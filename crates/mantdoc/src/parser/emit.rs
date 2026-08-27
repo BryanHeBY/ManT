@@ -19,6 +19,37 @@ pub(super) fn normalize_document_escapes(
     }
 }
 
+/// Shared source-relative effects for bounded parser emission.
+///
+/// Keeping the source identity, limits, diagnostic budget, visible-text
+/// budget, and truncation bit together prevents individual emitters from
+/// accidentally omitting one of the session-wide accounting boundaries.
+pub(super) struct EmitContext<'a> {
+    pub(super) source_id: crate::SourceId,
+    pub(super) limits: &'a Limits,
+    pub(super) text_bytes: &'a mut usize,
+    pub(super) diagnostics: &'a mut Vec<Diagnostic>,
+    pub(super) truncated: &'a mut bool,
+}
+
+impl<'a> EmitContext<'a> {
+    pub(super) fn new(
+        source_id: crate::SourceId,
+        limits: &'a Limits,
+        text_bytes: &'a mut usize,
+        diagnostics: &'a mut Vec<Diagnostic>,
+        truncated: &'a mut bool,
+    ) -> Self {
+        Self {
+            source_id,
+            limits,
+            text_bytes,
+            diagnostics,
+            truncated,
+        }
+    }
+}
+
 /// `\\.` is not a comment request: it remains visible text.  libmandoc still
 /// flags the following quote as the historical "bad comment style" while
 /// retaining that text in the public tree.  Diagnose from raw scanner bytes so
@@ -104,143 +135,110 @@ pub(super) fn emit_translation_request_diagnostics(
     }
 }
 
-#[allow(clippy::too_many_arguments)]
 pub(super) fn append_text_node(
     builder: &mut DocumentBuilder,
     parent: NodeId,
-    source_id: crate::SourceId,
     start: u32,
     end: u32,
     flags: NodeFlags,
     text: String,
-    limits: &Limits,
-    text_bytes: &mut usize,
-    diagnostics: &mut Vec<Diagnostic>,
-    truncated: &mut bool,
+    context: &mut EmitContext<'_>,
 ) -> bool {
     append_textual_node(
         builder,
         parent,
         NodeKind::Text,
-        source_id,
-        start,
-        end,
+        start..end,
         flags,
         text,
-        limits,
-        text_bytes,
-        diagnostics,
-        truncated,
+        context,
     )
 }
 
-#[allow(clippy::too_many_arguments)]
 pub(super) fn append_textual_node(
     builder: &mut DocumentBuilder,
     parent: NodeId,
     kind: NodeKind,
-    source_id: crate::SourceId,
-    start: u32,
-    end: u32,
+    range: std::ops::Range<u32>,
     flags: NodeFlags,
     text: String,
-    limits: &Limits,
-    text_bytes: &mut usize,
-    diagnostics: &mut Vec<Diagnostic>,
-    truncated: &mut bool,
+    context: &mut EmitContext<'_>,
 ) -> bool {
-    let Some(total) = text_bytes.checked_add(text.len()) else {
-        *truncated = true;
+    let start = range.start;
+    let end = range.end;
+    let Some(total) = context.text_bytes.checked_add(text.len()) else {
+        *context.truncated = true;
         return false;
     };
-    if total > limits.max_text_bytes {
-        *truncated = true;
+    if total > context.limits.max_text_bytes {
+        *context.truncated = true;
         push_diagnostic(
-            diagnostics,
-            limits,
+            context.diagnostics,
+            context.limits,
             diagnostic(
                 DiagnosticCode::LIMIT_TEXT_BYTES,
                 Severity::Warning,
-                source_id,
+                context.source_id,
                 start,
                 end,
                 "scanner-stage visible text exceeds max_text_bytes and was skipped",
             ),
-            truncated,
+            context.truncated,
         );
         return false;
     }
-    let Some(node) = append_node(
-        builder,
-        parent,
-        kind,
-        source_id,
-        start,
-        end,
-        flags,
-        limits,
-        diagnostics,
-        truncated,
-    ) else {
+    let Some(node) = append_node(builder, parent, kind, start, end, flags, context) else {
         return false;
     };
     if !builder.text(node, text) {
-        *truncated = true;
+        *context.truncated = true;
         return false;
     }
-    *text_bytes = total;
+    *context.text_bytes = total;
     true
 }
 
-#[allow(clippy::too_many_arguments)]
 pub(super) fn append_node(
     builder: &mut DocumentBuilder,
     parent: NodeId,
     kind: NodeKind,
-    source_id: crate::SourceId,
     start: u32,
     end: u32,
     flags: NodeFlags,
-    limits: &Limits,
-    diagnostics: &mut Vec<Diagnostic>,
-    truncated: &mut bool,
+    context: &mut EmitContext<'_>,
 ) -> Option<NodeId> {
-    if builder.node_count() >= limits.max_nodes {
-        *truncated = true;
+    if builder.node_count() >= context.limits.max_nodes {
+        *context.truncated = true;
         push_diagnostic(
-            diagnostics,
-            limits,
+            context.diagnostics,
+            context.limits,
             diagnostic(
                 DiagnosticCode::LIMIT_NODES,
                 Severity::Warning,
-                source_id,
+                context.source_id,
                 start,
                 end,
                 "scanner-stage AST node count exceeds max_nodes and was truncated",
             ),
-            truncated,
+            context.truncated,
         );
         return None;
     }
     let node = builder.push(parent, kind)?;
-    let span = SourceSpan::new(source_id, start, end).expect("scanner spans are monotonic");
+    let span = SourceSpan::new(context.source_id, start, end).expect("scanner spans are monotonic");
     if !builder.location(node, span) || !builder.flags(node, flags) {
-        *truncated = true;
+        *context.truncated = true;
         return None;
     }
     Some(node)
 }
 
-#[allow(clippy::too_many_arguments)]
 #[allow(clippy::too_many_lines)] // Ordered diagnostics need one exhaustive escape taxonomy.
 pub(super) fn emit_escape_issues(
     issues: &[EscapeIssue],
     line_start: u32,
     line_end: u32,
-    source_id: crate::SourceId,
-    limits: &Limits,
-    diagnostics: &mut Vec<Diagnostic>,
-    truncated: &mut bool,
+    context: &mut EmitContext<'_>,
 ) {
     let reverse_unicode_issues = issues.len() > 1
         && issues
@@ -323,12 +321,12 @@ pub(super) fn emit_escape_issues(
             ),
             EscapeIssueKind::UnsupportedEscape => {
                 push_diagnostic(
-                    diagnostics,
-                    limits,
+                    context.diagnostics,
+                    context.limits,
                     diagnostic(
                         DiagnosticCode::ESCAPE_UNKNOWN,
                         Severity::Unsupported,
-                        source_id,
+                        context.source_id,
                         start,
                         end,
                         issue.spelling.as_deref().map_or_else(
@@ -336,7 +334,7 @@ pub(super) fn emit_escape_issues(
                             |spelling| format!("unsupported escape sequence: {spelling}"),
                         ),
                     ),
-                    truncated,
+                    context.truncated,
                 );
                 continue;
             }
@@ -400,10 +398,17 @@ pub(super) fn emit_escape_issues(
             ),
         };
         push_diagnostic(
-            diagnostics,
-            limits,
-            diagnostic(code, Severity::Warning, source_id, start, end, message),
-            truncated,
+            context.diagnostics,
+            context.limits,
+            diagnostic(
+                code,
+                Severity::Warning,
+                context.source_id,
+                start,
+                end,
+                message,
+            ),
+            context.truncated,
         );
     }
 }

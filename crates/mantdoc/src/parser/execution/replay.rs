@@ -1,11 +1,11 @@
 use super::super::{
-    ArgumentIssue, BranchOutcome, Diagnostic, DiagnosticCode, DocumentBuilder, Environment, Limits,
-    NodeFlags, NodeId, NodeKind, Scanner, ScopeExecutionFrame, ScopeFlow, ScopeLine, Severity,
-    SourcePosition, SourceSpan, append_node, append_text_node, apply_environment_request,
-    apply_string_request, condition_body_source_start_from_offset, condition_body_template,
-    condition_parts, consume_ignore_block, copy_mode_reparse, diagnostic, emit_escape_issues,
-    environment_error_diagnostic, evaluate_condition, expand_environment, ignore_marker,
-    is_builtin_package_macro, is_definition_terminator, is_environment_request,
+    ArgumentIssue, BranchOutcome, Diagnostic, DiagnosticCode, DocumentBuilder, EmitContext,
+    Environment, Limits, NodeFlags, NodeId, NodeKind, Scanner, ScopeExecutionFrame, ScopeFlow,
+    ScopeLine, Severity, SourcePosition, SourceSpan, append_node, append_text_node,
+    apply_environment_request, apply_string_request, condition_body_source_start_from_offset,
+    condition_body_template, condition_parts, consume_ignore_block, copy_mode_reparse, diagnostic,
+    emit_escape_issues, environment_error_diagnostic, evaluate_condition, expand_environment,
+    ignore_marker, is_builtin_package_macro, is_definition_terminator, is_environment_request,
     is_macro_comment_request, is_scope_closer, is_scope_ignore_terminator, is_scope_opener,
     join_arguments, lex_arguments, lex_condition_arguments, normalize_document_escapes,
     push_diagnostic, record_expansion_steps, scope_line_end, scope_line_start,
@@ -1394,16 +1394,13 @@ pub(in crate::parser) fn execute_scope_macro_lines(
                 builder,
                 root,
                 NodeKind::Element,
-                source_id,
                 start,
                 end,
                 NodeFlags {
                     line_start: true,
                     ..NodeFlags::default()
                 },
-                limits,
-                diagnostics,
-                truncated,
+                &mut EmitContext::new(source_id, limits, text_bytes, diagnostics, truncated),
             ) else {
                 continue;
             };
@@ -1461,16 +1458,12 @@ pub(in crate::parser) fn execute_scope_macro_lines(
                 &result.issues,
                 start,
                 end,
-                source_id,
-                limits,
-                diagnostics,
-                truncated,
+                &mut EmitContext::new(source_id, limits, text_bytes, diagnostics, truncated),
             );
             *truncated |= result.truncated;
             if append_text_node(
                 builder,
                 element,
-                source_id,
                 start,
                 end,
                 NodeFlags {
@@ -1478,10 +1471,7 @@ pub(in crate::parser) fn execute_scope_macro_lines(
                     ..NodeFlags::default()
                 },
                 result.text,
-                limits,
-                text_bytes,
-                diagnostics,
-                truncated,
+                &mut EmitContext::new(source_id, limits, text_bytes, diagnostics, truncated),
             ) {
                 *maximum_depth = (*maximum_depth).max(3);
             }
@@ -1533,16 +1523,12 @@ pub(in crate::parser) fn execute_scope_macro_lines(
             &result.issues,
             start,
             end,
-            source_id,
-            limits,
-            diagnostics,
-            truncated,
+            &mut EmitContext::new(source_id, limits, text_bytes, diagnostics, truncated),
         );
         *truncated |= result.truncated;
         if append_text_node(
             builder,
             root,
-            source_id,
             start,
             end,
             NodeFlags {
@@ -1551,10 +1537,7 @@ pub(in crate::parser) fn execute_scope_macro_lines(
                 ..NodeFlags::default()
             },
             result.text,
-            limits,
-            text_bytes,
-            diagnostics,
-            truncated,
+            &mut EmitContext::new(source_id, limits, text_bytes, diagnostics, truncated),
         ) {
             *maximum_depth = (*maximum_depth).max(2);
         }
@@ -1880,16 +1863,12 @@ pub(in crate::parser) fn execute_scope_line(
                 &result.issues,
                 start,
                 end,
-                source_id,
-                limits,
-                diagnostics,
-                truncated,
+                &mut EmitContext::new(source_id, limits, text_bytes, diagnostics, truncated),
             );
             *truncated |= result.truncated;
             if append_text_node(
                 builder,
                 root,
-                source_id,
                 start,
                 end,
                 NodeFlags {
@@ -1901,10 +1880,7 @@ pub(in crate::parser) fn execute_scope_line(
                     ..NodeFlags::default()
                 },
                 result.text,
-                limits,
-                text_bytes,
-                diagnostics,
-                truncated,
+                &mut EmitContext::new(source_id, limits, text_bytes, diagnostics, truncated),
             ) {
                 if *terminal_inline
                     && let Some(node) = builder
@@ -2258,16 +2234,12 @@ pub(in crate::parser) fn execute_scope_line(
                     &result.issues,
                     body_source_start,
                     end,
-                    source_id,
-                    limits,
-                    diagnostics,
-                    truncated,
+                    &mut EmitContext::new(source_id, limits, text_bytes, diagnostics, truncated),
                 );
                 *truncated |= result.truncated;
                 if append_text_node(
                     builder,
                     root,
-                    source_id,
                     body_source_start,
                     end,
                     NodeFlags {
@@ -2276,10 +2248,7 @@ pub(in crate::parser) fn execute_scope_line(
                         ..NodeFlags::default()
                     },
                     result.text,
-                    limits,
-                    text_bytes,
-                    diagnostics,
-                    truncated,
+                    &mut EmitContext::new(source_id, limits, text_bytes, diagnostics, truncated),
                 ) {
                     *maximum_depth = (*maximum_depth).max(2);
                 }
@@ -2334,9 +2303,7 @@ pub(in crate::parser) fn execute_scope_line(
             let Some(element) = append_node(
                 builder,
                 root,
-                NodeKind::Element,
-                source_id,
-                // `br` parsed while replaying a conditional scope keeps the
+                NodeKind::Element, // `br` parsed while replaying a conditional scope keeps the
                 // physical control-column location in the legacy tree.  It
                 // is a roff layout request rather than a visible package
                 // macro, unlike `.B` and the other font controls above.
@@ -2346,9 +2313,7 @@ pub(in crate::parser) fn execute_scope_line(
                     line_start: true,
                     ..NodeFlags::default()
                 },
-                limits,
-                diagnostics,
-                truncated,
+                &mut EmitContext::new(source_id, limits, text_bytes, diagnostics, truncated),
             ) else {
                 return ScopeFlow::Continue;
             };
@@ -2402,16 +2367,12 @@ pub(in crate::parser) fn execute_scope_line(
                     &result.issues,
                     start,
                     end,
-                    source_id,
-                    limits,
-                    diagnostics,
-                    truncated,
+                    &mut EmitContext::new(source_id, limits, text_bytes, diagnostics, truncated),
                 );
                 *truncated |= result.truncated;
                 if append_text_node(
                     builder,
                     element,
-                    source_id,
                     argument_source_start,
                     end,
                     NodeFlags {
@@ -2419,10 +2380,7 @@ pub(in crate::parser) fn execute_scope_line(
                         ..NodeFlags::default()
                     },
                     result.text,
-                    limits,
-                    text_bytes,
-                    diagnostics,
-                    truncated,
+                    &mut EmitContext::new(source_id, limits, text_bytes, diagnostics, truncated),
                 ) {
                     *maximum_depth = (*maximum_depth).max(3);
                 }

@@ -1,5 +1,5 @@
 use super::{
-    ArgumentIssue, BranchOutcome, ControlEvent, DiagnosticCode, DocumentBuilder,
+    ArgumentIssue, BranchOutcome, ControlEvent, DiagnosticCode, DocumentBuilder, EmitContext,
     EnvironmentRequestContext, EscapeIssueKind, IncludeRequest, InputTrap, MacroSet,
     ManIndentState, NodeFlags, NodeId, NodeKind, ParseSession, RequestHandling, RequestKind,
     ScanOutcome, ScannedLine, Scanner, ScopeCollector, ScopeFlow, ScopeLine, ScopeMachine,
@@ -360,20 +360,26 @@ fn run_source<R: SourceResolver + ?Sized>(machine: SourceMachine<'_, '_, '_, R>)
                         &issues,
                         start,
                         end,
-                        source_id,
-                        limits,
-                        &mut diagnostics,
-                        &mut truncated,
+                        &mut EmitContext::new(
+                            source_id,
+                            limits,
+                            &mut text_bytes,
+                            &mut diagnostics,
+                            &mut truncated,
+                        ),
                     );
                 } else {
                     emit_escape_issues(
                         &result.issues,
                         start,
                         end,
-                        source_id,
-                        limits,
-                        &mut diagnostics,
-                        &mut truncated,
+                        &mut EmitContext::new(
+                            source_id,
+                            limits,
+                            &mut text_bytes,
+                            &mut diagnostics,
+                            &mut truncated,
+                        ),
                     );
                 }
                 truncated |= result.truncated;
@@ -385,15 +391,17 @@ fn run_source<R: SourceResolver + ?Sized>(machine: SourceMachine<'_, '_, '_, R>)
                 if append_text_node(
                     builder,
                     root,
-                    source_id,
                     start,
                     end,
                     flags,
                     result.text,
-                    limits,
-                    &mut text_bytes,
-                    &mut diagnostics,
-                    &mut truncated,
+                    &mut EmitContext::new(
+                        source_id,
+                        limits,
+                        &mut text_bytes,
+                        &mut diagnostics,
+                        &mut truncated,
+                    ),
                 ) {
                     if (has_invalid_input_bytes || has_valid_utf8_non_ascii)
                         && let Some(node) = builder
@@ -460,15 +468,16 @@ fn run_source<R: SourceResolver + ?Sized>(machine: SourceMachine<'_, '_, '_, R>)
                     builder,
                     root,
                     NodeKind::Comment,
-                    source_id,
-                    start,
-                    end,
+                    start..end,
                     flags,
                     visible_bytes(bytes),
-                    limits,
-                    &mut text_bytes,
-                    &mut diagnostics,
-                    &mut truncated,
+                    &mut EmitContext::new(
+                        source_id,
+                        limits,
+                        &mut text_bytes,
+                        &mut diagnostics,
+                        &mut truncated,
+                    ),
                 ) {
                     maximum_depth = maximum_depth.max(2);
                 }
@@ -1180,16 +1189,18 @@ fn run_source<R: SourceResolver + ?Sized>(machine: SourceMachine<'_, '_, '_, R>)
                                     &result.issues,
                                     start,
                                     end,
-                                    source_id,
-                                    limits,
-                                    &mut diagnostics,
-                                    &mut truncated,
+                                    &mut EmitContext::new(
+                                        source_id,
+                                        limits,
+                                        &mut text_bytes,
+                                        &mut diagnostics,
+                                        &mut truncated,
+                                    ),
                                 );
                                 truncated |= result.truncated;
                                 if append_text_node(
                                     builder,
                                     root,
-                                    source_id,
                                     start,
                                     end,
                                     NodeFlags {
@@ -1198,10 +1209,13 @@ fn run_source<R: SourceResolver + ?Sized>(machine: SourceMachine<'_, '_, '_, R>)
                                         ..NodeFlags::default()
                                     },
                                     result.text,
-                                    limits,
-                                    &mut text_bytes,
-                                    &mut diagnostics,
-                                    &mut truncated,
+                                    &mut EmitContext::new(
+                                        source_id,
+                                        limits,
+                                        &mut text_bytes,
+                                        &mut diagnostics,
+                                        &mut truncated,
+                                    ),
                                 ) {
                                     maximum_depth = maximum_depth.max(2);
                                 }
@@ -1230,10 +1244,13 @@ fn run_source<R: SourceResolver + ?Sized>(machine: SourceMachine<'_, '_, '_, R>)
                             &result.issues,
                             start,
                             end,
-                            source_id,
-                            limits,
-                            &mut diagnostics,
-                            &mut truncated,
+                            &mut EmitContext::new(
+                                source_id,
+                                limits,
+                                &mut text_bytes,
+                                &mut diagnostics,
+                                &mut truncated,
+                            ),
                         );
                         truncated |= result.truncated;
                         let flags = NodeFlags {
@@ -1246,15 +1263,17 @@ fn run_source<R: SourceResolver + ?Sized>(machine: SourceMachine<'_, '_, '_, R>)
                         if append_text_node(
                             builder,
                             root,
-                            source_id,
                             start,
                             end,
                             flags,
                             result.text,
-                            limits,
-                            &mut text_bytes,
-                            &mut diagnostics,
-                            &mut truncated,
+                            &mut EmitContext::new(
+                                source_id,
+                                limits,
+                                &mut text_bytes,
+                                &mut diagnostics,
+                                &mut truncated,
+                            ),
                         ) {
                             maximum_depth = maximum_depth.max(2);
                             if empty_while_body
@@ -1595,7 +1614,6 @@ fn run_source<R: SourceResolver + ?Sized>(machine: SourceMachine<'_, '_, '_, R>)
                             let _ = append_text_node(
                                 builder,
                                 root,
-                                source_id,
                                 end,
                                 end,
                                 NodeFlags {
@@ -1603,10 +1621,13 @@ fn run_source<R: SourceResolver + ?Sized>(machine: SourceMachine<'_, '_, '_, R>)
                                     ..NodeFlags::default()
                                 },
                                 String::new(),
-                                limits,
-                                &mut text_bytes,
-                                &mut diagnostics,
-                                &mut truncated,
+                                &mut EmitContext::new(
+                                    source_id,
+                                    limits,
+                                    &mut text_bytes,
+                                    &mut diagnostics,
+                                    &mut truncated,
+                                ),
                             );
                         }
                         next_line_condition = Some(condition.into());
@@ -1845,10 +1866,13 @@ fn run_source<R: SourceResolver + ?Sized>(machine: SourceMachine<'_, '_, '_, R>)
                             &result.issues,
                             body_source_start,
                             end,
-                            source_id,
-                            limits,
-                            &mut diagnostics,
-                            &mut truncated,
+                            &mut EmitContext::new(
+                                source_id,
+                                limits,
+                                &mut text_bytes,
+                                &mut diagnostics,
+                                &mut truncated,
+                            ),
                         );
                         truncated |= result.truncated;
                         let flags = NodeFlags {
@@ -1859,15 +1883,17 @@ fn run_source<R: SourceResolver + ?Sized>(machine: SourceMachine<'_, '_, '_, R>)
                         if append_text_node(
                             builder,
                             root,
-                            source_id,
                             body_source_start,
                             end,
                             flags,
                             result.text,
-                            limits,
-                            &mut text_bytes,
-                            &mut diagnostics,
-                            &mut truncated,
+                            &mut EmitContext::new(
+                                source_id,
+                                limits,
+                                &mut text_bytes,
+                                &mut diagnostics,
+                                &mut truncated,
+                            ),
                         ) {
                             if let Some(node) = builder
                                 .children(root)
@@ -2828,16 +2854,19 @@ fn run_source<R: SourceResolver + ?Sized>(machine: SourceMachine<'_, '_, '_, R>)
                             builder,
                             root,
                             NodeKind::Element,
-                            source_id,
                             control_start,
                             end,
                             NodeFlags {
                                 line_start: true,
                                 ..NodeFlags::default()
                             },
-                            limits,
-                            &mut diagnostics,
-                            &mut truncated,
+                            &mut EmitContext::new(
+                                source_id,
+                                limits,
+                                &mut text_bytes,
+                                &mut diagnostics,
+                                &mut truncated,
+                            ),
                         ) else {
                             continue;
                         };
@@ -2852,17 +2881,19 @@ fn run_source<R: SourceResolver + ?Sized>(machine: SourceMachine<'_, '_, '_, R>)
                             if !append_text_node(
                                 builder,
                                 element,
-                                source_id,
                                 argument_start
                                     .checked_add(argument_offset)
                                     .expect("parser checks public span offsets first"),
                                 end,
                                 NodeFlags::default(),
                                 visible_bytes(&argument.bytes),
-                                limits,
-                                &mut text_bytes,
-                                &mut diagnostics,
-                                &mut truncated,
+                                &mut EmitContext::new(
+                                    source_id,
+                                    limits,
+                                    &mut text_bytes,
+                                    &mut diagnostics,
+                                    &mut truncated,
+                                ),
                             ) {
                                 break 'lines;
                             }
@@ -3836,13 +3867,16 @@ fn run_source<R: SourceResolver + ?Sized>(machine: SourceMachine<'_, '_, '_, R>)
                                 builder,
                                 root,
                                 NodeKind::Element,
-                                source_id,
                                 generated_control_start,
                                 end,
                                 flags,
-                                limits,
-                                &mut diagnostics,
-                                &mut truncated,
+                                &mut EmitContext::new(
+                                    source_id,
+                                    limits,
+                                    &mut text_bytes,
+                                    &mut diagnostics,
+                                    &mut truncated,
+                                ),
                             ) else {
                                 continue;
                             };
@@ -3971,10 +4005,13 @@ fn run_source<R: SourceResolver + ?Sized>(machine: SourceMachine<'_, '_, '_, R>)
                                         &result.issues,
                                         start,
                                         end,
-                                        source_id,
-                                        limits,
-                                        &mut diagnostics,
-                                        &mut truncated,
+                                        &mut EmitContext::new(
+                                            source_id,
+                                            limits,
+                                            &mut text_bytes,
+                                            &mut diagnostics,
+                                            &mut truncated,
+                                        ),
                                     );
                                     truncated |= result.truncated;
                                     let logical_text_width = u32::try_from(result.text.len())
@@ -3982,7 +4019,6 @@ fn run_source<R: SourceResolver + ?Sized>(machine: SourceMachine<'_, '_, '_, R>)
                                     if append_text_node(
                                         builder,
                                         element,
-                                        source_id,
                                         generated_argument_start,
                                         end,
                                         NodeFlags {
@@ -3990,10 +4026,13 @@ fn run_source<R: SourceResolver + ?Sized>(machine: SourceMachine<'_, '_, '_, R>)
                                             ..NodeFlags::default()
                                         },
                                         result.text,
-                                        limits,
-                                        &mut text_bytes,
-                                        &mut diagnostics,
-                                        &mut truncated,
+                                        &mut EmitContext::new(
+                                            source_id,
+                                            limits,
+                                            &mut text_bytes,
+                                            &mut diagnostics,
+                                            &mut truncated,
+                                        ),
                                     ) {
                                         if let Some(position) = next_generated_argument_position
                                             && let Some(argument) = builder
@@ -4087,10 +4126,13 @@ fn run_source<R: SourceResolver + ?Sized>(machine: SourceMachine<'_, '_, '_, R>)
                             &result.issues,
                             start,
                             end,
-                            source_id,
-                            limits,
-                            &mut diagnostics,
-                            &mut truncated,
+                            &mut EmitContext::new(
+                                source_id,
+                                limits,
+                                &mut text_bytes,
+                                &mut diagnostics,
+                                &mut truncated,
+                            ),
                         );
                         truncated |= result.truncated;
                         let flags = NodeFlags {
@@ -4101,15 +4143,17 @@ fn run_source<R: SourceResolver + ?Sized>(machine: SourceMachine<'_, '_, '_, R>)
                         if append_text_node(
                             builder,
                             root,
-                            source_id,
                             start,
                             end,
                             flags,
                             result.text,
-                            limits,
-                            &mut text_bytes,
-                            &mut diagnostics,
-                            &mut truncated,
+                            &mut EmitContext::new(
+                                source_id,
+                                limits,
+                                &mut text_bytes,
+                                &mut diagnostics,
+                                &mut truncated,
+                            ),
                         ) {
                             if let Some(column) = text_origin
                                 && let Some(node) = builder
@@ -4139,13 +4183,16 @@ fn run_source<R: SourceResolver + ?Sized>(machine: SourceMachine<'_, '_, '_, R>)
                     builder,
                     root,
                     NodeKind::Element,
-                    source_id,
                     control_start,
                     end,
                     flags,
-                    limits,
-                    &mut diagnostics,
-                    &mut truncated,
+                    &mut EmitContext::new(
+                        source_id,
+                        limits,
+                        &mut text_bytes,
+                        &mut diagnostics,
+                        &mut truncated,
+                    ),
                 ) else {
                     continue;
                 };
@@ -4326,10 +4373,13 @@ fn run_source<R: SourceResolver + ?Sized>(machine: SourceMachine<'_, '_, '_, R>)
                                     &result.issues,
                                     argument_start,
                                     end,
-                                    source_id,
-                                    limits,
-                                    &mut diagnostics,
-                                    &mut truncated,
+                                    &mut EmitContext::new(
+                                        source_id,
+                                        limits,
+                                        &mut text_bytes,
+                                        &mut diagnostics,
+                                        &mut truncated,
+                                    ),
                                 );
                                 truncated |= result.truncated;
                             }
@@ -4350,15 +4400,17 @@ fn run_source<R: SourceResolver + ?Sized>(machine: SourceMachine<'_, '_, '_, R>)
                             if append_text_node(
                                 builder,
                                 element,
-                                source_id,
                                 argument_start,
                                 end,
                                 NodeFlags::default(),
                                 text,
-                                limits,
-                                &mut text_bytes,
-                                &mut diagnostics,
-                                &mut truncated,
+                                &mut EmitContext::new(
+                                    source_id,
+                                    limits,
+                                    &mut text_bytes,
+                                    &mut diagnostics,
+                                    &mut truncated,
+                                ),
                             ) {
                                 if let Some(argument_node) = builder
                                     .children(element)

@@ -244,7 +244,7 @@ use diagnostics::{
     apply_tree_depth_limit, reorder_deferred_post_validation_diagnostics,
 };
 use emit::{
-    append_node, append_text_node, append_textual_node, contains_valid_utf8_non_ascii,
+    EmitContext, append_node, append_text_node, append_textual_node, contains_valid_utf8_non_ascii,
     emit_bad_comment_style, emit_escape_issues, emit_filled_macro_argument_tabs,
     emit_filled_text_tabs, emit_font_request_diagnostics, emit_invalid_input_bytes,
     emit_man_alternating_font_trailing_whitespace, emit_mdoc_control_trailing_whitespace,
