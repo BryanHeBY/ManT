@@ -140,11 +140,13 @@ crates/mant-engine/           Resolution, lowering, projections, search, and ren
 crates/mant-ui/               Ratatui reader, navigation, search, and terminal styling
 crates/mant/                  Mode selection, CLI, request JSON, and MCP stdio boundary
 crates/mantdoc/               Native Rust roff/man/mdoc/tbl/eqn parser and renderers
+docs/architecture/mantdoc-refactoring.md  Native parser structural and Clippy debt audit
 fuzz/                        Standalone cargo-fuzz workspace
 tests/contracts/             Stable JSON contract fixtures consumed by Rust tests
 tests/fixtures/              Fixed Markdown and real roff integration sources
 scripts/check.sh             Canonical local and CI verification sequence
 scripts/check-mantdoc.sh     Concurrent focused native-migration verification work-loop
+scripts/check-mantdoc-clippy-exceptions.sh  Monotonic native parser Clippy debt gate
 scripts/check-windows.ps1    Native Windows verification sequence
 scripts/check-packaged-crates.sh  Build and test exact published crate source sets
 scripts/build-and-smoke.sh   Unix debug/release product build and smoke test

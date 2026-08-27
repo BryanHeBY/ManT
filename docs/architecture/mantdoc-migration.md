@@ -17,6 +17,10 @@ status table and decision log here instead of relying on chat history.
 Maintainer approval was recorded on 2026-08-24 and starts milestone M0. This
 document remains the durable source of truth for the long-running goal.
 
+Post-compatibility maintainability and lint-debt work is tracked separately in
+[`mantdoc-refactoring.md`](mantdoc-refactoring.md), so structural cleanup does
+not obscure the migration evidence below.
+
 ## 1. Mission and completion boundary
 
 `mantdoc` will be a safe, byte-oriented Rust implementation of the subset of
