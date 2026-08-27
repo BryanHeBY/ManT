@@ -86,6 +86,36 @@ fn normalizes_abbreviated_title_months_in_metadata() {
 }
 
 #[test]
+fn mr_is_a_recognized_inline_man_macro() {
+    let name = SourceName::new("man-mr.1").unwrap();
+    let report = Parser::default()
+        .parse(Source::new(
+            &name,
+            b".TH MR 1\n.SH DESCRIPTION\n.MR printf 3\nafter\n",
+        ))
+        .unwrap();
+    let reference = report
+        .document
+        .preorder()
+        .find(|node| node.macro_name() == Some("MR"))
+        .expect("MR stays a recognized man inline macro");
+    assert_eq!(reference.kind(), NodeKind::Element);
+    assert_eq!(
+        reference
+            .children()
+            .filter_map(NodeRef::text)
+            .collect::<Vec<_>>(),
+        ["printf", "3"]
+    );
+    assert!(
+        report
+            .diagnostics
+            .iter()
+            .all(|diagnostic| diagnostic.code.as_str() != DiagnosticCode::ROFF_UNKNOWN_MACRO)
+    );
+}
+
+#[test]
 fn inline_conditional_dispatches_man_request_body() {
     let name = SourceName::new("man-conditional-pod.1").unwrap();
     let report = Parser::default()

@@ -37,6 +37,27 @@ fn m3_parallel_sessions_do_not_share_delayed_environment_definitions() {
 }
 
 #[test]
+fn coding_declarations_do_not_destroy_high_bytes() {
+    for declaration in [b"latin-1".as_slice(), b"iso-8859-1", b"x-unknown-encoding"] {
+        let name = SourceName::new("declared-encoding.roff").unwrap();
+        let mut source = b".\\\" -*- coding: ".to_vec();
+        source.extend_from_slice(declaration);
+        source.extend_from_slice(b" -*-\ncaf\xe9\n");
+        let report = Parser::default()
+            .parse(Source::new(&name, &source))
+            .unwrap();
+        let text = report
+            .document
+            .preorder()
+            .filter(|node| node.kind() == NodeKind::Text)
+            .filter_map(crate::NodeRef::text)
+            .collect::<Vec<_>>();
+        assert_eq!(text, ["café"], "declaration: {declaration:?}");
+        assert!(text.iter().all(|value| !value.contains('\u{FFFD}')));
+    }
+}
+
+#[test]
 fn m3_tr_translates_visible_text_without_rewriting_escape_spellings() {
     let name = SourceName::new("translation.roff").unwrap();
     let report = Parser::default()
