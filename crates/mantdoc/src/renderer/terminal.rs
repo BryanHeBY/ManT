@@ -31,41 +31,88 @@ pub(super) fn render_terminal_document(
     maximum: usize,
     limits: &Limits,
 ) -> Result<String, RenderError> {
-    let mut output = BoundedOutput::new(maximum);
-    let protected_header_lines =
-        append_terminal_header(document, format, width, limits, &mut output, maximum)?;
-    let Some(root) = document.node(document.root()) else {
-        return output.finish();
-    };
-    for node in root.children() {
-        // A malformed, argumentless `.SH`/`.SS` is deliberately absent from
-        // the compatible tree: subsequent man nodes are therefore attached
-        // directly to Root.  term.c keeps the current man body field in that
-        // recovery shape, though, rather than resetting it to column zero.
-        // Root-level section blocks still own their distinct heading/body
-        // geometry; every other direct man child resumes in the ordinary
-        // seven-column body field.
-        let indentation = if document.macro_set() == MacroSet::Man && !is_section_block(node) {
-            7
-        } else {
-            0
+    TerminalWriter::new(document, format, width, maximum, limits).render()
+}
+
+/// State owned by one terminal device pass.
+struct TerminalWriter<'a> {
+    document: &'a Document,
+    format: RenderFormat,
+    width: usize,
+    maximum: usize,
+    limits: &'a Limits,
+    output: BoundedOutput,
+}
+
+impl<'a> TerminalWriter<'a> {
+    fn new(
+        document: &'a Document,
+        format: RenderFormat,
+        width: usize,
+        maximum: usize,
+        limits: &'a Limits,
+    ) -> Self {
+        Self {
+            document,
+            format,
+            width,
+            maximum,
+            limits,
+            output: BoundedOutput::new(maximum),
+        }
+    }
+
+    fn render(mut self) -> Result<String, RenderError> {
+        let protected_header_lines = append_terminal_header(
+            self.document,
+            self.format,
+            self.width,
+            self.limits,
+            &mut self.output,
+            self.maximum,
+        )?;
+        let Some(root) = self.document.node(self.document.root()) else {
+            return self.output.finish();
         };
-        render_terminal_node(node, format, limits, indentation, &mut output, maximum)?;
+        for node in root.children() {
+            // A malformed, argumentless `.SH`/`.SS` is absent from the tree,
+            // but following man nodes retain the ordinary body indentation.
+            let indentation =
+                if self.document.macro_set() == MacroSet::Man && !is_section_block(node) {
+                    7
+                } else {
+                    0
+                };
+            render_terminal_node(
+                node,
+                self.format,
+                self.limits,
+                indentation,
+                &mut self.output,
+                self.maximum,
+            )?;
+        }
+        let protected_footer_lines = append_terminal_footer(
+            self.document,
+            self.format,
+            self.width,
+            self.limits,
+            &mut self.output,
+            self.maximum,
+        )?;
+        let mut rendered = wrap_terminal_output(
+            self.output.trim_end(),
+            self.width,
+            self.maximum,
+            protected_header_lines,
+            protected_footer_lines,
+        )?;
+        if !rendered.is_empty() {
+            append(&mut rendered, "\n", self.maximum)?;
+        }
+        ensure_length(rendered.len(), self.maximum)?;
+        Ok(rendered)
     }
-    let protected_footer_lines =
-        append_terminal_footer(document, format, width, limits, &mut output, maximum)?;
-    let mut rendered = wrap_terminal_output(
-        output.trim_end(),
-        width,
-        maximum,
-        protected_header_lines,
-        protected_footer_lines,
-    )?;
-    if !rendered.is_empty() {
-        append(&mut rendered, "\n", maximum)?;
-    }
-    ensure_length(rendered.len(), maximum)?;
-    Ok(rendered)
 }
 
 /// Emit the shared terminal-page heading from normalized metadata.

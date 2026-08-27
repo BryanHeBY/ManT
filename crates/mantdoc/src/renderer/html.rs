@@ -18,24 +18,55 @@ pub(super) fn render_html_document(
     maximum: usize,
     limits: &Limits,
 ) -> Result<String, RenderError> {
-    let mut output = BoundedOutput::new(maximum);
-    let mut state = HtmlState::default();
-    if !fragment {
-        append(
-            &mut output,
-            "<!doctype html><html><body><main class=\"mantdoc\">",
+    HtmlWriter::new(document, fragment, maximum, limits).render()
+}
+
+/// State owned by one HTML device pass.
+struct HtmlWriter<'a> {
+    document: &'a Document,
+    fragment: bool,
+    maximum: usize,
+    limits: &'a Limits,
+    state: HtmlState,
+    output: BoundedOutput,
+}
+
+impl<'a> HtmlWriter<'a> {
+    fn new(document: &'a Document, fragment: bool, maximum: usize, limits: &'a Limits) -> Self {
+        Self {
+            document,
+            fragment,
             maximum,
-        )?;
-    }
-    if let Some(root) = document.node(document.root()) {
-        for node in root.children() {
-            render_html_node(node, limits, &mut state, &mut output, maximum)?;
+            limits,
+            state: HtmlState::default(),
+            output: BoundedOutput::new(maximum),
         }
     }
-    if !fragment {
-        append(&mut output, "</main></body></html>", maximum)?;
+
+    fn render(mut self) -> Result<String, RenderError> {
+        if !self.fragment {
+            append(
+                &mut self.output,
+                "<!doctype html><html><body><main class=\"mantdoc\">",
+                self.maximum,
+            )?;
+        }
+        if let Some(root) = self.document.node(self.document.root()) {
+            for node in root.children() {
+                render_html_node(
+                    node,
+                    self.limits,
+                    &mut self.state,
+                    &mut self.output,
+                    self.maximum,
+                )?;
+            }
+        }
+        if !self.fragment {
+            append(&mut self.output, "</main></body></html>", self.maximum)?;
+        }
+        self.output.finish_trimmed()
     }
-    output.finish_trimmed()
 }
 
 /// Document-scoped HTML state which the arena deliberately does not expose as
