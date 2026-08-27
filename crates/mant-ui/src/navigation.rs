@@ -30,6 +30,7 @@ pub(crate) fn rows(
     visible: &[usize],
     selected: usize,
     expanded: &HashSet<String>,
+    full_labels: bool,
     width: usize,
 ) -> Vec<NavigationRow> {
     visible
@@ -40,6 +41,7 @@ pub(crate) fn rows(
                 *index,
                 *index == selected,
                 expanded.contains(&nodes[*index].id),
+                full_labels,
                 width,
             )
         })
@@ -61,6 +63,7 @@ fn node_lines(
     node_index: usize,
     selected: bool,
     expanded: bool,
+    full_labels: bool,
     width: usize,
 ) -> Vec<NavigationRow> {
     let selection = if selected { "› " } else { "  " };
@@ -110,12 +113,16 @@ fn node_lines(
         style = style.add_modifier(Modifier::BOLD);
     }
 
-    let title = sanitize_terminal_text(&node.title);
+    let title = sanitize_terminal_text(if selected || full_labels {
+        node.full_title.as_deref().unwrap_or(&node.title)
+    } else {
+        &node.title
+    });
     let first_title_width = width.saturating_sub(prefix.width()).max(1);
     let wrapped_title_width = width
         .saturating_sub(prefix.width().max(continuation_prefix.width()))
         .max(1);
-    let titles = if selected {
+    let titles = if selected || full_labels {
         wrap_to_width(&title, wrapped_title_width)
     } else {
         vec![truncate_middle(&title, first_title_width)]
@@ -314,6 +321,7 @@ mod tests {
             id: "node".to_owned(),
             target_id: "node".to_owned(),
             title: title.to_owned(),
+            full_title: None,
             depth: 1,
             kind: NavKind::Section,
             has_children: false,
@@ -327,6 +335,7 @@ mod tests {
         let rows = node_lines(
             &node("Options Controlling the Kind of Output"),
             0,
+            false,
             false,
             false,
             31,
@@ -343,6 +352,7 @@ mod tests {
             &node("Options Controlling the Kind of Output"),
             0,
             true,
+            false,
             false,
             31,
         );
@@ -365,11 +375,39 @@ mod tests {
     }
 
     #[test]
+    fn semantic_entries_separate_compact_identity_from_complete_forms() {
+        let mut entry = node("-L");
+        entry.kind = NavKind::Entry(mant_ir::EntryKind::Parameter {
+            parameter_kind: mant_ir::ParameterKind::Option,
+        });
+        entry.full_title =
+            Some("-L [bind_address:]port:host:hostport | -L local_socket:remote_socket".to_owned());
+
+        let compact = node_lines(&entry, 0, false, false, false, 31);
+        let selected = node_lines(&entry, 0, true, false, false, 31);
+        let full = node_lines(&entry, 0, false, false, true, 31);
+
+        assert_eq!(compact.len(), 1);
+        assert!(compact[0].line.to_string().contains("-L"));
+        assert!(!compact[0].line.to_string().contains("bind_address"));
+        assert!(selected.len() > 1);
+        assert_eq!(full.len(), selected.len());
+        let complete = full
+            .iter()
+            .map(|row| row.line.to_string())
+            .collect::<Vec<_>>()
+            .join(" ");
+        assert!(complete.contains("bind_address"));
+        assert!(complete.contains("local_socket"));
+    }
+
+    #[test]
     fn wrapped_last_leaf_ends_its_branch_on_continuation_rows() {
         let rows = node_lines(
             &node("Options Controlling the Kind of Output"),
             0,
             true,
+            false,
             false,
             31,
         );
@@ -386,7 +424,7 @@ mod tests {
 
     #[test]
     fn navigation_titles_cannot_emit_terminal_controls() {
-        let rows = node_lines(&node("unsafe\u{1b}[31m\nname"), 0, true, false, 31);
+        let rows = node_lines(&node("unsafe\u{1b}[31m\nname"), 0, true, false, false, 31);
         let text = rows
             .iter()
             .map(|row| row.line.to_string())
@@ -400,7 +438,7 @@ mod tests {
     #[test]
     fn row_ranges_include_every_continuation_line() {
         let nodes = vec![node("Options Controlling the Kind of Output")];
-        let rows = super::rows(&nodes, &[0], 0, &HashSet::new(), 18);
+        let rows = super::rows(&nodes, &[0], 0, &HashSet::new(), false, 18);
 
         assert_eq!(node_row_range(&rows, 0), Some(0..rows.len()));
         assert!(rows.len() > 1);
@@ -413,7 +451,7 @@ mod tests {
         parent.has_children = true;
         parent.parent_id = None;
 
-        let rows = node_lines(&parent, 0, true, true, 23);
+        let rows = node_lines(&parent, 0, true, true, false, 23);
         let text = rows
             .iter()
             .map(|row| row.line.to_string())
@@ -436,7 +474,7 @@ mod tests {
         let mut leaf = node("Leaf");
         leaf.is_last = false;
 
-        let row = node_lines(&leaf, 0, false, false, 24)
+        let row = node_lines(&leaf, 0, false, false, false, 24)
             .remove(0)
             .line
             .to_string();

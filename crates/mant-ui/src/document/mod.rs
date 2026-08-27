@@ -62,6 +62,8 @@ pub struct NavNode {
     pub target_id: String,
     /// Visible sidebar label.
     pub title: String,
+    /// Complete authored label used while selected or in full-label mode.
+    pub full_title: Option<String>,
     /// Zero-based tree indentation depth.
     pub depth: usize,
     /// Semantic presentation category.
@@ -175,6 +177,7 @@ impl DocumentView {
                     id: ROOT_ID.to_owned(),
                     target_id: ROOT_ID.to_owned(),
                     title: "OVERVIEW".to_owned(),
+                    full_title: None,
                     depth: 0,
                     kind: NavKind::Root,
                     has_children: !entries.is_empty(),
@@ -374,6 +377,7 @@ impl DocumentBuilder {
             id: TLDR_ID.to_owned(),
             target_id: TLDR_ID.to_owned(),
             title: "TLDR QUICK REFERENCE".to_owned(),
+            full_title: None,
             depth: 0,
             kind: NavKind::Tldr,
             has_children: false,
@@ -468,6 +472,7 @@ impl DocumentBuilder {
             id: section.id.to_string(),
             target_id: section.id.to_string(),
             title: section.title.clone(),
+            full_title: None,
             depth,
             kind: NavKind::Section,
             has_children,
@@ -514,16 +519,18 @@ impl DocumentBuilder {
         }
         let summary = mant_ir::EntrySummary::for_entries(entries);
         let group_id = format!("__mant-entries__{owner_id}");
+        let full_title = format!(
+            "ENTRIES ({} direct · {} nested · {} {})",
+            summary.direct,
+            summary.descendants,
+            summary.forms,
+            if summary.forms == 1 { "form" } else { "forms" }
+        );
         self.navigation(NavNode {
             id: group_id.clone(),
             target_id: target_id.to_owned(),
-            title: format!(
-                "ENTRIES ({} direct · {} nested · {} {})",
-                summary.direct,
-                summary.descendants,
-                summary.forms,
-                if summary.forms == 1 { "form" } else { "forms" }
-            ),
+            title: format!("ENTRIES · {}", summary.direct),
+            full_title: Some(full_title),
             depth,
             kind: NavKind::EntryGroup,
             has_children: true,
@@ -535,9 +542,13 @@ impl DocumentBuilder {
 
     fn semantic_entries(&mut self, entries: &[SemanticEntry], depth: usize, parent_id: &str) {
         for (index, entry) in entries.iter().enumerate() {
-            let title = (!entry.forms.is_empty())
+            let full_title = (!entry.forms.is_empty())
                 .then(|| entry.forms.join(" | "))
-                .or_else(|| entry.aliases.first().cloned())
+                .or_else(|| (!entry.aliases.is_empty()).then(|| entry.aliases.join(" | ")))
+                .unwrap_or_else(|| entry.id.to_string());
+            let title = (!entry.aliases.is_empty())
+                .then(|| entry.aliases.join(" | "))
+                .or_else(|| entry.forms.first().cloned())
                 .unwrap_or_else(|| entry.id.to_string());
             self.navigation(NavNode {
                 id: entry.id.to_string(),
@@ -545,6 +556,7 @@ impl DocumentBuilder {
                     .targets
                     .first()
                     .map_or_else(|| entry.id.to_string(), ToString::to_string),
+                full_title: (full_title != title).then_some(full_title),
                 title,
                 depth,
                 kind: NavKind::Entry(entry.kind),

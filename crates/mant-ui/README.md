@@ -8,9 +8,11 @@ catalog, search, and cross-document interactions without serializing the IR.
 
 ## What this crate provides
 
-- A hierarchy-aware, collapsible Outline tree whose groups summarize direct
-  entries, descendants, and forms, then expand into commands, parameters,
-  configuration keys, variables, values, and generic terms.
+- A hierarchy-aware, collapsible Outline tree whose complete group labels
+  summarize direct entries, descendants, and forms, then expand into commands, parameters,
+  configuration keys, variables, values, and generic terms. Compact entry
+  aliases preserve browsing density while an optional full-label mode wraps
+  every authored form.
 - Settled-scroll navigation following and selectable Markdown/mdoc page-local
   references.
 - A live, bounded catalog finder that delegates complete-snapshot discovery

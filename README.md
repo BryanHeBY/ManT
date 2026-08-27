@@ -94,8 +94,11 @@ mant tar --ui
 
 The Outline sidebar mirrors nested document sections and reveals semantic
 entry groups and their nested commands, parameters, keys, variables, and
-values on demand. Collapsed groups report direct, nested, and authored-form
-counts. Selecting a node places its target at the top of the content pane;
+values on demand. Compact group rows show their direct count; selecting one
+reveals its direct, nested, and authored-form totals. Entry rows use semantic
+aliases by default; the selected row shows its complete authored form, and
+**View → Full Outline Labels** wraps all visible labels when that detail is
+useful. Selecting a node places its target at the top of the content pane;
 after scrolling settles, the outline follows the first visible document node.
 
 - `j` / `k` or arrow keys move through visible nodes.

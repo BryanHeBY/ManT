@@ -51,6 +51,10 @@ that crate was not published for that change.
 - Align the interactive Outline with protocol discovery: collapsed entry
   groups display direct, nested, and authored-form counts, while expansion
   reveals the complete role-aware hierarchy and multi-form labels.
+- Keep the default Outline dense by labeling semantic entries with exact
+  aliases instead of parameter-heavy authored forms. The selected entry still
+  expands to its complete form, and **View → Full Outline Labels** can wrap all
+  visible labels for review.
 
 ### mant 0.10.0
 

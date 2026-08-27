@@ -503,10 +503,15 @@ projection option or `--format` selects deterministic output instead.
 
 The resizable Outline sidebar forms one tree of addressable nodes: document
 sections, semantic entry groups, nested parameters and values, and optional
-tldr content. A collapsed entry group shows its direct-entry, nested-entry,
-and authored-form counts; expanding it reveals the same hierarchy returned by
-an `all` outline projection. Selecting a node puts its target at the top of the
-content pane.
+tldr content. A collapsed entry group shows its direct-entry count in compact
+mode; selecting it reveals the nested-entry and authored-form totals.
+Expanding it reveals the same hierarchy returned by an `all` outline
+projection. Semantic entries use their exact aliases as
+compact labels, while the selected entry expands to its complete authored
+form. **View → Full Outline Labels** wraps every visible complete label for
+side-by-side review. This mode changes presentation only; entry identity,
+folding, selection, and document targets remain unchanged. Selecting a node
+puts its target at the top of the content pane.
 After content scrolling settles, the outline follows the first visible
 document node.
 Underlined references can be followed directly. Markdown fragments and mdoc
@@ -602,10 +607,11 @@ Navigate contains backward/forward history and current-document movement.
 - `?`: Show keyboard shortcuts.
 - `q`: Quit.
 
-The View menu can hide the Outline sidebar. The Navigate and Search menus expose the
-same operations as their shortcuts. The Edit menu exposes visual plain-text
-copy and complete-node Text/Markdown copy. Terminal setup is restored on
-normal exit, errors, and Rust panics.
+The View menu can hide the Outline sidebar, reset its width, switch between
+compact and fully wrapped labels, and expand or collapse the complete tree.
+The Navigate and Search menus expose the same operations as their shortcuts.
+The Edit menu exposes visual plain-text copy and complete-node Text/Markdown
+copy. Terminal setup is restored on normal exit, errors, and Rust panics.
 
 ## Document Selection
 

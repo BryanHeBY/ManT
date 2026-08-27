@@ -170,6 +170,7 @@ impl App {
             &visible,
             self.selected,
             &self.expanded,
+            self.full_outline_labels,
             line_width,
         );
         let row_count = rows.len();

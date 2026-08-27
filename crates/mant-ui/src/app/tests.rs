@@ -1137,6 +1137,47 @@ fn selected_navigation_titles_wrap_with_a_continuous_background() {
 }
 
 #[test]
+fn full_outline_labels_mode_wraps_every_visible_title() {
+    let mut bundle = navigation_bundle();
+    bundle.document.as_mut().expect("manual").sections[0].children[0].title =
+        "A deliberately long nested section title".to_owned();
+    let backend = TestBackend::new(64, 18);
+    let mut terminal = Terminal::new(backend).expect("test terminal");
+    let mut app = App::new(&bundle);
+
+    terminal
+        .draw(|frame| app.draw(frame))
+        .expect("compact draw");
+    assert_eq!(
+        app.geometry
+            .navigation_rows
+            .iter()
+            .filter(|index| **index == 3)
+            .count(),
+        1
+    );
+
+    app.activate_menu_action(MenuAction::ToggleFullOutlineLabels);
+    terminal.draw(|frame| app.draw(frame)).expect("full draw");
+    assert!(
+        app.geometry
+            .navigation_rows
+            .iter()
+            .filter(|index| **index == 3)
+            .count()
+            > 1
+    );
+    app.open_menu(MenuId::View);
+    terminal.draw(|frame| app.draw(frame)).expect("draw menu");
+    assert!(
+        terminal
+            .backend()
+            .to_string()
+            .contains("[x] Full Outline Labels")
+    );
+}
+
+#[test]
 fn navigation_visibility_keeps_the_complete_selected_title_on_screen() {
     let mut app = App::new(&navigation_bundle());
     app.navigation_scroll = 4;

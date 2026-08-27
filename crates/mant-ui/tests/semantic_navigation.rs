@@ -5,6 +5,19 @@ use mant_ir::{
 };
 use mant_ui::{DocumentView, NavKind};
 
+fn assert_compact_and_complete_entry_labels(view: &DocumentView) {
+    assert_eq!(view.navigation()[1].title, "ENTRIES · 4");
+    assert_eq!(
+        view.navigation()[1].full_title.as_deref(),
+        Some("ENTRIES (4 direct · 1 nested · 3 forms)")
+    );
+    assert_eq!(view.navigation()[2].title, "--help");
+    assert_eq!(
+        view.navigation()[2].full_title.as_deref(),
+        Some("--help MODE | -h")
+    );
+}
+
 #[test]
 fn sidebar_exposes_every_semantic_role_supported_by_the_document_contract() {
     let mut entries = [
@@ -30,7 +43,7 @@ fn sidebar_exposes_every_semantic_role_supported_by_the_document_contract() {
     .collect::<Vec<_>>();
     entries[0].terms = vec![
         vec![Inline::Code {
-            value: "--help".to_owned(),
+            value: "--help MODE".to_owned(),
         }],
         vec![Inline::Code {
             value: "-h".to_owned(),
@@ -85,11 +98,7 @@ fn sidebar_exposes_every_semantic_role_supported_by_the_document_contract() {
     };
 
     let view = DocumentView::new(&bundle);
-    assert_eq!(
-        view.navigation()[1].title,
-        "ENTRIES (4 direct · 1 nested · 3 forms)"
-    );
-    assert_eq!(view.navigation()[2].title, "--help | -h");
+    assert_compact_and_complete_entry_labels(&view);
     assert_eq!(view.navigation()[3].parent_id.as_deref(), Some("entry-0"));
     assert_eq!(view.navigation()[3].depth, view.navigation()[2].depth + 1);
     assert_eq!(

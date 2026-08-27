@@ -73,6 +73,7 @@ pub(super) enum MenuAction {
     Back,
     Forward,
     ToggleSidebar,
+    ToggleFullOutlineLabels,
     ResetSidebar,
     ExpandAll,
     CollapseAll,
@@ -124,6 +125,11 @@ const VIEW_MENU: &[MenuEntry] = &[
         label: "Outline Sidebar",
         shortcut: "",
         action: MenuAction::ToggleSidebar,
+    },
+    MenuEntry {
+        label: "Full Outline Labels",
+        shortcut: "",
+        action: MenuAction::ToggleFullOutlineLabels,
     },
     MenuEntry {
         label: "Reset Outline Width",
@@ -395,6 +401,10 @@ impl App {
             MenuAction::Back => self.navigate_history(true),
             MenuAction::Forward => self.navigate_history(false),
             MenuAction::ToggleSidebar => self.show_sidebar = !self.show_sidebar,
+            MenuAction::ToggleFullOutlineLabels => {
+                self.full_outline_labels = !self.full_outline_labels;
+                self.navigation_visibility_target = Some(self.selected);
+            }
             MenuAction::ResetSidebar => self.sidebar_width = DEFAULT_SIDEBAR_WIDTH,
             MenuAction::ExpandAll => {
                 self.expanded = self
@@ -503,7 +513,8 @@ impl App {
             let active = index == cursor;
             let prefix = match entry.action {
                 MenuAction::ToggleSidebar if self.show_sidebar => "[x] ",
-                MenuAction::ToggleSidebar => "[ ] ",
+                MenuAction::ToggleFullOutlineLabels if self.full_outline_labels => "[x] ",
+                MenuAction::ToggleSidebar | MenuAction::ToggleFullOutlineLabels => "[ ] ",
                 _ => "    ",
             };
             let label = format!("{prefix}{}", entry.label);
