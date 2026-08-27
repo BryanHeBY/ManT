@@ -85,9 +85,13 @@ fn node_lines(
             NavKind::Root | NavKind::Section => theme::BLUE,
             NavKind::EntryGroup => theme::YELLOW,
             NavKind::Entry(DefinitionRole::Option) => theme::GREEN,
+            NavKind::Entry(DefinitionRole::Marker | DefinitionRole::Operand) => theme::GREEN,
             NavKind::Entry(DefinitionRole::Command) => theme::PEACH,
+            NavKind::Entry(DefinitionRole::ConfigurationKey) => theme::YELLOW,
             NavKind::Entry(DefinitionRole::EnvironmentVariable) => theme::LINK,
             NavKind::Entry(DefinitionRole::Variable) => theme::PINK,
+            NavKind::Entry(DefinitionRole::Value) => theme::BLUE,
+            NavKind::Entry(DefinitionRole::Term) => theme::SUBTEXT,
         }
     };
     let background = if selected {

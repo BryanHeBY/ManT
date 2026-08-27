@@ -1,6 +1,6 @@
 //! Fully resolved content shared by engines and in-memory frontends.
 
-use crate::{Document, DocumentAddress, DocumentIndex, TldrDocument};
+use crate::{Document, DocumentAddress, DocumentIndex, SemanticIndex, TldrDocument};
 
 /// One materialized document query before any versioned process projection.
 ///
@@ -24,5 +24,11 @@ impl ResolvedContent {
     #[must_use]
     pub fn document_index(&self) -> Option<DocumentIndex> {
         self.document.as_ref().map(DocumentIndex::build)
+    }
+
+    /// Build the source-neutral semantic entry index used by outlines and UI navigation.
+    #[must_use]
+    pub fn semantic_index(&self) -> Option<SemanticIndex> {
+        self.document.as_ref().map(SemanticIndex::build)
     }
 }

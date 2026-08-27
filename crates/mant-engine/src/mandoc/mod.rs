@@ -142,6 +142,7 @@ fn lower_mandoc_document_with_source(
         &mut root_blocks,
         &mut sections,
         &explicit_targets,
+        parsed.metadata.name.as_deref(),
     ));
     navigation::resolve_navigation(&mut sections, &retained_targets, &mut diagnostics);
     let mut document = Document {

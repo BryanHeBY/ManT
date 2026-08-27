@@ -657,6 +657,14 @@ fn entry_names(
         DefinitionRole::Variable => {
             plain_entry_names(value, is_variable_name).ok_or(EntryRejectionReason::InvalidEntryName)
         }
+        DefinitionRole::Marker
+        | DefinitionRole::Operand
+        | DefinitionRole::ConfigurationKey
+        | DefinitionRole::Value
+        | DefinitionRole::Term => plain_entry_names(value, |name| {
+            !name.is_empty() && !name.contains(['\r', '\n'])
+        })
+        .ok_or(EntryRejectionReason::InvalidEntryName),
     }
 }
 

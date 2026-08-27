@@ -36,8 +36,9 @@ fn keeps_compiler_options_environment_and_release_metadata() {
         OutlineDetail::Entries,
     )
     .expect("build rustc option outline");
-    assert_eq!(count_outline_entries(&outline.nodes), 31);
+    assert_eq!(count_outline_entries(&outline.nodes), 35);
     assert!(find_outline_entry(&outline.nodes, "--target").is_some());
+    assert!(find_outline_entry(&outline.nodes, "RUST_TEST_THREADS").is_some());
 }
 
 #[test]

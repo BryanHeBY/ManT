@@ -8,7 +8,7 @@ use mant_engine::build_outline_with_detail;
 use mant_ir::SourceFormat;
 use mant_protocol::OutlineDetail;
 
-/// 9 sections, `os = "22"`, 78 option-outline entries, and no duplicate
+/// 9 sections, `os = "22"`, 82 semantic entries, and no duplicate
 /// vertical spacing.
 #[test]
 fn keeps_complete_sections_and_semantic_option_outlines() {
@@ -22,8 +22,10 @@ fn keeps_complete_sections_and_semantic_option_outlines() {
     let query = query_for_document("clang", document);
     let outline = build_outline_with_detail(&query, OutlineDetail::Entries)
         .unwrap_or_else(|error| panic!("build clang option outline: {error}"));
-    assert_eq!(count_outline_entries(&outline.nodes), 78);
+    assert_eq!(count_outline_entries(&outline.nodes), 82);
     assert!(find_outline_entry(&outline.nodes, "-std").is_some());
+    assert!(find_outline_entry(&outline.nodes, "TMPDIR").is_some());
+    assert!(find_outline_entry(&outline.nodes, "TEMP").is_some());
 
     common::assert_no_duplicate_vertical_spacing(&document.sections, "fedora44/clang");
 }

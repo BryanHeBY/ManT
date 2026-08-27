@@ -26,20 +26,38 @@ pub(crate) fn identify_definitions(
     blocks: &mut Vec<Block>,
     sections: &mut [Section],
     reserved_targets: &HashSet<String>,
+    document_name: Option<&str>,
 ) -> HashSet<String> {
     let mut used = HashSet::new();
     collect_section_ids(sections, &mut used);
     let mut retained = HashSet::new();
-    identify_blocks(blocks, &mut used, reserved_targets, &mut retained);
+    let root_context = document_name.map_or(DefinitionContext::Generic, |name| {
+        let name = name.to_ascii_lowercase();
+        if name.ends_with("_config") || name.ends_with("-config") {
+            DefinitionContext::ConfigurationKeys
+        } else {
+            DefinitionContext::Generic
+        }
+    });
+    identify_blocks(
+        blocks,
+        root_context,
+        &mut used,
+        reserved_targets,
+        &mut retained,
+    );
     for section in sections {
+        let context = DefinitionContext::for_section(&section.title, root_context);
         identify_blocks(
             &mut section.blocks,
+            context,
             &mut used,
             reserved_targets,
             &mut retained,
         );
         identify_sections(
             &mut section.children,
+            context,
             &mut used,
             reserved_targets,
             &mut retained,
@@ -70,7 +88,11 @@ fn collect_definition_entries<'a>(
             }
             Block::DefinitionList { items, source, .. } => {
                 for item in items {
-                    if item.identity.is_some() {
+                    if item
+                        .identity
+                        .as_ref()
+                        .is_some_and(|identity| !identity.names.is_empty())
+                    {
                         output.push((item, *source));
                     }
                     collect_definition_entries(&item.description, output);
@@ -111,40 +133,61 @@ fn collect_section_ids(sections: &[Section], output: &mut HashSet<String>) {
 
 fn identify_sections(
     sections: &mut [Section],
+    parent_context: DefinitionContext,
     used: &mut HashSet<String>,
     reserved: &HashSet<String>,
     retained: &mut HashSet<String>,
 ) {
     for section in sections {
-        identify_blocks(&mut section.blocks, used, reserved, retained);
-        identify_sections(&mut section.children, used, reserved, retained);
+        let context = DefinitionContext::for_section(&section.title, parent_context);
+        identify_blocks(&mut section.blocks, context, used, reserved, retained);
+        identify_sections(&mut section.children, context, used, reserved, retained);
     }
 }
 
 fn identify_blocks(
     blocks: &mut Vec<Block>,
+    context: DefinitionContext,
     used: &mut HashSet<String>,
     reserved: &HashSet<String>,
     retained: &mut HashSet<String>,
 ) {
+    normalize_definition_nesting(blocks);
     normalize_hanging_definitions(blocks);
     for block in blocks {
         match block {
             Block::List { items, .. } => {
                 for item in items {
-                    identify_blocks(&mut item.blocks, used, reserved, retained);
+                    identify_blocks(&mut item.blocks, context, used, reserved, retained);
                 }
             }
-            Block::DefinitionList { items, .. } => {
+            Block::DefinitionList { items, layout, .. } => {
+                let item_context =
+                    if context == DefinitionContext::Commands && layout.indent_columns > 0 {
+                        DefinitionContext::Parameters
+                    } else {
+                        context
+                    };
                 for item in items {
-                    identify_item(item, used, reserved, retained);
-                    identify_blocks(&mut item.description, used, reserved, retained);
+                    let role = identify_item(item, item_context, used, reserved, retained);
+                    let child_context = if role == DefinitionRole::Command {
+                        DefinitionContext::Parameters
+                    } else {
+                        item_context
+                    };
+                    identify_blocks(
+                        &mut item.description,
+                        child_context,
+                        used,
+                        reserved,
+                        retained,
+                    );
                 }
             }
             Block::Table { rows, .. } => {
                 for row in rows {
                     for cell in &mut row.cells {
-                        identify_blocks(&mut cell.blocks, used, reserved, retained);
+                        identify_blocks(&mut cell.blocks, context, used, reserved, retained);
                     }
                 }
             }
@@ -155,6 +198,105 @@ fn identify_blocks(
             | Block::ThematicBreak { .. }
             | Block::Unsupported { .. } => {}
         }
+    }
+}
+
+/// Reattach source-neutral indented continuations to their owning definition.
+///
+/// libmandoc can retain man(7) `.RS` continuations as later sibling blocks
+/// whose absolute indentation is greater than the preceding definition list.
+/// They remain visually correct in that flat form, but the topology loses the
+/// command → parameter → value relationship needed by semantic navigation.
+/// Move the run under the last definition and translate its layout to the
+/// description's relative coordinate system so rendering is unchanged.
+fn normalize_definition_nesting(blocks: &mut Vec<Block>) {
+    let mut pending: VecDeque<Block> = mem::take(blocks).into();
+    let mut normalized = Vec::with_capacity(pending.len());
+
+    while let Some(mut block) = pending.pop_front() {
+        let Some(base_indent) = block_definition_indent(&block) else {
+            normalized.push(block);
+            continue;
+        };
+        let Some(last_item) = last_definition_mut(&mut block) else {
+            normalized.push(block);
+            continue;
+        };
+        let description_origin = base_indent.saturating_add(4);
+        while pending
+            .front()
+            .is_some_and(|next| block_indent(next) > base_indent)
+        {
+            let mut nested = pending.pop_front().expect("front exists");
+            shift_block_indent(&mut nested, description_origin);
+            last_item.description.push(nested);
+        }
+        normalized.push(block);
+    }
+
+    *blocks = normalized;
+}
+
+fn block_definition_indent(block: &Block) -> Option<u16> {
+    match block {
+        Block::DefinitionList { layout, .. } => Some(layout.indent_columns),
+        _ => None,
+    }
+}
+
+fn last_definition_mut(block: &mut Block) -> Option<&mut DefinitionItem> {
+    match block {
+        Block::DefinitionList { items, .. } => items.last_mut(),
+        _ => None,
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum DefinitionContext {
+    Generic,
+    Parameters,
+    Commands,
+    EnvironmentVariables,
+    Variables,
+    ConfigurationKeys,
+}
+
+impl DefinitionContext {
+    fn for_section(title: &str, inherited: Self) -> Self {
+        let normalized = title
+            .chars()
+            .map(|character| {
+                if character.is_ascii_alphanumeric() {
+                    character.to_ascii_uppercase()
+                } else {
+                    ' '
+                }
+            })
+            .collect::<String>();
+        let words = normalized.split_whitespace().collect::<Vec<_>>();
+        if words.contains(&"ENVIRONMENT") {
+            return Self::EnvironmentVariables;
+        }
+        if words.contains(&"VARIABLES") || words.contains(&"VARIABLE") {
+            return Self::Variables;
+        }
+        if words.contains(&"OPTIONS")
+            || words.contains(&"OPTION")
+            || words.contains(&"SWITCHES")
+            || words.contains(&"FLAGS")
+        {
+            return Self::Parameters;
+        }
+        if normalized.trim() == "COMMANDS"
+            || normalized.contains("BUILTIN COMMANDS")
+            || normalized.contains("SUBCOMMANDS")
+        {
+            return Self::Commands;
+        }
+        if normalized.contains("CONFIGURATION") || normalized.trim() == "KEYWORDS" {
+            return Self::ConfigurationKeys;
+        }
+        inherited
     }
 }
 
@@ -257,37 +399,32 @@ fn shift_block_indent(block: &mut Block, origin: u16) {
 
 fn identify_item(
     item: &mut DefinitionItem,
+    context: DefinitionContext,
     used: &mut HashSet<String>,
     reserved: &HashSet<String>,
     retained: &mut HashSet<String>,
-) {
+) -> DefinitionRole {
     let (role, case, names) = item.identity.as_ref().map_or_else(
-        || {
-            (
-                DefinitionRole::Option,
-                DefinitionCase::Sensitive,
-                option_names(item),
-            )
-        },
+        || infer_identity(item, context),
         |identity| (identity.role, identity.case, identity.names.clone()),
     );
-    if names.is_empty() {
-        return;
-    }
 
     let mut anchors = Vec::new();
     for term in &item.terms {
         collect_anchor_ids(term, &mut anchors);
     }
-    retained.extend(anchors.iter().cloned());
+    if role != DefinitionRole::Term {
+        retained.extend(anchors.iter().cloned());
+    }
 
     let existing = anchors.first().cloned();
     let preferred = existing.clone().unwrap_or_else(|| {
-        format!(
-            "{}-{}",
-            role_id_prefix(role),
-            role_name_slug(role, &names[0])
-        )
+        let name = names.first().cloned().unwrap_or_else(|| {
+            item.terms
+                .first()
+                .map_or_else(|| "entry".to_owned(), |term| plain_text(term))
+        });
+        format!("{}-{}", role_id_prefix(role), role_name_slug(role, &name))
     });
     // A copied libmandoc anchor may itself be an explicit `.Tg` destination,
     // so it is allowed to match the reserved set. Generated IDs are not.
@@ -297,7 +434,8 @@ fn identify_item(
     } else {
         unique_id(&preferred, used, reserved)
     };
-    if !anchors.iter().any(|anchor| anchor == &id)
+    if role != DefinitionRole::Term
+        && !anchors.iter().any(|anchor| anchor == &id)
         && let Some(term) = item.terms.first_mut()
     {
         term.insert(
@@ -307,16 +445,189 @@ fn identify_item(
             },
         );
     }
-    retained.insert(id.clone());
+    if role != DefinitionRole::Term {
+        retained.insert(id.clone());
+    }
     item.identity = Some(DefinitionIdentity {
         id: id.into(),
         role,
         case,
         names,
     });
+    role
+}
+
+fn infer_identity(
+    item: &DefinitionItem,
+    context: DefinitionContext,
+) -> (DefinitionRole, DefinitionCase, Vec<String>) {
+    let first = item
+        .terms
+        .first()
+        .map_or_else(String::new, |term| plain_text(term));
+    let trimmed = first.trim();
+    match context {
+        DefinitionContext::Commands
+            if trimmed.starts_with(['-', '+']) || trimmed.starts_with("[-+]") =>
+        {
+            parameter_identity(item, trimmed)
+        }
+        DefinitionContext::Commands => {
+            let names = command_names(item);
+            if names.is_empty() {
+                (DefinitionRole::Term, DefinitionCase::Sensitive, Vec::new())
+            } else {
+                (DefinitionRole::Command, DefinitionCase::Sensitive, names)
+            }
+        }
+        DefinitionContext::EnvironmentVariables => (
+            DefinitionRole::EnvironmentVariable,
+            DefinitionCase::Sensitive,
+            named_term(item, is_variable_term),
+        ),
+        DefinitionContext::Variables => (
+            DefinitionRole::Variable,
+            DefinitionCase::Sensitive,
+            named_term(item, is_variable_term),
+        ),
+        DefinitionContext::ConfigurationKeys => (
+            DefinitionRole::ConfigurationKey,
+            DefinitionCase::Insensitive,
+            named_term(item, is_configuration_key),
+        ),
+        DefinitionContext::Parameters => parameter_identity(item, trimmed),
+        DefinitionContext::Generic if trimmed.starts_with('-') => parameter_identity(item, trimmed),
+        DefinitionContext::Generic => (DefinitionRole::Term, DefinitionCase::Sensitive, Vec::new()),
+    }
+}
+
+fn parameter_identity(
+    item: &DefinitionItem,
+    first_term: &str,
+) -> (DefinitionRole, DefinitionCase, Vec<String>) {
+    if first_term == "--" || first_term == "--%" {
+        return (
+            DefinitionRole::Marker,
+            DefinitionCase::Sensitive,
+            vec![first_term.to_owned()],
+        );
+    }
+    if first_term == "-" {
+        return (
+            DefinitionRole::Operand,
+            DefinitionCase::Sensitive,
+            vec![first_term.to_owned()],
+        );
+    }
+    let names = parameter_names(item);
+    if names.is_empty() {
+        (DefinitionRole::Term, DefinitionCase::Sensitive, Vec::new())
+    } else {
+        (DefinitionRole::Option, DefinitionCase::Sensitive, names)
+    }
+}
+
+fn parameter_names(item: &DefinitionItem) -> Vec<String> {
+    let mut names = option_names(item);
+    for term in &item.terms {
+        let text = plain_text(term);
+        let token = text.split_whitespace().next().unwrap_or_default();
+        if let Some(body) = token.strip_prefix("[-+]")
+            && is_option_name_body(body)
+        {
+            for prefix in ['-', '+'] {
+                let name = format!("{prefix}{body}");
+                if !names.contains(&name) {
+                    names.push(name);
+                }
+            }
+        } else if let Some(body) = token.strip_prefix('+')
+            && is_option_name_body(body)
+        {
+            let name = format!("+{body}");
+            if !names.contains(&name) {
+                names.push(name);
+            }
+        }
+    }
+    names
+}
+
+fn command_names(item: &DefinitionItem) -> Vec<String> {
+    item.terms
+        .iter()
+        .filter_map(|term| {
+            let text = plain_text(term);
+            let name = text.split_whitespace().next()?.trim();
+            (!name.is_empty() && !name.starts_with(['-', '+', '/'])).then(|| name.to_owned())
+        })
+        .fold(Vec::new(), |mut names, name| {
+            if !names.contains(&name) {
+                names.push(name);
+            }
+            names
+        })
+}
+
+fn named_term(item: &DefinitionItem, validate: fn(&str) -> bool) -> Vec<String> {
+    item.terms
+        .iter()
+        .flat_map(|term| {
+            let text = plain_text(term);
+            text.split(',')
+                .filter_map(|part| {
+                    let name = part.split_whitespace().next()?;
+                    validate(name).then(|| name.to_owned())
+                })
+                .collect::<Vec<_>>()
+        })
+        .fold(Vec::new(), |mut names, name| {
+            if !names.contains(&name) {
+                names.push(name);
+            }
+            names
+        })
+}
+
+fn is_variable_term(value: &str) -> bool {
+    let value = value.strip_prefix('$').unwrap_or(value);
+    let (head, index) = value
+        .split_once('[')
+        .map_or((value, None), |(head, tail)| (head, tail.strip_suffix(']')));
+    !head.is_empty()
+        && head
+            .chars()
+            .all(|character| character.is_ascii_alphanumeric() || character == '_')
+        && head
+            .chars()
+            .next()
+            .is_some_and(|character| character.is_ascii_alphabetic() || character == '_')
+        && index.is_none_or(|index| {
+            !index.is_empty()
+                && index
+                    .chars()
+                    .all(|character| character.is_ascii_alphanumeric() || character == '_')
+        })
+}
+
+fn is_configuration_key(value: &str) -> bool {
+    !value.is_empty()
+        && value
+            .chars()
+            .all(|character| character.is_ascii_alphanumeric() || matches!(character, '-' | '_'))
+        && value
+            .chars()
+            .next()
+            .is_some_and(|character| character.is_ascii_alphabetic() || character == '_')
 }
 
 fn role_name_slug(role: DefinitionRole, name: &str) -> String {
+    match (role, name) {
+        (DefinitionRole::Marker, "--") => return "end-of-options".to_owned(),
+        (DefinitionRole::Marker, "--%") => return "stop-parsing".to_owned(),
+        (DefinitionRole::Operand, "-") => return "dash".to_owned(),
+        _ => {}
+    }
     if role == DefinitionRole::Variable {
         match name {
             "$?" => return "question-mark".to_owned(),
@@ -326,15 +637,25 @@ fn role_name_slug(role: DefinitionRole, name: &str) -> String {
             _ => {}
         }
     }
-    slug(name)
+    let slug = slug(name);
+    if slug.is_empty() {
+        "entry".to_owned()
+    } else {
+        slug
+    }
 }
 
 const fn role_id_prefix(role: DefinitionRole) -> &'static str {
     match role {
         DefinitionRole::Option => "option",
+        DefinitionRole::Marker => "marker",
+        DefinitionRole::Operand => "operand",
         DefinitionRole::Command => "command",
+        DefinitionRole::ConfigurationKey => "configuration",
         DefinitionRole::EnvironmentVariable => "environment",
         DefinitionRole::Variable => "variable",
+        DefinitionRole::Value => "value",
+        DefinitionRole::Term => "term",
     }
 }
 
@@ -509,7 +830,7 @@ mod tests {
             source: None,
         }];
 
-        identify_definitions(&mut Vec::new(), &mut sections, &HashSet::new());
+        identify_definitions(&mut Vec::new(), &mut sections, &HashSet::new(), None);
 
         assert_eq!(sections[0].blocks.len(), 2);
         let Block::DefinitionList { items, layout, .. } = &sections[0].blocks[0] else {

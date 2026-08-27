@@ -709,7 +709,13 @@ fn semantic_name_shorthand(role: DefinitionRole, name: &str) -> Option<&str> {
         DefinitionRole::EnvironmentVariable => name
             .strip_prefix("$env:")
             .or_else(|| name.strip_prefix("$ENV:")),
-        DefinitionRole::Command | DefinitionRole::Variable => None,
+        DefinitionRole::Command
+        | DefinitionRole::ConfigurationKey
+        | DefinitionRole::Marker
+        | DefinitionRole::Operand
+        | DefinitionRole::Variable
+        | DefinitionRole::Value
+        | DefinitionRole::Term => None,
     }
 }
 

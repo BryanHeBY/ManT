@@ -317,9 +317,12 @@ const fn outline_node_role(node: &OutlineNode) -> TerminalRole {
 const fn definition_role(role: DefinitionRole) -> TerminalRole {
     match role {
         DefinitionRole::Option => TerminalRole::Option,
+        DefinitionRole::Marker | DefinitionRole::Operand => TerminalRole::Option,
         DefinitionRole::Command => TerminalRole::Command,
+        DefinitionRole::ConfigurationKey => TerminalRole::Variable,
         DefinitionRole::EnvironmentVariable => TerminalRole::Environment,
         DefinitionRole::Variable => TerminalRole::Variable,
+        DefinitionRole::Value | DefinitionRole::Term => TerminalRole::Muted,
     }
 }
 

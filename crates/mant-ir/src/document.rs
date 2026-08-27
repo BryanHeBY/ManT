@@ -437,12 +437,22 @@ pub enum DefinitionCase {
 pub enum DefinitionRole {
     /// Command-line option or switch.
     Option,
+    /// End-of-options or parser-control marker such as `--` or `--%`.
+    Marker,
+    /// Positional or special operand documented as a definition.
+    Operand,
     /// Executable subcommand or verb.
     Command,
+    /// Named key accepted by a configuration language or command option.
+    ConfigurationKey,
     /// Process environment variable.
     EnvironmentVariable,
     /// Other named configuration or language variable.
     Variable,
+    /// One documented value accepted by a parent entry.
+    Value,
+    /// Addressable definition without a more specific reliable role.
+    Term,
 }
 
 /// One logical table row.

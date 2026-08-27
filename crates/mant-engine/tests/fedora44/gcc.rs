@@ -6,7 +6,7 @@ use mant_engine::build_outline_with_detail;
 use mant_ir::SourceFormat;
 use mant_protocol::OutlineDetail;
 
-/// 10 sections, `os = "gcc-16"`, 2,731 option-outline entries.
+/// 10 sections, `os = "gcc-16"`, 2,858 semantic entries.
 #[test]
 fn keeps_complete_sections_and_semantic_option_outlines() {
     let document = fedora44_manual("gcc");
@@ -18,7 +18,7 @@ fn keeps_complete_sections_and_semantic_option_outlines() {
     let query = query_for_document("gcc", document);
     let outline = build_outline_with_detail(&query, OutlineDetail::Entries)
         .unwrap_or_else(|error| panic!("build gcc option outline: {error}"));
-    assert_eq!(count_outline_entries(&outline.nodes), 2_731);
+    assert_eq!(count_outline_entries(&outline.nodes), 2_858);
     assert!(find_outline_entry(&outline.nodes, "-Wsuggest-final-types").is_some());
 
     common::assert_gcc_synopsis_layout(document);

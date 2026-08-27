@@ -3,6 +3,7 @@
 
 mod address;
 mod document;
+mod entry;
 mod identity;
 mod index;
 mod outline;
@@ -13,6 +14,7 @@ pub mod visit;
 
 pub use address::*;
 pub use document::*;
+pub use entry::*;
 pub use identity::*;
 pub use index::*;
 pub use outline::*;

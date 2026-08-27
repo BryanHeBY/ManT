@@ -1,6 +1,6 @@
 //! Tests for Fedora Linux 44's `sh(1)` alias of the Bash manual.
 
-use mant_ir::SourceFormat;
+use mant_ir::{EntryKind, ParameterKind, SemanticEntry, SemanticIndex, SourceFormat};
 
 use crate::common::{self, collect_sections, source_path_ends_with};
 use crate::fixtures::fedora44_manual;
@@ -25,4 +25,51 @@ fn keeps_the_bash_shell_page_spacing_and_anchors_normalized() {
     let document = fedora44_manual("sh");
     common::assert_anchor_ids_are_clean("fedora44/sh", document);
     common::assert_no_duplicate_vertical_spacing(&document.sections, "fedora44/sh");
+}
+
+#[test]
+fn rebuilds_builtin_parameter_hierarchy_from_relative_indentation() {
+    let document = fedora44_manual("sh");
+    let index = SemanticIndex::build(document);
+    let mut sections = Vec::new();
+    collect_sections(&document.sections, &mut sections);
+    let set = sections
+        .iter()
+        .flat_map(|section| index.section(&section.id))
+        .find(|entry| {
+            entry.kind == EntryKind::Command && entry.aliases.iter().any(|alias| alias == "set")
+        })
+        .expect("the set builtin is a semantic command");
+
+    assert!(has_parameter(set, ParameterKind::Marker, "--"));
+    assert!(has_parameter(set, ParameterKind::Operand, "-"));
+    assert!(has_parameter(set, ParameterKind::Option, "-o"));
+    assert!(
+        sections
+            .iter()
+            .flat_map(|section| all_entries(index.section(&section.id)))
+            .any(|entry| {
+                entry.kind
+                    == (EntryKind::Parameter {
+                        parameter_kind: ParameterKind::Option,
+                    })
+                    && entry.aliases.iter().any(|alias| alias == "-O")
+                    && entry.aliases.iter().any(|alias| alias == "+O")
+            })
+    );
+}
+
+fn has_parameter(entry: &SemanticEntry, parameter_kind: ParameterKind, alias: &str) -> bool {
+    entry.children.iter().any(|child| {
+        child.kind == EntryKind::Parameter { parameter_kind }
+            && child.aliases.iter().any(|candidate| candidate == alias)
+    })
+}
+
+fn all_entries(entries: &[SemanticEntry]) -> Box<dyn Iterator<Item = &SemanticEntry> + '_> {
+    Box::new(
+        entries
+            .iter()
+            .flat_map(|entry| std::iter::once(entry).chain(all_entries(&entry.children))),
+    )
 }

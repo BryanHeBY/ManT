@@ -230,6 +230,7 @@ fn parse_document_with_entries(
         &mut root_blocks,
         &mut sections,
         &ids.targets.keys().cloned().collect(),
+        source_path.as_deref(),
     );
     for target in retained_targets {
         ids.targets.insert(target.clone(), target);
