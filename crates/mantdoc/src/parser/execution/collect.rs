@@ -8,9 +8,41 @@ use super::super::{
     split_macro_control, visible_bytes,
 };
 
-#[allow(clippy::too_many_arguments)] // Scope collection shares parser session state and ordered diagnostics.
+pub(in crate::parser) struct ScopeCollector<'state, 'source> {
+    pub(in crate::parser) scanner: &'state mut Scanner<'source>,
+    pub(in crate::parser) source_id: crate::SourceId,
+    pub(in crate::parser) limits: &'state Limits,
+    pub(in crate::parser) macro_set: MacroSet,
+    pub(in crate::parser) diagnostics: &'state mut Vec<Diagnostic>,
+    pub(in crate::parser) truncated: &'state mut bool,
+    pub(in crate::parser) emit_definition_tail_diagnostics: bool,
+}
+
+impl ScopeCollector<'_, '_> {
+    pub(in crate::parser) fn collect(
+        self,
+        scope_start: u32,
+        scope_end: u32,
+        unterminated_scope_name: Option<&[u8]>,
+    ) -> CollectedScope {
+        collect_scope(
+            self.scanner,
+            self.source_id,
+            self.limits,
+            self.macro_set,
+            self.diagnostics,
+            self.truncated,
+            self.emit_definition_tail_diagnostics,
+            scope_start,
+            scope_end,
+            unterminated_scope_name,
+        )
+    }
+}
+
+#[allow(clippy::too_many_arguments)] // Private collector core; callers use `ScopeCollector`.
 #[allow(clippy::too_many_lines)] // Collection mirrors scanner cases while retaining nested scopes without recursion.
-pub(in crate::parser) fn collect_scope(
+fn collect_scope(
     scanner: &mut Scanner<'_>,
     source_id: crate::SourceId,
     limits: &Limits,

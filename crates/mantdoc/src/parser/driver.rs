@@ -1,10 +1,10 @@
 use super::{
     ArgumentIssue, BranchOutcome, ControlEvent, DiagnosticCode, DocumentBuilder, EscapeIssueKind,
     IncludeRequest, InputTrap, MacroSet, ManIndentState, NodeFlags, NodeId, NodeKind, ParseSession,
-    RequestKind, ScanOutcome, ScannedLine, Scanner, ScopeFlow, ScopeLine, ScopeMachine, Severity,
-    Source, SourceEvent, SourceMachine, SourcePosition, SourceResolver, SourceSpan, Syntax,
-    append_node, append_text_node, append_textual_node, apply_environment_request,
-    apply_string_request, arm_input_trap, collect_pending_macro_scope, collect_scope,
+    RequestKind, ScanOutcome, ScannedLine, Scanner, ScopeCollector, ScopeFlow, ScopeLine,
+    ScopeMachine, Severity, Source, SourceEvent, SourceMachine, SourcePosition, SourceResolver,
+    SourceSpan, Syntax, append_node, append_text_node, append_textual_node,
+    apply_environment_request, apply_string_request, arm_input_trap, collect_pending_macro_scope,
     condition_body_source_start_from_offset, condition_body_template,
     condition_body_template_from_offset, condition_parts, consume_ignore_block,
     contains_valid_utf8_non_ascii, copy_mode_reparse, definition_scope_remainder_line, diagnostic,
@@ -766,18 +766,16 @@ fn run_source<R: SourceResolver + ?Sized>(machine: SourceMachine<'_, '_, '_, R>)
                         })
                         .map(|body_start| body_start.saturating_add(2));
                     let mut scope = scope_requested.then(|| {
-                        collect_scope(
-                            &mut scanner,
+                        ScopeCollector {
+                            scanner: &mut scanner,
                             source_id,
                             limits,
-                            builder.macro_set(),
-                            &mut diagnostics,
-                            &mut truncated,
-                            true,
-                            control_start,
-                            end,
-                            Some(b"while"),
-                        )
+                            macro_set: builder.macro_set(),
+                            diagnostics: &mut diagnostics,
+                            truncated: &mut truncated,
+                            emit_definition_tail_diagnostics: true,
+                        }
+                        .collect(control_start, end, Some(b"while"))
                     });
                     if let (Some(scope), Some(remainder)) = (&mut scope, scope_remainder)
                         && !remainder.is_empty()
@@ -1481,18 +1479,16 @@ fn run_source<R: SourceResolver + ?Sized>(machine: SourceMachine<'_, '_, '_, R>)
                     let bare_scope_opener = scope_remainder.is_some_and(<[u8]>::is_empty)
                         && !body_template.starts_with(&[escape, b'{', escape]);
                     let mut scope = scope_requested.then(|| {
-                        collect_scope(
-                            &mut scanner,
+                        ScopeCollector {
+                            scanner: &mut scanner,
                             source_id,
                             limits,
-                            builder.macro_set(),
-                            &mut diagnostics,
-                            &mut truncated,
-                            condition,
-                            control_start,
-                            end,
-                            Some(name),
-                        )
+                            macro_set: builder.macro_set(),
+                            diagnostics: &mut diagnostics,
+                            truncated: &mut truncated,
+                            emit_definition_tail_diagnostics: condition,
+                        }
+                        .collect(control_start, end, Some(name))
                     });
                     // A bare `\{` (without the conventional continuation
                     // escape) starts its active roff scope with a vertical
@@ -3580,14 +3576,16 @@ fn run_source<R: SourceResolver + ?Sized>(machine: SourceMachine<'_, '_, '_, R>)
                                 )
                             {
                                 let escape = scanner.escape_character();
-                                let scope = collect_scope(
-                                    &mut scanner,
+                                let scope = ScopeCollector {
+                                    scanner: &mut scanner,
                                     source_id,
                                     limits,
-                                    builder.macro_set(),
-                                    &mut diagnostics,
-                                    &mut truncated,
-                                    true,
+                                    macro_set: builder.macro_set(),
+                                    diagnostics: &mut diagnostics,
+                                    truncated: &mut truncated,
+                                    emit_definition_tail_diagnostics: true,
+                                }
+                                .collect(
                                     start,
                                     end,
                                     Some(b"while"),

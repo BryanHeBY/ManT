@@ -258,7 +258,7 @@ use emit::{
 use event::{ControlEvent, RequestKind, SourceEvent};
 use execution::{
     collect::{
-        collect_pending_macro_scope, collect_scope, definition_scope_remainder_line,
+        ScopeCollector, collect_pending_macro_scope, definition_scope_remainder_line,
         record_suppressed_scope_definitions,
     },
     replay::{ScopeMachine, execute_scope_line, execute_scope_macro_lines},
