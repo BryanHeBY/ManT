@@ -191,6 +191,9 @@ pub(super) fn terminal_font_escape(
 /// renderer stays re-entrant because this walks immutable ancestry and prior
 /// siblings rather than storing document-global device state.
 pub(super) fn html_request_font_before(node: NodeRef<'_>) -> HtmlRequestFontState {
+    if !node.document_has_terminal_request("ft") {
+        return HtmlRequestFontState::default();
+    }
     let mut lineage = vec![node];
     let mut cursor = node;
     while let Some(parent) = cursor.parent() {

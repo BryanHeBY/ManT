@@ -832,17 +832,16 @@ fn render_html_man_tagged_paragraph(
 
 fn html_man_tagged_paragraph_group(node: NodeRef<'_>) -> Option<Vec<NodeRef<'_>>> {
     let parent = node.parent()?;
-    let siblings = parent.children().collect::<Vec<_>>();
-    let index = siblings
-        .iter()
-        .position(|sibling| sibling.id() == node.id())?;
-    if index > 0 && matches!(siblings[index - 1].macro_name(), Some("TP" | "TQ")) {
+    if node
+        .previous_sibling()
+        .is_some_and(|sibling| matches!(sibling.macro_name(), Some("TP" | "TQ")))
+    {
         return None;
     }
     Some(
-        siblings[index..]
-            .iter()
-            .copied()
+        parent
+            .children()
+            .skip_while(|sibling| sibling.id() != node.id())
             .take_while(|sibling| matches!(sibling.macro_name(), Some("TP" | "TQ")))
             .collect(),
     )
@@ -994,21 +993,16 @@ fn html_man_ip_group<'document>(
 ) -> Option<(HtmlManIpKind, Vec<NodeRef<'document>>)> {
     let kind = html_man_ip_kind(node, limits)?;
     let parent = node.parent()?;
-    let siblings = parent.children().collect::<Vec<_>>();
-    let index = siblings
-        .iter()
-        .position(|sibling| sibling.id() == node.id())?;
-    if index > 0
-        && siblings[index - 1].macro_name() == Some("IP")
-        && html_man_ip_kind(siblings[index - 1], limits) == Some(kind)
-    {
+    if node.previous_sibling().is_some_and(|sibling| {
+        sibling.macro_name() == Some("IP") && html_man_ip_kind(sibling, limits) == Some(kind)
+    }) {
         return None;
     }
     Some((
         kind,
-        siblings[index..]
-            .iter()
-            .copied()
+        parent
+            .children()
+            .skip_while(|sibling| sibling.id() != node.id())
             .take_while(|sibling| {
                 sibling.macro_name() == Some("IP")
                     && html_man_ip_kind(*sibling, limits) == Some(kind)
