@@ -504,6 +504,24 @@ pub(super) fn apply_mdoc_structure_outcome(
                 format!("missing section argument: Xr {name}"),
                 location,
             ),
+            crate::mdoc::Recovery::UnusualReferenceOrder {
+                name,
+                section,
+                previous_name,
+                previous_section,
+                location,
+            } => (
+                DiagnosticCode::MDOC_REFERENCE_ORDER,
+                Severity::Warning,
+                if section == previous_section {
+                    format!("unusual Xr order: {name} after {previous_name}")
+                } else {
+                    format!(
+                        "unusual Xr order: {name}({section}) after {previous_name}({previous_section})"
+                    )
+                },
+                location,
+            ),
             crate::mdoc::Recovery::InvalidTag { tag, location } => (
                 DiagnosticCode::MDOC_INVALID_TAG,
                 Severity::Error,

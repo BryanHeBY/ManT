@@ -31,6 +31,31 @@ fn ap_and_ns_have_no_owned_arguments() {
 }
 
 #[test]
+fn see_also_cross_references_report_reversed_section_order() {
+    let name = SourceName::new("mdoc-see-also-order.3").unwrap();
+    let report = Parser::default()
+        .parse(Source::new(
+            &name,
+            b".Dd August 28, 2026\n.Dt SEE-ALSO 3\n.Os\n.Sh NAME\n.Nm see-also\n.Nd test\n.Sh SEE ALSO\n.Xr first 5 ,\n.Xr second 3\n",
+        ))
+        .unwrap();
+    let diagnostic = report
+        .diagnostics
+        .iter()
+        .find(|diagnostic| diagnostic.code.as_str() == DiagnosticCode::MDOC_REFERENCE_ORDER)
+        .unwrap();
+    assert_eq!(
+        diagnostic.message.as_ref(),
+        "unusual Xr order: second(3) after first(5)"
+    );
+    let location = report
+        .document
+        .source_position(diagnostic.primary.as_ref().unwrap())
+        .unwrap();
+    assert_eq!((location.line, location.column), (9, 2));
+}
+
+#[test]
 fn vt_is_a_synopsis_partial_block_with_inline_children() {
     let name = SourceName::new("mdoc-vt-literal.1").unwrap();
     let report = Parser::default()

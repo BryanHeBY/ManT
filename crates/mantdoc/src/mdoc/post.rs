@@ -146,6 +146,7 @@ impl PostValidation<'_> {
             automatic_function_targets,
             automatic_function_tag_occurrences,
         );
+        validate_see_also_reference_order(builder, root, &mut outcome.recoveries);
         outcome.recoveries.extend(section_paragraph_recoveries);
         if !prologue.saw_operating_system_request && (prologue.saw_date || prologue.saw_title) {
             outcome.recoveries.push(Recovery::MissingOperatingSystem);
@@ -155,6 +156,99 @@ impl PostValidation<'_> {
             outcome
                 .recoveries
                 .push(Recovery::RcsIdMissing { flavour: "NetBSD" });
+        }
+    }
+}
+
+/// Mirror the order check in mandoc's `post_sh_see_also()`. The validator
+/// considers only the initial run of direct `.Xr name section` entries in a
+/// `SEE ALSO` body, allowing punctuation-only text between adjacent entries.
+fn validate_see_also_reference_order(
+    builder: &DocumentBuilder,
+    root: NodeId,
+    recoveries: &mut Vec<Recovery>,
+) {
+    let mut pending = vec![root];
+    while let Some(node) = pending.pop() {
+        if builder.node_kind(node) == Some(NodeKind::Block)
+            && builder.node_macro_name(node) == Some("Sh")
+            && is_see_also_section(builder, node)
+            && let Some(body) = builder.children(node).and_then(|children| {
+                children.iter().copied().find(|child| {
+                    builder.node_kind(*child) == Some(NodeKind::Body)
+                        && builder.node_macro_name(*child) == Some("Sh")
+                })
+            })
+        {
+            validate_see_also_body(builder, body, recoveries);
+        }
+        if let Some(children) = builder.children(node) {
+            pending.extend(children.iter().rev().copied());
+        }
+    }
+}
+
+fn is_see_also_section(builder: &DocumentBuilder, section: NodeId) -> bool {
+    builder
+        .children(section)
+        .and_then(|children| {
+            children.iter().copied().find(|child| {
+                builder.node_kind(*child) == Some(NodeKind::Head)
+                    && builder.node_macro_name(*child) == Some("Sh")
+            })
+        })
+        .and_then(|head| super::visible_head_text(builder, head))
+        .is_some_and(|title| title.eq_ignore_ascii_case("SEE ALSO"))
+}
+
+fn validate_see_also_body(builder: &DocumentBuilder, body: NodeId, recoveries: &mut Vec<Recovery>) {
+    let children = builder.children(body).unwrap_or_default();
+    let mut cursor = 0;
+    let mut previous = None::<(String, String)>;
+    while let Some(node) = children.get(cursor).copied() {
+        if builder.node_macro_name(node) != Some("Xr") {
+            break;
+        }
+        let Some(arguments) = builder.children(node) else {
+            break;
+        };
+        let (Some(name), Some(section)) = (
+            arguments
+                .first()
+                .and_then(|child| builder.node_text(*child)),
+            arguments.get(1).and_then(|child| builder.node_text(*child)),
+        ) else {
+            break;
+        };
+        if let Some((previous_name, previous_section)) = previous.as_ref() {
+            let section_order = previous_section.as_str().cmp(section);
+            if section_order.is_gt()
+                || (section_order.is_eq()
+                    && previous_name.to_ascii_lowercase() > name.to_ascii_lowercase())
+            {
+                recoveries.push(Recovery::UnusualReferenceOrder {
+                    name: name.into(),
+                    section: section.into(),
+                    previous_name: previous_name.clone().into_boxed_str(),
+                    previous_section: previous_section.clone().into_boxed_str(),
+                    location: builder.node_location(node),
+                });
+            }
+        }
+        previous = Some((name.to_owned(), section.to_owned()));
+        cursor += 1;
+        match children.get(cursor).copied() {
+            Some(next) if builder.node_macro_name(next) == Some("Xr") => {}
+            Some(next) if builder.node_kind(next) == Some(NodeKind::Text) => {
+                let Some(punctuation) = builder.node_text(next) else {
+                    break;
+                };
+                if punctuation.bytes().any(|byte| byte.is_ascii_alphabetic()) {
+                    break;
+                }
+                cursor += 1;
+            }
+            _ => break,
         }
     }
 }

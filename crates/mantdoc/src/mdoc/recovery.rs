@@ -59,6 +59,20 @@ pub(crate) enum Recovery {
         /// Source location of the `.Xr` request.
         location: Option<SourceSpan>,
     },
+    /// Adjacent `SEE ALSO` cross references are not in mandoc's expected
+    /// section/name order.
+    UnusualReferenceOrder {
+        /// Current referenced manual name.
+        name: Box<str>,
+        /// Current referenced manual section.
+        section: Box<str>,
+        /// Preceding referenced manual name.
+        previous_name: Box<str>,
+        /// Preceding referenced manual section.
+        previous_section: Box<str>,
+        /// Source location of the current `.Xr` request.
+        location: Option<SourceSpan>,
+    },
     /// A manual target spelling contains whitespace or a roff escape.
     InvalidTag {
         /// Complete authored tag spelling used in the legacy diagnostic.

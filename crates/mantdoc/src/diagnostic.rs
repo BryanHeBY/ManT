@@ -262,6 +262,8 @@ impl DiagnosticCode {
     pub const MDOC_NON_CALLABLE_MACRO: &'static str = "mdoc.non-callable-macro";
     /// An mdoc cross reference omitted its manual section argument.
     pub const MDOC_REFERENCE_SECTION_MISSING: &'static str = "mdoc.reference-section-missing";
+    /// Cross references in an mdoc `SEE ALSO` section are out of order.
+    pub const MDOC_REFERENCE_ORDER: &'static str = "mdoc.reference-order";
     /// An mdoc `.Ns` request cannot suppress spacing at its source position.
     pub const MDOC_NO_SPACE_MACRO: &'static str = "mdoc.no-space-macro";
     /// An mdoc boolean control did not receive `on` or `off`.
