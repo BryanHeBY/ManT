@@ -31,7 +31,7 @@ for package in "${PACKAGES[@]}"; do
     )
   done
 
-  cargo package --manifest-path "$ROOT/Cargo.toml" --locked --no-verify \
+  cargo package --quiet --manifest-path "$ROOT/Cargo.toml" --locked --no-verify \
     --allow-dirty -p "$package" "${package_patches[@]}"
   mkdir -p "$destination"
   tar -xzf "$archive" --strip-components=1 -C "$destination"

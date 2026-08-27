@@ -79,16 +79,3 @@ required-features = ["render"]
 name = "render_html_groups"
 harness = false
 required-features = ["render"]
-
-[[example]]
-name = "mantdoc-corpus-inventory"
-path = "examples/mantdoc-corpus-inventory.rs"
-
-[[example]]
-name = "mantdoc-canonical-snapshot"
-path = "examples/mantdoc-canonical-snapshot.rs"
-
-[[example]]
-name = "mantdoc-render-diff"
-path = "examples/mantdoc-render-diff.rs"
-required-features = ["render"]
