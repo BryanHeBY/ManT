@@ -501,6 +501,7 @@ impl<R: SourceResolver + ?Sized> SourceFrame<'_, '_, '_, R> {
                             );
                         }
                         if environment.is_filled() && !suppress_filled_text_tabs {
+                            let diagnostic_start = diagnostics.len();
                             emit_filled_text_tabs(
                                 bytes,
                                 start,
@@ -509,6 +510,13 @@ impl<R: SourceResolver + ?Sized> SourceFrame<'_, '_, '_, R> {
                                 &mut diagnostics,
                                 &mut truncated,
                             );
+                            // roff records filled-text tabs while scanning,
+                            // but libmandoc publishes their findings after
+                            // ordinary input and package validation.  Reserve
+                            // their budget now, then let the report phase move
+                            // only these exact findings behind the scan stream.
+                            deferred_post_validation_diagnostics
+                                .extend_from_slice(&diagnostics[diagnostic_start..]);
                         }
                     }
                     let has_invalid_input_bytes = emit_invalid_input_bytes(
@@ -640,6 +648,7 @@ impl<R: SourceResolver + ?Sized> SourceFrame<'_, '_, '_, R> {
                     // Its byte position is still relative to the visible input
                     // line, as in `.ds x<TAB>text` followed by `\\*[x]`.
                     if environment.is_filled() && !authored_has_tab {
+                        let diagnostic_start = diagnostics.len();
                         emit_filled_text_tabs(
                             &translated,
                             start,
@@ -648,6 +657,8 @@ impl<R: SourceResolver + ?Sized> SourceFrame<'_, '_, '_, R> {
                             &mut diagnostics,
                             &mut truncated,
                         );
+                        deferred_post_validation_diagnostics
+                            .extend_from_slice(&diagnostics[diagnostic_start..]);
                     }
                     emit_declared_character_escape_warnings(
                         &translated,

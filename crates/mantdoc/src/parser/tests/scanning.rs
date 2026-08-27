@@ -198,6 +198,30 @@ fn filled_text_tab_keeps_the_legacy_visible_diagnostic() {
 }
 
 #[test]
+fn filled_text_tabs_are_published_after_the_input_scan() {
+    let name = SourceName::new("filled-tab-order.1").unwrap();
+    let long_line = b"word word word word word word word word word word word word word word word word word word word\n";
+    let mut input = b".TH TABS 1 2026-08-28\n.SH DESCRIPTION\n".to_vec();
+    input.extend_from_slice(long_line);
+    input.extend_from_slice(b"left\tright\n");
+    input.extend_from_slice(long_line);
+    let report = Parser::default().parse(Source::new(&name, &input)).unwrap();
+    let codes = report
+        .diagnostics
+        .iter()
+        .map(|diagnostic| diagnostic.code.as_str())
+        .collect::<Vec<_>>();
+    assert_eq!(
+        codes,
+        vec![
+            DiagnosticCode::INPUT_LINE_TOO_LONG,
+            DiagnosticCode::INPUT_LINE_TOO_LONG,
+            DiagnosticCode::INPUT_TAB_IN_FILLED_TEXT,
+        ]
+    );
+}
+
+#[test]
 fn unterminated_quote_points_at_the_unclosed_argument_not_a_prior_quote() {
     let name = SourceName::new("unterminated-quote.1").unwrap();
     let report = Parser::default()
