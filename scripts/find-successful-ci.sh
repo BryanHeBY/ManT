@@ -25,6 +25,7 @@ runs=$(gh api --method GET \
 required_jobs=(
   "Supply chain"
   "Build (Linux x64)"
+  "Native roff conformance (Linux x64)"
   "Native (macOS arm64)"
   "Native (Windows x64)"
   "Rust MSRV (1.88.0)"

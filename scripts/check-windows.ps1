@@ -25,9 +25,7 @@ function Invoke-Native {
 
 $Root = Split-Path -Parent $PSScriptRoot
 Set-Location $Root
-$env:LIBMANDOC_RS_DENY_WARNINGS = "1"
 $Packages = @(
-    "--package", "libmandoc-rs",
     "--package", "mant-ir",
     "--package", "mant-protocol",
     "--package", "mant-sources",
@@ -97,8 +95,8 @@ Invoke-Native -Label "check Rust formatting" -Program "cargo" `
     -Arguments @("fmt", "--all", "--check")
 Invoke-Native -Label "test portable Rust packages" -Program "cargo" `
     -Arguments (@("test", "--locked") + $Packages)
-Invoke-Native -Label "test optional libmandoc features" -Program "cargo" `
-    -Arguments @("test", "--locked", "--package", "libmandoc-rs", "--all-features")
+Invoke-Native -Label "test native mantdoc features" -Program "cargo" `
+    -Arguments @("test", "--locked", "--package", "mantdoc", "--all-features")
 Invoke-Native -Label "lint portable Rust packages" -Program "cargo" `
     -Arguments (@("clippy", "--locked") + $Packages + @("--all-targets", "--all-features", "--", "-D", "warnings"))
 & (Join-Path $PSScriptRoot "build-and-smoke.ps1") -BuildProfile $BuildProfile

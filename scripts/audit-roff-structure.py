@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Find AST-to-IR topology gaps in local roff corpora.
+"""Find native-AST-to-IR topology gaps in local roff corpora.
 
 Unlike ``audit-roff-fidelity.py``, this development-only audit never compares
 terminal wrapping or invokes a host renderer. It compares structural
-obligations observed in libmandoc's owned AST with the source-aware ManT IR:
+obligations observed in mantdoc's owned AST with the source-aware ManT IR:
 no-fill source lines, paragraph/list/definition container shape, table rows,
 cells and spans, relative indentation, and typed navigation links.
 
@@ -90,7 +90,7 @@ class Finding:
 
 def parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="compare libmandoc AST topology with ManT IR over local roff inputs"
+        description="compare native mantdoc AST topology with ManT IR over local roff inputs"
     )
     source = parser.add_mutually_exclusive_group()
     source.add_argument(

@@ -20,7 +20,6 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  LIBMANDOC_RS_DENY_WARNINGS: "1"
   RUST_MSRV: 1.88.0
 
 jobs:
@@ -120,9 +119,6 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Install native dependencies
-        run: bash scripts/install-ci-native-dependencies.sh
-
       - name: Install stable Rust toolchain
         run: |
           rustup toolchain install stable --profile minimal --component clippy,rustfmt
@@ -147,14 +143,56 @@ jobs:
       - name: Build and test
         run: bash scripts/check.sh --build-profile debug
 
-      - name: Verify vendored libmandoc matches upstream
-        run: bash crates/libmandoc-rs/scripts/sync-vendor --verify
+  native-roff-conformance:
+    # This independent Rust-only conformance job starts beside the product
+    # boundary so archive verification and parser recovery never wait for
+    # packaging, docs, clippy, fuzz compilation, or product smoke tests.
+    name: Native roff conformance (Linux x64)
+    needs: scope
+    if: needs.scope.outputs.run_full == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install stable Rust toolchain
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+
+      - name: Cache compiled Cargo dependencies
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          shared-key: linux-x64-stable
+          workspaces: |
+            . -> target
+          cache-bin: false
+          save-if: ${{ github.event_name == 'push' }}
+
+      # The runner validates the frozen archive identity and exact decompressed
+      # source identities before asserting each native execution, macro-package,
+      # preprocessor, AST, and engine-IR contract. Keep payload under the runner
+      # temp directory: upstream regressions are conformance evidence, never
+      # repository/package contents.
+      - name: Check checksum-pinned native roff execution gate
+        shell: bash
+        run: |
+          archive="$RUNNER_TEMP/mandoc-1.14.6.tar.gz"
+          curl --fail --location --retry 3 --retry-all-errors \
+            --output "$archive" https://mandoc.bsd.lv/snapshots/mandoc-1.14.6.tar.gz
+          # M3, M4, and M6 are independent whole-corpus checks. M5 adds
+          # deterministic index-modulo shards. Four shards preserve complete
+          # coverage without serializing the independent parser gates.
+          python3 scripts/run-mantdoc-differential-shards.py "$archive" --shards 4 --jobs 4
 
   macos-native:
-    # Guards the checked-in macOS C configuration (config/macos.h and its
-    # compat sources) against bit-rot. Release signing and packaging require
-    # certificates and are intentionally out of scope; this only compiles and
-    # tests the native crates on macOS/arm64, which needs no secrets.
+    # Guards the portable Rust parser and product crates on macOS/arm64.
+    # Release signing and packaging require certificates and are intentionally
+    # out of scope; this needs no secrets.
     name: Native (macOS arm64)
     needs: scope
     if: needs.scope.outputs.run_full == 'true'
@@ -179,18 +217,14 @@ jobs:
           cache-bin: false
           save-if: ${{ github.event_name == 'push' }}
 
-      # Compile and test the native workspace plus libmandoc's default-off
-      # renderer so the macOS target family is exercised on every change, not
-      # only at release time. clang ships with the runner image, so libmandoc
-      # builds against config/macos.h.
       - name: Test Rust workspace on macOS
         run: |
           cargo test --locked --workspace
-          cargo test --locked --package libmandoc-rs --all-features
+          cargo test --locked --package mantdoc --all-features
 
   windows-native:
-    # Windows builds the same memory-only libmandoc parser and manual fixtures
-    # as Unix while Rust owns source I/O, decompression, and .so redirects.
+    # Windows exercises the same pure-Rust parser, transport, and manual
+    # fixtures as Unix.
     name: Native (Windows x64)
     needs: scope
     if: needs.scope.outputs.run_full == 'true'
@@ -233,9 +267,6 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Install native dependencies
-        run: bash scripts/install-ci-native-dependencies.sh
-
       - name: Install minimum supported Rust toolchain
         run: rustup toolchain install "$RUST_MSRV" --profile minimal
 
@@ -267,9 +298,6 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-
-      - name: Install native dependencies
-        run: bash scripts/install-ci-native-dependencies.sh
 
       - name: Install stable Rust toolchain
         run: |
@@ -311,6 +339,7 @@ jobs:
       - scope
       - supply-chain
       - build
+      - native-roff-conformance
       - macos-native
       - windows-native
       - rust-msrv
@@ -330,6 +359,7 @@ jobs:
           for result in \
             "$SUPPLY_CHAIN_RESULT" \
             "$BUILD_RESULT" \
+            "$NATIVE_ROFF_DIFFERENTIAL_RESULT" \
             "$MACOS_RESULT" \
             "$WINDOWS_RESULT" \
             "$MSRV_RESULT" \
@@ -341,6 +371,7 @@ jobs:
           SCOPE_RESULT: ${{ needs.scope.result }}
           SUPPLY_CHAIN_RESULT: ${{ needs.supply-chain.result }}
           BUILD_RESULT: ${{ needs.build.result }}
+          NATIVE_ROFF_DIFFERENTIAL_RESULT: ${{ needs.native-roff-conformance.result }}
           MACOS_RESULT: ${{ needs.macos-native.result }}
           WINDOWS_RESULT: ${{ needs.windows-native.result }}
           MSRV_RESULT: ${{ needs.rust-msrv.result }}

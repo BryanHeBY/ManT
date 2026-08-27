@@ -14,8 +14,6 @@ $Root = if ($env:MANT_WORKSPACE) {
     Split-Path -Parent $PSScriptRoot
 }
 Set-Location $Root
-$env:LIBMANDOC_RS_DENY_WARNINGS = "1"
-
 $CargoArguments = @("build", "--locked", "--package", "mant")
 if ($BuildProfile -eq "release") {
     $CargoArguments = @("build", "--locked", "--release", "--package", "mant")

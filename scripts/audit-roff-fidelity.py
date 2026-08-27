@@ -34,7 +34,7 @@ from typing import Iterable, Sequence
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURE_ROOT = ROOT / "tests/fixtures/roff/real"
 DEFAULT_MANT = ROOT / "target/debug/mant"
-DEFAULT_SYNTAX_PROFILER = ROOT / "target/debug/examples/roff_ast_profile"
+DEFAULT_SYNTAX_PROFILER = ROOT / "target/debug/examples/roff_structure_profile"
 DEFAULT_SOURCE_LEDGER = ROOT / "tests/fixtures/roff/FIDELITY_AUDIT.csv"
 SYNTAX_PROFILE_SCHEMA = "mant.roff-ast-profile/v2"
 SYNTAX_CACHE_VERSION = 3
@@ -325,8 +325,8 @@ def parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
         "--syntax-priority",
         action="store_true",
         help=(
-            "prefer pages with rare or not-yet-recorded libmandoc AST features "
-            "when bounded sampling is active"
+            "retired compatibility option; use audit-roff-structure.py for "
+            "native AST-to-IR topology sampling"
         ),
     )
     parser.add_argument(
@@ -335,7 +335,7 @@ def parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
         default=DEFAULT_SYNTAX_PROFILER,
         metavar="FILE",
         help=(
-            "batch AST profiler built from the libmandoc-rs example "
+            "retired AST profiler path; use audit-roff-structure.py instead "
             f"(default: {DEFAULT_SYNTAX_PROFILER.relative_to(ROOT)})"
         ),
     )
@@ -1492,7 +1492,7 @@ def fidelity_signatures(value: str) -> tuple[list[str], list[str]]:
         # leaked control syntax.
         review.append("bracketed Unicode escape is visible; verify documented syntax")
     if INTERNAL_MARKER.search(value):
-        hard.append("internal libmandoc marker leaked")
+        hard.append("internal roff marker leaked")
     if GLUED_MARKER.search(value):
         review.append("list or enumeration marker may be glued to following text")
     return hard, review
@@ -2596,11 +2596,10 @@ def validate_tools(mant: Path, reference: str) -> None:
 
 
 def validate_syntax_profiler(path: Path) -> None:
-    if not path.is_file():
-        raise ValueError(
-            f"syntax profiler not found: {path}; run "
-            "`cargo build -p libmandoc-rs --example roff_ast_profile`"
-        )
+    raise ValueError(
+        "syntax-priority profiling was retired with the C oracle; use "
+        "`python3 scripts/audit-roff-structure.py --fixtures` instead"
+    )
 
 
 def main(argv: Sequence[str]) -> int:

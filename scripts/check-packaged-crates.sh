@@ -4,12 +4,17 @@
 set -euo pipefail
 
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-PACKAGES=(mant-ir mant-protocol libmandoc-rs mant-sources mant-engine mant-ui mant)
+PACKAGES=(mant-ir mant-protocol mantdoc mant-sources mant-engine mant-ui mant)
 PACKAGE_CHECK_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/mant-package-check.XXXXXX")
 trap 'rm -rf "$PACKAGE_CHECK_ROOT"' EXIT
 
 mkdir -p "$PACKAGE_CHECK_ROOT/crates"
-cp "$ROOT/Cargo.toml" "$ROOT/Cargo.lock" "$PACKAGE_CHECK_ROOT/"
+# The conformance harness is an intentionally unpublished workspace member, so
+# it has no extracted package directory in this temporary published-source
+# workspace. Retain the workspace settings while omitting only that member.
+sed '/^[[:space:]]*"crates\/mantdoc-conformance",[[:space:]]*$/d' \
+  "$ROOT/Cargo.toml" > "$PACKAGE_CHECK_ROOT/Cargo.toml"
+cp "$ROOT/Cargo.lock" "$PACKAGE_CHECK_ROOT/"
 
 for package in "${PACKAGES[@]}"; do
   package_id=$(cargo pkgid --manifest-path "$ROOT/Cargo.toml" -p "$package")
@@ -19,7 +24,7 @@ for package in "${PACKAGES[@]}"; do
   dependencies=()
   case "$package" in
     mant-protocol) dependencies=(mant-ir) ;;
-    mant-engine) dependencies=(libmandoc-rs mant-ir mant-protocol mant-sources) ;;
+    mant-engine) dependencies=(mantdoc mant-ir mant-protocol mant-sources) ;;
     mant-ui) dependencies=(mant-engine mant-ir mant-protocol) ;;
     mant) dependencies=(mant-engine mant-ir mant-protocol mant-sources mant-ui) ;;
   esac
@@ -44,7 +49,4 @@ done
 # previous source set and hide, or invent, an API compatibility failure.
 export CARGO_TARGET_DIR="$PACKAGE_CHECK_ROOT/target"
 cargo test --manifest-path "$PACKAGE_CHECK_ROOT/Cargo.toml" --locked --workspace
-cargo test --manifest-path "$PACKAGE_CHECK_ROOT/Cargo.toml" --locked \
-  --package libmandoc-rs --all-features
-
 printf 'packaged crate verification succeeded\n'
