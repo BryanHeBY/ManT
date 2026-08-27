@@ -1499,17 +1499,33 @@ def fidelity_signatures(value: str) -> tuple[list[str], list[str]]:
     return hard, review
 
 
+def conditional_control_fragments(control: str) -> list[str]:
+    """Return visible spellings that identify a selected control program.
+
+    A broken reparse can lose the request dots or retain only a suffix.  The
+    whole authored spelling is still the strongest signal, while two-or-more
+    token fragments catch low-level leaks such as ``if rF``, ``nr rF``, and
+    ``rF 1`` without treating ordinary prose words or a bare number as syntax.
+    """
+    words = [word.lstrip(".'") for word in control.split()]
+    fragments = [control, " ".join(words)]
+    for width in range(2, len(words) + 1):
+        fragments.extend(" ".join(words[index : index + width]) for index in range(len(words) - width + 1))
+    return list(dict.fromkeys(fragment for fragment in fragments if fragment))
+
+
 def differential_signatures(
     source: str, reference: str, mant: str
-) -> list[str]:
-    """Return source-conditioned rendering differences worth human review.
+) -> tuple[list[str], list[str]]:
+    """Return hard and review-only source-conditioned rendering findings.
 
     Token presence deliberately ignores punctuation and whitespace. These
     probes cover formatter-owned mdoc syntax where those characters carry
     semantics, while keeping the general comparison tolerant of wrapping and
     layout differences.
     """
-    review = []
+    hard: list[str] = []
+    review: list[str] = []
     reference = strip_terminal_formatting(reference)
     mant = strip_terminal_formatting(mant)
     reference_visible_lines = [
@@ -1528,15 +1544,28 @@ def differential_signatures(
         cursor = 0
         while match := INLINE_ROFF_CONTROL.search(source_line, cursor):
             candidate = " ".join(match.group("body").split())
+            fragments = conditional_control_fragments(candidate)
             if (
-                any(candidate in line for line in mant_visible_lines)
-                and not any(candidate in line for line in reference_visible_lines)
+                any(
+                    fragment in line
+                    for fragment in fragments
+                    for line in mant_visible_lines
+                )
+                and not any(
+                    fragment in line
+                    for fragment in fragments
+                    for line in reference_visible_lines
+                )
                 and not any(candidate in existing for existing in leaked_controls)
             ):
                 leaked_controls.append(candidate)
             cursor = match.start("body") + 1
     for candidate in leaked_controls[:3]:
-        review.append(
+        # This is execution syntax that the reference did not print, rather
+        # than a formatter-specific presentation difference.  It must fail an
+        # audit even when the surviving fragment is short (for example `if`,
+        # `nr`, a register name, or a numeric operand).
+        hard.append(
             "selected conditional leaked an authored roff control line: "
             f"{candidate!r}"
         )
@@ -1564,7 +1593,7 @@ def differential_signatures(
                 "mdoc multi-operand Fa separators may be missing "
                 f"(reference={reference_commas}, mant={mant_commas})"
             )
-    return review
+    return hard, review
 
 
 def source_bytes(path: Path) -> bytes | None:
@@ -2077,13 +2106,13 @@ def audit_page(
     phrases = broken_phrase_candidates(reference_lines, mant_tokens, ngram)
     hard_signatures, review_signatures = fidelity_signatures(mant_output)
     if raw_source is not None:
-        review_signatures.extend(
-            differential_signatures(
-                raw_source.decode("utf-8", errors="replace"),
-                reference_output,
-                mant_output,
-            )
+        conditional_hard, differential_review = differential_signatures(
+            raw_source.decode("utf-8", errors="replace"),
+            reference_output,
+            mant_output,
         )
+        hard_signatures.extend(conditional_hard)
+        review_signatures.extend(differential_review)
     if not mant_output.strip():
         hard_signatures.append("ManT produced empty output")
     signatures = hard_signatures + review_signatures
@@ -2465,31 +2494,53 @@ def self_check() -> None:
     assert review == [
         "bracketed Unicode escape is visible; verify documented syntax"
     ]
+    assert conditional_control_fragments(".if rF .nr rF 1") == [
+        ".if rF .nr rF 1",
+        "if rF nr rF 1",
+        "if rF",
+        "rF nr",
+        "nr rF",
+        "rF 1",
+        "if rF nr",
+        "rF nr rF",
+        "nr rF 1",
+        "if rF nr rF",
+        "rF nr rF 1",
+    ]
     assert differential_signatures(
         ".Nd description\n", "name — description", "name —description"
-    ) == [
-        "mdoc Nd separator is attached to its description (reference=0, mant=1)"
-    ]
+    ) == (
+        [],
+        ["mdoc Nd separator is attached to its description (reference=0, mant=1)"],
+    )
     assert differential_signatures(
         ".Fo function\n.Fc\n", "function();", "function()"
-    ) == [
-        "mdoc synopsis function terminators may be missing (reference=1, mant=0)"
-    ]
-    assert not differential_signatures(
-        ".Fn function\n", "function();", "function();"
+    ) == (
+        [],
+        ["mdoc synopsis function terminators may be missing (reference=1, mant=0)"],
     )
+    assert differential_signatures(".Fn function\n", "function();", "function();") == ([], [])
     assert differential_signatures(
         ".if \\n(.g .if rF .nr rF 1\n",
         "NAME\n",
         "prefix .if rF .nr rF 1 suffix\nNAME\n",
-    ) == [
-        "selected conditional leaked an authored roff control line: '.if rF .nr rF 1'"
-    ]
+    ) == (
+        ["selected conditional leaked an authored roff control line: '.if rF .nr rF 1'"],
+        [],
+    )
+    assert differential_signatures(
+        ".if \\n(.g .if rF .nr rF 1\n",
+        "NAME\n",
+        "prefix nr rF 1 suffix\nNAME\n",
+    ) == (
+        ["selected conditional leaked an authored roff control line: '.if rF .nr rF 1'"],
+        [],
+    )
     assert differential_signatures(
         '.Fo function\n.Fa "int first" "int second"\n.Fc\n',
         "function(int first, int second);",
         "function(int first int second);",
-    )[-1] == "mdoc multi-operand Fa separators may be missing (reference=1, mant=0)"
+    )[1][-1] == "mdoc multi-operand Fa separators may be missing (reference=1, mant=0)"
     assert redirect_only_target(b'.\\" alias\n.so man1/target.1\n') == "man1/target.1"
     assert redirect_only_target(b".so man1/target.1\ntext\n") is None
     layout_source = ".EX\nplain first\n  plain second\n.EE\n"
