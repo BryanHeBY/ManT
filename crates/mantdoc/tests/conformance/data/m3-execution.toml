@@ -200,7 +200,10 @@ diagnostics = [{ code = "roff.unterminated-scope", start = 1223, end = 1230 }]
 [[case]]
 id = "regress/roff/de/factorial"
 source_sha256 = "214c0212ae84797ae778727802ec49a90c8f2cbb73d49acb75b6a3bb4ffdaca5"
-ast_nodes = 199
+# This is the public post-validation tree.  The earlier raw-event count (199)
+# predated structural normalization; the independent libmandoc-rs oracle and
+# immutable canonical snapshot both match this 196-node public result.
+ast_nodes = 196
 expansion_steps = 350
 truncated = false
 
