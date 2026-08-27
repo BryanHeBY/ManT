@@ -640,8 +640,9 @@ Multi-document deterministic output supports `--search` and `--explain`. Outline
   path, stable ID, or unambiguous semantic alias.
 - `--node SELECTOR`: Return an outline node selected by path, stable ID, or
   semantic-entry alias; repeat the option to select several nodes.
-- `--explain ENTRY`: Return exactly one semantic option, command, variable, or
-  environment entry.
+- `--explain ENTRY`: Return exactly one semantic entry, including commands,
+  parameters, configuration keys, environment variables, variables, values,
+  and generic terms.
 
 For progressive agent exploration, begin with the default summary, then reuse
 the bracketed stable ID of a relevant section as `--outline-root` and request
@@ -677,8 +678,9 @@ priority-zero built-in position as native manuals.
 
 `--node` first recognizes the reserved tldr and document-root selectors, then
 resolves exact paths or IDs across sections and entries, exact aliases, and
-finally normalized entry shorthands. `--explain` uses the same precedence but
-accepts entries only. Duplicate matches at one precedence return deterministic
+finally normalized entry shorthands. `--explain` uses the same precedence,
+accepts every semantic entry kind, and rejects structural sections. Duplicate
+matches at one precedence return deterministic
 candidate paths and IDs. Only when no entry matches does an exact section,
 root, or tldr selector produce the instruction to use `--node`; consequently a
 command alias may have the same spelling as a section ID without being
@@ -810,7 +812,10 @@ standard error. `--request-json` accepts the same input and projection model
 used by external process integrations. MCP exposes `mant_find`, `mant_outline`,
 `mant_read`, `mant_explain`, and `mant_search`. `mant_find` merges local
 Markdown candidates with the native manual index and returns canonical logical
-IDs. Focused tools accept one unqualified selector or canonical ID, never an
+IDs. It accepts literal or regex name matching, explicit case policy, and a
+result offset. `mant_search` likewise exposes visible or generated-Markdown
+scope plus a global matching-line-group offset. Focused tools accept one
+unqualified selector or canonical ID, never an
 arbitrary local path. Successful calls contain one bounded plain-text or
 CommonMark result rather than a complete AST or schema envelope. Every result
 starts with `chars`, `totalChars`, and optional `nextChar` metadata;
@@ -819,6 +824,8 @@ The largest page body is 32,768 scalars and therefore at most 131,072 UTF-8
 bytes before MCP/JSON framing; it is not a 32 KiB byte page. `maxResults` and
 `maxMatches` truncate the canonical result before character paging, so callers
 must raise those limits or narrow the query to reach omitted rows or matches.
+Result `offset` skips catalog rows or matching-line groups before that
+materialization; `startChar` then pages only the resulting canonical text.
 Paging is stateless: MCP reads current local files on every call, has no update
 tool, and makes no cross-call snapshot guarantee.
 

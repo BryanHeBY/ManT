@@ -1136,15 +1136,16 @@ tools. Outputs intentionally remain text-first:
 
 | Tool | Required input | Optional input | Output |
 | --- | --- | --- | --- |
-| `mant_find` | None | `query`, `kind`, `source`, `manualSection`, `maxResults`, `startChar`, `maxChars` | Flat catalog text with canonical document IDs |
+| `mant_find` | None | `query`, `syntax`, `case`, `kind`, `source`, `manualSection`, `maxResults`, `offset`, `startChar`, `maxChars` | Flat catalog text with canonical document IDs |
 | `mant_outline` | `document` | `entries`, default `summary`; `root`, `startChar`, `maxChars` | Selectable plain-text hierarchy |
 | `mant_read` | `document`, 1–16 `selectors` | `startChar`, `maxChars` | CommonMark excerpts |
 | `mant_explain` | 1–16 `documents`, `entry` | `followLinks`, `maxDepth`, `maxDocuments`, `startChar`, `maxChars` | CommonMark semantic entries grouped by document |
-| `mant_search` | 1–16 `documents`, `pattern` | `followLinks`, `maxDepth`, `maxDocuments`, `syntax`, `case`, `word`, `contextLines`, `maxMatches`, `startChar`, `maxChars` | Grep-like visible-text matches grouped by document |
+| `mant_search` | 1–16 `documents`, `pattern` | `followLinks`, `maxDepth`, `maxDocuments`, `syntax`, `case`, `scope`, `word`, `contextLines`, `maxMatches`, `offset`, `startChar`, `maxChars` | Grep-like visible-text or generated-CommonMark matches grouped by document |
 
 Every tool is annotated read-only, non-destructive, and closed-world.
-`mant_find` may filter one configured Markdown `source` or one native
-`manualSection`; the two filters cannot be combined. `mant_outline` and
+`mant_find` accepts literal or regex matching, explicit case policy, and a
+catalog-row `offset`. It may filter one configured Markdown `source` or one
+native `manualSection`; the two filters cannot be combined. `mant_outline` and
 `mant_read` take one `document`. `mant_explain` and `mant_search` take a
 `documents` array so one request can query several initial documents. Each
 value is either an ordinary unqualified selector or a canonical catalog ID such
@@ -1199,6 +1200,11 @@ Their compact bodies report returned and total match counts, while `totalChars`
 describes only the canonical body produced under the requested semantic bound.
 Rows or matches excluded by `maxResults` or `maxMatches` cannot be reached by
 advancing `startChar`; increase the semantic bound or narrow the query first.
+The independent `offset` skips matching catalog rows or global matching-line
+groups before materialization. A compact search status names
+`totalMatchingLineGroups` and, when more remain, returns `nextOffset`; callers
+rerun the same non-page query with that value. Character paging is applied
+afterward and continues only with `nextChar` as `startChar`.
 
 For explain and search, `followLinks: true` expands typed manual and registered
 Markdown links with the same deterministic breadth-first traversal as the
@@ -1369,22 +1375,25 @@ A structure-aware search tool call is:
       "pattern": "--acls",
       "syntax": "literal",
       "case": "insensitive",
+      "scope": "visible",
       "contextLines": 1
     }
   }
 }
 ```
 
-Search is deliberately fixed to visible document text and permits zero through
-five context lines. `maxMatches` selects 1 through 100 matching line groups
-for the canonical result and defaults to 20. `mant_read` and
+Search defaults to visible document text; `scope:"markdown"` instead searches
+the generated CommonMark coordinate text. It permits zero through five context
+lines. `maxMatches` selects 1 through 100 matching line groups for the
+canonical result and defaults to 20. `offset` skips that many groups globally
+across the ordered document scope. `mant_read` and
 `mant_explain` use CommonMark; the other tools use deterministic plain text.
 Occurrences on one rendered line share a result and list their columns once;
 overlapping context windows owned by the same exact outline node are merged.
 Regex `^` and `$` match visible line boundaries and the same Unicode/UTF-8
-validation applies before a document is loaded. The MCP surface intentionally
-uses one character paging contract instead of exposing engine result offsets
-or the raw-Markdown search scope.
+validation applies before a document is loaded. Result offsets and character
+paging are deliberately separate: use `nextOffset` to materialize another
+result page, then `nextChar` to continue the current page's presentation.
 This keeps model-visible results aligned with the CLI's human presentations
 without ANSI escapes, duplicated JSON, schema markers, producer metadata,
 physical source paths, or non-fatal diagnostics. Protocol-level and validation

@@ -61,7 +61,7 @@ impl MantMcpServer {
 
 #[tool_router(router = tool_router)]
 impl MantMcpServer {
-    /// Find registered Markdown and native manual documents by logical name.
+    /// Find registered Markdown and native manual documents by logical name or pattern.
     #[tool(
         name = "mant_find",
         annotations(
@@ -160,7 +160,7 @@ impl MantMcpServer {
         Ok(finish_page(&render_scope_explain(&response, page)?))
     }
 
-    /// Search visible text across one or more bounded documents.
+    /// Search visible text or generated CommonMark across bounded documents.
     #[tool(
         name = "mant_search",
         annotations(

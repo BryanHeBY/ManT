@@ -110,7 +110,7 @@ pub(super) struct ReadParams {
     pub(super) max_chars: Option<u32>,
 }
 
-/// Resolve one semantic command, option, variable, or environment entry.
+/// Resolve one semantic entry.
 #[derive(Debug, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(super) struct ExplainParams {

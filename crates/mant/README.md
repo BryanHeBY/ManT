@@ -151,6 +151,9 @@ Every successful tool result begins with a `mant-page` header reporting the
 Unicode-scalar character interval and full canonical body size. Clients select
 a bounded `maxChars` budget and resume statelessly with `startChar`; semantic
 `maxResults` and `maxMatches` limits remain separate from presentation paging.
+Discovery exposes literal or regex matching and case policy; search exposes
+visible or generated-Markdown scope. Both use result `offset`/`nextOffset`
+independently from character `startChar`/`nextChar` paging.
 
 ## Document sources
 

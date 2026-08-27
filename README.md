@@ -361,8 +361,11 @@ Unicode-scalar character interval and total size. Clients select a bounded
 `maxChars` budget and can resume with `startChar`; paging reruns the base query
 against current local state and retains no cursor. `maxResults` and
 `maxMatches` independently bound find and search materialization before
-character paging; omitted rows or matches require a larger semantic limit or a
-narrower query.
+character paging. Find additionally accepts regex/case controls, while search
+accepts visible or generated-Markdown scope. Their result `offset` and
+`nextOffset` paginate catalog rows or global matching-line groups;
+`startChar`/`nextChar` paginate only the canonical text produced from that
+result page.
 
 `mant_explain` and `mant_search` accept several initial document IDs and can
 optionally follow typed links as a bounded breadth-first scope. Native CLI

@@ -45,6 +45,11 @@ that crate was not published for that change.
 - Add `build_outline_projection` for summary, full, role-filtered, and rooted
   discovery while retaining `build_outline_with_detail` as an in-process
   compatibility convenience.
+- Give outline, excerpt lookup, explanation, addressable Markdown, and search
+  ownership one nested entry-coordinate topology. Every projected term or
+  nested entry path now round-trips through focused reads.
+- Recognize multi-item key-binding command groups under topical headings and
+  preserve complete hyphenated Readline command names as exact aliases.
 
 ### mant-ui 0.10.0
 
@@ -69,6 +74,9 @@ that crate was not published for that change.
   JSON, keeping MCP, CLI, and the TUI on one projection model.
 - Guide agents through stateless summary → rooted expansion → focused read
   calls while preserving returned paths and stable IDs across each step.
+- Expose catalog regex/case/result offsets and search representation/global
+  offsets through MCP. Scoped search presentation now reports one unambiguous
+  global matching-line-group total and never emits a document-local CLI cursor.
 
 ## 0.9.1 - 2026-08-24
 

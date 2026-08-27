@@ -449,7 +449,7 @@ struct Cli {
     )]
     node: Vec<String>,
 
-    /// Explain one option, command, variable, or environment variable by alias, ID, or outline path.
+    /// Explain one semantic entry by alias, ID, or outline path.
     #[arg(
         long,
         value_name = "ENTRY",
