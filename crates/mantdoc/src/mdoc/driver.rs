@@ -470,9 +470,24 @@ pub(crate) fn structure(
                 flags.delimiter_close = false;
                 let _ = builder.set_node_flags(delimiter, flags);
             }
-            let direct_partial_close = matches!(macro_name.as_deref(), Some("Fl" | "No"))
-                .then(|| take_explicit_partial_close_argument(builder, node, &scopes))
-                .flatten();
+            // Existing explicit-partial handling permits `.Fl` and `.No` to
+            // consume their close argument.  Extend that narrow path only to
+            // a synthetic Xo owned by an `.It` Head: deployed mdoc uses
+            // `.Oo … Oc Xc` for grouped item syntax, and that outer Xc must
+            // be detached before `.Oo` consumes its own inline arguments.
+            let item_head_xo = scopes.last().is_some_and(|frame| {
+                frame.close == "Xc"
+                    && builder.node_parent(frame.open).is_some_and(|parent| {
+                        builder.node_kind(parent) == Some(NodeKind::Head)
+                            && builder.node_macro_name(parent) == Some("It")
+                    })
+            });
+            let direct_partial_close =
+                if matches!(macro_name.as_deref(), Some("Fl" | "No")) || item_head_xo {
+                    take_explicit_partial_close_argument(builder, node, &scopes)
+                } else {
+                    None
+                };
             let paragraph_href = pending_paragraph_href.take();
             let list_open = scopes.iter().rev().any(|frame| frame.close == "El");
             let list_item_follower = macro_name.as_deref() == Some("It") && list_open;

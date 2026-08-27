@@ -380,6 +380,26 @@ fn cross_line_xo_closers_resume_their_control_line_tail() {
 }
 
 #[test]
+fn an_inline_xc_closes_an_extended_item_head_before_its_body() {
+    let name = SourceName::new("mdoc-item-xo-inline-close.1").unwrap();
+    let report = Parser::default()
+        .parse(Source::new(
+            &name,
+            b".Dd August 27, 2026\n.Dt ITEM-XO 1\n.Os\n.Sh DESCRIPTION\n.Bl -tag\n.It Li outer Xo\n.Oo heading Oc Xc\nbody text\n.El\n",
+        ))
+        .unwrap();
+    let body_text = report
+        .document
+        .preorder()
+        .find(|node| node.text() == Some("body text"))
+        .expect("body text is retained");
+    assert_eq!(
+        body_text.parent().and_then(crate::NodeRef::macro_name),
+        Some("It")
+    );
+}
+
+#[test]
 fn transparent_tags_after_empty_flags_split_targets_from_permalinks() {
     let name = SourceName::new("mdoc-transparent-flag-tag.1").unwrap();
     let report = Parser::default()

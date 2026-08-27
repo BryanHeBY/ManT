@@ -376,10 +376,20 @@ fn take_explicit_partial_close_argument(
     node: NodeId,
     scopes: &[ScopeFrame],
 ) -> Option<(&'static str, Vec<NodeId>)> {
-    let close = scopes
-        .last()
-        .map(|frame| frame.close)
-        .filter(|close| is_explicit_partial_close(close))?;
+    let frame = *scopes.last()?;
+    let close = frame.close;
+    // `.It … Xo` extends a definition-item head across physical lines.  Its
+    // synthetic Xo block is uniquely owned by that `It` Head, so only this
+    // scope may consume an inline `Xc`.  Ordinary `.Xo` scopes retain their
+    // existing inline-close behavior.
+    let item_head_xo = close == "Xc"
+        && builder.node_parent(frame.open).is_some_and(|parent| {
+            builder.node_kind(parent) == Some(NodeKind::Head)
+                && builder.node_macro_name(parent) == Some("It")
+        });
+    if !is_explicit_partial_close(close) && !item_head_xo {
+        return None;
+    }
     let arguments = builder.children(node)?.to_vec();
     if let Some(index) = arguments
         .iter()
