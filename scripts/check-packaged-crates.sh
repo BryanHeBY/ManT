@@ -9,11 +9,7 @@ PACKAGE_CHECK_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/mant-package-check.XXXXXX")
 trap 'rm -rf "$PACKAGE_CHECK_ROOT"' EXIT
 
 mkdir -p "$PACKAGE_CHECK_ROOT/crates"
-# The conformance harness is an intentionally unpublished workspace member, so
-# it has no extracted package directory in this temporary published-source
-# workspace. Retain the workspace settings while omitting only that member.
-sed '/^[[:space:]]*"crates\/mantdoc-conformance",[[:space:]]*$/d' \
-  "$ROOT/Cargo.toml" > "$PACKAGE_CHECK_ROOT/Cargo.toml"
+cp "$ROOT/Cargo.toml" "$PACKAGE_CHECK_ROOT/Cargo.toml"
 cp "$ROOT/Cargo.lock" "$PACKAGE_CHECK_ROOT/"
 
 for package in "${PACKAGES[@]}"; do

@@ -1,4 +1,4 @@
-#![doc = include_str!("../README.md")]
+#![doc = include_str!("README.md")]
 #![warn(missing_docs)]
 
 //! Versioned identities used by the native-parser differential harness.
@@ -16,12 +16,14 @@ use sha2::{Digest, Sha256};
 mod canonical;
 mod corpus;
 
+#[allow(unused_imports)]
 pub use canonical::{
     CANONICAL_AST_SCHEMA, CANONICAL_DIAGNOSTIC_SCHEMA, CANONICAL_MDOC_OPERATING_SYSTEM,
     CanonicalDiagnostic, CanonicalDifference, CanonicalDocument, CanonicalEnclosure,
     CanonicalFlags, CanonicalLocation, CanonicalMetadata, CanonicalNode, CanonicalParse,
     CanonicalTableCell, canonicalize_mantdoc, first_difference,
 };
+#[allow(unused_imports)]
 pub use corpus::{
     CorpusArchiveError, CorpusArchiveErrorKind, CorpusCase, CorpusCasePayload, CorpusInventory,
     ReferenceOutput, ReferenceOutputPayload, RendererCasePayload, stable_1_14_6_case,
@@ -29,7 +31,7 @@ pub use corpus::{
 };
 
 const M3_EXECUTION_MANIFEST: &str =
-    include_str!("../../../tests/conformance/manifests/v1/m3-execution.toml");
+    include_str!("../../../../tests/conformance/manifests/v1/m3-execution.toml");
 
 /// Repository-relative path of the versioned native M3 execution gate.
 pub const M3_EXECUTION_MANIFEST_PATH: &str = "tests/conformance/manifests/v1/m3-execution.toml";
@@ -731,9 +733,7 @@ pub fn run_m4_man_smoke_gate(
             error,
         })?;
         if report.statistics.truncated {
-            return Err(M4ManSmokeGateError::Truncated {
-                case_id: case.id.clone(),
-            });
+            return Err(M4ManSmokeGateError::Truncated { case_id: case.id });
         }
         let expected = m4_expected_diagnostic_codes(&case.id);
         let actual = report
@@ -973,9 +973,7 @@ pub fn run_m5_mdoc_smoke_shard(
             error,
         })?;
         if report.statistics.truncated {
-            return Err(M5MdocSmokeGateError::Truncated {
-                case_id: case.id.clone(),
-            });
+            return Err(M5MdocSmokeGateError::Truncated { case_id: case.id });
         }
         let expected = m5_expected_diagnostic_codes(&case.id);
         let actual = report
@@ -1691,9 +1689,7 @@ pub fn run_m6_preprocess_smoke_gate(
                 error,
             })?;
         if report.statistics.truncated {
-            return Err(M6PreprocessSmokeGateError::Truncated {
-                case_id: case.id.clone(),
-            });
+            return Err(M6PreprocessSmokeGateError::Truncated { case_id: case.id });
         }
         let expected = m6_expected_diagnostic_codes(&case.id);
         let actual = report

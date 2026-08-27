@@ -7,7 +7,6 @@ members = [
   "crates/mant-sources",
   "crates/mant-ui",
   "crates/mantdoc",
-  "crates/mantdoc-conformance",
 ]
 default-members = [
   "crates/mant-ir",

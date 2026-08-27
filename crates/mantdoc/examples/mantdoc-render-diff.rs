@@ -13,7 +13,11 @@ use std::{
 };
 
 use mantdoc::{RenderFormat, Renderer, Source, SourceName};
-use mantdoc_conformance::{CorpusCase, stable_1_14_6_inventory, stable_1_14_6_renderer_case};
+#[path = "../tests/conformance/mod.rs"]
+#[allow(dead_code, unused_imports)]
+mod conformance;
+
+use conformance::{CorpusCase, stable_1_14_6_inventory, stable_1_14_6_renderer_case};
 
 const RENDER_FORMATS: [&str; 3] = ["ascii", "utf8", "html"];
 
@@ -134,22 +138,20 @@ fn run_all(
                                     case.id
                                 );
                             }
-                            first.get_or_insert((
-                                case.id.clone(),
-                                format,
-                                format!("byte:{offset}"),
-                            ));
+                            first.get_or_insert_with(|| {
+                                (case.id.clone(), format, format!("byte:{offset}"))
+                            });
                         }
                         Err(error) => {
                             errors += 1;
-                            first.get_or_insert((case.id.clone(), format, error));
+                            first.get_or_insert_with(|| (case.id.clone(), format, error));
                         }
                     }
                 }
             }
             Err(error) => {
                 errors += formats.len();
-                first.get_or_insert((case.id.clone(), "batch".into(), error));
+                first.get_or_insert_with(|| (case.id.clone(), "batch".into(), error));
             }
         }
     }
@@ -495,7 +497,7 @@ mod tests {
         available_renderer_formats, difference_window, extract_upstream_html_test_output,
         render_format, visible_difference_fragment,
     };
-    use mantdoc_conformance::CorpusCase;
+    use crate::conformance::CorpusCase;
 
     #[test]
     fn only_compares_native_renderer_formats() {
@@ -504,12 +506,12 @@ mod tests {
             input_archive_path: "fixture.in".into(),
             source_sha256: "hash".into(),
             expected_outputs: vec![
-                mantdoc_conformance::ReferenceOutput {
+                crate::conformance::ReferenceOutput {
                     format: "ascii".into(),
                     archive_path: "fixture.out_ascii".into(),
                     sha256: "hash".into(),
                 },
-                mantdoc_conformance::ReferenceOutput {
+                crate::conformance::ReferenceOutput {
                     format: "lint".into(),
                     archive_path: "fixture.out_lint".into(),
                     sha256: "hash".into(),

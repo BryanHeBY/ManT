@@ -49,8 +49,8 @@ def command_for(
     shard: str,
     list_renderer_differences: bool,
 ) -> list[str]:
-    inventory = ROOT / "target" / "debug" / "mantdoc-corpus-inventory"
-    renderer_diff = ROOT / "target" / "debug" / "mantdoc-render-diff"
+    inventory = ROOT / "target" / "debug" / "examples" / "mantdoc-corpus-inventory"
+    renderer_diff = ROOT / "target" / "debug" / "examples" / "mantdoc-render-diff"
     if lane == "m3":
         return [str(inventory), str(archive), "--m3-execution"]
     if lane == "m4":
@@ -134,17 +134,19 @@ def main() -> int:
 
     features = []
     if "m9" in lanes:
-        features.append("renderer-diff")
+        features.append("render")
     build_command = [
         "cargo",
         "build",
         "--locked",
         "--package",
-        "mantdoc-conformance",
+        "mantdoc",
+        "--examples",
+        "--features",
+        "conformance",
     ]
     if features:
-        build_command.extend(("--features", ",".join(features)))
-    build_command.append("--bins")
+        build_command[-1] = f"conformance,{','.join(features)}"
     build = subprocess.run(
         build_command,
         cwd=ROOT,

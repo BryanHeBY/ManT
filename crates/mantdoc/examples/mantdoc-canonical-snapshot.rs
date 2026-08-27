@@ -10,7 +10,11 @@ use std::{
 };
 
 use mantdoc::{Parser, ParserConfig, Source, SourceName};
-use mantdoc_conformance::{
+#[path = "../tests/conformance/mod.rs"]
+#[allow(dead_code, unused_imports)]
+mod conformance;
+
+use conformance::{
     CANONICAL_MDOC_OPERATING_SYSTEM, canonicalize_mantdoc, stable_1_14_6_case,
     stable_1_14_6_inventory,
 };

@@ -7,7 +7,11 @@ use std::{
     process::ExitCode,
 };
 
-use mantdoc_conformance::{
+#[path = "../tests/conformance/mod.rs"]
+#[allow(dead_code, unused_imports)]
+mod conformance;
+
+use conformance::{
     MantdocBackend, inspect_m3_execution_reports, run_case, run_m3_execution_gate,
     run_m4_man_smoke_gate, run_m5_mdoc_smoke_gate, run_m5_mdoc_smoke_shard,
     run_m6_preprocess_smoke_gate, stable_1_14_6_case, stable_1_14_6_case_input,
