@@ -80,7 +80,7 @@ impl MantMcpServer {
         Ok(finish_page(&render_find(&catalog, parameters.page)))
     }
 
-    /// Return a selectable hierarchy; sections are the compact default.
+    /// Return a selectable hierarchy with compact semantic summaries by default.
     #[tool(
         name = "mant_outline",
         annotations(
@@ -96,7 +96,8 @@ impl MantMcpServer {
         let request = request_for(
             parameters.document,
             QueryView::Outline {
-                detail: parameters.detail,
+                entries: parameters.entries,
+                root: parameters.root,
             },
         );
         let QueryViewResult::Outline(mut outline) = self.query(request).await? else {
@@ -146,7 +147,7 @@ impl MantMcpServer {
         let parameters = parameters.0.validate()?;
         let page = parameters.page;
         let request = ScopeQueryRequest {
-            schema: ScopeRequestSchema::V0Dot9,
+            schema: ScopeRequestSchema::V0Dot10,
             scope: parameters.scope,
             view: ScopeQueryView::Explain {
                 entry: parameters.entry,
@@ -171,7 +172,7 @@ impl MantMcpServer {
         let parameters = parameters.0.validate()?;
         let page = parameters.page;
         let request = ScopeQueryRequest {
-            schema: ScopeRequestSchema::V0Dot9,
+            schema: ScopeRequestSchema::V0Dot10,
             scope: parameters.scope,
             view: ScopeQueryView::Search {
                 pattern: parameters.pattern,
@@ -383,7 +384,8 @@ mod tests {
     fn focused_tool_limits_are_enforced_at_runtime() {
         let outline = |document: String, max_chars: Option<u32>| OutlineParams {
             document,
-            detail: None,
+            entries: None,
+            root: None,
             start_char: 0,
             max_chars,
         };
@@ -517,7 +519,7 @@ mod tests {
             },
         ));
 
-        assert!(rendered.contains("call mant_outline with detail=entries"));
+        assert!(rendered.contains("call mant_outline with entries.kind=all"));
         assert!(!rendered.contains("as JSON"));
         assert!(!rendered.contains("--outline"));
 

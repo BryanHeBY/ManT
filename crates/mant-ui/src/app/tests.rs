@@ -151,7 +151,7 @@ fn document_catalog() -> DocumentCatalog {
         },
     ];
     DocumentCatalog {
-        schema: CatalogSchema::V0Dot9,
+        schema: CatalogSchema::V0Dot10,
         query: mant_protocol::CatalogQuery::default(),
         coverage: mant_protocol::CatalogCoverage::default(),
         total: 2,
@@ -176,7 +176,7 @@ fn overflowing_document_catalog() -> DocumentCatalog {
         })
         .collect::<Vec<_>>();
     DocumentCatalog {
-        schema: CatalogSchema::V0Dot9,
+        schema: CatalogSchema::V0Dot10,
         query: mant_protocol::CatalogQuery::default(),
         coverage: mant_protocol::CatalogCoverage::default(),
         total: u32::try_from(documents.len()).expect("fixture length"),
@@ -247,7 +247,7 @@ fn document_finder_tree_collapses_expands_and_opens_a_nested_document() {
         origin: MarkdownOrigin::Documents,
     };
     let catalog = DocumentCatalog {
-        schema: CatalogSchema::V0Dot9,
+        schema: CatalogSchema::V0Dot10,
         query: mant_protocol::CatalogQuery::default(),
         coverage: mant_protocol::CatalogCoverage::default(),
         total: 1,
@@ -406,7 +406,7 @@ fn document_finder_orders_exact_then_prefix_then_substring_matches() {
         })
         .collect::<Vec<_>>();
     let catalog = DocumentCatalog {
-        schema: CatalogSchema::V0Dot9,
+        schema: CatalogSchema::V0Dot10,
         query: mant_protocol::CatalogQuery::default(),
         coverage: mant_protocol::CatalogCoverage::default(),
         total: 5,
@@ -434,7 +434,7 @@ fn document_finder_orders_exact_then_prefix_then_substring_matches() {
 #[test]
 fn document_finder_keeps_matches_found_only_in_a_hierarchical_path() {
     let catalog = DocumentCatalog {
-        schema: CatalogSchema::V0Dot9,
+        schema: CatalogSchema::V0Dot10,
         query: mant_protocol::CatalogQuery::default(),
         coverage: mant_protocol::CatalogCoverage::default(),
         total: 1,
@@ -461,7 +461,7 @@ fn document_finder_keeps_matches_found_only_in_a_hierarchical_path() {
 #[test]
 fn document_finder_queries_beyond_the_initial_catalog_page() {
     let initial = DocumentCatalog {
-        schema: CatalogSchema::V0Dot9,
+        schema: CatalogSchema::V0Dot10,
         query: mant_protocol::CatalogQuery::default(),
         coverage: mant_protocol::CatalogCoverage::default(),
         total: 20_000,
@@ -492,7 +492,7 @@ fn document_finder_queries_beyond_the_initial_catalog_page() {
     );
 
     app.complete_discovery(DocumentCatalog {
-        schema: CatalogSchema::V0Dot9,
+        schema: CatalogSchema::V0Dot10,
         query: mant_protocol::CatalogQuery::default(),
         coverage: mant_protocol::CatalogCoverage::default(),
         total: 2,

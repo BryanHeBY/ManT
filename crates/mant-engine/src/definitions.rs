@@ -170,10 +170,16 @@ fn identify_blocks(
                     };
                 for item in items {
                     let role = identify_item(item, item_context, used, reserved, retained);
-                    let child_context = if role == DefinitionRole::Command {
-                        DefinitionContext::Parameters
-                    } else {
-                        item_context
+                    let child_context = match role {
+                        DefinitionRole::Command => DefinitionContext::Parameters,
+                        DefinitionRole::Option
+                        | DefinitionRole::Marker
+                        | DefinitionRole::Operand
+                        | DefinitionRole::ConfigurationKey => DefinitionContext::Values,
+                        DefinitionRole::EnvironmentVariable
+                        | DefinitionRole::Variable
+                        | DefinitionRole::Value
+                        | DefinitionRole::Term => item_context,
                     };
                     identify_blocks(
                         &mut item.description,
@@ -259,6 +265,7 @@ enum DefinitionContext {
     EnvironmentVariables,
     Variables,
     ConfigurationKeys,
+    Values,
 }
 
 impl DefinitionContext {
@@ -495,10 +502,24 @@ fn infer_identity(
             DefinitionCase::Insensitive,
             named_term(item, is_configuration_key),
         ),
+        DefinitionContext::Values => (
+            DefinitionRole::Value,
+            DefinitionCase::Sensitive,
+            named_term(item, is_value_name),
+        ),
         DefinitionContext::Parameters => parameter_identity(item, trimmed),
         DefinitionContext::Generic if trimmed.starts_with('-') => parameter_identity(item, trimmed),
         DefinitionContext::Generic => (DefinitionRole::Term, DefinitionCase::Sensitive, Vec::new()),
     }
+}
+
+fn is_value_name(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 128
+        && value.chars().all(|character| {
+            character.is_alphanumeric()
+                || matches!(character, '-' | '_' | '.' | '/' | ':' | '+' | '?')
+        })
 }
 
 fn parameter_identity(
@@ -776,7 +797,7 @@ fn unique_id(base: &str, used: &mut HashSet<String>, reserved: &HashSet<String>)
 mod tests {
     use std::collections::HashSet;
 
-    use mant_ir::{Block, DefinitionItem, Inline, LayoutHint, Section};
+    use mant_ir::{Block, DefinitionItem, DefinitionRole, Inline, LayoutHint, Section};
 
     use super::{identify_definitions, option_names, option_prefix};
 
@@ -854,5 +875,73 @@ mod tests {
             items[0].identity.as_ref().expect("option identity").names,
             ["-C"]
         );
+    }
+
+    #[test]
+    fn classifies_environment_configuration_and_nested_parameter_semantics() {
+        fn identities(section: &Section) -> Vec<&mant_ir::DefinitionIdentity> {
+            let Block::DefinitionList { items, .. } = &section.blocks[0] else {
+                panic!("expected definition list");
+            };
+            items
+                .iter()
+                .map(|item| item.identity.as_ref().expect("semantic identity"))
+                .collect()
+        }
+
+        let definition_list = |items| Block::DefinitionList {
+            items,
+            compact: true,
+            layout: LayoutHint::default(),
+            source: None,
+        };
+        let section = |id: &str, title: &str, items| Section {
+            id: id.into(),
+            title: title.to_owned(),
+            spacing_before_lines: 0,
+            blocks: vec![definition_list(items)],
+            children: Vec::new(),
+            source: None,
+        };
+        let mut option = item("-o MODE");
+        option
+            .description
+            .push(definition_list(vec![item("yes"), item("no")]));
+        let mut sections = vec![
+            section("environment", "ENVIRONMENT", vec![item("PATH")]),
+            section(
+                "configuration",
+                "CONFIGURATION KEYWORDS",
+                vec![item("HostKeyAlgorithms")],
+            ),
+            section("options", "OPTIONS", vec![item("--"), item("-"), option]),
+        ];
+
+        identify_definitions(&mut Vec::new(), &mut sections, &HashSet::new(), None);
+
+        assert_eq!(
+            identities(&sections[0])[0].role,
+            DefinitionRole::EnvironmentVariable
+        );
+        assert_eq!(
+            identities(&sections[1])[0].role,
+            DefinitionRole::ConfigurationKey
+        );
+        let parameters = identities(&sections[2]);
+        assert_eq!(parameters[0].role, DefinitionRole::Marker);
+        assert_eq!(parameters[1].role, DefinitionRole::Operand);
+        assert_eq!(parameters[2].role, DefinitionRole::Option);
+        let Block::DefinitionList { items, .. } = &sections[2].blocks[0] else {
+            panic!("expected option definitions");
+        };
+        let Block::DefinitionList { items: values, .. } = &items[2].description[0] else {
+            panic!("expected nested values");
+        };
+        assert!(values.iter().all(|value| {
+            value
+                .identity
+                .as_ref()
+                .is_some_and(|identity| identity.role == DefinitionRole::Value)
+        }));
     }
 }

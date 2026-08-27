@@ -5,7 +5,7 @@ use std::fmt::Write as _;
 use anstyle::{AnsiColor, Style};
 use mant_engine::QueryViewResult;
 use mant_ir::{
-    Block, DefinitionRole, DocumentMeta, Inline, ResolvedContent, Section, SourceFormat,
+    Block, DefinitionRole, DocumentMeta, EntryKind, Inline, ResolvedContent, Section, SourceFormat,
 };
 use mant_protocol::{
     ExcerptSelection, OutlineNode, QueryExcerpt, QueryOutline, QuerySearch, ScopeQueryResponse,
@@ -119,6 +119,12 @@ fn render_outline_nodes(nodes: &[OutlineNode], prefix: &str, output: &mut Termin
         output.styled(TerminalRole::Coordinate, node.id());
         output.styled(TerminalRole::TreeGuide, "] ");
         output.styled(outline_node_role(node), node.title());
+        if let Some(summary) = outline_node_summary(node) {
+            output.styled(
+                TerminalRole::Muted,
+                &mant_engine::render_outline_entry_summary(summary),
+            );
+        }
         if index + 1 < nodes.len() || !node.children().is_empty() {
             output.line();
         }
@@ -127,6 +133,15 @@ fn render_outline_nodes(nodes: &[OutlineNode], prefix: &str, output: &mut Termin
         if !node.children().is_empty() && index + 1 < nodes.len() {
             output.line();
         }
+    }
+}
+
+fn outline_node_summary(node: &OutlineNode) -> Option<&mant_ir::EntrySummary> {
+    match node {
+        OutlineNode::DocumentRoot { entry_summary, .. }
+        | OutlineNode::DocumentSection { entry_summary, .. }
+        | OutlineNode::DocumentEntry { entry_summary, .. } => entry_summary.as_ref(),
+        OutlineNode::Tldr { .. } => None,
     }
 }
 
@@ -307,21 +322,31 @@ fn inline_text(inlines: &[Inline]) -> String {
 
 const fn outline_node_role(node: &OutlineNode) -> TerminalRole {
     match node {
-        OutlineNode::DocumentEntry { role, .. } => definition_role(*role),
+        OutlineNode::DocumentEntry { entry_kind, .. } => entry_kind_role(*entry_kind),
         OutlineNode::Tldr { .. }
         | OutlineNode::DocumentRoot { .. }
         | OutlineNode::DocumentSection { .. } => TerminalRole::Heading,
     }
 }
 
+const fn entry_kind_role(kind: EntryKind) -> TerminalRole {
+    match kind {
+        EntryKind::Parameter { .. } => TerminalRole::Option,
+        EntryKind::Command => TerminalRole::Command,
+        EntryKind::EnvironmentVariable => TerminalRole::Environment,
+        EntryKind::Variable | EntryKind::ConfigurationKey => TerminalRole::Variable,
+        EntryKind::Value | EntryKind::Term => TerminalRole::Muted,
+    }
+}
+
 const fn definition_role(role: DefinitionRole) -> TerminalRole {
     match role {
-        DefinitionRole::Option => TerminalRole::Option,
-        DefinitionRole::Marker | DefinitionRole::Operand => TerminalRole::Option,
+        DefinitionRole::Option | DefinitionRole::Marker | DefinitionRole::Operand => {
+            TerminalRole::Option
+        }
         DefinitionRole::Command => TerminalRole::Command,
-        DefinitionRole::ConfigurationKey => TerminalRole::Variable,
         DefinitionRole::EnvironmentVariable => TerminalRole::Environment,
-        DefinitionRole::Variable => TerminalRole::Variable,
+        DefinitionRole::ConfigurationKey | DefinitionRole::Variable => TerminalRole::Variable,
         DefinitionRole::Value | DefinitionRole::Term => TerminalRole::Muted,
     }
 }
@@ -661,7 +686,7 @@ pub(super) fn render_json(value: &impl Serialize, pretty: bool) -> Result<String
 #[cfg(test)]
 mod tests {
     use mant_engine::{project_query_view, query_markdown_text};
-    use mant_protocol::{OutlineDetail, QueryView};
+    use mant_protocol::{EntryProjection, QueryView};
 
     use super::{OutputTarget, QueryFormat, RenderOptions, render_query_result};
 
@@ -679,7 +704,8 @@ The selected color is visible in terminal output.
     fn terminal_styles_do_not_change_visible_query_text() {
         for view in [
             QueryView::Outline {
-                detail: OutlineDetail::Entries,
+                entries: EntryProjection::All,
+                root: None,
             },
             QueryView::Explain {
                 entry: "--color".to_owned(),
@@ -736,7 +762,8 @@ The selected color is visible in terminal output.
         let views = [
             QueryView::Full {},
             QueryView::Outline {
-                detail: OutlineDetail::Entries,
+                entries: EntryProjection::All,
+                root: None,
             },
             QueryView::Explain {
                 entry: "--color".to_owned(),
@@ -773,7 +800,8 @@ The selected color is visible in terminal output.
         for view in [
             QueryView::Full {},
             QueryView::Outline {
-                detail: OutlineDetail::Entries,
+                entries: EntryProjection::All,
+                root: None,
             },
             QueryView::Explain {
                 entry: "--color".to_owned(),

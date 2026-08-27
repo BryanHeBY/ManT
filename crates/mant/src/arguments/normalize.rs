@@ -2,10 +2,11 @@
 
 use super::{
     CatalogKindMode, CatalogPaging, CatalogQuery, Cli, ColorMode, Command, CommandFactory,
-    DocumentScope, DocumentSelector, DocumentTraversal, ErrorKind, InputFormat, InputFormatMode,
-    NodeSelector, QueryFormat, QueryInput, QueryPolicy, QueryPresentation, QueryRequest,
-    QuerySource, QueryView, RequestSchema, ScopeQueryView, SearchCase, SearchScope, SearchSyntax,
-    default_search_limit, is_manual_section, normalize_tldr_topic, parenthesized_manual_reference,
+    DocumentScope, DocumentSelector, DocumentTraversal, EntryProjection, ErrorKind, InputFormat,
+    InputFormatMode, NodeSelector, QueryFormat, QueryInput, QueryPolicy, QueryPresentation,
+    QueryRequest, QuerySource, QueryView, RequestSchema, ScopeQueryView, SearchCase, SearchScope,
+    SearchSyntax, default_search_limit, is_manual_section, normalize_tldr_topic,
+    parenthesized_manual_reference,
 };
 
 pub(super) fn normalize(mut parsed: Cli, color: ColorMode) -> Result<Command, clap::Error> {
@@ -272,9 +273,13 @@ fn normalize_query_view(parsed: &mut Cli) -> QueryView {
         QueryView::Excerpt {
             selectors: vec![NodeSelector::from("tldr")],
         }
-    } else if let Some(detail) = parsed.outline.take() {
+    } else if parsed.outline {
         QueryView::Outline {
-            detail: detail.into(),
+            entries: parsed
+                .outline_entries
+                .take()
+                .map_or(EntryProjection::Summary, |entries| entries.0),
+            root: parsed.outline_root.take().map(NodeSelector::new),
         }
     } else if let Some(pattern) = parsed.search.take() {
         QueryView::Search {
@@ -481,7 +486,7 @@ fn normalize_query_source(
             QuerySource::InputStdin { format, view }
         } else {
             QuerySource::Arguments(QueryRequest {
-                schema: RequestSchema::V0Dot9,
+                schema: RequestSchema::V0Dot10,
                 input: QueryInput::File { path, format },
                 view,
             })
@@ -494,7 +499,7 @@ fn normalize_query_source(
             color,
         )?;
         QuerySource::Arguments(QueryRequest {
-            schema: RequestSchema::V0Dot9,
+            schema: RequestSchema::V0Dot10,
             input: QueryInput::Document {
                 selector: normalized.name,
                 source: options.configured_source,

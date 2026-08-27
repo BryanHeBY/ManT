@@ -49,7 +49,7 @@ fn shipped_manual_parses_without_lossy_fallbacks() {
             "mant tar --explain={{--exclude}} --format markdown",
             "mant git --search {{worktree}} --follow-links --max-depth 2 --max-documents 32 --context 1",
             "mant --find {{'^git'}} --regex --kind manual --limit 20 --format json --compact",
-            "mant --input {{./tool.md}} --outline=entries --format json --compact",
+            "mant --input {{./tool.md}} --outline --outline-entries all --format json --compact",
             "mant --mcp",
         ],
         "{name} quick reference should stay concise and show complete user tasks"
@@ -279,8 +279,8 @@ fn contains_entry(nodes: &[OutlineNode], name: &str) -> bool {
     nodes.iter().any(|node| {
         matches!(
             node,
-            OutlineNode::DocumentEntry { names, .. }
-                if names.iter().any(|candidate| candidate == name)
+            OutlineNode::DocumentEntry { aliases, .. }
+                if aliases.iter().any(|candidate| candidate == name)
         ) || contains_entry(node.children(), name)
     })
 }

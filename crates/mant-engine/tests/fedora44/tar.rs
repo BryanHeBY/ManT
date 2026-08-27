@@ -10,7 +10,7 @@ use mant_protocol::{
     ExcerptSelection, OutlineDetail, SearchCase, SearchQuery, SearchScope, SearchSyntax,
 };
 
-/// 9 sections, `os = "TAR"`, 156 option-outline entries.
+/// 9 sections, `os = "TAR"`, 219 semantic entries.
 #[test]
 fn keeps_complete_sections_and_semantic_option_outlines() {
     let document = fedora44_manual("tar");
@@ -22,16 +22,16 @@ fn keeps_complete_sections_and_semantic_option_outlines() {
     let query = query_for_document("tar", document);
     let outline = build_outline_with_detail(&query, OutlineDetail::Entries)
         .unwrap_or_else(|error| panic!("build tar option outline: {error}"));
-    assert_eq!(count_outline_entries(&outline.nodes), 156);
+    assert_eq!(count_outline_entries(&outline.nodes), 219);
     assert!(find_outline_entry(&outline.nodes, "--acls").is_some());
 
     common::assert_no_duplicate_vertical_spacing(&document.sections, "fedora44/tar");
 }
 
-/// `--acls` option is addressable through a v0.9 outline and
+/// `--acls` option is addressable through a v0.10 outline and
 /// `select_excerpt` returns its identity.
 #[test]
-fn options_are_addressable_in_v0_9_outlines_and_excerpts() {
+fn options_are_addressable_in_v0_10_outlines_and_excerpts() {
     let document = fedora44_manual("tar");
     let query = query_for_document("tar", document);
     let acls = semantic_definition_items(document)

@@ -6,7 +6,7 @@ use mant_engine::build_outline_with_detail;
 use mant_ir::{Block, SourceFormat};
 use mant_protocol::OutlineDetail;
 
-/// 24 sections, `os = "Git 2.53.0"`, 25 option-outline entries.
+/// 24 sections, `os = "Git 2.53.0"`, 32 semantic entries.
 #[test]
 fn keeps_complete_sections_and_semantic_option_outlines() {
     let document = fedora44_manual("git");
@@ -18,7 +18,7 @@ fn keeps_complete_sections_and_semantic_option_outlines() {
     let query = query_for_document("git", document);
     let outline = build_outline_with_detail(&query, OutlineDetail::Entries)
         .unwrap_or_else(|error| panic!("build git option outline: {error}"));
-    assert_eq!(count_outline_entries(&outline.nodes), 25);
+    assert_eq!(count_outline_entries(&outline.nodes), 32);
     assert!(find_outline_entry(&outline.nodes, "--help").is_some());
 
     let version = common::nested_definition_items(common::section(document, "OPTIONS"))

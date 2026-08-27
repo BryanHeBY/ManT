@@ -1,7 +1,8 @@
+use mant_ir::{EntryKind, ParameterKind};
 use mant_protocol::{
     CatalogDocumentKind, CatalogQuery, DocumentScope, DocumentSelector, DocumentTraversal,
-    InputFormat, OutlineDetail, QueryInput, QueryRequest, QueryView, RequestSchema, ScopeQueryView,
-    SearchCase, SearchScope, SearchSyntax,
+    EntryProjection, InputFormat, QueryInput, QueryRequest, QueryView, RequestSchema,
+    ScopeQueryView, SearchCase, SearchScope, SearchSyntax,
 };
 
 use super::{
@@ -19,7 +20,7 @@ fn defaults_direct_queries_to_markdown() {
         parse(&args(&["git"])).expect("query"),
         Command::Query {
             source: QuerySource::Arguments(QueryRequest {
-                schema: RequestSchema::V0Dot9,
+                schema: RequestSchema::V0Dot10,
                 input: QueryInput::Document {
                     selector: "git".to_owned(),
                     source: None,
@@ -254,7 +255,8 @@ fn dispatches_explicit_files_and_direct_stdin_without_embedding_content() {
             source: QuerySource::InputStdin {
                 format: InputFormat::Markdown,
                 view: QueryView::Outline {
-                    detail: OutlineDetail::Entries
+                    entries: EntryProjection::Summary,
+                    root: None,
                 }
             },
             presentation: QueryPresentation::Output {
@@ -301,7 +303,7 @@ fn parses_format_man_section_and_compact_json_options() {
         .expect("query"),
         Command::Query {
             source: QuerySource::Arguments(QueryRequest {
-                schema: RequestSchema::V0Dot9,
+                schema: RequestSchema::V0Dot10,
                 input: QueryInput::Document {
                     selector: "printf".to_owned(),
                     source: None,
@@ -564,14 +566,15 @@ fn parses_outline_and_repeatable_node_views_with_contextual_defaults() {
         parse(&args(&["gcc", "--outline"])).expect("outline"),
         Command::Query {
             source: QuerySource::Arguments(QueryRequest {
-                schema: RequestSchema::V0Dot9,
+                schema: RequestSchema::V0Dot10,
                 input: QueryInput::Document {
                     selector: "gcc".to_owned(),
                     source: None,
                     manual_section: None,
                 },
                 view: QueryView::Outline {
-                    detail: OutlineDetail::Entries,
+                    entries: EntryProjection::Summary,
+                    root: None,
                 },
             }),
             presentation: QueryPresentation::Output {
@@ -583,18 +586,85 @@ fn parses_outline_and_repeatable_node_views_with_contextual_defaults() {
             preserve_anchors: false,
         }
     );
-    assert_eq!(
-        parse(&args(&["tar", "--outline", "options", "--format", "json"])).expect("option outline"),
+    assert!(matches!(
+        parse(&args(&[
+            "ssh",
+            "--outline",
+            "--outline-entries",
+            "all",
+            "--outline-root=-L",
+        ]))
+        .expect("rooted full outline"),
         Command::Query {
             source: QuerySource::Arguments(QueryRequest {
-                schema: RequestSchema::V0Dot9,
+                view: QueryView::Outline {
+                    entries: EntryProjection::All,
+                    root: Some(ref root),
+                },
+                ..
+            }),
+            ..
+        } if root.as_str() == "-L"
+    ));
+    assert!(matches!(
+        parse(&args(&[
+            "bash",
+            "--outline",
+            "--outline-entries",
+            "marker,operand,value,marker",
+        ]))
+        .expect("filtered outline"),
+        Command::Query {
+            source: QuerySource::Arguments(QueryRequest {
+                view: QueryView::Outline {
+                    entries: EntryProjection::Kinds { ref kinds },
+                    root: None,
+                },
+                ..
+            }),
+            ..
+        } if kinds == &[
+            EntryKind::Parameter { parameter_kind: ParameterKind::Marker },
+            EntryKind::Parameter { parameter_kind: ParameterKind::Operand },
+            EntryKind::Value,
+        ]
+    ));
+    for invalid in [
+        &["git", "--outline-entries", "all"][..],
+        &["git", "--outline-root", "options"][..],
+        &["git", "--outline", "--outline-entries", "unknown"][..],
+    ] {
+        assert!(parse(&args(invalid)).is_err(), "accepted {invalid:?}");
+    }
+}
+
+#[test]
+fn parses_filtered_outlines_and_repeatable_nodes() {
+    assert_eq!(
+        parse(&args(&[
+            "tar",
+            "--outline",
+            "--outline-entries",
+            "option",
+            "--format",
+            "json",
+        ]))
+        .expect("option outline"),
+        Command::Query {
+            source: QuerySource::Arguments(QueryRequest {
+                schema: RequestSchema::V0Dot10,
                 input: QueryInput::Document {
                     selector: "tar".to_owned(),
                     source: None,
                     manual_section: None,
                 },
                 view: QueryView::Outline {
-                    detail: OutlineDetail::Entries,
+                    entries: EntryProjection::Kinds {
+                        kinds: vec![EntryKind::Parameter {
+                            parameter_kind: ParameterKind::Option,
+                        }],
+                    },
+                    root: None,
                 },
             }),
             presentation: QueryPresentation::Output {
@@ -613,7 +683,7 @@ fn parses_outline_and_repeatable_node_views_with_contextual_defaults() {
         .expect("excerpt"),
         Command::Query {
             source: QuerySource::Arguments(QueryRequest {
-                schema: RequestSchema::V0Dot9,
+                schema: RequestSchema::V0Dot10,
                 input: QueryInput::Document {
                     selector: "gcc".to_owned(),
                     source: None,
@@ -645,7 +715,7 @@ fn parses_explain_as_a_first_class_semantic_view() {
             parse(&args(&values)).expect("explain query"),
             Command::Query {
                 source: QuerySource::Arguments(QueryRequest {
-                    schema: RequestSchema::V0Dot9,
+                    schema: RequestSchema::V0Dot10,
                     input: QueryInput::Document {
                         selector: "tar".to_owned(),
                         source: None,
@@ -693,7 +763,7 @@ fn parses_literal_and_regex_searches_with_text_as_the_default() {
         parse(&args(&["tar", "--search=--acls"])).expect("literal search"),
         Command::Query {
             source: QuerySource::Arguments(QueryRequest {
-                schema: RequestSchema::V0Dot9,
+                schema: RequestSchema::V0Dot10,
                 input: QueryInput::Document {
                     selector: "tar".to_owned(),
                     source: None,
@@ -742,7 +812,7 @@ fn parses_literal_and_regex_searches_with_text_as_the_default() {
         .expect("regex search"),
         Command::Query {
             source: QuerySource::Arguments(QueryRequest {
-                schema: RequestSchema::V0Dot9,
+                schema: RequestSchema::V0Dot10,
                 input: QueryInput::Document {
                     selector: "git".to_owned(),
                     source: None,
@@ -901,7 +971,7 @@ fn help_is_side_effect_free_and_the_option_terminator_preserves_a_name() {
         parse(&args(&["--", "--help"])).expect("query"),
         Command::Query {
             source: QuerySource::Arguments(QueryRequest {
-                schema: RequestSchema::V0Dot9,
+                schema: RequestSchema::V0Dot10,
                 input: QueryInput::Document {
                     selector: "--help".to_owned(),
                     source: None,

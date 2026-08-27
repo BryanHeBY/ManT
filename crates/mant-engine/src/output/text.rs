@@ -1,8 +1,8 @@
 //! Renders query, outline, and excerpt contracts as unstyled semantic text.
 
 use mant_ir::{
-    Block, DefinitionItem, Inline, ListItem, ListKind, Section, TableCell, TldrCommandPart,
-    TldrDocument, TldrOrigin,
+    Block, DefinitionItem, EntryKind, EntrySummary, Inline, ListItem, ListKind, ParameterKind,
+    Section, TableCell, TldrCommandPart, TldrDocument, TldrOrigin,
 };
 use mant_protocol::{ExcerptSelection, OutlineNode, QueryExcerpt, QueryOutline};
 
@@ -78,14 +78,107 @@ fn render_outline_nodes(nodes: &[OutlineNode], prefix: &str, output: &mut Vec<St
     for (index, node) in nodes.iter().enumerate() {
         let last = index + 1 == nodes.len();
         let connector = if last { "└─" } else { "├─" };
+        let summary = outline_summary(node).map_or_else(String::new, render_outline_entry_summary);
         output.push(format!(
-            "{prefix}{connector} {} [{}] {}",
+            "{prefix}{connector} {} [{}] {}{summary}",
             node.path(),
             node.id(),
             node.title()
         ));
         let child_prefix = format!("{prefix}{}", if last { "  " } else { "│ " });
         render_outline_nodes(node.children(), &child_prefix, output);
+    }
+}
+
+fn outline_summary(node: &OutlineNode) -> Option<&EntrySummary> {
+    match node {
+        OutlineNode::DocumentRoot { entry_summary, .. }
+        | OutlineNode::DocumentSection { entry_summary, .. }
+        | OutlineNode::DocumentEntry { entry_summary, .. } => entry_summary.as_ref(),
+        OutlineNode::Tldr { .. } => None,
+    }
+}
+
+/// Render one compact semantic-entry summary suffix shared by terminal transports.
+#[must_use]
+pub fn render_outline_entry_summary(summary: &EntrySummary) -> String {
+    if summary.is_empty() {
+        return String::new();
+    }
+    let mut counts = summary
+        .by_kind
+        .iter()
+        .map(|count| {
+            format!(
+                "{} {}",
+                count.count,
+                entry_kind_label(count.kind, count.count == 1)
+            )
+        })
+        .collect::<Vec<_>>();
+    counts.push(format!(
+        "{} {}",
+        summary.forms,
+        if summary.forms == 1 { "form" } else { "forms" }
+    ));
+    format!(
+        " — {} direct, {} nested ({})",
+        summary.direct,
+        summary.descendants,
+        counts.join(", ")
+    )
+}
+
+const fn entry_kind_label(kind: EntryKind, singular: bool) -> &'static str {
+    match (kind, singular) {
+        (EntryKind::Command, true) => "command",
+        (EntryKind::Command, false) => "commands",
+        (
+            EntryKind::Parameter {
+                parameter_kind: ParameterKind::Option,
+            },
+            true,
+        ) => "option",
+        (
+            EntryKind::Parameter {
+                parameter_kind: ParameterKind::Option,
+            },
+            false,
+        ) => "options",
+        (
+            EntryKind::Parameter {
+                parameter_kind: ParameterKind::Marker,
+            },
+            true,
+        ) => "marker",
+        (
+            EntryKind::Parameter {
+                parameter_kind: ParameterKind::Marker,
+            },
+            false,
+        ) => "markers",
+        (
+            EntryKind::Parameter {
+                parameter_kind: ParameterKind::Operand,
+            },
+            true,
+        ) => "operand",
+        (
+            EntryKind::Parameter {
+                parameter_kind: ParameterKind::Operand,
+            },
+            false,
+        ) => "operands",
+        (EntryKind::ConfigurationKey, true) => "configuration key",
+        (EntryKind::ConfigurationKey, false) => "configuration keys",
+        (EntryKind::EnvironmentVariable, true) => "environment variable",
+        (EntryKind::EnvironmentVariable, false) => "environment variables",
+        (EntryKind::Variable, true) => "variable",
+        (EntryKind::Variable, false) => "variables",
+        (EntryKind::Value, true) => "value",
+        (EntryKind::Value, false) => "values",
+        (EntryKind::Term, true) => "term",
+        (EntryKind::Term, false) => "terms",
     }
 }
 

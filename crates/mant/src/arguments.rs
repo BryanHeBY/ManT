@@ -4,7 +4,7 @@
 //! Every action, projection, input mode, and output choice is a long option so
 //! humans and agents do not have to distinguish ad-hoc subcommand grammars.
 
-use std::iter;
+use std::{iter, str::FromStr};
 
 use clap::{
     ArgAction, ArgGroup, CommandFactory, FromArgMatches, ValueEnum,
@@ -14,9 +14,10 @@ use clap::{
 use mant_engine::{
     QueryPolicy, is_manual_section, normalize_tldr_topic, parenthesized_manual_reference,
 };
+use mant_ir::{EntryKind, ParameterKind};
 use mant_protocol::{
     CatalogDocumentKind, CatalogQuery, DocumentScope, DocumentSelector, DocumentTraversal,
-    InputFormat, NodeSelector, OutlineDetail, QueryInput, QueryRequest, QueryView, RequestSchema,
+    EntryProjection, InputFormat, NodeSelector, QueryInput, QueryRequest, QueryView, RequestSchema,
     ScopeQueryView, SearchCase, SearchScope, SearchSyntax, default_search_limit,
 };
 
@@ -123,19 +124,51 @@ pub(crate) enum SchemaContract {
 }
 
 /// Semantic entries included beneath the ordinary section outline.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
-enum OutlineMode {
-    Sections,
-    #[value(alias = "options")]
-    Entries,
-}
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct OutlineEntries(EntryProjection);
 
-impl From<OutlineMode> for OutlineDetail {
-    fn from(value: OutlineMode) -> Self {
+impl FromStr for OutlineEntries {
+    type Err = String;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
         match value {
-            OutlineMode::Sections => Self::Sections,
-            OutlineMode::Entries => Self::Entries,
+            "none" => return Ok(Self(EntryProjection::None)),
+            "summary" => return Ok(Self(EntryProjection::Summary)),
+            "all" => return Ok(Self(EntryProjection::All)),
+            _ => {}
         }
+        let mut kinds = Vec::new();
+        for name in value.split(',') {
+            let kind = match name {
+                "command" => EntryKind::Command,
+                "option" => EntryKind::Parameter {
+                    parameter_kind: ParameterKind::Option,
+                },
+                "marker" => EntryKind::Parameter {
+                    parameter_kind: ParameterKind::Marker,
+                },
+                "operand" => EntryKind::Parameter {
+                    parameter_kind: ParameterKind::Operand,
+                },
+                "configuration-key" => EntryKind::ConfigurationKey,
+                "environment-variable" => EntryKind::EnvironmentVariable,
+                "variable" => EntryKind::Variable,
+                "value" => EntryKind::Value,
+                "term" => EntryKind::Term,
+                _ => {
+                    return Err(format!(
+                        "unknown entry kind '{name}'; use none, summary, all, or a comma-separated list of command, option, marker, operand, configuration-key, environment-variable, variable, value, and term"
+                    ));
+                }
+            };
+            if !kinds.contains(&kind) {
+                kinds.push(kind);
+            }
+        }
+        if kinds.is_empty() {
+            return Err("entry kind list must not be empty".to_owned());
+        }
+        Ok(Self(EntryProjection::Kinds { kinds }))
     }
 }
 
@@ -378,17 +411,33 @@ struct Cli {
     )]
     tldr: bool,
 
-    /// Print the addressable outline tree; semantic entries are included by default.
+    /// Print the addressable outline tree with compact semantic summaries.
     #[arg(
         long,
-        value_name = "DETAIL",
-        value_enum,
-        num_args = 0..=1,
-        default_missing_value = "entries",
         conflicts_with_all = ["node", "explain"],
         help_heading = "Document selection"
     )]
-    outline: Option<OutlineMode>,
+    outline: bool,
+
+    /// Select semantic entry expansion: none, summary, all, or comma-separated kinds.
+    #[arg(
+        long,
+        value_name = "MODE|KINDS",
+        requires = "outline",
+        help_heading = "Document selection"
+    )]
+    outline_entries: Option<OutlineEntries>,
+
+    /// Start the outline at one section or semantic entry selector.
+    #[arg(
+        long,
+        value_name = "SELECTOR",
+        value_parser = non_empty,
+        allow_hyphen_values = true,
+        requires = "outline",
+        help_heading = "Document selection"
+    )]
+    outline_root: Option<String>,
 
     /// Print an outline node selected by path, stable ID, or semantic-entry alias; repeatable.
     #[arg(

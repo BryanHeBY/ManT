@@ -9,14 +9,14 @@ use serde::{Deserialize, Serialize};
 /// Exact schema marker for a normalized structured document response.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub enum DocumentSchema {
-    /// Version 0.9 of the pre-stable structured-document protocol.
-    #[serde(rename = "mant.document/v0.9")]
-    V0Dot9,
+    /// Version 0.10 of the pre-stable structured-document protocol.
+    #[serde(rename = "mant.document/v0.10")]
+    V0Dot10,
 }
 
 impl DocumentSchema {
     /// Serialized identifier of the current document contract.
-    pub const ID: &'static str = "mant.document/v0.9";
+    pub const ID: &'static str = "mant.document/v0.10";
 }
 
 /// Identifies `ManT` and the parser used to build a wire document.
@@ -42,7 +42,7 @@ pub struct Engine {
     pub version: String,
 }
 
-/// Serializable v0.9 envelope around `ManT`'s protocol-independent document IR.
+/// Serializable v0.10 envelope around `ManT`'s protocol-independent document IR.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct DocumentResponse {
@@ -82,7 +82,7 @@ impl Producer {
 impl From<&IrDocument> for DocumentResponse {
     fn from(document: &IrDocument) -> Self {
         Self {
-            schema: DocumentSchema::V0Dot9,
+            schema: DocumentSchema::V0Dot10,
             producer: Producer::for_document(document),
             source: document.source.clone(),
             meta: document.meta.clone(),

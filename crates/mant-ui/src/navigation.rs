@@ -13,7 +13,7 @@ use ratatui::{
 };
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
-use mant_ir::DefinitionRole;
+use mant_ir::{EntryKind, ParameterKind};
 
 use crate::{NavKind, NavNode, text::sanitize_terminal_text, theme};
 
@@ -82,16 +82,16 @@ fn node_lines(
         match node.kind {
             NavKind::Tldr => theme::MAUVE,
             NavKind::Root | NavKind::Section if node.depth == 0 => theme::SUBTEXT_BRIGHT,
-            NavKind::Root | NavKind::Section => theme::BLUE,
-            NavKind::EntryGroup => theme::YELLOW,
-            NavKind::Entry(DefinitionRole::Option) => theme::GREEN,
-            NavKind::Entry(DefinitionRole::Marker | DefinitionRole::Operand) => theme::GREEN,
-            NavKind::Entry(DefinitionRole::Command) => theme::PEACH,
-            NavKind::Entry(DefinitionRole::ConfigurationKey) => theme::YELLOW,
-            NavKind::Entry(DefinitionRole::EnvironmentVariable) => theme::LINK,
-            NavKind::Entry(DefinitionRole::Variable) => theme::PINK,
-            NavKind::Entry(DefinitionRole::Value) => theme::BLUE,
-            NavKind::Entry(DefinitionRole::Term) => theme::SUBTEXT,
+            NavKind::Root | NavKind::Section | NavKind::Entry(EntryKind::Value) => theme::BLUE,
+            NavKind::EntryGroup | NavKind::Entry(EntryKind::ConfigurationKey) => theme::YELLOW,
+            NavKind::Entry(EntryKind::Parameter {
+                parameter_kind:
+                    ParameterKind::Option | ParameterKind::Marker | ParameterKind::Operand,
+            }) => theme::GREEN,
+            NavKind::Entry(EntryKind::Command) => theme::PEACH,
+            NavKind::Entry(EntryKind::EnvironmentVariable) => theme::LINK,
+            NavKind::Entry(EntryKind::Variable) => theme::PINK,
+            NavKind::Entry(EntryKind::Term) => theme::SUBTEXT,
         }
     };
     let background = if selected {

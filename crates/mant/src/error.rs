@@ -96,6 +96,7 @@ pub(super) fn query_failure(error: QueryError) -> Failure {
         | QueryError::UnsupportedInputFormat { .. }
         | QueryError::EmptySelection
         | QueryError::EmptySelector
+        | QueryError::InvalidEntryKinds
         | QueryError::EmptyEntry
         | QueryError::InvalidSearch(_) => Failure::usage(error),
         QueryError::ManualWithTldr { error, topic } => Failure::operational_lines(
@@ -120,7 +121,7 @@ fn projection_failure(error: ProjectionError) -> Failure {
         ProjectionError::UnknownSelector { document, selector } => Failure::usage_lines(
             format!("document '{document}' has no outline node '{selector}'"),
             [format!(
-                "hint: run `mant {document} --outline=entries --format json` for available selectors and diagnostics"
+                "hint: run `mant {document} --outline --outline-entries all --format json` for available selectors and diagnostics"
             )],
         ),
         ProjectionError::SelectorFoundOnlyInText {

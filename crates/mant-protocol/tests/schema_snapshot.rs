@@ -3,7 +3,7 @@
 use mant_protocol::{NATIVE_API_VERSION, doctor_report_json_schema, query_json_schema_catalog};
 use serde_json::Value;
 
-const V0_9_SNAPSHOT: &str = include_str!("../../../tests/contracts/protocol-schemas-v0.9.json");
+const V0_10_SNAPSHOT: &str = include_str!("../../../tests/contracts/protocol-schemas-v0.10.json");
 
 fn remove_non_structural_metadata(value: &mut Value) {
     match value {
@@ -24,22 +24,22 @@ fn remove_non_structural_metadata(value: &mut Value) {
 }
 
 #[test]
-fn v0_9_structural_schemas_change_only_with_an_explicit_protocol_version() {
-    assert_eq!(NATIVE_API_VERSION, "0.9");
+fn v0_10_structural_schemas_change_only_with_an_explicit_protocol_version() {
+    assert_eq!(NATIVE_API_VERSION, "0.10");
 
-    let mut expected: Value = serde_json::from_str(V0_9_SNAPSHOT).expect("v0.9 schema snapshot");
+    let mut expected: Value = serde_json::from_str(V0_10_SNAPSHOT).expect("v0.10 schema snapshot");
     let mut actual = serde_json::to_value(query_json_schema_catalog()).expect("generated schemas");
     remove_non_structural_metadata(&mut expected);
     remove_non_structural_metadata(&mut actual);
 
     assert_eq!(
         actual, expected,
-        "the v0.9 structural contract changed; restore compatibility or advance every affected schema discriminator before regenerating the snapshot"
+        "the v0.10 structural contract changed; restore compatibility or advance every affected schema discriminator before regenerating the snapshot"
     );
 }
 
 #[test]
-fn v0_9_catalog_exposes_only_logical_document_identities() {
+fn v0_10_catalog_exposes_only_logical_document_identities() {
     let catalog = serde_json::to_value(mant_protocol::document_catalog_json_schema())
         .expect("catalog schema");
     let summary = &catalog["$defs"]["DocumentSummary"];

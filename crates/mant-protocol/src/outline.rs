@@ -5,43 +5,77 @@ use serde::{Deserialize, Serialize};
 
 use mant_ir::{
     Block, DefinitionCase, DefinitionItem, DefinitionRole, Diagnostic, DocumentMeta,
-    DocumentSource, NodeId, Section, TldrDocument,
+    DocumentSource, EntryKind, EntrySummary, NodeId, Section, TldrDocument, ValueDomain,
 };
 
-use crate::{NodePath, Producer};
+use crate::{NodePath, NodeSelector, Producer};
 
 /// Exact schema marker for a query outline response.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub enum OutlineSchema {
-    /// Version 0.9 of the pre-stable outline protocol.
-    #[serde(rename = "mant.outline/v0.9")]
-    V0Dot9,
+    /// Version 0.10 of the pre-stable outline protocol.
+    #[serde(rename = "mant.outline/v0.10")]
+    V0Dot10,
 }
 
 impl OutlineSchema {
     /// Serialized identifier of the current outline contract.
-    pub const ID: &'static str = "mant.outline/v0.9";
+    pub const ID: &'static str = "mant.outline/v0.10";
 }
 
-/// Amount of semantic detail included in an outline projection.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "kebab-case")]
+/// Semantic entry material included beneath structural outline nodes.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(
+    tag = "kind",
+    rename_all = "kebab-case",
+    rename_all_fields = "camelCase"
+)]
+pub enum EntryProjection {
+    /// Include section topology without entry metadata.
+    None,
+    /// Include recursive entry counts but not individual entry nodes.
+    #[default]
+    Summary,
+    /// Include every nested semantic entry.
+    All,
+    /// Include entries of the selected kinds and the ancestors needed to reach them.
+    Kinds {
+        /// Semantic categories retained by the projection.
+        #[schemars(length(min = 1, max = 9))]
+        kinds: Vec<EntryKind>,
+    },
+}
+
+/// Compatibility selector for in-process callers migrating from v0.9.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OutlineDetail {
     /// Include only section-level navigation nodes.
     Sections,
-    /// Include sections and semantic definition entries.
+    /// Include sections and every semantic definition entry.
     Entries,
+}
+
+impl From<OutlineDetail> for EntryProjection {
+    fn from(value: OutlineDetail) -> Self {
+        match value {
+            OutlineDetail::Sections => Self::None,
+            OutlineDetail::Entries => Self::All,
+        }
+    }
 }
 
 /// A block-free tree used to discover selectable query content.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
-#[schemars(extend("$id" = "urn:mant:outline:v0.9"))]
+#[schemars(extend("$id" = "urn:mant:outline:v0.10"))]
 pub struct QueryOutline {
     /// Exact response schema discriminator.
     pub schema: OutlineSchema,
-    /// Detail level used to build this projection.
-    pub detail: OutlineDetail,
+    /// Entry projection used to build this outline.
+    pub entries: EntryProjection,
+    /// Optional section or entry selector used as the projection root.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub root: Option<NodeSelector>,
     /// Human-readable selected-document label.
     pub label: String,
     /// Authoritative document source, when one was loaded.
@@ -98,6 +132,12 @@ pub enum OutlineNode {
         id: NodeId,
         /// Display title for the leading content.
         title: String,
+        /// Recursive semantic entry coverage for this scope.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        entry_summary: Option<EntrySummary>,
+        /// Nested semantic entries when explicitly expanded.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        children: Vec<OutlineNode>,
     },
     /// One semantic document section.
     DocumentSection {
@@ -107,10 +147,13 @@ pub enum OutlineNode {
         id: NodeId,
         /// Section heading text.
         title: String,
+        /// Recursive semantic entry coverage owned directly by this section.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        entry_summary: Option<EntrySummary>,
         /// Nested section and entry nodes.
         children: Vec<OutlineNode>,
     },
-    /// One semantic command, option, or variable definition.
+    /// One source-neutral semantic definition.
     DocumentEntry {
         /// Canonical structural outline path.
         path: NodePath,
@@ -119,11 +162,24 @@ pub enum OutlineNode {
         /// Primary display term.
         title: String,
         /// Semantic category of the entry.
-        role: DefinitionRole,
+        entry_kind: EntryKind,
         /// Alias case-matching policy.
         case: DefinitionCase,
-        /// Normalized selectable aliases.
-        names: Vec<String>,
+        /// Exact selectable aliases.
+        aliases: Vec<String>,
+        /// Author-written input forms.
+        forms: Vec<String>,
+        /// Definition nodes supplying content for this concept.
+        targets: Vec<NodeId>,
+        /// Optional finite or cross-document value space.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        value_domain: Option<ValueDomain>,
+        /// Recursive semantic entry coverage owned by this entry.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        entry_summary: Option<EntrySummary>,
+        /// Nested entry nodes.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        children: Vec<OutlineNode>,
     },
 }
 
@@ -165,8 +221,10 @@ impl OutlineNode {
     #[must_use]
     pub fn children(&self) -> &[Self] {
         match self {
-            Self::DocumentSection { children, .. } => children,
-            Self::Tldr { .. } | Self::DocumentRoot { .. } | Self::DocumentEntry { .. } => &[],
+            Self::DocumentRoot { children, .. }
+            | Self::DocumentSection { children, .. }
+            | Self::DocumentEntry { children, .. } => children,
+            Self::Tldr { .. } => &[],
         }
     }
 }
@@ -174,20 +232,20 @@ impl OutlineNode {
 /// Exact schema marker for selected query content.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub enum ExcerptSchema {
-    /// Version 0.9 of the pre-stable excerpt protocol.
-    #[serde(rename = "mant.excerpt/v0.9")]
-    V0Dot9,
+    /// Version 0.10 of the pre-stable excerpt protocol.
+    #[serde(rename = "mant.excerpt/v0.10")]
+    V0Dot10,
 }
 
 impl ExcerptSchema {
     /// Serialized identifier of the current excerpt contract.
-    pub const ID: &'static str = "mant.excerpt/v0.9";
+    pub const ID: &'static str = "mant.excerpt/v0.10";
 }
 
 /// One or more independently selected nodes from a complete query.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
-#[schemars(extend("$id" = "urn:mant:excerpt:v0.9"))]
+#[schemars(extend("$id" = "urn:mant:excerpt:v0.10"))]
 pub struct QueryExcerpt {
     /// Exact response schema discriminator.
     pub schema: ExcerptSchema,

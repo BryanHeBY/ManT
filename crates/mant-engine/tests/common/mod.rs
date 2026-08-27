@@ -313,7 +313,7 @@ pub fn semantic_definition_items(document: &Document) -> Vec<&mant_ir::Definitio
 
 pub fn find_outline_entry<'a>(nodes: &'a [OutlineNode], name: &str) -> Option<&'a OutlineNode> {
     for node in nodes {
-        if matches!(node, OutlineNode::DocumentEntry { names, .. } if names.iter().any(|value| value == name))
+        if matches!(node, OutlineNode::DocumentEntry { aliases, .. } if aliases.iter().any(|value| value == name))
         {
             return Some(node);
         }

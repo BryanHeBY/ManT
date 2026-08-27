@@ -266,7 +266,7 @@ fn self_hosted_markdown_manuals_use_the_same_terminal_pipeline() {
     for relative in ["docs/manuals/mant.md"] {
         let path = project_file(relative);
         let bundle = mant_engine::resolve_query(&QueryRequest {
-            schema: RequestSchema::V0Dot9,
+            schema: RequestSchema::V0Dot10,
             input: QueryInput::File {
                 path: path.to_string_lossy().into_owned(),
                 format: mant_protocol::InputFormat::Markdown,

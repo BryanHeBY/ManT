@@ -602,7 +602,7 @@ mod tests {
 
     fn result() -> QuerySearch {
         QuerySearch {
-            schema: SearchSchema::V0Dot9,
+            schema: SearchSchema::V0Dot10,
             label: "tar".to_owned(),
             source: None,
             meta: Some(mant_ir::DocumentMeta {

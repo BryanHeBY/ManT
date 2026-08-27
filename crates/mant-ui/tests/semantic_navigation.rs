@@ -1,12 +1,13 @@
 use mant_ir::{
     Block, DefinitionCase, DefinitionIdentity, DefinitionItem, DefinitionRole, Document,
-    DocumentMeta, DocumentSource, LayoutHint, ResolvedContent, Section, SourceFormat,
+    DocumentMeta, DocumentSource, EntryKind, Inline, LayoutHint, ParameterKind, ResolvedContent,
+    Section, SourceFormat,
 };
 use mant_ui::{DocumentView, NavKind};
 
 #[test]
 fn sidebar_exposes_every_semantic_role_supported_by_the_document_contract() {
-    let entries = [
+    let mut entries = [
         (DefinitionRole::Option, "--help"),
         (DefinitionRole::Command, "build"),
         (DefinitionRole::EnvironmentVariable, "MANT_HOME"),
@@ -26,7 +27,34 @@ fn sidebar_exposes_every_semantic_role_supported_by_the_document_contract() {
         inline_term: false,
         spacing_before_lines: None,
     })
-    .collect();
+    .collect::<Vec<_>>();
+    entries[0].terms = vec![
+        vec![Inline::Code {
+            value: "--help".to_owned(),
+        }],
+        vec![Inline::Code {
+            value: "-h".to_owned(),
+        }],
+    ];
+    entries[0].description = vec![Block::DefinitionList {
+        items: vec![DefinitionItem {
+            identity: Some(DefinitionIdentity {
+                id: "entry-help-value".into(),
+                role: DefinitionRole::Value,
+                case: DefinitionCase::Sensitive,
+                names: vec!["brief".to_owned()],
+            }),
+            terms: vec![vec![Inline::Code {
+                value: "brief".to_owned(),
+            }]],
+            description: Vec::new(),
+            inline_term: false,
+            spacing_before_lines: None,
+        }],
+        compact: true,
+        layout: LayoutHint::default(),
+        source: None,
+    }];
     let bundle = ResolvedContent {
         address: None,
         label: "tool".to_owned(),
@@ -57,17 +85,26 @@ fn sidebar_exposes_every_semantic_role_supported_by_the_document_contract() {
     };
 
     let view = DocumentView::new(&bundle);
-    assert_eq!(view.navigation()[1].title, "ENTRIES (4)");
+    assert_eq!(
+        view.navigation()[1].title,
+        "ENTRIES (4 direct · 1 nested · 3 forms)"
+    );
+    assert_eq!(view.navigation()[2].title, "--help | -h");
+    assert_eq!(view.navigation()[3].parent_id.as_deref(), Some("entry-0"));
+    assert_eq!(view.navigation()[3].depth, view.navigation()[2].depth + 1);
     assert_eq!(
         view.navigation()[2..]
             .iter()
             .map(|item| item.kind)
             .collect::<Vec<_>>(),
         vec![
-            NavKind::Entry(DefinitionRole::Option),
-            NavKind::Entry(DefinitionRole::Command),
-            NavKind::Entry(DefinitionRole::EnvironmentVariable),
-            NavKind::Entry(DefinitionRole::Variable),
+            NavKind::Entry(EntryKind::Parameter {
+                parameter_kind: ParameterKind::Option,
+            }),
+            NavKind::Entry(EntryKind::Value),
+            NavKind::Entry(EntryKind::Command),
+            NavKind::Entry(EntryKind::EnvironmentVariable),
+            NavKind::Entry(EntryKind::Variable),
         ]
     );
 }

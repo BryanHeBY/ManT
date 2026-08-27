@@ -40,7 +40,7 @@ fn keeps_the_analyzer_options_checkers_and_archive_metadata() {
     let outline =
         build_outline_with_detail(&windows_release_query("scan-build"), OutlineDetail::Entries)
             .expect("build scan-build option outline");
-    assert_eq!(count_outline_entries(&outline.nodes), 19);
+    assert_eq!(count_outline_entries(&outline.nodes), 75);
     assert!(find_outline_entry(&outline.nodes, "--use-cc").is_some());
 }
 

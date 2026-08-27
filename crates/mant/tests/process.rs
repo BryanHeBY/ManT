@@ -623,7 +623,7 @@ fn request_schema_is_discoverable_without_host_state() {
     assert!(
         String::from_utf8(output.stdout)
             .expect("UTF-8 schema")
-            .contains("mant.request/v0.9")
+            .contains("mant.request/v0.10")
     );
 }
 
@@ -637,12 +637,12 @@ fn protocol_version_is_a_clean_json_document() {
     assert!(output.status.success());
     assert!(output.stderr.is_empty());
     let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("protocol JSON");
-    assert_eq!(value["protocol"], "mant.cli/v0.9");
-    assert_eq!(value["requestSchema"], "mant.request/v0.9");
-    assert_eq!(value["querySchema"], "mant.query/v0.9");
-    assert_eq!(value["outlineSchema"], "mant.outline/v0.9");
-    assert_eq!(value["excerptSchema"], "mant.excerpt/v0.9");
-    assert_eq!(value["searchSchema"], "mant.search/v0.9");
+    assert_eq!(value["protocol"], "mant.cli/v0.10");
+    assert_eq!(value["requestSchema"], "mant.request/v0.10");
+    assert_eq!(value["querySchema"], "mant.query/v0.10");
+    assert_eq!(value["outlineSchema"], "mant.outline/v0.10");
+    assert_eq!(value["excerptSchema"], "mant.excerpt/v0.10");
+    assert_eq!(value["searchSchema"], "mant.search/v0.10");
 
     for (field, marker) in value.as_object().expect("protocol descriptor") {
         let documented = format!(
@@ -695,7 +695,7 @@ fn invalid_stdin_request_uses_status_two_without_runtime_noise() {
         .take()
         .expect("stdin")
         .write_all(
-            br#"{"schema":"mant.request/v0.9","input":{"kind":"document","selector":"git"},"view":{"kind":"full"},"futureField":true}"#,
+            br#"{"schema":"mant.request/v0.10","input":{"kind":"document","selector":"git"},"view":{"kind":"full"},"futureField":true}"#,
         )
         .expect("write request");
     let output = child.wait_with_output().expect("wait for mant");
@@ -1026,7 +1026,7 @@ fn direct_and_protocol_queries_read_local_markdown_files_by_path() {
         .spawn()
         .expect("start protocol query");
     let request = serde_json::json!({
-        "schema": "mant.request/v0.9",
+        "schema": "mant.request/v0.10",
         "input": {
             "kind": "file",
             "path": path.to_str().expect("UTF-8 path"),
@@ -1107,7 +1107,9 @@ fn cli_and_request_outlines_report_rejected_semantic_entries() {
         .args([
             "--input",
             path.to_str().expect("UTF-8 path"),
-            "--outline=entries",
+            "--outline",
+            "--outline-entries",
+            "all",
             "--format",
             "json",
             "--compact",
@@ -1132,13 +1134,13 @@ fn cli_and_request_outlines_report_rejected_semantic_entries() {
         .spawn()
         .expect("start outline request");
     let request = serde_json::json!({
-        "schema": "mant.request/v0.9",
+        "schema": "mant.request/v0.10",
         "input": {
             "kind": "file",
             "path": path.to_str().expect("UTF-8 path"),
             "format": "markdown",
         },
-        "view": { "kind": "outline", "detail": "entries" },
+        "view": { "kind": "outline", "entries": { "kind": "all" } },
     });
     child
         .stdin
@@ -1174,7 +1176,9 @@ fn exact_semantic_option_spellings_survive_the_cli_boundary() {
         .args([
             "--input",
             path,
-            "--outline=entries",
+            "--outline",
+            "--outline-entries",
+            "all",
             "--format",
             "json",
             "--compact",
@@ -1209,9 +1213,15 @@ fn exact_semantic_option_spellings_survive_the_cli_boundary() {
     assert!(outline.stderr.is_empty());
     let outline: serde_json::Value = serde_json::from_slice(&outline.stdout).expect("outline JSON");
     assert!(outline.get("entriesComplete").is_none());
-    assert_eq!(outline["nodes"][0]["children"][0]["names"][0], "-ca.cert");
-    assert_eq!(outline["nodes"][0]["children"][1]["names"][0], "-ca.chain");
-    assert_eq!(outline["nodes"][0]["children"][2]["names"][0], "--foo.bar");
+    assert_eq!(outline["nodes"][0]["children"][0]["aliases"][0], "-ca.cert");
+    assert_eq!(
+        outline["nodes"][0]["children"][1]["aliases"][0],
+        "-ca.chain"
+    );
+    assert_eq!(
+        outline["nodes"][0]["children"][2]["aliases"][0],
+        "--foo.bar"
+    );
 
     assert!(dotted.status.success(), "{dotted:?}");
     assert!(dotted.stderr.is_empty());
@@ -1524,7 +1534,7 @@ fn request_windows_suffix(fixture_root: &std::path::Path) -> std::process::Outpu
         .take()
         .expect("stdin")
         .write_all(
-            br#"{"schema":"mant.request/v0.9","input":{"kind":"document","selector":"ordered"},"view":{"kind":"full"}}"#,
+            br#"{"schema":"mant.request/v0.10","input":{"kind":"document","selector":"ordered"},"view":{"kind":"full"}}"#,
         )
         .expect("write Windows suffix request");
     child.wait_with_output().expect("wait for suffix request")
@@ -1927,7 +1937,7 @@ fn markdown_root_content_is_discoverable_selectable_and_searchable() {
         serde_json::from_slice::<serde_json::Value>(&output.stdout).expect("projection JSON")
     };
 
-    let outline = run_json(&["--input", path, "--outline=sections"]);
+    let outline = run_json(&["--input", path, "--outline", "--outline-entries", "none"]);
     assert_eq!(outline["nodes"][0]["kind"], "document-root");
     assert_eq!(outline["nodes"][0]["path"], "root");
     assert_eq!(outline["nodes"].as_array().map(Vec::len), Some(1));

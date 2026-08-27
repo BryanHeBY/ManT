@@ -15,8 +15,8 @@ pub enum OutlinePath {
     Entry {
         /// One-based path of the containing section, or `None` for root content.
         section: Option<Vec<NonZeroUsize>>,
-        /// One-based entry position within its container.
-        index: NonZeroUsize,
+        /// One-based entry positions from the scope root to the nested entry.
+        indices: Vec<NonZeroUsize>,
     },
 }
 
@@ -30,12 +30,18 @@ impl OutlinePath {
     /// Construct an entry path, returning `None` for zero indices or coordinates.
     #[must_use]
     pub fn entry(section: Option<&[usize]>, index: usize) -> Option<Self> {
+        Self::nested_entry(section, &[index])
+    }
+
+    /// Construct a possibly nested entry path.
+    #[must_use]
+    pub fn nested_entry(section: Option<&[usize]>, indices: &[usize]) -> Option<Self> {
         Some(Self::Entry {
             section: match section {
                 Some(coordinates) => Some(non_zero_coordinates(coordinates)?),
                 None => None,
             },
-            index: NonZeroUsize::new(index)?,
+            indices: non_zero_coordinates(indices)?,
         })
     }
 
@@ -66,17 +72,33 @@ impl fmt::Display for OutlinePath {
             Self::Section(coordinates) => write_coordinates(formatter, coordinates),
             Self::Entry {
                 section: None,
-                index,
-            } => write!(formatter, "root/e{index}"),
+                indices,
+            } => write_entry_coordinates(formatter, "root", indices),
             Self::Entry {
                 section: Some(coordinates),
-                index,
+                indices,
             } => {
                 write_coordinates(formatter, coordinates)?;
-                write!(formatter, "/e{index}")
+                write_entry_suffix(formatter, indices)
             }
         }
     }
+}
+
+fn write_entry_coordinates(
+    formatter: &mut fmt::Formatter<'_>,
+    root: &str,
+    indices: &[NonZeroUsize],
+) -> fmt::Result {
+    formatter.write_str(root)?;
+    write_entry_suffix(formatter, indices)
+}
+
+fn write_entry_suffix(formatter: &mut fmt::Formatter<'_>, indices: &[NonZeroUsize]) -> fmt::Result {
+    for index in indices {
+        write!(formatter, "/e{index}")?;
+    }
+    Ok(())
 }
 
 fn write_coordinates(
@@ -113,24 +135,39 @@ impl FromStr for OutlinePath {
             "root" => return Ok(Self::DocumentRoot),
             _ => {}
         }
-        if let Some(index) = value.strip_prefix("root/e") {
+        if let Some(indices) = value.strip_prefix("root/") {
             return Ok(Self::Entry {
                 section: None,
-                index: parse_index(index)?,
+                indices: parse_entry_indices(indices)?,
             });
         }
         let (section, entry) = value
-            .split_once("/e")
+            .split_once('/')
             .map_or((value, None), |(section, entry)| (section, Some(entry)));
         let coordinates = parse_coordinates(section)?;
         match entry {
-            Some(index) => Ok(Self::Entry {
+            Some(indices) => Ok(Self::Entry {
                 section: Some(coordinates),
-                index: parse_index(index)?,
+                indices: parse_entry_indices(indices)?,
             }),
             None => Ok(Self::Section(coordinates)),
         }
     }
+}
+
+fn parse_entry_indices(value: &str) -> Result<Vec<NonZeroUsize>, InvalidOutlinePath> {
+    let indices = value
+        .split('/')
+        .map(|component| {
+            component
+                .strip_prefix('e')
+                .ok_or(InvalidOutlinePath)
+                .and_then(parse_index)
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    (!indices.is_empty())
+        .then_some(indices)
+        .ok_or(InvalidOutlinePath)
 }
 
 fn parse_coordinates(value: &str) -> Result<Vec<NonZeroUsize>, InvalidOutlinePath> {
@@ -160,14 +197,23 @@ mod tests {
 
     #[test]
     fn round_trips_every_outline_path_family() {
-        for value in ["0", "root", "root/e2", "1", "2.3", "2.3/e4"] {
+        for value in [
+            "0",
+            "root",
+            "root/e2",
+            "root/e2/e1",
+            "1",
+            "2.3",
+            "2.3/e4",
+            "2.3/e4/e2",
+        ] {
             assert_eq!(value.parse::<OutlinePath>().unwrap().to_string(), value);
         }
     }
 
     #[test]
     fn rejects_zero_empty_and_malformed_indices() {
-        for value in ["", "00", "01", "1.0", "root/e0", "1/o", "1/e2/e3", "x"] {
+        for value in ["", "00", "01", "1.0", "root/e0", "1/o", "1/e2/e0", "x"] {
             assert!(value.parse::<OutlinePath>().is_err(), "accepted {value}");
         }
     }
@@ -178,6 +224,12 @@ mod tests {
         assert_eq!(
             OutlinePath::entry(Some(&[2, 3]), 4).unwrap().to_string(),
             "2.3/e4"
+        );
+        assert_eq!(
+            OutlinePath::nested_entry(Some(&[2, 3]), &[4, 2])
+                .unwrap()
+                .to_string(),
+            "2.3/e4/e2"
         );
         assert!(OutlinePath::section(&[]).is_none());
         assert!(OutlinePath::entry(Some(&[1, 0]), 2).is_none());

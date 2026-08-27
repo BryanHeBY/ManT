@@ -11,17 +11,17 @@ use std::{
 
 use mant_ir::{Document, DocumentAddress, MarkdownOrigin, ResolvedContent, TldrDocument};
 use mant_protocol::{
-    CatalogQuery, DocumentCatalog, InputFormat, QueryExcerpt, QueryInput, QueryOutline,
-    QueryRequest, QuerySearch, QueryView, SearchCase, SearchQuery, SearchScope, SearchSyntax,
+    CatalogQuery, DocumentCatalog, EntryProjection, InputFormat, QueryExcerpt, QueryInput,
+    QueryOutline, QueryRequest, QuerySearch, QueryView, SearchCase, SearchQuery, SearchScope,
+    SearchSyntax,
 };
 use mant_sources::{RegisteredDocumentIndex, RegisteredDocumentOrigin, SourceConfigError};
 
 use crate::{
-    ManualIndex, ManualPage, ManualRequest, ProjectionError, SearchError,
-    build_outline_with_detail, discover_manual_roots, executable::query_name_candidates,
-    locate_manual_source_in, parse_manual_bytes, parse_manual_page, parse_manual_source,
-    parse_markdown, read_cached_tldr_page, search_query, select_excerpt, select_explanation,
-    validate_search_query,
+    ManualIndex, ManualPage, ManualRequest, ProjectionError, SearchError, discover_manual_roots,
+    executable::query_name_candidates, locate_manual_source_in, parse_manual_bytes,
+    parse_manual_page, parse_manual_source, parse_markdown, read_cached_tldr_page, search_query,
+    select_excerpt, select_explanation, validate_search_query,
 };
 
 mod input;
@@ -66,6 +66,8 @@ pub enum QueryError {
     EmptySelection,
     /// An excerpt selector was empty.
     EmptySelector,
+    /// A role-filtered outline contained no kinds or exceeded the closed kind family.
+    InvalidEntryKinds,
     /// An explanation entry name was empty.
     EmptyEntry,
     /// Search configuration failed validation.
@@ -244,6 +246,9 @@ impl fmt::Display for QueryError {
             ),
             Self::EmptySelection => formatter.write_str("at least one outline node is required"),
             Self::EmptySelector => formatter.write_str("outline node must not be empty"),
+            Self::InvalidEntryKinds => {
+                formatter.write_str("outline entry kinds must contain between 1 and 9 values")
+            }
             Self::EmptyEntry => formatter.write_str("semantic entry must not be empty"),
             Self::InvalidSearch(error) => error.fmt(formatter),
             Self::Markdown { path, detail } => {
@@ -297,6 +302,7 @@ impl Error for QueryError {
             | Self::UnsupportedInputFormat { .. }
             | Self::EmptySelection
             | Self::EmptySelector
+            | Self::InvalidEntryKinds
             | Self::EmptyEntry
             | Self::Markdown { .. }
             | Self::EmptyMarkdown { .. }
@@ -406,9 +412,11 @@ pub fn project_query_view(
 ) -> Result<QueryViewResult, QueryExecutionError> {
     match view {
         QueryView::Full {} => Ok(QueryViewResult::Full(Box::new(query))),
-        QueryView::Outline { detail } => build_outline_with_detail(&query, *detail)
-            .map(QueryViewResult::Outline)
-            .map_err(QueryExecutionError::Projection),
+        QueryView::Outline { entries, root } => {
+            { crate::projection::build_outline_projection(&query, entries.clone(), root.clone()) }
+                .map(QueryViewResult::Outline)
+                .map_err(QueryExecutionError::Projection)
+        }
         QueryView::Excerpt { selectors } => select_excerpt(&query, selectors)
             .map(QueryViewResult::Excerpt)
             .map_err(QueryExecutionError::Projection),
@@ -566,7 +574,20 @@ pub fn validate_query_request(
             offset: *offset,
         })
         .map_err(QueryError::InvalidSearch)?,
-        QueryView::Full {} | QueryView::Outline { .. } | QueryView::Explain { .. } => {}
+        QueryView::Outline { entries, root } => {
+            if root
+                .as_ref()
+                .is_some_and(|selector| selector.trim().is_empty())
+            {
+                return Err(QueryError::EmptySelector);
+            }
+            if let EntryProjection::Kinds { kinds } = entries
+                && (kinds.is_empty() || kinds.len() > 9)
+            {
+                return Err(QueryError::InvalidEntryKinds);
+            }
+        }
+        QueryView::Full {} | QueryView::Explain { .. } => {}
     }
     Ok(())
 }

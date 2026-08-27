@@ -103,7 +103,7 @@ pub(super) fn query_error_for_mcp(error: mant_engine::QueryExecutionError) -> St
                 document,
                 selector,
             }) => format!(
-                "document '{document}' has no outline node '{selector}'; call mant_outline with detail=entries for available selectors"
+                "document '{document}' has no outline node '{selector}'; call mant_outline with entries.kind=all for available selectors"
             ),
             QueryExecutionError::Projection(ProjectionError::SelectorFoundOnlyInText {
                 document,

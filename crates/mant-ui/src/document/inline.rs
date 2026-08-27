@@ -1,8 +1,8 @@
 //! Lowers semantic inline nodes into styled text, anchors, and link targets.
 
 use super::{
-    Block, DefinitionIdentity, DocumentAddress, Inline, LinkTarget, LogicalLinkRange, Modifier,
-    Section, Span, Style, StyledInlineLine, UnicodeWidthStr, theme,
+    DocumentAddress, Inline, LinkTarget, LogicalLinkRange, Modifier, Section, Span, Style,
+    StyledInlineLine, UnicodeWidthStr, theme,
 };
 
 pub(super) fn tldr_style(role: crate::tldr::TldrRole) -> Style {
@@ -69,43 +69,6 @@ pub(super) fn count_sections(sections: &[Section]) -> usize {
         .iter()
         .map(|section| 1 + count_sections(&section.children))
         .sum()
-}
-
-pub(super) fn section_semantic_entries(blocks: &[Block]) -> Vec<&DefinitionIdentity> {
-    let mut entries = Vec::new();
-    collect_semantic_entries(blocks, &mut entries);
-    entries
-}
-
-fn collect_semantic_entries<'a>(blocks: &'a [Block], entries: &mut Vec<&'a DefinitionIdentity>) {
-    for block in blocks {
-        match block {
-            Block::DefinitionList { items, .. } => {
-                for item in items {
-                    if let Some(identity) = &item.identity {
-                        entries.push(identity);
-                    }
-                    collect_semantic_entries(&item.description, entries);
-                }
-            }
-            Block::List { items, .. } => {
-                for item in items {
-                    collect_semantic_entries(&item.blocks, entries);
-                }
-            }
-            Block::Table { rows, .. } => {
-                for cell in rows.iter().flat_map(|row| &row.cells) {
-                    collect_semantic_entries(&cell.blocks, entries);
-                }
-            }
-            Block::Paragraph { .. }
-            | Block::Preformatted { .. }
-            | Block::Equation { .. }
-            | Block::VerticalSpace { .. }
-            | Block::ThematicBreak { .. }
-            | Block::Unsupported { .. } => {}
-        }
-    }
 }
 
 fn append_inline(

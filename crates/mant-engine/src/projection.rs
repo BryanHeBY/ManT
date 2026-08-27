@@ -8,11 +8,12 @@ use std::{
 
 use mant_ir::{
     Block, DefinitionCase, DefinitionIdentity, DefinitionItem, DefinitionRole, Diagnostic,
-    DiagnosticLevel, OutlinePath, Section, SourceSpan,
+    DiagnosticLevel, EntrySummary, OutlinePath, Section, SemanticEntry, SemanticIndex, SourceSpan,
 };
 use mant_protocol::{
-    ExcerptSchema, ExcerptSelection, OutlineDetail, OutlineNode, OutlineNodeReference,
-    OutlineReference, OutlineSchema, OutlineTrail, QueryExcerpt, QueryOutline,
+    EntryProjection, ExcerptSchema, ExcerptSelection, NodeSelector, OutlineDetail, OutlineNode,
+    OutlineNodeReference, OutlineReference, OutlineSchema, OutlineTrail, QueryExcerpt,
+    QueryOutline,
 };
 
 use crate::{ResolvedContent, definitions::definition_entries};
@@ -149,7 +150,7 @@ impl Error for ProjectionError {}
 /// Returns [`ProjectionError::MissingContent`] when neither tldr nor a manual
 /// is available.
 pub fn build_outline(query: &ResolvedContent) -> Result<QueryOutline, ProjectionError> {
-    build_outline_with_detail(query, OutlineDetail::Sections)
+    build_outline_projection(query, EntryProjection::Summary, None)
 }
 
 /// Build an outline with optional semantic definition entries.
@@ -161,6 +162,20 @@ pub fn build_outline(query: &ResolvedContent) -> Result<QueryOutline, Projection
 pub fn build_outline_with_detail(
     query: &ResolvedContent,
     detail: OutlineDetail,
+) -> Result<QueryOutline, ProjectionError> {
+    build_outline_projection(query, detail.into(), None)
+}
+
+/// Build a structural outline with an explicit semantic-entry projection.
+///
+/// # Errors
+///
+/// Returns [`ProjectionError::MissingContent`] when no content is available,
+/// or [`ProjectionError::UnknownSelector`] when `root` matches no outline node.
+pub fn build_outline_projection(
+    query: &ResolvedContent,
+    entries: EntryProjection,
+    root: Option<NodeSelector>,
 ) -> Result<QueryOutline, ProjectionError> {
     if query.tldr.is_none() && query.document.is_none() {
         return Err(ProjectionError::MissingContent {
@@ -177,6 +192,11 @@ pub fn build_outline_with_detail(
             .as_deref()
             .is_some_and(crate::markdown::is_semantic_entry_rejection_code)
     });
+    let materialized_entries = if root.is_some() {
+        EntryProjection::All
+    } else {
+        entries.clone()
+    };
     let mut nodes = Vec::new();
     if query.tldr.is_some() {
         nodes.push(OutlineNode::Tldr {
@@ -186,36 +206,33 @@ pub fn build_outline_with_detail(
         });
     }
     if let Some(manual) = &query.document {
+        let index = SemanticIndex::build(manual);
         if !manual.blocks.is_empty() {
+            let root_entries = index.root();
             nodes.push(OutlineNode::DocumentRoot {
                 path: OutlinePath::DocumentRoot.to_string().into(),
                 id: DOCUMENT_ROOT_ID.into(),
                 title: DOCUMENT_ROOT_TITLE.to_owned(),
+                entry_summary: projected_summary(root_entries, &materialized_entries),
+                children: project_entries(root_entries, None, &[], &materialized_entries),
             });
-            if detail == OutlineDetail::Entries {
-                nodes.extend(
-                    definition_entries(&manual.blocks)
-                        .into_iter()
-                        .enumerate()
-                        .filter_map(|(index, (entry, _))| {
-                            let identity = entry.identity.as_ref()?;
-                            Some(OutlineNode::DocumentEntry {
-                                path: OutlinePath::entry(None, index + 1)?.to_string().into(),
-                                id: identity.id.clone(),
-                                title: identity.names.join(", "),
-                                role: identity.role,
-                                case: identity.case,
-                                names: identity.names.clone(),
-                            })
-                        }),
-                );
-            }
         }
-        nodes.extend(outline_nodes(&manual.sections, &[], detail));
+        nodes.extend(outline_nodes(
+            &manual.sections,
+            &[],
+            &index,
+            &materialized_entries,
+        ));
+    }
+    if let Some(selector) = root.as_ref() {
+        let mut selected = resolve_outline_root(query, &nodes, selector.as_str())?.clone();
+        reproject_selected_node(&mut selected, &entries, true);
+        nodes = vec![selected];
     }
     Ok(QueryOutline {
-        schema: OutlineSchema::V0Dot9,
-        detail,
+        schema: OutlineSchema::V0Dot10,
+        entries,
+        root,
         label: query.label.clone(),
         source: query
             .document
@@ -315,7 +332,7 @@ pub fn select_excerpt<S: AsRef<str>>(
     selections.extend(selected.into_iter().map(LocatedNode::selection));
 
     Ok(QueryExcerpt {
-        schema: ExcerptSchema::V0Dot9,
+        schema: ExcerptSchema::V0Dot10,
         label: query.label.clone(),
         producer: document.map(mant_protocol::Producer::for_document),
         source: document.map(|document| document.source.clone()),
@@ -502,47 +519,207 @@ fn resolve_candidate<'a>(
 fn outline_nodes(
     sections: &[Section],
     parent: &[usize],
-    detail: OutlineDetail,
+    index: &SemanticIndex,
+    entries: &EntryProjection,
 ) -> Vec<OutlineNode> {
     sections
         .iter()
         .enumerate()
-        .map(|(index, section)| {
+        .map(|(section_index, section)| {
             let mut coordinates = parent.to_vec();
-            coordinates.push(index + 1);
+            coordinates.push(section_index + 1);
             let path =
                 OutlinePath::section(&coordinates).expect("enumerated section paths are one-based");
-            let mut children = Vec::new();
-            if detail == OutlineDetail::Entries {
-                children.extend(
-                    definition_entries(&section.blocks)
-                        .into_iter()
-                        .enumerate()
-                        .filter_map(|(index, (entry, _))| {
-                            let identity = entry.identity.as_ref()?;
-                            Some(OutlineNode::DocumentEntry {
-                                path: OutlinePath::entry(Some(&coordinates), index + 1)
-                                    .expect("enumerated entry paths are one-based")
-                                    .to_string()
-                                    .into(),
-                                id: identity.id.clone(),
-                                title: identity.names.join(", "),
-                                role: identity.role,
-                                case: identity.case,
-                                names: identity.names.clone(),
-                            })
-                        }),
-                );
-            }
-            children.extend(outline_nodes(&section.children, &coordinates, detail));
+            let semantic_entries = index.section(&section.id);
+            let mut children = project_entries(semantic_entries, Some(&coordinates), &[], entries);
+            children.extend(outline_nodes(
+                &section.children,
+                &coordinates,
+                index,
+                entries,
+            ));
             OutlineNode::DocumentSection {
                 path: path.to_string().into(),
                 id: section.id.clone(),
                 title: section.title.clone(),
+                entry_summary: projected_summary(semantic_entries, entries),
                 children,
             }
         })
         .collect()
+}
+
+fn projected_summary(
+    entries: &[SemanticEntry],
+    projection: &EntryProjection,
+) -> Option<EntrySummary> {
+    if matches!(projection, EntryProjection::None) {
+        return None;
+    }
+    let summary = EntrySummary::for_entries(entries);
+    (!summary.is_empty()).then_some(summary)
+}
+
+fn project_entries(
+    entries: &[SemanticEntry],
+    section: Option<&[usize]>,
+    parent: &[usize],
+    projection: &EntryProjection,
+) -> Vec<OutlineNode> {
+    if matches!(projection, EntryProjection::None | EntryProjection::Summary) {
+        return Vec::new();
+    }
+    entries
+        .iter()
+        .enumerate()
+        .filter_map(|(index, entry)| {
+            let mut coordinates = parent.to_vec();
+            coordinates.push(index + 1);
+            let children = project_entries(&entry.children, section, &coordinates, projection);
+            let selected = match projection {
+                EntryProjection::All => true,
+                EntryProjection::Kinds { kinds } => kinds.contains(&entry.kind),
+                EntryProjection::None | EntryProjection::Summary => false,
+            };
+            if !selected && children.is_empty() {
+                return None;
+            }
+            let title = (!entry.forms.is_empty())
+                .then(|| entry.forms.join(" | "))
+                .or_else(|| entry.aliases.first().cloned())
+                .unwrap_or_else(|| entry.id.to_string());
+            Some(OutlineNode::DocumentEntry {
+                path: OutlinePath::nested_entry(section, &coordinates)?
+                    .to_string()
+                    .into(),
+                id: entry.id.clone(),
+                title,
+                entry_kind: entry.kind,
+                case: entry.case,
+                aliases: entry.aliases.clone(),
+                forms: entry.forms.clone(),
+                targets: entry.targets.clone(),
+                value_domain: entry.value_domain.clone(),
+                entry_summary: projected_summary(&entry.children, projection),
+                children,
+            })
+        })
+        .collect()
+}
+
+fn find_outline_node<'a>(
+    nodes: &'a [OutlineNode],
+    predicate: &impl Fn(&OutlineNode) -> bool,
+) -> Option<&'a OutlineNode> {
+    for node in nodes {
+        if predicate(node) {
+            return Some(node);
+        }
+        if let Some(found) = find_outline_node(node.children(), predicate) {
+            return Some(found);
+        }
+    }
+    None
+}
+
+fn collect_outline_alias_matches<'a>(
+    nodes: &'a [OutlineNode],
+    selector: &str,
+    matches: &mut Vec<&'a OutlineNode>,
+) {
+    for node in nodes {
+        if matches!(
+            node,
+            OutlineNode::DocumentEntry { aliases, .. }
+                if aliases.iter().any(|alias| alias == selector)
+        ) {
+            matches.push(node);
+        }
+        collect_outline_alias_matches(node.children(), selector, matches);
+    }
+}
+
+fn resolve_outline_root<'a>(
+    query: &ResolvedContent,
+    nodes: &'a [OutlineNode],
+    selector: &str,
+) -> Result<&'a OutlineNode, ProjectionError> {
+    if let Some(node) = find_outline_node(nodes, &|node| node.path() == selector) {
+        return Ok(node);
+    }
+    if let Some(node) = find_outline_node(nodes, &|node| node.id() == selector) {
+        return Ok(node);
+    }
+
+    let mut matches = Vec::new();
+    collect_outline_alias_matches(nodes, selector, &mut matches);
+    match matches.as_slice() {
+        [node] => Ok(node),
+        [] => Err(ProjectionError::UnknownSelector {
+            document: query.label.clone(),
+            selector: selector.to_owned(),
+        }),
+        _ => Err(ProjectionError::AmbiguousSelector {
+            document: query.label.clone(),
+            selector: selector.to_owned(),
+            candidates: matches
+                .into_iter()
+                .map(|node| SelectorCandidate {
+                    path: node.path().to_owned(),
+                    id: node.id().to_owned(),
+                })
+                .collect(),
+        }),
+    }
+}
+
+fn reproject_selected_node(
+    node: &mut OutlineNode,
+    projection: &EntryProjection,
+    keep_self: bool,
+) -> bool {
+    match node {
+        OutlineNode::Tldr { .. } => true,
+        OutlineNode::DocumentRoot {
+            entry_summary,
+            children,
+            ..
+        }
+        | OutlineNode::DocumentSection {
+            entry_summary,
+            children,
+            ..
+        } => {
+            if matches!(projection, EntryProjection::None) {
+                *entry_summary = None;
+            }
+            children.retain_mut(|child| reproject_selected_node(child, projection, false));
+            true
+        }
+        OutlineNode::DocumentEntry {
+            entry_kind,
+            entry_summary,
+            children,
+            ..
+        } => {
+            if matches!(projection, EntryProjection::None) {
+                *entry_summary = None;
+            }
+            if matches!(projection, EntryProjection::None | EntryProjection::Summary) {
+                children.clear();
+            } else {
+                children.retain_mut(|child| reproject_selected_node(child, projection, false));
+            }
+            keep_self
+                || match projection {
+                    EntryProjection::All => true,
+                    EntryProjection::Kinds { kinds } => {
+                        kinds.contains(entry_kind) || !children.is_empty()
+                    }
+                    EntryProjection::None | EntryProjection::Summary => false,
+                }
+        }
+    }
 }
 
 enum LocatedNode<'a> {
@@ -889,12 +1066,12 @@ mod tests {
     use crate::ResolvedContent;
     use mant_ir::{
         Block, DefinitionCase, DefinitionIdentity, DefinitionItem, DefinitionRole, Diagnostic,
-        DiagnosticLevel, Document, DocumentMeta, DocumentSource, Inline, LayoutHint, Section,
-        SourceFormat, TldrDocument, TldrOrigin,
+        DiagnosticLevel, Document, DocumentMeta, DocumentSource, EntryKind, Inline, LayoutHint,
+        ParameterKind, Section, SourceFormat, TldrDocument, TldrOrigin,
     };
-    use mant_protocol::{ExcerptSelection, OutlineNode};
+    use mant_protocol::{EntryProjection, ExcerptSelection, NodeSelector, OutlineNode};
 
-    use super::{ProjectionError, build_outline, select_excerpt};
+    use super::{ProjectionError, build_outline, build_outline_projection, select_excerpt};
 
     fn section(id: &str, title: &str, children: Vec<Section>) -> Section {
         Section {
@@ -953,6 +1130,73 @@ mod tests {
         }
     }
 
+    fn definition(
+        id: &str,
+        role: DefinitionRole,
+        aliases: &[&str],
+        forms: &[&str],
+        description: Vec<Block>,
+    ) -> DefinitionItem {
+        DefinitionItem {
+            identity: Some(DefinitionIdentity {
+                id: id.into(),
+                role,
+                case: DefinitionCase::Sensitive,
+                names: aliases.iter().map(|alias| (*alias).to_owned()).collect(),
+            }),
+            terms: forms
+                .iter()
+                .map(|form| {
+                    vec![Inline::Code {
+                        value: (*form).to_owned(),
+                    }]
+                })
+                .collect(),
+            description,
+            inline_term: false,
+            spacing_before_lines: None,
+        }
+    }
+
+    fn query_with_semantic_entries() -> ResolvedContent {
+        let value = definition(
+            "value-yes",
+            DefinitionRole::Value,
+            &["yes"],
+            &["yes"],
+            Vec::new(),
+        );
+        let local_forward = definition(
+            "option-local-forward",
+            DefinitionRole::Option,
+            &["-L"],
+            &["-L port:host:hostport", "-L socket:remote_socket"],
+            vec![Block::DefinitionList {
+                items: vec![value],
+                compact: true,
+                layout: LayoutHint::default(),
+                source: None,
+            }],
+        );
+        let marker = definition(
+            "marker-end-options",
+            DefinitionRole::Marker,
+            &["--"],
+            &["--"],
+            Vec::new(),
+        );
+        let mut query = query();
+        query.document.as_mut().expect("document").sections[1]
+            .blocks
+            .push(Block::DefinitionList {
+                items: vec![local_forward, marker],
+                compact: true,
+                layout: LayoutHint::default(),
+                source: None,
+            });
+        query
+    }
+
     #[test]
     fn builds_one_based_tree_paths_without_copying_blocks() {
         let outline = build_outline(&query()).expect("outline");
@@ -968,6 +1212,123 @@ mod tests {
         assert_eq!(outline.nodes[1].id(), "options-2");
         assert_eq!(outline.nodes[1].children()[0].path(), "2.1");
         assert_eq!(outline.nodes[1].children()[1].path(), "2.2");
+    }
+
+    #[test]
+    fn default_outline_summarizes_entries_without_materializing_them() {
+        let outline = build_outline(&query_with_semantic_entries()).expect("summary outline");
+        let OutlineNode::DocumentSection {
+            entry_summary,
+            children,
+            ..
+        } = &outline.nodes[1]
+        else {
+            panic!("expected options section");
+        };
+        let summary = entry_summary.as_ref().expect("non-empty entry summary");
+        assert_eq!(
+            (summary.direct, summary.descendants, summary.forms),
+            (2, 1, 4)
+        );
+        assert!(
+            children
+                .iter()
+                .all(|child| !matches!(child, OutlineNode::DocumentEntry { .. }))
+        );
+        assert!(matches!(
+            &outline.nodes[0],
+            OutlineNode::DocumentSection {
+                entry_summary: None,
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn full_and_filtered_outlines_preserve_forms_nesting_and_paths() {
+        let query = query_with_semantic_entries();
+        let full = build_outline_projection(&query, EntryProjection::All, None)
+            .expect("full semantic outline");
+        let OutlineNode::DocumentEntry {
+            path,
+            title,
+            forms,
+            children,
+            ..
+        } = &full.nodes[1].children()[0]
+        else {
+            panic!("expected option entry");
+        };
+        assert_eq!(path.as_str(), "2/e1");
+        assert_eq!(title, "-L port:host:hostport | -L socket:remote_socket");
+        assert_eq!(forms.len(), 2);
+        assert_eq!(children[0].path(), "2/e1/e1");
+
+        let filtered = build_outline_projection(
+            &query,
+            EntryProjection::Kinds {
+                kinds: vec![EntryKind::Value],
+            },
+            None,
+        )
+        .expect("value outline");
+        let option = &filtered.nodes[1].children()[0];
+        assert!(matches!(
+            option,
+            OutlineNode::DocumentEntry {
+                entry_kind: EntryKind::Parameter {
+                    parameter_kind: ParameterKind::Option
+                },
+                ..
+            }
+        ));
+        assert!(matches!(
+            option.children(),
+            [OutlineNode::DocumentEntry {
+                entry_kind: EntryKind::Value,
+                ..
+            }]
+        ));
+    }
+
+    #[test]
+    fn outline_root_resolves_exact_nodes_and_rejects_ambiguous_aliases() {
+        let mut query = query_with_semantic_entries();
+        let rooted = build_outline_projection(
+            &query,
+            EntryProjection::Summary,
+            Some(NodeSelector::new("option-local-forward")),
+        )
+        .expect("entry-rooted outline");
+        assert!(matches!(
+            rooted.nodes.as_slice(),
+            [OutlineNode::DocumentEntry { id, children, .. }]
+                if id == "option-local-forward" && children.is_empty()
+        ));
+
+        query.document.as_mut().expect("document").sections[2]
+            .blocks
+            .push(Block::DefinitionList {
+                items: vec![definition(
+                    "option-other-local-forward",
+                    DefinitionRole::Option,
+                    &["-L"],
+                    &["-L path"],
+                    Vec::new(),
+                )],
+                compact: true,
+                layout: LayoutHint::default(),
+                source: None,
+            });
+        let error =
+            build_outline_projection(&query, EntryProjection::All, Some(NodeSelector::new("-L")))
+                .expect_err("ambiguous aliases must require qualification");
+        let ProjectionError::AmbiguousSelector { candidates, .. } = error else {
+            panic!("expected ambiguous selector");
+        };
+        assert_eq!(candidates.len(), 2);
+        assert_eq!(candidates[0].path, "2/e1");
+        assert_eq!(candidates[1].path, "3/e1");
     }
 
     #[test]
@@ -1041,7 +1402,7 @@ mod tests {
         let outline = build_outline(&query).expect("Markdown outline");
         assert!(matches!(
             &outline.nodes[0],
-            OutlineNode::DocumentRoot { path, id, title }
+            OutlineNode::DocumentRoot { path, id, title, .. }
                 if path == "root" && id == "document-overview" && title == "OVERVIEW"
         ));
         // Heading paths remain stable and independent from the synthetic root.

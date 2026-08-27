@@ -2,7 +2,7 @@
 
 use mant_protocol::{
     CatalogDocumentKind, CatalogQuery, DocumentScope, DocumentSelector, DocumentTraversal,
-    NodeSelector, OutlineDetail, QueryInput, QueryRequest, QueryView, SearchCase, SearchSyntax,
+    EntryProjection, NodeSelector, QueryInput, QueryRequest, QueryView, SearchCase, SearchSyntax,
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, de::DeserializeOwned};
@@ -67,8 +67,11 @@ pub(super) struct OutlineParams {
     /// Unqualified name or canonical catalog path returned by `mant_find`.
     #[schemars(length(min = 1))]
     pub(super) document: String,
-    /// Include sections only (the default), or semantic entries as well.
-    pub(super) detail: Option<OutlineDetail>,
+    /// Include no entries, compact summaries (the default), all entries, or selected kinds.
+    pub(super) entries: Option<EntryProjection>,
+    /// Optional section or semantic entry selector used as the outline root.
+    #[schemars(length(min = 1))]
+    pub(super) root: Option<String>,
     /// Zero-based Unicode scalar offset into the canonical result text.
     #[serde(default, deserialize_with = "deserialize_compat_scalar")]
     pub(super) start_char: u32,
@@ -192,7 +195,8 @@ pub(super) struct ValidatedFindParams {
 
 pub(super) struct ValidatedOutlineParams {
     pub(super) document: String,
-    pub(super) detail: OutlineDetail,
+    pub(super) entries: EntryProjection,
+    pub(super) root: Option<NodeSelector>,
     pub(super) page: PageRequest,
 }
 
@@ -343,7 +347,9 @@ impl OutlineParams {
     pub(super) fn validate(self) -> Result<ValidatedOutlineParams, String> {
         Ok(ValidatedOutlineParams {
             document: bounded_normalized(&self.document, "document", MAX_DOCUMENT_BYTES)?,
-            detail: self.detail.unwrap_or(OutlineDetail::Sections),
+            entries: self.entries.unwrap_or_default(),
+            root: optional_normalized(self.root, "root", MAX_SELECTOR_BYTES)?
+                .map(NodeSelector::new),
             page: validate_page(self.start_char, self.max_chars)?,
         })
     }
@@ -513,7 +519,7 @@ pub(super) fn catalog_query(parameters: &ValidatedFindParams) -> CatalogQuery {
 
 pub(super) fn request_for(document: String, view: QueryView) -> QueryRequest {
     QueryRequest {
-        schema: mant_protocol::RequestSchema::V0Dot9,
+        schema: mant_protocol::RequestSchema::V0Dot10,
         input: QueryInput::Document {
             selector: document,
             source: None,

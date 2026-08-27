@@ -172,10 +172,17 @@ fn rust_dependency_notice_is_generated_from_the_locked_product_graph() {
 
     let licenses = include_str!("../../../THIRD_PARTY_LICENSES.html");
     let version = env!("CARGO_PKG_VERSION");
+    let libmandoc_version = include_str!("../../libmandoc-rs/Cargo.toml")
+        .lines()
+        .find_map(|line| {
+            line.strip_prefix("version = \"")
+                .and_then(|value| value.strip_suffix('"'))
+        })
+        .expect("libmandoc-rs package version");
     assert!(licenses.contains("ManT Rust dependency licenses"));
     assert!(licenses.contains("cargo-about"));
     assert!(licenses.contains(&format!("mant {version}")));
-    assert!(licenses.contains(&format!("libmandoc-rs {version}")));
+    assert!(licenses.contains(&format!("libmandoc-rs {libmandoc_version}")));
     assert!(licenses.contains("ratatui 0.30.2"));
     assert!(licenses.contains("rustls 0.23.43"));
 }

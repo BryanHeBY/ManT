@@ -12,10 +12,9 @@ mod wrap;
 
 use std::{collections::HashMap, sync::Arc};
 
-use mant_ir::DocumentAddress;
 use mant_ir::{
-    Block, DefinitionIdentity, DefinitionRole, Inline, ListKind, ResolvedContent, Section,
-    SourceFormat, TldrDocument,
+    Block, DocumentAddress, EntryKind, Inline, ListKind, ResolvedContent, Section, SemanticEntry,
+    SemanticIndex, SourceFormat, TldrDocument,
 };
 #[cfg(test)]
 use mant_ir::{TldrCommandPart, TldrOrigin};
@@ -33,8 +32,7 @@ use crate::theme;
 #[cfg(test)]
 use inline::safe_external_uri;
 use inline::{
-    count_sections, inline_anchor_ids, section_semantic_entries, shifted_links, spans_width,
-    styled_inline_lines, tldr_style,
+    count_sections, inline_anchor_ids, shifted_links, spans_width, styled_inline_lines, tldr_style,
 };
 pub(crate) use model::LinkTarget;
 use model::{
@@ -88,7 +86,7 @@ pub enum NavKind {
     /// Synthetic grouping for semantic entries.
     EntryGroup,
     /// Addressable semantic definition of the contained role.
-    Entry(DefinitionRole),
+    Entry(EntryKind),
 }
 
 /// Renderer-independent terminal view before width-dependent wrapping.
@@ -170,22 +168,31 @@ impl DocumentView {
         }
 
         if let Some(document) = &bundle.document {
+            let semantic_index = SemanticIndex::build(document);
             if !document.blocks.is_empty() {
+                let entries = semantic_index.root();
                 builder.anchor(NavNode {
                     id: ROOT_ID.to_owned(),
                     target_id: ROOT_ID.to_owned(),
                     title: "OVERVIEW".to_owned(),
                     depth: 0,
                     kind: NavKind::Root,
-                    has_children: false,
+                    has_children: !entries.is_empty(),
                     is_last: document.sections.is_empty(),
                     parent_id: None,
                 });
+                builder.entry_group(ROOT_ID, ROOT_ID, entries, 1, document.sections.is_empty());
                 builder.blocks(&document.blocks, 0);
             }
             let section_count = document.sections.len();
             for (index, section) in document.sections.iter().enumerate() {
-                builder.section_with_position(section, 0, index + 1 == section_count, None);
+                builder.section_with_position(
+                    section,
+                    &semantic_index,
+                    0,
+                    index + 1 == section_count,
+                    None,
+                );
             }
         }
 
@@ -449,12 +456,13 @@ impl DocumentBuilder {
     fn section_with_position(
         &mut self,
         section: &Section,
+        semantic_index: &SemanticIndex,
         depth: usize,
         is_last: bool,
         parent_id: Option<&str>,
     ) {
         self.spacing(section.spacing_before_lines);
-        let entries = section_semantic_entries(&section.blocks);
+        let entries = semantic_index.section(&section.id);
         let has_children = !entries.is_empty() || !section.children.is_empty();
         self.anchor(NavNode {
             id: section.id.to_string(),
@@ -466,32 +474,13 @@ impl DocumentBuilder {
             is_last,
             parent_id: parent_id.map(str::to_owned),
         });
-        if !entries.is_empty() {
-            let group_id = format!("__mant-entries__{}", section.id);
-            self.navigation(NavNode {
-                id: group_id.clone(),
-                target_id: section.id.to_string(),
-                title: format!("ENTRIES ({})", entries.len()),
-                depth: depth + 1,
-                kind: NavKind::EntryGroup,
-                has_children: true,
-                is_last: section.children.is_empty(),
-                parent_id: Some(section.id.to_string()),
-            });
-            let entry_count = entries.len();
-            for (index, identity) in entries.into_iter().enumerate() {
-                self.navigation(NavNode {
-                    id: identity.id.to_string(),
-                    target_id: identity.id.to_string(),
-                    title: identity.names.join(", "),
-                    depth: depth + 2,
-                    kind: NavKind::Entry(identity.role),
-                    has_children: false,
-                    is_last: index + 1 == entry_count,
-                    parent_id: Some(group_id.clone()),
-                });
-            }
-        }
+        self.entry_group(
+            &section.id,
+            &section.id,
+            entries,
+            depth + 1,
+            section.children.is_empty(),
+        );
         self.push(LogicalLine::plain(
             depth * 4,
             section.title.clone(),
@@ -504,10 +493,66 @@ impl DocumentBuilder {
         for (index, child) in section.children.iter().enumerate() {
             self.section_with_position(
                 child,
+                semantic_index,
                 depth + 1,
                 index + 1 == child_count,
                 Some(&section.id),
             );
+        }
+    }
+
+    fn entry_group(
+        &mut self,
+        owner_id: &str,
+        target_id: &str,
+        entries: &[SemanticEntry],
+        depth: usize,
+        is_last: bool,
+    ) {
+        if entries.is_empty() {
+            return;
+        }
+        let summary = mant_ir::EntrySummary::for_entries(entries);
+        let group_id = format!("__mant-entries__{owner_id}");
+        self.navigation(NavNode {
+            id: group_id.clone(),
+            target_id: target_id.to_owned(),
+            title: format!(
+                "ENTRIES ({} direct · {} nested · {} {})",
+                summary.direct,
+                summary.descendants,
+                summary.forms,
+                if summary.forms == 1 { "form" } else { "forms" }
+            ),
+            depth,
+            kind: NavKind::EntryGroup,
+            has_children: true,
+            is_last,
+            parent_id: Some(owner_id.to_owned()),
+        });
+        self.semantic_entries(entries, depth + 1, &group_id);
+    }
+
+    fn semantic_entries(&mut self, entries: &[SemanticEntry], depth: usize, parent_id: &str) {
+        for (index, entry) in entries.iter().enumerate() {
+            let title = (!entry.forms.is_empty())
+                .then(|| entry.forms.join(" | "))
+                .or_else(|| entry.aliases.first().cloned())
+                .unwrap_or_else(|| entry.id.to_string());
+            self.navigation(NavNode {
+                id: entry.id.to_string(),
+                target_id: entry
+                    .targets
+                    .first()
+                    .map_or_else(|| entry.id.to_string(), ToString::to_string),
+                title,
+                depth,
+                kind: NavKind::Entry(entry.kind),
+                has_children: !entry.children.is_empty(),
+                is_last: index + 1 == entries.len(),
+                parent_id: Some(parent_id.to_owned()),
+            });
+            self.semantic_entries(&entry.children, depth + 1, &entry.id);
         }
     }
 

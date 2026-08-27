@@ -1,8 +1,8 @@
 //! Contract-focused tests for Markdown lowering and source preservation.
 
 use mant_ir::{
-    Block, DefinitionCase, DefinitionRole, Inline, ListKind, SourceFormat, TableAlignment,
-    TldrOrigin,
+    Block, DefinitionCase, DefinitionRole, EntryKind, Inline, ListKind, SourceFormat,
+    TableAlignment, TldrOrigin,
 };
 use mant_protocol::{
     ExcerptSelection, OutlineDetail, OutlineNode, OutlineNodeReference, SearchCase, SearchQuery,
@@ -601,7 +601,7 @@ fn turns_explicit_option_lists_into_addressable_definitions() {
     };
     assert!(matches!(
         &children[0],
-        OutlineNode::DocumentEntry { names, .. } if names == &["-h", "--help"]
+        OutlineNode::DocumentEntry { aliases, .. } if aliases == &["-h", "--help"]
     ));
 }
 
@@ -747,14 +747,14 @@ fn declared_variables_keep_shell_and_powershell_automatic_names() {
     assert!(children.iter().all(|entry| matches!(
         entry,
         OutlineNode::DocumentEntry {
-            role: DefinitionRole::Variable,
+            entry_kind: EntryKind::Variable,
             ..
         }
     )));
     assert!(matches!(
         &children[0],
-        OutlineNode::DocumentEntry { id, names, .. }
-            if id == "variable-question-mark" && names == &["$?"]
+        OutlineNode::DocumentEntry { id, aliases, .. }
+            if id == "variable-question-mark" && aliases == &["$?"]
     ));
     for selector in ["$?", "$$", "$^", "$_", "$lastexitcode", "$PSVersionTable"] {
         let explanation = select_explanation(&query, selector).expect("variable selector");
@@ -1055,10 +1055,10 @@ fn declared_fixed_attached_values_keep_their_official_identity() {
     assert!(matches!(
         children.as_slice(),
         [
-            OutlineNode::DocumentEntry { id: first_id, title: first_title, names: first_names, .. },
-            OutlineNode::DocumentEntry { id: fixed_id, title: fixed_title, names: fixed_names, .. },
-            OutlineNode::DocumentEntry { names: placeholder_names, .. },
-            OutlineNode::DocumentEntry { id: equals_id, title: equals_title, names: equals_names, .. },
+            OutlineNode::DocumentEntry { id: first_id, title: first_title, aliases: first_names, .. },
+            OutlineNode::DocumentEntry { id: fixed_id, title: fixed_title, aliases: fixed_names, .. },
+            OutlineNode::DocumentEntry { aliases: placeholder_names, .. },
+            OutlineNode::DocumentEntry { id: equals_id, title: equals_title, aliases: equals_names, .. },
         ] if first_id == "option-f"
             && first_title == "/F"
             && first_names == &["/F"]
@@ -1081,10 +1081,12 @@ fn declared_option_entries_cover_windows_native_token_families() {
         for node in nodes {
             match node {
                 OutlineNode::DocumentEntry {
-                    names: entry_names, ..
+                    aliases: entry_names,
+                    ..
                 } => output.extend(entry_names.iter().cloned()),
-                OutlineNode::DocumentSection { children, .. } => collect_names(children, output),
-                OutlineNode::Tldr { .. } | OutlineNode::DocumentRoot { .. } => {}
+                OutlineNode::DocumentRoot { children, .. }
+                | OutlineNode::DocumentSection { children, .. } => collect_names(children, output),
+                OutlineNode::Tldr { .. } => {}
             }
         }
     }

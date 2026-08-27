@@ -134,7 +134,7 @@ fn request_document_tools(input: &mut impl Write) {
         "mant_outline",
         &json!({
             "document": "documents/mcp-registered",
-            "detail": "entries"
+            "entries": {"kind": "all"}
         }),
     );
     call_tool(
@@ -292,7 +292,7 @@ fn assert_tool_replies(replies: &[Value]) {
     assert!(outline.contains("[command-query] query"));
     assert!(outline.contains("[option-s] /S"));
     assert!(outline.contains("[environment-path] PATH, $env:PATH"));
-    assert!(!outline.contains("mant.outline/v0.9"));
+    assert!(!outline.contains("mant.outline/v0.10"));
 
     let explain = successful_text(reply(replies, 7));
     assert_page_header(explain);

@@ -925,7 +925,7 @@ dependencies = [
 
 [[package]]
 name = "mant"
-version = "0.9.1"
+version = "0.10.0"
 dependencies = [
  "anstream",
  "anstyle",
@@ -948,7 +948,7 @@ dependencies = [
 
 [[package]]
 name = "mant-engine"
-version = "0.9.1"
+version = "0.10.0"
 dependencies = [
  "flate2",
  "grep-matcher",
@@ -966,7 +966,7 @@ dependencies = [
 
 [[package]]
 name = "mant-ir"
-version = "0.9.1"
+version = "0.10.0"
 dependencies = [
  "schemars",
  "serde",
@@ -975,7 +975,7 @@ dependencies = [
 
 [[package]]
 name = "mant-protocol"
-version = "0.9.1"
+version = "0.10.0"
 dependencies = [
  "mant-ir",
  "schemars",
@@ -999,7 +999,7 @@ dependencies = [
 
 [[package]]
 name = "mant-ui"
-version = "0.9.1"
+version = "0.10.0"
 dependencies = [
  "crossterm",
  "mant-engine",

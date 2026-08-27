@@ -14,7 +14,11 @@ use crate::{
 #[derive(
     Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, JsonSchema,
 )]
-#[serde(tag = "kind", rename_all = "kebab-case")]
+#[serde(
+    tag = "kind",
+    rename_all = "kebab-case",
+    rename_all_fields = "camelCase"
+)]
 pub enum EntryKind {
     /// Executable command, builtin, subcommand, or verb.
     Command,
@@ -237,6 +241,10 @@ fn entries_in_blocks(blocks: &[Block]) -> Vec<SemanticEntry> {
 
 fn entry_from_definition(item: &DefinitionItem) -> Option<SemanticEntry> {
     let identity = item.identity.as_ref()?;
+    let children = entries_in_blocks(&item.description);
+    let value_domain = (!children.is_empty()
+        && children.iter().all(|child| child.kind == EntryKind::Value))
+    .then_some(ValueDomain::Choices { exhaustive: false });
     Some(SemanticEntry {
         id: identity.id.clone(),
         kind: entry_kind(identity.role),
@@ -244,8 +252,8 @@ fn entry_from_definition(item: &DefinitionItem) -> Option<SemanticEntry> {
         case: identity.case,
         forms: item.terms.iter().map(|term| inline_text(term)).collect(),
         targets: vec![identity.id.clone()],
-        children: entries_in_blocks(&item.description),
-        value_domain: None,
+        children,
+        value_domain,
     })
 }
 

@@ -1,6 +1,6 @@
 //! Tests for Fedora Linux 44's `sh(1)` alias of the Bash manual.
 
-use mant_ir::{EntryKind, ParameterKind, SemanticEntry, SemanticIndex, SourceFormat};
+use mant_ir::{EntryKind, ParameterKind, SemanticEntry, SemanticIndex, SourceFormat, ValueDomain};
 
 use crate::common::{self, collect_sections, source_path_ends_with};
 use crate::fixtures::fedora44_manual;
@@ -44,6 +44,21 @@ fn rebuilds_builtin_parameter_hierarchy_from_relative_indentation() {
     assert!(has_parameter(set, ParameterKind::Marker, "--"));
     assert!(has_parameter(set, ParameterKind::Operand, "-"));
     assert!(has_parameter(set, ParameterKind::Option, "-o"));
+    let named_option = set
+        .children
+        .iter()
+        .find(|entry| entry.aliases.iter().any(|alias| alias == "-o"))
+        .expect("set -o parameter");
+    assert!(matches!(
+        named_option.value_domain,
+        Some(ValueDomain::Choices { exhaustive: false })
+    ));
+    assert!(
+        named_option
+            .children
+            .iter()
+            .all(|entry| entry.kind == EntryKind::Value)
+    );
     assert!(
         sections
             .iter()

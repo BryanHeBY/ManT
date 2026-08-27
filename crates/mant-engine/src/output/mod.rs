@@ -19,4 +19,7 @@ pub use markdown::{
 pub use search::{
     SearchTextRole, render_search_markdown, render_search_text, render_search_text_with,
 };
-pub use text::{render_excerpt_text, render_outline_text, render_query_man, render_query_text};
+pub use text::{
+    render_excerpt_text, render_outline_entry_summary, render_outline_text, render_query_man,
+    render_query_text,
+};
