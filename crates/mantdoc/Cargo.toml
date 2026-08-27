@@ -55,3 +55,8 @@ harness = false
 name = "render"
 harness = false
 required-features = ["render"]
+
+[[bench]]
+name = "compare"
+harness = false
+required-features = ["render"]
