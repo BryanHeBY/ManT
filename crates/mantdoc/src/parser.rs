@@ -273,11 +273,12 @@ use emit::{
     emit_filled_text_tabs, emit_font_request_diagnostics, emit_invalid_input_bytes,
     emit_man_alternating_font_trailing_whitespace, emit_mdoc_control_trailing_whitespace,
     emit_mdoc_empty_display, emit_mdoc_implicit_trailing_delimiter_spacing,
-    emit_trailing_whitespace, emit_trailing_whitespace_with_logical_start,
-    emit_translation_request_diagnostics, emit_unterminated_quoted_argument,
-    emit_user_macro_leading_tabs, has_physical_line_continuation, is_bad_comment_style,
-    is_builtin_package_macro, is_legacy_roff_font_selector, is_man_visible_argument_macro,
-    legacy_table_input_text, normalize_document_escapes, recover_unterminated_quoted_arguments,
+    emit_mdoc_new_sentence_line_warnings, emit_trailing_whitespace,
+    emit_trailing_whitespace_with_logical_start, emit_translation_request_diagnostics,
+    emit_unterminated_quoted_argument, emit_user_macro_leading_tabs,
+    has_physical_line_continuation, is_bad_comment_style, is_builtin_package_macro,
+    is_legacy_roff_font_selector, is_man_visible_argument_macro, legacy_table_input_text,
+    normalize_document_escapes, recover_unterminated_quoted_arguments,
     retain_user_macro_tab_argument_prefix, update_fill_mode,
 };
 use event::{ControlEvent, EnvironmentRequest, RequestKind, SourceEvent, TransparentRequest};

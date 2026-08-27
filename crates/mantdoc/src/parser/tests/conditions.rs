@@ -83,6 +83,27 @@ fn filled_scope_text_marks_sentence_end_after_trimming_before_its_closer() {
 }
 
 #[test]
+fn filled_mdoc_text_warns_when_a_new_sentence_stays_on_one_line() {
+    let name = SourceName::new("mdoc-sentence-line.3").unwrap();
+    let report = Parser::default()
+        .parse(Source::new(
+            &name,
+            b".Dd August 28, 2026\n.Dt SENTENCE 3\n.Os\n.Sh DESCRIPTION\nshort prose. Next sentence.\nvs. Next sentence.\nnc. Next sentence.\n",
+        ))
+        .unwrap();
+
+    let locations = report
+        .diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code.as_str() == DiagnosticCode::INPUT_NEW_SENTENCE_LINE)
+        .filter_map(|diagnostic| diagnostic.primary.as_ref())
+        .filter_map(|span| report.document.source_position(span))
+        .map(|location| (location.line, location.column))
+        .collect::<Vec<_>>();
+    assert_eq!(locations, [(5, 14)]);
+}
+
+#[test]
 fn nested_inline_conditional_in_a_scope_keeps_its_body_location() {
     let name = SourceName::new("nested-scope-location.1").unwrap();
     let report = Parser::default()

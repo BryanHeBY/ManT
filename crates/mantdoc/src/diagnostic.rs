@@ -184,6 +184,8 @@ impl DiagnosticCode {
     pub const INPUT_TAB_IN_FILLED_TEXT: &'static str = "input.tab-in-filled-text";
     /// A physical blank line occurred while the package was in fill mode.
     pub const INPUT_BLANK_LINE_IN_FILLED_TEXT: &'static str = "input.blank-line-in-filled-text";
+    /// A filled mdoc text line begins an uppercase sentence after one space.
+    pub const INPUT_NEW_SENTENCE_LINE: &'static str = "input.new-sentence-line";
     /// tbl preprocessing exceeded its configured logical row boundary.
     pub const LIMIT_TABLE_ROWS: &'static str = "limits.table-rows";
     /// tbl preprocessing exceeded its configured logical column boundary.

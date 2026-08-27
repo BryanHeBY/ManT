@@ -573,6 +573,63 @@ pub(super) fn emit_trailing_whitespace_with_logical_start(
     );
 }
 
+/// Emit mandoc's mdoc(7) style finding for a new sentence that continues on
+/// the same filled source line.  This intentionally follows the C scanner's
+/// byte-oriented abbreviation exemptions and its zero-based logical column.
+pub(super) fn emit_mdoc_new_sentence_line_warnings(
+    bytes: &[u8],
+    line_start: u32,
+    source_id: crate::SourceId,
+    limits: &Limits,
+    diagnostics: &mut Vec<Diagnostic>,
+    truncated: &mut bool,
+) {
+    for (period, byte) in bytes.iter().enumerate() {
+        if *byte != b'.'
+            || period < 2
+            || bytes.len().saturating_sub(period) < 3
+            || bytes.get(period + 1) != Some(&b' ')
+            || !bytes[period - 2].is_ascii_alphanumeric()
+            || !bytes[period - 1].is_ascii_alphanumeric()
+            || bytes[period - 2..period] == *b"nc"
+            || bytes[period - 2..period] == *b"vs"
+        {
+            continue;
+        }
+        let mut sentence_start = period.saturating_add(2);
+        for _ in 0..2 {
+            if bytes.get(sentence_start) == Some(&b' ') {
+                sentence_start = sentence_start.saturating_add(1);
+            }
+        }
+        if !bytes
+            .get(sentence_start)
+            .is_some_and(u8::is_ascii_uppercase)
+        {
+            continue;
+        }
+        // `mandoc_msg()` receives the raw zero-based line cursor.  Passing
+        // that cursor through the normal one-based SourcePosition mapper
+        // yields its public column exactly.
+        let start = line_start.saturating_add(
+            u32::try_from(sentence_start).expect("bounded line offsets fit public source spans"),
+        );
+        push_diagnostic(
+            diagnostics,
+            limits,
+            diagnostic(
+                DiagnosticCode::INPUT_NEW_SENTENCE_LINE,
+                Severity::Warning,
+                source_id,
+                start,
+                start.saturating_add(1),
+                "new sentence, new line",
+            ),
+            truncated,
+        );
+    }
+}
+
 /// Emit mandoc's style finding for an incomplete control-line quote and keep
 /// its recovered token available to package or user-macro execution.
 #[allow(clippy::too_many_arguments)] // Keeps ordered quote and tail recovery together.

@@ -4,13 +4,14 @@ use super::super::{
     Severity, SourcePosition, SourceSpan, append_node, append_text_node, apply_environment_request,
     apply_string_request, condition_body_source_start_from_offset, condition_body_template,
     condition_parts, consume_ignore_block, copy_mode_reparse, diagnostic, emit_escape_issues,
-    emit_trailing_whitespace_with_logical_start, environment_error_diagnostic, evaluate_condition,
-    expand_environment, ignore_marker, is_builtin_package_macro, is_definition_terminator,
-    is_environment_request, is_macro_comment_request, is_scope_closer, is_scope_ignore_terminator,
-    is_scope_opener, join_arguments, lex_arguments, lex_condition_arguments,
-    normalize_document_escapes, push_diagnostic, record_expansion_steps, scope_line_end,
-    scope_line_start, set_new_root_children_logical_start, split_macro_control,
-    trailing_whitespace_start, translate_visible, trim_horizontal_space, visible_bytes,
+    emit_mdoc_new_sentence_line_warnings, emit_trailing_whitespace_with_logical_start,
+    environment_error_diagnostic, evaluate_condition, expand_environment, ignore_marker,
+    is_builtin_package_macro, is_definition_terminator, is_environment_request,
+    is_macro_comment_request, is_scope_closer, is_scope_ignore_terminator, is_scope_opener,
+    join_arguments, lex_arguments, lex_condition_arguments, normalize_document_escapes,
+    push_diagnostic, record_expansion_steps, scope_line_end, scope_line_start,
+    set_new_root_children_logical_start, split_macro_control, trailing_whitespace_start,
+    translate_visible, trim_horizontal_space, visible_bytes,
 };
 use super::collect::collect_pending_macro_scope;
 
@@ -2060,6 +2061,16 @@ pub(in crate::parser) fn execute_scope_line(
                     builder.macro_set(),
                     start,
                     logical_line_start,
+                    source_id,
+                    limits,
+                    diagnostics,
+                    truncated,
+                );
+            }
+            if builder.macro_set() == MacroSet::Mdoc && environment.is_filled() {
+                emit_mdoc_new_sentence_line_warnings(
+                    bytes,
+                    start,
                     source_id,
                     limits,
                     diagnostics,
