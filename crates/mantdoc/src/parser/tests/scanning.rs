@@ -623,6 +623,44 @@ fn man_rs_updates_the_an_margin_register_before_text_expansion() {
 }
 
 #[test]
+fn man_rs_in_macro_and_scope_replay_updates_the_an_margin_register() {
+    let name = SourceName::new("macro-an-margin.1").unwrap();
+    let report = Parser::default()
+        .parse(Source::new(
+            &name,
+            b".de1 INDENT\n. RS \\\\$1\n..\n.TH MACRO-AN-MARGIN 1 28-Aug-2026\n.SH DESCRIPTION\n.INDENT 0.0\n.INDENT 7.0\n\\n[an-margin]\n.RE\n.RE\n.if 1 \\{\\\n.RS 7.0\n.\\}\n\\n[an-margin]\n.RE\n.nr loops 1\n.while \\n[loops] \\{\\\n.RS 7.0\n.nr loops -1\n.\\}\n\\n[an-margin]\n.RE\n",
+        ))
+        .unwrap();
+    assert!(report.diagnostics.is_empty(), "{:#?}", report.diagnostics);
+    let values = report
+        .document
+        .preorder()
+        .filter(|node| node.kind() == NodeKind::Text)
+        .filter_map(crate::NodeRef::text)
+        .filter(|text| text.chars().all(|character| character.is_ascii_digit()))
+        .collect::<Vec<_>>();
+    assert_eq!(values, ["336", "336", "336"]);
+}
+
+#[test]
+fn macro_indents_expand_nested_register_names_before_later_lookup() {
+    let name = SourceName::new("nested-indent-register.1").unwrap();
+    let report = Parser::default()
+        .parse(Source::new(
+            &name,
+            b".nr indent-level 0\n.de1 INDENT\n. RS \\\\$1\n. nr indent\\\\n[indent-level] \\\\n[an-margin]\n. nr indent-level +1\n..\n.de UNINDENT\n. RE\n. nr indent-level -1\n.in \\\\n[indent\\\\n[indent-level]]u\n..\n.TH NESTED-INDENT-REGISTER 1 28-Aug-2026\n.SH DESCRIPTION\n.INDENT 0.0\nouter\n.INDENT 7.0\ninner\n\\n[indent0]\n\\n[indent1]\n.UNINDENT\n.UNINDENT\n",
+        ))
+        .unwrap();
+    assert!(report.diagnostics.is_empty(), "{:#?}", report.diagnostics);
+    let text = report
+        .document
+        .preorder()
+        .filter_map(crate::NodeRef::text)
+        .collect::<Vec<_>>();
+    assert!(text.contains(&"336u"), "{text:#?}");
+}
+
+#[test]
 fn m3_mdoc_os_uses_the_session_fallback_only_when_the_source_is_bare() {
     let name = SourceName::new("operating-system.1").unwrap();
     let parser = Parser::new(ParserConfig {

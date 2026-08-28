@@ -797,6 +797,7 @@ impl<R: SourceResolver + ?Sized> SourceFrame<'_, '_, '_, R> {
                                 source_id,
                                 &mut scanner,
                                 environment,
+                                &mut man_indent_state,
                                 limits,
                                 &mut text_bytes,
                                 &mut expansion_steps,
@@ -1502,6 +1503,7 @@ impl<R: SourceResolver + ?Sized> SourceFrame<'_, '_, '_, R> {
                                     source_id,
                                     scanner: &mut scanner,
                                     environment,
+                                    man_indent_state: &mut man_indent_state,
                                     limits,
                                     text_bytes: &mut text_bytes,
                                     expansion_steps: &mut expansion_steps,
@@ -2141,6 +2143,7 @@ impl<R: SourceResolver + ?Sized> SourceFrame<'_, '_, '_, R> {
                                     source_id,
                                     scanner: &mut scanner,
                                     environment,
+                                    man_indent_state: &mut man_indent_state,
                                     limits,
                                     text_bytes: &mut text_bytes,
                                     expansion_steps: &mut expansion_steps,
@@ -3517,6 +3520,31 @@ impl<R: SourceResolver + ?Sized> SourceFrame<'_, '_, '_, R> {
                                     );
                                     continue;
                                 }
+                                if matches!(request, b"RS" | b"RE") {
+                                    let Some(arguments) = expand_environment(
+                                        environment,
+                                        raw_arguments,
+                                        scanner.escape_character(),
+                                        &macro_arguments,
+                                        limits,
+                                        source_id,
+                                        start,
+                                        end,
+                                        &mut expansion_steps,
+                                        &mut diagnostics,
+                                        &mut truncated,
+                                    ) else {
+                                        break 'lines;
+                                    };
+                                    update_man_indent_register(
+                                        environment,
+                                        builder.macro_set(),
+                                        request,
+                                        &arguments,
+                                        &mut man_indent_state,
+                                        limits,
+                                    );
+                                }
                                 if matches!(request, b"if" | b"ie" | b"el") {
                                     let Ok(condition_arguments) = lex_condition_arguments(
                                         raw_arguments,
@@ -3942,6 +3970,7 @@ impl<R: SourceResolver + ?Sized> SourceFrame<'_, '_, '_, R> {
                                         end,
                                         &mut scanner,
                                         environment,
+                                        &mut man_indent_state,
                                         limits,
                                         &mut text_bytes,
                                         &mut expansion_steps,
@@ -4099,6 +4128,7 @@ impl<R: SourceResolver + ?Sized> SourceFrame<'_, '_, '_, R> {
                                         end,
                                         &mut scanner,
                                         environment,
+                                        &mut man_indent_state,
                                         limits,
                                         &mut text_bytes,
                                         &mut expansion_steps,
@@ -4140,6 +4170,7 @@ impl<R: SourceResolver + ?Sized> SourceFrame<'_, '_, '_, R> {
                                         source_id,
                                         scanner: &mut scanner,
                                         environment,
+                                        man_indent_state: &mut man_indent_state,
                                         limits,
                                         text_bytes: &mut text_bytes,
                                         expansion_steps: &mut expansion_steps,

@@ -1,17 +1,18 @@
 use super::super::{
     ArgumentIssue, BranchOutcome, Diagnostic, DiagnosticCode, DocumentBuilder, EmitContext,
-    Environment, Limits, MacroSet, NodeFlags, NodeId, NodeKind, Scanner, ScopeFlow, ScopeLine,
-    Severity, SourcePosition, SourceSpan, append_node, append_text_node, apply_environment_request,
-    apply_string_request, condition_body_source_start_from_offset, condition_body_template,
-    condition_parts, consume_ignore_block, copy_mode_reparse, diagnostic, emit_escape_issues,
-    emit_mdoc_new_sentence_line_warnings, emit_trailing_whitespace_with_logical_start,
-    environment_error_diagnostic, evaluate_condition, expand_environment, ignore_marker,
-    is_builtin_package_macro, is_definition_terminator, is_environment_request,
-    is_macro_comment_request, is_scope_closer, is_scope_ignore_terminator, is_scope_opener,
-    join_arguments, lex_arguments, lex_condition_arguments, normalize_document_escapes,
-    push_diagnostic, record_expansion_steps, scope_line_end, scope_line_start,
-    set_new_root_children_logical_start, split_macro_control, trailing_whitespace_start,
-    translate_visible, trim_horizontal_space, visible_bytes,
+    Environment, Limits, MacroSet, ManIndentState, NodeFlags, NodeId, NodeKind, Scanner, ScopeFlow,
+    ScopeLine, Severity, SourcePosition, SourceSpan, append_node, append_text_node,
+    apply_environment_request, apply_string_request, condition_body_source_start_from_offset,
+    condition_body_template, condition_parts, consume_ignore_block, copy_mode_reparse, diagnostic,
+    emit_escape_issues, emit_mdoc_new_sentence_line_warnings,
+    emit_trailing_whitespace_with_logical_start, environment_error_diagnostic, evaluate_condition,
+    expand_environment, ignore_marker, is_builtin_package_macro, is_definition_terminator,
+    is_environment_request, is_macro_comment_request, is_scope_closer, is_scope_ignore_terminator,
+    is_scope_opener, join_arguments, lex_arguments, lex_condition_arguments,
+    normalize_document_escapes, push_diagnostic, record_expansion_steps, scope_line_end,
+    scope_line_start, set_new_root_children_logical_start, split_macro_control,
+    trailing_whitespace_start, translate_visible, trim_horizontal_space,
+    update_man_indent_register, visible_bytes,
 };
 use super::collect::collect_pending_macro_scope;
 
@@ -46,6 +47,7 @@ pub(in crate::parser) struct ReplayMachine<'state, 'source> {
     pub(in crate::parser) source_id: crate::SourceId,
     pub(in crate::parser) scanner: &'state mut Scanner<'source>,
     pub(in crate::parser) environment: &'state mut Environment,
+    pub(in crate::parser) man_indent_state: &'state mut ManIndentState,
     pub(in crate::parser) limits: &'state Limits,
     pub(in crate::parser) text_bytes: &'state mut usize,
     pub(in crate::parser) expansion_steps: &'state mut usize,
@@ -64,6 +66,7 @@ impl ReplayMachine<'_, '_> {
             source_id,
             scanner,
             environment,
+            man_indent_state,
             limits,
             text_bytes,
             expansion_steps,
@@ -180,6 +183,7 @@ impl ReplayMachine<'_, '_> {
                                 source_id,
                                 scanner,
                                 environment,
+                                man_indent_state,
                                 limits,
                                 text_bytes,
                                 expansion_steps,
@@ -333,6 +337,7 @@ impl ReplayMachine<'_, '_> {
                             source_id,
                             scanner,
                             environment,
+                            man_indent_state,
                             limits,
                             text_bytes,
                             expansion_steps,
@@ -600,6 +605,7 @@ impl ReplayMachine<'_, '_> {
                         source_id,
                         scanner,
                         environment,
+                        man_indent_state,
                         limits,
                         text_bytes,
                         expansion_steps,
@@ -855,6 +861,7 @@ pub(in crate::parser) fn execute_scope_macro_lines(
     end: u32,
     scanner: &mut Scanner<'_>,
     environment: &mut Environment,
+    man_indent_state: &mut ManIndentState,
     limits: &Limits,
     text_bytes: &mut usize,
     expansion_steps: &mut usize,
@@ -934,6 +941,31 @@ pub(in crate::parser) fn execute_scope_macro_lines(
             if request == b"tr" {
                 environment.define_translation(raw_arguments, scanner.escape_character());
                 continue;
+            }
+            if matches!(request, b"RS" | b"RE") {
+                let Some(arguments) = expand_environment(
+                    environment,
+                    raw_arguments,
+                    scanner.escape_character(),
+                    &macro_arguments,
+                    limits,
+                    source_id,
+                    start,
+                    end,
+                    expansion_steps,
+                    diagnostics,
+                    truncated,
+                ) else {
+                    return ScopeFlow::Halt;
+                };
+                update_man_indent_register(
+                    environment,
+                    builder.macro_set(),
+                    request,
+                    &arguments,
+                    man_indent_state,
+                    limits,
+                );
             }
             if request == b"while"
                 && let Ok(while_arguments) =
@@ -1046,6 +1078,7 @@ pub(in crate::parser) fn execute_scope_macro_lines(
                         end,
                         scanner,
                         environment,
+                        man_indent_state,
                         limits,
                         text_bytes,
                         expansion_steps,
@@ -1187,6 +1220,7 @@ pub(in crate::parser) fn execute_scope_macro_lines(
                         end,
                         scanner,
                         environment,
+                        man_indent_state,
                         limits,
                         text_bytes,
                         expansion_steps,
@@ -2019,6 +2053,7 @@ pub(in crate::parser) fn execute_scope_line(
     source_id: crate::SourceId,
     scanner: &mut Scanner<'_>,
     environment: &mut Environment,
+    man_indent_state: &mut ManIndentState,
     limits: &Limits,
     text_bytes: &mut usize,
     expansion_steps: &mut usize,
@@ -2204,6 +2239,7 @@ pub(in crate::parser) fn execute_scope_line(
                     end,
                     scanner,
                     environment,
+                    man_indent_state,
                     limits,
                     text_bytes,
                     expansion_steps,
@@ -2241,6 +2277,7 @@ pub(in crate::parser) fn execute_scope_line(
                     source_id,
                     scanner,
                     environment,
+                    man_indent_state,
                     limits,
                     text_bytes,
                     expansion_steps,
@@ -2296,6 +2333,31 @@ pub(in crate::parser) fn execute_scope_line(
                 environment
                     .define_translation(&join_arguments(&arguments), scanner.escape_character());
                 return ScopeFlow::Continue;
+            }
+            if matches!(name.as_slice(), b"RS" | b"RE") {
+                let Some(arguments) = expand_environment(
+                    environment,
+                    raw_arguments,
+                    scanner.escape_character(),
+                    &[],
+                    limits,
+                    source_id,
+                    start,
+                    end,
+                    expansion_steps,
+                    diagnostics,
+                    truncated,
+                ) else {
+                    return ScopeFlow::Halt;
+                };
+                update_man_indent_register(
+                    environment,
+                    builder.macro_set(),
+                    name,
+                    &arguments,
+                    man_indent_state,
+                    limits,
+                );
             }
             if name == b"if" {
                 let Some((predicate_template, body_start)) = condition_parts(&arguments) else {
@@ -2394,6 +2456,7 @@ pub(in crate::parser) fn execute_scope_line(
                         end,
                         scanner,
                         environment,
+                        man_indent_state,
                         limits,
                         text_bytes,
                         expansion_steps,
@@ -2545,6 +2608,7 @@ pub(in crate::parser) fn execute_scope_line(
                             end,
                             scanner,
                             environment,
+                            man_indent_state,
                             limits,
                             text_bytes,
                             expansion_steps,
@@ -2631,6 +2695,7 @@ pub(in crate::parser) fn execute_scope_line(
                     end,
                     scanner,
                     environment,
+                    man_indent_state,
                     limits,
                     text_bytes,
                     expansion_steps,

@@ -202,7 +202,7 @@ pub(super) fn copy_mode_reparse(bytes: &[u8], escape: u8) -> Vec<u8> {
             {
                 let end = bracketed_reference_name_end(bytes, cursor + 4).unwrap_or(bytes.len());
                 reparsed.push(escape);
-                reparsed.extend_from_slice(&bytes[cursor + 2..end]);
+                reparse_nested_bracketed_references(&bytes[cursor + 2..end], escape, &mut reparsed);
                 cursor = end;
                 continue;
             }
@@ -255,11 +255,55 @@ pub(super) fn macro_argument_copy_mode_reparse(bytes: &[u8], escape: u8) -> Vec<
 /// the opening `[`; an unterminated name is left to the normal escape recovery
 /// path rather than being partially reparsed here.
 pub(super) fn bracketed_reference_name_end(bytes: &[u8], name_start: usize) -> Option<usize> {
-    bytes
-        .get(name_start..)?
-        .iter()
-        .position(|byte| *byte == b']')
-        .map(|offset| name_start + offset + 1)
+    let mut cursor = name_start;
+    let mut depth = 1_usize;
+    while let Some(byte) = bytes.get(cursor) {
+        if *byte == b'\\'
+            && matches!(bytes.get(cursor + 1), Some(b'*' | b'n'))
+            && bytes.get(cursor + 2) == Some(&b'[')
+        {
+            depth += 1;
+            cursor += 3;
+            continue;
+        }
+        if *byte == b'\\'
+            && bytes.get(cursor + 1) == Some(&b'\\')
+            && matches!(bytes.get(cursor + 2), Some(b'*' | b'n'))
+            && bytes.get(cursor + 3) == Some(&b'[')
+        {
+            depth += 1;
+            cursor += 4;
+            continue;
+        }
+        if *byte == b']' {
+            depth -= 1;
+            if depth == 0 {
+                return Some(cursor + 1);
+            }
+        }
+        cursor += 1;
+    }
+    None
+}
+
+/// Re-read only deferred nested string/register references inside a copied
+/// bracketed name.  Other doubled escapes remain literal name bytes: for
+/// example, a device-string spelling containing `\\e` is not a nested name.
+fn reparse_nested_bracketed_references(bytes: &[u8], escape: u8, output: &mut Vec<u8>) {
+    let mut cursor = 0;
+    while cursor < bytes.len() {
+        if bytes.get(cursor) == Some(&escape)
+            && bytes.get(cursor + 1) == Some(&escape)
+            && matches!(bytes.get(cursor + 2), Some(b'*' | b'n'))
+            && bytes.get(cursor + 3) == Some(&b'[')
+        {
+            output.push(escape);
+            cursor += 2;
+            continue;
+        }
+        output.push(bytes[cursor]);
+        cursor += 1;
+    }
 }
 
 /// Detect the copy-mode spelling whose provenance cannot be recovered from
