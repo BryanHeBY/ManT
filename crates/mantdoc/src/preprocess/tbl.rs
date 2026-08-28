@@ -1210,7 +1210,11 @@ fn parse_data_rows(lines: &[SourceLine], layout: &TableLayout) -> ParsedDataRows
                     cell.text_block = true;
                 }
                 if let Some(remainder) = remainder.strip_prefix(layout.delimiter) {
-                    let remainder = remainder.trim_start();
+                    // A second delimiter is an empty cell, not horizontal
+                    // padding.  tbl accepts ordinary spaces between `T}` and
+                    // the first delimiter, but tabulation is table syntax and
+                    // must remain visible to the cell splitter below.
+                    let remainder = remainder.trim_start_matches(' ');
                     // A closing text block may share its physical row with
                     // ordinary cells and the opening marker of the next text
                     // block: `T}:middle:T{`.  Preserve those ordinary cells,
@@ -1218,8 +1222,13 @@ fn parse_data_rows(lines: &[SourceLine], layout: &TableLayout) -> ParsedDataRows
                     if let Some((before, next)) = remainder.split_once("T{")
                         && (before.is_empty() || before.ends_with(layout.delimiter))
                     {
-                        let before = before.trim_end_matches(layout.delimiter);
-                        if !before.trim().is_empty() {
+                        // Preserve a non-empty delimiter run as cells: for
+                        // example `T}\t\tT{` has one empty field between
+                        // the completed block and the next block.  In
+                        // contrast, an empty `before` in `T}\tT{` means the
+                        // next text block starts in the immediately adjacent
+                        // field and adds no synthetic cell.
+                        if !before.is_empty() {
                             append_plain_cells(
                                 &mut row.cells,
                                 before,

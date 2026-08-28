@@ -726,6 +726,23 @@ fn adjacent_table_text_blocks_on_one_row_remain_pending() {
 }
 
 #[test]
+fn closing_text_block_preserves_an_empty_tab_delimited_cell() {
+    let report = parse(
+        b".TH TABLE 1 28-Aug-2026\n.SH DESCRIPTION\n.TS\nl l l.\nT{\nfirst\nT}\t\tT{\nlast\nT}\n.TE\n",
+    );
+    let table = report
+        .document
+        .preorder()
+        .find(|node| node.kind() == NodeKind::Table)
+        .expect("table row");
+    assert_eq!(table.table_cells().len(), 3);
+    assert_eq!(table.table_cells()[0].text.as_deref(), Some("first"));
+    assert_eq!(table.table_cells()[1].text.as_deref(), Some(""));
+    assert!(table.table_cells()[2].text_block);
+    assert_eq!(table.table_cells()[2].text.as_deref(), Some("last"));
+}
+
+#[test]
 fn empty_table_text_blocks_use_a_null_cell_payload() {
     let report =
         parse(b".TH TABLE 1 28-Aug-2026\n.SH DESCRIPTION\n.TS\nl l.\ntable\tT{\nT}\n.TE\n");
