@@ -303,6 +303,28 @@ fn tbl_macro_finding_precedes_later_scanner_style_findings() {
 }
 
 #[test]
+fn table_level_man_macro_is_reported_before_the_table_closes() {
+    let report = parse(
+        b".TH TABLE 1 28-Aug-2026\n.SH DESCRIPTION\n.TS\nl.\nfirst\n.P\nsecond\n.TE\n.BR outside (1)\n",
+    );
+    assert_eq!(report.diagnostics.len(), 1, "{:#?}", report.diagnostics);
+    let diagnostic = &report.diagnostics[0];
+    assert_eq!(diagnostic.code.as_str(), DiagnosticCode::TBL_MACRO);
+    assert_eq!(diagnostic.message.as_ref(), "ignoring macro in table: P");
+    let position = report
+        .document
+        .source_position(diagnostic.primary.as_ref().expect("primary span"))
+        .expect("source position");
+    assert_eq!((position.line, position.column), (6, 2));
+    assert!(report.document.preorder().any(|node| {
+        node.kind() == NodeKind::Table
+            && node
+                .source_position()
+                .is_some_and(|position| (position.line, position.column) == (6, 1))
+    }));
+}
+
+#[test]
 fn nested_tbl_opener_is_reported_without_a_synthetic_empty_row() {
     let report =
         parse(b".TH TABLE 1 28-Aug-2026\n.SH DESCRIPTION\n.TS\ntab(:);\nl | l .\na:b\n_\nc:d\n.TS\ne:f\n.TE\n");

@@ -149,11 +149,6 @@ enum TableDataRecovery {
         offset: usize,
         text: Box<str>,
     },
-    Macro {
-        source: NodeId,
-        name: Box<str>,
-        arguments: Box<str>,
-    },
     SpannedData {
         source: NodeId,
         offset: usize,
@@ -252,57 +247,27 @@ pub(super) fn parse_table_rows(
         },
     ));
     let recoveries = Vec::new();
-    dynamic_recoveries.extend(data_recoveries.into_iter().map(|recovery| {
-        match recovery {
-            TableDataRecovery::ExtraCells {
-                source,
-                offset,
-                text,
-            } => DynamicPreprocessRecovery {
-                code: crate::DiagnosticCode::TBL_EXTRA_DATA_CELLS,
-                severity: crate::Severity::Error,
-                message: format!("ignoring extra tbl data cells: {text}").into(),
-                location: table_source_location(builder, source, offset),
-            },
-            TableDataRecovery::Macro {
-                source,
-                name,
-                arguments,
-            } => DynamicPreprocessRecovery {
-                code: crate::DiagnosticCode::TBL_MACRO,
-                severity: crate::Severity::Unsupported,
-                message: format!(
-                    "ignoring macro in table: {}{}",
-                    name,
-                    if arguments.is_empty() {
-                        String::new()
-                    } else {
-                        format!(" {arguments}")
-                    }
-                )
-                .into(),
-                // Scanner control elements begin at their macro name (column 2
-                // after the leading roff control character), matching mandoc's
-                // `tbl_cdata()` diagnostic position. A nested `.TS` is read
-                // as a tbl control rather than an ordinary macro, so mandoc
-                // points after its two-letter request name.
-                location: table_source_location(
-                    builder,
-                    source,
-                    if name.as_ref() == "TS" { 2 } else { 0 },
-                ),
-            },
-            TableDataRecovery::SpannedData {
-                source,
-                offset,
-                text,
-            } => DynamicPreprocessRecovery {
-                code: crate::DiagnosticCode::TBL_SPANNED_DATA,
-                severity: crate::Severity::Error,
-                message: format!("ignoring data in spanned tbl cell: {text}").into(),
-                location: table_source_location(builder, source, offset),
-            },
-        }
+    dynamic_recoveries.extend(data_recoveries.into_iter().map(|recovery| match recovery {
+        TableDataRecovery::ExtraCells {
+            source,
+            offset,
+            text,
+        } => DynamicPreprocessRecovery {
+            code: crate::DiagnosticCode::TBL_EXTRA_DATA_CELLS,
+            severity: crate::Severity::Error,
+            message: format!("ignoring extra tbl data cells: {text}").into(),
+            location: table_source_location(builder, source, offset),
+        },
+        TableDataRecovery::SpannedData {
+            source,
+            offset,
+            text,
+        } => DynamicPreprocessRecovery {
+            code: crate::DiagnosticCode::TBL_SPANNED_DATA,
+            severity: crate::Severity::Error,
+            message: format!("ignoring data in spanned tbl cell: {text}").into(),
+            location: table_source_location(builder, source, offset),
+        },
     }));
     if rows.is_empty() {
         dynamic_recoveries.push(DynamicPreprocessRecovery {
@@ -1154,11 +1119,6 @@ fn parse_data_rows(lines: &[SourceLine], layout: &TableLayout) -> ParsedDataRows
         // because scanner-stage `.TS` is an Element with no text children;
         // otherwise it would leak as an empty generated table row.
         if line.macro_name.as_deref() == Some("TS") {
-            recoveries.push(TableDataRecovery::Macro {
-                source: line.source,
-                name: "TS".into(),
-                arguments: String::new().into(),
-            });
             continue;
         }
         let text = line
@@ -1194,15 +1154,10 @@ fn parse_data_rows(lines: &[SourceLine], layout: &TableLayout) -> ParsedDataRows
             continue;
         }
         if let Some(row) = pending.as_mut() {
-            if let Some(name) = line.macro_name.as_deref() {
-                recoveries.push(TableDataRecovery::Macro {
-                    source: line.source,
-                    name: name.into(),
-                    arguments: text.into(),
-                });
-                if let Some(cell) = row.cells.last_mut() {
-                    cell.semantic_content = true;
-                }
+            if line.macro_name.is_some()
+                && let Some(cell) = row.cells.last_mut()
+            {
+                cell.semantic_content = true;
             }
             let trimmed = text.trim_start();
             if let Some(remainder) = trimmed.strip_prefix("T}") {

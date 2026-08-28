@@ -1033,8 +1033,55 @@ impl<R: SourceResolver + ?Sized> SourceFrame<'_, '_, '_, R> {
                     let arguments = continued_arguments.as_deref().unwrap_or(arguments);
                     let raw_arguments = continued_raw_arguments.as_deref().unwrap_or(raw_arguments);
                     let mut continued_argument_nodes = Vec::new();
+                    let ignored_table_macro = table_preprocessor_depth > 0
+                        && matches!(request, RequestKind::Other)
+                        // `.TE` and `.T&` belong to tbl itself.  They are not
+                        // roff macros that tbl ignores.
+                        && !matches!(name, b"" | b"TE" | b"T&");
+                    if ignored_table_macro {
+                        // `roff_parseln()` emits this finding during its input
+                        // pass, before man/mdoc process any later source line.
+                        // Known roff requests have already consumed their
+                        // spelling when they are reported; unknown and package
+                        // macros still point at their first name byte.
+                        let macro_start = if matches!(name, b"TS" | b"br" | b"ce" | b"rj" | b"sp") {
+                            control_start.saturating_add(
+                                u32::try_from(name.len())
+                                    .expect("bounded request names fit public spans"),
+                            )
+                        } else {
+                            control_start
+                        };
+                        let visible_name = visible_bytes(name);
+                        let visible_arguments = visible_bytes(arguments);
+                        push_diagnostic(
+                            &mut diagnostics,
+                            limits,
+                            diagnostic(
+                                DiagnosticCode::TBL_MACRO,
+                                Severity::Unsupported,
+                                source_id,
+                                macro_start,
+                                macro_start,
+                                format!(
+                                    "ignoring macro in table: {visible_name}{}",
+                                    if visible_arguments.is_empty() {
+                                        String::new()
+                                    } else {
+                                        format!(" {visible_arguments}")
+                                    }
+                                ),
+                            ),
+                            &mut truncated,
+                        );
+                    }
                     update_preprocessor_depth(&mut package_preprocessor_depth, name);
-                    update_table_preprocessor_depth(&mut table_preprocessor_depth, name);
+                    // A nested `.TS` is rejected by tbl rather than opening a
+                    // second range.  Keeping the outer depth lets its first
+                    // `.TE` close the table, exactly as libmandoc does.
+                    if !(table_preprocessor_depth > 0 && name == b"TS") {
+                        update_table_preprocessor_depth(&mut table_preprocessor_depth, name);
+                    }
                     if let Some(message) = update_man_example_fill_presentation(
                         &mut man_example_fill_enabled,
                         builder.macro_set(),
@@ -4667,6 +4714,17 @@ impl<R: SourceResolver + ?Sized> SourceFrame<'_, '_, '_, R> {
                     if !builder.macro_name(element, visible_bytes(dispatched_package_macro)) {
                         truncated = true;
                         continue;
+                    }
+                    if ignored_table_macro {
+                        // tbl records a data span at the physical beginning of
+                        // this line, even when roff first recognized a package
+                        // macro after its control character.  The macro node
+                        // itself is discarded during preprocessing, so retain
+                        // tbl's source provenance for the generated row.
+                        let _ = builder.set_node_location(
+                            element,
+                            SourceSpan::new(source_id, start, end).ok(),
+                        );
                     }
                     if let Some(macro_start) = macro_start
                         && let Ok(span) = SourceSpan::new(source_id, macro_start, macro_start)
