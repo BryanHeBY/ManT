@@ -58,6 +58,38 @@ fn coding_declarations_do_not_destroy_high_bytes() {
 }
 
 #[test]
+fn trailing_whitespace_in_a_late_control_comment_is_reported_without_retaining_it() {
+    let name = SourceName::new("comment-trailing-space.1").unwrap();
+    let report = Parser::default()
+        .parse(Source::new(
+            &name,
+            b".TH COMMENT 1 28-Aug-2026\n.\\\" \n.SH DESCRIPTION\ntext\n",
+        ))
+        .unwrap();
+    assert_eq!(report.diagnostics.len(), 1, "{:#?}", report.diagnostics);
+    assert_eq!(
+        report.diagnostics[0].code.as_str(),
+        DiagnosticCode::INPUT_TRAILING_WHITESPACE
+    );
+    let position = report
+        .document
+        .source_position(
+            report.diagnostics[0]
+                .primary
+                .as_ref()
+                .expect("primary span"),
+        )
+        .expect("source position");
+    assert_eq!((position.line, position.column), (2, 4));
+    assert!(
+        report
+            .document
+            .preorder()
+            .all(|node| node.kind() != NodeKind::Comment)
+    );
+}
+
+#[test]
 fn m3_tr_translates_visible_text_without_rewriting_escape_spellings() {
     let name = SourceName::new("translation.roff").unwrap();
     let report = Parser::default()

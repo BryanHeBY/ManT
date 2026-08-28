@@ -812,10 +812,27 @@ impl<R: SourceResolver + ?Sized> SourceFrame<'_, '_, '_, R> {
                     }
                 }
                 SourceEvent::Comment { start, end, bytes } => {
+                    let bytes = bytes.as_ref();
+                    // Roff validates trailing whitespace in control-comment
+                    // payloads even after the public comment-retention window
+                    // closes.  The event starts at the final quote of `."`
+                    // (or `.\\"`), while the payload begins one byte later.
+                    if builder.macro_set() != MacroSet::None
+                        && (builder.macro_set() == MacroSet::Mdoc || environment.is_filled())
+                    {
+                        emit_trailing_whitespace(
+                            bytes,
+                            builder.macro_set(),
+                            start.saturating_add(1),
+                            source_id,
+                            limits,
+                            &mut diagnostics,
+                            &mut truncated,
+                        );
+                    }
                     if !retain_leading_comments {
                         continue;
                     }
-                    let bytes = bytes.as_ref();
                     // libmandoc preserves a comment as a distinct node, but does
                     // not mark it as an implicit no-print node. Consumers use the
                     // node kind to omit comments from rendered output.
