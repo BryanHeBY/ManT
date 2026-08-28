@@ -406,12 +406,35 @@ pub(super) fn apply_preprocess_outcome(
             Some(location) => diagnostic.with_primary(location),
             None => diagnostic,
         };
-        push_diagnostic(
-            &mut outcome.diagnostics,
-            limits,
-            diagnostic,
-            &mut outcome.truncated,
-        );
+        if recovery.code == DiagnosticCode::TBL_MACRO {
+            // tbl macros are diagnosed by `roff_parseln()` while the input
+            // stream is being scanned.  Table normalization necessarily runs
+            // later, so splice these recovered findings back into that phase
+            // instead of appending them behind unrelated later-line styles.
+            // This is observable for real manuals whose table is followed by
+            // an alternating-font macro with an input comment.
+            let insertion = diagnostic.primary.as_ref().and_then(|primary| {
+                outcome.diagnostics.iter().position(|candidate| {
+                    candidate.primary.as_ref().is_some_and(|location| {
+                        location.source == primary.source && location.start > primary.start
+                    })
+                })
+            });
+            if outcome.diagnostics.len() >= limits.max_diagnostics {
+                outcome.truncated = true;
+            } else if let Some(index) = insertion {
+                outcome.diagnostics.insert(index, diagnostic);
+            } else {
+                outcome.diagnostics.push(diagnostic);
+            }
+        } else {
+            push_diagnostic(
+                &mut outcome.diagnostics,
+                limits,
+                diagnostic,
+                &mut outcome.truncated,
+            );
+        }
     }
 }
 

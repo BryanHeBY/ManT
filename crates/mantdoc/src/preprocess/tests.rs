@@ -289,6 +289,20 @@ fn tbl_text_block_macro_is_retained_as_text_and_reported() {
 }
 
 #[test]
+fn tbl_macro_finding_precedes_later_scanner_style_findings() {
+    let report = parse(
+        b".TH TABLE 1 28-Aug-2026\n.SH DESCRIPTION\n.TS\nl.\nT{\n.SM table\nT}\n.TE\n.BR outside (1),   \\\" source note\n",
+    );
+    assert_eq!(report.diagnostics.len(), 1, "{:#?}", report.diagnostics);
+    let diagnostic = &report.diagnostics[0];
+    assert_eq!(diagnostic.code.as_str(), DiagnosticCode::TBL_MACRO);
+    assert_eq!(
+        diagnostic.message.as_ref(),
+        "ignoring macro in table: SM table"
+    );
+}
+
+#[test]
 fn nested_tbl_opener_is_reported_without_a_synthetic_empty_row() {
     let report =
         parse(b".TH TABLE 1 28-Aug-2026\n.SH DESCRIPTION\n.TS\ntab(:);\nl | l .\na:b\n_\nc:d\n.TS\ne:f\n.TE\n");

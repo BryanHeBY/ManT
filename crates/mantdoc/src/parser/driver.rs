@@ -1130,9 +1130,16 @@ impl<R: SourceResolver + ?Sized> SourceFrame<'_, '_, '_, R> {
                             &mut truncated,
                         );
                     } else if builder.macro_set() == MacroSet::Man {
+                        let has_inline_comment =
+                            scanner.physical_line(start, end).is_some_and(|line| {
+                                crate::scan::strip_inline_comment(line, scanner.escape_character())
+                                    .len()
+                                    < line.len()
+                            });
                         emit_man_alternating_font_trailing_whitespace(
                             name,
                             raw_arguments,
+                            has_inline_comment,
                             end,
                             source_id,
                             limits,

@@ -1030,6 +1030,7 @@ pub(super) fn emit_mdoc_empty_display(
 pub(super) fn emit_man_alternating_font_trailing_whitespace(
     name: &[u8],
     raw_arguments: &[u8],
+    has_inline_comment: bool,
     line_end: u32,
     source_id: crate::SourceId,
     limits: &Limits,
@@ -1038,6 +1039,7 @@ pub(super) fn emit_man_alternating_font_trailing_whitespace(
 ) {
     const ALTERNATING_FONT_MACROS: [&[u8]; 6] = [b"BI", b"BR", b"IB", b"IR", b"RB", b"RI"];
     if !ALTERNATING_FONT_MACROS.contains(&name)
+        || has_inline_comment
         || trailing_whitespace_start(raw_arguments).is_none()
     {
         return;
