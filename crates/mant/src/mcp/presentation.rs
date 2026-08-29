@@ -214,6 +214,11 @@ pub(super) fn finish_page(page: &TextPage) -> String {
 }
 
 pub(super) fn page_text(text: &str, page: PageRequest) -> TextPage {
+    // MCP success bodies are model-visible protocol data. Sanitize the whole
+    // canonical body here so every tool and every dynamically rendered
+    // identity shares the same control-character boundary before paging.
+    let text = sanitize_model_text(text);
+    let text = text.as_str();
     let total_chars = text.chars().count();
     let requested_start = usize::try_from(page.start_char).unwrap_or(usize::MAX);
     let start_char = requested_start.min(total_chars);
@@ -227,6 +232,18 @@ pub(super) fn page_text(text: &str, page: PageRequest) -> TextPage {
         end_char,
         total_chars,
     }
+}
+
+fn sanitize_model_text(text: &str) -> String {
+    text.chars()
+        .map(|character| {
+            if character.is_control() && !matches!(character, '\n' | '\t') {
+                '\u{fffd}'
+            } else {
+                character
+            }
+        })
+        .collect()
 }
 
 fn char_offset_to_byte(text: &str, offset: usize, total_chars: usize) -> usize {
@@ -382,6 +399,21 @@ mod tests {
         );
         assert!(empty.text.is_empty());
         assert_eq!((empty.start_char, empty.end_char), (5, 5));
+    }
+
+    #[test]
+    fn model_visible_pages_mask_terminal_controls_before_counting() {
+        let page = page_text(
+            "manual/1\u{1b}[31m/tool",
+            PageRequest {
+                start_char: 0,
+                max_chars: 100,
+            },
+        );
+
+        assert_eq!(page.text, "manual/1�[31m/tool");
+        assert!(!page.text.contains('\u{1b}'));
+        assert_eq!(page.total_chars, page.text.chars().count());
     }
 
     #[test]
