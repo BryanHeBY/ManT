@@ -783,7 +783,6 @@ fn shift_block_indent(block: &mut Block, origin: u16) {
 }
 
 struct IdentityPlan {
-    declared_id: Option<String>,
     role: DefinitionRole,
     case: DefinitionCase,
     names: Vec<String>,
@@ -791,25 +790,17 @@ struct IdentityPlan {
 }
 
 fn identity_plan(item: &DefinitionItem, context: DefinitionContext) -> IdentityPlan {
-    let declared_id = item
-        .identity
-        .as_ref()
-        .filter(|identity| !identity.id.as_str().is_empty())
-        .map(|identity| identity.id.to_string());
     let (role, case, names) = item.identity.as_ref().map_or_else(
         || infer_identity(item, context),
         |identity| (identity.role, identity.case, identity.names.clone()),
     );
-    let preferred = declared_id.clone().unwrap_or_else(|| {
-        let name = names.first().cloned().unwrap_or_else(|| {
-            item.terms
-                .first()
-                .map_or_else(|| "entry".to_owned(), |term| plain_text(term))
-        });
-        format!("{}-{}", role_id_prefix(role), role_name_slug(role, &name))
+    let name = names.first().cloned().unwrap_or_else(|| {
+        item.terms
+            .first()
+            .map_or_else(|| "entry".to_owned(), |term| plain_text(term))
     });
+    let preferred = format!("{}-{}", role_id_prefix(role), role_name_slug(role, &name));
     IdentityPlan {
-        declared_id,
         role,
         case,
         names,
@@ -825,14 +816,12 @@ fn identify_item(
     retained: &mut HashSet<String>,
     preferred_counts: &HashMap<String, usize>,
 ) -> DefinitionRole {
-    // A non-empty identity supplied by a producer is already authoritative;
-    // Markdown normalization uses an empty placeholder until this pass.
-    // Native parser anchors, by contrast, are navigation destinations whose
-    // formatter-generated tags may contain only the first word of a term.
-    // Keep those anchors addressable, but never reuse them as inferred entry
-    // IDs: doing so turns `set-mark` into the misleading semantic ID `set`.
+    // Native parser anchors are navigation destinations whose formatter tags
+    // may contain only the first word of a term. Keep those anchors
+    // addressable, but never reuse them as semantic entry IDs: doing so turns
+    // `set-mark` into the misleading semantic ID `set`. Markdown producers
+    // likewise provide role/name evidence and leave allocation to this pass.
     let IdentityPlan {
-        declared_id,
         role,
         case,
         names,
@@ -847,28 +836,19 @@ fn identify_item(
         retained.extend(anchors.iter().cloned());
     }
 
-    if declared_id.is_none()
-        && (preferred_counts
-            .get(&preferred)
-            .copied()
-            .unwrap_or_default()
-            > 1
-            || reserved.contains(&preferred))
+    if preferred_counts
+        .get(&preferred)
+        .copied()
+        .unwrap_or_default()
+        > 1
+        || reserved.contains(&preferred)
     {
         preferred = format!(
             "{preferred}-{}",
             semantic_fingerprint(item, role, case, &names)
         );
     }
-    // An authored Markdown identity is already part of its parsed target set,
-    // so it is allowed to match the reserved set. Generated native IDs are
-    // kept distinct from every source navigation destination.
-    let id = if declared_id.is_some() && !used.contains(&preferred) {
-        used.insert(preferred.clone());
-        preferred
-    } else {
-        unique_id(&preferred, used, reserved)
-    };
+    let id = unique_id(&preferred, used, reserved);
     if role != DefinitionRole::Term
         && !anchors.iter().any(|anchor| anchor == &id)
         && let Some(term) = item.terms.first_mut()
@@ -1488,7 +1468,10 @@ fn unique_id(base: &str, used: &mut HashSet<String>, reserved: &HashSet<String>)
 mod tests {
     use std::collections::{HashMap, HashSet};
 
-    use mant_ir::{Block, DefinitionItem, DefinitionRole, Inline, LayoutHint, Section};
+    use mant_ir::{
+        Block, DefinitionCase, DefinitionIdentity, DefinitionItem, DefinitionRole, Inline,
+        LayoutHint, Section,
+    };
 
     use super::{environment_variable_alias, identify_definitions, option_names, option_prefix};
 
@@ -1528,6 +1511,40 @@ mod tests {
         assert_eq!(option_prefix("-ca.cert"), Some("-ca.cert"));
         assert_eq!(option_prefix("--foo.bar=VALUE"), Some("--foo.bar"));
         assert_eq!(option_prefix("--foo..bar"), None);
+    }
+
+    #[test]
+    fn semantic_id_allocation_ignores_a_prefilled_producer_id() {
+        let mut option = item("--verbose");
+        option.identity = Some(DefinitionIdentity {
+            id: "producer-specific-id".into(),
+            role: DefinitionRole::Option,
+            case: DefinitionCase::Sensitive,
+            names: vec!["--verbose".to_owned()],
+        });
+        let mut sections = vec![Section {
+            id: "options".into(),
+            title: "OPTIONS".to_owned(),
+            spacing_before_lines: 0,
+            blocks: vec![Block::DefinitionList {
+                items: vec![option],
+                compact: true,
+                layout: LayoutHint::default(),
+                source: None,
+            }],
+            children: Vec::new(),
+            source: None,
+        }];
+
+        identify_definitions(&mut Vec::new(), &mut sections, &HashSet::new(), None);
+
+        let Block::DefinitionList { items, .. } = &sections[0].blocks[0] else {
+            panic!("option list");
+        };
+        assert_eq!(
+            items[0].identity.as_ref().expect("identity").id.as_str(),
+            "option-verbose"
+        );
     }
 
     #[test]
