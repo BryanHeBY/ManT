@@ -406,6 +406,7 @@ mod tests {
         assert_eq!(entries[0].children.len(), 1);
         assert_eq!(entries[0].children[0].aliases, ["-L"]);
         assert_eq!(entries[0].children[0].forms.len(), 2);
+        assert_eq!(entries[0].subtree_len(), 2);
 
         assert_eq!(
             index.section_summary("synopsis"),

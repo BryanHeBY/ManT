@@ -110,7 +110,7 @@ fn keeps_tier_table_text_blocks_in_their_own_columns() {
 #[test]
 fn renders_the_reviewed_windows_path_section_without_losing_backslashes() {
     let query = windows_release_query("rclone");
-    let excerpt = select_excerpt(&query, &["paths-on-windows-3225".to_owned()])
+    let excerpt = select_excerpt(&query, &["paths-on-windows".to_owned()])
         .expect("select rclone Paths on Windows");
     let markdown = render_excerpt_markdown(&excerpt);
     assert!(markdown.contains(r"`C:\path\to\wherever`"));

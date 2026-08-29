@@ -101,7 +101,10 @@ fn preserves_complete_readline_command_names_as_selectable_aliases() {
         "do-lowercase-version",
         "character-search-backward",
     ] {
-        assert!(aliases.contains(&name), "missing Readline command {name}");
+        assert!(
+            aliases.contains(&name),
+            "missing Readline command {name}; discovered {aliases:?}"
+        );
     }
 
     let query = common::query_for_document("sh", document);
@@ -187,15 +190,14 @@ fn preserves_complete_readline_variable_names_without_shadowing_builtins() {
         let rendered = render_excerpt_markdown(&excerpt);
         assert!(rendered.contains("SHELL BUILTIN COMMANDS"), "{rendered}");
     }
-    for ambiguous in ["history", "complete"] {
-        assert!(
-            matches!(
-                select_explanation(&query, ambiguous),
-                Err(ProjectionError::AmbiguousSelector { .. })
-            ),
-            "genuinely repeated exact alias {ambiguous} must report candidates"
-        );
-    }
+    assert!(matches!(
+        select_explanation(&query, "history"),
+        Err(ProjectionError::ExplanationRequiresEntry { .. })
+    ));
+    assert!(matches!(
+        select_explanation(&query, "complete"),
+        Err(ProjectionError::AmbiguousSelector { .. })
+    ));
 }
 
 fn has_parameter(entry: &SemanticEntry, parameter_kind: ParameterKind, alias: &str) -> bool {

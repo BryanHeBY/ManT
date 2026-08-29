@@ -5,7 +5,8 @@
 //! into the stable document contract.
 
 use std::{
-    collections::{HashSet, VecDeque},
+    collections::{HashMap, HashSet, VecDeque},
+    fmt::Write as _,
     mem,
 };
 
@@ -14,6 +15,7 @@ use mant_ir::{
     Section, SourceSpan,
     visit::{self, Visit},
 };
+use sha2::{Digest, Sha256};
 
 use crate::{
     block::{block_layout, block_layout_mut},
@@ -28,9 +30,7 @@ pub(crate) fn identify_definitions(
     reserved_targets: &HashSet<String>,
     document_name: Option<&str>,
 ) -> HashSet<String> {
-    let mut used = HashSet::new();
-    collect_section_ids(sections, &mut used);
-    let mut retained = HashSet::new();
+    let mut preferred_counts = HashMap::new();
     let root_context = document_name.map_or(DefinitionContext::Generic, |name| {
         let name = name.to_ascii_lowercase();
         if name.ends_with("_config") || name.ends_with("-config") {
@@ -39,12 +39,18 @@ pub(crate) fn identify_definitions(
             DefinitionContext::Generic
         }
     });
+    prepare_blocks(blocks, root_context, &mut preferred_counts);
+    prepare_sections(sections, root_context, &mut preferred_counts);
+
+    let mut used = HashSet::new();
+    let mut retained = HashSet::new();
     identify_blocks(
         blocks,
         root_context,
         &mut used,
         reserved_targets,
         &mut retained,
+        &preferred_counts,
     );
     for section in sections {
         let context = DefinitionContext::for_section(&section.title, root_context);
@@ -54,6 +60,7 @@ pub(crate) fn identify_definitions(
             &mut used,
             reserved_targets,
             &mut retained,
+            &preferred_counts,
         );
         identify_sections(
             &mut section.children,
@@ -61,6 +68,7 @@ pub(crate) fn identify_definitions(
             &mut used,
             reserved_targets,
             &mut retained,
+            &preferred_counts,
         );
     }
     retained
@@ -88,6 +96,141 @@ pub(crate) fn definition_entries(blocks: &[Block]) -> Vec<DefinitionEntry<'_>> {
     let mut entries = Vec::new();
     collect_definition_scope(blocks, &[], &mut Vec::new(), &mut entries);
     entries
+}
+
+/// Report definition-shaped native content that a semantic section could not
+/// classify without guessing.
+pub(crate) fn manual_discovery_diagnostics(sections: &[Section]) -> Vec<mant_ir::Diagnostic> {
+    let mut diagnostics = Vec::new();
+    visit_manual_discovery_sections(sections, DefinitionContext::Generic, &mut diagnostics);
+    diagnostics
+}
+
+fn visit_manual_discovery_sections(
+    sections: &[Section],
+    parent_context: DefinitionContext,
+    output: &mut Vec<mant_ir::Diagnostic>,
+) {
+    for section in sections {
+        let context = DefinitionContext::for_section(&section.title, parent_context);
+        visit_manual_discovery_blocks(&section.blocks, context, true, output);
+        visit_manual_discovery_sections(&section.children, context, output);
+    }
+}
+
+fn visit_manual_discovery_blocks(
+    blocks: &[Block],
+    context: DefinitionContext,
+    report_unclassified: bool,
+    output: &mut Vec<mant_ir::Diagnostic>,
+) {
+    for block in blocks {
+        match block {
+            Block::List { items, .. } => {
+                for item in items {
+                    visit_manual_discovery_blocks(
+                        &item.blocks,
+                        context,
+                        report_unclassified,
+                        output,
+                    );
+                }
+            }
+            Block::DefinitionList {
+                items,
+                layout,
+                source,
+                ..
+            } => visit_manual_definition_items(
+                items,
+                *layout,
+                *source,
+                context,
+                report_unclassified,
+                output,
+            ),
+            Block::Table { rows, .. } => {
+                for cell in rows.iter().flat_map(|row| &row.cells) {
+                    visit_manual_discovery_blocks(
+                        &cell.blocks,
+                        context,
+                        report_unclassified,
+                        output,
+                    );
+                }
+            }
+            Block::Paragraph { .. }
+            | Block::Preformatted { .. }
+            | Block::Equation { .. }
+            | Block::VerticalSpace { .. }
+            | Block::ThematicBreak { .. }
+            | Block::Unsupported { .. } => {}
+        }
+    }
+}
+
+fn visit_manual_definition_items(
+    items: &[DefinitionItem],
+    layout: LayoutHint,
+    source: Option<SourceSpan>,
+    context: DefinitionContext,
+    report_unclassified: bool,
+    output: &mut Vec<mant_ir::Diagnostic>,
+) {
+    let inferred_context =
+        if context == DefinitionContext::Generic && is_key_binding_command_group(items) {
+            DefinitionContext::Commands
+        } else {
+            context
+        };
+    let item_context =
+        if inferred_context == DefinitionContext::Commands && layout.indent_columns > 0 {
+            DefinitionContext::Parameters
+        } else {
+            inferred_context
+        };
+    for item in items {
+        let identity = item.identity.as_ref();
+        let role = identity.map_or(DefinitionRole::Term, |identity| identity.role);
+        if report_unclassified
+            && item_context != DefinitionContext::Generic
+            && role == DefinitionRole::Term
+            && identity.is_some_and(|identity| identity.names.is_empty())
+        {
+            report_unclassified_definition(item, item_context, source, output);
+        }
+        visit_manual_discovery_blocks(
+            &item.description,
+            child_definition_context(role, item_context),
+            false,
+            output,
+        );
+    }
+}
+
+fn report_unclassified_definition(
+    item: &DefinitionItem,
+    context: DefinitionContext,
+    source: Option<SourceSpan>,
+    output: &mut Vec<mant_ir::Diagnostic>,
+) {
+    let term = item
+        .terms
+        .first()
+        .map_or_else(String::new, |term| plain_text(term));
+    if term.trim().is_empty() {
+        return;
+    }
+    output.push(mant_ir::Diagnostic {
+        level: mant_ir::DiagnosticLevel::Warning,
+        code: Some("manual.semantic-entry.unclassified-definition".to_owned()),
+        message: format!(
+            "definition term '{}' did not match the complete {} name grammar and remains an unclassified term",
+            term.trim(),
+            context.label()
+        ),
+        source,
+    });
 }
 
 fn collect_definition_scope<'a>(
@@ -162,42 +305,22 @@ fn collect_direct_definitions<'a>(
     }
 }
 
-fn collect_section_ids(sections: &[Section], output: &mut HashSet<String>) {
-    struct Collector<'a>(&'a mut HashSet<String>);
-
-    impl<'ir> Visit<'ir> for Collector<'_> {
-        fn visit_section(&mut self, section: &'ir Section) {
-            self.0.insert(section.id.to_string());
-            visit::walk_section(self, section);
-        }
-    }
-
-    let mut collector = Collector(output);
-    for section in sections {
-        collector.visit_section(section);
-    }
-}
-
-fn identify_sections(
+fn prepare_sections(
     sections: &mut [Section],
     parent_context: DefinitionContext,
-    used: &mut HashSet<String>,
-    reserved: &HashSet<String>,
-    retained: &mut HashSet<String>,
+    preferred_counts: &mut HashMap<String, usize>,
 ) {
     for section in sections {
         let context = DefinitionContext::for_section(&section.title, parent_context);
-        identify_blocks(&mut section.blocks, context, used, reserved, retained);
-        identify_sections(&mut section.children, context, used, reserved, retained);
+        prepare_blocks(&mut section.blocks, context, preferred_counts);
+        prepare_sections(&mut section.children, context, preferred_counts);
     }
 }
 
-fn identify_blocks(
+fn prepare_blocks(
     blocks: &mut Vec<Block>,
     context: DefinitionContext,
-    used: &mut HashSet<String>,
-    reserved: &HashSet<String>,
-    retained: &mut HashSet<String>,
+    preferred_counts: &mut HashMap<String, usize>,
 ) {
     normalize_definition_nesting(blocks);
     normalize_hanging_definitions(blocks, context);
@@ -205,7 +328,7 @@ fn identify_blocks(
         match block {
             Block::List { items, .. } => {
                 for item in items {
-                    identify_blocks(&mut item.blocks, context, used, reserved, retained);
+                    prepare_blocks(&mut item.blocks, context, preferred_counts);
                 }
             }
             Block::DefinitionList { items, layout, .. } => {
@@ -224,31 +347,143 @@ fn identify_blocks(
                     inferred_context
                 };
                 for item in items {
-                    let role = identify_item(item, item_context, used, reserved, retained);
-                    let child_context = match role {
-                        DefinitionRole::Command => DefinitionContext::Parameters,
-                        DefinitionRole::Option
-                        | DefinitionRole::Marker
-                        | DefinitionRole::Operand
-                        | DefinitionRole::ConfigurationKey => DefinitionContext::Values,
-                        DefinitionRole::EnvironmentVariable
-                        | DefinitionRole::Variable
-                        | DefinitionRole::Value
-                        | DefinitionRole::Term => item_context,
-                    };
+                    let plan = identity_plan(item, item_context);
+                    *preferred_counts.entry(plan.preferred).or_default() += 1;
+                    let child_context = child_definition_context(plan.role, item_context);
+                    prepare_blocks(&mut item.description, child_context, preferred_counts);
+                }
+            }
+            Block::Table { rows, .. } => {
+                for row in rows {
+                    for cell in &mut row.cells {
+                        prepare_blocks(&mut cell.blocks, context, preferred_counts);
+                    }
+                }
+            }
+            Block::Paragraph { .. }
+            | Block::Preformatted { .. }
+            | Block::Equation { .. }
+            | Block::VerticalSpace { .. }
+            | Block::ThematicBreak { .. }
+            | Block::Unsupported { .. } => {}
+        }
+    }
+}
+
+fn child_definition_context(
+    role: DefinitionRole,
+    item_context: DefinitionContext,
+) -> DefinitionContext {
+    match role {
+        DefinitionRole::Command => DefinitionContext::Parameters,
+        DefinitionRole::Option
+        | DefinitionRole::Marker
+        | DefinitionRole::Operand
+        | DefinitionRole::ConfigurationKey => DefinitionContext::Values,
+        DefinitionRole::EnvironmentVariable
+        | DefinitionRole::Variable
+        | DefinitionRole::Value
+        | DefinitionRole::Term => item_context,
+    }
+}
+
+fn identify_sections(
+    sections: &mut [Section],
+    parent_context: DefinitionContext,
+    used: &mut HashSet<String>,
+    reserved: &HashSet<String>,
+    retained: &mut HashSet<String>,
+    preferred_counts: &HashMap<String, usize>,
+) {
+    for section in sections {
+        let context = DefinitionContext::for_section(&section.title, parent_context);
+        identify_blocks(
+            &mut section.blocks,
+            context,
+            used,
+            reserved,
+            retained,
+            preferred_counts,
+        );
+        identify_sections(
+            &mut section.children,
+            context,
+            used,
+            reserved,
+            retained,
+            preferred_counts,
+        );
+    }
+}
+
+fn identify_blocks(
+    blocks: &mut Vec<Block>,
+    context: DefinitionContext,
+    used: &mut HashSet<String>,
+    reserved: &HashSet<String>,
+    retained: &mut HashSet<String>,
+    preferred_counts: &HashMap<String, usize>,
+) {
+    for block in blocks {
+        match block {
+            Block::List { items, .. } => {
+                for item in items {
+                    identify_blocks(
+                        &mut item.blocks,
+                        context,
+                        used,
+                        reserved,
+                        retained,
+                        preferred_counts,
+                    );
+                }
+            }
+            Block::DefinitionList { items, layout, .. } => {
+                let inferred_context = if context == DefinitionContext::Generic
+                    && is_key_binding_command_group(items)
+                {
+                    DefinitionContext::Commands
+                } else {
+                    context
+                };
+                let item_context = if inferred_context == DefinitionContext::Commands
+                    && layout.indent_columns > 0
+                {
+                    DefinitionContext::Parameters
+                } else {
+                    inferred_context
+                };
+                for item in items {
+                    let role = identify_item(
+                        item,
+                        item_context,
+                        used,
+                        reserved,
+                        retained,
+                        preferred_counts,
+                    );
+                    let child_context = child_definition_context(role, item_context);
                     identify_blocks(
                         &mut item.description,
                         child_context,
                         used,
                         reserved,
                         retained,
+                        preferred_counts,
                     );
                 }
             }
             Block::Table { rows, .. } => {
                 for row in rows {
                     for cell in &mut row.cells {
-                        identify_blocks(&mut cell.blocks, context, used, reserved, retained);
+                        identify_blocks(
+                            &mut cell.blocks,
+                            context,
+                            used,
+                            reserved,
+                            retained,
+                            preferred_counts,
+                        );
                     }
                 }
             }
@@ -386,6 +621,18 @@ enum DefinitionContext {
 }
 
 impl DefinitionContext {
+    const fn label(self) -> &'static str {
+        match self {
+            Self::Generic => "generic",
+            Self::Parameters => "parameter",
+            Self::Commands => "command",
+            Self::EnvironmentVariables => "environment-variable",
+            Self::Variables => "variable",
+            Self::ConfigurationKeys => "configuration-key",
+            Self::Values => "value",
+        }
+    }
+
     fn for_section(title: &str, inherited: Self) -> Self {
         let normalized = title
             .chars()
@@ -398,18 +645,22 @@ impl DefinitionContext {
             })
             .collect::<String>();
         let words = normalized.split_whitespace().collect::<Vec<_>>();
-        if words.contains(&"ENVIRONMENT") {
-            return Self::EnvironmentVariables;
-        }
-        if words.contains(&"VARIABLES") || words.contains(&"VARIABLE") {
-            return Self::Variables;
-        }
+        // Composite headings describe the more specific syntax family.  In
+        // particular, "ENVIRONMENT OPTIONS" documents command-line options
+        // whose defaults happen to come from the environment; it is not a
+        // declaration list of environment-variable names.
         if words.contains(&"OPTIONS")
             || words.contains(&"OPTION")
             || words.contains(&"SWITCHES")
             || words.contains(&"FLAGS")
         {
             return Self::Parameters;
+        }
+        if words.contains(&"ENVIRONMENT") || words.contains(&"ENVIRONMENTS") {
+            return Self::EnvironmentVariables;
+        }
+        if words.contains(&"VARIABLES") || words.contains(&"VARIABLE") {
+            return Self::Variables;
         }
         if normalized.trim() == "COMMANDS"
             || normalized.contains("BUILTIN COMMANDS")
@@ -531,19 +782,15 @@ fn shift_block_indent(block: &mut Block, origin: u16) {
     }
 }
 
-fn identify_item(
-    item: &mut DefinitionItem,
-    context: DefinitionContext,
-    used: &mut HashSet<String>,
-    reserved: &HashSet<String>,
-    retained: &mut HashSet<String>,
-) -> DefinitionRole {
-    // A non-empty identity supplied by a producer is already authoritative;
-    // Markdown normalization uses an empty placeholder until this pass.
-    // Native parser anchors, by contrast, are navigation destinations whose
-    // formatter-generated tags may contain only the first word of a term.
-    // Keep those anchors addressable, but never reuse them as inferred entry
-    // IDs: doing so turns `set-mark` into the misleading semantic ID `set`.
+struct IdentityPlan {
+    declared_id: Option<String>,
+    role: DefinitionRole,
+    case: DefinitionCase,
+    names: Vec<String>,
+    preferred: String,
+}
+
+fn identity_plan(item: &DefinitionItem, context: DefinitionContext) -> IdentityPlan {
     let declared_id = item
         .identity
         .as_ref()
@@ -553,6 +800,44 @@ fn identify_item(
         || infer_identity(item, context),
         |identity| (identity.role, identity.case, identity.names.clone()),
     );
+    let preferred = declared_id.clone().unwrap_or_else(|| {
+        let name = names.first().cloned().unwrap_or_else(|| {
+            item.terms
+                .first()
+                .map_or_else(|| "entry".to_owned(), |term| plain_text(term))
+        });
+        format!("{}-{}", role_id_prefix(role), role_name_slug(role, &name))
+    });
+    IdentityPlan {
+        declared_id,
+        role,
+        case,
+        names,
+        preferred,
+    }
+}
+
+fn identify_item(
+    item: &mut DefinitionItem,
+    context: DefinitionContext,
+    used: &mut HashSet<String>,
+    reserved: &HashSet<String>,
+    retained: &mut HashSet<String>,
+    preferred_counts: &HashMap<String, usize>,
+) -> DefinitionRole {
+    // A non-empty identity supplied by a producer is already authoritative;
+    // Markdown normalization uses an empty placeholder until this pass.
+    // Native parser anchors, by contrast, are navigation destinations whose
+    // formatter-generated tags may contain only the first word of a term.
+    // Keep those anchors addressable, but never reuse them as inferred entry
+    // IDs: doing so turns `set-mark` into the misleading semantic ID `set`.
+    let IdentityPlan {
+        declared_id,
+        role,
+        case,
+        names,
+        mut preferred,
+    } = identity_plan(item, context);
 
     let mut anchors = Vec::new();
     for term in &item.terms {
@@ -562,14 +847,19 @@ fn identify_item(
         retained.extend(anchors.iter().cloned());
     }
 
-    let preferred = declared_id.clone().unwrap_or_else(|| {
-        let name = names.first().cloned().unwrap_or_else(|| {
-            item.terms
-                .first()
-                .map_or_else(|| "entry".to_owned(), |term| plain_text(term))
-        });
-        format!("{}-{}", role_id_prefix(role), role_name_slug(role, &name))
-    });
+    if declared_id.is_none()
+        && (preferred_counts
+            .get(&preferred)
+            .copied()
+            .unwrap_or_default()
+            > 1
+            || reserved.contains(&preferred))
+    {
+        preferred = format!(
+            "{preferred}-{}",
+            semantic_fingerprint(item, role, case, &names)
+        );
+    }
     // An authored Markdown identity is already part of its parsed target set,
     // so it is allowed to match the reserved set. Generated native IDs are
     // kept distinct from every source navigation destination.
@@ -727,28 +1017,15 @@ fn parameter_names(item: &DefinitionItem) -> Vec<String> {
 fn command_names(item: &DefinitionItem) -> Vec<String> {
     item.terms
         .iter()
-        .filter_map(|term| {
-            let text = plain_text(term);
-            let name = text.split_whitespace().next()?.trim();
-            (!name.is_empty() && !name.starts_with(['-', '+', '/'])).then(|| name.to_owned())
-        })
-        .fold(Vec::new(), |mut names, name| {
-            if !names.contains(&name) {
-                names.push(name);
-            }
-            names
-        })
-}
-
-fn named_term(item: &DefinitionItem, validate: fn(&str) -> bool) -> Vec<String> {
-    item.terms
-        .iter()
         .flat_map(|term| {
             let text = plain_text(term);
-            text.split(',')
+            if let Some((name, _)) = key_binding_command_form(&text) {
+                return vec![name.to_owned()];
+            }
+            text.split([',', '|'])
                 .filter_map(|part| {
-                    let name = part.split_whitespace().next()?;
-                    validate(name).then(|| name.to_owned())
+                    let name = command_name_from_authored_form(part);
+                    is_command_name(name).then(|| name.to_owned())
                 })
                 .collect::<Vec<_>>()
         })
@@ -758,6 +1035,49 @@ fn named_term(item: &DefinitionItem, validate: fn(&str) -> bool) -> Vec<String> 
             }
             names
         })
+}
+
+/// Keep a genuine multiword command name, but remove an authored argument
+/// suffix whose syntax makes the executable boundary explicit.
+fn command_name_from_authored_form(value: &str) -> &str {
+    let value = value.trim();
+    let Some((first, suffix)) = value.split_once(char::is_whitespace) else {
+        return value;
+    };
+    let suffix = suffix.trim_start();
+    if suffix.starts_with(['-', '+', '/', '[', '<', '{']) {
+        first
+    } else {
+        value
+    }
+}
+
+fn named_term(item: &DefinitionItem, validate: fn(&str) -> bool) -> Vec<String> {
+    item.terms
+        .iter()
+        .flat_map(|term| {
+            let text = plain_text(term);
+            text.split(',')
+                .filter_map(|part| named_term_name(part, validate).map(str::to_owned))
+                .collect::<Vec<_>>()
+        })
+        .fold(Vec::new(), |mut names, name| {
+            if !names.contains(&name) {
+                names.push(name);
+            }
+            names
+        })
+}
+
+/// Extract a complete semantic name, allowing one explicitly delimited
+/// trailing annotation such as Readline's `(On)` default-value notation.
+fn named_term_name(value: &str, validate: fn(&str) -> bool) -> Option<&str> {
+    let value = value.trim();
+    if validate(value) {
+        return Some(value);
+    }
+    let (name, annotation) = value.rsplit_once(" (")?;
+    (annotation.ends_with(')') && validate(name)).then_some(name)
 }
 
 fn environment_names(item: &DefinitionItem) -> Vec<String> {
@@ -786,13 +1106,36 @@ fn environment_names_from_terms(terms: &[Vec<Inline>]) -> Vec<String> {
 /// The semantic name grammar is shared by inferred native definitions and
 /// explicitly declared Markdown entries. It accepts conventional POSIX,
 /// shell, PowerShell provider, braced provider, and Windows `%NAME%` forms.
-/// Context remains responsible for deciding that a definition actually
-/// describes environment variables; this parser is never run over prose.
+/// The complete term must match.  Leading prose such as `export FOO=bar`, a
+/// shell label such as `Unix Bourne shell:`, and multiple assignments such as
+/// `LC_ALL=C LANG=en_US` are deliberately rejected instead of being truncated
+/// to a plausible-looking first token.
 pub(crate) fn environment_variable_alias(value: &str) -> Option<String> {
-    let token = value.split_whitespace().next()?;
-    let spelling = token.split_once('=').map_or(token, |(name, _)| name);
+    let value = value.trim();
+    if value.is_empty() || value.contains(['\r', '\n']) {
+        return None;
+    }
+    let (spelling, assignment) = value
+        .split_once('=')
+        .map_or((value, None), |(name, assignment)| {
+            (name.trim_end(), Some(assignment.trim_start()))
+        });
+    if spelling.is_empty() || spelling.chars().any(char::is_whitespace) {
+        return None;
+    }
+    if assignment.is_some_and(contains_additional_environment_assignment) {
+        return None;
+    }
     let body = environment_variable_body(spelling)?;
     is_environment_variable_body(body).then(|| spelling.to_owned())
+}
+
+fn contains_additional_environment_assignment(value: &str) -> bool {
+    value.split_whitespace().any(|token| {
+        token.split_once('=').is_some_and(|(name, _)| {
+            environment_variable_body(name).is_some_and(is_environment_variable_body)
+        })
+    })
 }
 
 /// Remove a recognized shell/provider wrapper from an environment selector.
@@ -864,6 +1207,10 @@ fn is_configuration_key(value: &str) -> bool {
             .chars()
             .next()
             .is_some_and(|character| character.is_ascii_alphabetic() || character == '_')
+}
+
+fn is_command_name(value: &str) -> bool {
+    !value.is_empty() && !value.contains(['\r', '\n']) && !value.starts_with(['-', '+', '/'])
 }
 
 fn role_name_slug(role: DefinitionRole, name: &str) -> String {
@@ -984,6 +1331,99 @@ fn collect_anchor_ids(nodes: &[Inline], output: &mut Vec<String>) {
     }
 }
 
+fn semantic_fingerprint(
+    item: &DefinitionItem,
+    role: DefinitionRole,
+    case: DefinitionCase,
+    names: &[String],
+) -> String {
+    struct VisibleFingerprint(Vec<u8>);
+
+    impl VisibleFingerprint {
+        fn field(&mut self, value: &str) {
+            self.0
+                .extend_from_slice(&u64::try_from(value.len()).unwrap_or(u64::MAX).to_le_bytes());
+            self.0.extend_from_slice(value.as_bytes());
+        }
+    }
+
+    impl<'ir> Visit<'ir> for VisibleFingerprint {
+        fn visit_block(&mut self, block: &'ir Block) {
+            let marker = match block {
+                Block::Paragraph { .. } => "paragraph",
+                Block::Preformatted { .. } => "preformatted",
+                Block::List { .. } => "list",
+                Block::DefinitionList { .. } => "definition-list",
+                Block::Table { .. } => "table",
+                Block::Equation { value, .. } => {
+                    self.field("equation");
+                    self.field(value);
+                    return;
+                }
+                Block::VerticalSpace { lines, .. } => {
+                    self.field("vertical-space");
+                    self.field(&lines.to_string());
+                    return;
+                }
+                Block::ThematicBreak { .. } => "thematic-break",
+                Block::Unsupported { name, text, .. } => {
+                    self.field("unsupported");
+                    self.field(name.as_deref().unwrap_or_default());
+                    self.field(text);
+                    return;
+                }
+            };
+            self.field(marker);
+            visit::walk_block(self, block);
+        }
+
+        fn visit_inline(&mut self, inline: &'ir Inline) {
+            match inline {
+                Inline::Text { value } => {
+                    self.field("text");
+                    self.field(value);
+                }
+                Inline::Code { value } => {
+                    self.field("code");
+                    self.field(value);
+                }
+                Inline::Strong { .. } => self.field("strong"),
+                Inline::Emphasis { .. } => self.field("emphasis"),
+                Inline::Link { .. } => self.field("link"),
+                Inline::LineBreak => self.field("line-break"),
+                Inline::Anchor { .. } => return,
+            }
+            visit::walk_inline(self, inline);
+        }
+    }
+
+    let mut content = VisibleFingerprint(Vec::new());
+    content.field(role_id_prefix(role));
+    content.field(match case {
+        DefinitionCase::Sensitive => "sensitive",
+        DefinitionCase::Insensitive => "insensitive",
+    });
+    for name in names {
+        content.field(name);
+    }
+    for term in &item.terms {
+        content.field("term");
+        for inline in term {
+            content.visit_inline(inline);
+        }
+    }
+    for block in &item.description {
+        content.visit_block(block);
+    }
+    let digest = Sha256::digest(content.0);
+    digest[..6]
+        .iter()
+        .fold(String::with_capacity(12), |mut fingerprint, byte| {
+            write!(fingerprint, "{byte:02x}").expect("writing to a String cannot fail");
+            fingerprint
+        })
+}
+
 fn slug(value: &str) -> String {
     if value.trim_start_matches(['-', '/']) == "?" {
         return "help".to_owned();
@@ -1024,11 +1464,11 @@ fn unique_id(base: &str, used: &mut HashSet<String>, reserved: &HashSet<String>)
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashSet;
+    use std::collections::{HashMap, HashSet};
 
     use mant_ir::{Block, DefinitionItem, DefinitionRole, Inline, LayoutHint, Section};
 
-    use super::{identify_definitions, option_names, option_prefix};
+    use super::{environment_variable_alias, identify_definitions, option_names, option_prefix};
 
     fn item(value: &str) -> DefinitionItem {
         DefinitionItem {
@@ -1052,6 +1492,196 @@ mod tests {
         assert_eq!(option_prefix("-ca.cert"), Some("-ca.cert"));
         assert_eq!(option_prefix("--foo.bar=VALUE"), Some("--foo.bar"));
         assert_eq!(option_prefix("--foo..bar"), None);
+    }
+
+    #[test]
+    fn environment_aliases_require_one_complete_semantic_name() {
+        for (value, expected) in [
+            ("HOME", Some("HOME")),
+            ("$Env:Path = C:\\Tools", Some("$Env:Path")),
+            (
+                "%ProgramFiles(x86)%=C:\\Program Files (x86)",
+                Some("%ProgramFiles(x86)%"),
+            ),
+            ("Unix Bourne shell:", None),
+            ("export FOO=bar", None),
+            ("LC_ALL=C LANG=en_US", None),
+            ("FOO= LANG=en_US", None),
+        ] {
+            assert_eq!(
+                environment_variable_alias(value).as_deref(),
+                expected,
+                "{value}"
+            );
+        }
+    }
+
+    #[test]
+    fn composite_environment_options_use_parameter_semantics() {
+        let mut sections = vec![Section {
+            id: "environment-options".into(),
+            title: "ENVIRONMENT OPTIONS".to_owned(),
+            spacing_before_lines: 0,
+            blocks: vec![Block::DefinitionList {
+                items: vec![item("Unix Bourne shell:"), item("-q")],
+                compact: true,
+                layout: LayoutHint::default(),
+                source: None,
+            }],
+            children: Vec::new(),
+            source: None,
+        }];
+
+        identify_definitions(&mut Vec::new(), &mut sections, &HashSet::new(), None);
+
+        let Block::DefinitionList { items, .. } = &sections[0].blocks[0] else {
+            panic!("definition list");
+        };
+        assert_eq!(
+            items[0].identity.as_ref().expect("term").role,
+            DefinitionRole::Term
+        );
+        assert_eq!(
+            items[1].identity.as_ref().expect("option").role,
+            DefinitionRole::Option
+        );
+    }
+
+    #[test]
+    fn inferred_names_never_truncate_multiword_terms() {
+        let definition_list = |items| Block::DefinitionList {
+            items,
+            compact: true,
+            layout: LayoutHint::default(),
+            source: None,
+        };
+        let mut sections = vec![
+            Section {
+                id: "commands".into(),
+                title: "COMMANDS".to_owned(),
+                spacing_before_lines: 0,
+                blocks: vec![definition_list(vec![
+                    item("Send Env"),
+                    item("Send Buffer"),
+                    item("bind [-m keymap]"),
+                    item("set -o"),
+                ])],
+                children: Vec::new(),
+                source: None,
+            },
+            Section {
+                id: "variables".into(),
+                title: "VARIABLES".to_owned(),
+                spacing_before_lines: 0,
+                blocks: vec![definition_list(vec![
+                    item("real-name"),
+                    item("bind-tty-special-chars (On)"),
+                    item("name prose"),
+                ])],
+                children: Vec::new(),
+                source: None,
+            },
+        ];
+
+        identify_definitions(&mut Vec::new(), &mut sections, &HashSet::new(), None);
+
+        let Block::DefinitionList {
+            items: commands, ..
+        } = &sections[0].blocks[0]
+        else {
+            panic!("commands");
+        };
+        assert_eq!(
+            commands[0].identity.as_ref().expect("command").names,
+            ["Send Env"]
+        );
+        assert_eq!(
+            commands[1].identity.as_ref().expect("command").names,
+            ["Send Buffer"]
+        );
+        assert_eq!(
+            commands[2].identity.as_ref().expect("command form").names,
+            ["bind"]
+        );
+        assert_eq!(
+            commands[3].identity.as_ref().expect("command form").names,
+            ["set"]
+        );
+        let Block::DefinitionList {
+            items: variables, ..
+        } = &sections[1].blocks[0]
+        else {
+            panic!("variables");
+        };
+        assert_eq!(
+            variables[0].identity.as_ref().expect("variable").names,
+            ["real-name"]
+        );
+        assert!(
+            variables[1]
+                .identity
+                .as_ref()
+                .is_some_and(|identity| identity.names == ["bind-tty-special-chars"])
+        );
+        assert!(
+            variables[2]
+                .identity
+                .as_ref()
+                .expect("unclassified term")
+                .names
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn colliding_generated_ids_follow_semantics_not_sibling_order() {
+        fn ids(terms: &[&str], with_colliding_section: bool) -> HashMap<String, String> {
+            let mut sections = Vec::new();
+            if with_colliding_section {
+                sections.push(Section {
+                    id: "option-v".into(),
+                    title: "Unrelated notes".to_owned(),
+                    spacing_before_lines: 0,
+                    blocks: Vec::new(),
+                    children: Vec::new(),
+                    source: None,
+                });
+            }
+            sections.push(Section {
+                id: "options".into(),
+                title: "OPTIONS".to_owned(),
+                spacing_before_lines: 0,
+                blocks: vec![Block::DefinitionList {
+                    items: terms.iter().map(|term| item(term)).collect(),
+                    compact: true,
+                    layout: LayoutHint::default(),
+                    source: None,
+                }],
+                children: Vec::new(),
+                source: None,
+            });
+
+            identify_definitions(&mut Vec::new(), &mut sections, &HashSet::new(), None);
+            let Block::DefinitionList { items, .. } = &sections.last().expect("options").blocks[0]
+            else {
+                panic!("definitions");
+            };
+            items
+                .iter()
+                .map(|item| {
+                    let identity = item.identity.as_ref().expect("identity");
+                    (identity.names[0].clone(), identity.id.to_string())
+                })
+                .collect()
+        }
+
+        let original = ids(&["-v", "-V"], false);
+        let reordered = ids(&["-V", "-v"], false);
+        let with_section = ids(&["-v", "-V"], true);
+        assert_eq!(original, reordered);
+        assert_eq!(original, with_section);
+        assert_ne!(original["-v"], original["-V"]);
+        assert!(original.values().all(|id| id.starts_with("option-v-")));
     }
 
     #[test]

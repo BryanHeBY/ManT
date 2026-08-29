@@ -829,6 +829,21 @@ fn semantic_entry_selectors_work_through_cli_and_request_json() {
         b"",
         &host,
     );
+    assert_eq!(status, 2);
+    assert!(output.is_empty());
+    assert!(diagnostics.contains("outline node 'query' is not a semantic entry"));
+
+    let (status, output, _) = invoke(
+        &[
+            "demo",
+            "--explain=command-query",
+            "--format",
+            "json",
+            "--compact",
+        ],
+        b"",
+        &host,
+    );
     assert_eq!(status, 0);
     let excerpt: serde_json::Value = serde_json::from_str(&output).expect("excerpt JSON");
     assert_eq!(excerpt["selections"][0]["kind"], "document-entry");
@@ -836,9 +851,8 @@ fn semantic_entry_selectors_work_through_cli_and_request_json() {
         excerpt["selections"][0]["entry"]["identity"]["role"],
         "command"
     );
-    assert!(diagnostics.is_empty());
 
-    let (status, output, diagnostics) = invoke(
+    let (status, output, _) = invoke(
         &["demo", "--node=query", "--format", "json", "--compact"],
         b"",
         &host,
@@ -847,7 +861,6 @@ fn semantic_entry_selectors_work_through_cli_and_request_json() {
     let excerpt: serde_json::Value = serde_json::from_str(&output).expect("section excerpt");
     assert_eq!(excerpt["selections"][0]["kind"], "document-section");
     assert_eq!(excerpt["selections"][0]["outline"]["node"]["id"], "query");
-    assert!(diagnostics.is_empty());
 
     for (selector, role) in [("/s", "option"), ("$ENV:PATH", "environment-variable")] {
         let argument = format!("--explain={selector}");
@@ -863,10 +876,10 @@ fn semantic_entry_selectors_work_through_cli_and_request_json() {
     }
 
     let (status, output, diagnostics) = invoke(
-            &["--request-json", "--format", "json", "--compact"],
-            br#"{"schema":"mant.request/v0.10","input":{"kind":"document","selector":"demo"},"view":{"kind":"explain","entry":"query"}}"#,
-            &host,
-        );
+        &["--request-json", "--format", "json", "--compact"],
+        br#"{"schema":"mant.request/v0.10","input":{"kind":"document","selector":"demo"},"view":{"kind":"explain","entry":"command-query"}}"#,
+        &host,
+    );
     assert_eq!(status, 0);
     let excerpt: serde_json::Value = serde_json::from_str(&output).expect("request excerpt");
     assert_eq!(
@@ -880,12 +893,13 @@ fn semantic_entry_selectors_work_through_cli_and_request_json() {
     assert!(output.is_empty());
     assert!(diagnostics.contains("multiple semantic entries"));
     assert!(diagnostics.contains("option-f"));
-    assert!(diagnostics.contains("option-f-2"));
 
-    let (status, output, diagnostics) = invoke(
+    let (status, outline, outline_diagnostics) = invoke(
         &[
             "demo",
-            "--explain=option-f-2",
+            "--outline",
+            "--outline-entries",
+            "all",
             "--format",
             "json",
             "--compact",
@@ -894,10 +908,25 @@ fn semantic_entry_selectors_work_through_cli_and_request_json() {
         &host,
     );
     assert_eq!(status, 0);
+    assert!(outline_diagnostics.is_empty());
+    let outline: serde_json::Value = serde_json::from_str(&outline).expect("outline JSON");
+    let qualified_id = outline["nodes"][4]["children"][0]["id"]
+        .as_str()
+        .expect("returned semantic ID");
+    assert!(qualified_id.starts_with("option-f-"));
+    assert!(diagnostics.contains(qualified_id));
+
+    let qualified_argument = format!("--explain={qualified_id}");
+    let (status, output, diagnostics) = invoke(
+        &["demo", &qualified_argument, "--format", "json", "--compact"],
+        b"",
+        &host,
+    );
+    assert_eq!(status, 0);
     let excerpt: serde_json::Value = serde_json::from_str(&output).expect("qualified entry");
     assert_eq!(
         excerpt["selections"][0]["entry"]["identity"]["id"],
-        "option-f-2"
+        qualified_id
     );
     assert!(diagnostics.is_empty());
 }

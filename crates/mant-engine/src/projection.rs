@@ -192,10 +192,10 @@ pub fn build_outline_projection(
         .as_ref()
         .map_or_else(Vec::new, |document| document.diagnostics.clone());
     let entries_complete = diagnostics.iter().all(|diagnostic| {
-        !diagnostic
-            .code
-            .as_deref()
-            .is_some_and(crate::markdown::is_semantic_entry_rejection_code)
+        !diagnostic.code.as_deref().is_some_and(|code| {
+            crate::markdown::is_semantic_entry_rejection_code(code)
+                || code == "manual.semantic-entry.unclassified-definition"
+        })
     });
     let materialized_entries = if root.is_some() {
         EntryProjection::All
@@ -429,44 +429,6 @@ fn resolve_explanation_candidate<'a>(
     located: &'a [LocatedNode<'a>],
     selector: &str,
 ) -> Result<&'a LocatedNode<'a>, ProjectionError> {
-    if let Some(candidate) = located
-        .iter()
-        .find(|candidate| candidate.matches_path(selector))
-    {
-        if !candidate.is_section() {
-            return Ok(candidate);
-        }
-        return Err(ProjectionError::ExplanationRequiresEntry {
-            document: query.label.clone(),
-            selector: selector.to_owned(),
-        });
-    }
-    if let Some(candidate) = located
-        .iter()
-        .find(|candidate| !candidate.is_section() && candidate.id() == selector)
-    {
-        return Ok(candidate);
-    }
-
-    let matches = matching_aliases(located, selector).1;
-    match matches.as_slice() {
-        [candidate] => return Ok(candidate),
-        [] => {}
-        _ => {
-            return Err(ProjectionError::AmbiguousSelector {
-                document: query.label.clone(),
-                selector: selector.to_owned(),
-                candidates: matches
-                    .into_iter()
-                    .map(|candidate| SelectorCandidate {
-                        path: candidate.path().to_string(),
-                        id: candidate.id().into(),
-                    })
-                    .collect(),
-            });
-        }
-    }
-
     let selects_tldr =
         (selector == TLDR_ID || selector.parse() == Ok(OutlinePath::Tldr)) && query.tldr.is_some();
     let selects_root = (selector == DOCUMENT_ROOT_ID
@@ -475,20 +437,20 @@ fn resolve_explanation_candidate<'a>(
             .document
             .as_ref()
             .is_some_and(|document| !document.blocks.is_empty());
-    let selects_section = located.iter().any(|candidate| {
-        candidate.is_section() && (candidate.matches_path(selector) || candidate.id() == selector)
-    });
-    if selects_tldr || selects_root || selects_section {
+    if selects_tldr || selects_root {
         return Err(ProjectionError::ExplanationRequiresEntry {
             document: query.label.clone(),
             selector: selector.to_owned(),
         });
     }
-
-    Err(ProjectionError::UnknownSelector {
-        document: query.label.clone(),
-        selector: selector.to_owned(),
-    })
+    let candidate = resolve_candidate(query, located, selector)?;
+    if candidate.is_section() {
+        return Err(ProjectionError::ExplanationRequiresEntry {
+            document: query.label.clone(),
+            selector: selector.to_owned(),
+        });
+    }
+    Ok(candidate)
 }
 
 fn resolve_candidate<'a>(
@@ -502,8 +464,14 @@ fn resolve_candidate<'a>(
     {
         return Ok(candidate);
     }
-    if let Some(candidate) = located.iter().find(|candidate| candidate.id() == selector) {
-        return Ok(candidate);
+    let ids = located
+        .iter()
+        .filter(|candidate| candidate.id() == selector)
+        .collect::<Vec<_>>();
+    match ids.as_slice() {
+        [candidate] => return Ok(candidate),
+        [] => {}
+        _ => return Err(ambiguous_selector(query, selector, ids)),
     }
 
     let matches = matching_aliases(located, selector).1;
@@ -513,17 +481,25 @@ fn resolve_candidate<'a>(
             selector: selector.to_owned(),
         }),
         [candidate] => Ok(candidate),
-        _ => Err(ProjectionError::AmbiguousSelector {
-            document: query.label.clone(),
-            selector: selector.to_owned(),
-            candidates: matches
-                .into_iter()
-                .map(|candidate| SelectorCandidate {
-                    path: candidate.path().to_string(),
-                    id: candidate.id().into(),
-                })
-                .collect(),
-        }),
+        _ => Err(ambiguous_selector(query, selector, matches)),
+    }
+}
+
+fn ambiguous_selector(
+    query: &ResolvedContent,
+    selector: &str,
+    matches: Vec<&LocatedNode<'_>>,
+) -> ProjectionError {
+    ProjectionError::AmbiguousSelector {
+        document: query.label.clone(),
+        selector: selector.to_owned(),
+        candidates: matches
+            .into_iter()
+            .map(|candidate| SelectorCandidate {
+                path: candidate.path().to_string(),
+                id: candidate.id().into(),
+            })
+            .collect(),
     }
 }
 
@@ -680,55 +656,47 @@ fn find_outline_node<'a>(
     None
 }
 
-fn collect_outline_alias_matches<'a>(
-    nodes: &'a [OutlineNode],
-    selector: &str,
-    matches: &mut Vec<&'a OutlineNode>,
-) {
-    for node in nodes {
-        if matches!(
-            node,
-            OutlineNode::DocumentEntry { aliases, .. }
-                if aliases.iter().any(|alias| alias == selector)
-        ) {
-            matches.push(node);
-        }
-        collect_outline_alias_matches(node.children(), selector, matches);
-    }
-}
-
 fn resolve_outline_root<'a>(
     query: &ResolvedContent,
     nodes: &'a [OutlineNode],
     selector: &str,
 ) -> Result<&'a OutlineNode, ProjectionError> {
-    if let Some(node) = find_outline_node(nodes, &|node| node.path() == selector) {
-        return Ok(node);
+    if (selector == TLDR_ID || selector.parse() == Ok(OutlinePath::Tldr)) && query.tldr.is_some() {
+        return find_outline_node(nodes, &|node| node.path() == OutlinePath::Tldr.to_string())
+            .ok_or_else(|| ProjectionError::UnknownSelector {
+                document: query.label.clone(),
+                selector: selector.to_owned(),
+            });
     }
-    if let Some(node) = find_outline_node(nodes, &|node| node.id() == selector) {
-        return Ok(node);
+    if (selector == DOCUMENT_ROOT_ID || selector.parse() == Ok(OutlinePath::DocumentRoot))
+        && query
+            .document
+            .as_ref()
+            .is_some_and(|document| !document.blocks.is_empty())
+    {
+        return find_outline_node(nodes, &|node| {
+            node.path() == OutlinePath::DocumentRoot.to_string()
+        })
+        .ok_or_else(|| ProjectionError::UnknownSelector {
+            document: query.label.clone(),
+            selector: selector.to_owned(),
+        });
     }
 
-    let mut matches = Vec::new();
-    collect_outline_alias_matches(nodes, selector, &mut matches);
-    match matches.as_slice() {
-        [node] => Ok(node),
-        [] => Err(ProjectionError::UnknownSelector {
-            document: query.label.clone(),
-            selector: selector.to_owned(),
-        }),
-        _ => Err(ProjectionError::AmbiguousSelector {
-            document: query.label.clone(),
-            selector: selector.to_owned(),
-            candidates: matches
-                .into_iter()
-                .map(|node| SelectorCandidate {
-                    path: node.path().to_owned(),
-                    id: node.id().to_owned(),
-                })
-                .collect(),
-        }),
+    let mut located = Vec::new();
+    if let Some(manual) = &query.document {
+        collect_root_entries(&manual.blocks, &mut located);
+        collect_sections(&manual.sections, &[], &[], &mut located);
     }
+    let path = resolve_candidate(query, &located, selector)?
+        .path()
+        .to_string();
+    find_outline_node(nodes, &|node| node.path() == path).ok_or_else(|| {
+        ProjectionError::UnknownSelector {
+            document: query.label.clone(),
+            selector: selector.to_owned(),
+        }
+    })
 }
 
 fn reproject_selected_node(
@@ -1037,6 +1005,7 @@ fn matching_aliases<'a>(
 pub(crate) fn semantic_selector_diagnostics(
     blocks: &[Block],
     sections: &[Section],
+    source_family: &str,
 ) -> Vec<Diagnostic> {
     let mut located = Vec::new();
     collect_root_entries(blocks, &mut located);
@@ -1054,10 +1023,61 @@ pub(crate) fn semantic_selector_diagnostics(
         }
     }
 
+    let mut diagnostics = selector_alias_diagnostics(&located, selectors, source_family);
+    diagnostics.extend(duplicate_id_diagnostics(&located, source_family));
+    diagnostics
+}
+
+fn selector_alias_diagnostics(
+    located: &[LocatedNode<'_>],
+    selectors: BTreeSet<String>,
+    source_family: &str,
+) -> Vec<Diagnostic> {
     let mut reported = HashSet::new();
     let mut diagnostics = Vec::new();
     for selector in selectors {
-        let (kind, matches) = matching_aliases(&located, &selector);
+        let (kind, matches) = matching_aliases(located, &selector);
+        let exact_ids = located
+            .iter()
+            .filter(|candidate| candidate.id() == selector)
+            .collect::<Vec<_>>();
+        let shadowed_matches = matches
+            .iter()
+            .copied()
+            .filter(|candidate| {
+                !exact_ids
+                    .iter()
+                    .any(|owner| owner.path() == candidate.path())
+            })
+            .collect::<Vec<_>>();
+        if !shadowed_matches.is_empty() && !exact_ids.is_empty() {
+            let key = format!("shadowed\u{1f}{selector}");
+            if reported.insert(key) {
+                let owners = exact_ids
+                    .iter()
+                    .map(|candidate| format!("{} ({})", candidate.path(), candidate.id()))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                let entries = shadowed_matches
+                    .iter()
+                    .map(|candidate| format!("{} ({})", candidate.path(), candidate.id()))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                diagnostics.push(Diagnostic {
+                    level: DiagnosticLevel::Warning,
+                    code: Some(format!(
+                        "{source_family}.semantic-entry.shadowed-selector"
+                    )),
+                    message: format!(
+                        "semantic selector '{selector}' is owned by exact outline ID {owners}; matching {} entries {entries} require their path or ID",
+                        kind.label()
+                    ),
+                    source: shadowed_matches
+                        .first()
+                        .and_then(|candidate| candidate.source()),
+                });
+            }
+        }
         if matches.len() < 2 {
             continue;
         }
@@ -1076,10 +1096,41 @@ pub(crate) fn semantic_selector_diagnostics(
             .join(", ");
         diagnostics.push(Diagnostic {
             level: DiagnosticLevel::Warning,
-            code: Some("markdown.semantic-entry.ambiguous-selector".to_owned()),
+            code: Some(format!(
+                "{source_family}.semantic-entry.ambiguous-selector"
+            )),
             message: format!(
                 "semantic selector '{selector}' has multiple {} matches: {candidates}; select by path or ID",
                 kind.label()
+            ),
+            source: matches.first().and_then(|candidate| candidate.source()),
+        });
+    }
+    diagnostics
+}
+
+fn duplicate_id_diagnostics(located: &[LocatedNode<'_>], source_family: &str) -> Vec<Diagnostic> {
+    let mut ids = BTreeSet::new();
+    ids.extend(located.iter().map(|candidate| candidate.id().to_owned()));
+    let mut diagnostics = Vec::new();
+    for id in ids {
+        let matches = located
+            .iter()
+            .filter(|candidate| candidate.id() == id)
+            .collect::<Vec<_>>();
+        if matches.len() < 2 {
+            continue;
+        }
+        let candidates = matches
+            .iter()
+            .map(|candidate| format!("{} ({})", candidate.path(), candidate.id()))
+            .collect::<Vec<_>>()
+            .join(", ");
+        diagnostics.push(Diagnostic {
+            level: DiagnosticLevel::Warning,
+            code: Some(format!("{source_family}.outline.duplicate-id")),
+            message: format!(
+                "outline ID '{id}' belongs to multiple nodes: {candidates}; select by path"
             ),
             source: matches.first().and_then(|candidate| candidate.source()),
         });
@@ -1595,6 +1646,55 @@ mod tests {
         assert_eq!(candidates.len(), 2);
         assert_eq!(candidates[0].path, "2/e1");
         assert_eq!(candidates[1].path, "3/e1");
+    }
+
+    #[test]
+    fn section_ids_win_consistently_before_entry_aliases() {
+        let mut query = query();
+        query.document.as_mut().expect("document").sections[0] = Section {
+            id: "force".into(),
+            title: "Force".to_owned(),
+            spacing_before_lines: 0,
+            blocks: Vec::new(),
+            children: Vec::new(),
+            source: None,
+        };
+        query.document.as_mut().expect("document").sections[1]
+            .blocks
+            .push(Block::DefinitionList {
+                items: vec![definition(
+                    "command-force",
+                    DefinitionRole::Command,
+                    &["force"],
+                    &["force"],
+                    Vec::new(),
+                )],
+                compact: true,
+                layout: LayoutHint::default(),
+                source: None,
+            });
+
+        let excerpt = select_excerpt(&query, &["force"]).expect("exact section ID");
+        assert!(matches!(
+            excerpt.selections.as_slice(),
+            [ExcerptSelection::DocumentSection { outline, .. }] if outline.path() == "1"
+        ));
+        assert!(matches!(
+            super::select_explanation(&query, "force"),
+            Err(ProjectionError::ExplanationRequiresEntry { .. })
+        ));
+        let outline = build_outline_projection(
+            &query,
+            EntryProjection::All,
+            Some(NodeSelector::new("force")),
+        )
+        .expect("outline root uses the same exact-ID precedence");
+        assert!(matches!(
+            outline.nodes.as_slice(),
+            [OutlineNode::DocumentSection { path, .. }] if path == "1"
+        ));
+
+        assert!(super::select_explanation(&query, "command-force").is_ok());
     }
 
     #[test]

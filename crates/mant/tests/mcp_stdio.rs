@@ -152,7 +152,7 @@ fn request_document_tools(input: &mut impl Write) {
         "mant_explain",
         &json!({
             "documents": ["documents/mcp-registered", "documents/mcp-suffix.exe"],
-            "entry": "query"
+            "entry": "command-query"
         }),
     );
     call_tool(
@@ -245,7 +245,7 @@ fn request_compatibility_and_page_tools(input: &mut impl Write) {
         "mant_explain",
         &json!({
             "documents": "[\"documents/mcp-registered\",\"documents/mcp-suffix.exe\"]",
-            "entry": "query"
+            "entry": "command-query"
         }),
     );
     call_tool(
@@ -356,7 +356,7 @@ fn assert_tool_replies(replies: &[Value]) {
 
     let ambiguity = successful_text(reply(replies, 8));
     assert!(ambiguity.contains("option-f"), "{ambiguity}");
-    assert!(ambiguity.contains("option-f-2"), "{ambiguity}");
+    assert!(ambiguity.matches("option-f-").count() >= 2, "{ambiguity}");
 
     let probe = successful_text(reply(replies, 15));
     assert!(probe.contains("has no semantic entry 'VISUAL'"), "{probe}");

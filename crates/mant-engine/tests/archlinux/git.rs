@@ -134,7 +134,7 @@ fn assert_git_option_descriptions_follow_terms(document: &mant_ir::Document) {
     }
 }
 
-/// V2 outlines expose sub-section ids (`git-diffs-28`) and
+/// Outlines expose semantic subsection IDs (`git-diffs`) and
 /// `select_excerpt` retrieves their content by path.
 #[test]
 fn supports_outline_discovery_and_targeted_excerpts() {
@@ -142,10 +142,10 @@ fn supports_outline_discovery_and_targeted_excerpts() {
     let outline = build_outline(&query).expect("Git outline");
     let git_diffs = &outline.nodes[15].children()[3];
     assert_eq!(git_diffs.path(), "16.4");
-    assert_eq!(git_diffs.id(), "git-diffs-28");
+    assert_eq!(git_diffs.id(), "git-diffs");
     assert_eq!(git_diffs.title(), "Git Diffs");
 
-    let excerpt = select_excerpt(&query, &["git-diffs-28".to_owned(), "16.4".to_owned()])
+    let excerpt = select_excerpt(&query, &["git-diffs".to_owned(), "16.4".to_owned()])
         .expect("Git Diffs excerpt");
     assert_eq!(excerpt.selections.len(), 1);
     let ExcerptSelection::DocumentSection {

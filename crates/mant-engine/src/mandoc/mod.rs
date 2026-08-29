@@ -11,7 +11,11 @@ mod roff_escape;
 mod source;
 mod source_lines;
 
-use std::{cell::RefCell, collections::BTreeMap, path::Path};
+use std::{
+    cell::RefCell,
+    collections::{BTreeMap, HashMap},
+    path::Path,
+};
 
 use libmandoc_rs::{
     Compression, Document as MandocDocument, IncludePolicy, MacroSet, Node, ParseOptions,
@@ -144,6 +148,12 @@ fn lower_mandoc_document_with_source(
         &explicit_targets,
         parsed.metadata.name.as_deref(),
     ));
+    diagnostics.extend(crate::projection::semantic_selector_diagnostics(
+        &root_blocks,
+        &sections,
+        "manual",
+    ));
+    diagnostics.extend(crate::definitions::manual_discovery_diagnostics(&sections));
     navigation::resolve_navigation(&mut sections, &retained_targets, &mut diagnostics);
     let mut document = Document {
         parser: Some(ParserInfo {
@@ -190,7 +200,7 @@ struct LoweringContext<'a> {
     source_lines: Option<SourceLineIndex<'a>>,
     equation_delimiters: Vec<EquationDelimiterChange>,
     normalized_equations: RefCell<BTreeMap<String, String>>,
-    next_section_id: usize,
+    section_ids: HashMap<String, usize>,
     diagnostics: RefCell<Vec<Diagnostic>>,
 }
 
@@ -235,7 +245,7 @@ impl<'a> LoweringContext<'a> {
             source_lines: source.map(SourceLineIndex::new),
             equation_delimiters: source.map_or_else(Vec::new, equation_delimiter_changes),
             normalized_equations: RefCell::new(BTreeMap::new()),
-            next_section_id: 1,
+            section_ids: HashMap::new(),
             diagnostics: RefCell::new(Vec::new()),
         }
     }
@@ -366,8 +376,6 @@ impl<'a> LoweringContext<'a> {
     }
 
     fn section_id(&mut self, title: &str) -> String {
-        let sequence = self.next_section_id;
-        self.next_section_id += 1;
         let slug: String = title
             .chars()
             .flat_map(char::to_lowercase)
@@ -383,10 +391,19 @@ impl<'a> LoweringContext<'a> {
             .filter(|part| !part.is_empty())
             .collect::<Vec<_>>()
             .join("-");
-        if slug.is_empty() {
-            format!("section-{sequence}")
+        let base = if slug.is_empty() {
+            "section".to_owned()
+        } else if crate::projection::is_reserved_selector(&slug) {
+            format!("{slug}-section")
         } else {
-            format!("{slug}-{sequence}")
+            slug
+        };
+        let count = self.section_ids.entry(base.clone()).or_default();
+        *count += 1;
+        if *count == 1 {
+            base
+        } else {
+            format!("{base}-{count}")
         }
     }
 
@@ -614,14 +631,27 @@ mod tests {
     use mant_ir::{Block, DiagnosticLevel, Inline, SourceFormat};
 
     use super::{
-        MAX_INLINE_EQUATION_NORMALIZATIONS, Parser, lower_mandoc_document, parse_manual_bytes,
-        parse_manual_source,
+        LoweringContext, MAX_INLINE_EQUATION_NORMALIZATIONS, Parser, lower_mandoc_document,
+        parse_manual_bytes, parse_manual_source,
     };
 
     fn temporary_source(label: &str, source: &str) -> std::path::PathBuf {
         let path = std::env::temp_dir().join(format!("mant-lower-{label}-{}.1", process::id()));
         fs::write(&path, source).expect("write temporary roff fixture");
         path
+    }
+
+    #[test]
+    fn native_section_ids_ignore_unrelated_section_insertions() {
+        let mut original = LoweringContext::new(None, None);
+        let original_name = original.section_id("NAME");
+        let original_options = original.section_id("OPTIONS");
+
+        let mut edited = LoweringContext::new(None, None);
+        assert_eq!(edited.section_id("NOTES"), "notes");
+        assert_eq!(edited.section_id("NAME"), original_name);
+        assert_eq!(edited.section_id("OPTIONS"), original_options);
+        assert_eq!(edited.section_id("OPTIONS"), "options-2");
     }
 
     fn find_macro_mut<'a>(
@@ -695,6 +725,36 @@ mod tests {
                     |description| matches!(description, Block::Preformatted { .. })
                 ))
         )));
+    }
+
+    #[test]
+    fn composite_environment_options_do_not_promote_shell_labels() {
+        let path = temporary_source(
+            "environment-options",
+            ".TH DEMO 1\n\
+             .SH \"ENVIRONMENT OPTIONS\"\n\
+             .TP\n\
+             Unix Bourne shell:\n\
+             UNZIP=-qq; export UNZIP\n\
+             .TP\n\
+             \\-q\n\
+             Be quiet.\n",
+        );
+
+        let document = parse_manual_source(&path).expect("lower environment option fixture");
+        fs::remove_file(path).expect("remove fixture");
+        let Block::DefinitionList { items, .. } = &document.sections[0].blocks[0] else {
+            panic!("definitions");
+        };
+        assert_eq!(
+            items[0].identity.as_ref().expect("term").role,
+            mant_ir::DefinitionRole::Term
+        );
+        assert_eq!(items[1].identity.as_ref().expect("option").names, ["-q"]);
+        assert!(document.diagnostics.iter().any(|diagnostic| {
+            diagnostic.code.as_deref() == Some("manual.semantic-entry.unclassified-definition")
+                && diagnostic.message.contains("Unix Bourne shell:")
+        }));
     }
 
     #[test]
@@ -2379,8 +2439,8 @@ Sean\n\
         let document = parse_manual_source(&path).expect("lower navigation mdoc source");
         fs::remove_file(path).expect("remove temporary roff fixture");
 
-        assert_eq!(document.sections[0].id, "description-1");
-        assert_eq!(document.sections[1].id, "details-2");
+        assert_eq!(document.sections[0].id, "description");
+        assert_eq!(document.sections[1].id, "details");
         let Block::Paragraph { children, .. } = &document.sections[0].blocks[0] else {
             panic!("expected navigation paragraph");
         };
@@ -2390,7 +2450,7 @@ Sean\n\
                 target: mant_ir::LinkTarget::Section { id },
                 children,
                 ..
-            } if id == "details-2" && inline_text(children) == "DETAILS"
+            } if id == "details" && inline_text(children) == "DETAILS"
         )));
         assert!(children.iter().any(|inline| matches!(
             inline,
@@ -2424,7 +2484,7 @@ Sean\n\
                 target: mant_ir::LinkTarget::Section { id },
                 children,
                 ..
-            } if id == "white-space-splitting-field-splitting-2"
+            } if id == "white-space-splitting-field-splitting"
                 && inline_text(children) == "White Space Splitting"
         )));
         assert!(document.diagnostics.iter().all(|diagnostic| {
@@ -3140,6 +3200,31 @@ Forward a local socket.\n.El\n",
                 matches!(description, Block::Paragraph { children, .. }
                     if inline_text(children).contains("Forward a local socket"))
             }))
+        }));
+    }
+
+    #[test]
+    fn preserves_a_single_mdoc_option_argument_and_its_description() {
+        let document = parse_manual_bytes(
+            std::path::Path::new("option-with-argument.1"),
+            b".Dd August 29, 2026\n.Dt OPTION-WITH-ARGUMENT 1\n.Os\n.Sh OPTIONS\n\
+.Bl -tag -width Ds\n\
+.It Fl Z Ar mode\n\
+Select the archive mode without losing this description.\n\
+.El\n",
+        )
+        .expect("lower an mdoc option with one argument");
+
+        let Block::DefinitionList { items, .. } = &document.sections[0].blocks[0] else {
+            panic!("expected an option definition list");
+        };
+        assert_eq!(items.len(), 1);
+        assert_eq!(inline_text(&items[0].terms[0]), "-Z mode");
+        assert_eq!(items[0].identity.as_ref().unwrap().names, ["-Z"]);
+        assert!(items[0].description.iter().any(|description| {
+            matches!(description, Block::Paragraph { children, .. }
+                if inline_text(children)
+                    == "Select the archive mode without losing this description.")
         }));
     }
 

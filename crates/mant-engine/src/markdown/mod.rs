@@ -238,6 +238,7 @@ fn parse_document_with_entries(
     entry_diagnostics.extend(crate::projection::semantic_selector_diagnostics(
         &root_blocks,
         &sections,
+        "markdown",
     ));
     let mut document = Document {
         parser: Some(markdown_parser()),

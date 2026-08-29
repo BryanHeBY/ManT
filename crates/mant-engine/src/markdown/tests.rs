@@ -612,11 +612,10 @@ fn declared_entries_cover_windows_options_commands_and_environment_variables() {
         Some("tool.md".to_owned()),
     )
     .expect("declared semantic entries");
-    assert!(
-        parsed.document.diagnostics.is_empty(),
-        "unexpected diagnostics: {:?}",
-        parsed.document.diagnostics
-    );
+    assert!(parsed.document.diagnostics.iter().any(|diagnostic| {
+        diagnostic.code.as_deref() == Some("markdown.semantic-entry.shadowed-selector")
+            && diagnostic.message.contains("semantic selector 'query'")
+    }));
 
     let Block::DefinitionList {
         items: option_items,
@@ -650,15 +649,17 @@ fn declared_entries_cover_windows_options_commands_and_environment_variables() {
         [ExcerptSelection::DocumentEntry { entry, .. }]
             if entry.identity.as_ref().is_some_and(|identity| identity.names == ["/query"])
     ));
-    for selector in ["query", "QUERY"] {
-        let command = select_explanation(&query, selector)
-            .expect("command alias beats a same-named section ID");
-        assert!(matches!(
-            command.selections.as_slice(),
-            [ExcerptSelection::DocumentEntry { entry, .. }]
-                if entry.identity.as_ref().is_some_and(|identity| identity.role == DefinitionRole::Command)
-        ));
-    }
+    assert!(matches!(
+        select_explanation(&query, "query"),
+        Err(ProjectionError::ExplanationRequiresEntry { .. })
+    ));
+    let command = select_explanation(&query, "QUERY")
+        .expect("a differently cased alias does not equal the case-sensitive section ID");
+    assert!(matches!(
+        command.selections.as_slice(),
+        [ExcerptSelection::DocumentEntry { entry, .. }]
+            if entry.identity.as_ref().is_some_and(|identity| identity.role == DefinitionRole::Command)
+    ));
     for selector in ["3", "environment"] {
         assert!(matches!(
             select_explanation(&query, selector),
@@ -822,8 +823,8 @@ fn duplicate_entry_aliases_require_a_stable_path_or_id() {
     .expect("duplicate entries remain valid input");
     assert!(parsed.document.diagnostics.iter().any(|diagnostic| {
         diagnostic.code.as_deref() == Some("markdown.semantic-entry.ambiguous-selector")
-            && diagnostic.message.contains("1/e1 (option-f)")
-            && diagnostic.message.contains("2/e1 (option-f-2)")
+            && diagnostic.message.contains("1/e1 (option-f-")
+            && diagnostic.message.contains("2/e1 (option-f-")
     }));
     let query = ResolvedContent {
         address: None,
@@ -907,8 +908,8 @@ fn normalized_shorthand_collisions_are_reported_before_selection() {
         diagnostic.code.as_deref() == Some("markdown.semantic-entry.ambiguous-selector")
             && diagnostic.message.contains("semantic selector 'help'")
             && diagnostic.message.contains("normalized shorthand")
-            && diagnostic.message.contains("1/e1 (option-help)")
-            && diagnostic.message.contains("1/e2 (option-help-2)")
+            && diagnostic.message.contains("1/e1 (option-help-")
+            && diagnostic.message.contains("1/e2 (option-help-")
     }));
     let query = ResolvedContent {
         address: None,
@@ -974,6 +975,22 @@ fn exact_entry_id_takes_precedence_over_another_entry_alias() {
                 identity.id == "command-query" && identity.names == ["query"]
             })
     ));
+}
+
+#[test]
+fn section_ids_that_shadow_entry_aliases_are_reported() {
+    let parsed = parse_markdown(
+        "# Tool\n\n## force\n\nStructural prose.\n\n## Commands\n\n<!-- mant:entries role=command case=sensitive -->\n- `force`: Force an operation.\n",
+        None,
+    )
+    .expect("section and entry selector collision remains readable");
+
+    assert!(parsed.document.diagnostics.iter().any(|diagnostic| {
+        diagnostic.code.as_deref() == Some("markdown.semantic-entry.shadowed-selector")
+            && diagnostic.message.contains("semantic selector 'force'")
+            && diagnostic.message.contains("1 (force)")
+            && diagnostic.message.contains("2/e1 (command-force)")
+    }));
 }
 
 #[test]
