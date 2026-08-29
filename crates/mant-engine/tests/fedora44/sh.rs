@@ -132,6 +132,50 @@ fn preserves_complete_readline_command_names_as_selectable_aliases() {
 }
 
 #[test]
+fn discovers_styled_builtin_names_without_promoting_argument_prose() {
+    let document = fedora44_manual("sh");
+    let index = SemanticIndex::build(document);
+    let mut sections = Vec::new();
+    collect_sections(&document.sections, &mut sections);
+    let entries = sections
+        .iter()
+        .flat_map(|section| all_entries(index.section(&section.id)))
+        .collect::<Vec<_>>();
+
+    for name in ["let", "test", "getopts", "builtin"] {
+        assert!(
+            entries.iter().any(|entry| {
+                entry.kind == EntryKind::Command && entry.aliases.iter().any(|alias| alias == name)
+            }),
+            "missing styled shell builtin {name}"
+        );
+    }
+    assert!(
+        entries
+            .iter()
+            .all(|entry| entry.aliases.iter().all(|alias| alias != "0 arguments")),
+        "descriptive prose below the command section must remain unclassified"
+    );
+
+    let query = common::query_for_document("sh", document);
+    for name in ["let", "test", "getopts"] {
+        let excerpt = select_explanation(&query, name)
+            .unwrap_or_else(|error| panic!("builtin {name} must be explainable: {error}"));
+        assert!(
+            render_excerpt_markdown(&excerpt).contains("SHELL BUILTIN COMMANDS"),
+            "{name} resolved outside the builtin section"
+        );
+    }
+    assert!(
+        matches!(
+            select_explanation(&query, "builtin"),
+            Err(ProjectionError::AmbiguousSelector { .. })
+        ),
+        "a command/value collision must be explicit instead of silently choosing one entry"
+    );
+}
+
+#[test]
 fn preserves_complete_readline_variable_names_without_shadowing_builtins() {
     let document = fedora44_manual("sh");
     let index = SemanticIndex::build(document);

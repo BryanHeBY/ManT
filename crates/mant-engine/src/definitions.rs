@@ -1022,11 +1022,12 @@ fn command_names(item: &DefinitionItem) -> Vec<String> {
             if let Some((name, _)) = key_binding_command_form(&text) {
                 return vec![name.to_owned()];
             }
+            if let Some(name) = leading_styled_command_name(term) {
+                return vec![name];
+            }
             text.split([',', '|'])
-                .filter_map(|part| {
-                    let name = command_name_from_authored_form(part);
-                    is_command_name(name).then(|| name.to_owned())
-                })
+                .filter_map(command_name_from_authored_form)
+                .map(str::to_owned)
                 .collect::<Vec<_>>()
         })
         .fold(Vec::new(), |mut names, name| {
@@ -1037,19 +1038,34 @@ fn command_names(item: &DefinitionItem) -> Vec<String> {
         })
 }
 
-/// Keep a genuine multiword command name, but remove an authored argument
-/// suffix whose syntax makes the executable boundary explicit.
-fn command_name_from_authored_form(value: &str) -> &str {
+/// Extract the command token from an unstyled authored form.
+///
+/// A single token is unambiguous. Multiword prose is not promoted merely
+/// because it occurs below a command-oriented section; the first word is
+/// accepted only when the rest begins with explicit argument syntax.
+fn command_name_from_authored_form(value: &str) -> Option<&str> {
     let value = value.trim();
     let Some((first, suffix)) = value.split_once(char::is_whitespace) else {
-        return value;
+        return is_command_name(value).then_some(value);
     };
     let suffix = suffix.trim_start();
-    if suffix.starts_with(['-', '+', '/', '[', '<', '{']) {
-        first
-    } else {
-        value
-    }
+    (suffix.starts_with(['-', '+', '/', '[', '<', '{']) && is_command_name(first)).then_some(first)
+}
+
+/// Read a formatter-emphasized command name without flattening the adjacent
+/// argument placeholders into it.
+fn leading_styled_command_name(term: &[Inline]) -> Option<String> {
+    let first = term.iter().find(|inline| match inline {
+        Inline::Anchor { .. } => false,
+        Inline::Text { value } => !value.trim().is_empty(),
+        _ => true,
+    })?;
+    let Inline::Strong { children } = first else {
+        return None;
+    };
+    let name = plain_text(children);
+    let name = name.trim();
+    is_command_name(name).then(|| name.to_owned())
 }
 
 fn named_term(item: &DefinitionItem, validate: fn(&str) -> bool) -> Vec<String> {
@@ -1210,7 +1226,13 @@ fn is_configuration_key(value: &str) -> bool {
 }
 
 fn is_command_name(value: &str) -> bool {
-    !value.is_empty() && !value.contains(['\r', '\n']) && !value.starts_with(['-', '+', '/'])
+    !value.is_empty()
+        && !value.chars().any(char::is_control)
+        && !value.starts_with(['-', '+', '/'])
+        && !value
+            .chars()
+            .next()
+            .is_some_and(|character| character.is_ascii_digit())
 }
 
 fn role_name_slug(role: DefinitionRole, name: &str) -> String {
@@ -1482,6 +1504,20 @@ mod tests {
         }
     }
 
+    fn strong_item(value: &str) -> DefinitionItem {
+        DefinitionItem {
+            identity: None,
+            inline_term: false,
+            terms: vec![vec![Inline::Strong {
+                children: vec![Inline::Text {
+                    value: value.into(),
+                }],
+            }]],
+            description: Vec::new(),
+            spacing_before_lines: None,
+        }
+    }
+
     #[test]
     fn extracts_aliases_without_argument_placeholders() {
         assert_eq!(
@@ -1548,7 +1584,7 @@ mod tests {
     }
 
     #[test]
-    fn inferred_names_never_truncate_multiword_terms() {
+    fn command_discovery_requires_a_structural_or_syntactic_boundary() {
         let definition_list = |items| Block::DefinitionList {
             items,
             compact: true,
@@ -1561,10 +1597,11 @@ mod tests {
                 title: "COMMANDS".to_owned(),
                 spacing_before_lines: 0,
                 blocks: vec![definition_list(vec![
-                    item("Send Env"),
+                    strong_item("Send Env"),
                     item("Send Buffer"),
                     item("bind [-m keymap]"),
                     item("set -o"),
+                    item("0 arguments"),
                 ])],
                 children: Vec::new(),
                 source: None,
@@ -1595,9 +1632,13 @@ mod tests {
             commands[0].identity.as_ref().expect("command").names,
             ["Send Env"]
         );
-        assert_eq!(
-            commands[1].identity.as_ref().expect("command").names,
-            ["Send Buffer"]
+        assert!(
+            commands[1]
+                .identity
+                .as_ref()
+                .expect("unstyled prose")
+                .names
+                .is_empty()
         );
         assert_eq!(
             commands[2].identity.as_ref().expect("command form").names,
@@ -1606,6 +1647,14 @@ mod tests {
         assert_eq!(
             commands[3].identity.as_ref().expect("command form").names,
             ["set"]
+        );
+        assert!(
+            commands[4]
+                .identity
+                .as_ref()
+                .expect("numeric prose")
+                .names
+                .is_empty()
         );
         let Block::DefinitionList {
             items: variables, ..
