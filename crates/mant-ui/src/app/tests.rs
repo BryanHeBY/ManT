@@ -1855,7 +1855,7 @@ fn edit_actions_copy_complete_semantic_nodes_only() {
 }
 
 #[test]
-fn search_runs_only_on_confirmation_and_escape_removes_highlights() {
+fn closing_search_removes_highlights_but_retains_navigation() {
     let backend = TestBackend::new(100, 18);
     let mut terminal = Terminal::new(backend).expect("test terminal");
     let mut app = App::new(&navigation_bundle());
@@ -1875,8 +1875,12 @@ fn search_runs_only_on_confirmation_and_escape_removes_highlights() {
 
     app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
     assert_eq!(app.search.mode, SearchMode::Closed);
-    assert!(app.search.query.is_empty());
+    assert_eq!(app.search.query, "show");
     assert!(app.search.matches.is_empty());
+    assert_eq!(app.search.scope_matches.len(), 1);
+
+    app.handle_key(KeyEvent::new(KeyCode::Char('n'), KeyModifiers::NONE));
+    assert_eq!(app.search.matches.len(), 1);
 }
 
 #[test]
@@ -2572,4 +2576,10 @@ fn search_menu_actions_keep_confirmed_results_available() {
     assert_eq!(app.overlay, Overlay::None);
     assert!(app.search.is_open());
     assert_eq!(app.search.active_match, app.search.matches.len() - 1);
+
+    app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::Char('n'), KeyModifiers::NONE));
+    assert_eq!(app.search.active_match, 0);
+    app.handle_key(KeyEvent::new(KeyCode::Char('N'), KeyModifiers::SHIFT));
+    assert_eq!(app.search.active_match, app.search.scope_matches.len() - 1);
 }

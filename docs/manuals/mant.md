@@ -607,8 +607,10 @@ terminal accepted it.
 - `Shift+N`: Select the previous confirmed match.
 - `Escape`: Close search and remove match highlighting.
 
-Search runs only after confirmation. Every match stays highlighted while the
-active match uses a stronger background and moves into view.
+Search runs only after confirmation. Matches stay highlighted while the field
+is open, and the active match uses a stronger background and moves into view.
+Closing the field removes highlighting but retains the confirmed query, so
+`n`, `Shift+N`, and the Search menu can resume navigation without rerunning it.
 
 ### Document Finder
 

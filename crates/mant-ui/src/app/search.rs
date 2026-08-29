@@ -72,7 +72,11 @@ impl SearchState {
     }
 
     pub(super) fn close(&mut self) {
-        *self = Self::default();
+        self.mode = SearchMode::Closed;
+        self.draft.clear();
+        self.cursor = 0;
+        self.matches.clear();
+        self.render_width = 0;
     }
 
     pub(super) fn move_cursor_to_column(&mut self, column: usize) {
@@ -242,8 +246,8 @@ impl App {
             self.forward_history.clear();
             self.replace_document(&bundle);
             self.search = search;
-            self.sync_current_search_matches();
         }
+        self.sync_current_search_matches();
         self.content_scroll = search_match.rendered.row;
         self.select_section_at_row(search_match.rendered.row);
     }

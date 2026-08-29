@@ -68,6 +68,11 @@ impl App {
         }
         match key.code {
             KeyCode::Char('q' | 'Q') => self.quit = true,
+            KeyCode::Char('n') if key.modifiers.contains(KeyModifiers::SHIFT) => {
+                self.select_search_relative(-1);
+            }
+            KeyCode::Char('n') => self.select_search_relative(1),
+            KeyCode::Char('N') => self.select_search_relative(-1),
             KeyCode::Char('j') | KeyCode::Down => self.select_relative(1),
             KeyCode::Char('k') | KeyCode::Up => self.select_relative(-1),
             KeyCode::Char('h') | KeyCode::Left => self.collapse_or_select_parent(),
