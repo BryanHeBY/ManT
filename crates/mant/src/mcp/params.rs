@@ -8,7 +8,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, de::DeserializeOwned};
 
 /// Maximum accepted logical document selector length.
-pub(super) const MAX_DOCUMENT_BYTES: usize = mant_protocol::MAX_DOCUMENT_SELECTOR_BYTES;
+pub(super) const MAX_DOCUMENT_CHARS: usize = mant_protocol::MAX_DOCUMENT_SELECTOR_CHARS;
 /// Maximum selectors accepted by one focused read.
 pub(super) const MAX_SELECTORS: usize = 16;
 /// Default number of catalog rows materialized by discovery.
@@ -27,17 +27,17 @@ pub(super) const MAX_SEARCH_MATCHES: u32 = 100;
 pub(super) const DEFAULT_PAGE_CHARS: u32 = 16 * 1024;
 /// Maximum Unicode scalar values returned by one successful tool call.
 pub(super) const MAX_PAGE_CHARS: u32 = 32 * 1024;
-pub(super) const MAX_FIND_QUERY_BYTES: usize = 1024;
-const MAX_SOURCE_BYTES: usize = 128;
-pub(super) const MAX_MANUAL_SECTION_BYTES: usize = 32;
-const MAX_SELECTOR_BYTES: usize = 512;
-const MAX_PATTERN_BYTES: usize = 4096;
+pub(super) const MAX_FIND_QUERY_CHARS: usize = 1024;
+const MAX_SOURCE_CHARS: usize = 128;
+pub(super) const MAX_MANUAL_SECTION_CHARS: usize = 32;
+const MAX_SELECTOR_CHARS: usize = 512;
+const MAX_PATTERN_CHARS: usize = mant_protocol::MAX_SEARCH_PATTERN_CHARS;
 
 /// Discover logical document identities in the local catalog.
 #[derive(Debug, Default, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(super) struct FindParams {
-    /// Optional name or catalog-path pattern, bounded to 1024 UTF-8 bytes at runtime.
+    /// Optional name or catalog-path pattern, bounded to 1024 Unicode scalars at runtime.
     pub(super) query: Option<String>,
     /// Interpret `query` literally (the default) or as a regular expression.
     pub(super) syntax: Option<SearchSyntax>,
@@ -333,13 +333,13 @@ impl FindParams {
         let query = self
             .query
             .filter(|query| !query.trim().is_empty())
-            .map(|query| bounded_normalized(&query, "query", MAX_FIND_QUERY_BYTES))
+            .map(|query| bounded_normalized(&query, "query", MAX_FIND_QUERY_CHARS))
             .transpose()?;
-        let source = optional_normalized(self.source, "source", MAX_SOURCE_BYTES)?;
+        let source = optional_normalized(self.source, "source", MAX_SOURCE_CHARS)?;
         let manual_section = optional_normalized(
             self.manual_section,
             "manualSection",
-            MAX_MANUAL_SECTION_BYTES,
+            MAX_MANUAL_SECTION_CHARS,
         )?;
         let max_results = validate_result_limit(
             self.max_results,
@@ -368,9 +368,9 @@ impl FindParams {
 impl OutlineParams {
     pub(super) fn validate(self) -> Result<ValidatedOutlineParams, String> {
         Ok(ValidatedOutlineParams {
-            document: bounded_normalized(&self.document, "document", MAX_DOCUMENT_BYTES)?,
+            document: bounded_normalized(&self.document, "document", MAX_DOCUMENT_CHARS)?,
             entries: self.entries.unwrap_or_default(),
-            root: optional_normalized(self.root, "root", MAX_SELECTOR_BYTES)?
+            root: optional_normalized(self.root, "root", MAX_SELECTOR_CHARS)?
                 .map(NodeSelector::new),
             page: validate_page(self.start_char, self.max_chars)?,
         })
@@ -388,12 +388,12 @@ impl ReadParams {
             .selectors
             .into_iter()
             .map(|selector| {
-                bounded_normalized(selector.as_str(), "selector", MAX_SELECTOR_BYTES)
+                bounded_normalized(selector.as_str(), "selector", MAX_SELECTOR_CHARS)
                     .map(NodeSelector::new)
             })
             .collect::<Result<_, _>>()?;
         Ok(ValidatedReadParams {
-            document: bounded_normalized(&self.document, "document", MAX_DOCUMENT_BYTES)?,
+            document: bounded_normalized(&self.document, "document", MAX_DOCUMENT_CHARS)?,
             selectors,
             page: validate_page(self.start_char, self.max_chars)?,
         })
@@ -412,7 +412,7 @@ impl ExplainParams {
             entry: bounded_normalized(
                 &self.entry,
                 "entry",
-                mant_protocol::MAX_SEMANTIC_ENTRY_BYTES,
+                mant_protocol::MAX_SEMANTIC_ENTRY_CHARS,
             )?,
             page: validate_page(self.start_char, self.max_chars)?,
         })
@@ -437,7 +437,7 @@ impl SearchParams {
                 self.max_depth,
                 self.max_documents,
             )?,
-            pattern: bounded_exact(&self.pattern, "pattern", MAX_PATTERN_BYTES)?,
+            pattern: bounded_exact(&self.pattern, "pattern", MAX_PATTERN_CHARS)?,
             syntax: self.syntax.unwrap_or_default(),
             case: self.case.unwrap_or_default(),
             scope: self.scope.unwrap_or_default(),
@@ -492,7 +492,7 @@ fn validate_scope(
     let documents = documents
         .into_iter()
         .map(|document| {
-            bounded_normalized(&document, "document", MAX_DOCUMENT_BYTES).map(|selector| {
+            bounded_normalized(&document, "document", MAX_DOCUMENT_CHARS).map(|selector| {
                 DocumentSelector {
                     selector,
                     source: None,
@@ -572,8 +572,10 @@ fn bounded_exact(value: &str, field: &str, max: usize) -> Result<String, String>
     if value.is_empty() {
         return Err(format!("{field} must not be empty"));
     }
-    if value.len() > max {
-        return Err(format!("{field} must not exceed {max} bytes"));
+    if value.chars().count() > max {
+        return Err(format!(
+            "{field} must not exceed {max} Unicode scalar values"
+        ));
     }
     if value.chars().any(char::is_control) {
         return Err(format!("{field} must not contain control characters"));

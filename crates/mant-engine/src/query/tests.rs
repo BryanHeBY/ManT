@@ -9,7 +9,7 @@ use mant_ir::{
     TldrDocument, TldrOrigin,
 };
 use mant_protocol::{
-    DocumentAddress, InputFormat, MAX_SEMANTIC_ENTRY_BYTES, MarkdownOrigin, QueryInput,
+    DocumentAddress, InputFormat, MAX_SEMANTIC_ENTRY_CHARS, MarkdownOrigin, QueryInput,
     QueryRequest, QueryView, RequestSchema, ScopeTextError,
 };
 use mant_sources::BUILTIN_CONTENT_PRIORITY;
@@ -755,7 +755,7 @@ fn validates_before_touching_host_state() {
 
 #[test]
 fn every_single_document_selector_obeys_the_shared_native_bound() {
-    let oversized = "x".repeat(MAX_SEMANTIC_ENTRY_BYTES + 1);
+    let oversized = "x".repeat(MAX_SEMANTIC_ENTRY_CHARS + 1);
     for (field, view) in [
         (
             "semantic entry",
@@ -784,7 +784,7 @@ fn every_single_document_selector_obeys_the_shared_native_bound() {
             Err(QueryError::InvalidViewSelector {
                 field,
                 error: ScopeTextError::TooLong {
-                    maximum: MAX_SEMANTIC_ENTRY_BYTES,
+                    maximum: MAX_SEMANTIC_ENTRY_CHARS,
                 },
             })
         );

@@ -394,14 +394,14 @@ is a section or entry path, stable ID, or unambiguous alias. Exact paths and IDs
 win before aliases and normalized shorthands; ambiguous matches return
 candidate paths and IDs rather than selecting one arbitrarily. `root`, every
 excerpt selector, and an explain entry reject control characters and values
-over 512 UTF-8 bytes before document resolution. The former v0.9 `detail` field and
+over 512 Unicode scalar values before document resolution. The former v0.9 `detail` field and
 `--outline=entries` syntax are rejected by v0.10.
 
 Search view fields are:
 
 | Field | Values | Default |
 | --- | --- | --- |
-| `pattern` | Non-empty UTF-8 string, at most 4,096 bytes | Required |
+| `pattern` | Non-empty string, at most 4,096 Unicode scalar values | Required |
 | `syntax` | `literal`, `regex` | `literal` |
 | `case` | `insensitive`, `sensitive`, `smart` | `insensitive` |
 | `scope` | `visible`, `markdown` | `visible` |
@@ -414,8 +414,8 @@ Regular expressions that match an empty string are rejected. Regex patterns
 must preserve Unicode mode and UTF-8 character boundaries; byte-oriented forms
 that disable Unicode, such as `(?-u:.)`, are rejected before document matching.
 `smart` case becomes case-sensitive when the pattern contains an uppercase
-character. JSON Schema `maxLength` counts Unicode scalar values; the runtime
-additionally enforces the documented 4,096-byte UTF-8 pattern limit.
+character. JSON Schema `maxLength` and runtime validation both count Unicode
+scalar values.
 
 ### Complete Request Examples
 

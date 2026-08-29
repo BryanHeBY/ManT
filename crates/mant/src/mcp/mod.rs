@@ -467,12 +467,12 @@ mod tests {
         assert!(invalid_scope.validate().is_err());
 
         let find = FindParams {
-            query: Some("x".repeat(MAX_FIND_QUERY_BYTES + 1)),
+            query: Some("x".repeat(MAX_FIND_QUERY_CHARS + 1)),
             ..FindParams::default()
         };
         assert!(find.validate().is_err());
         let find = FindParams {
-            manual_section: Some("x".repeat(MAX_MANUAL_SECTION_BYTES + 1)),
+            manual_section: Some("x".repeat(MAX_MANUAL_SECTION_CHARS + 1)),
             ..FindParams::default()
         };
         assert!(find.validate().is_err());

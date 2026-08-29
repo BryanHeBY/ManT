@@ -9,9 +9,9 @@ use std::{error::Error, fmt, ops::Range};
 use grep_matcher::Matcher;
 use grep_regex::RegexMatcherBuilder;
 use mant_protocol::{
-    MarkdownSchema, QuerySearch, SearchCase, SearchContextLine, SearchHit, SearchLineRange,
-    SearchMarkdownRange, SearchOccurrence, SearchQuery, SearchRender, SearchRenderFormat,
-    SearchRenderScope, SearchSchema, SearchScope, SearchSyntax,
+    MAX_SEARCH_PATTERN_CHARS, MarkdownSchema, QuerySearch, SearchCase, SearchContextLine,
+    SearchHit, SearchLineRange, SearchMarkdownRange, SearchOccurrence, SearchQuery, SearchRender,
+    SearchRenderFormat, SearchRenderScope, SearchSchema, SearchScope, SearchSyntax,
 };
 use pulldown_cmark::{Event, Parser, TagEnd};
 use regex_syntax::ParserBuilder;
@@ -23,7 +23,6 @@ mod owners;
 
 use owners::{Owner, OwnerIndex};
 
-const MAX_PATTERN_BYTES: usize = 4096;
 const MAX_CONTEXT_LINES: u16 = 100;
 const MAX_SEARCH_LIMIT: u32 = 10_000;
 const MAX_OCCURRENCES_PER_MATCH: usize = 256;
@@ -49,7 +48,7 @@ impl fmt::Display for SearchError {
             Self::EmptyPattern => formatter.write_str("search pattern must not be empty"),
             Self::PatternTooLong => write!(
                 formatter,
-                "search pattern exceeds the {MAX_PATTERN_BYTES}-byte limit"
+                "search pattern exceeds the {MAX_SEARCH_PATTERN_CHARS}-character limit"
             ),
             Self::InvalidLimit => write!(
                 formatter,
@@ -180,7 +179,7 @@ fn validate_request(request: &SearchQuery) -> Result<(), SearchError> {
     if request.pattern.is_empty() {
         return Err(SearchError::EmptyPattern);
     }
-    if request.pattern.len() > MAX_PATTERN_BYTES {
+    if request.pattern.chars().count() > MAX_SEARCH_PATTERN_CHARS {
         return Err(SearchError::PatternTooLong);
     }
     if request.limit == 0 || request.limit > MAX_SEARCH_LIMIT {
@@ -746,10 +745,13 @@ mod tests {
         Block, DefinitionCase, DefinitionIdentity, DefinitionItem, DefinitionRole, Document,
         DocumentMeta, DocumentSource, Inline, LayoutHint, Section, SourceFormat,
     };
-    use mant_protocol::{SearchCase, SearchQuery, SearchScope, SearchSyntax};
+    use mant_protocol::{
+        MAX_SEARCH_PATTERN_CHARS, SearchCase, SearchQuery, SearchScope, SearchSyntax,
+    };
 
     use super::{
-        MAX_OCCURRENCES_PER_MATCH, display_markdown_line, render_addressable_markdown, search_query,
+        MAX_OCCURRENCES_PER_MATCH, SearchError, display_markdown_line, render_addressable_markdown,
+        search_query, validate_search_query,
     };
 
     fn query() -> ResolvedContent {
@@ -1130,5 +1132,17 @@ Manual needle.
         let error = search_query(&query(), &request).expect_err("byte-oriented regex");
 
         assert!(error.to_string().contains("UTF-8 character boundaries"));
+    }
+
+    #[test]
+    fn search_pattern_limit_counts_unicode_scalars() {
+        let valid = request(&"界".repeat(MAX_SEARCH_PATTERN_CHARS));
+        assert_eq!(validate_search_query(&valid), Ok(()));
+
+        let request = request(&"界".repeat(MAX_SEARCH_PATTERN_CHARS + 1));
+        assert_eq!(
+            validate_search_query(&request),
+            Err(SearchError::PatternTooLong)
+        );
     }
 }

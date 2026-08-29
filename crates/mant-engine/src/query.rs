@@ -11,7 +11,7 @@ use std::{
 
 use mant_ir::{Document, DocumentAddress, MarkdownOrigin, ResolvedContent, TldrDocument};
 use mant_protocol::{
-    CatalogQuery, DocumentCatalog, EntryProjection, InputFormat, MAX_SEMANTIC_ENTRY_BYTES,
+    CatalogQuery, DocumentCatalog, EntryProjection, InputFormat, MAX_SEMANTIC_ENTRY_CHARS,
     QueryExcerpt, QueryInput, QueryOutline, QueryRequest, QuerySearch, QueryView, ScopeTextError,
     SearchCase, SearchQuery, SearchScope, SearchSyntax, validate_scope_text,
 };
@@ -330,7 +330,7 @@ fn view_selector_error_message(error: ScopeTextError) -> String {
         ScopeTextError::Empty => "must not be empty".to_owned(),
         ScopeTextError::ControlCharacter => "must not contain control characters".to_owned(),
         ScopeTextError::TooLong { maximum } => {
-            format!("must not exceed {maximum} bytes")
+            format!("must not exceed {maximum} Unicode scalar values")
         }
     }
 }
@@ -573,7 +573,7 @@ fn validate_query_view(view: &QueryView) -> Result<(), QueryError> {
                 return Err(QueryError::EmptySelection);
             }
             for selector in selectors {
-                validate_scope_text(selector, MAX_SEMANTIC_ENTRY_BYTES).map_err(|error| {
+                validate_scope_text(selector, MAX_SEMANTIC_ENTRY_CHARS).map_err(|error| {
                     if error == ScopeTextError::Empty {
                         QueryError::EmptySelector
                     } else {
@@ -586,7 +586,7 @@ fn validate_query_view(view: &QueryView) -> Result<(), QueryError> {
             }
         }
         QueryView::Explain { entry } => {
-            validate_scope_text(entry, MAX_SEMANTIC_ENTRY_BYTES).map_err(|error| {
+            validate_scope_text(entry, MAX_SEMANTIC_ENTRY_CHARS).map_err(|error| {
                 if error == ScopeTextError::Empty {
                     QueryError::EmptyEntry
                 } else {
@@ -619,7 +619,7 @@ fn validate_query_view(view: &QueryView) -> Result<(), QueryError> {
         .map_err(QueryError::InvalidSearch)?,
         QueryView::Outline { entries, root } => {
             if let Some(selector) = root {
-                validate_scope_text(selector, MAX_SEMANTIC_ENTRY_BYTES).map_err(|error| {
+                validate_scope_text(selector, MAX_SEMANTIC_ENTRY_CHARS).map_err(|error| {
                     if error == ScopeTextError::Empty {
                         QueryError::EmptySelector
                     } else {

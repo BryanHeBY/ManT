@@ -204,7 +204,7 @@ fn every_cli_explain_surface_rejects_oversized_entries_before_lookup() {
         assert!(output.stdout.is_empty());
         let error = String::from_utf8(output.stderr).expect("UTF-8 diagnostic");
         assert!(
-            error.contains("semantic entry must not exceed 512 bytes"),
+            error.contains("semantic entry must not exceed 512 Unicode scalar values"),
             "{error}"
         );
         assert!(

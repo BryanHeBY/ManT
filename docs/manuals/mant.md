@@ -719,7 +719,7 @@ matches but the same literal text occurs in the document, the failure
 identifies its first outline node and directs the caller to `--search`. This
 remains a diagnostic only: prose never silently becomes an explainable
 semantic entry. All three selectors reject control characters and values over
-512 UTF-8 bytes before document resolution.
+512 Unicode scalar values before document resolution.
 
 ## Search {#search-section}
 

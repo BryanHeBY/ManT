@@ -25,10 +25,12 @@ pub const MAX_SCOPE_DOCUMENT_LIMIT: u32 = 256;
 /// independent guard prevents a small number of individually valid documents
 /// from creating an unbounded aggregate allocation.
 pub const MAX_SCOPE_CONTENT_BYTES: u64 = 64 * 1024 * 1024;
-/// Maximum UTF-8 byte length of one logical document selector.
-pub const MAX_DOCUMENT_SELECTOR_BYTES: usize = 1024;
-/// Maximum UTF-8 byte length of one semantic-entry selector.
-pub const MAX_SEMANTIC_ENTRY_BYTES: usize = 512;
+/// Maximum Unicode scalar length of one logical document selector.
+pub const MAX_DOCUMENT_SELECTOR_CHARS: usize = 1024;
+/// Maximum Unicode scalar length of one semantic-entry selector.
+pub const MAX_SEMANTIC_ENTRY_CHARS: usize = 512;
+/// Maximum Unicode scalar length of one search pattern.
+pub const MAX_SEARCH_PATTERN_CHARS: usize = 4096;
 
 /// One violated runtime constraint shared by scope-query request adapters.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -37,9 +39,9 @@ pub enum ScopeTextError {
     Empty,
     /// The value contained a terminal or structural control character.
     ControlCharacter,
-    /// The UTF-8 byte length exceeded the declared maximum.
+    /// The Unicode scalar length exceeded the declared maximum.
     TooLong {
-        /// Inclusive maximum accepted byte length.
+        /// Inclusive maximum accepted Unicode scalar length.
         maximum: usize,
     },
 }
@@ -52,7 +54,7 @@ pub enum ScopeTextError {
 ///
 /// # Errors
 ///
-/// Returns the precise empty, control-character, or byte-length violation.
+/// Returns the precise empty, control-character, or scalar-length violation.
 pub fn validate_scope_text(value: &str, maximum: usize) -> Result<(), ScopeTextError> {
     if value.trim().is_empty() {
         return Err(ScopeTextError::Empty);
@@ -60,7 +62,7 @@ pub fn validate_scope_text(value: &str, maximum: usize) -> Result<(), ScopeTextE
     if value.chars().any(char::is_control) {
         return Err(ScopeTextError::ControlCharacter);
     }
-    if value.len() > maximum {
+    if value.chars().count() > maximum {
         return Err(ScopeTextError::TooLong { maximum });
     }
     Ok(())
@@ -71,7 +73,7 @@ pub fn validate_scope_text(value: &str, maximum: usize) -> Result<(), ScopeTextE
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct DocumentSelector {
     /// Unqualified name or complete catalog path.
-    #[schemars(length(min = 1, max = MAX_DOCUMENT_SELECTOR_BYTES))]
+    #[schemars(length(min = 1, max = MAX_DOCUMENT_SELECTOR_CHARS))]
     pub selector: String,
     /// Optional configured Markdown source for an unqualified selector.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -168,13 +170,13 @@ pub enum ScopeQueryView {
     /// Resolve one semantic entry independently in every document.
     Explain {
         /// Exact alias, outline path, or stable ID.
-        #[schemars(length(min = 1, max = MAX_SEMANTIC_ENTRY_BYTES))]
+        #[schemars(length(min = 1, max = MAX_SEMANTIC_ENTRY_CHARS))]
         entry: String,
     },
     /// Search visible or generated-Markdown text over the complete scope.
     Search {
         /// Literal or regular-expression search pattern.
-        #[schemars(length(min = 1, max = 4096))]
+        #[schemars(length(min = 1, max = MAX_SEARCH_PATTERN_CHARS))]
         pattern: String,
         /// Pattern language.
         #[serde(default)]

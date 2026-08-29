@@ -7,8 +7,8 @@ use mant_ir::visit::{Visit, walk_inline};
 use mant_ir::{DocumentAddress, Inline, LinkTarget, ResolvedContent};
 use mant_protocol::{
     DocumentEdge, DocumentEdgeKind, DocumentFrontier, DocumentScope, DocumentSelector,
-    MAX_DOCUMENT_SELECTOR_BYTES, MAX_SCOPE_CONTENT_BYTES, MAX_SCOPE_DEPTH,
-    MAX_SCOPE_DOCUMENT_LIMIT, MAX_SCOPE_DOCUMENTS, MAX_SEMANTIC_ENTRY_BYTES, QueryInput,
+    MAX_DOCUMENT_SELECTOR_CHARS, MAX_SCOPE_CONTENT_BYTES, MAX_SCOPE_DEPTH,
+    MAX_SCOPE_DOCUMENT_LIMIT, MAX_SCOPE_DOCUMENTS, MAX_SEMANTIC_ENTRY_CHARS, QueryInput,
     QueryRequest, RequestSchema, ResolvedDocumentScope, ScopeQueryRequest, ScopeQueryResponse,
     ScopeQueryResult, ScopeQuerySchema, ScopeQueryView, ScopeSearch, ScopeTextError,
     ScopedDocument, ScopedExplanation, ScopedQueryFailure, ScopedSearchDocument, SearchQuery,
@@ -132,7 +132,7 @@ impl Error for ScopeQueryError {
 pub fn validate_scope_query_request(request: &ScopeQueryRequest) -> Result<(), ScopeQueryError> {
     validate_document_scope(&request.scope)?;
     match &request.view {
-        ScopeQueryView::Explain { entry } => validate_scope_text(entry, MAX_SEMANTIC_ENTRY_BYTES)
+        ScopeQueryView::Explain { entry } => validate_scope_text(entry, MAX_SEMANTIC_ENTRY_CHARS)
             .map_err(ScopeQueryError::EntrySelector),
         ScopeQueryView::Search {
             pattern,
@@ -165,7 +165,7 @@ fn validate_document_scope(scope: &DocumentScope) -> Result<(), ScopeQueryError>
         return Err(ScopeQueryError::TooManyDocuments);
     }
     for selector in &scope.documents {
-        validate_scope_text(&selector.selector, MAX_DOCUMENT_SELECTOR_BYTES)
+        validate_scope_text(&selector.selector, MAX_DOCUMENT_SELECTOR_CHARS)
             .map_err(ScopeQueryError::DocumentSelector)?;
     }
     if !scope.traversal.follow_links
@@ -190,7 +190,7 @@ fn scope_text_error_message(error: ScopeTextError) -> String {
         ScopeTextError::Empty => "must not be empty".to_owned(),
         ScopeTextError::ControlCharacter => "must not contain control characters".to_owned(),
         ScopeTextError::TooLong { maximum } => {
-            format!("must not exceed {maximum} bytes")
+            format!("must not exceed {maximum} Unicode scalar values")
         }
     }
 }
@@ -838,7 +838,7 @@ mod tests {
     fn native_scope_request_enforces_document_selector_contract() {
         let mut scope = DocumentScope {
             documents: vec![DocumentSelector {
-                selector: "a".repeat(MAX_DOCUMENT_SELECTOR_BYTES + 1),
+                selector: "a".repeat(MAX_DOCUMENT_SELECTOR_CHARS + 1),
                 source: None,
                 manual_section: None,
             }],
@@ -847,9 +847,12 @@ mod tests {
         assert_eq!(
             validate_document_scope(&scope),
             Err(ScopeQueryError::DocumentSelector(ScopeTextError::TooLong {
-                maximum: MAX_DOCUMENT_SELECTOR_BYTES,
+                maximum: MAX_DOCUMENT_SELECTOR_CHARS,
             }))
         );
+
+        scope.documents[0].selector = "界".repeat(MAX_DOCUMENT_SELECTOR_CHARS);
+        assert_eq!(validate_document_scope(&scope), Ok(()));
 
         scope.documents[0].selector = "root\nother".to_owned();
         assert_eq!(
@@ -862,7 +865,7 @@ mod tests {
 
     #[test]
     fn native_scope_request_enforces_entry_selector_contract() {
-        let request = ScopeQueryRequest {
+        let mut request = ScopeQueryRequest {
             schema: mant_protocol::ScopeRequestSchema::V0Dot10,
             scope: DocumentScope {
                 documents: vec![DocumentSelector {
@@ -873,15 +876,20 @@ mod tests {
                 traversal: mant_protocol::DocumentTraversal::default(),
             },
             view: ScopeQueryView::Explain {
-                entry: "x".repeat(MAX_SEMANTIC_ENTRY_BYTES + 1),
+                entry: "x".repeat(MAX_SEMANTIC_ENTRY_CHARS + 1),
             },
         };
         assert_eq!(
             validate_scope_query_request(&request),
             Err(ScopeQueryError::EntrySelector(ScopeTextError::TooLong {
-                maximum: MAX_SEMANTIC_ENTRY_BYTES,
+                maximum: MAX_SEMANTIC_ENTRY_CHARS,
             }))
         );
+
+        request.view = ScopeQueryView::Explain {
+            entry: "界".repeat(MAX_SEMANTIC_ENTRY_CHARS),
+        };
+        assert_eq!(validate_scope_query_request(&request), Ok(()));
     }
 
     #[test]
