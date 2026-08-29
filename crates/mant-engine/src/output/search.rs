@@ -6,6 +6,7 @@ use std::{collections::BTreeMap, ops::Range};
 use mant_protocol::{OutlineNodeReference, OutlineTrail, QuerySearch, SearchHit, SearchScope};
 use pulldown_cmark::{Event, Parser};
 
+use super::markdown::{commonmark_code_span as code_span, escape_commonmark as escape_text};
 use crate::markdown_mapping::{InlineMappingKind, map_inline_characters};
 
 /// Semantic roles in the grep-like search presentation.
@@ -565,27 +566,6 @@ fn document_label(search: &QuerySearch) -> String {
         )
 }
 
-fn code_span(value: &str) -> String {
-    let width = value
-        .split(|character| character != '`')
-        .map(str::len)
-        .max()
-        .unwrap_or(0)
-        .saturating_add(1)
-        .max(1);
-    let delimiter = "`".repeat(width);
-    format!("{delimiter}{value}{delimiter}")
-}
-
-fn escape_text(value: &str) -> String {
-    value
-        .replace('\\', "\\\\")
-        .replace('*', "\\*")
-        .replace('_', "\\_")
-        .replace('[', "\\[")
-        .replace(']', "\\]")
-}
-
 #[cfg(test)]
 mod tests {
     use mant_protocol::{
@@ -594,6 +574,7 @@ mod tests {
         SearchOccurrence, SearchQuery, SearchRender, SearchRenderFormat, SearchRenderScope,
         SearchSchema, SearchScope, SearchSyntax,
     };
+    use pulldown_cmark::{Event, Parser};
 
     use super::{
         SearchTextRenderer, SearchTextRole, render_search_line_text, render_search_markdown,
@@ -687,6 +668,32 @@ mod tests {
         assert!(markdown.contains("# Search results for `--acls` in tar(1)"));
         assert!(markdown.contains("- Outline: `5.3/e17`"));
         assert!(markdown.contains("- Trail: `Archive options` → `--acls`"));
+    }
+
+    #[test]
+    fn search_markdown_uses_canonical_commonmark_escaping() {
+        let mut result = result();
+        result.query.pattern = "`ticked start".to_owned();
+        result.label = "a|b~c^d:e".to_owned();
+        result.matches[0].outline.node = OutlineNodeReference::DocumentSection {
+            path: "1".to_owned().into(),
+            id: "ticked".to_owned().into(),
+            title: "`ticked start".to_owned(),
+        };
+
+        let markdown = render_search_markdown(&result);
+        assert!(markdown.contains("`` `ticked start ``"), "{markdown}");
+        assert!(markdown.contains("a\\|b\\~c\\^d\\:e"), "{markdown}");
+        assert_eq!(
+            Parser::new(&markdown)
+                .filter_map(|event| match event {
+                    Event::Code(value) => Some(value.into_string()),
+                    _ => None,
+                })
+                .filter(|value| value == "`ticked start")
+                .count(),
+            3
+        );
     }
 
     #[test]

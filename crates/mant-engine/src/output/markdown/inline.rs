@@ -5,7 +5,7 @@ use mant_ir::{Inline, LinkTarget};
 use super::MarkdownOptions;
 
 pub(super) fn render_inline(children: &[Inline], options: MarkdownOptions) -> String {
-    render_inline_raw(children, options)
+    render_inline_raw(children, options, 0)
         .split('\n')
         .map(|line| line.trim_matches([' ', '\t']))
         .filter(|line| !line.is_empty())
@@ -31,7 +31,7 @@ pub(super) fn flatten_inline(children: &[Inline]) -> String {
     output
 }
 
-pub(super) fn escape_text(value: &str) -> String {
+pub(crate) fn escape_text(value: &str) -> String {
     let mut output = String::new();
     let mut remainder = value;
     while let Some((start, opening_width)) = find_angle_url(remainder) {
@@ -75,7 +75,7 @@ pub(super) fn fenced_code(value: &str, language: Option<&str>) -> String {
     format!("{fence}{language}\n{value}{boundary}{fence}")
 }
 
-pub(super) fn code_span(value: &str) -> String {
+pub(crate) fn code_span(value: &str) -> String {
     let width = longest_backtick_run(value).saturating_add(1).max(1);
     let delimiter = "`".repeat(width);
     let padding = (value.starts_with(['`', ' ']) || value.ends_with(['`', ' ']))
@@ -87,7 +87,7 @@ pub(super) fn code_span(value: &str) -> String {
     }
 }
 
-fn render_inline_raw(nodes: &[Inline], options: MarkdownOptions) -> String {
+fn render_inline_raw(nodes: &[Inline], options: MarkdownOptions, style_depth: usize) -> String {
     let mut output = String::new();
     let mut index = 0;
     while let Some(child) = nodes.get(index) {
@@ -96,25 +96,25 @@ fn render_inline_raw(nodes: &[Inline], options: MarkdownOptions) -> String {
             Inline::Strong {
                 children: styled_children,
             } => {
-                let mut rendered = render_inline_raw(styled_children, options);
+                let mut rendered = render_inline_raw(styled_children, options, style_depth + 1);
                 index += 1;
                 while let Some(Inline::Strong { children }) = nodes.get(index) {
-                    rendered.push_str(&render_inline_raw(children, options));
+                    rendered.push_str(&render_inline_raw(children, options, style_depth + 1));
                     index += 1;
                 }
-                output.push_str(&render_styled(&rendered, "**", "__", &output));
+                output.push_str(&render_styled(&rendered, "**", "__", &output, style_depth));
                 continue;
             }
             Inline::Emphasis {
                 children: styled_children,
             } => {
-                let mut rendered = render_inline_raw(styled_children, options);
+                let mut rendered = render_inline_raw(styled_children, options, style_depth + 1);
                 index += 1;
                 while let Some(Inline::Emphasis { children }) = nodes.get(index) {
-                    rendered.push_str(&render_inline_raw(children, options));
+                    rendered.push_str(&render_inline_raw(children, options, style_depth + 1));
                     index += 1;
                 }
-                output.push_str(&render_styled(&rendered, "*", "_", &output));
+                output.push_str(&render_styled(&rendered, "*", "_", &output, style_depth));
                 continue;
             }
             Inline::Code { value } => output.push_str(&code_span(value)),
@@ -124,13 +124,20 @@ fn render_inline_raw(nodes: &[Inline], options: MarkdownOptions) -> String {
                 children,
             } => match target {
                 LinkTarget::External { uri } => {
-                    output.push_str(&render_link(uri, title.as_deref(), children, options));
+                    output.push_str(&render_link(
+                        uri,
+                        title.as_deref(),
+                        children,
+                        options,
+                        style_depth,
+                    ));
                 }
                 LinkTarget::Email { address } => output.push_str(&render_link(
                     &format!("mailto:{address}"),
                     title.as_deref(),
                     children,
                     options,
+                    style_depth,
                 )),
                 LinkTarget::Document { name, fragment } => {
                     let mut destination = format!("{name}.md");
@@ -143,13 +150,20 @@ fn render_inline_raw(nodes: &[Inline], options: MarkdownOptions) -> String {
                         title.as_deref(),
                         children,
                         options,
+                        style_depth,
                     ));
                 }
-                LinkTarget::Section { id } if options.preserve_anchors => output.push_str(
-                    &render_link(&format!("#{id}"), title.as_deref(), children, options),
-                ),
+                LinkTarget::Section { id } if options.preserve_anchors => {
+                    output.push_str(&render_link(
+                        &format!("#{id}"),
+                        title.as_deref(),
+                        children,
+                        options,
+                        style_depth,
+                    ))
+                }
                 LinkTarget::Manual { .. } | LinkTarget::Section { .. } => {
-                    output.push_str(&render_inline_raw(children, options));
+                    output.push_str(&render_inline_raw(children, options, style_depth));
                 }
             },
             Inline::Anchor { id } if options.preserve_anchors => {
@@ -172,6 +186,7 @@ fn render_styled(
     primary_marker: &str,
     alternate_marker: &str,
     preceding: &str,
+    style_depth: usize,
 ) -> String {
     let core = rendered.trim_matches([' ', '\t']);
     if core.is_empty() {
@@ -181,6 +196,13 @@ fn render_styled(
     let trailing_width = rendered.len() - rendered.trim_end_matches([' ', '\t']).len();
     let leading = &rendered[..leading_width];
     let trailing = &rendered[rendered.len() - trailing_width..];
+    // CommonMark cannot reliably delimit a punctuation-only style nested in
+    // an ordinary word (for example, the bold hyphen inside italic
+    // `--no-option`). Preserve the contiguous semantic spelling and the
+    // outer style instead of emitting literal delimiter characters.
+    if style_depth > 0 {
+        return rendered.to_owned();
+    }
     let marker = if preceding.ends_with('*') || core.contains(primary_marker) {
         alternate_marker
     } else {
@@ -194,8 +216,9 @@ fn render_link(
     title: Option<&str>,
     children: &[Inline],
     options: MarkdownOptions,
+    style_depth: usize,
 ) -> String {
-    let label = render_inline_raw(children, options);
+    let label = render_inline_raw(children, options, style_depth);
     if (target.starts_with("http://") || target.starts_with("https://"))
         && flatten_inline(children) == target
         && !target.chars().any(char::is_whitespace)
@@ -246,8 +269,10 @@ fn escape_plain_text(value: &str) -> String {
             previous = Some(character);
             continue;
         }
-        if matches!(character, '\\' | '`' | '*' | '[' | ']' | '<' | '>' | '$')
-            || (character == '_' && !intraword_underscore)
+        if matches!(
+            character,
+            '\\' | '`' | '*' | '[' | ']' | '<' | '>' | '$' | '~' | '|' | '^' | ':'
+        ) || (character == '_' && !intraword_underscore)
         {
             output.push('\\');
         }

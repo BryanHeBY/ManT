@@ -129,7 +129,11 @@ fn render_block(block: &Block, options: MarkdownOptions) -> Option<String> {
         Block::VerticalSpace { .. } => None,
         Block::ThematicBreak { .. } => Some("---".to_owned()),
         Block::Unsupported { name, text, .. } => {
-            let text = escape_text(text.trim());
+            let text = escape_text(text.trim())
+                .lines()
+                .map(protect_block_prefix)
+                .collect::<Vec<_>>()
+                .join("  \n");
             if text.is_empty() {
                 None
             } else {

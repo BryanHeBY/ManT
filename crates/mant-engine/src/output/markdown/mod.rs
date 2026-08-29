@@ -11,6 +11,9 @@ use mant_ir::{
 };
 use mant_protocol::{ExcerptSelection, OutlineNode, OutlineReference, QueryExcerpt, QueryOutline};
 
+pub(crate) use self::inline::{
+    code_span as commonmark_code_span, escape_text as escape_commonmark,
+};
 use self::{
     blocks::{RenderedBlocks, render_blocks, render_blocks_with_entries},
     inline::{code_span, escape_text},

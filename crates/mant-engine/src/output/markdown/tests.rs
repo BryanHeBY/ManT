@@ -559,6 +559,79 @@ fn escapes_literal_dollars_that_would_be_reparsed_as_math() {
 }
 
 #[test]
+fn escapes_enabled_extension_syntax_and_unsupported_block_prefixes() {
+    let query = ResolvedContent {
+        address: None,
+        label: "extensions".to_owned(),
+        document: Some(manual(vec![section(
+            "TEXT",
+            vec![Block::Unsupported {
+                name: Some("source".to_owned()),
+                text: "# injected\n~~~\na | b\n: definition\n~~strike~~\n^super^".to_owned(),
+                layout: LayoutHint::default(),
+                source: None,
+            }],
+            Vec::new(),
+        )])),
+        tldr: None,
+    };
+
+    let markdown = render_markdown(&query);
+    assert!(markdown.contains("\\# injected"), "{markdown}");
+    assert!(markdown.contains("\\~\\~\\~"), "{markdown}");
+    assert!(markdown.contains("a \\| b"), "{markdown}");
+    assert!(markdown.contains("\\: definition"), "{markdown}");
+    assert!(markdown.contains("\\~\\~strike\\~\\~"), "{markdown}");
+    assert!(markdown.contains("\\^super\\^"), "{markdown}");
+    assert_eq!(
+        Parser::new(&markdown)
+            .filter(|event| matches!(event, Event::Start(Tag::Heading { .. })))
+            .count(),
+        2,
+        "only the document and section headings remain structural"
+    );
+}
+
+#[test]
+fn nested_styles_preserve_contiguous_intraword_spellings() {
+    let query = ResolvedContent {
+        address: None,
+        label: "styles".to_owned(),
+        document: Some(manual(vec![section(
+            "TEXT",
+            vec![paragraph(vec![Inline::Emphasis {
+                children: vec![
+                    Inline::Text {
+                        value: "x".to_owned(),
+                    },
+                    Inline::Strong {
+                        children: vec![Inline::Text {
+                            value: "-".to_owned(),
+                        }],
+                    },
+                    Inline::Text {
+                        value: "y".to_owned(),
+                    },
+                ],
+            }])],
+            Vec::new(),
+        )])),
+        tldr: None,
+    };
+
+    let markdown = render_markdown(&query);
+    assert!(markdown.contains("*x-y*"), "{markdown}");
+    assert!(!markdown.contains("**-**"), "{markdown}");
+    let visible = Parser::new(&markdown)
+        .filter_map(|event| match event {
+            Event::Text(value) => Some(value.into_string()),
+            _ => None,
+        })
+        .collect::<String>();
+    assert!(visible.contains("x-y"), "{visible}");
+}
+
+#[test]
 fn protects_hanging_definition_terms_from_becoming_nested_lists() {
     let query = ResolvedContent {
         address: None,
