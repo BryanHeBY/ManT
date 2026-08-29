@@ -160,7 +160,7 @@ fn render_inline_raw(nodes: &[Inline], options: MarkdownOptions, style_depth: us
                         children,
                         options,
                         style_depth,
-                    ))
+                    ));
                 }
                 LinkTarget::Manual { .. } | LinkTarget::Section { .. } => {
                     output.push_str(&render_inline_raw(children, options, style_depth));
