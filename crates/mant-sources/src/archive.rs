@@ -161,6 +161,11 @@ fn extract_tar(reader: impl Read, destination: &Path) -> Result<(), String> {
             .into_owned();
         validate_archive_path(&path)?;
         let entry_type = entry.header().entry_type();
+        if entry_type.is_pax_global_extensions() {
+            expanded = charge_expanded(expanded, entry.size(), &path)?;
+            validate_global_pax(&mut entry)?;
+            continue;
+        }
         if entry_type.is_dir() {
             continue;
         }
@@ -177,6 +182,24 @@ fn extract_tar(reader: impl Read, destination: &Path) -> Result<(), String> {
         }
         documents = charge_document(documents, size, &path)?;
         write_archive_file(destination, &path, &mut entry, size, &mut paths)?;
+    }
+    Ok(())
+}
+
+fn validate_global_pax(entry: &mut tar::Entry<'_, impl Read>) -> Result<(), String> {
+    let extensions = entry
+        .pax_extensions()
+        .map_err(|error| format!("could not read global PAX metadata: {error}"))?
+        .ok_or_else(|| "global PAX header did not contain metadata".to_owned())?;
+    for extension in extensions {
+        let extension =
+            extension.map_err(|error| format!("could not read global PAX metadata: {error}"))?;
+        let key = extension
+            .key()
+            .map_err(|_| "global PAX metadata key is not UTF-8".to_owned())?;
+        if key != "comment" {
+            return Err(format!("global PAX metadata key '{key}' is not supported"));
+        }
     }
     Ok(())
 }
@@ -269,7 +292,8 @@ fn write_archive_file(
                 relative.display()
             )
         })?;
-    let copied = io::copy(reader, &mut file).map_err(|error| {
+    let mut bounded = reader.take(expected.saturating_add(1));
+    let copied = io::copy(&mut bounded, &mut file).map_err(|error| {
         format!(
             "could not extract archive entry '{}': {error}",
             relative.display()
@@ -295,6 +319,7 @@ fn is_markdown(path: &Path) -> bool {
 #[cfg(test)]
 mod tests {
     use std::{
+        collections::BTreeSet,
         fs,
         io::{Cursor, Write as _},
         path::PathBuf,
@@ -304,7 +329,7 @@ mod tests {
     use tar::{Builder, EntryType, Header};
     use zip::{ZipWriter, write::SimpleFileOptions};
 
-    use super::extract_archive;
+    use super::{extract_archive, write_archive_file};
 
     fn temp(label: &str) -> PathBuf {
         std::env::temp_dir().join(format!("mant-archive-{label}-{}", std::process::id()))
@@ -332,6 +357,46 @@ mod tests {
             writer.write_all(contents).expect("write ZIP file");
         }
         writer.finish().expect("finish ZIP").into_inner()
+    }
+
+    fn pax_record(key: &str, value: &str) -> Vec<u8> {
+        let remainder = format!(" {key}={value}\n");
+        let mut width = 1;
+        loop {
+            let length = width + remainder.len();
+            let digits = length.to_string().len();
+            if digits == width {
+                return format!("{length}{remainder}").into_bytes();
+            }
+            width = digits;
+        }
+    }
+
+    fn tar_with_global_pax(key: &str, value: &str) -> Vec<u8> {
+        let mut builder = Builder::new(Vec::new());
+        let metadata = pax_record(key, value);
+        let mut header = Header::new_ustar();
+        header
+            .set_path("pax_global_header")
+            .expect("set global header path");
+        header.set_entry_type(EntryType::XGlobalHeader);
+        header.set_size(u64::try_from(metadata.len()).expect("metadata length fits"));
+        header.set_mode(0o644);
+        header.set_cksum();
+        builder
+            .append(&header, metadata.as_slice())
+            .expect("append global PAX header");
+
+        let contents = b"# tool";
+        let mut header = Header::new_ustar();
+        header.set_path("docs/tool.md").expect("set document path");
+        header.set_size(u64::try_from(contents.len()).expect("content length fits"));
+        header.set_mode(0o644);
+        header.set_cksum();
+        builder
+            .append(&header, contents.as_slice())
+            .expect("append document");
+        builder.into_inner().expect("finish tar")
     }
 
     fn assert_extracts(label: &str, bytes: &[u8]) {
@@ -402,6 +467,37 @@ mod tests {
         let error = extract_archive(&archive, &destination).expect_err("reject parent path");
         assert!(error.contains("unsafe path"), "{error}");
         assert!(!destination.join("escape.md").exists());
+        fs::remove_dir_all(root).expect("remove fixture");
+    }
+
+    #[test]
+    fn accepts_git_archive_global_comment_metadata_only() {
+        assert_extracts(
+            "global-pax-comment",
+            &tar_with_global_pax("comment", "0123456789abcdef0123456789abcdef01234567"),
+        );
+
+        let root = temp("global-pax-path");
+        let archive = root.join("download");
+        let destination = root.join("tree");
+        fs::create_dir_all(&root).expect("create fixture");
+        fs::write(&archive, tar_with_global_pax("path", "elsewhere.md")).expect("write archive");
+        let error = extract_archive(&archive, &destination).expect_err("reject global path");
+        assert!(error.contains("key 'path' is not supported"), "{error}");
+        fs::remove_dir_all(root).expect("remove fixture");
+    }
+
+    #[test]
+    fn archive_writes_stop_one_byte_after_the_declared_size() {
+        let root = temp("bounded-write");
+        fs::create_dir_all(&root).expect("create fixture");
+        let relative = PathBuf::from("docs/tool.md");
+        let mut input = Cursor::new(vec![b'x'; 64]);
+        let error = write_archive_file(&root, &relative, &mut input, 3, &mut BTreeSet::new())
+            .expect_err("reject declared size mismatch");
+
+        assert!(error.contains("decoded to 4 bytes instead of 3"), "{error}");
+        assert_eq!(fs::metadata(root.join(relative)).expect("output").len(), 4);
         fs::remove_dir_all(root).expect("remove fixture");
     }
 }
