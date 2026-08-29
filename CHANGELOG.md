@@ -80,6 +80,8 @@ that crate was not published for that change.
   projections; a zero-match projection now renders an explicit empty result.
 - Rebase scoped-search hit ordinals across breadth-first document order so one
   response never contains duplicate line-group numbers.
+- Index semantic aliases and outline IDs once while producing discovery
+  diagnostics, avoiding quadratic selector scans on definition-heavy manuals.
 
 ### mant-ui 0.10.0
 

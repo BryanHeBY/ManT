@@ -1,7 +1,7 @@
 //! Projects complete structured documents into outlines and selectable excerpts.
 
 use std::{
-    collections::{BTreeSet, HashSet},
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     error::Error,
     fmt,
 };
@@ -1010,6 +1010,7 @@ pub(crate) fn semantic_selector_diagnostics(
     let mut located = Vec::new();
     collect_root_entries(blocks, &mut located);
     collect_sections(sections, &[], &[], &mut located);
+    let index = SelectorDiagnosticsIndex::new(&located);
     let mut selectors = BTreeSet::new();
     for candidate in &located {
         let Some(identity) = candidate.identity() else {
@@ -1023,24 +1024,100 @@ pub(crate) fn semantic_selector_diagnostics(
         }
     }
 
-    let mut diagnostics = selector_alias_diagnostics(&located, selectors, source_family);
-    diagnostics.extend(duplicate_id_diagnostics(&located, source_family));
+    let mut diagnostics = selector_alias_diagnostics(&index, selectors, source_family);
+    diagnostics.extend(duplicate_id_diagnostics(&index.ids, source_family));
     diagnostics
 }
 
+#[derive(Default)]
+struct AliasIndex<'a> {
+    sensitive: HashMap<&'a str, Vec<&'a LocatedNode<'a>>>,
+    insensitive: HashMap<String, Vec<&'a LocatedNode<'a>>>,
+}
+
+impl<'a> AliasIndex<'a> {
+    fn insert(&mut self, case: DefinitionCase, alias: &'a str, candidate: &'a LocatedNode<'a>) {
+        let bucket = match case {
+            DefinitionCase::Sensitive => self.sensitive.entry(alias).or_default(),
+            DefinitionCase::Insensitive => self
+                .insensitive
+                .entry(alias.to_ascii_lowercase())
+                .or_default(),
+        };
+        if bucket
+            .last()
+            .is_none_or(|existing| existing.order() != candidate.order())
+        {
+            bucket.push(candidate);
+        }
+    }
+
+    fn matches(&self, selector: &str) -> Vec<&'a LocatedNode<'a>> {
+        let mut matches = self.sensitive.get(selector).cloned().unwrap_or_default();
+        if let Some(insensitive) = self.insensitive.get(&selector.to_ascii_lowercase()) {
+            matches.extend(insensitive.iter().copied());
+        }
+        matches.sort_unstable_by_key(|candidate| candidate.order());
+        matches.dedup_by_key(|candidate| candidate.order());
+        matches
+    }
+}
+
+struct SelectorDiagnosticsIndex<'a> {
+    exact_aliases: AliasIndex<'a>,
+    shorthand_aliases: AliasIndex<'a>,
+    ids: BTreeMap<&'a str, Vec<&'a LocatedNode<'a>>>,
+}
+
+impl<'a> SelectorDiagnosticsIndex<'a> {
+    fn new(located: &'a [LocatedNode<'a>]) -> Self {
+        let mut index = Self {
+            exact_aliases: AliasIndex::default(),
+            shorthand_aliases: AliasIndex::default(),
+            ids: BTreeMap::new(),
+        };
+        for candidate in located {
+            index.ids.entry(candidate.id()).or_default().push(candidate);
+            let Some(identity) = candidate.identity() else {
+                continue;
+            };
+            for name in &identity.names {
+                index.exact_aliases.insert(identity.case, name, candidate);
+                if let Some(shorthand) = semantic_name_shorthand(identity.role, name) {
+                    index
+                        .shorthand_aliases
+                        .insert(identity.case, shorthand, candidate);
+                }
+            }
+        }
+        index
+    }
+
+    fn matching_aliases(&self, selector: &str) -> (AliasMatchKind, Vec<&'a LocatedNode<'a>>) {
+        let exact = self.exact_aliases.matches(selector);
+        if !exact.is_empty() {
+            return (AliasMatchKind::Exact, exact);
+        }
+        (
+            AliasMatchKind::Shorthand,
+            self.shorthand_aliases.matches(selector),
+        )
+    }
+}
+
 fn selector_alias_diagnostics(
-    located: &[LocatedNode<'_>],
+    index: &SelectorDiagnosticsIndex<'_>,
     selectors: BTreeSet<String>,
     source_family: &str,
 ) -> Vec<Diagnostic> {
     let mut reported = HashSet::new();
     let mut diagnostics = Vec::new();
     for selector in selectors {
-        let (kind, matches) = matching_aliases(located, &selector);
-        let exact_ids = located
-            .iter()
-            .filter(|candidate| candidate.id() == selector)
-            .collect::<Vec<_>>();
+        let (kind, matches) = index.matching_aliases(&selector);
+        let exact_ids = index
+            .ids
+            .get(selector.as_str())
+            .map_or(&[][..], Vec::as_slice);
         let shadowed_matches = matches
             .iter()
             .copied()
@@ -1109,15 +1186,12 @@ fn selector_alias_diagnostics(
     diagnostics
 }
 
-fn duplicate_id_diagnostics(located: &[LocatedNode<'_>], source_family: &str) -> Vec<Diagnostic> {
-    let mut ids = BTreeSet::new();
-    ids.extend(located.iter().map(|candidate| candidate.id().to_owned()));
+fn duplicate_id_diagnostics(
+    ids: &BTreeMap<&str, Vec<&LocatedNode<'_>>>,
+    source_family: &str,
+) -> Vec<Diagnostic> {
     let mut diagnostics = Vec::new();
-    for id in ids {
-        let matches = located
-            .iter()
-            .filter(|candidate| candidate.id() == id)
-            .collect::<Vec<_>>();
+    for (id, matches) in ids {
         if matches.len() < 2 {
             continue;
         }
@@ -1270,7 +1344,10 @@ mod tests {
     };
     use mant_protocol::{EntryProjection, ExcerptSelection, NodeSelector, OutlineNode};
 
-    use super::{ProjectionError, build_outline, build_outline_projection, select_excerpt};
+    use super::{
+        ProjectionError, build_outline, build_outline_projection, select_excerpt,
+        semantic_selector_diagnostics,
+    };
 
     fn section(id: &str, title: &str, children: Vec<Section>) -> Section {
         Section {
@@ -1394,6 +1471,52 @@ mod tests {
                 source: None,
             });
         query
+    }
+
+    #[test]
+    fn indexed_selector_diagnostics_preserve_case_policy_and_deduplicate_aliases() {
+        let sensitive = definition(
+            "command-sensitive-mode",
+            DefinitionRole::Command,
+            &["Mode"],
+            &["Mode"],
+            Vec::new(),
+        );
+        let mut insensitive = definition(
+            "command-insensitive-mode",
+            DefinitionRole::Command,
+            &["MODE", "mode"],
+            &["MODE"],
+            Vec::new(),
+        );
+        insensitive.identity.as_mut().expect("identity").case = DefinitionCase::Insensitive;
+        let blocks = vec![Block::DefinitionList {
+            items: vec![sensitive, insensitive],
+            compact: true,
+            layout: LayoutHint::default(),
+            source: None,
+        }];
+        let sections = vec![section("mode", "Mode", Vec::new())];
+
+        let diagnostics = semantic_selector_diagnostics(&blocks, &sections, "manual");
+        assert_eq!(
+            diagnostics
+                .iter()
+                .filter(|diagnostic| {
+                    diagnostic.code.as_deref() == Some("manual.semantic-entry.ambiguous-selector")
+                })
+                .count(),
+            1
+        );
+        assert!(diagnostics.iter().any(|diagnostic| {
+            diagnostic.code.as_deref() == Some("manual.semantic-entry.shadowed-selector")
+                && diagnostic.message.contains("semantic selector 'mode'")
+                && diagnostic
+                    .message
+                    .matches("command-insensitive-mode")
+                    .count()
+                    == 1
+        }));
     }
 
     #[test]
