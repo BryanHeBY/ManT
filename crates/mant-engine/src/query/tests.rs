@@ -9,8 +9,8 @@ use mant_ir::{
     TldrDocument, TldrOrigin,
 };
 use mant_protocol::{
-    DocumentAddress, InputFormat, MarkdownOrigin, QueryInput, QueryRequest, QueryView,
-    RequestSchema,
+    DocumentAddress, InputFormat, MAX_SEMANTIC_ENTRY_BYTES, MarkdownOrigin, QueryInput,
+    QueryRequest, QueryView, RequestSchema, ScopeTextError,
 };
 use mant_sources::BUILTIN_CONTENT_PRIORITY;
 
@@ -19,7 +19,7 @@ use crate::{ManualPage, ManualRequest};
 use super::{
     MAX_MARKDOWN_BYTES, QueryError, QueryExecutionError, QueryHost, QueryPolicy,
     RegisteredLookupPhase, RegisteredSelection, RegisteredSelectionGroup, project_query_view,
-    query_markdown_text, query_with, read_capped_utf8, read_capped_utf8_io,
+    query_markdown_text, query_with, read_capped_utf8, read_capped_utf8_io, validate_query_request,
 };
 
 use crate::ProjectionError;
@@ -751,6 +751,44 @@ fn validates_before_touching_host_state() {
         Err(QueryError::EmptyName)
     );
     assert!(host.calls.lock().expect("calls lock").is_empty());
+}
+
+#[test]
+fn every_single_document_selector_obeys_the_shared_native_bound() {
+    let oversized = "x".repeat(MAX_SEMANTIC_ENTRY_BYTES + 1);
+    for (field, view) in [
+        (
+            "semantic entry",
+            QueryView::Explain {
+                entry: oversized.clone(),
+            },
+        ),
+        (
+            "outline node",
+            QueryView::Excerpt {
+                selectors: vec![oversized.clone().into()],
+            },
+        ),
+        (
+            "outline root",
+            QueryView::Outline {
+                entries: mant_protocol::EntryProjection::Summary,
+                root: Some(oversized.clone().into()),
+            },
+        ),
+    ] {
+        let mut request = request();
+        request.view = view;
+        assert_eq!(
+            validate_query_request(&request, QueryPolicy::default()),
+            Err(QueryError::InvalidViewSelector {
+                field,
+                error: ScopeTextError::TooLong {
+                    maximum: MAX_SEMANTIC_ENTRY_BYTES,
+                },
+            })
+        );
+    }
 }
 
 #[test]

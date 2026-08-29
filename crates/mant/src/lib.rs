@@ -161,13 +161,13 @@ impl CliHost for SystemHost {
     ) -> Result<mant_engine::LoadedDocumentScope, Failure> {
         self.resolver
             .resolve_scope(scope)
-            .map_err(Failure::operational)
+            .map_err(error::scope_query_failure)
     }
 
     fn query_scope(&self, request: &ScopeQueryRequest) -> Result<ScopeQueryResponse, Failure> {
         self.resolver
             .execute_scope_query(request)
-            .map_err(Failure::operational)
+            .map_err(error::scope_query_failure)
     }
 
     fn update_tldr(&self) -> Result<TldrCacheUpdate, Failure> {

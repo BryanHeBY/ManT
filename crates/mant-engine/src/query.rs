@@ -11,9 +11,9 @@ use std::{
 
 use mant_ir::{Document, DocumentAddress, MarkdownOrigin, ResolvedContent, TldrDocument};
 use mant_protocol::{
-    CatalogQuery, DocumentCatalog, EntryProjection, InputFormat, QueryExcerpt, QueryInput,
-    QueryOutline, QueryRequest, QuerySearch, QueryView, SearchCase, SearchQuery, SearchScope,
-    SearchSyntax,
+    CatalogQuery, DocumentCatalog, EntryProjection, InputFormat, MAX_SEMANTIC_ENTRY_BYTES,
+    QueryExcerpt, QueryInput, QueryOutline, QueryRequest, QuerySearch, QueryView, ScopeTextError,
+    SearchCase, SearchQuery, SearchScope, SearchSyntax, validate_scope_text,
 };
 use mant_sources::{RegisteredDocumentIndex, RegisteredDocumentOrigin, SourceConfigError};
 
@@ -70,6 +70,13 @@ pub enum QueryError {
     InvalidEntryKinds,
     /// An explanation entry name was empty.
     EmptyEntry,
+    /// A node or semantic-entry selector violated the bounded request contract.
+    InvalidViewSelector {
+        /// User-facing field name.
+        field: &'static str,
+        /// Precise bound or character violation.
+        error: ScopeTextError,
+    },
     /// Search configuration failed validation.
     InvalidSearch(SearchError),
     /// Markdown input could not be read or parsed.
@@ -250,6 +257,9 @@ impl fmt::Display for QueryError {
                 formatter.write_str("outline entry kinds must contain between 1 and 9 values")
             }
             Self::EmptyEntry => formatter.write_str("semantic entry must not be empty"),
+            Self::InvalidViewSelector { field, error } => {
+                write!(formatter, "{field} {}", view_selector_error_message(*error))
+            }
             Self::InvalidSearch(error) => error.fmt(formatter),
             Self::Markdown { path, detail } => {
                 write!(
@@ -304,12 +314,23 @@ impl Error for QueryError {
             | Self::EmptySelector
             | Self::InvalidEntryKinds
             | Self::EmptyEntry
+            | Self::InvalidViewSelector { .. }
             | Self::Markdown { .. }
             | Self::EmptyMarkdown { .. }
             | Self::Registry { .. }
             | Self::TldrNotFound { .. }
             | Self::Tldr { .. }
             | Self::NoReadableContent { .. } => None,
+        }
+    }
+}
+
+fn view_selector_error_message(error: ScopeTextError) -> String {
+    match error {
+        ScopeTextError::Empty => "must not be empty".to_owned(),
+        ScopeTextError::ControlCharacter => "must not contain control characters".to_owned(),
+        ScopeTextError::TooLong { maximum } => {
+            format!("must not exceed {maximum} bytes")
         }
     }
 }
@@ -542,17 +563,39 @@ pub fn validate_query_request(
             }
         }
     }
-    match &request.view {
+    validate_query_view(&request.view)
+}
+
+fn validate_query_view(view: &QueryView) -> Result<(), QueryError> {
+    match view {
         QueryView::Excerpt { selectors } => {
             if selectors.is_empty() {
                 return Err(QueryError::EmptySelection);
             }
-            if selectors.iter().any(|selector| selector.trim().is_empty()) {
-                return Err(QueryError::EmptySelector);
+            for selector in selectors {
+                validate_scope_text(selector, MAX_SEMANTIC_ENTRY_BYTES).map_err(|error| {
+                    if error == ScopeTextError::Empty {
+                        QueryError::EmptySelector
+                    } else {
+                        QueryError::InvalidViewSelector {
+                            field: "outline node",
+                            error,
+                        }
+                    }
+                })?;
             }
         }
-        QueryView::Explain { entry } if entry.trim().is_empty() => {
-            return Err(QueryError::EmptyEntry);
+        QueryView::Explain { entry } => {
+            validate_scope_text(entry, MAX_SEMANTIC_ENTRY_BYTES).map_err(|error| {
+                if error == ScopeTextError::Empty {
+                    QueryError::EmptyEntry
+                } else {
+                    QueryError::InvalidViewSelector {
+                        field: "semantic entry",
+                        error,
+                    }
+                }
+            })?;
         }
         QueryView::Search {
             pattern,
@@ -575,11 +618,17 @@ pub fn validate_query_request(
         })
         .map_err(QueryError::InvalidSearch)?,
         QueryView::Outline { entries, root } => {
-            if root
-                .as_ref()
-                .is_some_and(|selector| selector.trim().is_empty())
-            {
-                return Err(QueryError::EmptySelector);
+            if let Some(selector) = root {
+                validate_scope_text(selector, MAX_SEMANTIC_ENTRY_BYTES).map_err(|error| {
+                    if error == ScopeTextError::Empty {
+                        QueryError::EmptySelector
+                    } else {
+                        QueryError::InvalidViewSelector {
+                            field: "outline root",
+                            error,
+                        }
+                    }
+                })?;
             }
             if let EntryProjection::Kinds { kinds } = entries
                 && (kinds.is_empty() || kinds.len() > 9)
@@ -587,7 +636,7 @@ pub fn validate_query_request(
                 return Err(QueryError::InvalidEntryKinds);
             }
         }
-        QueryView::Full {} | QueryView::Explain { .. } => {}
+        QueryView::Full {} => {}
     }
     Ok(())
 }

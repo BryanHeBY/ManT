@@ -3,7 +3,7 @@
 use std::io::Write;
 
 use anstyle::{AnsiColor, Style};
-use mant_engine::{ProjectionError, QueryError, QueryExecutionError, SearchError};
+use mant_engine::{ProjectionError, QueryError, QueryExecutionError, ScopeQueryError, SearchError};
 use mant_protocol::sanitize_terminal_text;
 
 const ERROR_STYLE: Style = AnsiColor::Red.on_default().bold();
@@ -98,6 +98,7 @@ pub(super) fn query_failure(error: QueryError) -> Failure {
         | QueryError::EmptySelector
         | QueryError::InvalidEntryKinds
         | QueryError::EmptyEntry
+        | QueryError::InvalidViewSelector { .. }
         | QueryError::InvalidSearch(_) => Failure::usage(error),
         QueryError::ManualWithTldr { error, topic } => Failure::operational_lines(
             error,
@@ -152,6 +153,22 @@ pub(super) fn query_execution_failure(error: QueryExecutionError) -> Failure {
         QueryExecutionError::Query(error) => query_failure(error),
         QueryExecutionError::Projection(error) => projection_failure(error),
         QueryExecutionError::Search(error) => search_failure(error),
+    }
+}
+
+pub(super) fn scope_query_failure(error: ScopeQueryError) -> Failure {
+    match error {
+        ScopeQueryError::NoResolvedDocuments { .. } | ScopeQueryError::ContentLimit => {
+            Failure::operational(error)
+        }
+        ScopeQueryError::EmptyScope
+        | ScopeQueryError::TooManyDocuments
+        | ScopeQueryError::DepthLimit
+        | ScopeQueryError::DocumentLimit
+        | ScopeQueryError::TraversalLimitsRequireLinks
+        | ScopeQueryError::DocumentSelector(_)
+        | ScopeQueryError::EntrySelector(_)
+        | ScopeQueryError::Search(_) => Failure::usage(error),
     }
 }
 

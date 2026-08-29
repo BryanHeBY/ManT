@@ -174,6 +174,49 @@ fn dynamic_newlines_cannot_forge_colored_diagnostic_lines() {
 }
 
 #[test]
+fn every_cli_explain_surface_rejects_oversized_entries_before_lookup() {
+    let root = std::env::temp_dir().join(format!(
+        "mant-oversized-explain-process-{}",
+        std::process::id()
+    ));
+    let manual_root = root.join("manuals");
+    fs::create_dir_all(&manual_root).expect("create empty manual root");
+    let entry = "x".repeat(513);
+
+    for arguments in [
+        vec!["missing", "--explain", entry.as_str()],
+        vec![
+            "--document",
+            "missing",
+            "--follow-links",
+            "--explain",
+            entry.as_str(),
+        ],
+    ] {
+        let mut command = Command::new(executable());
+        configure_registered_documents(&mut command, &root);
+        let output = command
+            .args(arguments)
+            .env("MANT_MANPATH", &manual_root)
+            .output()
+            .expect("reject oversized semantic entry");
+        assert_eq!(output.status.code(), Some(2));
+        assert!(output.stdout.is_empty());
+        let error = String::from_utf8(output.stderr).expect("UTF-8 diagnostic");
+        assert!(
+            error.contains("semantic entry must not exceed 512 bytes"),
+            "{error}"
+        );
+        assert!(
+            !error.contains(&entry),
+            "oversized input must not be echoed"
+        );
+    }
+
+    fs::remove_dir_all(root).expect("remove oversized selector fixture");
+}
+
+#[test]
 fn partial_query_text_is_colored_only_when_the_stream_policy_allows_it() {
     let path = std::env::temp_dir().join(format!(
         "mant-colored-query-process-{}.md",
