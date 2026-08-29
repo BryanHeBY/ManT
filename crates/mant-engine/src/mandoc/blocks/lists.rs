@@ -20,6 +20,7 @@ use super::super::{
     source_span,
 };
 use super::{is_inline_equation, is_inline_equation_quote_artifact, lower_blocks_with_spacing};
+use crate::block::block_layout_mut;
 
 fn is_bullet_glyph(text: &str) -> bool {
     let mut chars = text.chars();
@@ -50,7 +51,7 @@ pub(super) fn lower_man_definition(
     };
     update_man_definition_width(node, definition_hanging_width);
     let max_width = definition_hanging_width.saturating_sub(1);
-    let item = definition_item(
+    let mut item = definition_item(
         node,
         context,
         indent_columns,
@@ -58,6 +59,12 @@ pub(super) fn lower_man_definition(
         max_width,
         spacing_enabled,
     );
+    if node.macro_name.as_deref() == Some("IP")
+        && item.terms.is_empty()
+        && append_ip_continuation(output, &mut item, indent_columns, spacing_before)
+    {
+        return;
+    }
     if node.macro_name.as_deref() == Some("IP") && is_ip_bullet_item(&item) {
         append_ip_bullet(
             output,
@@ -76,6 +83,42 @@ pub(super) fn lower_man_definition(
             max_width,
         );
     }
+}
+
+/// Attach an unlabelled `.IP` body to the preceding labelled item.
+///
+/// man(7) uses a headless `.IP` to begin another indented paragraph under the
+/// current tag. It is a continuation only when the immediately preceding
+/// item already has both a term and a description; otherwise the anonymous
+/// block remains explicit so malformed or intentionally unlabelled input is
+/// never discarded.
+fn append_ip_continuation(
+    output: &mut [Block],
+    item: &mut DefinitionItem,
+    indent_columns: u16,
+    paragraph_distance: u16,
+) -> bool {
+    if item.description.is_empty() {
+        return false;
+    }
+    let Some(Block::DefinitionList { items, compact, .. }) = output
+        .last_mut()
+        .filter(|block| block_indent(block) == Some(indent_columns))
+    else {
+        return false;
+    };
+    let Some(previous) = items
+        .last_mut()
+        .filter(|previous| !previous.terms.is_empty() && !previous.description.is_empty())
+    else {
+        return false;
+    };
+    if let Some(layout) = item.description.first_mut().and_then(block_layout_mut) {
+        layout.spacing_before_lines = layout.spacing_before_lines.max(paragraph_distance);
+    }
+    previous.description.append(&mut item.description);
+    *compact = *compact && paragraph_distance == 0;
+    true
 }
 
 pub(super) fn lower_mdoc_list(

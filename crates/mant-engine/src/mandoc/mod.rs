@@ -1393,6 +1393,44 @@ The next line.\n",
     }
 
     #[test]
+    fn headless_ip_macros_continue_the_preceding_definition() {
+        let path = temporary_source(
+            "headless-ip-continuations",
+            ".TH CONTINUATIONS 1\n\
+             .SH DESCRIPTION\n\
+             .IP foo\n\
+             First paragraph.\n\
+             .IP\n\
+             Second paragraph.\n\
+             .IP\n\
+             Third paragraph.\n\
+             .IP bar\n\
+             Bar body.\n",
+        );
+
+        let document = parse_manual_source(&path).expect("lower headless IP continuations");
+        fs::remove_file(path).expect("remove temporary roff fixture");
+        let [Block::DefinitionList { items, .. }] = document.sections[0].blocks.as_slice() else {
+            panic!("expected one definition list");
+        };
+        assert_eq!(items.len(), 2);
+        assert_eq!(inline_text(&items[0].terms[0]), "foo");
+        assert_eq!(items[0].description.len(), 3);
+        assert_eq!(
+            items[0]
+                .description
+                .iter()
+                .filter_map(|block| match block {
+                    Block::Paragraph { children, .. } => Some(inline_text(children)),
+                    _ => None,
+                })
+                .collect::<Vec<_>>(),
+            ["First paragraph.", "Second paragraph.", "Third paragraph."]
+        );
+        assert_eq!(inline_text(&items[1].terms[0]), "bar");
+    }
+
+    #[test]
     fn tq_terms_share_one_semantic_option_identity() {
         let path = temporary_source(
             "tq-aliases",
