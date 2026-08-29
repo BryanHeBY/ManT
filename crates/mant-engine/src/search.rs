@@ -233,7 +233,14 @@ fn validate_utf8_pattern(request: &SearchQuery) -> Result<(), SearchError> {
         .build()
         .parse(&request.pattern)
         .map(|_| ())
-        .map_err(|_| non_utf8_pattern_error())
+        .map_err(|error| {
+            let message = error.to_string();
+            if message.contains("pattern can match invalid UTF-8") {
+                non_utf8_pattern_error()
+            } else {
+                SearchError::InvalidPattern(message)
+            }
+        })
 }
 
 fn non_utf8_pattern_error() -> SearchError {
@@ -1132,6 +1139,22 @@ Manual needle.
         let error = search_query(&query(), &request).expect_err("byte-oriented regex");
 
         assert!(error.to_string().contains("UTF-8 character boundaries"));
+    }
+
+    #[test]
+    fn regex_syntax_errors_retain_their_actual_cause() {
+        for (pattern, expected) in [
+            ("(", "unclosed group"),
+            ("a{2,1}", "invalid repetition count range"),
+            ("[z-a]", "invalid character class range"),
+        ] {
+            let mut request = request(pattern);
+            request.syntax = SearchSyntax::Regex;
+            let error = validate_search_query(&request).expect_err("invalid regex");
+            let message = error.to_string();
+            assert!(message.contains(expected), "{pattern}: {message}");
+            assert!(!message.contains("Unicode mode cannot be disabled"));
+        }
     }
 
     #[test]
