@@ -12398,6 +12398,7 @@ mandoc,mandoc-1.14.6-1,fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man
 mandoc,mandoc-1.14.6-1,fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man7/gitworkflows.7.gz,7,976c9a2deb995ed75ecb44da20d80799a46596f45bdd3109c46c6587a3763e94,clean,not-required,
 mandoc,mandoc-1.14.6-1,fedora44-2026-07-20-x86_64,tar/usr/share/man/man1/gtar.1.gz,1,3a85ebdd1601114e7c8c1dfa35726f8394d59412887242ffc6ef49ec021017ee,clean,not-required,
 mandoc,mandoc-1.14.6-1,fixtures,real/archlinux/archive_entry_stat.3,3,06311cf3566f167804ef732defd0e5d1375dd68ceb001713be666de69e58581b,clean,not-required,
+mandoc,mandoc-1.14.6-1,fixtures,real/archlinux/bsdunzip.1,1,a271c9471543684df90d1a3f0d988628588ed8ec4f49bb2f7e402fc752ff4a83,clean,not-required,
 mandoc,mandoc-1.14.6-1,fixtures,real/archlinux/clang.1.gz,1,ff10a1611fc293291388feabf2d988c2c8950c0e784a34d4fcea5b4eb966fce0,clean,not-required,
 mandoc,mandoc-1.14.6-1,fixtures,real/archlinux/expand_number.3bsd,3bsd,4e0d2bd2af63de49f6c55ce96ae07b52a6c2214d837f4c33eec47699ca19de03,clean,not-required,
 mandoc,mandoc-1.14.6-1,fixtures,real/archlinux/gawk.1.zst,1,d28fc0d5bfdc08f85faaa6267b14223520967f9fdf0730550f12fee880b2ca31,clean,not-required,

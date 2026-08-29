@@ -111,6 +111,8 @@ Parsing does not consult the installed manual index, so the same roff bytes prod
 
 `-compact`, `-offset`, and `-width` are normalized where they affect terminal structure. Definition descriptions and list items retain nested blocks.
 
+Consecutive option-shaped mdoc `It` heads without bodies are retained as alternative terms of the next described definition. This covers both several forms of one option and distinct options such as `-I` and `-O` that intentionally share one description; a trailing run with no following body remains separate.
+
 Displays lower as follows:
 
 | Macros | ManT result |

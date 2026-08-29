@@ -181,16 +181,7 @@ fn coalesce_pending_definition_terms(
             pending.push(item);
             continue;
         }
-        if pending
-            .first()
-            .and_then(primary_option_name)
-            .is_some_and(|name| {
-                primary_option_name(&item).is_some_and(|candidate| candidate == name)
-                    && pending.iter().all(|pending| {
-                        primary_option_name(pending).as_deref() == Some(name.as_str())
-                    })
-            })
-        {
+        if is_option_definition(&item) && pending.iter().all(is_option_definition) {
             let pending_terms = pending
                 .drain(..)
                 .flat_map(|pending: DefinitionItem| pending.terms);
@@ -206,14 +197,15 @@ fn coalesce_pending_definition_terms(
     output
 }
 
-fn primary_option_name(item: &DefinitionItem) -> Option<String> {
-    item.terms.iter().find_map(|term| {
+fn is_option_definition(item: &DefinitionItem) -> bool {
+    item.terms.iter().any(|term| {
         let text = plain_text(term);
-        let token = text.split_whitespace().next()?;
+        let Some(token) = text.split_whitespace().next() else {
+            return false;
+        };
         let name =
             token.trim_matches(|character: char| matches!(character, '[' | ']' | '(' | ')' | ','));
-        (name.starts_with('-') && name != "-")
-            .then(|| name.split(['=', '[']).next().unwrap_or(name).to_owned())
+        name.starts_with('-') && name != "-"
     })
 }
 

@@ -18,6 +18,7 @@ static RSYNC: OnceLock<Document> = OnceLock::new();
 static TAR: OnceLock<Document> = OnceLock::new();
 static SH: OnceLock<Document> = OnceLock::new();
 static ARCHIVE_ENTRY_STAT: OnceLock<Document> = OnceLock::new();
+static BSDUNZIP: OnceLock<Document> = OnceLock::new();
 static EXPAND_NUMBER: OnceLock<Document> = OnceLock::new();
 static ZIP_SOURCE_FUNCTION: OnceLock<Document> = OnceLock::new();
 
@@ -32,6 +33,7 @@ pub fn archlinux_manual(name: &str) -> &'static Document {
         "tar" => &TAR,
         "sh" => &SH,
         "archive_entry_stat" => &ARCHIVE_ENTRY_STAT,
+        "bsdunzip" => &BSDUNZIP,
         "expand_number" => &EXPAND_NUMBER,
         "zip_source_function" => &ZIP_SOURCE_FUNCTION,
         _ => panic!("unknown Arch Linux fixture {name}"),
@@ -47,10 +49,15 @@ pub fn archlinux_manual_query(name: &str) -> ResolvedContent {
 }
 
 pub fn archlinux_fixture_path(name: &str) -> PathBuf {
-    if name == "archive_entry_stat" {
+    if matches!(name, "archive_entry_stat" | "bsdunzip") {
         return PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("../..")
-            .join("tests/fixtures/roff/real/archlinux/archive_entry_stat.3");
+            .join("tests/fixtures/roff/real/archlinux")
+            .join(match name {
+                "archive_entry_stat" => "archive_entry_stat.3",
+                "bsdunzip" => "bsdunzip.1",
+                _ => unreachable!(),
+            });
     }
     if matches!(name, "expand_number" | "zip_source_function") {
         return PathBuf::from(env!("CARGO_MANIFEST_DIR"))

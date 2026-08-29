@@ -11,6 +11,10 @@ coverage of ManT's in-process zstd decoder.
 It stores the exact decompressed roff bytes so the declaration-unit regression
 remains directly inspectable; its source hash matches the host-audit ledger.
 
+`bsdunzip.1` was added on 2026-08-29 from the same Arch libarchive package
+after a lowering review exposed two distinct option heads sharing the body of
+the following mdoc list item. It also stores the exact decompressed roff bytes.
+
 `expand_number.3bsd` was added on 2026-08-23 from Arch's libbsd package after
 a mandoc comparison exposed a missing comma between multiple operands of one
 mdoc `Fa` invocation. It likewise stores the exact decompressed source and
@@ -37,6 +41,7 @@ output.
 | `rsync.1.zst` | [Rsync], [Arch `rsync` 3.4.3-1] | `usr/share/man/man1/rsync.1.gz` | Lossless zstd recompression | [GPL-3.0-or-later] | `cb2becd7d2448b4f27fc28e36ea377d2667e9f814b9295b0b5ce45c06d0495a2` |
 | `sh.1p.gz` | [POSIX sh], [Arch `man-pages` 6.18-1] | `usr/share/man/man1p/sh.1p.gz` | Original member | [POSIX manual notice] | `464243a5da22f585063698896dc115ab81ef10950a3d75e3f00d3d3874b3785e` |
 | `archive_entry_stat.3` | [libarchive], [Arch `libarchive` 3.8.9-1] | `usr/share/man/man3/archive_entry_stat.3.gz` | Exact decompressed source | [BSD-2-Clause] | `06311cf3566f167804ef732defd0e5d1375dd68ceb001713be666de69e58581b` |
+| `bsdunzip.1` | [libarchive], [Arch `libarchive` 3.8.9-1] | `usr/share/man/man1/bsdunzip.1.gz` | Exact decompressed source | [libarchive BSD-2-Clause] | `a271c9471543684df90d1a3f0d988628588ed8ec4f49bb2f7e402fc752ff4a83` |
 | `expand_number.3bsd` | [libbsd], [Arch `libbsd` 0.12.2-2] | `usr/share/man/man3/expand_number.3bsd.gz` | Exact decompressed source | [BSD-2-Clause] | `4e0d2bd2af63de49f6c55ce96ae07b52a6c2214d837f4c33eec47699ca19de03` |
 | `zip_source_function.3` | [libzip], [Arch `libzip` 1.11.4-1] | `usr/share/man/man3/zip_source_function.3.gz` | Exact decompressed source | [BSD-3-Clause] | `73a409d297a001c885fc00092a92105f30fe4e6ecca0b57d06c6fecc40b5b898` |
 
@@ -51,6 +56,7 @@ The corresponding immutable package archives have these SHA-256 values:
 - `gawk-5.2.0-1-x86_64.pkg.tar.zst`: `dd6a14cb65eec0754eb0d77a373bc685cff2776133007251e35593a3de8045f6`
 - `rsync-3.4.3-1-x86_64.pkg.tar.zst`: `f2ad0dcc4d7022cb7f04c4da716be067b93a95fc246f2c0259cb2dbb880684e5`
 - `man-pages-6.18-1-any.pkg.tar.zst`: `f03bbc27c6c14aed6c009a4780e618cf57c0eb9cdca390a3c4eacc600d197ba3`
+- `libarchive-3.8.9-1-x86_64.pkg.tar.zst`: `07b7aaec008cc4892cb2da0c599a16438d2e70869a01b90c4e20bf153f58c3b3`
 - `libbsd-0.12.2-2-x86_64.pkg.tar.zst`: `e26194849786b0202828a348be3f4b90d410604cd7d48f113a4301584a49895a`
 - `libzip-1.11.4-1-x86_64.pkg.tar.zst`: `e6bc733cdc738d317d94f1906eb86229be174aa8362ad7dbb03ae68d9eb3dbf6`
 
@@ -65,9 +71,11 @@ transcribed in [`GAWK-MANPAGE.txt`](../LICENSES/GAWK-MANPAGE.txt).
 The POSIX shell page is redistributed under the IEEE and The Open Group
 permission shipped by Arch's man-pages package; its required notice is copied
 verbatim to [`POSIX-COPYRIGHT.txt`](../LICENSES/POSIX-COPYRIGHT.txt).
-The libarchive and libbsd pages retain their complete BSD-2-Clause notices at
-the start of each fixture. The libzip page likewise retains its complete
-BSD-3-Clause notice.
+The libarchive `archive_entry_stat` and libbsd pages retain their complete
+BSD-2-Clause notices at the start of each fixture. The SPDX-identified
+`bsdunzip` page's complete page-specific terms are reproduced in
+[`LIBARCHIVE-BSD-2-Clause.txt`](../LICENSES/LIBARCHIVE-BSD-2-Clause.txt). The
+libzip page likewise retains its complete BSD-3-Clause notice.
 
 ## Reproducing a fixture
 
@@ -152,4 +160,5 @@ representative topics, grouped by source package.
 [gawk manual-page permission]: ../LICENSES/GAWK-MANPAGE.txt
 [POSIX manual notice]: ../LICENSES/POSIX-COPYRIGHT.txt
 [BSD-2-Clause]: archive_entry_stat.3
+[libarchive BSD-2-Clause]: ../LICENSES/LIBARCHIVE-BSD-2-Clause.txt
 [BSD-3-Clause]: zip_source_function.3

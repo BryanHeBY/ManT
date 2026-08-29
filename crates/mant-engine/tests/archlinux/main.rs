@@ -9,6 +9,7 @@ mod common;
 mod fixtures;
 
 mod archive_entry_stat;
+mod bsdunzip;
 mod clang;
 mod expand_number;
 mod gawk;

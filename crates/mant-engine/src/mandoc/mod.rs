@@ -3204,6 +3204,38 @@ Forward a local socket.\n.El\n",
     }
 
     #[test]
+    fn groups_distinct_mdoc_options_that_share_one_description() {
+        let document = parse_manual_bytes(
+            std::path::Path::new("shared-option-description.1"),
+            b".Dd August 29, 2026\n.Dt SHARED-OPTION-DESCRIPTION 1\n.Os\n.Sh OPTIONS\n\
+.Bl -tag -width Ds\n\
+.It Fl I Ar encoding\n\
+.It Fl O Ar encoding\n\
+Convert filenames from the specified encoding.\n\
+.El\n",
+        )
+        .expect("lower distinct options with a shared description");
+
+        let Block::DefinitionList { items, .. } = &document.sections[0].blocks[0] else {
+            panic!("expected an option definition list");
+        };
+        assert_eq!(items.len(), 1);
+        assert_eq!(
+            items[0]
+                .terms
+                .iter()
+                .map(|term| inline_text(term))
+                .collect::<Vec<_>>(),
+            ["-I encoding", "-O encoding"]
+        );
+        assert_eq!(items[0].identity.as_ref().unwrap().names, ["-I", "-O"]);
+        assert!(items[0].description.iter().any(|description| {
+            matches!(description, Block::Paragraph { children, .. }
+                if inline_text(children) == "Convert filenames from the specified encoding.")
+        }));
+    }
+
+    #[test]
     fn preserves_a_single_mdoc_option_argument_and_its_description() {
         let document = parse_manual_bytes(
             std::path::Path::new("option-with-argument.1"),
