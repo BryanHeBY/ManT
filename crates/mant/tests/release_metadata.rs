@@ -8,6 +8,25 @@ use std::{fs, process, time::SystemTime};
 use serde_json::Value;
 
 #[test]
+fn release_profile_preserves_unwind_cleanup() {
+    let manifest = include_str!("../../../Cargo.toml");
+    let release = manifest
+        .split_once("[profile.release]")
+        .expect("release profile")
+        .1
+        .split("\n[")
+        .next()
+        .expect("release profile body");
+
+    assert!(
+        !release
+            .lines()
+            .any(|line| line.trim() == "panic = \"abort\""),
+        "the TUI terminal guard and catch_unwind require unwinding"
+    );
+}
+
+#[test]
 fn binstall_targets_match_the_published_archive_contract() {
     let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("Cargo.toml");
     let output = Command::new(env!("CARGO"))
