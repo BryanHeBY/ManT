@@ -63,10 +63,19 @@ that crate was not published for that change.
 - Separate inferred native semantic IDs from formatter navigation anchors and
   derive role-qualified IDs from complete recognized names, preventing short
   anchors such as `set` or `re` from shadowing unrelated exact aliases.
+- Make generated entry collision IDs content-addressed and native section IDs
+  independent of unrelated siblings, so reordering cannot silently redirect a
+  returned ID. Paths remain explicit source-order coordinates.
+- Use one selector resolver for excerpts, rooted outlines, and explanations:
+  exact path, exact ID, exact alias, then shorthand. Explanation now rejects a
+  resolved structural node instead of bypassing it for a lower-precedence
+  same-spelled entry.
 - Apply one context-bounded environment-variable grammar to native and
   Markdown definitions, including shell, PowerShell provider, Windows percent,
-  and assignment forms. This makes Git, systemd, Windows, and ManT environment
-  sections discoverable without promoting uppercase prose.
+  and single-assignment forms. Complete terms and explicit trailing default
+  annotations are parsed without first-word truncation; unresolved native
+  definitions remain visible with a structured incompleteness diagnostic
+  rather than promoting prose.
 - Prune unrelated topology and recalculate summaries for selected-kind outline
   projections; a zero-match projection now renders an explicit empty result.
 - Rebase scoped-search hit ordinals across breadth-first document order so one
@@ -110,6 +119,8 @@ that crate was not published for that change.
 - Give completely missed scoped explanations an executable next step: native
   output names the complete outline command, while MCP names `mant_outline`
   and `mant_search` without leaking CLI-only flags.
+- Apply the same 512-byte, control-free selector validation and usage exit
+  status to single-document and multi-document outline/read/explain requests.
 - Launch native Windows external links through the absolute System32 handler
   path instead of executable name lookup, and sanitize dynamic TUI notices at
   their final terminal-rendering boundary.

@@ -103,7 +103,7 @@ A definition-list item may carry `DefinitionIdentity` when ManT can identify a s
 
 The identity is assigned during lowering, before source-specific macro information is discarded. Ordinary prose definitions remain valid definition items without an identity.
 
-For inferred native definitions, the engine derives a role-qualified identity from the complete semantic name. Formatter navigation tags remain page-local anchors but do not become semantic IDs merely because their spelling is short or collides with a command. A producer-supplied non-empty identity remains authoritative. These IDs are stable within a compatible logical document; they do not promise that an independently updated host manual retains the same semantic inventory.
+For inferred native definitions, the engine derives a role-qualified identity from the complete semantic name. Formatter navigation tags remain page-local anchors but do not become semantic IDs merely because their spelling is short or collides with a command. Collisions use a deterministic fingerprint of semantic identity and content rather than a source-order suffix; unrelated sibling insertion and reordering therefore cannot silently redirect an ID. Section and entry allocation are independent. A producer-supplied non-empty identity remains authoritative. These IDs identify the same logical content within one current document, but an independently updated host manual can change or remove that content, so consumers rediscover before reuse.
 
 `SemanticIndex` is a rebuildable sidecar over these content definitions. It
 classifies entries with `EntryKind`, preserves exact selector `aliases`

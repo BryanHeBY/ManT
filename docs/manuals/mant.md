@@ -450,9 +450,11 @@ beneath their owning section in `--outline`, and are selectable through
 rather than being guessed. Paths and IDs resolve first, followed by exact
 aliases and then normalized conveniences such as omitting leading dashes. This
 lets an exact command `?` coexist with option spelling `-?`. When aliases at
-the same precedence remain ambiguous, the outline carries a source diagnostic
-and `entriesComplete: false`; selection returns candidate paths and IDs for a
-stable qualification.
+the same precedence remain ambiguous, or a structural ID shadows an entry
+alias, the outline carries a source diagnostic and selection returns or points
+to candidate paths and IDs for exact qualification. `entriesComplete: false`
+is reserved for rejected declarations or native definitions that could not be
+classified without guessing.
 
 Semantic tables are not currently inferred or declared. Convert an interface
 table to a declared bullet list when its rows must appear in outlines and work
@@ -661,7 +663,7 @@ Multi-document deterministic output supports `--search` and `--explain`. Outline
   and generic terms.
 
 For progressive agent exploration, begin with the default summary, then reuse
-the bracketed stable ID of a relevant section as `--outline-root` and request
+the bracketed ID of a relevant section as `--outline-root` and request
 only the needed entry kinds. A second rooted outline can expand one returned
 entry before `--node` reads its complete content. The IDs below illustrate
 values returned by one installed `bash(1)`; callers reuse the values from their
@@ -669,15 +671,16 @@ own preceding response:
 
 ```sh
 mant bash --outline
-mant bash --outline --outline-root shell-builtin-commands-80 --outline-entries command
+mant bash --outline --outline-root shell-builtin-commands --outline-entries command
 mant bash --outline --outline-root command-set --outline-entries all
 mant bash --node command-set --format markdown
 ```
 
 Rooting changes only the returned tree boundary. Paths and IDs remain unchanged
 between projections of the same current document, unrelated siblings are
-omitted, and every call independently rebuilds the local source. Prefer a
-returned ID over a display heading or an alias that may be ambiguous.
+omitted, and every call independently rebuilds the local source. Reuse a path
+or ID from the current outline response instead of guessing from a display
+heading. Rediscover after the underlying document changes.
 
 Outline path `0` and node ID `tldr` designate the reserved tldr outline node,
 which contains either an external tldr page or a Markdown document's explicitly
@@ -689,30 +692,36 @@ nodes; aliases remain exact selectable spellings rather than display forms.
 Paths are source-order coordinates and can move when an installed manual
 changes; `2.3/e4` is not a stable ID. The separately printed bracketed ID is a
 document-local selector derived from semantic identity. Automatically inferred
-native entry IDs use the full recognized name plus a role prefix, so a
+native entry IDs use the complete recognized name plus a role prefix, so a
 navigation anchor such as `set` cannot turn `set-mark` into a misleading entry
-ID or shadow the `set` command. IDs are stable only for that logical identity
-within a compatible source document, not across arbitrary host-manual updates.
+ID or shadow the `set` command. When two semantic identities would otherwise
+have the same ID, ManT adds a deterministic content fingerprint rather than a
+source-order suffix. Native section IDs count only equal headings, and section
+and entry allocation do not renumber each other. These properties keep IDs
+stable across unrelated sibling insertion and reordering; an independently
+updated manual can still change or remove the logical identity, so callers
+must rediscover after document changes.
 `--tldr` selects that reserved node alone and, unlike a general node
 projection, explicitly permits a quick reference without a full document. It
 uses the normal document priority chain, but considers only Markdown documents
 that actually contain an embedded tldr preface; cached tldr occupies the same
 priority-zero built-in position as native manuals.
 
-`--node` first recognizes the reserved tldr and document-root selectors, then
-resolves exact paths or IDs across sections and entries, exact aliases, and
-finally normalized entry shorthands. `--explain` uses the same precedence,
-accepts every semantic entry kind, and rejects structural sections. Duplicate
-matches at one precedence return deterministic
-candidate paths and IDs. Only when no entry matches does an exact section,
-root, or tldr selector produce the instruction to use `--node`; consequently a
-command alias may have the same spelling as a section ID without being
-shadowed. If no semantic entry matches but the same literal text occurs in the
-document, the failure identifies its first outline node and directs the caller
-to `--search`. This remains a diagnostic only: prose never silently becomes an
-explainable semantic entry.
+`--node`, `--outline-root`, and `--explain` use one selector resolver: exact
+path, exact ID, exact semantic alias, then normalized entry shorthand.
+`--explain` applies that same resolution first and then rejects a structural
+section, document root, or tldr node. It never changes precedence to find a
+different entry. Duplicate matches at one precedence return deterministic
+candidate paths and IDs. If an entry alias equals an exact structural ID, the
+structural ID therefore wins; the outline reports the shadowing diagnostic and
+the entry remains reachable by its returned path or ID. If no semantic entry
+matches but the same literal text occurs in the document, the failure
+identifies its first outline node and directs the caller to `--search`. This
+remains a diagnostic only: prose never silently becomes an explainable
+semantic entry. All three selectors reject control characters and values over
+512 UTF-8 bytes before document resolution.
 
-## Search
+## Search {#search-section}
 
 - `--search PATTERN`: Search visible text and report reusable nodes plus Markdown coordinates.
 - `--grep PATTERN`: Alias for `--search`.

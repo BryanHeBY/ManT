@@ -15,6 +15,8 @@ deterministic output without owning a terminal or command-line process.
   every supported platform.
 - Semantic outlines with compact scope summaries, role filters, nested entry
   paths, authored forms, value domains, and optional section/entry roots.
+- One selector resolver for outline roots, excerpts, and explanations: exact
+  path, exact ID, exact alias, then normalized shorthand.
 - Excerpt selection and literal or regular-expression search with generated
   Markdown coordinates.
 - Markdown, text, man-style text, and JSON renderers over one normalized IR.
