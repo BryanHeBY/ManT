@@ -135,12 +135,13 @@ fn lower_mandoc_document_with_source(
     source: Option<&str>,
 ) -> Document {
     let parsed: &MandocDocument = &report.document;
+    let explicit_targets = navigation::explicit_targets(&parsed.root);
     let mut context = LoweringContext::new(parsed.metadata.name.as_deref(), source);
+    context.reserve_section_ids(&explicit_targets);
     let mut diagnostics = diagnostics::lower_diagnostics(&report.diagnostics);
     let mut sections = blocks::lower_sections(&parsed.root, &mut context);
     let mut root_blocks = blocks::lower_root_blocks(&parsed.root, &context);
     diagnostics.extend(context.take_diagnostics());
-    let explicit_targets = navigation::explicit_targets(&parsed.root);
     let mut retained_targets = explicit_targets.clone();
     retained_targets.extend(crate::definitions::identify_definitions(
         &mut root_blocks,
@@ -258,6 +259,10 @@ impl<'a> LoweringContext<'a> {
             .rev()
             .find(|change| change.line <= line)
             .and_then(|change| change.delimiters)
+    }
+
+    fn reserve_section_ids(&mut self, ids: &HashSet<String>) {
+        self.assigned_section_ids.extend(ids.iter().cloned());
     }
 
     /// Normalize an eqn fragment through the same pinned parser used for
@@ -2543,6 +2548,38 @@ Sean\n\
             inline,
             Inline::Anchor { id } if id == "explicit-option"
         )));
+    }
+
+    #[test]
+    fn explicit_targets_reserve_the_native_section_namespace() {
+        let path = temporary_source(
+            "mdoc-target-section-collision",
+            ".Dd August 30, 2026\n\
+             .Dt TARGET-COLLISION 1\n\
+             .Os\n\
+             .Sh FOO\n\
+             .Tg bar\n\
+             First.\n\
+             .Sh BAR\n\
+             Second.\n",
+        );
+
+        let document = parse_manual_source(&path).expect("lower reserved explicit target");
+        fs::remove_file(path).expect("remove temporary roff fixture");
+
+        assert_eq!(document.sections[0].id, "foo");
+        assert_eq!(document.sections[1].id, "bar-2");
+        assert!(document.sections[0].blocks.iter().any(|block| matches!(
+            block,
+            Block::Paragraph { children, .. }
+                if children.iter().any(|inline| matches!(
+                    inline,
+                    Inline::Anchor { id } if id == "bar"
+                ))
+        )));
+        assert!(document.diagnostics.iter().all(|diagnostic| {
+            diagnostic.code.as_deref() != Some("ir.identity-role-collision")
+        }));
     }
 
     #[test]
