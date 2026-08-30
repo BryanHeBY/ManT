@@ -373,10 +373,26 @@ complete bullet list. Both the role and matching policy are required:
 - `$?`: Hold the last PowerShell success state.
 - `$LASTEXITCODE`: Hold the last native process exit code.
 - `$PSVersionTable`: Describe the running PowerShell version.
+
+<!-- mant:entries role=configuration-key case=insensitive -->
+- `AuthorizedKeysFile`: Select authorized-key paths.
+
+<!-- mant:entries role=marker case=sensitive -->
+- `--`: End option parsing.
+
+<!-- mant:entries role=operand case=sensitive -->
+- `FILE`: Name an input file.
+
+<!-- mant:entries role=value case=insensitive -->
+- `always`: Select an accepted value.
+
+<!-- mant:entries role=term case=sensitive -->
+- `exit status`: Describe a general addressable term.
 ```
 
-`role` is `option`, `command`, `variable`, or `environment-variable`; `case`
-is `sensitive` or `insensitive`. An environment-variable entry accepts bare
+`role` is `option`, `marker`, `operand`, `command`, `configuration-key`,
+`environment-variable`, `variable`, `value`, or `term`; `case` is `sensitive`
+or `insensitive`. An environment-variable entry accepts bare
 `NAME`, shell `$NAME`, PowerShell `$Env:NAME` or `${Env:NAME}`, Windows
 `%NAME%`, and assignment `NAME=value` spellings. The selector for an assignment
 omits its value while the authored form retains it; wrapper-free lookup such as

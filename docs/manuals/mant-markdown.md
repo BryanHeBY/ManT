@@ -67,7 +67,7 @@ Wiki links are not part of the supported link contract.
 
 ## Semantic Entry Lists
 
-ManT uses definition identities to make options, commands, variables, and environment variables directly addressable by `--explain`, outlines, the TUI, JSON, and MCP. Markdown has no portable definition-list syntax, so ManT provides an invisible directive for a complete bullet list:
+ManT uses definition identities to make options, markers, operands, commands, configuration keys, environment variables, variables, values, and terms directly addressable by `--explain`, outlines, the TUI, JSON, and MCP. Markdown has no portable definition-list syntax, so ManT provides an invisible directive for a complete bullet list:
 
 ```markdown
 <!-- mant:entries role=option case=sensitive -->
@@ -79,11 +79,13 @@ The directive must be the only construct on its line and immediately precede a c
 
 | Field | Values | Meaning |
 | --- | --- | --- |
-| `role` | `option`, `command`, `environment-variable`, `variable` | Entry semantics |
+| `role` | `option`, `marker`, `operand`, `command`, `configuration-key`, `environment-variable`, `variable`, `value`, `term` | Entry semantics |
 | `case` | `sensitive`, `insensitive` | Alias lookup policy |
 | `attached` | `infer`, `fixed` | Optional option-value policy |
 
 `attached` applies only to option entries. With `infer`, a declaration such as `` `--output=FILE` `` exposes `--output` and accepts attached values. With `fixed`, punctuation remains part of the exact option name. This is useful for real Windows tokens such as `-ca.cert`.
+
+The other roles preserve complete authored names. Use `marker` for parser-control tokens such as `--`, `operand` for positional or special operands, `configuration-key` for named configuration-language keys, `value` for a value accepted by a parent entry, and `term` only when no more specific reliable role applies.
 
 Environment-variable declarations use one cross-platform name grammar shared with native manuals. Accepted spellings are bare names such as `PATH`, shell references such as `$PATH`, PowerShell provider references such as `$Env:PATH` and `${Env:ProgramData}`, and Windows references such as `%ProgramFiles(x86)%`. Provider matching is ASCII case-insensitive. An assignment term such as `RUST_LOG=debug` exposes `RUST_LOG` as its selector while preserving the complete assignment as an authored form. A name starts with an ASCII letter or underscore and then uses ASCII letters, digits, `_`, `-`, or parentheses. The directive supplies the semantic context; ManT never scans ordinary prose for name-shaped words.
 

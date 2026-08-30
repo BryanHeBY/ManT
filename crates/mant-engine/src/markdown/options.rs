@@ -204,9 +204,14 @@ fn parse_declaration(value: &str, source: SourceSpan) -> Result<EntryDeclaration
             "role" if role.is_none() => {
                 role = Some(match value {
                     "option" => DefinitionRole::Option,
+                    "marker" => DefinitionRole::Marker,
+                    "operand" => DefinitionRole::Operand,
                     "command" => DefinitionRole::Command,
+                    "configuration-key" => DefinitionRole::ConfigurationKey,
                     "environment-variable" => DefinitionRole::EnvironmentVariable,
                     "variable" => DefinitionRole::Variable,
+                    "value" => DefinitionRole::Value,
+                    "term" => DefinitionRole::Term,
                     _ => return Err(format!("unknown semantic-entry role '{value}'")),
                 });
             }

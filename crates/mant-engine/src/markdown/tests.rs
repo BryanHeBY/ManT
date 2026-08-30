@@ -709,6 +709,45 @@ fn declared_entries_cover_windows_options_commands_and_environment_variables() {
 }
 
 #[test]
+fn declared_entries_expose_every_protocol_semantic_role() {
+    let parsed = parse_markdown(
+        "# tool\n\n## Markers\n\n<!-- mant:entries role=marker case=sensitive -->\n- `--`: End option parsing.\n\n## Operands\n\n<!-- mant:entries role=operand case=sensitive -->\n- `FILE`: Select an input.\n\n## Configuration\n\n<!-- mant:entries role=configuration-key case=insensitive -->\n- `AuthorizedKeysFile`: Select key paths.\n\n## Values\n\n<!-- mant:entries role=value case=insensitive -->\n- `always`: Select a policy.\n\n## Terms\n\n<!-- mant:entries role=term case=sensitive -->\n- `exit status`: Describe a result.\n",
+        Some("roles.md".to_owned()),
+    )
+    .expect("all declared semantic roles");
+    assert!(parsed.document.diagnostics.is_empty());
+
+    let expected = [
+        (DefinitionRole::Marker, "--"),
+        (DefinitionRole::Operand, "FILE"),
+        (DefinitionRole::ConfigurationKey, "AuthorizedKeysFile"),
+        (DefinitionRole::Value, "always"),
+        (DefinitionRole::Term, "exit status"),
+    ];
+    for (section, (role, name)) in parsed.document.sections.iter().zip(expected) {
+        let [Block::DefinitionList { items, .. }] = section.blocks.as_slice() else {
+            panic!("declared {role:?} list should become definitions");
+        };
+        let identity = items[0].identity.as_ref().expect("semantic identity");
+        assert_eq!(identity.role, role);
+        assert_eq!(identity.names, [name]);
+    }
+
+    let content = ResolvedContent {
+        address: None,
+        label: "roles".to_owned(),
+        document: Some(parsed.document),
+        tldr: None,
+    };
+    for selector in ["--", "FILE", "authorizedkeysfile", "ALWAYS", "exit status"] {
+        assert!(
+            select_explanation(&content, selector).is_ok(),
+            "semantic selector {selector}"
+        );
+    }
+}
+
+#[test]
 fn declared_dotted_dash_options_preserve_their_exact_names() {
     let parsed = parse_markdown(
         "# tool\n\n## Options\n\n<!-- mant:entries role=option case=insensitive -->\n- `-ca.cert`: Retrieve a CA certificate.\n- `-ca.chain`: Retrieve a CA chain.\n- `--foo.bar`: Use a dotted long option.\n- `--config.file=FILE`: Read a configuration file.\n- `--output.name <PATH>`: Write to a path.\n",
