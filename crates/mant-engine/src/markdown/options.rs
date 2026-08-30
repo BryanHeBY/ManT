@@ -746,6 +746,12 @@ fn option_entry_name(
     if value.starts_with('+') {
         return fixed_prefixed_name(value, "+");
     }
+    if let Some(negated) = value.strip_prefix('!') {
+        if !negated.starts_with('-') {
+            return Err(EntryRejectionReason::UnsupportedOptionPrefix);
+        }
+        return dash_option_name(negated, attached).map(|name| format!("!{name}"));
+    }
     if !value.starts_with('/') {
         return equals_option_name(value, attached);
     }

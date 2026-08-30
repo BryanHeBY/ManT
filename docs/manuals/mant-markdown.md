@@ -83,7 +83,7 @@ The directive must be the only construct on its line and immediately precede a c
 | `case` | `sensitive`, `insensitive` | Alias lookup policy |
 | `attached` | `infer`, `fixed` | Optional option-value policy |
 
-`attached` applies only to option entries. With `infer`, a declaration such as `` `--output=FILE` `` exposes `--output` and accepts attached values. With `fixed`, punctuation remains part of the exact option name. This is useful for real Windows tokens such as `-ca.cert`.
+`attached` applies only to option entries. With `infer`, a declaration such as `` `--output=FILE` `` exposes `--output` and accepts attached values. With `fixed`, punctuation remains part of the exact option name. This is useful for real Windows tokens such as `-ca.cert`. An explicitly declared negated dash option may prefix a valid `-` or `--` spelling with `!`, for example `!--reloadEnvironment`; arbitrary `!name` tokens are not options.
 
 The other roles preserve complete authored names. Use `marker` for parser-control tokens such as `--`, `operand` for positional or special operands, `configuration-key` for named configuration-language keys, `value` for a value accepted by a parent entry, and `term` only when no more specific reliable role applies.
 

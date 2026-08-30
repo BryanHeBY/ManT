@@ -802,6 +802,60 @@ fn declared_dotted_dash_options_preserve_their_exact_names() {
 }
 
 #[test]
+fn declared_negated_dash_options_preserve_their_executable_spelling() {
+    let parsed = parse_markdown(
+        "# tool\n\n## Options\n\n<!-- mant:entries role=option case=sensitive -->\n- `!--reloadEnvironment`: Disable environment reload.\n- `!--profile=NAME`: Negate one named profile option.\n",
+        Some("negated-option.md".to_owned()),
+    )
+    .expect("negated dash semantic options");
+    assert!(parsed.document.diagnostics.is_empty());
+
+    let Block::DefinitionList { items, .. } = &parsed.document.sections[0].blocks[0] else {
+        panic!("declared options should become definitions");
+    };
+    assert_eq!(
+        items
+            .iter()
+            .map(|item| item
+                .identity
+                .as_ref()
+                .expect("option identity")
+                .names
+                .clone())
+            .collect::<Vec<_>>(),
+        [vec!["!--reloadEnvironment"], vec!["!--profile"]]
+    );
+
+    let content = ResolvedContent {
+        address: None,
+        label: "negated-option".to_owned(),
+        document: Some(parsed.document),
+        tldr: None,
+    };
+    assert!(select_explanation(&content, "!--reloadEnvironment").is_ok());
+    assert!(select_explanation(&content, "!--profile").is_ok());
+}
+
+#[test]
+fn declared_options_reject_arbitrary_bang_prefixed_terms() {
+    let parsed = parse_markdown(
+        "# tool\n\n## Options\n\n<!-- mant:entries role=option case=sensitive -->\n- `!reloadEnvironment`: Invalid negation.\n",
+        Some("invalid-negated-option.md".to_owned()),
+    )
+    .expect("invalid entry remains a readable document");
+    assert!(parsed.document.diagnostics.iter().any(|diagnostic| {
+        diagnostic.code.as_deref() == Some("markdown.semantic-entry.unsupported-option-prefix")
+    }));
+    assert!(matches!(
+        &parsed.document.sections[0].blocks[0],
+        Block::List {
+            kind: ListKind::Bullet,
+            ..
+        }
+    ));
+}
+
+#[test]
 fn declared_variables_keep_shell_and_powershell_automatic_names() {
     let parsed = parse_markdown(
         "# Shell\n\n## Variables\n\n<!-- mant:entries role=variable case=insensitive -->\n- `$?`: Last success state.\n- `$$`: Current process identifier.\n- `$^`: First pipeline input.\n- `$_`: Current pipeline item.\n- `$null`: Null value.\n- `$LASTEXITCODE`: Native exit status.\n- `$PSVersionTable`: PowerShell version data.\n- `$PROFILE`: Profile paths.\n- `$PATH`: Ordinary shell variable.\n\n## Environment\n\n<!-- mant:entries role=environment-variable case=insensitive -->\n- `$env:PATH`: Process executable path.\n",

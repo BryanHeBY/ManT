@@ -352,6 +352,7 @@ complete bullet list. Both the role and matching policy are required:
 - `/driver.exclude`: Select Driver Verifier exclusions.
 - `-ca.cert`, `-ca.chain`: Preserve exact dotted dash-option names.
 - `--config.file=FILE`: Omit a placeholder while preserving the dotted name.
+- `!--reloadEnvironment`: Preserve an explicitly negated dash option.
 
 <!-- mant:entries role=option case=insensitive attached=fixed -->
 - `/F`: Run an extended scan.
@@ -442,6 +443,9 @@ selector. Numeric and lowercase alphabetic values such as `/reg:32` and
 `/mode:auto` likewise remain part of the selector.
 
 Declared option lists also accept conservative Windows-native token families.
+An explicit `!` may negate an otherwise valid dash option, so
+`!--reloadEnvironment` remains an exact executable spelling; `!name` without a
+dash option is rejected.
 An ASCII identifier followed by `=` retains the equals sign while omitting an
 uppercase or angle-bracket placeholder, so `type= TYPE` and `board=N` become
 `type=` and `board=`. Windows Script Host `//` names preserve both slashes and
