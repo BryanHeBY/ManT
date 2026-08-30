@@ -889,6 +889,35 @@ mod tests {
     }
 
     #[test]
+    fn paragraph_distance_zero_does_not_turn_tp_items_into_aliases() {
+        let path = temporary_source(
+            "distinct-zero-distance-definitions",
+            ".TH DISTINCT 1\n\
+             .SH OPTIONS\n\
+             .PD 0\n\
+             .TP\n\
+             -a\n\
+             .TP\n\
+             -b\n\
+             Description only for b.\n",
+        );
+
+        let document = parse_manual_source(&path).expect("lower compact tagged paragraphs");
+        fs::remove_file(path).expect("remove temporary roff fixture");
+        let [Block::DefinitionList { items, .. }] = document.sections[0].blocks.as_slice() else {
+            panic!("expected one definition list");
+        };
+        assert_eq!(items.len(), 2);
+        assert_eq!(inline_text(&items[0].terms[0]), "-a");
+        assert!(items[0].description.is_empty());
+        assert_eq!(inline_text(&items[1].terms[0]), "-b");
+        let Block::Paragraph { children, .. } = &items[1].description[0] else {
+            panic!("expected second tagged paragraph description");
+        };
+        assert_eq!(inline_text(children), "Description only for b.");
+    }
+
+    #[test]
     fn preserves_man_synopsis_flow_and_alternating_fonts() {
         let path = temporary_source(
             "man-synopsis-flow",

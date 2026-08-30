@@ -68,8 +68,7 @@ pub(super) fn lower_man_definition(
     );
     let macro_name = node.macro_name.as_deref();
     let merge_pending = macro_name == Some("IP")
-        || matches!(macro_name, Some("TP" | "TQ"))
-            && (macro_name == Some("TQ") || *pending_alias || spacing_before == 0);
+        || matches!(macro_name, Some("TP" | "TQ")) && (macro_name == Some("TQ") || *pending_alias);
     *pending_alias = item.description.is_empty()
         && (macro_name == Some("TQ")
             || visible_definition_head(node)
