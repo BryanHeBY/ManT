@@ -86,9 +86,15 @@ pub fn search_query(
     let limit = usize::try_from(request.limit).unwrap_or(usize::MAX);
     let mut collector = SearchCollector::new(markdown, &lines, offset, limit);
     let mut invalid_utf8_match = false;
+    let mut invalid_zero_width_match = false;
+    let mut invalid_mapped_range = false;
 
     matcher
         .find_iter(searchable.text.as_bytes(), |found| {
+            if found.start() == found.end() {
+                invalid_zero_width_match = true;
+                return false;
+            }
             if !searchable.text.is_char_boundary(found.start())
                 || !searchable.text.is_char_boundary(found.end())
             {
@@ -103,7 +109,15 @@ pub fn search_query(
                 invalid_utf8_match = true;
                 return false;
             }
-            if let Some(owner) = owners.owner(markdown_start) {
+            if markdown_start >= markdown_end {
+                invalid_mapped_range = true;
+                return false;
+            }
+            let owner = owners.owner(markdown_start);
+            let end_owner = owners.owner(markdown_end - 1);
+            if let (Some(owner), Some(end_owner)) = (owner, end_owner)
+                && owner.key == end_owner.key
+            {
                 collector.push(
                     RawOccurrence {
                         searchable: found.start()..found.end(),
@@ -117,6 +131,14 @@ pub fn search_query(
         .map_err(|error| SearchError::InvalidPattern(error.to_string()))?;
     if invalid_utf8_match {
         return Err(non_utf8_pattern_error());
+    }
+    if invalid_zero_width_match {
+        return Err(empty_match_error());
+    }
+    if invalid_mapped_range {
+        return Err(SearchError::InvalidPattern(
+            "pattern produced a range that cannot be mapped to canonical Markdown".to_owned(),
+        ));
     }
 
     let (raw_groups, total) = collector.finish();
@@ -192,7 +214,7 @@ fn validate_request(request: &SearchQuery) -> Result<(), SearchError> {
 }
 
 fn build_matcher(request: &SearchQuery) -> Result<grep_regex::RegexMatcher, SearchError> {
-    validate_utf8_pattern(request)?;
+    validate_pattern_semantics(request)?;
     let mut builder = RegexMatcherBuilder::new();
     builder
         .fixed_strings(request.syntax == SearchSyntax::Literal)
@@ -216,23 +238,20 @@ fn build_matcher(request: &SearchQuery) -> Result<grep_regex::RegexMatcher, Sear
         .is_match(b"")
         .map_err(|error| SearchError::InvalidPattern(error.to_string()))?
     {
-        return Err(SearchError::InvalidPattern(
-            "pattern must not match empty text".to_owned(),
-        ));
+        return Err(empty_match_error());
     }
     Ok(matcher)
 }
 
-fn validate_utf8_pattern(request: &SearchQuery) -> Result<(), SearchError> {
+fn validate_pattern_semantics(request: &SearchQuery) -> Result<(), SearchError> {
     if request.syntax == SearchSyntax::Literal {
         return Ok(());
     }
-    ParserBuilder::new()
+    let hir = ParserBuilder::new()
         .utf8(true)
         .unicode(true)
         .build()
         .parse(&request.pattern)
-        .map(|_| ())
         .map_err(|error| {
             let message = error.to_string();
             if message.contains("pattern can match invalid UTF-8") {
@@ -240,7 +259,15 @@ fn validate_utf8_pattern(request: &SearchQuery) -> Result<(), SearchError> {
             } else {
                 SearchError::InvalidPattern(message)
             }
-        })
+        })?;
+    if hir.properties().minimum_len() == Some(0) {
+        return Err(empty_match_error());
+    }
+    Ok(())
+}
+
+fn empty_match_error() -> SearchError {
+    SearchError::InvalidPattern("pattern must not match empty text".to_owned())
 }
 
 fn non_utf8_pattern_error() -> SearchError {
@@ -317,7 +344,7 @@ impl<'a> SearchCollector<'a> {
             .line_index;
         let end_line_index = self
             .lines
-            .position(self.markdown, occurrence.markdown.end)
+            .position(self.markdown, occurrence.markdown.end.saturating_sub(1))
             .line_index;
         if let Some(group) = self.current.as_mut().filter(|group| {
             group.start_line_index == start_line_index
@@ -449,7 +476,9 @@ fn occurrence_line_ranges(
     let start = lines
         .position(markdown, occurrence.markdown.start)
         .line_index;
-    let end = lines.position(markdown, occurrence.markdown.end).line_index;
+    let end = lines
+        .position(markdown, occurrence.markdown.end.saturating_sub(1))
+        .line_index;
     (start..=end)
         .flat_map(|line_index| {
             let line_start = lines.start(line_index);
@@ -1167,10 +1196,81 @@ Manual needle.
 
     #[test]
     fn regexes_that_match_empty_text_are_rejected() {
-        let mut request = request("$");
+        for pattern in ["$", r"\b", r"\B", "a*"] {
+            let mut request = request(pattern);
+            request.syntax = SearchSyntax::Regex;
+            let error = search_query(&query(), &request).expect_err("empty regex match");
+            assert!(
+                error.to_string().contains("must not match empty text"),
+                "pattern {pattern:?}: {error}"
+            );
+        }
+    }
+
+    #[test]
+    fn search_results_never_cross_addressable_owner_boundaries() {
+        let mut query = query();
+        query
+            .document
+            .as_mut()
+            .expect("document")
+            .sections
+            .push(Section {
+                id: "next".into(),
+                title: "NEXT".to_owned(),
+                spacing_before_lines: 0,
+                blocks: vec![Block::Paragraph {
+                    children: vec![Inline::Text {
+                        value: "Following owner".to_owned(),
+                    }],
+                    layout: LayoutHint::default(),
+                    source: None,
+                }],
+                children: Vec::new(),
+                source: None,
+            });
+        let mut request = request(r"lists(?s:.*?)NEXT");
         request.syntax = SearchSyntax::Regex;
-        let error = search_query(&query(), &request).expect_err("empty regex match");
-        assert!(error.to_string().contains("must not match empty text"));
+        request.scope = SearchScope::Markdown;
+        request.case = SearchCase::Sensitive;
+
+        let result = search_query(&query, &request).expect("bounded owner search");
+
+        assert_eq!(result.total, 0);
+    }
+
+    #[test]
+    fn exclusive_newline_end_does_not_mark_the_following_context_line() {
+        let mut query = query();
+        query.document.as_mut().expect("document").sections[0]
+            .blocks
+            .push(Block::Paragraph {
+                children: vec![
+                    Inline::Text {
+                        value: "alpha".to_owned(),
+                    },
+                    Inline::LineBreak,
+                    Inline::Text {
+                        value: "beta".to_owned(),
+                    },
+                ],
+                layout: LayoutHint::default(),
+                source: None,
+            });
+        let mut request = request("alpha  \n");
+        request.scope = SearchScope::Markdown;
+        request.case = SearchCase::Sensitive;
+        let result = search_query(&query, &request).expect("newline search");
+        let hit = &result.matches[0];
+        let occurrence = &hit.occurrences[0];
+
+        assert_eq!(occurrence.line_ranges.len(), 1);
+        let following = hit
+            .context
+            .iter()
+            .find(|line| line.line == occurrence.markdown.end_line)
+            .expect("following context line");
+        assert!(!following.matched);
     }
 
     #[test]
