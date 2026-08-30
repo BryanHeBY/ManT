@@ -158,9 +158,7 @@ pub(super) fn query_execution_failure(error: QueryExecutionError) -> Failure {
 
 pub(super) fn scope_query_failure(error: ScopeQueryError) -> Failure {
     match error {
-        ScopeQueryError::NoResolvedDocuments { .. } | ScopeQueryError::ContentLimit => {
-            Failure::operational(error)
-        }
+        ScopeQueryError::NoResolvedDocuments { .. } => Failure::operational(error),
         ScopeQueryError::EmptyScope
         | ScopeQueryError::TooManyDocuments
         | ScopeQueryError::DepthLimit

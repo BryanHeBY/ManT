@@ -40,8 +40,6 @@ pub enum ScopeQueryError {
     DepthLimit,
     /// The document budget was zero, too large, or smaller than the root set.
     DocumentLimit,
-    /// The initial document set exceeded the aggregate semantic-content budget.
-    ContentLimit,
     /// Traversal limits were supplied while link following was disabled.
     TraversalLimitsRequireLinks,
     /// A logical document selector violated its native bound.
@@ -72,11 +70,6 @@ impl fmt::Display for ScopeQueryError {
             Self::DocumentLimit => write!(
                 formatter,
                 "document limit must include every initial document and not exceed {MAX_SCOPE_DOCUMENT_LIMIT}"
-            ),
-            Self::ContentLimit => write!(
-                formatter,
-                "initial documents exceed the {} MiB scope content limit",
-                MAX_SCOPE_CONTENT_BYTES / (1024 * 1024)
             ),
             Self::TraversalLimitsRequireLinks => {
                 formatter.write_str("maxDepth and maxDocuments require followLinks=true")
@@ -115,7 +108,6 @@ impl Error for ScopeQueryError {
             | Self::TooManyDocuments
             | Self::DepthLimit
             | Self::DocumentLimit
-            | Self::ContentLimit
             | Self::TraversalLimitsRequireLinks
             | Self::DocumentSelector(_)
             | Self::EntrySelector(_)
@@ -318,9 +310,7 @@ impl ScopeResolution {
         for (root_index, selector) in self.graph.query.documents.clone().iter().enumerate() {
             match resolver.resolve_selector(selector, QueryPolicy::Combined) {
                 Ok(bundle) => {
-                    if !self.insert_root(bundle, selector, root_index) {
-                        return Err(ScopeQueryError::ContentLimit);
-                    }
+                    self.insert_root(bundle, selector, root_index);
                 }
                 Err(error) => self.graph.unresolved.push(UnresolvedDocument {
                     from: None,
@@ -337,14 +327,14 @@ impl ScopeResolution {
         bundle: ResolvedContent,
         selector: &DocumentSelector,
         root_index: usize,
-    ) -> bool {
+    ) {
         let Some(address) = bundle.address.clone() else {
             self.graph.unresolved.push(UnresolvedDocument {
                 from: None,
                 selector: selector.clone(),
                 reason: "selector did not resolve to a registered document".to_owned(),
             });
-            return true;
+            return;
         };
         let root_index = u16::try_from(root_index).unwrap_or(u16::MAX);
         if let Some(position) = self.positions.get(&address).copied() {
@@ -352,10 +342,18 @@ impl ScopeResolution {
             if !roots.contains(&root_index) {
                 roots.push(root_index);
             }
-            return true;
+            return;
         }
         if !self.reserve_content_bytes(&bundle) {
-            return false;
+            self.graph.unresolved.push(UnresolvedDocument {
+                from: None,
+                selector: selector.clone(),
+                reason: format!(
+                    "document exceeds the {} MiB aggregate scope content budget",
+                    MAX_SCOPE_CONTENT_BYTES / (1024 * 1024)
+                ),
+            });
+            return;
         }
         let position = self.documents.len();
         self.positions.insert(address.clone(), position);
@@ -367,7 +365,6 @@ impl ScopeResolution {
             reached_from: Vec::new(),
         });
         self.queue.push_back(position);
-        true
     }
 
     fn follow_links(&mut self, resolver: &DocumentResolver) {
@@ -1109,6 +1106,37 @@ mod tests {
         assert_eq!(
             resolution.content_bytes,
             MAX_SCOPE_CONTENT_BYTES - bytes + 1
+        );
+    }
+
+    #[test]
+    fn root_content_budget_is_reported_as_an_unresolved_root() {
+        let selector = DocumentSelector {
+            selector: "root".to_owned(),
+            source: None,
+            manual_section: None,
+        };
+        let scope = DocumentScope {
+            documents: vec![selector.clone()],
+            traversal: mant_protocol::DocumentTraversal::default(),
+        };
+        let mut content =
+            crate::query_markdown_text("# Root\n\nBody.\n", None).expect("fixture content");
+        content.address = Some(DocumentAddress::Markdown {
+            path: "root".to_owned(),
+            origin: MarkdownOrigin::Documents,
+        });
+        let mut resolution = ScopeResolution::new(&scope);
+        resolution.content_bytes = MAX_SCOPE_CONTENT_BYTES;
+
+        resolution.insert_root(content, &selector, 0);
+
+        assert!(resolution.documents.is_empty());
+        assert_eq!(resolution.graph.unresolved.len(), 1);
+        assert!(
+            resolution.graph.unresolved[0]
+                .reason
+                .contains("aggregate scope content budget")
         );
     }
 }
