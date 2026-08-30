@@ -8,8 +8,9 @@ use unicode_width::UnicodeWidthStr;
 
 /// External URI that passed `ManT`'s host-activation policy.
 ///
-/// Construction accepts only non-empty HTTP, HTTPS, and mailto targets of at
-/// most 4096 bytes without control characters. Keeping validation in this
+/// Construction accepts only absolute HTTP/HTTPS targets with a host and
+/// non-empty mailto targets, at most 4096 bytes and without whitespace or
+/// control characters. Keeping validation in this
 /// type prevents a new document producer from bypassing the activation gate.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExternalUri(String);
@@ -18,7 +19,12 @@ impl ExternalUri {
     /// Validate one untrusted external URI for host activation.
     #[must_use]
     pub fn parse(uri: &str) -> Option<Self> {
-        if uri.is_empty() || uri.len() > 4096 || uri.chars().any(char::is_control) {
+        if uri.is_empty()
+            || uri.len() > 4096
+            || uri
+                .chars()
+                .any(|character| character.is_control() || character.is_whitespace())
+        {
             return None;
         }
         let (scheme, target) = uri.split_once(':')?;
@@ -28,7 +34,21 @@ impl ExternalUri {
         {
             return None;
         }
-        (!target.trim_start_matches('/').is_empty()).then(|| Self(uri.to_owned()))
+        let valid_target =
+            if scheme.eq_ignore_ascii_case("http") || scheme.eq_ignore_ascii_case("https") {
+                target
+                    .strip_prefix("//")
+                    .and_then(|hierarchy| hierarchy.split(['/', '?', '#']).next())
+                    .is_some_and(|authority| {
+                        let host = authority
+                            .rsplit_once('@')
+                            .map_or(authority, |(_, host)| host);
+                        !host.is_empty() && host != ":" && !host.starts_with(':')
+                    })
+            } else {
+                !target.trim_matches('/').is_empty()
+            };
+        valid_target.then(|| Self(uri.to_owned()))
     }
 
     /// Return the validated URI spelling supplied by the document.

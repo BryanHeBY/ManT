@@ -89,14 +89,32 @@ fn valid_external_uri(uri: &str) -> bool {
     let Some((scheme, remainder)) = uri.split_once(':') else {
         return false;
     };
-    !remainder.is_empty()
+    let syntax_valid = !remainder.is_empty()
         && scheme.starts_with(char::is_alphabetic)
         && scheme.chars().all(|character| {
             character.is_ascii_alphanumeric() || matches!(character, '+' | '-' | '.')
         })
         && !uri
             .chars()
-            .any(|character| character.is_control() || character.is_whitespace())
+            .any(|character| character.is_control() || character.is_whitespace());
+    if !syntax_valid {
+        return false;
+    }
+    if scheme.eq_ignore_ascii_case("http") || scheme.eq_ignore_ascii_case("https") {
+        return remainder
+            .strip_prefix("//")
+            .and_then(|hierarchy| hierarchy.split(['/', '?', '#']).next())
+            .is_some_and(|authority| {
+                let host = authority
+                    .rsplit_once('@')
+                    .map_or(authority, |(_, host)| host);
+                !host.is_empty() && host != ":" && !host.starts_with(':')
+            });
+    }
+    if scheme.eq_ignore_ascii_case("mailto") {
+        return !remainder.trim_matches('/').is_empty();
+    }
+    true
 }
 
 fn validate_source_span(diagnostics: &mut Vec<Diagnostic>, source: SourceSpan) {
@@ -376,6 +394,12 @@ mod tests {
             "ir.invalid-external-uri",
         ] {
             assert!(codes.contains(&expected), "missing {expected}: {codes:?}");
+        }
+        for uri in ["https:relative", "https:///missing-host", "mailto:"] {
+            assert!(!valid_external_uri(uri), "accepted invalid URI {uri}");
+        }
+        for uri in ["https://example.test/path", "mailto:user@example.test"] {
+            assert!(valid_external_uri(uri), "rejected valid URI {uri}");
         }
     }
 }

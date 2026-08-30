@@ -452,6 +452,26 @@ fn external_uri_schemes_are_matched_case_insensitively() {
 }
 
 #[test]
+fn external_uri_activation_requires_a_host_or_mailbox() {
+    for invalid in [
+        "https:relative",
+        "https:///missing-host",
+        "https://",
+        "mailto:",
+        "https://example.test/white space",
+    ] {
+        assert!(ExternalUri::parse(invalid).is_none(), "accepted {invalid}");
+    }
+    for valid in [
+        "https://example.test/path",
+        "http://user@example.test:8080/path",
+        "mailto:docs@example.test",
+    ] {
+        assert!(ExternalUri::parse(valid).is_some(), "rejected {valid}");
+    }
+}
+
+#[test]
 fn unsafe_tldr_more_information_remains_visible_but_inert() {
     let mut bundle = geometry_bundle();
     bundle.tldr.as_mut().expect("tldr").more_information = Some("file:///etc/passwd".to_owned());
