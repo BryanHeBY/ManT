@@ -146,10 +146,12 @@ below `sources/` whose names are absent from the current
 configuration. Ordinary updates never delete them.
 
 For a Git source, ManT reads the branch head with `git ls-remote`. It skips an
-unchanged source or performs a depth-one, single-branch, blob-filtered clone
-without tags, an initial checkout, local hardlinks, or submodule
-initialization. It validates Git tree modes and then materializes only the
-configured `path`. Git transport is restricted to HTTPS, SSH, and local paths;
+unchanged source or performs a depth-one, single-branch clone without tags, an
+initial checkout, local hardlinks, or submodule initialization. Unix clones
+request a blobless partial checkout before materializing only the configured
+`path`. Windows downloads the complete single-commit tree because some Git for
+Windows versions do not reliably hydrate a filtered no-checkout clone during
+pathspec checkout. Git transport is restricted to HTTPS, SSH, and local paths;
 remote-helper syntax and other protocols are rejected. The `git` executable
 must be installed and available on `PATH` for Git-backed sources.
 
@@ -181,9 +183,10 @@ materialized regular-file data, 16 MiB per selected Markdown file, 10,000
 Markdown files, and paths 32 components deep. Archive downloads have an
 additional 64 MiB compressed-size limit, and archive entry metadata is charged
 before extraction. Git command output is bounded too; Git checkout contents
-are measured before staging. A server may ignore Git's partial-clone filter,
-so unlike the streaming archive path this cannot strictly cap transient Git
-pack traffic or storage before checkout validation. Absolute,
+are measured before staging. Windows intentionally receives every blob in the
+depth-one snapshot, and a Unix server may ignore Git's partial-clone filter, so
+unlike the streaming archive path this cannot strictly cap transient Git pack
+traffic or storage before checkout validation. Absolute,
 parent-relative, non-UTF-8, duplicate, link, and special archive entries are
 rejected. These checks apply before activation, so malformed or hostile input
 leaves the previous source installed.

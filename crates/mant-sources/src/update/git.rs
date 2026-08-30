@@ -14,6 +14,20 @@ use super::{
 
 const MAX_GIT_OUTPUT_BYTES: u64 = 64 * 1024 * 1024;
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum GitObjectFilter {
+    Blobless,
+    None,
+}
+
+const fn native_object_filter() -> GitObjectFilter {
+    if cfg!(windows) {
+        GitObjectFilter::None
+    } else {
+        GitObjectFilter::Blobless
+    }
+}
+
 pub(super) fn update(
     context: &SourceUpdateContext<'_>,
     repo: &str,
@@ -29,21 +43,12 @@ pub(super) fn update(
     let workspace = UpdateWorkspace::new(&context.paths.sources, context.name)?;
     run_git(
         &context.paths.root,
-        [
-            OsStr::new("clone"),
-            OsStr::new("--depth"),
-            OsStr::new("1"),
-            OsStr::new("--single-branch"),
-            OsStr::new("--no-local"),
-            OsStr::new("--no-tags"),
-            OsStr::new("--filter=blob:none"),
-            OsStr::new("--no-checkout"),
-            OsStr::new("--branch"),
-            OsStr::new(branch),
-            OsStr::new("--"),
+        clone_arguments(
             OsStr::new(repo),
+            OsStr::new(branch),
             workspace.checkout.as_os_str(),
-        ],
+            native_object_filter(),
+        ),
     )?;
     let checked_out = git_revision(&context.paths.root, &workspace.checkout)?;
     if checked_out != revision {
@@ -88,6 +93,34 @@ pub(super) fn update(
     );
     activate_source(&workspace.staging, &context.target, &metadata)?;
     Ok(context.updated(revision, document_count))
+}
+
+fn clone_arguments<'a>(
+    repo: &'a OsStr,
+    branch: &'a OsStr,
+    checkout: &'a OsStr,
+    object_filter: GitObjectFilter,
+) -> Vec<&'a OsStr> {
+    let mut arguments = vec![
+        OsStr::new("clone"),
+        OsStr::new("--depth"),
+        OsStr::new("1"),
+        OsStr::new("--single-branch"),
+        OsStr::new("--no-local"),
+        OsStr::new("--no-tags"),
+    ];
+    if object_filter == GitObjectFilter::Blobless {
+        arguments.push(OsStr::new("--filter=blob:none"));
+    }
+    arguments.extend([
+        OsStr::new("--no-checkout"),
+        OsStr::new("--branch"),
+        branch,
+        OsStr::new("--"),
+        repo,
+        checkout,
+    ]);
+    arguments
 }
 
 fn materialize_configured_path(
@@ -288,9 +321,76 @@ fn run_git_bytes<'a>(
 
 #[cfg(test)]
 mod tests {
+    use std::ffi::OsStr;
+
     use crate::{ConfiguredSource, SourceLocation};
 
-    use super::selected_symlink_document;
+    use super::{
+        GitObjectFilter, clone_arguments, native_object_filter, selected_symlink_document,
+    };
+
+    #[test]
+    fn complete_object_clone_retains_shallow_bounds() {
+        let arguments = clone_arguments(
+            OsStr::new("repo"),
+            OsStr::new("main"),
+            OsStr::new("checkout"),
+            GitObjectFilter::None,
+        );
+
+        assert!(!arguments.contains(&OsStr::new("--filter=blob:none")));
+        for required in [
+            "--depth",
+            "1",
+            "--single-branch",
+            "--no-local",
+            "--no-tags",
+            "--no-checkout",
+        ] {
+            assert!(
+                arguments.contains(&OsStr::new(required)),
+                "missing {required}"
+            );
+        }
+    }
+
+    #[test]
+    fn native_object_filter_avoids_blobless_clones_on_windows() {
+        assert_eq!(
+            native_object_filter(),
+            if cfg!(windows) {
+                GitObjectFilter::None
+            } else {
+                GitObjectFilter::Blobless
+            }
+        );
+    }
+
+    #[test]
+    fn blobless_clone_changes_only_the_object_filter() {
+        let filtered = clone_arguments(
+            OsStr::new("repo"),
+            OsStr::new("main"),
+            OsStr::new("checkout"),
+            GitObjectFilter::Blobless,
+        );
+        let complete = clone_arguments(
+            OsStr::new("repo"),
+            OsStr::new("main"),
+            OsStr::new("checkout"),
+            GitObjectFilter::None,
+        );
+
+        assert!(filtered.contains(&OsStr::new("--filter=blob:none")));
+        assert_eq!(filtered.len(), complete.len() + 1);
+        assert_eq!(
+            filtered
+                .into_iter()
+                .filter(|argument| *argument != OsStr::new("--filter=blob:none"))
+                .collect::<Vec<_>>(),
+            complete
+        );
+    }
 
     fn source(path: &str) -> ConfiguredSource {
         ConfiguredSource {

@@ -153,6 +153,8 @@ that crate was not published for that change.
 - Reject linked managed-source roots and metadata during registration.
 - Compare the recorded document count with the materialized Markdown count so
   doctor reports count-mismatched caches and update reacquires the source.
+- Use complete-object depth-one clones on Windows, avoiding Git for Windows
+  failures while hydrating a blob-filtered no-checkout clone by pathspec.
 
 ## 0.9.1 - 2026-08-24
 

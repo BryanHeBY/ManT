@@ -1037,6 +1037,7 @@ mod tests {
             vec!["init", "--quiet", "--initial-branch=main"],
             vec!["config", "user.name", "ManT tests"],
             vec!["config", "user.email", "mant-tests@example.invalid"],
+            vec!["config", "uploadpack.allowFilter", "true"],
             vec!["add", "--", "."],
             vec!["commit", "--quiet", "-m", "fixture"],
         ] {

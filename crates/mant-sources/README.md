@@ -65,13 +65,14 @@ types reject selected link entries before installation so source snapshots
 remain portable.
 
 With `update` enabled, Git and archive acquisition share resource budgets,
-staging, and one atomic activation transaction. Git uses a blob-filtered,
-no-checkout shallow clone before materializing only the configured path;
-archives are streamed and extracted within separate compressed and expanded
-budgets. Temporary checkouts, downloads, and staging directories are owned by
-an RAII workspace and cleaned on every exit path. Provider metadata is a strict
-tagged value, so Git-only and archive-only fields cannot form invalid
-combinations.
+staging, and one atomic activation transaction. Git uses a no-checkout shallow
+clone before materializing only the configured path; Unix requests a blobless
+object filter, while Windows downloads the complete single-commit tree for
+reliable pathspec checkout. Archives are streamed and extracted within separate
+compressed and expanded budgets. Temporary checkouts, downloads, and staging
+directories are owned by an RAII workspace and cleaned on every exit path.
+Provider metadata is a strict tagged value, so Git-only and archive-only fields
+cannot form invalid combinations.
 
 The update report also identifies installed directories absent from the active
 configuration without deleting them. Explicit prune and dry-run operations
