@@ -59,6 +59,12 @@ Markdown links are classified before entering the IR:
 | `other.md` or `guide/other.markdown#part` | Registered Markdown document |
 | Other ordinary URI | External URI |
 
+URI scheme classification is ASCII case-insensitive, so a bare-address
+`MAILTO:` and `mailto:` both produce a typed email target. A mailto URI with a
+query remains an external URI so its complete action is preserved.
+Structurally invalid external and email targets remain visible and receive an
+IR diagnostic rather than becoming trusted activation requests.
+
 Relative document links retain an extension-free logical path. `.md` and `.markdown` matching is case-insensitive. Absolute paths, query strings, control characters, and non-Markdown suffixes do not become document-navigation links.
 
 Paths containing `.` or `..` components are represented but navigation remains constrained to the current registered document source. A document link cannot escape its source boundary. Unresolved local fragments remain visible and are diagnosed rather than silently redirected.

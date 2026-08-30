@@ -586,8 +586,9 @@ Mouse input selects and folds outline nodes, follows in-page,
 cross-document, and safe external links, scrolls either pane, drags
 scrollbars, resizes the Outline boundary, and selects rendered document text.
 Safe external links are classified before they can cross the host boundary:
-only non-empty HTTP, HTTPS, and mailto targets without control characters are
-activatable, while rejected targets remain visible and inert. They are handed
+only structurally valid HTTP and HTTPS targets with a host and valid optional
+port, plus mailto targets with a mailbox, are activatable. Rejected targets
+remain visible and inert. They are handed
 asynchronously to the platform URL handler; native Windows uses the absolute
 System32 handler path, WSL uses the Windows handler when it is available, and
 the child process cannot read from or write into the TUI terminal streams. A

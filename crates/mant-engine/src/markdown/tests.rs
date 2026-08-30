@@ -147,6 +147,32 @@ fn preserves_titles_for_every_supported_markdown_link_target() {
 }
 
 #[test]
+fn classifies_mailto_schemes_without_ascii_case_distinctions() {
+    let document = parse_document(
+        "[mail](MAILTO:user@example.test \"mail title\") [subject](mailto:user@example.test?subject=hello)\n",
+        Some("/docs/tool.md".to_owned()),
+    );
+    let Block::Paragraph { children, .. } = &document.blocks[0] else {
+        panic!("link paragraph");
+    };
+    assert!(matches!(
+        &children[0],
+        Inline::Link {
+            target: mant_ir::LinkTarget::Email { address },
+            title: Some(title),
+            ..
+        } if address == "user@example.test" && title == "mail title"
+    ));
+    assert!(children.iter().any(|inline| matches!(
+        inline,
+        Inline::Link {
+            target: mant_ir::LinkTarget::External { uri },
+            ..
+        } if uri == "mailto:user@example.test?subject=hello"
+    )));
+}
+
+#[test]
 fn heading_attributes_consume_only_an_explicit_id() {
     let document = parse_document(
         "# API Reference\n\n\

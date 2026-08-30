@@ -89,6 +89,10 @@ Links use a closed `LinkTarget` union rather than stringly typed URLs:
 | `section` | Resolved `NodeId` in the current document |
 
 Visible link children remain useful when a frontend cannot activate the destination.
+Document validation rejects malformed external HTTP(S) authorities, hosts,
+IPv6 literals and ports, mailto targets without a mailbox, and malformed typed
+email addresses. Consumers may apply a narrower activation allowlist without
+reimplementing that structural validation.
 
 ## Semantic Definitions
 

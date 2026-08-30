@@ -85,7 +85,35 @@ fn is_normalized_node_id(id: &str) -> bool {
         && id.chars().flat_map(char::to_lowercase).eq(id.chars())
 }
 
-fn valid_external_uri(uri: &str) -> bool {
+/// Return whether an email link contains one conservative mailbox spelling.
+///
+/// This intentionally accepts the ordinary `local@domain` form used by
+/// documentation links rather than attempting to implement the complete
+/// RFC mailbox grammar.
+#[must_use]
+pub fn is_valid_email_address(address: &str) -> bool {
+    if address.is_empty()
+        || address
+            .chars()
+            .any(|character| character.is_control() || character.is_whitespace())
+        || address.contains(['?', '#', '/', ','])
+    {
+        return false;
+    }
+    let Some((local, domain)) = address.split_once('@') else {
+        return false;
+    };
+    !local.is_empty() && !domain.is_empty() && !domain.contains('@') && valid_host_name(domain)
+}
+
+/// Return whether an absolute external URI satisfies the document contract.
+///
+/// HTTP(S) targets receive conservative authority, host, IPv6, and port
+/// validation. `mailto` requires at least one mailbox before its query.
+/// Other schemes retain the generic absolute-URI validation used by the IR;
+/// host activation applies a narrower scheme allowlist separately.
+#[must_use]
+pub fn is_valid_external_uri(uri: &str) -> bool {
     let Some((scheme, remainder)) = uri.split_once(':') else {
         return false;
     };
@@ -104,17 +132,63 @@ fn valid_external_uri(uri: &str) -> bool {
         return remainder
             .strip_prefix("//")
             .and_then(|hierarchy| hierarchy.split(['/', '?', '#']).next())
-            .is_some_and(|authority| {
-                let host = authority
-                    .rsplit_once('@')
-                    .map_or(authority, |(_, host)| host);
-                !host.is_empty() && host != ":" && !host.starts_with(':')
-            });
+            .is_some_and(valid_http_authority);
     }
     if scheme.eq_ignore_ascii_case("mailto") {
-        return !remainder.trim_matches('/').is_empty();
+        let mailboxes = remainder
+            .split_once('?')
+            .map_or(remainder, |(value, _)| value);
+        return !mailboxes.is_empty() && mailboxes.split(',').all(is_valid_email_address);
     }
     true
+}
+
+fn valid_http_authority(authority: &str) -> bool {
+    if authority.is_empty() || authority.contains('\\') {
+        return false;
+    }
+    let host_port = if let Some((userinfo, host_port)) = authority.rsplit_once('@') {
+        if userinfo.is_empty() || userinfo.contains('@') {
+            return false;
+        }
+        host_port
+    } else {
+        authority
+    };
+    if let Some(bracketed) = host_port.strip_prefix('[') {
+        let Some((host, suffix)) = bracketed.split_once(']') else {
+            return false;
+        };
+        return host.parse::<std::net::Ipv6Addr>().is_ok()
+            && (suffix.is_empty() || suffix.strip_prefix(':').is_some_and(valid_port));
+    }
+    if host_port.contains(['[', ']']) {
+        return false;
+    }
+    let (host, port) = host_port
+        .rsplit_once(':')
+        .map_or((host_port, None), |(host, port)| (host, Some(port)));
+    valid_host_name(host) && port.is_none_or(valid_port)
+}
+
+fn valid_host_name(host: &str) -> bool {
+    !host.is_empty()
+        && !host.starts_with('.')
+        && !host.ends_with('.')
+        && host.split('.').all(|label| {
+            !label.is_empty()
+                && !label.starts_with('-')
+                && !label.ends_with('-')
+                && label
+                    .bytes()
+                    .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-')
+        })
+}
+
+fn valid_port(port: &str) -> bool {
+    !port.is_empty()
+        && port.bytes().all(|byte| byte.is_ascii_digit())
+        && port.parse::<u16>().is_ok()
 }
 
 fn validate_source_span(diagnostics: &mut Vec<Diagnostic>, source: SourceSpan) {
@@ -229,9 +303,16 @@ impl<'ir> Visit<'ir> for InvariantCollector {
             Inline::Link {
                 target: LinkTarget::External { uri },
                 ..
-            } if !valid_external_uri(uri) => self.diagnostics.push(invariant(
+            } if !is_valid_external_uri(uri) => self.diagnostics.push(invariant(
                 "ir.invalid-external-uri",
                 format!("external link target '{uri}' is not an absolute URI"),
+            )),
+            Inline::Link {
+                target: LinkTarget::Email { address },
+                ..
+            } if !is_valid_email_address(address) => self.diagnostics.push(invariant(
+                "ir.invalid-email-address",
+                format!("email link target '{address}' is not a valid mailbox"),
             )),
             _ => {}
         }
@@ -356,13 +437,22 @@ mod tests {
         };
         let blocks = vec![
             Block::Paragraph {
-                children: vec![Inline::Link {
-                    target: LinkTarget::External {
-                        uri: "relative target".to_owned(),
+                children: vec![
+                    Inline::Link {
+                        target: LinkTarget::External {
+                            uri: "relative target".to_owned(),
+                        },
+                        title: None,
+                        children: Vec::new(),
                     },
-                    title: None,
-                    children: Vec::new(),
-                }],
+                    Inline::Link {
+                        target: LinkTarget::Email {
+                            address: "missing-domain".to_owned(),
+                        },
+                        title: None,
+                        children: Vec::new(),
+                    },
+                ],
                 layout: LayoutHint::default(),
                 source: None,
             },
@@ -392,14 +482,45 @@ mod tests {
             "ir.reverse-source-range",
             "ir.invalid-table-span",
             "ir.invalid-external-uri",
+            "ir.invalid-email-address",
         ] {
             assert!(codes.contains(&expected), "missing {expected}: {codes:?}");
         }
-        for uri in ["https:relative", "https:///missing-host", "mailto:"] {
-            assert!(!valid_external_uri(uri), "accepted invalid URI {uri}");
+    }
+
+    #[test]
+    fn validates_external_uri_and_email_structure() {
+        for uri in [
+            "https:relative",
+            "https:///missing-host",
+            "https://example.test:",
+            "https://[::1",
+            "https://[::1]:invalid",
+            "mailto:",
+            "mailto:?subject=x",
+        ] {
+            assert!(!is_valid_external_uri(uri), "accepted invalid URI {uri}");
         }
-        for uri in ["https://example.test/path", "mailto:user@example.test"] {
-            assert!(valid_external_uri(uri), "rejected valid URI {uri}");
+        for uri in [
+            "https://example.test/path",
+            "https://user@example.test:443/path",
+            "https://[::1]:8443/path",
+            "mailto:user@example.test",
+            "mailto:user@example.test?subject=hello",
+        ] {
+            assert!(is_valid_external_uri(uri), "rejected valid URI {uri}");
+        }
+        for address in ["", "missing-domain", "@example.test", "docs@"] {
+            assert!(
+                !is_valid_email_address(address),
+                "accepted invalid email address {address}"
+            );
+        }
+        for address in ["docs@example.test", "support@sub.example.test"] {
+            assert!(
+                is_valid_email_address(address),
+                "rejected valid email address {address}"
+            );
         }
     }
 }

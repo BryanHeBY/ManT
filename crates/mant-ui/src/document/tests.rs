@@ -457,7 +457,11 @@ fn external_uri_activation_requires_a_host_or_mailbox() {
         "https:relative",
         "https:///missing-host",
         "https://",
+        "https://example.test:",
+        "https://[::1",
+        "https://[::1]:invalid",
         "mailto:",
+        "mailto:?subject=x",
         "https://example.test/white space",
     ] {
         assert!(ExternalUri::parse(invalid).is_none(), "accepted {invalid}");
@@ -465,7 +469,9 @@ fn external_uri_activation_requires_a_host_or_mailbox() {
     for valid in [
         "https://example.test/path",
         "http://user@example.test:8080/path",
+        "https://[::1]:8443/path",
         "mailto:docs@example.test",
+        "mailto:docs@example.test?subject=hello",
     ] {
         assert!(ExternalUri::parse(valid).is_some(), "rejected {valid}");
     }

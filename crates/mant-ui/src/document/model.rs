@@ -8,10 +8,10 @@ use unicode_width::UnicodeWidthStr;
 
 /// External URI that passed `ManT`'s host-activation policy.
 ///
-/// Construction accepts only absolute HTTP/HTTPS targets with a host and
-/// non-empty mailto targets, at most 4096 bytes and without whitespace or
-/// control characters. Keeping validation in this
-/// type prevents a new document producer from bypassing the activation gate.
+/// Construction accepts only structurally valid absolute HTTP/HTTPS targets
+/// and mailto targets, at most 4096 bytes. Keeping the activation allowlist in
+/// this type while reusing the IR validator prevents producers and consumers
+/// from drifting apart.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExternalUri(String);
 
@@ -27,28 +27,14 @@ impl ExternalUri {
         {
             return None;
         }
-        let (scheme, target) = uri.split_once(':')?;
+        let (scheme, _) = uri.split_once(':')?;
         if !["https", "http", "mailto"]
             .iter()
             .any(|allowed| scheme.eq_ignore_ascii_case(allowed))
         {
             return None;
         }
-        let valid_target =
-            if scheme.eq_ignore_ascii_case("http") || scheme.eq_ignore_ascii_case("https") {
-                target
-                    .strip_prefix("//")
-                    .and_then(|hierarchy| hierarchy.split(['/', '?', '#']).next())
-                    .is_some_and(|authority| {
-                        let host = authority
-                            .rsplit_once('@')
-                            .map_or(authority, |(_, host)| host);
-                        !host.is_empty() && host != ":" && !host.starts_with(':')
-                    })
-            } else {
-                !target.trim_matches('/').is_empty()
-            };
-        valid_target.then(|| Self(uri.to_owned()))
+        mant_ir::is_valid_external_uri(uri).then(|| Self(uri.to_owned()))
     }
 
     /// Return the validated URI spelling supplied by the document.
