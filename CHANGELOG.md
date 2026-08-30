@@ -114,8 +114,8 @@ that crate was not published for that change.
   callbacks now receive `&ExternalUri` instead of an unclassified `&str`;
   rejected schemes remain visible but inert.
 - Reuse the IR's structural URI validator at that activation boundary, rejecting
-  empty ports, malformed IPv6 authorities, and mailto targets without a
-  mailbox while retaining query-bearing mailto actions.
+  malformed percent escapes, userinfo, empty ports, IPv6 authorities, and
+  mailto dot-atoms while retaining valid query-bearing mailto actions.
 
 ### mant 0.10.0
 

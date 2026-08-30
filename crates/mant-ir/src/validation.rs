@@ -95,60 +95,185 @@ fn is_normalized_node_id(id: &str) -> bool {
 
 /// Return whether an email link contains one conservative mailbox spelling.
 ///
-/// This intentionally accepts the ordinary `local@domain` form used by
-/// documentation links rather than attempting to implement the complete
-/// RFC mailbox grammar.
+/// The local part is one ASCII dot-atom and the domain uses conservative DNS
+/// labels. Quoted strings, internationalized addresses, and address comments
+/// remain outside the document contract.
 #[must_use]
 pub fn is_valid_email_address(address: &str) -> bool {
     if address.is_empty()
+        || !address.is_ascii()
         || address
             .chars()
             .any(|character| character.is_control() || character.is_whitespace())
-        || address.contains(['?', '#', '/', ','])
+        || address.contains(['?', '#', ','])
     {
         return false;
     }
     let Some((local, domain)) = address.split_once('@') else {
         return false;
     };
-    !local.is_empty() && !domain.is_empty() && !domain.contains('@') && valid_host_name(domain)
+    valid_dot_atom(local) && !domain.contains('@') && valid_host_name(domain)
 }
 
 /// Return whether an absolute external URI satisfies the document contract.
 ///
-/// HTTP(S) targets receive conservative authority, host, IPv6, and port
-/// validation. `mailto` requires at least one mailbox before its query.
-/// Other schemes retain the generic absolute-URI validation used by the IR;
-/// host activation applies a narrower scheme allowlist separately.
+/// Every component uses RFC 3986 ASCII characters and complete percent
+/// triplets. HTTP(S) additionally validates authority, userinfo, host, IPv6,
+/// and port structure. `mailto` requires conservative dot-atom mailboxes.
+/// Host activation applies a narrower scheme allowlist separately.
 #[must_use]
 pub fn is_valid_external_uri(uri: &str) -> bool {
     let Some((scheme, remainder)) = uri.split_once(':') else {
         return false;
     };
     let syntax_valid = !remainder.is_empty()
-        && scheme.starts_with(char::is_alphabetic)
+        && scheme
+            .chars()
+            .next()
+            .is_some_and(|character| character.is_ascii_alphabetic())
         && scheme.chars().all(|character| {
             character.is_ascii_alphanumeric() || matches!(character, '+' | '-' | '.')
         })
+        && uri.is_ascii()
         && !uri
-            .chars()
-            .any(|character| character.is_control() || character.is_whitespace());
+            .bytes()
+            .any(|byte| byte.is_ascii_control() || byte == b' ');
     if !syntax_valid {
         return false;
     }
+    let Some((hierarchy, query, fragment)) = uri_components(remainder) else {
+        return false;
+    };
+    if query.is_some_and(|value| !valid_query_or_fragment(value))
+        || fragment.is_some_and(|value| !valid_query_or_fragment(value))
+    {
+        return false;
+    }
     if scheme.eq_ignore_ascii_case("http") || scheme.eq_ignore_ascii_case("https") {
-        return remainder
-            .strip_prefix("//")
-            .and_then(|hierarchy| hierarchy.split(['/', '?', '#']).next())
-            .is_some_and(valid_http_authority);
+        let Some(authority_and_path) = hierarchy.strip_prefix("//") else {
+            return false;
+        };
+        let (authority, path) = authority_and_path
+            .find('/')
+            .map_or((authority_and_path, ""), |index| {
+                authority_and_path.split_at(index)
+            });
+        return valid_http_authority(authority) && valid_path(path);
     }
     if scheme.eq_ignore_ascii_case("mailto") {
-        let mailboxes = remainder
-            .split_once('?')
-            .map_or(remainder, |(value, _)| value);
-        return !mailboxes.is_empty() && mailboxes.split(',').all(is_valid_email_address);
+        return !hierarchy.is_empty()
+            && !hierarchy.contains('/')
+            && valid_uri_component(hierarchy, |byte| {
+                is_atext(byte) || matches!(byte, b'.' | b'@' | b',')
+            })
+            && hierarchy.split(',').all(is_valid_email_address);
+    }
+    valid_generic_hierarchy(hierarchy)
+}
+
+fn uri_components(remainder: &str) -> Option<(&str, Option<&str>, Option<&str>)> {
+    let (before_fragment, fragment) = remainder
+        .split_once('#')
+        .map_or((remainder, None), |(value, fragment)| {
+            (value, Some(fragment))
+        });
+    if fragment.is_some_and(|value| value.contains('#')) {
+        return None;
+    }
+    let (hierarchy, query) = before_fragment
+        .split_once('?')
+        .map_or((before_fragment, None), |(value, query)| {
+            (value, Some(query))
+        });
+    Some((hierarchy, query, fragment))
+}
+
+fn valid_generic_hierarchy(hierarchy: &str) -> bool {
+    if let Some(authority_and_path) = hierarchy.strip_prefix("//") {
+        let (authority, path) = authority_and_path
+            .find('/')
+            .map_or((authority_and_path, ""), |index| {
+                authority_and_path.split_at(index)
+            });
+        return (authority.is_empty() || valid_http_authority(authority)) && valid_path(path);
+    }
+    valid_path(hierarchy)
+}
+
+fn valid_path(path: &str) -> bool {
+    valid_uri_component(path, |byte| is_pchar(byte) || byte == b'/')
+}
+
+fn valid_query_or_fragment(value: &str) -> bool {
+    valid_uri_component(value, |byte| is_pchar(byte) || matches!(byte, b'/' | b'?'))
+}
+
+fn valid_uri_component(value: &str, allowed: impl Fn(u8) -> bool) -> bool {
+    let bytes = value.as_bytes();
+    let mut index = 0;
+    while index < bytes.len() {
+        if bytes[index] == b'%' {
+            if index + 2 >= bytes.len()
+                || !bytes[index + 1].is_ascii_hexdigit()
+                || !bytes[index + 2].is_ascii_hexdigit()
+            {
+                return false;
+            }
+            index += 3;
+        } else if allowed(bytes[index]) {
+            index += 1;
+        } else {
+            return false;
+        }
     }
     true
+}
+
+const fn is_pchar(byte: u8) -> bool {
+    is_unreserved(byte) || is_sub_delimiter(byte) || matches!(byte, b':' | b'@')
+}
+
+const fn is_unreserved(byte: u8) -> bool {
+    byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'.' | b'_' | b'~')
+}
+
+const fn is_sub_delimiter(byte: u8) -> bool {
+    matches!(
+        byte,
+        b'!' | b'$' | b'&' | b'\'' | b'(' | b')' | b'*' | b'+' | b',' | b';' | b'='
+    )
+}
+
+fn valid_dot_atom(local: &str) -> bool {
+    !local.is_empty()
+        && local
+            .split('.')
+            .all(|atom| !atom.is_empty() && atom.bytes().all(is_atext))
+}
+
+const fn is_atext(byte: u8) -> bool {
+    byte.is_ascii_alphanumeric()
+        || matches!(
+            byte,
+            b'!' | b'#'
+                | b'$'
+                | b'%'
+                | b'&'
+                | b'\''
+                | b'*'
+                | b'+'
+                | b'-'
+                | b'/'
+                | b'='
+                | b'?'
+                | b'^'
+                | b'_'
+                | b'`'
+                | b'{'
+                | b'|'
+                | b'}'
+                | b'~'
+        )
 }
 
 fn valid_http_authority(authority: &str) -> bool {
@@ -156,7 +281,12 @@ fn valid_http_authority(authority: &str) -> bool {
         return false;
     }
     let host_port = if let Some((userinfo, host_port)) = authority.rsplit_once('@') {
-        if userinfo.is_empty() || userinfo.contains('@') {
+        if userinfo.is_empty()
+            || userinfo.contains('@')
+            || !valid_uri_component(userinfo, |byte| {
+                is_unreserved(byte) || is_sub_delimiter(byte) || byte == b':'
+            })
+        {
             return false;
         }
         host_port
@@ -504,27 +634,50 @@ mod tests {
             "https://example.test:",
             "https://[::1",
             "https://[::1]:invalid",
+            "https://%ZZ@example.test/path",
+            "https://example.test/%ZZ",
+            "https://user]name@example.test/path",
+            "https://example.test/path#one#two",
             "mailto:",
             "mailto:?subject=x",
+            "mailto:a..b@example.test",
+            "mailto:.a@example.test",
+            "mailto:a.@example.test",
+            "mailto:user%ZZ@example.test",
         ] {
             assert!(!is_valid_external_uri(uri), "accepted invalid URI {uri}");
         }
         for uri in [
             "https://example.test/path",
             "https://user@example.test:443/path",
+            "https://user%40name@example.test/path",
             "https://[::1]:8443/path",
+            "https://[::1]:8443/path?q=x#part",
             "mailto:user@example.test",
             "mailto:user@example.test?subject=hello",
         ] {
             assert!(is_valid_external_uri(uri), "rejected valid URI {uri}");
         }
-        for address in ["", "missing-domain", "@example.test", "docs@"] {
+        for address in [
+            "",
+            "missing-domain",
+            "@example.test",
+            "docs@",
+            ".docs@example.test",
+            "docs.@example.test",
+            "docs..team@example.test",
+            "quoted\"name@example.test",
+        ] {
             assert!(
                 !is_valid_email_address(address),
                 "accepted invalid email address {address}"
             );
         }
-        for address in ["docs@example.test", "support@sub.example.test"] {
+        for address in [
+            "docs@example.test",
+            "support@sub.example.test",
+            "build+notifications@example.test",
+        ] {
             assert!(
                 is_valid_email_address(address),
                 "rejected valid email address {address}"

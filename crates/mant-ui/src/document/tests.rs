@@ -460,19 +460,34 @@ fn external_uri_activation_requires_a_host_or_mailbox() {
         "https://example.test:",
         "https://[::1",
         "https://[::1]:invalid",
+        "https://%ZZ@example.test/path",
+        "https://example.test/%ZZ",
+        "https://user]name@example.test/path",
+        "https://example.test/path#one#two",
         "mailto:",
         "mailto:?subject=x",
+        "mailto:a..b@example.test",
+        "mailto:.a@example.test",
+        "mailto:a.@example.test",
+        "mailto:user%ZZ@example.test",
         "https://example.test/white space",
     ] {
+        assert!(
+            !mant_ir::is_valid_external_uri(invalid),
+            "IR accepted {invalid}"
+        );
         assert!(ExternalUri::parse(invalid).is_none(), "accepted {invalid}");
     }
     for valid in [
         "https://example.test/path",
         "http://user@example.test:8080/path",
+        "https://user%40name@example.test/path",
         "https://[::1]:8443/path",
+        "https://[::1]:8443/path?q=x#part",
         "mailto:docs@example.test",
         "mailto:docs@example.test?subject=hello",
     ] {
+        assert!(mant_ir::is_valid_external_uri(valid), "IR rejected {valid}");
         assert!(ExternalUri::parse(valid).is_some(), "rejected {valid}");
     }
 }
