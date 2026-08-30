@@ -436,6 +436,52 @@ fn unsafe_external_schemes_remain_visible_but_inert() {
 }
 
 #[test]
+fn typed_email_links_use_the_shared_mailto_serializer() {
+    for (address, expected_uri) in [
+        ("user%tag@example.test", "mailto:user%25tag@example.test"),
+        ("a/b@example.test", "mailto:a%2Fb@example.test"),
+        ("user=tag@example.test", "mailto:user%3Dtag@example.test"),
+    ] {
+        let lines = styled_inline_lines(
+            &[Inline::Link {
+                target: mant_ir::LinkTarget::Email {
+                    address: address.to_owned(),
+                },
+                title: None,
+                children: vec![Inline::Text {
+                    value: "email".to_owned(),
+                }],
+            }],
+            Style::default(),
+            None,
+        );
+        assert_eq!(lines[0].spans[0].content, "email");
+        assert_eq!(
+            lines[0].links[0].target,
+            LinkTarget::External(
+                ExternalUri::parse(expected_uri).expect("serialized email URI remains valid")
+            )
+        );
+    }
+
+    let invalid = styled_inline_lines(
+        &[Inline::Link {
+            target: mant_ir::LinkTarget::Email {
+                address: ".user@example.test".to_owned(),
+            },
+            title: None,
+            children: vec![Inline::Text {
+                value: "invalid email".to_owned(),
+            }],
+        }],
+        Style::default(),
+        None,
+    );
+    assert_eq!(invalid[0].spans[0].content, "invalid email");
+    assert!(invalid[0].links.is_empty());
+}
+
+#[test]
 fn external_uri_schemes_are_matched_case_insensitively() {
     assert_eq!(
         ExternalUri::parse("HTTPS://example.test")
@@ -470,6 +516,10 @@ fn external_uri_activation_requires_a_host_or_mailbox() {
         "mailto:.a@example.test",
         "mailto:a.@example.test",
         "mailto:user%ZZ@example.test",
+        "mailto:%2Euser@example.test",
+        "mailto:user%2E%2Ename@example.test",
+        "mailto:user%40evil@example.test",
+        "mailto:user%2Csecond@example.test",
         "https://example.test/white space",
     ] {
         assert!(
@@ -486,6 +536,9 @@ fn external_uri_activation_requires_a_host_or_mailbox() {
         "https://[::1]:8443/path?q=x#part",
         "mailto:docs@example.test",
         "mailto:docs@example.test?subject=hello",
+        "mailto:user%25tag@example.test",
+        "mailto:a%2Fb@example.test",
+        "mailto:docs@example.test,second@example.test",
     ] {
         assert!(mant_ir::is_valid_external_uri(valid), "IR rejected {valid}");
         assert!(ExternalUri::parse(valid).is_some(), "rejected {valid}");

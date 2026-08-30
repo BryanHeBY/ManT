@@ -141,13 +141,8 @@ fn parse_inline_sequence(
 fn link_target(destination: String) -> mant_ir::LinkTarget {
     if let Some(target) = destination.strip_prefix('#') {
         mant_ir::LinkTarget::Section { id: target.into() }
-    } else if let Some((_, address)) = destination
-        .split_once(':')
-        .filter(|(scheme, address)| scheme.eq_ignore_ascii_case("mailto") && !address.contains('?'))
-    {
-        mant_ir::LinkTarget::Email {
-            address: address.to_owned(),
-        }
+    } else if let Some(address) = mant_ir::email_address_from_mailto_uri(&destination) {
+        mant_ir::LinkTarget::Email { address }
     } else if let Some((name, fragment)) = markdown_document_reference(&destination) {
         mant_ir::LinkTarget::Document { name, fragment }
     } else {

@@ -115,6 +115,49 @@ pub fn is_valid_email_address(address: &str) -> bool {
     valid_dot_atom(local) && !domain.contains('@') && valid_host_name(domain)
 }
 
+/// Decode one single-recipient `mailto:` URI into its typed email address.
+///
+/// Header fields, fragments, and recipient lists remain external URIs because
+/// they cannot be represented by [`LinkTarget::Email`]. Percent escapes are
+/// decoded exactly once before the conservative ASCII mailbox is validated.
+#[must_use]
+pub fn email_address_from_mailto_uri(uri: &str) -> Option<String> {
+    let (scheme, remainder) = uri.split_once(':')?;
+    if !scheme.eq_ignore_ascii_case("mailto") || remainder.contains(',') {
+        return None;
+    }
+    let (recipient, query, fragment) = uri_components(remainder)?;
+    if query.is_some() || fragment.is_some() {
+        return None;
+    }
+    decode_mailto_recipient(recipient)
+}
+
+/// Serialize one typed email address as a structurally valid `mailto:` URI.
+///
+/// URI-sensitive characters in the ASCII dot-atom local part are percent-
+/// encoded exactly once. Unsupported mailbox forms return `None` rather than
+/// producing a target that a consumer would later reject.
+#[must_use]
+pub fn mailto_uri_for_email_address(address: &str) -> Option<String> {
+    if !is_valid_email_address(address) {
+        return None;
+    }
+    let mut uri = String::with_capacity("mailto:".len() + address.len());
+    uri.push_str("mailto:");
+    for byte in address.bytes() {
+        if is_mailto_addr_spec_byte(byte) {
+            uri.push(char::from(byte));
+        } else {
+            const HEX: &[u8; 16] = b"0123456789ABCDEF";
+            uri.push('%');
+            uri.push(char::from(HEX[usize::from(byte >> 4)]));
+            uri.push(char::from(HEX[usize::from(byte & 0x0f)]));
+        }
+    }
+    Some(uri)
+}
+
 /// Return whether an absolute external URI satisfies the document contract.
 ///
 /// Every component uses RFC 3986 ASCII characters and complete percent
@@ -162,13 +205,52 @@ pub fn is_valid_external_uri(uri: &str) -> bool {
     }
     if scheme.eq_ignore_ascii_case("mailto") {
         return !hierarchy.is_empty()
-            && !hierarchy.contains('/')
-            && valid_uri_component(hierarchy, |byte| {
-                is_atext(byte) || matches!(byte, b'.' | b'@' | b',')
-            })
-            && hierarchy.split(',').all(is_valid_email_address);
+            && hierarchy
+                .split(',')
+                .all(|recipient| decode_mailto_recipient(recipient).is_some());
     }
     valid_generic_hierarchy(hierarchy)
+}
+
+fn decode_mailto_recipient(recipient: &str) -> Option<String> {
+    if recipient.is_empty() || !recipient.is_ascii() {
+        return None;
+    }
+    let bytes = recipient.as_bytes();
+    let mut decoded = Vec::with_capacity(bytes.len());
+    let mut index = 0;
+    while index < bytes.len() {
+        if bytes[index] == b'%' {
+            let high = decode_hex(*bytes.get(index + 1)?)?;
+            let low = decode_hex(*bytes.get(index + 2)?)?;
+            decoded.push((high << 4) | low);
+            index += 3;
+        } else if is_mailto_addr_spec_byte(bytes[index]) {
+            decoded.push(bytes[index]);
+            index += 1;
+        } else {
+            return None;
+        }
+    }
+    let address = String::from_utf8(decoded).ok()?;
+    (address.is_ascii() && is_valid_email_address(&address)).then_some(address)
+}
+
+const fn decode_hex(byte: u8) -> Option<u8> {
+    match byte {
+        b'0'..=b'9' => Some(byte - b'0'),
+        b'a'..=b'f' => Some(byte - b'a' + 10),
+        b'A'..=b'F' => Some(byte - b'A' + 10),
+        _ => None,
+    }
+}
+
+const fn is_mailto_addr_spec_byte(byte: u8) -> bool {
+    is_unreserved(byte)
+        || matches!(
+            byte,
+            b'!' | b'$' | b'\'' | b'(' | b')' | b'*' | b'+' | b':' | b'@'
+        )
 }
 
 fn uri_components(remainder: &str) -> Option<(&str, Option<&str>, Option<&str>)> {
@@ -644,6 +726,11 @@ mod tests {
             "mailto:.a@example.test",
             "mailto:a.@example.test",
             "mailto:user%ZZ@example.test",
+            "mailto:%2Euser@example.test",
+            "mailto:user%2E%2Ename@example.test",
+            "mailto:user%40evil@example.test",
+            "mailto:user%2Csecond@example.test",
+            "mailto:%80@example.test",
         ] {
             assert!(!is_valid_external_uri(uri), "accepted invalid URI {uri}");
         }
@@ -655,6 +742,10 @@ mod tests {
             "https://[::1]:8443/path?q=x#part",
             "mailto:user@example.test",
             "mailto:user@example.test?subject=hello",
+            "mailto:user%25tag@example.test",
+            "mailto:a%2Fb@example.test",
+            "mailto:user@example.test,second@example.test",
+            "mailto:user%252Etag@example.test",
         ] {
             assert!(is_valid_external_uri(uri), "rejected valid URI {uri}");
         }
@@ -681,6 +772,43 @@ mod tests {
             assert!(
                 is_valid_email_address(address),
                 "rejected valid email address {address}"
+            );
+        }
+
+        for (uri, address) in [
+            ("mailto:docs@example.test", "docs@example.test"),
+            ("MAILTO:user%25tag@example.test", "user%tag@example.test"),
+            ("mailto:a%2Fb@example.test", "a/b@example.test"),
+            (
+                "mailto:user%252Etag@example.test",
+                "user%2Etag@example.test",
+            ),
+        ] {
+            let (_, remainder) = uri.split_once(':').expect("mailto URI has a scheme");
+            let canonical_uri = format!("mailto:{remainder}");
+            assert_eq!(
+                email_address_from_mailto_uri(uri).as_deref(),
+                Some(address),
+                "failed to decode {uri}"
+            );
+            assert_eq!(
+                mailto_uri_for_email_address(address).as_deref(),
+                Some(canonical_uri.as_str()),
+                "failed to serialize {address}"
+            );
+        }
+        for uri in [
+            "mailto:%2Euser@example.test",
+            "mailto:user%2E%2Ename@example.test",
+            "mailto:user%40evil@example.test",
+            "mailto:user%2Csecond@example.test",
+            "mailto:user@example.test,second@example.test",
+            "mailto:user@example.test?subject=x",
+            "mailto:user@example.test#fragment",
+        ] {
+            assert!(
+                email_address_from_mailto_uri(uri).is_none(),
+                "classified non-typed mailto URI {uri}"
             );
         }
     }

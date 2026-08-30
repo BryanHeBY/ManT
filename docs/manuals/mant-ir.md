@@ -93,6 +93,9 @@ Document validation requires RFC 3986 ASCII component characters and complete
 percent-encoded triplets. It also rejects malformed external HTTP(S)
 authorities, userinfo, hosts, IPv6 literals and ports, mailto targets without a
 mailbox, and typed email addresses outside the supported ASCII dot-atom form.
+Mailto recipients are percent-decoded exactly once before mailbox validation;
+the shared typed-email serializer percent-encodes URI-sensitive local-part
+characters so accepted addresses remain activatable without raw concatenation.
 Consumers may apply a narrower activation allowlist without reimplementing
 that structural validation.
 

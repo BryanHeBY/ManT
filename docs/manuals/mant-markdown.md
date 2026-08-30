@@ -59,15 +59,19 @@ Markdown links are classified before entering the IR:
 | `other.md` or `guide/other.markdown#part` | Registered Markdown document |
 | Other ordinary URI | External URI |
 
-URI scheme classification is ASCII case-insensitive, so a bare-address
-`MAILTO:` and `mailto:` both produce a typed email target. A mailto URI with a
-query remains an external URI so its complete action is preserved.
+URI scheme classification is ASCII case-insensitive, so a valid single-address
+`MAILTO:` and `mailto:` without headers or a fragment both produce a typed
+email target. Percent escapes in that address are decoded exactly once before
+mailbox validation, and consumers use the shared inverse serializer when they
+activate the typed target. Recipient lists and mailto URIs with a query or
+fragment remain external URIs so their complete action is preserved.
 Structurally invalid external and email targets remain visible and receive an
 IR diagnostic rather than becoming trusted activation requests.
 External URI components use ASCII RFC 3986 syntax and complete `%HH` escapes.
 Typed email addresses accept an ASCII dot-atom local part and conservative DNS
-domain; quoted, internationalized, leading-dot, trailing-dot, and consecutive-
-dot local parts remain visible but invalid.
+domain. URI-sensitive mailbox characters such as `%` and `/` are percent-
+encoded during activation; quoted, internationalized, leading-dot, trailing-
+dot, and consecutive-dot local parts remain visible but invalid.
 
 Relative document links retain an extension-free logical path. `.md` and `.markdown` matching is case-insensitive. Absolute paths, query strings, control characters, and non-Markdown suffixes do not become document-navigation links.
 

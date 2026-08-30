@@ -173,6 +173,60 @@ fn classifies_mailto_schemes_without_ascii_case_distinctions() {
 }
 
 #[test]
+fn classifies_mailto_only_after_decoding_and_validating_the_mailbox() {
+    let document = parse_document(
+        "[percent](mailto:user%25tag@example.test) \
+         [slash](mailto:a%2Fb@example.test) \
+         [leading-dot](mailto:%2Euser@example.test) \
+         [double-dot](mailto:user%2E%2Ename@example.test) \
+         [extra-at](mailto:user%40evil@example.test) \
+         [recipients](mailto:user@example.test,second@example.test)\n",
+        Some("/docs/tool.md".to_owned()),
+    );
+    let Block::Paragraph { children, .. } = &document.blocks[0] else {
+        panic!("link paragraph");
+    };
+    let targets = children
+        .iter()
+        .filter_map(|inline| match inline {
+            Inline::Link { target, .. } => Some(target),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    assert!(matches!(
+        targets[0],
+        mant_ir::LinkTarget::Email { address } if address == "user%tag@example.test"
+    ));
+    assert!(matches!(
+        targets[1],
+        mant_ir::LinkTarget::Email { address } if address == "a/b@example.test"
+    ));
+    for (target, uri) in targets[2..5].iter().zip([
+        "mailto:%2Euser@example.test",
+        "mailto:user%2E%2Ename@example.test",
+        "mailto:user%40evil@example.test",
+    ]) {
+        assert!(matches!(
+            target,
+            mant_ir::LinkTarget::External { uri: actual } if actual == uri
+        ));
+    }
+    assert!(matches!(
+        targets[5],
+        mant_ir::LinkTarget::External { uri }
+            if uri == "mailto:user@example.test,second@example.test"
+    ));
+    assert_eq!(
+        document
+            .diagnostics
+            .iter()
+            .filter(|diagnostic| diagnostic.code.as_deref() == Some("ir.invalid-external-uri"))
+            .count(),
+        3
+    );
+}
+
+#[test]
 fn heading_attributes_consume_only_an_explicit_id() {
     let document = parse_document(
         "# API Reference\n\n\

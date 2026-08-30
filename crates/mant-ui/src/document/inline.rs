@@ -105,12 +105,9 @@ fn append_inline(
                 mant_ir::LinkTarget::External { uri } => {
                     append_external_link(uri, children, current_address, lines);
                 }
-                mant_ir::LinkTarget::Email { address } => append_external_link(
-                    &format!("mailto:{address}"),
-                    children,
-                    current_address,
-                    lines,
-                ),
+                mant_ir::LinkTarget::Email { address } => {
+                    append_email_link(address, children, current_address, lines);
+                }
                 mant_ir::LinkTarget::Document { name, fragment } => {
                     let target = markdown_reference_address(current_address, name).map(|address| {
                         LinkTarget::Document {
@@ -175,6 +172,27 @@ fn append_external_link(
     lines: &mut Vec<StyledInlineLine>,
 ) {
     let target = ExternalUri::parse(uri).map(LinkTarget::External);
+    append_addressable_inline(
+        children,
+        Style::default()
+            .fg(theme::BLUE)
+            .add_modifier(Modifier::UNDERLINED),
+        current_address,
+        lines,
+        target.as_ref(),
+    );
+}
+
+fn append_email_link(
+    address: &str,
+    children: &[Inline],
+    current_address: Option<&DocumentAddress>,
+    lines: &mut Vec<StyledInlineLine>,
+) {
+    let target = mant_ir::mailto_uri_for_email_address(address)
+        .as_deref()
+        .and_then(ExternalUri::parse)
+        .map(LinkTarget::External);
     append_addressable_inline(
         children,
         Style::default()

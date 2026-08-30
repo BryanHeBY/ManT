@@ -81,6 +81,9 @@ exact logical document addresses, and an `ExternalUri` that has already passed
 the shared HTTP(S)/mailto activation policy; rejected URI schemes remain
 visible document text but never reach the callback. Callback failures return
 to the UI as notices rather than giving the frontend hidden authority.
+Typed email links use the IR-owned mailto serializer, so URI-sensitive mailbox
+characters are encoded before the resulting `ExternalUri` crosses that same
+activation boundary.
 
 The upper-right document tab stack records successful loads in stable first-open
 order and deduplicates logical addresses. Selecting an addressed tab emits the

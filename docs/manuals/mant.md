@@ -588,8 +588,9 @@ scrollbars, resizes the Outline boundary, and selects rendered document text.
 Safe external links are classified before they can cross the host boundary:
 only structurally valid HTTP and HTTPS targets with RFC 3986 component and
 percent-escape syntax, a host, and valid optional port, plus mailto targets
-with an ASCII dot-atom mailbox, are activatable. Rejected targets remain
-visible and inert. They are handed
+whose recipients decode exactly once to ASCII dot-atom mailboxes, are
+activatable. Typed email targets use the same validator and percent-encoding
+serializer. Rejected targets remain visible and inert. They are handed
 asynchronously to the platform URL handler; native Windows uses the absolute
 System32 handler path, WSL uses the Windows handler when it is available, and
 the child process cannot read from or write into the TUI terminal streams. A
