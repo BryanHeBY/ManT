@@ -1028,7 +1028,7 @@ fn update_and_protocol_results_are_stable_json_documents() {
     assert_eq!(status, 0);
     assert_eq!(
         output,
-        "{\"action\":\"updated\",\"cacheDir\":\"/cache/tldr\",\"revision\":\"abc123\"}\n"
+        "{\"schema\":\"mant.tldr-update/v1\",\"action\":\"updated\",\"cacheDir\":\"/cache/tldr\",\"revision\":\"abc123\"}\n"
     );
     assert!(diagnostics.is_empty());
     assert_eq!(host.update_calls.get(), 1);
