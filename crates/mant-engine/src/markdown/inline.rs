@@ -106,33 +106,11 @@ fn parse_inline_sequence(
                 end_offset = nested_end;
                 let destination = dest_url.into_string();
                 let title = (!title.is_empty()).then(|| title.into_string());
-                if let Some(target) = destination.strip_prefix('#') {
-                    output.push(Inline::Link {
-                        target: mant_ir::LinkTarget::Section { id: target.into() },
-                        title,
-                        children,
-                    });
-                } else if let Some(address) = destination.strip_prefix("mailto:") {
-                    output.push(Inline::Link {
-                        target: mant_ir::LinkTarget::Email {
-                            address: address.to_owned(),
-                        },
-                        title,
-                        children,
-                    });
-                } else if let Some((name, fragment)) = markdown_document_reference(&destination) {
-                    output.push(Inline::Link {
-                        target: mant_ir::LinkTarget::Document { name, fragment },
-                        title,
-                        children,
-                    });
-                } else {
-                    output.push(Inline::Link {
-                        target: mant_ir::LinkTarget::External { uri: destination },
-                        title,
-                        children,
-                    });
-                }
+                output.push(Inline::Link {
+                    target: link_target(destination),
+                    title,
+                    children,
+                });
             }
             Event::Start(tag) => {
                 let name = unsupported_tag_name(&tag);
@@ -158,6 +136,20 @@ fn parse_inline_sequence(
     }
 
     (output, end_offset)
+}
+
+fn link_target(destination: String) -> mant_ir::LinkTarget {
+    if let Some(target) = destination.strip_prefix('#') {
+        mant_ir::LinkTarget::Section { id: target.into() }
+    } else if let Some(address) = destination.strip_prefix("mailto:") {
+        mant_ir::LinkTarget::Email {
+            address: address.to_owned(),
+        }
+    } else if let Some((name, fragment)) = markdown_document_reference(&destination) {
+        mant_ir::LinkTarget::Document { name, fragment }
+    } else {
+        mant_ir::LinkTarget::External { uri: destination }
+    }
 }
 
 fn unescape_commonmark_punctuation(value: &str) -> String {
