@@ -7,6 +7,7 @@ use mant_protocol::{
     TraversalLimit, sanitize_terminal_text,
 };
 
+use super::params::MAX_PAGE_CHARS;
 use super::params::PageRequest;
 use crate::arguments::QueryFormat;
 
@@ -213,6 +214,14 @@ pub(super) fn finish_page(page: &TextPage) -> String {
     output
 }
 
+/// Apply the same model-visible control and size boundary to tool failures.
+pub(super) fn finish_error(error: impl AsRef<str>) -> String {
+    sanitize_model_text(error.as_ref())
+        .chars()
+        .take(usize::try_from(MAX_PAGE_CHARS).unwrap_or(usize::MAX))
+        .collect()
+}
+
 pub(super) fn page_text(text: &str, page: PageRequest) -> TextPage {
     // MCP success bodies are model-visible protocol data. Sanitize the whole
     // canonical body here so every tool and every dynamically rendered
@@ -304,7 +313,7 @@ mod tests {
         ScopeQueryResponse, ScopeQueryResult, ScopeQuerySchema, ScopedQueryFailure,
     };
 
-    use super::{finish_page, page_text, prepare_scope};
+    use super::{finish_error, finish_page, page_text, prepare_scope};
     use crate::mcp::params::{MAX_PAGE_CHARS, PageRequest};
 
     #[test]
@@ -333,6 +342,15 @@ mod tests {
             },
         );
         assert_eq!(second.text.chars().count(), 17);
+    }
+
+    #[test]
+    fn tool_errors_are_control_free_and_scalar_bounded() {
+        let error = format!("bad\u{1b}{}", "界".repeat(40_000));
+        let presented = finish_error(error);
+        assert!(!presented.contains('\u{1b}'));
+        assert!(presented.contains('\u{fffd}'));
+        assert_eq!(presented.chars().count(), 32_768);
     }
 
     #[test]

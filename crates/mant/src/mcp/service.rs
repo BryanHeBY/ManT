@@ -35,7 +35,7 @@ impl QueryService {
                 .map_err(query_error_for_mcp)
         })
         .await
-        .map_err(|error| format!("MCP query worker failed: {error}"))?
+        .map_err(|_| "MCP query worker failed".to_owned())?
     }
 
     pub(super) async fn query_scope(
@@ -53,7 +53,7 @@ impl QueryService {
                 .map_err(scope_error_for_mcp)
         })
         .await
-        .map_err(|error| format!("MCP scope-query worker failed: {error}"))?
+        .map_err(|_| "MCP scope-query worker failed".to_owned())?
     }
 
     pub(super) async fn discover(&self, query: CatalogQuery) -> Result<DocumentCatalog, String> {
@@ -63,11 +63,15 @@ impl QueryService {
             .map_err(|_| "MCP query service is shutting down".to_owned())?;
         task::spawn_blocking(move || {
             let _permit = permit;
-            mant_engine::discover_documents(&query)
+            mant_engine::discover_documents(&query).map_err(discovery_error_for_mcp)
         })
         .await
-        .map_err(|error| format!("MCP document discovery worker failed: {error}"))?
+        .map_err(|_| "MCP document discovery worker failed".to_owned())?
     }
+}
+
+fn discovery_error_for_mcp(_error: String) -> String {
+    "registered document discovery failed".to_owned()
 }
 
 fn scope_error_for_mcp(error: mant_engine::ScopeQueryError) -> String {
@@ -140,5 +144,20 @@ pub(super) fn query_error_for_mcp(error: mant_engine::QueryExecutionError) -> St
             format!("could not load the tldr entry for '{topic}'")
         }
         other => other.to_string(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::discovery_error_for_mcp;
+
+    #[test]
+    fn discovery_errors_never_expose_configuration_paths_or_source_lines() {
+        let error = discovery_error_for_mcp(
+            "/home/demo/.config/mant/sources.toml:4: invalid table\nrepo = [".to_owned(),
+        );
+        assert_eq!(error, "registered document discovery failed");
+        assert!(!error.contains("/home/demo"));
+        assert!(!error.contains("repo ="));
     }
 }

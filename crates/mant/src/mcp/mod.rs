@@ -24,8 +24,8 @@ use params::{
     ExplainParams, FindParams, OutlineParams, ReadParams, SearchParams, catalog_query, request_for,
 };
 use presentation::{
-    finish_page, prepare_excerpt, prepare_outline, prepare_scope, render_excerpt, render_find,
-    render_outline, render_scope_explain, render_scope_search,
+    finish_error, finish_page, prepare_excerpt, prepare_outline, prepare_scope, render_excerpt,
+    render_find, render_outline, render_scope_explain, render_scope_search,
 };
 use service::QueryService;
 
@@ -72,11 +72,12 @@ impl MantMcpServer {
         )
     )]
     async fn find(&self, parameters: Parameters<FindParams>) -> Result<String, String> {
-        let parameters = parameters.0.validate()?;
+        let parameters = parameters.0.validate().map_err(finish_error)?;
         let catalog = self
             .query_service
             .discover(catalog_query(&parameters))
-            .await?;
+            .await
+            .map_err(finish_error)?;
         Ok(finish_page(&render_find(&catalog, parameters.page)))
     }
 
@@ -93,7 +94,7 @@ impl MantMcpServer {
         )
     )]
     async fn outline(&self, parameters: Parameters<OutlineParams>) -> Result<String, String> {
-        let parameters = parameters.0.validate()?;
+        let parameters = parameters.0.validate().map_err(finish_error)?;
         let page = parameters.page;
         let request = request_for(
             parameters.document,
@@ -102,7 +103,9 @@ impl MantMcpServer {
                 root: parameters.root,
             },
         );
-        let QueryViewResult::Outline(mut outline) = self.query(request).await? else {
+        let QueryViewResult::Outline(mut outline) =
+            self.query(request).await.map_err(finish_error)?
+        else {
             unreachable!("outline request materializes an outline")
         };
         prepare_outline(&mut outline);
@@ -120,7 +123,7 @@ impl MantMcpServer {
         )
     )]
     async fn read(&self, parameters: Parameters<ReadParams>) -> Result<String, String> {
-        let parameters = parameters.0.validate()?;
+        let parameters = parameters.0.validate().map_err(finish_error)?;
         let page = parameters.page;
         let request = request_for(
             parameters.document,
@@ -128,7 +131,9 @@ impl MantMcpServer {
                 selectors: parameters.selectors,
             },
         );
-        let QueryViewResult::Excerpt(mut excerpt) = self.query(request).await? else {
+        let QueryViewResult::Excerpt(mut excerpt) =
+            self.query(request).await.map_err(finish_error)?
+        else {
             unreachable!("read request materializes an excerpt")
         };
         prepare_excerpt(&mut excerpt);
@@ -146,7 +151,7 @@ impl MantMcpServer {
         )
     )]
     async fn explain(&self, parameters: Parameters<ExplainParams>) -> Result<String, String> {
-        let parameters = parameters.0.validate()?;
+        let parameters = parameters.0.validate().map_err(finish_error)?;
         let page = parameters.page;
         let request = ScopeQueryRequest {
             schema: ScopeRequestSchema::V0Dot10,
@@ -155,9 +160,11 @@ impl MantMcpServer {
                 entry: parameters.entry,
             },
         };
-        let mut response = self.query_scope(request).await?;
+        let mut response = self.query_scope(request).await.map_err(finish_error)?;
         prepare_scope(&mut response);
-        Ok(finish_page(&render_scope_explain(&response, page)?))
+        Ok(finish_page(
+            &render_scope_explain(&response, page).map_err(finish_error)?,
+        ))
     }
 
     /// Search visible text or generated `CommonMark` across bounded documents.
@@ -171,7 +178,7 @@ impl MantMcpServer {
         )
     )]
     async fn search(&self, parameters: Parameters<SearchParams>) -> Result<String, String> {
-        let parameters = parameters.0.validate()?;
+        let parameters = parameters.0.validate().map_err(finish_error)?;
         let page = parameters.page;
         let request = ScopeQueryRequest {
             schema: ScopeRequestSchema::V0Dot10,
@@ -187,9 +194,11 @@ impl MantMcpServer {
                 offset: parameters.offset,
             },
         };
-        let mut response = self.query_scope(request).await?;
+        let mut response = self.query_scope(request).await.map_err(finish_error)?;
         prepare_scope(&mut response);
-        Ok(finish_page(&render_scope_search(&response, page)?))
+        Ok(finish_page(
+            &render_scope_search(&response, page).map_err(finish_error)?,
+        ))
     }
 }
 
