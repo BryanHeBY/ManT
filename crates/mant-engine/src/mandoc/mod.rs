@@ -804,7 +804,13 @@ mod tests {
         );
         assert!(matches!(
             items[0].terms[0].as_slice(),
-            [Inline::Strong { .. }, Inline::Emphasis { .. }]
+            [
+                Inline::Anchor { id },
+                Inline::Anchor { .. },
+                Inline::Strong { .. },
+                Inline::Emphasis { .. }
+            ]
+                if items[0].identity.as_ref().is_some_and(|identity| &identity.id == id)
         ));
         assert!(
             items
@@ -3174,7 +3180,8 @@ can be an IPv4 or IPv6 address.\nT}\n.TE\n",
         assert_eq!(inline_text(&items[1].terms[0]), "zinject -b bookmark");
         assert!(matches!(
             items[0].terms[0].as_slice(),
-            [Inline::Strong { .. }]
+            [Inline::Anchor { id }, Inline::Strong { .. }]
+                if items[0].identity.as_ref().is_some_and(|identity| &identity.id == id)
         ));
         assert!(
             items[1].terms[0]
