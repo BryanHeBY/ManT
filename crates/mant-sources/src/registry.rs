@@ -403,8 +403,16 @@ pub fn list_registered_documents() -> Result<Vec<RegisteredDocument>, SourceConf
 }
 
 fn source_directory_ready(directory: &Path) -> bool {
-    fs::symlink_metadata(directory.join(SOURCE_METADATA_FILE))
-        .is_ok_and(|metadata| metadata.file_type().is_file())
+    if !fs::symlink_metadata(directory).is_ok_and(|metadata| {
+        let file_type = metadata.file_type();
+        file_type.is_dir() && !file_type.is_symlink()
+    }) {
+        return false;
+    }
+    fs::symlink_metadata(directory.join(SOURCE_METADATA_FILE)).is_ok_and(|metadata| {
+        let file_type = metadata.file_type();
+        file_type.is_file() && !file_type.is_symlink()
+    })
 }
 
 fn document_paths_equal(left: &str, right: &str) -> bool {
@@ -551,6 +559,7 @@ mod tests {
     use super::super::{ConfiguredSource, SourceConfig, SourceLocation};
     use super::{
         RegisteredDocument, RegisteredDocumentIndex, RegisteredDocumentOrigin, scan_directory,
+        source_directory_ready,
     };
 
     fn temporary_root(label: &str) -> PathBuf {
@@ -585,7 +594,12 @@ mod tests {
         match result {
             Ok(()) => true,
             #[cfg(windows)]
-            Err(error) if error.kind() == std::io::ErrorKind::PermissionDenied => false,
+            Err(error)
+                if error.kind() == std::io::ErrorKind::PermissionDenied
+                    || error.raw_os_error() == Some(1314) =>
+            {
+                false
+            }
             Err(error) => panic!("create fixture symlink: {error}"),
         }
     }
@@ -668,6 +682,34 @@ mod tests {
         );
         let managed = scan_directory(&documents, false).expect("scan managed source");
         assert!(managed.is_empty());
+        fs::remove_dir_all(base).expect("remove fixture");
+    }
+
+    #[test]
+    fn managed_source_readiness_rejects_linked_roots_and_metadata() {
+        let base = temporary_root("managed-root-links");
+        let installed = base.join("installed");
+        let linked_root = base.join("linked-root");
+        fs::create_dir_all(&installed).expect("create installed source");
+        fs::write(installed.join(super::SOURCE_METADATA_FILE), "metadata")
+            .expect("write source metadata");
+        if !created_link(symlink_directory(&installed, &linked_root)) {
+            fs::remove_dir_all(base).expect("remove unsupported symlink fixture");
+            return;
+        }
+        assert!(source_directory_ready(&installed));
+        assert!(!source_directory_ready(&linked_root));
+
+        let linked_metadata_root = base.join("linked-metadata");
+        fs::create_dir_all(&linked_metadata_root).expect("create linked metadata root");
+        if !created_link(symlink_file(
+            &installed.join(super::SOURCE_METADATA_FILE),
+            &linked_metadata_root.join(super::SOURCE_METADATA_FILE),
+        )) {
+            fs::remove_dir_all(base).expect("remove unsupported symlink fixture");
+            return;
+        }
+        assert!(!source_directory_ready(&linked_metadata_root));
         fs::remove_dir_all(base).expect("remove fixture");
     }
 
