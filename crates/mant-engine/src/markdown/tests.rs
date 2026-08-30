@@ -180,6 +180,10 @@ fn classifies_mailto_only_after_decoding_and_validating_the_mailbox() {
          [leading-dot](mailto:%2Euser@example.test) \
          [double-dot](mailto:user%2E%2Ename@example.test) \
          [extra-at](mailto:user%40evil@example.test) \
+         [query-leading-dot](mailto:%2Euser@example.test?subject=x) \
+         [query-double-dot](mailto:user%2E%2Ename@example.test?subject=x) \
+         [query-extra-at](mailto:user%40evil@example.test?subject=x) \
+         [fragment-leading-dot](mailto:%2Euser@example.test#fragment) \
          [recipients](mailto:user@example.test,second@example.test)\n",
         Some("/docs/tool.md".to_owned()),
     );
@@ -201,10 +205,14 @@ fn classifies_mailto_only_after_decoding_and_validating_the_mailbox() {
         targets[1],
         mant_ir::LinkTarget::Email { address } if address == "a/b@example.test"
     ));
-    for (target, uri) in targets[2..5].iter().zip([
+    for (target, uri) in targets[2..9].iter().zip([
         "mailto:%2Euser@example.test",
         "mailto:user%2E%2Ename@example.test",
         "mailto:user%40evil@example.test",
+        "mailto:%2Euser@example.test?subject=x",
+        "mailto:user%2E%2Ename@example.test?subject=x",
+        "mailto:user%40evil@example.test?subject=x",
+        "mailto:%2Euser@example.test#fragment",
     ]) {
         assert!(matches!(
             target,
@@ -212,7 +220,7 @@ fn classifies_mailto_only_after_decoding_and_validating_the_mailbox() {
         ));
     }
     assert!(matches!(
-        targets[5],
+        targets[9],
         mant_ir::LinkTarget::External { uri }
             if uri == "mailto:user@example.test,second@example.test"
     ));
@@ -222,7 +230,7 @@ fn classifies_mailto_only_after_decoding_and_validating_the_mailbox() {
             .iter()
             .filter(|diagnostic| diagnostic.code.as_deref() == Some("ir.invalid-external-uri"))
             .count(),
-        3
+        7
     );
 }
 

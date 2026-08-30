@@ -195,12 +195,13 @@ fn render_inline_raw(nodes: &[Inline], options: MarkdownOptions) -> String {
                         options,
                     )));
                 }
-                LinkTarget::Email { address } => pieces.push(InlinePiece::plain(render_link(
-                    &format!("mailto:{address}"),
-                    title.as_deref(),
-                    children,
-                    options,
-                ))),
+                LinkTarget::Email { address } => {
+                    let rendered = mant_ir::mailto_uri_for_email_address(address).map_or_else(
+                        || render_inline_raw(children, options),
+                        |uri| render_link(&uri, title.as_deref(), children, options),
+                    );
+                    pieces.push(InlinePiece::plain(rendered));
+                }
                 LinkTarget::Document { name, fragment } => {
                     let mut destination = format!("{name}.md");
                     if let Some(fragment) = fragment {

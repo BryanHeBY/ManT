@@ -709,7 +709,7 @@ mod tests {
     }
 
     #[test]
-    fn validates_external_uri_and_email_structure() {
+    fn validates_external_uri_structure() {
         for uri in [
             "https:relative",
             "https:///missing-host",
@@ -731,6 +731,10 @@ mod tests {
             "mailto:user%40evil@example.test",
             "mailto:user%2Csecond@example.test",
             "mailto:%80@example.test",
+            "mailto:%2Euser@example.test?subject=x",
+            "mailto:user%2E%2Ename@example.test?subject=x",
+            "mailto:user%40evil@example.test?subject=x",
+            "mailto:%2Euser@example.test#fragment",
         ] {
             assert!(!is_valid_external_uri(uri), "accepted invalid URI {uri}");
         }
@@ -749,6 +753,10 @@ mod tests {
         ] {
             assert!(is_valid_external_uri(uri), "rejected valid URI {uri}");
         }
+    }
+
+    #[test]
+    fn validates_email_and_mailto_round_trips() {
         for address in [
             "",
             "missing-domain",

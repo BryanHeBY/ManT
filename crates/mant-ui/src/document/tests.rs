@@ -520,6 +520,10 @@ fn external_uri_activation_requires_a_host_or_mailbox() {
         "mailto:user%2E%2Ename@example.test",
         "mailto:user%40evil@example.test",
         "mailto:user%2Csecond@example.test",
+        "mailto:%2Euser@example.test?subject=x",
+        "mailto:user%2E%2Ename@example.test?subject=x",
+        "mailto:user%40evil@example.test?subject=x",
+        "mailto:%2Euser@example.test#fragment",
         "https://example.test/white space",
     ] {
         assert!(

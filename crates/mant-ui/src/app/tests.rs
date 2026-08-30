@@ -2353,6 +2353,57 @@ fn clicking_an_external_link_returns_the_uri_to_the_host() {
 }
 
 #[test]
+fn clicking_encoded_invalid_mailto_links_never_reaches_the_host() {
+    for (index, uri) in [
+        "mailto:%2Euser@example.test?subject=x",
+        "mailto:user%2E%2Ename@example.test?subject=x",
+        "mailto:user%40evil@example.test?subject=x",
+        "mailto:%2Euser@example.test#fragment",
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let label = format!("invalid mail target {index}");
+        let mut bundle = navigation_bundle();
+        bundle.document.as_mut().expect("manual").sections[0]
+            .blocks
+            .insert(
+                0,
+                AstBlock::Paragraph {
+                    children: vec![Inline::Link {
+                        target: mant_ir::LinkTarget::External {
+                            uri: uri.to_owned(),
+                        },
+                        title: None,
+                        children: vec![Inline::Text {
+                            value: label.clone(),
+                        }],
+                    }],
+                    layout: LayoutHint::default(),
+                    source: None,
+                },
+            );
+        let backend = TestBackend::new(72, 18);
+        let mut terminal = Terminal::new(backend).expect("test terminal");
+        let mut app = App::new(&bundle);
+        terminal.draw(|frame| app.draw(frame)).expect("draw app");
+        let width = app.geometry.content.width;
+        let region = app.rendered_cache[&width]
+            .search(&label)
+            .into_iter()
+            .next()
+            .expect("invalid mail label remains visible");
+
+        click_document_cell(&mut app, region.start_column, region.row);
+
+        assert!(
+            app.take_external_request().is_none(),
+            "unsafe mailto URI reached host activation: {uri}"
+        );
+    }
+}
+
+#[test]
 fn clicking_unsafe_tldr_more_information_does_not_reach_the_host() {
     let mut bundle = tldr_bundle();
     bundle.tldr.as_mut().expect("tldr").more_information = Some("file:///etc/passwd".to_owned());
