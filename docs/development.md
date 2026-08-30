@@ -104,7 +104,12 @@ checked-in report and review its package and license mapping:
 
 ```sh
 scripts/generate-rust-licenses.sh
+scripts/generate-rust-licenses.sh --check
 ```
+
+The first command refreshes the checked-in report; `--check` regenerates it
+in a temporary file and fails without modifying the worktree when the report
+is stale. CI uses the same check mode.
 
 Pull requests also use GitHub dependency review. Dependabot supplies weekly
 version updates, while security updates, secret scanning with push protection,

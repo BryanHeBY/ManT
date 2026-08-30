@@ -84,11 +84,7 @@ jobs:
       - name: Verify distributable Rust dependency notices
         run: |
           cargo fetch --locked
-          scripts/generate-rust-licenses.sh "$RUNNER_TEMP/THIRD_PARTY_LICENSES.html"
-          cmp THIRD_PARTY_LICENSES.html "$RUNNER_TEMP/THIRD_PARTY_LICENSES.html" || {
-            echo 'THIRD_PARTY_LICENSES.html is stale; run scripts/generate-rust-licenses.sh' >&2
-            exit 1
-          }
+          scripts/generate-rust-licenses.sh --check
 
   dependency-review:
     name: Dependency review

@@ -169,20 +169,44 @@ fn rust_dependency_notice_is_generated_from_the_locked_product_graph() {
     assert!(generator.contains("--manifest-path crates/mant/Cargo.toml"));
     assert!(generator.contains("--all-features"));
     assert!(generator.contains("--fail"));
+    assert!(generator.contains("--check"));
+
+    let workflow = include_str!("../../../.github/workflows/ci.yml");
+    assert!(workflow.contains("scripts/generate-rust-licenses.sh --check"));
 
     let licenses = include_str!("../../../THIRD_PARTY_LICENSES.html");
-    let version = env!("CARGO_PKG_VERSION");
-    let libmandoc_version = include_str!("../../libmandoc-rs/Cargo.toml")
-        .lines()
-        .find_map(|line| {
-            line.strip_prefix("version = \"")
-                .and_then(|value| value.strip_suffix('"'))
-        })
-        .expect("libmandoc-rs package version");
     assert!(licenses.contains("ManT Rust dependency licenses"));
     assert!(licenses.contains("cargo-about"));
-    assert!(licenses.contains(&format!("mant {version}")));
-    assert!(licenses.contains(&format!("libmandoc-rs {libmandoc_version}")));
+    for (package, manifest) in [
+        ("mant-ir", include_str!("../../mant-ir/Cargo.toml")),
+        (
+            "mant-protocol",
+            include_str!("../../mant-protocol/Cargo.toml"),
+        ),
+        (
+            "libmandoc-rs",
+            include_str!("../../libmandoc-rs/Cargo.toml"),
+        ),
+        (
+            "mant-sources",
+            include_str!("../../mant-sources/Cargo.toml"),
+        ),
+        ("mant-engine", include_str!("../../mant-engine/Cargo.toml")),
+        ("mant-ui", include_str!("../../mant-ui/Cargo.toml")),
+        ("mant", include_str!("../Cargo.toml")),
+    ] {
+        let version = manifest
+            .lines()
+            .find_map(|line| {
+                line.strip_prefix("version = \"")
+                    .and_then(|value| value.strip_suffix('"'))
+            })
+            .unwrap_or_else(|| panic!("{package} package version"));
+        assert!(
+            licenses.contains(&format!("{package} {version}")),
+            "generated dependency notice must name {package} {version}"
+        );
+    }
     assert!(licenses.contains("ratatui 0.30.2"));
     assert!(licenses.contains("rustls 0.23.43"));
 }

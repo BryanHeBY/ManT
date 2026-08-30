@@ -321,7 +321,8 @@ $env:MANT_RELEASE_TAG = "vMAJOR.MINOR.PATCH"
 ```
 
 Before publishing, regenerate `THIRD_PARTY_LICENSES.html` with cargo-about
-0.9.2 and confirm there is no diff. Then inspect that the executable,
+0.9.2, review the diff, and run
+`scripts/generate-rust-licenses.sh --check`. Then inspect that the executable,
 self-hosted document, project license, generated Rust dependency report,
 parser third-party notice, upstream inventory, and complete reusable license
 texts are present:
