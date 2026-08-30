@@ -219,6 +219,11 @@ struct BlockLowerer<'a, 'source> {
     definition_hanging_width: usize,
     split_authors: bool,
     synopsis_return_type_open: bool,
+    // A description-less `.TQ`, or a `.TP` head explicitly continued with
+    // `\c`, proves that the next described tagged paragraph shares its head.
+    // Keep that source fact here instead of inferring aliases from an empty
+    // lowered description, which would merge unrelated consecutive `.TP`s.
+    pending_man_alias: bool,
 }
 
 impl<'a, 'source> BlockLowerer<'a, 'source> {
@@ -237,6 +242,7 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
             definition_hanging_width: 7,
             split_authors: false,
             synopsis_return_type_open: false,
+            pending_man_alias: false,
         }
     }
 
@@ -302,6 +308,7 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
                 paragraph_distance: self.paragraph_distance,
                 output: &mut self.state.output,
                 definition_hanging_width: &mut self.definition_hanging_width,
+                pending_man_alias: &mut self.pending_man_alias,
                 spacing_enabled,
             }
             .push(node, table_embedding);
@@ -556,6 +563,7 @@ struct StructuralLowerer<'a, 'source, 'state> {
     paragraph_distance: &'state mut u16,
     output: &'state mut Vec<Block>,
     definition_hanging_width: &'state mut usize,
+    pending_man_alias: &'state mut bool,
     spacing_enabled: bool,
 }
 
@@ -563,6 +571,9 @@ impl StructuralLowerer<'_, '_, '_> {
     fn push(&mut self, node: &Node, table_embedding: Option<&TableEmbedding<'_>>) {
         if self.lower_transparent_container(node) {
             return;
+        }
+        if !matches!(node.macro_name.as_deref(), Some("TP" | "TQ")) {
+            *self.pending_man_alias = false;
         }
         match node.macro_name.as_deref() {
             Some("TP" | "IP" | "TQ") => {
@@ -573,6 +584,7 @@ impl StructuralLowerer<'_, '_, '_> {
                     self.paragraph_distance,
                     self.output,
                     self.definition_hanging_width,
+                    self.pending_man_alias,
                     self.spacing_enabled,
                 );
             }

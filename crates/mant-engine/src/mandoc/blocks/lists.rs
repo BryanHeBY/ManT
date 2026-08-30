@@ -19,7 +19,10 @@ use super::super::{
     roff_escape::visible_text,
     source_span,
 };
-use super::{is_inline_equation, is_inline_equation_quote_artifact, lower_blocks_with_spacing};
+use super::{
+    ends_with_line_continuation, is_inline_equation, is_inline_equation_quote_artifact,
+    lower_blocks_with_spacing,
+};
 use crate::block::block_layout_mut;
 
 fn is_bullet_glyph(text: &str) -> bool {
@@ -39,6 +42,7 @@ pub(super) fn lower_man_definition(
     paragraph_distance: &mut u16,
     output: &mut Vec<Block>,
     definition_hanging_width: &mut usize,
+    pending_alias: &mut bool,
     spacing_enabled: bool,
 ) {
     // Capture the distance before lowering the body: a `.PD` request that
@@ -59,6 +63,15 @@ pub(super) fn lower_man_definition(
         max_width,
         spacing_enabled,
     );
+    let macro_name = node.macro_name.as_deref();
+    let merge_pending = macro_name == Some("IP")
+        || matches!(macro_name, Some("TP" | "TQ"))
+            && (macro_name == Some("TQ") || *pending_alias || spacing_before == 0);
+    *pending_alias = item.description.is_empty()
+        && (macro_name == Some("TQ")
+            || visible_definition_head(node)
+                .last()
+                .is_some_and(ends_with_line_continuation));
     if node.macro_name.as_deref() == Some("IP")
         && item.terms.is_empty()
         && append_ip_continuation(output, &mut item, indent_columns, spacing_before)
@@ -81,6 +94,7 @@ pub(super) fn lower_man_definition(
             spacing_before,
             source_span(node),
             max_width,
+            merge_pending,
         );
     }
 }
@@ -493,12 +507,13 @@ fn append_definition(
     paragraph_distance: u16,
     source: Option<mant_ir::SourceSpan>,
     max_term_width: usize,
+    merge_pending: bool,
 ) {
     if let Some(Block::DefinitionList { items, compact, .. }) = output
         .last_mut()
         .filter(|block| block_indent(block) == Some(indent_columns))
     {
-        if !item.description.is_empty() {
+        if merge_pending && !item.description.is_empty() {
             let first_pending = items
                 .iter()
                 .rposition(|previous| !previous.description.is_empty())
@@ -506,10 +521,10 @@ fn append_definition(
             for pending in items.drain(first_pending..) {
                 item.terms.splice(0..0, pending.terms);
             }
-            // `.TQ` aliases are collected as pending, description-less items.
-            // Once they join the described item, layout must be decided from
-            // the complete visible term string rather than the final alias
-            // alone.
+            // Source-proven `.TQ` and `\c` aliases are collected as pending,
+            // description-less items. Once joined, layout must be decided
+            // from the complete visible term string rather than the final
+            // alias alone.
             item.inline_term = terms_fit_inline(&item.terms, max_term_width);
         }
         item.spacing_before_lines = Some(if items.is_empty() {

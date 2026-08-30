@@ -13,7 +13,7 @@ mod source_lines;
 
 use std::{
     cell::RefCell,
-    collections::{BTreeMap, HashMap},
+    collections::{BTreeMap, HashMap, HashSet},
     path::Path,
 };
 
@@ -201,6 +201,7 @@ struct LoweringContext<'a> {
     equation_delimiters: Vec<EquationDelimiterChange>,
     normalized_equations: RefCell<BTreeMap<String, String>>,
     section_ids: HashMap<String, usize>,
+    assigned_section_ids: HashSet<String>,
     diagnostics: RefCell<Vec<Diagnostic>>,
 }
 
@@ -246,6 +247,7 @@ impl<'a> LoweringContext<'a> {
             equation_delimiters: source.map_or_else(Vec::new, equation_delimiter_changes),
             normalized_equations: RefCell::new(BTreeMap::new()),
             section_ids: HashMap::new(),
+            assigned_section_ids: HashSet::new(),
             diagnostics: RefCell::new(Vec::new()),
         }
     }
@@ -399,11 +401,16 @@ impl<'a> LoweringContext<'a> {
             slug
         };
         let count = self.section_ids.entry(base.clone()).or_default();
-        *count += 1;
-        if *count == 1 {
-            base
-        } else {
-            format!("{base}-{count}")
+        loop {
+            *count += 1;
+            let candidate = if *count == 1 {
+                base.clone()
+            } else {
+                format!("{base}-{count}")
+            };
+            if self.assigned_section_ids.insert(candidate.clone()) {
+                return candidate;
+            }
         }
     }
 
@@ -654,6 +661,14 @@ mod tests {
         assert_eq!(edited.section_id("OPTIONS"), "options-2");
     }
 
+    #[test]
+    fn native_section_ids_disambiguate_final_slug_collisions() {
+        let mut context = LoweringContext::new(None, None);
+        assert_eq!(context.section_id("FOO"), "foo");
+        assert_eq!(context.section_id("FOO"), "foo-2");
+        assert_eq!(context.section_id("FOO 2"), "foo-2-2");
+    }
+
     fn find_macro_mut<'a>(
         node: &'a mut libmandoc_rs::Node,
         name: &str,
@@ -832,6 +847,34 @@ mod tests {
             panic!("expected alias description paragraph");
         };
         assert_eq!(inline_text(children), "Read symbols.");
+    }
+
+    #[test]
+    fn keeps_unrelated_consecutive_tp_definitions_separate() {
+        let path = temporary_source(
+            "distinct-consecutive-definitions",
+            ".TH DISTINCT 1\n\
+             .SH OPTIONS\n\
+             .TP\n\
+             -a\n\
+             .TP\n\
+             -b\n\
+             Description only for b.\n",
+        );
+
+        let document = parse_manual_source(&path).expect("lower distinct tagged paragraphs");
+        fs::remove_file(path).expect("remove temporary roff fixture");
+        let [Block::DefinitionList { items, .. }] = document.sections[0].blocks.as_slice() else {
+            panic!("expected one definition list");
+        };
+        assert_eq!(items.len(), 2);
+        assert_eq!(inline_text(&items[0].terms[0]), "-a");
+        assert!(items[0].description.is_empty());
+        assert_eq!(inline_text(&items[1].terms[0]), "-b");
+        let Block::Paragraph { children, .. } = &items[1].description[0] else {
+            panic!("expected second tagged paragraph description");
+        };
+        assert_eq!(inline_text(children), "Description only for b.");
     }
 
     #[test]
