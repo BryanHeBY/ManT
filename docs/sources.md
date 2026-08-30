@@ -123,6 +123,12 @@ Use `mant --doctor --format json` for the versioned `mant.doctor/v1` report.
 Physical paths are included deliberately because this is a local diagnostic
 interface; doctor is not exposed through MCP.
 
+Installed-source metadata records a document count. Doctor compares that count
+with the currently materialized Markdown files, and update reacquires a source
+when they differ. This detects ordinary missing-file damage but is not a path
+manifest or content-integrity hash: a same-count rename or replacement is
+outside this check.
+
 ## Updating
 
 Run:

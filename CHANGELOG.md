@@ -136,8 +136,8 @@ that crate was not published for that change.
 ### mant-sources 0.9.2
 
 - Reject linked managed-source roots and metadata during registration.
-- Compare updater metadata with the materialized Markdown inventory so doctor
-  reports incomplete caches and update reacquires missing documents.
+- Compare the recorded document count with the materialized Markdown count so
+  doctor reports count-mismatched caches and update reacquires the source.
 
 ## 0.9.1 - 2026-08-24
 
