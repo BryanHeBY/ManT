@@ -148,7 +148,7 @@ fn clap_color_is_terminal_aware_and_explicitly_controllable() {
 }
 
 #[test]
-fn dynamic_newlines_cannot_forge_colored_diagnostic_lines() {
+fn dynamic_newline_selectors_are_rejected_before_diagnostic_interpolation() {
     let root = std::env::temp_dir().join(format!("mant-diagnostic-newline-{}", std::process::id()));
     let manual_root = root.join("manuals");
     fs::create_dir_all(&manual_root).expect("create empty manual root");
@@ -162,14 +162,14 @@ fn dynamic_newlines_cannot_forge_colored_diagnostic_lines() {
         .expect("query a selector containing a newline");
     fs::remove_dir_all(root).expect("remove diagnostic fixture");
 
-    assert_eq!(output.status.code(), Some(1));
+    assert_eq!(output.status.code(), Some(2));
     assert!(output.stdout.is_empty());
     let diagnostic = String::from_utf8(output.stderr).expect("UTF-8 diagnostic");
     assert!(
-        diagnostic.contains("missing�hint: forged advice"),
+        diagnostic.contains("document selector must not contain control characters"),
         "{diagnostic:?}"
     );
-    assert!(!diagnostic.contains("\nhint: forged advice"));
+    assert!(!diagnostic.contains("forged advice"));
     assert_eq!(diagnostic.matches("\u{1b}[1m\u{1b}[36mhint:").count(), 0);
 }
 
