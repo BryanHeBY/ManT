@@ -244,6 +244,40 @@ fn preserves_complete_readline_variable_names_without_shadowing_builtins() {
     ));
 }
 
+#[test]
+fn preserves_compact_invocation_aliases_and_their_shared_description() {
+    let document = fedora44_manual("sh");
+    let index = SemanticIndex::build(document);
+    let mut sections = Vec::new();
+    collect_sections(&document.sections, &mut sections);
+    let aliases = ["--init-file", "--rcfile"];
+    let entries = aliases.map(|alias| {
+        sections
+            .iter()
+            .flat_map(|section| all_entries(index.section(&section.id)))
+            .find(|entry| entry.aliases.iter().any(|candidate| candidate == alias))
+            .unwrap_or_else(|| panic!("missing invocation option {alias}"))
+    });
+
+    assert_eq!(entries[0].id, entries[1].id);
+    assert!(aliases.iter().all(|alias| {
+        entries[0]
+            .aliases
+            .iter()
+            .any(|candidate| candidate == alias)
+    }));
+
+    let query = common::query_for_document("sh", document);
+    for alias in aliases {
+        let excerpt = select_explanation(&query, alias)
+            .unwrap_or_else(|error| panic!("{alias} must be explainable: {error}"));
+        let rendered = render_excerpt_markdown(&excerpt);
+        assert!(rendered.contains("--init-file"), "{rendered}");
+        assert!(rendered.contains("--rcfile"), "{rendered}");
+        assert!(rendered.contains("Execute commands from"), "{rendered}");
+    }
+}
+
 fn has_parameter(entry: &SemanticEntry, parameter_kind: ParameterKind, alias: &str) -> bool {
     entry.children.iter().any(|child| {
         child.kind == EntryKind::Parameter { parameter_kind }

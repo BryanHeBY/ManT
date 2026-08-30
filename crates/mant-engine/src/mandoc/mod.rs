@@ -948,6 +948,192 @@ mod tests {
     }
 
     #[test]
+    fn paragraph_distance_in_the_first_tp_head_opens_a_compact_alias_group() {
+        let path = temporary_source(
+            "head-owned-compact-alias-group",
+            ".TH ALIASES 1\n\
+             .SH OPTIONS\n\
+             .TP\n\
+             .PD 0\n\
+             --first\n\
+             .TP\n\
+             --second\n\
+             .PD\n\
+             Shared description.\n",
+        );
+
+        let document = parse_manual_source(&path).expect("lower head-owned compact alias group");
+        fs::remove_file(path).expect("remove temporary roff fixture");
+        let [Block::DefinitionList { items, .. }] = document.sections[0].blocks.as_slice() else {
+            panic!("expected one definition list");
+        };
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].terms.len(), 2);
+        assert_eq!(inline_text(&items[0].terms[0]), "--first");
+        assert_eq!(inline_text(&items[0].terms[1]), "--second");
+        let Block::Paragraph { children, .. } = &items[0].description[0] else {
+            panic!("expected shared description");
+        };
+        assert_eq!(inline_text(children), "Shared description.");
+    }
+
+    #[test]
+    fn compact_alias_group_does_not_absorb_a_preceding_orphan() {
+        let path = temporary_source(
+            "bounded-compact-alias-group",
+            ".TH ALIASES 1\n\
+             .SH OPTIONS\n\
+             .TP\n\
+             orphan\n\
+             .TP\n\
+             .PD 0\n\
+             --first\n\
+             .TP\n\
+             --second\n\
+             .PD\n\
+             Shared description.\n",
+        );
+
+        let document = parse_manual_source(&path).expect("lower bounded compact alias group");
+        fs::remove_file(path).expect("remove temporary roff fixture");
+        let [Block::DefinitionList { items, .. }] = document.sections[0].blocks.as_slice() else {
+            panic!("expected one definition list");
+        };
+        assert_eq!(items.len(), 2);
+        assert_eq!(inline_text(&items[0].terms[0]), "orphan");
+        assert!(items[0].description.is_empty());
+        assert_eq!(items[1].terms.len(), 2);
+        assert_eq!(inline_text(&items[1].terms[0]), "--first");
+        assert_eq!(inline_text(&items[1].terms[1]), "--second");
+    }
+
+    #[test]
+    fn adjacent_compact_alias_groups_keep_their_exact_boundaries() {
+        let path = temporary_source(
+            "adjacent-compact-alias-groups",
+            ".TH ALIASES 1\n\
+             .SH OPTIONS\n\
+             .TP\n\
+             .PD 0\n\
+             --first\n\
+             .TP\n\
+             --second\n\
+             .PD\n\
+             First description.\n\
+             .TP\n\
+             .PD 0\n\
+             --third\n\
+             .TP\n\
+             --fourth\n\
+             .PD\n\
+             Second description.\n",
+        );
+
+        let document = parse_manual_source(&path).expect("lower adjacent compact alias groups");
+        fs::remove_file(path).expect("remove temporary roff fixture");
+        let [Block::DefinitionList { items, .. }] = document.sections[0].blocks.as_slice() else {
+            panic!("expected one definition list");
+        };
+        assert_eq!(items.len(), 2);
+        assert_eq!(inline_text(&items[0].terms[0]), "--first");
+        assert_eq!(inline_text(&items[0].terms[1]), "--second");
+        assert_eq!(inline_text(&items[1].terms[0]), "--third");
+        assert_eq!(inline_text(&items[1].terms[1]), "--fourth");
+    }
+
+    #[test]
+    fn unclosed_compact_run_stays_separate_and_resets_at_indent_scope() {
+        let path = temporary_source(
+            "unclosed-compact-alias-group",
+            ".TH ALIASES 1\n\
+             .SH OPTIONS\n\
+             .TP\n\
+             .PD 0\n\
+             --loose\n\
+             .TP\n\
+             --described\n\
+             Own description.\n\
+             .TP\n\
+             .PD 0\n\
+             outer\n\
+             .RS\n\
+             .TP\n\
+             inner\n\
+             .PD\n\
+             Inner description.\n\
+             .RE\n",
+        );
+
+        let document = parse_manual_source(&path).expect("lower unclosed compact alias group");
+        fs::remove_file(path).expect("remove temporary roff fixture");
+        let [Block::DefinitionList { items, .. }] = document.sections[0].blocks.as_slice() else {
+            panic!("expected one outer definition list");
+        };
+        assert_eq!(items.len(), 3);
+        assert_eq!(inline_text(&items[0].terms[0]), "--loose");
+        assert!(items[0].description.is_empty());
+        assert_eq!(inline_text(&items[1].terms[0]), "--described");
+        assert_eq!(inline_text(&items[2].terms[0]), "outer");
+        let [
+            Block::DefinitionList {
+                items: inner_items, ..
+            },
+        ] = items[2].description.as_slice()
+        else {
+            panic!("expected one nested definition list");
+        };
+        assert_eq!(inner_items.len(), 1);
+        assert_eq!(inline_text(&inner_items[0].terms[0]), "inner");
+        assert!(!inner_items[0].description.is_empty());
+    }
+
+    #[test]
+    fn unclosed_compact_run_does_not_cross_a_section_boundary() {
+        let path = temporary_source(
+            "section-bounded-compact-alias-group",
+            ".TH ALIASES 1\n\
+             .SH FIRST\n\
+             .TP\n\
+             .PD 0\n\
+             first\n\
+             .SH SECOND\n\
+             .TP\n\
+             second\n\
+             .PD\n\
+             Second description.\n",
+        );
+
+        let document = parse_manual_source(&path).expect("lower section-bounded compact run");
+        fs::remove_file(path).expect("remove temporary roff fixture");
+        let [first, second] = document.sections.as_slice() else {
+            panic!("expected two sections");
+        };
+        let [
+            Block::DefinitionList {
+                items: first_items, ..
+            },
+        ] = first.blocks.as_slice()
+        else {
+            panic!("expected first definition list");
+        };
+        let [
+            Block::DefinitionList {
+                items: second_items,
+                ..
+            },
+        ] = second.blocks.as_slice()
+        else {
+            panic!("expected second definition list");
+        };
+        assert_eq!(first_items.len(), 1);
+        assert_eq!(inline_text(&first_items[0].terms[0]), "first");
+        assert!(first_items[0].description.is_empty());
+        assert_eq!(second_items.len(), 1);
+        assert_eq!(inline_text(&second_items[0].terms[0]), "second");
+        assert!(!second_items[0].description.is_empty());
+    }
+
+    #[test]
     fn preserves_man_synopsis_flow_and_alternating_fonts() {
         let path = temporary_source(
             "man-synopsis-flow",

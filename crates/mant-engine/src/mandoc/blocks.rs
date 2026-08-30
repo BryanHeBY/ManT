@@ -25,7 +25,8 @@ mod preformatted;
 mod tables;
 
 use lists::{
-    ManDefinitionState, lower_man_definition as lower_man_definition_block, lower_mdoc_list,
+    ManAliasState, ManDefinitionState, lower_man_definition as lower_man_definition_block,
+    lower_mdoc_list,
 };
 use preformatted::{preformatted_blocks, style_preformatted_inlines};
 use tables::{TableEmbedding, append_table_row, table_embeddings};
@@ -221,11 +222,10 @@ struct BlockLowerer<'a, 'source> {
     definition_hanging_width: usize,
     split_authors: bool,
     synopsis_return_type_open: bool,
-    // A description-less `.TQ`, or a `.TP` head explicitly continued with
-    // `\c`, proves that the next described tagged paragraph shares its head.
-    // Keep that source fact here instead of inferring aliases from an empty
-    // lowered description, which would merge unrelated consecutive `.TP`s.
-    pending_man_alias: bool,
+    // Retain explicit continuation and bounded `.PD 0` group state across
+    // adjacent man definitions. The state owns the exact first item of a
+    // compact group so a later close cannot absorb an unrelated orphan.
+    man_alias_state: ManAliasState,
 }
 
 impl<'a, 'source> BlockLowerer<'a, 'source> {
@@ -244,7 +244,7 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
             definition_hanging_width: 7,
             split_authors: false,
             synopsis_return_type_open: false,
-            pending_man_alias: false,
+            man_alias_state: ManAliasState::None,
         }
     }
 
@@ -310,7 +310,7 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
                 paragraph_distance: self.paragraph_distance,
                 output: &mut self.state.output,
                 definition_hanging_width: &mut self.definition_hanging_width,
-                pending_man_alias: &mut self.pending_man_alias,
+                man_alias_state: &mut self.man_alias_state,
                 spacing_enabled,
             }
             .push(node, table_embedding);
@@ -565,7 +565,7 @@ struct StructuralLowerer<'a, 'source, 'state> {
     paragraph_distance: &'state mut u16,
     output: &'state mut Vec<Block>,
     definition_hanging_width: &'state mut usize,
-    pending_man_alias: &'state mut bool,
+    man_alias_state: &'state mut ManAliasState,
     spacing_enabled: bool,
 }
 
@@ -579,18 +579,18 @@ impl StructuralLowerer<'_, '_, '_> {
                 paragraph_distance: self.paragraph_distance,
                 output: self.output,
                 definition_hanging_width: self.definition_hanging_width,
-                pending_alias: self.pending_man_alias,
+                alias_state: self.man_alias_state,
             },
             self.spacing_enabled,
         );
     }
 
     fn push(&mut self, node: &Node, table_embedding: Option<&TableEmbedding<'_>>) {
+        if !matches!(node.macro_name.as_deref(), Some("TP" | "TQ")) {
+            *self.man_alias_state = ManAliasState::None;
+        }
         if self.lower_transparent_container(node) {
             return;
-        }
-        if !matches!(node.macro_name.as_deref(), Some("TP" | "TQ")) {
-            *self.pending_man_alias = false;
         }
         match node.macro_name.as_deref() {
             Some("TP" | "IP" | "TQ") => self.lower_man_definition(node),

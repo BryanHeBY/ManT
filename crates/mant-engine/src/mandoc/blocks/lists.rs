@@ -14,6 +14,7 @@ use super::super::{
     },
     layout::{
         block_indent, display_indent, horizontal_distance_columns, layout, layout_with_spacing,
+        paragraph_distance_lines,
     },
     part_child_groups,
     roff_escape::visible_text,
@@ -46,7 +47,7 @@ pub(super) fn lower_man_definition(
         paragraph_distance,
         output,
         definition_hanging_width,
-        pending_alias,
+        alias_state,
     } = state;
     // Capture the distance before lowering the body: a `.PD` request that
     // follows this item can live inside libmandoc's block scope and updates
@@ -56,6 +57,13 @@ pub(super) fn lower_man_definition(
     } else {
         *paragraph_distance
     };
+    let head = first_part_children(node, NodeKind::Head);
+    let body = first_part_children(node, NodeKind::Body);
+    let leading_head_distance = leading_paragraph_distance(head);
+    let leading_body_distance = leading_paragraph_distance(body);
+    if let Some(distance) = leading_head_distance {
+        *paragraph_distance = distance;
+    }
     update_man_definition_width(node, definition_hanging_width);
     let max_width = definition_hanging_width.saturating_sub(1);
     let mut item = definition_item(
@@ -67,22 +75,29 @@ pub(super) fn lower_man_definition(
         spacing_enabled,
     );
     let macro_name = node.macro_name.as_deref();
-    // Some generated man pages open a zero-distance run after the first
-    // spelling and restore `.PD` immediately before the shared description.
-    // That closing transition is structural evidence of an alias group;
-    // remaining at zero distance merely requests compact independent items.
-    let closes_compact_alias_group = macro_name == Some("TP")
-        && spacing_before == 0
-        && *paragraph_distance != 0
-        && !item.description.is_empty();
-    let merge_pending = macro_name == Some("IP")
-        || matches!(macro_name, Some("TP" | "TQ"))
-            && (macro_name == Some("TQ") || *pending_alias || closes_compact_alias_group);
-    *pending_alias = item.description.is_empty()
+    let description_empty = item.description.is_empty();
+    let opens_compact_group = macro_name == Some("TP")
+        && description_empty
+        && (leading_head_distance == Some(0) || leading_body_distance == Some(0));
+    let closes_compact_group = macro_name == Some("TP")
+        && !description_empty
+        && leading_body_distance.is_some_and(|distance| distance != 0);
+    let explicit_continuation = description_empty
         && (macro_name == Some("TQ")
             || visible_definition_head(node)
                 .last()
                 .is_some_and(ends_with_line_continuation));
+    let merge = if macro_name == Some("IP") || macro_name == Some("TQ") {
+        DefinitionMerge::PendingTail
+    } else if closes_compact_group {
+        alias_state
+            .compact_start()
+            .map_or(DefinitionMerge::None, DefinitionMerge::From)
+    } else if alias_state.is_explicit_continuation() {
+        DefinitionMerge::PendingTail
+    } else {
+        DefinitionMerge::None
+    };
     if node.macro_name.as_deref() == Some("IP")
         && item.terms.is_empty()
         && append_ip_continuation(output, &mut item, indent_columns, spacing_before)
@@ -98,15 +113,49 @@ pub(super) fn lower_man_definition(
             source_span(node),
         );
     } else {
-        append_definition(
+        let location = append_definition(
             output,
             item,
             indent_columns,
             spacing_before,
             source_span(node),
             max_width,
-            merge_pending,
+            merge,
         );
+        *alias_state = if opens_compact_group {
+            ManAliasState::CompactRun(location)
+        } else if explicit_continuation {
+            match *alias_state {
+                ManAliasState::CompactRun(start) => ManAliasState::CompactRun(start),
+                ManAliasState::None | ManAliasState::ExplicitContinuation => {
+                    ManAliasState::ExplicitContinuation
+                }
+            }
+        } else if matches!(merge, DefinitionMerge::None) && description_empty {
+            *alias_state
+        } else {
+            ManAliasState::None
+        };
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum ManAliasState {
+    None,
+    ExplicitContinuation,
+    CompactRun(DefinitionLocation),
+}
+
+impl ManAliasState {
+    const fn compact_start(self) -> Option<DefinitionLocation> {
+        match self {
+            Self::CompactRun(location) => Some(location),
+            Self::None | Self::ExplicitContinuation => None,
+        }
+    }
+
+    const fn is_explicit_continuation(self) -> bool {
+        matches!(self, Self::ExplicitContinuation)
     }
 }
 
@@ -114,7 +163,34 @@ pub(super) struct ManDefinitionState<'a> {
     pub(super) paragraph_distance: &'a mut u16,
     pub(super) output: &'a mut Vec<Block>,
     pub(super) definition_hanging_width: &'a mut usize,
-    pub(super) pending_alias: &'a mut bool,
+    pub(super) alias_state: &'a mut ManAliasState,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) struct DefinitionLocation {
+    block: usize,
+    item: usize,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum DefinitionMerge {
+    None,
+    PendingTail,
+    From(DefinitionLocation),
+}
+
+fn leading_paragraph_distance(nodes: &[Node]) -> Option<u16> {
+    let mut distance = None;
+    for node in nodes {
+        if node.macro_name.as_deref() == Some("PD") {
+            if let Some(value) = paragraph_distance_lines(node) {
+                distance = Some(value);
+            }
+        } else if !node.flags.no_print && node.kind != NodeKind::Comment {
+            break;
+        }
+    }
+    distance
 }
 
 /// Attach an unlabelled `.IP` body to the preceding labelled item.
@@ -525,25 +601,40 @@ fn append_definition(
     paragraph_distance: u16,
     source: Option<mant_ir::SourceSpan>,
     max_term_width: usize,
-    merge_pending: bool,
-) {
+    merge: DefinitionMerge,
+) -> DefinitionLocation {
+    let block_index = output.len().saturating_sub(1);
     if let Some(Block::DefinitionList { items, compact, .. }) = output
         .last_mut()
         .filter(|block| block_indent(block) == Some(indent_columns))
     {
-        if merge_pending && !item.description.is_empty() {
-            let first_pending = items
-                .iter()
-                .rposition(|previous| !previous.description.is_empty())
-                .map_or(0, |index| index + 1);
-            for pending in items.drain(first_pending..) {
-                item.terms.splice(0..0, pending.terms);
+        if !item.description.is_empty() {
+            let first_pending = match merge {
+                DefinitionMerge::PendingTail => Some(
+                    items
+                        .iter()
+                        .rposition(|previous| !previous.description.is_empty())
+                        .map_or(0, |index| index + 1),
+                ),
+                DefinitionMerge::From(location)
+                    if location.block == block_index
+                        && location.item < items.len()
+                        && items[location.item..]
+                            .iter()
+                            .all(|pending| pending.description.is_empty()) =>
+                {
+                    Some(location.item)
+                }
+                DefinitionMerge::None | DefinitionMerge::From(_) => None,
+            };
+            if let Some(first_pending) = first_pending {
+                for pending in items.drain(first_pending..) {
+                    item.terms.splice(0..0, pending.terms);
+                }
+                // Source-proven `.TQ`, `\c`, and bounded compact aliases are
+                // collected as pending terms. Recompute their combined layout.
+                item.inline_term = terms_fit_inline(&item.terms, max_term_width);
             }
-            // Source-proven `.TQ` and `\c` aliases are collected as pending,
-            // description-less items. Once joined, layout must be decided
-            // from the complete visible term string rather than the final
-            // alias alone.
-            item.inline_term = terms_fit_inline(&item.terms, max_term_width);
         }
         item.spacing_before_lines = Some(if items.is_empty() {
             0
@@ -551,7 +642,12 @@ fn append_definition(
             paragraph_distance
         });
         *compact = *compact && paragraph_distance == 0;
+        let item_index = items.len();
         items.push(item);
+        DefinitionLocation {
+            block: block_index,
+            item: item_index,
+        }
     } else {
         item.spacing_before_lines = Some(0);
         let spacing_before_lines = if output.is_empty() {
@@ -565,6 +661,10 @@ fn append_definition(
             layout: layout_with_spacing(indent_columns, spacing_before_lines),
             source,
         });
+        DefinitionLocation {
+            block: output.len() - 1,
+            item: 0,
+        }
     }
 }
 
