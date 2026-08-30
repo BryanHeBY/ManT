@@ -475,8 +475,7 @@ fn occurrence_line_ranges(
     let start = lines
         .position(markdown, occurrence.markdown.start)
         .line_index;
-    let end = lines
-        .line_index_at_byte(occurrence.markdown.end.saturating_sub(1));
+    let end = lines.line_index_at_byte(occurrence.markdown.end.saturating_sub(1));
     (start..=end)
         .flat_map(|line_index| {
             let line_start = lines.start(line_index);
