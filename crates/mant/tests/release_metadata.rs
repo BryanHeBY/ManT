@@ -386,6 +386,21 @@ fn workspace_crates_own_their_versions_and_use_explicit_caret_dependencies() {
 }
 
 #[test]
+fn source_consumers_require_the_integrity_patch_baseline() {
+    for (name, manifest) in [
+        ("mant-engine", include_str!("../../mant-engine/Cargo.toml")),
+        ("mant", include_str!("../Cargo.toml")),
+    ] {
+        assert!(
+            manifest.lines().any(|line| {
+                line.starts_with("mant-sources = ") && line.contains("version = \"^0.9.2\"")
+            }),
+            "{name} does not require the mant-sources integrity baseline"
+        );
+    }
+}
+
+#[test]
 fn mcp_sdk_and_generated_macros_use_the_same_exact_release() {
     let root = include_str!("../../../Cargo.toml");
     let exact_version = |prefix: &str| {
