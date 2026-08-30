@@ -516,39 +516,7 @@ fn execute(
             },
             pretty,
         ),
-        Command::Schema { contract, pretty } => match contract {
-            SchemaContract::Doctor => {
-                render_json(&mant_protocol::doctor_report_json_schema(), pretty)
-            }
-            SchemaContract::TldrUpdate => {
-                render_json(&mant_protocol::tldr_cache_update_json_schema(), pretty)
-            }
-            SchemaContract::Request => {
-                render_json(&mant_protocol::query_request_json_schema(), pretty)
-            }
-            SchemaContract::Query => {
-                render_json(&mant_protocol::query_bundle_json_schema(), pretty)
-            }
-            SchemaContract::Outline => {
-                render_json(&mant_protocol::query_outline_json_schema(), pretty)
-            }
-            SchemaContract::Excerpt => {
-                render_json(&mant_protocol::query_excerpt_json_schema(), pretty)
-            }
-            SchemaContract::Search => {
-                render_json(&mant_protocol::query_search_json_schema(), pretty)
-            }
-            SchemaContract::ScopeRequest => {
-                render_json(&mant_protocol::scope_query_request_json_schema(), pretty)
-            }
-            SchemaContract::ScopeQuery => {
-                render_json(&mant_protocol::scope_query_response_json_schema(), pretty)
-            }
-            SchemaContract::Catalog => {
-                render_json(&mant_protocol::document_catalog_json_schema(), pretty)
-            }
-            SchemaContract::All => render_json(&mant_protocol::query_json_schema_catalog(), pretty),
-        },
+        Command::Schema { contract, pretty } => render_schema(contract, pretty),
         Command::Catalog {
             query,
             grouped,
@@ -600,6 +568,30 @@ fn execute(
             input,
             host,
         ),
+    }
+}
+
+fn render_schema(contract: SchemaContract, pretty: bool) -> Result<String, Failure> {
+    match contract {
+        SchemaContract::Doctor => render_json(&mant_protocol::doctor_report_json_schema(), pretty),
+        SchemaContract::TldrUpdate => {
+            render_json(&mant_protocol::tldr_cache_update_json_schema(), pretty)
+        }
+        SchemaContract::Request => render_json(&mant_protocol::query_request_json_schema(), pretty),
+        SchemaContract::Query => render_json(&mant_protocol::query_bundle_json_schema(), pretty),
+        SchemaContract::Outline => render_json(&mant_protocol::query_outline_json_schema(), pretty),
+        SchemaContract::Excerpt => render_json(&mant_protocol::query_excerpt_json_schema(), pretty),
+        SchemaContract::Search => render_json(&mant_protocol::query_search_json_schema(), pretty),
+        SchemaContract::ScopeRequest => {
+            render_json(&mant_protocol::scope_query_request_json_schema(), pretty)
+        }
+        SchemaContract::ScopeQuery => {
+            render_json(&mant_protocol::scope_query_response_json_schema(), pretty)
+        }
+        SchemaContract::Catalog => {
+            render_json(&mant_protocol::document_catalog_json_schema(), pretty)
+        }
+        SchemaContract::All => render_json(&mant_protocol::query_json_schema_catalog(), pretty),
     }
 }
 
