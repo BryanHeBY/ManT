@@ -23,6 +23,9 @@ that crate was not published for that change.
   and generic terms. Add evidence-backed value domains without heuristically
   inferring cross-document sets from prose.
 - Extend `OutlinePath` with nested entry coordinates such as `2/e3/e1`.
+- Centralize conservative external-URI and email-address validation, including
+  HTTP authority, host, IPv6 and port structure, and validate source spans
+  attached to producer diagnostics as well as document content.
 
 ### mant-protocol 0.10.0
 
@@ -84,6 +87,13 @@ that crate was not published for that change.
   response never contains duplicate line-group numbers.
 - Index semantic aliases and outline IDs once while producing discovery
   diagnostics, avoiding quadratic selector scans on definition-heavy manuals.
+- Let explicit Markdown declarations produce every v0.10 semantic role and
+  preserve strictly formed negated dash options such as
+  `!--reloadEnvironment` without treating arbitrary `!name` tokens as options.
+- Reserve explicit mdoc `.Tg` targets before allocating section IDs, and keep
+  `.PD 0` as layout rather than using it to merge independent `.TP` entries.
+- Require `mant-sources ^0.9.2` so the source-health guarantees cannot resolve
+  to an older compatible patch through an existing lockfile.
 
 ### mant-ui 0.10.0
 
@@ -103,6 +113,9 @@ that crate was not published for that change.
   Markdown and tldr producers share the same HTTP(S)/mailto policy. Embedding
   callbacks now receive `&ExternalUri` instead of an unclassified `&str`;
   rejected schemes remain visible but inert.
+- Reuse the IR's structural URI validator at that activation boundary, rejecting
+  empty ports, malformed IPv6 authorities, and mailto targets without a
+  mailbox while retaining query-bearing mailto actions.
 
 ### mant 0.10.0
 
@@ -132,6 +145,8 @@ that crate was not published for that change.
 - Launch native Windows external links through the absolute System32 handler
   path instead of executable name lookup, and sanitize dynamic TUI notices at
   their final terminal-rendering boundary.
+- Require `mant-sources ^0.9.2` for maintenance commands so an existing
+  lockfile cannot retain the pre-health-check implementation.
 
 ### mant-sources 0.9.2
 
