@@ -860,6 +860,47 @@ mod tests {
     }
 
     #[test]
+    fn searches_contiguous_text_across_an_unsafe_style_boundary() {
+        let mut query = query();
+        query.document.as_mut().expect("fixture document").sections[0]
+            .blocks
+            .push(Block::Paragraph {
+                children: vec![
+                    Inline::Text {
+                        value: "disabled with --".to_owned(),
+                    },
+                    Inline::Strong {
+                        children: vec![Inline::Text {
+                            value: "no-".to_owned(),
+                        }],
+                    },
+                    Inline::Text {
+                        value: "option".to_owned(),
+                    },
+                ],
+                layout: LayoutHint::default(),
+                source: None,
+            });
+
+        let visible = search_query(&query, &request("no-option")).expect("visible search");
+        assert_eq!(visible.total, 1);
+        assert_eq!(visible.matches[0].occurrences[0].matched_text, "no-option");
+        assert!(visible.matches[0].preview.contains("--no-option"));
+        assert!(!visible.matches[0].preview.contains("**no-**"));
+
+        let markdown = search_query(
+            &query,
+            &SearchQuery {
+                scope: SearchScope::Markdown,
+                ..request("no-option")
+            },
+        )
+        .expect("Markdown search");
+        assert_eq!(markdown.total, 1);
+        assert_eq!(markdown.matches[0].occurrences[0].matched_text, "no-option");
+    }
+
+    #[test]
     fn source_map_stripping_accepts_only_complete_empty_anchors() {
         assert_eq!(
             display_markdown_line("before<a id=\"node\"></a>after"),

@@ -1,11 +1,13 @@
 //! Converts renderer-neutral inline nodes to safe `CommonMark` phrasing.
 
+use std::collections::VecDeque;
+
 use mant_ir::{Inline, LinkTarget};
 
 use super::MarkdownOptions;
 
 pub(super) fn render_inline(children: &[Inline], options: MarkdownOptions) -> String {
-    render_inline_raw(children, options, 0)
+    render_inline_raw(children, options)
         .split('\n')
         .map(|line| line.trim_matches([' ', '\t']))
         .filter(|line| !line.is_empty())
@@ -87,94 +89,231 @@ pub(crate) fn code_span(value: &str) -> String {
     }
 }
 
-fn render_inline_raw(nodes: &[Inline], options: MarkdownOptions, style_depth: usize) -> String {
-    let mut output = String::new();
+#[derive(Clone, Copy)]
+struct StyleMarkers {
+    primary: &'static str,
+    alternate: &'static str,
+}
+
+struct InlinePiece {
+    rendered: String,
+    markers: Option<StyleMarkers>,
+    styled: bool,
+}
+
+impl InlinePiece {
+    fn plain(rendered: String) -> Self {
+        Self {
+            rendered,
+            markers: None,
+            styled: false,
+        }
+    }
+
+    fn styled(rendered: String, primary: &'static str, alternate: &'static str) -> Self {
+        let styled = !rendered.trim_matches([' ', '\t']).is_empty();
+        Self {
+            rendered,
+            markers: Some(StyleMarkers { primary, alternate }),
+            styled,
+        }
+    }
+
+    fn first_output_character(&self) -> Option<char> {
+        if self.styled && !self.rendered.starts_with([' ', '\t']) {
+            Some('*')
+        } else {
+            self.rendered.chars().next()
+        }
+    }
+
+    fn last_output_character(&self) -> Option<char> {
+        if self.styled && !self.rendered.ends_with([' ', '\t']) {
+            Some('*')
+        } else {
+            self.rendered.chars().next_back()
+        }
+    }
+}
+
+fn render_inline_raw(nodes: &[Inline], options: MarkdownOptions) -> String {
+    let mut pieces = Vec::with_capacity(nodes.len());
     let mut index = 0;
     while let Some(child) = nodes.get(index) {
         match child {
-            Inline::Text { value } => output.push_str(&escape_text(value)),
+            Inline::Text { value } => pieces.push(InlinePiece::plain(escape_text(value))),
             Inline::Strong {
                 children: styled_children,
             } => {
-                let mut rendered = render_inline_raw(styled_children, options, style_depth + 1);
+                let mut rendered = render_inline_raw(styled_children, options);
                 index += 1;
                 while let Some(Inline::Strong { children }) = nodes.get(index) {
-                    rendered.push_str(&render_inline_raw(children, options, style_depth + 1));
+                    rendered.push_str(&render_inline_raw(children, options));
                     index += 1;
                 }
-                output.push_str(&render_styled(&rendered, "**", "__", &output, style_depth));
+                pieces.push(InlinePiece::styled(rendered, "**", "__"));
                 continue;
             }
             Inline::Emphasis {
                 children: styled_children,
             } => {
-                let mut rendered = render_inline_raw(styled_children, options, style_depth + 1);
+                let mut rendered = render_inline_raw(styled_children, options);
                 index += 1;
                 while let Some(Inline::Emphasis { children }) = nodes.get(index) {
-                    rendered.push_str(&render_inline_raw(children, options, style_depth + 1));
+                    rendered.push_str(&render_inline_raw(children, options));
                     index += 1;
                 }
-                output.push_str(&render_styled(&rendered, "*", "_", &output, style_depth));
+                pieces.push(InlinePiece::styled(rendered, "*", "_"));
                 continue;
             }
-            Inline::Code { value } => output.push_str(&code_span(value)),
+            Inline::Code { value } => pieces.push(InlinePiece::plain(code_span(value))),
             Inline::Link {
                 target,
                 title,
                 children,
             } => match target {
                 LinkTarget::External { uri } => {
-                    output.push_str(&render_link(
+                    pieces.push(InlinePiece::plain(render_link(
                         uri,
                         title.as_deref(),
                         children,
                         options,
-                        style_depth,
-                    ));
+                    )));
                 }
-                LinkTarget::Email { address } => output.push_str(&render_link(
+                LinkTarget::Email { address } => pieces.push(InlinePiece::plain(render_link(
                     &format!("mailto:{address}"),
                     title.as_deref(),
                     children,
                     options,
-                    style_depth,
-                )),
+                ))),
                 LinkTarget::Document { name, fragment } => {
                     let mut destination = format!("{name}.md");
                     if let Some(fragment) = fragment {
                         destination.push('#');
                         destination.push_str(fragment);
                     }
-                    output.push_str(&render_link(
+                    pieces.push(InlinePiece::plain(render_link(
                         &destination,
                         title.as_deref(),
                         children,
                         options,
-                        style_depth,
-                    ));
+                    )));
                 }
                 LinkTarget::Section { id } if options.preserve_anchors => {
-                    output.push_str(&render_link(
+                    pieces.push(InlinePiece::plain(render_link(
                         &format!("#{id}"),
                         title.as_deref(),
                         children,
                         options,
-                        style_depth,
-                    ));
+                    )));
                 }
                 LinkTarget::Manual { .. } | LinkTarget::Section { .. } => {
-                    output.push_str(&render_inline_raw(children, options, style_depth));
+                    pieces.push(InlinePiece::plain(render_inline_raw(children, options)));
                 }
             },
             Inline::Anchor { id } if options.preserve_anchors => {
-                output.push_str(&html_anchor(id));
+                pieces.push(InlinePiece::plain(html_anchor(id)));
             }
             Inline::Anchor { .. } => {}
-            Inline::LineBreak => output.push('\n'),
+            Inline::LineBreak => pieces.push(InlinePiece::plain("\n".to_owned())),
         }
         index += 1;
     }
+    render_inline_pieces(&mut pieces)
+}
+
+fn render_inline_pieces(pieces: &mut [InlinePiece]) -> String {
+    let (preceding, following) = nonempty_neighbors(pieces);
+    let mut pending = pieces
+        .iter()
+        .enumerate()
+        .filter_map(|(index, piece)| {
+            (piece.styled && !style_is_valid(pieces, index, &preceding, &following))
+                .then_some(index)
+        })
+        .collect::<VecDeque<_>>();
+    while let Some(index) = pending.pop_front() {
+        if !pieces[index].styled || style_is_valid(pieces, index, &preceding, &following) {
+            continue;
+        }
+        pieces[index].styled = false;
+        for neighbor in [preceding[index], following[index]].into_iter().flatten() {
+            if pieces[neighbor].styled {
+                pending.push_back(neighbor);
+            }
+        }
+    }
+
+    let following = following_characters(pieces);
+    let mut output = String::new();
+    for (index, piece) in pieces.iter().enumerate() {
+        if let Some(markers) = piece.markers.filter(|_| piece.styled) {
+            output.push_str(&render_styled(
+                &piece.rendered,
+                markers.primary,
+                markers.alternate,
+                &output,
+                following[index],
+            ));
+        } else {
+            output.push_str(&piece.rendered);
+        }
+    }
     output
+}
+
+fn nonempty_neighbors(pieces: &[InlinePiece]) -> (Vec<Option<usize>>, Vec<Option<usize>>) {
+    let mut preceding = vec![None; pieces.len()];
+    let mut current = None;
+    for (index, piece) in pieces.iter().enumerate() {
+        preceding[index] = current;
+        if !piece.rendered.is_empty() {
+            current = Some(index);
+        }
+    }
+    let mut following = vec![None; pieces.len()];
+    current = None;
+    for (index, piece) in pieces.iter().enumerate().rev() {
+        following[index] = current;
+        if !piece.rendered.is_empty() {
+            current = Some(index);
+        }
+    }
+    (preceding, following)
+}
+
+fn style_is_valid(
+    pieces: &[InlinePiece],
+    index: usize,
+    preceding: &[Option<usize>],
+    following: &[Option<usize>],
+) -> bool {
+    let piece = &pieces[index];
+    let core = piece.rendered.trim_matches([' ', '\t']);
+    let before = piece
+        .rendered
+        .starts_with([' ', '\t'])
+        .then_some(' ')
+        .or_else(|| preceding[index].and_then(|index| pieces[index].last_output_character()));
+    let after = piece
+        .rendered
+        .ends_with([' ', '\t'])
+        .then_some(' ')
+        .or_else(|| following[index].and_then(|index| pieces[index].first_output_character()));
+    let markers = piece.markers.expect("styled pieces carry markers");
+    [markers.primary, markers.alternate]
+        .into_iter()
+        .any(|marker| !core.contains(marker) && can_delimit_style(core, marker, before, after))
+}
+
+fn following_characters(pieces: &[InlinePiece]) -> Vec<Option<char>> {
+    let mut following = vec![None; pieces.len()];
+    let mut current = None;
+    for (index, piece) in pieces.iter().enumerate().rev() {
+        following[index] = current;
+        current = piece.first_output_character().or(current);
+    }
+    following
 }
 
 /// Render one styled span with the ordinary asterisk marker, switching to the
@@ -186,7 +325,7 @@ fn render_styled(
     primary_marker: &str,
     alternate_marker: &str,
     preceding: &str,
-    style_depth: usize,
+    following: Option<char>,
 ) -> String {
     let core = rendered.trim_matches([' ', '\t']);
     if core.is_empty() {
@@ -196,19 +335,20 @@ fn render_styled(
     let trailing_width = rendered.len() - rendered.trim_end_matches([' ', '\t']).len();
     let leading = &rendered[..leading_width];
     let trailing = &rendered[rendered.len() - trailing_width..];
-    // CommonMark cannot reliably delimit a punctuation-only style nested in
-    // an ordinary word (for example, the bold hyphen inside italic
-    // `--no-option`). Preserve the contiguous semantic spelling and the
-    // outer style instead of emitting literal delimiter characters.
-    if style_depth > 0 {
-        return rendered.to_owned();
-    }
-    let marker = if preceding.ends_with('*') || core.contains(primary_marker) {
-        alternate_marker
+    let prefer_alternate = preceding.ends_with('*') || core.contains(primary_marker);
+    let markers = if prefer_alternate {
+        [alternate_marker, primary_marker]
     } else {
-        primary_marker
+        [primary_marker, alternate_marker]
     };
-    format!("{leading}{marker}{core}{marker}{trailing}")
+    let preceding = preceding.chars().next_back();
+    let marker = markers.into_iter().find(|marker| {
+        !core.contains(marker) && can_delimit_style(core, marker, preceding, following)
+    });
+    marker.map_or_else(
+        || rendered.to_owned(),
+        |marker| format!("{leading}{marker}{core}{marker}{trailing}"),
+    )
 }
 
 fn render_link(
@@ -216,9 +356,8 @@ fn render_link(
     title: Option<&str>,
     children: &[Inline],
     options: MarkdownOptions,
-    style_depth: usize,
 ) -> String {
-    let label = render_inline_raw(children, options, style_depth);
+    let label = render_inline_raw(children, options);
     if (target.starts_with("http://") || target.starts_with("https://"))
         && flatten_inline(children) == target
         && !target.chars().any(char::is_whitespace)
@@ -235,6 +374,60 @@ fn render_link(
         || format!("[{label}]({target})"),
         |title| format!("[{label}]({target} \"{}\")", title.replace('"', "\\\"")),
     )
+}
+
+fn can_delimit_style(
+    core: &str,
+    marker: &str,
+    preceding: Option<char>,
+    following: Option<char>,
+) -> bool {
+    let Some(first) = core.chars().next() else {
+        return false;
+    };
+    let Some(last) = core.chars().next_back() else {
+        return false;
+    };
+    can_open_delimiter(marker, preceding, Some(first))
+        && can_close_delimiter(marker, Some(last), following)
+}
+
+fn can_open_delimiter(marker: &str, preceding: Option<char>, following: Option<char>) -> bool {
+    let (left_flanking, right_flanking) = delimiter_flanking(preceding, following);
+    if marker.starts_with('*') {
+        left_flanking
+    } else {
+        left_flanking && (!right_flanking || preceding.is_some_and(is_commonmark_punctuation))
+    }
+}
+
+fn can_close_delimiter(marker: &str, preceding: Option<char>, following: Option<char>) -> bool {
+    let (left_flanking, right_flanking) = delimiter_flanking(preceding, following);
+    if marker.starts_with('*') {
+        right_flanking
+    } else {
+        right_flanking && (!left_flanking || following.is_some_and(is_commonmark_punctuation))
+    }
+}
+
+fn delimiter_flanking(preceding: Option<char>, following: Option<char>) -> (bool, bool) {
+    let preceding_whitespace = preceding.is_none_or(char::is_whitespace);
+    let following_whitespace = following.is_none_or(char::is_whitespace);
+    let preceding_punctuation = preceding.is_some_and(is_commonmark_punctuation);
+    let following_punctuation = following.is_some_and(is_commonmark_punctuation);
+    let left_flanking = !following_whitespace
+        && (!following_punctuation || preceding_whitespace || preceding_punctuation);
+    let right_flanking = !preceding_whitespace
+        && (!preceding_punctuation || following_whitespace || following_punctuation);
+    (left_flanking, right_flanking)
+}
+
+fn is_commonmark_punctuation(character: char) -> bool {
+    // CommonMark uses Unicode punctuation and symbol categories. Treating the
+    // remaining non-alphanumeric, non-whitespace scalars as punctuation is a
+    // conservative superset: an unusual combining mark can lose styling, but
+    // it cannot make delimiter bytes visible in the projected text.
+    !character.is_alphanumeric() && !character.is_whitespace()
 }
 
 pub(crate) fn html_anchor(id: &str) -> String {

@@ -745,7 +745,9 @@ disable Unicode, such as `(?-u:.)`, are rejected before document matching.
 Structured results always retain generated Markdown coordinates. Plain-text
 visible searches show columns in the displayed text instead, while
 Markdown-scope text searches show canonical Markdown columns; line numbers are
-shared by both presentations.
+shared by both presentations. Reproduce the exact addressable
+`mant.markdown/v1` coordinate text with
+`mant SELECTOR --format markdown --preserve-anchors`.
 
 Use the `=` form when a value begins with a hyphen:
 

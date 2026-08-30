@@ -632,6 +632,110 @@ fn nested_styles_preserve_contiguous_intraword_spellings() {
 }
 
 #[test]
+fn styles_only_flatten_when_commonmark_cannot_delimit_them() {
+    let query = ResolvedContent {
+        address: None,
+        label: "styles".to_owned(),
+        document: Some(manual(vec![section(
+            "TEXT",
+            vec![paragraph(vec![
+                Inline::Text {
+                    value: "disabled with --".to_owned(),
+                },
+                Inline::Strong {
+                    children: vec![Inline::Text {
+                        value: "no-".to_owned(),
+                    }],
+                },
+                Inline::Text {
+                    value: "option; safe ".to_owned(),
+                },
+                Inline::Strong {
+                    children: vec![Inline::Text {
+                        value: "!".to_owned(),
+                    }],
+                },
+                Inline::Text {
+                    value: " and ".to_owned(),
+                },
+                Inline::Emphasis {
+                    children: vec![
+                        Inline::Text {
+                            value: "an ".to_owned(),
+                        },
+                        Inline::Strong {
+                            children: vec![Inline::Text {
+                                value: "important".to_owned(),
+                            }],
+                        },
+                        Inline::Text {
+                            value: " word".to_owned(),
+                        },
+                    ],
+                },
+                Inline::Text {
+                    value: ". chained --".to_owned(),
+                },
+                Inline::Strong {
+                    children: vec![Inline::Text {
+                        value: "no-".to_owned(),
+                    }],
+                },
+                Inline::Emphasis {
+                    children: vec![Inline::Text {
+                        value: "option-".to_owned(),
+                    }],
+                },
+                Inline::Text {
+                    value: "word.".to_owned(),
+                },
+            ])],
+            Vec::new(),
+        )])),
+        tldr: None,
+    };
+
+    let markdown = render_markdown(&query);
+    assert!(markdown.contains("disabled with --no-option"), "{markdown}");
+    assert!(!markdown.contains("--**no-**option"), "{markdown}");
+    assert!(markdown.contains("safe **!**"), "{markdown}");
+    assert!(markdown.contains("_an **important** word_"), "{markdown}");
+    assert!(markdown.contains("chained --no-option-word"), "{markdown}");
+    assert!(!markdown.contains("**no-**option-word"), "{markdown}");
+
+    let events = Parser::new(&markdown).collect::<Vec<_>>();
+    assert_eq!(
+        events
+            .iter()
+            .filter(|event| matches!(event, Event::Start(Tag::Strong)))
+            .count(),
+        2,
+        "safe top-level and nested strong spans remain semantic"
+    );
+    assert_eq!(
+        events
+            .iter()
+            .filter(|event| matches!(event, Event::Start(Tag::Emphasis)))
+            .count(),
+        1,
+        "the representable outer emphasis remains semantic"
+    );
+    let visible = events
+        .into_iter()
+        .filter_map(|event| match event {
+            Event::Text(value) => Some(value.into_string()),
+            _ => None,
+        })
+        .collect::<String>();
+    assert!(
+        visible.contains(
+            "disabled with --no-option; safe ! and an important word. chained --no-option-word."
+        ),
+        "{visible}"
+    );
+}
+
+#[test]
 fn protects_hanging_definition_terms_from_becoming_nested_lists() {
     let query = ResolvedContent {
         address: None,
