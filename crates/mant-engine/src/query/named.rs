@@ -347,7 +347,7 @@ fn load_manual(
             name: requested_name.to_owned(),
             detail,
         })?;
-    if document.sections.is_empty() {
+    if document.sections.is_empty() && document.blocks.is_empty() {
         let diagnostics = document
             .diagnostics
             .iter()

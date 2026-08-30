@@ -5,8 +5,8 @@ use std::{
 };
 
 use mant_ir::{
-    Diagnostic, DiagnosticLevel, Document, DocumentMeta, DocumentSource, Section, SourceFormat,
-    TldrDocument, TldrOrigin,
+    Block, Diagnostic, DiagnosticLevel, Document, DocumentMeta, DocumentSource, Inline, LayoutHint,
+    Section, SourceFormat, TldrDocument, TldrOrigin,
 };
 use mant_protocol::{
     DocumentAddress, InputFormat, MAX_DOCUMENT_SELECTOR_CHARS, MAX_SEMANTIC_ENTRY_CHARS,
@@ -597,6 +597,24 @@ fn readable_best_effort_document_survives_parser_findings() {
         result.document.expect("manual").source.format,
         SourceFormat::Mdoc
     );
+}
+
+#[test]
+fn root_only_native_document_is_readable() {
+    let mut root_only = document(SourceFormat::Man, false, false);
+    root_only.blocks.push(Block::Paragraph {
+        children: vec![Inline::Text {
+            value: "manual text before any section".to_owned(),
+        }],
+        layout: LayoutHint::default(),
+        source: None,
+    });
+    let host = host(Ok(root_only));
+
+    let result = query_with(&request(), QueryPolicy::default(), &host).expect("root content");
+    let document = result.document.expect("manual");
+    assert!(document.sections.is_empty());
+    assert_eq!(document.blocks.len(), 1);
 }
 
 #[test]
