@@ -15,6 +15,14 @@ pub fn validate_document(document: &Document) -> Vec<Diagnostic> {
     let index = DocumentIndex::build(document);
     let mut diagnostics = Vec::new();
 
+    for source in document
+        .diagnostics
+        .iter()
+        .filter_map(|diagnostic| diagnostic.source)
+    {
+        validate_source_span(&mut diagnostics, source);
+    }
+
     for (id, node) in index.iter() {
         if id.trim().is_empty() {
             for role in node.roles() {
@@ -522,5 +530,37 @@ mod tests {
                 "rejected valid email address {address}"
             );
         }
+    }
+
+    #[test]
+    fn validates_source_spans_owned_by_document_diagnostics() {
+        let source = SourceSpan {
+            byte_range: Some(TextRange {
+                start: TextSize::new(8),
+                end: TextSize::new(3),
+            }),
+            line: 0,
+            column: 0,
+            end_line: Some(0),
+            end_column: Some(0),
+        };
+        let mut document = document(Vec::new(), Vec::new());
+        document.diagnostics.push(Diagnostic {
+            level: DiagnosticLevel::Warning,
+            code: Some("producer.finding".to_owned()),
+            message: "producer finding".to_owned(),
+            source: Some(source),
+        });
+
+        let codes = validate_document(&document)
+            .into_iter()
+            .filter_map(|diagnostic| diagnostic.code)
+            .collect::<Vec<_>>();
+        assert!(
+            codes
+                .iter()
+                .any(|code| code == "ir.invalid-source-position")
+        );
+        assert!(codes.iter().any(|code| code == "ir.reverse-source-range"));
     }
 }
