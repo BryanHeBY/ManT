@@ -24,7 +24,9 @@ mod lists;
 mod preformatted;
 mod tables;
 
-use lists::{lower_man_definition, lower_mdoc_list};
+use lists::{
+    ManDefinitionState, lower_man_definition as lower_man_definition_block, lower_mdoc_list,
+};
 use preformatted::{preformatted_blocks, style_preformatted_inlines};
 use tables::{TableEmbedding, append_table_row, table_embeddings};
 
@@ -568,6 +570,21 @@ struct StructuralLowerer<'a, 'source, 'state> {
 }
 
 impl StructuralLowerer<'_, '_, '_> {
+    fn lower_man_definition(&mut self, node: &Node) {
+        lower_man_definition_block(
+            node,
+            self.context,
+            self.indent_columns,
+            ManDefinitionState {
+                paragraph_distance: self.paragraph_distance,
+                output: self.output,
+                definition_hanging_width: self.definition_hanging_width,
+                pending_alias: self.pending_man_alias,
+            },
+            self.spacing_enabled,
+        );
+    }
+
     fn push(&mut self, node: &Node, table_embedding: Option<&TableEmbedding<'_>>) {
         if self.lower_transparent_container(node) {
             return;
@@ -576,18 +593,7 @@ impl StructuralLowerer<'_, '_, '_> {
             *self.pending_man_alias = false;
         }
         match node.macro_name.as_deref() {
-            Some("TP" | "IP" | "TQ") => {
-                lower_man_definition(
-                    node,
-                    self.context,
-                    self.indent_columns,
-                    self.paragraph_distance,
-                    self.output,
-                    self.definition_hanging_width,
-                    self.pending_man_alias,
-                    self.spacing_enabled,
-                );
-            }
+            Some("TP" | "IP" | "TQ") => self.lower_man_definition(node),
             Some("Bl") => {
                 let mut block = lower_mdoc_list(
                     node,

@@ -39,12 +39,15 @@ pub(super) fn lower_man_definition(
     node: &Node,
     context: &LoweringContext<'_>,
     indent_columns: u16,
-    paragraph_distance: &mut u16,
-    output: &mut Vec<Block>,
-    definition_hanging_width: &mut usize,
-    pending_alias: &mut bool,
+    state: ManDefinitionState<'_>,
     spacing_enabled: bool,
 ) {
+    let ManDefinitionState {
+        paragraph_distance,
+        output,
+        definition_hanging_width,
+        pending_alias,
+    } = state;
     // Capture the distance before lowering the body: a `.PD` request that
     // follows this item can live inside libmandoc's block scope and updates
     // spacing for the *next* item, not the current one.
@@ -97,6 +100,13 @@ pub(super) fn lower_man_definition(
             merge_pending,
         );
     }
+}
+
+pub(super) struct ManDefinitionState<'a> {
+    pub(super) paragraph_distance: &'a mut u16,
+    pub(super) output: &'a mut Vec<Block>,
+    pub(super) definition_hanging_width: &'a mut usize,
+    pub(super) pending_alias: &'a mut bool,
 }
 
 /// Attach an unlabelled `.IP` body to the preceding labelled item.
