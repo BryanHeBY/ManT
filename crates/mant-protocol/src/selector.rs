@@ -20,7 +20,7 @@ pub struct NodePath(String);
     Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, JsonSchema,
 )]
 #[serde(transparent)]
-pub struct NodeSelector(String);
+pub struct NodeSelector(#[schemars(length(min = 1, max = 512))] String);
 
 impl NodePath {
     /// Wrap a canonical path produced by a trusted projection.

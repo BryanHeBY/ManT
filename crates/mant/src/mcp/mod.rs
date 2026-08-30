@@ -301,6 +301,23 @@ mod tests {
             }))
             .is_err()
         );
+        assert!(
+            serde_json::from_value::<OutlineParams>(json!({
+                "document": "git",
+                "entries": {"kind": "all", "future": true}
+            }))
+            .is_err()
+        );
+        assert!(
+            serde_json::from_value::<OutlineParams>(json!({
+                "document": "git",
+                "entries": {
+                    "kind": "kinds",
+                    "kinds": [{"kind": "command", "future": true}]
+                }
+            }))
+            .is_err()
+        );
     }
 
     #[test]
@@ -387,6 +404,25 @@ mod tests {
                 "documents": ["manual/1/tar"],
                 "pattern": "exclude",
                 "maxMatches": "many"
+            }))
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn explicit_null_does_not_bypass_required_scalar_types() {
+        assert!(
+            serde_json::from_value::<OutlineParams>(json!({
+                "document": "git",
+                "startChar": null
+            }))
+            .is_err()
+        );
+        assert!(
+            serde_json::from_value::<SearchParams>(json!({
+                "documents": ["git"],
+                "pattern": "index",
+                "followLinks": null
             }))
             .is_err()
         );

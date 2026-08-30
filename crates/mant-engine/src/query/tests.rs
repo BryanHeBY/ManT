@@ -9,8 +9,8 @@ use mant_ir::{
     TldrDocument, TldrOrigin,
 };
 use mant_protocol::{
-    DocumentAddress, InputFormat, MAX_SEMANTIC_ENTRY_CHARS, MarkdownOrigin, QueryInput,
-    QueryRequest, QueryView, RequestSchema, ScopeTextError,
+    DocumentAddress, InputFormat, MAX_DOCUMENT_SELECTOR_CHARS, MAX_SEMANTIC_ENTRY_CHARS,
+    MarkdownOrigin, QueryInput, QueryRequest, QueryView, RequestSchema, ScopeTextError,
 };
 use mant_sources::BUILTIN_CONTENT_PRIORITY;
 
@@ -789,6 +789,37 @@ fn every_single_document_selector_obeys_the_shared_native_bound() {
             })
         );
     }
+}
+
+#[test]
+fn document_input_selector_obeys_the_shared_native_bound() {
+    let mut request = request();
+    request.input = QueryInput::Document {
+        selector: "界".repeat(MAX_DOCUMENT_SELECTOR_CHARS + 1),
+        source: None,
+        manual_section: None,
+    };
+    assert_eq!(
+        validate_query_request(&request, QueryPolicy::default()),
+        Err(QueryError::InvalidViewSelector {
+            field: "document selector",
+            error: ScopeTextError::TooLong {
+                maximum: MAX_DOCUMENT_SELECTOR_CHARS,
+            },
+        })
+    );
+
+    let QueryInput::Document { selector, .. } = &mut request.input else {
+        unreachable!()
+    };
+    *selector = "bad\nselector".to_owned();
+    assert_eq!(
+        validate_query_request(&request, QueryPolicy::default()),
+        Err(QueryError::InvalidViewSelector {
+            field: "document selector",
+            error: ScopeTextError::ControlCharacter,
+        })
+    );
 }
 
 #[test]

@@ -38,6 +38,7 @@ const MAX_PATTERN_CHARS: usize = mant_protocol::MAX_SEARCH_PATTERN_CHARS;
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(super) struct FindParams {
     /// Optional name or catalog-path pattern, bounded to 1024 Unicode scalars at runtime.
+    #[schemars(length(min = 1, max = 1024))]
     pub(super) query: Option<String>,
     /// Interpret `query` literally (the default) or as a regular expression.
     pub(super) syntax: Option<SearchSyntax>,
@@ -46,10 +47,10 @@ pub(super) struct FindParams {
     /// Restrict results to registered Markdown or native manuals.
     pub(super) kind: Option<CatalogDocumentKind>,
     /// Restrict Markdown results to one configured source.
-    #[schemars(length(min = 1))]
+    #[schemars(length(min = 1, max = 128))]
     pub(super) source: Option<String>,
     /// Restrict native manuals to one exact manual section.
-    #[schemars(length(min = 1))]
+    #[schemars(length(min = 1, max = 32))]
     pub(super) manual_section: Option<String>,
     /// Maximum matching catalog rows included in the canonical result text.
     #[schemars(range(min = 1, max = 10_000))]
@@ -72,14 +73,14 @@ pub(super) struct FindParams {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(super) struct OutlineParams {
     /// Unqualified name or canonical catalog path returned by `mant_find`.
-    #[schemars(length(min = 1))]
+    #[schemars(length(min = 1, max = 1024))]
     pub(super) document: String,
     /// Include no entries, compact summaries (the default), all entries, or selected kinds.
     /// Start compact, then expand a relevant returned root with all or selected kinds.
     pub(super) entries: Option<EntryProjection>,
     /// Returned section or entry path, stable ID, or unambiguous alias used as the tree root.
     /// Stable IDs are preferred for stateless follow-up calls.
-    #[schemars(length(min = 1))]
+    #[schemars(length(min = 1, max = 512))]
     pub(super) root: Option<String>,
     /// Zero-based Unicode scalar offset into the canonical result text.
     #[serde(default, deserialize_with = "deserialize_compat_scalar")]
@@ -95,7 +96,7 @@ pub(super) struct OutlineParams {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(super) struct ReadParams {
     /// Unqualified name or canonical catalog path returned by `mant_find`.
-    #[schemars(length(min = 1))]
+    #[schemars(length(min = 1, max = 1024))]
     pub(super) document: String,
     /// Outline paths, stable IDs, or semantic aliases.
     #[schemars(length(min = 1, max = 16))]
@@ -115,7 +116,7 @@ pub(super) struct ReadParams {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(super) struct ExplainParams {
     /// One or more unqualified names or canonical IDs returned by `mant_find`.
-    #[schemars(length(min = 1, max = 16))]
+    #[schemars(length(min = 1, max = 16), inner(length(min = 1, max = 1024)))]
     #[serde(deserialize_with = "deserialize_documents")]
     pub(super) documents: Vec<String>,
     /// Follow typed links from the initial documents.
@@ -130,7 +131,7 @@ pub(super) struct ExplainParams {
     #[serde(default, deserialize_with = "deserialize_compat_optional_scalar")]
     pub(super) max_documents: Option<u32>,
     /// Exact alias, outline path, or stable ID of the entry.
-    #[schemars(length(min = 1))]
+    #[schemars(length(min = 1, max = 512))]
     pub(super) entry: String,
     /// Zero-based Unicode scalar offset into the canonical result text.
     #[serde(default, deserialize_with = "deserialize_compat_scalar")]
@@ -146,7 +147,7 @@ pub(super) struct ExplainParams {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(super) struct SearchParams {
     /// One or more unqualified names or canonical IDs returned by `mant_find`.
-    #[schemars(length(min = 1, max = 16))]
+    #[schemars(length(min = 1, max = 16), inner(length(min = 1, max = 1024)))]
     #[serde(deserialize_with = "deserialize_documents")]
     pub(super) documents: Vec<String>,
     /// Follow typed links from the initial documents.
@@ -161,7 +162,7 @@ pub(super) struct SearchParams {
     #[serde(default, deserialize_with = "deserialize_compat_optional_scalar")]
     pub(super) max_documents: Option<u32>,
     /// Literal text or a regular expression, depending on `syntax`.
-    #[schemars(length(min = 1))]
+    #[schemars(length(min = 1, max = 4096))]
     pub(super) pattern: String,
     /// Interpret `pattern` literally (the default) or as a regular expression.
     pub(super) syntax: Option<SearchSyntax>,
@@ -294,7 +295,9 @@ where
 
     let value = serde_json::Value::deserialize(deserializer)?;
     match value {
-        serde_json::Value::Null => Ok(T::default()),
+        serde_json::Value::Null => Err(D::Error::custom(
+            "null is not accepted for a required scalar; omit the field to use its default",
+        )),
         serde_json::Value::String(text) => text
             .trim()
             .to_ascii_lowercase()
@@ -330,11 +333,7 @@ where
 
 impl FindParams {
     pub(super) fn validate(self) -> Result<ValidatedFindParams, String> {
-        let query = self
-            .query
-            .filter(|query| !query.trim().is_empty())
-            .map(|query| bounded_normalized(&query, "query", MAX_FIND_QUERY_CHARS))
-            .transpose()?;
+        let query = optional_normalized(self.query, "query", MAX_FIND_QUERY_CHARS)?;
         let source = optional_normalized(self.source, "source", MAX_SOURCE_CHARS)?;
         let manual_section = optional_normalized(
             self.manual_section,

@@ -6,8 +6,9 @@ use serde::{Deserialize, Serialize};
 use mant_ir::{ResolvedContent, TldrDocument};
 
 use crate::{
-    DocumentAddress, DocumentResponse, EntryProjection, NodeSelector, SearchCase, SearchScope,
-    SearchSyntax, default_search_limit,
+    DocumentAddress, DocumentResponse, EntryProjection, MAX_DOCUMENT_SELECTOR_CHARS,
+    MAX_MANUAL_SECTION_CHARS, MAX_SEMANTIC_ENTRY_CHARS, MAX_SOURCE_SELECTOR_CHARS, NodeSelector,
+    SearchCase, SearchScope, SearchSyntax, default_search_limit,
 };
 
 /// Exact schema marker for a complete `ManT` query result.
@@ -49,11 +50,14 @@ pub enum QueryInput {
     /// priority-zero native-manual baseline.
     Document {
         /// Hierarchical catalog path or unqualified component-suffix selector.
+        #[schemars(length(min = 1, max = MAX_DOCUMENT_SELECTOR_CHARS))]
         selector: String,
         /// Optional configured Markdown source. It bypasses root documents and manuals.
+        #[schemars(length(min = 1, max = MAX_SOURCE_SELECTOR_CHARS))]
         #[serde(skip_serializing_if = "Option::is_none")]
         source: Option<String>,
         /// Optional native manual category such as `1` or `3p`.
+        #[schemars(length(min = 1, max = MAX_MANUAL_SECTION_CHARS))]
         #[serde(skip_serializing_if = "Option::is_none")]
         manual_section: Option<String>,
     },
@@ -96,19 +100,20 @@ pub enum QueryView {
         #[serde(default)]
         entries: EntryProjection,
         /// Optional section or entry used as the outline root.
+        #[schemars(length(min = 1, max = MAX_SEMANTIC_ENTRY_CHARS))]
         #[serde(skip_serializing_if = "Option::is_none")]
         root: Option<NodeSelector>,
     },
     /// Return content selected by one or more node paths, IDs, or aliases.
     Excerpt {
         /// Ordered selectors resolved by the engine.
-        #[schemars(length(min = 1))]
+        #[schemars(length(min = 1, max = 16))]
         selectors: Vec<NodeSelector>,
     },
     /// Resolve exactly one semantic entry and return its complete description.
     Explain {
         /// Exact or normalized semantic entry name.
-        #[schemars(length(min = 1))]
+        #[schemars(length(min = 1, max = MAX_SEMANTIC_ENTRY_CHARS))]
         entry: String,
     },
     /// Search visible document content with bounded pagination.

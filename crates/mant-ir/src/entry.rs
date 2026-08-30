@@ -3,7 +3,7 @@
 use std::collections::BTreeMap;
 
 use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::{
     Block, DefinitionCase, DefinitionItem, DefinitionRole, Document, DocumentAddress, Inline,
@@ -11,13 +11,12 @@ use crate::{
 };
 
 /// Semantic category used for outline filtering and nested presentation.
-#[derive(
-    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, JsonSchema,
-)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, JsonSchema)]
 #[serde(
     tag = "kind",
     rename_all = "kebab-case",
-    rename_all_fields = "camelCase"
+    rename_all_fields = "camelCase",
+    deny_unknown_fields
 )]
 pub enum EntryKind {
     /// Executable command, builtin, subcommand, or verb.
@@ -37,6 +36,40 @@ pub enum EntryKind {
     Value,
     /// Addressable definition without a more specific reliable category.
     Term,
+}
+
+#[derive(Deserialize)]
+#[serde(
+    tag = "kind",
+    rename_all = "kebab-case",
+    rename_all_fields = "camelCase",
+    deny_unknown_fields
+)]
+enum ClosedEntryKind {
+    Command {},
+    Parameter { parameter_kind: ParameterKind },
+    ConfigurationKey {},
+    EnvironmentVariable {},
+    Variable {},
+    Value {},
+    Term {},
+}
+
+impl<'de> Deserialize<'de> for EntryKind {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        Ok(match ClosedEntryKind::deserialize(deserializer)? {
+            ClosedEntryKind::Command {} => Self::Command,
+            ClosedEntryKind::Parameter { parameter_kind } => Self::Parameter { parameter_kind },
+            ClosedEntryKind::ConfigurationKey {} => Self::ConfigurationKey,
+            ClosedEntryKind::EnvironmentVariable {} => Self::EnvironmentVariable,
+            ClosedEntryKind::Variable {} => Self::Variable,
+            ClosedEntryKind::Value {} => Self::Value,
+            ClosedEntryKind::Term {} => Self::Term,
+        })
+    }
 }
 
 /// Semantic behavior of one command parameter.

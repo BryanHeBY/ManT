@@ -166,7 +166,9 @@
             "type": [
               "string",
               "null"
-            ]
+            ],
+            "maxLength": 4096,
+            "minLength": 1
           },
           "source": {
             "description": "Optional configured Markdown source name.",
@@ -2359,6 +2361,7 @@
                 "const": "command"
               }
             },
+            "additionalProperties": false,
             "required": [
               "kind"
             ]
@@ -2376,6 +2379,7 @@
                 "$ref": "#/$defs/ParameterKind"
               }
             },
+            "additionalProperties": false,
             "required": [
               "kind",
               "parameterKind"
@@ -2390,6 +2394,7 @@
                 "const": "configuration-key"
               }
             },
+            "additionalProperties": false,
             "required": [
               "kind"
             ]
@@ -2403,6 +2408,7 @@
                 "const": "environment-variable"
               }
             },
+            "additionalProperties": false,
             "required": [
               "kind"
             ]
@@ -2416,6 +2422,7 @@
                 "const": "variable"
               }
             },
+            "additionalProperties": false,
             "required": [
               "kind"
             ]
@@ -2429,6 +2436,7 @@
                 "const": "value"
               }
             },
+            "additionalProperties": false,
             "required": [
               "kind"
             ]
@@ -2442,6 +2450,7 @@
                 "const": "term"
               }
             },
+            "additionalProperties": false,
             "required": [
               "kind"
             ]
@@ -2480,6 +2489,7 @@
                 "const": "none"
               }
             },
+            "additionalProperties": false,
             "required": [
               "kind"
             ]
@@ -2493,6 +2503,7 @@
                 "const": "summary"
               }
             },
+            "additionalProperties": false,
             "required": [
               "kind"
             ]
@@ -2506,6 +2517,7 @@
                 "const": "all"
               }
             },
+            "additionalProperties": false,
             "required": [
               "kind"
             ]
@@ -2528,6 +2540,7 @@
                 "minItems": 1
               }
             },
+            "additionalProperties": false,
             "required": [
               "kind",
               "kinds"
@@ -2617,7 +2630,9 @@
       },
       "NodeSelector": {
         "description": "User-supplied outline selector interpreted as a path, node ID, or entry alias.\n\nResolution remains an engine concern; this wire type prevents an input\nselector from being confused with a canonical [`NodePath`].",
-        "type": "string"
+        "type": "string",
+        "maxLength": 512,
+        "minLength": 1
       },
       "OutlineNode": {
         "description": "One uniquely addressable node in a query outline.",
@@ -4646,6 +4661,7 @@
                 "const": "command"
               }
             },
+            "additionalProperties": false,
             "required": [
               "kind"
             ]
@@ -4663,6 +4679,7 @@
                 "$ref": "#/$defs/ParameterKind"
               }
             },
+            "additionalProperties": false,
             "required": [
               "kind",
               "parameterKind"
@@ -4677,6 +4694,7 @@
                 "const": "configuration-key"
               }
             },
+            "additionalProperties": false,
             "required": [
               "kind"
             ]
@@ -4690,6 +4708,7 @@
                 "const": "environment-variable"
               }
             },
+            "additionalProperties": false,
             "required": [
               "kind"
             ]
@@ -4703,6 +4722,7 @@
                 "const": "variable"
               }
             },
+            "additionalProperties": false,
             "required": [
               "kind"
             ]
@@ -4716,6 +4736,7 @@
                 "const": "value"
               }
             },
+            "additionalProperties": false,
             "required": [
               "kind"
             ]
@@ -4729,6 +4750,7 @@
                 "const": "term"
               }
             },
+            "additionalProperties": false,
             "required": [
               "kind"
             ]
@@ -4747,6 +4769,7 @@
                 "const": "none"
               }
             },
+            "additionalProperties": false,
             "required": [
               "kind"
             ]
@@ -4760,6 +4783,7 @@
                 "const": "summary"
               }
             },
+            "additionalProperties": false,
             "required": [
               "kind"
             ]
@@ -4773,6 +4797,7 @@
                 "const": "all"
               }
             },
+            "additionalProperties": false,
             "required": [
               "kind"
             ]
@@ -4795,6 +4820,7 @@
                 "minItems": 1
               }
             },
+            "additionalProperties": false,
             "required": [
               "kind",
               "kinds"
@@ -4824,7 +4850,9 @@
       },
       "NodeSelector": {
         "description": "User-supplied outline selector interpreted as a path, node ID, or entry alias.\n\nResolution remains an engine concern; this wire type prevents an input\nselector from being confused with a canonical [`NodePath`].",
-        "type": "string"
+        "type": "string",
+        "maxLength": 512,
+        "minLength": 1
       },
       "ParameterKind": {
         "description": "Semantic behavior of one command parameter.",
@@ -4862,18 +4890,24 @@
                 "type": [
                   "string",
                   "null"
-                ]
+                ],
+                "maxLength": 32,
+                "minLength": 1
               },
               "selector": {
                 "description": "Hierarchical catalog path or unqualified component-suffix selector.",
-                "type": "string"
+                "type": "string",
+                "maxLength": 1024,
+                "minLength": 1
               },
               "source": {
                 "description": "Optional configured Markdown source. It bypasses root documents and manuals.",
                 "type": [
                   "string",
                   "null"
-                ]
+                ],
+                "maxLength": 128,
+                "minLength": 1
               }
             },
             "additionalProperties": false,
@@ -4971,6 +5005,7 @@
                 "items": {
                   "$ref": "#/$defs/NodeSelector"
                 },
+                "maxItems": 16,
                 "minItems": 1
               }
             },
@@ -4987,6 +5022,7 @@
               "entry": {
                 "description": "Exact or normalized semantic entry name.",
                 "type": "string",
+                "maxLength": 512,
                 "minLength": 1
               },
               "kind": {
@@ -5925,7 +5961,9 @@
             "type": [
               "string",
               "null"
-            ]
+            ],
+            "maxLength": 32,
+            "minLength": 1
           },
           "selector": {
             "description": "Unqualified name or complete catalog path.",
@@ -5938,7 +5976,9 @@
             "type": [
               "string",
               "null"
-            ]
+            ],
+            "maxLength": 128,
+            "minLength": 1
           }
         },
         "additionalProperties": false,
@@ -7907,7 +7947,9 @@
             "type": [
               "string",
               "null"
-            ]
+            ],
+            "maxLength": 32,
+            "minLength": 1
           },
           "selector": {
             "description": "Unqualified name or complete catalog path.",
@@ -7920,7 +7962,9 @@
             "type": [
               "string",
               "null"
-            ]
+            ],
+            "maxLength": 128,
+            "minLength": 1
           }
         },
         "additionalProperties": false,

@@ -7,6 +7,9 @@ pub use mant_ir::{DocumentAddress, MarkdownOrigin};
 
 use crate::{SearchCase, SearchSyntax};
 
+/// Maximum Unicode scalar length of one native catalog pattern.
+pub const MAX_CATALOG_PATTERN_CHARS: usize = 4096;
+
 /// Exact schema marker for a local document catalog.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub enum CatalogSchema {
@@ -35,6 +38,7 @@ pub enum CatalogDocumentKind {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct CatalogQuery {
     /// Optional name or catalog-path pattern.
+    #[schemars(length(min = 1, max = MAX_CATALOG_PATTERN_CHARS))]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub pattern: Option<String>,
     /// Pattern language used by [`Self::pattern`].

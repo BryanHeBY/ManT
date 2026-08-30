@@ -31,6 +31,10 @@ pub const MAX_DOCUMENT_SELECTOR_CHARS: usize = 1024;
 pub const MAX_SEMANTIC_ENTRY_CHARS: usize = 512;
 /// Maximum Unicode scalar length of one search pattern.
 pub const MAX_SEARCH_PATTERN_CHARS: usize = 4096;
+/// Maximum Unicode scalar length of one configured Markdown source selector.
+pub const MAX_SOURCE_SELECTOR_CHARS: usize = 128;
+/// Maximum Unicode scalar length of one native manual section selector.
+pub const MAX_MANUAL_SECTION_CHARS: usize = 32;
 
 /// One violated runtime constraint shared by scope-query request adapters.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -76,9 +80,11 @@ pub struct DocumentSelector {
     #[schemars(length(min = 1, max = MAX_DOCUMENT_SELECTOR_CHARS))]
     pub selector: String,
     /// Optional configured Markdown source for an unqualified selector.
+    #[schemars(length(min = 1, max = MAX_SOURCE_SELECTOR_CHARS))]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub source: Option<String>,
     /// Optional native manual category for an unqualified selector.
+    #[schemars(length(min = 1, max = MAX_MANUAL_SECTION_CHARS))]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub manual_section: Option<String>,
 }

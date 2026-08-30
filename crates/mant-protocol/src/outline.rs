@@ -1,7 +1,7 @@
 //! Stable contracts for lightweight query outlines and selected excerpts.
 
 use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 
 use mant_ir::{
     Block, DefinitionCase, DefinitionItem, DefinitionRole, Diagnostic, DocumentMeta,
@@ -24,11 +24,12 @@ impl OutlineSchema {
 }
 
 /// Semantic entry material included beneath structural outline nodes.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, JsonSchema)]
 #[serde(
     tag = "kind",
     rename_all = "kebab-case",
-    rename_all_fields = "camelCase"
+    rename_all_fields = "camelCase",
+    deny_unknown_fields
 )]
 pub enum EntryProjection {
     /// Include section topology without entry metadata.
@@ -44,6 +45,34 @@ pub enum EntryProjection {
         #[schemars(length(min = 1, max = 9))]
         kinds: Vec<EntryKind>,
     },
+}
+
+#[derive(Deserialize)]
+#[serde(
+    tag = "kind",
+    rename_all = "kebab-case",
+    rename_all_fields = "camelCase",
+    deny_unknown_fields
+)]
+enum ClosedEntryProjection {
+    None {},
+    Summary {},
+    All {},
+    Kinds { kinds: Vec<EntryKind> },
+}
+
+impl<'de> Deserialize<'de> for EntryProjection {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        Ok(match ClosedEntryProjection::deserialize(deserializer)? {
+            ClosedEntryProjection::None {} => Self::None,
+            ClosedEntryProjection::Summary {} => Self::Summary,
+            ClosedEntryProjection::All {} => Self::All,
+            ClosedEntryProjection::Kinds { kinds } => Self::Kinds { kinds },
+        })
+    }
 }
 
 /// Compatibility selector for in-process callers migrating from v0.9.

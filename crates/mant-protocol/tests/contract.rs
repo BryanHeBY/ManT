@@ -177,6 +177,18 @@ fn request_v0_10_rejects_the_obsolete_outline_detail_field() {
 }
 
 #[test]
+fn request_v0_10_rejects_unknown_fields_inside_outline_unions() {
+    for request in [
+        r#"{"schema":"mant.request/v0.10","input":{"kind":"document","selector":"tar"},"view":{"kind":"outline","entries":{"kind":"all","future":true}}}"#,
+        r#"{"schema":"mant.request/v0.10","input":{"kind":"document","selector":"tar"},"view":{"kind":"outline","entries":{"kind":"kinds","kinds":[{"kind":"parameter","parameterKind":"option","typo":true}]}}}"#,
+    ] {
+        let error = serde_json::from_str::<QueryRequest>(request)
+            .expect_err("nested request union must be closed");
+        assert!(error.to_string().contains("unknown field"), "{error}");
+    }
+}
+
+#[test]
 fn scope_request_is_closed_bounded_and_keeps_single_document_views_separate() {
     let request: ScopeQueryRequest = serde_json::from_str(
         r#"{"schema":"mant.scope-request/v0.10","scope":{"documents":[{"selector":"git"},{"selector":"manual/1/git-add"}],"traversal":{"followLinks":true,"maxDepth":3,"maxDocuments":12}},"view":{"kind":"search","pattern":"index"}}"#,

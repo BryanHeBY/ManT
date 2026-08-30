@@ -6,7 +6,8 @@ use grep_matcher::Matcher;
 use grep_regex::RegexMatcherBuilder;
 use mant_protocol::{
     CatalogCoverage, CatalogDocumentKind, CatalogMatchScore, CatalogQuery, CatalogSchema,
-    DocumentAddress, DocumentCatalog, DocumentSummary, MarkdownOrigin, SearchCase, SearchSyntax,
+    DocumentAddress, DocumentCatalog, DocumentSummary, MAX_CATALOG_PATTERN_CHARS, MarkdownOrigin,
+    SearchCase, SearchSyntax,
 };
 
 use mant_sources::{
@@ -75,7 +76,10 @@ impl fmt::Display for CatalogError {
         match self {
             Self::EmptyPattern => formatter.write_str("catalog pattern must not be empty"),
             Self::PatternTooLong => {
-                formatter.write_str("catalog pattern exceeds the 4096-byte limit")
+                write!(
+                    formatter,
+                    "catalog pattern exceeds the {MAX_CATALOG_PATTERN_CHARS}-character limit"
+                )
             }
             Self::InvalidLimit => formatter.write_str("catalog limit must be between 1 and 10000"),
             Self::ConflictingSelectors => {
@@ -250,7 +254,7 @@ fn validate_catalog_query(query: &CatalogQuery) -> Result<(), CatalogError> {
     if query
         .pattern
         .as_ref()
-        .is_some_and(|pattern| pattern.len() > 4096)
+        .is_some_and(|pattern| pattern.chars().count() > MAX_CATALOG_PATTERN_CHARS)
     {
         return Err(CatalogError::PatternTooLong);
     }
@@ -424,7 +428,8 @@ mod tests {
     use crate::ManualPage;
 
     use mant_protocol::{
-        CatalogDocumentKind, CatalogQuery, DocumentAddress, SearchCase, SearchSyntax,
+        CatalogDocumentKind, CatalogQuery, DocumentAddress, MAX_CATALOG_PATTERN_CHARS, SearchCase,
+        SearchSyntax,
     };
 
     use super::{
@@ -462,6 +467,24 @@ mod tests {
         assert_eq!(documents[0].origin, AvailableDocumentOrigin::Documents);
         assert_eq!(documents[1].manual_section.as_deref(), Some("1"));
         assert_eq!(documents[2].manual_section.as_deref(), Some("3"));
+    }
+
+    #[test]
+    fn catalog_pattern_limit_counts_unicode_scalars() {
+        let accepted = CatalogQuery {
+            pattern: Some("界".repeat(MAX_CATALOG_PATTERN_CHARS)),
+            ..CatalogQuery::default()
+        };
+        assert!(query_available_documents(&[], &accepted).is_ok());
+
+        let rejected = CatalogQuery {
+            pattern: Some("界".repeat(MAX_CATALOG_PATTERN_CHARS + 1)),
+            ..CatalogQuery::default()
+        };
+        assert!(matches!(
+            query_available_documents(&[], &rejected),
+            Err(super::CatalogError::PatternTooLong)
+        ));
     }
 
     #[test]

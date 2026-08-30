@@ -11,9 +11,10 @@ use std::{
 
 use mant_ir::{Document, DocumentAddress, MarkdownOrigin, ResolvedContent, TldrDocument};
 use mant_protocol::{
-    CatalogQuery, DocumentCatalog, EntryProjection, InputFormat, MAX_SEMANTIC_ENTRY_CHARS,
-    QueryExcerpt, QueryInput, QueryOutline, QueryRequest, QuerySearch, QueryView, ScopeTextError,
-    SearchCase, SearchQuery, SearchScope, SearchSyntax, validate_scope_text,
+    CatalogQuery, DocumentCatalog, EntryProjection, InputFormat, MAX_DOCUMENT_SELECTOR_CHARS,
+    MAX_SEMANTIC_ENTRY_CHARS, MAX_SOURCE_SELECTOR_CHARS, QueryExcerpt, QueryInput, QueryOutline,
+    QueryRequest, QuerySearch, QueryView, ScopeTextError, SearchCase, SearchQuery, SearchScope,
+    SearchSyntax, validate_scope_text,
 };
 use mant_sources::{RegisteredDocumentIndex, RegisteredDocumentOrigin, SourceConfigError};
 
@@ -524,14 +525,27 @@ pub fn validate_query_request(
             source,
             manual_section,
         } => {
-            if selector.trim().is_empty() {
-                return Err(QueryError::EmptyName);
-            }
-            if source
-                .as_deref()
-                .is_some_and(|value| value.trim().is_empty())
-            {
-                return Err(QueryError::InvalidSource);
+            validate_scope_text(selector, MAX_DOCUMENT_SELECTOR_CHARS).map_err(|error| {
+                if error == ScopeTextError::Empty {
+                    QueryError::EmptyName
+                } else {
+                    QueryError::InvalidViewSelector {
+                        field: "document selector",
+                        error,
+                    }
+                }
+            })?;
+            if let Some(source) = source {
+                validate_scope_text(source, MAX_SOURCE_SELECTOR_CHARS).map_err(|error| {
+                    if error == ScopeTextError::Empty {
+                        QueryError::InvalidSource
+                    } else {
+                        QueryError::InvalidViewSelector {
+                            field: "document source",
+                            error,
+                        }
+                    }
+                })?;
             }
             if manual_section
                 .as_deref()
