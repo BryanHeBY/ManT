@@ -1,6 +1,9 @@
 //! Locks the structural wire contract independently from `mant-ir` evolution.
 
-use mant_protocol::{NATIVE_API_VERSION, doctor_report_json_schema, query_json_schema_catalog};
+use mant_protocol::{
+    NATIVE_API_VERSION, doctor_report_json_schema, query_json_schema_catalog,
+    tldr_cache_update_json_schema,
+};
 use serde_json::Value;
 
 const V0_10_SNAPSHOT: &str = include_str!("../../../tests/contracts/protocol-schemas-v0.10.json");
@@ -70,4 +73,15 @@ fn doctor_v1_has_an_independent_discriminator_and_stable_result_fields() {
             "summary"
         ])
     );
+}
+
+#[test]
+fn tldr_update_v1_has_an_independent_discriminator_and_stable_result_fields() {
+    let schema = serde_json::to_value(tldr_cache_update_json_schema()).expect("tldr update schema");
+    assert_eq!(schema["$id"], "urn:mant:tldr-update:v1");
+    assert_eq!(
+        schema["$defs"]["TldrCacheUpdateSchema"]["oneOf"][0]["const"],
+        "mant.tldr-update/v1"
+    );
+    assert_eq!(schema["required"], serde_json::json!(["schema", "action"]));
 }

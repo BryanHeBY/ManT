@@ -112,6 +112,7 @@ impl From<ColorMode> for anstream::ColorChoice {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 pub(crate) enum SchemaContract {
     Doctor,
+    TldrUpdate,
     Request,
     Query,
     Outline,
@@ -515,7 +516,7 @@ struct Cli {
     #[arg(long, value_name = "COUNT", help_heading = "Search")]
     offset: Option<u32>,
 
-    /// Read a versioned `QueryRequest` JSON object from standard input.
+    /// Read a versioned single- or multi-document request JSON object from standard input.
     #[arg(
         long,
         conflicts_with_all = [

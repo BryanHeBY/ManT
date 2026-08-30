@@ -6,13 +6,19 @@ use schemars::{JsonSchema, Schema, generate::SchemaSettings};
 
 use crate::{
     DoctorReport, DocumentCatalog, QueryBundle, QueryExcerpt, QueryOutline, QueryRequest,
-    QuerySearch, ScopeQueryRequest, ScopeQueryResponse,
+    QuerySearch, ScopeQueryRequest, ScopeQueryResponse, TldrCacheUpdate,
 };
 
 /// Generate the read-only installation health report schema.
 #[must_use]
 pub fn doctor_report_json_schema() -> Schema {
     serialize_schema::<DoctorReport>()
+}
+
+/// Generate the explicit tldr cache update result schema.
+#[must_use]
+pub fn tldr_cache_update_json_schema() -> Schema {
+    serialize_schema::<TldrCacheUpdate>()
 }
 
 /// Generate the local document-catalog JSON representation.

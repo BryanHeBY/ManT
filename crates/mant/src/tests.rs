@@ -398,6 +398,7 @@ impl CliHost for FakeHost {
     fn update_tldr(&self) -> Result<TldrCacheUpdate, Failure> {
         self.update_calls.set(self.update_calls.get() + 1);
         Ok(TldrCacheUpdate {
+            schema: mant_protocol::TldrCacheUpdateSchema::V1,
             action: TldrCacheAction::Updated,
             cache_dir: Some("/cache/tldr".to_owned()),
             client: None,

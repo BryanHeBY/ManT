@@ -36,7 +36,7 @@ mod tests {
     use super::{
         CLI_PROTOCOL_VERSION, CatalogSchema, DocumentSchema, ExcerptSchema, NATIVE_API_VERSION,
         OutlineSchema, QuerySchema, RequestSchema, ScopeQuerySchema, ScopeRequestSchema,
-        SearchSchema,
+        SearchSchema, TldrCacheUpdateSchema,
     };
 
     #[test]
@@ -80,6 +80,10 @@ mod tests {
             (
                 serde_json::to_value(CatalogSchema::V0Dot10),
                 CatalogSchema::ID,
+            ),
+            (
+                serde_json::to_value(TldrCacheUpdateSchema::V1),
+                TldrCacheUpdateSchema::ID,
             ),
         ] {
             assert_eq!(value.expect("serialize schema marker"), expected);

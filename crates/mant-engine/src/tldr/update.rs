@@ -235,6 +235,7 @@ fn update_tldr_cache_with(
         let output = run_checked(host, &client, &[OsString::from("--update")])?;
         let rendered_output = combined_output(&output);
         return Ok(TldrCacheUpdate {
+            schema: mant_protocol::TldrCacheUpdateSchema::V1,
             action: TldrCacheAction::Updated,
             cache_dir: None,
             client: Some(client.to_string_lossy().into_owned()),
@@ -283,6 +284,7 @@ fn update_tldr_cache_with(
         .and_then(|output| first_nonempty_line(&output.stdout));
 
     Ok(TldrCacheUpdate {
+        schema: mant_protocol::TldrCacheUpdateSchema::V1,
         action,
         cache_dir: Some(target.to_string_lossy().into_owned()),
         client: None,
@@ -531,6 +533,7 @@ mod tests {
         assert_eq!(
             result,
             TldrCacheUpdate {
+                schema: mant_protocol::TldrCacheUpdateSchema::V1,
                 action: TldrCacheAction::Updated,
                 cache_dir: None,
                 client: Some("/usr/bin/tldr".to_owned()),

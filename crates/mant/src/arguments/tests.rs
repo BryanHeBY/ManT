@@ -899,6 +899,13 @@ fn parses_long_option_actions_without_ad_hoc_subcommands() {
             pretty: true,
         }
     );
+    assert_eq!(
+        parse(&args(&["--schema", "tldr-update"])).expect("tldr update schema"),
+        Command::Schema {
+            contract: SchemaContract::TldrUpdate,
+            pretty: true,
+        }
+    );
     assert_eq!(parse(&args(&["--mcp"])).expect("MCP"), Command::Mcp);
 }
 

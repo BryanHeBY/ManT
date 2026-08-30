@@ -520,6 +520,9 @@ fn execute(
             SchemaContract::Doctor => {
                 render_json(&mant_protocol::doctor_report_json_schema(), pretty)
             }
+            SchemaContract::TldrUpdate => {
+                render_json(&mant_protocol::tldr_cache_update_json_schema(), pretty)
+            }
             SchemaContract::Request => {
                 render_json(&mant_protocol::query_request_json_schema(), pretty)
             }

@@ -98,6 +98,7 @@ mod tests {
     #[test]
     fn update_json_omits_absent_provider_fields() {
         let update = TldrCacheUpdate {
+            schema: mant_protocol::TldrCacheUpdateSchema::V1,
             action: TldrCacheAction::Cloned,
             cache_dir: Some("/cache/tldr".to_owned()),
             client: None,
@@ -107,7 +108,7 @@ mod tests {
 
         assert_eq!(
             render_update_json(&update, false).expect("update JSON"),
-            r#"{"action":"cloned","cacheDir":"/cache/tldr","revision":"abc123"}"#
+            r#"{"schema":"mant.tldr-update/v1","action":"cloned","cacheDir":"/cache/tldr","revision":"abc123"}"#
         );
         assert!(
             render_update_json(&update, true)

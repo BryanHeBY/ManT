@@ -3,6 +3,19 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
+/// Exact schema marker for an explicit tldr cache update result.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub enum TldrCacheUpdateSchema {
+    /// Version 1 of the tldr cache maintenance result.
+    #[serde(rename = "mant.tldr-update/v1")]
+    V1,
+}
+
+impl TldrCacheUpdateSchema {
+    /// Serialized identifier of the current result contract.
+    pub const ID: &'static str = "mant.tldr-update/v1";
+}
+
 /// How an explicit tldr cache refresh changed local state.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "kebab-case")]
@@ -16,7 +29,10 @@ pub enum TldrCacheAction {
 /// Result of an explicit `mant --update-tldr` operation.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
+#[schemars(extend("$id" = "urn:mant:tldr-update:v1"))]
 pub struct TldrCacheUpdate {
+    /// Exact response schema discriminator.
+    pub schema: TldrCacheUpdateSchema,
     /// Mutation performed by the client-specific update path.
     pub action: TldrCacheAction,
     /// Updated cache directory, when the client exposes it.
@@ -37,11 +53,12 @@ pub struct TldrCacheUpdate {
 mod tests {
     use serde_json::json;
 
-    use super::{TldrCacheAction, TldrCacheUpdate};
+    use super::{TldrCacheAction, TldrCacheUpdate, TldrCacheUpdateSchema};
 
     #[test]
     fn cache_update_uses_a_stable_camel_case_shape() {
         let update = TldrCacheUpdate {
+            schema: TldrCacheUpdateSchema::V1,
             action: TldrCacheAction::Cloned,
             cache_dir: Some("/cache/mant/tldr-pages".to_owned()),
             client: None,
@@ -52,6 +69,7 @@ mod tests {
         assert_eq!(
             serde_json::to_value(update).expect("serialize update"),
             json!({
+                "schema": "mant.tldr-update/v1",
                 "action": "cloned",
                 "cacheDir": "/cache/mant/tldr-pages",
                 "revision": "abc123"
