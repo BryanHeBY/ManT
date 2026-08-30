@@ -344,8 +344,7 @@ impl<'a> SearchCollector<'a> {
             .line_index;
         let end_line_index = self
             .lines
-            .position(self.markdown, occurrence.markdown.end.saturating_sub(1))
-            .line_index;
+            .line_index_at_byte(occurrence.markdown.end.saturating_sub(1));
         if let Some(group) = self.current.as_mut().filter(|group| {
             group.start_line_index == start_line_index
                 && group.end_line_index == end_line_index
@@ -477,8 +476,7 @@ fn occurrence_line_ranges(
         .position(markdown, occurrence.markdown.start)
         .line_index;
     let end = lines
-        .position(markdown, occurrence.markdown.end.saturating_sub(1))
-        .line_index;
+        .line_index_at_byte(occurrence.markdown.end.saturating_sub(1));
     (start..=end)
         .flat_map(|line_index| {
             let line_start = lines.start(line_index);
@@ -600,6 +598,10 @@ impl LineIndex {
             line_index,
             column: text[line_start..offset].chars().count().saturating_add(1),
         }
+    }
+
+    fn line_index_at_byte(&self, offset: usize) -> usize {
+        self.starts.partition_point(|start| *start <= offset) - 1
     }
 
     fn line<'a>(&self, text: &'a str, line_index: usize) -> &'a str {
@@ -1271,6 +1273,31 @@ Manual needle.
             .find(|line| line.line == occurrence.markdown.end_line)
             .expect("following context line");
         assert!(!following.matched);
+    }
+
+    #[test]
+    fn multibyte_match_ends_remain_valid_coordinate_boundaries() {
+        let mut query = query();
+        query.document.as_mut().expect("document").sections[0]
+            .blocks
+            .push(Block::Paragraph {
+                children: vec![Inline::Text {
+                    value: "café — 日本".to_owned(),
+                }],
+                layout: LayoutHint::default(),
+                source: None,
+            });
+        let mut request = request("—");
+        request.case = SearchCase::Sensitive;
+
+        let result = search_query(&query, &request).expect("Unicode search");
+        let occurrence = &result.matches[0].occurrences[0];
+
+        assert_eq!(occurrence.matched_text, "—");
+        assert_eq!(
+            occurrence.markdown.end_column,
+            occurrence.markdown.start_column + 1
+        );
     }
 
     #[test]
