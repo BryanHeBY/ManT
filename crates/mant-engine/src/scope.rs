@@ -200,7 +200,7 @@ impl DocumentResolver {
     ) -> Result<LoadedDocumentScope, ScopeQueryError> {
         validate_document_scope(query)?;
         let mut resolution = ScopeResolution::new(query);
-        resolution.resolve_roots(self)?;
+        resolution.resolve_roots(self);
         if resolution.documents.is_empty() {
             return Err(ScopeQueryError::NoResolvedDocuments {
                 reasons: resolution
@@ -306,7 +306,7 @@ impl ScopeResolution {
         }
     }
 
-    fn resolve_roots(&mut self, resolver: &DocumentResolver) -> Result<(), ScopeQueryError> {
+    fn resolve_roots(&mut self, resolver: &DocumentResolver) {
         for (root_index, selector) in self.graph.query.documents.clone().iter().enumerate() {
             match resolver.resolve_selector(selector, QueryPolicy::Combined) {
                 Ok(bundle) => {
@@ -319,7 +319,6 @@ impl ScopeResolution {
                 }),
             }
         }
-        Ok(())
     }
 
     fn insert_root(
