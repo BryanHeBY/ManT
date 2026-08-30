@@ -85,61 +85,7 @@ pub fn search_query(
     let offset = usize::try_from(request.offset).unwrap_or(usize::MAX);
     let limit = usize::try_from(request.limit).unwrap_or(usize::MAX);
     let mut collector = SearchCollector::new(markdown, &lines, offset, limit);
-    let mut invalid_utf8_match = false;
-    let mut invalid_zero_width_match = false;
-    let mut invalid_mapped_range = false;
-
-    matcher
-        .find_iter(searchable.text.as_bytes(), |found| {
-            if found.start() == found.end() {
-                invalid_zero_width_match = true;
-                return false;
-            }
-            if !searchable.text.is_char_boundary(found.start())
-                || !searchable.text.is_char_boundary(found.end())
-            {
-                invalid_utf8_match = true;
-                return false;
-            }
-            let markdown_start = searchable.markdown_start(found.start());
-            let markdown_end = searchable.markdown_end(found.end());
-            if !markdown.is_char_boundary(markdown_start)
-                || !markdown.is_char_boundary(markdown_end)
-            {
-                invalid_utf8_match = true;
-                return false;
-            }
-            if markdown_start >= markdown_end {
-                invalid_mapped_range = true;
-                return false;
-            }
-            let owner = owners.owner(markdown_start);
-            let end_owner = owners.owner(markdown_end - 1);
-            if let (Some(owner), Some(end_owner)) = (owner, end_owner)
-                && owner.key == end_owner.key
-            {
-                collector.push(
-                    RawOccurrence {
-                        searchable: found.start()..found.end(),
-                        markdown: markdown_start..markdown_end,
-                    },
-                    owner,
-                );
-            }
-            true
-        })
-        .map_err(|error| SearchError::InvalidPattern(error.to_string()))?;
-    if invalid_utf8_match {
-        return Err(non_utf8_pattern_error());
-    }
-    if invalid_zero_width_match {
-        return Err(empty_match_error());
-    }
-    if invalid_mapped_range {
-        return Err(SearchError::InvalidPattern(
-            "pattern produced a range that cannot be mapped to canonical Markdown".to_owned(),
-        ));
-    }
+    collect_occurrences(&matcher, &searchable, markdown, &owners, &mut collector)?;
 
     let (raw_groups, total) = collector.finish();
     let selected = raw_groups
@@ -185,6 +131,69 @@ pub fn search_query(
         next_offset: truncated.then_some(consumed),
         matches: selected,
     })
+}
+
+fn collect_occurrences(
+    matcher: &grep_regex::RegexMatcher,
+    searchable: &SearchableText,
+    markdown: &str,
+    owners: &OwnerIndex,
+    collector: &mut SearchCollector<'_>,
+) -> Result<(), SearchError> {
+    let mut invalid_utf8_match = false;
+    let mut invalid_zero_width_match = false;
+    let mut invalid_mapped_range = false;
+    matcher
+        .find_iter(searchable.text.as_bytes(), |found| {
+            if found.start() == found.end() {
+                invalid_zero_width_match = true;
+                return false;
+            }
+            if !searchable.text.is_char_boundary(found.start())
+                || !searchable.text.is_char_boundary(found.end())
+            {
+                invalid_utf8_match = true;
+                return false;
+            }
+            let markdown_start = searchable.markdown_start(found.start());
+            let markdown_end = searchable.markdown_end(found.end());
+            if !markdown.is_char_boundary(markdown_start)
+                || !markdown.is_char_boundary(markdown_end)
+            {
+                invalid_utf8_match = true;
+                return false;
+            }
+            if markdown_start >= markdown_end {
+                invalid_mapped_range = true;
+                return false;
+            }
+            let owner = owners.owner(markdown_start);
+            let end_owner = owners.owner(markdown_end - 1);
+            if let (Some(owner), Some(end_owner)) = (owner, end_owner)
+                && owner.key == end_owner.key
+            {
+                collector.push(
+                    RawOccurrence {
+                        searchable: found.start()..found.end(),
+                        markdown: markdown_start..markdown_end,
+                    },
+                    owner,
+                );
+            }
+            true
+        })
+        .map_err(|error| SearchError::InvalidPattern(error.to_string()))?;
+    if invalid_utf8_match {
+        Err(non_utf8_pattern_error())
+    } else if invalid_zero_width_match {
+        Err(empty_match_error())
+    } else if invalid_mapped_range {
+        Err(SearchError::InvalidPattern(
+            "pattern produced a range that cannot be mapped to canonical Markdown".to_owned(),
+        ))
+    } else {
+        Ok(())
+    }
 }
 
 /// Validate search limits and compile its matcher without loading a manual.
