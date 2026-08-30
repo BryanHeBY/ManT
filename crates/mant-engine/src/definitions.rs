@@ -832,9 +832,7 @@ fn identify_item(
     for term in &item.terms {
         collect_anchor_ids(term, &mut anchors);
     }
-    if role != DefinitionRole::Term {
-        retained.extend(anchors.iter().cloned());
-    }
+    retained.extend(anchors.iter().cloned());
 
     if preferred_counts
         .get(&preferred)
@@ -849,8 +847,7 @@ fn identify_item(
         );
     }
     let id = unique_id(&preferred, used, reserved);
-    if role != DefinitionRole::Term
-        && !anchors.iter().any(|anchor| anchor == &id)
+    if !anchors.iter().any(|anchor| anchor == &id)
         && let Some(term) = item.terms.first_mut()
     {
         term.insert(
@@ -860,9 +857,7 @@ fn identify_item(
             },
         );
     }
-    if role != DefinitionRole::Term {
-        retained.insert(id.clone());
-    }
+    retained.insert(id.clone());
     item.identity = Some(DefinitionIdentity {
         id: id.into(),
         role,
@@ -1882,6 +1877,35 @@ mod tests {
         assert_eq!(identity.names, ["set-mark"]);
         assert!(retained.contains("set"));
         assert!(retained.contains("command-set-mark"));
+    }
+
+    #[test]
+    fn generic_terms_receive_the_anchor_their_projected_entry_advertises() {
+        let mut sections = vec![Section {
+            id: "glossary".into(),
+            title: "GLOSSARY".to_owned(),
+            spacing_before_lines: 0,
+            blocks: vec![Block::DefinitionList {
+                items: vec![item("widget")],
+                compact: true,
+                layout: LayoutHint::default(),
+                source: None,
+            }],
+            children: Vec::new(),
+            source: None,
+        }];
+
+        let retained = identify_definitions(&mut Vec::new(), &mut sections, &HashSet::new(), None);
+        let Block::DefinitionList { items, .. } = &sections[0].blocks[0] else {
+            panic!("term definition list");
+        };
+        let identity = items[0].identity.as_ref().expect("term identity");
+        assert_eq!(identity.id.as_str(), "term-widget");
+        assert!(matches!(
+            items[0].terms[0].first(),
+            Some(Inline::Anchor { id }) if id == "term-widget"
+        ));
+        assert!(retained.contains("term-widget"));
     }
 
     #[test]

@@ -499,6 +499,37 @@ fn protects_paragraph_lines_from_accidental_block_syntax() {
 }
 
 #[test]
+fn preserves_leading_consecutive_and_trailing_hard_breaks() {
+    let query = ResolvedContent {
+        address: None,
+        label: "breaks".to_owned(),
+        document: Some(manual(vec![section(
+            "TEXT",
+            vec![paragraph(vec![
+                Inline::LineBreak,
+                Inline::Text {
+                    value: "before".to_owned(),
+                },
+                Inline::LineBreak,
+                Inline::LineBreak,
+                Inline::Text {
+                    value: "after".to_owned(),
+                },
+                Inline::LineBreak,
+            ])],
+            Vec::new(),
+        )])),
+        tldr: None,
+    };
+
+    let markdown = render_markdown(&query);
+    assert!(
+        markdown.contains("<br>\nbefore<br>\n<br>\nafter<br>"),
+        "{markdown}"
+    );
+}
+
+#[test]
 fn preserves_literal_html_entity_spellings_across_commonmark() {
     let query = ResolvedContent {
         address: None,

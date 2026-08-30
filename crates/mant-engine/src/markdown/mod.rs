@@ -229,7 +229,10 @@ fn parse_document_with_entries(
     let retained_targets = crate::definitions::identify_definitions(
         &mut root_blocks,
         &mut sections,
-        &ids.targets.keys().cloned().collect(),
+        // Link aliases are selectors, not physical anchors. Reserve only the
+        // final section destinations so an unrelated heading alias cannot
+        // perturb a semantic entry's inferred ID.
+        &ids.targets.values().cloned().collect(),
         source_path.as_deref(),
     );
     for target in retained_targets {

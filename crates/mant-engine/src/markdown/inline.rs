@@ -105,10 +105,11 @@ fn parse_inline_sequence(
                 cursor.ascend();
                 end_offset = nested_end;
                 let destination = dest_url.into_string();
+                let title = (!title.is_empty()).then(|| title.into_string());
                 if let Some(target) = destination.strip_prefix('#') {
                     output.push(Inline::Link {
                         target: mant_ir::LinkTarget::Section { id: target.into() },
-                        title: None,
+                        title,
                         children,
                     });
                 } else if let Some(address) = destination.strip_prefix("mailto:") {
@@ -116,19 +117,19 @@ fn parse_inline_sequence(
                         target: mant_ir::LinkTarget::Email {
                             address: address.to_owned(),
                         },
-                        title: None,
+                        title,
                         children,
                     });
                 } else if let Some((name, fragment)) = markdown_document_reference(&destination) {
                     output.push(Inline::Link {
                         target: mant_ir::LinkTarget::Document { name, fragment },
-                        title: None,
+                        title,
                         children,
                     });
                 } else {
                     output.push(Inline::Link {
                         target: mant_ir::LinkTarget::External { uri: destination },
-                        title: (!title.is_empty()).then(|| title.into_string()),
+                        title,
                         children,
                     });
                 }

@@ -7,13 +7,28 @@ use mant_ir::{Inline, LinkTarget};
 use super::MarkdownOptions;
 
 pub(super) fn render_inline(children: &[Inline], options: MarkdownOptions) -> String {
-    render_inline_raw(children, options)
+    let lines = render_inline_raw(children, options)
         .split('\n')
         .map(|line| line.trim_matches([' ', '\t']))
-        .filter(|line| !line.is_empty())
-        .map(protect_block_prefix)
-        .collect::<Vec<_>>()
-        .join("  \n")
+        .map(|line| (!line.is_empty()).then(|| protect_block_prefix(line)))
+        .collect::<Vec<_>>();
+    let mut output = String::new();
+    for (index, line) in lines.iter().enumerate() {
+        if let Some(line) = line {
+            output.push_str(line);
+        }
+        let Some(next) = lines.get(index + 1) else {
+            continue;
+        };
+        if line.is_some() && next.is_some() {
+            output.push_str("  \n");
+        } else {
+            // CommonMark's two-space form cannot represent a leading, trailing,
+            // or consecutive hard break once empty source lines are retained.
+            output.push_str("<br>\n");
+        }
+    }
+    output
 }
 
 pub(super) fn flatten_inline(children: &[Inline]) -> String {

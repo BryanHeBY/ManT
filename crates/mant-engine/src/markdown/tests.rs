@@ -125,6 +125,28 @@ fn main() {}
 }
 
 #[test]
+fn preserves_titles_for_every_supported_markdown_link_target() {
+    let document = parse_document(
+        "[section](#target \"section title\") [document](other.md \"document title\") [mail](mailto:user@example.test \"mail title\") [web](https://example.test \"web title\")\n\n## Target\n",
+        Some("/docs/tool.md".to_owned()),
+    );
+    let Block::Paragraph { children, .. } = &document.blocks[0] else {
+        panic!("link paragraph");
+    };
+    let titles = children
+        .iter()
+        .filter_map(|inline| match inline {
+            Inline::Link { title, .. } => title.as_deref(),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(
+        titles,
+        ["section title", "document title", "mail title", "web title"]
+    );
+}
+
+#[test]
 fn heading_attributes_consume_only_an_explicit_id() {
     let document = parse_document(
         "# API Reference\n\n\
@@ -991,6 +1013,30 @@ fn section_ids_that_shadow_entry_aliases_are_reported() {
             && diagnostic.message.contains("1 (force)")
             && diagnostic.message.contains("2/e1 (command-force)")
     }));
+}
+
+#[test]
+fn unrelated_semantic_looking_sections_do_not_perturb_entry_ids() {
+    let entry_id = |source: &str| {
+        let parsed = parse_markdown(source, None).expect("semantic ID fixture");
+        let entries = crate::definitions::definition_entries(&parsed.document.sections[1].blocks);
+        entries[0]
+            .item
+            .identity
+            .as_ref()
+            .expect("option identity")
+            .id
+            .to_string()
+    };
+    let original = entry_id(
+        "# Tool\n\n## Notes\n\nText.\n\n## Options\n\n<!-- mant:entries role=option -->\n- `-v`: Verbose.\n",
+    );
+    let edited = entry_id(
+        "# Tool\n\n## option-v\n\nUnrelated text.\n\n## Options\n\n<!-- mant:entries role=option -->\n- `-v`: Verbose.\n",
+    );
+
+    assert_eq!(original, "option-v");
+    assert_eq!(edited, original);
 }
 
 #[test]

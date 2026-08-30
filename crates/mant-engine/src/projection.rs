@@ -36,7 +36,21 @@ pub(crate) const DOCUMENT_ROOT_TITLE: &str = "OVERVIEW";
 /// not only selectors present in one particular document, so source-defined
 /// IDs can never make excerpt lookup ambiguous.
 pub(crate) fn is_reserved_selector(value: &str) -> bool {
-    matches!(value, TLDR_ID | DOCUMENT_ROOT_ID) || value.parse::<OutlinePath>().is_ok()
+    matches!(value, TLDR_ID | DOCUMENT_ROOT_ID)
+        || value.parse::<OutlinePath>().is_ok()
+        || [
+            "option-",
+            "marker-",
+            "operand-",
+            "command-",
+            "configuration-",
+            "environment-",
+            "variable-",
+            "value-",
+            "term-",
+        ]
+        .iter()
+        .any(|prefix| value.starts_with(prefix))
 }
 
 /// Failure to derive an addressable view from a complete query.
