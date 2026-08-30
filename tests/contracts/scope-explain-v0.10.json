@@ -5,7 +5,13 @@
       "documents": [{ "selector": "git" }],
       "traversal": { "followLinks": false }
     },
-    "documents": [],
+    "documents": [
+      {
+        "address": { "kind": "manual", "name": "git", "manualSection": "1" },
+        "depth": 0,
+        "rootIndices": [0]
+      }
+    ],
     "edges": []
   },
   "result": {

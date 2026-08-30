@@ -70,6 +70,15 @@ fn v0_10_breaking_projection_shapes_have_cross_language_golden_examples() {
         (7, 3, Some(5))
     );
     assert_eq!(
+        result
+            .documents
+            .iter()
+            .flat_map(|document| document.matches.iter())
+            .map(|matched| matched.ordinal)
+            .collect::<Vec<_>>(),
+        [4, 5]
+    );
+    assert_eq!(
         serde_json::to_value(search).expect("search value"),
         serde_json::from_str::<Value>(SCOPE_SEARCH).expect("search fixture")
     );

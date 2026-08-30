@@ -5,7 +5,20 @@
       "documents": [{ "selector": "git" }],
       "traversal": { "followLinks": false }
     },
-    "documents": [],
+    "documents": [
+      {
+        "address": { "kind": "manual", "name": "git", "manualSection": "1" },
+        "depth": 0,
+        "rootIndices": [0]
+      },
+      {
+        "address": { "kind": "manual", "name": "git-add", "manualSection": "1" },
+        "depth": 1,
+        "reachedFrom": [
+          { "kind": "manual", "name": "git", "manualSection": "1" }
+        ]
+      }
+    ],
     "edges": []
   },
   "result": {
@@ -26,7 +39,96 @@
       "offset": 3,
       "truncated": true,
       "nextOffset": 5,
-      "documents": []
+      "documents": [
+        {
+          "address": { "kind": "manual", "name": "git", "manualSection": "1" },
+          "depth": 0,
+          "render": {
+            "schema": "mant.markdown/v1",
+            "format": "markdown",
+            "scope": "full",
+            "lineBase": 1,
+            "columnBase": 1,
+            "lineCount": 120
+          },
+          "matches": [
+            {
+              "ordinal": 4,
+              "outline": {
+                "node": {
+                  "kind": "document-section",
+                  "path": "5",
+                  "id": "description",
+                  "title": "DESCRIPTION"
+                }
+              },
+              "occurrences": [
+                {
+                  "matchedText": "index",
+                  "markdown": {
+                    "startByte": 320,
+                    "endByte": 325,
+                    "startLine": 18,
+                    "startColumn": 7,
+                    "endLine": 18,
+                    "endColumn": 12
+                  },
+                  "lineRanges": [
+                    { "line": 18, "startByte": 6, "endByte": 11 }
+                  ]
+                }
+              ],
+              "occurrenceCount": 1,
+              "occurrencesTruncated": false,
+              "preview": "18:7: the index records content"
+            }
+          ]
+        },
+        {
+          "address": { "kind": "manual", "name": "git-add", "manualSection": "1" },
+          "depth": 1,
+          "render": {
+            "schema": "mant.markdown/v1",
+            "format": "markdown",
+            "scope": "full",
+            "lineBase": 1,
+            "columnBase": 1,
+            "lineCount": 84
+          },
+          "matches": [
+            {
+              "ordinal": 5,
+              "outline": {
+                "node": {
+                  "kind": "document-section",
+                  "path": "4",
+                  "id": "description",
+                  "title": "DESCRIPTION"
+                }
+              },
+              "occurrences": [
+                {
+                  "matchedText": "index",
+                  "markdown": {
+                    "startByte": 210,
+                    "endByte": 215,
+                    "startLine": 12,
+                    "startColumn": 16,
+                    "endLine": 12,
+                    "endColumn": 21
+                  },
+                  "lineRanges": [
+                    { "line": 12, "startByte": 15, "endByte": 20 }
+                  ]
+                }
+              ],
+              "occurrenceCount": 1,
+              "occurrencesTruncated": false,
+              "preview": "12:16: add content to the index"
+            }
+          ]
+        }
+      ]
     }
   }
 }
