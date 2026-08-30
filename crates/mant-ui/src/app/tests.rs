@@ -1880,6 +1880,11 @@ fn closing_search_removes_highlights_but_retains_navigation() {
     assert_eq!(app.search.scope_matches.len(), 1);
 
     app.handle_key(KeyEvent::new(KeyCode::Char('n'), KeyModifiers::NONE));
+    assert!(app.search.matches.is_empty());
+    app.refresh_search(80);
+    assert!(app.search.matches.is_empty());
+
+    app.open_search();
     assert_eq!(app.search.matches.len(), 1);
 }
 

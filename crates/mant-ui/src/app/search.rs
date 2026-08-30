@@ -168,6 +168,7 @@ impl SearchMode {
 impl App {
     pub(super) fn open_search(&mut self) {
         self.search.open();
+        self.sync_current_search_matches();
     }
 
     pub(super) fn close_search(&mut self) {
@@ -268,6 +269,10 @@ impl App {
     }
 
     fn sync_current_search_matches(&mut self) {
+        if !self.search.is_open() {
+            self.search.matches.clear();
+            return;
+        }
         self.search.matches = self
             .search
             .scope_matches
