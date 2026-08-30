@@ -67,8 +67,17 @@ pub(super) fn lower_man_definition(
         spacing_enabled,
     );
     let macro_name = node.macro_name.as_deref();
+    // Some generated man pages open a zero-distance run after the first
+    // spelling and restore `.PD` immediately before the shared description.
+    // That closing transition is structural evidence of an alias group;
+    // remaining at zero distance merely requests compact independent items.
+    let closes_compact_alias_group = macro_name == Some("TP")
+        && spacing_before == 0
+        && *paragraph_distance != 0
+        && !item.description.is_empty();
     let merge_pending = macro_name == Some("IP")
-        || matches!(macro_name, Some("TP" | "TQ")) && (macro_name == Some("TQ") || *pending_alias);
+        || matches!(macro_name, Some("TP" | "TQ"))
+            && (macro_name == Some("TQ") || *pending_alias || closes_compact_alias_group);
     *pending_alias = item.description.is_empty()
         && (macro_name == Some("TQ")
             || visible_definition_head(node)

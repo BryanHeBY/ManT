@@ -918,6 +918,36 @@ mod tests {
     }
 
     #[test]
+    fn restored_paragraph_distance_closes_a_compact_tp_alias_group() {
+        let path = temporary_source(
+            "compact-alias-group",
+            ".TH ALIASES 1\n\
+             .SH COMMANDS\n\
+             .TP\n\
+             bind first-form\n\
+             .PD 0\n\
+             .TP\n\
+             bind second-form\n\
+             .PD\n\
+             Shared description.\n",
+        );
+
+        let document = parse_manual_source(&path).expect("lower compact alias group");
+        fs::remove_file(path).expect("remove temporary roff fixture");
+        let [Block::DefinitionList { items, .. }] = document.sections[0].blocks.as_slice() else {
+            panic!("expected one definition list");
+        };
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].terms.len(), 2);
+        assert_eq!(inline_text(&items[0].terms[0]), "bind first-form");
+        assert_eq!(inline_text(&items[0].terms[1]), "bind second-form");
+        let Block::Paragraph { children, .. } = &items[0].description[0] else {
+            panic!("expected shared description");
+        };
+        assert_eq!(inline_text(children), "Shared description.");
+    }
+
+    #[test]
     fn preserves_man_synopsis_flow_and_alternating_fonts() {
         let path = temporary_source(
             "man-synopsis-flow",
