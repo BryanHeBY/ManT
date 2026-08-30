@@ -43,6 +43,8 @@ that crate was not published for that change.
   groups now carry only their canonical Markdown render descriptor and globally
   numbered hits; nested local offsets, continuation cursors, and totals are
   removed from the unreleased v0.10 wire shape.
+- Version explicit tldr maintenance output as `mant.tldr-update/v1` and expose
+  its independent generated schema without adding mutation to MCP.
 
 ### mant-engine 0.10.0
 
@@ -95,6 +97,8 @@ that crate was not published for that change.
 - Anchor the selected Outline node to its current viewport row across full-label
   changes, whole-tree expansion or collapse, and sidebar-width reflow, moving
   it only when terminal bounds or complete-title visibility require it.
+- Keep dismissed search highlights hidden across redraws and resizing while
+  retaining the confirmed query for later navigation.
 - Represent host-activatable external links with a validated `ExternalUri` so
   Markdown and tldr producers share the same HTTP(S)/mailto policy. Embedding
   callbacks now receive `&ExternalUri` instead of an unclassified `&str`;
@@ -121,11 +125,19 @@ that crate was not published for that change.
 - Give completely missed scoped explanations an executable next step: native
   output names the complete outline command, while MCP names `mant_outline`
   and `mant_search` without leaking CLI-only flags.
-- Apply the same 512-byte, control-free selector validation and usage exit
+- Apply the same 512-Unicode-scalar, control-free selector validation and usage exit
   status to single-document and multi-document outline/read/explain requests.
+- Sanitize and bound every MCP error through the same presentation boundary as
+  successful pages, without exposing physical registry paths or panic details.
 - Launch native Windows external links through the absolute System32 handler
   path instead of executable name lookup, and sanitize dynamic TUI notices at
   their final terminal-rendering boundary.
+
+### mant-sources 0.9.2
+
+- Reject linked managed-source roots and metadata during registration.
+- Compare updater metadata with the materialized Markdown inventory so doctor
+  reports incomplete caches and update reacquires missing documents.
 
 ## 0.9.1 - 2026-08-24
 

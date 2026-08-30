@@ -292,7 +292,7 @@ pub struct QueryExcerpt {
     /// Recoverable parser and validation findings.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub diagnostics: Vec<Diagnostic>,
-    /// Selected nodes in request order.
+    /// Selected nodes in canonical source order after duplicate selectors are removed.
     pub selections: Vec<ExcerptSelection>,
 }
 

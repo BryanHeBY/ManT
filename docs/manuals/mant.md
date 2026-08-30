@@ -39,6 +39,7 @@
 ```text
 mant <SELECTOR> [OPTIONS]
 mant <MAN_SECTION> <NAME> [OPTIONS]
+mant --document <SELECTOR>... [--follow-links] [OPTIONS]
 mant --input <PATH|-> [--input-format FORMAT] [OPTIONS]
 mant --list [FILTERS]
 mant --find PATTERN [FILTERS]
@@ -801,10 +802,15 @@ capability is broken and exits with status `1`; invalid usage exits with status
 Doctor JSON intentionally includes local filesystem paths for diagnosis. It is
 a native CLI interface and is not exposed through the read-only MCP server.
 
+`--update-tldr` JSON uses the independent `mant.tldr-update/v1` maintenance
+contract. It reports `action` plus optional `cacheDir`, `client`, `output`, and
+`revision`; inspect its schema with `mant --schema tldr-update`. MCP remains
+read-only and cannot invoke this operation.
+
 ## Integration
 
 - `--request-json`: Read one closed `mant.request/v0.10` or `mant.scope-request/v0.10` object from standard input.
-- `--schema CONTRACT`: Print a generated JSON Schema for `doctor`, `request`, `query`, `outline`, `excerpt`, `search`, `scope-request`, `scope-query`, `catalog`, or `all`.
+- `--schema CONTRACT`: Print a generated JSON Schema for `doctor`, `tldr-update`, `request`, `query`, `outline`, `excerpt`, `search`, `scope-request`, `scope-query`, `catalog`, or `all`.
 - `--protocol-version`: Print the exact native protocol versions.
 - `--mcp`: Serve read-only ManT tools over silent MCP stdio. Successful calls
   return bounded plain text or CommonMark without ordinary lowering
@@ -831,7 +837,9 @@ The current protocol descriptor is:
 ```
 
 The native request and response family follows ManT's pre-stable minor release
-line: ManT 0.10.x uses v0.10, and patch releases keep the same wire shape. The
+line: ManT 0.10.x uses v0.10, and patch releases remain backward compatible.
+They may add documented optional response fields but do not change requests,
+required fields, tagged unions, or existing field semantics. The
 former experimental bare v1 through v7 query schemas are no longer accepted.
 Excerpt and search results now share a complete outline trail, so both human
 output and structured consumers receive the same ancestor chain and terminal

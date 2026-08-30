@@ -2,12 +2,16 @@
 
 use mant_ir::{Block, Inline, SourceFormat};
 use mant_protocol::{
-    EntryProjection, QueryBundle, QueryInput, QueryRequest, QuerySchema, QueryView, RequestSchema,
-    ScopeQueryRequest, ScopeQueryView, ScopeRequestSchema, SearchCase, SearchScope, SearchSyntax,
+    EntryProjection, QueryBundle, QueryInput, QueryOutline, QueryRequest, QuerySchema, QueryView,
+    RequestSchema, ScopeQueryRequest, ScopeQueryResponse, ScopeQueryResult, ScopeQueryView,
+    ScopeRequestSchema, SearchCase, SearchScope, SearchSyntax,
 };
 use serde_json::Value;
 
 const MINIMAL_QUERY: &str = include_str!("../../../tests/contracts/minimal-query-v0.10.json");
+const ROOTED_OUTLINE: &str = include_str!("../../../tests/contracts/rooted-outline-v0.10.json");
+const SCOPE_SEARCH: &str = include_str!("../../../tests/contracts/scope-search-v0.10.json");
+const SCOPE_EXPLAIN: &str = include_str!("../../../tests/contracts/scope-explain-v0.10.json");
 
 #[test]
 fn shared_query_fixture_round_trips_without_shape_changes() {
@@ -45,6 +49,40 @@ fn shared_query_fixture_round_trips_without_shape_changes() {
     let expected: Value = serde_json::from_str(MINIMAL_QUERY).expect("fixture JSON value");
     let actual = serde_json::to_value(query).expect("serialize query");
     assert_eq!(actual, expected);
+}
+
+#[test]
+fn v0_10_breaking_projection_shapes_have_cross_language_golden_examples() {
+    let outline: QueryOutline = serde_json::from_str(ROOTED_OUTLINE).expect("rooted outline");
+    assert_eq!(outline.root.as_deref(), Some("options"));
+    assert!(matches!(outline.entries, EntryProjection::Kinds { .. }));
+    assert_eq!(
+        serde_json::to_value(outline).expect("outline value"),
+        serde_json::from_str::<Value>(ROOTED_OUTLINE).expect("outline fixture")
+    );
+
+    let search: ScopeQueryResponse = serde_json::from_str(SCOPE_SEARCH).expect("scope search");
+    let ScopeQueryResult::Search { search: result } = &search.result else {
+        panic!("scope search wrapper");
+    };
+    assert_eq!(
+        (result.total, result.offset, result.next_offset),
+        (7, 3, Some(5))
+    );
+    assert_eq!(
+        serde_json::to_value(search).expect("search value"),
+        serde_json::from_str::<Value>(SCOPE_SEARCH).expect("search fixture")
+    );
+
+    let explain: ScopeQueryResponse = serde_json::from_str(SCOPE_EXPLAIN).expect("scope explain");
+    assert!(matches!(
+        explain.result,
+        ScopeQueryResult::Explain {
+            missed: 1,
+            ref matches,
+            ..
+        } if matches.is_empty()
+    ));
 }
 
 #[test]

@@ -28,6 +28,7 @@ ScopeQueryRequest ──> host / mant-engine ──> ScopeQueryResponse
 CatalogQuery ──> host ──────────────────> DocumentCatalog ──> compact text
 
 local inspection ───────────────────────> DoctorReport
+explicit cache maintenance ─────────────> TldrCacheUpdate
 ```
 
 | Family | Current discriminator | Purpose |
@@ -40,6 +41,7 @@ local inspection ─────────────────────
 | Catalog | `mant.catalog/v0.10` | Registered Markdown and native-manual discovery |
 | Outline, excerpt, search | `mant.outline/v0.10`, `mant.excerpt/v0.10`, `mant.search/v0.10` | Focused query projections |
 | Doctor | `mant.doctor/v1` | Read-only local installation diagnostics |
+| tldr update | `mant.tldr-update/v1` | Explicit native cache-maintenance result |
 
 The schemas generated from the Rust types are authoritative. Request schemas
 are generated for deserialization so closed-object and default behavior match
@@ -79,7 +81,9 @@ let _schema = query_request_json_schema();
 ```
 
 The native query family follows `ManT`'s pre-stable minor release line: `ManT`
-0.10.x uses `v0.10`, and patch releases retain the same wire shape. The former
+0.10.x uses `v0.10`, and patch releases remain backward compatible. They may
+add documented optional response fields, but never change requests, required
+fields, tagged unions, or existing field semantics. The former
 bare `v1` through `v7` schemas were experimental and are intentionally not
 accepted by 0.10. Historical tags preserve those contracts; the first stable
 native protocol will use a `v1.0` release line. Independent contracts such as

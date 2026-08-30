@@ -75,7 +75,9 @@ query the manual database, read tldr data, or start the TUI.
 | `mant.doctor/v1` | Read-only local installation diagnostics | Doctor report `schema` |
 
 The native query family follows ManT's pre-stable minor release line:
-ManT 0.10.x uses `v0.10`, and patch releases do not change its wire shape. The
+ManT 0.10.x uses `v0.10`, and patch releases remain backward compatible. They
+may add documented optional response fields, but never change requests,
+required fields, tagged unions, or existing field semantics. The
 independent Markdown coordinate and doctor contracts remain
 `mant.markdown/v1` and `mant.doctor/v1`. Clients must still compare complete
 identifiers rather than infer compatibility between independent families.
@@ -129,13 +131,15 @@ mant --schema scope-request
 mant --schema scope-query
 mant --schema catalog
 mant --schema doctor
+mant --schema tldr-update
 mant --schema all
 ```
 
 `--schema all` returns an object with the stable keys `request`, `query`,
-`outline`, `excerpt`, `search`, `scope-request`, `scope-query`, and `catalog`. The independent doctor schema is
-requested explicitly and does not alter that v0.10 schema catalog. `--compact` is
-accepted by all schema commands.
+`outline`, `excerpt`, `search`, `scope-request`, `scope-query`, and `catalog`.
+The independent doctor and tldr-update schemas are requested explicitly and do
+not alter that v0.10 schema catalog. `--compact` is accepted by all schema
+commands.
 
 | `--schema` value | Root title | Root `$id` |
 | --- | --- | --- |
@@ -148,6 +152,7 @@ accepted by all schema commands.
 | `scope-query` | `ScopeQueryResponse` | `urn:mant:scope-query:v0.10` |
 | `catalog` | `DocumentCatalog` | `urn:mant:catalog:v0.10` |
 | `doctor` | `DoctorReport` | `urn:mant:doctor:v1` |
+| `tldr-update` | `TldrCacheUpdate` | `urn:mant:tldr-update:v1` |
 
 The request schema is generated for deserialization, while response schemas
 are generated for serialization. This distinction matters because input
@@ -171,9 +176,40 @@ mant --schema all --compact > mant-schemas.json
 `mant --doctor --format json` emits `mant.doctor/v1`, a native, offline snapshot
 of the effective local installation. The report contains a platform/version
 environment, an overall `healthy`, `warning`, or `error` outcome, ordered checks,
-and an aggregate summary. Each check has a stable ID, `ok`, `info`, `warning`, or
-`error` status, a concise message, optional details, and an optional suggested
-command. Warnings retain exit status `0`; any error produces exit status `1`.
+and an aggregate summary. Each check has a stable `code`, `ok`, `info`,
+`warning`, or `error` status, a concise `message`, optional logical `subject`,
+bounded `details`, and optional `remediation`. Warnings retain exit status `0`;
+any error produces exit status `1`.
+
+| Check field | Meaning |
+| --- | --- |
+| `code` | Stable machine-readable check identifier |
+| `subject` | Optional configured source or other logical subject |
+| `status` | `ok`, `info`, `warning`, or `error` |
+| `message` | Concise human-readable outcome |
+| `details` | Ordered bounded evidence strings |
+| `remediation` | Optional command or corrective action |
+
+```json
+{
+  "schema": "mant.doctor/v1",
+  "outcome": "warning",
+  "checks": [
+    {
+      "code": "sources.installation",
+      "subject": "team",
+      "status": "warning",
+      "message": "installed source is invalid or unreadable",
+      "details": ["installed metadata records 20 documents but 19 are present"],
+      "remediation": "mant --update-docs"
+    }
+  ]
+}
+```
+
+The abbreviated example omits the required `producer`, `environment`, and
+`summary` objects only to focus on the check vocabulary; the generated schema
+is authoritative for a complete report.
 
 Doctor may expose physical filesystem paths because local provenance is needed
 to repair an installation. It omits configured repository and archive URLs and
@@ -181,6 +217,14 @@ is not an MCP tool, so MCP consumers continue to see logical document identities
 rather than host filesystem layout. The command never creates directories or
 locks, invokes external programs, contacts the network, updates caches, or
 removes data.
+
+## TLDR Cache Update Result
+
+`mant --update-tldr` emits `mant.tldr-update/v1`. `action` is `cloned` or
+`updated`; optional `cacheDir`, `client`, `output`, and `revision` retain the
+locally available update evidence. This native maintenance contract is not
+part of the read-only MCP surface. Its schema is available with
+`mant --schema tldr-update`.
 
 ## Document Catalog
 
@@ -606,9 +650,43 @@ Example:
 }
 ```
 
-The response uses `mant.scope-query/v0.10`. Its `scope` field contains the request, ordered resolved documents, unique edges, optional unresolved targets, and the typed traversal frontier. `result.kind = "search"` supplies the only `total`, `returned`, `offset`, `truncated`, and `nextOffset` fields, then groups retained hits by exact document address. Each document group contains `address`, `depth`, its canonical Markdown `render` coordinate descriptor, and `matches`; it deliberately has no local pagination fields or nested `mant.search/v0.10` envelope. Hit `ordinal` values are one-based in the complete unpaginated scope and therefore remain unique across document groups and result pages. Search-level `truncated` describes result pagination, not document traversal. Limit and offset apply globally, not once per document.
+The response uses `mant.scope-query/v0.10`. Its `scope` field contains the request, ordered resolved documents, unique edges, optional unresolved targets, and the typed traversal frontier. For `result.kind = "search"`, pagination lives under `result.search`: consumers read `result.search.total`, `returned`, `offset`, `truncated`, `nextOffset`, and `documents`. Each document group contains `address`, `depth`, its canonical Markdown `render` coordinate descriptor, and `matches`; it deliberately has no local pagination fields or nested `mant.search/v0.10` envelope. Hit `ordinal` values are one-based in the complete unpaginated scope and therefore remain unique across document groups and result pages. Search-level `truncated` describes result pagination, not document traversal. Limit and offset apply globally, not once per document.
+
+```json
+{
+  "schema": "mant.scope-query/v0.10",
+  "scope": {
+    "query": { "documents": [{ "selector": "git" }], "traversal": { "followLinks": false } },
+    "documents": [],
+    "edges": []
+  },
+  "result": {
+    "kind": "search",
+    "search": {
+      "query": { "pattern": "index", "syntax": "literal", "case": "insensitive", "scope": "visible", "word": false, "contextLines": 0, "limit": 20, "offset": 0 },
+      "total": 0,
+      "returned": 0,
+      "offset": 0,
+      "truncated": false,
+      "documents": []
+    }
+  }
+}
+```
 
 For `result.kind = "explain"`, `matches` contains exact document addresses, graph depths, and ordinary `mant.excerpt/v0.10` projections. A document with neither an entry nor a literal occurrence is an ordinary sparse miss counted by `missed`. If the bounded literal probe finds the requested text only in prose, the document instead contributes a qualified `failure` containing its outline node and line; this preserves the CLI `--search` and MCP `mant_search` handoff without treating prose as a semantic entry. Ambiguous or invalid entry selection likewise remains in `failures` for that document and never causes another document's exact match to be guessed or discarded. Therefore `matches.len() + missed + failures.len()` equals the number of resolved documents queried.
+
+```json
+{
+  "schema": "mant.scope-query/v0.10",
+  "scope": {
+    "query": { "documents": [{ "selector": "git" }], "traversal": { "followLinks": false } },
+    "documents": [],
+    "edges": []
+  },
+  "result": { "kind": "explain", "entry": "--help", "matches": [], "missed": 0 }
+}
+```
 
 The CLI constructs the same contract with repeated `--document`, or with one positional selector plus `--follow-links`. An interactive scope has no serialized `full` view: the host resolves `DocumentScope` directly, opens its first readable root, and gives the loaded set to the TUI's confirmed text search.
 
@@ -1251,9 +1329,10 @@ All six fields are always present in that order. A complete traversal therefore
 still emits the line with zero unresolved and frontier counts, making link
 following observable. `R` counts unresolved initial selectors, `L` counts
 unresolved followed links, and the three frontier fields count logical links
-excluded by the corresponding bound. `document-frontier` reports the configured
-document count, while `content-frontier` reports the fixed 64 MiB aggregate
-normalized-IR guard. `mant_explain` additionally emits
+excluded by the corresponding bound. `document-frontier` therefore counts
+links blocked by the configured document-count bound, while `content-frontier`
+counts links blocked by the fixed 64 MiB normalized-IR budget; neither field
+encodes the limit value itself. `mant_explain` additionally emits
 `[explain: matched=M, missed=K, failed=F]`; documents without an entry contribute
 to `missed` when the selector is entirely absent. When every resolved document
 misses, the body tells the caller to inspect one document with

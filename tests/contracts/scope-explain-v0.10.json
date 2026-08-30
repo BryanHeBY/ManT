@@ -1,0 +1,17 @@
+{
+  "schema": "mant.scope-query/v0.10",
+  "scope": {
+    "query": {
+      "documents": [{ "selector": "git" }],
+      "traversal": { "followLinks": false }
+    },
+    "documents": [],
+    "edges": []
+  },
+  "result": {
+    "kind": "explain",
+    "entry": "--help",
+    "matches": [],
+    "missed": 1
+  }
+}

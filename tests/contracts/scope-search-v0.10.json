@@ -1,0 +1,32 @@
+{
+  "schema": "mant.scope-query/v0.10",
+  "scope": {
+    "query": {
+      "documents": [{ "selector": "git" }],
+      "traversal": { "followLinks": false }
+    },
+    "documents": [],
+    "edges": []
+  },
+  "result": {
+    "kind": "search",
+    "search": {
+      "query": {
+        "pattern": "index",
+        "syntax": "literal",
+        "case": "insensitive",
+        "scope": "visible",
+        "word": false,
+        "contextLines": 1,
+        "limit": 2,
+        "offset": 3
+      },
+      "total": 7,
+      "returned": 2,
+      "offset": 3,
+      "truncated": true,
+      "nextOffset": 5,
+      "documents": []
+    }
+  }
+}
