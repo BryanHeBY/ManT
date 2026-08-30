@@ -455,6 +455,16 @@ fn scan_directory(
         .collect())
 }
 
+pub(crate) fn managed_document_count(directory: &Path) -> Result<u32, String> {
+    scan_directory(directory, false)
+        .and_then(|documents| {
+            u32::try_from(documents.len()).map_err(|_| {
+                SourceConfigError::new("managed document count exceeds the supported range")
+            })
+        })
+        .map_err(|error| error.to_string())
+}
+
 fn scan_directory_into(
     root: &Path,
     directory: &Path,

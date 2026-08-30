@@ -8,6 +8,7 @@ use crate::{
     ConfiguredSource, DocumentPaths, SOURCE_METADATA_FILE, SourceConfig, SourceConfigError,
     SourceLocation, is_source_name, load_source_config,
     metadata::{MAX_METADATA_BYTES, read_source_metadata, source_fingerprint},
+    registry::managed_document_count,
 };
 
 /// Transport required to update one configured source.
@@ -160,6 +161,29 @@ fn inspect_configured_source(
     };
     let revision = Some(metadata.revision().to_owned());
     let documents = Some(metadata.documents());
+    let actual_documents = match managed_document_count(&target) {
+        Ok(documents) => documents,
+        Err(error) => {
+            return base(
+                SourceInstallationStatus::Invalid,
+                revision,
+                documents,
+                Some(format!("could not verify installed documents: {error}")),
+            );
+        }
+    };
+    if actual_documents != metadata.documents() {
+        return base(
+            SourceInstallationStatus::Invalid,
+            revision,
+            documents,
+            Some(format!(
+                "installed metadata records {} documents but {} are present",
+                metadata.documents(),
+                actual_documents
+            )),
+        );
+    }
     if metadata.matches(name, configured, &source_fingerprint(configured)) {
         base(SourceInstallationStatus::Ready, revision, documents, None)
     } else {
@@ -274,7 +298,7 @@ struct InstalledSourceIdentity {
 mod tests {
     use std::{fs, path::PathBuf};
 
-    use crate::{DocumentPaths, config::load_source_config_from};
+    use crate::{DocumentPaths, config::load_source_config_from, metadata::source_fingerprint};
 
     use super::{SourceInstallationStatus, inspect_document_sources_from};
 
@@ -347,6 +371,50 @@ mod tests {
         assert!(inspection.orphaned[1].removable);
         assert_eq!(inspection.orphaned[1].revision.as_deref(), Some("abc"));
 
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn configured_source_metadata_must_match_materialized_documents() {
+        let root = temp("document-count");
+        let _ = fs::remove_dir_all(&root);
+        let paths = DocumentPaths {
+            config: root.join("sources.toml"),
+            documents: root.join("documents"),
+            sources: root.join("sources"),
+            root: root.clone(),
+        };
+        fs::create_dir_all(&paths.sources).expect("sources");
+        fs::write(
+            &paths.config,
+            "[team]\nrepo = 'https://example.invalid/docs.git'\nbranch = 'main'\n",
+        )
+        .expect("config");
+        let config = load_source_config_from(&paths.config).expect("source config");
+        let configured = config.get("team").expect("team source");
+        let directory = paths.sources.join("team");
+        fs::create_dir_all(&directory).expect("installed source");
+        fs::write(directory.join("only.md"), "# only").expect("document");
+        fs::write(
+            directory.join(crate::SOURCE_METADATA_FILE),
+            format!(
+                "version = 3\nsource = 'team'\nrevision = 'abc123'\nconfig_fingerprint = {:?}\ndocuments = 2\n\n[location]\nkind = 'git'\nrepo = 'https://example.invalid/docs.git'\nbranch = 'main'\n",
+                source_fingerprint(configured)
+            ),
+        )
+        .expect("metadata");
+
+        let inspection = inspect_document_sources_from(&paths, &config).expect("inspection");
+        assert_eq!(
+            inspection.sources[0].status,
+            SourceInstallationStatus::Invalid
+        );
+        assert!(
+            inspection.sources[0]
+                .detail
+                .as_deref()
+                .is_some_and(|detail| detail.contains("records 2 documents but 1 are present"))
+        );
         fs::remove_dir_all(root).expect("cleanup");
     }
 }

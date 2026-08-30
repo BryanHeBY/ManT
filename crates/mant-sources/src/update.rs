@@ -18,7 +18,10 @@ use crate::limits::{
     MAX_DOCUMENT_BYTES, MAX_SOURCE_BYTES, MAX_SOURCE_DEPTH, MAX_SOURCE_DOCUMENTS,
     MAX_SOURCE_ENTRIES,
 };
-use crate::metadata::{SourceMetadata, read_source_metadata, source_fingerprint};
+use crate::{
+    metadata::{SourceMetadata, read_source_metadata, source_fingerprint},
+    registry::managed_document_count,
+};
 use prune::discover_orphaned_sources;
 #[cfg(test)]
 use prune::prune_document_sources_from;
@@ -164,7 +167,11 @@ impl<'a> SourceUpdateContext<'a> {
         let fingerprint = source_fingerprint(configured);
         let metadata = read_source_metadata(&target)
             .ok()
-            .filter(|metadata| metadata.matches(name, configured, &fingerprint));
+            .filter(|metadata| metadata.matches(name, configured, &fingerprint))
+            .filter(|metadata| {
+                managed_document_count(&target)
+                    .is_ok_and(|documents| documents == metadata.documents())
+            });
         Ok(Self {
             paths,
             name,
@@ -585,9 +592,10 @@ mod tests {
     #[cfg(any(unix, windows))]
     use super::sync_file;
     use super::{
-        ConfiguredSource, DocumentPaths, SourceLocation, SourcePruneAction, SourceUpdateAction,
-        UpdateLock, discover_orphaned_sources, install_selected_documents,
-        prune_document_sources_from, recover_directory, source_fingerprint, try_update_one_source,
+        ConfiguredSource, DocumentPaths, SourceLocation, SourceMetadata, SourcePruneAction,
+        SourceUpdateAction, SourceUpdateContext, UpdateLock, discover_orphaned_sources,
+        install_selected_documents, prune_document_sources_from, recover_directory,
+        source_fingerprint, try_update_one_source,
     };
     use crate::config::load_source_config_from;
 
@@ -637,6 +645,37 @@ mod tests {
         )
         .expect("write installed identity");
         fs::write(directory.join("tool.md"), "# tool").expect("write installed document");
+    }
+
+    #[test]
+    fn update_does_not_trust_metadata_after_installed_documents_disappear() {
+        let root = temp("missing-installed-document");
+        let paths = paths(&root);
+        let configured = source(".");
+        let target = paths.sources.join("team");
+        fs::create_dir_all(&target).expect("installed source");
+        fs::write(target.join("remaining.md"), "# remaining").expect("remaining document");
+        let metadata = SourceMetadata::git(
+            "team",
+            "repo",
+            "main",
+            "abc123".to_owned(),
+            &source_fingerprint(&configured),
+            2,
+        );
+        fs::write(
+            target.join(crate::SOURCE_METADATA_FILE),
+            toml::to_string_pretty(&metadata).expect("metadata text"),
+        )
+        .expect("metadata");
+
+        let context =
+            SourceUpdateContext::prepare(&paths, "team", &configured).expect("update context");
+        assert!(
+            context.metadata.is_none(),
+            "an incomplete installation must force reacquisition"
+        );
+        fs::remove_dir_all(root).expect("cleanup");
     }
 
     fn zip_document() -> Vec<u8> {
