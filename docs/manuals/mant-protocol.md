@@ -180,6 +180,10 @@ and an aggregate summary. Each check has a stable `code`, `ok`, `info`,
 `warning`, or `error` status, a concise `message`, optional logical `subject`,
 bounded `details`, and optional `remediation`. Warnings retain exit status `0`;
 any error produces exit status `1`.
+For `sources.installation`, an `ok` result means the installed metadata,
+document count, and active local configuration agree. It includes an explicit
+detail that remote freshness was not checked; doctor never contacts a Git or
+archive origin.
 
 | Check field | Meaning |
 | --- | --- |

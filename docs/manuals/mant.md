@@ -813,6 +813,10 @@ libmandoc, native manual index, conditional Git requirement, and tldr roots. It
 does not create directories or lock files, invoke external programs, access the
 network, update caches, or remove orphaned sources. Suggested repairs name the
 existing explicit maintenance command instead of running it.
+An installed source reported as consistent matches its active local
+configuration, metadata, and recorded document count; this does not claim the
+remote source is current. The corresponding check explicitly says that remote
+freshness was not checked.
 
 Human-readable text is the default. `--format json` returns the independent
 `mant.doctor/v1` contract; add `--compact` for one-line JSON, and inspect its

@@ -285,7 +285,7 @@ fn push_configured_source(builder: &mut DoctorBuilder, source: &ConfiguredSource
     let (status, message, remediation) = match source.status {
         SourceInstallationStatus::Ready => (
             DoctorCheckStatus::Ok,
-            "configured source is installed and current",
+            "configured source is installed and consistent with local configuration",
             None,
         ),
         SourceInstallationStatus::Missing => (
@@ -319,6 +319,11 @@ fn push_configured_source(builder: &mut DoctorBuilder, source: &ConfiguredSource
     }
     if let Some(documents) = source.documents {
         check.details.push(format!("documents={documents}"));
+    }
+    if source.status == SourceInstallationStatus::Ready {
+        check
+            .details
+            .push("remote freshness was not checked".to_owned());
     }
     if let Some(detail) = &source.detail {
         check.details.push(detail.clone());
@@ -501,8 +506,9 @@ mod tests {
     use mant_protocol::{
         DoctorCheck, DoctorCheckStatus, DoctorEnvironment, DoctorReport, Producer,
     };
+    use mant_sources::{ConfiguredSourceInspection, SourceInstallationStatus, SourceTransport};
 
-    use super::{render_text, terminal_safe};
+    use super::{DoctorBuilder, push_configured_source, render_text, terminal_safe};
 
     fn report() -> DoctorReport {
         DoctorReport::new(
@@ -550,5 +556,35 @@ mod tests {
             terminal_safe("path\u{1b}[2J\nnext"),
             "path\\u{1b}[2J\\nnext"
         );
+    }
+
+    #[test]
+    fn ready_sources_claim_only_local_consistency() {
+        let mut builder = DoctorBuilder::new();
+        push_configured_source(
+            &mut builder,
+            &ConfiguredSourceInspection {
+                source: "team".to_owned(),
+                transport: SourceTransport::Git,
+                priority: 1,
+                status: SourceInstallationStatus::Ready,
+                revision: Some("0123456789abcdef".to_owned()),
+                documents: Some(42),
+                detail: None,
+            },
+        );
+
+        let check = builder.checks.first().expect("source check");
+        assert_eq!(
+            check.message,
+            "configured source is installed and consistent with local configuration"
+        );
+        assert!(
+            check
+                .details
+                .iter()
+                .any(|detail| detail == "remote freshness was not checked")
+        );
+        assert!(!check.message.contains("current"));
     }
 }

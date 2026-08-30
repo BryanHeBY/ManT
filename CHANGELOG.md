@@ -147,6 +147,8 @@ that crate was not published for that change.
   their final terminal-rendering boundary.
 - Require `mant-sources ^0.9.2` for maintenance commands so an existing
   lockfile cannot retain the pre-health-check implementation.
+- Describe healthy installed sources as locally consistent in offline doctor
+  reports and state explicitly that remote freshness was not checked.
 
 ### mant-sources 0.9.2
 

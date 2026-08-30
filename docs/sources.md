@@ -127,7 +127,10 @@ Installed-source metadata records a document count. Doctor compares that count
 with the currently materialized Markdown files, and update reacquires a source
 when they differ. This detects ordinary missing-file damage but is not a path
 manifest or content-integrity hash: a same-count rename or replacement is
-outside this check.
+outside this check. A locally consistent source is not necessarily at the
+remote branch head: doctor remains offline and explicitly reports that remote
+freshness was not checked. Run `mant --update-docs` to compare Git sources with
+their remote branch or refresh archive validators.
 
 ## Updating
 
