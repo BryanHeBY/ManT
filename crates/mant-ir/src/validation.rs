@@ -112,7 +112,7 @@ pub fn is_valid_email_address(address: &str) -> bool {
     let Some((local, domain)) = address.split_once('@') else {
         return false;
     };
-    valid_dot_atom(local) && !domain.contains('@') && valid_host_name(domain)
+    valid_dot_atom(local) && !domain.contains('@') && valid_email_domain(domain)
 }
 
 /// Decode one single-recipient `mailto:` URI into its typed email address.
@@ -388,10 +388,19 @@ fn valid_http_authority(authority: &str) -> bool {
     let (host, port) = host_port
         .rsplit_once(':')
         .map_or((host_port, None), |(host, port)| (host, Some(port)));
-    valid_host_name(host) && port.is_none_or(valid_port)
+    valid_uri_reg_name(host) && port.is_none_or(valid_port)
 }
 
-fn valid_host_name(host: &str) -> bool {
+fn valid_uri_reg_name(host: &str) -> bool {
+    let host = host.strip_suffix('.').unwrap_or(host);
+    !host.is_empty()
+        && host.split('.').all(|label| {
+            !label.is_empty()
+                && valid_uri_component(label, |byte| is_unreserved(byte) || is_sub_delimiter(byte))
+        })
+}
+
+fn valid_email_domain(host: &str) -> bool {
     !host.is_empty()
         && !host.starts_with('.')
         && !host.ends_with('.')
@@ -719,6 +728,9 @@ mod tests {
             "https://%ZZ@example.test/path",
             "https://example.test/%ZZ",
             "https://user]name@example.test/path",
+            "https://example%ZZ.test/path",
+            "https://example..test/path",
+            "https://例.example/path",
             "https://example.test/path#one#two",
             "mailto:",
             "mailto:?subject=x",
@@ -744,6 +756,10 @@ mod tests {
             "https://user%40name@example.test/path",
             "https://[::1]:8443/path",
             "https://[::1]:8443/path?q=x#part",
+            "https://service_name.example.test/path",
+            "https://example.test./path",
+            "https://ex%41mple.test/path",
+            "https://xn--fsq.example/path",
             "mailto:user@example.test",
             "mailto:user@example.test?subject=hello",
             "mailto:user%25tag@example.test",

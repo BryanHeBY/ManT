@@ -90,9 +90,13 @@ Links use a closed `LinkTarget` union rather than stringly typed URLs:
 
 Visible link children remain useful when a frontend cannot activate the destination.
 Document validation requires RFC 3986 ASCII component characters and complete
-percent-encoded triplets. It also rejects malformed external HTTP(S)
-authorities, userinfo, hosts, IPv6 literals and ports, mailto targets without a
-mailbox, and typed email addresses outside the supported ASCII dot-atom form.
+percent-encoded triplets. HTTP(S) host names use the RFC 3986 `reg-name`
+grammar, including underscores, a terminal DNS root dot, and percent-encoded
+triplets. Internationalized host names must be supplied in their ASCII
+punycode form; raw Unicode belongs to IRI syntax and is rejected. Validation
+also rejects malformed external HTTP(S) authorities, userinfo, IPv6 literals
+and ports, mailto targets without a mailbox, and typed email addresses outside
+the supported conservative ASCII dot-atom and DNS-domain form.
 Mailto recipients are percent-decoded exactly once before mailbox validation;
 the shared typed-email serializer percent-encodes URI-sensitive local-part
 characters so accepted addresses remain activatable without raw concatenation.
