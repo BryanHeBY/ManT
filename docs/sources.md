@@ -184,12 +184,14 @@ files instead of filesystem aliases.
 Acquired snapshots are intentionally bounded to 20,000 entries, 256 MiB of
 materialized regular-file data, 16 MiB per selected Markdown file, 10,000
 Markdown files, and paths 32 components deep. Archive downloads have an
-additional 64 MiB compressed-size limit, and archive entry metadata is charged
-before extraction. Git command output is bounded too; Git checkout contents
-are measured before staging. Windows intentionally receives every blob in the
-depth-one snapshot, and a Unix server may ignore Git's partial-clone filter, so
-unlike the streaming archive path this cannot strictly cap transient Git pack
-traffic or storage before checkout validation. Absolute,
+additional 64 MiB compressed-size limit. The complete decompressed tar stream
+is bounded before tar parsing, including GNU long-name/long-link and local PAX
+records that the tar parser consumes internally; yielded entry metadata is
+also charged before extraction. Git command output is bounded too; Git checkout
+contents are measured before staging. Windows intentionally receives every
+blob in the depth-one snapshot, and a Unix server may ignore Git's partial-clone
+filter, so unlike the streaming archive path this cannot strictly cap transient
+Git pack traffic or storage before checkout validation. Absolute,
 parent-relative, non-UTF-8, duplicate, link, and special archive entries are
 rejected. These checks apply before activation, so malformed or hostile input
 leaves the previous source installed.

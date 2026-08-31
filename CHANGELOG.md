@@ -27,9 +27,10 @@ No compatibility changes are pending.
   and generic terms. Add evidence-backed value domains without heuristically
   inferring cross-document sets from prose.
 - Extend `OutlinePath` with nested entry coordinates such as `2/e3/e1`.
-- Centralize conservative external-URI and email-address validation, including
-  HTTP authority, host, IPv6 and port structure, percent-decoded single-recipient
-  mailto validation, and inverse percent-encoding for typed email targets.
+- Centralize external-URI and conservative email-address validation, including
+  RFC 3986 ASCII registered names, root dots, percent-encoded hosts, HTTP
+  authority, IPv6 and port structure, percent-decoded single-recipient mailto
+  validation, and inverse percent-encoding for typed email targets.
   Validate source spans attached to producer diagnostics as well as document
   content.
 
@@ -54,6 +55,8 @@ No compatibility changes are pending.
   removed from the unreleased v0.10 wire shape.
 - Version explicit tldr maintenance output as `mant.tldr-update/v1` and expose
   its independent generated schema without adding mutation to MCP.
+- Publish the shared 16-selector maximum and enforce it at every native,
+  in-process, and MCP excerpt boundary rather than relying on schema metadata.
 
 ### mant-engine 0.10.0
 
@@ -101,6 +104,14 @@ No compatibility changes are pending.
 - Preserve compact man `.TP` alias groups only across verified option-shaped
   terms, stopping at prose, indentation, and section boundaries so aliases
   share their description without merging unrelated definitions.
+- Keep `.TP`, `.TQ`, and compact `.IP` alias groups on exact source-backed
+  boundaries, preserve their authored order with a linear merge, and diagnose
+  uncertain descriptions instead of absorbing unrelated pending heads.
+- Clamp search `lineRanges` to the exact trailing-space-trimmed UTF-8 lines
+  published in previews and context so structured coordinates never point
+  outside their presented text.
+- Enforce selector length and excerpt-count bounds inside the projection engine
+  so preloaded and standard-input producers cannot bypass request validation.
 - Classify mailto recipients only after shared decoding and structural
   validation, serialize typed email targets through the inverse shared encoder,
   and keep invalid targets visible but inert in deterministic Markdown.
@@ -128,6 +139,9 @@ No compatibility changes are pending.
 - Reuse the IR's structural URI validator at that activation boundary, rejecting
   malformed percent escapes, userinfo, empty ports, IPv6 authorities, and
   mailto dot-atoms while retaining valid query-bearing mailto actions.
+- Reserve a one-column Outline scrollbar gutter only when its narrow layout
+  actually overflows, preserving final label cells without wasting sidebar
+  width in non-scrolling outlines.
 
 ### mant 0.10.0
 
@@ -161,6 +175,8 @@ No compatibility changes are pending.
   lockfile cannot retain the pre-health-check implementation.
 - Describe healthy installed sources as locally consistent in offline doctor
   reports and state explicitly that remote freshness was not checked.
+- Reject oversized or control-bearing standard-input node selectors through the
+  same engine-owned validation used by file, logical-document, and JSON inputs.
 
 ### mant-sources 0.9.2
 
@@ -169,6 +185,9 @@ No compatibility changes are pending.
   doctor reports count-mismatched caches and update reacquires the source.
 - Use complete-object depth-one clones on Windows, avoiding Git for Windows
   failures while hydrating a blob-filtered no-checkout clone by pathspec.
+- Bound the complete decompressed tar stream before parsing so hidden GNU
+  long-name/long-link and local PAX metadata cannot allocate outside source
+  acquisition budgets.
 
 See the complete [ManT 0.10.0 release notes](https://github.com/BryanHeBY/ManT/releases/tag/v0.10.0).
 

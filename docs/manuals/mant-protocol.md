@@ -1062,10 +1062,12 @@ parent. Its typed terminal `node` contains the selected node's `kind`, `path`,
 `id`, and `title`; a `document-entry` node additionally retains `role`, `case`,
 and normalized `names`. Empty ancestor arrays are omitted.
 
-Selectors may be outline paths, document IDs, or semantic aliases. Overlapping
-selections are deduplicated, and source order is preserved. Selecting a
-section includes its descendants. The outline trail identifies ancestors
-without copying their blocks.
+An excerpt accepts from 1 through 16 selectors. Selectors may be outline paths,
+document IDs, or semantic aliases. The schema, native request boundary, MCP,
+and direct in-process projection all enforce the same bound. Overlapping
+selections are deduplicated, and source order is preserved. Selecting a section
+includes its descendants. The outline trail identifies ancestors without
+copying their blocks.
 
 The `excerpt`, `outline.root`, and `explain` views use one resolver: exact path,
 exact ID across sections and entries, exact semantic alias, then normalized
@@ -1149,8 +1151,9 @@ line from duplicating its preview or context. Each line group includes:
   repetitive line exceeds that bound, `occurrencesTruncated` is true;
 - each retained occurrence contains exact `matchedText`, its canonical
   Markdown range, and `lineRanges` within the anchor-free Markdown lines used
-  by text presentations; `lineRanges` retain Markdown syntax such as hard-break
-  spaces and can contain several fragments when an internal anchor was removed;
+  by text presentations; each half-open UTF-8 byte range is clamped to the
+  presented line after trailing presentation-only whitespace is removed and
+  can contain several fragments when an internal anchor was removed;
 - an optional original `nodeSource` span for the owning outline node;
 - a human-readable `preview`;
 - optional full Markdown context lines.

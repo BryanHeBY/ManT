@@ -78,6 +78,13 @@ Validated libmandoc tags on mdoc definitions are retained for page-local navigat
 
 After source lowering, ManT assigns semantic identities only inside a reliable structural context. Definition lists under environment sections recognize a complete term in bare `NAME`, shell `$NAME`, PowerShell `$Env:NAME` and `${Env:NAME}`, Windows `%NAME%`, or one assignment `NAME=value` form through the same grammar used by explicit Markdown declarations. The assignment value is not part of the selector. Named variables and similar entries may also carry one explicitly delimited trailing parenthetical annotation, such as Readline's `(On)` default notation; that annotation remains in the authored form but not the selector. ManT never takes only the first word of a term, and a composite heading such as `ENVIRONMENT OPTIONS` selects the more specific option grammar. Hanging paragraph plus relative-indent layouts are reconstructed as definitions only in that environment context. Ordinary prose and unrelated uppercase terms are never scanned or promoted. A definition-shaped term that fails the selected grammar remains visible as an unclassified term and emits `manual.semantic-entry.unclassified-definition`; the outline then reports `entriesComplete: false` rather than claiming a complete semantic inventory.
 
+ManT merges man `TP`, `TQ`, and compact `IP` heads only when the source proves
+one alias group through an explicit continuation or a bounded compact run. The
+aliases retain source order. If an `IP` or `TQ` description follows earlier
+unlabelled heads outside that proven group, those heads remain independent and
+the document reports `manual.definition-alias-boundary` instead of silently
+absorbing them.
+
 ## Manual References
 
 ManT retains explicit manual-reference semantics and recognizes two conservative compatibility forms:
