@@ -1138,7 +1138,9 @@ coordinates. Columns count Unicode scalar values rather than UTF-8 bytes.
 `scope = "visible"` changes what can match, but coordinates still point into
 the canonical Markdown. `scope = "markdown"` also allows matches in markup.
 Regex `^` and `$` anchors apply at every rendered line boundary in either
-scope.
+scope. Regex compilation has a fixed project resource budget in addition to
+the pattern-length bound; an expression whose compiled program exceeds that
+budget is rejected before document matching.
 
 Matches on the same rendered line and in the same outline node form one
 pagination unit. This keeps a regular expression with several matches on one
@@ -1149,11 +1151,12 @@ line from duplicating its preview or context. Each line group includes:
   selection;
 - an `occurrenceCount` plus up to 256 exact `occurrences`; when a highly
   repetitive line exceeds that bound, `occurrencesTruncated` is true;
-- each retained occurrence contains exact `matchedText`, its canonical
-  Markdown range, and `lineRanges` within the anchor-free Markdown lines used
-  by text presentations; each half-open UTF-8 byte range is clamped to the
-  presented line after trailing presentation-only whitespace is removed and
-  can contain several fragments when an internal anchor was removed;
+- each retained occurrence contains presented `matchedText`, its canonical
+  Markdown covering range, and one or more `lineRanges` within the anchor-free
+  Markdown lines used by text presentations; each half-open UTF-8 byte range
+  is clamped to the presented line after trailing presentation-only whitespace
+  is removed and can contain several fragments when an internal anchor was
+  removed;
 - an optional original `nodeSource` span for the owning outline node;
 - a human-readable `preview`;
 - optional full Markdown context lines.
@@ -1164,6 +1167,11 @@ Visible-scope text reports columns in the displayed, markup-free line so its
 coordinates can be checked directly; Markdown-scope text reports canonical
 Markdown columns. Structured results always retain canonical Markdown
 coordinates and report when exact occurrence details were bounded.
+Matches wholly inside internal source-map anchors, and visible-scope matches
+wholly on a synthetic block separator with no canonical Markdown bytes, are
+omitted. A Markdown-scope match that overlaps an anchor retains its canonical
+covering range while `matchedText` and `lineRanges` expose only the
+anchor-free presented fragments.
 
 The trail has the same `ancestors` and typed terminal `node` shape used by
 excerpt selections. The node union uses the same `tldr`, `document-root`,

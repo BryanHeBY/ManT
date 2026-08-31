@@ -383,7 +383,7 @@
         "$ref": "#/$defs/ExcerptSchema"
       },
       "selections": {
-        "description": "Selected nodes in request order.",
+        "description": "Selected nodes in canonical source order after duplicate selectors are removed.",
         "type": "array",
         "items": {
           "$ref": "#/$defs/ExcerptSelection"
@@ -6785,7 +6785,7 @@
             "$ref": "#/$defs/ExcerptSchema"
           },
           "selections": {
-            "description": "Selected nodes in request order.",
+            "description": "Selected nodes in canonical source order after duplicate selectors are removed.",
             "type": "array",
             "items": {
               "$ref": "#/$defs/ExcerptSelection"
@@ -7295,7 +7295,8 @@
             "type": "array",
             "items": {
               "$ref": "#/$defs/SearchLineRange"
-            }
+            },
+            "minItems": 1
           },
           "markdown": {
             "description": "Location in the deterministic full Markdown render.",
@@ -8793,7 +8794,8 @@
             "type": "array",
             "items": {
               "$ref": "#/$defs/SearchLineRange"
-            }
+            },
+            "minItems": 1
           },
           "markdown": {
             "description": "Location in the deterministic full Markdown render.",

@@ -210,6 +210,7 @@ pub struct SearchOccurrence {
     /// Location in the deterministic full Markdown render.
     pub markdown: SearchMarkdownRange,
     /// Exact ranges within the anchor-free Markdown lines used for presentation.
+    #[schemars(length(min = 1))]
     pub line_ranges: Vec<SearchLineRange>,
 }
 

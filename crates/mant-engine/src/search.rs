@@ -26,6 +26,8 @@ use owners::{Owner, OwnerIndex};
 const MAX_CONTEXT_LINES: u16 = 100;
 const MAX_SEARCH_LIMIT: u32 = 10_000;
 const MAX_OCCURRENCES_PER_MATCH: usize = 256;
+const MAX_REGEX_COMPILED_BYTES: usize = 4 * 1024 * 1024;
+const MAX_REGEX_DFA_CACHE_BYTES: usize = 8 * 1024 * 1024;
 
 /// Invalid search input or matcher construction.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -85,20 +87,19 @@ pub fn search_query(
     let offset = usize::try_from(request.offset).unwrap_or(usize::MAX);
     let limit = usize::try_from(request.limit).unwrap_or(usize::MAX);
     let mut collector = SearchCollector::new(markdown, &lines, offset, limit);
-    collect_occurrences(&matcher, &searchable, markdown, &owners, &mut collector)?;
+    collect_occurrences(
+        &matcher,
+        &searchable,
+        markdown,
+        &lines,
+        &owners,
+        &mut collector,
+    )?;
 
     let (raw_groups, total) = collector.finish();
     let selected = raw_groups
         .iter()
-        .map(|found| {
-            build_match(
-                found,
-                &searchable.text,
-                markdown,
-                &lines,
-                request.context_lines,
-            )
-        })
+        .map(|found| build_match(found, &searchable, markdown, &lines, request.context_lines))
         .collect::<Vec<_>>();
     let returned = u32::try_from(selected.len()).unwrap_or(u32::MAX);
     let consumed = request.offset.saturating_add(returned);
@@ -137,12 +138,12 @@ fn collect_occurrences(
     matcher: &grep_regex::RegexMatcher,
     searchable: &SearchableText,
     markdown: &str,
+    lines: &LineIndex,
     owners: &OwnerIndex,
     collector: &mut SearchCollector<'_>,
 ) -> Result<(), SearchError> {
     let mut invalid_utf8_match = false;
     let mut invalid_zero_width_match = false;
-    let mut invalid_mapped_range = false;
     matcher
         .find_iter(searchable.text.as_bytes(), |found| {
             if found.start() == found.end() {
@@ -164,8 +165,19 @@ fn collect_occurrences(
                 return false;
             }
             if markdown_start >= markdown_end {
-                invalid_mapped_range = true;
-                return false;
+                // Visible text contains synthetic separators between block
+                // events. They make whitespace searchable but have no
+                // canonical Markdown bytes of their own, so this occurrence
+                // is intentionally absent rather than invalidating the query.
+                return true;
+            }
+            let line_ranges = occurrence_line_ranges(markdown_start..markdown_end, markdown, lines);
+            if line_ranges.is_empty() {
+                // A Markdown-scope matcher can land wholly inside one of the
+                // zero-width source-map anchors. Such internal matches have
+                // no anchor-free presentation and must not become phantom
+                // result rows.
+                return true;
             }
             let owner = owners.owner(markdown_start);
             let end_owner = owners.owner(markdown_end - 1);
@@ -176,21 +188,18 @@ fn collect_occurrences(
                     RawOccurrence {
                         searchable: found.start()..found.end(),
                         markdown: markdown_start..markdown_end,
+                        line_ranges,
                     },
                     owner,
                 );
             }
             true
         })
-        .map_err(|error| SearchError::InvalidPattern(error.to_string()))?;
+        .map_err(matcher_error)?;
     if invalid_utf8_match {
         Err(non_utf8_pattern_error())
     } else if invalid_zero_width_match {
         Err(empty_match_error())
-    } else if invalid_mapped_range {
-        Err(SearchError::InvalidPattern(
-            "pattern produced a range that cannot be mapped to canonical Markdown".to_owned(),
-        ))
     } else {
         Ok(())
     }
@@ -228,6 +237,8 @@ fn build_matcher(request: &SearchQuery) -> Result<grep_regex::RegexMatcher, Sear
     builder
         .fixed_strings(request.syntax == SearchSyntax::Literal)
         .multi_line(true)
+        .size_limit(MAX_REGEX_COMPILED_BYTES)
+        .dfa_size_limit(MAX_REGEX_DFA_CACHE_BYTES)
         .word(request.word);
     match request.case {
         SearchCase::Insensitive => {
@@ -240,13 +251,8 @@ fn build_matcher(request: &SearchQuery) -> Result<grep_regex::RegexMatcher, Sear
             builder.case_smart(true);
         }
     }
-    let matcher = builder
-        .build(&request.pattern)
-        .map_err(|error| SearchError::InvalidPattern(error.to_string()))?;
-    if matcher
-        .is_match(b"")
-        .map_err(|error| SearchError::InvalidPattern(error.to_string()))?
-    {
+    let matcher = builder.build(&request.pattern).map_err(matcher_error)?;
+    if matcher.is_match(b"").map_err(matcher_error)? {
         return Err(empty_match_error());
     }
     Ok(matcher)
@@ -286,9 +292,21 @@ fn non_utf8_pattern_error() -> SearchError {
     )
 }
 
+fn matcher_error(error: impl fmt::Display) -> SearchError {
+    let message = error.to_string();
+    if message.contains("compiled regex exceeds size limit") {
+        SearchError::InvalidPattern(
+            "regular expression exceeds ManT's compiled-size limit".to_owned(),
+        )
+    } else {
+        SearchError::InvalidPattern(message)
+    }
+}
+
 struct RawOccurrence {
     searchable: Range<usize>,
     markdown: Range<usize>,
+    line_ranges: Vec<SearchLineRange>,
 }
 
 struct RawMatchGroup {
@@ -416,7 +434,7 @@ impl RawMatchGroup {
 
 fn build_match(
     found: &RawMatchGroup,
-    searchable: &str,
+    searchable: &SearchableText,
     markdown: &str,
     lines: &LineIndex,
     context_lines: u16,
@@ -453,7 +471,11 @@ fn build_match(
                 let start = lines.position(markdown, occurrence.markdown.start);
                 let end = lines.position(markdown, occurrence.markdown.end);
                 SearchOccurrence {
-                    matched_text: searchable[occurrence.searchable.clone()].to_owned(),
+                    matched_text: if searchable.direct_markdown {
+                        presented_matched_text(occurrence, markdown, lines)
+                    } else {
+                        searchable.text[occurrence.searchable.clone()].to_owned()
+                    },
                     markdown: SearchMarkdownRange {
                         start_byte: u64::try_from(occurrence.markdown.start).unwrap_or(u64::MAX),
                         end_byte: u64::try_from(occurrence.markdown.end).unwrap_or(u64::MAX),
@@ -464,7 +486,7 @@ fn build_match(
                             .unwrap_or(u32::MAX),
                         end_column: u32::try_from(end.column).unwrap_or(u32::MAX),
                     },
-                    line_ranges: occurrence_line_ranges(occurrence, markdown, lines),
+                    line_ranges: occurrence.line_ranges.clone(),
                 }
             })
             .collect(),
@@ -477,21 +499,19 @@ fn build_match(
 }
 
 fn occurrence_line_ranges(
-    occurrence: &RawOccurrence,
+    markdown_range: Range<usize>,
     markdown: &str,
     lines: &LineIndex,
 ) -> Vec<SearchLineRange> {
-    let start = lines
-        .position(markdown, occurrence.markdown.start)
-        .line_index;
-    let end = lines.line_index_at_byte(occurrence.markdown.end.saturating_sub(1));
+    let start = lines.position(markdown, markdown_range.start).line_index;
+    let end = lines.line_index_at_byte(markdown_range.end.saturating_sub(1));
     (start..=end)
         .flat_map(|line_index| {
             let line_start = lines.start(line_index);
             let line = lines.line(markdown, line_index).trim_end();
             let line_end = line_start.saturating_add(line.len());
             let intersection =
-                occurrence.markdown.start.max(line_start)..occurrence.markdown.end.min(line_end);
+                markdown_range.start.max(line_start)..markdown_range.end.min(line_end);
             (intersection.start < intersection.end)
                 .then(|| AnchorStrippedLine::new(line))
                 .into_iter()
@@ -508,6 +528,25 @@ fn occurrence_line_ranges(
                 })
         })
         .collect()
+}
+
+fn presented_matched_text(occurrence: &RawOccurrence, markdown: &str, lines: &LineIndex) -> String {
+    let mut text = String::new();
+    let mut previous_line = None;
+    for range in &occurrence.line_ranges {
+        let line_index = usize::try_from(range.line.saturating_sub(1)).unwrap_or(usize::MAX);
+        if previous_line.is_some_and(|previous| previous != line_index) {
+            text.push('\n');
+        }
+        let line = display_markdown_line(lines.line(markdown, line_index));
+        let start = usize::try_from(range.start_byte).unwrap_or(usize::MAX);
+        let end = usize::try_from(range.end_byte).unwrap_or(usize::MAX);
+        if let Some(fragment) = line.get(start..end) {
+            text.push_str(fragment);
+        }
+        previous_line = Some(line_index);
+    }
+    text
 }
 
 /// Hide `ManT`'s zero-width source-map anchors from human-facing snippets.
@@ -799,7 +838,7 @@ mod tests {
     };
 
     use super::{
-        LineIndex, MAX_OCCURRENCES_PER_MATCH, RawOccurrence, SearchError, display_markdown_line,
+        LineIndex, MAX_OCCURRENCES_PER_MATCH, SearchError, display_markdown_line,
         occurrence_line_ranges, render_addressable_markdown, search_query, validate_search_query,
     };
 
@@ -905,12 +944,7 @@ mod tests {
     fn presented_line_ranges_exclude_trimmed_unicode_trailing_space() {
         let markdown = "zz 日本語   \nnext";
         let lines = LineIndex::new(markdown);
-        let occurrence = RawOccurrence {
-            searchable: 0..0,
-            markdown: 3..15,
-        };
-
-        let ranges = occurrence_line_ranges(&occurrence, markdown, &lines);
+        let ranges = occurrence_line_ranges(3..15, markdown, &lines);
 
         assert_eq!(display_markdown_line(lines.line(markdown, 0)), "zz 日本語");
         assert_eq!(ranges.len(), 1);
@@ -988,6 +1022,57 @@ mod tests {
             assert_eq!(result.total, 1, "pattern {pattern:?}");
             assert_eq!(result.matches[0].outline.node.path(), "1/e1");
         }
+    }
+
+    #[test]
+    fn synthetic_visible_whitespace_occurrences_are_skipped_without_failing_the_query() {
+        for pattern in [r"\n", r"\s", r"\s+", "[[:space:]]"] {
+            let mut request = request(pattern);
+            request.syntax = SearchSyntax::Regex;
+            request.case = SearchCase::Sensitive;
+
+            let result = search_query(&query(), &request).expect("valid whitespace search");
+            assert!(
+                result
+                    .matches
+                    .iter()
+                    .flat_map(|hit| &hit.occurrences)
+                    .all(|occurrence| !occurrence.line_ranges.is_empty()),
+                "pattern {pattern:?} emitted an unpresentable occurrence"
+            );
+        }
+    }
+
+    #[test]
+    fn markdown_anchor_only_matches_do_not_become_phantom_results() {
+        let mut request = request("a id=");
+        request.scope = SearchScope::Markdown;
+        request.case = SearchCase::Sensitive;
+
+        let result = search_query(&query(), &request).expect("search internal anchor text");
+
+        assert_eq!(result.total, 0);
+        assert!(result.matches.is_empty());
+    }
+
+    #[test]
+    fn markdown_matches_crossing_an_anchor_expose_only_presented_text() {
+        let markdown = render_addressable_markdown(&query()).text;
+        let marker = "\"></a>`--acls";
+        assert!(
+            markdown.contains(marker),
+            "fixture anchor shape changed:\n{markdown}"
+        );
+        let mut request = request(marker);
+        request.scope = SearchScope::Markdown;
+        request.case = SearchCase::Sensitive;
+
+        let result = search_query(&query(), &request).expect("search across source-map anchor");
+        let occurrence = &result.matches[0].occurrences[0];
+
+        assert_eq!(occurrence.matched_text, "`--acls");
+        assert!(!occurrence.line_ranges.is_empty());
+        assert!(!result.matches[0].preview.contains("<a id="));
     }
 
     #[test]
@@ -1352,6 +1437,24 @@ Manual needle.
             assert!(message.contains(expected), "{pattern}: {message}");
             assert!(!message.contains("Unicode mode cannot be disabled"));
         }
+    }
+
+    #[test]
+    fn compiled_regex_programs_use_the_project_resource_budget() {
+        let mut oversized = request("((a{100}){100}){100}");
+        oversized.syntax = SearchSyntax::Regex;
+
+        let error = validate_search_query(&oversized).expect_err("reject oversized regex program");
+
+        assert_eq!(
+            error,
+            SearchError::InvalidPattern(
+                "regular expression exceeds ManT's compiled-size limit".to_owned()
+            )
+        );
+        let mut ordinary = request("needle|ordinary");
+        ordinary.syntax = SearchSyntax::Regex;
+        assert_eq!(validate_search_query(&ordinary), Ok(()));
     }
 
     #[test]

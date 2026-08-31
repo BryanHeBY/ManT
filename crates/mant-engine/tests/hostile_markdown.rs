@@ -110,7 +110,10 @@ fn exercise(label: &str, source: &str) {
 
     // A sample taken from the rendered body must always be findable; the
     // leading label header is presentation and owns no search node.
-    let body = addressable
+    // Source-map anchors are intentionally not searchable presentation. Pick
+    // the sample from the anchor-free public Markdown while searching the
+    // canonical addressable projection that contains the same body text.
+    let body = rendered
         .split_once('\n')
         .map_or("", |(_, remainder)| remainder);
     if let Some(word) = first_ascii_word(body) {
