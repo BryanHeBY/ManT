@@ -535,12 +535,40 @@ pub(crate) fn normalize_document_path(document: &str) -> Option<String> {
             Component::Normal(value) => value.to_str().filter(|value| {
                 !value.is_empty()
                     && !value.contains(['/', '\\'])
-                    && !value.chars().any(char::is_control)
+                    && !value.chars().any(is_unsafe_logical_path_character)
             }),
             _ => None,
         })
         .collect::<Option<Vec<_>>>()?;
     (!components.is_empty()).then(|| components.join("/"))
+}
+
+fn is_unsafe_logical_path_character(character: char) -> bool {
+    character.is_control()
+        || matches!(
+            character,
+            '\u{00ad}'
+                | '\u{600}'..='\u{605}'
+                | '\u{61c}'
+                | '\u{6dd}'
+                | '\u{70f}'
+                | '\u{890}'..='\u{891}'
+                | '\u{8e2}'
+                | '\u{180e}'
+                | '\u{200b}'..='\u{200f}'
+                | '\u{202a}'..='\u{202e}'
+                | '\u{2060}'..='\u{2064}'
+                | '\u{2066}'..='\u{206f}'
+                | '\u{feff}'
+                | '\u{fff9}'..='\u{fffb}'
+                | '\u{110bd}'
+                | '\u{110cd}'
+                | '\u{13430}'..='\u{1343f}'
+                | '\u{1bca0}'..='\u{1bca3}'
+                | '\u{1d173}'..='\u{1d17a}'
+                | '\u{e0001}'
+                | '\u{e0020}'..='\u{e007f}'
+        )
 }
 
 fn markdown_document_path(root: &Path, path: &Path) -> Option<String> {
@@ -640,6 +668,16 @@ mod tests {
         );
         assert_eq!(normalize_document_path("docs/back\\slash"), None);
         assert_eq!(normalize_document_path("docs/bad\u{1f}name"), None);
+        for hidden in ['\u{202e}', '\u{200b}', '\u{feff}', '\u{e0020}'] {
+            assert_eq!(
+                normalize_document_path(&format!("docs/trusted{hidden}name")),
+                None
+            );
+        }
+        assert_eq!(
+            normalize_document_path("文档/可信名称"),
+            Some("文档/可信名称".to_owned())
+        );
     }
 
     #[test]

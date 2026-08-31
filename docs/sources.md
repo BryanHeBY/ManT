@@ -95,7 +95,9 @@ suffix.
 Source names use lowercase ASCII letters, digits, `-`, and `_`, beginning with
 a letter or digit. Paths are trimmed, relative, use `/` on every platform,
 cannot contain `.`/`..` components (`path = "."` is the one root shorthand),
-and do not accept glob syntax. A selector
+and do not accept glob syntax. Logical document paths reject control characters
+and invisible Unicode formatting, directional, and tag characters; ordinary
+visible non-ASCII names remain valid. A selector
 matches either one exact path or everything below that
 directory. When `include` is absent or empty, every Markdown file below `path`
 is eligible; `exclude` always wins.
