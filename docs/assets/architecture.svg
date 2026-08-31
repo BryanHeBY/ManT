@@ -60,9 +60,9 @@
     <rect x="75" y="165" width="750" height="310" rx="18" class="engine"/>
   </g>
 
-  <path d="M 160 125 L 160 145 Q 160 155 170 155 L 275 155 Q 285 155 285 165 L 285 215" class="connector"/>
-  <path d="M 450 125 L 450 215" class="connector"/>
-  <path d="M 740 125 L 740 145 Q 740 155 730 155 L 625 155 Q 615 155 615 165 L 615 215" class="connector"/>
+  <path d="M 160 125 L 160 165" class="connector"/>
+  <path d="M 450 125 L 450 165" class="connector"/>
+  <path d="M 740 125 L 740 165" class="connector"/>
 
   <text x="105" y="199" class="engine-title">mant-engine</text>
   <text x="795" y="198" text-anchor="end" class="detail">execution layer</text>
