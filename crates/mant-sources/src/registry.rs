@@ -528,7 +528,23 @@ fn scan_directory_into(
 }
 
 pub(crate) fn normalize_document_path(document: &str) -> Option<String> {
-    let path = Path::new(document.trim());
+    let document = document.trim();
+    if document.starts_with('/') || document.contains('\\') {
+        return None;
+    }
+    let components = document
+        .split('/')
+        .map(|value| {
+            (!value.is_empty()
+                && !matches!(value, "." | "..")
+                && !value.chars().any(is_unsafe_logical_path_character))
+            .then_some(value)
+        })
+        .collect::<Option<Vec<_>>>()?;
+    (!components.is_empty()).then(|| components.join("/"))
+}
+
+pub(crate) fn normalize_relative_document_path(path: &Path) -> Option<String> {
     let components = path
         .components()
         .map(|component| match component {
@@ -543,7 +559,7 @@ pub(crate) fn normalize_document_path(document: &str) -> Option<String> {
     (!components.is_empty()).then(|| components.join("/"))
 }
 
-fn is_unsafe_logical_path_character(character: char) -> bool {
+pub(crate) fn is_unsafe_logical_path_character(character: char) -> bool {
     character.is_control()
         || matches!(
             character,
@@ -576,7 +592,7 @@ fn markdown_document_path(root: &Path, path: &Path) -> Option<String> {
     let relative = path.strip_prefix(root).ok()?;
     let parent = relative.parent().unwrap_or_else(|| Path::new(""));
     let logical = parent.join(path.file_stem()?);
-    let logical = normalize_document_path(logical.to_str()?)?;
+    let logical = normalize_relative_document_path(&logical)?;
     Some(logical)
 }
 
@@ -595,7 +611,8 @@ mod tests {
     use super::super::{ConfiguredSource, SourceConfig, SourceLocation};
     use super::{
         RegisteredDocument, RegisteredDocumentIndex, RegisteredDocumentOrigin,
-        normalize_document_path, scan_directory, source_directory_ready,
+        normalize_document_path, normalize_relative_document_path, scan_directory,
+        source_directory_ready,
     };
 
     fn temporary_root(label: &str) -> PathBuf {
@@ -667,6 +684,13 @@ mod tests {
             Some("docs/tool".to_owned())
         );
         assert_eq!(normalize_document_path("docs/back\\slash"), None);
+        assert_eq!(normalize_document_path("docs//tool"), None);
+        assert_eq!(normalize_document_path("./docs/tool"), None);
+        assert_eq!(normalize_document_path("docs/../tool"), None);
+        assert_eq!(
+            normalize_relative_document_path(&PathBuf::from("docs").join("tool")),
+            Some("docs/tool".to_owned())
+        );
         assert_eq!(normalize_document_path("docs/bad\u{1f}name"), None);
         for hidden in ['\u{202e}', '\u{200b}', '\u{feff}', '\u{e0020}'] {
             assert_eq!(

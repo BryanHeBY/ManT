@@ -281,6 +281,22 @@ fn validate_global_pax(entry: &mut tar::Entry<'_, impl Read>) -> Result<(), Stri
 }
 
 fn normalize_archive_path(path: &Path) -> Result<Option<PathBuf>, String> {
+    let raw = path.to_str().ok_or_else(|| {
+        format!(
+            "archive entry '{}' does not use a UTF-8 path",
+            path.display()
+        )
+    })?;
+    if raw.contains('\\')
+        || raw
+            .chars()
+            .any(crate::registry::is_unsafe_logical_path_character)
+    {
+        return Err(format!(
+            "archive entry '{}' has an unsafe path",
+            path.display()
+        ));
+    }
     let mut normalized = PathBuf::new();
     let mut depth = 0_usize;
     for component in path.components() {
@@ -300,7 +316,7 @@ fn normalize_archive_path(path: &Path) -> Result<Option<PathBuf>, String> {
                 path.display()
             )
         })?;
-        if value.contains(['/', '\\']) || value.chars().any(char::is_control) {
+        if value.contains(['/', '\\']) {
             return Err(format!(
                 "archive entry '{}' has an unsafe path",
                 path.display()

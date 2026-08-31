@@ -22,7 +22,7 @@ use crate::{
     metadata::{
         SourceMetadata, read_source_metadata, source_fingerprint, validate_source_directory,
     },
-    registry::{managed_document_count, normalize_document_path},
+    registry::{managed_document_count, normalize_relative_document_path},
 };
 use prune::discover_orphaned_sources;
 #[cfg(test)]
@@ -354,10 +354,7 @@ fn markdown_logical_path(relative: &Path) -> Result<String, String> {
         .and_then(OsStr::to_str)
         .ok_or_else(|| format!("Markdown filename is not UTF-8: {}", relative.display()))?;
     let path = parent.join(stem);
-    let path = path
-        .to_str()
-        .ok_or_else(|| format!("Markdown path is not UTF-8: {}", relative.display()))?;
-    normalize_document_path(path).ok_or_else(|| {
+    normalize_relative_document_path(&path).ok_or_else(|| {
         format!(
             "Markdown path contains an unsupported component: {}",
             relative.display()
