@@ -139,7 +139,19 @@ fn validate_zip_entry_name(name: &str) -> Result<(), String> {
 }
 
 fn extract_tar(reader: impl Read, destination: &Path) -> Result<(), String> {
-    let mut archive = tar::Archive::new(reader);
+    extract_tar_with_budget(reader, destination, MAX_SOURCE_BYTES)
+}
+
+fn extract_tar_with_budget(
+    reader: impl Read,
+    destination: &Path,
+    stream_limit: u64,
+) -> Result<(), String> {
+    // tar-rs consumes GNU long-name/long-link and local PAX records before it
+    // yields the described entry. Put the aggregate decompressed-byte gate
+    // below the parser so those hidden records and any future parser-owned
+    // metadata cannot allocate or read beyond the source budget.
+    let mut archive = tar::Archive::new(ExpandedArchiveReader::new(reader, stream_limit));
     let entries = archive
         .entries()
         .map_err(|error| format!("could not read tar archive: {error}"))?;
@@ -184,6 +196,51 @@ fn extract_tar(reader: impl Read, destination: &Path) -> Result<(), String> {
         write_archive_file(destination, &path, &mut entry, size, &mut paths)?;
     }
     Ok(())
+}
+
+struct ExpandedArchiveReader<R> {
+    inner: R,
+    remaining: u64,
+    limit: u64,
+}
+
+impl<R> ExpandedArchiveReader<R> {
+    const fn new(inner: R, limit: u64) -> Self {
+        Self {
+            inner,
+            remaining: limit,
+            limit,
+        }
+    }
+}
+
+impl<R: Read> Read for ExpandedArchiveReader<R> {
+    fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
+        if buffer.is_empty() {
+            return Ok(0);
+        }
+        if self.remaining == 0 {
+            let mut probe = [0_u8; 1];
+            return match self.inner.read(&mut probe)? {
+                0 => Ok(0),
+                _ => Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!(
+                        "archive decompressed stream exceeds the {}-byte source limit",
+                        self.limit
+                    ),
+                )),
+            };
+        }
+        let maximum = usize::try_from(self.remaining)
+            .unwrap_or(usize::MAX)
+            .min(buffer.len());
+        let read = self.inner.read(&mut buffer[..maximum])?;
+        self.remaining = self
+            .remaining
+            .saturating_sub(u64::try_from(read).unwrap_or(u64::MAX));
+        Ok(read)
+    }
 }
 
 fn validate_global_pax(entry: &mut tar::Entry<'_, impl Read>) -> Result<(), String> {
@@ -329,7 +386,7 @@ mod tests {
     use tar::{Builder, EntryType, Header};
     use zip::{ZipWriter, write::SimpleFileOptions};
 
-    use super::{extract_archive, write_archive_file};
+    use super::{extract_archive, extract_tar_with_budget, write_archive_file};
 
     fn temp(label: &str) -> PathBuf {
         std::env::temp_dir().join(format!("mant-archive-{label}-{}", std::process::id()))
@@ -484,6 +541,29 @@ mod tests {
         fs::write(&archive, tar_with_global_pax("path", "elsewhere.md")).expect("write archive");
         let error = extract_archive(&archive, &destination).expect_err("reject global path");
         assert!(error.contains("key 'path' is not supported"), "{error}");
+        fs::remove_dir_all(root).expect("remove fixture");
+    }
+
+    #[test]
+    fn tar_parser_owned_metadata_cannot_bypass_the_stream_budget() {
+        let root = temp("tar-metadata-budget");
+        let destination = root.join("tree");
+        fs::create_dir_all(&root).expect("create fixture");
+
+        let long_name = format!("docs/{}.md", "a".repeat(4_096));
+        let mut builder = Builder::new(Vec::new());
+        let mut header = Header::new_gnu();
+        header.set_size(1);
+        header.set_mode(0o644);
+        builder
+            .append_data(&mut header, &long_name, Cursor::new(b"x"))
+            .expect("append long-name entry");
+        let archive = builder.into_inner().expect("finish tar");
+
+        let error = extract_tar_with_budget(Cursor::new(archive), &destination, 1_024)
+            .expect_err("reject parser-owned metadata above the stream budget");
+        assert!(error.contains("decompressed stream exceeds"), "{error}");
+        assert!(!destination.join("docs").exists());
         fs::remove_dir_all(root).expect("remove fixture");
     }
 
