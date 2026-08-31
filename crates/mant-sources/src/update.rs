@@ -19,8 +19,10 @@ use crate::limits::{
     MAX_SOURCE_ENTRIES,
 };
 use crate::{
-    metadata::{SourceMetadata, read_source_metadata, source_fingerprint},
-    registry::managed_document_count,
+    metadata::{
+        SourceMetadata, read_source_metadata, source_fingerprint, validate_source_directory,
+    },
+    registry::{managed_document_count, normalize_document_path},
 };
 use prune::discover_orphaned_sources;
 #[cfg(test)]
@@ -164,9 +166,11 @@ impl<'a> SourceUpdateContext<'a> {
     ) -> Result<Self, String> {
         let target = paths.sources.join(name);
         recover_directory(&target)?;
+        let installed = validate_source_directory(&target)?;
         let fingerprint = source_fingerprint(configured);
-        let metadata = read_source_metadata(&target)
-            .ok()
+        let metadata = installed
+            .then(|| read_source_metadata(&target).ok())
+            .flatten()
             .filter(|metadata| metadata.matches(name, configured, &fingerprint))
             .filter(|metadata| {
                 managed_document_count(&target)
@@ -350,12 +354,15 @@ fn markdown_logical_path(relative: &Path) -> Result<String, String> {
         .and_then(OsStr::to_str)
         .ok_or_else(|| format!("Markdown filename is not UTF-8: {}", relative.display()))?;
     let path = parent.join(stem);
-    let components = path
-        .components()
-        .map(|component| component.as_os_str().to_str())
-        .collect::<Option<Vec<_>>>()
+    let path = path
+        .to_str()
         .ok_or_else(|| format!("Markdown path is not UTF-8: {}", relative.display()))?;
-    Ok(components.join("/"))
+    normalize_document_path(path).ok_or_else(|| {
+        format!(
+            "Markdown path contains an unsupported component: {}",
+            relative.display()
+        )
+    })
 }
 
 fn collect_markdown(
@@ -594,8 +601,8 @@ mod tests {
     use super::{
         ConfiguredSource, DocumentPaths, SourceLocation, SourceMetadata, SourcePruneAction,
         SourceUpdateAction, SourceUpdateContext, UpdateLock, discover_orphaned_sources,
-        install_selected_documents, prune_document_sources_from, recover_directory,
-        source_fingerprint, try_update_one_source,
+        install_selected_documents, markdown_logical_path, prune_document_sources_from,
+        recover_directory, source_fingerprint, try_update_one_source,
     };
     use crate::config::load_source_config_from;
 
@@ -675,6 +682,25 @@ mod tests {
             context.metadata.is_none(),
             "an incomplete installation must force reacquisition"
         );
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn update_rejects_a_linked_installed_source_before_the_unchanged_fast_path() {
+        let root = temp("linked-installed-source");
+        let paths = paths(&root);
+        let configured = source(".");
+        let outside = root.join("outside");
+        write_installed_identity(&outside, "team", 1);
+        fs::create_dir_all(&paths.sources).expect("create source store");
+        std::os::unix::fs::symlink(&outside, paths.sources.join("team"))
+            .expect("link installed source");
+
+        let Err(error) = SourceUpdateContext::prepare(&paths, "team", &configured) else {
+            panic!("linked installed root must not be treated as unchanged");
+        };
+        assert_eq!(error, "source entry is not a regular directory");
         fs::remove_dir_all(root).expect("cleanup");
     }
 
@@ -808,6 +834,34 @@ mod tests {
         assert!(staging.join("one/tool.md").is_file());
         assert!(staging.join("two/tool.markdown").is_file());
         fs::remove_dir_all(root).expect("remove fixture");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn install_rejects_names_that_discovery_cannot_address() {
+        let root = temp("unsupported-logical-name");
+        let checkout = root.join("checkout");
+        let staging = root.join("staging");
+        fs::create_dir_all(&checkout).expect("create checkout");
+        fs::create_dir_all(&staging).expect("create staging");
+        fs::write(checkout.join("back\\slash.md"), "# hidden")
+            .expect("write non-portable Markdown name");
+
+        let error = install_selected_documents(&checkout, &staging, &source("."))
+            .expect_err("install and discovery must share logical-name validation");
+        assert!(error.contains("unsupported component"), "{error}");
+        assert!(staging.read_dir().expect("read staging").next().is_none());
+        fs::remove_dir_all(root).expect("remove fixture");
+    }
+
+    #[test]
+    fn logical_markdown_paths_share_registry_normalization() {
+        assert_eq!(
+            markdown_logical_path(std::path::Path::new("docs/tool.markdown"))
+                .expect("portable logical path"),
+            "docs/tool"
+        );
+        assert!(markdown_logical_path(std::path::Path::new("docs/bad\u{1f}name.md")).is_err());
     }
 
     #[test]

@@ -7,7 +7,9 @@ use serde::Deserialize;
 use crate::{
     ConfiguredSource, DocumentPaths, SOURCE_METADATA_FILE, SourceConfig, SourceConfigError,
     SourceLocation, is_source_name, load_source_config,
-    metadata::{MAX_METADATA_BYTES, read_source_metadata, source_fingerprint},
+    metadata::{
+        MAX_METADATA_BYTES, read_source_metadata, source_fingerprint, validate_source_directory,
+    },
     registry::managed_document_count,
 };
 
@@ -131,27 +133,14 @@ fn inspect_configured_source(
         documents,
         detail,
     };
-    let directory = match fs::symlink_metadata(&target) {
-        Ok(metadata) => metadata,
-        Err(error) if error.kind() == io::ErrorKind::NotFound => {
+    match validate_source_directory(&target) {
+        Ok(false) => {
             return base(SourceInstallationStatus::Missing, None, None, None);
         }
         Err(error) => {
-            return base(
-                SourceInstallationStatus::Invalid,
-                None,
-                None,
-                Some(format!("could not inspect source directory: {error}")),
-            );
+            return base(SourceInstallationStatus::Invalid, None, None, Some(error));
         }
-    };
-    if directory.file_type().is_symlink() || !directory.file_type().is_dir() {
-        return base(
-            SourceInstallationStatus::Invalid,
-            None,
-            None,
-            Some("source entry is not a regular directory".to_owned()),
-        );
+        Ok(true) => {}
     }
     let metadata = match read_source_metadata(&target) {
         Ok(metadata) => metadata,
@@ -261,10 +250,8 @@ pub(crate) fn inspect_installed_identity(path: &Path, name: &str) -> Result<(Str
     if !is_source_name(name) {
         return Err("source directory name is invalid".to_owned());
     }
-    let directory = fs::symlink_metadata(path)
-        .map_err(|error| format!("could not inspect source directory: {error}"))?;
-    if directory.file_type().is_symlink() || !directory.file_type().is_dir() {
-        return Err("source entry is not a regular directory".to_owned());
+    if !validate_source_directory(path)? {
+        return Err("source directory is missing".to_owned());
     }
     let metadata_path = path.join(SOURCE_METADATA_FILE);
     let metadata = fs::symlink_metadata(&metadata_path)

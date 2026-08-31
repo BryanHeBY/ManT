@@ -184,6 +184,9 @@ pub(crate) fn source_fingerprint(source: &ConfiguredSource) -> String {
 }
 
 pub(crate) fn read_source_metadata(directory: &Path) -> Result<SourceMetadata, String> {
+    if !validate_source_directory(directory)? {
+        return Err("source directory is missing".to_owned());
+    }
     let path = directory.join(SOURCE_METADATA_FILE);
     let metadata = fs::symlink_metadata(&path)
         .map_err(|error| format!("could not inspect source metadata: {error}"))?;
@@ -195,4 +198,21 @@ pub(crate) fn read_source_metadata(directory: &Path) -> Result<SourceMetadata, S
     let text = crate::bounded::read_utf8(file, MAX_METADATA_BYTES, "source metadata")
         .map_err(|error| error.to_string())?;
     toml::from_str(&text).map_err(|error| format!("source metadata is invalid: {error}"))
+}
+
+/// Validate the physical root shared by update, discovery, doctor, and prune.
+///
+/// A missing directory is an ordinary uninstalled state. Every present entry
+/// must be a real directory rather than a link or another filesystem object.
+pub(crate) fn validate_source_directory(directory: &Path) -> Result<bool, String> {
+    let metadata = match fs::symlink_metadata(directory) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(false),
+        Err(error) => return Err(format!("could not inspect source directory: {error}")),
+    };
+    let file_type = metadata.file_type();
+    if file_type.is_symlink() || !file_type.is_dir() {
+        return Err("source entry is not a regular directory".to_owned());
+    }
+    Ok(true)
 }

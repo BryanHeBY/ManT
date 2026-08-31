@@ -9,6 +9,7 @@ use std::{
 use super::{
     SOURCE_METADATA_FILE, SourceConfig, SourceConfigError, is_source_name, load_source_config,
 };
+use crate::metadata::validate_source_directory;
 
 const MARKDOWN_EXTENSIONS: [&str; 2] = ["md", "markdown"];
 const MAX_DOCUMENT_DEPTH: usize = 32;
@@ -403,10 +404,7 @@ pub fn list_registered_documents() -> Result<Vec<RegisteredDocument>, SourceConf
 }
 
 fn source_directory_ready(directory: &Path) -> bool {
-    if !fs::symlink_metadata(directory).is_ok_and(|metadata| {
-        let file_type = metadata.file_type();
-        file_type.is_dir() && !file_type.is_symlink()
-    }) {
+    if validate_source_directory(directory) != Ok(true) {
         return false;
     }
     fs::symlink_metadata(directory.join(SOURCE_METADATA_FILE)).is_ok_and(|metadata| {
@@ -529,7 +527,7 @@ fn scan_directory_into(
     Ok(())
 }
 
-fn normalize_document_path(document: &str) -> Option<String> {
+pub(crate) fn normalize_document_path(document: &str) -> Option<String> {
     let path = Path::new(document.trim());
     let components = path
         .components()
@@ -568,8 +566,8 @@ mod tests {
 
     use super::super::{ConfiguredSource, SourceConfig, SourceLocation};
     use super::{
-        RegisteredDocument, RegisteredDocumentIndex, RegisteredDocumentOrigin, scan_directory,
-        source_directory_ready,
+        RegisteredDocument, RegisteredDocumentIndex, RegisteredDocumentOrigin,
+        normalize_document_path, scan_directory, source_directory_ready,
     };
 
     fn temporary_root(label: &str) -> PathBuf {
@@ -632,6 +630,16 @@ mod tests {
             vec!["alpha", "beta", "nested/hidden"]
         );
         fs::remove_dir_all(root).expect("remove fixture");
+    }
+
+    #[test]
+    fn logical_paths_reject_non_portable_components() {
+        assert_eq!(
+            normalize_document_path(" docs/tool "),
+            Some("docs/tool".to_owned())
+        );
+        assert_eq!(normalize_document_path("docs/back\\slash"), None);
+        assert_eq!(normalize_document_path("docs/bad\u{1f}name"), None);
     }
 
     #[test]
