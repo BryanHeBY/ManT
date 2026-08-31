@@ -12,6 +12,10 @@ that crate was not published for that change.
 
 ## Unreleased
 
+No compatibility changes are pending.
+
+## 0.10.0 - 2026-08-31
+
 ### mant-ir 0.10.0
 
 - Add a rebuildable `SemanticIndex` that keeps content definitions independent
@@ -24,8 +28,10 @@ that crate was not published for that change.
   inferring cross-document sets from prose.
 - Extend `OutlinePath` with nested entry coordinates such as `2/e3/e1`.
 - Centralize conservative external-URI and email-address validation, including
-  HTTP authority, host, IPv6 and port structure, and validate source spans
-  attached to producer diagnostics as well as document content.
+  HTTP authority, host, IPv6 and port structure, percent-decoded single-recipient
+  mailto validation, and inverse percent-encoding for typed email targets.
+  Validate source spans attached to producer diagnostics as well as document
+  content.
 
 ### mant-protocol 0.10.0
 
@@ -92,6 +98,12 @@ that crate was not published for that change.
   `!--reloadEnvironment` without treating arbitrary `!name` tokens as options.
 - Reserve explicit mdoc `.Tg` targets before allocating section IDs, and keep
   `.PD 0` as layout rather than using it to merge independent `.TP` entries.
+- Preserve compact man `.TP` alias groups only across verified option-shaped
+  terms, stopping at prose, indentation, and section boundaries so aliases
+  share their description without merging unrelated definitions.
+- Classify mailto recipients only after shared decoding and structural
+  validation, serialize typed email targets through the inverse shared encoder,
+  and keep invalid targets visible but inert in deterministic Markdown.
 - Require `mant-sources ^0.9.2` so the source-health guarantees cannot resolve
   to an older compatible patch through an existing lockfile.
 
@@ -157,6 +169,8 @@ that crate was not published for that change.
   doctor reports count-mismatched caches and update reacquires the source.
 - Use complete-object depth-one clones on Windows, avoiding Git for Windows
   failures while hydrating a blob-filtered no-checkout clone by pathspec.
+
+See the complete [ManT 0.10.0 release notes](https://github.com/BryanHeBY/ManT/releases/tag/v0.10.0).
 
 ## 0.9.1 - 2026-08-24
 
