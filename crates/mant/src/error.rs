@@ -99,8 +99,8 @@ pub(super) fn query_failure(error: QueryError) -> Failure {
         | QueryError::EmptySelector
         | QueryError::InvalidEntryKinds
         | QueryError::EmptyEntry
-        | QueryError::InvalidViewSelector { .. }
-        | QueryError::InvalidSearch(_) => Failure::usage(error),
+        | QueryError::InvalidViewSelector { .. } => Failure::usage(error),
+        QueryError::InvalidSearch(error) => search_failure(&error),
         QueryError::ManualWithTldr { error, topic } => Failure::operational_lines(
             error,
             [format!(
@@ -153,7 +153,7 @@ pub(super) fn query_execution_failure(error: QueryExecutionError) -> Failure {
     match error {
         QueryExecutionError::Query(error) => query_failure(error),
         QueryExecutionError::Projection(error) => projection_failure(error),
-        QueryExecutionError::Search(error) => search_failure(error),
+        QueryExecutionError::Search(error) => search_failure(&error),
     }
 }
 
@@ -166,13 +166,15 @@ pub(super) fn scope_query_failure(error: ScopeQueryError) -> Failure {
         | ScopeQueryError::DocumentLimit
         | ScopeQueryError::TraversalLimitsRequireLinks
         | ScopeQueryError::DocumentSelector(_)
-        | ScopeQueryError::EntrySelector(_)
-        | ScopeQueryError::Search(_) => Failure::usage(error),
+        | ScopeQueryError::EntrySelector(_) => Failure::usage(error),
+        ScopeQueryError::Search(error) => search_failure(&error),
     }
 }
 
-fn search_failure(error: SearchError) -> Failure {
-    Failure::usage(error)
+fn search_failure(error: &SearchError) -> Failure {
+    let message = error.to_string();
+    let mut lines = message.lines();
+    Failure::usage_lines(lines.next().unwrap_or_default(), lines)
 }
 
 pub(super) fn report_failure(error: &Failure, diagnostics: &mut dyn Write, color: bool) -> u8 {
@@ -243,7 +245,9 @@ pub(super) fn report_process_argument_error(error: &clap::Error) -> u8 {
 
 #[cfg(test)]
 mod tests {
-    use super::{Failure, report_failure};
+    use mant_engine::SearchError;
+
+    use super::{Failure, report_failure, search_failure};
 
     #[test]
     fn failure_messages_mask_dynamic_terminal_controls() {
@@ -265,6 +269,20 @@ mod tests {
         assert_eq!(
             String::from_utf8(diagnostics).expect("diagnostics UTF-8"),
             "mant: could not load topic�forged\nhint: retry�forged\n"
+        );
+    }
+
+    #[test]
+    fn regex_diagnostics_keep_trusted_line_structure() {
+        let error = search_failure(&SearchError::InvalidPattern(
+            "regex parse error:\n    (a\n    ^\nerror: unclosed group\u{1b}[31m".to_owned(),
+        ));
+        let mut diagnostics = Vec::new();
+
+        assert_eq!(report_failure(&error, &mut diagnostics, false), 2);
+        assert_eq!(
+            String::from_utf8(diagnostics).expect("diagnostics UTF-8"),
+            "mant: invalid search pattern: regex parse error:\n    (a\n    ^\nerror: unclosed group�[31m\nTry 'mant --help' for more information.\n"
         );
     }
 }
