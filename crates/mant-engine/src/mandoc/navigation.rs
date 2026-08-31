@@ -9,7 +9,10 @@ use std::collections::{HashMap, HashSet};
 use super::reference::{is_manual_reference_name, is_manual_section};
 use super::roff_escape::visible_text;
 use libmandoc_rs::{Node, NodeKind};
-use mant_ir::{Block, Diagnostic, DiagnosticLevel, Inline, LinkTarget, Section};
+use mant_ir::{
+    Block, Diagnostic, DiagnosticLevel, Inline, LinkTarget, Section,
+    visit::{self, VisitMut},
+};
 
 type SectionTargets = HashMap<String, Option<String>>;
 
@@ -49,6 +52,65 @@ pub(super) fn explicit_targets(root: &Node) -> HashSet<String> {
         }
     }
     targets
+}
+
+/// Normalize and uniquely allocate formatter-generated native anchors.
+///
+/// Explicit `.Tg` identities remain source-authored destinations. Other man
+/// and mdoc tags are formatter conveniences, so expose them through the same
+/// document-local slug contract as semantic entries and disambiguate repeated
+/// tags before IR validation observes them.
+pub(super) fn normalize_generated_anchors(
+    blocks: &mut [Block],
+    sections: &mut [Section],
+    explicit_targets: &HashSet<String>,
+) {
+    struct Normalizer<'targets> {
+        explicit_targets: &'targets HashSet<String>,
+        used: HashSet<String>,
+    }
+
+    impl VisitMut for Normalizer<'_> {
+        fn visit_inline_mut(&mut self, inline: &mut Inline) {
+            if let Inline::Anchor { id } = inline {
+                let original = id.to_string();
+                if self.explicit_targets.contains(&original) && self.used.insert(original.clone()) {
+                    return;
+                }
+                let base = crate::definitions::document_id_slug(&original);
+                let mut candidate = base.clone();
+                let mut suffix = 2;
+                while self.used.contains(&candidate) || self.explicit_targets.contains(&candidate) {
+                    candidate = format!("{base}-{suffix}");
+                    suffix += 1;
+                }
+                self.used.insert(candidate.clone());
+                *id = candidate.into();
+                return;
+            }
+            visit::walk_inline_mut(self, inline);
+        }
+    }
+
+    fn reserve_section_ids(sections: &[Section], used: &mut HashSet<String>) {
+        for section in sections {
+            used.insert(section.id.to_string());
+            reserve_section_ids(&section.children, used);
+        }
+    }
+
+    let mut used = HashSet::new();
+    reserve_section_ids(sections, &mut used);
+    let mut normalizer = Normalizer {
+        explicit_targets,
+        used,
+    };
+    for block in blocks {
+        normalizer.visit_block_mut(block);
+    }
+    for section in sections {
+        normalizer.visit_section_mut(section);
+    }
 }
 
 fn flatten_nodes<'a>(node: &'a Node, output: &mut Vec<&'a Node>) {

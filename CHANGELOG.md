@@ -77,6 +77,9 @@ No compatibility changes are pending.
 - Separate inferred native semantic IDs from formatter navigation anchors and
   derive role-qualified IDs from complete recognized names, preventing short
   anchors such as `set` or `re` from shadowing unrelated exact aliases.
+- Normalize formatter-generated man and mdoc anchors through the semantic ID
+  slug rule, allocate repeated tags uniquely against section identities, and
+  reserve all resulting anchors before assigning semantic entry IDs.
 - Make generated entry collision IDs content-addressed and native section IDs
   independent of unrelated siblings, so reordering cannot silently redirect a
   returned ID. Paths remain explicit source-order coordinates.

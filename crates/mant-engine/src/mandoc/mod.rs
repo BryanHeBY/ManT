@@ -142,6 +142,7 @@ fn lower_mandoc_document_with_source(
     let mut sections = blocks::lower_sections(&parsed.root, &mut context);
     let mut root_blocks = blocks::lower_root_blocks(&parsed.root, &context);
     diagnostics.extend(context.take_diagnostics());
+    navigation::normalize_generated_anchors(&mut root_blocks, &mut sections, &explicit_targets);
     let mut retained_targets = explicit_targets.clone();
     retained_targets.extend(crate::definitions::identify_definitions(
         &mut root_blocks,
@@ -647,9 +648,12 @@ fn part_child_groups(node: &Node, kind: libmandoc_rs::NodeKind) -> impl Iterator
 
 #[cfg(test)]
 mod tests {
-    use std::{fmt::Write as _, fs, process};
+    use std::{collections::HashSet, fmt::Write as _, fs, process};
 
-    use mant_ir::{Block, DiagnosticLevel, Inline, SourceFormat};
+    use mant_ir::{
+        Block, DiagnosticLevel, Inline, SourceFormat,
+        visit::{self, Visit},
+    };
 
     use super::{
         LoweringContext, MAX_INLINE_EQUATION_NORMALIZATIONS, Parser, lower_mandoc_document,
@@ -681,6 +685,41 @@ mod tests {
         assert_eq!(context.section_id("FOO"), "foo");
         assert_eq!(context.section_id("FOO"), "foo-2");
         assert_eq!(context.section_id("FOO 2"), "foo-2-2");
+    }
+
+    #[test]
+    fn native_generated_anchors_share_one_normalized_unique_namespace() {
+        struct AnchorCollector(Vec<String>);
+
+        impl<'ir> Visit<'ir> for AnchorCollector {
+            fn visit_inline(&mut self, inline: &'ir Inline) {
+                if let Inline::Anchor { id } = inline {
+                    self.0.push(id.to_string());
+                }
+                visit::walk_inline(self, inline);
+            }
+        }
+
+        let document = parse_manual_bytes(
+            std::path::Path::new("anchors.1"),
+            b".TH ANCHORS 1\n.SH ALPHA\nProse.\n.SH OPTIONS\n.TP\n.B --ALPHA\nFirst.\n.TP\n.B --ALPHA\nSecond.\n",
+        )
+        .expect("lower repeated uppercase definition tags");
+        let mut anchors = AnchorCollector(Vec::new());
+        anchors.visit_document(&document);
+
+        assert!(anchors.0.iter().any(|id| id == "alpha-2"));
+        assert!(anchors.0.iter().any(|id| id == "alpha-3"));
+        assert_eq!(
+            anchors.0.len(),
+            anchors.0.iter().collect::<HashSet<_>>().len()
+        );
+        assert!(document.diagnostics.iter().all(|diagnostic| {
+            !matches!(
+                diagnostic.code.as_deref(),
+                Some("ir.invalid-identity" | "ir.duplicate-identity")
+            )
+        }));
     }
 
     fn find_macro_mut<'a>(

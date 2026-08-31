@@ -42,8 +42,8 @@ pub(crate) fn identify_definitions(
     prepare_blocks(blocks, root_context, &mut preferred_counts);
     prepare_sections(sections, root_context, &mut preferred_counts);
 
-    let mut used = HashSet::new();
-    let mut retained = HashSet::new();
+    let mut used = document_anchor_ids(blocks, sections);
+    let mut retained = used.clone();
     identify_blocks(
         blocks,
         root_context,
@@ -72,6 +72,28 @@ pub(crate) fn identify_definitions(
         );
     }
     retained
+}
+
+fn document_anchor_ids(blocks: &[Block], sections: &[Section]) -> HashSet<String> {
+    struct Collector(HashSet<String>);
+
+    impl<'ir> Visit<'ir> for Collector {
+        fn visit_inline(&mut self, inline: &'ir Inline) {
+            if let Inline::Anchor { id } = inline {
+                self.0.insert(id.to_string());
+            }
+            visit::walk_inline(self, inline);
+        }
+    }
+
+    let mut collector = Collector(HashSet::new());
+    for block in blocks {
+        collector.visit_block(block);
+    }
+    for section in sections {
+        collector.visit_section(section);
+    }
+    collector.0
 }
 
 /// One identified definition together with its semantic coordinates.
@@ -1229,9 +1251,9 @@ fn role_name_slug(role: DefinitionRole, name: &str) -> String {
     if role == DefinitionRole::EnvironmentVariable
         && let Some(body) = environment_variable_body(name)
     {
-        return slug(body);
+        return document_id_slug(body);
     }
-    let slug = slug(name);
+    let slug = document_id_slug(name);
     if slug.is_empty() {
         "entry".to_owned()
     } else {
@@ -1421,7 +1443,12 @@ fn semantic_fingerprint(
         })
 }
 
-fn slug(value: &str) -> String {
+/// Normalize a visible semantic name into a document-local identity base.
+///
+/// Source-specific producers use this same boundary for generated navigation
+/// anchors so validation, entry discovery, and native permalink identities
+/// cannot drift into separate slug dialects.
+pub(crate) fn document_id_slug(value: &str) -> String {
     if value.trim_start_matches(['-', '/']) == "?" {
         return "help".to_owned();
     }

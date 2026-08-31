@@ -709,6 +709,10 @@ The CLI constructs the same contract with repeated `--document`, or with one pos
 A successful runtime result contains useful `document`, `tldr`, or both. The
 CLI permits a tldr-only result only for an explicit `--tldr` invocation; an
 ordinary document query remains a failed lookup and receives a command hint.
+Recoverable parser and IR findings are nested under
+`document.diagnostics`; they are not duplicated as a top-level `QueryBundle`
+field. Focused outline and excerpt projections instead copy their relevant
+findings into their own `diagnostics` field.
 For that explicit lookup, personal embedded quick references precede positive
 source priorities, cached tldr at the built-in priority-zero baseline, and
 non-positive sources. A matching Markdown document without embedded tldr is

@@ -18,6 +18,12 @@ fn keeps_complete_sections_and_semantic_option_outlines() {
     assert_eq!(document.sections.len(), 9);
     assert_eq!(document.meta.manual_section.as_deref(), Some("1"));
     assert_eq!(document.meta.os.as_deref(), Some("TAR"));
+    assert!(document.diagnostics.iter().all(|diagnostic| {
+        !matches!(
+            diagnostic.code.as_deref(),
+            Some("ir.invalid-identity" | "ir.duplicate-identity" | "ir.identity-role-collision")
+        )
+    }));
 
     let query = query_for_document("tar", document);
     let outline = build_outline_with_detail(&query, OutlineDetail::Entries)
