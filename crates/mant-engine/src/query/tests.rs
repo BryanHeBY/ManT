@@ -9,8 +9,9 @@ use mant_ir::{
     Section, SourceFormat, TldrDocument, TldrOrigin,
 };
 use mant_protocol::{
-    DocumentAddress, InputFormat, MAX_DOCUMENT_SELECTOR_CHARS, MAX_SEMANTIC_ENTRY_CHARS,
-    MarkdownOrigin, QueryInput, QueryRequest, QueryView, RequestSchema, ScopeTextError,
+    DocumentAddress, InputFormat, MAX_DOCUMENT_SELECTOR_CHARS, MAX_NODE_SELECTORS,
+    MAX_SEMANTIC_ENTRY_CHARS, MarkdownOrigin, QueryInput, QueryRequest, QueryView, RequestSchema,
+    ScopeTextError,
 };
 use mant_sources::BUILTIN_CONTENT_PRIORITY;
 
@@ -807,6 +808,33 @@ fn every_single_document_selector_obeys_the_shared_native_bound() {
             })
         );
     }
+}
+
+#[test]
+fn focused_projection_enforces_view_bounds_without_a_request_producer() {
+    let query = query_markdown_text("# Demo\n\nBody.\n", None).expect("Markdown query");
+    let oversized = "x".repeat(MAX_SEMANTIC_ENTRY_CHARS + 1);
+    assert_eq!(
+        project_query_view(query.clone(), &QueryView::Explain { entry: oversized }),
+        Err(QueryExecutionError::Query(
+            QueryError::InvalidViewSelector {
+                field: "semantic entry",
+                error: ScopeTextError::TooLong {
+                    maximum: MAX_SEMANTIC_ENTRY_CHARS,
+                },
+            }
+        ))
+    );
+
+    let selectors = (0..=MAX_NODE_SELECTORS)
+        .map(|index| format!("node-{index}").into())
+        .collect();
+    assert_eq!(
+        project_query_view(query, &QueryView::Excerpt { selectors }),
+        Err(QueryExecutionError::Query(QueryError::TooManySelections {
+            maximum: MAX_NODE_SELECTORS,
+        }))
+    );
 }
 
 #[test]

@@ -10,7 +10,7 @@ use serde::{Deserialize, de::DeserializeOwned};
 /// Maximum accepted logical document selector length.
 pub(super) const MAX_DOCUMENT_CHARS: usize = mant_protocol::MAX_DOCUMENT_SELECTOR_CHARS;
 /// Maximum selectors accepted by one focused read.
-pub(super) const MAX_SELECTORS: usize = 16;
+pub(super) const MAX_SELECTORS: usize = mant_protocol::MAX_NODE_SELECTORS;
 /// Default number of catalog rows materialized by discovery.
 pub(super) const DEFAULT_FIND_RESULTS: u32 = 50;
 /// Default number of matching line groups materialized by search.

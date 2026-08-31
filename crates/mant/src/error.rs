@@ -95,6 +95,7 @@ pub(super) fn query_failure(error: QueryError) -> Failure {
         | QueryError::EmptyMarkdownPath
         | QueryError::UnsupportedInputFormat { .. }
         | QueryError::EmptySelection
+        | QueryError::TooManySelections { .. }
         | QueryError::EmptySelector
         | QueryError::InvalidEntryKinds
         | QueryError::EmptyEntry

@@ -12,9 +12,9 @@ use std::{
 use mant_ir::{Document, DocumentAddress, MarkdownOrigin, ResolvedContent, TldrDocument};
 use mant_protocol::{
     CatalogQuery, DocumentCatalog, EntryProjection, InputFormat, MAX_DOCUMENT_SELECTOR_CHARS,
-    MAX_SEMANTIC_ENTRY_CHARS, MAX_SOURCE_SELECTOR_CHARS, QueryExcerpt, QueryInput, QueryOutline,
-    QueryRequest, QuerySearch, QueryView, ScopeTextError, SearchCase, SearchQuery, SearchScope,
-    SearchSyntax, validate_scope_text,
+    MAX_NODE_SELECTORS, MAX_SEMANTIC_ENTRY_CHARS, MAX_SOURCE_SELECTOR_CHARS, QueryExcerpt,
+    QueryInput, QueryOutline, QueryRequest, QuerySearch, QueryView, ScopeTextError, SearchCase,
+    SearchQuery, SearchScope, SearchSyntax, validate_scope_text,
 };
 use mant_sources::{RegisteredDocumentIndex, RegisteredDocumentOrigin, SourceConfigError};
 
@@ -65,6 +65,11 @@ pub enum QueryError {
     },
     /// Excerpt projection was requested without selectors.
     EmptySelection,
+    /// Excerpt projection exceeded the closed selector-count bound.
+    TooManySelections {
+        /// Maximum selectors accepted by one focused request.
+        maximum: usize,
+    },
     /// An excerpt selector was empty.
     EmptySelector,
     /// A role-filtered outline contained no kinds or exceeded the closed kind family.
@@ -253,6 +258,12 @@ impl fmt::Display for QueryError {
                 "could not infer the input format for '{path}'; use --input-format markdown or roff"
             ),
             Self::EmptySelection => formatter.write_str("at least one outline node is required"),
+            Self::TooManySelections { maximum } => {
+                write!(
+                    formatter,
+                    "outline nodes must not contain more than {maximum} values"
+                )
+            }
             Self::EmptySelector => formatter.write_str("outline node must not be empty"),
             Self::InvalidEntryKinds => {
                 formatter.write_str("outline entry kinds must contain between 1 and 9 values")
@@ -312,6 +323,7 @@ impl Error for QueryError {
             | Self::EmptyMarkdownPath
             | Self::UnsupportedInputFormat { .. }
             | Self::EmptySelection
+            | Self::TooManySelections { .. }
             | Self::EmptySelector
             | Self::InvalidEntryKinds
             | Self::EmptyEntry
@@ -432,6 +444,7 @@ pub fn project_query_view(
     query: ResolvedContent,
     view: &QueryView,
 ) -> Result<QueryViewResult, QueryExecutionError> {
+    validate_query_view(view).map_err(QueryExecutionError::Query)?;
     match view {
         QueryView::Full {} => Ok(QueryViewResult::Full(Box::new(query))),
         QueryView::Outline { entries, root } => {
@@ -585,6 +598,11 @@ fn validate_query_view(view: &QueryView) -> Result<(), QueryError> {
         QueryView::Excerpt { selectors } => {
             if selectors.is_empty() {
                 return Err(QueryError::EmptySelection);
+            }
+            if selectors.len() > MAX_NODE_SELECTORS {
+                return Err(QueryError::TooManySelections {
+                    maximum: MAX_NODE_SELECTORS,
+                });
             }
             for selector in selectors {
                 validate_scope_text(selector, MAX_SEMANTIC_ENTRY_CHARS).map_err(|error| {

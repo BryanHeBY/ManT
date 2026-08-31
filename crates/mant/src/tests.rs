@@ -623,6 +623,8 @@ fn malformed_or_extended_requests_fail_before_querying_the_host() {
             br#"{"schema":"mant.request/v0.10","input":{"kind":"document","selector":"git"},"view":{"kind":"full"},"futureField":true}"#.as_slice(),
             br#"{"schema":"mant.request/v0.10","input":{"kind":"document","selector":"   "},"view":{"kind":"full"}}"#.as_slice(),
             br#"{"schema":"mant.request/v0.10","input":{"kind":"document","selector":"git"},"view":{"kind":"excerpt","nodes":[]}}"#.as_slice(),
+            br#"{"schema":"mant.request/v0.10","input":{"kind":"document","selector":"git"},"view":{"kind":"excerpt","selectors":[]}}"#.as_slice(),
+            br#"{"schema":"mant.request/v0.10","input":{"kind":"document","selector":"git"},"view":{"kind":"excerpt","selectors":["1","2","3","4","5","6","7","8","9","10","11","12","13","14","15","16","17"]}}"#.as_slice(),
             br#"{"schema":"mant.request/v0.10","input":{"kind":"document","selector":"git"},"view":{"kind":"outline","root":"   "}}"#.as_slice(),
             br#"{"schema":"mant.request/v0.10","input":{"kind":"document","selector":"git"},"view":{"kind":"outline","entries":{"kind":"kinds","kinds":[]}}}"#.as_slice(),
             br#"{"schema":"mant.request/v0.10","input":{"kind":"document","selector":"git"},"view":{"kind":"search","pattern":"","limit":10}}"#.as_slice(),

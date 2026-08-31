@@ -11,6 +11,9 @@ use crate::{
     SearchCase, SearchScope, SearchSyntax, default_search_limit,
 };
 
+/// Maximum outline selectors accepted by one focused read request.
+pub const MAX_NODE_SELECTORS: usize = 16;
+
 /// Exact schema marker for a complete `ManT` query result.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub enum QuerySchema {
@@ -107,7 +110,7 @@ pub enum QueryView {
     /// Return content selected by one or more node paths, IDs, or aliases.
     Excerpt {
         /// Ordered selectors resolved by the engine.
-        #[schemars(length(min = 1, max = 16))]
+        #[schemars(length(min = 1, max = MAX_NODE_SELECTORS))]
         selectors: Vec<NodeSelector>,
     },
     /// Resolve exactly one semantic entry and return its complete description.

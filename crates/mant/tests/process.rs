@@ -213,6 +213,41 @@ fn every_cli_explain_surface_rejects_oversized_entries_before_lookup() {
         );
     }
 
+    let mut command = Command::new(executable());
+    configure_registered_documents(&mut command, &root);
+    let mut child = command
+        .args([
+            "--input",
+            "-",
+            "--input-format",
+            "markdown",
+            "--explain",
+            entry.as_str(),
+        ])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("start stdin query");
+    child
+        .stdin
+        .take()
+        .expect("stdin pipe")
+        .write_all(b"# Demo\n\nBody.\n")
+        .expect("write Markdown stdin");
+    let output = child.wait_with_output().expect("finish stdin query");
+    assert_eq!(output.status.code(), Some(2));
+    assert!(output.stdout.is_empty());
+    let error = String::from_utf8(output.stderr).expect("UTF-8 diagnostic");
+    assert!(
+        error.contains("semantic entry must not exceed 512 Unicode scalar values"),
+        "{error}"
+    );
+    assert!(
+        !error.contains(&entry),
+        "oversized input must not be echoed"
+    );
+
     fs::remove_dir_all(root).expect("remove oversized selector fixture");
 }
 
