@@ -78,7 +78,7 @@ fn stdio_mode_exposes_compact_text_first_document_tools() {
 }
 
 #[test]
-fn oversized_request_lines_are_fatal_and_keep_stderr_silent() {
+fn invalid_request_lines_return_bounded_errors_and_the_session_recovers() {
     let mut child = Command::new(env!("CARGO_BIN_EXE_mant"))
         .arg("--mcp")
         .stdin(Stdio::piped())
@@ -87,22 +87,51 @@ fn oversized_request_lines_are_fatal_and_keep_stderr_silent() {
         .spawn()
         .expect("start mant MCP server");
     let mut input = child.stdin.take().expect("MCP stdin");
-    input
-        .write_all(&vec![b'x'; 256 * 1024 + 1])
-        .expect("write oversized MCP line");
+    let output = child.stdout.take().expect("MCP stdout");
+    let diagnostics = child.stderr.take().expect("MCP stderr");
+    initialize(&mut input);
+    input.flush().expect("flush initialization");
+    let mut lines = BufReader::new(output).lines();
+    let initialization = parse_reply(lines.next().expect("initialization reply"));
+    assert_eq!(initialization["id"], 1);
+
+    writeln!(
+        input,
+        "{{\"jsonrpc\":\"2.0\",\"id\":10,\"method\":\"tools/list\",\"padding\":\"{}\"}}",
+        "x".repeat(256 * 1024)
+    )
+    .expect("write oversized line");
+    let deep = "[".repeat(130) + "0" + &"]".repeat(130);
+    writeln!(
+        input,
+        "{{\"jsonrpc\":\"2.0\",\"id\":11,\"method\":\"tools/call\",\"params\":{deep}}}"
+    )
+    .expect("write deeply nested line");
+    let hostile_field = format!("\u{1b}[31m\u{009b}BEGIN{}", "A".repeat(40_000));
+    call_tool(&mut input, 12, "mant_find", &json!({ hostile_field: true }));
+    request_tool_list(&mut input);
+    input.flush().expect("flush recovery requests");
     drop(input);
 
-    let output = child.wait_with_output().expect("wait for MCP failure");
-    assert_eq!(
-        output.status.code(),
-        Some(1),
-        "unexpected status: {output:?}"
-    );
+    let replies = lines.map(parse_reply).collect::<Vec<_>>();
+    let status = child.wait().expect("wait for MCP shutdown");
+    assert!(status.success(), "recoverable framing errors: {status}");
+    assert_eq!(reply(&replies, 10)["error"]["code"], -32600);
+    assert_eq!(reply(&replies, 11)["error"]["code"], -32600);
+    assert!(reply(&replies, 2)["result"]["tools"].is_array());
+
+    let deserialization = result_text(reply(&replies, 12));
+    assert!(!deserialization.contains('\u{1b}'));
+    assert!(!deserialization.contains('\u{009b}'));
+    assert!(deserialization.chars().count() <= 32_768);
+    let diagnostics = BufReader::new(diagnostics)
+        .lines()
+        .collect::<Result<Vec<_>, _>>()
+        .expect("read MCP stderr");
     assert!(
-        output.stdout.is_empty(),
-        "fatal input emitted protocol data"
+        diagnostics.is_empty(),
+        "unexpected MCP stderr: {diagnostics:?}"
     );
-    assert!(output.stderr.is_empty(), "fatal input emitted stderr noise");
 }
 
 fn request_document_tools(input: &mut impl Write) {

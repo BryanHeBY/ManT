@@ -21,8 +21,8 @@ use super::{
     CLI_PROTOCOL_VERSION, CatalogQuery, CliHost, DocumentAddress, DocumentCatalog, Failure,
     MarkdownOrigin, QueryPolicy, TerminalCapabilities, TerminalKind,
     arguments::{self, ColorMode, Command, QueryFormat, QueryPresentation},
-    request_for_address, resolve_process_presentation, run_command, run_with_host,
-    should_page_catalog,
+    read_native_request, request_for_address, resolve_process_presentation, run_command,
+    run_with_host, should_page_catalog,
 };
 
 struct FakeHost {
@@ -1151,4 +1151,21 @@ fn generated_schemas_are_json_only_and_side_effect_free() {
     assert!(diagnostics.is_empty());
     assert_eq!(host.query_calls.get(), 0);
     assert_eq!(host.update_calls.get(), 0);
+}
+
+#[test]
+fn deep_generated_responses_reach_the_top_level_schema_diagnostic() {
+    let input = format!(
+        "{{\"schema\":\"mant.query/v0.10\",\"result\":{}}}",
+        "[".repeat(140) + "0" + &"]".repeat(140)
+    );
+    let Err(error) = read_native_request(&mut input.as_bytes()) else {
+        panic!("a response schema must not be accepted as a request");
+    };
+
+    assert!(
+        error
+            .into_message()
+            .contains("unsupported request schema 'mant.query/v0.10'"),
+    );
 }

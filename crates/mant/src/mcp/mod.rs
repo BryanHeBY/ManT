@@ -215,10 +215,9 @@ impl ServerHandler for MantMcpServer {
 
 #[cfg(test)]
 mod tests {
-    use std::{io, path::PathBuf};
+    use std::path::PathBuf;
 
     use serde_json::json;
-    use tokio::io::AsyncReadExt;
 
     use super::{MCP_INSTRUCTIONS, MantMcpServer, params::*, service::query_error_for_mcp};
 
@@ -623,63 +622,5 @@ mod tests {
         assert!(rendered.contains("appears in outline node 1 (Invocation)"));
         assert!(rendered.contains("call mant_search"));
         assert!(!rendered.contains("--search"));
-    }
-
-    #[tokio::test]
-    async fn line_bounded_reader_passes_and_resets_valid_lines() {
-        let (mut writer, reader) = tokio::io::duplex(64);
-        tokio::spawn(async move {
-            tokio::io::AsyncWriteExt::write_all(&mut writer, b"1234\n5678\n")
-                .await
-                .expect("write lines");
-        });
-        let mut bounded = super::transport::LineBoundedReader::new(reader, 4);
-        let mut output = Vec::new();
-        bounded
-            .read_to_end(&mut output)
-            .await
-            .expect("bounded read");
-        assert_eq!(output, b"1234\n5678\n");
-    }
-
-    #[tokio::test]
-    async fn line_bounded_reader_rejects_an_oversized_line() {
-        let (mut writer, reader) = tokio::io::duplex(64);
-        tokio::spawn(async move {
-            tokio::io::AsyncWriteExt::write_all(&mut writer, b"12345")
-                .await
-                .expect("write line");
-        });
-        let mut bounded = super::transport::LineBoundedReader::new(reader, 4);
-        let mut output = Vec::new();
-        let error = bounded
-            .read_to_end(&mut output)
-            .await
-            .expect_err("oversized line");
-        assert_eq!(error.kind(), io::ErrorKind::InvalidData);
-    }
-
-    #[tokio::test]
-    async fn line_bounded_reader_rejects_an_oversized_completed_line() {
-        let reader = std::io::Cursor::new(b"12345\n".to_vec());
-        let mut bounded = super::transport::LineBoundedReader::new(reader, 4);
-        let mut output = Vec::new();
-        let error = bounded
-            .read_to_end(&mut output)
-            .await
-            .expect_err("oversized completed line");
-        assert_eq!(error.kind(), io::ErrorKind::InvalidData);
-    }
-
-    #[tokio::test]
-    async fn line_bounded_reader_rejects_an_oversized_line_before_a_valid_line() {
-        let reader = std::io::Cursor::new(b"12345\nok\n".to_vec());
-        let mut bounded = super::transport::LineBoundedReader::new(reader, 4);
-        let mut output = Vec::new();
-        let error = bounded
-            .read_to_end(&mut output)
-            .await
-            .expect_err("oversized line must not be hidden by a later newline");
-        assert_eq!(error.kind(), io::ErrorKind::InvalidData);
     }
 }

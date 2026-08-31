@@ -149,6 +149,8 @@ promised capability exits with status `1`.
 search over stdio JSON-RPC. Its five tools return bounded plain text or
 `CommonMark` rather than serializing full AST envelopes. MCP stdout contains
 protocol messages only; use CLI JSON output to inspect lowering diagnostics.
+Malformed, excessively nested, and oversized input lines receive bounded
+errors without ending the session once the offending newline has been drained.
 Every successful tool result begins with a `mant-page` header reporting the
 Unicode-scalar character interval and full canonical body size. Clients select
 a bounded `maxChars` budget and resume statelessly with `startChar`; semantic

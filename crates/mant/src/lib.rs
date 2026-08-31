@@ -6,6 +6,7 @@ mod clipboard;
 mod doctor;
 mod error;
 mod external;
+mod json_boundary;
 mod mcp;
 mod presentation;
 mod terminal;
@@ -898,8 +899,22 @@ enum NativeRequest {
 
 fn read_native_request(input: &mut dyn Read) -> Result<NativeRequest, Failure> {
     let request = read_utf8_input(input, MAX_REQUEST_BYTES, "request JSON")?;
-    let value = serde_json::from_str::<serde_json::Value>(&request)
-        .map_err(|error| Failure::usage(format!("invalid request JSON: {error}")))?;
+    let value = match serde_json::from_str::<serde_json::Value>(&request) {
+        Ok(value) => value,
+        Err(error) if error.to_string().contains("recursion limit exceeded") => {
+            if let Some(schema) = json_boundary::top_level_string(request.as_bytes(), "schema")
+                && !matches!(schema.as_str(), RequestSchema::ID | ScopeRequestSchema::ID)
+            {
+                return Err(Failure::usage(format!(
+                    "unsupported request schema '{schema}'; expected '{}' or '{}'",
+                    RequestSchema::ID,
+                    ScopeRequestSchema::ID
+                )));
+            }
+            return Err(Failure::usage(format!("invalid request JSON: {error}")));
+        }
+        Err(error) => return Err(Failure::usage(format!("invalid request JSON: {error}"))),
+    };
     match value.get("schema").and_then(serde_json::Value::as_str) {
         Some(RequestSchema::ID) => serde_json::from_value(value)
             .map(NativeRequest::Query)

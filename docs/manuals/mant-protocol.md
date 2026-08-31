@@ -1220,15 +1220,18 @@ input and output. It is a compact agent presentation over the same
 does not introduce a separate document model.
 
 The server uses JSON-RPC 2.0 newline-delimited MCP stdio messages. One input
-line is limited to 256 KiB. Standard output is exclusively MCP traffic and
-standard error is deliberately silent. Successful calls return one bounded
-text content block; they do not duplicate the result as `structuredContent`,
-publish an `outputSchema`, expose AST nodes, or include ordinary lowering
-diagnostics. Tool failures use MCP error results and fatal transport failures
-use a non-zero process status. There is no HTTP listener and there are no
-mutation tools. Each call reads the local files visible at that time; MCP does
-not invoke Git or HTTP, update sources, or promise one fixed snapshot across
-calls.
+line is limited to 256 KiB. A malformed, excessively nested, or oversized line
+receives a bounded JSON-RPC error when its top-level request ID is recoverable;
+an oversized line is drained through its newline and later requests remain
+usable. Standard output is exclusively MCP traffic and standard error is
+deliberately silent. Successful calls return one bounded text content block;
+they do not duplicate the result as `structuredContent`, publish an
+`outputSchema`, expose AST nodes, or include ordinary lowering diagnostics.
+Tool and parameter failures are sanitized and bounded before they cross the
+transport. Only an unrecoverable transport failure ends the session with a
+non-zero process status. There is no HTTP listener and there are no mutation
+tools. Each call reads the local files visible at that time; MCP does not invoke
+Git or HTTP, update sources, or promise one fixed snapshot across calls.
 
 MCP protocol versions are negotiated by the standard `initialize` exchange.
 With the current runtime, a client requesting `2025-11-25` receives:
