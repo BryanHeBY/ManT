@@ -87,17 +87,22 @@ pub(super) fn lower_man_definition(
             || visible_definition_head(node)
                 .last()
                 .is_some_and(ends_with_line_continuation));
-    let merge = if macro_name == Some("IP") || macro_name == Some("TQ") {
-        DefinitionMerge::PendingTail
-    } else if closes_compact_group {
-        alias_state
-            .compact_start()
-            .map_or(DefinitionMerge::None, DefinitionMerge::From)
-    } else if alias_state.is_explicit_continuation() {
-        DefinitionMerge::PendingTail
-    } else {
-        DefinitionMerge::None
-    };
+    let previous_location = last_definition_location(output, indent_columns);
+    let merge = definition_merge(
+        macro_name,
+        closes_compact_group,
+        *alias_state,
+        previous_location,
+    );
+    warn_unproven_alias_boundary(
+        node,
+        context,
+        output,
+        indent_columns,
+        macro_name,
+        description_empty,
+        merge,
+    );
     if node.macro_name.as_deref() == Some("IP")
         && item.terms.is_empty()
         && append_ip_continuation(output, &mut item, indent_columns, spacing_before)
@@ -122,27 +127,28 @@ pub(super) fn lower_man_definition(
             max_width,
             merge,
         );
-        *alias_state = if opens_compact_group {
-            ManAliasState::CompactRun(location)
-        } else if explicit_continuation {
-            match *alias_state {
-                ManAliasState::CompactRun(start) => ManAliasState::CompactRun(start),
-                ManAliasState::None | ManAliasState::ExplicitContinuation => {
-                    ManAliasState::ExplicitContinuation
-                }
-            }
-        } else if matches!(merge, DefinitionMerge::None) && description_empty {
-            *alias_state
-        } else {
-            ManAliasState::None
-        };
+        transition_alias_state(
+            alias_state,
+            AliasTransition {
+                macro_name,
+                description_empty,
+                opens_compact_group,
+                explicit_continuation,
+                previous_location,
+                merge,
+                location,
+                spacing_before,
+                leading_head_distance,
+                leading_body_distance,
+            },
+        );
     }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) enum ManAliasState {
     None,
-    ExplicitContinuation,
+    ExplicitContinuation(DefinitionLocation),
     CompactRun(DefinitionLocation),
 }
 
@@ -150,12 +156,15 @@ impl ManAliasState {
     const fn compact_start(self) -> Option<DefinitionLocation> {
         match self {
             Self::CompactRun(location) => Some(location),
-            Self::None | Self::ExplicitContinuation => None,
+            Self::None | Self::ExplicitContinuation(_) => None,
         }
     }
 
-    const fn is_explicit_continuation(self) -> bool {
-        matches!(self, Self::ExplicitContinuation)
+    const fn explicit_start(self) -> Option<DefinitionLocation> {
+        match self {
+            Self::ExplicitContinuation(location) => Some(location),
+            Self::None | Self::CompactRun(_) => None,
+        }
     }
 }
 
@@ -175,8 +184,137 @@ pub(super) struct DefinitionLocation {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum DefinitionMerge {
     None,
-    PendingTail,
     From(DefinitionLocation),
+}
+
+#[derive(Clone, Copy)]
+struct AliasTransition<'a> {
+    macro_name: Option<&'a str>,
+    description_empty: bool,
+    opens_compact_group: bool,
+    explicit_continuation: bool,
+    previous_location: Option<DefinitionLocation>,
+    merge: DefinitionMerge,
+    location: DefinitionLocation,
+    spacing_before: u16,
+    leading_head_distance: Option<u16>,
+    leading_body_distance: Option<u16>,
+}
+
+fn transition_alias_state(alias_state: &mut ManAliasState, transition: AliasTransition<'_>) {
+    let AliasTransition {
+        macro_name,
+        description_empty,
+        opens_compact_group,
+        explicit_continuation,
+        previous_location,
+        merge,
+        location,
+        spacing_before,
+        leading_head_distance,
+        leading_body_distance,
+    } = transition;
+    *alias_state = if opens_compact_group
+        || (macro_name == Some("IP")
+            && description_empty
+            && (spacing_before == 0
+                || leading_head_distance == Some(0)
+                || leading_body_distance == Some(0)))
+    {
+        match *alias_state {
+            ManAliasState::CompactRun(start) => ManAliasState::CompactRun(start),
+            ManAliasState::None | ManAliasState::ExplicitContinuation(_) => {
+                ManAliasState::CompactRun(location)
+            }
+        }
+    } else if explicit_continuation {
+        match *alias_state {
+            ManAliasState::CompactRun(start) => ManAliasState::CompactRun(start),
+            ManAliasState::ExplicitContinuation(start) => {
+                ManAliasState::ExplicitContinuation(start)
+            }
+            ManAliasState::None if macro_name == Some("TQ") => previous_location.map_or(
+                ManAliasState::ExplicitContinuation(location),
+                ManAliasState::ExplicitContinuation,
+            ),
+            ManAliasState::None => ManAliasState::ExplicitContinuation(location),
+        }
+    } else if matches!(merge, DefinitionMerge::None) && description_empty {
+        *alias_state
+    } else {
+        ManAliasState::None
+    };
+}
+
+fn definition_merge(
+    macro_name: Option<&str>,
+    closes_compact_group: bool,
+    alias_state: ManAliasState,
+    previous_location: Option<DefinitionLocation>,
+) -> DefinitionMerge {
+    let start = if macro_name == Some("TQ") {
+        alias_state
+            .explicit_start()
+            .or_else(|| alias_state.compact_start())
+            .or(previous_location)
+    } else if closes_compact_group {
+        alias_state.compact_start()
+    } else if let Some(start) = alias_state.explicit_start() {
+        Some(start)
+    } else if macro_name == Some("IP") {
+        alias_state.compact_start()
+    } else {
+        None
+    };
+    start.map_or(DefinitionMerge::None, DefinitionMerge::From)
+}
+
+fn warn_unproven_alias_boundary(
+    node: &Node,
+    context: &LoweringContext<'_>,
+    output: &[Block],
+    indent_columns: u16,
+    macro_name: Option<&str>,
+    description_empty: bool,
+    merge: DefinitionMerge,
+) {
+    if !description_empty
+        && matches!(macro_name, Some("IP" | "TQ"))
+        && pending_definition_start(output, indent_columns).is_some_and(
+            |pending| !matches!(merge, DefinitionMerge::From(start) if start == pending),
+        )
+    {
+        context.warn_definition_alias_boundary(node);
+    }
+}
+
+fn last_definition_location(output: &[Block], indent_columns: u16) -> Option<DefinitionLocation> {
+    let block = output.len().checked_sub(1)?;
+    let Block::DefinitionList { items, .. } = output
+        .last()
+        .filter(|candidate| block_indent(candidate) == Some(indent_columns))?
+    else {
+        return None;
+    };
+    Some(DefinitionLocation {
+        block,
+        item: items.len().checked_sub(1)?,
+    })
+}
+
+fn pending_definition_start(output: &[Block], indent_columns: u16) -> Option<DefinitionLocation> {
+    let block = output.len().checked_sub(1)?;
+    let Block::DefinitionList { items, .. } = output
+        .last()
+        .filter(|candidate| block_indent(candidate) == Some(indent_columns))?
+    else {
+        return None;
+    };
+    let item = items
+        .iter()
+        .rposition(|previous| !previous.description.is_empty())
+        .map_or(0, |index| index + 1);
+    (item < items.len()).then_some(DefinitionLocation { block, item })
 }
 
 fn leading_paragraph_distance(nodes: &[Node]) -> Option<u16> {
@@ -610,12 +748,6 @@ fn append_definition(
     {
         if !item.description.is_empty() {
             let first_pending = match merge {
-                DefinitionMerge::PendingTail => Some(
-                    items
-                        .iter()
-                        .rposition(|previous| !previous.description.is_empty())
-                        .map_or(0, |index| index + 1),
-                ),
                 DefinitionMerge::From(location)
                     if location.block == block_index
                         && location.item < items.len()
@@ -628,9 +760,10 @@ fn append_definition(
                 DefinitionMerge::None | DefinitionMerge::From(_) => None,
             };
             if let Some(first_pending) = first_pending {
-                for pending in items.drain(first_pending..) {
-                    item.terms.splice(0..0, pending.terms);
-                }
+                let pending_terms = items
+                    .drain(first_pending..)
+                    .flat_map(|pending| pending.terms);
+                item.terms.splice(0..0, pending_terms);
                 // Source-proven `.TQ`, `\c`, and bounded compact aliases are
                 // collected as pending terms. Recompute their combined layout.
                 item.inline_term = terms_fit_inline(&item.terms, max_term_width);

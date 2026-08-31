@@ -431,6 +431,15 @@ impl<'a> LoweringContext<'a> {
         });
     }
 
+    fn warn_definition_alias_boundary(&self, node: &Node) {
+        self.diagnostics.borrow_mut().push(Diagnostic {
+            level: DiagnosticLevel::Warning,
+            code: Some("manual.definition-alias-boundary".to_owned()),
+            message: "unlabelled definition heads were kept separate because this macro does not prove that they share one description".to_owned(),
+            source: source_span(node),
+        });
+    }
+
     fn warn_unhandled_table_text_block(&self, node: &Node) {
         self.diagnostics.borrow_mut().push(Diagnostic {
             level: DiagnosticLevel::Warning,
@@ -1756,12 +1765,84 @@ The next line.\n",
                 .iter()
                 .map(|term| inline_text(term))
                 .collect::<Vec<_>>(),
-            ["-a", "--alpha", "--ALPHA"]
+            ["--alpha", "-a", "--ALPHA"]
         );
         assert_eq!(
             items[0].identity.as_ref().expect("option identity").names,
-            ["-a", "--alpha", "--ALPHA"]
+            ["--alpha", "-a", "--ALPHA"]
         );
+    }
+
+    #[test]
+    fn ip_does_not_absorb_unproven_definition_heads() {
+        let path = temporary_source(
+            "bounded-ip-aliases",
+            ".TH IP-BOUNDARY 7\n\
+             .SH OPTIONS\n\
+             .TP\n\
+             -a\n\
+             .TP\n\
+             -b\n\
+             .TP\n\
+             -c\n\
+             .IP -d\n\
+             Description only for d.\n",
+        );
+
+        let document = parse_manual_source(&path).expect("lower bounded IP definitions");
+        fs::remove_file(path).expect("remove temporary roff fixture");
+        let [Block::DefinitionList { items, .. }] = document.sections[0].blocks.as_slice() else {
+            panic!("expected one definition list");
+        };
+        assert_eq!(items.len(), 4);
+        assert_eq!(
+            items
+                .iter()
+                .map(|item| inline_text(&item.terms[0]))
+                .collect::<Vec<_>>(),
+            ["-a", "-b", "-c", "-d"]
+        );
+        assert!(items[..3].iter().all(|item| item.description.is_empty()));
+        assert!(!items[3].description.is_empty());
+        assert!(document.diagnostics.iter().any(|diagnostic| {
+            diagnostic.code.as_deref() == Some("manual.definition-alias-boundary")
+        }));
+    }
+
+    #[test]
+    fn tq_continuation_starts_at_the_immediately_preceding_head() {
+        let path = temporary_source(
+            "bounded-tq-aliases",
+            ".TH TQ-BOUNDARY 7\n\
+             .SH OPTIONS\n\
+             .TP\n\
+             -a\n\
+             .TP\n\
+             -b\n\
+             .TQ\n\
+             --beta\n\
+             Description only for beta.\n",
+        );
+
+        let document = parse_manual_source(&path).expect("lower bounded TQ definitions");
+        fs::remove_file(path).expect("remove temporary roff fixture");
+        let [Block::DefinitionList { items, .. }] = document.sections[0].blocks.as_slice() else {
+            panic!("expected one definition list");
+        };
+        assert_eq!(items.len(), 2);
+        assert_eq!(inline_text(&items[0].terms[0]), "-a");
+        assert!(items[0].description.is_empty());
+        assert_eq!(
+            items[1]
+                .terms
+                .iter()
+                .map(|term| inline_text(term))
+                .collect::<Vec<_>>(),
+            ["-b", "--beta"]
+        );
+        assert!(document.diagnostics.iter().any(|diagnostic| {
+            diagnostic.code.as_deref() == Some("manual.definition-alias-boundary")
+        }));
     }
 
     #[test]

@@ -586,7 +586,7 @@ impl StructuralLowerer<'_, '_, '_> {
     }
 
     fn push(&mut self, node: &Node, table_embedding: Option<&TableEmbedding<'_>>) {
-        if !matches!(node.macro_name.as_deref(), Some("TP" | "TQ")) {
+        if !matches!(node.macro_name.as_deref(), Some("TP" | "IP" | "TQ")) {
             *self.man_alias_state = ManAliasState::None;
         }
         if self.lower_transparent_container(node) {
