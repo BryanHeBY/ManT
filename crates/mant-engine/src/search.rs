@@ -488,16 +488,19 @@ fn occurrence_line_ranges(
     (start..=end)
         .flat_map(|line_index| {
             let line_start = lines.start(line_index);
-            let line = lines.line(markdown, line_index);
+            let line = lines.line(markdown, line_index).trim_end();
             let line_end = line_start.saturating_add(line.len());
             let intersection =
                 occurrence.markdown.start.max(line_start)..occurrence.markdown.end.min(line_end);
-            AnchorStrippedLine::new(line)
-                .map_range(
-                    intersection.start.saturating_sub(line_start)
-                        ..intersection.end.saturating_sub(line_start),
-                )
+            (intersection.start < intersection.end)
+                .then(|| AnchorStrippedLine::new(line))
                 .into_iter()
+                .flat_map(move |visible| {
+                    visible.map_range(
+                        intersection.start.saturating_sub(line_start)
+                            ..intersection.end.saturating_sub(line_start),
+                    )
+                })
                 .map(move |range| SearchLineRange {
                     line: u32::try_from(line_index.saturating_add(1)).unwrap_or(u32::MAX),
                     start_byte: u32::try_from(range.start).unwrap_or(u32::MAX),
@@ -796,8 +799,8 @@ mod tests {
     };
 
     use super::{
-        MAX_OCCURRENCES_PER_MATCH, SearchError, display_markdown_line, render_addressable_markdown,
-        search_query, validate_search_query,
+        LineIndex, MAX_OCCURRENCES_PER_MATCH, RawOccurrence, SearchError, display_markdown_line,
+        occurrence_line_ranges, render_addressable_markdown, search_query, validate_search_query,
     };
 
     fn query() -> ResolvedContent {
@@ -896,6 +899,24 @@ mod tests {
         assert!(result.matches[0].preview.contains("**access control**"));
         assert!(!result.matches[0].preview.contains("<a id="));
         assert!(!result.matches[0].context.is_empty());
+    }
+
+    #[test]
+    fn presented_line_ranges_exclude_trimmed_unicode_trailing_space() {
+        let markdown = "zz 日本語   \nnext";
+        let lines = LineIndex::new(markdown);
+        let occurrence = RawOccurrence {
+            searchable: 0..0,
+            markdown: 3..15,
+        };
+
+        let ranges = occurrence_line_ranges(&occurrence, markdown, &lines);
+
+        assert_eq!(display_markdown_line(lines.line(markdown, 0)), "zz 日本語");
+        assert_eq!(ranges.len(), 1);
+        assert_eq!(ranges[0].line, 1);
+        assert_eq!(ranges[0].start_byte, 3);
+        assert_eq!(ranges[0].end_byte, 12);
     }
 
     #[test]
