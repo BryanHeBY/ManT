@@ -46,6 +46,8 @@ explicit cache maintenance ─────────────> TldrCacheUpd
 The schemas generated from the Rust types are authoritative. Request schemas
 are generated for deserialization so closed-object and default behavior match
 what the process accepts; response schemas are generated for serialization.
+`mant --schema all` includes every row above, including the two independent
+maintenance and diagnostic contracts.
 These native schema discriminators describe CLI and request JSON. MCP uses its
 own negotiated protocol version and presents the same logical identities and
 focused projections as bounded text or `CommonMark` instead of serializing the

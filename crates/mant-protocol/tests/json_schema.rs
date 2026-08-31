@@ -158,13 +158,15 @@ fn schema_catalog_exposes_every_public_query_contract() {
         catalog.keys().copied().collect::<Vec<_>>(),
         [
             "catalog",
+            "doctor",
             "excerpt",
             "outline",
             "query",
             "request",
             "scope-query",
             "scope-request",
-            "search"
+            "search",
+            "tldr-update"
         ]
     );
 }

@@ -1146,6 +1146,8 @@ fn generated_schemas_are_json_only_and_side_effect_free() {
     assert!(value["outline"].is_object());
     assert!(value["excerpt"].is_object());
     assert!(value["search"].is_object());
+    assert!(value["doctor"].is_object());
+    assert!(value["tldr-update"].is_object());
     assert!(diagnostics.is_empty());
     assert_eq!(host.query_calls.get(), 0);
     assert_eq!(host.update_calls.get(), 0);

@@ -74,6 +74,7 @@ pub fn scope_query_response_json_schema() -> Schema {
 pub fn query_json_schema_catalog() -> BTreeMap<&'static str, Schema> {
     BTreeMap::from([
         ("catalog", document_catalog_json_schema()),
+        ("doctor", doctor_report_json_schema()),
         ("excerpt", query_excerpt_json_schema()),
         ("outline", query_outline_json_schema()),
         ("query", query_bundle_json_schema()),
@@ -81,6 +82,7 @@ pub fn query_json_schema_catalog() -> BTreeMap<&'static str, Schema> {
         ("search", query_search_json_schema()),
         ("scope-query", scope_query_response_json_schema()),
         ("scope-request", scope_query_request_json_schema()),
+        ("tldr-update", tldr_cache_update_json_schema()),
     ])
 }
 

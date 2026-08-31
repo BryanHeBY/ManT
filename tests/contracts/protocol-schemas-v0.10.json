@@ -338,6 +338,296 @@
       }
     }
   },
+  "doctor": {
+    "$id": "urn:mant:doctor:v1",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "title": "DoctorReport",
+    "description": "Complete read-only installation health report.",
+    "type": "object",
+    "properties": {
+      "checks": {
+        "description": "Deterministically ordered checks.",
+        "type": "array",
+        "items": {
+          "$ref": "#/$defs/DoctorCheck"
+        }
+      },
+      "environment": {
+        "description": "Effective host and storage paths.",
+        "$ref": "#/$defs/DoctorEnvironment"
+      },
+      "outcome": {
+        "description": "Aggregate health derived from [`Self::checks`].",
+        "$ref": "#/$defs/DoctorOutcome"
+      },
+      "producer": {
+        "description": "Process provenance.",
+        "$ref": "#/$defs/Producer"
+      },
+      "schema": {
+        "description": "Exact response schema discriminator.",
+        "$ref": "#/$defs/DoctorSchema"
+      },
+      "summary": {
+        "description": "Counts derived from [`Self::checks`].",
+        "$ref": "#/$defs/DoctorSummary"
+      }
+    },
+    "required": [
+      "schema",
+      "producer",
+      "outcome",
+      "environment",
+      "checks",
+      "summary"
+    ],
+    "$defs": {
+      "DoctorCheck": {
+        "description": "One independently actionable installation check.",
+        "type": "object",
+        "properties": {
+          "code": {
+            "description": "Stable machine-readable check identifier.",
+            "type": "string"
+          },
+          "details": {
+            "description": "Additional bounded evidence, when useful.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "message": {
+            "description": "Concise human-readable result.",
+            "type": "string"
+          },
+          "remediation": {
+            "description": "Explicit next command or corrective action, when available.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "description": "Check severity.",
+            "$ref": "#/$defs/DoctorCheckStatus"
+          },
+          "subject": {
+            "description": "Optional configured source or other logical subject.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "code",
+          "status",
+          "message"
+        ]
+      },
+      "DoctorCheckStatus": {
+        "description": "Severity of one stable doctor check.",
+        "oneOf": [
+          {
+            "description": "The checked capability is available and healthy.",
+            "type": "string",
+            "const": "ok"
+          },
+          {
+            "description": "The check records useful context without requiring action.",
+            "type": "string",
+            "const": "info"
+          },
+          {
+            "description": "An optional or recoverable capability needs attention.",
+            "type": "string",
+            "const": "warning"
+          },
+          {
+            "description": "A promised local capability is unusable.",
+            "type": "string",
+            "const": "error"
+          }
+        ]
+      },
+      "DoctorEnvironment": {
+        "description": "Effective local paths and host identity inspected by `mant --doctor`.",
+        "type": "object",
+        "properties": {
+          "arch": {
+            "description": "Rust host processor architecture.",
+            "type": "string"
+          },
+          "configPath": {
+            "description": "Effective `sources.toml` path, when the data root is available.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "dataRoot": {
+            "description": "Platform-native `ManT` data root, when it could be derived.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "documentsRoot": {
+            "description": "Personal Markdown root, when the data root is available.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "manualRoots": {
+            "description": "Native manual roots in effective precedence order.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "os": {
+            "description": "Rust host operating-system family.",
+            "type": "string"
+          },
+          "sourcesRoot": {
+            "description": "Managed source root, when the data root is available.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "tldrRoots": {
+            "description": "tldr cache roots in effective read order.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "os",
+          "arch",
+          "manualRoots",
+          "tldrRoots"
+        ]
+      },
+      "DoctorOutcome": {
+        "description": "Aggregate health derived from every doctor check.",
+        "oneOf": [
+          {
+            "description": "No warning or error was detected.",
+            "type": "string",
+            "const": "healthy"
+          },
+          {
+            "description": "At least one non-fatal condition deserves attention.",
+            "type": "string",
+            "const": "warning"
+          },
+          {
+            "description": "At least one promised local capability is broken.",
+            "type": "string",
+            "const": "error"
+          }
+        ]
+      },
+      "DoctorSchema": {
+        "description": "Exact schema marker for an installation health report.",
+        "oneOf": [
+          {
+            "description": "Version 1 of the doctor report protocol.",
+            "type": "string",
+            "const": "mant.doctor/v1"
+          }
+        ]
+      },
+      "DoctorSummary": {
+        "description": "Stable counts for one complete doctor run.",
+        "type": "object",
+        "properties": {
+          "errors": {
+            "description": "Failed capabilities.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          },
+          "info": {
+            "description": "Informational checks.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          },
+          "ok": {
+            "description": "Successful checks.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          },
+          "warnings": {
+            "description": "Non-fatal warnings.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "ok",
+          "info",
+          "warnings",
+          "errors"
+        ]
+      },
+      "Engine": {
+        "description": "Parser implementation recorded at the process boundary.",
+        "type": "object",
+        "properties": {
+          "name": {
+            "description": "Parser implementation name.",
+            "type": "string"
+          },
+          "version": {
+            "description": "Parser implementation version.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "version"
+        ]
+      },
+      "Producer": {
+        "description": "Identifies `ManT` and the parser used to build a wire document.",
+        "type": "object",
+        "properties": {
+          "engine": {
+            "description": "Parser implementation, when an authoritative document was parsed.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/Engine"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "name": {
+            "description": "Process implementation name.",
+            "type": "string"
+          },
+          "version": {
+            "description": "Process package version.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "version"
+        ]
+      }
+    }
+  },
   "excerpt": {
     "$id": "urn:mant:excerpt:v0.10",
     "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -9078,6 +9368,82 @@
         "type": "integer",
         "format": "uint32",
         "minimum": 0
+      }
+    }
+  },
+  "tldr-update": {
+    "$id": "urn:mant:tldr-update:v1",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "title": "TldrCacheUpdate",
+    "description": "Result of an explicit `mant --update-tldr` operation.",
+    "type": "object",
+    "properties": {
+      "action": {
+        "description": "Mutation performed by the client-specific update path.",
+        "$ref": "#/$defs/TldrCacheAction"
+      },
+      "cacheDir": {
+        "description": "Updated cache directory, when the client exposes it.",
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "client": {
+        "description": "External tldr client used for the operation, when applicable.",
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "output": {
+        "description": "Trimmed human-readable client output, when useful.",
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "revision": {
+        "description": "Resulting cache revision, when discoverable.",
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "schema": {
+        "description": "Exact response schema discriminator.",
+        "$ref": "#/$defs/TldrCacheUpdateSchema"
+      }
+    },
+    "required": [
+      "schema",
+      "action"
+    ],
+    "$defs": {
+      "TldrCacheAction": {
+        "description": "How an explicit tldr cache refresh changed local state.",
+        "oneOf": [
+          {
+            "description": "A cache did not exist and was cloned.",
+            "type": "string",
+            "const": "cloned"
+          },
+          {
+            "description": "An existing cache advanced or was refreshed.",
+            "type": "string",
+            "const": "updated"
+          }
+        ]
+      },
+      "TldrCacheUpdateSchema": {
+        "description": "Exact schema marker for an explicit tldr cache update result.",
+        "oneOf": [
+          {
+            "description": "Version 1 of the tldr cache maintenance result.",
+            "type": "string",
+            "const": "mant.tldr-update/v1"
+          }
+        ]
       }
     }
   }

@@ -136,10 +136,10 @@ mant --schema all
 ```
 
 `--schema all` returns an object with the stable keys `request`, `query`,
-`outline`, `excerpt`, `search`, `scope-request`, `scope-query`, and `catalog`.
-The independent doctor and tldr-update schemas are requested explicitly and do
-not alter that v0.10 schema catalog. `--compact` is accepted by all schema
-commands.
+`outline`, `excerpt`, `search`, `scope-request`, `scope-query`, `catalog`,
+`doctor`, and `tldr-update`. The latter two retain their independent contract
+families even though the catalog exposes them together with the release-aligned
+document schemas. `--compact` is accepted by all schema commands.
 
 | `--schema` value | Root title | Root `$id` |
 | --- | --- | --- |
