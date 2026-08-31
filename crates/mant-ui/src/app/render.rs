@@ -165,17 +165,33 @@ impl App {
 
         self.geometry.navigation = navigation_area;
         let visible = self.visible_navigation_indices();
-        let line_width = usize::from(navigation_area.width);
-        let rows = navigation::rows(
+        let height = usize::from(navigation_area.height);
+        // Build against the scrollbar-bearing width first. If those rows fit,
+        // the full-width layout cannot overflow and no gutter is necessary.
+        // When they do overflow, every label is laid out one column earlier so
+        // the scrollbar never replaces its final cell (or half of a wide one).
+        let gutter_width = navigation_area.width.saturating_sub(1);
+        let gutter_rows = navigation::rows(
             self.document.navigation(),
             &visible,
             self.selected,
             &self.expanded,
             self.full_outline_labels,
-            line_width,
+            usize::from(gutter_width),
         );
+        let rows = if gutter_rows.len() > height {
+            gutter_rows
+        } else {
+            navigation::rows(
+                self.document.navigation(),
+                &visible,
+                self.selected,
+                &self.expanded,
+                self.full_outline_labels,
+                usize::from(navigation_area.width),
+            )
+        };
         let row_count = rows.len();
-        let height = usize::from(navigation_area.height);
         let maximum = row_count.saturating_sub(height);
         self.navigation_scroll = self.navigation_scroll.min(maximum);
         let request = self

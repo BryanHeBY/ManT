@@ -931,6 +931,54 @@ fn overflowing_navigation_exposes_a_scrollbar() {
 }
 
 #[test]
+fn overflowing_navigation_reserves_its_final_column_for_the_scrollbar() {
+    let mut bundle = navigation_bundle();
+    bundle.document.as_mut().expect("manual").sections[0].title =
+        "A deliberately long option section ending in XYZ".to_owned();
+    for (height, reserves_gutter) in [(8, true), (14, false)] {
+        let backend = TestBackend::new(80, height);
+        let mut terminal = Terminal::new(backend).expect("test terminal");
+        let mut app = App::new(&bundle);
+        let options = app
+            .document
+            .navigation()
+            .iter()
+            .position(|node| node.target_id == "options")
+            .expect("options navigation node");
+        app.selected = (0..app.document.navigation().len())
+            .find(|index| *index != options)
+            .expect("another navigation node");
+
+        terminal.draw(|frame| app.draw(frame)).expect("draw app");
+
+        let row = app.geometry.navigation.y
+            + u16::try_from(
+                app.geometry
+                    .navigation_rows
+                    .iter()
+                    .position(|index| *index == options)
+                    .expect("visible options row"),
+            )
+            .expect("navigation row");
+        let last_column = app
+            .geometry
+            .navigation
+            .right()
+            .saturating_sub(1 + u16::from(reserves_gutter));
+        assert_eq!(
+            terminal
+                .backend()
+                .buffer()
+                .cell((last_column, row))
+                .expect("last label cell")
+                .symbol(),
+            "Z"
+        );
+        assert_eq!(app.geometry.navigation_scrollbar.is_some(), reserves_gutter);
+    }
+}
+
+#[test]
 fn navigation_scrollbar_click_and_drag_do_not_resize_the_sidebar() {
     let backend = TestBackend::new(80, 8);
     let mut terminal = Terminal::new(backend).expect("test terminal");
