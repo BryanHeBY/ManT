@@ -57,6 +57,9 @@ No compatibility changes are pending.
   its independent generated schema without adding mutation to MCP.
 - Publish the shared 16-selector maximum and enforce it at every native,
   in-process, and MCP excerpt boundary rather than relying on schema metadata.
+- Include doctor and tldr-update in `--schema all` while retaining their
+  independent discriminator families, and require every published search
+  occurrence to contain at least one presented line range.
 
 ### mant-engine 0.10.0
 
@@ -113,6 +116,9 @@ No compatibility changes are pending.
 - Clamp search `lineRanges` to the exact trailing-space-trimmed UTF-8 lines
   published in previews and context so structured coordinates never point
   outside their presented text.
+- Bound compiled regex programs and DFA caches, omit matches that exist only
+  in source-map anchors or synthetic separators, and keep structured matched
+  text and ranges on the anchor-free presentation surface.
 - Enforce selector length and excerpt-count bounds inside the projection engine
   so preloaded and standard-input producers cannot bypass request validation.
 - Classify mailto recipients only after shared decoding and structural
@@ -145,6 +151,9 @@ No compatibility changes are pending.
 - Reserve a one-column Outline scrollbar gutter only when its narrow layout
   actually overflows, preserving final label cells without wasting sidebar
   width in non-scrolling outlines.
+- Restore raw mode and the alternate screen from the normal event loop before
+  re-raising POSIX termination signals, while a second signal retains its
+  immediate default behavior.
 
 ### mant 0.10.0
 
@@ -180,6 +189,9 @@ No compatibility changes are pending.
   reports and state explicitly that remote freshness was not checked.
 - Reject oversized or control-bearing standard-input node selectors through the
   same engine-owned validation used by file, logical-document, and JSON inputs.
+- Keep multiline regex parser diagnostics readable through independently
+  sanitized lines, and recover MCP stdio after malformed, deeply nested, or
+  oversized frames while bounding framework-generated parameter errors.
 
 ### mant-sources 0.9.2
 
@@ -191,6 +203,12 @@ No compatibility changes are pending.
 - Bound the complete decompressed tar stream before parsing so hidden GNU
   long-name/long-link and local PAX metadata cannot allocate outside source
   acquisition budgets.
+- Apply one physical managed-root gate to update, discovery, doctor, and
+  metadata reads; apply the registry's logical-path normalization during
+  installation; and reject invisible Unicode formatting identities.
+- Accept explicit archive `./` components, but charge every tar entry before
+  type dispatch so directory and metadata payloads cannot evade expanded-size
+  limits.
 
 See the complete [ManT 0.10.0 release notes](https://github.com/BryanHeBY/ManT/releases/tag/v0.10.0).
 

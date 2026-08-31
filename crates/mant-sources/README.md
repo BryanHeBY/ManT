@@ -62,7 +62,9 @@ Personal `documents/` may contain explicitly named leaf-file links to regular
 files, including external targets. Directory and broken links are ignored.
 Managed source caches never follow links; Git tree modes and archive entry
 types reject selected link entries before installation so source snapshots
-remain portable.
+remain portable. Discovery, doctor, metadata reads, and update fast paths share
+the same physical managed-root gate, so a linked cache cannot bypass the
+installation boundary.
 
 With `update` enabled, Git and archive acquisition share resource budgets,
 staging, and one atomic activation transaction. Git uses a no-checkout shallow
@@ -71,6 +73,9 @@ object filter, while Windows downloads the complete single-commit tree for
 reliable pathspec checkout. Archives are streamed and extracted within separate
 compressed and expanded budgets. Temporary checkouts, downloads, and staging
 directories are owned by an RAII workspace and cleaned on every exit path.
+Every tar entry is charged before its type is interpreted, including directory
+and metadata payloads. Explicit `./` components are normalized, while parent
+traversal, host separators, controls, and non-UTF-8 components are rejected.
 Provider metadata is a strict tagged value, so Git-only and archive-only fields
 cannot form invalid combinations.
 
@@ -89,7 +94,9 @@ taking an update lock, starting a process, or accessing the network.
 Upstream source trees may be recursive, and activation preserves each selected
 Markdown file's relative path. Repeated leaf names in different directories
 are valid; case-only logical-path collisions and an empty selection are
-rejected. Platform paths, the complete `sources.toml` schema, and update
+rejected. Control and invisible Unicode formatting characters are not valid
+logical identities; visible non-ASCII names remain supported. Platform paths,
+the complete `sources.toml` schema, and update
 semantics are documented in the
 [ManT document-source guide](https://github.com/BryanHeBY/ManT/blob/main/docs/sources.md).
 

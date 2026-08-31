@@ -26,7 +26,8 @@ catalog, search, and cross-document interactions without serializing the IR.
 - Width-aware visual text selection plus typed requests for plain-text and
   complete-node Text/Markdown clipboard content.
 - A Crossterm lifecycle boundary that restores raw mode and the alternate
-  screen after normal exit, setup failure, or panic.
+  screen after normal exit, setup failure, panic, or a handled POSIX
+  termination signal before the signal's default action resumes.
 - A static, less-like text pager for terminal-owned catalog output; short and
   redirected results pass through without opening a full-screen interface.
 - Public `App` and `DocumentView` layers for callers embedding the frontend in
