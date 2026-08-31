@@ -297,3 +297,86 @@ mandoc content, AST-to-IR structure, CommonMark projection, and both layout
 routes were all 36/36 clean. Temporary ledgers and third-party review bundles
 remained under `/tmp`; only the promoted fixture and durable conclusions are
 tracked.
+
+## 2026-08-31 v0.10.0 release replay
+
+The release candidate at `c57574b394eae9fa7e5383d45b241b894812dbf4`
+replayed the 257 unchanged source identities from
+`fedora44-2026-07-20-x86_64` through all six independent routes. The five
+verified package roots were `bash`, `clang`, `gcc`, `git-core-doc`, and `tar`
+under `/home/hby/dev/tmp/mantdoc-real-corpus/fedora44-2026-07-20-x86_64`.
+The exact invocations used temporary ledgers so the release replay could not
+rewrite the durable human dispositions:
+
+```sh
+fedora=/home/hby/dev/tmp/mantdoc-real-corpus/fedora44-2026-07-20-x86_64
+fedora_roots=(
+  --manpath "$fedora/root/bash/usr/share/man"
+  --manpath "$fedora/root/clang/usr/share/man"
+  --manpath "$fedora/root/gcc/usr/share/man"
+  --manpath "$fedora/root/git-core-doc/usr/share/man"
+  --manpath "$fedora/root/tar/usr/share/man"
+)
+out=target/release-audit-v0.10.0
+
+python3 scripts/audit-roff-fidelity.py "${fedora_roots[@]}" \
+  --corpus fedora44-2026-07-20-x86_64 --replay-source-records \
+  --source-ledger tests/fixtures/roff/FIDELITY_AUDIT.csv \
+  --audit-db "$out/fedora-fidelity.csv" \
+  --json "$out/fedora-fidelity.json" \
+  --review-dir "$out/fedora-fidelity-review" --findings-only
+python3 scripts/audit-roff-structure.py "${fedora_roots[@]}" \
+  --corpus fedora44-2026-07-20-x86_64 --replay-fidelity-records \
+  --fidelity-db "$out/fedora-fidelity.csv" \
+  --audit-db "$out/fedora-structure.csv" \
+  --json "$out/fedora-structure.json" --findings-only
+python3 scripts/audit-roff-projection.py "${fedora_roots[@]}" \
+  --corpus fedora44-2026-07-20-x86_64 --replay-fidelity-records \
+  --fidelity-db "$out/fedora-fidelity.csv" \
+  --audit-db "$out/fedora-projection.csv" \
+  --json "$out/fedora-projection.json" --findings-only
+python3 scripts/audit-roff-layout.py "${fedora_roots[@]}" \
+  --corpus fedora44-2026-07-20-x86_64 --replay-fidelity-records \
+  --fidelity-db "$out/fedora-fidelity.csv" \
+  --audit-db "$out/fedora-layout.csv" \
+  --json "$out/fedora-layout.json" --findings-only
+python3 scripts/audit-roff-fidelity.py "${fedora_roots[@]}" \
+  --corpus fedora44-2026-07-20-x86_64 --replay-source-records \
+  --source-ledger tests/fixtures/roff/FIDELITY_AUDIT.csv \
+  --reference-kind mandoc --reference mandoc \
+  --reference-id mandoc-1.14.6-1 \
+  --audit-db "$out/fedora-mandoc-fidelity.csv" \
+  --json "$out/fedora-mandoc-fidelity.json" \
+  --review-dir "$out/fedora-mandoc-fidelity-review" --findings-only
+python3 scripts/audit-roff-layout.py "${fedora_roots[@]}" \
+  --corpus fedora44-2026-07-20-x86_64 --replay-fidelity-records \
+  --fidelity-db "$out/fedora-mandoc-fidelity.csv" \
+  --reference-kind mandoc --reference mandoc \
+  --reference-id mandoc-1.14.6-1 \
+  --audit-db "$out/fedora-mandoc-layout.csv" \
+  --json "$out/fedora-mandoc-layout.json" --findings-only
+```
+
+Groff content reported 202 clean and 55 reviewed pages. All 55 are the durable
+false-positive Bash alias rows whose embedded `.so` chains the bounded product
+resolver deliberately does not execute. Structure reported 256 clean and the
+existing `builtins(1)` `confirmed-open` mixed mid-document include. CommonMark
+projection reparsed 771 excerpts from 257 clean pages. Groff layout was 257/257
+clean. Mandoc content reported 200 clean, 56 review candidates, and the known
+unrenderable mixed-include page; manual inspection confirmed that 54 candidates
+were Bash redirect wrappers where mandoc synthesizes `See the file bash.1`, and
+the other two were formatter-owned platform default `PATH` values in `bash(1)`
+and `sh(1)`. Mandoc layout was 256/256 clean. No new fidelity, structure,
+projection, or layout defect was found, so no permanent CSV row changed.
+
+A final source-directed BSD check used exact official bytes from NetBSD 11.0,
+DragonFly BSD 6.4.2, FreeBSD 15.1, and OpenBSD 7.9. Its 14-page set covered each
+available `ssh(1)`, `mandoc(1)`, `unzip(1)`, and `term(5)` plus DragonFly
+`gdb(1)`. Both content references, CommonMark projection, and both layout
+references were 14/14 clean. Structure was 9 clean plus five manually reviewed
+semantic-grouping candidates: each `ssh(1)` combines the multiple authored
+forms of `-L` and `-R` into one definition per option, while FreeBSD
+`unzip(1)` combines the adjacent `-I` and `-O` heads that share one body. The
+visible source content and definition relationships remain intact. The exact
+page list, reports, temporary ledgers, and third-party review material remained
+under `target/release-audit-v0.10.0` and are not distribution inputs.
