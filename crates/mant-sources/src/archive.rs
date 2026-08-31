@@ -4,7 +4,7 @@ use std::{
     collections::BTreeSet,
     fs::{self, File},
     io::{self, BufReader, Read},
-    path::{Component, Path, PathBuf},
+    path::{Path, PathBuf},
 };
 
 use flate2::read::MultiGzDecoder;
@@ -90,18 +90,15 @@ fn extract_zip(path: &Path, destination: &Path) -> Result<(), String> {
         let mut entry = archive
             .by_index(index)
             .map_err(|error| format!("could not read ZIP entry {index}: {error}"))?;
-        validate_zip_entry_name(entry.name())?;
-        let raw_path = entry
+        let raw_name = entry.name();
+        entry
             .enclosed_name()
             .ok_or_else(|| format!("ZIP entry '{}' has an unsafe path", entry.name()))?;
-        let path = match normalize_archive_path(&raw_path)? {
+        let path = match normalize_archive_name(raw_name)? {
             Some(path) => path,
             None if entry.is_dir() => continue,
             None => {
-                return Err(format!(
-                    "archive entry '{}' has an unsafe path",
-                    raw_path.display()
-                ));
+                return Err(format!("archive entry '{raw_name}' has an unsafe path"));
             }
         };
         if entry.is_symlink() {
@@ -126,25 +123,6 @@ fn extract_zip(path: &Path, destination: &Path) -> Result<(), String> {
         let size = entry.size();
         documents = charge_document(documents, size, &path)?;
         write_archive_file(destination, &path, &mut entry, size, &mut paths)?;
-    }
-    Ok(())
-}
-
-fn validate_zip_entry_name(name: &str) -> Result<(), String> {
-    if name.contains('\\') || name.chars().any(char::is_control) {
-        return Err(format!("ZIP entry '{name}' has an unsafe path"));
-    }
-    let trimmed = name.strip_suffix('/').unwrap_or(name);
-    let mut components = trimmed.split('/');
-    let first = components.next().unwrap_or_default();
-    if first.is_empty()
-        || first.ends_with(':')
-        || components.clone().any(str::is_empty)
-        || std::iter::once(first)
-            .chain(components)
-            .any(|component| component == "..")
-    {
-        return Err(format!("ZIP entry '{name}' has an unsafe path"));
     }
     Ok(())
 }
@@ -178,21 +156,17 @@ fn extract_tar_with_budget(
             ));
         }
         let mut entry = entry.map_err(|error| format!("could not read tar entry: {error}"))?;
-        let raw_path = entry
-            .path()
-            .map_err(|error| format!("could not decode tar entry path: {error}"))?
-            .into_owned();
+        let raw_path = entry.path_bytes();
+        let raw_name =
+            std::str::from_utf8(&raw_path).map_err(|_| "tar entry path is not UTF-8".to_owned())?;
         let entry_type = entry.header().entry_type();
         let size = entry.size();
-        expanded = charge_expanded_with_limit(expanded, size, &raw_path, stream_limit)?;
-        let path = match normalize_archive_path(&raw_path)? {
+        expanded = charge_expanded_with_limit(expanded, size, Path::new(raw_name), stream_limit)?;
+        let path = match normalize_archive_name(raw_name)? {
             Some(path) => path,
             None if entry_type.is_dir() => continue,
             None => {
-                return Err(format!(
-                    "archive entry '{}' has an unsafe path",
-                    raw_path.display()
-                ));
+                return Err(format!("archive entry '{raw_name}' has an unsafe path"));
             }
         };
         if entry_type.is_pax_global_extensions() {
@@ -280,55 +254,36 @@ fn validate_global_pax(entry: &mut tar::Entry<'_, impl Read>) -> Result<(), Stri
     Ok(())
 }
 
-fn normalize_archive_path(path: &Path) -> Result<Option<PathBuf>, String> {
-    let raw = path.to_str().ok_or_else(|| {
-        format!(
-            "archive entry '{}' does not use a UTF-8 path",
-            path.display()
-        )
-    })?;
-    if raw.contains('\\')
-        || raw
+fn normalize_archive_name(name: &str) -> Result<Option<PathBuf>, String> {
+    // Archive member names are POSIX identities. Parse the raw ZIP string or
+    // tar bytes before a host `Path` can reinterpret `\\` as a separator on
+    // Windows and erase the evidence that the archive was non-portable.
+    if name.contains('\\')
+        || name
             .chars()
             .any(crate::registry::is_unsafe_logical_path_character)
     {
-        return Err(format!(
-            "archive entry '{}' has an unsafe path",
-            path.display()
-        ));
+        return Err(format!("archive entry '{name}' has an unsafe path"));
     }
     let mut normalized = PathBuf::new();
     let mut depth = 0_usize;
-    for component in path.components() {
-        let value = match component {
-            Component::CurDir => continue,
-            Component::Normal(value) => value,
-            Component::Prefix(_) | Component::RootDir | Component::ParentDir => {
-                return Err(format!(
-                    "archive entry '{}' has an unsafe path",
-                    path.display()
-                ));
-            }
-        };
-        let value = value.to_str().ok_or_else(|| {
-            format!(
-                "archive entry '{}' does not use a UTF-8 path",
-                path.display()
-            )
-        })?;
-        if value.contains(['/', '\\']) {
-            return Err(format!(
-                "archive entry '{}' has an unsafe path",
-                path.display()
-            ));
+    let mut components = name.split('/').peekable();
+    while let Some(component) = components.next() {
+        if component == "." {
+            continue;
         }
-        normalized.push(value);
+        if component.is_empty() && components.peek().is_none() {
+            continue;
+        }
+        if component.is_empty() || component == ".." || (depth == 0 && component.ends_with(':')) {
+            return Err(format!("archive entry '{name}' has an unsafe path"));
+        }
+        normalized.push(component);
         depth += 1;
     }
     if depth > MAX_SOURCE_DEPTH {
         return Err(format!(
-            "archive entry '{}' exceeds the maximum path depth of {MAX_SOURCE_DEPTH}",
-            path.display()
+            "archive entry '{name}' exceeds the maximum path depth of {MAX_SOURCE_DEPTH}"
         ));
     }
     Ok((depth != 0).then_some(normalized))
@@ -443,7 +398,7 @@ mod tests {
     use zip::{ZipWriter, write::SimpleFileOptions};
 
     use super::{
-        extract_archive, extract_tar_with_budget, normalize_archive_path, write_archive_file,
+        extract_archive, extract_tar_with_budget, normalize_archive_name, write_archive_file,
     };
 
     fn temp(label: &str) -> PathBuf {
@@ -653,12 +608,11 @@ mod tests {
     #[test]
     fn archive_paths_accept_explicit_current_directory_components() {
         assert_eq!(
-            normalize_archive_path(std::path::Path::new("./docs/./tool.md"))
-                .expect("normalize GNU tar path"),
+            normalize_archive_name("./docs/./tool.md").expect("normalize GNU tar path"),
             Some(PathBuf::from("docs/tool.md"))
         );
         assert_eq!(
-            normalize_archive_path(std::path::Path::new(".")).expect("normalize archive root"),
+            normalize_archive_name(".").expect("normalize archive root"),
             None
         );
 
@@ -670,8 +624,7 @@ mod tests {
     #[test]
     fn archive_paths_reject_host_separator_and_control_characters() {
         for path in ["docs\\tool.md", "docs/bad\u{1f}name.md"] {
-            let error = normalize_archive_path(std::path::Path::new(path))
-                .expect_err("reject non-portable archive path");
+            let error = normalize_archive_name(path).expect_err("reject non-portable archive path");
             assert!(error.contains("unsafe path"), "{error}");
         }
     }
