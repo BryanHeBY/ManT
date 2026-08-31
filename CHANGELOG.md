@@ -26,7 +26,7 @@ No compatibility changes are pending.
   parameters; configuration keys; environment variables; variables; values;
   and generic terms. Add evidence-backed value domains without heuristically
   inferring cross-document sets from prose.
-- Extend `OutlinePath` with nested entry coordinates such as `2/e3/e1`.
+- Extend `OutlinePath` with nested entry coordinates such as `2.3/e4/e2`.
 - Centralize external-URI and conservative email-address validation, including
   RFC 3986 ASCII registered names, root dots, percent-encoded hosts, HTTP
   authority, IPv6 and port structure, percent-decoded single-recipient mailto
@@ -209,6 +209,13 @@ No compatibility changes are pending.
 - Accept explicit archive `./` components, but charge every tar entry before
   type dispatch so directory and metadata payloads cannot evade expanded-size
   limits.
+- Parse configured logical document identities independently of host path
+  rules, rejecting backslashes before Windows can reinterpret them while
+  converting discovered native relative paths to portable slash-separated
+  identities at the filesystem boundary.
+- Validate raw ZIP names and tar member bytes as POSIX archive identities
+  before constructing host paths, preserving valid slash-separated archives
+  on Windows while rejecting non-portable backslash members.
 
 See the complete [ManT 0.10.0 release notes](https://github.com/BryanHeBY/ManT/releases/tag/v0.10.0).
 

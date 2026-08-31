@@ -80,12 +80,12 @@ stdout are terminals; redirection falls back to clean Markdown. `--ui` and
 
 Discovery uses a case-insensitive literal substring by default. `--find` also
 accepts `--regex` and `--case`; `--limit` and `--offset` apply deterministic
-pagination. Inside one relevance tier, candidates preserving the query's exact
-case rank before candidates found only through case folding. Plain `--find`
-output is tab-separated as
-the canonical catalog path and `kind`, while `--format json` returns
-`mant.catalog/v0.10`. `--list` groups the same hierarchy beneath `documents`,
-`sources/SOURCE`, or `manual/SECTION`.
+pagination. `--list` and `--find` return at most 10,000 rows by default. Inside
+one relevance tier, candidates preserving the query's exact case rank ahead of
+candidates found only through case folding. Plain `--find` output is
+tab-separated as the canonical catalog path and `kind`, while `--format json`
+returns `mant.catalog/v0.10`. `--list` groups the same hierarchy beneath
+`documents`, `sources/SOURCE`, or `manual/SECTION`.
 
 An empty name match stays silent in ordinary text output. If an explicit source
 or manual section is not indexed at all, text output instead identifies the
@@ -760,8 +760,9 @@ semantic entry. All three selectors reject control characters and values over
 - `--offset COUNT`: Skip matching lines for deterministic pagination.
 
 Search defaults to a case-insensitive literal over visible text, returns at
-most 100 matching lines, and includes no context lines. Multiple occurrences
-on the same rendered line form one pagination result. `smart` case becomes
+most 100 matching lines, and includes no context lines. Context cannot exceed
+100 lines on either side of a match. Multiple occurrences on the same rendered
+line form one pagination result. `smart` case becomes
 case-sensitive when the pattern contains uppercase text. In regex mode, `^`
 and `$` match the beginning and end of each rendered line. Regex patterns must
 preserve Unicode mode and UTF-8 character boundaries; byte-oriented forms that

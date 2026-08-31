@@ -485,6 +485,9 @@ fn replace_directory(staging: &Path, target: &Path) -> Result<(), String> {
     }
     if let Err(error) = fs::rename(staging, target) {
         if had_target {
+            // Keep the activation failure as the primary error. Restoration
+            // is best effort; if it cannot complete, the intact `.backup`
+            // remains available to `recover_directory` on the next attempt.
             let _ = fs::rename(&backup, target);
             let _ = sync_parent_directory(target);
         }

@@ -159,7 +159,7 @@ Diagnostics have `style`, `warning`, `error`, or `unsupported` severity, an opti
 document. `SemanticIndex` independently projects semantic definitions for
 outline discovery and can always be rebuilt from the document. `NodePath` and
 outline paths are ephemeral coordinates derived from the current tree; nested
-semantic entries use paths such as `2/e3/e1`. These coordinates are not
+semantic entries use paths such as `2.3/e4/e2`. These coordinates are not
 long-term storage identifiers and can change when a source document inserts or
 removes earlier entries. A product version therefore does not freeze paths in
 host-provided manuals.
