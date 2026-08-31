@@ -91,10 +91,19 @@ fn extract_zip(path: &Path, destination: &Path) -> Result<(), String> {
             .by_index(index)
             .map_err(|error| format!("could not read ZIP entry {index}: {error}"))?;
         validate_zip_entry_name(entry.name())?;
-        let path = entry
+        let raw_path = entry
             .enclosed_name()
             .ok_or_else(|| format!("ZIP entry '{}' has an unsafe path", entry.name()))?;
-        validate_archive_path(&path)?;
+        let path = match normalize_archive_path(&raw_path)? {
+            Some(path) => path,
+            None if entry.is_dir() => continue,
+            None => {
+                return Err(format!(
+                    "archive entry '{}' has an unsafe path",
+                    raw_path.display()
+                ));
+            }
+        };
         if entry.is_symlink() {
             return Err(format!(
                 "archive entry '{}' is a symbolic link",
@@ -122,8 +131,10 @@ fn extract_zip(path: &Path, destination: &Path) -> Result<(), String> {
 }
 
 fn validate_zip_entry_name(name: &str) -> Result<(), String> {
-    let normalized = name.replace('\\', "/");
-    let trimmed = normalized.strip_suffix('/').unwrap_or(&normalized);
+    if name.contains('\\') || name.chars().any(char::is_control) {
+        return Err(format!("ZIP entry '{name}' has an unsafe path"));
+    }
+    let trimmed = name.strip_suffix('/').unwrap_or(name);
     let mut components = trimmed.split('/');
     let first = components.next().unwrap_or_default();
     if first.is_empty()
@@ -131,7 +142,7 @@ fn validate_zip_entry_name(name: &str) -> Result<(), String> {
         || components.clone().any(str::is_empty)
         || std::iter::once(first)
             .chain(components)
-            .any(|component| matches!(component, "." | ".."))
+            .any(|component| component == "..")
     {
         return Err(format!("ZIP entry '{name}' has an unsafe path"));
     }
@@ -167,14 +178,24 @@ fn extract_tar_with_budget(
             ));
         }
         let mut entry = entry.map_err(|error| format!("could not read tar entry: {error}"))?;
-        let path = entry
+        let raw_path = entry
             .path()
             .map_err(|error| format!("could not decode tar entry path: {error}"))?
             .into_owned();
-        validate_archive_path(&path)?;
         let entry_type = entry.header().entry_type();
+        let size = entry.size();
+        expanded = charge_expanded_with_limit(expanded, size, &raw_path, stream_limit)?;
+        let path = match normalize_archive_path(&raw_path)? {
+            Some(path) => path,
+            None if entry_type.is_dir() => continue,
+            None => {
+                return Err(format!(
+                    "archive entry '{}' has an unsafe path",
+                    raw_path.display()
+                ));
+            }
+        };
         if entry_type.is_pax_global_extensions() {
-            expanded = charge_expanded(expanded, entry.size(), &path)?;
             validate_global_pax(&mut entry)?;
             continue;
         }
@@ -187,8 +208,6 @@ fn extract_tar_with_budget(
                 path.display()
             ));
         }
-        let size = entry.size();
-        expanded = charge_expanded(expanded, size, &path)?;
         if !is_markdown(&path) {
             continue;
         }
@@ -261,39 +280,60 @@ fn validate_global_pax(entry: &mut tar::Entry<'_, impl Read>) -> Result<(), Stri
     Ok(())
 }
 
-fn validate_archive_path(path: &Path) -> Result<(), String> {
+fn normalize_archive_path(path: &Path) -> Result<Option<PathBuf>, String> {
+    let mut normalized = PathBuf::new();
     let mut depth = 0_usize;
     for component in path.components() {
-        let Component::Normal(value) = component else {
-            return Err(format!(
-                "archive entry '{}' has an unsafe path",
-                path.display()
-            ));
+        let value = match component {
+            Component::CurDir => continue,
+            Component::Normal(value) => value,
+            Component::Prefix(_) | Component::RootDir | Component::ParentDir => {
+                return Err(format!(
+                    "archive entry '{}' has an unsafe path",
+                    path.display()
+                ));
+            }
         };
-        value.to_str().ok_or_else(|| {
+        let value = value.to_str().ok_or_else(|| {
             format!(
                 "archive entry '{}' does not use a UTF-8 path",
                 path.display()
             )
         })?;
+        if value.contains(['/', '\\']) || value.chars().any(char::is_control) {
+            return Err(format!(
+                "archive entry '{}' has an unsafe path",
+                path.display()
+            ));
+        }
+        normalized.push(value);
         depth += 1;
     }
-    if depth == 0 || depth > MAX_SOURCE_DEPTH {
+    if depth > MAX_SOURCE_DEPTH {
         return Err(format!(
             "archive entry '{}' exceeds the maximum path depth of {MAX_SOURCE_DEPTH}",
             path.display()
         ));
     }
-    Ok(())
+    Ok((depth != 0).then_some(normalized))
 }
 
 fn charge_expanded(current: u64, size: u64, path: &Path) -> Result<u64, String> {
+    charge_expanded_with_limit(current, size, path, MAX_SOURCE_BYTES)
+}
+
+fn charge_expanded_with_limit(
+    current: u64,
+    size: u64,
+    path: &Path,
+    limit: u64,
+) -> Result<u64, String> {
     let next = current
         .checked_add(size)
         .ok_or_else(|| "archive expanded-size budget overflow".to_owned())?;
-    if next > MAX_SOURCE_BYTES {
+    if next > limit {
         return Err(format!(
-            "archive exceeds the {MAX_SOURCE_BYTES}-byte expanded-size limit at '{}'",
+            "archive exceeds the {limit}-byte expanded-size limit at '{}'",
             path.display()
         ));
     }
@@ -386,7 +426,9 @@ mod tests {
     use tar::{Builder, EntryType, Header};
     use zip::{ZipWriter, write::SimpleFileOptions};
 
-    use super::{extract_archive, extract_tar_with_budget, write_archive_file};
+    use super::{
+        extract_archive, extract_tar_with_budget, normalize_archive_path, write_archive_file,
+    };
 
     fn temp(label: &str) -> PathBuf {
         std::env::temp_dir().join(format!("mant-archive-{label}-{}", std::process::id()))
@@ -565,6 +607,57 @@ mod tests {
         assert!(error.contains("decompressed stream exceeds"), "{error}");
         assert!(!destination.join("docs").exists());
         fs::remove_dir_all(root).expect("remove fixture");
+    }
+
+    #[test]
+    fn tar_directory_payloads_count_toward_the_expanded_budget() {
+        let root = temp("tar-directory-budget");
+        let destination = root.join("tree");
+        fs::create_dir_all(&root).expect("create fixture");
+
+        let mut builder = Builder::new(Vec::new());
+        let mut header = Header::new_gnu();
+        header.set_path("docs").expect("set directory path");
+        header.set_entry_type(EntryType::Directory);
+        header.set_size(1_025);
+        header.set_mode(0o755);
+        header.set_cksum();
+        builder
+            .append(&header, Cursor::new(vec![0_u8; 1_025]))
+            .expect("append oversized directory payload");
+        let archive = builder.into_inner().expect("finish tar");
+
+        let error = extract_tar_with_budget(Cursor::new(archive), &destination, 1_024)
+            .expect_err("directory payload must consume the expanded-size budget");
+        assert!(error.contains("1024-byte expanded-size limit"), "{error}");
+        assert!(error.contains("docs"), "{error}");
+        fs::remove_dir_all(root).expect("remove fixture");
+    }
+
+    #[test]
+    fn archive_paths_accept_explicit_current_directory_components() {
+        assert_eq!(
+            normalize_archive_path(std::path::Path::new("./docs/./tool.md"))
+                .expect("normalize GNU tar path"),
+            Some(PathBuf::from("docs/tool.md"))
+        );
+        assert_eq!(
+            normalize_archive_path(std::path::Path::new(".")).expect("normalize archive root"),
+            None
+        );
+
+        let entries: &[(&str, &[u8])] = &[("./docs/tool.md", b"# tool")];
+        assert_extracts("tar-dot-prefix", &tar_bytes(entries));
+        assert_extracts("zip-dot-prefix", &zip_bytes(entries));
+    }
+
+    #[test]
+    fn archive_paths_reject_host_separator_and_control_characters() {
+        for path in ["docs\\tool.md", "docs/bad\u{1f}name.md"] {
+            let error = normalize_archive_path(std::path::Path::new(path))
+                .expect_err("reject non-portable archive path");
+            assert!(error.contains("unsafe path"), "{error}");
+        }
     }
 
     #[test]
