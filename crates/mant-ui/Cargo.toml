@@ -22,6 +22,9 @@ minus.workspace = true
 ratatui.workspace = true
 unicode-width.workspace = true
 
+[target.'cfg(unix)'.dependencies]
+signal-hook.workspace = true
+
 [dev-dependencies]
 mant-engine = { path = "../mant-engine", version = "^0.10.0" }
 

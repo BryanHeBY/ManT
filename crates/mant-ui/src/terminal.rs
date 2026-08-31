@@ -1,6 +1,9 @@
 //! Crossterm lifecycle boundary that always restores the host terminal.
 
-use std::{io, panic, time::Instant};
+use std::{
+    io, panic,
+    time::{Duration, Instant},
+};
 
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event},
@@ -12,6 +15,31 @@ use mant_protocol::{CatalogQuery, DocumentAddress, DocumentCatalog};
 use ratatui::{Terminal, backend::CrosstermBackend};
 
 use crate::{App, CopyRequest, UpdateOutcome};
+
+#[cfg(unix)]
+mod signals;
+#[cfg(unix)]
+use signals::TerminationSignals;
+
+const TERMINATION_POLL_INTERVAL: Duration = Duration::from_millis(50);
+
+#[cfg(not(unix))]
+struct TerminationSignals;
+
+#[cfg(not(unix))]
+impl TerminationSignals {
+    fn install() -> io::Result<Self> {
+        Ok(Self)
+    }
+
+    const fn take(&self) -> Option<i32> {
+        None
+    }
+
+    fn terminate(self, _signal: i32) -> io::Result<()> {
+        Ok(())
+    }
+}
 
 /// Run the interactive frontend until the user requests exit.
 ///
@@ -120,6 +148,7 @@ where
     E: FnMut(&crate::ExternalUri) -> Result<(), String>,
     C: FnMut(CopyRequest) -> Result<(), String>,
 {
+    let termination = TerminationSignals::install()?;
     let mut stdout = io::stdout();
     enable_raw_mode()?;
     let mut guard = TerminalGuard { active: true };
@@ -131,23 +160,26 @@ where
     let mut terminal = Terminal::new(backend)?;
     let mut app = App::with_catalog_and_scope(bundle, catalog, scope);
 
-    let result = panic::catch_unwind(panic::AssertUnwindSafe(|| -> io::Result<()> {
+    let result = panic::catch_unwind(panic::AssertUnwindSafe(|| -> io::Result<Option<i32>> {
         let mut redraw = true;
-        while !app.should_quit() {
+        loop {
+            if let Some(signal) = termination.take() {
+                return Ok(Some(signal));
+            }
+            if app.should_quit() {
+                return Ok(None);
+            }
             let now = Instant::now();
             redraw |= app.tick(now).needs_redraw();
             if redraw {
                 terminal.draw(|frame| app.draw(frame))?;
                 redraw = false;
             }
-            let Some(timeout) = app.next_wakeup(Instant::now()) else {
-                redraw |= route_event(&mut app, &event::read()?).needs_redraw();
-                redraw |= service_discovery_request(&mut app, &mut discover_documents);
-                redraw |= service_open_request(&mut app, &mut open_document);
-                redraw |= service_external_request(&mut app, &mut open_external);
-                redraw |= service_copy_request(&mut app, &mut copy_to_clipboard);
-                continue;
-            };
+            let timeout = app
+                .next_wakeup(Instant::now())
+                .map_or(TERMINATION_POLL_INTERVAL, |timeout| {
+                    timeout.min(TERMINATION_POLL_INTERVAL)
+                });
             if !event::poll(timeout)? {
                 continue;
             }
@@ -157,12 +189,16 @@ where
             redraw |= service_external_request(&mut app, &mut open_external);
             redraw |= service_copy_request(&mut app, &mut copy_to_clipboard);
         }
-        Ok(())
     }));
 
     let restore_result = guard.restore();
     match result {
-        Ok(run_result) => run_result.and(restore_result),
+        Ok(Ok(Some(signal))) => {
+            let signal_result = termination.terminate(signal);
+            restore_result.and(signal_result)
+        }
+        Ok(Ok(None)) => restore_result,
+        Ok(Err(error)) => Err(error),
         Err(payload) => {
             let _ = restore_result;
             panic::resume_unwind(payload);
