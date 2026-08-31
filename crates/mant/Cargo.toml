@@ -49,5 +49,8 @@ tokio.workspace = true
 [target.'cfg(windows)'.dependencies]
 crossterm_winapi.workspace = true
 
+[dev-dependencies]
+toml.workspace = true
+
 [lints]
 workspace = true

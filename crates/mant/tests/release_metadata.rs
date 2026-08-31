@@ -10,20 +10,33 @@ use serde_json::Value;
 #[test]
 fn release_profile_preserves_unwind_cleanup() {
     let manifest = include_str!("../../../Cargo.toml");
-    let release = manifest
-        .split_once("[profile.release]")
-        .expect("release profile")
-        .1
-        .split("\n[")
-        .next()
-        .expect("release profile body");
-
     assert!(
-        !release
-            .lines()
-            .any(|line| line.trim() == "panic = \"abort\""),
+        release_panic_strategy(manifest).as_deref() != Some("abort"),
         "the TUI terminal guard and catch_unwind require unwinding"
     );
+}
+
+#[test]
+fn release_profile_guard_parses_equivalent_toml_strings() {
+    assert_eq!(
+        release_panic_strategy("[profile.release]\npanic = 'abort' # equivalent literal string\n")
+            .as_deref(),
+        Some("abort")
+    );
+    assert_eq!(
+        release_panic_strategy("[profile.release]\npanic = \"unwind\"\n").as_deref(),
+        Some("unwind")
+    );
+}
+
+fn release_panic_strategy(manifest: &str) -> Option<String> {
+    toml::from_str::<toml::Value>(manifest)
+        .expect("valid workspace manifest")
+        .get("profile")?
+        .get("release")?
+        .get("panic")?
+        .as_str()
+        .map(str::to_owned)
 }
 
 #[test]
