@@ -26,7 +26,11 @@ const TERMINATION_POLL_INTERVAL: Duration = Duration::from_millis(50);
 #[cfg(not(unix))]
 struct TerminationSignals;
 
+// Keep the event-loop boundary identical to the Unix signal adapter. Windows
+// has no POSIX termination registrations or deferred signal to consume, so
+// these deliberately fallible, receiver-based operations are no-ops there.
 #[cfg(not(unix))]
+#[allow(clippy::unnecessary_wraps, clippy::unused_self)]
 impl TerminationSignals {
     fn install() -> io::Result<Self> {
         Ok(Self)
