@@ -21,6 +21,7 @@ static ARCHIVE_ENTRY_STAT: OnceLock<Document> = OnceLock::new();
 static BSDUNZIP: OnceLock<Document> = OnceLock::new();
 static EXPAND_NUMBER: OnceLock<Document> = OnceLock::new();
 static ZIP_SOURCE_FUNCTION: OnceLock<Document> = OnceLock::new();
+static LIBPIPELINE: OnceLock<Document> = OnceLock::new();
 
 pub fn archlinux_manual(name: &str) -> &'static Document {
     let slot = match name {
@@ -36,6 +37,7 @@ pub fn archlinux_manual(name: &str) -> &'static Document {
         "bsdunzip" => &BSDUNZIP,
         "expand_number" => &EXPAND_NUMBER,
         "zip_source_function" => &ZIP_SOURCE_FUNCTION,
+        "libpipeline" => &LIBPIPELINE,
         _ => panic!("unknown Arch Linux fixture {name}"),
     };
     slot.get_or_init(|| {
@@ -73,6 +75,11 @@ pub fn archlinux_fixture_path(name: &str) -> PathBuf {
         return PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("../..")
             .join("tests/fixtures/roff/real/archlinux/sh.1p.gz");
+    }
+    if name == "libpipeline" {
+        return PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../..")
+            .join("tests/fixtures/roff/real/archlinux/libpipeline.3.gz");
     }
     let extension = match name {
         "gawk" | "rsync" => "zst",

@@ -25,6 +25,11 @@ after the aligned mandoc audit exposed the same operand-loss class inside an
 out-of-SYNOPSIS `Fo` function-pointer declaration. It retains the complete
 page-specific BSD-3-Clause notice.
 
+`libpipeline.3.gz` was added on 2026-09-03 from Arch's libpipeline package
+after a target-conservation audit showed that function identities moved onto
+paragraph nodes by libmandoc disappeared during structural lowering. The
+original compressed package member is retained unchanged.
+
 They form the primary real-man corpus for section topology, definition lists,
 preformatted blocks, inline fonts, navigation, and source-markup regressions.
 The neighbouring Fedora corpus supplies independently packaged generator
@@ -44,6 +49,7 @@ output.
 | `bsdunzip.1` | [libarchive], [Arch `libarchive` 3.8.9-1] | `usr/share/man/man1/bsdunzip.1.gz` | Exact decompressed source | [libarchive BSD-2-Clause] | `a271c9471543684df90d1a3f0d988628588ed8ec4f49bb2f7e402fc752ff4a83` |
 | `expand_number.3bsd` | [libbsd], [Arch `libbsd` 0.12.2-2] | `usr/share/man/man3/expand_number.3bsd.gz` | Exact decompressed source | [BSD-2-Clause] | `4e0d2bd2af63de49f6c55ce96ae07b52a6c2214d837f4c33eec47699ca19de03` |
 | `zip_source_function.3` | [libzip], [Arch `libzip` 1.11.4-1] | `usr/share/man/man3/zip_source_function.3.gz` | Exact decompressed source | [BSD-3-Clause] | `73a409d297a001c885fc00092a92105f30fe4e6ecca0b57d06c6fecc40b5b898` |
+| `libpipeline.3.gz` | [libpipeline], [Arch `libpipeline` 1.5.8-1] | `usr/share/man/man3/libpipeline.3.gz` | Original member | [GPL-3.0-or-later] | `20d992e497e6f86a3abfc218aa349620a05e7b58250db0beefafedc07c7aed7e` |
 
 The two recompressed fixtures preserve these exact decompressed roff hashes:
 
@@ -59,6 +65,7 @@ The corresponding immutable package archives have these SHA-256 values:
 - `libarchive-3.8.9-1-x86_64.pkg.tar.zst`: `07b7aaec008cc4892cb2da0c599a16438d2e70869a01b90c4e20bf153f58c3b3`
 - `libbsd-0.12.2-2-x86_64.pkg.tar.zst`: `e26194849786b0202828a348be3f4b90d410604cd7d48f113a4301584a49895a`
 - `libzip-1.11.4-1-x86_64.pkg.tar.zst`: `e6bc733cdc738d317d94f1906eb86229be174aa8362ad7dbb03ae68d9eb3dbf6`
+- `libpipeline-1.5.8-1-x86_64.pkg.tar.zst`: `35caa28ccb5f00d06f043a68004c406d4985dd4557669e972c7fafeb1af3be5f`
 
 The GCC manual embeds its own GFDL invariant sections, front-cover text, and
 back-cover text. Those page-specific notices remain in `gcc.1.gz`; the shared
@@ -142,6 +149,7 @@ representative topics, grouped by source package.
 [libarchive]: https://libarchive.org/
 [libbsd]: https://libbsd.freedesktop.org/
 [libzip]: https://libzip.org/
+[libpipeline]: https://nongnu.org/libpipeline/
 [Arch `coreutils` 9.11-2]: https://archive.archlinux.org/packages/c/coreutils/coreutils-9.11-2-x86_64.pkg.tar.zst
 [Arch `git` 2.55.0-1]: https://archive.archlinux.org/packages/g/git/git-2.55.0-1-x86_64.pkg.tar.zst
 [Arch `gcc` 16.1.1+r346+g4e03491b401d-4]: https://archive.archlinux.org/packages/g/gcc/gcc-16.1.1%2Br346%2Bg4e03491b401d-4-x86_64.pkg.tar.zst
@@ -153,6 +161,7 @@ representative topics, grouped by source package.
 [Arch `libarchive` 3.8.9-1]: https://archive.archlinux.org/packages/l/libarchive/libarchive-3.8.9-1-x86_64.pkg.tar.zst
 [Arch `libbsd` 0.12.2-2]: https://archive.archlinux.org/packages/l/libbsd/libbsd-0.12.2-2-x86_64.pkg.tar.zst
 [Arch `libzip` 1.11.4-1]: https://archive.archlinux.org/packages/l/libzip/libzip-1.11.4-1-x86_64.pkg.tar.zst
+[Arch `libpipeline` 1.5.8-1]: https://archive.archlinux.org/packages/l/libpipeline/libpipeline-1.5.8-1-x86_64.pkg.tar.zst
 [GPL-2.0-only]: ../LICENSES/GPL-2.0-only.txt
 [GPL-3.0-or-later]: ../LICENSES/GPL-3.0-or-later.txt
 [GFDL-1.3-invariants-or-later]: ../LICENSES/GFDL-1.3-invariants-or-later.txt

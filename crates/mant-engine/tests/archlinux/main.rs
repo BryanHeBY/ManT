@@ -15,6 +15,7 @@ mod expand_number;
 mod gawk;
 mod gcc;
 mod git;
+mod libpipeline;
 mod ls;
 mod rsync;
 mod sh;
