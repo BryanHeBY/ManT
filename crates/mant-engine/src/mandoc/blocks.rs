@@ -17,7 +17,7 @@ use super::{
     },
     part_child_groups,
     roff_escape::visible_text,
-    source_span,
+    source_span, targets,
 };
 
 mod lists;
@@ -106,7 +106,7 @@ fn lower_section(
     let title = plain_text(&heading).trim().to_owned();
     // Allocate IDs in visible document order. Besides being deterministic for
     // consumers, this makes `.Sx` resolution independent of tree recursion.
-    let id = context.section_id(&title);
+    let id = context.section_id_for(&title, node);
     let body = first_part_children(node, NodeKind::Body);
     let first_subsection = body
         .iter()
@@ -249,10 +249,12 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
     }
 
     fn push(&mut self, node: &Node, table_embedding: Option<&TableEmbedding<'_>>) {
+        let structural_targets = targets::structural_targets(node);
         if self.consume_control_or_empty_block(node) {
             return;
         }
         if self.push_no_fill_lines(node) {
+            self.state.queue_targets(structural_targets);
             return;
         }
         self.state.flush_preformatted();
@@ -275,6 +277,7 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
         }
         if node.macro_name.as_deref() == Some("Pp") {
             self.state.flush_paragraph();
+            self.state.queue_targets(structural_targets);
             if !self.state.output.is_empty() {
                 self.state.output.push(Block::VerticalSpace {
                     lines: 1,
@@ -303,6 +306,7 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
             self.push_inline_node(node);
         } else {
             self.state.flush_paragraph();
+            let output_start = self.state.output.len();
             let spacing_enabled = self.state.spacing_enabled();
             StructuralLowerer {
                 context: self.context,
@@ -314,6 +318,8 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
                 spacing_enabled,
             }
             .push(node, table_embedding);
+            self.state.queue_targets(structural_targets);
+            self.state.attach_pending_to_structural_output(output_start);
         }
         self.state.inherit_spacing(spacing_after_node(
             node,
@@ -1021,6 +1027,7 @@ struct BlockState {
     pre_source: Option<mant_ir::SourceSpan>,
     preformatted_last_line: Option<u32>,
     preformatted_tight_boundary: bool,
+    pending_targets: Vec<String>,
     indent_columns: u16,
     spacing_enabled: bool,
 }
@@ -1036,6 +1043,7 @@ impl BlockState {
             pre_source: None,
             preformatted_last_line: None,
             preformatted_tight_boundary: false,
+            pending_targets: Vec::new(),
             indent_columns,
             spacing_enabled,
         }
@@ -1109,6 +1117,35 @@ impl BlockState {
         self.paragraph.tighten_next_boundary();
     }
 
+    fn queue_targets(&mut self, targets: impl IntoIterator<Item = String>) {
+        for target in targets {
+            if !self.pending_targets.contains(&target) {
+                self.pending_targets.push(target);
+            }
+        }
+    }
+
+    fn attach_pending_to_new_output(&mut self, output_start: usize) {
+        if self.pending_targets.is_empty() || self.output.len() == output_start {
+            return;
+        }
+        self.attach_pending_to_structural_output(output_start);
+    }
+
+    fn attach_pending_to_structural_output(&mut self, output_start: usize) {
+        if self.pending_targets.is_empty() {
+            return;
+        }
+        let mut lowered = self.output.split_off(output_start.min(self.output.len()));
+        targets::attach_targets(
+            &mut lowered,
+            std::mem::take(&mut self.pending_targets),
+            layout(self.indent_columns),
+            None,
+        );
+        self.output.append(&mut lowered);
+    }
+
     fn push_preformatted(
         &mut self,
         nodes: Vec<Inline>,
@@ -1145,6 +1182,7 @@ impl BlockState {
     }
 
     fn flush_paragraph(&mut self) {
+        let output_start = self.output.len();
         flush_paragraph(
             &mut self.output,
             &mut self.paragraph,
@@ -1152,16 +1190,19 @@ impl BlockState {
             self.indent_columns,
             self.spacing_enabled,
         );
+        self.attach_pending_to_new_output(output_start);
         self.paragraph_last_line = None;
     }
 
     fn flush_preformatted(&mut self) {
+        let output_start = self.output.len();
         flush_preformatted(
             &mut self.output,
             &mut self.preformatted,
             &mut self.pre_source,
             self.indent_columns,
         );
+        self.attach_pending_to_new_output(output_start);
         self.preformatted_last_line = None;
         self.preformatted_tight_boundary = false;
     }
@@ -1169,6 +1210,8 @@ impl BlockState {
     fn finish(mut self) -> Vec<Block> {
         self.flush_preformatted();
         self.flush_paragraph();
+        let output_end = self.output.len();
+        self.attach_pending_to_structural_output(output_end);
         normalize_explicit_vertical_spacing(&mut self.output);
         self.output
     }

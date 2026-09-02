@@ -179,6 +179,10 @@ impl InlineBuilder {
         let incoming_first = first_visible_character(incoming);
         let incoming_last = last_visible_character(incoming);
         let incoming_has_printable = has_printable_character(incoming);
+        if incoming_first.is_none() && !incoming_has_printable {
+            self.nodes.append(incoming);
+            return;
+        }
         let add_space = needs_boundary_space(self.last_visible_character, incoming_first);
         let boundary = std::mem::replace(&mut self.boundary, PendingBoundary::Ordinary);
         if (self.spacing.enabled() || matches!(boundary, PendingBoundary::Preserved))
@@ -365,6 +369,11 @@ fn lower_inline_node(
     default_name: Option<&str>,
     spacing_enabled: bool,
 ) -> Vec<Inline> {
+    if node.macro_name.as_deref() == Some("Tg") {
+        return super::targets::raw_target(node)
+            .map(|id| vec![Inline::Anchor { id: id.into() }])
+            .unwrap_or_default();
+    }
     if node.flags.no_print || node.kind == NodeKind::Comment {
         return Vec::new();
     }
@@ -688,16 +697,9 @@ fn enclosure_marks(name: &str) -> Option<(&'static str, &'static str)> {
 /// Explicit `.Tg` tags carry `node.tag`; automatically discovered tags fall
 /// back to the same first visible word that libmandoc uses.
 fn navigation_anchor(node: &Node, lowered: &[Inline]) -> Option<Inline> {
-    if !node.flags.deep_link_target {
-        return None;
-    }
-    let id = node.tag.as_deref().map(visible_text).or_else(|| {
-        plain_text(lowered)
-            .split_whitespace()
-            .next()
-            .map(ToOwned::to_owned)
-    })?;
-    (!id.is_empty()).then_some(Inline::Anchor { id: id.into() })
+    let fallback = plain_text(lowered);
+    super::targets::node_target(node, fallback.split_whitespace().next())
+        .map(|id| Inline::Anchor { id: id.into() })
 }
 
 fn inline_children(node: &Node) -> &[Node] {

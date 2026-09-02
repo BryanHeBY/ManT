@@ -16,9 +16,7 @@ use super::super::{
         block_indent, display_indent, horizontal_distance_columns, layout, layout_with_spacing,
         paragraph_distance_lines,
     },
-    part_child_groups,
-    roff_escape::visible_text,
-    source_span,
+    part_child_groups, source_span, targets,
 };
 use super::{
     ends_with_line_continuation, is_inline_equation, is_inline_equation_quote_artifact,
@@ -429,8 +427,8 @@ pub(super) fn lower_mdoc_list(
             compact: node.compact,
             items: items
                 .into_iter()
-                .map(|item| ListItem {
-                    blocks: lower_blocks_with_spacing(
+                .map(|item| {
+                    let mut blocks = lower_blocks_with_spacing(
                         first_part_children(item.node, NodeKind::Body),
                         context,
                         list_indent,
@@ -440,7 +438,14 @@ pub(super) fn lower_mdoc_list(
                             item.spacing_enabled,
                             context.default_name,
                         ),
-                    ),
+                    );
+                    targets::attach_targets(
+                        &mut blocks,
+                        targets::item_targets(item.node),
+                        layout(list_indent),
+                        source_span(item.node),
+                    );
+                    ListItem { blocks }
                 })
                 .collect(),
             layout: layout(indent_columns),
@@ -567,12 +572,13 @@ fn lower_mdoc_column_list(
                     alignment: Some(AstTableAlignment::Left),
                 })
                 .collect::<Vec<_>>();
-            if item.node.flags.deep_link_target
-                && let Some(id) = item.node.tag.as_deref()
-                && let Some(Block::Paragraph { children, .. }) =
-                    cells.first_mut().and_then(|cell| cell.blocks.first_mut())
-            {
-                children.insert(0, Inline::Anchor { id: id.into() });
+            if let Some(cell) = cells.first_mut() {
+                targets::attach_targets(
+                    &mut cell.blocks,
+                    targets::item_targets(item.node),
+                    layout(cell_indent),
+                    source_span(item.node),
+                );
             }
             TableRow { cells }
         })
@@ -697,20 +703,16 @@ fn split_definition_terms(term: Vec<Inline>) -> Vec<Vec<Inline>> {
 /// tags, this identity lives on the structural head rather than a visible
 /// inline child, so it has to be copied before lowering discards that wrapper.
 fn definition_head_anchor(node: &Node, term: &[Inline]) -> Option<String> {
-    let head = node
-        .children
-        .iter()
-        .find(|child| child.kind == NodeKind::Head)?;
-    if !head.flags.deep_link_target {
-        return None;
-    }
-    head.tag.as_deref().map(visible_text).or_else(|| {
-        plain_text(term)
+    let fallback = plain_text(term);
+    targets::part_target(
+        node,
+        NodeKind::Head,
+        fallback
             .trim_start_matches('-')
             .split_whitespace()
             .next()
-            .map(ToOwned::to_owned)
-    })
+            .unwrap_or_default(),
+    )
 }
 
 /// Return only document content from a definition macro's mixed-purpose head.

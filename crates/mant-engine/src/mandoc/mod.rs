@@ -10,6 +10,7 @@ mod reference;
 mod roff_escape;
 mod source;
 mod source_lines;
+mod targets;
 
 use std::{
     cell::RefCell,
@@ -204,6 +205,7 @@ struct LoweringContext<'a> {
     normalized_equations: RefCell<BTreeMap<String, String>>,
     section_ids: HashMap<String, usize>,
     assigned_section_ids: HashSet<String>,
+    explicit_targets: HashSet<String>,
     diagnostics: RefCell<Vec<Diagnostic>>,
 }
 
@@ -250,6 +252,7 @@ impl<'a> LoweringContext<'a> {
             normalized_equations: RefCell::new(BTreeMap::new()),
             section_ids: HashMap::new(),
             assigned_section_ids: HashSet::new(),
+            explicit_targets: HashSet::new(),
             diagnostics: RefCell::new(Vec::new()),
         }
     }
@@ -263,7 +266,17 @@ impl<'a> LoweringContext<'a> {
     }
 
     fn reserve_section_ids(&mut self, ids: &HashSet<String>) {
+        self.explicit_targets.clone_from(ids);
         self.assigned_section_ids.extend(ids.iter().cloned());
+    }
+
+    fn section_id_for(&mut self, title: &str, node: &Node) -> String {
+        if let Some(target) =
+            targets::section_target(node).filter(|target| self.explicit_targets.contains(target))
+        {
+            return target;
+        }
+        self.section_id(title)
     }
 
     /// Normalize an eqn fragment through the same pinned parser used for
@@ -666,6 +679,48 @@ mod tests {
         path
     }
 
+    fn anchor_ids(document: &mant_ir::Document) -> Vec<String> {
+        struct AnchorCollector(Vec<String>);
+
+        impl<'ir> Visit<'ir> for AnchorCollector {
+            fn visit_inline(&mut self, inline: &'ir Inline) {
+                if let Inline::Anchor { id } = inline {
+                    self.0.push(id.to_string());
+                }
+                visit::walk_inline(self, inline);
+            }
+        }
+
+        let mut collector = AnchorCollector(Vec::new());
+        collector.visit_document(document);
+        collector.0
+    }
+
+    fn visible_document_text(document: &mant_ir::Document) -> String {
+        struct TextCollector(String);
+
+        impl<'ir> Visit<'ir> for TextCollector {
+            fn visit_inline(&mut self, inline: &'ir Inline) {
+                match inline {
+                    Inline::Text { value } | Inline::Code { value } => {
+                        self.0.push_str(value);
+                        self.0.push(' ');
+                    }
+                    Inline::LineBreak => self.0.push('\n'),
+                    Inline::Strong { .. }
+                    | Inline::Emphasis { .. }
+                    | Inline::Link { .. }
+                    | Inline::Anchor { .. } => {}
+                }
+                visit::walk_inline(self, inline);
+            }
+        }
+
+        let mut collector = TextCollector(String::new());
+        collector.visit_document(document);
+        collector.0
+    }
+
     #[test]
     fn native_section_ids_ignore_unrelated_section_insertions() {
         let mut original = LoweringContext::new(None, None);
@@ -689,37 +744,135 @@ mod tests {
 
     #[test]
     fn native_generated_anchors_share_one_normalized_unique_namespace() {
-        struct AnchorCollector(Vec<String>);
-
-        impl<'ir> Visit<'ir> for AnchorCollector {
-            fn visit_inline(&mut self, inline: &'ir Inline) {
-                if let Inline::Anchor { id } = inline {
-                    self.0.push(id.to_string());
-                }
-                visit::walk_inline(self, inline);
-            }
-        }
-
         let document = parse_manual_bytes(
             std::path::Path::new("anchors.1"),
             b".TH ANCHORS 1\n.SH ALPHA\nProse.\n.SH OPTIONS\n.TP\n.B --ALPHA\nFirst.\n.TP\n.B --ALPHA\nSecond.\n",
         )
         .expect("lower repeated uppercase definition tags");
-        let mut anchors = AnchorCollector(Vec::new());
-        anchors.visit_document(&document);
+        let anchors = anchor_ids(&document);
 
-        assert!(anchors.0.iter().any(|id| id == "alpha-2"));
-        assert!(anchors.0.iter().any(|id| id == "alpha-3"));
-        assert_eq!(
-            anchors.0.len(),
-            anchors.0.iter().collect::<HashSet<_>>().len()
-        );
+        assert!(anchors.iter().any(|id| id == "alpha-2"));
+        assert!(anchors.iter().any(|id| id == "alpha-3"));
+        assert_eq!(anchors.len(), anchors.iter().collect::<HashSet<_>>().len());
         assert!(document.diagnostics.iter().all(|diagnostic| {
             !matches!(
                 diagnostic.code.as_deref(),
                 Some("ir.invalid-identity" | "ir.duplicate-identity")
             )
         }));
+    }
+
+    #[test]
+    fn explicit_mdoc_targets_are_zero_width_and_unique() {
+        let document = parse_manual_bytes(
+            std::path::Path::new("target-only.1"),
+            b".Dd September 3, 2026\n.Dt TARGET-ONLY 1\n.Os\n.Sh DESCRIPTION\n\
+.Tg explicit-target\n\
+ordinary text\n\
+.Tg repeated-target\n\
+more text\n\
+.Tg repeated-target\n\
+last text\n\
+.Tg\n",
+        )
+        .expect("lower explicit target-only requests");
+
+        let anchors = anchor_ids(&document);
+        assert_eq!(
+            anchors
+                .iter()
+                .filter(|target| target.as_str() == "explicit-target")
+                .count(),
+            1
+        );
+        assert_eq!(
+            anchors
+                .iter()
+                .filter(|target| target.as_str() == "repeated-target")
+                .count(),
+            1
+        );
+        assert!(anchors.iter().all(|target| !target.is_empty()));
+        let visible = visible_document_text(&document);
+        assert!(!visible.contains("explicit-target"));
+        assert!(!visible.contains("repeated-target"));
+        assert!(visible.contains("ordinary text"));
+        assert!(visible.contains("last text"));
+    }
+
+    #[test]
+    fn preserves_targets_moved_to_paragraphs_and_displays() {
+        let paragraph = parse_manual_bytes(
+            std::path::Path::new("paragraph-target.3"),
+            b".Dd September 3, 2026\n.Dt PARAGRAPH-TARGET 3\n.Os\n.Sh DESCRIPTION\n\
+intro\n.Pp\n.Fn alpha\n",
+        )
+        .expect("lower an automatic function target moved to Pp");
+        assert!(anchor_ids(&paragraph).iter().any(|id| id == "alpha"));
+        assert!(visible_document_text(&paragraph).contains("alpha"));
+
+        for (name, display) in [
+            ("Bd", ".Bd -literal\nhello\n.Ed"),
+            ("D1", ".D1 hello"),
+            ("Dl", ".Dl hello"),
+        ] {
+            let source = format!(
+                ".Dd September 3, 2026\n.Dt DISPLAY-TARGET 1\n.Os\n.Sh DESCRIPTION\n.Tg display-target\n{display}\n"
+            );
+            let document = parse_manual_bytes(
+                std::path::Path::new(&format!("{name}-target.1")),
+                source.as_bytes(),
+            )
+            .unwrap_or_else(|error| panic!("lower {name} target: {error}"));
+            assert_eq!(anchor_ids(&document), ["display-target"]);
+            assert_eq!(visible_document_text(&document).trim(), "hello");
+            assert!(matches!(
+                document.sections[0].blocks.first(),
+                Some(Block::Preformatted { children, .. })
+                    if matches!(children.first(), Some(Inline::Anchor { id }) if id == "display-target")
+            ));
+        }
+    }
+
+    #[test]
+    fn preserves_targets_moved_to_list_items_and_containers() {
+        let item = parse_manual_bytes(
+            std::path::Path::new("list-item-target.1"),
+            b".Dd September 3, 2026\n.Dt LIST-ITEM-TARGET 1\n.Os\n.Sh DESCRIPTION\n\
+.Bl -bullet\n.It\n.Tg bullet-target\n.Em bullet text\n.El\n",
+        )
+        .expect("lower a target moved to an ordinary list item");
+        assert_eq!(anchor_ids(&item), ["bullet-target"]);
+        assert!(visible_document_text(&item).contains("bullet text"));
+
+        let container = parse_manual_bytes(
+            std::path::Path::new("list-container-target.1"),
+            b".Dd September 3, 2026\n.Dt LIST-CONTAINER-TARGET 1\n.Os\n.Sh DESCRIPTION\n\
+.Tg list-target\n.Bl -bullet\n.It\nhello\n.El\n",
+        )
+        .expect("lower a target moved to a list container");
+        assert_eq!(anchor_ids(&container), ["list-target"]);
+        assert_eq!(visible_document_text(&container).trim(), "hello");
+    }
+
+    #[test]
+    fn explicit_targets_replace_mdoc_section_slugs() {
+        let document = parse_manual_bytes(
+            std::path::Path::new("section-targets.1"),
+            b".Dd September 3, 2026\n.Dt SECTION-TARGETS 1\n.Os\n\
+.Tg custom-section\n.Sh HEADING\ntext\n\
+.Tg custom-subsection\n.Ss SUBHEADING\nmore text\n",
+        )
+        .expect("lower explicit section and subsection targets");
+
+        assert_eq!(document.sections[0].id.as_str(), "custom-section");
+        assert_eq!(document.sections[0].title, "HEADING");
+        assert_eq!(
+            document.sections[0].children[0].id.as_str(),
+            "custom-subsection"
+        );
+        assert_eq!(document.sections[0].children[0].title, "SUBHEADING");
+        assert!(anchor_ids(&document).is_empty());
     }
 
     fn find_macro_mut<'a>(
