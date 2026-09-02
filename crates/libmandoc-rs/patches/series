@@ -35,3 +35,4 @@
 0026-initialize-number-register-sign.patch
 0027-initialize-alternating-html-tag.patch
 0028-initialize-terminal-escape-state.patch
+0029-avoid-retagging-mdoc-parts.patch

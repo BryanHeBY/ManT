@@ -1,0 +1,32 @@
+diff --git a/mdoc_validate.c b/mdoc_validate.c
+--- a/mdoc_validate.c
++++ b/mdoc_validate.c
+@@ -1161,7 +1161,9 @@ post_tg(POST_ARGS)
+ 	case MDOC_Sh:
+ 	case MDOC_Ss:
+ 	case MDOC_Fo:
+-		nn = nn->head->child == NULL ? n : nn->head;
++		/* The selected head can already own an automatic tag. */
++		nn = nn->head->child == NULL ||
++		    nn->head->flags & NODE_ID ? n : nn->head;
+ 		break;
+ 	case MDOC_It:
+ 		np = nn->parent;
+diff --git a/tag.c b/tag.c
+--- a/tag.c
++++ b/tag.c
+@@ -94,6 +94,14 @@ tag_put(const char *s, int prio, struct roff_node *n)
+ 
+ 	assert(prio <= TAG_FALLBACK);
+ 
++	/*
++	 * An explicit tag can already own this node when a later validation
++	 * pass considers an automatic fallback tag for the same structure.
++	 * Keep the author-selected identity instead of retagging the node.
++	 */
++	if (n->flags & NODE_ID)
++		return;
++
+ 	if (s == NULL) {
+ 		if (n->child == NULL || n->child->type != ROFFT_TEXT)
+ 			return;

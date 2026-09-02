@@ -1862,6 +1862,31 @@ mod tests {
     }
 
     #[test]
+    fn explicit_target_before_an_already_tagged_subsection_remains_separate() {
+        let report = Parser::default()
+            .parse_bytes(
+                "tagged-subsection.1",
+                b".Dd September 3, 2026\n.Dt TAGGED-SUBSECTION 1\n.Os\n\
+.Sh DESCRIPTION\n.Tg subsection-target\n.Ss CUSTOM SUBSECTION\ntext\n",
+            )
+            .expect("parse explicit target before subsection");
+
+        let explicit_target = find_node(&report.document.root, &|node| {
+            node.flags.deep_link_target && node.tag.as_deref() == Some("subsection-target")
+        })
+        .expect("explicit target must remain represented");
+        assert_eq!(explicit_target.macro_name.as_deref(), Some("Ss"));
+
+        let subsection = find_macro(&report.document.root, "Ss").expect("subsection block");
+        assert!(
+            find_node(subsection, &|node| {
+                node.kind == NodeKind::Head && node.flags.deep_link_target
+            })
+            .is_some()
+        );
+    }
+
+    #[test]
     fn parser_normalizes_internal_sentinels_in_validated_tags() {
         let report = Parser::default()
             .parse_bytes(

@@ -1161,7 +1161,9 @@ post_tg(POST_ARGS)
 	case MDOC_Sh:
 	case MDOC_Ss:
 	case MDOC_Fo:
-		nn = nn->head->child == NULL ? n : nn->head;
+		/* The selected head can already own an automatic tag. */
+		nn = nn->head->child == NULL ||
+		    nn->head->flags & NODE_ID ? n : nn->head;
 		break;
 	case MDOC_It:
 		np = nn->parent;

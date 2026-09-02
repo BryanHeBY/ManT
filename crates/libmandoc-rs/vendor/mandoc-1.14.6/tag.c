@@ -94,6 +94,14 @@ tag_put(const char *s, int prio, struct roff_node *n)
 
 	assert(prio <= TAG_FALLBACK);
 
+	/*
+	 * An explicit tag can already own this node when a later validation
+	 * pass considers an automatic fallback tag for the same structure.
+	 * Keep the author-selected identity instead of retagging the node.
+	 */
+	if (n->flags & NODE_ID)
+		return;
+
 	if (s == NULL) {
 		if (n->child == NULL || n->child->type != ROFFT_TEXT)
 			return;
