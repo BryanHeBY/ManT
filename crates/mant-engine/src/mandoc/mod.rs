@@ -2602,10 +2602,11 @@ Escaped: Ma\\[u0161]l\\[u00E1] and \\[u2014] dash.\n";
             inline_text(declaration),
             "audit_open(const char *path, int flags)"
         );
-        assert!(matches!(
-            declaration.first(),
-            Some(Inline::Strong { children }) if inline_text(children) == "audit_open"
-        ));
+        assert!(declaration.iter().any(|inline| matches!(
+            inline,
+            Inline::Strong { children } if inline_text(children) == "audit_open"
+        )));
+        assert!(anchor_ids(&document).iter().any(|id| id == "audit-open"));
 
         let [Block::Paragraph { children, .. }] = document.sections[2].blocks.as_slice() else {
             panic!("expected one enclosure paragraph");

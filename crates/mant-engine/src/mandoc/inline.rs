@@ -606,7 +606,14 @@ fn lower_function_declaration(
         return lower_inline_nodes_with_spacing(body, default_name, spacing_enabled);
     }
 
-    let mut declaration = vec![Inline::Strong { children: head }];
+    // `Fo` stores an explicit `.Tg` on its head wrapper, while the visible
+    // function declaration is lowered from the complete block.
+    let target = super::targets::part_target(node, NodeKind::Head, &plain_text(&head));
+    let mut declaration = target
+        .into_iter()
+        .map(|id| Inline::Anchor { id: id.into() })
+        .collect::<Vec<_>>();
+    declaration.push(Inline::Strong { children: head });
     declaration.push(Inline::Text { value: "(".into() });
     let mut has_argument = false;
     for argument in body {
