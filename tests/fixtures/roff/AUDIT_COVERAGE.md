@@ -13,7 +13,8 @@ index keyed by immutable `(corpus, path, decompressed-source SHA-256)` identity:
   `clean` or `review`, because `skipped` and `hard-failure` rows have no valid
   two-renderer layout baseline; and
 - every checked-in real fixture must appear under the current structure and
-  projection schemas. These bounded fixture runs are the reproducible CI
+  projection schemas and under the current target-conservation schema. These
+  bounded fixture runs are the reproducible CI
   baseline; local distribution corpora remain development and release-time
   evidence;
 - `MANDOC_FIDELITY_AUDIT.csv` must contain every historical fidelity identity
@@ -28,6 +29,10 @@ release scans, and renderer-specific layout studies do not need to be copied
 into unrelated ledgers merely to make row counts equal. The aligned mandoc
 ledgers are narrower by design: content is exactly historical fidelity plus
 fixtures, and layout is exactly the comparable mandoc content set.
+`TARGET_AUDIT.csv` is also independent: its distribution rows record complete
+or targeted zero-width destination sweeps rather than replaying the historical
+visible-fidelity sample. Only its checked-in fixture coverage, schema, source
+identity, and review queue are part of the cross-ledger CI contract.
 `REFERENCE_RENDERER_DEVIATIONS.csv` is a curated conclusion index, not a
 coverage route. Even so, rows naming the current mandoc renderer are validated
 against the matching mandoc-fidelity source hash, section, renderer command,
