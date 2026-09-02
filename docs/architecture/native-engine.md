@@ -101,6 +101,8 @@ while preserving their different origins and licences.
 The model carries intent that a renderer cannot safely recover from text:
 
 - section and anchor IDs identify page-local destinations;
+- native zero-width targets survive structural lowering even when libmandoc
+  moves them onto paragraph, display, list, item, function, or section owners;
 - definition identities remain attached to content, while the rebuildable
   `SemanticIndex` classifies commands, parameter families, configuration keys,
   variables, values, and terms; it preserves selector aliases separately from

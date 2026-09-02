@@ -118,6 +118,11 @@ mandoc `man.conf`, macOS reads its PATH, active developer selection, and
 `MANPATH`/`MANCONFIG` configuration, and Windows optionally reads `ManT`'s own
 `man.conf`, all without spawning a host manual utility.
 
+Native lowering conserves validated zero-width navigation targets as section,
+semantic-entry, or inline identities. This includes targets libmandoc moves
+onto structural paragraph, display, list, item, and function wrappers; it does
+not synthesize visible placeholder text.
+
 ## Layering
 
 `mant-engine` returns an owned `mant_ir::ResolvedContent` for direct semantic

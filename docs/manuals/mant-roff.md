@@ -68,13 +68,13 @@ The required mdoc prologue and structural macros are normalized as follows:
 | `Sh`, `Ss` | Top-level sections and child sections |
 | `Nm`, `Nd` | Strong document name and NAME description dash |
 | `Pp` | Explicit vertical paragraph separation |
-| `Tg` | Zero-width navigation anchor when validated by libmandoc |
+| `Tg` | Zero-width navigation anchor when validated by libmandoc; no visible placeholder text |
 | `Sx` | Resolved same-document section link, including one unique parenthetical heading qualifier, or visible text when unresolved |
 | `Xr` | Typed link to a manual name and section |
 | `Lk`, `Mt` | External URI or email link; an unlabeled target remains visible and any trailing sentence punctuation stays outside the link |
 | `Bx` | BSD lifecycle forms such as `-alpha`, `-beta`, and `-devel` expand to their portable descriptive text; version forms render as canonical `versionBSD` names with an optional release |
 
-Validated libmandoc tags on man and mdoc definitions are retained for page-local navigation. Formatter-generated tags use the same normalized slug rule as semantic entries and are allocated uniquely against section IDs and earlier tags before IR validation. Explicit mdoc `Tg` destinations retain their authored identity.
+Validated libmandoc tags on man and mdoc definitions are retained for page-local navigation. Formatter-generated tags use the same normalized slug rule as semantic entries and are allocated uniquely against section IDs and earlier tags before IR validation. Explicit mdoc `Tg` destinations retain their authored identity. When libmandoc moves a target onto a paragraph, display, list, item, function block, or section wrapper, ManT attaches it to the first addressable lowered descendant (or to the section itself) without adding visible content. Root content and section content pass through the same local-link and traditional-manual-reference resolution.
 
 After source lowering, ManT assigns semantic identities only inside a reliable structural context. Definition lists under environment sections recognize a complete term in bare `NAME`, shell `$NAME`, PowerShell `$Env:NAME` and `${Env:NAME}`, Windows `%NAME%`, or one assignment `NAME=value` form through the same grammar used by explicit Markdown declarations. The assignment value is not part of the selector. Named variables and similar entries may also carry one explicitly delimited trailing parenthetical annotation, such as Readline's `(On)` default notation; that annotation remains in the authored form but not the selector. ManT never takes only the first word of a term, and a composite heading such as `ENVIRONMENT OPTIONS` selects the more specific option grammar. Hanging paragraph plus relative-indent layouts are reconstructed as definitions only in that environment context. Ordinary prose and unrelated uppercase terms are never scanned or promoted. A definition-shaped term that fails the selected grammar remains visible as an unclassified term and emits `manual.semantic-entry.unclassified-definition`; the outline then reports `entriesComplete: false` rather than claiming a complete semantic inventory.
 

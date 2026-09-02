@@ -161,6 +161,7 @@ scripts/audit-roff-fidelity.py  Visible-content differential audit
 scripts/audit-roff-structure.py  Native AST-to-IR topology audit
 scripts/audit-roff-projection.py  CommonMark round-trip topology audit
 scripts/audit-roff-layout.py  Source-gated renderer layout audit
+scripts/audit-roff-targets.py  Native zero-width target-conservation audit
 scripts/check-roff-audit-coverage.py  Cross-ledger corpus coverage verification
 scripts/roff_audit_common.py  Shared roff audit identities and helpers
 docs/architecture/           Design decisions and stable-boundary documentation
@@ -440,6 +441,33 @@ historical conclusions. Its [guide](../tests/fixtures/roff/LAYOUT_AUDIT.md)
 defines the narrow signal and review lifecycle. Do not add it to daily CI;
 only its self-check and focused regressions derived from confirmed findings
 belong there.
+
+### Roff target-conservation audit
+
+Visible text and renderer comparisons cannot detect a zero-width destination
+that disappears while all surrounding words remain intact. The independent
+target audit therefore reads validated libmandoc deep-link owners and compares
+their destinations with section, semantic-entry, and inline identities in the
+final source-aware IR:
+
+```sh
+cargo build --package mant-engine --example roff_target_profile
+python3 scripts/audit-roff-targets.py --fixtures --recheck-recorded \
+  --verify --findings-only
+python3 scripts/audit-roff-targets.py --manpath /usr/share/man \
+  --corpus archlinux-host --recheck-recorded --findings-only \
+  --json /tmp/mant-roff-targets.json
+```
+
+The fixture form is part of the Unix verification boundary. Distribution
+trees remain local release-time evidence and are recorded incrementally in
+[`TARGET_AUDIT.csv`](../tests/fixtures/roff/TARGET_AUDIT.csv). Its
+[guide](../tests/fixtures/roff/TARGET_AUDIT.md) defines the oracle, review
+lifecycle, and latest complete sweep. Automatic section tags are not compared
+as literal strings because ManT deliberately derives a section ID from the
+complete visible title, while an explicit `Tg` destination remains exact.
+Every candidate or native-parser failure requires manual review; confirmed
+loss becomes a licensed real fixture and a focused Rust assertion.
 
 ### Mandoc reference replay
 

@@ -12,7 +12,20 @@ that crate was not published for that change.
 
 ## Unreleased
 
-No compatibility changes are pending.
+### libmandoc-rs
+
+- Avoid an upstream assertion when an explicit mdoc `.Tg` precedes an already
+  tagged section by preserving the existing section target instead of trying
+  to assign it twice.
+
+### mant-engine
+
+- Preserve validated mdoc targets moved by libmandoc onto paragraph, display,
+  list, item, function, and section owners; keep `.Tg` zero-width; and run the
+  same navigation-resolution passes over root and section content.
+- Add an independent target-conservation audit and a licensed `libpipeline(3)`
+  regression fixture so invisible destination loss is covered separately from
+  visible-content, structure, CommonMark, and renderer-layout audits.
 
 ## 0.10.0 - 2026-08-31
 
