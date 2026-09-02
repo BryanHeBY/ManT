@@ -80,6 +80,9 @@ class Finding:
     expected: list[dict[str, object]] | None = None
     observed: list[str] | None = None
     missing: list[dict[str, object]] | None = None
+    unexpected: list[str] | None = None
+    duplicate_target_count: int = 0
+    dangling_target_count: int = 0
     target_owners: dict[str, int] | None = None
 
 
@@ -229,6 +232,9 @@ def profile_findings(
             expected = response.get("expected")
             observed = response.get("observed")
             missing = response.get("missing")
+            unexpected = response.get("unexpected")
+            duplicate_target_count = response.get("duplicateTargetCount")
+            dangling_target_count = response.get("danglingTargetCount")
             target_owners = response.get("targetOwners")
             violations = response.get("violations")
             valid = (
@@ -238,6 +244,12 @@ def profile_findings(
                 and all(isinstance(identity, str) for identity in observed)
                 and isinstance(missing, list)
                 and all(valid_target(target) for target in missing)
+                and isinstance(unexpected, list)
+                and all(isinstance(target, str) for target in unexpected)
+                and isinstance(duplicate_target_count, int)
+                and duplicate_target_count >= 0
+                and isinstance(dangling_target_count, int)
+                and dangling_target_count >= 0
                 and isinstance(violations, list)
                 and all(isinstance(item, str) for item in violations)
                 and isinstance(target_owners, dict)
@@ -256,6 +268,9 @@ def profile_findings(
                 expected=expected,
                 observed=observed,
                 missing=missing,
+                unexpected=unexpected,
+                duplicate_target_count=duplicate_target_count,
+                dangling_target_count=dangling_target_count,
                 target_owners=target_owners,
             )
 
@@ -338,8 +353,16 @@ def main(argv: Sequence[str]) -> int:
     by_label = {finding.path: finding for finding in findings}
     summary = Counter(finding.status for finding in findings)
     owner_summary = Counter()
+    missing_count = 0
+    unexpected_count = 0
+    duplicate_count = 0
+    dangling_count = 0
     for finding in findings:
         owner_summary.update(finding.target_owners or {})
+        missing_count += len(finding.missing or [])
+        unexpected_count += len(finding.unexpected or [])
+        duplicate_count += finding.duplicate_target_count
+        dangling_count += finding.dangling_target_count
     verification_failed = False
     for page in pages:
         label, digest = records[page]
@@ -372,6 +395,10 @@ def main(argv: Sequence[str]) -> int:
     print(
         f"summary: examined={len(findings)}, clean={summary['clean']}, "
         f"review={summary['review']}, hard={summary['hard-failure']}"
+    )
+    print(
+        f"target differences: missing={missing_count}, unexpected={unexpected_count}, "
+        f"duplicate={duplicate_count}, dangling={dangling_count}"
     )
     if owner_summary:
         owners = ", ".join(

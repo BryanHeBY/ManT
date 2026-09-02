@@ -13,6 +13,9 @@ source-aware lowering path. Validated libmandoc deep-link owners form the
 expected set. Section IDs, semantic-entry IDs, and inline anchors form the
 observed set. Explicit `.Tg` destinations must survive exactly; generated
 destinations may use ManT's deterministic normalized collision suffix.
+The `unexpected` count is reserved for IR identity-role collisions reported
+by validation; semantic discovery legitimately creates additional entry IDs
+that have no one-to-one native tag and those are not target-audit findings.
 
 Automatic `Sh` and `Ss` tags are excluded from literal comparison because
 ManT intentionally uses the complete visible heading for section identity,

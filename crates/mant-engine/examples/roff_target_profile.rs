@@ -96,13 +96,33 @@ fn profile_request(line: &str) -> Result<Value, String> {
     })
     .map_err(|error| error.to_string())?;
     let alias = document.meta.alias_target.is_some();
-    let observed = observed_identities(&document);
+    let (observed, anchors, section_links) = observed_identities(&document);
     let missing = if alias {
         Vec::new()
     } else {
         missing_targets(&expected, &observed)
     };
-    let violations = missing
+    // Semantic discovery deliberately creates additional addressable entries
+    // that have no one-to-one libmandoc target. An "unexpected" target is
+    // therefore an incompatible identity-role collision reported by the IR
+    // validator, not merely an identity absent from the native tag table.
+    let unexpected = document
+        .diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code.as_deref() == Some("ir.identity-role-collision"))
+        .map(|diagnostic| diagnostic.message.clone())
+        .collect::<Vec<_>>();
+    let duplicate_target_count = document
+        .diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code.as_deref() == Some("ir.duplicate-identity"))
+        .count();
+    let dangling_target_count = document
+        .diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code.as_deref() == Some("ir.dangling-section-link"))
+        .count();
+    let mut violations = missing
         .iter()
         .map(|target| {
             format!(
@@ -111,6 +131,21 @@ fn profile_request(line: &str) -> Result<Value, String> {
             )
         })
         .collect::<Vec<_>>();
+    violations.extend(
+        unexpected
+            .iter()
+            .map(|target| format!("unexpected IR target role: {target}")),
+    );
+    if duplicate_target_count > 0 {
+        violations.push(format!(
+            "{duplicate_target_count} duplicate IR target identities"
+        ));
+    }
+    if dangling_target_count > 0 {
+        violations.push(format!(
+            "{dangling_target_count} dangling section-link targets"
+        ));
+    }
 
     Ok(json!({
         "schema": PROFILE_SCHEMA,
@@ -118,7 +153,12 @@ fn profile_request(line: &str) -> Result<Value, String> {
         "expected": expected,
         "targetOwners": target_owners,
         "observed": observed,
+        "anchors": anchors,
+        "sectionLinkTargets": section_links,
         "missing": missing,
+        "unexpected": unexpected,
+        "duplicateTargetCount": duplicate_target_count,
+        "danglingTargetCount": dangling_target_count,
         "alias": alias,
         "diagnostics": {
             "parser": report.diagnostics.len(),
@@ -270,32 +310,51 @@ fn flatten_nodes<'a>(node: &'a Node, output: &mut Vec<&'a Node>) {
     }
 }
 
-fn observed_identities(document: &Document) -> BTreeSet<String> {
+fn observed_identities(
+    document: &Document,
+) -> (BTreeSet<String>, BTreeSet<String>, BTreeSet<String>) {
     let mut identities = BTreeSet::new();
-    collect_blocks(&document.blocks, &mut identities);
+    let mut anchors = BTreeSet::new();
+    let mut section_links = BTreeSet::new();
+    collect_blocks(
+        &document.blocks,
+        &mut identities,
+        &mut anchors,
+        &mut section_links,
+    );
     for section in &document.sections {
-        collect_section(section, &mut identities);
+        collect_section(section, &mut identities, &mut anchors, &mut section_links);
     }
-    identities
+    (identities, anchors, section_links)
 }
 
-fn collect_section(section: &Section, identities: &mut BTreeSet<String>) {
+fn collect_section(
+    section: &Section,
+    identities: &mut BTreeSet<String>,
+    anchors: &mut BTreeSet<String>,
+    section_links: &mut BTreeSet<String>,
+) {
     identities.insert(section.id.to_string());
-    collect_blocks(&section.blocks, identities);
+    collect_blocks(&section.blocks, identities, anchors, section_links);
     for child in &section.children {
-        collect_section(child, identities);
+        collect_section(child, identities, anchors, section_links);
     }
 }
 
-fn collect_blocks(blocks: &[Block], identities: &mut BTreeSet<String>) {
+fn collect_blocks(
+    blocks: &[Block],
+    identities: &mut BTreeSet<String>,
+    anchors: &mut BTreeSet<String>,
+    section_links: &mut BTreeSet<String>,
+) {
     for block in blocks {
         match block {
             Block::Paragraph { children, .. } | Block::Preformatted { children, .. } => {
-                collect_inlines(children, identities);
+                collect_inlines(children, identities, anchors, section_links);
             }
             Block::List { items, .. } => {
                 for item in items {
-                    collect_blocks(&item.blocks, identities);
+                    collect_blocks(&item.blocks, identities, anchors, section_links);
                 }
             }
             Block::DefinitionList { items, .. } => {
@@ -304,14 +363,14 @@ fn collect_blocks(blocks: &[Block], identities: &mut BTreeSet<String>) {
                         identities.insert(identity.id.to_string());
                     }
                     for term in &item.terms {
-                        collect_inlines(term, identities);
+                        collect_inlines(term, identities, anchors, section_links);
                     }
-                    collect_blocks(&item.description, identities);
+                    collect_blocks(&item.description, identities, anchors, section_links);
                 }
             }
             Block::Table { rows, .. } => {
                 for cell in rows.iter().flat_map(|row| &row.cells) {
-                    collect_blocks(&cell.blocks, identities);
+                    collect_blocks(&cell.blocks, identities, anchors, section_links);
                 }
             }
             Block::Equation { .. }
@@ -322,15 +381,30 @@ fn collect_blocks(blocks: &[Block], identities: &mut BTreeSet<String>) {
     }
 }
 
-fn collect_inlines(nodes: &[Inline], identities: &mut BTreeSet<String>) {
+fn collect_inlines(
+    nodes: &[Inline],
+    identities: &mut BTreeSet<String>,
+    anchors: &mut BTreeSet<String>,
+    section_links: &mut BTreeSet<String>,
+) {
     for node in nodes {
         match node {
             Inline::Anchor { id } => {
                 identities.insert(id.to_string());
+                anchors.insert(id.to_string());
             }
             Inline::Strong { children }
             | Inline::Emphasis { children }
-            | Inline::Link { children, .. } => collect_inlines(children, identities),
+            | Inline::Link { children, .. } => {
+                if let Inline::Link {
+                    target: mant_ir::LinkTarget::Section { id },
+                    ..
+                } = node
+                {
+                    section_links.insert(id.to_string());
+                }
+                collect_inlines(children, identities, anchors, section_links);
+            }
             Inline::Text { .. } | Inline::Code { .. } | Inline::LineBreak => {}
         }
     }
