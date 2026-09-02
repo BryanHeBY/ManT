@@ -157,7 +157,12 @@ fn lower_mandoc_document_with_source(
         "manual",
     ));
     diagnostics.extend(crate::definitions::manual_discovery_diagnostics(&sections));
-    navigation::resolve_navigation(&mut sections, &retained_targets, &mut diagnostics);
+    navigation::resolve_navigation(
+        &mut root_blocks,
+        &mut sections,
+        &retained_targets,
+        &mut diagnostics,
+    );
     let mut document = Document {
         parser: Some(ParserInfo {
             name: "libmandoc".to_owned(),
@@ -873,6 +878,43 @@ intro\n.Pp\n.Fn alpha\n",
         );
         assert_eq!(document.sections[0].children[0].title, "SUBHEADING");
         assert!(anchor_ids(&document).is_empty());
+    }
+
+    #[test]
+    fn root_blocks_receive_the_same_navigation_passes_as_sections() {
+        let mdoc = parse_manual_bytes(
+            std::path::Path::new("root-section-reference.1"),
+            b".Dd September 3, 2026\n.Dt ROOT-SECTION-REFERENCE 1\n.Os\n\
+See\n.Sx NAME\n.Sh NAME\n.Nm root-section-reference\n.Nd root reference\n",
+        )
+        .expect("lower a root-level mdoc section reference");
+        assert!(mdoc.blocks.iter().any(|block| {
+            matches!(block, Block::Paragraph { children, .. } if children.iter().any(|inline| {
+                matches!(inline, Inline::Link {
+                    target: mant_ir::LinkTarget::Section { id }, ..
+                } if id == "name")
+            }))
+        }));
+        assert!(mdoc.diagnostics.iter().all(|diagnostic| {
+            diagnostic.code.as_deref() != Some("ir.dangling-section-link")
+                && diagnostic.code.as_deref() != Some("unresolved-section-reference")
+        }));
+
+        let man = parse_manual_bytes(
+            std::path::Path::new("root-manual-reference.1"),
+            b".TH ROOT-MANUAL-REFERENCE 1\n.BR printf (3)\n.SH NAME\nroot-manual-reference \\- root reference\n",
+        )
+        .expect("lower a root-level traditional manual reference");
+        assert!(man.blocks.iter().any(|block| {
+            matches!(block, Block::Paragraph { children, .. } if children.iter().any(|inline| {
+                matches!(inline, Inline::Link {
+                    target: mant_ir::LinkTarget::Manual {
+                        name,
+                        manual_section: Some(section),
+                    }, ..
+                } if name == "printf" && section == "3")
+            }))
+        }));
     }
 
     fn find_macro_mut<'a>(

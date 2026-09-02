@@ -17,14 +17,17 @@ use mant_ir::{
 type SectionTargets = HashMap<String, Option<String>>;
 
 pub(super) fn resolve_navigation(
+    root_blocks: &mut [Block],
     sections: &mut [Section],
-    explicit_targets: &HashSet<String>,
+    retained_targets: &HashSet<String>,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     let mut targets = SectionTargets::new();
     collect_section_targets(sections, &mut targets);
+    resolve_blocks(root_blocks, &targets, retained_targets, diagnostics);
+    promote_manual_references(root_blocks);
     for section in sections {
-        resolve_section(section, &targets, explicit_targets, diagnostics);
+        resolve_section(section, &targets, retained_targets, diagnostics);
     }
 }
 
@@ -153,13 +156,13 @@ fn collect_section_targets(sections: &[Section], targets: &mut SectionTargets) {
 fn resolve_section(
     section: &mut Section,
     targets: &SectionTargets,
-    explicit_targets: &HashSet<String>,
+    retained_targets: &HashSet<String>,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    resolve_blocks(&mut section.blocks, targets, explicit_targets, diagnostics);
+    resolve_blocks(&mut section.blocks, targets, retained_targets, diagnostics);
     promote_manual_references(&mut section.blocks);
     for child in &mut section.children {
-        resolve_section(child, targets, explicit_targets, diagnostics);
+        resolve_section(child, targets, retained_targets, diagnostics);
     }
 }
 
