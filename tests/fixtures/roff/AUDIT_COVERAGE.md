@@ -12,8 +12,8 @@ index keyed by immutable `(corpus, path, decompressed-source SHA-256)` identity:
 - `LAYOUT_AUDIT.csv` must cover fidelity rows whose comparison completed as
   `clean` or `review`, because `skipped` and `hard-failure` rows have no valid
   two-renderer layout baseline; and
-- every checked-in real fixture must appear under the current structure and
-  projection schemas and under the current target-conservation schema. These
+- every checked-in real fixture must appear under the current structure,
+  projection, target-conservation, and semantic-entry precision schemas. These
   bounded fixture runs are the reproducible CI
   baseline; local distribution corpora remain development and release-time
   evidence;
@@ -33,6 +33,10 @@ fixtures, and layout is exactly the comparable mandoc content set.
 or targeted zero-width destination sweeps rather than replaying the historical
 visible-fidelity sample. Only its checked-in fixture coverage, schema, source
 identity, and review queue are part of the cross-ledger CI contract.
+`SEMANTIC_AUDIT.csv` follows the same independent model for final semantic
+entries and retained definition structure. Its broad sweeps need not mirror
+the visible-fidelity sample, while every checked-in fixture must have a current
+schema row and no unresolved review result.
 `REFERENCE_RENDERER_DEVIATIONS.csv` is a curated conclusion index, not a
 coverage route. Even so, rows naming the current mandoc renderer are validated
 against the matching mandoc-fidelity source hash, section, renderer command,
@@ -62,10 +66,10 @@ python3 scripts/audit-roff-layout.py --manpath /path/to/man-root \
 
 The coverage check is cheap enough for daily CI: it validates CSV headers,
 status/schema values, duplicate and exact source identities, current schema
-coverage, matching mandoc renderer identities, pending-review totals, and the
-small checked-in fixture inventory. It also validates the schema and unique IDs
-of the curated deviation ledger and reports how many rows reproduce the current
-mandoc renderer.
+coverage (including target and semantic fixtures), matching mandoc renderer
+identities, pending-review totals, and the small checked-in fixture inventory.
+It also validates the schema and unique IDs of the curated deviation ledger and
+reports how many rows reproduce the current mandoc renderer.
 It does not run groff, scan host manuals, or turn local third-party corpora
 into a CI dependency. A zero missing count certifies execution-range alignment,
 and a zero pending count certify execution-range alignment and completion of

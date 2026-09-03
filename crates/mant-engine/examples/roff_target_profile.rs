@@ -16,11 +16,18 @@ use std::{
 
 use libmandoc_rs::{Compression, IncludePolicy, Node, NodeKind, ParseOptions, Parser};
 use mant_engine::lower_mandoc_document;
-use mant_ir::{Block, Document, Inline, Section};
+use mant_ir::{Block, Document, FragmentAlias, Inline, Section};
 use serde::Serialize;
 use serde_json::{Value, json};
 
-const PROFILE_SCHEMA: &str = "mant.roff-target-profile/v2";
+const PROFILE_SCHEMA: &str = "mant.roff-target-profile/v3";
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+enum TargetRole {
+    Section,
+    Anchor,
+}
 
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -28,9 +35,44 @@ struct ExpectedTarget {
     id: String,
     normalized_id: String,
     source_line: u32,
+    owner_source_line: u32,
     owner_macro: String,
     owner_kind: String,
+    ast_path: String,
+    logical_owner_key: String,
+    section_source_line: u32,
+    expected_role: TargetRole,
+    expected_container: &'static str,
     explicit: bool,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+enum ObservedRole {
+    Document,
+    Section,
+    Entry,
+    Anchor,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ObservedTarget {
+    identity: String,
+    fragment_aliases: Vec<String>,
+    role: ObservedRole,
+    container: &'static str,
+    section_source_line: u32,
+    ir_path: String,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct MatchedTarget {
+    logical_owner_key: String,
+    observed_ir_path: String,
+    observed_identity: String,
+    matched_by: &'static str,
 }
 
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
@@ -57,6 +99,7 @@ struct ClassifiedOwner {
     owner_macro: String,
     owner_kind: String,
     explicit: bool,
+    expected_role: TargetRole,
     disposition: OwnerDisposition,
     reason: &'static str,
 }
@@ -78,11 +121,15 @@ struct UnclassifiedOwner {
     source_line: u32,
     owner_macro: String,
     owner_kind: String,
+    ast_path: String,
+    logical_owner_key: String,
+    raw_owner_count: usize,
     reason: &'static str,
 }
 
 #[derive(Default)]
 struct ObservedTargets {
+    occurrences: Vec<ObservedTarget>,
     identities: BTreeSet<String>,
     fragments: BTreeSet<String>,
     anchors: BTreeSet<String>,
@@ -167,15 +214,15 @@ fn profile_request(line: &str) -> Result<Value, String> {
     let alias = document.meta.alias_target.is_some();
     let observed = observed_targets(&document);
     let observed_spellings = observed.all_spellings();
-    let missing = if alias {
-        Vec::new()
+    let (missing, matched, used_observed) = if alias {
+        (Vec::new(), Vec::new(), BTreeSet::new())
     } else {
-        missing_targets(&native_profile.expected, &observed_spellings)
+        match_targets(&native_profile.expected, &observed.occurrences)
     };
     let unexpected_targets = if alias {
         Vec::new()
     } else {
-        unexpected_targets(&native_profile.expected, &observed)
+        unexpected_targets(&observed, &used_observed)
     };
     let findings = audit_findings(
         &document,
@@ -189,10 +236,14 @@ fn profile_request(line: &str) -> Result<Value, String> {
         "id": id,
         "expected": native_profile.expected,
         "targetOwnerCount": native_profile.owner_count,
-        "classifiedOwnerCount": native_profile.owner_count - native_profile.unclassified.len(),
+        "classifiedOwnerCount": native_profile.classified_owner_count,
+        "logicalOwnerCount": native_profile.logical_owner_count,
+        "classifiedLogicalOwnerCount": native_profile.classified_logical_owner_count,
         "ownerClasses": native_profile.owner_classes,
         "unclassifiedOwners": native_profile.unclassified,
         "observed": observed_spellings,
+        "observedOccurrences": observed.occurrences,
+        "matched": matched,
         "observedIdentities": observed.identities,
         "observedFragmentAliases": observed.fragments,
         "observedEntryIdentities": observed.entries,
@@ -310,25 +361,125 @@ fn path_field(request: &Value, field: &str) -> Result<PathBuf, String> {
 struct NativeTargetProfile {
     expected: Vec<ExpectedTarget>,
     owner_count: usize,
+    classified_owner_count: usize,
+    logical_owner_count: usize,
+    classified_logical_owner_count: usize,
     owner_classes: Vec<OwnerClass>,
     unclassified: Vec<UnclassifiedOwner>,
 }
 
+struct AstNodeRef<'a> {
+    node: &'a Node,
+    path: String,
+    section_source_line: u32,
+    order: usize,
+}
+
+#[derive(Clone)]
+struct ExplicitTarget {
+    id: String,
+    source_line: u32,
+    ast_path: String,
+    section_source_line: u32,
+    order: usize,
+}
+
+struct LogicalOwner {
+    target: Option<String>,
+    owner_source_line: u32,
+    owner_macro: String,
+    owner_kind: String,
+    ast_path: String,
+    section_source_line: u32,
+    order: usize,
+    raw_owner_count: usize,
+    explicit: Option<ExplicitTarget>,
+}
+
 fn native_target_profile(root: &Node) -> NativeTargetProfile {
     let mut flattened = Vec::new();
-    flatten_nodes(root, &mut flattened);
+    flatten_nodes(root, "0", 0, &mut flattened);
     let explicit = explicit_targets(&flattened);
-    let mut targets = BTreeMap::<(String, u32), ExpectedTarget>::new();
-    let mut classes = BTreeMap::<(String, String, OwnerDisposition, &'static str), usize>::new();
-    let mut unclassified = Vec::new();
-    let mut owner_count = 0;
+    let (mut owners, owner_count) = logical_owners(&flattened);
+    let unmatched_explicit = bind_explicit_targets(&mut owners, &explicit);
+    assemble_native_profile(owners, unmatched_explicit, owner_count)
+}
 
-    for node in flattened {
-        if !node.flags.deep_link_target {
+fn logical_owners(flattened: &[AstNodeRef<'_>]) -> (Vec<LogicalOwner>, usize) {
+    let mut grouped = BTreeMap::<(String, Option<String>), LogicalOwner>::new();
+    let mut owner_count = 0;
+    for reference in flattened {
+        if !reference.node.flags.deep_link_target {
             continue;
         }
         owner_count += 1;
-        let owner = classify_target_owner(node, &explicit);
+        let target = target_name(reference.node);
+        let logical_path = logical_owner_path(reference);
+        let key = (logical_path.clone(), target.clone());
+        grouped
+            .entry(key)
+            .and_modify(|owner| owner.raw_owner_count += 1)
+            .or_insert_with(|| LogicalOwner {
+                target,
+                owner_source_line: reference.node.line,
+                owner_macro: reference
+                    .node
+                    .macro_name
+                    .clone()
+                    .unwrap_or_else(|| "<none>".to_owned()),
+                owner_kind: format!("{:?}", reference.node.kind).to_ascii_lowercase(),
+                ast_path: logical_path,
+                section_source_line: reference.section_source_line,
+                order: reference.order,
+                raw_owner_count: 1,
+                explicit: None,
+            });
+    }
+    let mut owners = grouped.into_values().collect::<Vec<_>>();
+    owners.sort_by_key(|owner| owner.order);
+    (owners, owner_count)
+}
+
+fn bind_explicit_targets(
+    owners: &mut [LogicalOwner],
+    explicit: &[ExplicitTarget],
+) -> Vec<ExplicitTarget> {
+    let mut unmatched_explicit = Vec::new();
+    for (index, target) in explicit.iter().cloned().enumerate() {
+        let next_explicit_order = explicit
+            .get(index + 1)
+            .map_or(usize::MAX, |next| next.order);
+        let candidate = owners
+            .iter_mut()
+            .filter(|owner| {
+                owner.explicit.is_none()
+                    && owner.target.as_deref() == Some(target.id.as_str())
+                    && owner.order >= target.order
+                    && owner.order < next_explicit_order
+            })
+            .min_by_key(|owner| owner.order);
+        if let Some(owner) = candidate {
+            owner.explicit = Some(target);
+        } else {
+            unmatched_explicit.push(target);
+        }
+    }
+    unmatched_explicit
+}
+
+fn assemble_native_profile(
+    owners: Vec<LogicalOwner>,
+    unmatched_explicit: Vec<ExplicitTarget>,
+    owner_count: usize,
+) -> NativeTargetProfile {
+    let logical_owner_count = owners.len() + unmatched_explicit.len();
+    let mut targets = Vec::new();
+    let mut classes = BTreeMap::<(String, String, OwnerDisposition, &'static str), usize>::new();
+    let mut unclassified = Vec::new();
+    let mut unclassified_raw_count = 0;
+
+    for logical in owners {
+        let owner = classify_target_owner(&logical);
         *classes
             .entry((
                 owner.owner_macro.clone(),
@@ -336,13 +487,17 @@ fn native_target_profile(root: &Node) -> NativeTargetProfile {
                 owner.disposition,
                 owner.reason,
             ))
-            .or_default() += 1;
+            .or_default() += logical.raw_owner_count;
         if owner.disposition == OwnerDisposition::Unclassified {
+            unclassified_raw_count += logical.raw_owner_count;
             unclassified.push(UnclassifiedOwner {
                 target: owner.target,
                 source_line: owner.source_line,
                 owner_macro: owner.owner_macro,
                 owner_kind: owner.owner_kind,
+                ast_path: logical.ast_path.clone(),
+                logical_owner_key: logical_owner_key(&logical),
+                raw_owner_count: logical.raw_owner_count,
                 reason: owner.reason,
             });
             continue;
@@ -353,48 +508,51 @@ fn native_target_profile(root: &Node) -> NativeTargetProfile {
         let Some(id) = owner.target else {
             continue;
         };
-        let owner_macro = node.macro_name.clone().unwrap_or_default();
-        let owner_kind = format!("{:?}", node.kind).to_ascii_lowercase();
-        let target = ExpectedTarget {
+        let expected_container = expected_container(&owner.owner_macro);
+        targets.push(ExpectedTarget {
             normalized_id: document_id_slug(&id),
             explicit: owner.explicit,
-            id: id.clone(),
-            source_line: node.line,
-            owner_macro: owner_macro.clone(),
-            owner_kind: owner_kind.clone(),
-        };
-        // libmandoc often places one logical target on a block and one or
-        // more of its head/body wrappers. They are one preservation
-        // obligation, not multiple required IR anchors.
-        targets.entry((id, node.line)).or_insert(target);
+            id,
+            source_line: logical
+                .explicit
+                .as_ref()
+                .map_or(logical.owner_source_line, |target| target.source_line),
+            owner_source_line: logical.owner_source_line,
+            owner_macro: owner.owner_macro,
+            owner_kind: owner.owner_kind,
+            ast_path: logical.ast_path.clone(),
+            logical_owner_key: logical_owner_key(&logical),
+            section_source_line: logical.section_source_line,
+            expected_role: owner.expected_role,
+            expected_container,
+        });
     }
 
-    // A target can remain on an inline `.Tg` or on a visible inline macro.
-    // It remains an obligation even though it has no structural owner.
-    for id in explicit.keys() {
-        if targets.values().any(|target| &target.id == id) {
-            continue;
-        }
-        let source_line = explicit
-            .get(id)
-            .and_then(|lines| lines.iter().next().copied())
-            .unwrap_or(0);
-        targets.insert(
-            (id.clone(), source_line),
-            ExpectedTarget {
-                normalized_id: document_id_slug(id),
-                id: id.clone(),
-                source_line,
-                owner_macro: "Tg".to_owned(),
-                owner_kind: "explicit".to_owned(),
-                explicit: true,
-            },
-        );
+    for target in unmatched_explicit {
+        let normalized_id = document_id_slug(&target.id);
+        targets.push(ExpectedTarget {
+            id: target.id,
+            normalized_id,
+            source_line: target.source_line,
+            owner_source_line: target.source_line,
+            owner_macro: "Tg".to_owned(),
+            owner_kind: "element".to_owned(),
+            ast_path: target.ast_path.clone(),
+            logical_owner_key: format!("tg:{}", target.ast_path),
+            section_source_line: target.section_source_line,
+            expected_role: TargetRole::Anchor,
+            expected_container: "content",
+            explicit: true,
+        });
     }
 
+    let classified_logical_owner_count = logical_owner_count - unclassified.len();
     NativeTargetProfile {
-        expected: targets.into_values().collect(),
+        expected: targets,
         owner_count,
+        classified_owner_count: owner_count - unclassified_raw_count,
+        logical_owner_count,
+        classified_logical_owner_count,
         owner_classes: classes
             .into_iter()
             .map(
@@ -411,19 +569,20 @@ fn native_target_profile(root: &Node) -> NativeTargetProfile {
     }
 }
 
-fn classify_target_owner(
-    node: &Node,
-    explicit: &BTreeMap<String, BTreeSet<u32>>,
-) -> ClassifiedOwner {
-    let target = target_name(node);
-    let is_explicit = target
+fn classify_target_owner(logical: &LogicalOwner) -> ClassifiedOwner {
+    let target = logical
+        .explicit
         .as_ref()
-        .is_some_and(|target| explicit.contains_key(target));
-    let owner_macro = node
-        .macro_name
-        .clone()
-        .unwrap_or_else(|| "<none>".to_owned());
-    let owner_kind = format!("{:?}", node.kind).to_ascii_lowercase();
+        .map(|target| target.id.clone())
+        .or_else(|| logical.target.clone());
+    let is_explicit = logical.explicit.is_some();
+    let owner_macro = logical.owner_macro.clone();
+    let owner_kind = logical.owner_kind.clone();
+    let expected_role = if matches!(owner_macro.as_str(), "SH" | "SS" | "Sh" | "Ss") {
+        TargetRole::Section
+    } else {
+        TargetRole::Anchor
+    };
     let (disposition, reason) =
         if matches!(owner_macro.as_str(), "SH" | "SS" | "Sh" | "Ss") && !is_explicit {
             (
@@ -473,32 +632,64 @@ fn classify_target_owner(
         };
     ClassifiedOwner {
         target,
-        source_line: node.line,
+        source_line: logical.owner_source_line,
         owner_macro,
         owner_kind,
         explicit: is_explicit,
+        expected_role,
         disposition,
         reason,
     }
 }
 
-fn explicit_targets(nodes: &[&Node]) -> BTreeMap<String, BTreeSet<u32>> {
-    let mut targets = BTreeMap::<String, BTreeSet<u32>>::new();
-    for (index, node) in nodes.iter().enumerate() {
-        if node.macro_name.as_deref() != Some("Tg") {
+fn explicit_targets(nodes: &[AstNodeRef<'_>]) -> Vec<ExplicitTarget> {
+    let mut targets = Vec::new();
+    for reference in nodes {
+        if reference.node.macro_name.as_deref() != Some("Tg") {
             continue;
         }
-        let target = first_text(node).map(str::to_owned).or_else(|| {
-            nodes[index + 1..]
-                .iter()
-                .find(|candidate| candidate.flags.deep_link_target)
-                .and_then(|candidate| target_name(candidate))
-        });
+        let target = target_name(reference.node);
         if let Some(target) = target.filter(|target| !target.is_empty()) {
-            targets.entry(target).or_default().insert(node.line);
+            targets.push(ExplicitTarget {
+                id: target,
+                source_line: reference.node.line,
+                ast_path: reference.path.clone(),
+                section_source_line: reference.section_source_line,
+                order: reference.order,
+            });
         }
     }
     targets
+}
+
+fn logical_owner_path(reference: &AstNodeRef<'_>) -> String {
+    logical_owner_path_for(&reference.path, reference.node.kind)
+}
+
+fn logical_owner_path_for(path: &str, kind: NodeKind) -> String {
+    if matches!(kind, NodeKind::Head | NodeKind::Body | NodeKind::Tail) {
+        path.rsplit_once('.')
+            .map_or_else(|| path.to_owned(), |(parent, _)| parent.to_owned())
+    } else {
+        path.to_owned()
+    }
+}
+
+fn logical_owner_key(owner: &LogicalOwner) -> String {
+    format!(
+        "{}:{}:{}",
+        owner.section_source_line,
+        owner.ast_path,
+        owner.target.as_deref().unwrap_or("<missing>")
+    )
+}
+
+fn expected_container(owner_macro: &str) -> &'static str {
+    match owner_macro {
+        "SH" | "SS" | "Sh" | "Ss" => "section",
+        "IP" | "TP" | "TQ" | "It" => "item",
+        _ => "content",
+    }
 }
 
 fn target_name(node: &Node) -> Option<String> {
@@ -525,63 +716,190 @@ fn first_token(value: &str) -> String {
         .to_owned()
 }
 
-fn flatten_nodes<'a>(node: &'a Node, output: &mut Vec<&'a Node>) {
-    output.push(node);
-    for child in &node.children {
-        flatten_nodes(child, output);
+fn flatten_nodes<'a>(
+    node: &'a Node,
+    path: &str,
+    parent_section_line: u32,
+    output: &mut Vec<AstNodeRef<'a>>,
+) {
+    let section_source_line =
+        if matches!(node.macro_name.as_deref(), Some("SH" | "SS" | "Sh" | "Ss")) {
+            node.line
+        } else {
+            parent_section_line
+        };
+    let order = output.len();
+    output.push(AstNodeRef {
+        node,
+        path: path.to_owned(),
+        section_source_line,
+        order,
+    });
+    for (index, child) in node.children.iter().enumerate() {
+        flatten_nodes(
+            child,
+            &format!("{path}.{index}"),
+            section_source_line,
+            output,
+        );
     }
 }
 
 fn observed_targets(document: &Document) -> ObservedTargets {
     let mut observed = ObservedTargets::default();
-    observed
-        .fragments
-        .extend(document.fragment_aliases.iter().map(ToString::to_string));
-    collect_blocks(&document.blocks, &mut observed);
-    for section in &document.sections {
-        collect_section(section, &mut observed);
+    record_observed(
+        &mut observed,
+        "document",
+        &document.fragment_aliases,
+        ObservedRole::Document,
+        "document",
+        0,
+        "document".to_owned(),
+    );
+    collect_blocks(&document.blocks, &mut observed, 0, "document", "content");
+    for (index, section) in document.sections.iter().enumerate() {
+        collect_section(section, &mut observed, &format!("section[{index}]"));
     }
     observed
 }
 
-fn collect_section(section: &Section, observed: &mut ObservedTargets) {
+fn record_observed(
+    observed: &mut ObservedTargets,
+    identity: &str,
+    fragment_aliases: &[FragmentAlias],
+    role: ObservedRole,
+    container: &'static str,
+    section_source_line: u32,
+    ir_path: String,
+) {
+    let fragment_aliases = fragment_aliases
+        .iter()
+        .map(ToString::to_string)
+        .collect::<Vec<_>>();
+    observed.identities.insert(identity.to_owned());
+    observed.fragments.extend(fragment_aliases.iter().cloned());
+    match role {
+        ObservedRole::Section => {
+            observed.sections.insert(identity.to_owned());
+        }
+        ObservedRole::Entry => {
+            observed.entries.insert(identity.to_owned());
+        }
+        ObservedRole::Anchor => {
+            observed.anchors.insert(identity.to_owned());
+        }
+        ObservedRole::Document => {}
+    }
+    observed.occurrences.push(ObservedTarget {
+        identity: identity.to_owned(),
+        fragment_aliases,
+        role,
+        container,
+        section_source_line,
+        ir_path,
+    });
+}
+
+fn collect_section(section: &Section, observed: &mut ObservedTargets, path: &str) {
+    let section_source_line = section.source.map_or(0, |source| source.line);
+    record_observed(
+        observed,
+        section.id.as_str(),
+        &section.fragment_aliases,
+        ObservedRole::Section,
+        "section",
+        section_source_line,
+        path.to_owned(),
+    );
     observed.identities.insert(section.id.to_string());
-    observed.sections.insert(section.id.to_string());
-    observed
-        .fragments
-        .extend(section.fragment_aliases.iter().map(ToString::to_string));
-    collect_blocks(&section.blocks, observed);
-    for child in &section.children {
-        collect_section(child, observed);
+    collect_blocks(
+        &section.blocks,
+        observed,
+        section_source_line,
+        path,
+        "content",
+    );
+    for (index, child) in section.children.iter().enumerate() {
+        collect_section(child, observed, &format!("{path}/section[{index}]"));
     }
 }
 
-fn collect_blocks(blocks: &[Block], observed: &mut ObservedTargets) {
-    for block in blocks {
+fn collect_blocks(
+    blocks: &[Block],
+    observed: &mut ObservedTargets,
+    section_source_line: u32,
+    parent_path: &str,
+    owner_container: &'static str,
+) {
+    for (block_index, block) in blocks.iter().enumerate() {
+        let path = format!("{parent_path}/block[{block_index}]");
         match block {
             Block::Paragraph { children, .. } | Block::Preformatted { children, .. } => {
-                collect_inlines(children, observed);
+                let container = if owner_container == "content" {
+                    match block {
+                        Block::Paragraph { .. } => "paragraph",
+                        Block::Preformatted { .. } => "preformatted",
+                        _ => unreachable!(),
+                    }
+                } else {
+                    owner_container
+                };
+                collect_inlines(children, observed, section_source_line, &path, container);
             }
             Block::List { items, .. } => {
-                for item in items {
-                    collect_blocks(&item.blocks, observed);
+                for (item_index, item) in items.iter().enumerate() {
+                    collect_blocks(
+                        &item.blocks,
+                        observed,
+                        section_source_line,
+                        &format!("{path}/item[{item_index}]"),
+                        "list-item",
+                    );
                 }
             }
             Block::DefinitionList { items, .. } => {
-                for item in items {
+                for (item_index, item) in items.iter().enumerate() {
+                    let item_path = format!("{path}/definition[{item_index}]");
                     if let Some(identity) = &item.identity {
-                        observed.identities.insert(identity.id.to_string());
-                        observed.entries.insert(identity.id.to_string());
+                        record_observed(
+                            observed,
+                            identity.id.as_str(),
+                            &[],
+                            ObservedRole::Entry,
+                            "definition",
+                            section_source_line,
+                            item_path.clone(),
+                        );
                     }
-                    for term in &item.terms {
-                        collect_inlines(term, observed);
+                    for (term_index, term) in item.terms.iter().enumerate() {
+                        collect_inlines(
+                            term,
+                            observed,
+                            section_source_line,
+                            &format!("{item_path}/term[{term_index}]"),
+                            "definition",
+                        );
                     }
-                    collect_blocks(&item.description, observed);
+                    collect_blocks(
+                        &item.description,
+                        observed,
+                        section_source_line,
+                        &format!("{item_path}/description"),
+                        "definition",
+                    );
                 }
             }
             Block::Table { rows, .. } => {
-                for cell in rows.iter().flat_map(|row| &row.cells) {
-                    collect_blocks(&cell.blocks, observed);
+                for (row_index, row) in rows.iter().enumerate() {
+                    for (cell_index, cell) in row.cells.iter().enumerate() {
+                        collect_blocks(
+                            &cell.blocks,
+                            observed,
+                            section_source_line,
+                            &format!("{path}/row[{row_index}]/cell[{cell_index}]"),
+                            "table-cell",
+                        );
+                    }
                 }
             }
             Block::Equation { .. }
@@ -592,18 +910,29 @@ fn collect_blocks(blocks: &[Block], observed: &mut ObservedTargets) {
     }
 }
 
-fn collect_inlines(nodes: &[Inline], observed: &mut ObservedTargets) {
-    for node in nodes {
+fn collect_inlines(
+    nodes: &[Inline],
+    observed: &mut ObservedTargets,
+    section_source_line: u32,
+    parent_path: &str,
+    container: &'static str,
+) {
+    for (index, node) in nodes.iter().enumerate() {
+        let path = format!("{parent_path}/inline[{index}]");
         match node {
             Inline::Anchor {
                 id,
                 fragment_aliases,
             } => {
-                observed.identities.insert(id.to_string());
-                observed.anchors.insert(id.to_string());
-                observed
-                    .fragments
-                    .extend(fragment_aliases.iter().map(ToString::to_string));
+                record_observed(
+                    observed,
+                    id.as_str(),
+                    fragment_aliases,
+                    ObservedRole::Anchor,
+                    container,
+                    section_source_line,
+                    path,
+                );
             }
             Inline::Strong { children }
             | Inline::Emphasis { children }
@@ -615,84 +944,170 @@ fn collect_inlines(nodes: &[Inline], observed: &mut ObservedTargets) {
                 {
                     observed.section_links.insert(id.to_string());
                 }
-                collect_inlines(children, observed);
+                collect_inlines(children, observed, section_source_line, &path, container);
             }
             Inline::Text { .. } | Inline::Code { .. } | Inline::LineBreak => {}
         }
     }
 }
 
-fn unexpected_targets(expected: &[ExpectedTarget], observed: &ObservedTargets) -> Vec<String> {
-    let mut unexpected = BTreeSet::new();
-    for fragment in &observed.fragments {
-        if !expected
-            .iter()
-            .any(|target| target.explicit && target.id == *fragment)
-        {
-            unexpected.insert(format!("fragment alias {fragment:?}"));
+fn match_targets(
+    expected: &[ExpectedTarget],
+    observed: &[ObservedTarget],
+) -> (Vec<ExpectedTarget>, Vec<MatchedTarget>, BTreeSet<String>) {
+    let mut alias_index = BTreeMap::<(u32, String), Vec<(usize, usize)>>::new();
+    let mut anchors_by_section = BTreeMap::<u32, Vec<usize>>::new();
+    for (index, candidate) in observed.iter().enumerate() {
+        for (fragment_index, fragment) in candidate.fragment_aliases.iter().enumerate() {
+            alias_index
+                .entry((candidate.section_source_line, fragment.clone()))
+                .or_default()
+                .push((index, fragment_index));
+        }
+        if candidate.role == ObservedRole::Anchor {
+            anchors_by_section
+                .entry(candidate.section_source_line)
+                .or_default()
+                .push(index);
         }
     }
-    for anchor in &observed.anchors {
-        if observed.entries.contains(anchor)
-            || expected.iter().any(|target| {
-                target.id == *anchor || generated_identity_matches(&target.normalized_id, anchor)
+
+    let mut used = BTreeSet::<String>::new();
+    let mut assignments = vec![None; expected.len()];
+
+    for (expected_index, target) in expected
+        .iter()
+        .enumerate()
+        .filter(|(_, target)| target.explicit)
+    {
+        let candidates = alias_index
+            .get(&(target.section_source_line, target.id.clone()))
+            .map_or(&[][..], Vec::as_slice);
+        if let Some((index, fragment_index)) =
+            candidates.iter().copied().find(|(index, fragment_index)| {
+                let candidate = &observed[*index];
+                role_matches(target.expected_role, candidate.role)
+                    && container_matches(target.expected_container, candidate.container)
+                    && !used.contains(&format!("{index}:identity"))
+                    && !used.contains(&format!("{index}:fragment:{fragment_index}"))
             })
         {
+            used.insert(format!("{index}:fragment:{fragment_index}"));
+            assignments[expected_index] =
+                Some(matched_target(target, &observed[index], "fragment-alias"));
+        }
+    }
+
+    let mut section_cursors = BTreeMap::<u32, usize>::new();
+    for (expected_index, target) in expected.iter().enumerate() {
+        if target.explicit || assignments[expected_index].is_some() {
             continue;
         }
-        unexpected.insert(format!("anchor {anchor:?}"));
+        let candidates = anchors_by_section
+            .get(&target.section_source_line)
+            .map_or(&[][..], Vec::as_slice);
+        let cursor = section_cursors
+            .entry(target.section_source_line)
+            .or_default();
+        let candidate = candidates[*cursor..]
+            .iter()
+            .enumerate()
+            .find_map(|(offset, index)| {
+                let index = *index;
+                let candidate = &observed[index];
+                let identity_claim = format!("{index}:identity");
+                let fragment_prefix = format!("{index}:fragment:");
+                (container_matches(target.expected_container, candidate.container)
+                    && !used.contains(&identity_claim)
+                    && !used.iter().any(|claim| claim.starts_with(&fragment_prefix))
+                    && generated_identity_matches(&target.normalized_id, &candidate.identity))
+                .then_some((offset, index))
+            });
+        if let Some((offset, index)) = candidate {
+            *cursor += offset + 1;
+            used.insert(format!("{index}:identity"));
+            assignments[expected_index] = Some(matched_target(
+                target,
+                &observed[index],
+                "ordered-identity-occurrence",
+            ));
+        }
     }
-    unexpected.into_iter().collect()
+
+    let mut missing = Vec::new();
+    let mut confirmed = Vec::new();
+    for (target, candidate) in expected.iter().zip(assignments) {
+        if let Some(candidate) = candidate {
+            confirmed.push(candidate);
+        } else {
+            missing.push(target.clone());
+        }
+    }
+    (missing, confirmed, used)
 }
 
-fn missing_targets(
-    expected: &[ExpectedTarget],
-    observed: &BTreeSet<String>,
-) -> Vec<ExpectedTarget> {
-    let mut automatic_required = BTreeMap::<&str, usize>::new();
-    let mut missing = Vec::new();
-    for target in expected {
-        if target.explicit {
-            if !observed.contains(&target.id) {
-                missing.push(target.clone());
+fn matched_target(
+    expected: &ExpectedTarget,
+    observed: &ObservedTarget,
+    matched_by: &'static str,
+) -> MatchedTarget {
+    MatchedTarget {
+        logical_owner_key: expected.logical_owner_key.clone(),
+        observed_ir_path: observed.ir_path.clone(),
+        observed_identity: observed.identity.clone(),
+        matched_by,
+    }
+}
+
+fn container_matches(expected: &str, observed: &str) -> bool {
+    match expected {
+        "section" => observed == "section",
+        "item" => matches!(observed, "definition" | "list-item" | "table-cell"),
+        "content" => observed != "section" && observed != "document",
+        _ => false,
+    }
+}
+
+const fn role_matches(expected: TargetRole, observed: ObservedRole) -> bool {
+    matches!(
+        (expected, observed),
+        (TargetRole::Section, ObservedRole::Section) | (TargetRole::Anchor, ObservedRole::Anchor)
+    )
+}
+
+fn unexpected_targets(observed: &ObservedTargets, used: &BTreeSet<String>) -> Vec<String> {
+    let mut unexpected = Vec::new();
+    for (index, target) in observed.occurrences.iter().enumerate() {
+        for (fragment_index, fragment) in target.fragment_aliases.iter().enumerate() {
+            let claim = format!("{index}:fragment:{fragment_index}");
+            if !used.contains(&claim) {
+                unexpected.push(format!(
+                    "fragment alias {fragment:?} on {} {}",
+                    target.container, target.ir_path
+                ));
             }
-        } else {
-            *automatic_required
-                .entry(target.normalized_id.as_str())
-                .or_default() += 1;
+        }
+        if target.role == ObservedRole::Anchor
+            && !observed.entries.contains(&target.identity)
+            && !used.contains(&format!("{index}:identity"))
+        {
+            unexpected.push(format!(
+                "anchor {:?} in {} {}",
+                target.identity, target.container, target.ir_path
+            ));
         }
     }
-    for (base, required) in automatic_required {
-        let retained = observed
-            .iter()
-            .filter(|candidate| generated_identity_matches(base, candidate))
-            .count();
-        if retained >= required {
-            continue;
-        }
-        missing.extend(
-            expected
-                .iter()
-                .filter(|target| !target.explicit && target.normalized_id == base)
-                .skip(retained)
-                .cloned(),
-        );
-    }
-    missing
+    unexpected
 }
 
 fn generated_identity_matches(base: &str, candidate: &str) -> bool {
-    candidate == base
-        || candidate
-            .strip_prefix(base)
-            .and_then(|suffix| suffix.strip_prefix('-'))
-            .is_some_and(|suffix| {
-                !suffix.is_empty()
-                    && suffix
-                        .chars()
-                        .all(|character| character.is_ascii_hexdigit())
-                    || suffix.parse::<usize>().is_ok()
-            })
+    candidate == base || collision_base(candidate) == Some(base)
+}
+
+fn collision_base(candidate: &str) -> Option<&str> {
+    let (base, suffix) = candidate.rsplit_once('-')?;
+    let value = suffix.parse::<usize>().ok()?;
+    (value >= 2 && suffix == value.to_string()).then_some(base)
 }
 
 fn document_id_slug(value: &str) -> String {
@@ -719,5 +1134,153 @@ fn document_id_slug(value: &str) -> String {
         "entry".to_owned()
     } else {
         slug
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use libmandoc_rs::NodeKind;
+
+    use super::{
+        ExpectedTarget, ObservedRole, ObservedTarget, TargetRole, generated_identity_matches,
+        logical_owner_path_for, match_targets,
+    };
+
+    fn expected(
+        id: &str,
+        explicit: bool,
+        role: TargetRole,
+        container: &'static str,
+    ) -> ExpectedTarget {
+        ExpectedTarget {
+            id: id.to_owned(),
+            normalized_id: id.to_owned(),
+            source_line: 10,
+            owner_source_line: 11,
+            owner_macro: if role == TargetRole::Section {
+                "Sh"
+            } else {
+                "Pp"
+            }
+            .to_owned(),
+            owner_kind: "element".to_owned(),
+            ast_path: format!("0.{id}"),
+            logical_owner_key: format!("1:0.{id}:{id}"),
+            section_source_line: 1,
+            expected_role: role,
+            expected_container: container,
+            explicit,
+        }
+    }
+
+    fn observed(
+        id: &str,
+        aliases: &[&str],
+        role: ObservedRole,
+        container: &'static str,
+    ) -> ObservedTarget {
+        ObservedTarget {
+            identity: id.to_owned(),
+            fragment_aliases: aliases.iter().map(|alias| (*alias).to_owned()).collect(),
+            role,
+            container,
+            section_source_line: 1,
+            ir_path: format!("section[0]/{container}/{id}"),
+        }
+    }
+
+    #[test]
+    fn exact_generated_suffixes_are_numeric_and_canonical() {
+        for identity in ["target", "target-2", "target-31"] {
+            assert!(generated_identity_matches("target", identity));
+        }
+        for identity in [
+            "target-1",
+            "target-02",
+            "target-a",
+            "target-deadbeef",
+            "target-123abc",
+        ] {
+            assert!(!generated_identity_matches("target", identity));
+        }
+    }
+
+    #[test]
+    fn each_same_named_explicit_owner_requires_its_own_alias_occurrence() {
+        let expected = [
+            expected("same", true, TargetRole::Anchor, "content"),
+            expected("same", true, TargetRole::Anchor, "content"),
+        ];
+        let observed = [observed(
+            "same",
+            &["same"],
+            ObservedRole::Anchor,
+            "paragraph",
+        )];
+        let (missing, matched, _) = match_targets(&expected, &observed);
+        assert_eq!(matched.len(), 1);
+        assert_eq!(missing.len(), 1);
+    }
+
+    #[test]
+    fn explicit_and_automatic_owners_cannot_share_one_ir_location() {
+        let expected = [
+            expected("same", true, TargetRole::Anchor, "content"),
+            expected("same", false, TargetRole::Anchor, "content"),
+        ];
+        let observed = [observed(
+            "same",
+            &["same"],
+            ObservedRole::Anchor,
+            "paragraph",
+        )];
+        let (missing, matched, _) = match_targets(&expected, &observed);
+        assert_eq!(matched.len(), 1);
+        assert_eq!(missing.len(), 1);
+    }
+
+    #[test]
+    fn role_section_and_container_mismatches_do_not_satisfy_an_owner() {
+        let target = expected("target", false, TargetRole::Anchor, "item");
+        for candidate in [
+            observed("target", &[], ObservedRole::Section, "section"),
+            observed("target", &[], ObservedRole::Entry, "definition"),
+            observed("target", &[], ObservedRole::Anchor, "paragraph"),
+            ObservedTarget {
+                section_source_line: 99,
+                ..observed("target", &[], ObservedRole::Anchor, "list-item")
+            },
+        ] {
+            let (missing, matched, _) = match_targets(std::slice::from_ref(&target), &[candidate]);
+            assert_eq!(missing.len(), 1);
+            assert!(matched.is_empty());
+        }
+    }
+
+    #[test]
+    fn independent_same_named_owners_consume_distinct_numeric_identities() {
+        let expected = [
+            expected("same", false, TargetRole::Anchor, "content"),
+            expected("same", false, TargetRole::Anchor, "content"),
+        ];
+        let observed = [
+            observed("same", &[], ObservedRole::Anchor, "paragraph"),
+            observed("same-2", &[], ObservedRole::Anchor, "paragraph"),
+        ];
+        let (missing, matched, _) = match_targets(&expected, &observed);
+        assert!(missing.is_empty());
+        assert_eq!(matched.len(), 2);
+    }
+
+    #[test]
+    fn wrapper_roles_share_one_logical_owner_but_siblings_do_not() {
+        assert_eq!(logical_owner_path_for("0.4.0", NodeKind::Head), "0.4");
+        assert_eq!(logical_owner_path_for("0.4.1", NodeKind::Body), "0.4");
+        assert_eq!(logical_owner_path_for("0.4.2", NodeKind::Tail), "0.4");
+        assert_eq!(logical_owner_path_for("0.4.3", NodeKind::Element), "0.4.3");
+        assert_ne!(
+            logical_owner_path_for("0.4.0", NodeKind::Head),
+            logical_owner_path_for("0.5.0", NodeKind::Head)
+        );
     }
 }

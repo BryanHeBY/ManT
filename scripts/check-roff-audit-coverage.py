@@ -9,8 +9,9 @@ layout sweeps. Checked-in fixtures form a second, reproducible baseline shared
 by the structure and projection ledgers. The mandoc reference route must replay
 the complete historical fidelity baseline, cover every comparable result in
 its own layout ledger, and include every checked-in fixture in both ledgers.
-The independent zero-width target route must cover every checked-in fixture,
-but its distribution sweeps do not have to mirror the visible-fidelity sample.
+The independent zero-width target and semantic-entry precision routes must
+cover every checked-in fixture, but their distribution sweeps do not have to
+mirror the visible-fidelity sample.
 """
 
 from __future__ import annotations
@@ -35,6 +36,7 @@ DEFAULT_STRUCTURE_DB = ROFF_ROOT / "STRUCTURE_AUDIT.csv"
 DEFAULT_PROJECTION_DB = ROFF_ROOT / "PROJECTION_AUDIT.csv"
 DEFAULT_LAYOUT_DB = ROFF_ROOT / "LAYOUT_AUDIT.csv"
 DEFAULT_TARGET_DB = ROFF_ROOT / "TARGET_AUDIT.csv"
+DEFAULT_SEMANTIC_DB = ROFF_ROOT / "SEMANTIC_AUDIT.csv"
 DEFAULT_MANDOC_FIDELITY_DB = ROFF_ROOT / "MANDOC_FIDELITY_AUDIT.csv"
 DEFAULT_MANDOC_LAYOUT_DB = ROFF_ROOT / "MANDOC_LAYOUT_AUDIT.csv"
 DEFAULT_DEVIATION_DB = ROFF_ROOT / "REFERENCE_RENDERER_DEVIATIONS.csv"
@@ -70,10 +72,11 @@ DEVIATION_FIELDS = [
 CURRENT_STRUCTURE_SCHEMA = "mant.roff-structure-profile/v4"
 CURRENT_PROJECTION_SCHEMA = "mant.roff-projection-profile/v3"
 CURRENT_LAYOUT_SCHEMA = "mant.roff-layout-audit/v3"
-CURRENT_TARGET_SCHEMA = "mant.roff-target-profile/v2"
+CURRENT_TARGET_SCHEMA = "mant.roff-target-profile/v3"
+CURRENT_SEMANTIC_SCHEMA = "mant.roff-semantic-profile/v1"
 SOURCE_DIGEST = re.compile(r"[0-9a-f]{64}")
 PROFILE_SCHEMA = re.compile(
-    r"mant\.roff-(?:structure|projection|target)-profile/v[1-9][0-9]*"
+    r"mant\.roff-(?:structure|projection|target|semantic)-profile/v[1-9][0-9]*"
 )
 LAYOUT_SCHEMA = re.compile(r"mant\.roff-layout-audit/v[1-9][0-9]*")
 REVIEW_STATUSES = {
@@ -101,6 +104,7 @@ class Coverage:
     projection: frozenset[Identity]
     layout: frozenset[Identity]
     target: frozenset[Identity]
+    semantic: frozenset[Identity]
     mandoc_fidelity: frozenset[Identity]
     mandoc_comparable: frozenset[Identity]
     mandoc_layout: frozenset[Identity]
@@ -129,6 +133,7 @@ def parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
     parser.add_argument("--projection-db", type=Path, default=DEFAULT_PROJECTION_DB)
     parser.add_argument("--layout-db", type=Path, default=DEFAULT_LAYOUT_DB)
     parser.add_argument("--target-db", type=Path, default=DEFAULT_TARGET_DB)
+    parser.add_argument("--semantic-db", type=Path, default=DEFAULT_SEMANTIC_DB)
     parser.add_argument(
         "--mandoc-fidelity-db", type=Path, default=DEFAULT_MANDOC_FIDELITY_DB
     )
@@ -320,6 +325,12 @@ def load_coverage(arguments: argparse.Namespace) -> Coverage:
         {"clean", "review", "hard-failure"},
         "profile_schema",
     )
+    semantic_rows = read_rows(
+        arguments.semantic_db,
+        STRUCTURE_FIELDS,
+        {"clean", "review", "hard-failure"},
+        "profile_schema",
+    )
     mandoc_fidelity_rows = read_rows(
         arguments.mandoc_fidelity_db,
         MANDOC_FIDELITY_FIELDS,
@@ -364,6 +375,11 @@ def load_coverage(arguments: argparse.Namespace) -> Coverage:
     current_target = [
         row for row in target_rows if row["profile_schema"] == CURRENT_TARGET_SCHEMA
     ]
+    current_semantic = [
+        row
+        for row in semantic_rows
+        if row["profile_schema"] == CURRENT_SEMANTIC_SCHEMA
+    ]
     current_mandoc_layout = [
         row
         for row in mandoc_layout_rows
@@ -399,6 +415,7 @@ def load_coverage(arguments: argparse.Namespace) -> Coverage:
             ("projection", current_projection, fidelity),
             ("layout", current_layout, comparable),
             ("target", current_target, fixture_identities()),
+            ("semantic", current_semantic, fixture_identities()),
             ("mandoc-fidelity", mandoc_fidelity_rows, mandoc_fidelity),
             ("mandoc-layout", current_mandoc_layout, mandoc_comparable),
         )
@@ -414,6 +431,7 @@ def load_coverage(arguments: argparse.Namespace) -> Coverage:
             ("projection", current_projection),
             ("layout", current_layout),
             ("target", current_target),
+            ("semantic", current_semantic),
             ("mandoc-fidelity", mandoc_fidelity_rows),
             ("mandoc-layout", current_mandoc_layout),
         )
@@ -429,6 +447,7 @@ def load_coverage(arguments: argparse.Namespace) -> Coverage:
         ),
         layout=identities(current_layout),
         target=identities(current_target),
+        semantic=identities(current_semantic),
         mandoc_fidelity=mandoc_fidelity,
         mandoc_comparable=mandoc_comparable,
         mandoc_layout=identities(current_mandoc_layout),
@@ -447,6 +466,7 @@ def missing_sets(coverage: Coverage) -> dict[str, frozenset[Identity]]:
         "structure/fixtures": coverage.fixture_inventory - coverage.structure,
         "projection/fixtures": coverage.fixture_inventory - coverage.projection,
         "target/fixtures": coverage.fixture_inventory - coverage.target,
+        "semantic/fixtures": coverage.fixture_inventory - coverage.semantic,
         "mandoc-fidelity/historical-fidelity": coverage.fidelity
         - coverage.mandoc_fidelity,
         "mandoc-layout/comparable-mandoc-fidelity": coverage.mandoc_comparable
@@ -486,6 +506,7 @@ def self_check() -> None:
         projection=frozenset({a, b, fixture}),
         layout=frozenset({a}),
         target=frozenset({fixture}),
+        semantic=frozenset({fixture}),
         mandoc_fidelity=frozenset({a, b, fixture}),
         mandoc_comparable=frozenset({a, fixture}),
         mandoc_layout=frozenset({a, fixture}),
@@ -502,6 +523,7 @@ def self_check() -> None:
         projection=frozenset({b}),
         layout=frozenset(),
         target=frozenset(),
+        semantic=frozenset(),
         mandoc_fidelity=frozenset({a}),
         mandoc_comparable=frozenset({a}),
         mandoc_layout=frozenset(),
@@ -517,6 +539,7 @@ def self_check() -> None:
     assert missing["structure/fixtures"] == frozenset({fixture})
     assert missing["projection/fixtures"] == frozenset({fixture})
     assert missing["target/fixtures"] == frozenset({fixture})
+    assert missing["semantic/fixtures"] == frozenset({fixture})
     assert missing["mandoc-fidelity/historical-fidelity"] == frozenset({b})
     assert missing["mandoc-layout/comparable-mandoc-fidelity"] == frozenset({a})
     assert missing["mandoc-fidelity/fixtures"] == frozenset({fixture})

@@ -276,7 +276,8 @@ a clean recheck no longer emits the original candidate.
 Rolling inputs stay outside the permanent CSV breadth totals until they become
 a released corpus or produce an exact checked-in fixture. On 2026-08-24, a
 syntax-priority sample of 200 pages from the OpenBSD amd64 snapshot built
-`Sun Aug 23 04:21:40 UTC 2026` was replayed through all six audit routes. Its
+`Sun Aug 23 04:21:40 UTC 2026` was replayed through all six then-current
+differential/reference audit routes. Its
 official `man80.tgz` SHA-256 was
 `213189e7db8c7cc33bcbb29d3cc87f653d3392ee1c873625c62da87415192512`.
 The content routes found one real loss: `\\s-20000` consumed two digits after
@@ -302,7 +303,8 @@ tracked.
 
 The release candidate at `c57574b394eae9fa7e5383d45b241b894812dbf4`
 replayed the 257 unchanged source identities from
-`fedora44-2026-07-20-x86_64` through all six independent routes. The five
+`fedora44-2026-07-20-x86_64` through all six then-current independent
+differential/reference routes. The five
 verified package roots were `bash`, `clang`, `gcc`, `git-core-doc`, and `tar`
 under `/home/hby/dev/tmp/mantdoc-real-corpus/fedora44-2026-07-20-x86_64`.
 The exact invocations used temporary ledgers so the release replay could not

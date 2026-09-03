@@ -14,20 +14,28 @@ can manufacture false losses on aggregate pages. Validated libmandoc
 deep-link owners form the native evidence. Canonical section and entry IDs,
 inline anchors, and exact source fragment aliases form the observed set.
 
-Profile schema `mant.roff-target-profile/v2` classifies every deep-link owner
+Profile schema `mant.roff-target-profile/v3` classifies every deep-link owner
 as `retained`, `excluded`, or `unclassified`, with a stable reason. Known man
 definitions, mdoc lists/displays/functions, and inline semantic macros are
 retained obligations. An owner macro without a policy is not silently omitted:
 it is emitted in `unclassifiedOwners` and makes the page a review candidate.
-Wrapper nodes sharing one target and source line form one logical obligation.
+Head/body/tail wrapper nodes at the same AST child-index path form one logical
+obligation; independent same-named owners remain separate occurrences.
 
 Explicit `.Tg` destinations must survive exactly as fragment aliases and also
 resolve through a normalized internal ID. Generated destinations may use
-ManT's deterministic normalized collision suffix. The profile reports true
-unexpected targets, incompatible identity-role collisions, invalid or empty
-identities/fragments, duplicate identities, and dangling links separately.
-Semantic discovery can create additional entry IDs with no one-to-one native
-tag; those typed entry destinations are not unexpected target findings.
+ManT's deterministic canonical numeric collision suffix (`base`, `base-2`,
+`base-3`, and so on). Each obligation records its AST path, source line, owner
+macro and kind, section source line, expected IR role, and container class.
+Observed section identities, entry identities, anchors, and fragment aliases
+remain distinct occurrences and are consumed at most once. Consequently an
+unrelated same-named section/entry, one retained occurrence standing in for two
+owners, or an anchor in an incompatible structural container cannot manufacture
+a clean result. The profile reports true unexpected targets, incompatible
+identity-role collisions, invalid or empty identities/fragments, duplicate
+identities, and dangling links separately. Semantic discovery can create
+additional entry IDs with no one-to-one native tag; those typed entry
+destinations are not unexpected target findings.
 
 Automatic `SH`, `SS`, `Sh`, and `Ss` tags are excluded from literal comparison
 because ManT intentionally uses the complete visible heading for section
@@ -45,7 +53,9 @@ fixture and a focused Rust test.
 ## Current complete sweep
 
 On 2026-09-04 the complete local Arch Linux manual hierarchy was rescanned
-with the v2 exhaustive-owner contract:
+with the v2 exhaustive-owner contract. This remains historical distribution
+evidence; the current v3 occurrence-aware fixture gate supersedes its matching
+contract until the complete hierarchy is replayed:
 
 ```sh
 cargo build --locked -p mant-engine --example roff_target_profile

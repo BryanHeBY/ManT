@@ -162,6 +162,7 @@ scripts/audit-roff-structure.py  Native AST-to-IR topology audit
 scripts/audit-roff-projection.py  CommonMark round-trip topology audit
 scripts/audit-roff-layout.py  Source-gated renderer layout audit
 scripts/audit-roff-targets.py  Native zero-width target-conservation audit
+scripts/audit-roff-semantics.py  Semantic-entry precision audit
 scripts/check-roff-audit-coverage.py  Cross-ledger corpus coverage verification
 scripts/roff_audit_common.py  Shared roff audit identities and helpers
 docs/architecture/           Design decisions and stable-boundary documentation
@@ -448,8 +449,11 @@ Visible text and renderer comparisons cannot detect a zero-width destination
 that disappears while all surrounding words remain intact. The independent
 target audit therefore lowers the same owned libmandoc parse used as its
 oracle, classifies every deep-link owner as retained, deliberately excluded,
-or unclassified, and compares retained destinations with canonical IR
-identities and exact authored fragment aliases:
+or unclassified, and compares each retained owner occurrence with a compatible
+canonical IR identity or exact authored fragment alias. The comparison keeps
+AST child paths, source lines, owner macro/kind, section, required IR role, and
+container class separate, so a same-named section, entry, or unrelated anchor
+cannot satisfy a missing owner:
 
 ```sh
 cargo build --package mant-engine --example roff_target_profile
@@ -472,6 +476,33 @@ unexpected targets, role collisions, duplicates, and dangling links are
 independent findings. Every candidate or native-parser failure requires manual
 review; confirmed loss becomes a licensed real fixture and a focused Rust
 assertion.
+
+### Roff semantic-entry precision audit
+
+Target conservation cannot detect lowering that preserves every destination
+but incorrectly promotes numbered prose or a target-only placement artifact
+to a semantic entry. The independent semantic profile inventories the final
+`SemanticIndex`, its source context and value-domain origins, and scans the IR
+for high-confidence classification errors:
+
+```sh
+cargo build --package mant-engine --example roff_semantic_profile
+python3 scripts/audit-roff-semantics.py --fixtures --recheck-recorded \
+  --verify --findings-only
+python3 scripts/audit-roff-semantics.py --manpath /usr/share/man \
+  --corpus archlinux-host --recheck-recorded --findings-only \
+  --json /tmp/mant-roff-semantics.json
+```
+
+Punctuated integer definitions left outside an ordered list, corresponding
+`term` or `value` entries, entries with neither an alias nor a visible form,
+and non-`value` children inside a `Choices` domain are review findings.
+Aliasless generic terms and entries in NOTES, FOOTNOTES, or REFERENCES are
+reported as bounded census data, not failures: those categories can be valid
+and require source-aware human judgment. The fixture ledger is
+[`SEMANTIC_AUDIT.csv`](../tests/fixtures/roff/SEMANTIC_AUDIT.csv); its
+[guide](../tests/fixtures/roff/SEMANTIC_AUDIT.md) records the exact contract
+and latest broad sweep.
 
 ### Mandoc reference replay
 
@@ -537,8 +568,10 @@ similar row counts. Structure and CommonMark projection cover every recorded
 fidelity identity; renderer-layout covers the fidelity rows with a completed
 two-renderer comparison. The mandoc content profile exactly replays that
 historical baseline plus checked-in fixtures, and its layout profile covers
-every comparable mandoc row. Independent targeted groff/structure sweeps may
-remain supersets. See
+every comparable mandoc row. Target-conservation and semantic-entry precision
+each cover every checked-in fixture while their broader distribution sweeps
+remain independent. Other targeted groff/structure sweeps may remain
+supersets. See
 the [coverage contract](../tests/fixtures/roff/AUDIT_COVERAGE.md) and run
 `python3 scripts/check-roff-audit-coverage.py` before concluding a local audit
 expansion.

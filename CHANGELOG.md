@@ -60,6 +60,14 @@ that crate was not published for that change.
   fragment aliases and normalized identities, and report unexpected targets,
   role collisions, invalid identities, duplicates, and dangling links as
   distinct signals.
+- Upgrade target conservation to an occurrence-aware v3 contract that binds
+  every logical AST owner to a compatible IR role, section, and container;
+  same-named unrelated identities and arbitrary hexadecimal suffixes no longer
+  produce false-clean audit results.
+- Add a separate semantic-entry precision audit for ordinal definitions,
+  empty entries, and invalid value-domain children, while retaining aliasless
+  generic and note-section entries as reviewable census signals rather than
+  language-specific rejection rules.
 
 ### mant-ui 0.11.0
 

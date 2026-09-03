@@ -45,6 +45,7 @@ run "check roff CommonMark projection audit" \
   python3 scripts/audit-roff-projection.py --self-check
 run "check roff renderer-layout audit" python3 scripts/audit-roff-layout.py --self-check
 run "check roff target-conservation audit" python3 scripts/audit-roff-targets.py --self-check
+run "check roff semantic-entry audit" python3 scripts/audit-roff-semantics.py --self-check
 run "check roff audit coverage contract" python3 scripts/check-roff-audit-coverage.py
 run "test Rust workspace" cargo test --locked --workspace
 run "test optional libmandoc features" \
@@ -56,11 +57,16 @@ run "build roff CommonMark projection profiler" \
   cargo build --locked --package mant-engine --example roff_projection_profile
 run "build roff target-conservation profiler" \
   cargo build --locked --package mant-engine --example roff_target_profile
+run "build roff semantic-entry profiler" \
+  cargo build --locked --package mant-engine --example roff_semantic_profile
 run "gate roff fixtures through the CommonMark projection" \
   python3 scripts/audit-roff-projection.py --fixtures --recheck-recorded \
   --verify --findings-only
 run "gate roff fixtures through target conservation" \
   python3 scripts/audit-roff-targets.py --fixtures --recheck-recorded \
+  --verify --findings-only
+run "gate roff fixtures through semantic-entry precision" \
+  python3 scripts/audit-roff-semantics.py --fixtures --recheck-recorded \
   --verify --findings-only
 run "check read-only engine feature boundary" \
   cargo check --locked --package mant-engine --no-default-features

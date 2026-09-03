@@ -39,9 +39,10 @@ ROOT = Path(__file__).resolve().parents[1]
 FIXTURE_ROOT = ROOT / "tests/fixtures/roff/real"
 DEFAULT_PROFILER = ROOT / "target/debug/examples/roff_target_profile"
 DEFAULT_AUDIT_DB = ROOT / "tests/fixtures/roff/TARGET_AUDIT.csv"
-PROFILE_SCHEMA = "mant.roff-target-profile/v2"
+PROFILE_SCHEMA = "mant.roff-target-profile/v3"
 SUPPORTED_PROFILE_SCHEMAS = {
     "mant.roff-target-profile/v1",
+    "mant.roff-target-profile/v2",
     PROFILE_SCHEMA,
 }
 DATABASE_FIELDS = [
@@ -84,6 +85,8 @@ class Finding:
     detail: str | None = None
     expected: list[dict[str, object]] | None = None
     observed: list[str] | None = None
+    observed_occurrences: list[dict[str, object]] | None = None
+    matched: list[dict[str, object]] | None = None
     missing: list[dict[str, object]] | None = None
     unexpected_targets: list[str] | None = None
     role_collisions: list[str] | None = None
@@ -92,6 +95,8 @@ class Finding:
     dangling_target_count: int = 0
     target_owner_count: int = 0
     classified_owner_count: int = 0
+    logical_owner_count: int = 0
+    classified_logical_owner_count: int = 0
     owner_classes: list[dict[str, object]] | None = None
     unclassified_owners: list[dict[str, object]] | None = None
 
@@ -202,10 +207,44 @@ def valid_target(value: object) -> bool:
             "id": str,
             "normalizedId": str,
             "sourceLine": int,
+            "ownerSourceLine": int,
             "ownerMacro": str,
             "ownerKind": str,
+            "astPath": str,
+            "logicalOwnerKey": str,
+            "sectionSourceLine": int,
+            "expectedRole": str,
+            "expectedContainer": str,
             "explicit": bool,
         }.items()
+    ) and value.get("expectedRole") in {"section", "anchor"} and value.get(
+        "expectedContainer"
+    ) in {"section", "item", "content"}
+
+
+def valid_observed_target(value: object) -> bool:
+    return (
+        isinstance(value, dict)
+        and isinstance(value.get("identity"), str)
+        and isinstance(value.get("fragmentAliases"), list)
+        and all(isinstance(alias, str) for alias in value["fragmentAliases"])
+        and value.get("role") in {"document", "section", "entry", "anchor"}
+        and isinstance(value.get("container"), str)
+        and isinstance(value.get("sectionSourceLine"), int)
+        and value["sectionSourceLine"] >= 0
+        and isinstance(value.get("irPath"), str)
+    )
+
+
+def valid_matched_target(value: object) -> bool:
+    return isinstance(value, dict) and all(
+        isinstance(value.get(field), str)
+        for field in (
+            "logicalOwnerKey",
+            "observedIrPath",
+            "observedIdentity",
+            "matchedBy",
+        )
     )
 
 
@@ -232,6 +271,10 @@ def valid_unclassified_owner(value: object) -> bool:
         and value["sourceLine"] >= 0
         and isinstance(value.get("ownerMacro"), str)
         and isinstance(value.get("ownerKind"), str)
+        and isinstance(value.get("astPath"), str)
+        and isinstance(value.get("logicalOwnerKey"), str)
+        and isinstance(value.get("rawOwnerCount"), int)
+        and value["rawOwnerCount"] > 0
         and isinstance(value.get("reason"), str)
     )
 
@@ -268,6 +311,8 @@ def profile_findings(
                 continue
             expected = response.get("expected")
             observed = response.get("observed")
+            observed_occurrences = response.get("observedOccurrences")
+            matched = response.get("matched")
             observed_identities = response.get("observedIdentities")
             observed_fragments = response.get("observedFragmentAliases")
             observed_entries = response.get("observedEntryIdentities")
@@ -282,6 +327,10 @@ def profile_findings(
             dangling_target_count = response.get("danglingTargetCount")
             target_owner_count = response.get("targetOwnerCount")
             classified_owner_count = response.get("classifiedOwnerCount")
+            logical_owner_count = response.get("logicalOwnerCount")
+            classified_logical_owner_count = response.get(
+                "classifiedLogicalOwnerCount"
+            )
             owner_classes = response.get("ownerClasses")
             unclassified_owners = response.get("unclassifiedOwners")
             violations = response.get("violations")
@@ -290,6 +339,10 @@ def profile_findings(
                 and all(valid_target(target) for target in expected)
                 and isinstance(observed, list)
                 and all(isinstance(identity, str) for identity in observed)
+                and isinstance(observed_occurrences, list)
+                and all(valid_observed_target(item) for item in observed_occurrences)
+                and isinstance(matched, list)
+                and all(valid_matched_target(item) for item in matched)
                 and all(
                     isinstance(collection, list)
                     and all(isinstance(identity, str) for identity in collection)
@@ -318,6 +371,10 @@ def profile_findings(
                 and target_owner_count >= 0
                 and isinstance(classified_owner_count, int)
                 and 0 <= classified_owner_count <= target_owner_count
+                and isinstance(logical_owner_count, int)
+                and logical_owner_count >= 0
+                and isinstance(classified_logical_owner_count, int)
+                and 0 <= classified_logical_owner_count <= logical_owner_count
                 and isinstance(violations, list)
                 and all(isinstance(item, str) for item in violations)
                 and isinstance(owner_classes, list)
@@ -326,8 +383,11 @@ def profile_findings(
                 == target_owner_count
                 and isinstance(unclassified_owners, list)
                 and all(valid_unclassified_owner(item) for item in unclassified_owners)
-                and len(unclassified_owners)
+                and sum(int(item["rawOwnerCount"]) for item in unclassified_owners)
                 == target_owner_count - classified_owner_count
+                and len(unclassified_owners)
+                == logical_owner_count - classified_logical_owner_count
+                and len(matched) + len(missing) == len(expected)
             )
             has_derived_violation = bool(
                 missing
@@ -348,6 +408,8 @@ def profile_findings(
                 violations,
                 expected=expected,
                 observed=observed,
+                observed_occurrences=observed_occurrences,
+                matched=matched,
                 missing=missing,
                 unexpected_targets=unexpected_targets,
                 role_collisions=role_collisions,
@@ -356,6 +418,8 @@ def profile_findings(
                 dangling_target_count=dangling_target_count,
                 target_owner_count=target_owner_count,
                 classified_owner_count=classified_owner_count,
+                logical_owner_count=logical_owner_count,
+                classified_logical_owner_count=classified_logical_owner_count,
                 owner_classes=owner_classes,
                 unclassified_owners=unclassified_owners,
             )
@@ -373,9 +437,33 @@ def self_check() -> None:
             "id": "target",
             "normalizedId": "target",
             "sourceLine": 1,
+            "ownerSourceLine": 2,
             "ownerMacro": "Pp",
             "ownerKind": "element",
+            "astPath": "0.1",
+            "logicalOwnerKey": "1:0.1:target",
+            "sectionSourceLine": 1,
+            "expectedRole": "anchor",
+            "expectedContainer": "content",
             "explicit": False,
+        }
+    )
+    assert valid_observed_target(
+        {
+            "identity": "target",
+            "fragmentAliases": ["Target"],
+            "role": "anchor",
+            "container": "paragraph",
+            "sectionSourceLine": 1,
+            "irPath": "section[0]/block[0]/inline[0]",
+        }
+    )
+    assert valid_matched_target(
+        {
+            "logicalOwnerKey": "1:0.1:target",
+            "observedIrPath": "section[0]/block[0]/inline[0]",
+            "observedIdentity": "target",
+            "matchedBy": "identity",
         }
     )
     assert valid_owner_class(
@@ -393,6 +481,9 @@ def self_check() -> None:
             "sourceLine": 7,
             "ownerMacro": "Future",
             "ownerKind": "element",
+            "astPath": "0.3",
+            "logicalOwnerKey": "1:0.3:future",
+            "rawOwnerCount": 1,
             "reason": "owner macro has no target-conservation policy",
         }
     )
@@ -462,6 +553,8 @@ def main(argv: Sequence[str]) -> int:
     role_collision_count = 0
     identity_violation_count = 0
     target_owner_count = 0
+    logical_owner_count = 0
+    unclassified_logical_owner_count = 0
     unclassified_owner_count = 0
     duplicate_count = 0
     dangling_count = 0
@@ -477,7 +570,14 @@ def main(argv: Sequence[str]) -> int:
         role_collision_count += len(finding.role_collisions or [])
         identity_violation_count += len(finding.identity_violations or [])
         target_owner_count += finding.target_owner_count
-        unclassified_owner_count += len(finding.unclassified_owners or [])
+        logical_owner_count += finding.logical_owner_count
+        unclassified_owner_count += sum(
+            int(owner["rawOwnerCount"])
+            for owner in (finding.unclassified_owners or [])
+        )
+        unclassified_logical_owner_count += (
+            finding.logical_owner_count - finding.classified_logical_owner_count
+        )
         duplicate_count += finding.duplicate_target_count
         dangling_count += finding.dangling_target_count
     verification_failed = False
@@ -522,6 +622,11 @@ def main(argv: Sequence[str]) -> int:
         f"target owner classification: total={target_owner_count}, "
         f"classified={target_owner_count - unclassified_owner_count}, "
         f"unclassified={unclassified_owner_count}"
+    )
+    print(
+        f"logical target obligations: total={logical_owner_count}, "
+        f"classified={logical_owner_count - unclassified_logical_owner_count}, "
+        f"unclassified={unclassified_logical_owner_count}"
     )
     if owner_summary:
         owners = ", ".join(
