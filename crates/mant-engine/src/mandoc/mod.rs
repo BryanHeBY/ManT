@@ -3570,6 +3570,75 @@ Sean\n\
     }
 
     #[test]
+    fn keeps_man_ordinal_boundaries_explicit_without_reclassifying_numeric_terms() {
+        let document = parse_manual_bytes(
+            std::path::Path::new("ordinal-boundaries.1"),
+            b".TH ORDINAL-BOUNDARIES 1\n.SH BREAKS\n\
+.IP 1. 4\none\n.IP 3. 4\nthree\n.IP 1) 4\nparen\n.IP 2. 4\nperiod\n\
+.SH MIXED\n.IP 1. 4\none\n.TP\n.B 2.\ntwo\n\
+.SH VALUES\n.TP\n.B 1\none\n.TP\n.B 2.2\ndecimal\n.TP\n.B v1.\nversion\n.TP\n.B 1.2.\nrelease\n",
+        )
+        .expect("lower ordinal boundaries");
+
+        let starts = document.sections[0]
+            .blocks
+            .iter()
+            .filter_map(|block| match block {
+                Block::List {
+                    kind: ListKind::Ordered,
+                    start,
+                    ..
+                } => *start,
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(starts, [1, 3, 1, 2]);
+        assert!(matches!(
+            document.sections[1].blocks.as_slice(),
+            [Block::List {
+                kind: ListKind::Ordered,
+                start: Some(1),
+                items,
+                ..
+            }] if items.len() == 2
+        ));
+        assert!(matches!(
+            document.sections[2].blocks.as_slice(),
+            [Block::DefinitionList { items, .. }] if items.len() == 4
+        ));
+    }
+
+    #[test]
+    fn keeps_each_adjacent_rs_scope_in_the_current_ordinal_item() {
+        let document = parse_manual_bytes(
+            std::path::Path::new("ordinal-continuations.1"),
+            b".TH ORDINAL-CONTINUATIONS 1\n.SH NOTES\n\
+.IP 1. 4\none\n.RS 4\nfirst continuation\n.RE\n.RS 4\nsecond continuation\n.RE\n\
+.PP\nseparate paragraph\n.IP 2. 4\ntwo\n",
+        )
+        .expect("lower adjacent relative-indent continuations");
+
+        assert!(matches!(
+            document.sections[0].blocks.as_slice(),
+            [
+                Block::List {
+                    kind: ListKind::Ordered,
+                    start: Some(1),
+                    items: first,
+                    ..
+                },
+                Block::Paragraph { .. },
+                Block::List {
+                    kind: ListKind::Ordered,
+                    start: Some(2),
+                    items: second,
+                    ..
+                }
+            ] if first.len() == 1 && first[0].blocks.len() == 3 && second.len() == 1
+        ));
+    }
+
+    #[test]
     fn lowers_normalized_mdoc_font_and_author_layout() {
         let path = temporary_source(
             "normalized-mdoc-modes",

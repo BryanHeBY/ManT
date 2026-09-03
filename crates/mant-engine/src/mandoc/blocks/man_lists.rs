@@ -256,7 +256,7 @@ fn collect_inline_anchors(nodes: &[Inline], output: &mut Vec<String>) {
 
 #[cfg(test)]
 mod tests {
-    use mant_ir::{Block, DefinitionItem, Inline, LayoutHint};
+    use mant_ir::{Block, DefinitionItem, Inline, LayoutHint, ListKind};
 
     fn definition(term: &str, description: &str) -> DefinitionItem {
         DefinitionItem {
@@ -288,5 +288,32 @@ mod tests {
         let mut empty = definition("1.", "");
         empty.description.clear();
         assert!(super::ordinal_marker(&empty, false).is_none());
+    }
+
+    #[test]
+    fn ordered_conversion_conserves_a_native_term_target() {
+        let mut item = definition("1.", "item");
+        item.terms[0].insert(0, Inline::anchor("native-target"));
+        let marker = super::ordinal_marker(&item, false).expect("punctuated ordinal");
+        let mut output = Vec::new();
+        let mut state = super::ManListState::None;
+
+        super::append_ordered(&mut output, item, 0, 1, None, marker, &mut state);
+
+        let [
+            Block::List {
+                kind: ListKind::Ordered,
+                items,
+                ..
+            },
+        ] = output.as_slice()
+        else {
+            panic!("ordered list");
+        };
+        assert!(matches!(
+            items[0].blocks[0],
+            Block::Paragraph { ref children, .. }
+                if matches!(children.first(), Some(Inline::Anchor { id, .. }) if id == "native-target")
+        ));
     }
 }
