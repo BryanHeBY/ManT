@@ -15,6 +15,9 @@ deterministic output without owning a terminal or command-line process.
   every supported platform.
 - Semantic outlines with compact scope summaries, role filters, nested entry
   paths, authored forms, value domains, and optional section/entry roots.
+- Typed local and cross-document navigation: only logical document and manual
+  links become bounded scope edges; external, email, and page-local targets do
+  not expand a query.
 - One selector resolver for outline roots, excerpts, and explanations: exact
   path, exact ID, exact alias, then normalized shorthand.
 - Excerpt selection and literal or regular-expression search with generated
@@ -41,7 +44,8 @@ DocumentResolver ──> Markdown parser or libmandoc lowering
               │
               v
       mant_ir::ResolvedContent
-         ├─> outline / excerpt / search projections
+         ├─> DefinitionIdentity ─> SemanticIndex ─> outline / excerpt
+         ├─> typed document graph ─> bounded scope search / explain
          ├─> Markdown / text / man-style renderers
          └─> versioned mant-protocol responses
 ```

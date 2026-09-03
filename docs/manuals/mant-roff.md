@@ -33,6 +33,27 @@ Indexed redirect-only pages containing `.so target` may resolve only to another 
 
 libmandoc file inclusion is disabled. Requests that read, write, execute, pipe, or include arbitrary files remain denied or ignored by the upstream safe parser. ManT never invokes the host `man`, `groff`, `nroff`, or shell executable.
 
+## Native-to-IR Semantic Mapping
+
+Native macros are parser evidence, not frontend instructions. Lowering consumes
+that evidence once and emits the same source-neutral facts used by Markdown:
+
+| Native evidence | Shared IR result |
+| --- | --- |
+| `SH`/`SS`, `Sh`/`Ss` | Recursive `Section` nodes |
+| `TP`/`TQ`/qualified `IP`, definition-form `It` | `DefinitionItem` content |
+| Reliable option, command, variable, or value context | Optional `DefinitionIdentity` on that content |
+| `Tg` and resolvable `Sx` | Zero-width anchor or local section destination |
+| `Xr`, `MR`, conservative structured manual reference | Typed `Manual` graph edge |
+| `UR`/`UE`, `MT`/`ME`, `Lk`, `Mt` | External or email host-action target |
+
+The rebuildable `SemanticIndex` later groups identified definitions into
+logical entries while retaining authored forms and nested ownership. It does
+not scan rendered prose to invent entries. Likewise, only typed manual targets
+can expand a multi-document scope; link-looking text is not a graph edge. This
+keeps native and Markdown queries aligned even though their producer syntax is
+different. The complete shared model is defined by [mant-ir(7)](mant-ir.md).
+
 ## man Language
 
 The following `man(7)` macros have dedicated lowering behavior:

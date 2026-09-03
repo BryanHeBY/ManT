@@ -84,6 +84,20 @@ independent of terminal detection.
   the same hierarchy, links, semantic entries, search, output, and agent access
   as native manuals.
 
+“Semantic” means ManT retains intent before rendering turns it into text. A
+definition such as the several accepted `ssh -L` layouts becomes one parameter
+entry with exact selector aliases, complete authored forms, nested values, and
+links back to the definitions that explain it. The TUI outline, `--explain`,
+JSON, and MCP then address that same concept instead of independently parsing
+its displayed spelling.
+
+Links follow the same rule. A Markdown document reference or native `Xr`/`MR`
+manual reference becomes a typed, logical edge; a local section remains a
+page-local destination; web and email targets remain explicit host actions.
+This lets interactive history and bounded multi-document queries share one
+safe documentation graph without treating arbitrary prose or filesystem paths
+as navigation.
+
 ## Interactive reader
 
 ```sh

@@ -124,6 +124,13 @@ index, and `Kinds` retains selected roles plus their required ancestors. An
 optional root selector can focus any projection on one section or entry.
 Outline entries keep exact selector aliases separate from authored forms and
 can expose evidence-backed value domains.
+
+Definitions remain authoritative content in `mant-ir`; `SemanticEntry` is a
+rebuildable concept index, and an outline entry is the selected protocol
+projection. Its targets lead back to the definition nodes that supply content.
+This separation lets summary and role-filtered outlines omit entries without
+changing the document or inventing another semantic model.
+
 This supports stateless agent exploration: inspect the compact summary, reuse
 a path or ID from that current response as the next request's root, expand all
 or selected entry kinds below it, then read the chosen node. Exact path and ID

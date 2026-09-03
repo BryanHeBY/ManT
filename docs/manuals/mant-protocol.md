@@ -893,6 +893,12 @@ cross that source boundary. Manual targets come directly from mdoc `Xr` and
 GNU man `MR`, or conservatively from an unambiguous strongly styled
 `name(section)` pair in a traditional man page.
 
+These target kinds have different authority. `section` stays inside the
+current document; `document` and `manual` are the only edges followed by a
+bounded `DocumentScope`; `external` and `email` are explicit host actions and
+never expand a query. The protocol projects the typed IR intent and does not
+turn an unresolved target, physical path, or rendered label into another kind.
+
 ### Quick Reference Contract
 
 `QueryBundle.tldr` and tldr excerpt selections use `TldrDocument`:
@@ -955,6 +961,12 @@ keys; environment variables; variables; values; and unclassified terms.
 Nested values can declare a `choices` value domain. Cross-document `entry-set`
 and `union` domains are available only when a producer has explicit evidence;
 ManT does not infer them from prose.
+
+This is a projection boundary rather than a second semantic model. The
+content-attached `DefinitionIdentity`, derived `SemanticEntry`, and selected
+outline node have distinct responsibilities described in
+[mant-ir(7)](mant-ir.md). Clients use the versioned fields shown here; they
+must not serialize an in-process IR type as a substitute for this contract.
 
 Environment-variable aliases share one source-neutral grammar across native
 and Markdown documents: bare `NAME`, shell `$NAME`, PowerShell `$Env:NAME` or

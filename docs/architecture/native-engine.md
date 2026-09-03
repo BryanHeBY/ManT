@@ -93,6 +93,37 @@ values; `DocumentIndex` provides a derived lookup sidecar without embedding
 mutable caches in the tree. Syn-style `Visit` and `VisitMut` traits keep
 cross-cutting passes exhaustive as the IR evolves.
 
+Semantic discovery is a derived path through that shared model:
+
+```text
+source syntax
+    └─> DefinitionItem + DefinitionIdentity     authoritative content fact
+            └─> SemanticIndex + SemanticEntry   rebuildable concept hierarchy
+                    └─> outline/excerpt          selective protocol projection
+                            └─> CLI / TUI / MCP   shared selection and content
+```
+
+The index does not own another copy of the prose. Entry aliases select a
+concept, forms preserve its complete authored syntax, targets point back to the
+definitions that supply content, and children preserve semantic ownership. An
+outline may emit only summaries or selected kinds without changing the source
+document.
+
+Typed inline navigation forms a second, orthogonal graph:
+
+```text
+navigation identities
+├─ Section NodeId / Inline::Anchor        current-document destinations
+└─ Inline::Link target
+   ├─ Section                              current-document reference
+   ├─ Document / Manual                    bounded logical document edge
+   └─ External / Email                     explicit host action
+```
+
+Only the `Document`/`Manual` branch expands a `DocumentScope`. This prevents external URIs,
+page-local jumps, prose that resembles a manual name, and physical paths from
+silently changing the documents searched by an agent or frontend.
+
 At a structured integration boundary, `mant-protocol::DocumentResponse` adds
 the exact `mant.document/v0.10` discriminator and producer metadata. `mant.query/v0.10`
 combines an optional document response with an optional tldr quick reference

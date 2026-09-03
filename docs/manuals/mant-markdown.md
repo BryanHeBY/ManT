@@ -107,6 +107,20 @@ Each list item must begin with one or more code spans containing names and then 
 
 Ordinary option-shaped definition lists produced by native manuals can receive identities automatically. Markdown lists require either the explicit directive or the conservative complete-list inference described in the shipped examples; authors should use the directive when role or case policy matters.
 
+An accepted list item remains a normal definition item in the document tree;
+the directive adds its source-neutral `DefinitionIdentity`. From those content
+facts, `SemanticIndex` derives entry kinds, selector aliases, complete authored
+forms, content targets, and any nested ownership. Outline, excerpt, explanation,
+TUI, and MCP projections consume that derived index rather than reparsing the
+Markdown list. See [mant-ir(7)](mant-ir.md) for the distinction between content
+definitions and indexed concepts.
+
+Links follow the same source-to-IR boundary: a fragment becomes a local section
+target, a relative Markdown path becomes a same-source document edge, and web
+or email destinations remain host actions. Only document edges may expand a
+bounded multi-document query; the Markdown parser does not perform catalog or
+filesystem lookup while classifying the link.
+
 ## Embedded tldr
 
 A document may own one tldr-compatible quick reference before its ordinary Markdown body:
