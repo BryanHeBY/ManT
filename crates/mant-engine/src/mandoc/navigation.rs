@@ -11,7 +11,7 @@ use super::roff_escape::visible_text;
 use libmandoc_rs::{Node, NodeKind};
 use mant_ir::{
     Block, Diagnostic, DiagnosticLevel, Inline, LinkTarget, Section,
-    visit::{self, VisitMut},
+    visit::{self, Visit, VisitMut},
 };
 
 type SectionTargets = HashMap<String, Option<String>>;
@@ -31,9 +31,9 @@ pub(super) fn resolve_navigation(
     }
 }
 
-/// Return only destinations requested by `.Tg`. libmandoc also marks many
-/// definitions for renderer-generated permalinks; exposing all of those as
-/// inline IR nodes would add layout work and change ordinary paragraphs.
+/// Return source-authored `.Tg` destinations that require exact fragment
+/// handling. Formatter-generated destinations are retained separately after
+/// normalization, but do not become authored fragment aliases.
 pub(super) fn explicit_targets(root: &Node) -> HashSet<String> {
     let mut nodes = Vec::new();
     flatten_nodes(root, &mut nodes);
@@ -120,6 +120,38 @@ pub(super) fn normalize_generated_anchors(
     for section in sections {
         normalizer.visit_section_mut(section);
     }
+}
+
+/// Collect every normalized native anchor before navigation pruning.
+///
+/// These zero-width nodes are part of the navigation contract even when they
+/// do not also become semantic definitions. Keeping the complete set prevents
+/// an automatic function or paragraph target from disappearing merely because
+/// its normalized spelling collides with a section identity.
+pub(super) fn native_anchor_ids(root_blocks: &[Block], sections: &[Section]) -> HashSet<String> {
+    #[derive(Default)]
+    struct Collector {
+        ids: HashSet<String>,
+    }
+
+    impl<'ir> Visit<'ir> for Collector {
+        fn visit_inline(&mut self, inline: &'ir Inline) {
+            if let Inline::Anchor { id, .. } = inline {
+                self.ids.insert(id.to_string());
+            } else {
+                visit::walk_inline(self, inline);
+            }
+        }
+    }
+
+    let mut collector = Collector::default();
+    for block in root_blocks {
+        collector.visit_block(block);
+    }
+    for section in sections {
+        collector.visit_section(section);
+    }
+    collector.ids
 }
 
 fn flatten_nodes<'a>(node: &'a Node, output: &mut Vec<&'a Node>) {

@@ -144,7 +144,8 @@ fn lower_mandoc_document_with_source(
     let mut root_blocks = blocks::lower_root_blocks(&parsed.root, &context);
     diagnostics.extend(context.take_diagnostics());
     navigation::normalize_generated_anchors(&mut root_blocks, &mut sections, &explicit_targets);
-    let mut retained_targets = explicit_targets.clone();
+    let mut retained_targets = navigation::native_anchor_ids(&root_blocks, &sections);
+    retained_targets.extend(explicit_targets.iter().cloned());
     retained_targets.extend(crate::definitions::identify_definitions(
         &mut root_blocks,
         &mut sections,
@@ -3280,6 +3281,32 @@ Sean\n\
         assert!(document.diagnostics.iter().all(|diagnostic| {
             diagnostic.code.as_deref() != Some("ir.identity-role-collision")
         }));
+    }
+
+    #[test]
+    fn automatic_function_target_survives_a_section_identity_collision() {
+        let path = temporary_source(
+            "mdoc-function-section-collision",
+            ".Dd September 4, 2026\n\
+             .Dt TARGET-COLLISION 3\n\
+             .Os\n\
+             .Sh DESCRIPTION\n\
+             .Ss acl_delete_def_file_at\n\
+             .Fn acl_delete_def_file_at \"const char *path\"\n",
+        );
+
+        let document = parse_manual_source(&path).expect("lower automatic function target");
+        fs::remove_file(path).expect("remove temporary roff fixture");
+
+        assert_eq!(
+            document.sections[0].children[0].id,
+            "acl-delete-def-file-at"
+        );
+        assert!(
+            anchor_ids(&document)
+                .iter()
+                .any(|id| id == "acl-delete-def-file-at-2")
+        );
     }
 
     #[test]
