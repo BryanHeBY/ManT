@@ -15,9 +15,11 @@ import csv
 import hashlib
 import json
 import re
+import subprocess
 import sys
 from collections import Counter
 from dataclasses import asdict, dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable, Sequence
 
@@ -494,6 +496,24 @@ def self_check() -> None:
     )
 
 
+def repository_commit() -> str | None:
+    result = subprocess.run(
+        ["git", "-C", str(ROOT), "rev-parse", "HEAD"],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    return result.stdout.strip() if result.returncode == 0 else None
+
+
+def file_digest(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as source:
+        for chunk in iter(lambda: source.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
 def main(argv: Sequence[str]) -> int:
     arguments = parse_arguments(argv)
     if arguments.self_check:
@@ -649,8 +669,24 @@ def main(argv: Sequence[str]) -> int:
             json.dumps(
                 {
                     "schema": PROFILE_SCHEMA,
+                    "producerCommit": repository_commit(),
+                    "profileSha256": file_digest(arguments.profiler),
+                    "scannedAt": datetime.now(timezone.utc).isoformat(),
                     "corpus": corpus,
                     "roots": [str(root) for root in roots],
+                    "pageCount": len(findings),
+                    "targetOwnerCount": target_owner_count,
+                    "logicalOwnerCount": logical_owner_count,
+                    "targetDifferences": {
+                        "missing": missing_count,
+                        "unexpected": unexpected_count,
+                        "roleCollision": role_collision_count,
+                        "invalidIdentity": identity_violation_count,
+                        "duplicate": duplicate_count,
+                        "dangling": dangling_count,
+                        "unclassifiedRaw": unclassified_owner_count,
+                        "unclassifiedLogical": unclassified_logical_owner_count,
+                    },
                     "summary": dict(summary),
                     "findings": [asdict(finding) for finding in findings],
                 },
