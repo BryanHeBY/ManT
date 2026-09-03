@@ -33,6 +33,8 @@ that crate was not published for that change.
 
 ### mant-engine 0.11.0
 
+- Keep target-only native definition containers as zero-width navigation
+  placements without manufacturing empty `term-entry-*` semantic entries.
 - Preserve exact Markdown heading IDs and explicit mdoc `.Tg` spellings as
   fragment aliases while assigning every destination a normalized internal
   identity. Addressable Markdown emits both forms and local references continue

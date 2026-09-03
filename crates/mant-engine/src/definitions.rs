@@ -370,7 +370,9 @@ fn prepare_blocks(
                 };
                 for item in items {
                     let plan = identity_plan(item, item_context);
-                    *preferred_counts.entry(plan.preferred).or_default() += 1;
+                    if has_semantic_spelling(item, &plan) {
+                        *preferred_counts.entry(plan.preferred).or_default() += 1;
+                    }
                     let child_context = child_definition_context(plan.role, item_context);
                     prepare_blocks(&mut item.description, child_context, preferred_counts);
                 }
@@ -856,6 +858,19 @@ fn identify_item(
     }
     retained.extend(anchors.iter().cloned());
 
+    // A target-only definition is a navigation placement artifact, not a
+    // semantic concept. Keep its native anchors but do not manufacture an
+    // empty `term-entry-*` whose outline label is merely its generated ID.
+    if names.is_empty()
+        && !item
+            .terms
+            .iter()
+            .any(|term| !plain_text(term).trim().is_empty())
+    {
+        item.identity = None;
+        return DefinitionRole::Term;
+    }
+
     if preferred_counts
         .get(&preferred)
         .copied()
@@ -882,6 +897,14 @@ fn identify_item(
         names,
     });
     role
+}
+
+fn has_semantic_spelling(item: &DefinitionItem, plan: &IdentityPlan) -> bool {
+    !plan.names.is_empty()
+        || item
+            .terms
+            .iter()
+            .any(|term| !plain_text(term).trim().is_empty())
 }
 
 fn infer_identity(
@@ -1580,6 +1603,39 @@ mod tests {
             items[0].identity.as_ref().expect("identity").id.as_str(),
             "option-verbose"
         );
+    }
+
+    #[test]
+    fn target_only_definitions_retain_anchors_without_becoming_entries() {
+        let target_only = DefinitionItem {
+            identity: None,
+            inline_term: true,
+            terms: vec![vec![Inline::anchor("native-target")]],
+            description: Vec::new(),
+            spacing_before_lines: None,
+        };
+        let mut sections = vec![Section {
+            id: "notes".into(),
+            fragment_aliases: Vec::new(),
+            title: "NOTES".to_owned(),
+            spacing_before_lines: 0,
+            blocks: vec![Block::DefinitionList {
+                items: vec![target_only],
+                compact: true,
+                layout: LayoutHint::default(),
+                source: None,
+            }],
+            children: Vec::new(),
+            source: None,
+        }];
+
+        let retained = identify_definitions(&mut Vec::new(), &mut sections, &HashSet::new(), None);
+
+        let Block::DefinitionList { items, .. } = &sections[0].blocks[0] else {
+            panic!("definition list");
+        };
+        assert!(items[0].identity.is_none());
+        assert!(retained.contains("native-target"));
     }
 
     #[test]
