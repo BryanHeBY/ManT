@@ -105,7 +105,22 @@ that structural validation.
 
 ## Semantic Definitions
 
-A definition-list item may carry `DefinitionIdentity` when ManT can identify a stable, addressable entry. The identity records:
+A semantic entry passes through three deliberately separate representations:
+
+```text
+DefinitionItem + DefinitionIdentity   source fact attached to document content
+                  │
+                  └─> SemanticIndex   rebuildable hierarchy of logical concepts
+                           │
+                           └─> outline/query projection   selected external view
+```
+
+This separation keeps the document tree authoritative. An index can be rebuilt
+without reparsing, and an outline can omit entries or include only summaries
+without deleting their definitions from the document.
+
+A definition-list item may carry `DefinitionIdentity` when ManT can identify an
+addressable entry. The identity records:
 
 | Field | Meaning |
 | --- | --- |
@@ -119,13 +134,60 @@ The identity is assigned during lowering, before source-specific macro informati
 For semantic definitions, the engine derives a role-qualified identity from the complete semantic name after source-specific parsing. Formatter navigation tags remain page-local anchors but do not become semantic IDs merely because their spelling is short or collides with a command. Collisions use a deterministic fingerprint of semantic identity and content rather than a source-order suffix; unrelated sibling insertion and reordering therefore cannot silently redirect an ID. Section and entry allocation are independent. These IDs identify the same logical content within one current document, but an independently updated host manual can change or remove that content, so consumers rediscover before reuse.
 
 `SemanticIndex` is a rebuildable sidecar over these content definitions. It
-classifies entries with `EntryKind`, preserves exact selector `aliases`
-separately from complete author-written `forms`, and retains nested ownership
-such as command → option → value. `EntrySummary` reports direct entries,
-descendants, forms, and kind totals without materializing the indexed nodes in
-an outline. `ValueDomain::Choices` describes observed nested choices;
-`EntrySet` and `Union` are reserved for producers with explicit evidence and
-are never guessed from prose.
+groups definitions into `SemanticEntry` concepts and retains nested ownership
+such as command → option → value. The source role becomes an index kind as
+follows:
+
+| `DefinitionRole` | `EntryKind` |
+| --- | --- |
+| `option` | `parameter { parameterKind: option }` |
+| `marker` | `parameter { parameterKind: marker }` |
+| `operand` | `parameter { parameterKind: operand }` |
+| `command` | `command` |
+| `configuration-key` | `configuration-key` |
+| `environment-variable` | `environment-variable` |
+| `variable` | `variable` |
+| `value` | `value` |
+| `term` | `term` |
+
+`DefinitionRole` describes what a producer recognized in one content node.
+`EntryKind` describes the logical concept exposed by the derived index; option,
+marker, and operand are parameter families at this layer.
+
+Each `SemanticEntry` contains:
+
+| Field | Meaning |
+| --- | --- |
+| `id` | Current-document semantic identity |
+| `kind` | Role-aware index category shown above |
+| `aliases` | Exact selectable spellings, derived from identity `names` |
+| `case` | Alias matching policy |
+| `forms` | Complete author-written terms, including argument layouts |
+| `targets` | Definition-node IDs that provide content for the concept |
+| `children` | Entries semantically owned by this entry |
+| `valueDomain` | Optional value-space evidence |
+
+Aliases answer “how can this concept be selected?”, forms answer “how did the
+source say it can be used?”, and targets answer “which content definitions
+explain it?”. Consumers must not reconstruct one field from another. In
+particular, a complete form such as `[+-]O [shopt_option]` is not necessarily a
+safe selector, and one logical concept may be backed by more than one definition
+node.
+
+`EntrySummary` describes a scope without materializing individual entry nodes:
+
+| Field | Meaning |
+| --- | --- |
+| `direct` | Entries directly owned by the document root or section |
+| `descendants` | Entries nested below those direct entries |
+| `forms` | Complete authored forms across direct and nested entries |
+| `byKind` | Recursive counts grouped by `EntryKind` |
+
+`ValueDomain::Choices { exhaustive }` says child entries are observed choices
+and records whether the source proves the set complete. `EntrySet` references
+selected entry kinds in another logical `DocumentAddress`; `Union` combines
+several independently evidenced domains. Producers must not infer either form
+from prose.
 
 ## Addresses and Resolution
 

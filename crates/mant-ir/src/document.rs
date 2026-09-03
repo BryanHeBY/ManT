@@ -407,7 +407,11 @@ pub struct DefinitionItem {
     pub spacing_before_lines: Option<u16>,
 }
 
-/// Stable, renderer-independent identity for one navigable definition.
+/// Renderer-independent identity attached to one navigable content definition.
+///
+/// [`crate::SemanticIndex`] derives logical entries from these source facts.
+/// The identity remains part of the authoritative document tree; an outline or
+/// another projection may omit the entry without removing its definition.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct DefinitionIdentity {
@@ -417,7 +421,7 @@ pub struct DefinitionIdentity {
     pub role: DefinitionRole,
     /// Matching policy used for aliases in semantic entry lookup.
     pub case: DefinitionCase,
-    /// Plain normalized names suitable for outlines and agent selection.
+    /// Plain normalized names used as [`crate::SemanticEntry::aliases`].
     pub names: Vec<String>,
 }
 
@@ -431,7 +435,11 @@ pub enum DefinitionCase {
     Insensitive,
 }
 
-/// Semantic role assigned before roff macro details leave the native layer.
+/// Semantic role assigned before source-specific details leave the parser.
+///
+/// [`crate::SemanticIndex`] maps option, marker, and operand roles to
+/// [`crate::EntryKind::Parameter`] and maps the remaining roles directly to
+/// their corresponding entry categories.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "kebab-case")]
 pub enum DefinitionRole {

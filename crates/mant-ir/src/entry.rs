@@ -113,7 +113,11 @@ pub enum ValueDomain {
     },
 }
 
-/// One semantic concept backed by one or more document definitions.
+/// One indexed semantic concept backed by one or more document definitions.
+///
+/// This value is derived from [`DefinitionIdentity`](crate::DefinitionIdentity)
+/// facts in the document tree. It groups selection, presentation, and content
+/// ownership metadata without replacing those authoritative definitions.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct SemanticEntry {
@@ -126,9 +130,9 @@ pub struct SemanticEntry {
     pub aliases: Vec<String>,
     /// Alias case-matching policy.
     pub case: DefinitionCase,
-    /// Author-written input forms, distinct from selectable aliases.
+    /// Complete author-written input forms, distinct from selectable aliases.
     pub forms: Vec<String>,
-    /// Definition nodes that supply content for this concept.
+    /// Document-local definition IDs that supply content for this concept.
     pub targets: Vec<NodeId>,
     /// Nested semantic entries owned by this concept.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -193,6 +197,10 @@ impl EntrySummary {
 }
 
 /// Rebuildable semantic index for the document root and every section.
+///
+/// The index is a derived navigation sidecar. Definitions and their identities
+/// remain in the [`Document`] content tree, so callers may rebuild this value
+/// after a trusted document transformation.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct SemanticIndex {
     root: Vec<SemanticEntry>,

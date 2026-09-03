@@ -18,8 +18,10 @@ ResolvedContent
 ├── document: Document?             normalized full document
 │   ├── meta + diagnostics
 │   ├── blocks                      content before the first heading
-│   └── sections[]                  recursive heading-backed content
-│       └── blocks[]                paragraphs, lists, definitions, tables, …
+│   ├── sections[]                  recursive heading-backed content
+│   │   └── blocks[]                paragraphs, lists, definitions, tables, …
+│   └── DefinitionIdentity?         semantic fact attached to a definition
+│       └─> SemanticIndex           rebuildable entry hierarchy
 └── tldr: TldrDocument?             distinct quick-reference channel
 ```
 
@@ -41,23 +43,41 @@ The important public families are:
 deliberately separate so consumers cannot confuse storage lookup with
 within-document navigation.
 
-## Basic use
+## Content and semantic indexes
 
-Build indexes and run shared validation after obtaining a document from
+`DocumentIndex` addresses content nodes. `SemanticIndex` separately groups
+identified definitions into commands, parameter families, configuration keys,
+variables, values, and terms. A semantic entry keeps exact selector aliases,
+complete authored forms, content targets, and nested ownership; it does not
+replace the definitions in the document tree.
+
+Build both indexes and run shared validation after obtaining a document from
 `mant-engine` or another trusted producer:
 
 ```rust
-use mant_ir::{Document, DocumentIndex, validate_document};
+use mant_ir::{Document, DocumentIndex, SemanticIndex, validate_document};
 
 fn inspect(document: &Document) {
-    let index = DocumentIndex::build(document);
-    println!("{} addressable identities", index.iter().count());
+    let content = DocumentIndex::build(document);
+    let semantics = SemanticIndex::build(document);
+    println!("{} addressable identities", content.iter().count());
+
+    for entry in semantics.root() {
+        println!("{}: {:?}", entry.id, entry.aliases);
+        for target in &entry.targets {
+            assert!(content.get(target).is_some());
+        }
+    }
 
     for diagnostic in validate_document(document) {
         eprintln!("{}", diagnostic.message);
     }
 }
 ```
+
+Entries owned by a heading are available through `SemanticIndex::section`.
+Nested entries remain under their parent `SemanticEntry`; callers should not
+flatten that hierarchy when ownership affects interpretation.
 
 ## Stability boundary
 
