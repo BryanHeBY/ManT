@@ -3,7 +3,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{
-    DOCUMENT_ROOT_ID, DefinitionItem, Document, Inline, NodeId, Section,
+    DOCUMENT_ROOT_ID, DefinitionItem, Document, FragmentAlias, Inline, NodeId, Section,
     visit::{self, Visit},
 };
 
@@ -59,6 +59,8 @@ pub struct DuplicateIdentity {
 pub struct DocumentIndex {
     nodes: BTreeMap<NodeId, IndexedNode>,
     duplicates: Vec<DuplicateIdentity>,
+    fragment_targets: BTreeMap<FragmentAlias, BTreeSet<NodeId>>,
+    authored_fragments: BTreeSet<FragmentAlias>,
 }
 
 impl DocumentIndex {
@@ -66,10 +68,15 @@ impl DocumentIndex {
     #[must_use]
     pub fn build(document: &Document) -> Self {
         let mut builder = IndexBuilder::default();
-        if !document.blocks.is_empty() {
+        builder.visit_document(document);
+        if (!document.blocks.is_empty() || !document.fragment_aliases.is_empty())
+            && !builder.index.nodes.contains_key(DOCUMENT_ROOT_ID)
+        {
             builder.register(&NodeId::from(DOCUMENT_ROOT_ID), IndexedRole::Anchor);
         }
-        builder.visit_document(document);
+        for alias in &document.fragment_aliases {
+            builder.register_fragment(alias.clone(), &NodeId::from(DOCUMENT_ROOT_ID), true);
+        }
         builder.index
     }
 
@@ -95,6 +102,29 @@ impl DocumentIndex {
     pub fn duplicates(&self) -> &[DuplicateIdentity] {
         &self.duplicates
     }
+
+    /// Resolve one canonical or source-authored fragment without guessing.
+    ///
+    /// `None` means the fragment is absent or names more than one target.
+    #[must_use]
+    pub fn fragment_target(&self, fragment: &str) -> Option<&NodeId> {
+        let targets = self.fragment_targets.get(fragment)?;
+        let mut targets = targets.iter();
+        let target = targets.next()?;
+        targets.next().is_none().then_some(target)
+    }
+
+    /// Iterate exact aliases contributed by document producers.
+    pub fn authored_fragments(&self) -> impl Iterator<Item = &FragmentAlias> {
+        self.authored_fragments.iter()
+    }
+
+    /// Iterate fragments that resolve to more than one canonical target.
+    pub fn ambiguous_fragments(&self) -> impl Iterator<Item = (&FragmentAlias, &BTreeSet<NodeId>)> {
+        self.fragment_targets
+            .iter()
+            .filter(|(_, targets)| targets.len() > 1)
+    }
 }
 
 #[derive(Default)]
@@ -105,6 +135,7 @@ struct IndexBuilder {
 
 impl IndexBuilder {
     fn register(&mut self, id: &NodeId, role: IndexedRole) {
+        self.register_fragment(FragmentAlias::from(id.as_str()), id, false);
         let containing_section = self.section_stack.last().cloned();
         let node = self
             .index
@@ -121,11 +152,25 @@ impl IndexBuilder {
             });
         }
     }
+
+    fn register_fragment(&mut self, alias: FragmentAlias, id: &NodeId, authored: bool) {
+        if authored {
+            self.index.authored_fragments.insert(alias.clone());
+        }
+        self.index
+            .fragment_targets
+            .entry(alias)
+            .or_default()
+            .insert(id.clone());
+    }
 }
 
 impl<'ir> Visit<'ir> for IndexBuilder {
     fn visit_section(&mut self, section: &'ir Section) {
         self.register(&section.id, IndexedRole::Section);
+        for alias in &section.fragment_aliases {
+            self.register_fragment(alias.clone(), &section.id, true);
+        }
         self.section_stack.push(section.id.clone());
         visit::walk_section(self, section);
         self.section_stack.pop();
@@ -139,8 +184,15 @@ impl<'ir> Visit<'ir> for IndexBuilder {
     }
 
     fn visit_inline(&mut self, inline: &'ir Inline) {
-        if let Inline::Anchor { id } = inline {
+        if let Inline::Anchor {
+            id,
+            fragment_aliases,
+        } = inline
+        {
             self.register(id, IndexedRole::Anchor);
+            for alias in fragment_aliases {
+                self.register_fragment(alias.clone(), id, true);
+            }
         }
         visit::walk_inline(self, inline);
     }
@@ -165,6 +217,7 @@ mod tests {
                 path: None,
             },
             meta: DocumentMeta::default(),
+            fragment_aliases: Vec::new(),
             diagnostics: Vec::new(),
             blocks: vec![crate::Block::DefinitionList {
                 items: vec![DefinitionItem {
@@ -174,7 +227,7 @@ mod tests {
                         case: DefinitionCase::Sensitive,
                         names: vec!["--help".to_owned()],
                     }),
-                    terms: vec![vec![Inline::Anchor { id: id.clone() }]],
+                    terms: vec![vec![Inline::anchor(id.clone())]],
                     description: Vec::new(),
                     inline_term: false,
                     spacing_before_lines: None,
@@ -193,5 +246,52 @@ mod tests {
             &BTreeSet::from([IndexedRole::Entry, IndexedRole::Anchor])
         );
         assert!(index.duplicates().is_empty());
+    }
+
+    #[test]
+    fn resolves_exact_fragments_to_normalized_targets_without_guessing() {
+        let mut section = Section {
+            id: "mixed-target".into(),
+            fragment_aliases: vec![FragmentAlias::from("Mixed.Target")],
+            title: "Mixed target".to_owned(),
+            spacing_before_lines: 0,
+            blocks: Vec::new(),
+            children: Vec::new(),
+            source: None,
+        };
+        section.blocks.push(crate::Block::Paragraph {
+            children: vec![Inline::anchor_with_aliases(
+                "option",
+                vec![FragmentAlias::from("--option")],
+            )],
+            layout: crate::LayoutHint::default(),
+            source: None,
+        });
+        let document = Document {
+            parser: None,
+            source: DocumentSource {
+                format: SourceFormat::Markdown,
+                path: None,
+            },
+            meta: DocumentMeta::default(),
+            fragment_aliases: Vec::new(),
+            diagnostics: Vec::new(),
+            blocks: Vec::new(),
+            sections: vec![section],
+        };
+
+        let index = DocumentIndex::build(&document);
+        assert_eq!(
+            index.fragment_target("Mixed.Target").map(NodeId::as_str),
+            Some("mixed-target")
+        );
+        assert_eq!(
+            index.fragment_target("--option").map(NodeId::as_str),
+            Some("option")
+        );
+        assert_eq!(
+            index.fragment_target("mixed-target").map(NodeId::as_str),
+            Some("mixed-target")
+        );
     }
 }

@@ -75,19 +75,25 @@ pub(super) fn normalize_generated_anchors(
 
     impl VisitMut for Normalizer<'_> {
         fn visit_inline_mut(&mut self, inline: &mut Inline) {
-            if let Inline::Anchor { id } = inline {
+            if let Inline::Anchor {
+                id,
+                fragment_aliases,
+            } = inline
+            {
                 let original = id.to_string();
-                if self.explicit_targets.contains(&original) && self.used.insert(original.clone()) {
-                    return;
-                }
                 let base = crate::definitions::document_id_slug(&original);
                 let mut candidate = base.clone();
                 let mut suffix = 2;
-                while self.used.contains(&candidate) || self.explicit_targets.contains(&candidate) {
+                while self.used.contains(&candidate)
+                    || (candidate != original && self.explicit_targets.contains(&candidate))
+                {
                     candidate = format!("{base}-{suffix}");
                     suffix += 1;
                 }
                 self.used.insert(candidate.clone());
+                if self.explicit_targets.contains(&original) {
+                    fragment_aliases.push(original.into());
+                }
                 *id = candidate.into();
                 return;
             }
@@ -356,8 +362,14 @@ fn resolve_inlines(
                     children,
                 });
             }
-            Inline::Anchor { id } if explicit_targets.contains(id.as_str()) => {
-                resolved.push(Inline::Anchor { id });
+            Inline::Anchor {
+                id,
+                fragment_aliases,
+            } if !fragment_aliases.is_empty() || explicit_targets.contains(id.as_str()) => {
+                resolved.push(Inline::Anchor {
+                    id,
+                    fragment_aliases,
+                });
             }
             Inline::Anchor { .. } => {}
             leaf => resolved.push(leaf),

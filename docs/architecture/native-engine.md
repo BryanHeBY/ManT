@@ -113,7 +113,8 @@ Typed inline navigation forms a second, orthogonal graph:
 
 ```text
 navigation identities
-├─ Section NodeId / Inline::Anchor        current-document destinations
+├─ Section NodeId / Inline::Anchor        normalized current-document destinations
+│  └─ FragmentAlias[]                     exact source-authored deep links
 └─ Inline::Link target
    ├─ Section                              current-document reference
    ├─ Document / Manual                    bounded logical document edge
@@ -125,7 +126,7 @@ page-local jumps, prose that resembles a manual name, and physical paths from
 silently changing the documents searched by an agent or frontend.
 
 At a structured integration boundary, `mant-protocol::DocumentResponse` adds
-the exact `mant.document/v0.10` discriminator and producer metadata. `mant.query/v0.10`
+the exact `mant.document/v0.11` discriminator and producer metadata. `mant.query/v0.11`
 combines an optional document response with an optional tldr quick reference
 while preserving their different origins and licences.
 

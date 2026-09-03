@@ -120,8 +120,8 @@ mod tests {
         );
         assert_eq!(top_level_value(deep.as_bytes(), "id"), Some(17.into()));
         assert_eq!(
-            top_level_string(br#"{"schema":"mant.query/v0.10","body":{}}"#, "schema").as_deref(),
-            Some("mant.query/v0.10")
+            top_level_string(br#"{"schema":"mant.query/v0.11","body":{}}"#, "schema").as_deref(),
+            Some("mant.query/v0.11")
         );
     }
 

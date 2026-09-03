@@ -79,10 +79,12 @@ fn sidebar_exposes_every_semantic_role_supported_by_the_document_contract() {
                 path: None,
             },
             meta: DocumentMeta::default(),
+            fragment_aliases: Vec::new(),
             diagnostics: Vec::new(),
             blocks: Vec::new(),
             sections: vec![Section {
                 id: "reference".to_owned().into(),
+                fragment_aliases: Vec::new(),
                 title: "REFERENCE".to_owned(),
                 spacing_before_lines: 0,
                 blocks: vec![Block::DefinitionList {

@@ -423,10 +423,12 @@ mod tests {
                 path: None,
             },
             meta: DocumentMeta::default(),
+            fragment_aliases: Vec::new(),
             diagnostics: Vec::new(),
             blocks: Vec::new(),
             sections: vec![Section {
                 id: "synopsis".into(),
+                fragment_aliases: Vec::new(),
                 title: "SYNOPSIS".to_owned(),
                 spacing_before_lines: 0,
                 blocks: vec![Block::DefinitionList {

@@ -1,0 +1,32 @@
+{
+  "schema": "mant.outline/v0.11",
+  "entries": {
+    "kind": "kinds",
+    "kinds": [
+      { "kind": "parameter", "parameterKind": "option" }
+    ]
+  },
+  "root": "options",
+  "label": "tool(1)",
+  "nodes": [
+    {
+      "kind": "document-section",
+      "path": "2",
+      "id": "options",
+      "title": "OPTIONS",
+      "children": [
+        {
+          "kind": "document-entry",
+          "path": "2/e1",
+          "id": "option-help",
+          "title": "--help",
+          "entryKind": { "kind": "parameter", "parameterKind": "option" },
+          "case": "sensitive",
+          "aliases": ["--help"],
+          "forms": ["--help"],
+          "targets": ["option-help"]
+        }
+      ]
+    }
+  ]
+}

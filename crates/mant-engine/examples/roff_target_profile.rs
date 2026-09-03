@@ -389,7 +389,7 @@ fn collect_inlines(
 ) {
     for node in nodes {
         match node {
-            Inline::Anchor { id } => {
+            Inline::Anchor { id, .. } => {
                 identities.insert(id.to_string());
                 anchors.insert(id.to_string());
             }

@@ -521,15 +521,18 @@ mod tests {
                     manual_section: Some("1".to_owned()),
                     ..DocumentMeta::default()
                 },
+                fragment_aliases: Vec::new(),
                 diagnostics: Vec::new(),
                 blocks: Vec::new(),
                 sections: vec![Section {
                     id: "options-1".to_owned().into(),
+                    fragment_aliases: Vec::new(),
                     title: "OPTIONS".to_owned(),
                     spacing_before_lines: 0,
                     blocks: vec![paragraph("parent details", true)],
                     children: vec![Section {
                         id: "common-2".to_owned().into(),
+                        fragment_aliases: Vec::new(),
                         title: "Common options".to_owned(),
                         spacing_before_lines: 1,
                         blocks: vec![paragraph("child details", false)],
@@ -714,10 +717,12 @@ mod tests {
                         manual_section: Some("1".to_owned()),
                         ..DocumentMeta::default()
                     },
+                    fragment_aliases: Vec::new(),
                     diagnostics: Vec::new(),
                     blocks: Vec::new(),
                     sections: vec![Section {
                         id: "s-1".to_owned().into(),
+                        fragment_aliases: Vec::new(),
                         title: "S".to_owned(),
                         spacing_before_lines: 0,
                         blocks,
@@ -780,10 +785,12 @@ mod tests {
                     manual_section: Some("1".to_owned()),
                     ..DocumentMeta::default()
                 },
+                fragment_aliases: Vec::new(),
                 diagnostics: Vec::new(),
                 blocks: Vec::new(),
                 sections: vec![Section {
                     id: "ops".to_owned().into(),
+                    fragment_aliases: Vec::new(),
                     title: "OPERATORS".to_owned(),
                     spacing_before_lines: 0,
                     blocks: vec![Block::DefinitionList {
@@ -860,10 +867,12 @@ mod tests {
                     manual_section: Some("1".to_owned()),
                     ..DocumentMeta::default()
                 },
+                fragment_aliases: Vec::new(),
                 diagnostics: Vec::new(),
                 blocks: Vec::new(),
                 sections: vec![Section {
                     id: "ops".to_owned().into(),
+                    fragment_aliases: Vec::new(),
                     title: "OPERATORS".to_owned(),
                     spacing_before_lines: 0,
                     blocks: vec![Block::DefinitionList {

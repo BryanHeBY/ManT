@@ -737,7 +737,7 @@ fn definition_item(
     }
     let mut term = term_builder.finish();
     if let Some(id) = definition_head_anchor(node, &term) {
-        term.insert(0, Inline::Anchor { id: id.into() });
+        term.insert(0, Inline::anchor(id));
     }
     let terms = split_definition_terms(term);
     DefinitionItem {

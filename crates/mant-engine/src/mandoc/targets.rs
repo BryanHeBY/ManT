@@ -74,7 +74,7 @@ pub(super) fn part_target(node: &Node, kind: NodeKind, fallback: &str) -> Option
 
 /// Attach zero-width targets to the first addressable descendant.
 ///
-/// The current v0.10 IR intentionally has no identity field on every block
+/// The current v0.11 IR intentionally has no identity field on every block
 /// variant. Anchors therefore live in the first inline-bearing descendant. If
 /// a structure contains no such descendant, an anchor-only paragraph retains
 /// the destination without adding visible text or spacing.
@@ -94,10 +94,7 @@ pub(super) fn attach_targets(
     if prepend_to_first_descendant(blocks, &targets) {
         return;
     }
-    let children = targets
-        .drain(..)
-        .map(|id| Inline::Anchor { id: id.into() })
-        .collect();
+    let children = targets.drain(..).map(Inline::anchor).collect();
     let insertion = blocks
         .iter()
         .position(|block| !matches!(block, Block::VerticalSpace { .. }))
@@ -160,13 +157,7 @@ fn prepend_to_first_descendant(blocks: &mut [Block], targets: &[String]) -> bool
 }
 
 fn prepend_inlines(children: &mut Vec<Inline>, targets: &[String]) {
-    children.splice(
-        0..0,
-        targets
-            .iter()
-            .cloned()
-            .map(|id| Inline::Anchor { id: id.into() }),
-    );
+    children.splice(0..0, targets.iter().cloned().map(Inline::anchor));
 }
 
 fn contains_anchor(blocks: &[Block], target: &str) -> bool {
@@ -197,7 +188,7 @@ fn contains_anchor(blocks: &[Block], target: &str) -> bool {
 
 fn inlines_contain_anchor(nodes: &[Inline], target: &str) -> bool {
     nodes.iter().any(|node| match node {
-        Inline::Anchor { id } => id == target,
+        Inline::Anchor { id, .. } => id == target,
         Inline::Strong { children }
         | Inline::Emphasis { children }
         | Inline::Link { children, .. } => inlines_contain_anchor(children, target),
@@ -268,7 +259,7 @@ mod tests {
         };
         assert!(matches!(
             children.first(),
-            Some(Inline::Anchor { id }) if id == "nested-target"
+            Some(Inline::Anchor { id, .. }) if id == "nested-target"
         ));
     }
 
@@ -285,7 +276,7 @@ mod tests {
         assert!(matches!(
             blocks.as_slice(),
             [Block::Paragraph { children, .. }]
-                if matches!(children.as_slice(), [Inline::Anchor { id }] if id == "empty-target")
+                if matches!(children.as_slice(), [Inline::Anchor { id, .. }] if id == "empty-target")
         ));
     }
 }

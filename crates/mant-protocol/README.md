@@ -33,13 +33,13 @@ explicit cache maintenance ─────────────> TldrCacheUpd
 
 | Family | Current discriminator | Purpose |
 | --- | --- | --- |
-| Process framing | `mant.cli/v0.10` | Advertised by the `mant` executable |
-| Request | `mant.request/v0.10` | Closed input accepted by `--request-json` |
-| Scope request/result | `mant.scope-request/v0.10`, `mant.scope-query/v0.10` | Bounded multi-document search and explanation |
-| Full query | `mant.query/v0.10` | Document plus optional tldr content |
-| Document | `mant.document/v0.10` | Versioned projection of the normalized document |
-| Catalog | `mant.catalog/v0.10` | Registered Markdown and native-manual discovery |
-| Outline, excerpt, search | `mant.outline/v0.10`, `mant.excerpt/v0.10`, `mant.search/v0.10` | Focused query projections |
+| Process framing | `mant.cli/v0.11` | Advertised by the `mant` executable |
+| Request | `mant.request/v0.11` | Closed input accepted by `--request-json` |
+| Scope request/result | `mant.scope-request/v0.11`, `mant.scope-query/v0.11` | Bounded multi-document search and explanation |
+| Full query | `mant.query/v0.11` | Document plus optional tldr content |
+| Document | `mant.document/v0.11` | Versioned projection of the normalized document |
+| Catalog | `mant.catalog/v0.11` | Registered Markdown and native-manual discovery |
+| Outline, excerpt, search | `mant.outline/v0.11`, `mant.excerpt/v0.11`, `mant.search/v0.11` | Focused query projections |
 | Doctor | `mant.doctor/v1` | Read-only local installation diagnostics |
 | tldr update | `mant.tldr-update/v1` | Explicit native cache-maintenance result |
 
@@ -65,7 +65,7 @@ use mant_protocol::{
 };
 
 let request = QueryRequest {
-    schema: RequestSchema::V0Dot10,
+    schema: RequestSchema::V0Dot11,
     input: QueryInput::Document {
         selector: "git".to_owned(),
         source: None,
@@ -77,17 +77,17 @@ let request = QueryRequest {
     },
 };
 
-assert_eq!(NATIVE_API_VERSION, "0.10");
-assert_eq!(request.schema, RequestSchema::V0Dot10);
+assert_eq!(NATIVE_API_VERSION, "0.11");
+assert_eq!(request.schema, RequestSchema::V0Dot11);
 let _schema = query_request_json_schema();
 ```
 
 The native query family follows `ManT`'s pre-stable minor release line: `ManT`
-0.10.x uses `v0.10`, and patch releases remain backward compatible. They may
+0.11.x uses `v0.11`, and patch releases remain backward compatible. They may
 add documented optional response fields, but never change requests, required
 fields, tagged unions, or existing field semantics. The former
 bare `v1` through `v7` schemas were experimental and are intentionally not
-accepted by 0.10. Historical tags preserve those contracts; the first stable
+accepted by 0.11. Historical tags preserve those contracts; the first stable
 native protocol will use a `v1.0` release line. Independent contracts such as
 `mant.doctor/v1` and `mant.markdown/v1` keep their own identifiers. Clients
 must therefore compare complete discriminators. The `mant-protocol` crate has
@@ -108,7 +108,7 @@ derive a continuation cursor from an individual document group.
 `DefinitionIdentity`, `DocumentAddress`, source, metadata, diagnostic, and tldr
 types from `mant-ir`. Those types form the wire-bearing semantic subset: a
 Serde change to any of them is also a protocol change. CI compares every
-generated structural schema with the checked-in v0.10 snapshot, so an accidental
+generated structural schema with the checked-in v0.11 snapshot, so an accidental
 IR representation change fails until compatibility is restored or the
 affected protocol discriminator is advanced explicitly. Rustdoc descriptions
 and schema titles are excluded from that structural comparison.

@@ -569,6 +569,7 @@ fn check_section_excerpts(
             source: document.source.clone(),
             meta: document.meta.clone(),
             parser: document.parser.clone(),
+            fragment_aliases: Vec::new(),
             blocks: Vec::new(),
             sections: vec![(*section).clone()],
             diagnostics: Vec::new(),

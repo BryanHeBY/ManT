@@ -26,7 +26,13 @@ pub(super) fn inline_anchor_ids(nodes: &[Inline]) -> Vec<String> {
     let mut ids = Vec::new();
     for node in nodes {
         match node {
-            Inline::Anchor { id } => ids.push(id.to_string()),
+            Inline::Anchor {
+                id,
+                fragment_aliases,
+            } => {
+                ids.push(id.to_string());
+                ids.extend(fragment_aliases.iter().map(ToString::to_string));
+            }
             Inline::Strong { children }
             | Inline::Emphasis { children }
             | Inline::Link { children, .. } => ids.extend(inline_anchor_ids(children)),

@@ -183,6 +183,7 @@ fn document(format: SourceFormat, unsupported: bool, readable: bool) -> Document
         parser: None,
         source: DocumentSource { format, path: None },
         meta: DocumentMeta::default(),
+        fragment_aliases: Vec::new(),
         diagnostics: unsupported
             .then_some(Diagnostic {
                 level: DiagnosticLevel::Unsupported,
@@ -196,6 +197,7 @@ fn document(format: SourceFormat, unsupported: bool, readable: bool) -> Document
         sections: readable
             .then_some(Section {
                 id: "name-1".to_owned().into(),
+                fragment_aliases: Vec::new(),
                 title: "NAME".to_owned(),
                 spacing_before_lines: 0,
                 blocks: Vec::new(),
@@ -261,7 +263,7 @@ fn host(direct: Result<Document, String>) -> StubHost {
 
 fn request() -> QueryRequest {
     QueryRequest {
-        schema: RequestSchema::V0Dot10,
+        schema: RequestSchema::V0Dot11,
         input: QueryInput::Document {
             selector: " tool ".to_owned(),
             source: None,
@@ -326,7 +328,7 @@ fn requested_manual_section_backfills_metadata_the_parser_left_empty() {
     host.locate.as_mut().expect("manual page").section = "3".to_owned();
     host.tldr = Ok(Some(tldr()));
     let request = QueryRequest {
-        schema: RequestSchema::V0Dot10,
+        schema: RequestSchema::V0Dot11,
         input: QueryInput::Document {
             selector: "tool".to_owned(),
             source: None,
@@ -370,7 +372,7 @@ fn requested_command_section_keeps_the_combined_tldr_facet() {
     let mut host = host(Ok(document(SourceFormat::Man, false, true)));
     host.tldr = Ok(Some(tldr()));
     let request = QueryRequest {
-        schema: RequestSchema::V0Dot10,
+        schema: RequestSchema::V0Dot11,
         input: QueryInput::Document {
             selector: "tool".to_owned(),
             source: None,
@@ -394,7 +396,7 @@ fn tldr_only_accepts_command_sections_and_rejects_other_categories() {
     let mut host = host(Err("manual must not be read".to_owned()));
     host.tldr = Ok(Some(tldr()));
     let request_for = |section: &str| QueryRequest {
-        schema: RequestSchema::V0Dot10,
+        schema: RequestSchema::V0Dot11,
         input: QueryInput::Document {
             selector: "tool".to_owned(),
             source: None,
@@ -421,7 +423,7 @@ fn explicit_source_reads_only_registered_markdown() {
     host.registered_document = Some(PathBuf::from("/documents/tool.md"));
     host.markdown = Ok("# Tool\n\nSource body.\n".to_owned());
     let request = QueryRequest {
-        schema: RequestSchema::V0Dot10,
+        schema: RequestSchema::V0Dot11,
         input: QueryInput::Document {
             selector: "tool".to_owned(),
             source: Some("team".to_owned()),
@@ -455,7 +457,7 @@ fn canonical_catalog_paths_resolve_exact_addresses() {
     markdown.registered_document = Some(PathBuf::from("/documents/en/tool.md"));
     markdown.markdown = Ok("# Tool\n\nBody.\n".to_owned());
     let request = QueryRequest {
-        schema: RequestSchema::V0Dot10,
+        schema: RequestSchema::V0Dot11,
         input: QueryInput::Document {
             selector: "documents/en/tool".to_owned(),
             source: None,
@@ -478,7 +480,7 @@ fn canonical_catalog_paths_resolve_exact_addresses() {
 
     let manual = host(Ok(document(SourceFormat::Man, false, true)));
     let request = QueryRequest {
-        schema: RequestSchema::V0Dot10,
+        schema: RequestSchema::V0Dot11,
         input: QueryInput::Document {
             selector: "manual/1/tool".to_owned(),
             source: None,
@@ -561,7 +563,7 @@ fn requested_manual_section_failure_is_not_hidden_by_tldr() {
     host.locate = Err("section not found".to_owned());
     host.tldr = Ok(Some(tldr()));
     let request = QueryRequest {
-        schema: RequestSchema::V0Dot10,
+        schema: RequestSchema::V0Dot11,
         input: QueryInput::Document {
             selector: "tool".to_owned(),
             source: None,
@@ -756,7 +758,7 @@ fn validates_before_touching_host_state() {
     assert_eq!(
         query_with(
             &QueryRequest {
-                schema: RequestSchema::V0Dot10,
+                schema: RequestSchema::V0Dot11,
                 input: QueryInput::Document {
                     selector: " ".to_owned(),
                     source: None,
@@ -1061,7 +1063,7 @@ fn markdown_files_bypass_manual_and_tldr_sources() {
     host.markdown = Ok("# Tool\n\n## Options\n\n- `--help`: Show help.\n".to_owned());
     let result = query_with(
         &QueryRequest {
-            schema: RequestSchema::V0Dot10,
+            schema: RequestSchema::V0Dot11,
             input: QueryInput::File {
                 path: "docs/tool.md".to_owned(),
                 format: InputFormat::Markdown,

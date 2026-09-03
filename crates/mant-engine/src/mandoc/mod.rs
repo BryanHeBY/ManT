@@ -187,6 +187,7 @@ fn lower_mandoc_document_with_source(
                 .collect(),
             alias_target: parsed.metadata.alias_target.clone(),
         },
+        fragment_aliases: Vec::new(),
         diagnostics,
         blocks: root_blocks,
         sections,
@@ -275,13 +276,17 @@ impl<'a> LoweringContext<'a> {
         self.assigned_section_ids.extend(ids.iter().cloned());
     }
 
-    fn section_id_for(&mut self, title: &str, node: &Node) -> String {
-        if let Some(target) =
-            targets::section_target(node).filter(|target| self.explicit_targets.contains(target))
-        {
-            return target;
-        }
-        self.section_id(title)
+    fn section_identity_for(
+        &mut self,
+        title: &str,
+        node: &Node,
+    ) -> (String, Vec<mant_ir::FragmentAlias>) {
+        let id = self.section_id(title);
+        let fragment_aliases = targets::section_target(node)
+            .filter(|target| self.explicit_targets.contains(target))
+            .map(|target| vec![target.into()])
+            .unwrap_or_default();
+        (id, fragment_aliases)
     }
 
     /// Normalize an eqn fragment through the same pinned parser used for
@@ -722,7 +727,7 @@ mod tests {
 
         impl<'ir> Visit<'ir> for AnchorCollector {
             fn visit_inline(&mut self, inline: &'ir Inline) {
-                if let Inline::Anchor { id } = inline {
+                if let Inline::Anchor { id, .. } = inline {
                     self.0.push(id.to_string());
                 }
                 visit::walk_inline(self, inline);
@@ -880,7 +885,7 @@ intro\n.Pp\n.Fn alpha\n",
             assert!(matches!(
                 document.sections[0].blocks.first(),
                 Some(Block::Preformatted { children, .. })
-                    if matches!(children.first(), Some(Inline::Anchor { id }) if id == "display-target")
+                    if matches!(children.first(), Some(Inline::Anchor { id, .. }) if id == "display-target")
             ));
         }
     }
@@ -907,7 +912,7 @@ intro\n.Pp\n.Fn alpha\n",
     }
 
     #[test]
-    fn explicit_targets_replace_mdoc_section_slugs() {
+    fn explicit_section_targets_preserve_fragments_beside_normalized_ids() {
         let document = parse_manual_bytes(
             std::path::Path::new("section-targets.1"),
             b".Dd September 3, 2026\n.Dt SECTION-TARGETS 1\n.Os\n\
@@ -916,14 +921,58 @@ intro\n.Pp\n.Fn alpha\n",
         )
         .expect("lower explicit section and subsection targets");
 
-        assert_eq!(document.sections[0].id.as_str(), "custom-section");
-        assert_eq!(document.sections[0].title, "HEADING");
+        assert_eq!(document.sections[0].id.as_str(), "heading");
         assert_eq!(
-            document.sections[0].children[0].id.as_str(),
-            "custom-subsection"
+            document.sections[0]
+                .fragment_aliases
+                .iter()
+                .map(mant_ir::FragmentAlias::as_str)
+                .collect::<Vec<_>>(),
+            ["custom-section"]
+        );
+        assert_eq!(document.sections[0].title, "HEADING");
+        assert_eq!(document.sections[0].children[0].id.as_str(), "subheading");
+        assert_eq!(
+            document.sections[0].children[0]
+                .fragment_aliases
+                .iter()
+                .map(mant_ir::FragmentAlias::as_str)
+                .collect::<Vec<_>>(),
+            ["custom-subsection"]
         );
         assert_eq!(document.sections[0].children[0].title, "SUBHEADING");
         assert!(anchor_ids(&document).is_empty());
+    }
+
+    #[test]
+    fn noncanonical_mdoc_targets_keep_exact_fragments_without_invalid_ids() {
+        let document = parse_manual_bytes(
+            std::path::Path::new("authored-fragments.7"),
+            b".Dd September 4, 2026\n.Dt AUTHORED-FRAGMENTS 7\n.Os\n\
+.Tg Mixed.Section\n.Sh HEADING\n\
+.Tg --option\noption target\n",
+        )
+        .expect("lower exact authored fragments");
+
+        let index = mant_ir::DocumentIndex::build(&document);
+        assert_eq!(
+            index
+                .fragment_target("Mixed.Section")
+                .map(mant_ir::NodeId::as_str),
+            Some("heading")
+        );
+        assert_eq!(
+            index
+                .fragment_target("--option")
+                .map(mant_ir::NodeId::as_str),
+            Some("option")
+        );
+        assert!(document.diagnostics.iter().all(|diagnostic| {
+            !matches!(
+                diagnostic.code.as_deref(),
+                Some("ir.invalid-identity" | "ir.invalid-fragment-alias")
+            )
+        }));
     }
 
     #[test]
@@ -1099,7 +1148,7 @@ See\n.Sx NAME\n.Sh NAME\n.Nm root-section-reference\n.Nd root reference\n",
         assert!(matches!(
             items[0].terms[0].as_slice(),
             [
-                Inline::Anchor { id },
+                Inline::Anchor { id, .. },
                 Inline::Anchor { .. },
                 Inline::Strong { .. },
                 Inline::Emphasis { .. }
@@ -3153,7 +3202,7 @@ Sean\n\
         )));
         assert!(children.iter().any(|inline| matches!(
             inline,
-            Inline::Anchor { id } if id == "explicit-option"
+            Inline::Anchor { id, .. } if id == "explicit-option"
         )));
     }
 
@@ -3181,7 +3230,7 @@ Sean\n\
             Block::Paragraph { children, .. }
                 if children.iter().any(|inline| matches!(
                     inline,
-                    Inline::Anchor { id } if id == "bar"
+                    Inline::Anchor { id, .. } if id == "bar"
                 ))
         )));
         assert!(document.diagnostics.iter().all(|diagnostic| {
@@ -3896,7 +3945,7 @@ can be an IPv4 or IPv6 address.\nT}\n.TE\n",
         assert_eq!(inline_text(&items[1].terms[0]), "zinject -b bookmark");
         assert!(matches!(
             items[0].terms[0].as_slice(),
-            [Inline::Anchor { id }, Inline::Strong { .. }]
+            [Inline::Anchor { id, .. }, Inline::Strong { .. }]
                 if items[0].identity.as_ref().is_some_and(|identity| &identity.id == id)
         ));
         assert!(

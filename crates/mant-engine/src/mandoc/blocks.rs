@@ -108,7 +108,7 @@ fn lower_section(
     let title = plain_text(&heading).trim().to_owned();
     // Allocate IDs in visible document order. Besides being deterministic for
     // consumers, this makes `.Sx` resolution independent of tree recursion.
-    let id = context.section_id_for(&title, node);
+    let (id, fragment_aliases) = context.section_identity_for(&title, node);
     let body = first_part_children(node, NodeKind::Body);
     let first_subsection = body
         .iter()
@@ -134,6 +134,7 @@ fn lower_section(
     }
     Section {
         id: id.into(),
+        fragment_aliases,
         title,
         spacing_before_lines,
         blocks,

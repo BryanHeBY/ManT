@@ -34,10 +34,10 @@ fn keeps_complete_sections_and_semantic_option_outlines() {
     common::assert_no_duplicate_vertical_spacing(&document.sections, "fedora44/tar");
 }
 
-/// `--acls` option is addressable through a v0.10 outline and
+/// `--acls` option is addressable through a v0.11 outline and
 /// `select_excerpt` returns its identity.
 #[test]
-fn options_are_addressable_in_v0_10_outlines_and_excerpts() {
+fn options_are_addressable_in_v0_11_outlines_and_excerpts() {
     let document = fedora44_manual("tar");
     let query = query_for_document("tar", document);
     let acls = semantic_definition_items(document)

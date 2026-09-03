@@ -30,6 +30,7 @@ Source parsers retain syntax-specific facts only until they can be expressed as 
 | `parser` | Producer name and version, when known |
 | `source` | Source format and original path |
 | `meta` | Normalized title, native manual metadata, names, and alias target |
+| `fragmentAliases` | Exact source fragments resolving to the normalized document root |
 | `diagnostics` | Recoverable parser and validation findings |
 | `blocks` | Content before the first heading |
 | `sections` | Recursive content-section tree |
@@ -40,9 +41,9 @@ Source parsers retain syntax-specific facts only until they can be expressed as 
 
 ## Sections
 
-A `Section` contains a document-local `NodeId`, a plain title, blocks, child sections, optional source coordinates, and source-requested spacing before the heading. Depth is derived from tree position rather than stored as mutable metadata.
+A `Section` contains a normalized document-local `NodeId`, optional exact `fragmentAliases`, a plain title, blocks, child sections, optional source coordinates, and source-requested spacing before the heading. Depth is derived from tree position rather than stored as mutable metadata.
 
-The virtual ID `document-overview` addresses root blocks before the first section. IDs are unique only inside one document and may change when the source changes. Consumers should rediscover them through the current index or outline rather than persisting them globally.
+The virtual ID `document-overview` addresses root blocks before the first section and may carry exact source aliases from a removed Markdown H1 title. IDs are unique only inside one document and may change when the source changes. Consumers should rediscover them through the current index or outline rather than persisting them globally.
 
 ## Blocks
 
@@ -89,7 +90,12 @@ Links use a closed `LinkTarget` union rather than stringly typed URLs:
 | `section` | resolved document-local `id` | Current-document destination |
 
 `Inline::Anchor` and section IDs define destinations inside the current
-document. `LinkTarget::Document` and `Manual` connect logical catalog entries
+document. Their `id` is always the normalized internal identity. Optional
+`fragmentAliases` preserve exact source-authored destinations such as mdoc
+`.Tg Mixed.Target`, `--option`, or a Markdown heading ID without admitting
+those spellings into the `NodeId` namespace. `DocumentIndex::fragment_target`
+maps a canonical ID or exact alias to one target and refuses ambiguous aliases.
+`LinkTarget::Document` and `Manual` connect logical catalog entries
 and are the only link kinds followed by bounded multi-document operations.
 `External` and `Email` are host actions: they never expand a documentation
 scope. This classification prevents a query from turning arbitrary URI text or
@@ -261,7 +267,7 @@ Add the crate when implementing an in-process parser, index, renderer, or truste
 
 ```toml
 [dependencies]
-mant-ir = "^0.10.0"
+mant-ir = "^0.11.0"
 ```
 
 Prefer constructors and visitors from the crate over recursively rewriting public fields by hand. Use `visit::Visit` or `visit::VisitMut` for whole-document passes and run validation after transformations that can affect identities or links.

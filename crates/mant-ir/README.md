@@ -33,7 +33,7 @@ The important public families are:
 | `DefinitionIdentity` | Addressable content definition and exact aliases |
 | `SemanticIndex`, `SemanticEntry`, `EntrySummary` | Rebuildable role-aware hierarchy, authored forms, and compact coverage |
 | `DocumentAddress`, `MarkdownOrigin` | Exact identity in `ManT`'s catalog rather than a physical path |
-| `NodeId`, `OutlinePath`, `TextRange` | Typed local identities and coordinates |
+| `NodeId`, `FragmentAlias`, `OutlinePath`, `TextRange` | Normalized local identities, exact source fragments, and coordinates |
 | `DocumentIndex` | Immutable lookup sidecar derived from one document |
 | `validate_document` | Shared structural invariant checks |
 | `Visit`, `VisitMut` | Exhaustive read-only or mutable traversal |
@@ -92,6 +92,13 @@ the referring `DocumentAddress` so `mant-engine` can keep relative links inside
 their registered source; a `Manual` target still requires catalog lookup and
 explicit ambiguity handling. Renderers that cannot activate a target should
 preserve the link's visible children.
+
+`NodeId` is always the normalized internal identity used by indexes and typed
+local links. A document root, section, or inline anchor may additionally carry
+exact `FragmentAlias` values contributed by source syntax such as mdoc `.Tg`
+or a Markdown heading ID. Those aliases preserve external deep links without
+weakening the normalized-ID invariant. `DocumentIndex::fragment_target`
+resolves either form only when it identifies one canonical target.
 
 ## Stability boundary
 

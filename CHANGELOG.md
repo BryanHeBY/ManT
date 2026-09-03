@@ -12,13 +12,31 @@ that crate was not published for that change.
 
 ## Unreleased
 
+### mant-ir 0.11.0
+
+- Separate normalized document-local `NodeId` values from exact
+  source-authored fragment aliases on document roots, sections, and inline
+  anchors. `DocumentIndex` resolves either spelling without admitting
+  noncanonical identities or guessing between ambiguous fragments.
+
+### mant-protocol 0.11.0
+
+- Advance the native process family to v0.11 and expose optional
+  `fragmentAliases` beside normalized document, section, and anchor identities.
+  The published v0.10 schema snapshot remains immutable.
+
 ### libmandoc-rs
 
 - Avoid an upstream assertion when an explicit mdoc `.Tg` precedes an already
   tagged section by preserving the existing section target instead of trying
   to assign it twice.
 
-### mant-engine
+### mant-engine 0.11.0
+
+- Preserve exact Markdown heading IDs and explicit mdoc `.Tg` spellings as
+  fragment aliases while assigning every destination a normalized internal
+  identity. Addressable Markdown emits both forms and local references continue
+  to resolve to the canonical target.
 
 - Reconstruct source-proven man(7) `.IP` enumerations as ordered lists instead
   of exposing their numeric markers as option values, while preserving bare
@@ -29,6 +47,16 @@ that crate was not published for that change.
 - Add an independent target-conservation audit and a licensed `libpipeline(3)`
   regression fixture so invisible destination loss is covered separately from
   visible-content, structure, CommonMark, and renderer-layout audits.
+
+### mant-ui 0.11.0
+
+- Resolve exact document, section, and inline fragment aliases to the same TUI
+  rows as their normalized internal targets.
+
+### mant 0.11.0
+
+- Advertise and accept the v0.11 native protocol family required by the new
+  fragment-alias wire model.
 
 ## 0.10.0 - 2026-08-31
 

@@ -106,7 +106,7 @@ pub fn search_query(
     let truncated = consumed < total;
 
     Ok(QuerySearch {
-        schema: SearchSchema::V0Dot10,
+        schema: SearchSchema::V0Dot11,
         label: query.label.clone(),
         source: query
             .document
@@ -856,10 +856,12 @@ mod tests {
                     manual_section: Some("1".to_owned()),
                     ..DocumentMeta::default()
                 },
+                fragment_aliases: Vec::new(),
                 diagnostics: Vec::new(),
                 blocks: Vec::new(),
                 sections: vec![Section {
                     id: "options-1".to_owned().into(),
+                    fragment_aliases: Vec::new(),
                     title: "OPTIONS".to_owned(),
                     spacing_before_lines: 0,
                     blocks: vec![Block::DefinitionList {
@@ -872,9 +874,7 @@ mod tests {
                                 names: vec!["--acls".to_owned()],
                             }),
                             terms: vec![vec![
-                                Inline::Anchor {
-                                    id: "option-acls".to_owned().into(),
-                                },
+                                Inline::anchor("option-acls"),
                                 Inline::Code {
                                     value: "--acls".to_owned(),
                                 },
@@ -1333,6 +1333,7 @@ Manual needle.
             .sections
             .push(Section {
                 id: "next".into(),
+                fragment_aliases: Vec::new(),
                 title: "NEXT".to_owned(),
                 spacing_before_lines: 0,
                 blocks: vec![Block::Paragraph {

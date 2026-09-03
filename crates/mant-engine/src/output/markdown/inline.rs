@@ -227,8 +227,11 @@ fn render_inline_raw(nodes: &[Inline], options: MarkdownOptions) -> String {
                     pieces.push(InlinePiece::plain(render_inline_raw(children, options)));
                 }
             },
-            Inline::Anchor { id } if options.preserve_anchors => {
-                pieces.push(InlinePiece::plain(html_anchor(id)));
+            Inline::Anchor {
+                id,
+                fragment_aliases,
+            } if options.preserve_anchors => {
+                pieces.push(InlinePiece::plain(html_anchors(id, fragment_aliases)));
             }
             Inline::Anchor { .. } => {}
             Inline::LineBreak => pieces.push(InlinePiece::plain("\n".to_owned())),
@@ -448,6 +451,19 @@ fn is_commonmark_punctuation(character: char) -> bool {
 
 pub(crate) fn html_anchor(id: &str) -> String {
     format!("<a id=\"{}\"></a>", escape_html_attribute(id))
+}
+
+pub(crate) fn html_anchors(id: &str, aliases: &[mant_ir::FragmentAlias]) -> String {
+    std::iter::once(id)
+        .chain(
+            aliases
+                .iter()
+                .map(mant_ir::FragmentAlias::as_str)
+                .filter(|alias| *alias != id),
+        )
+        .map(html_anchor)
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 fn escape_html_attribute(value: &str) -> String {

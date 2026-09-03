@@ -371,7 +371,7 @@ fn lower_inline_node(
 ) -> Vec<Inline> {
     if node.macro_name.as_deref() == Some("Tg") {
         return super::targets::raw_target(node)
-            .map(|id| vec![Inline::Anchor { id: id.into() }])
+            .map(|id| vec![Inline::anchor(id)])
             .unwrap_or_default();
     }
     if node.flags.no_print || node.kind == NodeKind::Comment {
@@ -609,10 +609,7 @@ fn lower_function_declaration(
     // `Fo` stores an explicit `.Tg` on its head wrapper, while the visible
     // function declaration is lowered from the complete block.
     let target = super::targets::part_target(node, NodeKind::Head, &plain_text(&head));
-    let mut declaration = target
-        .into_iter()
-        .map(|id| Inline::Anchor { id: id.into() })
-        .collect::<Vec<_>>();
+    let mut declaration = target.into_iter().map(Inline::anchor).collect::<Vec<_>>();
     declaration.push(Inline::Strong { children: head });
     declaration.push(Inline::Text { value: "(".into() });
     let mut has_argument = false;
@@ -705,8 +702,7 @@ fn enclosure_marks(name: &str) -> Option<(&'static str, &'static str)> {
 /// back to the same first visible word that libmandoc uses.
 fn navigation_anchor(node: &Node, lowered: &[Inline]) -> Option<Inline> {
     let fallback = plain_text(lowered);
-    super::targets::node_target(node, fallback.split_whitespace().next())
-        .map(|id| Inline::Anchor { id: id.into() })
+    super::targets::node_target(node, fallback.split_whitespace().next()).map(Inline::anchor)
 }
 
 fn inline_children(node: &Node) -> &[Node] {
@@ -1223,9 +1219,7 @@ mod tests {
     #[test]
     fn inline_builder_tracks_nested_visible_boundaries_incrementally() {
         let mut builder = InlineBuilder::new();
-        builder.append(vec![Inline::Anchor {
-            id: "start".to_owned().into(),
-        }]);
+        builder.append(vec![Inline::anchor("start")]);
         builder.append(vec![Inline::Strong {
             children: vec![Inline::Text {
                 value: "first".to_owned(),

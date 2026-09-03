@@ -255,7 +255,7 @@ impl DocumentResolver {
             )?,
         };
         Ok(ScopeQueryResponse {
-            schema: ScopeQuerySchema::V0Dot10,
+            schema: ScopeQuerySchema::V0Dot11,
             scope: loaded.scope,
             result,
         })
@@ -268,7 +268,7 @@ impl DocumentResolver {
     ) -> Result<ResolvedContent, QueryError> {
         self.resolve(
             &QueryRequest {
-                schema: RequestSchema::V0Dot10,
+                schema: RequestSchema::V0Dot11,
                 input: QueryInput::Document {
                     selector: selector.selector.clone(),
                     source: selector.source.clone(),
@@ -862,7 +862,7 @@ mod tests {
     #[test]
     fn native_scope_request_enforces_entry_selector_contract() {
         let mut request = ScopeQueryRequest {
-            schema: mant_protocol::ScopeRequestSchema::V0Dot10,
+            schema: mant_protocol::ScopeRequestSchema::V0Dot11,
             scope: DocumentScope {
                 documents: vec![DocumentSelector {
                     selector: "root".to_owned(),

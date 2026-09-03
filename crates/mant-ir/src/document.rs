@@ -16,6 +16,9 @@ pub struct Document {
     pub source: DocumentSource,
     /// Metadata normalized across all supported source formats.
     pub meta: DocumentMeta,
+    /// Exact source fragments resolving to the normalized document root.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub fragment_aliases: Vec<crate::FragmentAlias>,
     /// Recoverable findings retained for callers that need source quality data.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub diagnostics: Vec<Diagnostic>,
@@ -217,6 +220,9 @@ pub struct SourceSpan {
 pub struct Section {
     /// Unique within one document; consumers must not treat it as a global ID.
     pub id: NodeId,
+    /// Exact source fragments resolving to this normalized section identity.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub fragment_aliases: Vec<crate::FragmentAlias>,
     /// Visible heading text.
     pub title: String,
     /// Terminal rows requested before this heading by the source macro set.
@@ -548,9 +554,35 @@ pub enum Inline {
     Anchor {
         /// Document-local destination identity.
         id: NodeId,
+        /// Exact source fragments resolving to this normalized identity.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        fragment_aliases: Vec<crate::FragmentAlias>,
     },
     /// Hard line break that renderers must preserve.
     LineBreak,
+}
+
+impl Inline {
+    /// Construct a normalized local anchor without source-authored aliases.
+    #[must_use]
+    pub fn anchor(id: impl Into<NodeId>) -> Self {
+        Self::Anchor {
+            id: id.into(),
+            fragment_aliases: Vec::new(),
+        }
+    }
+
+    /// Construct a normalized local anchor with exact source fragments.
+    #[must_use]
+    pub fn anchor_with_aliases(
+        id: impl Into<NodeId>,
+        fragment_aliases: Vec<crate::FragmentAlias>,
+    ) -> Self {
+        Self::Anchor {
+            id: id.into(),
+            fragment_aliases,
+        }
+    }
 }
 
 /// Typed destination kind for [`Inline::Link`].

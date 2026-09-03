@@ -154,7 +154,7 @@ impl MantMcpServer {
         let parameters = parameters.0.validate().map_err(finish_error)?;
         let page = parameters.page;
         let request = ScopeQueryRequest {
-            schema: ScopeRequestSchema::V0Dot10,
+            schema: ScopeRequestSchema::V0Dot11,
             scope: parameters.scope,
             view: ScopeQueryView::Explain {
                 entry: parameters.entry,
@@ -181,7 +181,7 @@ impl MantMcpServer {
         let parameters = parameters.0.validate().map_err(finish_error)?;
         let page = parameters.page;
         let request = ScopeQueryRequest {
-            schema: ScopeRequestSchema::V0Dot10,
+            schema: ScopeRequestSchema::V0Dot11,
             scope: parameters.documents,
             view: ScopeQueryView::Search {
                 pattern: parameters.pattern,

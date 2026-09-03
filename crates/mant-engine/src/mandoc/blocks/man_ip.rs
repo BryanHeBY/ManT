@@ -228,7 +228,7 @@ pub(super) fn list_item_from_definition(
 fn collect_inline_anchors(nodes: &[Inline], output: &mut Vec<String>) {
     for node in nodes {
         match node {
-            Inline::Anchor { id } => output.push(id.to_string()),
+            Inline::Anchor { id, .. } => output.push(id.to_string()),
             Inline::Strong { children }
             | Inline::Emphasis { children }
             | Inline::Link { children, .. } => collect_inline_anchors(children, output),

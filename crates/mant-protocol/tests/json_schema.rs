@@ -30,12 +30,12 @@ fn request_schema_is_closed_versioned_and_deserialization_oriented() {
         "https://json-schema.org/draft/2020-12/schema"
     );
     assert_eq!(schema["title"], "QueryRequest");
-    assert_eq!(schema["$id"], "urn:mant:request:v0.10");
+    assert_eq!(schema["$id"], "urn:mant:request:v0.11");
     assert_eq!(schema["additionalProperties"], false);
     assert!(required(&schema).contains(&"schema"));
     assert!(required(&schema).contains(&"input"));
     assert!(required(&schema).contains(&"view"));
-    assert!(encoded.contains("mant.request/v0.10"));
+    assert!(encoded.contains("mant.request/v0.11"));
     assert!(encoded.contains("\"document\""));
     assert!(encoded.contains("\"selector\""));
     assert!(encoded.contains("\"source\""));
@@ -50,11 +50,11 @@ fn request_schema_is_closed_versioned_and_deserialization_oriented() {
 #[test]
 fn response_schemas_follow_the_serialized_wire_shapes() {
     for (schema, marker) in [
-        (query_bundle_json_schema(), "mant.query/v0.10"),
-        (query_outline_json_schema(), "mant.outline/v0.10"),
-        (query_excerpt_json_schema(), "mant.excerpt/v0.10"),
-        (query_search_json_schema(), "mant.search/v0.10"),
-        (document_catalog_json_schema(), "mant.catalog/v0.10"),
+        (query_bundle_json_schema(), "mant.query/v0.11"),
+        (query_outline_json_schema(), "mant.outline/v0.11"),
+        (query_excerpt_json_schema(), "mant.excerpt/v0.11"),
+        (query_search_json_schema(), "mant.search/v0.11"),
+        (document_catalog_json_schema(), "mant.catalog/v0.11"),
     ] {
         let encoded = serde_json::to_string(&schema).expect("schema JSON");
         assert!(encoded.contains(marker), "missing marker {marker}");
@@ -67,7 +67,7 @@ fn response_schemas_follow_the_serialized_wire_shapes() {
     assert!(fields.contains(&"label"));
     assert!(!fields.contains(&"document"));
     assert!(!fields.contains(&"tldr"));
-    assert!(encoded_query.contains("mant.document/v0.10"));
+    assert!(encoded_query.contains("mant.document/v0.11"));
     assert!(encoded_query.contains("DefinitionIdentity"));
     assert!(encoded_query.contains("LinkTarget"));
     assert!(encoded_query.contains("byteRange"));

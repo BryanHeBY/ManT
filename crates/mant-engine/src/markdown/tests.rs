@@ -265,6 +265,14 @@ fn heading_attributes_consume_only_an_explicit_id() {
             ("Shell ${HOME} expansion", "shell-home-expansion"),
         ]
     );
+    assert_eq!(
+        document.sections[2]
+            .fragment_aliases
+            .iter()
+            .map(mant_ir::FragmentAlias::as_str)
+            .collect::<Vec<_>>(),
+        ["config-anchor"]
+    );
 }
 
 #[test]
@@ -616,10 +624,10 @@ Root body.
         None,
     );
 
-    assert_eq!(document.sections[0].id, "1/e1-section");
-    assert_eq!(document.sections[1].id, "3.1-section");
+    assert_eq!(document.sections[0].id, "entry-owner");
+    assert_eq!(document.sections[1].id, "path-owner");
     assert_eq!(document.sections[2].children[0].id, "child");
-    assert_eq!(document.sections[3].id, "root-section");
+    assert_eq!(document.sections[3].id, "explicit-root");
     let Block::Paragraph { children, .. } = &document.blocks[0] else {
         panic!("document preface contains source links");
     };
@@ -635,8 +643,16 @@ Root body.
         .collect::<Vec<_>>();
     assert_eq!(
         targets,
-        ["1/e1-section", "3.1-section", "root-section"],
+        ["entry-owner", "path-owner", "explicit-root"],
         "renamed explicit IDs remain valid Markdown link aliases"
+    );
+    assert_eq!(
+        document.sections[0]
+            .fragment_aliases
+            .iter()
+            .map(mant_ir::FragmentAlias::as_str)
+            .collect::<Vec<_>>(),
+        ["1/e1"]
     );
     assert!(
         document
@@ -663,6 +679,46 @@ Root body.
         [selection @ ExcerptSelection::DocumentSection { .. }]
             if selection.outline().title() == "Child"
     ));
+}
+
+#[test]
+fn document_title_fragments_follow_the_normalized_root_destination() {
+    let document = parse_document(
+        "# Guide {#Mixed.Root}\n\nPreface.\n\n## Details\n\nBody.\n",
+        None,
+    );
+
+    assert_eq!(
+        document
+            .fragment_aliases
+            .iter()
+            .map(mant_ir::FragmentAlias::as_str)
+            .collect::<Vec<_>>(),
+        ["Mixed.Root"]
+    );
+    assert_eq!(
+        mant_ir::DocumentIndex::build(&document)
+            .fragment_target("Mixed.Root")
+            .map(mant_ir::NodeId::as_str),
+        Some(mant_ir::DOCUMENT_ROOT_ID)
+    );
+
+    let document = parse_document("# Guide {#Empty.Root}\n\n## Details\n\nBody.\n", None);
+    assert!(document.fragment_aliases.is_empty());
+    assert_eq!(
+        document.sections[0]
+            .fragment_aliases
+            .iter()
+            .map(mant_ir::FragmentAlias::as_str)
+            .collect::<Vec<_>>(),
+        ["Empty.Root"]
+    );
+    assert_eq!(
+        mant_ir::DocumentIndex::build(&document)
+            .fragment_target("Empty.Root")
+            .map(mant_ir::NodeId::as_str),
+        Some("details")
+    );
 }
 
 #[test]
@@ -693,7 +749,7 @@ fn turns_explicit_option_lists_into_addressable_definitions() {
     );
     assert!(matches!(
         &items[0].terms[0][0],
-        Inline::Anchor { id } if id == "option-h"
+        Inline::Anchor { id, .. } if id == "option-h"
     ));
 
     let outline = build_outline_with_detail(

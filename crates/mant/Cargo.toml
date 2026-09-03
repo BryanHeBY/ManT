@@ -1,6 +1,6 @@
 [package]
 name = "mant"
-version = "0.10.0"
+version = "0.11.0"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
@@ -34,11 +34,11 @@ anstyle.workspace = true
 arboard.workspace = true
 base64.workspace = true
 clap.workspace = true
-mant-ir = { path = "../mant-ir", version = "^0.10.0" }
-mant-protocol = { path = "../mant-protocol", version = "^0.10.0" }
-mant-engine = { path = "../mant-engine", version = "^0.10.0", features = ["tldr-update"] }
+mant-ir = { path = "../mant-ir", version = "^0.11.0" }
+mant-protocol = { path = "../mant-protocol", version = "^0.11.0" }
+mant-engine = { path = "../mant-engine", version = "^0.11.0", features = ["tldr-update"] }
 mant-sources = { path = "../mant-sources", version = "^0.9.2", features = ["update"] }
-mant-ui = { path = "../mant-ui", version = "^0.10.0" }
+mant-ui = { path = "../mant-ui", version = "^0.11.0" }
 rmcp.workspace = true
 rmcp-macros.workspace = true
 schemars.workspace = true

@@ -185,7 +185,7 @@ pub fn query_available_documents(
         .map(document_summary)
         .collect::<Vec<_>>();
     Ok(DocumentCatalog {
-        schema: CatalogSchema::V0Dot10,
+        schema: CatalogSchema::V0Dot11,
         query: query.clone(),
         coverage,
         total: u32::try_from(total).unwrap_or(u32::MAX),

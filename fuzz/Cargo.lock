@@ -241,7 +241,7 @@ checksum = "f9f8bd3e56ce4dfc153cf470fffbfa98c7620958b312ca5c3a4b8d5181fd13c6"
 
 [[package]]
 name = "mant-engine"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "flate2",
  "grep-matcher",
@@ -270,7 +270,7 @@ dependencies = [
 
 [[package]]
 name = "mant-ir"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "schemars",
  "serde",
@@ -278,7 +278,7 @@ dependencies = [
 
 [[package]]
 name = "mant-protocol"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "mant-ir",
  "schemars",

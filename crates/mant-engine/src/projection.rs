@@ -255,7 +255,7 @@ pub fn build_outline_projection(
         nodes = vec![selected];
     }
     Ok(QueryOutline {
-        schema: OutlineSchema::V0Dot10,
+        schema: OutlineSchema::V0Dot11,
         entries,
         root,
         label: query.label.clone(),
@@ -357,7 +357,7 @@ pub fn select_excerpt<S: AsRef<str>>(
     selections.extend(selected.into_iter().map(LocatedNode::selection));
 
     Ok(QueryExcerpt {
-        schema: ExcerptSchema::V0Dot10,
+        schema: ExcerptSchema::V0Dot11,
         label: query.label.clone(),
         producer: document.map(mant_protocol::Producer::for_document),
         source: document.map(|document| document.source.clone()),
@@ -1366,6 +1366,7 @@ mod tests {
     fn section(id: &str, title: &str, children: Vec<Section>) -> Section {
         Section {
             id: id.to_owned().into(),
+            fragment_aliases: Vec::new(),
             title: title.to_owned(),
             spacing_before_lines: 0,
             blocks: Vec::new(),
@@ -1388,6 +1389,7 @@ mod tests {
                     manual_section: Some("1".to_owned()),
                     ..DocumentMeta::default()
                 },
+                fragment_aliases: Vec::new(),
                 diagnostics: Vec::new(),
                 blocks: Vec::new(),
                 sections: vec![
@@ -1790,6 +1792,7 @@ mod tests {
         let mut query = query();
         query.document.as_mut().expect("document").sections[0] = Section {
             id: "force".into(),
+            fragment_aliases: Vec::new(),
             title: "Force".to_owned(),
             spacing_before_lines: 0,
             blocks: Vec::new(),

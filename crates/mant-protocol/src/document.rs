@@ -9,14 +9,14 @@ use serde::{Deserialize, Serialize};
 /// Exact schema marker for a normalized structured document response.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub enum DocumentSchema {
-    /// Version 0.10 of the pre-stable structured-document protocol.
-    #[serde(rename = "mant.document/v0.10")]
-    V0Dot10,
+    /// Version 0.11 of the pre-stable structured-document protocol.
+    #[serde(rename = "mant.document/v0.11")]
+    V0Dot11,
 }
 
 impl DocumentSchema {
     /// Serialized identifier of the current document contract.
-    pub const ID: &'static str = "mant.document/v0.10";
+    pub const ID: &'static str = "mant.document/v0.11";
 }
 
 /// Identifies `ManT` and the parser used to build a wire document.
@@ -42,7 +42,7 @@ pub struct Engine {
     pub version: String,
 }
 
-/// Serializable v0.10 envelope around `ManT`'s protocol-independent document IR.
+/// Serializable v0.11 envelope around `ManT`'s protocol-independent document IR.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct DocumentResponse {
@@ -54,6 +54,9 @@ pub struct DocumentResponse {
     pub source: DocumentSource,
     /// Source-neutral document metadata.
     pub meta: DocumentMeta,
+    /// Exact source fragments resolving to the normalized document root.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub fragment_aliases: Vec<mant_ir::FragmentAlias>,
     /// Recoverable parsing and validation findings.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub diagnostics: Vec<Diagnostic>,
@@ -82,10 +85,11 @@ impl Producer {
 impl From<&IrDocument> for DocumentResponse {
     fn from(document: &IrDocument) -> Self {
         Self {
-            schema: DocumentSchema::V0Dot10,
+            schema: DocumentSchema::V0Dot11,
             producer: Producer::for_document(document),
             source: document.source.clone(),
             meta: document.meta.clone(),
+            fragment_aliases: document.fragment_aliases.clone(),
             diagnostics: document.diagnostics.clone(),
             blocks: document.blocks.clone(),
             sections: document.sections.clone(),
@@ -102,6 +106,7 @@ impl From<DocumentResponse> for IrDocument {
             }),
             source: document.source,
             meta: document.meta,
+            fragment_aliases: document.fragment_aliases,
             diagnostics: document.diagnostics,
             blocks: document.blocks,
             sections: document.sections,

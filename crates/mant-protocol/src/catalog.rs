@@ -13,14 +13,14 @@ pub const MAX_CATALOG_PATTERN_CHARS: usize = 4096;
 /// Exact schema marker for a local document catalog.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub enum CatalogSchema {
-    /// Version 0.10 of the pre-stable document-catalog protocol.
-    #[serde(rename = "mant.catalog/v0.10")]
-    V0Dot10,
+    /// Version 0.11 of the pre-stable document-catalog protocol.
+    #[serde(rename = "mant.catalog/v0.11")]
+    V0Dot11,
 }
 
 impl CatalogSchema {
     /// Serialized identifier of the current catalog contract.
-    pub const ID: &'static str = "mant.catalog/v0.10";
+    pub const ID: &'static str = "mant.catalog/v0.11";
 }
 
 /// Optional family filter for catalog discovery.
@@ -117,7 +117,7 @@ impl DocumentSummary {
 /// Deterministically ordered page of discoverable local documents.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
-#[schemars(extend("$id" = "urn:mant:catalog:v0.10"))]
+#[schemars(extend("$id" = "urn:mant:catalog:v0.11"))]
 pub struct DocumentCatalog {
     /// Exact response schema discriminator.
     pub schema: CatalogSchema,
@@ -143,7 +143,7 @@ pub struct DocumentCatalog {
 impl Default for DocumentCatalog {
     fn default() -> Self {
         Self {
-            schema: CatalogSchema::V0Dot10,
+            schema: CatalogSchema::V0Dot11,
             query: CatalogQuery::default(),
             coverage: CatalogCoverage::default(),
             total: 0,

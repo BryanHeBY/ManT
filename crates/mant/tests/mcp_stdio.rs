@@ -373,7 +373,7 @@ fn assert_tool_replies(replies: &[Value]) {
     assert!(outline.contains("[command-query] query"));
     assert!(outline.contains("[option-s] /S"));
     assert!(outline.contains("[environment-path] PATH, $env:PATH"));
-    assert!(!outline.contains("mant.outline/v0.10"));
+    assert!(!outline.contains("mant.outline/v0.11"));
 
     let explain = successful_text(reply(replies, 7));
     assert_page_header(explain);

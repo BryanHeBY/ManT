@@ -170,7 +170,7 @@ impl DocumentView {
 
         if let Some(document) = &bundle.document {
             let semantic_index = SemanticIndex::build(document);
-            if !document.blocks.is_empty() {
+            if !document.blocks.is_empty() || !document.fragment_aliases.is_empty() {
                 let entries = semantic_index.root();
                 builder.anchor(NavNode {
                     id: ROOT_ID.to_owned(),
@@ -183,6 +183,12 @@ impl DocumentView {
                     is_last: document.sections.is_empty(),
                     parent_id: None,
                 });
+                for alias in &document.fragment_aliases {
+                    builder
+                        .anchors
+                        .entry(alias.to_string())
+                        .or_insert(builder.lines.len());
+                }
                 builder.entry_group(ROOT_ID, ROOT_ID, entries, 1, document.sections.is_empty());
                 builder.blocks(&document.blocks, 0);
             }
@@ -483,6 +489,11 @@ impl DocumentBuilder {
             is_last,
             parent_id: parent_id.map(str::to_owned),
         });
+        for alias in &section.fragment_aliases {
+            self.anchors
+                .entry(alias.to_string())
+                .or_insert(self.lines.len());
+        }
         self.entry_group(
             &section.id,
             &section.id,

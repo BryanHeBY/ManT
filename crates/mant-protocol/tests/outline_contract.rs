@@ -20,7 +20,7 @@ fn source() -> DocumentSource {
 #[test]
 fn outline_contract_exposes_both_human_paths_and_document_ids() {
     let outline = QueryOutline {
-        schema: OutlineSchema::V0Dot10,
+        schema: OutlineSchema::V0Dot11,
         entries: EntryProjection::All,
         root: None,
         label: "demo(1)".to_owned(),
@@ -52,7 +52,7 @@ fn outline_contract_exposes_both_human_paths_and_document_ids() {
     };
 
     let value = serde_json::to_value(outline).expect("outline JSON");
-    assert_eq!(value["schema"], "mant.outline/v0.10");
+    assert_eq!(value["schema"], "mant.outline/v0.11");
     assert_eq!(value["entries"]["kind"], "all");
     assert_eq!(value["label"], "demo(1)");
     assert_eq!(value["nodes"][0]["kind"], "document-section");
@@ -75,7 +75,7 @@ fn outline_contract_exposes_both_human_paths_and_document_ids() {
 #[test]
 fn outline_optional_diagnostic_fields_default_to_a_complete_result() {
     let outline: QueryOutline = serde_json::from_value(serde_json::json!({
-        "schema": "mant.outline/v0.10",
+        "schema": "mant.outline/v0.11",
         "entries": {"kind": "summary"},
         "label": "demo",
         "nodes": [],
@@ -90,6 +90,7 @@ fn outline_optional_diagnostic_fields_default_to_a_complete_result() {
 fn excerpt_contract_keeps_breadcrumbs_separate_from_complete_sections() {
     let section = Section {
         id: "common-3".to_owned().into(),
+        fragment_aliases: Vec::new(),
         title: "Common options".to_owned(),
         spacing_before_lines: 0,
         blocks: Vec::new(),
@@ -97,7 +98,7 @@ fn excerpt_contract_keeps_breadcrumbs_separate_from_complete_sections() {
         source: None,
     };
     let excerpt = QueryExcerpt {
-        schema: ExcerptSchema::V0Dot10,
+        schema: ExcerptSchema::V0Dot11,
         label: "demo(1)".to_owned(),
         producer: Some(Producer {
             name: "mant".to_owned(),
@@ -125,7 +126,7 @@ fn excerpt_contract_keeps_breadcrumbs_separate_from_complete_sections() {
     };
 
     let value = serde_json::to_value(excerpt).expect("excerpt JSON");
-    assert_eq!(value["schema"], "mant.excerpt/v0.10");
+    assert_eq!(value["schema"], "mant.excerpt/v0.11");
     assert_eq!(value["selections"][0]["kind"], "document-section");
     assert_eq!(
         value["selections"][0]["outline"]["ancestors"][0]["path"],
@@ -151,7 +152,7 @@ fn excerpt_contract_can_return_one_semantic_definition() {
         spacing_before_lines: None,
     };
     let excerpt = QueryExcerpt {
-        schema: ExcerptSchema::V0Dot10,
+        schema: ExcerptSchema::V0Dot11,
         label: "demo(1)".to_owned(),
         producer: None,
         source: Some(source()),
@@ -191,7 +192,7 @@ fn document_root_contract_addresses_content_before_the_first_heading() {
         source: None,
     }];
     let outline = QueryOutline {
-        schema: OutlineSchema::V0Dot10,
+        schema: OutlineSchema::V0Dot11,
         entries: EntryProjection::None,
         root: None,
         label: "guide.md".to_owned(),
@@ -211,7 +212,7 @@ fn document_root_contract_addresses_content_before_the_first_heading() {
         }],
     };
     let excerpt = QueryExcerpt {
-        schema: ExcerptSchema::V0Dot10,
+        schema: ExcerptSchema::V0Dot11,
         label: "guide.md".to_owned(),
         producer: None,
         source: outline.source.clone(),
@@ -254,7 +255,7 @@ fn tldr_uses_the_reserved_zero_path_in_outline_and_excerpt_contracts() {
         origin: TldrOrigin::TldrPages,
     };
     let outline = QueryOutline {
-        schema: OutlineSchema::V0Dot10,
+        schema: OutlineSchema::V0Dot11,
         entries: EntryProjection::None,
         root: None,
         label: "demo".to_owned(),
@@ -269,7 +270,7 @@ fn tldr_uses_the_reserved_zero_path_in_outline_and_excerpt_contracts() {
         }],
     };
     let excerpt = QueryExcerpt {
-        schema: ExcerptSchema::V0Dot10,
+        schema: ExcerptSchema::V0Dot11,
         label: "demo".to_owned(),
         producer: None,
         source: None,

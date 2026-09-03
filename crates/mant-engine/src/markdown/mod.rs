@@ -201,18 +201,24 @@ fn parse_document_with_entries(
         document_title_id,
     } = lower_document_structure(source_text, &source);
     let mut sections = nest_sections(flat_sections);
-    let extracted_title = extract_document_title(
+    let extracted_title_aliases = extract_document_title(
         &mut root_blocks,
         &mut sections,
         document_title_id.as_deref(),
     );
-    if extracted_title {
+    let mut document_fragment_aliases = Vec::new();
+    if let Some(fragment_aliases) = extracted_title_aliases {
         let replacement = if root_blocks.is_empty() {
             sections.first().map(|section| section.id.as_str())
         } else {
             Some(DOCUMENT_ROOT_ID)
         };
         ids.remap_target(document_title_id.as_deref(), replacement);
+        if replacement == Some(DOCUMENT_ROOT_ID) {
+            document_fragment_aliases = fragment_aliases;
+        } else if let Some(section) = sections.first_mut() {
+            section.fragment_aliases.extend(fragment_aliases);
+        }
     }
     normalize_markdown_layout(&source, &mut root_blocks, &mut sections);
     normalize_entry_lists(&mut root_blocks, &mut declarations, entry_diagnostics);
@@ -253,6 +259,7 @@ fn parse_document_with_entries(
             title,
             ..DocumentMeta::default()
         },
+        fragment_aliases: document_fragment_aliases,
         diagnostics,
         blocks: root_blocks,
         sections,
@@ -324,6 +331,11 @@ fn lower_document_structure(
                 title = Some(heading.clone());
             }
             let id = ids.allocate(&heading, explicit_id.as_deref());
+            let fragment_aliases = explicit_id
+                .as_deref()
+                .map(mant_ir::FragmentAlias::from)
+                .into_iter()
+                .collect();
             if is_document_title {
                 document_title_id = Some(id.clone());
             }
@@ -332,6 +344,7 @@ fn lower_document_structure(
                 is_document_title,
                 section: Section {
                     id: id.into(),
+                    fragment_aliases,
                     title: heading.clone(),
                     spacing_before_lines: u16::from(!flat_sections.is_empty()),
                     blocks: Vec::new(),
@@ -449,17 +462,15 @@ fn extract_document_title(
     root_blocks: &mut Vec<Block>,
     sections: &mut Vec<Section>,
     document_title_id: Option<&str>,
-) -> bool {
-    let Some(document_title_id) = document_title_id else {
-        return false;
-    };
+) -> Option<Vec<mant_ir::FragmentAlias>> {
+    let document_title_id = document_title_id?;
     if sections.first().map(|section| section.id.as_str()) != Some(document_title_id) {
-        return false;
+        return None;
     }
     let title = sections.remove(0);
     root_blocks.extend(title.blocks);
     sections.splice(0..0, title.children);
-    true
+    Some(title.fragment_aliases)
 }
 
 struct FlatSection {
@@ -509,7 +520,16 @@ impl SectionIds {
             .map(str::trim)
             .filter(|value| !value.is_empty())
             .map(ToOwned::to_owned);
-        let base = explicit.clone().unwrap_or_else(|| slug(title));
+        let normalized_explicit = explicit
+            .as_deref()
+            .map(crate::definitions::document_id_slug);
+        let base = explicit
+            .as_deref()
+            .zip(normalized_explicit.as_deref())
+            .filter(|(authored, normalized)| {
+                *authored == *normalized && !crate::projection::is_reserved_selector(authored)
+            })
+            .map_or_else(|| slug(title), |(_, normalized)| normalized.to_owned());
         let base = if base.is_empty() {
             "section".to_owned()
         } else if crate::projection::is_reserved_selector(&base) {

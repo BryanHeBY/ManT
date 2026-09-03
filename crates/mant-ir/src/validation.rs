@@ -59,6 +59,38 @@ pub fn validate_document(document: &Document) -> Vec<Diagnostic> {
         ));
     }
 
+    for alias in index.authored_fragments() {
+        if alias.is_empty() {
+            diagnostics.push(invariant(
+                "ir.empty-fragment-alias",
+                "source-authored fragment alias must not be empty".to_owned(),
+            ));
+        } else if alias
+            .chars()
+            .any(|character| character.is_control() || character.is_whitespace())
+        {
+            diagnostics.push(invariant(
+                "ir.invalid-fragment-alias",
+                format!(
+                    "source-authored fragment alias '{alias}' contains whitespace or control characters"
+                ),
+            ));
+        }
+    }
+    for (alias, targets) in index.ambiguous_fragments() {
+        diagnostics.push(invariant(
+            "ir.ambiguous-fragment-alias",
+            format!(
+                "fragment '{alias}' resolves to multiple document-local IDs: {}",
+                targets
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+        ));
+    }
+
     let mut collector = InvariantCollector::default();
     collector.visit_document(document);
     diagnostics.extend(collector.diagnostics);
@@ -567,6 +599,7 @@ mod tests {
                 path: None,
             },
             meta: DocumentMeta::default(),
+            fragment_aliases: Vec::new(),
             diagnostics: Vec::new(),
             blocks,
             sections,
@@ -576,6 +609,7 @@ mod tests {
     fn section(id: &str) -> Section {
         Section {
             id: id.into(),
+            fragment_aliases: Vec::new(),
             title: id.to_owned(),
             spacing_before_lines: 0,
             blocks: Vec::new(),
@@ -609,9 +643,7 @@ mod tests {
         };
         let blocks = vec![Block::Paragraph {
             children: vec![
-                Inline::Anchor {
-                    id: "anchor".into(),
-                },
+                Inline::anchor("anchor"),
                 link("section"),
                 link("anchor"),
                 link("missing"),
@@ -625,6 +657,24 @@ mod tests {
             diagnostics[0].code.as_deref(),
             Some("ir.dangling-section-link")
         );
+    }
+
+    #[test]
+    fn fragment_aliases_keep_source_spelling_but_must_resolve_uniquely() {
+        let mut first = section("first");
+        first.fragment_aliases = vec!["Mixed.Target".into(), "--option".into()];
+        let diagnostics = validate_document(&document(vec![first.clone()], Vec::new()));
+        assert!(diagnostics.is_empty());
+
+        let mut second = section("second");
+        second.fragment_aliases = vec!["Mixed.Target".into(), "bad fragment".into()];
+        let diagnostics = validate_document(&document(vec![first, second], Vec::new()));
+        let codes = diagnostics
+            .iter()
+            .filter_map(|diagnostic| diagnostic.code.as_deref())
+            .collect::<Vec<_>>();
+        assert!(codes.contains(&"ir.invalid-fragment-alias"));
+        assert!(codes.contains(&"ir.ambiguous-fragment-alias"));
     }
 
     #[test]
@@ -642,6 +692,7 @@ mod tests {
         let shared: NodeId = "Bad ID".into();
         let section = Section {
             id: shared.clone(),
+            fragment_aliases: Vec::new(),
             title: "invalid".to_owned(),
             spacing_before_lines: 0,
             blocks: vec![Block::DefinitionList {
@@ -652,7 +703,7 @@ mod tests {
                         case: DefinitionCase::Sensitive,
                         names: vec!["term".to_owned()],
                     }),
-                    terms: vec![vec![Inline::Anchor { id: shared.clone() }]],
+                    terms: vec![vec![Inline::anchor(shared.clone())]],
                     description: Vec::new(),
                     inline_term: false,
                     spacing_before_lines: None,

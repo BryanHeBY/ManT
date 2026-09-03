@@ -79,7 +79,7 @@ fn document_anchor_ids(blocks: &[Block], sections: &[Section]) -> HashSet<String
 
     impl<'ir> Visit<'ir> for Collector {
         fn visit_inline(&mut self, inline: &'ir Inline) {
-            if let Inline::Anchor { id } = inline {
+            if let Inline::Anchor { id, .. } = inline {
                 self.0.insert(id.to_string());
             }
             visit::walk_inline(self, inline);
@@ -872,12 +872,7 @@ fn identify_item(
     if !anchors.iter().any(|anchor| anchor == &id)
         && let Some(term) = item.terms.first_mut()
     {
-        term.insert(
-            0,
-            Inline::Anchor {
-                id: id.clone().into(),
-            },
-        );
+        term.insert(0, Inline::anchor(id.clone()));
     }
     retained.insert(id.clone());
     item.identity = Some(DefinitionIdentity {
@@ -1354,7 +1349,7 @@ fn collect_anchor_ids(nodes: &[Inline], output: &mut Vec<String>) {
 
     impl<'ir> Visit<'ir> for Collector<'_> {
         fn visit_inline(&mut self, inline: &'ir Inline) {
-            if let Inline::Anchor { id } = inline {
+            if let Inline::Anchor { id, .. } = inline {
                 self.0.push(id.to_string());
             }
             visit::walk_inline(self, inline);
@@ -1563,6 +1558,7 @@ mod tests {
         });
         let mut sections = vec![Section {
             id: "options".into(),
+            fragment_aliases: Vec::new(),
             title: "OPTIONS".to_owned(),
             spacing_before_lines: 0,
             blocks: vec![Block::DefinitionList {
@@ -1612,6 +1608,7 @@ mod tests {
     fn composite_environment_options_use_parameter_semantics() {
         let mut sections = vec![Section {
             id: "environment-options".into(),
+            fragment_aliases: Vec::new(),
             title: "ENVIRONMENT OPTIONS".to_owned(),
             spacing_before_lines: 0,
             blocks: vec![Block::DefinitionList {
@@ -1650,6 +1647,7 @@ mod tests {
         let mut sections = vec![
             Section {
                 id: "commands".into(),
+                fragment_aliases: Vec::new(),
                 title: "COMMANDS".to_owned(),
                 spacing_before_lines: 0,
                 blocks: vec![definition_list(vec![
@@ -1664,6 +1662,7 @@ mod tests {
             },
             Section {
                 id: "variables".into(),
+                fragment_aliases: Vec::new(),
                 title: "VARIABLES".to_owned(),
                 spacing_before_lines: 0,
                 blocks: vec![definition_list(vec![
@@ -1745,6 +1744,7 @@ mod tests {
             if with_colliding_section {
                 sections.push(Section {
                     id: "option-v".into(),
+                    fragment_aliases: Vec::new(),
                     title: "Unrelated notes".to_owned(),
                     spacing_before_lines: 0,
                     blocks: Vec::new(),
@@ -1754,6 +1754,7 @@ mod tests {
             }
             sections.push(Section {
                 id: "options".into(),
+                fragment_aliases: Vec::new(),
                 title: "OPTIONS".to_owned(),
                 spacing_before_lines: 0,
                 blocks: vec![Block::DefinitionList {
@@ -1803,6 +1804,7 @@ mod tests {
         };
         let mut sections = vec![Section {
             id: "options".to_owned().into(),
+            fragment_aliases: Vec::new(),
             title: "OPTIONS".to_owned(),
             spacing_before_lines: 0,
             blocks: vec![
@@ -1855,6 +1857,7 @@ mod tests {
         };
         let mut sections = vec![Section {
             id: "environment".into(),
+            fragment_aliases: Vec::new(),
             title: "ENVIRONMENT VARIABLES".to_owned(),
             spacing_before_lines: 0,
             blocks: vec![
@@ -1897,9 +1900,10 @@ mod tests {
     #[test]
     fn keeps_native_navigation_anchors_separate_from_semantic_ids() {
         let mut command = item("set-mark");
-        command.terms[0].insert(0, Inline::Anchor { id: "set".into() });
+        command.terms[0].insert(0, Inline::anchor("set"));
         let mut sections = vec![Section {
             id: "commands".into(),
+            fragment_aliases: Vec::new(),
             title: "COMMANDS".to_owned(),
             spacing_before_lines: 0,
             blocks: vec![Block::DefinitionList {
@@ -1927,6 +1931,7 @@ mod tests {
     fn generic_terms_receive_the_anchor_their_projected_entry_advertises() {
         let mut sections = vec![Section {
             id: "glossary".into(),
+            fragment_aliases: Vec::new(),
             title: "GLOSSARY".to_owned(),
             spacing_before_lines: 0,
             blocks: vec![Block::DefinitionList {
@@ -1947,7 +1952,7 @@ mod tests {
         assert_eq!(identity.id.as_str(), "term-widget");
         assert!(matches!(
             items[0].terms[0].first(),
-            Some(Inline::Anchor { id }) if id == "term-widget"
+            Some(Inline::Anchor { id, .. }) if id == "term-widget"
         ));
         assert!(retained.contains("term-widget"));
     }
@@ -1972,6 +1977,7 @@ mod tests {
         };
         let section = |id: &str, title: &str, items| Section {
             id: id.into(),
+            fragment_aliases: Vec::new(),
             title: title.to_owned(),
             spacing_before_lines: 0,
             blocks: vec![definition_list(items)],

@@ -18,10 +18,12 @@ fn bundle() -> ResolvedContent {
                 path: None,
             },
             meta: DocumentMeta::default(),
+            fragment_aliases: Vec::new(),
             diagnostics: Vec::new(),
             blocks: Vec::new(),
             sections: vec![Section {
                 id: "description".to_owned().into(),
+                fragment_aliases: Vec::new(),
                 title: "Description".to_owned(),
                 spacing_before_lines: 0,
                 blocks: vec![Block::Paragraph {
@@ -109,6 +111,7 @@ fn geometry_bundle() -> ResolvedContent {
     ];
     document.sections[0].children.push(Section {
         id: "details".to_owned().into(),
+        fragment_aliases: Vec::new(),
         title: "Details".to_owned(),
         spacing_before_lines: 0,
         blocks: vec![paragraph("Nothing is lost after resizing.")],
@@ -186,6 +189,31 @@ fn records_section_rows_after_wrapping() {
     assert_eq!(rendered.anchor_row("description"), Some(0));
     assert!(rendered.row_count >= 4);
     assert_eq!(view.navigation()[0].title, "Description");
+}
+
+#[test]
+fn authored_fragments_jump_to_their_canonical_target_rows() {
+    let mut bundle = bundle();
+    let section = &mut bundle.document.as_mut().expect("document").sections[0];
+    section.fragment_aliases = vec!["Mixed.Section".into()];
+    section.blocks.insert(
+        0,
+        Block::Paragraph {
+            children: vec![Inline::anchor_with_aliases(
+                "option",
+                vec!["--option".into()],
+            )],
+            layout: LayoutHint::default(),
+            source: None,
+        },
+    );
+
+    let rendered = DocumentView::new(&bundle).render(40);
+    assert_eq!(rendered.anchor_row("Mixed.Section"), Some(0));
+    assert_eq!(
+        rendered.anchor_row("--option"),
+        rendered.anchor_row("option")
+    );
 }
 
 #[test]
@@ -1239,6 +1267,7 @@ fn section_reference_hit_regions_follow_wrapped_link_text() {
     }];
     document.sections[0].children.push(Section {
         id: "details".to_owned().into(),
+        fragment_aliases: Vec::new(),
         title: "Details".to_owned(),
         spacing_before_lines: 0,
         blocks: Vec::new(),

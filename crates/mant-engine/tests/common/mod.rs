@@ -462,7 +462,7 @@ pub fn assert_git_generated_highlight_is_lowered(name: &str, document: &Document
 pub fn assert_anchor_ids_are_clean(name: &str, document: &Document) {
     for block in document_blocks(document) {
         visit_block_inlines(block, &mut |inline| {
-            if let Inline::Anchor { id } = inline {
+            if let Inline::Anchor { id, .. } = inline {
                 assert!(
                     !id.contains(['\u{1d}', '\u{1e}', '\u{1f}']),
                     "{name} anchor ID {id:?} bytes {:02x?} leaks roff escape",

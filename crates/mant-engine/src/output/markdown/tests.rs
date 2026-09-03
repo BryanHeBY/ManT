@@ -31,6 +31,7 @@ fn manual(sections: Vec<Section>) -> Document {
             path: None,
         },
         meta: DocumentMeta::default(),
+        fragment_aliases: Vec::new(),
         diagnostics: Vec::new(),
         blocks: Vec::new(),
         sections,
@@ -40,12 +41,58 @@ fn manual(sections: Vec<Section>) -> Document {
 fn section(title: &str, blocks: Vec<Block>, children: Vec<Section>) -> Section {
     Section {
         id: title.to_lowercase().into(),
+        fragment_aliases: Vec::new(),
         title: title.to_owned(),
         spacing_before_lines: 0,
         blocks,
         children,
         source: None,
     }
+}
+
+#[test]
+fn addressable_markdown_emits_canonical_and_authored_fragments() {
+    let mut section = section(
+        "Mixed target",
+        vec![paragraph(vec![Inline::anchor_with_aliases(
+            "option",
+            vec!["--option".into()],
+        )])],
+        Vec::new(),
+    );
+    section.id = "mixed-target".into();
+    section.fragment_aliases = vec!["Mixed.Target".into()];
+    let query = ResolvedContent {
+        address: None,
+        label: "fragments".to_owned(),
+        document: Some(manual(vec![section])),
+        tldr: None,
+    };
+
+    let markdown = render_markdown_with_options(&query, MarkdownOptions::ADDRESSABLE);
+    assert!(markdown.contains("<a id=\"mixed-target\"></a>"));
+    assert!(markdown.contains("<a id=\"Mixed.Target\"></a>"));
+    assert!(markdown.contains("<a id=\"option\"></a>"));
+    assert!(markdown.contains("<a id=\"--option\"></a>"));
+}
+
+#[test]
+fn addressable_markdown_emits_document_root_fragments() {
+    let mut document = manual(Vec::new());
+    document.blocks = vec![paragraph(vec![Inline::Text {
+        value: "Preface.".to_owned(),
+    }])];
+    document.fragment_aliases = vec!["Mixed.Root".into()];
+    let query = ResolvedContent {
+        address: None,
+        label: "fragments".to_owned(),
+        document: Some(document),
+        tldr: None,
+    };
+
+    let markdown = render_markdown_with_options(&query, MarkdownOptions::ADDRESSABLE);
+    assert!(markdown.contains("<a id=\"document-overview\"></a>"));
+    assert!(markdown.contains("<a id=\"Mixed.Root\"></a>"));
 }
 
 fn email_addresses(document: &Document) -> Vec<String> {
@@ -438,7 +485,7 @@ fn chooses_safe_fences_and_preserves_native_table_and_equation_content() {
 fn renders_the_shared_query_contract_without_leaking_json() {
     let fixture = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../..")
-        .join("tests/contracts/minimal-query-v0.10.json");
+        .join("tests/contracts/minimal-query-v0.11.json");
     if !fixture.exists() {
         // The tagged repository owns shared process-contract fixtures; they
         // intentionally remain outside the published engine package.
@@ -462,7 +509,7 @@ fn renders_the_shared_query_contract_without_leaking_json() {
     assert!(markdown.contains(", or read OPTIONS"));
     assert!(!markdown.contains("[OPTIONS](#options-1)"));
     assert!(!markdown.contains("<a "));
-    assert!(!markdown.contains("mant.query/v0.10"));
+    assert!(!markdown.contains("mant.query/v0.11"));
 
     let addressable = render_markdown_with_options(&query, MarkdownOptions::ADDRESSABLE);
     assert!(addressable.contains("[OPTIONS](#options-1)"));
@@ -1081,9 +1128,7 @@ fn addressable_rendering_returns_exact_semantic_node_ranges() {
             names: vec!["--help".to_owned()],
         }),
         terms: vec![vec![
-            Inline::Anchor {
-                id: "help-entry".into(),
-            },
+            Inline::anchor("help-entry"),
             Inline::Code {
                 value: "--help".to_owned(),
             },

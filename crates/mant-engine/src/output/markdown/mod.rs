@@ -113,9 +113,14 @@ fn render_markdown_artifact(query: &ResolvedContent, options: MarkdownOptions) -
     }
 
     if let Some(document) = &query.document {
-        if !document.blocks.is_empty() {
+        if !document.blocks.is_empty() || !document.fragment_aliases.is_empty() {
             let start = if options.preserve_anchors {
-                output.push(&inline::html_anchor(DOCUMENT_ROOT_ID)).start
+                output
+                    .push(&inline::html_anchors(
+                        DOCUMENT_ROOT_ID,
+                        &document.fragment_aliases,
+                    ))
+                    .start
             } else {
                 output.text.len()
             };
@@ -256,7 +261,7 @@ fn render_artifact_sections(
         let rendered_heading = if options.preserve_anchors {
             format!(
                 "{}\n\n{}",
-                inline::html_anchor(&section.id),
+                inline::html_anchors(&section.id, &section.fragment_aliases),
                 heading(depth, &section.title)
             )
         } else {
@@ -414,7 +419,7 @@ fn render_sections(
         if options.preserve_anchors {
             output.push(format!(
                 "{}\n\n{}",
-                inline::html_anchor(&section.id),
+                inline::html_anchors(&section.id, &section.fragment_aliases),
                 heading(depth, &section.title)
             ));
         } else {

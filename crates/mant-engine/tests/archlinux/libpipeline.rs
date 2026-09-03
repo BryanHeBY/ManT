@@ -13,7 +13,7 @@ fn preserves_function_targets_moved_to_paragraphs() {
 
     impl<'ir> Visit<'ir> for Anchors {
         fn visit_inline(&mut self, inline: &'ir Inline) {
-            if let Inline::Anchor { id } = inline {
+            if let Inline::Anchor { id, .. } = inline {
                 self.0.push(id.to_string());
             }
             visit::walk_inline(self, inline);

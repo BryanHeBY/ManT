@@ -167,7 +167,7 @@ mod tests {
             },
         ];
         DocumentCatalog {
-            schema: CatalogSchema::V0Dot10,
+            schema: CatalogSchema::V0Dot11,
             query: crate::CatalogQuery::default(),
             coverage: crate::CatalogCoverage::default(),
             total: 2,
