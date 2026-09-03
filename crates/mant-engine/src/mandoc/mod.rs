@@ -912,6 +912,50 @@ intro\n.Pp\n.Fn alpha\n",
     }
 
     #[test]
+    fn preserves_explicit_targets_on_empty_mdoc_list_items() {
+        let document = parse_manual_bytes(
+            std::path::Path::new("empty-list-targets.7"),
+            b".Dd September 4, 2026\n.Dt EMPTY-LIST-TARGETS 7\n.Os\n.Sh DESCRIPTION\n\
+.Bl -bullet\n.Tg empty-bullet-target\n.It\n.El\n\
+.Bl -enum\n.Tg empty-enum-target\n.It\n.El\n\
+.Bl -item\n.Tg empty-plain-target\n.It\n.El\n\
+.Bl -column \"one\" \"two\"\n.Tg empty-column-target\n.It\n.El\n\
+.Bl -tag\n.Tg empty-definition-target\n.It\n.El\n\
+.Bl -bullet\n.It\nbody\n.Tg trailing-list-target\n.El\n\
+.Bl -bullet\n.Tg target-without-item\n.El\n",
+        )
+        .expect("lower targets at empty and trailing mdoc list positions");
+
+        let index = mant_ir::DocumentIndex::build(&document);
+        for target in [
+            "empty-bullet-target",
+            "empty-enum-target",
+            "empty-plain-target",
+            "empty-column-target",
+            "empty-definition-target",
+            "trailing-list-target",
+            "target-without-item",
+        ] {
+            assert_eq!(
+                index.fragment_target(target).map(mant_ir::NodeId::as_str),
+                Some(target),
+                "missing {target}"
+            );
+        }
+        assert!(document.diagnostics.iter().all(|diagnostic| {
+            !matches!(
+                diagnostic.code.as_deref(),
+                Some(
+                    "ir.invalid-identity" | "ir.duplicate-identity" | "ir.ambiguous-fragment-alias"
+                )
+            )
+        }));
+        let visible = visible_document_text(&document);
+        assert_eq!(visible.trim(), "body");
+        assert!(!visible.contains("target"));
+    }
+
+    #[test]
     fn explicit_section_targets_preserve_fragments_beside_normalized_ids() {
         let document = parse_manual_bytes(
             std::path::Path::new("section-targets.1"),

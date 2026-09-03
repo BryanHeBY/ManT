@@ -8,7 +8,7 @@
 use std::collections::HashSet;
 
 use libmandoc_rs::{Node, NodeKind};
-use mant_ir::{Block, Inline, LayoutHint, SourceSpan};
+use mant_ir::{Block, DefinitionItem, Inline, LayoutHint, SourceSpan};
 
 use super::roff_escape::visible_text;
 
@@ -29,6 +29,25 @@ pub(super) fn node_target(node: &Node, fallback: Option<&str>) -> Option<String>
 /// Return the first source token used by libmandoc when a target has no tag.
 pub(super) fn raw_target(node: &Node) -> Option<String> {
     node_target(node, first_text(node))
+}
+
+/// Return the exact destination authored by one explicit mdoc `.Tg` node.
+///
+/// libmandoc can leave `.Tg` as a list-body sibling without the target flag,
+/// notably before an empty column item. The macro itself is still authoritative
+/// source syntax, so retain its explicit argument independently from where the
+/// parser later places `NODE_ID`.
+pub(super) fn explicit_target(node: &Node) -> Option<String> {
+    if node.macro_name.as_deref() != Some("Tg") {
+        return None;
+    }
+    let target = node
+        .tag
+        .as_deref()
+        .map(visible_text)
+        .or_else(|| first_text(node).map(visible_text))?;
+    let target = target.trim();
+    (!target.is_empty()).then(|| target.to_owned())
 }
 
 /// Collect targets owned by a structural node or one of its direct parts.
@@ -84,9 +103,10 @@ pub(super) fn attach_targets(
     layout: LayoutHint,
     source: Option<SourceSpan>,
 ) {
+    let mut seen = HashSet::new();
     let mut targets = targets
         .into_iter()
-        .filter(|target| !contains_anchor(blocks, target))
+        .filter(|target| seen.insert(target.clone()) && !contains_anchor(blocks, target))
         .collect::<Vec<_>>();
     if targets.is_empty() {
         return;
@@ -107,6 +127,98 @@ pub(super) fn attach_targets(
             source,
         },
     );
+}
+
+/// Attach targets to a definition term, falling back to its description.
+///
+/// An empty mdoc `.It` has no visible term, but its authored target must still
+/// survive as zero-width content. Keeping that anchor in the item prevents it
+/// from being reassigned to a neighbouring definition.
+pub(super) fn attach_definition_targets(
+    item: &mut DefinitionItem,
+    targets: impl IntoIterator<Item = String>,
+) {
+    let mut seen = HashSet::new();
+    let targets = targets
+        .into_iter()
+        .filter(|target| {
+            seen.insert(target.clone())
+                && !item
+                    .terms
+                    .iter()
+                    .any(|term| inlines_contain_anchor(term, target))
+                && !contains_anchor(&item.description, target)
+        })
+        .collect::<Vec<_>>();
+    if targets.is_empty() {
+        return;
+    }
+    if let Some(term) = item.terms.first_mut() {
+        prepend_inlines(term, &targets);
+    } else if prepend_to_first_descendant(&mut item.description, &targets) {
+    } else {
+        item.terms
+            .push(targets.into_iter().map(Inline::anchor).collect());
+        item.inline_term = true;
+    }
+}
+
+/// Attach targets after the final addressable descendant of a definition.
+pub(super) fn append_definition_targets(
+    item: &mut DefinitionItem,
+    targets: impl IntoIterator<Item = String>,
+    layout: LayoutHint,
+    source: Option<SourceSpan>,
+) {
+    let mut seen = HashSet::new();
+    let targets = targets
+        .into_iter()
+        .filter(|target| {
+            seen.insert(target.clone())
+                && !item
+                    .terms
+                    .iter()
+                    .any(|term| inlines_contain_anchor(term, target))
+                && !contains_anchor(&item.description, target)
+        })
+        .collect::<Vec<_>>();
+    if targets.is_empty() {
+        return;
+    }
+    if !item.description.is_empty() {
+        append_targets(&mut item.description, targets, layout, source);
+    } else if let Some(term) = item.terms.last_mut() {
+        term.extend(targets.into_iter().map(Inline::anchor));
+    } else {
+        item.terms
+            .push(targets.into_iter().map(Inline::anchor).collect());
+        item.inline_term = true;
+    }
+}
+
+/// Attach targets after the final addressable descendant in a block sequence.
+pub(super) fn append_targets(
+    blocks: &mut Vec<Block>,
+    targets: impl IntoIterator<Item = String>,
+    layout: LayoutHint,
+    source: Option<SourceSpan>,
+) {
+    let mut seen = HashSet::new();
+    let targets = targets
+        .into_iter()
+        .filter(|target| seen.insert(target.clone()) && !contains_anchor(blocks, target))
+        .collect::<Vec<_>>();
+    if targets.is_empty() {
+        return;
+    }
+    if append_to_last_descendant(blocks, &targets) {
+        return;
+    }
+    blocks.push(Block::Paragraph {
+        children: targets.into_iter().map(Inline::anchor).collect(),
+        layout,
+        source,
+    });
 }
 
 fn prepend_to_first_descendant(blocks: &mut [Block], targets: &[String]) -> bool {
@@ -147,6 +259,47 @@ fn prepend_to_first_descendant(blocks: &mut [Block], targets: &[String]) -> bool
                     return true;
                 }
                 return false;
+            }
+            Block::Equation { .. } | Block::ThematicBreak { .. } | Block::Unsupported { .. } => {
+                return false;
+            }
+        }
+    }
+    false
+}
+
+fn append_to_last_descendant(blocks: &mut [Block], targets: &[String]) -> bool {
+    for block in blocks.iter_mut().rev() {
+        match block {
+            Block::VerticalSpace { .. } => {}
+            Block::Paragraph { children, .. } | Block::Preformatted { children, .. } => {
+                children.extend(targets.iter().cloned().map(Inline::anchor));
+                return true;
+            }
+            Block::List { items, .. } => {
+                let Some(item) = items.last_mut() else {
+                    return false;
+                };
+                return append_to_last_descendant(&mut item.blocks, targets);
+            }
+            Block::DefinitionList { items, .. } => {
+                let Some(item) = items.last_mut() else {
+                    return false;
+                };
+                if append_to_last_descendant(&mut item.description, targets) {
+                    return true;
+                }
+                if let Some(term) = item.terms.last_mut() {
+                    term.extend(targets.iter().cloned().map(Inline::anchor));
+                    return true;
+                }
+                return false;
+            }
+            Block::Table { rows, .. } => {
+                let Some(cell) = rows.last_mut().and_then(|row| row.cells.last_mut()) else {
+                    return false;
+                };
+                return append_to_last_descendant(&mut cell.blocks, targets);
             }
             Block::Equation { .. } | Block::ThematicBreak { .. } | Block::Unsupported { .. } => {
                 return false;

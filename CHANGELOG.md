@@ -37,6 +37,9 @@ that crate was not published for that change.
   fragment aliases while assigning every destination a normalized internal
   identity. Addressable Markdown emits both forms and local references continue
   to resolve to the canonical target.
+- Retain explicit `.Tg` destinations before empty mdoc bullet, ordered, plain,
+  column, and definition items, including target-only list bodies, instead of
+  discarding the target when the item has no visible descendant.
 
 - Reconstruct source-proven man(7) `.IP` enumerations as ordered lists instead
   of exposing their numeric markers as option values, while preserving bare

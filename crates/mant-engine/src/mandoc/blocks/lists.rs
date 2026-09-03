@@ -492,7 +492,10 @@ pub(super) fn lower_mdoc_list(
     paragraph_distance: &mut u16,
     initial_spacing: bool,
 ) -> Block {
-    let items = mdoc_list_items(node, initial_spacing, context.default_name);
+    let MdocListItems {
+        items,
+        trailing_targets,
+    } = mdoc_list_items(node, initial_spacing, context.default_name);
     let is_definition = matches!(
         node.list_kind,
         Some(NormalizedListKind::Definition | NormalizedListKind::Column)
@@ -501,17 +504,16 @@ pub(super) fn lower_mdoc_list(
             .iter()
             .any(|item| !first_part_children(item.node, NodeKind::Head).is_empty()));
     let list_indent = indent_columns + display_indent(node);
-    if node.list_kind == Some(NormalizedListKind::Column) {
-        return lower_mdoc_column_list(
+    let mut block = if node.list_kind == Some(NormalizedListKind::Column) {
+        lower_mdoc_column_list(
             node,
             items,
             context,
             indent_columns,
             list_indent,
             paragraph_distance,
-        );
-    }
-    if is_definition {
+        )
+    } else if is_definition {
         let max_term_width = node
             .width
             .as_deref()
@@ -520,14 +522,20 @@ pub(super) fn lower_mdoc_list(
         let lowered_items = items
             .into_iter()
             .map(|item| {
-                definition_item(
+                let mut lowered = definition_item(
                     item.node,
                     context,
                     list_indent,
                     paragraph_distance,
                     max_term_width,
                     item.spacing_enabled,
-                )
+                );
+                let targets = item
+                    .leading_targets
+                    .into_iter()
+                    .chain(targets::item_targets(item.node));
+                targets::attach_definition_targets(&mut lowered, targets);
+                lowered
             })
             .collect();
         Block::DefinitionList {
@@ -559,9 +567,13 @@ pub(super) fn lower_mdoc_list(
                             context.default_name,
                         ),
                     );
+                    let targets = item
+                        .leading_targets
+                        .into_iter()
+                        .chain(targets::item_targets(item.node));
                     targets::attach_targets(
                         &mut blocks,
-                        targets::item_targets(item.node),
+                        targets,
                         layout(list_indent),
                         source_span(item.node),
                     );
@@ -571,7 +583,14 @@ pub(super) fn lower_mdoc_list(
             layout: layout(indent_columns),
             source: source_span(node),
         }
-    }
+    };
+    append_list_targets(
+        &mut block,
+        trailing_targets,
+        layout(list_indent),
+        source_span(node),
+    );
+    block
 }
 
 /// Attach consecutive description-less definition heads to the next item.
@@ -623,10 +642,15 @@ fn is_option_definition(item: &DefinitionItem) -> bool {
     })
 }
 
-#[derive(Clone, Copy)]
 struct MdocListItem<'a> {
     node: &'a Node,
     spacing_enabled: bool,
+    leading_targets: Vec<String>,
+}
+
+struct MdocListItems<'a> {
+    items: Vec<MdocListItem<'a>>,
+    trailing_targets: Vec<String>,
 }
 
 /// Pair each mdoc list item with the formatter spacing state active at its
@@ -641,19 +665,29 @@ fn mdoc_list_items<'a>(
     node: &'a Node,
     initial_spacing: bool,
     default_name: Option<&str>,
-) -> Vec<MdocListItem<'a>> {
+) -> MdocListItems<'a> {
     let mut spacing_enabled = initial_spacing;
     let mut items = Vec::new();
+    let mut pending_targets = Vec::new();
     for child in first_part_children(node, NodeKind::Body) {
+        if let Some(target) = targets::explicit_target(child)
+            && !pending_targets.contains(&target)
+        {
+            pending_targets.push(target);
+        }
         if child.macro_name.as_deref() == Some("It") {
             items.push(MdocListItem {
                 node: child,
                 spacing_enabled,
+                leading_targets: std::mem::take(&mut pending_targets),
             });
         }
         spacing_enabled = spacing_after_node(child, spacing_enabled, default_name);
     }
-    items
+    MdocListItems {
+        items,
+        trailing_targets: pending_targets,
+    }
 }
 
 /// Preserve every body sibling of an mdoc `Bl -column` item as one table cell.
@@ -693,12 +727,36 @@ fn lower_mdoc_column_list(
                 })
                 .collect::<Vec<_>>();
             if let Some(cell) = cells.first_mut() {
+                let targets = item
+                    .leading_targets
+                    .into_iter()
+                    .chain(targets::item_targets(item.node));
                 targets::attach_targets(
                     &mut cell.blocks,
-                    targets::item_targets(item.node),
+                    targets,
                     layout(cell_indent),
                     source_span(item.node),
                 );
+            } else {
+                let mut blocks = Vec::new();
+                let targets = item
+                    .leading_targets
+                    .into_iter()
+                    .chain(targets::item_targets(item.node));
+                targets::attach_targets(
+                    &mut blocks,
+                    targets,
+                    layout(cell_indent),
+                    source_span(item.node),
+                );
+                if !blocks.is_empty() {
+                    cells.push(AstTableCell {
+                        blocks,
+                        column_span: 1,
+                        row_span: 1,
+                        alignment: Some(AstTableAlignment::Left),
+                    });
+                }
             }
             TableRow { cells }
         })
@@ -708,6 +766,61 @@ fn lower_mdoc_column_list(
         rows,
         layout: layout(indent_columns),
         source: source_span(node),
+    }
+}
+
+fn append_list_targets(
+    block: &mut Block,
+    targets: Vec<String>,
+    layout: mant_ir::LayoutHint,
+    source: Option<mant_ir::SourceSpan>,
+) {
+    if targets.is_empty() {
+        return;
+    }
+    match block {
+        Block::List { items, .. } => {
+            if items.is_empty() {
+                items.push(ListItem { blocks: Vec::new() });
+            }
+            targets::append_targets(
+                &mut items.last_mut().expect("list item inserted").blocks,
+                targets,
+                layout,
+                source,
+            );
+        }
+        Block::DefinitionList { items, .. } => {
+            if let Some(item) = items.last_mut() {
+                targets::append_definition_targets(item, targets, layout, source);
+            } else {
+                items.push(DefinitionItem {
+                    identity: None,
+                    terms: vec![targets.into_iter().map(Inline::anchor).collect()],
+                    description: Vec::new(),
+                    inline_term: true,
+                    spacing_before_lines: None,
+                });
+            }
+        }
+        Block::Table { rows, .. } => {
+            if rows.is_empty() {
+                rows.push(TableRow {
+                    cells: vec![AstTableCell {
+                        blocks: Vec::new(),
+                        column_span: 1,
+                        row_span: 1,
+                        alignment: Some(AstTableAlignment::Left),
+                    }],
+                });
+            }
+            let cell = rows
+                .last_mut()
+                .and_then(|row| row.cells.last_mut())
+                .expect("table cell inserted");
+            targets::append_targets(&mut cell.blocks, targets, layout, source);
+        }
+        _ => unreachable!("mdoc list lowering returns a list-like block"),
     }
 }
 

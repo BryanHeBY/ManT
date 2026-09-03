@@ -91,7 +91,7 @@ pub(super) fn normalize_generated_anchors(
                     suffix += 1;
                 }
                 self.used.insert(candidate.clone());
-                if self.explicit_targets.contains(&original) {
+                if candidate != original && self.explicit_targets.contains(&original) {
                     fragment_aliases.push(original.into());
                 }
                 *id = candidate.into();
