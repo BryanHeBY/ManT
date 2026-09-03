@@ -11,7 +11,7 @@ pub(crate) use crate::inline::{plain_text, terms_fit_inline};
 mod source;
 mod source_mdoc;
 
-use source::roff_macro_arguments;
+pub(super) use source::roff_macro_arguments;
 pub(super) use source_mdoc::lower_source_mdoc_request;
 
 use super::{

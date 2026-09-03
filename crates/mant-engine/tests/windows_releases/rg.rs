@@ -1,6 +1,7 @@
 //! Tests for ripgrep's official MSVC Windows release manual.
 
 use mant_engine::{build_outline_with_detail, render_excerpt_markdown, select_excerpt};
+use mant_ir::{Block, ListKind};
 use mant_protocol::OutlineDetail;
 
 use crate::common::{self, count_outline_entries, find_outline_entry};
@@ -33,8 +34,25 @@ fn keeps_release_metadata_sections_and_semantic_options() {
 
     let outline = build_outline_with_detail(&windows_release_query("rg"), OutlineDetail::Entries)
         .expect("build rg option outline");
-    assert_eq!(count_outline_entries(&outline.nodes), 142);
+    assert_eq!(count_outline_entries(&outline.nodes), 136);
     assert!(find_outline_entry(&outline.nodes, "--glob").is_some());
+
+    for (section, length) in [("AUTOMATIC FILTERING", 4), ("CONFIGURATION FILES", 2)] {
+        assert!(
+            common::section(document, section)
+                .blocks
+                .iter()
+                .any(|block| matches!(
+                    block,
+                    Block::List {
+                        kind: ListKind::Ordered,
+                        start: Some(1),
+                        items,
+                        ..
+                    } if items.len() == length
+                ))
+        );
+    }
 }
 
 #[test]

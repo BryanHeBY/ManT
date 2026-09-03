@@ -1,6 +1,6 @@
 //! Splits the argument text of roff requests flattened into source strings.
 
-pub(super) fn roff_macro_arguments(source: &str) -> Vec<String> {
+pub(in crate::mandoc) fn roff_macro_arguments(source: &str) -> Vec<String> {
     let mut arguments = Vec::new();
     let mut current = String::new();
     let mut started = false;

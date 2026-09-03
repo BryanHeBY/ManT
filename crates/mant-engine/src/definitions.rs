@@ -953,10 +953,27 @@ fn named_identity(
 fn is_value_name(value: &str) -> bool {
     !value.is_empty()
         && value.len() <= 128
+        && !is_ordinal_marker(value)
         && value.chars().all(|character| {
             character.is_alphanumeric()
                 || matches!(character, '-' | '_' | '.' | '/' | ':' | '+' | '?')
         })
+}
+
+fn is_ordinal_marker(value: &str) -> bool {
+    let value = value.trim();
+    let digits = if let Some(digits) = value.strip_suffix('.') {
+        Some(digits)
+    } else if let Some(digits) = value.strip_suffix(')') {
+        Some(digits.strip_prefix('(').unwrap_or(digits))
+    } else {
+        value
+            .strip_prefix('[')
+            .and_then(|digits| digits.strip_suffix(']'))
+    };
+    digits.is_some_and(|digits| {
+        !digits.is_empty() && digits.chars().all(|char| char.is_ascii_digit())
+    })
 }
 
 fn parameter_identity(
@@ -2001,5 +2018,15 @@ mod tests {
                 .as_ref()
                 .is_some_and(|identity| identity.role == DefinitionRole::Value)
         }));
+    }
+
+    #[test]
+    fn ordinal_labels_are_not_semantic_values() {
+        for marker in ["1.", "2)", "(3)", "[4]"] {
+            assert!(!super::is_value_name(marker), "accepted {marker}");
+        }
+        for value in ["0", "1", "2.2", "c++", "default"] {
+            assert!(super::is_value_name(value), "rejected {value}");
+        }
     }
 }

@@ -21,6 +21,11 @@ use super::super::{
 use super::{
     ends_with_line_continuation, is_inline_equation, is_inline_equation_quote_artifact,
     lower_blocks_with_spacing,
+    man_ip::{
+        DefinitionLocation, MAN_DEFINITION_BODY_INDENT, ManIpListState,
+        append_ordered as append_ip_ordered, list_item_from_definition,
+        ordinal_marker as ip_ordinal_marker,
+    },
 };
 use crate::block::block_layout_mut;
 
@@ -46,33 +51,26 @@ pub(super) fn lower_man_definition(
         output,
         definition_hanging_width,
         alias_state,
+        ip_list_state,
     } = state;
-    // Capture the distance before lowering the body: a `.PD` request that
-    // follows this item can live inside libmandoc's block scope and updates
-    // spacing for the *next* item, not the current one.
-    let spacing_before = if node.macro_name.as_deref() == Some("TQ") {
-        0
-    } else {
-        *paragraph_distance
-    };
-    let head = first_part_children(node, NodeKind::Head);
-    let body = first_part_children(node, NodeKind::Body);
-    let leading_head_distance = leading_paragraph_distance(head);
-    let leading_body_distance = leading_paragraph_distance(body);
-    if let Some(distance) = leading_head_distance {
-        *paragraph_distance = distance;
-    }
-    update_man_definition_width(node, definition_hanging_width);
-    let max_width = definition_hanging_width.saturating_sub(1);
-    let mut item = definition_item(
+    let LoweredManItem {
+        mut item,
+        spacing_before,
+        leading_head_distance,
+        leading_body_distance,
+        max_width,
+    } = lower_man_item(
         node,
         context,
         indent_columns,
         paragraph_distance,
-        max_width,
+        definition_hanging_width,
         spacing_enabled,
     );
     let macro_name = node.macro_name.as_deref();
+    let ordinal = (macro_name == Some("IP"))
+        .then(|| ip_ordinal_marker(&item, context.man_ip_uses_incrementing_register(node.line)))
+        .flatten();
     let description_empty = item.description.is_empty();
     let opens_compact_group = macro_name == Some("TP")
         && description_empty
@@ -107,21 +105,93 @@ pub(super) fn lower_man_definition(
     {
         return;
     }
-    if node.macro_name.as_deref() == Some("IP") && is_ip_bullet_item(&item) {
-        append_ip_bullet(
-            output,
+    emit_man_definition(
+        output,
+        alias_state,
+        ip_list_state,
+        ManDefinitionEmission {
             item,
+            macro_name,
+            source: source_span(node),
             indent_columns,
             spacing_before,
-            source_span(node),
-        );
+            max_width,
+            ordinal,
+            description_empty,
+            opens_compact_group,
+            explicit_continuation,
+            previous_location,
+            merge,
+            leading_head_distance,
+            leading_body_distance,
+        },
+    );
+}
+
+struct ManDefinitionEmission<'a> {
+    item: DefinitionItem,
+    macro_name: Option<&'a str>,
+    source: Option<mant_ir::SourceSpan>,
+    indent_columns: u16,
+    spacing_before: u16,
+    max_width: usize,
+    ordinal: Option<super::man_ip::IpOrdinalMarker>,
+    description_empty: bool,
+    opens_compact_group: bool,
+    explicit_continuation: bool,
+    previous_location: Option<DefinitionLocation>,
+    merge: DefinitionMerge,
+    leading_head_distance: Option<u16>,
+    leading_body_distance: Option<u16>,
+}
+
+fn emit_man_definition(
+    output: &mut Vec<Block>,
+    alias_state: &mut ManAliasState,
+    ip_list_state: &mut ManIpListState,
+    emission: ManDefinitionEmission<'_>,
+) {
+    let ManDefinitionEmission {
+        item,
+        macro_name,
+        source,
+        indent_columns,
+        spacing_before,
+        max_width,
+        ordinal,
+        description_empty,
+        opens_compact_group,
+        explicit_continuation,
+        previous_location,
+        merge,
+        leading_head_distance,
+        leading_body_distance,
+    } = emission;
+    if macro_name == Some("IP") && is_ip_bullet_item(&item) {
+        *ip_list_state = ManIpListState::None;
+        append_ip_bullet(output, item, indent_columns, spacing_before, source);
     } else {
+        let mut item = Some(item);
+        if ordinal.is_some_and(|marker| {
+            append_ip_ordered(
+                output,
+                &mut item,
+                indent_columns,
+                spacing_before,
+                source,
+                marker,
+                ip_list_state,
+            )
+        }) {
+            *alias_state = ManAliasState::None;
+            return;
+        }
         let location = append_definition(
             output,
-            item,
+            item.take().expect("unconsumed definition item"),
             indent_columns,
             spacing_before,
-            source_span(node),
+            source,
             max_width,
             merge,
         );
@@ -140,6 +210,61 @@ pub(super) fn lower_man_definition(
                 leading_body_distance,
             },
         );
+        *ip_list_state = ordinal.map_or(ManIpListState::None, |marker| ManIpListState::Candidate {
+            location,
+            marker,
+            source,
+        });
+    }
+}
+
+struct LoweredManItem {
+    item: DefinitionItem,
+    spacing_before: u16,
+    leading_head_distance: Option<u16>,
+    leading_body_distance: Option<u16>,
+    max_width: usize,
+}
+
+fn lower_man_item(
+    node: &Node,
+    context: &LoweringContext<'_>,
+    indent_columns: u16,
+    paragraph_distance: &mut u16,
+    definition_hanging_width: &mut usize,
+    spacing_enabled: bool,
+) -> LoweredManItem {
+    // Capture the distance before lowering the body: a `.PD` request that
+    // follows this item can live inside libmandoc's block scope and updates
+    // spacing for the *next* item, not the current one.
+    let spacing_before = if node.macro_name.as_deref() == Some("TQ") {
+        0
+    } else {
+        *paragraph_distance
+    };
+    let head = first_part_children(node, NodeKind::Head);
+    let body = first_part_children(node, NodeKind::Body);
+    let leading_head_distance = leading_paragraph_distance(head);
+    let leading_body_distance = leading_paragraph_distance(body);
+    if let Some(distance) = leading_head_distance {
+        *paragraph_distance = distance;
+    }
+    update_man_definition_width(node, definition_hanging_width);
+    let max_width = definition_hanging_width.saturating_sub(1);
+    let item = definition_item(
+        node,
+        context,
+        indent_columns,
+        paragraph_distance,
+        max_width,
+        spacing_enabled,
+    );
+    LoweredManItem {
+        item,
+        spacing_before,
+        leading_head_distance,
+        leading_body_distance,
+        max_width,
     }
 }
 
@@ -171,12 +296,7 @@ pub(super) struct ManDefinitionState<'a> {
     pub(super) output: &'a mut Vec<Block>,
     pub(super) definition_hanging_width: &'a mut usize,
     pub(super) alias_state: &'a mut ManAliasState,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(super) struct DefinitionLocation {
-    block: usize,
-    item: usize,
+    pub(super) ip_list_state: &'a mut ManIpListState,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -627,7 +747,7 @@ fn definition_item(
         description: lower_blocks_with_spacing(
             body,
             context,
-            indent_columns + 4,
+            indent_columns.saturating_add(MAN_DEFINITION_BODY_INDENT),
             paragraph_distance,
             spacing_after_nodes(head, spacing_enabled, context.default_name),
         ),
@@ -837,9 +957,7 @@ fn append_ip_bullet(
     paragraph_distance: u16,
     source: Option<mant_ir::SourceSpan>,
 ) {
-    let list_item = ListItem {
-        blocks: item.description,
-    };
+    let list_item = list_item_from_definition(item, indent_columns, source);
     if let Some(Block::List {
         kind: ListKind::Bullet,
         compact,

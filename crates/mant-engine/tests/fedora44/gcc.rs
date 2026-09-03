@@ -3,10 +3,10 @@
 use crate::common::{self, count_outline_entries, find_outline_entry, query_for_document};
 use crate::fixtures::fedora44_manual;
 use mant_engine::build_outline_with_detail;
-use mant_ir::SourceFormat;
+use mant_ir::{Block, ListKind, SourceFormat};
 use mant_protocol::OutlineDetail;
 
-/// 10 sections, `os = "gcc-16"`, 3,863 semantic entries.
+/// 10 sections, `os = "gcc-16"`, 3,824 semantic entries.
 #[test]
 fn keeps_complete_sections_and_semantic_option_outlines() {
     let document = fedora44_manual("gcc");
@@ -18,8 +18,40 @@ fn keeps_complete_sections_and_semantic_option_outlines() {
     let query = query_for_document("gcc", document);
     let outline = build_outline_with_detail(&query, OutlineDetail::Entries)
         .unwrap_or_else(|error| panic!("build gcc option outline: {error}"));
-    assert_eq!(count_outline_entries(&outline.nodes), 3_863);
+    assert_eq!(count_outline_entries(&outline.nodes), 3_824);
     assert!(find_outline_entry(&outline.nodes, "-Wsuggest-final-types").is_some());
+    let visibility = find_outline_entry(&outline.nodes, "-fvisibility-ms-compat")
+        .expect("GCC visibility compatibility option");
+    assert!(
+        visibility.children().is_empty(),
+        "numbered effects are not values"
+    );
+
+    let cxx_options = common::section(document, "Options Controlling C++ Dialect");
+    let visibility_definition = common::nested_definition_items(cxx_options)
+        .into_iter()
+        .find(|item| {
+            item.terms.iter().any(|term| {
+                common::inline_text(term)
+                    .split_whitespace()
+                    .any(|form| form == "-fvisibility-ms-compat")
+            })
+        })
+        .expect("GCC visibility compatibility definition");
+    assert!(
+        visibility_definition
+            .description
+            .iter()
+            .any(|block| matches!(
+                block,
+                Block::List {
+                    kind: ListKind::Ordered,
+                    start: Some(1),
+                    items,
+                    ..
+                } if items.len() == 3
+            ))
+    );
 
     common::assert_gcc_synopsis_layout(document);
 

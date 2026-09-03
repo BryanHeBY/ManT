@@ -371,6 +371,39 @@ impl<'a> LoweringContext<'a> {
             .then(|| source_line.split('\t').collect())
     }
 
+    /// Whether a source-level `.IP` marker uses roff's pre-increment form.
+    ///
+    /// libmandoc resolves number registers before exposing the owned AST, so
+    /// `\n+[step]` and a literal value such as `1` otherwise become
+    /// indistinguishable.  Retain only this narrow source fact: it proves an
+    /// author-controlled sequence without teaching lowering a second roff
+    /// parser or reinterpreting literal numeric option values.
+    fn man_ip_uses_incrementing_register(&self, line: u32) -> bool {
+        let Some(source_line) = self
+            .source_lines
+            .as_ref()
+            .and_then(|source| source.line(line))
+        else {
+            return false;
+        };
+        let Some(request) = source_line
+            .trim_start()
+            .strip_prefix(['.', '\''])
+            .map(str::trim_start)
+        else {
+            return false;
+        };
+        let Some(arguments) = request
+            .strip_prefix("IP")
+            .filter(|rest| rest.chars().next().is_none_or(char::is_whitespace))
+        else {
+            return false;
+        };
+        inline::roff_macro_arguments(arguments)
+            .first()
+            .is_some_and(|head| head.contains("\\n+"))
+    }
+
     /// Return explicitly requested blank rows between two visible no-fill
     /// source lines.
     ///
@@ -669,7 +702,7 @@ mod tests {
     use std::{collections::HashSet, fmt::Write as _, fs, process};
 
     use mant_ir::{
-        Block, DiagnosticLevel, Inline, SourceFormat,
+        Block, DiagnosticLevel, Inline, ListKind, SemanticIndex, SourceFormat, ValueDomain,
         visit::{self, Visit},
     };
 
@@ -745,6 +778,19 @@ mod tests {
         assert_eq!(context.section_id("FOO"), "foo");
         assert_eq!(context.section_id("FOO"), "foo-2");
         assert_eq!(context.section_id("FOO 2"), "foo-2-2");
+    }
+
+    #[test]
+    fn reads_incrementing_registers_only_from_ip_markers() {
+        let context = LoweringContext::new(
+            None,
+            Some(".IP \\n+[step] 4\n.IP 1 \\n+[width]\n.IPX \\n+[other]\n'IP \"\\n+[quoted]\" 4\n"),
+        );
+
+        assert!(context.man_ip_uses_incrementing_register(1));
+        assert!(!context.man_ip_uses_incrementing_register(2));
+        assert!(!context.man_ip_uses_incrementing_register(3));
+        assert!(context.man_ip_uses_incrementing_register(4));
     }
 
     #[test]
@@ -3259,6 +3305,78 @@ Sean\n\
             document.sections[0].blocks[1],
             Block::Preformatted { layout, .. } if layout.indent_columns == 6
         ));
+    }
+
+    #[test]
+    fn distinguishes_man_ip_enumeration_from_numeric_option_values() {
+        let document = parse_manual_bytes(
+            std::path::Path::new("ip-enumeration.1"),
+            b".TH IP-ENUMERATION 1\n.SH OPTIONS\n\
+.TP\n.B -fchanges\nThis flag makes these changes:\n.RS 4\n\
+.IP 1. 4\nfirst change\n.IP 2. 4\nsecond change\n.IP 3. 4\nthird change\n.RE\n\
+.TP\n.B -fcounter\nThese are generated steps:\n.RS 4\n\
+.nr step 0 1\n.IP \\n+[step]\nfirst step\n.IP \\n+[step]\nsecond step\n.RE\n\
+.TP\n.B -flevel=level\nThe level can be one of:\n.RS 4\n\
+.IP 0 4\ndisabled\n.IP 1 4\nenabled\n.RE\n",
+        )
+        .expect("lower man IP lists and values");
+
+        let options = document.sections[0]
+            .blocks
+            .iter()
+            .filter_map(|block| match block {
+                Block::DefinitionList { items, .. } => Some(items.as_slice()),
+                _ => None,
+            })
+            .flatten()
+            .collect::<Vec<_>>();
+        assert_eq!(options.len(), 3);
+        for option in &options[..2] {
+            assert!(option.description.iter().any(|block| {
+                let Block::List {
+                    kind: ListKind::Ordered,
+                    start: Some(1),
+                    items,
+                    ..
+                } = block
+                else {
+                    return false;
+                };
+                items.len() >= 2
+                    && items.iter().all(|item| {
+                        matches!(
+                            item.blocks.first(),
+                            Some(Block::Paragraph { layout, .. }) if layout.indent_columns == 0
+                        )
+                    })
+            }));
+        }
+        assert!(
+            options[2].description.iter().any(
+                |block| matches!(block, Block::DefinitionList { items, .. } if items.len() == 2)
+            )
+        );
+
+        let index = SemanticIndex::build(&document);
+        let entries = index.section("options");
+        assert_eq!(entries.len(), 3);
+        assert!(
+            entries[..2]
+                .iter()
+                .all(|entry| entry.children.is_empty() && entry.value_domain.is_none())
+        );
+        assert_eq!(
+            entries[2].value_domain,
+            Some(ValueDomain::Choices { exhaustive: false })
+        );
+        assert_eq!(
+            entries[2]
+                .children
+                .iter()
+                .flat_map(|entry| &entry.aliases)
+                .collect::<Vec<_>>(),
+            ["0", "1"]
+        );
     }
 
     #[test]

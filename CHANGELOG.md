@@ -20,6 +20,9 @@ that crate was not published for that change.
 
 ### mant-engine
 
+- Reconstruct source-proven man(7) `.IP` enumerations as ordered lists instead
+  of exposing their numeric markers as option values, while preserving bare
+  numeric value domains such as `0`/`1`.
 - Preserve validated mdoc targets moved by libmandoc onto paragraph, display,
   list, item, function, and section owners; keep `.Tg` zero-width; and run the
   same navigation-resolution passes over root and section content.

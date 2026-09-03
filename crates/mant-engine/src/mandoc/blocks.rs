@@ -21,6 +21,7 @@ use super::{
 };
 
 mod lists;
+mod man_ip;
 mod preformatted;
 mod tables;
 
@@ -28,6 +29,7 @@ use lists::{
     ManAliasState, ManDefinitionState, lower_man_definition as lower_man_definition_block,
     lower_mdoc_list,
 };
+use man_ip::ManIpListState;
 use preformatted::{preformatted_blocks, style_preformatted_inlines};
 use tables::{TableEmbedding, append_table_row, table_embeddings};
 
@@ -226,6 +228,9 @@ struct BlockLowerer<'a, 'source> {
     // adjacent man definitions. The state owns the exact first item of a
     // compact group so a later close cannot absorb an unrelated orphan.
     man_alias_state: ManAliasState,
+    // A single `.IP` tag is deliberately ambiguous. Retain a bounded
+    // candidate until an adjacent source-proven ordinal establishes a list.
+    man_ip_list_state: ManIpListState,
 }
 
 impl<'a, 'source> BlockLowerer<'a, 'source> {
@@ -245,6 +250,7 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
             split_authors: false,
             synopsis_return_type_open: false,
             man_alias_state: ManAliasState::None,
+            man_ip_list_state: ManIpListState::None,
         }
     }
 
@@ -315,6 +321,7 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
                 output: &mut self.state.output,
                 definition_hanging_width: &mut self.definition_hanging_width,
                 man_alias_state: &mut self.man_alias_state,
+                man_ip_list_state: &mut self.man_ip_list_state,
                 spacing_enabled,
             }
             .push(node, table_embedding);
@@ -572,6 +579,7 @@ struct StructuralLowerer<'a, 'source, 'state> {
     output: &'state mut Vec<Block>,
     definition_hanging_width: &'state mut usize,
     man_alias_state: &'state mut ManAliasState,
+    man_ip_list_state: &'state mut ManIpListState,
     spacing_enabled: bool,
 }
 
@@ -586,6 +594,7 @@ impl StructuralLowerer<'_, '_, '_> {
                 output: self.output,
                 definition_hanging_width: self.definition_hanging_width,
                 alias_state: self.man_alias_state,
+                ip_list_state: self.man_ip_list_state,
             },
             self.spacing_enabled,
         );
@@ -594,6 +603,9 @@ impl StructuralLowerer<'_, '_, '_> {
     fn push(&mut self, node: &Node, table_embedding: Option<&TableEmbedding<'_>>) {
         if !matches!(node.macro_name.as_deref(), Some("TP" | "IP" | "TQ")) {
             *self.man_alias_state = ManAliasState::None;
+        }
+        if node.macro_name.as_deref() != Some("IP") {
+            *self.man_ip_list_state = ManIpListState::None;
         }
         if self.lower_transparent_container(node) {
             return;
