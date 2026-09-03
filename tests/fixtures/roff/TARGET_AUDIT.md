@@ -7,21 +7,34 @@ this one.
 
 ## Oracle and scope
 
-The development-only `roff_target_profile` example parses each page twice:
-once through the owned `libmandoc-rs` AST and once through ManT's complete
-source-aware lowering path. Validated libmandoc deep-link owners form the
-expected set. Section IDs, semantic-entry IDs, and inline anchors form the
-observed set. Explicit `.Tg` destinations must survive exactly; generated
-destinations may use ManT's deterministic normalized collision suffix.
-The `unexpected` count is reserved for IR identity-role collisions reported
-by validation; semantic discovery legitimately creates additional entry IDs
-that have no one-to-one native tag and those are not target-audit findings.
+The development-only `roff_target_profile` example parses each page once and
+lowers that exact owned `libmandoc-rs` report. Sharing one parser session is
+part of the oracle: reparsing through a resolver with a different `.so` policy
+can manufacture false losses on aggregate pages. Validated libmandoc
+deep-link owners form the native evidence. Canonical section and entry IDs,
+inline anchors, and exact source fragment aliases form the observed set.
 
-Automatic `Sh` and `Ss` tags are excluded from literal comparison because
-ManT intentionally uses the complete visible heading for section identity,
-while libmandoc's formatter tag may use a shortened spelling. An explicit
-`.Tg` moved onto the same wrapper remains an exact obligation. Redirect-only
-alias pages are recorded but have no local IR destination obligation.
+Profile schema `mant.roff-target-profile/v2` classifies every deep-link owner
+as `retained`, `excluded`, or `unclassified`, with a stable reason. Known man
+definitions, mdoc lists/displays/functions, and inline semantic macros are
+retained obligations. An owner macro without a policy is not silently omitted:
+it is emitted in `unclassifiedOwners` and makes the page a review candidate.
+Wrapper nodes sharing one target and source line form one logical obligation.
+
+Explicit `.Tg` destinations must survive exactly as fragment aliases and also
+resolve through a normalized internal ID. Generated destinations may use
+ManT's deterministic normalized collision suffix. The profile reports true
+unexpected targets, incompatible identity-role collisions, invalid or empty
+identities/fragments, duplicate identities, and dangling links separately.
+Semantic discovery can create additional entry IDs with no one-to-one native
+tag; those typed entry destinations are not unexpected target findings.
+
+Automatic `SH`, `SS`, `Sh`, and `Ss` tags are excluded from literal comparison
+because ManT intentionally uses the complete visible heading for section
+identity, while libmandoc's formatter tag may use a shortened spelling. An
+explicit `.Tg` moved onto the same wrapper remains an exact obligation.
+Redirect-only alias pages are recorded but have no local IR destination
+obligation.
 
 Rows are keyed by `(corpus, path, decompressed-source SHA-256)`. `clean` needs
 no review. Every `review` or `hard-failure` row starts as `pending` and must be
@@ -31,22 +44,24 @@ fixture and a focused Rust test.
 
 ## Current complete sweep
 
-On 2026-09-03 the complete local Arch Linux manual hierarchy was scanned:
+On 2026-09-04 the complete local Arch Linux manual hierarchy was rescanned
+with the v2 exhaustive-owner contract:
 
 ```sh
 cargo build --locked -p mant-engine --example roff_target_profile
 python3 scripts/audit-roff-targets.py --manpath /usr/share/man \
   --corpus archlinux-host --recheck-recorded --findings-only \
-  --json /tmp/mant-target-archlinux.json
+  --json /tmp/mant-target-archlinux-v2.json
 ```
 
-The sweep examined 28,674 pages. It produced 28,666 clean results and eight
-native parse failures, all manually classified as false positives because the
-`libxau 1.0.12-1` package shipped unresolved redirect placeholders of the form
-`.so man3/Xau.__libmansuffix__`. There were no unresolved review rows after the
-structural-owner and function-owner fixes. The owner census exercised man and
-mdoc section, paragraph, definition, list, display, inline, and function forms,
-including `Sh`, `Ss`, `Pp`, `IP`, `TP`, `TQ`, `Bl`, `It`, `Bd`, `D1`, and `Fo`.
+The sweep examined 28,712 pages and produced 28,712 clean results. All 565,090
+deep-link owners were classified; none were unclassified. There were no
+missing or unexpected targets, role collisions, invalid identities/fragments,
+duplicates, or dangling links. The owner census exercised man and mdoc section,
+paragraph, definition, list, display, inline, function, command, variable,
+error, and literal forms. Historical v1 rows remain as immutable source
+identities, while every page present in this complete sweep and every checked-in
+fixture now has a v2 record.
 
 CI does not depend on `/usr/share/man`. It builds the profiler and verifies the
 small checked-in fixture corpus against recorded rows:

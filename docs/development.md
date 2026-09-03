@@ -446,9 +446,10 @@ belong there.
 
 Visible text and renderer comparisons cannot detect a zero-width destination
 that disappears while all surrounding words remain intact. The independent
-target audit therefore reads validated libmandoc deep-link owners and compares
-their destinations with section, semantic-entry, and inline identities in the
-final source-aware IR:
+target audit therefore lowers the same owned libmandoc parse used as its
+oracle, classifies every deep-link owner as retained, deliberately excluded,
+or unclassified, and compares retained destinations with canonical IR
+identities and exact authored fragment aliases:
 
 ```sh
 cargo build --package mant-engine --example roff_target_profile
@@ -466,8 +467,11 @@ trees remain local release-time evidence and are recorded incrementally in
 lifecycle, and latest complete sweep. Automatic section tags are not compared
 as literal strings because ManT deliberately derives a section ID from the
 complete visible title, while an explicit `Tg` destination remains exact.
-Every candidate or native-parser failure requires manual review; confirmed
-loss becomes a licensed real fixture and a focused Rust assertion.
+Unknown owner classes, invalid or empty target identities/fragments, genuine
+unexpected targets, role collisions, duplicates, and dangling links are
+independent findings. Every candidate or native-parser failure requires manual
+review; confirmed loss becomes a licensed real fixture and a focused Rust
+assertion.
 
 ### Mandoc reference replay
 

@@ -50,6 +50,12 @@ that crate was not published for that change.
 - Add an independent target-conservation audit and a licensed `libpipeline(3)`
   regression fixture so invisible destination loss is covered separately from
   visible-content, structure, CommonMark, and renderer-layout audits.
+- Upgrade target conservation to an exhaustive v2 owner policy: every native
+  deep-link owner is retained, deliberately excluded with a reason, or fails
+  review as unclassified. Compare one shared parse on both sides, audit exact
+  fragment aliases and normalized identities, and report unexpected targets,
+  role collisions, invalid identities, duplicates, and dangling links as
+  distinct signals.
 
 ### mant-ui 0.11.0
 

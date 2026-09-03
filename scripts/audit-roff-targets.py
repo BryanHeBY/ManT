@@ -2,9 +2,10 @@
 """Audit zero-width libmandoc targets through ManT's AST-to-IR lowering.
 
 The visible fidelity, structure, projection, and layout routes intentionally
-cannot observe zero-width anchors. This independent route compares targets on
-validated libmandoc owners with section, semantic-entry, and inline identities
-in the final source-aware IR. Results are candidates until manually reviewed.
+cannot observe zero-width anchors. This independent route lowers the same
+owned libmandoc parse that supplies its oracle, classifies every deep-link
+owner, and compares retained targets with final IR identities and fragments.
+Results are candidates until manually reviewed.
 """
 
 from __future__ import annotations
@@ -38,7 +39,11 @@ ROOT = Path(__file__).resolve().parents[1]
 FIXTURE_ROOT = ROOT / "tests/fixtures/roff/real"
 DEFAULT_PROFILER = ROOT / "target/debug/examples/roff_target_profile"
 DEFAULT_AUDIT_DB = ROOT / "tests/fixtures/roff/TARGET_AUDIT.csv"
-PROFILE_SCHEMA = "mant.roff-target-profile/v1"
+PROFILE_SCHEMA = "mant.roff-target-profile/v2"
+SUPPORTED_PROFILE_SCHEMAS = {
+    "mant.roff-target-profile/v1",
+    PROFILE_SCHEMA,
+}
 DATABASE_FIELDS = [
     "corpus",
     "path",
@@ -80,10 +85,15 @@ class Finding:
     expected: list[dict[str, object]] | None = None
     observed: list[str] | None = None
     missing: list[dict[str, object]] | None = None
-    unexpected: list[str] | None = None
+    unexpected_targets: list[str] | None = None
+    role_collisions: list[str] | None = None
+    identity_violations: list[str] | None = None
     duplicate_target_count: int = 0
     dangling_target_count: int = 0
-    target_owners: dict[str, int] | None = None
+    target_owner_count: int = 0
+    classified_owner_count: int = 0
+    owner_classes: list[dict[str, object]] | None = None
+    unclassified_owners: list[dict[str, object]] | None = None
 
 
 def parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
@@ -133,7 +143,7 @@ def read_database(path: Path) -> dict[tuple[str, str, str], AuditRecord]:
         for number, row in enumerate(reader, 2):
             if SOURCE_DIGEST.fullmatch(row["source_sha256"]) is None:
                 raise ValueError(f"invalid source digest at {path}:{number}")
-            if row["profile_schema"] != PROFILE_SCHEMA:
+            if row["profile_schema"] not in SUPPORTED_PROFILE_SCHEMAS:
                 raise ValueError(f"unsupported target profile schema at {path}:{number}")
             if row["scan_status"] not in {"clean", "review", "hard-failure"}:
                 raise ValueError(f"invalid scan status at {path}:{number}")
@@ -199,6 +209,33 @@ def valid_target(value: object) -> bool:
     )
 
 
+def valid_owner_class(value: object) -> bool:
+    if not isinstance(value, dict):
+        return False
+    return (
+        isinstance(value.get("ownerMacro"), str)
+        and isinstance(value.get("ownerKind"), str)
+        and value.get("disposition") in {"retained", "excluded", "unclassified"}
+        and isinstance(value.get("reason"), str)
+        and isinstance(value.get("count"), int)
+        and value["count"] > 0
+    )
+
+
+def valid_unclassified_owner(value: object) -> bool:
+    if not isinstance(value, dict):
+        return False
+    target = value.get("target")
+    return (
+        (target is None or isinstance(target, str))
+        and isinstance(value.get("sourceLine"), int)
+        and value["sourceLine"] >= 0
+        and isinstance(value.get("ownerMacro"), str)
+        and isinstance(value.get("ownerKind"), str)
+        and isinstance(value.get("reason"), str)
+    )
+
+
 def profile_findings(
     pages: Sequence[Path], roots: Sequence[Path], profiler: Path, timeout: int
 ) -> Iterable[Finding]:
@@ -231,33 +268,77 @@ def profile_findings(
                 continue
             expected = response.get("expected")
             observed = response.get("observed")
+            observed_identities = response.get("observedIdentities")
+            observed_fragments = response.get("observedFragmentAliases")
+            observed_entries = response.get("observedEntryIdentities")
+            observed_sections = response.get("observedSectionIdentities")
+            anchors = response.get("anchors")
+            section_links = response.get("sectionLinkTargets")
             missing = response.get("missing")
-            unexpected = response.get("unexpected")
+            unexpected_targets = response.get("unexpectedTargets")
+            role_collisions = response.get("roleCollisions")
+            identity_violations = response.get("identityViolations")
             duplicate_target_count = response.get("duplicateTargetCount")
             dangling_target_count = response.get("danglingTargetCount")
-            target_owners = response.get("targetOwners")
+            target_owner_count = response.get("targetOwnerCount")
+            classified_owner_count = response.get("classifiedOwnerCount")
+            owner_classes = response.get("ownerClasses")
+            unclassified_owners = response.get("unclassifiedOwners")
             violations = response.get("violations")
             valid = (
                 isinstance(expected, list)
                 and all(valid_target(target) for target in expected)
                 and isinstance(observed, list)
                 and all(isinstance(identity, str) for identity in observed)
+                and all(
+                    isinstance(collection, list)
+                    and all(isinstance(identity, str) for identity in collection)
+                    for collection in (
+                        observed_identities,
+                        observed_fragments,
+                        observed_entries,
+                        observed_sections,
+                        anchors,
+                        section_links,
+                    )
+                )
                 and isinstance(missing, list)
                 and all(valid_target(target) for target in missing)
-                and isinstance(unexpected, list)
-                and all(isinstance(target, str) for target in unexpected)
+                and isinstance(unexpected_targets, list)
+                and all(isinstance(target, str) for target in unexpected_targets)
+                and isinstance(role_collisions, list)
+                and all(isinstance(target, str) for target in role_collisions)
+                and isinstance(identity_violations, list)
+                and all(isinstance(target, str) for target in identity_violations)
                 and isinstance(duplicate_target_count, int)
                 and duplicate_target_count >= 0
                 and isinstance(dangling_target_count, int)
                 and dangling_target_count >= 0
+                and isinstance(target_owner_count, int)
+                and target_owner_count >= 0
+                and isinstance(classified_owner_count, int)
+                and 0 <= classified_owner_count <= target_owner_count
                 and isinstance(violations, list)
                 and all(isinstance(item, str) for item in violations)
-                and isinstance(target_owners, dict)
-                and all(
-                    isinstance(owner, str) and isinstance(count, int) and count >= 0
-                    for owner, count in target_owners.items()
-                )
+                and isinstance(owner_classes, list)
+                and all(valid_owner_class(item) for item in owner_classes)
+                and sum(int(item["count"]) for item in owner_classes)
+                == target_owner_count
+                and isinstance(unclassified_owners, list)
+                and all(valid_unclassified_owner(item) for item in unclassified_owners)
+                and len(unclassified_owners)
+                == target_owner_count - classified_owner_count
             )
+            has_derived_violation = bool(
+                missing
+                or unexpected_targets
+                or role_collisions
+                or identity_violations
+                or unclassified_owners
+                or duplicate_target_count
+                or dangling_target_count
+            )
+            valid = valid and bool(violations) == has_derived_violation
             if not valid:
                 yield Finding(label, "hard-failure", [], "invalid profiler response")
                 continue
@@ -268,10 +349,15 @@ def profile_findings(
                 expected=expected,
                 observed=observed,
                 missing=missing,
-                unexpected=unexpected,
+                unexpected_targets=unexpected_targets,
+                role_collisions=role_collisions,
+                identity_violations=identity_violations,
                 duplicate_target_count=duplicate_target_count,
                 dangling_target_count=dangling_target_count,
-                target_owners=target_owners,
+                target_owner_count=target_owner_count,
+                classified_owner_count=classified_owner_count,
+                owner_classes=owner_classes,
+                unclassified_owners=unclassified_owners,
             )
 
 
@@ -290,6 +376,24 @@ def self_check() -> None:
             "ownerMacro": "Pp",
             "ownerKind": "element",
             "explicit": False,
+        }
+    )
+    assert valid_owner_class(
+        {
+            "ownerMacro": "IP",
+            "ownerKind": "head",
+            "disposition": "retained",
+            "reason": "validated non-section navigation destination",
+            "count": 2,
+        }
+    )
+    assert valid_unclassified_owner(
+        {
+            "target": "future",
+            "sourceLine": 7,
+            "ownerMacro": "Future",
+            "ownerKind": "element",
+            "reason": "owner macro has no target-conservation policy",
         }
     )
 
@@ -346,7 +450,7 @@ def main(argv: Sequence[str]) -> int:
     print("ManT roff target-conservation audit")
     print(f"  pages:  {len(pages)}")
     print(f"  corpus: {corpus}")
-    print("  contract: validated zero-width targets must survive as IR identities")
+    print("  contract: every native target owner is classified and retained targets resolve")
     print()
 
     findings = list(profile_findings(pages, roots, arguments.profiler, arguments.timeout))
@@ -355,12 +459,25 @@ def main(argv: Sequence[str]) -> int:
     owner_summary = Counter()
     missing_count = 0
     unexpected_count = 0
+    role_collision_count = 0
+    identity_violation_count = 0
+    target_owner_count = 0
+    unclassified_owner_count = 0
     duplicate_count = 0
     dangling_count = 0
     for finding in findings:
-        owner_summary.update(finding.target_owners or {})
+        for owner_class in finding.owner_classes or []:
+            key = (
+                f"{owner_class['ownerMacro']}/{owner_class['ownerKind']}"
+                f"[{owner_class['disposition']}]"
+            )
+            owner_summary[key] += int(owner_class["count"])
         missing_count += len(finding.missing or [])
-        unexpected_count += len(finding.unexpected or [])
+        unexpected_count += len(finding.unexpected_targets or [])
+        role_collision_count += len(finding.role_collisions or [])
+        identity_violation_count += len(finding.identity_violations or [])
+        target_owner_count += finding.target_owner_count
+        unclassified_owner_count += len(finding.unclassified_owners or [])
         duplicate_count += finding.duplicate_target_count
         dangling_count += finding.dangling_target_count
     verification_failed = False
@@ -398,7 +515,13 @@ def main(argv: Sequence[str]) -> int:
     )
     print(
         f"target differences: missing={missing_count}, unexpected={unexpected_count}, "
+        f"role-collision={role_collision_count}, invalid-identity={identity_violation_count}, "
         f"duplicate={duplicate_count}, dangling={dangling_count}"
+    )
+    print(
+        f"target owner classification: total={target_owner_count}, "
+        f"classified={target_owner_count - unclassified_owner_count}, "
+        f"unclassified={unclassified_owner_count}"
     )
     if owner_summary:
         owners = ", ".join(

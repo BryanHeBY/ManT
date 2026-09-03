@@ -5,8 +5,8 @@
 //! `{ "id": "...", "path": "/.../git.1.gz", "root": "/usr/share/man" }`
 //!
 //! It compares navigation targets intentionally retained by libmandoc with
-//! section and inline identities in the source-aware `ManT` IR. Unlike visible
-//! text and layout audits, zero-width anchors are the primary evidence here.
+//! section and inline identities in the lowered `ManT` IR. Unlike visible text
+//! and layout audits, zero-width anchors are the primary evidence here.
 
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -15,12 +15,12 @@ use std::{
 };
 
 use libmandoc_rs::{Compression, IncludePolicy, Node, NodeKind, ParseOptions, Parser};
-use mant_engine::{ManualPage, parse_manual_page};
+use mant_engine::lower_mandoc_document;
 use mant_ir::{Block, Document, Inline, Section};
 use serde::Serialize;
 use serde_json::{Value, json};
 
-const PROFILE_SCHEMA: &str = "mant.roff-target-profile/v1";
+const PROFILE_SCHEMA: &str = "mant.roff-target-profile/v2";
 
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -31,6 +31,78 @@ struct ExpectedTarget {
     owner_macro: String,
     owner_kind: String,
     explicit: bool,
+}
+
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+enum OwnerDisposition {
+    Retained,
+    Excluded,
+    Unclassified,
+}
+
+impl OwnerDisposition {
+    const fn as_str(self) -> &'static str {
+        match self {
+            Self::Retained => "retained",
+            Self::Excluded => "excluded",
+            Self::Unclassified => "unclassified",
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+struct ClassifiedOwner {
+    target: Option<String>,
+    source_line: u32,
+    owner_macro: String,
+    owner_kind: String,
+    explicit: bool,
+    disposition: OwnerDisposition,
+    reason: &'static str,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct OwnerClass {
+    owner_macro: String,
+    owner_kind: String,
+    disposition: &'static str,
+    reason: &'static str,
+    count: usize,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct UnclassifiedOwner {
+    target: Option<String>,
+    source_line: u32,
+    owner_macro: String,
+    owner_kind: String,
+    reason: &'static str,
+}
+
+#[derive(Default)]
+struct ObservedTargets {
+    identities: BTreeSet<String>,
+    fragments: BTreeSet<String>,
+    anchors: BTreeSet<String>,
+    sections: BTreeSet<String>,
+    entries: BTreeSet<String>,
+    section_links: BTreeSet<String>,
+}
+
+struct AuditFindings {
+    role_collisions: Vec<String>,
+    identity_violations: Vec<String>,
+    duplicate_target_count: usize,
+    dangling_target_count: usize,
+    violations: Vec<String>,
+}
+
+impl ObservedTargets {
+    fn all_spellings(&self) -> BTreeSet<String> {
+        self.identities.union(&self.fragments).cloned().collect()
+    }
 }
 
 fn main() {
@@ -86,42 +158,88 @@ fn profile_request(line: &str) -> Result<Value, String> {
     })
     .parse_file(&path)
     .map_err(|error| error.to_string())?;
-    let expected = expected_targets(&report.document.root);
-    let target_owners = target_owner_summary(&report.document.root);
-    let document = parse_manual_page(&ManualPage {
-        name: "audit".to_owned(),
-        section: "1".to_owned(),
-        path,
-        manual_root: root,
-    })
-    .map_err(|error| error.to_string())?;
+    let native_profile = native_target_profile(&report.document.root);
+    // Compare both sides of one parser session. Re-parsing through the product
+    // resolver would change the input contract for embedded `.so` trees and
+    // can manufacture thousands of false losses on aggregate pages such as
+    // zshall(1).
+    let document = lower_mandoc_document(&path, &report);
     let alias = document.meta.alias_target.is_some();
-    let (observed, anchors, section_links) = observed_identities(&document);
+    let observed = observed_targets(&document);
+    let observed_spellings = observed.all_spellings();
     let missing = if alias {
         Vec::new()
     } else {
-        missing_targets(&expected, &observed)
+        missing_targets(&native_profile.expected, &observed_spellings)
     };
-    // Semantic discovery deliberately creates additional addressable entries
-    // that have no one-to-one libmandoc target. An "unexpected" target is
-    // therefore an incompatible identity-role collision reported by the IR
-    // validator, not merely an identity absent from the native tag table.
-    let unexpected = document
+    let unexpected_targets = if alias {
+        Vec::new()
+    } else {
+        unexpected_targets(&native_profile.expected, &observed)
+    };
+    let findings = audit_findings(
+        &document,
+        &missing,
+        &unexpected_targets,
+        &native_profile.unclassified,
+    );
+
+    Ok(json!({
+        "schema": PROFILE_SCHEMA,
+        "id": id,
+        "expected": native_profile.expected,
+        "targetOwnerCount": native_profile.owner_count,
+        "classifiedOwnerCount": native_profile.owner_count - native_profile.unclassified.len(),
+        "ownerClasses": native_profile.owner_classes,
+        "unclassifiedOwners": native_profile.unclassified,
+        "observed": observed_spellings,
+        "observedIdentities": observed.identities,
+        "observedFragmentAliases": observed.fragments,
+        "observedEntryIdentities": observed.entries,
+        "observedSectionIdentities": observed.sections,
+        "anchors": observed.anchors,
+        "sectionLinkTargets": observed.section_links,
+        "missing": missing,
+        "unexpectedTargets": unexpected_targets,
+        "roleCollisions": findings.role_collisions,
+        "identityViolations": findings.identity_violations,
+        "duplicateTargetCount": findings.duplicate_target_count,
+        "danglingTargetCount": findings.dangling_target_count,
+        "alias": alias,
+        "diagnostics": {
+            "parser": report.diagnostics.len(),
+            "ir": document.diagnostics.len(),
+        },
+        "violations": findings.violations,
+    }))
+}
+
+fn audit_findings(
+    document: &Document,
+    missing: &[ExpectedTarget],
+    unexpected_targets: &[String],
+    unclassified: &[UnclassifiedOwner],
+) -> AuditFindings {
+    let role_collisions = diagnostics_with_code(document, "ir.identity-role-collision");
+    let identity_violations = document
         .diagnostics
         .iter()
-        .filter(|diagnostic| diagnostic.code.as_deref() == Some("ir.identity-role-collision"))
+        .filter(|diagnostic| {
+            matches!(
+                diagnostic.code.as_deref(),
+                Some(
+                    "ir.empty-identity"
+                        | "ir.invalid-identity"
+                        | "ir.empty-fragment-alias"
+                        | "ir.invalid-fragment-alias"
+                        | "ir.ambiguous-fragment-alias"
+                )
+            )
+        })
         .map(|diagnostic| diagnostic.message.clone())
         .collect::<Vec<_>>();
-    let duplicate_target_count = document
-        .diagnostics
-        .iter()
-        .filter(|diagnostic| diagnostic.code.as_deref() == Some("ir.duplicate-identity"))
-        .count();
-    let dangling_target_count = document
-        .diagnostics
-        .iter()
-        .filter(|diagnostic| diagnostic.code.as_deref() == Some("ir.dangling-section-link"))
-        .count();
+    let duplicate_target_count = diagnostics_with_code(document, "ir.duplicate-identity").len();
+    let dangling_target_count = diagnostics_with_code(document, "ir.dangling-section-link").len();
     let mut violations = missing
         .iter()
         .map(|target| {
@@ -132,9 +250,25 @@ fn profile_request(line: &str) -> Result<Value, String> {
         })
         .collect::<Vec<_>>();
     violations.extend(
-        unexpected
+        unexpected_targets
             .iter()
-            .map(|target| format!("unexpected IR target role: {target}")),
+            .map(|target| format!("unexpected IR target: {target}")),
+    );
+    violations.extend(unclassified.iter().map(|owner| {
+        format!(
+            "unclassified target owner {}/{} at line {}: {}",
+            owner.owner_macro, owner.owner_kind, owner.source_line, owner.reason
+        )
+    }));
+    violations.extend(
+        role_collisions
+            .iter()
+            .map(|collision| format!("IR identity-role collision: {collision}")),
+    );
+    violations.extend(
+        identity_violations
+            .iter()
+            .map(|violation| format!("invalid IR target identity: {violation}")),
     );
     if duplicate_target_count > 0 {
         violations.push(format!(
@@ -146,26 +280,22 @@ fn profile_request(line: &str) -> Result<Value, String> {
             "{dangling_target_count} dangling section-link targets"
         ));
     }
+    AuditFindings {
+        role_collisions,
+        identity_violations,
+        duplicate_target_count,
+        dangling_target_count,
+        violations,
+    }
+}
 
-    Ok(json!({
-        "schema": PROFILE_SCHEMA,
-        "id": id,
-        "expected": expected,
-        "targetOwners": target_owners,
-        "observed": observed,
-        "anchors": anchors,
-        "sectionLinkTargets": section_links,
-        "missing": missing,
-        "unexpected": unexpected,
-        "duplicateTargetCount": duplicate_target_count,
-        "danglingTargetCount": dangling_target_count,
-        "alias": alias,
-        "diagnostics": {
-            "parser": report.diagnostics.len(),
-            "ir": document.diagnostics.len(),
-        },
-        "violations": violations,
-    }))
+fn diagnostics_with_code(document: &Document, code: &str) -> Vec<String> {
+    document
+        .diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code.as_deref() == Some(code))
+        .map(|diagnostic| diagnostic.message.clone())
+        .collect()
 }
 
 fn path_field(request: &Value, field: &str) -> Result<PathBuf, String> {
@@ -177,80 +307,183 @@ fn path_field(request: &Value, field: &str) -> Result<PathBuf, String> {
         .ok_or_else(|| format!("request.{field} must be a non-empty string"))
 }
 
-fn expected_targets(root: &Node) -> Vec<ExpectedTarget> {
+struct NativeTargetProfile {
+    expected: Vec<ExpectedTarget>,
+    owner_count: usize,
+    owner_classes: Vec<OwnerClass>,
+    unclassified: Vec<UnclassifiedOwner>,
+}
+
+fn native_target_profile(root: &Node) -> NativeTargetProfile {
     let mut flattened = Vec::new();
     flatten_nodes(root, &mut flattened);
     let explicit = explicit_targets(&flattened);
-    let mut targets = BTreeMap::<(String, u32, String, String), ExpectedTarget>::new();
+    let mut targets = BTreeMap::<(String, u32), ExpectedTarget>::new();
+    let mut classes = BTreeMap::<(String, String, OwnerDisposition, &'static str), usize>::new();
+    let mut unclassified = Vec::new();
+    let mut owner_count = 0;
 
     for node in flattened {
-        if !node.flags.deep_link_target || !structural_target_owner(node) {
+        if !node.flags.deep_link_target {
             continue;
         }
-        let Some(id) = target_name(node) else {
+        owner_count += 1;
+        let owner = classify_target_owner(node, &explicit);
+        *classes
+            .entry((
+                owner.owner_macro.clone(),
+                owner.owner_kind.clone(),
+                owner.disposition,
+                owner.reason,
+            ))
+            .or_default() += 1;
+        if owner.disposition == OwnerDisposition::Unclassified {
+            unclassified.push(UnclassifiedOwner {
+                target: owner.target,
+                source_line: owner.source_line,
+                owner_macro: owner.owner_macro,
+                owner_kind: owner.owner_kind,
+                reason: owner.reason,
+            });
+            continue;
+        }
+        if owner.disposition == OwnerDisposition::Excluded {
+            continue;
+        }
+        let Some(id) = owner.target else {
             continue;
         };
-        let is_explicit = explicit.contains(&id);
-        if matches!(node.macro_name.as_deref(), Some("Sh" | "Ss")) && !is_explicit {
-            // Every lowered section is independently addressable, but ManT's
-            // source-neutral section ID is derived from the complete visible
-            // title rather than mandoc's sometimes truncated renderer tag.
-            continue;
-        }
         let owner_macro = node.macro_name.clone().unwrap_or_default();
         let owner_kind = format!("{:?}", node.kind).to_ascii_lowercase();
         let target = ExpectedTarget {
             normalized_id: document_id_slug(&id),
-            explicit: is_explicit,
+            explicit: owner.explicit,
             id: id.clone(),
             source_line: node.line,
             owner_macro: owner_macro.clone(),
             owner_kind: owner_kind.clone(),
         };
-        targets.insert((id, node.line, owner_macro, owner_kind), target);
+        // libmandoc often places one logical target on a block and one or
+        // more of its head/body wrappers. They are one preservation
+        // obligation, not multiple required IR anchors.
+        targets.entry((id, node.line)).or_insert(target);
     }
 
     // A target can remain on an inline `.Tg` or on a visible inline macro.
     // It remains an obligation even though it has no structural owner.
-    for id in explicit {
-        if targets.values().any(|target| target.id == id) {
+    for id in explicit.keys() {
+        if targets.values().any(|target| &target.id == id) {
             continue;
         }
+        let source_line = explicit
+            .get(id)
+            .and_then(|lines| lines.iter().next().copied())
+            .unwrap_or(0);
         targets.insert(
-            (id.clone(), 0, "Tg".to_owned(), "explicit".to_owned()),
+            (id.clone(), source_line),
             ExpectedTarget {
-                normalized_id: document_id_slug(&id),
-                id,
-                source_line: 0,
+                normalized_id: document_id_slug(id),
+                id: id.clone(),
+                source_line,
                 owner_macro: "Tg".to_owned(),
                 owner_kind: "explicit".to_owned(),
                 explicit: true,
             },
         );
     }
-    targets.into_values().collect()
-}
 
-fn target_owner_summary(root: &Node) -> BTreeMap<String, usize> {
-    let mut nodes = Vec::new();
-    flatten_nodes(root, &mut nodes);
-    let mut owners = BTreeMap::new();
-    for node in nodes {
-        if !node.flags.deep_link_target {
-            continue;
-        }
-        let key = format!(
-            "{}/{}",
-            node.macro_name.as_deref().unwrap_or("<none>"),
-            format!("{:?}", node.kind).to_ascii_lowercase()
-        );
-        *owners.entry(key).or_default() += 1;
+    NativeTargetProfile {
+        expected: targets.into_values().collect(),
+        owner_count,
+        owner_classes: classes
+            .into_iter()
+            .map(
+                |((owner_macro, owner_kind, disposition, reason), count)| OwnerClass {
+                    owner_macro,
+                    owner_kind,
+                    disposition: disposition.as_str(),
+                    reason,
+                    count,
+                },
+            )
+            .collect(),
+        unclassified,
     }
-    owners
 }
 
-fn explicit_targets(nodes: &[&Node]) -> BTreeSet<String> {
-    let mut targets = BTreeSet::new();
+fn classify_target_owner(
+    node: &Node,
+    explicit: &BTreeMap<String, BTreeSet<u32>>,
+) -> ClassifiedOwner {
+    let target = target_name(node);
+    let is_explicit = target
+        .as_ref()
+        .is_some_and(|target| explicit.contains_key(target));
+    let owner_macro = node
+        .macro_name
+        .clone()
+        .unwrap_or_else(|| "<none>".to_owned());
+    let owner_kind = format!("{:?}", node.kind).to_ascii_lowercase();
+    let (disposition, reason) =
+        if matches!(owner_macro.as_str(), "SH" | "SS" | "Sh" | "Ss") && !is_explicit {
+            (
+                OwnerDisposition::Excluded,
+                "section uses the complete visible heading as its normalized identity",
+            )
+        } else if target.is_none() {
+            (
+                OwnerDisposition::Unclassified,
+                "deep-link owner has no validated target name",
+            )
+        } else if is_explicit || owner_macro == "Tg" {
+            (OwnerDisposition::Retained, "source-authored Tg destination")
+        } else if matches!(
+            owner_macro.as_str(),
+            "IP" | "TP"
+                | "TQ"
+                | "Pp"
+                | "Bd"
+                | "D1"
+                | "Dl"
+                | "Bl"
+                | "It"
+                | "Fo"
+                | "Fn"
+                | "Fl"
+                | "Cm"
+                | "Em"
+                | "No"
+                | "Sy"
+                | "Dv"
+                | "Ic"
+                | "Li"
+                | "Er"
+                | "Va"
+                | "Ev"
+        ) {
+            (
+                OwnerDisposition::Retained,
+                "validated non-section navigation destination",
+            )
+        } else {
+            (
+                OwnerDisposition::Unclassified,
+                "owner macro has no target-conservation policy",
+            )
+        };
+    ClassifiedOwner {
+        target,
+        source_line: node.line,
+        owner_macro,
+        owner_kind,
+        explicit: is_explicit,
+        disposition,
+        reason,
+    }
+}
+
+fn explicit_targets(nodes: &[&Node]) -> BTreeMap<String, BTreeSet<u32>> {
+    let mut targets = BTreeMap::<String, BTreeSet<u32>>::new();
     for (index, node) in nodes.iter().enumerate() {
         if node.macro_name.as_deref() != Some("Tg") {
             continue;
@@ -262,21 +495,10 @@ fn explicit_targets(nodes: &[&Node]) -> BTreeSet<String> {
                 .and_then(|candidate| target_name(candidate))
         });
         if let Some(target) = target.filter(|target| !target.is_empty()) {
-            targets.insert(target);
+            targets.entry(target).or_default().insert(node.line);
         }
     }
     targets
-}
-
-fn structural_target_owner(node: &Node) -> bool {
-    matches!(
-        node.macro_name.as_deref(),
-        Some("Tg" | "Pp" | "Bd" | "D1" | "Dl" | "Bl" | "It" | "Sh" | "Ss" | "Fo")
-    ) || matches!(node.kind, NodeKind::Head | NodeKind::Body | NodeKind::Tail)
-        && matches!(
-            node.macro_name.as_deref(),
-            Some("Bd" | "Bl" | "It" | "Sh" | "Ss" | "Fo")
-        )
 }
 
 fn target_name(node: &Node) -> Option<String> {
@@ -310,67 +532,56 @@ fn flatten_nodes<'a>(node: &'a Node, output: &mut Vec<&'a Node>) {
     }
 }
 
-fn observed_identities(
-    document: &Document,
-) -> (BTreeSet<String>, BTreeSet<String>, BTreeSet<String>) {
-    let mut identities = BTreeSet::new();
-    let mut anchors = BTreeSet::new();
-    let mut section_links = BTreeSet::new();
-    collect_blocks(
-        &document.blocks,
-        &mut identities,
-        &mut anchors,
-        &mut section_links,
-    );
+fn observed_targets(document: &Document) -> ObservedTargets {
+    let mut observed = ObservedTargets::default();
+    observed
+        .fragments
+        .extend(document.fragment_aliases.iter().map(ToString::to_string));
+    collect_blocks(&document.blocks, &mut observed);
     for section in &document.sections {
-        collect_section(section, &mut identities, &mut anchors, &mut section_links);
+        collect_section(section, &mut observed);
     }
-    (identities, anchors, section_links)
+    observed
 }
 
-fn collect_section(
-    section: &Section,
-    identities: &mut BTreeSet<String>,
-    anchors: &mut BTreeSet<String>,
-    section_links: &mut BTreeSet<String>,
-) {
-    identities.insert(section.id.to_string());
-    collect_blocks(&section.blocks, identities, anchors, section_links);
+fn collect_section(section: &Section, observed: &mut ObservedTargets) {
+    observed.identities.insert(section.id.to_string());
+    observed.sections.insert(section.id.to_string());
+    observed
+        .fragments
+        .extend(section.fragment_aliases.iter().map(ToString::to_string));
+    collect_blocks(&section.blocks, observed);
     for child in &section.children {
-        collect_section(child, identities, anchors, section_links);
+        collect_section(child, observed);
     }
 }
 
-fn collect_blocks(
-    blocks: &[Block],
-    identities: &mut BTreeSet<String>,
-    anchors: &mut BTreeSet<String>,
-    section_links: &mut BTreeSet<String>,
-) {
+fn collect_blocks(blocks: &[Block], observed: &mut ObservedTargets) {
     for block in blocks {
         match block {
             Block::Paragraph { children, .. } | Block::Preformatted { children, .. } => {
-                collect_inlines(children, identities, anchors, section_links);
+                collect_inlines(children, observed);
             }
             Block::List { items, .. } => {
                 for item in items {
-                    collect_blocks(&item.blocks, identities, anchors, section_links);
+                    collect_blocks(&item.blocks, observed);
                 }
             }
             Block::DefinitionList { items, .. } => {
                 for item in items {
                     if let Some(identity) = &item.identity {
-                        identities.insert(identity.id.to_string());
+                        observed.identities.insert(identity.id.to_string());
+                        observed.entries.insert(identity.id.to_string());
                     }
                     for term in &item.terms {
-                        collect_inlines(term, identities, anchors, section_links);
+                        collect_inlines(term, observed);
                     }
-                    collect_blocks(&item.description, identities, anchors, section_links);
+                    collect_blocks(&item.description, observed);
                 }
             }
             Block::Table { rows, .. } => {
                 for cell in rows.iter().flat_map(|row| &row.cells) {
-                    collect_blocks(&cell.blocks, identities, anchors, section_links);
+                    collect_blocks(&cell.blocks, observed);
                 }
             }
             Block::Equation { .. }
@@ -381,17 +592,18 @@ fn collect_blocks(
     }
 }
 
-fn collect_inlines(
-    nodes: &[Inline],
-    identities: &mut BTreeSet<String>,
-    anchors: &mut BTreeSet<String>,
-    section_links: &mut BTreeSet<String>,
-) {
+fn collect_inlines(nodes: &[Inline], observed: &mut ObservedTargets) {
     for node in nodes {
         match node {
-            Inline::Anchor { id, .. } => {
-                identities.insert(id.to_string());
-                anchors.insert(id.to_string());
+            Inline::Anchor {
+                id,
+                fragment_aliases,
+            } => {
+                observed.identities.insert(id.to_string());
+                observed.anchors.insert(id.to_string());
+                observed
+                    .fragments
+                    .extend(fragment_aliases.iter().map(ToString::to_string));
             }
             Inline::Strong { children }
             | Inline::Emphasis { children }
@@ -401,13 +613,36 @@ fn collect_inlines(
                     ..
                 } = node
                 {
-                    section_links.insert(id.to_string());
+                    observed.section_links.insert(id.to_string());
                 }
-                collect_inlines(children, identities, anchors, section_links);
+                collect_inlines(children, observed);
             }
             Inline::Text { .. } | Inline::Code { .. } | Inline::LineBreak => {}
         }
     }
+}
+
+fn unexpected_targets(expected: &[ExpectedTarget], observed: &ObservedTargets) -> Vec<String> {
+    let mut unexpected = BTreeSet::new();
+    for fragment in &observed.fragments {
+        if !expected
+            .iter()
+            .any(|target| target.explicit && target.id == *fragment)
+        {
+            unexpected.insert(format!("fragment alias {fragment:?}"));
+        }
+    }
+    for anchor in &observed.anchors {
+        if observed.entries.contains(anchor)
+            || expected.iter().any(|target| {
+                target.id == *anchor || generated_identity_matches(&target.normalized_id, anchor)
+            })
+        {
+            continue;
+        }
+        unexpected.insert(format!("anchor {anchor:?}"));
+    }
+    unexpected.into_iter().collect()
 }
 
 fn missing_targets(
