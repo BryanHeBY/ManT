@@ -41,9 +41,11 @@ that crate was not published for that change.
   column, and definition items, including target-only list bodies, instead of
   discarding the target when the item has no visible descendant.
 
-- Reconstruct source-proven man(7) `.IP` enumerations as ordered lists instead
-  of exposing their numeric markers as option values, while preserving bare
-  numeric value domains such as `0`/`1`.
+- Reconstruct source-proven man(7) `.IP` and `.TP` enumerations as ordered
+  lists from the first punctuated item, keep sibling `.RS` continuations in
+  that item, and stop exposing singleton footnotes or numbered steps as
+  semantic entries while preserving bare numeric value domains such as
+  `0`/`1`.
 - Preserve validated mdoc targets moved by libmandoc onto paragraph, display,
   list, item, function, and section owners; keep `.Tg` zero-width; and run the
   same navigation-resolution passes over root and section content.

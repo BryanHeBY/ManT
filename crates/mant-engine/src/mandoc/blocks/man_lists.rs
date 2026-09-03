@@ -1,4 +1,4 @@
-//! Reconstructs source-proven lists expressed with man(7) `.IP` paragraphs.
+//! Reconstructs source-proven lists expressed with man(7) tagged paragraphs.
 
 use mant_ir::{Block, DefinitionItem, Inline, ListItem, ListKind, SourceSpan};
 
@@ -18,21 +18,22 @@ pub(super) struct DefinitionLocation {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(super) enum ManIpListState {
+pub(super) enum ManListState {
     None,
-    Candidate {
-        location: DefinitionLocation,
-        marker: IpOrdinalMarker,
-        source: Option<SourceSpan>,
-    },
     Ordered {
         block: usize,
-        marker: IpOrdinalMarker,
+        marker: ManOrdinalMarker,
     },
 }
 
+impl ManListState {
+    pub(super) const fn is_active(self) -> bool {
+        !matches!(self, Self::None)
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(super) struct IpOrdinalMarker {
+pub(super) struct ManOrdinalMarker {
     value: u64,
     style: IpOrdinalStyle,
 }
@@ -46,7 +47,7 @@ enum IpOrdinalStyle {
     IncrementingRegister,
 }
 
-/// Parse only source-proven enumerator spellings used by man(7) `.IP`.
+/// Parse only source-proven enumerator spellings used by man(7) `.IP`/`.TP`.
 ///
 /// A bare resolved integer is ambiguous: option manuals routinely use the
 /// same spelling for a real value domain. It is therefore accepted only when
@@ -56,7 +57,7 @@ enum IpOrdinalStyle {
 pub(super) fn ordinal_marker(
     item: &DefinitionItem,
     uses_incrementing_register: bool,
-) -> Option<IpOrdinalMarker> {
+) -> Option<ManOrdinalMarker> {
     if item.description.is_empty() {
         return None;
     }
@@ -84,28 +85,27 @@ pub(super) fn ordinal_marker(
         return None;
     };
     let value = digits.parse().ok()?;
-    Some(IpOrdinalMarker { value, style })
+    Some(ManOrdinalMarker { value, style })
 }
 
-/// Convert a proven sequence of adjacent `.IP` enumerators into one ordered
-/// list, or append to an already proven sequence.
+/// Convert a source-proven man enumerator into an ordered list, appending it
+/// to an adjacent sequence when the spelling and numeric progression agree.
 ///
-/// The first candidate remains a definition until the next consecutive,
-/// same-style marker arrives. This is important because `.IP` itself carries
-/// no list semantics: the same macro is also the portable definition-list
-/// primitive. Semantic entry discovery runs only after this pass completes,
-/// so the temporary representation never escapes the lowering boundary.
+/// Punctuated integers and source-level incrementing registers carry enough
+/// evidence even when a list contains only one item.  Requiring a second item
+/// used to leak singleton footnote labels such as `1.` into the semantic entry
+/// index.  Bare literal integers remain excluded by [`ordinal_marker`].
 pub(super) fn append_ordered(
     output: &mut Vec<Block>,
-    item: &mut Option<DefinitionItem>,
+    item: DefinitionItem,
     indent_columns: u16,
     paragraph_distance: u16,
     source: Option<SourceSpan>,
-    marker: IpOrdinalMarker,
-    state: &mut ManIpListState,
-) -> bool {
+    marker: ManOrdinalMarker,
+    state: &mut ManListState,
+) {
     match *state {
-        ManIpListState::Ordered {
+        ManListState::Ordered {
             block,
             marker: previous,
         } if previous.style == marker.style
@@ -119,85 +119,102 @@ pub(super) fn append_ordered(
                 ..
             }) = output.get_mut(block)
             else {
-                *state = ManIpListState::None;
-                return false;
+                *state = ManListState::None;
+                append_new_ordered(
+                    output,
+                    item,
+                    indent_columns,
+                    paragraph_distance,
+                    source,
+                    marker,
+                    state,
+                );
+                return;
             };
             *compact = *compact && paragraph_distance == 0;
-            items.push(list_item_from_definition(
-                item.take().expect("ordered item exists"),
+            items.push(list_item_from_definition(item, indent_columns, source));
+            *state = ManListState::Ordered { block, marker };
+        }
+        ManListState::None | ManListState::Ordered { .. } => {
+            append_new_ordered(
+                output,
+                item,
                 indent_columns,
+                paragraph_distance,
                 source,
-            ));
-            *state = ManIpListState::Ordered { block, marker };
-            true
-        }
-        ManIpListState::Candidate {
-            location,
-            marker: previous,
-            source: previous_source,
-        } if previous.style == marker.style
-            && previous.value.checked_add(1) == Some(marker.value)
-            && location.block == output.len().saturating_sub(1) =>
-        {
-            let Some(Block::DefinitionList {
-                items,
-                layout: definition_layout,
-                source: definition_source,
-                ..
-            }) = output.get_mut(location.block)
-            else {
-                *state = ManIpListState::None;
-                return false;
-            };
-            if location.item != items.len().saturating_sub(1) {
-                *state = ManIpListState::None;
-                return false;
-            }
-            let Some(previous_item) = items.pop() else {
-                *state = ManIpListState::None;
-                return false;
-            };
-            let first_spacing = previous_item.spacing_before_lines.unwrap_or(0);
-            let list_source = previous_source.or(*definition_source);
-            let remove_definition = items.is_empty();
-            let spacing_before_lines = if remove_definition {
-                definition_layout.spacing_before_lines
-            } else {
-                first_spacing
-            };
-            if remove_definition {
-                output.pop();
-            }
-            let block = output.len();
-            output.push(Block::List {
-                kind: ListKind::Ordered,
-                start: Some(previous.value),
-                compact: paragraph_distance == 0,
-                items: vec![
-                    list_item_from_definition(previous_item, indent_columns, list_source),
-                    list_item_from_definition(
-                        item.take().expect("ordered item exists"),
-                        indent_columns,
-                        source,
-                    ),
-                ],
-                layout: layout_with_spacing(indent_columns, spacing_before_lines),
-                source: list_source,
-            });
-            *state = ManIpListState::Ordered { block, marker };
-            true
-        }
-        ManIpListState::None
-        | ManIpListState::Candidate { .. }
-        | ManIpListState::Ordered { .. } => {
-            *state = ManIpListState::None;
-            false
+                marker,
+                state,
+            );
         }
     }
 }
 
-/// Remove an `.IP` mark from visible content while conserving any target it
-/// owned and making item indentation relative to the new list container.
+fn append_new_ordered(
+    output: &mut Vec<Block>,
+    item: DefinitionItem,
+    indent_columns: u16,
+    paragraph_distance: u16,
+    source: Option<SourceSpan>,
+    marker: ManOrdinalMarker,
+    state: &mut ManListState,
+) {
+    let block = output.len();
+    output.push(Block::List {
+        kind: ListKind::Ordered,
+        start: Some(marker.value),
+        compact: paragraph_distance == 0,
+        items: vec![list_item_from_definition(item, indent_columns, source)],
+        layout: layout_with_spacing(indent_columns, paragraph_distance),
+        source,
+    });
+    *state = ManListState::Ordered { block, marker };
+}
+
+/// Attach a transparent relative-indent scope to the current `.IP` item.
+///
+/// AsciDoc-generated man pages commonly put a reference URI in an `.RS/.RE`
+/// scope immediately after each numbered `.IP`.  Libmandoc correctly exposes
+/// that scope as a sibling of the `.IP`, but it remains content of the same
+/// visible item and must not break ordinal sequence recognition.  Proven list
+/// items use coordinates relative to the list container.
+pub(super) fn append_relative_continuation(
+    output: &mut [Block],
+    nested: &mut Vec<Block>,
+    indent_columns: u16,
+    state: ManListState,
+) -> bool {
+    let origin = indent_columns.saturating_add(MAN_DEFINITION_BODY_INDENT);
+    match state {
+        ManListState::Ordered { block, .. } => {
+            let Some(Block::List {
+                kind: ListKind::Ordered,
+                items,
+                ..
+            }) = output.get_mut(block)
+            else {
+                return false;
+            };
+            let Some(item) = items.last_mut() else {
+                return false;
+            };
+            make_relative(nested, origin);
+            item.blocks.append(nested);
+            true
+        }
+        ManListState::None => false,
+    }
+}
+
+fn make_relative(blocks: &mut [Block], origin: u16) {
+    for block in blocks {
+        if let Some(layout) = block_layout_mut(block) {
+            layout.indent_columns = layout.indent_columns.saturating_sub(origin);
+        }
+    }
+}
+
+/// Remove an `.IP`/`.TP` mark from visible content while conserving any target
+/// it owned and making item indentation relative to the new list container.
 pub(super) fn list_item_from_definition(
     item: DefinitionItem,
     indent_columns: u16,

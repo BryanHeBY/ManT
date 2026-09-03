@@ -21,7 +21,7 @@ use super::{
 };
 
 mod lists;
-mod man_ip;
+mod man_lists;
 mod preformatted;
 mod tables;
 
@@ -29,7 +29,7 @@ use lists::{
     ManAliasState, ManDefinitionState, lower_man_definition as lower_man_definition_block,
     lower_mdoc_list,
 };
-use man_ip::ManIpListState;
+use man_lists::{ManListState, append_relative_continuation};
 use preformatted::{preformatted_blocks, style_preformatted_inlines};
 use tables::{TableEmbedding, append_table_row, table_embeddings};
 
@@ -229,9 +229,9 @@ struct BlockLowerer<'a, 'source> {
     // adjacent man definitions. The state owns the exact first item of a
     // compact group so a later close cannot absorb an unrelated orphan.
     man_alias_state: ManAliasState,
-    // A single `.IP` tag is deliberately ambiguous. Retain a bounded
-    // candidate until an adjacent source-proven ordinal establishes a list.
-    man_ip_list_state: ManIpListState,
+    // Source-proven `.IP`/`.TP` ordinals form lists immediately; this state
+    // joins only adjacent, consecutively numbered items of the same style.
+    man_list_state: ManListState,
 }
 
 impl<'a, 'source> BlockLowerer<'a, 'source> {
@@ -251,7 +251,7 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
             split_authors: false,
             synopsis_return_type_open: false,
             man_alias_state: ManAliasState::None,
-            man_ip_list_state: ManIpListState::None,
+            man_list_state: ManListState::None,
         }
     }
 
@@ -322,7 +322,7 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
                 output: &mut self.state.output,
                 definition_hanging_width: &mut self.definition_hanging_width,
                 man_alias_state: &mut self.man_alias_state,
-                man_ip_list_state: &mut self.man_ip_list_state,
+                man_list_state: &mut self.man_list_state,
                 spacing_enabled,
             }
             .push(node, table_embedding);
@@ -580,7 +580,7 @@ struct StructuralLowerer<'a, 'source, 'state> {
     output: &'state mut Vec<Block>,
     definition_hanging_width: &'state mut usize,
     man_alias_state: &'state mut ManAliasState,
-    man_ip_list_state: &'state mut ManIpListState,
+    man_list_state: &'state mut ManListState,
     spacing_enabled: bool,
 }
 
@@ -595,7 +595,7 @@ impl StructuralLowerer<'_, '_, '_> {
                 output: self.output,
                 definition_hanging_width: self.definition_hanging_width,
                 alias_state: self.man_alias_state,
-                ip_list_state: self.man_ip_list_state,
+                list_state: self.man_list_state,
             },
             self.spacing_enabled,
         );
@@ -605,8 +605,10 @@ impl StructuralLowerer<'_, '_, '_> {
         if !matches!(node.macro_name.as_deref(), Some("TP" | "IP" | "TQ")) {
             *self.man_alias_state = ManAliasState::None;
         }
-        if node.macro_name.as_deref() != Some("IP") {
-            *self.man_ip_list_state = ManIpListState::None;
+        let continues_ip_item =
+            node.macro_name.as_deref() == Some("RS") && self.man_list_state.is_active();
+        if !matches!(node.macro_name.as_deref(), Some("IP" | "TP")) && !continues_ip_item {
+            *self.man_list_state = ManListState::None;
         }
         if self.lower_transparent_container(node) {
             return;
@@ -737,6 +739,26 @@ impl StructuralLowerer<'_, '_, '_> {
                 extend_blocks_with_spacing(self.output, nested, spacing_before);
             }
             Some("RS") => {
+                if self.man_list_state.is_active() {
+                    let mut nested = lower_blocks_with_spacing(
+                        first_part_children(node, NodeKind::Body),
+                        self.context,
+                        self.indent_columns + 4,
+                        self.paragraph_distance,
+                        self.spacing_enabled,
+                    );
+                    if append_relative_continuation(
+                        self.output,
+                        &mut nested,
+                        self.indent_columns,
+                        *self.man_list_state,
+                    ) {
+                        return true;
+                    }
+                    *self.man_list_state = ManListState::None;
+                    self.output.append(&mut nested);
+                    return true;
+                }
                 let output = std::mem::take(self.output);
                 *self.output = lower_blocks_onto(
                     first_part_children(node, NodeKind::Body),

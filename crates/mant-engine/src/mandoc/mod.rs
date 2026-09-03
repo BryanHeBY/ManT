@@ -3473,6 +3473,103 @@ Sean\n\
     }
 
     #[test]
+    fn keeps_relative_indent_references_inside_man_ip_enumerations() {
+        let document = parse_manual_bytes(
+            std::path::Path::new("ip-reference-enumeration.1"),
+            b".TH IP-REFERENCE-ENUMERATION 1\n.SH NOTES\n\
+.IP \" 1.\" 4\nFirst reference\n.RS 4\nfile:///first\n.RE\n\
+.IP \" 2.\" 4\nSecond reference\n.RS 4\nfile:///second\n.RE\n\
+.IP \" 3.\" 4\nThird reference\n.RS 4\nfile:///third\n.RE\n",
+        )
+        .expect("lower numbered IP references");
+
+        let notes = &document.sections[0];
+        let [
+            Block::List {
+                kind: ListKind::Ordered,
+                start: Some(1),
+                items,
+                ..
+            },
+        ] = notes.blocks.as_slice()
+        else {
+            panic!("numbered references must form one ordered list");
+        };
+        assert_eq!(items.len(), 3);
+        assert!(items.iter().all(|item| {
+            item.blocks.len() == 2
+                && item.blocks.iter().all(
+                    |block| matches!(block, Block::Paragraph { layout, .. } if layout.indent_columns == 0),
+                )
+        }));
+        assert!(SemanticIndex::build(&document).section("notes").is_empty());
+    }
+
+    #[test]
+    fn recognizes_one_source_proven_ip_ordinal_without_semantic_entry() {
+        let document = parse_manual_bytes(
+            std::path::Path::new("ip-reference-candidate.1"),
+            b".TH IP-REFERENCE-CANDIDATE 1\n.SH NOTES\n\
+.IP \" 9.\" 4\nOnly reference\n.RS 4\nfile:///only\n.RE\n",
+        )
+        .expect("lower one numbered IP reference");
+
+        let Block::List {
+            kind: ListKind::Ordered,
+            start: Some(9),
+            compact: false,
+            items,
+            ..
+        } = &document.sections[0].blocks[0]
+        else {
+            panic!("one source-proven ordinal is an ordered list");
+        };
+        assert!(matches!(
+            items[0].blocks.as_slice(),
+            [
+                Block::Paragraph { layout: body, .. },
+                Block::Paragraph {
+                    layout: continuation,
+                    ..
+                }
+            ] if body.indent_columns == 0 && continuation.indent_columns == 0
+        ));
+        assert!(SemanticIndex::build(&document).section("notes").is_empty());
+    }
+
+    #[test]
+    fn recognizes_tp_enumerations_nested_below_a_definition() {
+        let document = parse_manual_bytes(
+            std::path::Path::new("tp-enumeration.1"),
+            b".TH TP-ENUMERATION 1\n.SH OPTIONS\n\
+.TP\n.B extdebug\nThis setting has the following effects:\n.RS 4\n\
+.TP\n.B 1.\nFirst effect.\n\
+.TP\n.B 2.\nSecond effect.\n\
+.TP\n.B 3.\nThird effect.\n.RE\n",
+        )
+        .expect("lower nested TP enumeration");
+
+        let Block::DefinitionList { items, .. } = &document.sections[0].blocks[0] else {
+            panic!("outer setting remains a definition");
+        };
+        assert!(items[0].description.iter().any(|block| {
+            matches!(
+                block,
+                Block::List {
+                    kind: ListKind::Ordered,
+                    start: Some(1),
+                    items,
+                    ..
+                } if items.len() == 3
+            )
+        }));
+        let index = SemanticIndex::build(&document);
+        let entries = index.section("options");
+        assert_eq!(entries.len(), 1);
+        assert!(entries[0].children.is_empty());
+    }
+
+    #[test]
     fn lowers_normalized_mdoc_font_and_author_layout() {
         let path = temporary_source(
             "normalized-mdoc-modes",

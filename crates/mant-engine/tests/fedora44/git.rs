@@ -3,7 +3,7 @@
 use crate::common::{self, count_outline_entries, find_outline_entry, query_for_document};
 use crate::fixtures::fedora44_manual;
 use mant_engine::build_outline_with_detail;
-use mant_ir::{Block, SourceFormat};
+use mant_ir::{Block, ListKind, SourceFormat};
 use mant_protocol::OutlineDetail;
 
 /// 24 sections, `os = "Git 2.53.0"`, and options plus environment entries.
@@ -18,7 +18,7 @@ fn keeps_complete_sections_and_semantic_option_outlines() {
     let query = query_for_document("git", document);
     let outline = build_outline_with_detail(&query, OutlineDetail::Entries)
         .unwrap_or_else(|error| panic!("build git option outline: {error}"));
-    assert_eq!(count_outline_entries(&outline.nodes), 101);
+    assert_eq!(count_outline_entries(&outline.nodes), 94);
     assert!(find_outline_entry(&outline.nodes, "--help").is_some());
     assert!(find_outline_entry(&outline.nodes, "GIT_DIR").is_some());
 
@@ -33,6 +33,17 @@ fn keeps_complete_sections_and_semantic_option_outlines() {
     assert!(matches!(
         version.description.first(),
         Some(Block::Paragraph { layout, .. }) if layout.spacing_before_lines == 0
+    ));
+
+    let notes = common::section(document, "NOTES");
+    assert!(matches!(
+        notes.blocks.as_slice(),
+        [Block::List {
+            kind: ListKind::Ordered,
+            start: Some(1),
+            items,
+            ..
+        }] if items.len() == 7
     ));
 
     common::assert_no_duplicate_vertical_spacing(&document.sections, "fedora44/git");

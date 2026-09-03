@@ -64,7 +64,7 @@ The following `man(7)` macros have dedicated lowering behavior:
 | `SH`, `SS` | Top-level sections and child sections |
 | `P`, `PP`, `LP`, `HP` | Paragraph boundaries and retained vertical spacing |
 | `RS`, `RE` | Nested indentation boundary |
-| `IP`, `TP`, `TQ` | Bullet or definition-list items, aliases, hanging layout, and widths |
+| `IP`, `TP`, `TQ` | Bullet, ordered-list, or definition-list items, aliases, hanging layout, and widths |
 | `PD` | Paragraph, definition-item, and heading spacing |
 | `B`, `SB` | Strong inline content |
 | `I` | Emphasized inline content |
@@ -77,16 +77,18 @@ The following `man(7)` macros have dedicated lowering behavior:
 
 `br` inside a flow becomes an inline line break. `sp` becomes explicit vertical space. Filled source lines normally join with spaces; an indented input line and no-fill input preserve line boundaries. In a no-fill display, a run of raw blank input lines is one visual separator, while an explicit `sp` retains its requested separation. A final unescaped `\c` suppresses that implicit space or line break and joins the next input line directly.
 
-The `IP` macro is source-ambiguous: its leading mark can introduce a bullet,
-an enumerated paragraph, or a glossary-style definition. ManT recognizes
-single-glyph bullet marks at that source boundary. It reconstructs an ordered
-list only from adjacent, same-style, consecutively increasing numeric marks
-such as `1.`/`2.`, `1)`/`2)`, `(1)`/`(2)`, or `[1]`/`[2]`. A bare numeric
-sequence is treated as ordered only when the original `IP` calls use roff's
-pre-increment number-register form. This preserves real option value domains
-such as `0`/`1` as definitions, while explanation steps cannot become
-addressable `value` entries. An isolated or broken ordinal sequence remains
-visible as definitions but is not promoted to a semantic value.
+The `IP` and `TP` macros are source-ambiguous: a leading mark can introduce a
+bullet, an enumerated paragraph, or a glossary-style definition. ManT
+recognizes single-glyph bullet marks at that source boundary. A punctuated
+integer such as `1.`, `1)`, `(1)`, or `[1]` is sufficient evidence for an
+ordered item, including a one-item footnote list. Adjacent, same-style,
+consecutively increasing marks join one list; a gap or style change begins a
+new list at the explicit number. A bare integer is treated as ordered only
+when the original `IP` call uses roff's pre-increment number-register form.
+This preserves real option value domains such as `0`/`1` as definitions while
+keeping numbered instructions and references out of the semantic-entry index.
+An immediately following `RS` region remains content of the current item, as
+required for generated references and hierarchically indented lists.
 
 `OP`, `AT`, `DT`, `SM`, `UC`, and other libmandoc-recognized man macros retain printable children where available but do not currently have a dedicated ManT semantic variant. For example, `SM` does not preserve point size, and `OP` does not become a distinct optional-argument node.
 
