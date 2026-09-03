@@ -22,8 +22,10 @@ it is emitted in `unclassifiedOwners` and makes the page a review candidate.
 Head/body/tail wrapper nodes at the same AST child-index path form one logical
 obligation; independent same-named owners remain separate occurrences.
 
-Explicit `.Tg` destinations must survive exactly as fragment aliases and also
-resolve through a normalized internal ID. Generated destinations may use
+Every explicit `.Tg` spelling must resolve exactly. A spelling already equal
+to its canonical identity needs no redundant alias; a noncanonical spelling
+must survive as a fragment alias resolving to the normalized internal ID.
+Generated destinations may use
 ManT's deterministic canonical numeric collision suffix (`base`, `base-2`,
 `base-3`, and so on). Each obligation records its AST path, source line, owner
 macro and kind, section source line, expected IR role, and container class.
@@ -52,26 +54,28 @@ fixture and a focused Rust test.
 
 ## Current complete sweep
 
-On 2026-09-04 the complete local Arch Linux manual hierarchy was rescanned
-with the v2 exhaustive-owner contract. This remains historical distribution
-evidence; the current v3 occurrence-aware fixture gate supersedes its matching
-contract until the complete hierarchy is replayed:
+On 2026-09-04 the complete local Arch Linux manual hierarchy was rescanned at
+producer commit `c51be9d8a539080dd8f53e8812386d8c7b4f782e` with the v3
+occurrence-aware contract. The profiler binary SHA-256 was
+`6c6ada2e38de0bd4dab5c0a692c50fd94e599103b472505f339457be6bc6cf70`:
 
 ```sh
 cargo build --locked -p mant-engine --example roff_target_profile
 python3 scripts/audit-roff-targets.py --manpath /usr/share/man \
   --corpus archlinux-host --recheck-recorded --findings-only \
-  --json /tmp/mant-target-archlinux-v2.json
+  --json /tmp/mant-target-archlinux-v3-c51be9d.json
 ```
 
 The sweep examined 28,712 pages and produced 28,712 clean results. All 565,090
-deep-link owners were classified; none were unclassified. There were no
-missing or unexpected targets, role collisions, invalid identities/fragments,
-duplicates, or dangling links. The owner census exercised man and mdoc section,
-paragraph, definition, list, display, inline, function, command, variable,
-error, and literal forms. Historical v1 rows remain as immutable source
-identities, while every page present in this complete sweep and every checked-in
-fixture now has a v2 record.
+raw owners formed 565,090 logical obligations; every owner was classified and
+every retained obligation matched exactly one compatible IR occurrence. There
+were no missing or unexpected targets, role collisions, invalid
+identities/fragments, duplicates, dangling links, or unclassified owners. The
+owner census exercised man and mdoc section, paragraph, definition, list,
+display, inline, function, command, variable, error, and literal forms.
+Historical v1/v2 rows remain for source identities absent from the current
+host, while every page present in this complete sweep and every checked-in
+fixture now has a v3 record.
 
 CI does not depend on `/usr/share/man`. It builds the profiler and verifies the
 small checked-in fixture corpus against recorded rows:

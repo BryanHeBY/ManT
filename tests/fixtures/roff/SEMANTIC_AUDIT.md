@@ -68,3 +68,13 @@ bounded entry samples. Record the exact producer commit, profiler hash, corpus
 identity, page/entry totals, and reviewed findings here when a complete sweep
 is accepted. A clean automated scan is evidence for the checks above, not a
 general proof that every source's semantic classification is ideal.
+
+On 2026-09-04 the complete local Arch Linux hierarchy was scanned at producer
+commit `c51be9d8a539080dd8f53e8812386d8c7b4f782e`. The profiler binary SHA-256
+was `2d81071c571963bbbef607908665b3392febb7f037aa5715b1bbb09412b6e80e`.
+All 28,712 pages were clean. Their 347,943 semantic entries contained no
+punctuated ordinal entries, retained ordinal definitions, empty entries, or
+value-domain violations. The informational census found 241,323 aliasless
+generic terms and 6,914 entries in note-like sections; these remain sampling
+populations rather than automated defects. The exact JSON report is
+`/tmp/mant-semantic-archlinux-v1-c51be9d.json` on the audit host.
