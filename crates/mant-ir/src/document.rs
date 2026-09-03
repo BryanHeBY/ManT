@@ -529,8 +529,12 @@ pub enum Inline {
         value: String,
     },
     /// A typed link whose navigation semantics are explicit in the IR.
+    ///
+    /// Only document and manual targets form cross-document graph edges.
+    /// Section targets remain local, while external and email targets require a
+    /// host action and never expand a documentation scope.
     Link {
-        /// Resolved navigation destination.
+        /// Typed navigation destination.
         target: LinkTarget,
         /// Optional advisory title.
         #[serde(skip_serializing_if = "Option::is_none")]
@@ -549,7 +553,11 @@ pub enum Inline {
     LineBreak,
 }
 
-/// Resolved destination kind for [`Inline::Link`].
+/// Typed destination kind for [`Inline::Link`].
+///
+/// This enum records navigation intent, not host resolution state. The query
+/// engine resolves [`LinkTarget::Document`] and [`LinkTarget::Manual`] against
+/// the catalog; consumers must not infer equivalent edges from rendered text.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(
     tag = "kind",
@@ -568,6 +576,8 @@ pub enum LinkTarget {
         address: String,
     },
     /// A relative Markdown link to another document in the current source.
+    ///
+    /// This is a logical cross-document graph edge, not a physical path.
     Document {
         /// Extension-free relative document path.
         name: String,
@@ -576,6 +586,9 @@ pub enum LinkTarget {
         fragment: Option<String>,
     },
     /// A typed reference to another installed manual page.
+    ///
+    /// This is a logical cross-document graph edge resolved through the manual
+    /// catalog and its normal ambiguity rules.
     Manual {
         /// Manual topic without a section suffix.
         name: String,

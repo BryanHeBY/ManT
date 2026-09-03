@@ -79,6 +79,20 @@ Entries owned by a heading are available through `SemanticIndex::section`.
 Nested entries remain under their parent `SemanticEntry`; callers should not
 flatten that hierarchy when ownership affects interpretation.
 
+## Typed links and the document graph
+
+`Inline::Link` carries a closed `LinkTarget` rather than an unclassified URL
+string. `Section` targets stay inside the current document. `Document` and
+`Manual` targets are logical cross-document edges that a resolver may follow
+under explicit bounds. `External` and `Email` targets are host actions and must
+not expand a documentation scope.
+
+The IR intentionally does not resolve those edges. A `Document` target needs
+the referring `DocumentAddress` so `mant-engine` can keep relative links inside
+their registered source; a `Manual` target still requires catalog lookup and
+explicit ambiguity handling. Renderers that cannot activate a target should
+preserve the link's visible children.
+
 ## Stability boundary
 
 This is a typed Rust library contract for trusted in-process components. Its

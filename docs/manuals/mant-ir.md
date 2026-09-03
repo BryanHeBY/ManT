@@ -80,13 +80,29 @@ The inline union contains:
 
 Links use a closed `LinkTarget` union rather than stringly typed URLs:
 
-| Kind | Destination |
-| --- | --- |
-| `external` | URI |
-| `email` | Address without a `mailto:` prefix |
-| `document` | Relative registered Markdown document and optional fragment |
-| `manual` | Manual name and optional native manual section |
-| `section` | Resolved `NodeId` in the current document |
+| Kind | Fields | Navigation class |
+| --- | --- | --- |
+| `external` | `uri` | Host-activated absolute URI |
+| `email` | `address` without a `mailto:` prefix | Host-activated mailbox |
+| `document` | `name`, optional `fragment` | Cross-document graph edge |
+| `manual` | `name`, optional `manualSection` | Cross-document graph edge |
+| `section` | resolved document-local `id` | Current-document destination |
+
+`Inline::Anchor` and section IDs define destinations inside the current
+document. `LinkTarget::Document` and `Manual` connect logical catalog entries
+and are the only link kinds followed by bounded multi-document operations.
+`External` and `Email` are host actions: they never expand a documentation
+scope. This classification prevents a query from turning arbitrary URI text or
+a local filesystem path into an implicit document edge.
+
+A document target retains the extension-free relative name derived from its
+Markdown source. It does not store an absolute cache path. Resolution therefore
+requires the referring document's `DocumentAddress`; the engine resolves the
+target within that registered source and rejects traversal across its root. A
+manual target records a topic and optional exact native manual section, normally
+from mdoc `Xr`, man `MR`, or another source construct with equivalent evidence.
+The IR records this intent, while the engine owns catalog lookup, ambiguity, and
+source-confinement policy.
 
 Visible link children remain useful when a frontend cannot activate the destination.
 Document validation requires RFC 3986 ASCII component characters and complete
@@ -102,6 +118,13 @@ the shared typed-email serializer percent-encodes URI-sensitive local-part
 characters so accepted addresses remain activatable without raw concatenation.
 Consumers may apply a narrower activation allowlist without reimplementing
 that structural validation.
+
+Typed targets let every consumer use the same document graph. The TUI can
+activate local destinations and request cross-document resolution while keeping
+back/forward history; CLI and MCP scopes can traverse `Document` and `Manual`
+edges breadth-first under explicit document, depth, and byte limits; renderers
+can preserve visible children without pretending an unsupported destination is
+clickable. Consumers must not recover navigation semantics from rendered text.
 
 ## Semantic Definitions
 
