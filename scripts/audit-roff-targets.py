@@ -212,6 +212,7 @@ def valid_target(value: object) -> bool:
             "ownerKind": str,
             "astPath": str,
             "logicalOwnerKey": str,
+            "sectionOrdinal": int,
             "sectionSourceLine": int,
             "expectedRole": str,
             "expectedContainer": str,
@@ -230,6 +231,8 @@ def valid_observed_target(value: object) -> bool:
         and all(isinstance(alias, str) for alias in value["fragmentAliases"])
         and value.get("role") in {"document", "section", "entry", "anchor"}
         and isinstance(value.get("container"), str)
+        and isinstance(value.get("sectionOrdinal"), int)
+        and value["sectionOrdinal"] >= 0
         and isinstance(value.get("sectionSourceLine"), int)
         and value["sectionSourceLine"] >= 0
         and isinstance(value.get("irPath"), str)
@@ -442,6 +445,7 @@ def self_check() -> None:
             "ownerKind": "element",
             "astPath": "0.1",
             "logicalOwnerKey": "1:0.1:target",
+            "sectionOrdinal": 1,
             "sectionSourceLine": 1,
             "expectedRole": "anchor",
             "expectedContainer": "content",
@@ -454,6 +458,7 @@ def self_check() -> None:
             "fragmentAliases": ["Target"],
             "role": "anchor",
             "container": "paragraph",
+            "sectionOrdinal": 1,
             "sectionSourceLine": 1,
             "irPath": "section[0]/block[0]/inline[0]",
         }
