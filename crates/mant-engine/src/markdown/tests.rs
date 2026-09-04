@@ -1666,3 +1666,26 @@ fn declared_entry_description_requires_a_leading_paragraph_delimiter() {
             && diagnostic.message.contains("query")
     }));
 }
+
+#[test]
+fn linked_code_terms_define_entry_document_destinations() {
+    let parsed = parse_markdown(
+        "# Tools\n\n<!-- mant:entries role=command case=insensitive -->\n- [`winget.exe`](winget.exe.md): Windows package manager.\n- `plain`: See [details](plain.md).\n",
+        None,
+    )
+    .expect("linked entry terms parse");
+    assert!(parsed.document.diagnostics.is_empty());
+
+    let index = mant_ir::SemanticIndex::build(&parsed.document);
+    let entries = index.root();
+    assert_eq!(entries.len(), 2);
+    assert_eq!(entries[0].aliases, ["winget.exe"]);
+    assert!(matches!(
+        entries[0].document_targets.as_slice(),
+        [mant_ir::SemanticDocumentTarget {
+            label,
+            target: mant_ir::LinkTarget::Document { name, fragment: None },
+        }] if label == "winget.exe" && name == "winget.exe"
+    ));
+    assert!(entries[1].document_targets.is_empty());
+}

@@ -9,7 +9,7 @@ use std::collections::BTreeMap;
 
 use mant_ir::{
     Block, DefinitionCase, DefinitionIdentity, DefinitionItem, DefinitionRole, Diagnostic,
-    DiagnosticLevel, Inline, ListItem, ListKind, SourceSpan,
+    DiagnosticLevel, Inline, LinkTarget, ListItem, ListKind, SourceSpan,
 };
 use pulldown_cmark::{Event, Parser, Tag, TagEnd};
 
@@ -461,6 +461,23 @@ fn entry_signature(
     for (delimiter_inline, inline) in children.iter().enumerate() {
         match inline {
             Inline::Code { value } => {
+                leading_term.get_or_insert(value.as_str());
+                let parsed = entry_names(value, role, explicitly_declared, attached)
+                    .map_err(|reason| EntryRejection::new(reason, Some(value), source))?;
+                extend_unique(&mut names, parsed);
+            }
+            Inline::Link {
+                target,
+                children: linked,
+                ..
+            } if matches!(
+                target,
+                LinkTarget::Document { .. } | LinkTarget::Manual { .. }
+            ) && matches!(linked.as_slice(), [Inline::Code { .. }]) =>
+            {
+                let [Inline::Code { value }] = linked.as_slice() else {
+                    unreachable!("the match guard accepts exactly one code child");
+                };
                 leading_term.get_or_insert(value.as_str());
                 let parsed = entry_names(value, role, explicitly_declared, attached)
                     .map_err(|reason| EntryRejection::new(reason, Some(value), source))?;
