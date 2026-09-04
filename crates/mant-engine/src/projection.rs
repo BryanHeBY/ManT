@@ -652,7 +652,7 @@ fn project_entries(
                 value_domain: entry
                     .value_domain
                     .as_ref()
-                    .map(|domain| project_value_domain(domain, current_address)),
+                    .map(|domain| Box::new(project_value_domain(domain, current_address))),
                 entry_summary: projected_summary(&entry.children, projection),
                 children,
             })

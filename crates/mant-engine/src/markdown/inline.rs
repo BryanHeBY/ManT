@@ -163,7 +163,7 @@ fn unescape_commonmark_punctuation(value: &str) -> String {
     output
 }
 
-fn markdown_document_reference(destination: &str) -> Option<(String, Option<String>)> {
+pub(super) fn markdown_document_reference(destination: &str) -> Option<(String, Option<String>)> {
     let (path, fragment) = destination
         .split_once('#')
         .map_or((destination, None), |(path, fragment)| {

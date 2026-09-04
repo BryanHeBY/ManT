@@ -1726,3 +1726,89 @@ fn linked_code_terms_define_entry_document_destinations() {
         })
     );
 }
+
+#[test]
+fn entry_domain_directives_resolve_cross_document_value_spaces() {
+    let parsed = parse_markdown(
+        "# SSH\n\n<!-- mant:entries role=option case=sensitive -->\n- `-o OPTION`: Set a configuration key.\n\n  <!-- mant:domain entries=manual/5/ssh_config roles=configuration-key -->\n",
+        None,
+    )
+    .expect("entry domain parses");
+    assert!(parsed.document.diagnostics.is_empty());
+    let index = mant_ir::SemanticIndex::build(&parsed.document);
+    let [entry] = index.root() else {
+        panic!("one semantic option expected");
+    };
+    assert!(matches!(
+        entry.value_domain,
+        Some(mant_ir::ValueDomain::EntrySet {
+            reference: mant_ir::SemanticDocumentReference::Manual {
+                ref name,
+                manual_section: Some(ref section),
+            },
+            ref entry_kinds,
+        }) if name == "ssh_config"
+            && section == "5"
+            && entry_kinds == &[EntryKind::ConfigurationKey]
+    ));
+
+    let outline = build_outline_projection(
+        &ResolvedContent {
+            label: "ssh(1)".to_owned(),
+            address: Some(DocumentAddress::Manual {
+                name: "ssh".to_owned(),
+                manual_section: "1".to_owned(),
+            }),
+            document: Some(parsed.document),
+            tldr: None,
+        },
+        EntryProjection::All,
+        None,
+    )
+    .expect("entry domain outline");
+    let OutlineNode::DocumentRoot { children, .. } = &outline.nodes[0] else {
+        panic!("document title leaves entries in root content");
+    };
+    assert!(matches!(
+        children.as_slice(),
+        [OutlineNode::DocumentEntry {
+            value_domain: Some(value_domain),
+            ..
+        }] if matches!(value_domain.as_ref(), mant_protocol::EntryValueDomain::EntrySet {
+                reference: mant_ir::SemanticDocumentReference::Manual { name, manual_section: Some(section) },
+                address: Some(DocumentAddress::Manual { name: address_name, manual_section: address_section }),
+                entry_kinds,
+            } if name == "ssh_config"
+            && section == "5"
+            && address_name == "ssh_config"
+            && address_section == "5"
+            && entry_kinds == &[EntryKind::ConfigurationKey])
+    ));
+}
+
+#[test]
+fn misplaced_entry_domain_is_visible_as_incomplete_semantics() {
+    let parsed = parse_markdown(
+        "# Tool\n\n<!-- mant:domain entries=other.md roles=command -->\n\nProse.\n",
+        None,
+    )
+    .expect("misplaced domain remains recoverable");
+    assert!(
+        parsed.document.diagnostics.iter().any(|diagnostic| {
+            diagnostic.code.as_deref() == Some("markdown.semantic-value-domain")
+        }),
+        "diagnostics: {:?}",
+        parsed.document.diagnostics
+    );
+    let outline = build_outline_with_detail(
+        &ResolvedContent {
+            label: "tool".to_owned(),
+            address: None,
+            document: Some(parsed.document),
+            tldr: None,
+        },
+        OutlineDetail::Entries,
+    )
+    .expect("incomplete outline remains available");
+    assert!(!outline.semantics_complete);
+}

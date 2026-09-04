@@ -248,7 +248,7 @@ pub enum OutlineNode {
         document_targets: Vec<EntryDocumentTarget>,
         /// Optional finite or cross-document value space.
         #[serde(skip_serializing_if = "Option::is_none")]
-        value_domain: Option<EntryValueDomain>,
+        value_domain: Option<Box<EntryValueDomain>>,
         /// Recursive semantic entry coverage owned by this entry.
         #[serde(skip_serializing_if = "Option::is_none")]
         entry_summary: Option<EntrySummary>,

@@ -9,7 +9,8 @@ use std::collections::BTreeMap;
 
 use mant_ir::{
     Block, DefinitionCase, DefinitionIdentity, DefinitionItem, DefinitionRole, Diagnostic,
-    DiagnosticLevel, Inline, LinkTarget, ListItem, ListKind, SourceSpan,
+    DiagnosticLevel, EntryKind, Inline, LinkTarget, ListItem, ListKind, SemanticDocumentReference,
+    SourceSpan, ValueDomain,
 };
 use pulldown_cmark::{Event, Parser, Tag, TagEnd};
 
@@ -24,6 +25,18 @@ pub(super) struct EntryDeclaration {
     pub(super) source: SourceSpan,
 }
 
+#[derive(Debug, Clone, Default)]
+pub(super) struct SemanticDeclarations {
+    pub(super) entries: BTreeMap<u32, EntryDeclaration>,
+    pub(super) domains: BTreeMap<u32, DomainDeclaration>,
+}
+
+#[derive(Debug, Clone)]
+pub(super) struct DomainDeclaration {
+    value: ValueDomain,
+    pub(super) source: SourceSpan,
+}
+
 #[derive(Debug, Clone, Copy, Default)]
 enum AttachedValuePolicy {
     #[default]
@@ -31,13 +44,13 @@ enum AttachedValuePolicy {
     Fixed,
 }
 
-/// Remove invisible semantic-entry directives while retaining source offsets.
-pub(super) fn extract_entry_directives(
+/// Remove invisible semantic directives while retaining source offsets.
+pub(super) fn extract_semantic_directives(
     source: &str,
     diagnostics: &mut Vec<Diagnostic>,
-) -> (Option<String>, BTreeMap<u32, EntryDeclaration>) {
+) -> (Option<String>, SemanticDeclarations) {
     let mut masked = source.as_bytes().to_vec();
-    let mut declarations = BTreeMap::new();
+    let mut declarations = SemanticDeclarations::default();
     let lines = source.split_inclusive('\n').collect::<Vec<_>>();
     let line_starts = lines
         .iter()
@@ -51,6 +64,38 @@ pub(super) fn extract_entry_directives(
         .into_offset_iter()
         .collect::<Vec<_>>();
 
+    collect_entry_declarations(
+        &events,
+        &lines,
+        &line_starts,
+        &mut masked,
+        &mut declarations,
+        diagnostics,
+    );
+    collect_domain_declarations(
+        &events,
+        &lines,
+        &line_starts,
+        &mut masked,
+        &mut declarations,
+        diagnostics,
+    );
+
+    let masked = (!declarations.entries.is_empty()
+        || !declarations.domains.is_empty()
+        || masked.as_slice() != source.as_bytes())
+    .then(|| String::from_utf8(masked).expect("masking ASCII preserves UTF-8"));
+    (masked, declarations)
+}
+
+fn collect_entry_declarations(
+    events: &[(Event<'_>, std::ops::Range<usize>)],
+    lines: &[&str],
+    line_starts: &[usize],
+    masked: &mut [u8],
+    declarations: &mut SemanticDeclarations,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
     for (event_index, window) in events.windows(3).enumerate() {
         let [
             (Event::Start(Tag::HtmlBlock), _),
@@ -63,7 +108,7 @@ pub(super) fn extract_entry_directives(
         if !raw.trim().starts_with("<!-- mant:entries") {
             continue;
         }
-        let index = source_line_index(&line_starts, range.start);
+        let index = source_line_index(line_starts, range.start);
         let line = lines[index];
         let without_newline = line.trim_end_matches(['\r', '\n']);
         let line_number = u32::try_from(index + 1).unwrap_or(u32::MAX);
@@ -71,7 +116,7 @@ pub(super) fn extract_entry_directives(
             without_newline,
             line_starts[index],
             line_number,
-            &mut masked,
+            masked,
             diagnostics,
         ) else {
             continue;
@@ -87,9 +132,13 @@ pub(super) fn extract_entry_directives(
             );
             continue;
         };
-        let target_line = u32::try_from(source_line_index(&line_starts, target_range.start) + 1)
+        let target_line = u32::try_from(source_line_index(line_starts, target_range.start) + 1)
             .unwrap_or(u32::MAX);
-        if declarations.insert(target_line, declaration).is_some() {
+        if declarations
+            .entries
+            .insert(target_line, declaration)
+            .is_some()
+        {
             semantic_diagnostic(
                 diagnostics,
                 source_span,
@@ -97,10 +146,68 @@ pub(super) fn extract_entry_directives(
             );
         }
     }
+}
 
-    let masked = (!declarations.is_empty() || masked.as_slice() != source.as_bytes())
-        .then(|| String::from_utf8(masked).expect("masking ASCII preserves UTF-8"));
-    (masked, declarations)
+fn collect_domain_declarations(
+    events: &[(Event<'_>, std::ops::Range<usize>)],
+    lines: &[&str],
+    line_starts: &[usize],
+    masked: &mut [u8],
+    declarations: &mut SemanticDeclarations,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    let mut item_lines = Vec::new();
+    for (event, range) in events {
+        match event {
+            Event::Start(Tag::Item) => {
+                item_lines.push(
+                    u32::try_from(source_line_index(line_starts, range.start) + 1)
+                        .unwrap_or(u32::MAX),
+                );
+            }
+            Event::End(TagEnd::Item) => {
+                item_lines.pop();
+            }
+            Event::Html(raw) if raw.trim().starts_with("<!-- mant:domain") => {
+                let index = source_line_index(line_starts, range.start);
+                let line = lines[index].trim_end_matches(['\r', '\n']);
+                let line_number = u32::try_from(index + 1).unwrap_or(u32::MAX);
+                let Some(item_line) = item_lines.last().copied() else {
+                    let source_span = directive_source(line, line_starts[index], line_number);
+                    mask_directive(line, line_starts[index], masked);
+                    domain_diagnostic(
+                        diagnostics,
+                        source_span,
+                        "semantic value-domain directive must be inside a list item".to_owned(),
+                    );
+                    continue;
+                };
+                let Some(declaration) = read_domain_declaration(
+                    line,
+                    line_starts[index],
+                    line_number,
+                    masked,
+                    diagnostics,
+                ) else {
+                    continue;
+                };
+                let source_span = declaration.source;
+                if declarations
+                    .domains
+                    .insert(item_line, declaration)
+                    .is_some()
+                {
+                    domain_diagnostic(
+                        diagnostics,
+                        source_span,
+                        "more than one semantic value-domain directive targets the same entry"
+                            .to_owned(),
+                    );
+                }
+            }
+            _ => {}
+        }
+    }
 }
 
 fn source_line_index(line_starts: &[usize], offset: usize) -> usize {
@@ -157,6 +264,160 @@ fn read_declaration(
             None
         }
     }
+}
+
+fn read_domain_declaration(
+    line: &str,
+    offset: usize,
+    line_number: u32,
+    masked: &mut [u8],
+    diagnostics: &mut Vec<Diagnostic>,
+) -> Option<DomainDeclaration> {
+    let source = directive_source(line, offset, line_number);
+    let Some(comment_end) = mask_directive(line, offset, masked) else {
+        domain_diagnostic(
+            diagnostics,
+            source,
+            "unterminated semantic value-domain directive".to_owned(),
+        );
+        return None;
+    };
+    let comment_start = line
+        .find("<!--")
+        .expect("a recognized directive starts with an HTML comment");
+    if !line[..comment_start].trim().is_empty() || !line[comment_end..].trim().is_empty() {
+        domain_diagnostic(
+            diagnostics,
+            source,
+            "semantic value-domain directive must be the only construct on its line".to_owned(),
+        );
+        return None;
+    }
+    match parse_domain_declaration(&line[comment_start..comment_end], source) {
+        Ok(declaration) => Some(declaration),
+        Err(message) => {
+            domain_diagnostic(diagnostics, source, message);
+            None
+        }
+    }
+}
+
+fn directive_source(line: &str, offset: usize, line_number: u32) -> SourceSpan {
+    let comment_start = line
+        .find("<!--")
+        .expect("a recognized directive starts with an HTML comment");
+    let comment_end = line[comment_start..]
+        .find("-->")
+        .map(|relative| comment_start + relative + 3);
+    SourceSpan {
+        byte_range: Some(mant_ir::TextRange::new(
+            mant_ir::TextSize::from_usize_saturating(offset + comment_start),
+            mant_ir::TextSize::from_usize_saturating(offset + comment_end.unwrap_or(line.len())),
+        )),
+        line: line_number,
+        column: u32::try_from(comment_start + 1).unwrap_or(u32::MAX),
+        end_line: Some(line_number),
+        end_column: comment_end.map(|end| u32::try_from(end + 1).unwrap_or(u32::MAX)),
+    }
+}
+
+fn mask_directive(line: &str, offset: usize, masked: &mut [u8]) -> Option<usize> {
+    let comment_start = line
+        .find("<!--")
+        .expect("a recognized directive starts with an HTML comment");
+    let comment_end = line[comment_start..]
+        .find("-->")
+        .map(|relative| comment_start + relative + 3);
+    masked[offset + comment_start..offset + comment_end.unwrap_or(line.len())].fill(b' ');
+    comment_end
+}
+
+fn parse_domain_declaration(value: &str, source: SourceSpan) -> Result<DomainDeclaration, String> {
+    let Some(fields) = value
+        .strip_prefix("<!--")
+        .and_then(|value| value.strip_suffix("-->"))
+        .map(str::trim)
+        .and_then(|value| value.strip_prefix("mant:domain"))
+    else {
+        return Err("malformed semantic value-domain directive".to_owned());
+    };
+    let mut entries = None;
+    let mut roles = None;
+    for field in fields.split_whitespace() {
+        let Some((key, value)) = field.split_once('=') else {
+            return Err(format!("invalid semantic value-domain field '{field}'"));
+        };
+        match key {
+            "entries" if entries.is_none() => entries = Some(parse_domain_reference(value)?),
+            "roles" if roles.is_none() => roles = Some(parse_domain_roles(value)?),
+            "entries" | "roles" => {
+                return Err(format!("duplicate semantic value-domain field '{key}'"));
+            }
+            _ => return Err(format!("unknown semantic value-domain field '{key}'")),
+        }
+    }
+    Ok(DomainDeclaration {
+        value: ValueDomain::EntrySet {
+            reference: entries
+                .ok_or_else(|| "semantic value-domain directive requires entries=...".to_owned())?,
+            entry_kinds: roles
+                .ok_or_else(|| "semantic value-domain directive requires roles=...".to_owned())?,
+        },
+        source,
+    })
+}
+
+fn parse_domain_reference(value: &str) -> Result<SemanticDocumentReference, String> {
+    if let Some(rest) = value.strip_prefix("manual/") {
+        let Some((manual_section, name)) = rest.split_once('/') else {
+            return Err("manual entry domains use manual/<section>/<name>".to_owned());
+        };
+        if manual_section.is_empty() || name.is_empty() || name.contains('/') {
+            return Err("manual entry domains use manual/<section>/<name>".to_owned());
+        }
+        return Ok(SemanticDocumentReference::Manual {
+            name: name.to_owned(),
+            manual_section: Some(manual_section.to_owned()),
+        });
+    }
+    let Some((name, fragment)) = super::inline::markdown_document_reference(value) else {
+        return Err(
+            "entry domains require a relative Markdown path or manual/<section>/<name>".to_owned(),
+        );
+    };
+    if fragment.is_some() {
+        return Err("entry domains must reference a complete document, not a fragment".to_owned());
+    }
+    Ok(SemanticDocumentReference::Document { name, fragment })
+}
+
+fn parse_domain_roles(value: &str) -> Result<Vec<EntryKind>, String> {
+    let mut roles = Vec::new();
+    for role in value.split(',') {
+        let role = match role {
+            "option" => EntryKind::Parameter {
+                parameter_kind: mant_ir::ParameterKind::Option,
+            },
+            "marker" => EntryKind::Parameter {
+                parameter_kind: mant_ir::ParameterKind::Marker,
+            },
+            "operand" => EntryKind::Parameter {
+                parameter_kind: mant_ir::ParameterKind::Operand,
+            },
+            "command" => EntryKind::Command,
+            "configuration-key" => EntryKind::ConfigurationKey,
+            "environment-variable" => EntryKind::EnvironmentVariable,
+            "variable" => EntryKind::Variable,
+            "value" => EntryKind::Value,
+            "term" => EntryKind::Term,
+            "" => return Err("semantic value-domain roles must not be empty".to_owned()),
+            _ => return Err(format!("unknown semantic value-domain role '{role}'")),
+        };
+        if !roles.contains(&role) {
+            roles.push(role);
+        }
+    }
+    Ok(roles)
 }
 
 fn parse_declaration(value: &str, source: SourceSpan) -> Result<EntryDeclaration, String> {
@@ -231,7 +492,7 @@ fn parse_declaration(value: &str, source: SourceSpan) -> Result<EntryDeclaration
 /// Convert unambiguous entry lists without changing mixed or prose lists.
 pub(super) fn normalize_entry_lists(
     blocks: &mut Vec<Block>,
-    declarations: &mut BTreeMap<u32, EntryDeclaration>,
+    declarations: &mut SemanticDeclarations,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     for block in blocks.iter_mut() {
@@ -257,7 +518,7 @@ pub(super) fn normalize_entry_lists(
         // list remains untouched. Plans retain only delimiter coordinates:
         // successful conversion can then move the original IR exactly once,
         // including potentially large nested description blocks.
-        let declaration = source.and_then(|source| declarations.remove(&source.line));
+        let declaration = source.and_then(|source| declarations.entries.remove(&source.line));
         let role = declaration.map_or(DefinitionRole::Option, |value| value.role);
         let case = declaration.map_or(DefinitionCase::Sensitive, |value| value.case);
         let attached = declaration.map_or(AttachedValuePolicy::Infer, |value| value.attached);
@@ -292,7 +553,15 @@ pub(super) fn normalize_entry_lists(
         let definitions = std::mem::take(items)
             .into_iter()
             .zip(signatures)
-            .map(|(item, signature)| entry_definition(item, signature, role, case))
+            .map(|(item, signature)| {
+                let value_domain = item
+                    .blocks
+                    .first()
+                    .and_then(block_source)
+                    .and_then(|source| declarations.domains.remove(&source.line))
+                    .map(|declaration| declaration.value);
+                entry_definition(item, signature, role, case, value_domain)
+            })
             .collect();
         *block = Block::DefinitionList {
             items: definitions,
@@ -305,7 +574,7 @@ pub(super) fn normalize_entry_lists(
 
 fn normalize_nested_blocks(
     block: &mut Block,
-    declarations: &mut BTreeMap<u32, EntryDeclaration>,
+    declarations: &mut SemanticDeclarations,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     match block {
@@ -402,6 +671,7 @@ impl EntryRejectionReason {
 
 pub(crate) fn is_semantic_entry_rejection_code(code: &str) -> bool {
     code == "markdown.semantic-entry-list"
+        || code == "markdown.semantic-value-domain"
         || EntryRejectionReason::ALL
             .iter()
             .any(|reason| reason.code() == code)
@@ -547,6 +817,7 @@ fn entry_definition(
     signature: EntrySignature,
     role: DefinitionRole,
     case: DefinitionCase,
+    value_domain: Option<ValueDomain>,
 ) -> DefinitionItem {
     let mut blocks = item.blocks.into_iter();
     let Some(Block::Paragraph {
@@ -574,7 +845,7 @@ fn entry_definition(
             role,
             case,
             names: signature.names,
-            value_domain: None,
+            value_domain,
         }),
         inline_term: false,
         terms: vec![terms],
@@ -921,9 +1192,22 @@ fn semantic_diagnostic(diagnostics: &mut Vec<Diagnostic>, source: SourceSpan, me
     });
 }
 
+fn domain_diagnostic(diagnostics: &mut Vec<Diagnostic>, source: SourceSpan, message: String) {
+    diagnostics.push(Diagnostic {
+        level: DiagnosticLevel::Warning,
+        code: Some("markdown.semantic-value-domain".to_owned()),
+        message,
+        source: Some(source),
+    });
+}
+
 #[cfg(test)]
 fn normalize_option_lists(blocks: &mut Vec<Block>) {
-    normalize_entry_lists(blocks, &mut BTreeMap::new(), &mut Vec::new());
+    normalize_entry_lists(
+        blocks,
+        &mut SemanticDeclarations::default(),
+        &mut Vec::new(),
+    );
 }
 
 fn is_alias_separator(value: &str) -> bool {

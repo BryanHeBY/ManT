@@ -17,7 +17,7 @@ pub use container::TldrDirectiveError;
 pub(crate) use entries::is_semantic_entry_rejection_code;
 
 use std::{
-    collections::{BTreeMap, HashMap, HashSet},
+    collections::{HashMap, HashSet},
     error::Error,
     fmt,
     ops::Range,
@@ -33,7 +33,7 @@ use pulldown_cmark::{Event, HeadingLevel, Options, Parser, Tag, TagEnd};
 use self::{
     blocks::parse_block,
     container::split_markdown,
-    entries::{extract_entry_directives, normalize_entry_lists},
+    entries::{extract_semantic_directives, normalize_entry_lists},
     inline::{inline_text, parse_inlines},
     layout::normalize_markdown_layout,
     source::MarkdownSource,
@@ -115,7 +115,7 @@ pub fn parse_markdown(
         .transpose()?;
     let mut entry_diagnostics = Vec::new();
     let (masked_document, declarations) =
-        extract_entry_directives(parts.document.as_ref(), &mut entry_diagnostics);
+        extract_semantic_directives(parts.document.as_ref(), &mut entry_diagnostics);
     let document_source = masked_document
         .as_deref()
         .unwrap_or_else(|| parts.document.as_ref());
@@ -182,13 +182,18 @@ fn sanitize_source(source_text: &str, diagnostics: &mut Vec<Diagnostic>) -> Opti
 #[cfg(test)]
 fn parse_document(source_text: &str, source_path: Option<String>) -> Document {
     let mut diagnostics = Vec::new();
-    parse_document_with_entries(source_text, source_path, BTreeMap::new(), &mut diagnostics)
+    parse_document_with_entries(
+        source_text,
+        source_path,
+        entries::SemanticDeclarations::default(),
+        &mut diagnostics,
+    )
 }
 
 fn parse_document_with_entries(
     source_text: &str,
     source_path: Option<String>,
-    mut declarations: BTreeMap<u32, entries::EntryDeclaration>,
+    mut declarations: entries::SemanticDeclarations,
     entry_diagnostics: &mut Vec<Diagnostic>,
 ) -> Document {
     let source = MarkdownSource::new(source_text);
@@ -223,11 +228,20 @@ fn parse_document_with_entries(
     normalize_markdown_layout(&source, &mut root_blocks, &mut sections);
     normalize_entry_lists(&mut root_blocks, &mut declarations, entry_diagnostics);
     normalize_section_entries(&mut sections, &mut declarations, entry_diagnostics);
-    for declaration in declarations.into_values() {
+    for declaration in declarations.entries.into_values() {
         entry_diagnostics.push(Diagnostic {
             level: DiagnosticLevel::Warning,
             code: Some("markdown.semantic-entry-list".to_owned()),
             message: "semantic-entry directive did not resolve to a Markdown bullet list"
+                .to_owned(),
+            source: Some(declaration.source),
+        });
+    }
+    for declaration in declarations.domains.into_values() {
+        entry_diagnostics.push(Diagnostic {
+            level: DiagnosticLevel::Warning,
+            code: Some("markdown.semantic-value-domain".to_owned()),
+            message: "semantic value-domain directive did not resolve to a semantic entry"
                 .to_owned(),
             source: Some(declaration.source),
         });
@@ -384,7 +398,7 @@ fn markdown_parser() -> ParserInfo {
 
 fn normalize_section_entries(
     sections: &mut [Section],
-    declarations: &mut BTreeMap<u32, entries::EntryDeclaration>,
+    declarations: &mut entries::SemanticDeclarations,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     for section in sections {
