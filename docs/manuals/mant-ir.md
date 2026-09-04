@@ -95,6 +95,11 @@ document. Their `id` is always the normalized internal identity. Optional
 `.Tg Mixed.Target`, `--option`, or a Markdown heading ID without admitting
 those spellings into the `NodeId` namespace. `DocumentIndex::fragment_target`
 maps a canonical ID or exact alias to one target and refuses ambiguous aliases.
+An anchor can also retain the source span of the paragraph, definition, list
+item, table cell, or standalone target that owns its destination. This
+`ownerSource` provenance is distinct from the inline's eventual placement and
+allows consumers to verify that zero-width navigation did not drift to a
+neighbouring structure during lowering.
 `LinkTarget::Document` and `Manual` connect logical catalog entries
 and are the only link kinds followed by bounded multi-document operations.
 `External` and `Email` are host actions: they never expand a documentation

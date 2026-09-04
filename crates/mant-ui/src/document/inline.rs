@@ -29,6 +29,7 @@ pub(super) fn inline_anchor_ids(nodes: &[Inline]) -> Vec<String> {
             Inline::Anchor {
                 id,
                 fragment_aliases,
+                ..
             } => {
                 ids.push(id.to_string());
                 ids.extend(fragment_aliases.iter().map(ToString::to_string));

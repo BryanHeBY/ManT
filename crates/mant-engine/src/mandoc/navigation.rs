@@ -50,6 +50,7 @@ pub(super) fn normalize_generated_anchors(
             if let Inline::Anchor {
                 id,
                 fragment_aliases,
+                ..
             } = inline
             {
                 let original = id.to_string();
@@ -342,10 +343,12 @@ fn resolve_inlines(
             Inline::Anchor {
                 id,
                 fragment_aliases,
+                owner_source,
             } if !fragment_aliases.is_empty() || explicit_targets.contains(id.as_str()) => {
                 resolved.push(Inline::Anchor {
                     id,
                     fragment_aliases,
+                    owner_source,
                 });
             }
             Inline::Anchor { .. } => {}

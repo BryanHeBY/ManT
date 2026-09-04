@@ -261,7 +261,8 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
             return;
         }
         if self.push_no_fill_lines(node) {
-            self.state.queue_targets(structural_targets);
+            self.state
+                .queue_targets(structural_targets, source_span(node));
             return;
         }
         self.state.flush_preformatted();
@@ -284,7 +285,8 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
         }
         if node.macro_name.as_deref() == Some("Pp") {
             self.state.flush_paragraph();
-            self.state.queue_targets(structural_targets);
+            self.state
+                .queue_targets(structural_targets, source_span(node));
             if !self.state.output.is_empty() {
                 self.state.output.push(Block::VerticalSpace {
                     lines: 1,
@@ -326,7 +328,8 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
                 spacing_enabled,
             }
             .push(node, table_embedding);
-            self.state.queue_targets(structural_targets);
+            self.state
+                .queue_targets(structural_targets, source_span(node));
             self.state.attach_pending_to_structural_output(output_start);
         }
         self.state.inherit_spacing(spacing_after_node(
@@ -1053,6 +1056,11 @@ fn append_to_last_inline_block(blocks: &mut [Block], tail: &[Inline]) -> bool {
     false
 }
 
+struct PendingTargetBatch {
+    targets: Vec<String>,
+    owner_source: Option<mant_ir::SourceSpan>,
+}
+
 struct BlockState {
     output: Vec<Block>,
     paragraph: InlineBuilder,
@@ -1062,7 +1070,7 @@ struct BlockState {
     pre_source: Option<mant_ir::SourceSpan>,
     preformatted_last_line: Option<u32>,
     preformatted_tight_boundary: bool,
-    pending_targets: Vec<String>,
+    pending_targets: Vec<PendingTargetBatch>,
     indent_columns: u16,
     spacing_enabled: bool,
 }
@@ -1152,11 +1160,25 @@ impl BlockState {
         self.paragraph.tighten_next_boundary();
     }
 
-    fn queue_targets(&mut self, targets: impl IntoIterator<Item = String>) {
-        for target in targets {
-            if !self.pending_targets.contains(&target) {
-                self.pending_targets.push(target);
-            }
+    fn queue_targets(
+        &mut self,
+        targets: impl IntoIterator<Item = String>,
+        owner_source: Option<mant_ir::SourceSpan>,
+    ) {
+        let targets = targets
+            .into_iter()
+            .filter(|target| {
+                !self
+                    .pending_targets
+                    .iter()
+                    .any(|batch| batch.targets.contains(target))
+            })
+            .collect::<Vec<_>>();
+        if !targets.is_empty() {
+            self.pending_targets.push(PendingTargetBatch {
+                targets,
+                owner_source,
+            });
         }
     }
 
@@ -1172,12 +1194,17 @@ impl BlockState {
             return;
         }
         let mut lowered = self.output.split_off(output_start.min(self.output.len()));
-        targets::attach_targets(
-            &mut lowered,
-            std::mem::take(&mut self.pending_targets),
-            layout(self.indent_columns),
-            None,
-        );
+        // Each source owner keeps its own provenance. Attach in reverse batch
+        // order because every call prepends, leaving the authored order in the
+        // final inline sequence.
+        for batch in std::mem::take(&mut self.pending_targets).into_iter().rev() {
+            targets::attach_targets(
+                &mut lowered,
+                batch.targets,
+                layout(self.indent_columns),
+                batch.owner_source,
+            );
+        }
         self.output.append(&mut lowered);
     }
 

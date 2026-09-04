@@ -557,6 +557,13 @@ pub enum Inline {
         /// Exact source fragments resolving to this normalized identity.
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         fragment_aliases: Vec<crate::FragmentAlias>,
+        /// Source location of the addressable owner receiving this target.
+        ///
+        /// For a standalone target this is the target request itself; when a
+        /// parser attaches the target to a paragraph, definition, list item,
+        /// or table cell, it is that owning construct's location.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        owner_source: Option<SourceSpan>,
     },
     /// Hard line break that renderers must preserve.
     LineBreak,
@@ -569,6 +576,17 @@ impl Inline {
         Self::Anchor {
             id: id.into(),
             fragment_aliases: Vec::new(),
+            owner_source: None,
+        }
+    }
+
+    /// Construct a normalized local anchor at its addressable source owner.
+    #[must_use]
+    pub fn anchor_at(id: impl Into<NodeId>, owner_source: Option<SourceSpan>) -> Self {
+        Self::Anchor {
+            id: id.into(),
+            fragment_aliases: Vec::new(),
+            owner_source,
         }
     }
 
@@ -581,6 +599,7 @@ impl Inline {
         Self::Anchor {
             id: id.into(),
             fragment_aliases,
+            owner_source: None,
         }
     }
 }

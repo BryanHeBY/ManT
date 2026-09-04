@@ -20,7 +20,7 @@ use mant_ir::Document;
 use serde::Serialize;
 use serde_json::{Value, json};
 
-const PROFILE_SCHEMA: &str = "mant.roff-target-profile/v3";
+const PROFILE_SCHEMA: &str = "mant.roff-target-profile/v4";
 
 #[path = "roff_target_profile/matching.rs"]
 mod matching;
@@ -83,6 +83,8 @@ struct ObservedTarget {
     container: &'static str,
     section_ordinal: usize,
     section_source_line: u32,
+    owner_source_line: u32,
+    owner_path: String,
     ir_path: String,
 }
 
@@ -417,8 +419,9 @@ mod tests {
 
     use super::{
         ExpectedTarget, ExplicitTarget, LogicalOwner, ObservedRole, ObservedTarget,
-        OwnerDisposition, TargetRole, bind_explicit_targets, classify_target_owner,
-        generated_identity_matches, logical_owner_path_for, match_targets, native_target_profile,
+        ObservedTargets, OwnerDisposition, TargetRole, bind_explicit_targets,
+        classify_target_owner, generated_identity_matches, logical_owner_path_for, match_targets,
+        native_target_profile, unexpected_targets,
     };
 
     fn node(
@@ -643,6 +646,8 @@ mod tests {
             container,
             section_ordinal: 1,
             section_source_line: 1,
+            owner_source_line: 11,
+            owner_path: format!("section[0]/{container}/owner"),
             ir_path: format!("section[0]/{container}/{id}"),
         }
     }
@@ -694,6 +699,30 @@ mod tests {
         let (missing, matched, _) = match_targets(&expected, &observed);
         assert_eq!(matched.len(), 1);
         assert_eq!(missing.len(), 1);
+    }
+
+    #[test]
+    fn target_on_a_same_kind_sibling_is_both_missing_and_unexpected() {
+        let target = expected("same", true, TargetRole::Anchor, "item");
+        let mut misplaced = observed("same", &["same"], ObservedRole::Anchor, "list-item");
+        misplaced.owner_source_line = 22;
+        misplaced.owner_path = "section[0]/block[0]/item[1]".to_owned();
+        misplaced.ir_path = format!("{}/block[0]/inline[0]", misplaced.owner_path);
+        let observed = ObservedTargets {
+            occurrences: vec![misplaced.clone()],
+            identities: ["same".to_owned()].into_iter().collect(),
+            fragments: ["same".to_owned()].into_iter().collect(),
+            anchors: ["same".to_owned()].into_iter().collect(),
+            ..ObservedTargets::default()
+        };
+
+        let (missing, matched, used) = match_targets(&[target], &observed.occurrences);
+        let unexpected = unexpected_targets(&observed, &used);
+
+        assert_eq!(missing.len(), 1);
+        assert!(matched.is_empty());
+        assert!(!unexpected.is_empty());
+        assert!(unexpected.iter().any(|finding| finding.contains("item[1]")));
     }
 
     #[test]

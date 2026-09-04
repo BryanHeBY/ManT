@@ -18,6 +18,9 @@ that crate was not published for that change.
   source-authored fragment aliases on document roots, sections, and inline
   anchors. `DocumentIndex` resolves either spelling without admitting
   noncanonical identities or guessing between ambiguous fragments.
+- Retain an inline anchor's addressable-owner source span independently from
+  its nested IR placement, allowing target-conservation tools to distinguish
+  neighbouring paragraphs, definitions, list items, and table cells.
 
 ### mant-protocol 0.11.0
 
@@ -75,6 +78,10 @@ that crate was not published for that change.
   every logical AST owner to a compatible IR role, section, and container;
   same-named unrelated identities and arbitrary hexadecimal suffixes no longer
   produce false-clean audit results.
+- Upgrade target conservation to a position-aware v4 contract that matches
+  each obligation to the source line of its concrete addressable owner and
+  reports targets moved onto same-kind sibling structures as both missing and
+  unexpected.
 - Add a separate semantic-entry precision audit for ordinal definitions,
   empty entries, and invalid value-domain children, while retaining aliasless
   generic and note-section entries as reviewable census signals rather than

@@ -41,10 +41,11 @@ ROOT = Path(__file__).resolve().parents[1]
 FIXTURE_ROOT = ROOT / "tests/fixtures/roff/real"
 DEFAULT_PROFILER = ROOT / "target/debug/examples/roff_target_profile"
 DEFAULT_AUDIT_DB = ROOT / "tests/fixtures/roff/TARGET_AUDIT.csv"
-PROFILE_SCHEMA = "mant.roff-target-profile/v3"
+PROFILE_SCHEMA = "mant.roff-target-profile/v4"
 SUPPORTED_PROFILE_SCHEMAS = {
     "mant.roff-target-profile/v1",
     "mant.roff-target-profile/v2",
+    "mant.roff-target-profile/v3",
     PROFILE_SCHEMA,
 }
 DATABASE_FIELDS = [
@@ -237,6 +238,9 @@ def valid_observed_target(value: object) -> bool:
         and value["sectionOrdinal"] >= 0
         and isinstance(value.get("sectionSourceLine"), int)
         and value["sectionSourceLine"] >= 0
+        and isinstance(value.get("ownerSourceLine"), int)
+        and value["ownerSourceLine"] >= 0
+        and isinstance(value.get("ownerPath"), str)
         and isinstance(value.get("irPath"), str)
     )
 

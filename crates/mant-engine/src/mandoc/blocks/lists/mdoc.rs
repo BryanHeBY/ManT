@@ -123,7 +123,7 @@ fn lower_mdoc_definition_list(
                 .leading_targets
                 .into_iter()
                 .chain(targets::item_targets(item.node));
-            targets::attach_definition_targets(&mut lowered, targets);
+            targets::attach_definition_targets(&mut lowered, targets, source_span(item.node));
             lowered
         })
         .collect::<Vec<_>>();
@@ -170,11 +170,15 @@ fn mdoc_list_item_from_definition(
                 .saturating_sub(MAN_DEFINITION_BODY_INDENT);
         }
     }
+    let owner_source = terms
+        .iter()
+        .find_map(|term| targets::inline_anchor_owner_source(term))
+        .or(source);
     let mut anchors = Vec::new();
     for term in &terms {
         targets::inline_anchor_ids(term, &mut anchors);
     }
-    targets::attach_targets(&mut description, anchors, layout(list_indent), source);
+    targets::attach_targets(&mut description, anchors, layout(list_indent), owner_source);
     ListItem {
         blocks: description,
     }

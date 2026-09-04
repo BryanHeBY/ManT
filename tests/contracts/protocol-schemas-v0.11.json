@@ -1596,6 +1596,17 @@
                 "description": "Document-local destination identity.",
                 "$ref": "#/$defs/NodeId"
               },
+              "ownerSource": {
+                "description": "Source location of the addressable owner receiving this target.\n\nFor a standalone target this is the target request itself; when a\nparser attaches the target to a paragraph, definition, list item,\nor table cell, it is that owning construct's location.",
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/SourceSpan"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
               "type": {
                 "type": "string",
                 "const": "anchor"
@@ -4317,6 +4328,17 @@
                 "description": "Document-local destination identity.",
                 "$ref": "#/$defs/NodeId"
               },
+              "ownerSource": {
+                "description": "Source location of the addressable owner receiving this target.\n\nFor a standalone target this is the target request itself; when a\nparser attaches the target to a paragraph, definition, list item,\nor table cell, it is that owning construct's location.",
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/SourceSpan"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
               "type": {
                 "type": "string",
                 "const": "anchor"
@@ -6634,6 +6656,17 @@
               "id": {
                 "description": "Document-local destination identity.",
                 "$ref": "#/$defs/NodeId"
+              },
+              "ownerSource": {
+                "description": "Source location of the addressable owner receiving this target.\n\nFor a standalone target this is the target request itself; when a\nparser attaches the target to a paragraph, definition, list item,\nor table cell, it is that owning construct's location.",
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/SourceSpan"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
               },
               "type": {
                 "type": "string",

@@ -513,7 +513,7 @@ fn definition_item(
     }
     let mut term = term_builder.finish();
     if let Some(id) = definition_head_anchor(node) {
-        term.insert(0, Inline::anchor(id));
+        term.insert(0, Inline::anchor_at(id, source_span(node)));
     }
     let terms = split_definition_terms(term);
     DefinitionItem {

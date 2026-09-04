@@ -452,8 +452,11 @@ oracle, classifies every deep-link owner as retained, deliberately excluded,
 or unclassified, and compares each retained owner occurrence with a compatible
 canonical IR identity or exact authored fragment alias. The comparison keeps
 AST child paths, source lines, owner macro/kind, section, required IR role, and
-container class separate, so a same-named section, entry, or unrelated anchor
-cannot satisfy a missing owner:
+container class separate. Lowered anchors also retain their addressable owner
+source span, and the profiler records their concrete block/item/definition/cell
+path. A target moved onto a neighbouring owner therefore cannot satisfy the
+original obligation merely because its name, role, section, and broad container
+still agree:
 
 ```sh
 cargo build --package mant-engine --example roff_target_profile

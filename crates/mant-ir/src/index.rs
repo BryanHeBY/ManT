@@ -187,6 +187,7 @@ impl<'ir> Visit<'ir> for IndexBuilder {
         if let Inline::Anchor {
             id,
             fragment_aliases,
+            ..
         } = inline
         {
             self.register(id, IndexedRole::Anchor);

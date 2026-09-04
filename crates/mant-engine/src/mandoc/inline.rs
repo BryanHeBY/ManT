@@ -321,7 +321,7 @@ pub(super) fn append_inline_node(
             // block lowering path conserves structural Pp targets, but this
             // inline path must do so before replacing the node with a break.
             if let Some(target) = super::targets::raw_target(node) {
-                builder.append(vec![Inline::anchor(target)]);
+                builder.append(vec![Inline::anchor_at(target, super::source_span(node))]);
             }
             builder.hard_break();
         }
@@ -381,7 +381,7 @@ fn lower_inline_node(
 ) -> Vec<Inline> {
     if node.macro_name.as_deref() == Some("Tg") {
         return super::targets::raw_target(node)
-            .map(|id| vec![Inline::anchor(id)])
+            .map(|id| vec![Inline::anchor_at(id, super::source_span(node))])
             .unwrap_or_default();
     }
     if node.flags.no_print || node.kind == NodeKind::Comment {
@@ -711,7 +711,7 @@ fn enclosure_marks(name: &str) -> Option<(&'static str, &'static str)> {
 /// Explicit `.Tg` requests retain their authored argument; automatically
 /// discovered tags fall back to libmandoc's first printable source token.
 fn navigation_anchor(node: &Node) -> Option<Inline> {
-    super::targets::raw_target(node).map(Inline::anchor)
+    super::targets::raw_target(node).map(|id| Inline::anchor_at(id, super::source_span(node)))
 }
 
 fn inline_children(node: &Node) -> &[Node] {

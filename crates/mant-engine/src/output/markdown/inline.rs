@@ -230,6 +230,7 @@ fn render_inline_raw(nodes: &[Inline], options: MarkdownOptions) -> String {
             Inline::Anchor {
                 id,
                 fragment_aliases,
+                ..
             } if options.preserve_anchors => {
                 pieces.push(InlinePiece::plain(html_anchors(id, fragment_aliases)));
             }

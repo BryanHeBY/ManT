@@ -34,6 +34,28 @@ fn anchor_ids(document: &mant_ir::Document) -> Vec<String> {
     collector.0
 }
 
+fn anchor_owner_lines(document: &mant_ir::Document) -> Vec<(String, u32)> {
+    struct AnchorCollector(Vec<(String, u32)>);
+
+    impl<'ir> Visit<'ir> for AnchorCollector {
+        fn visit_inline(&mut self, inline: &'ir Inline) {
+            if let Inline::Anchor {
+                id,
+                owner_source: Some(source),
+                ..
+            } = inline
+            {
+                self.0.push((id.to_string(), source.line));
+            }
+            visit::walk_inline(self, inline);
+        }
+    }
+
+    let mut collector = AnchorCollector(Vec::new());
+    collector.visit_document(document);
+    collector.0
+}
+
 fn visible_document_text(document: &mant_ir::Document) -> String {
     struct TextCollector(String);
 
@@ -272,6 +294,11 @@ intro\n.Pp\n.Fn alpha\n",
     )
     .expect("lower an automatic function target moved to Pp");
     assert!(anchor_ids(&paragraph).iter().any(|id| id == "alpha"));
+    assert!(
+        anchor_owner_lines(&paragraph)
+            .iter()
+            .any(|(id, line)| id == "alpha" && *line == 7)
+    );
     assert!(visible_document_text(&paragraph).contains("alpha"));
 
     for (name, display) in [
@@ -316,6 +343,22 @@ fn preserves_targets_moved_to_list_items_and_containers() {
     .expect("lower a target moved to a list container");
     assert_eq!(anchor_ids(&container), ["list-target"]);
     assert_eq!(visible_document_text(&container).trim(), "hello");
+}
+
+#[test]
+fn same_named_list_target_owners_retain_their_individual_source_positions() {
+    let document = parse_manual_bytes(
+        std::path::Path::new("list-target-owner-positions.7"),
+        b".Dd September 4, 2026\n.Dt LIST-TARGET-OWNER-POSITIONS 7\n.Os\n.Sh DESCRIPTION\n\
+.Bl -bullet\n.Tg same\n.It\nfirst\n.Tg same\n.It\nsecond\n.El\n",
+    )
+    .expect("lower repeated targets onto separate list items");
+
+    let owners = anchor_owner_lines(&document)
+        .into_iter()
+        .filter(|(id, _)| id == "same" || id.starts_with("same-"))
+        .collect::<Vec<_>>();
+    assert_eq!(owners, [("same".to_owned(), 7), ("same-2".to_owned(), 10)]);
 }
 
 #[test]

@@ -43,6 +43,7 @@ pub(super) fn match_targets(
                 let candidate = &observed[*index];
                 role_matches(target.expected_role, candidate.role)
                     && container_matches(target.expected_container, candidate.container)
+                    && owner_matches(target, candidate)
                     && !used.contains(&format!("{index}:identity"))
                     && !used.contains(&format!("{index}:fragment:{fragment_index}"))
             })
@@ -57,6 +58,7 @@ pub(super) fn match_targets(
                     && candidate.identity == target.id
                     && role_matches(target.expected_role, candidate.role)
                     && container_matches(target.expected_container, candidate.container)
+                    && owner_matches(target, candidate)
                     && !used.contains(&format!("{index}:identity"))
             });
             if let Some((index, candidate)) = candidate {
@@ -85,6 +87,7 @@ pub(super) fn match_targets(
                 let identity_claim = format!("{index}:identity");
                 let fragment_prefix = format!("{index}:fragment:");
                 (container_matches(target.expected_container, candidate.container)
+                    && owner_matches(target, candidate)
                     && !used.contains(&identity_claim)
                     && !used.iter().any(|claim| claim.starts_with(&fragment_prefix))
                     && generated_identity_matches(&target.normalized_id, &candidate.identity))
@@ -111,6 +114,10 @@ pub(super) fn match_targets(
         }
     }
     (missing, confirmed, used)
+}
+
+fn owner_matches(expected: &ExpectedTarget, observed: &ObservedTarget) -> bool {
+    expected.owner_source_line == observed.owner_source_line
 }
 
 fn matched_target(

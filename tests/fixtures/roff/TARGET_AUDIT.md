@@ -14,7 +14,7 @@ can manufacture false losses on aggregate pages. Validated libmandoc
 deep-link owners form the native evidence. Canonical section and entry IDs,
 inline anchors, and exact source fragment aliases form the observed set.
 
-Profile schema `mant.roff-target-profile/v3` classifies every deep-link owner
+Profile schema `mant.roff-target-profile/v4` classifies every deep-link owner
 as `retained`, `excluded`, or `unclassified`, with a stable reason. Known man
 definitions, mdoc lists/displays/functions, and inline semantic macros are
 retained obligations. An owner macro without a policy is not silently omitted:
@@ -30,10 +30,15 @@ ManT's deterministic canonical numeric collision suffix (`base`, `base-2`,
 `base-3`, and so on). Each obligation records its AST path, source line, owner
 macro and kind, section source line, expected IR role, and container class.
 Observed section identities, entry identities, anchors, and fragment aliases
-remain distinct occurrences and are consumed at most once. Consequently an
-unrelated same-named section/entry, one retained occurrence standing in for two
-owners, or an anchor in an incompatible structural container cannot manufacture
-a clean result. The profile reports true unexpected targets, incompatible
+remain distinct occurrences and are consumed at most once. Anchors additionally
+carry their addressable owner's source span, while the profiler records the
+exact block, list-item, definition, and table-cell path where each occurrence
+landed. A match requires the native and IR owner source lines to agree, so a
+target moved to a same-kind sibling in the same section produces both a missing
+obligation and an unexpected occurrence. Consequently an unrelated same-named
+section/entry, one retained occurrence standing in for two owners, or an anchor
+in an incompatible or neighbouring structural owner cannot manufacture a clean
+result. The profile reports true unexpected targets, incompatible
 identity-role collisions, invalid or empty identities/fragments, duplicate
 identities, and dangling links separately. Semantic discovery can create
 additional entry IDs with no one-to-one native tag; those typed entry

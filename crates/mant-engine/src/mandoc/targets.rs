@@ -168,10 +168,13 @@ pub(super) fn attach_targets(
     if targets.is_empty() {
         return;
     }
-    if prepend_to_first_descendant(blocks, &targets) {
+    if prepend_to_first_descendant(blocks, &targets, source) {
         return;
     }
-    let children = targets.drain(..).map(Inline::anchor).collect();
+    let children = targets
+        .drain(..)
+        .map(|target| Inline::anchor_at(target, source))
+        .collect();
     let insertion = blocks
         .iter()
         .position(|block| !matches!(block, Block::VerticalSpace { .. }))
@@ -194,6 +197,7 @@ pub(super) fn attach_targets(
 pub(super) fn attach_definition_targets(
     item: &mut DefinitionItem,
     targets: impl IntoIterator<Item = String>,
+    source: Option<SourceSpan>,
 ) {
     let mut seen = HashSet::new();
     let targets = targets
@@ -211,11 +215,15 @@ pub(super) fn attach_definition_targets(
         return;
     }
     if let Some(term) = item.terms.first_mut() {
-        prepend_inlines(term, &targets);
-    } else if prepend_to_first_descendant(&mut item.description, &targets) {
+        prepend_inlines(term, &targets, source);
+    } else if prepend_to_first_descendant(&mut item.description, &targets, source) {
     } else {
-        item.terms
-            .push(targets.into_iter().map(Inline::anchor).collect());
+        item.terms.push(
+            targets
+                .into_iter()
+                .map(|target| Inline::anchor_at(target, source))
+                .collect(),
+        );
         item.inline_term = true;
     }
 }
@@ -245,10 +253,18 @@ pub(super) fn append_definition_targets(
     if !item.description.is_empty() {
         append_targets(&mut item.description, targets, layout, source);
     } else if let Some(term) = item.terms.last_mut() {
-        term.extend(targets.into_iter().map(Inline::anchor));
+        term.extend(
+            targets
+                .into_iter()
+                .map(|target| Inline::anchor_at(target, source)),
+        );
     } else {
-        item.terms
-            .push(targets.into_iter().map(Inline::anchor).collect());
+        item.terms.push(
+            targets
+                .into_iter()
+                .map(|target| Inline::anchor_at(target, source))
+                .collect(),
+        );
         item.inline_term = true;
     }
 }
@@ -268,11 +284,14 @@ pub(super) fn append_targets(
     if targets.is_empty() {
         return;
     }
-    if append_to_last_descendant(blocks, &targets) {
+    if append_to_last_descendant(blocks, &targets, source) {
         return;
     }
     blocks.push(Block::Paragraph {
-        children: targets.into_iter().map(Inline::anchor).collect(),
+        children: targets
+            .into_iter()
+            .map(|target| Inline::anchor_at(target, source))
+            .collect(),
         layout,
         source,
     });
@@ -291,19 +310,34 @@ pub(super) fn inline_anchor_ids(nodes: &[Inline], output: &mut Vec<String>) {
     }
 }
 
-fn prepend_to_first_descendant(blocks: &mut [Block], targets: &[String]) -> bool {
+/// Return the first structural owner location carried by an inline anchor.
+pub(super) fn inline_anchor_owner_source(nodes: &[Inline]) -> Option<SourceSpan> {
+    nodes.iter().find_map(|node| match node {
+        Inline::Anchor { owner_source, .. } => *owner_source,
+        Inline::Strong { children }
+        | Inline::Emphasis { children }
+        | Inline::Link { children, .. } => inline_anchor_owner_source(children),
+        Inline::Text { .. } | Inline::Code { .. } | Inline::LineBreak => None,
+    })
+}
+
+fn prepend_to_first_descendant(
+    blocks: &mut [Block],
+    targets: &[String],
+    source: Option<SourceSpan>,
+) -> bool {
     for block in blocks {
         match block {
             Block::VerticalSpace { .. } => {}
             Block::Paragraph { children, .. } | Block::Preformatted { children, .. } => {
-                prepend_inlines(children, targets);
+                prepend_inlines(children, targets, source);
                 return true;
             }
             Block::List { items, .. } => {
                 let Some(item) = items.first_mut() else {
                     return false;
                 };
-                if prepend_to_first_descendant(&mut item.blocks, targets) {
+                if prepend_to_first_descendant(&mut item.blocks, targets, source) {
                     return true;
                 }
                 return false;
@@ -313,10 +347,10 @@ fn prepend_to_first_descendant(blocks: &mut [Block], targets: &[String]) -> bool
                     return false;
                 };
                 if let Some(term) = item.terms.first_mut() {
-                    prepend_inlines(term, targets);
+                    prepend_inlines(term, targets, source);
                     return true;
                 }
-                if prepend_to_first_descendant(&mut item.description, targets) {
+                if prepend_to_first_descendant(&mut item.description, targets, source) {
                     return true;
                 }
                 return false;
@@ -325,7 +359,7 @@ fn prepend_to_first_descendant(blocks: &mut [Block], targets: &[String]) -> bool
                 let Some(cell) = rows.first_mut().and_then(|row| row.cells.first_mut()) else {
                     return false;
                 };
-                if prepend_to_first_descendant(&mut cell.blocks, targets) {
+                if prepend_to_first_descendant(&mut cell.blocks, targets, source) {
                     return true;
                 }
                 return false;
@@ -338,29 +372,43 @@ fn prepend_to_first_descendant(blocks: &mut [Block], targets: &[String]) -> bool
     false
 }
 
-fn append_to_last_descendant(blocks: &mut [Block], targets: &[String]) -> bool {
+fn append_to_last_descendant(
+    blocks: &mut [Block],
+    targets: &[String],
+    source: Option<SourceSpan>,
+) -> bool {
     for block in blocks.iter_mut().rev() {
         match block {
             Block::VerticalSpace { .. } => {}
             Block::Paragraph { children, .. } | Block::Preformatted { children, .. } => {
-                children.extend(targets.iter().cloned().map(Inline::anchor));
+                children.extend(
+                    targets
+                        .iter()
+                        .cloned()
+                        .map(|target| Inline::anchor_at(target, source)),
+                );
                 return true;
             }
             Block::List { items, .. } => {
                 let Some(item) = items.last_mut() else {
                     return false;
                 };
-                return append_to_last_descendant(&mut item.blocks, targets);
+                return append_to_last_descendant(&mut item.blocks, targets, source);
             }
             Block::DefinitionList { items, .. } => {
                 let Some(item) = items.last_mut() else {
                     return false;
                 };
-                if append_to_last_descendant(&mut item.description, targets) {
+                if append_to_last_descendant(&mut item.description, targets, source) {
                     return true;
                 }
                 if let Some(term) = item.terms.last_mut() {
-                    term.extend(targets.iter().cloned().map(Inline::anchor));
+                    term.extend(
+                        targets
+                            .iter()
+                            .cloned()
+                            .map(|target| Inline::anchor_at(target, source)),
+                    );
                     return true;
                 }
                 return false;
@@ -369,7 +417,7 @@ fn append_to_last_descendant(blocks: &mut [Block], targets: &[String]) -> bool {
                 let Some(cell) = rows.last_mut().and_then(|row| row.cells.last_mut()) else {
                     return false;
                 };
-                return append_to_last_descendant(&mut cell.blocks, targets);
+                return append_to_last_descendant(&mut cell.blocks, targets, source);
             }
             Block::Equation { .. } | Block::ThematicBreak { .. } | Block::Unsupported { .. } => {
                 return false;
@@ -379,8 +427,14 @@ fn append_to_last_descendant(blocks: &mut [Block], targets: &[String]) -> bool {
     false
 }
 
-fn prepend_inlines(children: &mut Vec<Inline>, targets: &[String]) {
-    children.splice(0..0, targets.iter().cloned().map(Inline::anchor));
+fn prepend_inlines(children: &mut Vec<Inline>, targets: &[String], source: Option<SourceSpan>) {
+    children.splice(
+        0..0,
+        targets
+            .iter()
+            .cloned()
+            .map(|target| Inline::anchor_at(target, source)),
+    );
 }
 
 fn contains_anchor(blocks: &[Block], target: &str) -> bool {

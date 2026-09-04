@@ -99,6 +99,10 @@ exact `FragmentAlias` values contributed by source syntax such as mdoc `.Tg`
 or a Markdown heading ID. Those aliases preserve external deep links without
 weakening the normalized-ID invariant. `DocumentIndex::fragment_target`
 resolves either form only when it identifies one canonical target.
+Inline anchors may additionally retain the `SourceSpan` of their addressable
+owner. That provenance identifies the paragraph, definition, item, or cell to
+which a zero-width destination belongs even when the anchor is physically
+nested inside a descendant inline sequence.
 
 ## Stability boundary
 
