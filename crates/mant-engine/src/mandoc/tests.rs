@@ -2239,6 +2239,31 @@ fn preserves_explicit_mdoc_function_and_enclosure_structure() {
 }
 
 #[test]
+fn function_block_anchor_keeps_the_fo_head_as_its_owner() {
+    let source = b".Dd September 4, 2026\n\
+.Dt FUNCTION-OWNER 3\n\
+.Os\n\
+.Sh DESCRIPTION\n\
+.Bl -tag -width Ds\n\
+.It Ev CALLBACK\n\
+The callback is\n\
+.Fo callback\n\
+.Fa \"int value\"\n\
+.Fc\n\
+.El\n";
+    let document = parse_manual_bytes(std::path::Path::new("function-owner.3"), source)
+        .expect("lower function target nested in a definition");
+
+    let owners = anchor_owner_lines(&document);
+    assert!(
+        owners
+            .iter()
+            .any(|(id, line)| id == "callback-2" && *line == 8),
+        "the function destination must retain the Fo head line rather than the surrounding definition: {owners:?}"
+    );
+}
+
+#[test]
 fn preserves_the_complete_libbsd_library_identity() {
     let document = parse_manual_bytes(
         std::path::Path::new("libbsd.3bsd"),

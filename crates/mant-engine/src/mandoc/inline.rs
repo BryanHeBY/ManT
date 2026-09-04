@@ -618,8 +618,11 @@ fn lower_function_declaration(
 
     // `Fo` stores an explicit `.Tg` on its head wrapper, while the visible
     // function declaration is lowered from the complete block.
-    let target = super::targets::part_target(node, NodeKind::Head);
-    let mut declaration = target.into_iter().map(Inline::anchor).collect::<Vec<_>>();
+    let target = super::targets::part_target_with_source(node, NodeKind::Head);
+    let mut declaration = target
+        .into_iter()
+        .map(|(target, source)| Inline::anchor_at(target, source))
+        .collect::<Vec<_>>();
     declaration.push(Inline::Strong { children: head });
     declaration.push(Inline::Text { value: "(".into() });
     let mut has_argument = false;
