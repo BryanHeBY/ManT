@@ -1081,6 +1081,17 @@
           "role": {
             "description": "Semantic category used by lookup and presentation.",
             "$ref": "#/$defs/DefinitionRole"
+          },
+          "valueDomain": {
+            "description": "Optional value space explicitly declared by the source producer.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/ValueDomain"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -1351,6 +1362,114 @@
         "required": [
           "name",
           "version"
+        ]
+      },
+      "EntryKind": {
+        "description": "Semantic category used for outline filtering and nested presentation.",
+        "oneOf": [
+          {
+            "description": "Executable command, builtin, subcommand, or verb.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "command"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "description": "Command input whose exact behavior is described by [`ParameterKind`].",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "parameter"
+              },
+              "parameterKind": {
+                "description": "Parameter syntax family.",
+                "$ref": "#/$defs/ParameterKind"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "parameterKind"
+            ]
+          },
+          {
+            "description": "Named key accepted by a configuration language or parameter.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "configuration-key"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "description": "Process environment variable.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "environment-variable"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "description": "Shell, language, or application variable.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "variable"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "description": "One value accepted by a parent entry.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "value"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "description": "Addressable definition without a more specific reliable category.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "term"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
+          }
         ]
       },
       "ExcerptSchema": {
@@ -1983,6 +2102,26 @@
           "node"
         ]
       },
+      "ParameterKind": {
+        "description": "Semantic behavior of one command parameter.",
+        "oneOf": [
+          {
+            "description": "Named option or switch such as `-L`, `/?`, or `+r`.",
+            "type": "string",
+            "const": "option"
+          },
+          {
+            "description": "Parser-control marker such as `--` or PowerShell's `--%`.",
+            "type": "string",
+            "const": "marker"
+          },
+          {
+            "description": "Positional or special operand such as a documented stdin `-`.",
+            "type": "string",
+            "const": "operand"
+          }
+        ]
+      },
       "Producer": {
         "description": "Identifies `ManT` and the parser used to build a wire document.",
         "type": "object",
@@ -2069,6 +2208,65 @@
           "title",
           "blocks",
           "children"
+        ]
+      },
+      "SemanticDocumentReference": {
+        "description": "A source-neutral reference to another locally addressable document.",
+        "oneOf": [
+          {
+            "description": "A relative Markdown document in the current registered namespace.",
+            "type": "object",
+            "properties": {
+              "fragment": {
+                "description": "Optional document-local fragment.",
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "minLength": 1
+              },
+              "kind": {
+                "type": "string",
+                "const": "document"
+              },
+              "name": {
+                "description": "Extension-free relative document path.",
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "kind",
+              "name"
+            ]
+          },
+          {
+            "description": "A typed native manual reference.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "manual"
+              },
+              "manualSection": {
+                "description": "Native manual category, when source-specified.",
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "minLength": 1
+              },
+              "name": {
+                "description": "Manual topic without a section suffix.",
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "kind",
+              "name"
+            ]
+          }
         ]
       },
       "SourceFormat": {
@@ -2378,6 +2576,57 @@
             "const": "embedded"
           }
         ]
+      },
+      "ValueDomain": {
+        "description": "Logical value space accepted by one semantic entry.",
+        "oneOf": [
+          {
+            "description": "Values represented by child [`SemanticEntry`] nodes.",
+            "type": "object",
+            "properties": {
+              "exhaustive": {
+                "description": "True when the listed choices are known to be exhaustive.",
+                "type": "boolean"
+              },
+              "kind": {
+                "type": "string",
+                "const": "choices"
+              }
+            },
+            "required": [
+              "kind",
+              "exhaustive"
+            ]
+          },
+          {
+            "description": "Entries owned by another logical document form the value space.",
+            "type": "object",
+            "properties": {
+              "entryKinds": {
+                "description": "Accepted semantic categories in the referenced document.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/EntryKind"
+                },
+                "maxItems": 9,
+                "minItems": 1
+              },
+              "kind": {
+                "type": "string",
+                "const": "entry-set"
+              },
+              "reference": {
+                "description": "Source-neutral reference to the document that owns the entries.",
+                "$ref": "#/$defs/SemanticDocumentReference"
+              }
+            },
+            "required": [
+              "kind",
+              "reference",
+              "entryKinds"
+            ]
+          }
+        ]
       }
     }
   },
@@ -2388,6 +2637,17 @@
     "description": "A block-free tree used to discover selectable query content.",
     "type": "object",
     "properties": {
+      "address": {
+        "description": "Exact logical document address, absent for direct-file input.",
+        "anyOf": [
+          {
+            "$ref": "#/$defs/DocumentAddress"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
       "diagnostics": {
         "description": "Recoverable parser findings available to diagnostic-oriented transports.",
         "type": "array",
@@ -2398,10 +2658,6 @@
       "entries": {
         "description": "Entry projection used to build this outline.",
         "$ref": "#/$defs/EntryProjection"
-      },
-      "entriesComplete": {
-        "description": "False when semantic-entry declarations were rejected during lowering.\n\nThe field is omitted for complete outlines so compact transports pay no\nsteady-state bandwidth cost.",
-        "type": "boolean"
       },
       "label": {
         "description": "Human-readable selected-document label.",
@@ -2439,6 +2695,10 @@
       "schema": {
         "description": "Exact response schema discriminator.",
         "$ref": "#/$defs/OutlineSchema"
+      },
+      "semanticsComplete": {
+        "description": "False when semantic-entry declarations were rejected during lowering.\n\nThe field is omitted for complete outlines so compact transports pay no\nsteady-state bandwidth cost.",
+        "type": "boolean"
       },
       "source": {
         "description": "Authoritative document source, when one was loaded.",
@@ -2666,6 +2926,36 @@
         },
         "required": [
           "format"
+        ]
+      },
+      "EntryDocumentTarget": {
+        "description": "One exact cross-document destination declared by a semantic entry term.",
+        "type": "object",
+        "properties": {
+          "address": {
+            "description": "Exact logical destination resolved in the source document namespace.\n\nThis is absent for direct-file inputs and references, such as an\nunqualified manual name, that require catalog lookup.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/DocumentAddress"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "label": {
+            "description": "Visible term text associated with this destination.",
+            "type": "string",
+            "minLength": 1
+          },
+          "reference": {
+            "description": "Source-authored logical reference.",
+            "$ref": "#/$defs/SemanticDocumentReference"
+          }
+        },
+        "required": [
+          "label",
+          "reference"
         ]
       },
       "EntryKind": {
@@ -2903,6 +3193,68 @@
           "forms"
         ]
       },
+      "EntryValueDomain": {
+        "description": "Resolved value space accepted by one semantic entry.",
+        "oneOf": [
+          {
+            "description": "Values represented by nested entry nodes.",
+            "type": "object",
+            "properties": {
+              "exhaustive": {
+                "description": "True when the listed choices are known to be exhaustive.",
+                "type": "boolean"
+              },
+              "kind": {
+                "type": "string",
+                "const": "choices"
+              }
+            },
+            "required": [
+              "kind",
+              "exhaustive"
+            ]
+          },
+          {
+            "description": "Entries owned by another logical document form the value space.",
+            "type": "object",
+            "properties": {
+              "address": {
+                "description": "Exact logical destination when namespace-only resolution suffices.",
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/DocumentAddress"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "entryKinds": {
+                "description": "Accepted semantic categories in the referenced document.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/EntryKind"
+                },
+                "maxItems": 9,
+                "minItems": 1
+              },
+              "kind": {
+                "type": "string",
+                "const": "entry-set"
+              },
+              "reference": {
+                "description": "Source-authored logical reference.",
+                "$ref": "#/$defs/SemanticDocumentReference"
+              }
+            },
+            "required": [
+              "kind",
+              "reference",
+              "entryKinds"
+            ]
+          }
+        ]
+      },
       "MarkdownOrigin": {
         "description": "Storage identity of one registered Markdown document.",
         "oneOf": [
@@ -3099,6 +3451,13 @@
                   "$ref": "#/$defs/OutlineNode"
                 }
               },
+              "documentTargets": {
+                "description": "Exact cross-document destinations declared by linked entry terms.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/EntryDocumentTarget"
+                }
+              },
               "entryKind": {
                 "description": "Semantic category of the entry.",
                 "$ref": "#/$defs/EntryKind"
@@ -3133,13 +3492,6 @@
                 "description": "Canonical structural outline path.",
                 "$ref": "#/$defs/NodePath"
               },
-              "targets": {
-                "description": "Definition nodes supplying content for this concept.",
-                "type": "array",
-                "items": {
-                  "$ref": "#/$defs/NodeId"
-                }
-              },
               "title": {
                 "description": "Primary display term.",
                 "type": "string"
@@ -3148,7 +3500,7 @@
                 "description": "Optional finite or cross-document value space.",
                 "anyOf": [
                   {
-                    "$ref": "#/$defs/ValueDomain"
+                    "$ref": "#/$defs/EntryValueDomain"
                   },
                   {
                     "type": "null"
@@ -3164,8 +3516,7 @@
               "entryKind",
               "case",
               "aliases",
-              "forms",
-              "targets"
+              "forms"
             ]
           }
         ]
@@ -3197,6 +3548,65 @@
             "description": "Positional or special operand such as a documented stdin `-`.",
             "type": "string",
             "const": "operand"
+          }
+        ]
+      },
+      "SemanticDocumentReference": {
+        "description": "A source-neutral reference to another locally addressable document.",
+        "oneOf": [
+          {
+            "description": "A relative Markdown document in the current registered namespace.",
+            "type": "object",
+            "properties": {
+              "fragment": {
+                "description": "Optional document-local fragment.",
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "minLength": 1
+              },
+              "kind": {
+                "type": "string",
+                "const": "document"
+              },
+              "name": {
+                "description": "Extension-free relative document path.",
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "kind",
+              "name"
+            ]
+          },
+          {
+            "description": "A typed native manual reference.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "manual"
+              },
+              "manualSection": {
+                "description": "Native manual category, when source-specified.",
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "minLength": 1
+              },
+              "name": {
+                "description": "Manual topic without a section suffix.",
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "kind",
+              "name"
+            ]
           }
         ]
       },
@@ -3294,76 +3704,6 @@
         "type": "integer",
         "format": "uint32",
         "minimum": 0
-      },
-      "ValueDomain": {
-        "description": "Logical value space accepted by one semantic entry.",
-        "oneOf": [
-          {
-            "description": "Values represented by child [`SemanticEntry`] nodes.",
-            "type": "object",
-            "properties": {
-              "exhaustive": {
-                "description": "True when the listed choices are known to be exhaustive.",
-                "type": "boolean"
-              },
-              "kind": {
-                "type": "string",
-                "const": "choices"
-              }
-            },
-            "required": [
-              "kind",
-              "exhaustive"
-            ]
-          },
-          {
-            "description": "Entries owned by another logical document form the value space.",
-            "type": "object",
-            "properties": {
-              "document": {
-                "description": "Logical document that owns the referenced entries.",
-                "$ref": "#/$defs/DocumentAddress"
-              },
-              "entryKinds": {
-                "description": "Accepted semantic categories in the referenced document.",
-                "type": "array",
-                "items": {
-                  "$ref": "#/$defs/EntryKind"
-                }
-              },
-              "kind": {
-                "type": "string",
-                "const": "entry-set"
-              }
-            },
-            "required": [
-              "kind",
-              "document",
-              "entryKinds"
-            ]
-          },
-          {
-            "description": "Union of several independently described value spaces.",
-            "type": "object",
-            "properties": {
-              "domains": {
-                "description": "Constituent value spaces in source order.",
-                "type": "array",
-                "items": {
-                  "$ref": "#/$defs/ValueDomain"
-                }
-              },
-              "kind": {
-                "type": "string",
-                "const": "union"
-              }
-            },
-            "required": [
-              "kind",
-              "domains"
-            ]
-          }
-        ]
       }
     }
   },
@@ -3805,6 +4145,17 @@
           "role": {
             "description": "Semantic category used by lookup and presentation.",
             "$ref": "#/$defs/DefinitionRole"
+          },
+          "valueDomain": {
+            "description": "Optional value space explicitly declared by the source producer.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/ValueDomain"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -4195,6 +4546,114 @@
           "version"
         ]
       },
+      "EntryKind": {
+        "description": "Semantic category used for outline filtering and nested presentation.",
+        "oneOf": [
+          {
+            "description": "Executable command, builtin, subcommand, or verb.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "command"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "description": "Command input whose exact behavior is described by [`ParameterKind`].",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "parameter"
+              },
+              "parameterKind": {
+                "description": "Parameter syntax family.",
+                "$ref": "#/$defs/ParameterKind"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "parameterKind"
+            ]
+          },
+          {
+            "description": "Named key accepted by a configuration language or parameter.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "configuration-key"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "description": "Process environment variable.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "environment-variable"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "description": "Shell, language, or application variable.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "variable"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "description": "One value accepted by a parent entry.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "value"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "description": "Addressable definition without a more specific reliable category.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "term"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
+          }
+        ]
+      },
       "FragmentAlias": {
         "description": "Exact source-authored fragment spelling for one local navigation target.\n\nA fragment alias is not a [`NodeId`]: formats such as mdoc deliberately\npermit stable external destinations containing uppercase letters or\npunctuation. Producers retain that spelling here while assigning the\ntarget a separate normalized internal identity. Shared validation rejects\nempty, whitespace-containing, and control-containing aliases.",
         "type": "string"
@@ -4569,6 +5028,26 @@
         "description": "Document-local identity shared by sections, anchors, and entries.\n\nLowering layers normalize these values; [`crate::validate_document`] reports\nany invalid value introduced through deserialization or custom producers.",
         "type": "string"
       },
+      "ParameterKind": {
+        "description": "Semantic behavior of one command parameter.",
+        "oneOf": [
+          {
+            "description": "Named option or switch such as `-L`, `/?`, or `+r`.",
+            "type": "string",
+            "const": "option"
+          },
+          {
+            "description": "Parser-control marker such as `--` or PowerShell's `--%`.",
+            "type": "string",
+            "const": "marker"
+          },
+          {
+            "description": "Positional or special operand such as a documented stdin `-`.",
+            "type": "string",
+            "const": "operand"
+          }
+        ]
+      },
       "Producer": {
         "description": "Identifies `ManT` and the parser used to build a wire document.",
         "type": "object",
@@ -4665,6 +5144,65 @@
           "title",
           "blocks",
           "children"
+        ]
+      },
+      "SemanticDocumentReference": {
+        "description": "A source-neutral reference to another locally addressable document.",
+        "oneOf": [
+          {
+            "description": "A relative Markdown document in the current registered namespace.",
+            "type": "object",
+            "properties": {
+              "fragment": {
+                "description": "Optional document-local fragment.",
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "minLength": 1
+              },
+              "kind": {
+                "type": "string",
+                "const": "document"
+              },
+              "name": {
+                "description": "Extension-free relative document path.",
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "kind",
+              "name"
+            ]
+          },
+          {
+            "description": "A typed native manual reference.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "manual"
+              },
+              "manualSection": {
+                "description": "Native manual category, when source-specified.",
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "minLength": 1
+              },
+              "name": {
+                "description": "Manual topic without a section suffix.",
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "kind",
+              "name"
+            ]
+          }
         ]
       },
       "SourceFormat": {
@@ -4972,6 +5510,57 @@
             "description": "Quick reference embedded in the authoritative Markdown document.",
             "type": "string",
             "const": "embedded"
+          }
+        ]
+      },
+      "ValueDomain": {
+        "description": "Logical value space accepted by one semantic entry.",
+        "oneOf": [
+          {
+            "description": "Values represented by child [`SemanticEntry`] nodes.",
+            "type": "object",
+            "properties": {
+              "exhaustive": {
+                "description": "True when the listed choices are known to be exhaustive.",
+                "type": "boolean"
+              },
+              "kind": {
+                "type": "string",
+                "const": "choices"
+              }
+            },
+            "required": [
+              "kind",
+              "exhaustive"
+            ]
+          },
+          {
+            "description": "Entries owned by another logical document form the value space.",
+            "type": "object",
+            "properties": {
+              "entryKinds": {
+                "description": "Accepted semantic categories in the referenced document.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/EntryKind"
+                },
+                "maxItems": 9,
+                "minItems": 1
+              },
+              "kind": {
+                "type": "string",
+                "const": "entry-set"
+              },
+              "reference": {
+                "description": "Source-neutral reference to the document that owns the entries.",
+                "$ref": "#/$defs/SemanticDocumentReference"
+              }
+            },
+            "required": [
+              "kind",
+              "reference",
+              "entryKinds"
+            ]
           }
         ]
       }
@@ -5929,6 +6518,17 @@
           "role": {
             "description": "Semantic category used by lookup and presentation.",
             "$ref": "#/$defs/DefinitionRole"
+          },
+          "valueDomain": {
+            "description": "Optional value space explicitly declared by the source producer.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/ValueDomain"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -6412,6 +7012,114 @@
         "required": [
           "name",
           "version"
+        ]
+      },
+      "EntryKind": {
+        "description": "Semantic category used for outline filtering and nested presentation.",
+        "oneOf": [
+          {
+            "description": "Executable command, builtin, subcommand, or verb.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "command"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "description": "Command input whose exact behavior is described by [`ParameterKind`].",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "parameter"
+              },
+              "parameterKind": {
+                "description": "Parameter syntax family.",
+                "$ref": "#/$defs/ParameterKind"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "parameterKind"
+            ]
+          },
+          {
+            "description": "Named key accepted by a configuration language or parameter.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "configuration-key"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "description": "Process environment variable.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "environment-variable"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "description": "Shell, language, or application variable.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "variable"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "description": "One value accepted by a parent entry.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "value"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "description": "Addressable definition without a more specific reliable category.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "term"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
+          }
         ]
       },
       "ExcerptSchema": {
@@ -7088,6 +7796,26 @@
         },
         "required": [
           "node"
+        ]
+      },
+      "ParameterKind": {
+        "description": "Semantic behavior of one command parameter.",
+        "oneOf": [
+          {
+            "description": "Named option or switch such as `-L`, `/?`, or `+r`.",
+            "type": "string",
+            "const": "option"
+          },
+          {
+            "description": "Parser-control marker such as `--` or PowerShell's `--%`.",
+            "type": "string",
+            "const": "marker"
+          },
+          {
+            "description": "Positional or special operand such as a documented stdin `-`.",
+            "type": "string",
+            "const": "operand"
+          }
         ]
       },
       "Producer": {
@@ -7911,6 +8639,65 @@
           "children"
         ]
       },
+      "SemanticDocumentReference": {
+        "description": "A source-neutral reference to another locally addressable document.",
+        "oneOf": [
+          {
+            "description": "A relative Markdown document in the current registered namespace.",
+            "type": "object",
+            "properties": {
+              "fragment": {
+                "description": "Optional document-local fragment.",
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "minLength": 1
+              },
+              "kind": {
+                "type": "string",
+                "const": "document"
+              },
+              "name": {
+                "description": "Extension-free relative document path.",
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "kind",
+              "name"
+            ]
+          },
+          {
+            "description": "A typed native manual reference.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "manual"
+              },
+              "manualSection": {
+                "description": "Native manual category, when source-specified.",
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "minLength": 1
+              },
+              "name": {
+                "description": "Manual topic without a section suffix.",
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "kind",
+              "name"
+            ]
+          }
+        ]
+      },
       "SourceFormat": {
         "description": "Source format consumed by the normalization engine.",
         "oneOf": [
@@ -8266,6 +9053,57 @@
         "required": [
           "selector",
           "reason"
+        ]
+      },
+      "ValueDomain": {
+        "description": "Logical value space accepted by one semantic entry.",
+        "oneOf": [
+          {
+            "description": "Values represented by child [`SemanticEntry`] nodes.",
+            "type": "object",
+            "properties": {
+              "exhaustive": {
+                "description": "True when the listed choices are known to be exhaustive.",
+                "type": "boolean"
+              },
+              "kind": {
+                "type": "string",
+                "const": "choices"
+              }
+            },
+            "required": [
+              "kind",
+              "exhaustive"
+            ]
+          },
+          {
+            "description": "Entries owned by another logical document form the value space.",
+            "type": "object",
+            "properties": {
+              "entryKinds": {
+                "description": "Accepted semantic categories in the referenced document.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/EntryKind"
+                },
+                "maxItems": 9,
+                "minItems": 1
+              },
+              "kind": {
+                "type": "string",
+                "const": "entry-set"
+              },
+              "reference": {
+                "description": "Source-neutral reference to the document that owns the entries.",
+                "$ref": "#/$defs/SemanticDocumentReference"
+              }
+            },
+            "required": [
+              "kind",
+              "reference",
+              "entryKinds"
+            ]
+          }
         ]
       }
     }

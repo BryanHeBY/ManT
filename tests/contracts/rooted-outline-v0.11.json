@@ -23,8 +23,7 @@
           "entryKind": { "kind": "parameter", "parameterKind": "option" },
           "case": "sensitive",
           "aliases": ["--help"],
-          "forms": ["--help"],
-          "targets": ["option-help"]
+          "forms": ["--help"]
         }
       ]
     }

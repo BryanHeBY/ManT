@@ -1,13 +1,14 @@
 //! Locks the public JSON shapes used for outline discovery and excerpts.
 
 use mant_ir::{
-    Block, DefinitionCase, DefinitionIdentity, DefinitionItem, DefinitionRole, DocumentMeta,
-    DocumentSource, EntryKind, EntrySummary, Inline, LayoutHint, ParameterKind, Section,
-    SourceFormat, TldrDocument, TldrOrigin,
+    Block, DefinitionCase, DefinitionIdentity, DefinitionItem, DefinitionRole, DocumentAddress,
+    DocumentMeta, DocumentSource, EntryKind, EntrySummary, Inline, LayoutHint, ParameterKind,
+    Section, SemanticDocumentReference, SourceFormat, TldrDocument, TldrOrigin,
 };
 use mant_protocol::{
-    EntryProjection, ExcerptSchema, ExcerptSelection, OutlineNode, OutlineNodeReference,
-    OutlineReference, OutlineSchema, OutlineTrail, Producer, QueryExcerpt, QueryOutline,
+    EntryDocumentTarget, EntryProjection, EntryValueDomain, ExcerptSchema, ExcerptSelection,
+    OutlineNode, OutlineNodeReference, OutlineReference, OutlineSchema, OutlineTrail, Producer,
+    QueryExcerpt, QueryOutline,
 };
 
 fn source() -> DocumentSource {
@@ -24,7 +25,10 @@ fn outline_contract_exposes_both_human_paths_and_document_ids() {
         entries: EntryProjection::All,
         root: None,
         label: "demo(1)".to_owned(),
-        address: None,
+        address: Some(DocumentAddress::Manual {
+            name: "demo".to_owned(),
+            manual_section: "1".to_owned(),
+        }),
         source: Some(source()),
         meta: Some(DocumentMeta::default()),
         diagnostics: Vec::new(),
@@ -44,8 +48,18 @@ fn outline_contract_exposes_both_human_paths_and_document_ids() {
                 case: DefinitionCase::Sensitive,
                 aliases: vec!["-a".to_owned(), "--all".to_owned()],
                 forms: vec!["-a, --all".to_owned()],
-                document_targets: Vec::new(),
-                value_domain: None,
+                document_targets: vec![EntryDocumentTarget {
+                    label: "help(1)".to_owned(),
+                    reference: SemanticDocumentReference::Manual {
+                        name: "help".to_owned(),
+                        manual_section: Some("1".to_owned()),
+                    },
+                    address: Some(DocumentAddress::Manual {
+                        name: "help".to_owned(),
+                        manual_section: "1".to_owned(),
+                    }),
+                }],
+                value_domain: Some(Box::new(EntryValueDomain::Choices { exhaustive: false })),
                 entry_summary: Some(EntrySummary::default()),
                 children: Vec::new(),
             }],
@@ -69,6 +83,14 @@ fn outline_contract_exposes_both_human_paths_and_document_ids() {
             .is_none()
     );
     assert_eq!(value["nodes"][0]["children"][0]["aliases"][1], "--all");
+    assert_eq!(
+        value["nodes"][0]["children"][0]["documentTargets"][0]["address"]["name"],
+        "help"
+    );
+    assert_eq!(
+        value["nodes"][0]["children"][0]["valueDomain"]["kind"],
+        "choices"
+    );
     assert!(value.get("diagnostics").is_none());
     assert!(value.get("semanticsComplete").is_none());
 }

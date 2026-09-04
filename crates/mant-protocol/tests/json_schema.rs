@@ -92,8 +92,11 @@ fn response_schemas_follow_the_serialized_wire_shapes() {
         "case",
         "aliases",
         "forms",
-        "targets",
+        "documentTargets",
+        "valueDomain",
         "entrySummary",
+        "semanticsComplete",
+        "address",
     ] {
         assert!(outline.contains(&format!("\"{field}\"")));
     }

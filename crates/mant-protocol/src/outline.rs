@@ -135,6 +135,7 @@ pub struct QueryOutline {
 #[serde(rename_all = "camelCase")]
 pub struct EntryDocumentTarget {
     /// Visible term text associated with this destination.
+    #[schemars(length(min = 1))]
     pub label: String,
     /// Source-authored logical reference.
     pub reference: SemanticDocumentReference,
@@ -167,6 +168,7 @@ pub enum EntryValueDomain {
         #[serde(skip_serializing_if = "Option::is_none")]
         address: Option<DocumentAddress>,
         /// Accepted semantic categories in the referenced document.
+        #[schemars(length(min = 1, max = 9))]
         entry_kinds: Vec<EntryKind>,
     },
 }
