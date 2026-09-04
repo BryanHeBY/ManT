@@ -189,10 +189,11 @@ derives roots from `MANT_MANPATH`, `MANPATH`, and platform conventions, then
 indexes raw, gzip, and zstd files in traditional `man<section>/` directories
 and flat roots. Its dedicated path layer reads Linux man-db maps and mandatory
 roots (or mandoc `man.conf`), macOS PATH, active-developer, `MANPATH`, and
-`MANCONFIG` sources, and an optional ManT-owned Windows `man.conf`; only an
-unavailable host configuration falls back to user, PATH-derived, and
-conventional system locations. No lookup spawns the host `man`, `manpath`, or
-`xcode-select` program.
+`MANCONFIG` sources, and an optional ManT-owned Windows `man.conf`. Windows
+then adds `%APPDATA%\ManT\man` and the compatible
+`%USERPROFILE%\.local\share\man` fallback; Unix hosts use user, PATH-derived,
+and conventional system locations when native configuration is unavailable.
+No lookup spawns the host `man`, `manpath`, or `xcode-select` program.
 
 Rust owns source I/O and decompression before plain roff bytes cross the parser
 boundary. Reads are capped for stored and decoded data. Redirect-only `.so`

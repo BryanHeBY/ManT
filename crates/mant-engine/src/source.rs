@@ -692,15 +692,22 @@ mod tests {
 
     #[cfg(windows)]
     #[test]
-    fn windows_defaults_to_user_share_man_and_honors_manpath() {
+    fn windows_defaults_to_mant_data_then_user_share_and_honors_manpath() {
+        let data_root = PathBuf::from(r"C:\Users\demo\AppData\Roaming");
         let profile = PathBuf::from(r"C:\Users\demo");
-        let environment = HashMap::from([(
-            OsString::from("USERPROFILE"),
-            profile.as_os_str().to_owned(),
-        )]);
+        let environment = HashMap::from([
+            (OsString::from("APPDATA"), data_root.as_os_str().to_owned()),
+            (
+                OsString::from("USERPROFILE"),
+                profile.as_os_str().to_owned(),
+            ),
+        ]);
         assert_eq!(
             discover_manual_roots_with(&environment),
-            vec![profile.join(".local/share/man")]
+            vec![
+                data_root.join("ManT").join("man"),
+                profile.join(".local/share/man")
+            ]
         );
 
         let custom = PathBuf::from(r"D:\manuals");

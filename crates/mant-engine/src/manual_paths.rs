@@ -120,28 +120,38 @@ fn fallback_manual_roots(environment: &HashMap<OsString, OsString>) -> Vec<PathB
 }
 
 fn supplemental_manual_roots(environment: &HashMap<OsString, OsString>) -> Vec<PathBuf> {
+    supplemental_manual_roots_for(environment, host_platform())
+}
+
+fn supplemental_manual_roots_for(
+    environment: &HashMap<OsString, OsString>,
+    platform: ManualPathPlatform,
+) -> Vec<PathBuf> {
     let mut roots = Vec::new();
-    #[cfg(windows)]
-    if let Some(profile) = environment
-        .get(OsStr::new("USERPROFILE"))
-        .map(PathBuf::from)
-    {
-        roots.push(profile.join(".local/share/man"));
+    if platform == ManualPathPlatform::Windows {
+        if let Some(data_root) = environment.get(OsStr::new("APPDATA")).map(PathBuf::from) {
+            roots.push(data_root.join("ManT").join("man"));
+        }
+        if let Some(profile) = environment
+            .get(OsStr::new("USERPROFILE"))
+            .map(PathBuf::from)
+        {
+            roots.push(profile.join(".local/share/man"));
+        }
+        return roots;
     }
-    #[cfg(unix)]
+
     if let Some(home) = environment.get(OsStr::new("HOME")).map(PathBuf::from) {
         roots.push(home.join(".local/share/man"));
         roots.push(home.join(".local/man"));
         roots.push(home.join("man"));
     }
-    #[cfg(unix)]
     if let Some(data_home) = environment
         .get(OsStr::new("XDG_DATA_HOME"))
         .map(PathBuf::from)
     {
         roots.push(data_home.join("man"));
     }
-    #[cfg(unix)]
     if let Some(data_dirs) = environment.get(OsStr::new("XDG_DATA_DIRS")) {
         roots.extend(env::split_paths(data_dirs).map(|root| root.join("man")));
     }
@@ -603,8 +613,9 @@ mod tests {
     use std::{collections::HashMap, env, ffi::OsString, fs, path::PathBuf};
 
     use super::{
-        BsdManConfig, ManDbConfig, developer_manual_roots, discover_manual_roots_from,
-        expand_man_db_systems, parse_bsd_man_config, parse_man_db_config, parse_mandoc_manpaths,
+        BsdManConfig, ManDbConfig, ManualPathPlatform, developer_manual_roots,
+        discover_manual_roots_from, expand_man_db_systems, parse_bsd_man_config,
+        parse_man_db_config, parse_mandoc_manpaths, supplemental_manual_roots_for,
         wildcard_matches,
     };
 
@@ -722,6 +733,39 @@ mod tests {
         assert_eq!(
             discover_manual_roots_from(&environment, vec![native_a.clone(), native_b.clone()],),
             vec![first, native_a, native_b, last]
+        );
+    }
+
+    #[test]
+    fn windows_supplemental_roots_prefer_mant_data_before_profile_compatibility() {
+        let data_root = PathBuf::from(r"C:\Users\demo\AppData\Roaming");
+        let profile = PathBuf::from(r"C:\Users\demo");
+        let environment = HashMap::from([
+            (OsString::from("APPDATA"), data_root.as_os_str().to_owned()),
+            (
+                OsString::from("USERPROFILE"),
+                profile.as_os_str().to_owned(),
+            ),
+        ]);
+
+        assert_eq!(
+            supplemental_manual_roots_for(&environment, ManualPathPlatform::Windows),
+            vec![
+                data_root.join("ManT").join("man"),
+                profile.join(".local/share/man")
+            ]
+        );
+    }
+
+    #[test]
+    fn windows_supplemental_roots_do_not_require_a_profile_fallback() {
+        let data_root = PathBuf::from(r"D:\Roaming");
+        let environment =
+            HashMap::from([(OsString::from("APPDATA"), data_root.as_os_str().to_owned())]);
+
+        assert_eq!(
+            supplemental_manual_roots_for(&environment, ManualPathPlatform::Windows),
+            vec![data_root.join("ManT").join("man")]
         );
     }
 

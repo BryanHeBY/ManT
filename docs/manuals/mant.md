@@ -204,10 +204,11 @@ manual shorthand. This preserves Markdown names, dotted executable names, and
 tldr collision pages such as `command.1` without a context-dependent guess.
 Use `--input PATH` for a physical roff file.
 
-Windows uses `%USERPROFILE%\.local\share\man` as its conventional user root.
-It also accepts additional roots through `MANPATH` or `MANT_MANPATH`, and an
-optional ManT-owned `%APPDATA%\ManT\man.conf` can provide persistent roots
-without requiring a shell profile.
+Windows automatically checks `%APPDATA%\ManT\man`, then the compatible
+`%USERPROFILE%\.local\share\man` root. It also accepts additional roots through
+`MANPATH` or `MANT_MANPATH`, and an optional ManT-owned
+`%APPDATA%\ManT\man.conf` can provide persistent roots without requiring a
+shell profile.
 
 - `--man-section MAN_SECTION`: Select the full document from one exact native
   manual category such as `1` or `3p`. In an ordinary combined query, a selected
@@ -294,9 +295,11 @@ it fall back to `/etc/manpaths` and sorted `/etc/manpaths.d` files.
 
 Windows has no system `man(1)` convention. If present,
 `%APPDATA%\ManT\man.conf` is a ManT-owned portable configuration containing
-one `manpath DIRECTORY` line per root; its entries precede the conventional
-`%USERPROFILE%\.local\share\man` fallback. The parser also accepts uppercase
-`MANPATH` for familiarity with macOS and FreeBSD configuration files.
+one `manpath DIRECTORY` line per root; its entries precede the automatic
+`%APPDATA%\ManT\man` root and the compatible
+`%USERPROFILE%\.local\share\man` fallback, in that order. The parser also
+accepts uppercase `MANPATH` for familiarity with macOS and FreeBSD
+configuration files.
 
 The index accepts a leaf page symlink whose target is a regular file, including
 one outside the configured root. It does not traverse directory symlinks or
@@ -952,8 +955,9 @@ private tldr checkout lives below `~/Library/Caches/ManT/tldr-pages`.
 
 On Windows, documents live below `%APPDATA%\ManT`. ManT's private
 tldr checkout lives below `%LOCALAPPDATA%\ManT\cache\tldr-pages`. The native
-manual fallback root is `%USERPROFILE%\.local\share\man`; an optional
-`%APPDATA%\ManT\man.conf` adds persistent native-manual roots.
+manual roots automatically include `%APPDATA%\ManT\man`, followed by the
+compatible `%USERPROFILE%\.local\share\man` fallback; an optional
+`%APPDATA%\ManT\man.conf` adds persistent native-manual roots ahead of both.
 
 `sources.toml` lives at the data root. Personal documents remain below
 `documents/`; installed source directories remain below `sources/`. See the online
@@ -990,9 +994,10 @@ for the schema and update lifecycle.
   would disable it; an explicit `--color` remains authoritative.
 - `HOME`: On Unix, supply conventional document, manual, and cache locations
   when their XDG overrides are absent.
-- `APPDATA`: Select the per-user ManT data root on Windows.
+- `APPDATA`: Select the per-user ManT data root and its automatic `man/`
+  manual root on Windows.
 - `LOCALAPPDATA`: Select ManT and installed-client cache roots on Windows.
-- `USERPROFILE`: Supply the default Windows manual root and compatible
+- `USERPROFILE`: Supply the compatible Windows manual fallback and
   installed-client tldr cache locations.
 
 ## General

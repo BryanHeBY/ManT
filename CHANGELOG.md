@@ -42,6 +42,10 @@ that crate was not published for that change.
 
 ### mant-engine 0.11.0
 
+- Discover `%APPDATA%\ManT\man` as the primary automatic Windows native-manual
+  root after configured `man.conf` entries and before the
+  `%USERPROFILE%\.local\share\man` compatibility fallback. Explicit
+  `MANT_MANPATH` and `MANPATH` behavior is unchanged.
 - Keep target-only native definition containers as zero-width navigation
   placements without manufacturing empty `term-entry-*` semantic entries.
 - Retain formatter-generated native anchors independently of semantic-entry

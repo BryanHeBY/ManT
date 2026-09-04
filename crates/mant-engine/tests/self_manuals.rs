@@ -125,6 +125,7 @@ fn shipped_manuals_explain_project_local_roff_lookup() {
         "MANCONFIG",
         "MANPATH_MAP",
         "%APPDATA%\\ManT\\man.conf",
+        "%APPDATA%\\ManT\\man",
         "project-man/man1/widget.1",
         "%USERPROFILE%\\.local\\share\\man",
         "pages can live directly below it as `widget.1`",

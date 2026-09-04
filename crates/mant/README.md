@@ -166,7 +166,9 @@ and parses their roff through bundled libmandoc. It does not require a system
 `man` or `mandoc` executable at runtime. A leaf manual-page symlink may point
 outside its indexed root, but directory symlinks are not traversed and every
 `.so` target must remain inside that root. Windows defaults to
-`%USERPROFILE%\.local\share\man` and also honors configured manual paths.
+`%APPDATA%\ManT\man`, followed by the compatible
+`%USERPROFILE%\.local\share\man` fallback, and also honors configured manual
+paths.
 
 Reusable Markdown documents can be registered by relative path below:
 
