@@ -5,16 +5,16 @@
 
 mod blocks;
 mod container;
+mod entries;
 mod inline;
 mod layout;
-mod options;
 mod source;
 
 #[cfg(test)]
 mod tests;
 
 pub use container::TldrDirectiveError;
-pub(crate) use options::is_semantic_entry_rejection_code;
+pub(crate) use entries::is_semantic_entry_rejection_code;
 
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
@@ -33,9 +33,9 @@ use pulldown_cmark::{Event, HeadingLevel, Options, Parser, Tag, TagEnd};
 use self::{
     blocks::parse_block,
     container::split_markdown,
+    entries::{extract_entry_directives, normalize_entry_lists},
     inline::{inline_text, parse_inlines},
     layout::normalize_markdown_layout,
-    options::{extract_entry_directives, normalize_entry_lists},
     source::MarkdownSource,
 };
 use crate::text_safety::mask_terminal_controls;
@@ -188,7 +188,7 @@ fn parse_document(source_text: &str, source_path: Option<String>) -> Document {
 fn parse_document_with_entries(
     source_text: &str,
     source_path: Option<String>,
-    mut declarations: BTreeMap<u32, options::EntryDeclaration>,
+    mut declarations: BTreeMap<u32, entries::EntryDeclaration>,
     entry_diagnostics: &mut Vec<Diagnostic>,
 ) -> Document {
     let source = MarkdownSource::new(source_text);
@@ -384,7 +384,7 @@ fn markdown_parser() -> ParserInfo {
 
 fn normalize_section_entries(
     sections: &mut [Section],
-    declarations: &mut BTreeMap<u32, options::EntryDeclaration>,
+    declarations: &mut BTreeMap<u32, entries::EntryDeclaration>,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     for section in sections {
