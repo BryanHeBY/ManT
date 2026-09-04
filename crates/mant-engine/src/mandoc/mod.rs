@@ -905,6 +905,69 @@ Second description.\n\
     }
 
     #[test]
+    fn argumentless_target_requests_bind_each_following_source_owner() {
+        let document = parse_manual_bytes(
+            std::path::Path::new("derived-target-owners.7"),
+            b".Dd September 4, 2026\n.Dt DERIVED-TARGET-OWNERS 7\n.Os\n.Sh DESCRIPTION\n\
+.Tg\n\
+.Ic first-command\n\
+.Pp\n\
+Paragraph before the second request.\n\
+.Tg\n\
+.Ic second-command\n\
+.Tg explicit-third\n\
+.Ic third-command\n",
+        )
+        .expect("lower consecutive target ownership forms");
+
+        let index = mant_ir::DocumentIndex::build(&document);
+        for target in ["first-command", "second-command", "explicit-third"] {
+            assert!(
+                index.fragment_target(target).is_some(),
+                "missing target request {target}"
+            );
+        }
+        assert_eq!(
+            index.fragment_target("third-command"),
+            None,
+            "an explicit .Tg spelling must replace the automatic owner spelling"
+        );
+    }
+
+    #[test]
+    fn target_identity_is_independent_from_optional_raw_source_recovery() {
+        let path = std::path::Path::new("target-source-parity.7");
+        let source = b".Dd September 4, 2026\n.Dt TARGET-SOURCE-PARITY 7\n.Os\n\
+.Tg Mixed.Section\n\
+.Sh HEADING\n\
+.Pp\n\
+Paragraph before a target request.\n\
+.Tg\n\
+.Ic derived-command\n\
+.Pp\n\
+.Fn automatic_function\n";
+        let with_source = parse_manual_bytes(path, source).expect("lower source-aware document");
+        let report = Parser::default()
+            .parse_bytes(path, source)
+            .expect("parse owned native tree");
+        let without_source = lower_mandoc_document(path, &report);
+
+        let with_source_index = mant_ir::DocumentIndex::build(&with_source);
+        let without_source_index = mant_ir::DocumentIndex::build(&without_source);
+        for target in ["Mixed.Section", "derived-command", "automatic_function"] {
+            assert_eq!(
+                with_source_index
+                    .fragment_target(target)
+                    .map(mant_ir::NodeId::as_str),
+                without_source_index
+                    .fragment_target(target)
+                    .map(mant_ir::NodeId::as_str),
+                "target {target} changed when raw source recovery was unavailable"
+            );
+        }
+    }
+
+    #[test]
     fn preserves_targets_moved_to_paragraphs_and_displays() {
         let paragraph = parse_manual_bytes(
             std::path::Path::new("paragraph-target.3"),
