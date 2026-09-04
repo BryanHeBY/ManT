@@ -686,23 +686,7 @@ struct DocumentReference {
 
 impl DocumentReference {
     fn exact_address(&self, from: &DocumentAddress) -> Option<DocumentAddress> {
-        match &self.target {
-            LinkTarget::Document { name, .. } => from.resolve_document_reference(name),
-            LinkTarget::Manual {
-                name,
-                manual_section: Some(manual_section),
-            } => Some(DocumentAddress::Manual {
-                name: name.clone(),
-                manual_section: manual_section.clone(),
-            }),
-            LinkTarget::Manual {
-                manual_section: None,
-                ..
-            }
-            | LinkTarget::External { .. }
-            | LinkTarget::Email { .. }
-            | LinkTarget::Section { .. } => None,
-        }
+        logical_document_address(from, &self.target)
     }
 
     fn selector(&self, from: &DocumentAddress) -> Option<DocumentSelector> {
@@ -741,6 +725,34 @@ impl DocumentReference {
             source: None,
             manual_section: None,
         }
+    }
+}
+
+/// Resolve one typed source reference to an exact catalog address without I/O.
+///
+/// Relative Markdown targets remain inside the referring registered namespace,
+/// and native-manual targets require an explicit section. Other link families
+/// are not logical document references.
+pub(crate) fn logical_document_address(
+    from: &DocumentAddress,
+    target: &LinkTarget,
+) -> Option<DocumentAddress> {
+    match target {
+        LinkTarget::Document { name, .. } => from.resolve_document_reference(name),
+        LinkTarget::Manual {
+            name,
+            manual_section: Some(manual_section),
+        } => Some(DocumentAddress::Manual {
+            name: name.clone(),
+            manual_section: manual_section.clone(),
+        }),
+        LinkTarget::Manual {
+            manual_section: None,
+            ..
+        }
+        | LinkTarget::External { .. }
+        | LinkTarget::Email { .. }
+        | LinkTarget::Section { .. } => None,
     }
 }
 
