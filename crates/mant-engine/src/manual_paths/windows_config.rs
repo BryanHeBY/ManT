@@ -234,9 +234,8 @@ fn collect_include_paths_with(
             if included.len() == MAX_EXPANDED_CONFIG_PATHS {
                 fragment_truncated = true;
                 break;
-            } else {
-                included.push(included_path);
             }
+            included.push(included_path);
         }
         if fragment_truncated {
             break;
