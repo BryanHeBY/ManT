@@ -42,36 +42,20 @@ pub(crate) fn identify_definitions(
     prepare_blocks(blocks, root_context, &mut preferred_counts);
     prepare_sections(sections, root_context, &mut preferred_counts);
 
-    let mut used = document_anchor_ids(blocks, sections);
-    let mut retained = used.clone();
-    identify_blocks(
-        blocks,
-        root_context,
-        &mut used,
-        reserved_targets,
-        &mut retained,
-        &preferred_counts,
-    );
+    let used = document_anchor_ids(blocks, sections);
+    let mut discovery = DefinitionDiscovery {
+        retained: used.clone(),
+        used,
+        reserved: reserved_targets,
+        preferred_counts: &preferred_counts,
+    };
+    discovery.identify_blocks(blocks, root_context);
     for section in sections {
         let context = DefinitionContext::for_section(&section.title, root_context);
-        identify_blocks(
-            &mut section.blocks,
-            context,
-            &mut used,
-            reserved_targets,
-            &mut retained,
-            &preferred_counts,
-        );
-        identify_sections(
-            &mut section.children,
-            context,
-            &mut used,
-            reserved_targets,
-            &mut retained,
-            &preferred_counts,
-        );
+        discovery.identify_blocks(&mut section.blocks, context);
+        discovery.identify_sections(&mut section.children, context);
     }
-    retained
+    discovery.retained
 }
 
 fn document_anchor_ids(blocks: &[Block], sections: &[Section]) -> HashSet<String> {
@@ -411,112 +395,72 @@ fn child_definition_context(
     }
 }
 
-fn identify_sections(
-    sections: &mut [Section],
-    parent_context: DefinitionContext,
-    used: &mut HashSet<String>,
-    reserved: &HashSet<String>,
-    retained: &mut HashSet<String>,
-    preferred_counts: &HashMap<String, usize>,
-) {
-    for section in sections {
-        let context = DefinitionContext::for_section(&section.title, parent_context);
-        identify_blocks(
-            &mut section.blocks,
-            context,
-            used,
-            reserved,
-            retained,
-            preferred_counts,
-        );
-        identify_sections(
-            &mut section.children,
-            context,
-            used,
-            reserved,
-            retained,
-            preferred_counts,
-        );
-    }
+struct DefinitionDiscovery<'a> {
+    used: HashSet<String>,
+    reserved: &'a HashSet<String>,
+    retained: HashSet<String>,
+    preferred_counts: &'a HashMap<String, usize>,
 }
 
-fn identify_blocks(
-    blocks: &mut Vec<Block>,
-    context: DefinitionContext,
-    used: &mut HashSet<String>,
-    reserved: &HashSet<String>,
-    retained: &mut HashSet<String>,
-    preferred_counts: &HashMap<String, usize>,
-) {
-    for block in blocks {
-        match block {
-            Block::List { items, .. } => {
-                for item in items {
-                    identify_blocks(
-                        &mut item.blocks,
-                        context,
-                        used,
-                        reserved,
-                        retained,
-                        preferred_counts,
-                    );
-                }
-            }
-            Block::DefinitionList { items, layout, .. } => {
-                let inferred_context = if context == DefinitionContext::Generic
-                    && is_key_binding_command_group(items)
-                {
-                    DefinitionContext::Commands
-                } else {
-                    context
-                };
-                let item_context = if inferred_context == DefinitionContext::Commands
-                    && layout.indent_columns > 0
-                {
-                    DefinitionContext::Parameters
-                } else {
-                    inferred_context
-                };
-                for item in items {
-                    let role = identify_item(
-                        item,
-                        item_context,
-                        used,
-                        reserved,
-                        retained,
-                        preferred_counts,
-                    );
-                    let child_context = child_definition_context(role, item_context);
-                    identify_blocks(
-                        &mut item.description,
-                        child_context,
-                        used,
-                        reserved,
-                        retained,
-                        preferred_counts,
-                    );
-                }
-            }
-            Block::Table { rows, .. } => {
-                for row in rows {
-                    for cell in &mut row.cells {
-                        identify_blocks(
-                            &mut cell.blocks,
-                            context,
-                            used,
-                            reserved,
-                            retained,
-                            preferred_counts,
-                        );
+impl DefinitionDiscovery<'_> {
+    fn identify_sections(&mut self, sections: &mut [Section], parent_context: DefinitionContext) {
+        for section in sections {
+            let context = DefinitionContext::for_section(&section.title, parent_context);
+            self.identify_blocks(&mut section.blocks, context);
+            self.identify_sections(&mut section.children, context);
+        }
+    }
+
+    fn identify_blocks(&mut self, blocks: &mut [Block], context: DefinitionContext) {
+        for block in blocks {
+            match block {
+                Block::List { items, .. } => {
+                    for item in items {
+                        self.identify_blocks(&mut item.blocks, context);
                     }
                 }
+                Block::DefinitionList { items, layout, .. } => {
+                    let inferred_context = if context == DefinitionContext::Generic
+                        && is_key_binding_command_group(items)
+                    {
+                        DefinitionContext::Commands
+                    } else {
+                        context
+                    };
+                    let item_context = if inferred_context == DefinitionContext::Commands
+                        && layout.indent_columns > 0
+                    {
+                        DefinitionContext::Parameters
+                    } else {
+                        inferred_context
+                    };
+                    for item in items {
+                        let role = identify_item(
+                            item,
+                            item_context,
+                            &mut self.used,
+                            self.reserved,
+                            &mut self.retained,
+                            self.preferred_counts,
+                        );
+                        let child_context = child_definition_context(role, item_context);
+                        self.identify_blocks(&mut item.description, child_context);
+                    }
+                }
+                Block::Table { rows, .. } => {
+                    for row in rows {
+                        for cell in &mut row.cells {
+                            self.identify_blocks(&mut cell.blocks, context);
+                        }
+                    }
+                }
+                Block::Paragraph { .. }
+                | Block::Preformatted { .. }
+                | Block::Equation { .. }
+                | Block::VerticalSpace { .. }
+                | Block::ThematicBreak { .. }
+                | Block::Unsupported { .. } => {}
             }
-            Block::Paragraph { .. }
-            | Block::Preformatted { .. }
-            | Block::Equation { .. }
-            | Block::VerticalSpace { .. }
-            | Block::ThematicBreak { .. }
-            | Block::Unsupported { .. } => {}
         }
     }
 }
