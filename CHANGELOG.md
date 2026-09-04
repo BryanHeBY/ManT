@@ -72,6 +72,10 @@ that crate was not published for that change.
   `MANDATORY_MANPATH` roots, optional double-quoted paths, and case-insensitive
   single-pass `%NAME%` expansion. Invalid directives are omitted and exposed
   through the new `inspect_manual_roots` diagnostics used by `mant --doctor`.
+- Match process-environment names with Windows' case-insensitive semantics,
+  deduplicate final roots by Windows path equivalence, stop traversing
+  `MANCONFIG` patterns once the 256-fragment budget is exhausted, and diagnose
+  both that truncation and known directives with missing arguments.
 - Keep target-only native definition containers as zero-width navigation
   placements without manufacturing empty `term-entry-*` semantic entries.
 - Retain formatter-generated native anchors independently of semantic-entry
