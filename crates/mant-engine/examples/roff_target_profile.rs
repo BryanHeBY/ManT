@@ -388,6 +388,7 @@ struct AstNodeRef<'a> {
 #[derive(Clone)]
 struct ExplicitTarget {
     id: String,
+    argumentless: bool,
     source_line: u32,
     ast_path: String,
     section_ordinal: usize,
@@ -473,6 +474,10 @@ fn bind_explicit_targets(
 ) -> Vec<ExplicitTarget> {
     let mut unmatched_explicit = Vec::new();
     for (index, target) in explicit.iter().cloned().enumerate() {
+        let previous_explicit_order = index
+            .checked_sub(1)
+            .and_then(|previous| explicit.get(previous))
+            .map_or(0, |previous| previous.order);
         let next_explicit_order = explicit
             .get(index + 1)
             .map_or(usize::MAX, |next| next.order);
@@ -485,6 +490,23 @@ fn bind_explicit_targets(
             })
             .max_by_key(|owner| owner.ast_path.len());
         if let Some(owner) = containing_owner {
+            owner.explicit = Some(target);
+            continue;
+        }
+        let preceding_paragraph_owner = target.argumentless.then(|| {
+            owners
+                .iter_mut()
+                .filter(|owner| {
+                    owner.explicit.is_none()
+                        && owner.owner_macro == "Pp"
+                        && owner.target.as_deref() == Some(target.id.as_str())
+                        && owner.order > previous_explicit_order
+                        && owner.order < target.order
+                        && preceding_sibling(&owner.ast_path, &target.ast_path)
+                })
+                .max_by_key(|owner| owner.order)
+        });
+        if let Some(Some(owner)) = preceding_paragraph_owner {
             owner.explicit = Some(target);
             continue;
         }
@@ -504,6 +526,21 @@ fn bind_explicit_targets(
         }
     }
     unmatched_explicit
+}
+
+fn preceding_sibling(candidate: &str, target: &str) -> bool {
+    let Some((candidate_parent, candidate_index)) = candidate.rsplit_once('.') else {
+        return false;
+    };
+    let Some((target_parent, target_index)) = target.rsplit_once('.') else {
+        return false;
+    };
+    candidate_parent == target_parent
+        && candidate_index
+            .parse::<usize>()
+            .ok()
+            .zip(target_index.parse::<usize>().ok())
+            .is_some_and(|(candidate, target)| candidate < target)
 }
 
 fn assemble_native_profile(
@@ -696,7 +733,8 @@ fn explicit_targets(nodes: &[AstNodeRef<'_>]) -> Vec<ExplicitTarget> {
         if reference.node.macro_name.as_deref() != Some("Tg") {
             continue;
         }
-        let target = explicit_target_argument(reference.node).or_else(|| {
+        let authored = explicit_target_argument(reference.node);
+        let target = authored.clone().or_else(|| {
             nodes[index + 1..]
                 .iter()
                 .filter(|candidate| candidate.node.line > reference.node.line)
@@ -705,6 +743,7 @@ fn explicit_targets(nodes: &[AstNodeRef<'_>]) -> Vec<ExplicitTarget> {
         if let Some(target) = target.filter(|target| !target.is_empty()) {
             targets.push(ExplicitTarget {
                 id: target,
+                argumentless: authored.is_none(),
                 source_line: reference.node.line,
                 ast_path: reference.path.clone(),
                 section_ordinal: reference.section_ordinal,
@@ -1405,6 +1444,65 @@ mod tests {
         assert!(profile.expected[0].explicit);
     }
 
+    #[test]
+    fn target_profile_binds_argumentless_tg_to_its_preceding_paragraph_owner() {
+        let paragraph = node(
+            NodeKind::Element,
+            Some("Pp"),
+            None,
+            Some("group"),
+            7,
+            NodeFlags {
+                deep_link_target: true,
+                ..NodeFlags::default()
+            },
+            Vec::new(),
+        );
+        let prose = node(
+            NodeKind::Text,
+            None,
+            Some("prose"),
+            None,
+            8,
+            NodeFlags::default(),
+            Vec::new(),
+        );
+        let request = node(
+            NodeKind::Element,
+            Some("Tg"),
+            None,
+            None,
+            9,
+            NodeFlags::default(),
+            Vec::new(),
+        );
+        let target_text = node(
+            NodeKind::Text,
+            None,
+            Some("group"),
+            None,
+            10,
+            NodeFlags::default(),
+            Vec::new(),
+        );
+        let target = node(
+            NodeKind::Element,
+            Some("Ic"),
+            None,
+            None,
+            10,
+            NodeFlags::default(),
+            vec![target_text],
+        );
+
+        let profile = native_target_profile(&root(vec![paragraph, prose, request, target]));
+        assert!(profile.unclassified.is_empty());
+        assert_eq!(profile.expected.len(), 1);
+        assert_eq!(profile.expected[0].id, "group");
+        assert_eq!(profile.expected[0].owner_macro, "Pp");
+        assert!(profile.expected[0].explicit);
+    }
+
     fn expected(
         id: &str,
         explicit: bool,
@@ -1576,6 +1674,7 @@ mod tests {
         let mut owners = [logical_owner("same", "0.4")];
         let explicit = [ExplicitTarget {
             id: "same".to_owned(),
+            argumentless: false,
             source_line: 12,
             ast_path: "0.4.1.0".to_owned(),
             section_ordinal: 1,
