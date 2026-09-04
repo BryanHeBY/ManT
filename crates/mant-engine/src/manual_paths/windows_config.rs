@@ -331,7 +331,7 @@ fn normalized_windows_path(path: &Path) -> String {
         .to_ascii_lowercase()
 }
 
-fn deduplicate_windows_paths(paths: Vec<PathBuf>) -> Vec<PathBuf> {
+pub(super) fn deduplicate_windows_paths(paths: Vec<PathBuf>) -> Vec<PathBuf> {
     let mut seen = HashSet::new();
     paths
         .into_iter()

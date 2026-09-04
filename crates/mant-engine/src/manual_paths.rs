@@ -69,14 +69,13 @@ pub fn discover_manual_roots() -> Vec<PathBuf> {
 #[must_use]
 pub fn inspect_manual_roots() -> ManualRootDiscovery {
     let environment = env::vars_os().collect::<HashMap<_, _>>();
-    if environment.contains_key(OsStr::new("MANT_MANPATH")) {
+    if environment_value(&environment, "MANT_MANPATH").is_some() {
         return ManualRootDiscovery {
             roots: discover_manual_roots_from(&environment, Vec::new()),
             diagnostics: Vec::new(),
         };
     }
-    if environment
-        .get(OsStr::new("MANPATH"))
+    if environment_value(&environment, "MANPATH")
         .is_some_and(|value| env::split_paths(value).all(|path| !path.as_os_str().is_empty()))
     {
         return ManualRootDiscovery {
@@ -103,13 +102,22 @@ fn discover_manual_roots_from(
     environment: &HashMap<OsString, OsString>,
     defaults: Vec<PathBuf>,
 ) -> Vec<PathBuf> {
-    if let Some(explicit) = environment.get(OsStr::new("MANT_MANPATH")) {
-        return deduplicate_paths(
+    discover_manual_roots_from_for(environment, defaults, host_platform())
+}
+
+fn discover_manual_roots_from_for(
+    environment: &HashMap<OsString, OsString>,
+    defaults: Vec<PathBuf>,
+    platform: ManualPathPlatform,
+) -> Vec<PathBuf> {
+    if let Some(explicit) = environment_value_for(environment, "MANT_MANPATH", platform) {
+        return deduplicate_manual_paths(
             env::split_paths(explicit).filter(|path| !path.as_os_str().is_empty()),
+            platform,
         );
     }
 
-    if let Some(manpath) = environment.get(OsStr::new("MANPATH")) {
+    if let Some(manpath) = environment_value_for(environment, "MANPATH", platform) {
         let mut roots = Vec::new();
         for path in env::split_paths(manpath) {
             if path.as_os_str().is_empty() {
@@ -118,7 +126,7 @@ fn discover_manual_roots_from(
                 roots.push(path);
             }
         }
-        return deduplicate_paths(roots);
+        return deduplicate_manual_paths(roots, platform);
     }
     defaults
 }
@@ -145,7 +153,7 @@ fn host_default_manual_roots(environment: &HashMap<OsString, OsString>) -> Manua
         discovery
             .roots
             .extend(supplemental_manual_roots(environment));
-        discovery.roots = deduplicate_paths(discovery.roots);
+        discovery.roots = deduplicate_manual_paths(discovery.roots, host_platform());
     }
     discovery
 }
@@ -156,6 +164,42 @@ enum ManualPathPlatform {
     Macos,
     Windows,
     OtherUnix,
+}
+
+fn environment_value<'a>(
+    environment: &'a HashMap<OsString, OsString>,
+    name: &str,
+) -> Option<&'a OsString> {
+    environment_value_for(environment, name, host_platform())
+}
+
+fn environment_value_for<'a>(
+    environment: &'a HashMap<OsString, OsString>,
+    name: &str,
+    platform: ManualPathPlatform,
+) -> Option<&'a OsString> {
+    environment.get(OsStr::new(name)).or_else(|| {
+        (platform == ManualPathPlatform::Windows).then(|| {
+            environment.iter().find_map(|(candidate, value)| {
+                candidate
+                    .to_string_lossy()
+                    .eq_ignore_ascii_case(name)
+                    .then_some(value)
+            })
+        })?
+    })
+}
+
+fn deduplicate_manual_paths(
+    paths: impl IntoIterator<Item = PathBuf>,
+    platform: ManualPathPlatform,
+) -> Vec<PathBuf> {
+    let paths = paths.into_iter().collect::<Vec<_>>();
+    if platform == ManualPathPlatform::Windows {
+        windows_config::deduplicate_windows_paths(paths)
+    } else {
+        deduplicate_paths(paths)
+    }
 }
 
 const fn host_platform() -> ManualPathPlatform {
@@ -180,7 +224,7 @@ fn fallback_manual_roots(environment: &HashMap<OsString, OsString>) -> Vec<PathB
 
 #[cfg(not(unix))]
 fn fallback_manual_roots(environment: &HashMap<OsString, OsString>) -> Vec<PathBuf> {
-    deduplicate_paths(supplemental_manual_roots(environment))
+    deduplicate_manual_paths(supplemental_manual_roots(environment), host_platform())
 }
 
 fn supplemental_manual_roots(environment: &HashMap<OsString, OsString>) -> Vec<PathBuf> {
@@ -193,30 +237,30 @@ fn supplemental_manual_roots_for(
 ) -> Vec<PathBuf> {
     let mut roots = Vec::new();
     if platform == ManualPathPlatform::Windows {
-        if let Some(data_root) = environment.get(OsStr::new("APPDATA")).map(PathBuf::from) {
+        if let Some(data_root) =
+            environment_value_for(environment, "APPDATA", platform).map(PathBuf::from)
+        {
             roots.push(data_root.join("ManT").join("man"));
         }
-        if let Some(profile) = environment
-            .get(OsStr::new("USERPROFILE"))
-            .map(PathBuf::from)
+        if let Some(profile) =
+            environment_value_for(environment, "USERPROFILE", platform).map(PathBuf::from)
         {
             roots.push(profile.join(".local/share/man"));
         }
         return roots;
     }
 
-    if let Some(home) = environment.get(OsStr::new("HOME")).map(PathBuf::from) {
+    if let Some(home) = environment_value_for(environment, "HOME", platform).map(PathBuf::from) {
         roots.push(home.join(".local/share/man"));
         roots.push(home.join(".local/man"));
         roots.push(home.join("man"));
     }
-    if let Some(data_home) = environment
-        .get(OsStr::new("XDG_DATA_HOME"))
-        .map(PathBuf::from)
+    if let Some(data_home) =
+        environment_value_for(environment, "XDG_DATA_HOME", platform).map(PathBuf::from)
     {
         roots.push(data_home.join("man"));
     }
-    if let Some(data_dirs) = environment.get(OsStr::new("XDG_DATA_DIRS")) {
+    if let Some(data_dirs) = environment_value_for(environment, "XDG_DATA_DIRS", platform) {
         roots.extend(env::split_paths(data_dirs).map(|root| root.join("man")));
     }
     roots
@@ -225,7 +269,7 @@ fn supplemental_manual_roots_for(
 #[cfg(unix)]
 fn path_derived_manual_roots(environment: &HashMap<OsString, OsString>) -> Vec<PathBuf> {
     let mut roots = Vec::new();
-    if let Some(path) = environment.get(OsStr::new("PATH")) {
+    if let Some(path) = environment_value(environment, "PATH") {
         for binary_dir in env::split_paths(path) {
             roots.extend(unmapped_man_db_roots(&binary_dir));
         }
@@ -234,8 +278,7 @@ fn path_derived_manual_roots(environment: &HashMap<OsString, OsString>) -> Vec<P
 }
 
 fn linux_configured_manual_roots(environment: &HashMap<OsString, OsString>) -> Vec<PathBuf> {
-    let user_config = environment
-        .get(OsStr::new("HOME"))
+    let user_config = environment_value(environment, "HOME")
         .map(PathBuf::from)
         .map(|home| home.join(".manpath"));
     let system_configurations = [
@@ -287,7 +330,7 @@ fn macos_configured_manual_roots(environment: &HashMap<OsString, OsString>) -> V
 
 fn macos_path_manual_roots(environment: &HashMap<OsString, OsString>) -> Vec<PathBuf> {
     let mut roots = Vec::new();
-    let Some(path) = environment.get(OsStr::new("PATH")) else {
+    let Some(path) = environment_value(environment, "PATH") else {
         return roots;
     };
     for executable_dir in env::split_paths(path) {
@@ -332,8 +375,7 @@ fn developer_manual_roots(developer: &Path) -> Vec<PathBuf> {
 }
 
 fn macos_developer_directory(environment: &HashMap<OsString, OsString>) -> Option<PathBuf> {
-    environment
-        .get(OsStr::new("DEVELOPER_DIR"))
+    environment_value(environment, "DEVELOPER_DIR")
         .filter(|path| !path.is_empty())
         .map(PathBuf::from)
         .or_else(|| read_selected_developer_directory(Path::new("/var/db/xcode_select_link")))
@@ -370,8 +412,7 @@ fn mant_configured_manual_roots(environment: &HashMap<OsString, OsString>) -> Ma
     mant_sources::document_paths()
         .ok()
         .map(|paths| {
-            let executable_paths = environment
-                .get(OsStr::new("PATH"))
+            let executable_paths = environment_value(environment, "PATH")
                 .map(|value| env::split_paths(value).collect::<Vec<_>>())
                 .unwrap_or_default();
             windows_config::load(&paths.root.join("man.conf"), environment, &executable_paths)
@@ -454,7 +495,7 @@ fn man_db_manual_roots(
     configuration: &ManDbConfig,
 ) -> Vec<PathBuf> {
     let mut roots = Vec::new();
-    if let Some(path) = environment.get(OsStr::new("PATH")) {
+    if let Some(path) = environment_value(environment, "PATH") {
         for binary in env::split_paths(path) {
             let mapped = configuration
                 .mappings
@@ -498,7 +539,7 @@ fn expand_man_db_systems(
     roots: Vec<PathBuf>,
     environment: &HashMap<OsString, OsString>,
 ) -> Vec<PathBuf> {
-    let Some(systems) = environment.get(OsStr::new("SYSTEM")) else {
+    let Some(systems) = environment_value(environment, "SYSTEM") else {
         return deduplicate_paths(roots);
     };
     let systems_value = systems.to_string_lossy();
@@ -674,10 +715,10 @@ mod tests {
     use std::{collections::HashMap, env, ffi::OsString, fs, path::PathBuf};
 
     use super::{
-        BsdManConfig, ManDbConfig, ManualPathPlatform, config_directive, developer_manual_roots,
-        discover_manual_roots_from, expand_man_db_systems, parse_bsd_man_config,
-        parse_man_db_config, parse_mandoc_manpaths, supplemental_manual_roots_for,
-        wildcard_matches,
+        BsdManConfig, ManDbConfig, ManualPathPlatform, config_directive, deduplicate_manual_paths,
+        developer_manual_roots, discover_manual_roots_from, discover_manual_roots_from_for,
+        environment_value_for, expand_man_db_systems, parse_bsd_man_config, parse_man_db_config,
+        parse_mandoc_manpaths, supplemental_manual_roots_for, wildcard_matches,
     };
 
     #[test]
@@ -812,9 +853,9 @@ mod tests {
         let data_root = PathBuf::from(r"C:\Users\demo\AppData\Roaming");
         let profile = PathBuf::from(r"C:\Users\demo");
         let environment = HashMap::from([
-            (OsString::from("APPDATA"), data_root.as_os_str().to_owned()),
+            (OsString::from("AppData"), data_root.as_os_str().to_owned()),
             (
-                OsString::from("USERPROFILE"),
+                OsString::from("UserProfile"),
                 profile.as_os_str().to_owned(),
             ),
         ]);
@@ -825,6 +866,61 @@ mod tests {
                 data_root.join("ManT").join("man"),
                 profile.join(".local/share/man")
             ]
+        );
+    }
+
+    #[test]
+    fn windows_environment_names_are_ascii_case_insensitive_only_on_windows() {
+        let path = env::join_paths([PathBuf::from("/tools")]).expect("join PATH");
+        let environment = HashMap::from([
+            (OsString::from("Path"), path.clone()),
+            (OsString::from("ManPath"), OsString::from("/manuals")),
+            (OsString::from("Mant_ManPath"), OsString::from("/override")),
+        ]);
+
+        assert_eq!(
+            environment_value_for(&environment, "PATH", ManualPathPlatform::Windows),
+            Some(&path)
+        );
+        assert_eq!(
+            environment_value_for(&environment, "PATH", ManualPathPlatform::Linux),
+            None
+        );
+        assert_eq!(
+            discover_manual_roots_from_for(
+                &environment,
+                vec![PathBuf::from("/default")],
+                ManualPathPlatform::Windows,
+            ),
+            vec![PathBuf::from("/override")]
+        );
+
+        let environment = HashMap::from([(
+            OsString::from("ManPath"),
+            env::join_paths([PathBuf::from("/first"), PathBuf::from("/second")])
+                .expect("join MANPATH"),
+        )]);
+        assert_eq!(
+            discover_manual_roots_from_for(
+                &environment,
+                vec![PathBuf::from("/default")],
+                ManualPathPlatform::Windows,
+            ),
+            vec![PathBuf::from("/first"), PathBuf::from("/second")]
+        );
+    }
+
+    #[test]
+    fn windows_final_roots_deduplicate_case_and_separator_variants() {
+        assert_eq!(
+            deduplicate_manual_paths(
+                [
+                    PathBuf::from(r"C:\Users\demo\ManT\man"),
+                    PathBuf::from("c:/users/DEMO/mant/man/"),
+                ],
+                ManualPathPlatform::Windows,
+            ),
+            vec![PathBuf::from(r"C:\Users\demo\ManT\man")]
         );
     }
 
