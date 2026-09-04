@@ -403,7 +403,7 @@ fn lower_inline_node(
             lower_alternating_fonts(children, default_name, first, second, spacing_enabled)
         },
     );
-    let anchor = navigation_anchor(node, &lowered);
+    let anchor = navigation_anchor(node);
     let mut output = lower_macro_inline(
         node,
         macro_name,
@@ -700,9 +700,8 @@ fn enclosure_marks(name: &str) -> Option<(&'static str, &'static str)> {
 /// Convert libmandoc's validated deep-link marker into a zero-width IR node.
 /// Explicit `.Tg` tags carry `node.tag`; automatically discovered tags fall
 /// back to the same first visible word that libmandoc uses.
-fn navigation_anchor(node: &Node, lowered: &[Inline]) -> Option<Inline> {
-    let fallback = plain_text(lowered);
-    super::targets::node_target(node, fallback.split_whitespace().next()).map(Inline::anchor)
+fn navigation_anchor(node: &Node) -> Option<Inline> {
+    super::targets::raw_target(node).map(Inline::anchor)
 }
 
 fn inline_children(node: &Node) -> &[Node] {

@@ -858,6 +858,53 @@ last text\n\
     }
 
     #[test]
+    fn automatic_targets_use_source_tokens_independently_of_spacing_mode() {
+        let document = parse_manual_bytes(
+            std::path::Path::new("spacing-target.7"),
+            b".Dd September 4, 2026\n.Dt SPACING-TARGET 7\n.Os\n.Sh DESCRIPTION\n\
+.Sm off\n\
+.Sy (U + S) / R .\n\
+.Sm on\n",
+        )
+        .expect("lower an automatic target while mdoc spacing is disabled");
+
+        assert!(anchor_ids(&document).iter().any(|id| id == "u"));
+        assert!(!anchor_ids(&document).iter().any(|id| id == "u-s-r"));
+    }
+
+    #[test]
+    fn argumentless_targets_retain_libmandoc_derived_destinations() {
+        let document = parse_manual_bytes(
+            std::path::Path::new("derived-target.8"),
+            b".Dd September 4, 2026\n.Dt DERIVED-TARGET 8\n.Os\n.Sh DESCRIPTION\n\
+.Bl -tag -width Ds\n\
+.It Xo\n\
+.Ic route\n\
+.Op Fl dtv\n\
+.Op Fl T Ar rtable\n\
+.Tg\n\
+.Cm nameserver\n\
+.Xc\n\
+First description.\n\
+.It Xo\n\
+.Ic route\n\
+.Tg\n\
+.Cm sourceaddr\n\
+.Xc\n\
+Second description.\n\
+.El\n",
+        )
+        .expect("lower argument-less targets in extended list heads");
+
+        let index = mant_ir::DocumentIndex::build(&document);
+        assert!(index.fragment_target("nameserver").is_some());
+        assert!(index.fragment_target("sourceaddr").is_some());
+        assert!(document.diagnostics.iter().all(|diagnostic| {
+            diagnostic.code.as_deref() != Some("ir.ambiguous-fragment-alias")
+        }));
+    }
+
+    #[test]
     fn preserves_targets_moved_to_paragraphs_and_displays() {
         let paragraph = parse_manual_bytes(
             std::path::Path::new("paragraph-target.3"),

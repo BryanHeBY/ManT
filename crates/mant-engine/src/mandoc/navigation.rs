@@ -7,8 +7,7 @@
 use std::collections::{HashMap, HashSet};
 
 use super::reference::{is_manual_reference_name, is_manual_section};
-use super::roff_escape::visible_text;
-use libmandoc_rs::{Node, NodeKind};
+use libmandoc_rs::Node;
 use mant_ir::{
     Block, Diagnostic, DiagnosticLevel, Inline, LinkTarget, Section,
     visit::{self, Visit, VisitMut},
@@ -42,13 +41,16 @@ pub(super) fn explicit_targets(root: &Node) -> HashSet<String> {
         if node.macro_name.as_deref() != Some("Tg") {
             continue;
         }
-        let target = first_text(node).map(visible_text).or_else(|| {
+        let target = super::targets::explicit_target_argument(node).or_else(|| {
             // An argument-less `.Tg` names the first argument of its following
-            // node. The validated target is the first tagged node after it.
+            // source macro. libmandoc moves the validated target backwards
+            // onto an enclosing list head, so looking only for the next
+            // target owner skips the intended macro and can select a later
+            // list item instead.
             nodes[index + 1..]
                 .iter()
-                .find(|candidate| candidate.flags.deep_link_target)
-                .and_then(|candidate| navigation_name(candidate))
+                .filter(|candidate| candidate.line > node.line)
+                .find_map(|candidate| super::targets::source_token(candidate))
         });
         if let Some(target) = target.filter(|target| !target.is_empty()) {
             targets.insert(target);
@@ -159,26 +161,6 @@ fn flatten_nodes<'a>(node: &'a Node, output: &mut Vec<&'a Node>) {
     for child in &node.children {
         flatten_nodes(child, output);
     }
-}
-
-fn first_text(node: &Node) -> Option<&str> {
-    if node.kind == NodeKind::Text {
-        return node.text.as_deref();
-    }
-    node.children.iter().find_map(first_text)
-}
-
-fn navigation_name(node: &Node) -> Option<String> {
-    node.tag.as_deref().map(visible_text).or_else(|| {
-        first_text(node).and_then(|value| {
-            let sanitized = visible_text(value);
-            sanitized
-                .trim_start_matches('-')
-                .split_whitespace()
-                .next()
-                .map(str::to_owned)
-        })
-    })
 }
 
 fn collect_section_targets(sections: &[Section], targets: &mut SectionTargets) {

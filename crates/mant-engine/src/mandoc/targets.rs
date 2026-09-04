@@ -28,7 +28,19 @@ pub(super) fn node_target(node: &Node, fallback: Option<&str>) -> Option<String>
 
 /// Return the first source token used by libmandoc when a target has no tag.
 pub(super) fn raw_target(node: &Node) -> Option<String> {
-    node_target(node, first_text(node))
+    let fallback = source_token(node);
+    node_target(node, fallback.as_deref())
+}
+
+/// Return the first printable source token used by automatic mdoc targets.
+pub(super) fn source_token(node: &Node) -> Option<String> {
+    let value = visible_text(first_text(node)?);
+    value
+        .trim_start_matches('-')
+        .split_whitespace()
+        .next()
+        .filter(|value| !value.is_empty())
+        .map(str::to_owned)
 }
 
 /// Return the exact destination authored by one explicit mdoc `.Tg` node.
@@ -46,6 +58,22 @@ pub(super) fn explicit_target(node: &Node) -> Option<String> {
         .as_deref()
         .map(visible_text)
         .or_else(|| first_text(node).map(visible_text))?;
+    let target = target.trim();
+    (!target.is_empty()).then(|| target.to_owned())
+}
+
+/// Return only the destination written as an argument to an explicit `.Tg`.
+///
+/// For an argument-less request, libmandoc can store a previously active
+/// automatic tag on the `.Tg` node itself while placing the destination
+/// derived from the following macro on that following node. Callers that need
+/// to distinguish authored arguments from derived destinations must therefore
+/// not consult `node.tag`.
+pub(super) fn explicit_target_argument(node: &Node) -> Option<String> {
+    if node.macro_name.as_deref() != Some("Tg") {
+        return None;
+    }
+    let target = first_text_on_line(node, node.line).map(visible_text)?;
     let target = target.trim();
     (!target.is_empty()).then(|| target.to_owned())
 }
@@ -354,6 +382,15 @@ fn first_text(node: &Node) -> Option<&str> {
         return node.text.as_deref();
     }
     node.children.iter().find_map(first_text)
+}
+
+fn first_text_on_line(node: &Node, line: u32) -> Option<&str> {
+    if node.kind == NodeKind::Text && !node.flags.no_print && node.line == line {
+        return node.text.as_deref();
+    }
+    node.children
+        .iter()
+        .find_map(|child| first_text_on_line(child, line))
 }
 
 fn node_and_part_targets(node: &Node) -> Vec<String> {
