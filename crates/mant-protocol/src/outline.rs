@@ -4,8 +4,9 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Deserializer, Serialize};
 
 use mant_ir::{
-    Block, DefinitionCase, DefinitionItem, DefinitionRole, Diagnostic, DocumentMeta,
-    DocumentSource, EntryKind, EntrySummary, NodeId, Section, TldrDocument, ValueDomain,
+    Block, DefinitionCase, DefinitionItem, DefinitionRole, Diagnostic, DocumentAddress,
+    DocumentMeta, DocumentSource, EntryKind, EntrySummary, LinkTarget, NodeId, Section,
+    TldrDocument, ValueDomain,
 };
 
 use crate::{NodePath, NodeSelector, Producer};
@@ -107,6 +108,9 @@ pub struct QueryOutline {
     pub root: Option<NodeSelector>,
     /// Human-readable selected-document label.
     pub label: String,
+    /// Exact logical document address, absent for direct-file input.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub address: Option<DocumentAddress>,
     /// Authoritative document source, when one was loaded.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub source: Option<DocumentSource>,
@@ -121,9 +125,25 @@ pub struct QueryOutline {
     /// The field is omitted for complete outlines so compact transports pay no
     /// steady-state bandwidth cost.
     #[serde(default = "default_true", skip_serializing_if = "is_true")]
-    pub entries_complete: bool,
+    pub semantics_complete: bool,
     /// Addressable nodes in document order.
     pub nodes: Vec<OutlineNode>,
+}
+
+/// One exact cross-document destination declared by a semantic entry term.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct EntryDocumentTarget {
+    /// Visible term text associated with this destination.
+    pub label: String,
+    /// Source-authored logical reference.
+    pub reference: LinkTarget,
+    /// Exact logical destination resolved in the source document namespace.
+    ///
+    /// This is absent for direct-file inputs and references, such as an
+    /// unqualified manual name, that require catalog lookup.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub address: Option<DocumentAddress>,
 }
 
 const fn default_true() -> bool {
@@ -198,8 +218,9 @@ pub enum OutlineNode {
         aliases: Vec<String>,
         /// Author-written input forms.
         forms: Vec<String>,
-        /// Definition nodes supplying content for this concept.
-        targets: Vec<NodeId>,
+        /// Exact cross-document destinations declared by linked entry terms.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        document_targets: Vec<EntryDocumentTarget>,
         /// Optional finite or cross-document value space.
         #[serde(skip_serializing_if = "Option::is_none")]
         value_domain: Option<ValueDomain>,

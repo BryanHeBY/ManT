@@ -24,10 +24,11 @@ fn outline_contract_exposes_both_human_paths_and_document_ids() {
         entries: EntryProjection::All,
         root: None,
         label: "demo(1)".to_owned(),
+        address: None,
         source: Some(source()),
         meta: Some(DocumentMeta::default()),
         diagnostics: Vec::new(),
-        entries_complete: true,
+        semantics_complete: true,
         nodes: vec![OutlineNode::DocumentSection {
             path: "2".to_owned().into(),
             id: "options-2".to_owned().into(),
@@ -43,7 +44,7 @@ fn outline_contract_exposes_both_human_paths_and_document_ids() {
                 case: DefinitionCase::Sensitive,
                 aliases: vec!["-a".to_owned(), "--all".to_owned()],
                 forms: vec!["-a, --all".to_owned()],
-                targets: vec!["all".to_owned().into()],
+                document_targets: Vec::new(),
                 value_domain: None,
                 entry_summary: Some(EntrySummary::default()),
                 children: Vec::new(),
@@ -69,7 +70,7 @@ fn outline_contract_exposes_both_human_paths_and_document_ids() {
     );
     assert_eq!(value["nodes"][0]["children"][0]["aliases"][1], "--all");
     assert!(value.get("diagnostics").is_none());
-    assert!(value.get("entriesComplete").is_none());
+    assert!(value.get("semanticsComplete").is_none());
 }
 
 #[test]
@@ -82,7 +83,7 @@ fn outline_optional_diagnostic_fields_default_to_a_complete_result() {
     }))
     .expect("outline optional-field defaults");
 
-    assert!(outline.entries_complete);
+    assert!(outline.semantics_complete);
     assert!(outline.diagnostics.is_empty());
 }
 
@@ -196,13 +197,14 @@ fn document_root_contract_addresses_content_before_the_first_heading() {
         entries: EntryProjection::None,
         root: None,
         label: "guide.md".to_owned(),
+        address: None,
         source: Some(DocumentSource {
             format: SourceFormat::Markdown,
             path: Some("guide.md".to_owned()),
         }),
         meta: Some(DocumentMeta::default()),
         diagnostics: Vec::new(),
-        entries_complete: true,
+        semantics_complete: true,
         nodes: vec![OutlineNode::DocumentRoot {
             path: "root".to_owned().into(),
             id: "document-overview".to_owned().into(),
@@ -259,10 +261,11 @@ fn tldr_uses_the_reserved_zero_path_in_outline_and_excerpt_contracts() {
         entries: EntryProjection::None,
         root: None,
         label: "demo".to_owned(),
+        address: None,
         source: None,
         meta: None,
         diagnostics: Vec::new(),
-        entries_complete: true,
+        semantics_complete: true,
         nodes: vec![OutlineNode::Tldr {
             path: "0".to_owned().into(),
             id: "tldr".to_owned().into(),

@@ -1198,7 +1198,7 @@ fn cli_and_request_outlines_report_rejected_semantic_entries() {
     assert!(direct.stderr.is_empty());
     let direct: serde_json::Value =
         serde_json::from_slice(&direct.stdout).expect("direct outline JSON");
-    assert_eq!(direct["entriesComplete"], false);
+    assert_eq!(direct["semanticsComplete"], false);
     assert_eq!(
         direct["diagnostics"][0]["code"],
         "markdown.semantic-entry.invalid-option-name"
@@ -1233,7 +1233,7 @@ fn cli_and_request_outlines_report_rejected_semantic_entries() {
     assert!(protocol.stderr.is_empty());
     let protocol: serde_json::Value =
         serde_json::from_slice(&protocol.stdout).expect("request outline JSON");
-    assert_eq!(protocol["entriesComplete"], false);
+    assert_eq!(protocol["semanticsComplete"], false);
     assert_eq!(protocol["diagnostics"], direct["diagnostics"]);
 }
 
@@ -1290,7 +1290,7 @@ fn exact_semantic_option_spellings_survive_the_cli_boundary() {
     assert!(outline.status.success(), "{outline:?}");
     assert!(outline.stderr.is_empty());
     let outline: serde_json::Value = serde_json::from_slice(&outline.stdout).expect("outline JSON");
-    assert!(outline.get("entriesComplete").is_none());
+    assert!(outline.get("semanticsComplete").is_none());
     assert_eq!(outline["nodes"][0]["children"][0]["aliases"][0], "-ca.cert");
     assert_eq!(
         outline["nodes"][0]["children"][1]["aliases"][0],

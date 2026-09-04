@@ -1,17 +1,17 @@
 //! Contract-focused tests for Markdown lowering and source preservation.
 
 use mant_ir::{
-    Block, DefinitionCase, DefinitionRole, EntryKind, Inline, ListKind, SourceFormat,
-    TableAlignment, TldrOrigin,
+    Block, DefinitionCase, DefinitionRole, DocumentAddress, EntryKind, Inline, ListKind,
+    MarkdownOrigin, SourceFormat, TableAlignment, TldrOrigin,
 };
 use mant_protocol::{
-    ExcerptSelection, OutlineDetail, OutlineNode, OutlineNodeReference, SearchCase, SearchQuery,
-    SearchScope, SearchSyntax,
+    EntryProjection, ExcerptSelection, OutlineDetail, OutlineNode, OutlineNodeReference,
+    SearchCase, SearchQuery, SearchScope, SearchSyntax,
 };
 
 use crate::{
-    ProjectionError, ResolvedContent, build_outline_with_detail, search_query, select_excerpt,
-    select_explanation,
+    ProjectionError, ResolvedContent, build_outline_projection, build_outline_with_detail,
+    search_query, select_excerpt, select_explanation,
 };
 
 use super::{parse_document, parse_markdown};
@@ -1549,7 +1549,7 @@ fn rejected_declared_entries_report_each_term_reason_and_item_location() {
         OutlineDetail::Entries,
     )
     .expect("incomplete semantic outline");
-    assert!(!outline.entries_complete);
+    assert!(!outline.semantics_complete);
     assert_eq!(outline.diagnostics.len(), 3);
 }
 
@@ -1579,7 +1579,7 @@ fn declared_entry_directive_does_not_skip_an_intervening_construct() {
         OutlineDetail::Entries,
     )
     .expect("recoverable incomplete semantic outline");
-    assert!(!outline.entries_complete);
+    assert!(!outline.semantics_complete);
 }
 
 #[test]
@@ -1688,4 +1688,41 @@ fn linked_code_terms_define_entry_document_destinations() {
         }] if label == "winget.exe" && name == "winget.exe"
     ));
     assert!(entries[1].document_targets.is_empty());
+
+    let outline = build_outline_projection(
+        &ResolvedContent {
+            label: "tools".to_owned(),
+            address: Some(DocumentAddress::Markdown {
+                path: "indexes/tools".to_owned(),
+                origin: MarkdownOrigin::Documents,
+            }),
+            document: Some(parsed.document),
+            tldr: None,
+        },
+        EntryProjection::All,
+        None,
+    )
+    .expect("linked entry outline");
+    let OutlineNode::DocumentRoot { children, .. } = &outline.nodes[0] else {
+        panic!("document title leaves entries in root content");
+    };
+    assert!(matches!(
+        children.as_slice(),
+        [OutlineNode::DocumentEntry { document_targets, .. }, OutlineNode::DocumentEntry { .. }]
+            if matches!(
+                document_targets.as_slice(),
+                [mant_protocol::EntryDocumentTarget {
+                    label,
+                    reference: mant_ir::LinkTarget::Document { name, fragment: None },
+                    address: Some(DocumentAddress::Markdown { path, origin: MarkdownOrigin::Documents }),
+                }] if label == "winget.exe" && name == "winget.exe" && path == "indexes/winget.exe"
+            )
+    ));
+    assert_eq!(
+        outline.address,
+        Some(DocumentAddress::Markdown {
+            path: "indexes/tools".to_owned(),
+            origin: MarkdownOrigin::Documents,
+        })
+    );
 }

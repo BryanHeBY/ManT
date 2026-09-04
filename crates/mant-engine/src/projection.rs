@@ -12,15 +12,16 @@ use mant_ir::{
     SemanticIndex, SourceSpan,
 };
 use mant_protocol::{
-    EntryProjection, ExcerptSchema, ExcerptSelection, NodeSelector, OutlineDetail, OutlineNode,
-    OutlineNodeReference, OutlineReference, OutlineSchema, OutlineTrail, QueryExcerpt,
-    QueryOutline,
+    EntryDocumentTarget, EntryProjection, ExcerptSchema, ExcerptSelection, NodeSelector,
+    OutlineDetail, OutlineNode, OutlineNodeReference, OutlineReference, OutlineSchema,
+    OutlineTrail, QueryExcerpt, QueryOutline,
 };
 
 use crate::{
     ResolvedContent,
     definitions::{definition_entries, environment_variable_body},
     inline::plain_text,
+    scope::logical_document_address,
 };
 
 pub(crate) const TLDR_ID: &str = "tldr";
@@ -205,7 +206,7 @@ pub fn build_outline_projection(
         .document
         .as_ref()
         .map_or_else(Vec::new, |document| document.diagnostics.clone());
-    let entries_complete = diagnostics.iter().all(|diagnostic| {
+    let semantics_complete = diagnostics.iter().all(|diagnostic| {
         !diagnostic.code.as_deref().is_some_and(|code| {
             crate::markdown::is_semantic_entry_rejection_code(code)
                 || code == "manual.semantic-entry.unclassified-definition"
@@ -228,7 +229,13 @@ pub fn build_outline_projection(
         let index = SemanticIndex::build(manual);
         if !manual.blocks.is_empty() {
             let root_entries = index.root();
-            let children = project_entries(root_entries, None, &[], &materialized_entries);
+            let children = project_entries(
+                root_entries,
+                None,
+                &[],
+                &materialized_entries,
+                query.address.as_ref(),
+            );
             let root = OutlineNode::DocumentRoot {
                 path: OutlinePath::DocumentRoot.to_string().into(),
                 id: DOCUMENT_ROOT_ID.into(),
@@ -247,6 +254,7 @@ pub fn build_outline_projection(
             &[],
             &index,
             &materialized_entries,
+            query.address.as_ref(),
         ));
     }
     if let Some(selector) = root.as_ref() {
@@ -259,6 +267,7 @@ pub fn build_outline_projection(
         entries,
         root,
         label: query.label.clone(),
+        address: query.address.clone(),
         source: query
             .document
             .as_ref()
@@ -268,7 +277,7 @@ pub fn build_outline_projection(
             .as_ref()
             .map(|document| document.meta.clone()),
         diagnostics,
-        entries_complete,
+        semantics_complete,
         nodes,
     })
 }
@@ -492,6 +501,7 @@ fn outline_nodes(
     parent: &[usize],
     index: &SemanticIndex,
     entries: &EntryProjection,
+    current_address: Option<&mant_ir::DocumentAddress>,
 ) -> Vec<OutlineNode> {
     sections
         .iter()
@@ -502,12 +512,19 @@ fn outline_nodes(
             let path =
                 OutlinePath::section(&coordinates).expect("enumerated section paths are one-based");
             let semantic_entries = index.section(&section.id);
-            let mut children = project_entries(semantic_entries, Some(&coordinates), &[], entries);
+            let mut children = project_entries(
+                semantic_entries,
+                Some(&coordinates),
+                &[],
+                entries,
+                current_address,
+            );
             children.extend(outline_nodes(
                 &section.children,
                 &coordinates,
                 index,
                 entries,
+                current_address,
             ));
             let node = OutlineNode::DocumentSection {
                 path: path.to_string().into(),
@@ -583,6 +600,7 @@ fn project_entries(
     section: Option<&[usize]>,
     parent: &[usize],
     projection: &EntryProjection,
+    current_address: Option<&mant_ir::DocumentAddress>,
 ) -> Vec<OutlineNode> {
     if matches!(projection, EntryProjection::None | EntryProjection::Summary) {
         return Vec::new();
@@ -593,7 +611,13 @@ fn project_entries(
         .filter_map(|(index, entry)| {
             let mut coordinates = parent.to_vec();
             coordinates.push(index + 1);
-            let children = project_entries(&entry.children, section, &coordinates, projection);
+            let children = project_entries(
+                &entry.children,
+                section,
+                &coordinates,
+                projection,
+                current_address,
+            );
             let selected = match projection {
                 EntryProjection::All => true,
                 EntryProjection::Kinds { kinds } => kinds.contains(&entry.kind),
@@ -616,7 +640,16 @@ fn project_entries(
                 case: entry.case,
                 aliases: entry.aliases.clone(),
                 forms: entry.forms.clone(),
-                targets: vec![entry.id.clone()],
+                document_targets: entry
+                    .document_targets
+                    .iter()
+                    .map(|target| EntryDocumentTarget {
+                        label: target.label.clone(),
+                        reference: target.target.clone(),
+                        address: current_address
+                            .and_then(|address| logical_document_address(address, &target.target)),
+                    })
+                    .collect(),
                 value_domain: entry.value_domain.clone(),
                 entry_summary: projected_summary(&entry.children, projection),
                 children,
@@ -1800,7 +1833,7 @@ mod tests {
     }
 
     #[test]
-    fn entry_completeness_distinguishes_rejections_from_author_warnings() {
+    fn semantic_completeness_distinguishes_rejections_from_author_warnings() {
         let mut query = query();
         {
             let document = query.document.as_mut().expect("document");
@@ -1814,7 +1847,7 @@ mod tests {
         assert!(
             build_outline(&query)
                 .expect("complete outline")
-                .entries_complete
+                .semantics_complete
         );
 
         query
@@ -1831,7 +1864,7 @@ mod tests {
         assert!(
             !build_outline(&query)
                 .expect("partial outline")
-                .entries_complete
+                .semantics_complete
         );
 
         query
@@ -1848,7 +1881,7 @@ mod tests {
         assert!(
             !build_outline(&query)
                 .expect("partial outline")
-                .entries_complete
+                .semantics_complete
         );
     }
 
