@@ -401,9 +401,10 @@ impl EntryRejectionReason {
 }
 
 pub(crate) fn is_semantic_entry_rejection_code(code: &str) -> bool {
-    EntryRejectionReason::ALL
-        .iter()
-        .any(|reason| reason.code() == code)
+    code == "markdown.semantic-entry-list"
+        || EntryRejectionReason::ALL
+            .iter()
+            .any(|reason| reason.code() == code)
 }
 
 #[derive(Debug, Clone)]

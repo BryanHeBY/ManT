@@ -1568,6 +1568,18 @@ fn declared_entry_directive_does_not_skip_an_intervening_construct() {
         diagnostic.code.as_deref() == Some("markdown.semantic-entry-list")
             && diagnostic.message.contains("immediately precede")
     }));
+
+    let outline = build_outline_with_detail(
+        &ResolvedContent {
+            address: None,
+            label: "tool.md".to_owned(),
+            document: Some(parsed.document),
+            tldr: None,
+        },
+        OutlineDetail::Entries,
+    )
+    .expect("recoverable incomplete semantic outline");
+    assert!(!outline.entries_complete);
 }
 
 #[test]

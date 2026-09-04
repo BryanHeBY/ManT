@@ -1804,10 +1804,7 @@ mod tests {
         let mut query = query();
         {
             let document = query.document.as_mut().expect("document");
-            for code in [
-                "markdown.semantic-entry.ambiguous-selector",
-                "markdown.semantic-entry-list",
-            ] {
+            for code in ["markdown.semantic-entry.ambiguous-selector"] {
                 document.diagnostics.push(Diagnostic {
                     level: DiagnosticLevel::Warning,
                     code: Some(code.to_owned()),
@@ -1829,8 +1826,25 @@ mod tests {
             .diagnostics
             .push(Diagnostic {
                 level: DiagnosticLevel::Warning,
-                code: Some("markdown.semantic-entry.invalid-entry-name".to_owned()),
+                code: Some("markdown.semantic-entry-list".to_owned()),
                 message: "rejected declaration".to_owned(),
+                source: None,
+            });
+        assert!(
+            !build_outline(&query)
+                .expect("partial outline")
+                .entries_complete
+        );
+
+        query
+            .document
+            .as_mut()
+            .expect("document")
+            .diagnostics
+            .push(Diagnostic {
+                level: DiagnosticLevel::Warning,
+                code: Some("markdown.semantic-entry.invalid-entry-name".to_owned()),
+                message: "rejected entry".to_owned(),
                 source: None,
             });
         assert!(
