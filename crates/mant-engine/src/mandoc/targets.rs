@@ -12,18 +12,47 @@ use mant_ir::{Block, DefinitionItem, Inline, LayoutHint, SourceSpan};
 
 use super::roff_escape::visible_text;
 
-/// Return the validated target owned by one exact AST node.
-pub(super) fn node_target(node: &Node, fallback: Option<&str>) -> Option<String> {
-    if !node.flags.deep_link_target {
-        return None;
+/// Document-wide target facts that must be known before structural lowering.
+///
+/// libmandoc moves target ownership between AST wrappers, and an argument-less
+/// `.Tg` derives its authored fragment spelling from the following source
+/// macro. Computing that source-level namespace once keeps section allocation,
+/// anchor normalization, semantic discovery, and navigation pruning on the
+/// same target policy.
+#[derive(Debug)]
+pub(super) struct NativeTargetPlan {
+    explicit: HashSet<String>,
+}
+
+impl NativeTargetPlan {
+    pub(super) fn build(root: &Node) -> Self {
+        let mut nodes = Vec::new();
+        flatten_nodes(root, &mut nodes);
+        let mut explicit = HashSet::new();
+        for (index, node) in nodes.iter().enumerate() {
+            if node.macro_name.as_deref() != Some("Tg") {
+                continue;
+            }
+            let target = explicit_target_argument(node).or_else(|| {
+                // An argument-less `.Tg` names the first argument of its
+                // following source macro. libmandoc can move the validated
+                // target backwards onto an enclosing structural wrapper, so
+                // the next target owner is not necessarily the source macro.
+                nodes[index + 1..]
+                    .iter()
+                    .filter(|candidate| candidate.line > node.line)
+                    .find_map(|candidate| source_token(candidate))
+            });
+            if let Some(target) = target.filter(|target| !target.is_empty()) {
+                explicit.insert(target);
+            }
+        }
+        Self { explicit }
     }
-    let target = node
-        .tag
-        .as_deref()
-        .map(visible_text)
-        .or_else(|| fallback.map(visible_text))?;
-    let target = target.trim();
-    (!target.is_empty()).then(|| target.to_owned())
+
+    pub(super) fn explicit(&self) -> &HashSet<String> {
+        &self.explicit
+    }
 }
 
 /// Return the first source token used by libmandoc when a target has no tag.
@@ -35,8 +64,16 @@ pub(super) fn raw_target(node: &Node) -> Option<String> {
             .then(|| explicit_target_argument(node))
             .flatten();
     }
-    let fallback = source_token(node);
-    node_target(node, fallback.as_deref())
+    if !node.flags.deep_link_target {
+        return None;
+    }
+    let target = node
+        .tag
+        .as_deref()
+        .map(visible_text)
+        .or_else(|| source_token(node))?;
+    let target = target.trim();
+    (!target.is_empty()).then(|| target.to_owned())
 }
 
 /// Return the first printable source token used by automatic mdoc targets.
@@ -48,16 +85,6 @@ pub(super) fn source_token(node: &Node) -> Option<String> {
         .next()
         .filter(|value| !value.is_empty())
         .map(str::to_owned)
-}
-
-/// Return the exact destination authored by one explicit mdoc `.Tg` node.
-///
-/// libmandoc can leave `.Tg` as a list-body sibling without the target flag,
-/// notably before an empty column item. The macro itself is still authoritative
-/// source syntax, so retain its explicit argument independently from where the
-/// parser later places `NODE_ID`.
-pub(super) fn explicit_target(node: &Node) -> Option<String> {
-    explicit_target_argument(node)
 }
 
 /// Return only the destination written as an argument to an explicit `.Tg`.
@@ -428,6 +455,13 @@ fn node_and_part_targets(node: &Node) -> Vec<String> {
     targets
 }
 
+fn flatten_nodes<'a>(node: &'a Node, output: &mut Vec<&'a Node>) {
+    output.push(node);
+    for child in &node.children {
+        flatten_nodes(child, output);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use libmandoc_rs::{Node, NodeFlags, NodeKind};
@@ -496,7 +530,7 @@ mod tests {
             Some("--Exact.Target")
         );
         assert_eq!(
-            super::explicit_target(&target).as_deref(),
+            super::explicit_target_argument(&target).as_deref(),
             Some("--Exact.Target")
         );
 
@@ -513,7 +547,7 @@ mod tests {
             Vec::new(),
         );
         assert_eq!(super::raw_target(&argumentless), None);
-        assert_eq!(super::explicit_target(&argumentless), None);
+        assert_eq!(super::explicit_target_argument(&argumentless), None);
     }
 
     #[test]

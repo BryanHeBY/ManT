@@ -7,7 +7,6 @@
 use std::collections::{HashMap, HashSet};
 
 use super::reference::{is_manual_reference_name, is_manual_section};
-use libmandoc_rs::Node;
 use mant_ir::{
     Block, Diagnostic, DiagnosticLevel, Inline, LinkTarget, Section,
     visit::{self, Visit, VisitMut},
@@ -28,35 +27,6 @@ pub(super) fn resolve_navigation(
     for section in sections {
         resolve_section(section, &targets, retained_targets, diagnostics);
     }
-}
-
-/// Return source-authored `.Tg` destinations that require exact fragment
-/// handling. Formatter-generated destinations are retained separately after
-/// normalization, but do not become authored fragment aliases.
-pub(super) fn explicit_targets(root: &Node) -> HashSet<String> {
-    let mut nodes = Vec::new();
-    flatten_nodes(root, &mut nodes);
-    let mut targets = HashSet::new();
-    for (index, node) in nodes.iter().enumerate() {
-        if node.macro_name.as_deref() != Some("Tg") {
-            continue;
-        }
-        let target = super::targets::explicit_target_argument(node).or_else(|| {
-            // An argument-less `.Tg` names the first argument of its following
-            // source macro. libmandoc moves the validated target backwards
-            // onto an enclosing list head, so looking only for the next
-            // target owner skips the intended macro and can select a later
-            // list item instead.
-            nodes[index + 1..]
-                .iter()
-                .filter(|candidate| candidate.line > node.line)
-                .find_map(|candidate| super::targets::source_token(candidate))
-        });
-        if let Some(target) = target.filter(|target| !target.is_empty()) {
-            targets.insert(target);
-        }
-    }
-    targets
 }
 
 /// Normalize and uniquely allocate formatter-generated native anchors.
@@ -154,13 +124,6 @@ pub(super) fn native_anchor_ids(root_blocks: &[Block], sections: &[Section]) -> 
         collector.visit_section(section);
     }
     collector.ids
-}
-
-fn flatten_nodes<'a>(node: &'a Node, output: &mut Vec<&'a Node>) {
-    output.push(node);
-    for child in &node.children {
-        flatten_nodes(child, output);
-    }
 }
 
 fn collect_section_targets(sections: &[Section], targets: &mut SectionTargets) {

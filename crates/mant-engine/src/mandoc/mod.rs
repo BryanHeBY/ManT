@@ -136,20 +136,21 @@ fn lower_mandoc_document_with_source(
     source: Option<&str>,
 ) -> Document {
     let parsed: &MandocDocument = &report.document;
-    let explicit_targets = navigation::explicit_targets(&parsed.root);
+    let target_plan = targets::NativeTargetPlan::build(&parsed.root);
+    let explicit_targets = target_plan.explicit();
     let mut context = LoweringContext::new(parsed.metadata.name.as_deref(), source);
-    context.reserve_section_ids(&explicit_targets);
+    context.reserve_section_ids(explicit_targets);
     let mut diagnostics = diagnostics::lower_diagnostics(&report.diagnostics);
     let mut sections = blocks::lower_sections(&parsed.root, &mut context);
     let mut root_blocks = blocks::lower_root_blocks(&parsed.root, &context);
     diagnostics.extend(context.take_diagnostics());
-    navigation::normalize_generated_anchors(&mut root_blocks, &mut sections, &explicit_targets);
+    navigation::normalize_generated_anchors(&mut root_blocks, &mut sections, explicit_targets);
     let mut retained_targets = navigation::native_anchor_ids(&root_blocks, &sections);
     retained_targets.extend(explicit_targets.iter().cloned());
     retained_targets.extend(crate::definitions::identify_definitions(
         &mut root_blocks,
         &mut sections,
-        &explicit_targets,
+        explicit_targets,
         parsed.metadata.name.as_deref(),
     ));
     diagnostics.extend(crate::projection::semantic_selector_diagnostics(

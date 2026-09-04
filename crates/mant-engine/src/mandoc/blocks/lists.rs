@@ -724,7 +724,7 @@ fn mdoc_list_items<'a>(
     let mut items = Vec::new();
     let mut pending_targets = Vec::new();
     for child in first_part_children(node, NodeKind::Body) {
-        if let Some(target) = targets::explicit_target(child)
+        if let Some(target) = targets::explicit_target_argument(child)
             && !pending_targets.contains(&target)
         {
             pending_targets.push(target);
