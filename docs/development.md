@@ -486,7 +486,12 @@ Target conservation cannot detect lowering that preserves every destination
 but incorrectly promotes numbered prose or a target-only placement artifact
 to a semantic entry. The independent semantic profile inventories the final
 `SemanticIndex`, its source context and value-domain origins, and scans the IR
-for high-confidence classification errors:
+for high-confidence classification errors. It also inventories punctuated
+ordinal candidates directly from the owned mdoc AST, retains each authored
+definition-list subtype and complete term sequence, and requires the final IR
+block at that source line to have the intended retained or recovered shape.
+This independent source-side ledger detects over-conversion after the original
+definition term has already disappeared from the IR:
 
 ```sh
 cargo build --package mant-engine --example roff_semantic_profile
@@ -500,6 +505,8 @@ python3 scripts/audit-roff-semantics.py --manpath /usr/share/man \
 Punctuated integer definitions left outside an ordered list, corresponding
 `term` or `value` entries, entries with neither an alias nor a visible form,
 and non-`value` children inside a `Choices` domain are review findings.
+So are qualifying `Bl -tag` sequences that remain definitions and ordinal
+`-diag`, `-hang`, `-inset`, or `-ohang` definitions that become ordered lists.
 Aliasless generic terms and entries in NOTES, FOOTNOTES, or REFERENCES are
 reported as bounded census data, not failures: those categories can be valid
 and require source-aware human judgment. The fixture ledger is

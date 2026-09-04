@@ -34,7 +34,8 @@ ROOT = Path(__file__).resolve().parents[1]
 FIXTURE_ROOT = ROOT / "tests/fixtures/roff/real"
 DEFAULT_PROFILER = ROOT / "target/debug/examples/roff_semantic_profile"
 DEFAULT_AUDIT_DB = ROOT / "tests/fixtures/roff/SEMANTIC_AUDIT.csv"
-PROFILE_SCHEMA = "mant.roff-semantic-profile/v1"
+PROFILE_SCHEMA = "mant.roff-semantic-profile/v2"
+SUPPORTED_PROFILE_SCHEMAS = {"mant.roff-semantic-profile/v1", PROFILE_SCHEMA}
 DATABASE_FIELDS = [
     "corpus",
     "path",
@@ -92,6 +93,8 @@ class Finding:
     aliasless_generic_term_count: int = 0
     note_like_entry_count: int = 0
     value_domain_violations: list[str] | None = None
+    ordinal_conversions: list[dict[str, object]] | None = None
+    ordinal_conversion_violations: list[str] | None = None
 
 
 def parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
@@ -131,7 +134,7 @@ def read_database(path: Path) -> dict[tuple[str, str, str], AuditRecord]:
         for number, row in enumerate(reader, 2):
             if SOURCE_DIGEST.fullmatch(row["source_sha256"]) is None:
                 raise ValueError(f"invalid source digest at {path}:{number}")
-            if row["profile_schema"] != PROFILE_SCHEMA:
+            if row["profile_schema"] not in SUPPORTED_PROFILE_SCHEMAS:
                 raise ValueError(f"unsupported semantic profile schema at {path}:{number}")
             if row["scan_status"] not in {"clean", "review", "hard-failure"}:
                 raise ValueError(f"invalid scan status at {path}:{number}")
@@ -230,6 +233,23 @@ def valid_definition_candidate(value: object) -> bool:
     )
 
 
+def valid_ordinal_conversion(value: object) -> bool:
+    dispositions = {"recovered-ordered-list", "retained-definition-list"}
+    return (
+        isinstance(value, dict)
+        and isinstance(value.get("sourceLine"), int)
+        and value["sourceLine"] >= 0
+        and value.get("listStyle") in {"tag", "diag", "hang", "inset", "ohang"}
+        and isinstance(value.get("terms"), list)
+        and all(isinstance(term, str) for term in value["terms"])
+        and value.get("expectedDisposition") in dispositions
+        and isinstance(value.get("observedDispositions"), list)
+        and all(item in dispositions for item in value["observedDispositions"])
+        and isinstance(value.get("observedIrPaths"), list)
+        and all(isinstance(path, str) for path in value["observedIrPaths"])
+    )
+
+
 def profile_findings(
     pages: Sequence[Path], roots: Sequence[Path], profiler: Path, timeout: int
 ) -> Iterable[Finding]:
@@ -271,6 +291,8 @@ def profile_findings(
             note_count = response.get("noteLikeEntryCount")
             note_samples = response.get("noteLikeEntrySamples")
             value_domain_violations = response.get("valueDomainViolations")
+            ordinal_conversions = response.get("ordinalConversions")
+            ordinal_conversion_violations = response.get("ordinalConversionViolations")
             violations = response.get("violations")
             valid = (
                 isinstance(entries, list)
@@ -296,6 +318,10 @@ def profile_findings(
                 and len(note_samples) <= min(note_count, 32)
                 and isinstance(value_domain_violations, list)
                 and all(isinstance(item, str) for item in value_domain_violations)
+                and isinstance(ordinal_conversions, list)
+                and all(valid_ordinal_conversion(item) for item in ordinal_conversions)
+                and isinstance(ordinal_conversion_violations, list)
+                and all(isinstance(item, str) for item in ordinal_conversion_violations)
                 and isinstance(violations, list)
                 and all(isinstance(item, str) for item in violations)
                 and bool(violations)
@@ -304,6 +330,7 @@ def profile_findings(
                     or ordinal_definitions
                     or empty_entries
                     or value_domain_violations
+                    or ordinal_conversion_violations
                 )
             )
             if not valid:
@@ -321,6 +348,8 @@ def profile_findings(
                 aliasless_generic_term_count=aliasless_count,
                 note_like_entry_count=note_count,
                 value_domain_violations=value_domain_violations,
+                ordinal_conversions=ordinal_conversions,
+                ordinal_conversion_violations=ordinal_conversion_violations,
             )
 
 
@@ -369,6 +398,16 @@ def self_check() -> None:
             "containingSectionTitle": "NOTES",
             "containingSectionSourceLine": 20,
             "irPath": "section[0]/block[0]/definition[0]",
+        }
+    )
+    assert valid_ordinal_conversion(
+        {
+            "sourceLine": 20,
+            "listStyle": "tag",
+            "terms": ["1.", "2."],
+            "expectedDisposition": "recovered-ordered-list",
+            "observedDispositions": ["recovered-ordered-list"],
+            "observedIrPaths": ["section[0]/block[0]"],
         }
     )
 
@@ -439,6 +478,8 @@ def main(argv: Sequence[str]) -> int:
     ordinal_definition_count = 0
     empty_entry_count = 0
     value_domain_violation_count = 0
+    ordinal_conversion_count = 0
+    ordinal_conversion_violation_count = 0
     verification_failed = False
     for finding in findings:
         total_entries += finding.entry_count
@@ -449,6 +490,10 @@ def main(argv: Sequence[str]) -> int:
         ordinal_definition_count += len(finding.ordinal_definitions or [])
         empty_entry_count += len(finding.empty_entries or [])
         value_domain_violation_count += len(finding.value_domain_violations or [])
+        ordinal_conversion_count += len(finding.ordinal_conversions or [])
+        ordinal_conversion_violation_count += len(
+            finding.ordinal_conversion_violations or []
+        )
     for page in pages:
         label, digest = records[page]
         finding = by_label[label]
@@ -485,7 +530,9 @@ def main(argv: Sequence[str]) -> int:
         f"ordinal-definitions={ordinal_definition_count}, "
         f"empty={empty_entry_count}, "
         f"aliasless-generic={aliasless_count}, note-like={note_count}, "
-        f"value-domain-violations={value_domain_violation_count}"
+        f"value-domain-violations={value_domain_violation_count}, "
+        f"ordinal-conversions={ordinal_conversion_count}, "
+        f"conversion-violations={ordinal_conversion_violation_count}"
     )
     if entry_counts:
         print(
@@ -511,6 +558,8 @@ def main(argv: Sequence[str]) -> int:
                     "pageCount": len(findings),
                     "entryCount": total_entries,
                     "entryCounts": dict(entry_counts),
+                    "ordinalConversionCount": ordinal_conversion_count,
+                    "ordinalConversionViolationCount": ordinal_conversion_violation_count,
                     "summary": dict(summary),
                     "findings": [asdict(finding) for finding in findings],
                 },

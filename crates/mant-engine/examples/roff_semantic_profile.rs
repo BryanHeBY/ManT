@@ -10,7 +10,7 @@ use std::{
     path::PathBuf,
 };
 
-use libmandoc_rs::{Compression, IncludePolicy, ParseOptions, Parser};
+use libmandoc_rs::{Compression, IncludePolicy, Node, ParseOptions, Parser};
 use mant_engine::lower_mandoc_document;
 use mant_ir::{
     Block, DefinitionRole, Document, EntryKind, Inline, ParameterKind, Section, SemanticEntry,
@@ -19,7 +19,12 @@ use mant_ir::{
 use serde::Serialize;
 use serde_json::{Value, json};
 
-const PROFILE_SCHEMA: &str = "mant.roff-semantic-profile/v1";
+#[path = "roff_semantic_profile/conversions.rs"]
+mod conversions;
+
+use conversions::{conversion_violations, ordinal_conversions};
+
+const PROFILE_SCHEMA: &str = "mant.roff-semantic-profile/v2";
 const SAMPLE_LIMIT: usize = 32;
 
 #[derive(Clone, Serialize)]
@@ -102,10 +107,20 @@ fn profile_request(line: &str) -> Result<Value, String> {
     .parse_file(&path)
     .map_err(|error| error.to_string())?;
     let document = lower_mandoc_document(&path, &report);
-    Ok(profile_document(id, &document, report.diagnostics.len()))
+    Ok(profile_document(
+        id,
+        &report.document.root,
+        &document,
+        report.diagnostics.len(),
+    ))
 }
 
-fn profile_document(id: &str, document: &Document, parser_diagnostics: usize) -> Value {
+fn profile_document(
+    id: &str,
+    native_root: &Node,
+    document: &Document,
+    parser_diagnostics: usize,
+) -> Value {
     let entries = entry_records(document);
     let ordinal_entries = entries
         .iter()
@@ -137,6 +152,8 @@ fn profile_document(id: &str, document: &Document, parser_diagnostics: usize) ->
         );
     }
     let value_domain_violations = value_domain_violations(document);
+    let ordinal_conversions = ordinal_conversions(native_root, document);
+    let ordinal_conversion_violations = conversion_violations(&ordinal_conversions);
     let aliasless_generic_terms = entries
         .iter()
         .filter(|entry| entry.kind == "term" && entry.aliases.is_empty())
@@ -181,6 +198,7 @@ fn profile_document(id: &str, document: &Document, parser_diagnostics: usize) ->
         )
     }));
     violations.extend(value_domain_violations.iter().cloned());
+    violations.extend(ordinal_conversion_violations.iter().cloned());
 
     json!({
         "schema": PROFILE_SCHEMA,
@@ -195,6 +213,8 @@ fn profile_document(id: &str, document: &Document, parser_diagnostics: usize) ->
         "noteLikeEntryCount": note_like_entries.len(),
         "noteLikeEntrySamples": note_like_entries.into_iter().take(SAMPLE_LIMIT).collect::<Vec<_>>(),
         "valueDomainViolations": value_domain_violations,
+        "ordinalConversions": ordinal_conversions,
+        "ordinalConversionViolations": ordinal_conversion_violations,
         "diagnostics": {
             "parser": parser_diagnostics,
             "ir": document.diagnostics.len(),

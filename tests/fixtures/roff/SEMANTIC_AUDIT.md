@@ -11,9 +11,15 @@ agent-visible semantic index.
 The development-only `roff_semantic_profile` example parses and lowers each
 page once, builds the final `SemanticIndex`, and records each entry's ID, kind,
 aliases, visible forms, targets, containing section, nested depth, and
-value-domain origin. Profile schema `mant.roff-semantic-profile/v1` also walks
+value-domain origin. Profile schema `mant.roff-semantic-profile/v2` also walks
 the IR definition lists independently so an ordinal that failed to become a
-list cannot hide merely because semantic discovery declined it.
+list cannot hide merely because semantic discovery declined it. Independently,
+it derives every punctuated ordinal candidate from the original owned mdoc AST,
+including the authored `-tag`, `-diag`, `-hang`, `-inset`, or `-ohang` subtype
+and complete term sequence, then matches that candidate to the final IR block
+at the same source line. This source-side conversion ledger detects both a
+qualifying `-tag` sequence that was not recovered and a non-tag definition
+whose terms were incorrectly deleted by over-conversion.
 
 The following are high-confidence review findings:
 
@@ -21,7 +27,11 @@ The following are high-confidence review findings:
   in a definition list;
 - such a form becomes a `term` or `value` semantic entry;
 - an entry has neither a semantic alias nor any visible form; or
-- a `Choices` value domain contains a child whose kind is not `value`.
+- a `Choices` value domain contains a child whose kind is not `value`;
+- a complete consecutive `Bl -tag` ordinal sequence does not become an ordered
+  list; or
+- an ordinal candidate from any other mdoc definition-list style does not
+  remain a definition list.
 
 The profile separately counts aliasless generic terms and entries below
 NOTES, FOOTNOTES, or REFERENCES headings. Those are sampling signals, not
@@ -60,7 +70,7 @@ host manuals a CI dependency:
 ```sh
 python3 scripts/audit-roff-semantics.py --manpath /usr/share/man \
   --corpus archlinux-host --recheck-recorded --findings-only \
-  --json /tmp/mant-semantic-archlinux-v1.json
+  --json /tmp/mant-semantic-archlinux-v2.json
 ```
 
 Keep the JSON report under `/tmp`; it can contain host-specific paths and

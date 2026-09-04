@@ -86,6 +86,11 @@ that crate was not published for that change.
   empty entries, and invalid value-domain children, while retaining aliasless
   generic and note-section entries as reviewable census signals rather than
   language-specific rejection rules.
+- Upgrade semantic precision to a v2 source-side conversion ledger. Every mdoc
+  ordinal candidate records its authored definition-list subtype and term
+  sequence, and its expected retained/recovered disposition must match the IR
+  block at the same source line, exposing over-conversion even after the
+  original term has disappeared.
 
 ### mant-ui 0.11.0
 
