@@ -1,6 +1,6 @@
 [package]
 name = "libmandoc-rs"
-version = "0.9.1"
+version = "0.9.2"
 edition.workspace = true
 rust-version.workspace = true
 license = "Apache-2.0 AND ISC AND BSD-2-Clause AND BSD-3-Clause"

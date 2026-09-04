@@ -13,9 +13,9 @@ use std::path::Path;
 mod windows_root;
 
 use super::{
-    AuthorMode, DisplayKind, Document, InputFormat, MacroSet, Metadata, Node, NodeFlags, NodeKind,
-    NormalizedEnclosure, NormalizedFont, NormalizedListKind, RawDocument, SourceBundle,
-    TableAlignment, TableCell,
+    AuthorMode, DefinitionListStyle, DisplayKind, Document, InputFormat, MacroSet, Metadata, Node,
+    NodeFlags, NodeKind, NormalizedEnclosure, NormalizedFont, NormalizedListKind, RawDocument,
+    SourceBundle, TableAlignment, TableCell,
 };
 
 #[cfg(feature = "render")]
@@ -48,6 +48,7 @@ struct CNodeView {
     column: i32,
     flags: u32,
     list_kind: i32,
+    definition_list_style: i32,
     display_kind: i32,
     font_kind: i32,
     author_mode: i32,
@@ -630,6 +631,18 @@ fn list_kind(value: i32) -> Result<Option<NormalizedListKind>, String> {
     }
 }
 
+fn definition_list_style(value: i32) -> Result<Option<DefinitionListStyle>, String> {
+    match value {
+        0 => Ok(None),
+        1 => Ok(Some(DefinitionListStyle::Tag)),
+        2 => Ok(Some(DefinitionListStyle::Diagnostic)),
+        3 => Ok(Some(DefinitionListStyle::Hang)),
+        4 => Ok(Some(DefinitionListStyle::Inset)),
+        5 => Ok(Some(DefinitionListStyle::Overhang)),
+        _ => Err("libmandoc returned an unknown definition list style".to_owned()),
+    }
+}
+
 fn display_kind(value: i32) -> Result<Option<DisplayKind>, String> {
     match value {
         0 => Ok(None),
@@ -694,6 +707,7 @@ unsafe fn copy_node(
             line_continuation,
         },
         list_kind: list_kind(view.list_kind)?,
+        definition_list_style: definition_list_style(view.definition_list_style)?,
         display_kind: display_kind(view.display_kind)?,
         font: font_kind(view.font_kind)?,
         author_mode: author_mode(view.author_mode)?,

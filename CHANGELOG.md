@@ -25,11 +25,14 @@ that crate was not published for that change.
   `fragmentAliases` beside normalized document, section, and anchor identities.
   The published v0.10 schema snapshot remains immutable.
 
-### libmandoc-rs
+### libmandoc-rs 0.9.2
 
 - Avoid an upstream assertion when an explicit mdoc `.Tg` precedes an already
   tagged section by preserving the existing section target instead of trying
   to assign it twice.
+- Preserve the authored `-tag`, `-diag`, `-hang`, `-inset`, or `-ohang`
+  subtype of normalized mdoc definition lists so semantic consumers do not
+  need to recover source syntax after parsing.
 
 ### mant-engine 0.11.0
 

@@ -16,8 +16,8 @@ mod source_bundle;
 mod special_character;
 
 pub use ast::{
-    AuthorMode, DisplayKind, Document, MacroSet, Metadata, Node, NodeFlags, NodeKind,
-    NormalizedEnclosure, NormalizedFont, NormalizedListKind, TableAlignment, TableCell,
+    AuthorMode, DefinitionListStyle, DisplayKind, Document, MacroSet, Metadata, Node, NodeFlags,
+    NodeKind, NormalizedEnclosure, NormalizedFont, NormalizedListKind, TableAlignment, TableCell,
 };
 pub use compression::MAX_DECOMPRESSED_SOURCE_BYTES;
 pub use diagnostics::{Diagnostic, DiagnosticCode, DiagnosticLevel, SourceLocation};

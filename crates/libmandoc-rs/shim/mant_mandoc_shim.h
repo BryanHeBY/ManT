@@ -35,6 +35,7 @@ struct mant_mandoc_node_view {
 	int			 column;
 	unsigned int		 flags;
 	int			 list_kind;
+	int			 definition_list_style;
 	int			 display_kind;
 	int			 font_kind;
 	int			 author_mode;
@@ -89,6 +90,15 @@ enum mant_mandoc_list_kind {
 	MANT_MANDOC_LIST_DEFINITION = 3,
 	MANT_MANDOC_LIST_COLUMN = 4,
 	MANT_MANDOC_LIST_PLAIN = 5
+};
+
+enum mant_mandoc_definition_list_style {
+	MANT_MANDOC_DEFINITION_LIST_NONE = 0,
+	MANT_MANDOC_DEFINITION_LIST_TAG = 1,
+	MANT_MANDOC_DEFINITION_LIST_DIAG = 2,
+	MANT_MANDOC_DEFINITION_LIST_HANG = 3,
+	MANT_MANDOC_DEFINITION_LIST_INSET = 4,
+	MANT_MANDOC_DEFINITION_LIST_OHANG = 5
 };
 
 enum mant_mandoc_display_kind {

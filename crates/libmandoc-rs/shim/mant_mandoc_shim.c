@@ -1215,10 +1215,28 @@ snapshot_normalized_data(struct mant_mandoc_node_view *view,
 			view->list_kind = MANT_MANDOC_LIST_ORDERED;
 			break;
 		case LIST_diag:
+			view->definition_list_style =
+			    MANT_MANDOC_DEFINITION_LIST_DIAG;
+			view->list_kind = MANT_MANDOC_LIST_DEFINITION;
+			break;
 		case LIST_hang:
+			view->definition_list_style =
+			    MANT_MANDOC_DEFINITION_LIST_HANG;
+			view->list_kind = MANT_MANDOC_LIST_DEFINITION;
+			break;
 		case LIST_inset:
+			view->definition_list_style =
+			    MANT_MANDOC_DEFINITION_LIST_INSET;
+			view->list_kind = MANT_MANDOC_LIST_DEFINITION;
+			break;
 		case LIST_ohang:
+			view->definition_list_style =
+			    MANT_MANDOC_DEFINITION_LIST_OHANG;
+			view->list_kind = MANT_MANDOC_LIST_DEFINITION;
+			break;
 		case LIST_tag:
+			view->definition_list_style =
+			    MANT_MANDOC_DEFINITION_LIST_TAG;
 			view->list_kind = MANT_MANDOC_LIST_DEFINITION;
 			break;
 		case LIST_column:

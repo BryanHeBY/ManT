@@ -14,9 +14,9 @@ use windows_sys::Win32::Foundation::ERROR_PRIVILEGE_NOT_HELD;
 use super::Diagnostic;
 
 use super::{
-    AuthorMode, Compression, DiagnosticCode, DiagnosticLevel, DisplayKind, Document, IncludePolicy,
-    InputFormat, MacroSet, Node, NodeKind, NormalizedFont, NormalizedListKind, ParseError,
-    ParseOptions, Parser, SourceBundle, TableAlignment,
+    AuthorMode, Compression, DefinitionListStyle, DiagnosticCode, DiagnosticLevel, DisplayKind,
+    Document, IncludePolicy, InputFormat, MacroSet, Node, NodeKind, NormalizedFont,
+    NormalizedListKind, ParseError, ParseOptions, Parser, SourceBundle, TableAlignment,
 };
 
 fn source_path(label: &str) -> std::path::PathBuf {
@@ -1664,12 +1664,38 @@ fn parser_copies_normalized_list_and_display_attributes() {
 
     let list = find_macro(&document.root, "Bl").expect("normalized list node");
     assert_eq!(list.list_kind, Some(NormalizedListKind::Definition));
+    assert_eq!(list.definition_list_style, Some(DefinitionListStyle::Tag));
     assert!(list.compact);
     assert_eq!(list.offset.as_deref(), Some("indent"));
     assert_eq!(list.width.as_deref(), Some("12n"));
     let display = find_macro(&document.root, "Bd").expect("normalized display node");
     assert_eq!(display.display_kind, Some(DisplayKind::Literal));
     assert_eq!(display.offset.as_deref(), Some("indent"));
+}
+
+#[test]
+fn parser_preserves_each_mdoc_definition_list_style() {
+    for (source_style, expected) in [
+        ("tag", DefinitionListStyle::Tag),
+        ("diag", DefinitionListStyle::Diagnostic),
+        ("hang", DefinitionListStyle::Hang),
+        ("inset", DefinitionListStyle::Inset),
+        ("ohang", DefinitionListStyle::Overhang),
+    ] {
+        let source = format!(
+            ".Dd September 4, 2026\n.Dt LIST-STYLE 1\n.Os\n.Sh DESCRIPTION\n.Bl -{source_style}\n.It term\nDescription.\n.El\n"
+        );
+        let report = Parser::default()
+            .parse_bytes("list-style.1", source.as_bytes())
+            .expect("parse definition list style");
+        let list = find_macro(&report.document.root, "Bl").expect("definition list node");
+        assert_eq!(list.list_kind, Some(NormalizedListKind::Definition));
+        assert_eq!(
+            list.definition_list_style,
+            Some(expected),
+            "-{source_style}"
+        );
+    }
 }
 
 #[test]

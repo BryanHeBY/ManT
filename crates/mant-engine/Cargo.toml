@@ -24,7 +24,7 @@ tldr-update = []
 grep-matcher.workspace = true
 grep-regex.workspace = true
 flate2.workspace = true
-libmandoc-rs = { path = "../libmandoc-rs", version = "^0.9.1" }
+libmandoc-rs = { path = "../libmandoc-rs", version = "^0.9.2" }
 mant-ir = { path = "../mant-ir", version = "^0.11.0" }
 mant-protocol = { path = "../mant-protocol", version = "^0.11.0" }
 mant-sources = { path = "../mant-sources", version = "^0.9.2" }

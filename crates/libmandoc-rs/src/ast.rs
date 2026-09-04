@@ -60,6 +60,26 @@ pub enum NormalizedListKind {
     Plain,
 }
 
+/// Source-level layout style of an mdoc definition list.
+///
+/// All variants lower to [`NormalizedListKind::Definition`], but retaining
+/// the authored style lets semantic consumers distinguish tagged definitions
+/// from diagnostic or hanging presentation without reparsing source text.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum DefinitionListStyle {
+    /// `Bl -tag`: terms occupy a measured tag column.
+    Tag,
+    /// `Bl -diag`: terms use diagnostic-message presentation.
+    Diagnostic,
+    /// `Bl -hang`: descriptions hang from their terms.
+    Hang,
+    /// `Bl -inset`: terms are inset without a fixed tag column.
+    Inset,
+    /// `Bl -ohang`: descriptions begin below overhanging terms.
+    Overhang,
+}
+
 /// Whether an mdoc display preserves source line layout.
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -197,6 +217,9 @@ pub struct Node {
     pub flags: NodeFlags,
     /// Normalized list behavior for an mdoc list block.
     pub list_kind: Option<NormalizedListKind>,
+    /// Authored mdoc definition-list style, when [`Self::list_kind`] is
+    /// [`NormalizedListKind::Definition`].
+    pub definition_list_style: Option<DefinitionListStyle>,
     /// Fill behavior for an mdoc display block.
     pub display_kind: Option<DisplayKind>,
     /// Font selected by an mdoc font block.

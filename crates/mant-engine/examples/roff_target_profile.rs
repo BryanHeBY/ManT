@@ -439,6 +439,7 @@ mod tests {
             column: 1,
             flags,
             list_kind: None,
+            definition_list_style: None,
             display_kind: None,
             font: None,
             author_mode: None,
