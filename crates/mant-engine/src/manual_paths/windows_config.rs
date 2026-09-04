@@ -9,7 +9,7 @@ use std::{
 
 use super::{
     MAX_EXPANDED_CONFIG_PATHS, MAX_MANUAL_PATH_CONFIG_BYTES, ManualPathDiagnostic,
-    ManualRootDiscovery, config_directive, expand_path_pattern,
+    ManualRootDiscovery, expand_path_pattern, expand_path_pattern_bounded,
 };
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -34,19 +34,13 @@ pub(super) fn load(
         };
     };
     let mut plan = parse(&text, path, environment, true);
-    let mut included = Vec::new();
-    let mut seen = HashSet::new();
-    for pattern in &plan.include_patterns {
-        for included_path in expand_path_pattern(pattern) {
-            if included.len() >= MAX_EXPANDED_CONFIG_PATHS {
-                break;
-            }
-            if seen.insert(normalized_windows_path(&included_path)) {
-                included.push(included_path);
-            }
-        }
+    let (included, truncated) = collect_include_paths(&plan.include_patterns);
+    if truncated {
+        plan.diagnostics.push(file_diagnostic(
+            path,
+            "MANCONFIG expansion exceeds the 256-fragment limit; remaining matches and patterns were not read",
+        ));
     }
-    included.sort_unstable_by_key(|path| normalized_windows_path(path));
 
     for included_path in included {
         let mut diagnostics = Vec::new();
@@ -120,10 +114,19 @@ fn parse(
         if line.is_empty() || line.starts_with('#') {
             continue;
         }
-        let Some((directive, value)) = config_directive(line) else {
+        let (directive, value) = directive_and_value(line);
+        if !is_known_directive(directive) {
             continue;
-        };
+        }
         let line = index + 1;
+        if value.is_empty() {
+            plan.diagnostics.push(line_diagnostic(
+                source,
+                line,
+                "directive has the wrong number of path arguments",
+            ));
+            continue;
+        }
         if directive.eq_ignore_ascii_case("manpath") {
             push_single_path(
                 &mut plan.roots,
@@ -174,6 +177,51 @@ fn parse(
         }
     }
     plan
+}
+
+fn directive_and_value(line: &str) -> (&str, &str) {
+    line.split_once(char::is_whitespace)
+        .map_or((line, ""), |(directive, value)| (directive, value.trim()))
+}
+
+fn is_known_directive(directive: &str) -> bool {
+    ["manpath", "mandatory_manpath", "manconfig", "manpath_map"]
+        .iter()
+        .any(|known| directive.eq_ignore_ascii_case(known))
+}
+
+fn collect_include_paths(patterns: &[PathBuf]) -> (Vec<PathBuf>, bool) {
+    collect_include_paths_with(patterns, expand_path_pattern_bounded)
+}
+
+fn collect_include_paths_with(
+    patterns: &[PathBuf],
+    mut expand: impl FnMut(&Path, usize) -> (Vec<PathBuf>, bool),
+) -> (Vec<PathBuf>, bool) {
+    let mut included = Vec::new();
+    let mut seen = HashSet::new();
+    let mut truncated = false;
+    for (index, pattern) in patterns.iter().enumerate() {
+        let remaining = MAX_EXPANDED_CONFIG_PATHS - included.len();
+        if remaining == 0 {
+            truncated = true;
+            break;
+        }
+        let (expanded, pattern_truncated) = expand(pattern, remaining);
+        for included_path in expanded {
+            if seen.insert(normalized_windows_path(&included_path)) {
+                included.push(included_path);
+            }
+        }
+        if pattern_truncated
+            || (included.len() == MAX_EXPANDED_CONFIG_PATHS && index + 1 < patterns.len())
+        {
+            truncated = true;
+            break;
+        }
+    }
+    included.sort_unstable_by_key(|path| normalized_windows_path(path));
+    (included, truncated)
 }
 
 fn push_single_path(
@@ -343,7 +391,8 @@ pub(super) fn deduplicate_windows_paths(paths: Vec<PathBuf>) -> Vec<PathBuf> {
 mod tests {
     use std::{collections::HashMap, ffi::OsString, path::PathBuf};
 
-    use super::{materialize, parse, split_arguments};
+    use super::{collect_include_paths_with, materialize, parse, split_arguments};
+    use crate::manual_paths::MAX_EXPANDED_CONFIG_PATHS;
 
     #[test]
     fn single_paths_preserve_spaces_and_accept_one_optional_double_quote_pair() {
@@ -429,6 +478,46 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec![1, 2, 3, 4]
         );
+    }
+
+    #[test]
+    fn known_directives_without_arguments_are_diagnosed() {
+        let plan = parse(
+            "MANPATH\nMANCONFIG\nMANPATH_MAP\nMANDATORY_MANPATH\nUNKNOWN\n",
+            PathBuf::from(r"C:\config\man.conf").as_path(),
+            &HashMap::new(),
+            true,
+        );
+        assert_eq!(
+            plan.diagnostics
+                .iter()
+                .map(|diagnostic| (diagnostic.line, diagnostic.message.as_str()))
+                .collect::<Vec<_>>(),
+            vec![
+                (Some(1), "directive has the wrong number of path arguments"),
+                (Some(2), "directive has the wrong number of path arguments"),
+                (Some(3), "directive has the wrong number of path arguments"),
+                (Some(4), "directive has the wrong number of path arguments"),
+            ]
+        );
+    }
+
+    #[test]
+    fn reaching_the_fragment_limit_skips_later_patterns() {
+        let patterns = [PathBuf::from("first"), PathBuf::from("must-not-expand")];
+        let (included, truncated) = collect_include_paths_with(&patterns, |pattern, limit| {
+            assert_eq!(limit, MAX_EXPANDED_CONFIG_PATHS);
+            assert_eq!(pattern, PathBuf::from("first"));
+            (
+                (0..MAX_EXPANDED_CONFIG_PATHS)
+                    .map(|index| PathBuf::from(format!(r"C:\fragments\{index:03}.conf")))
+                    .collect(),
+                false,
+            )
+        });
+
+        assert_eq!(included.len(), MAX_EXPANDED_CONFIG_PATHS);
+        assert!(truncated);
     }
 
     #[test]

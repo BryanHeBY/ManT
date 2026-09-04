@@ -192,8 +192,10 @@ roots (or mandoc `man.conf`), macOS PATH, active-developer, `MANPATH`, and
 `MANCONFIG` sources, and an optional ManT-owned Windows `man.conf`. That
 Windows parser materializes normalized directives in four phases: primary and
 one-level fragment roots, current-PATH mappings, then mandatory roots. It
-expands `%NAME%` once and keeps rejected directives as non-fatal discovery
-diagnostics for `mant --doctor`. Windows then adds `%APPDATA%\ManT\man` and the compatible
+expands `%NAME%` once, matches Windows environment names case-insensitively,
+stops traversing fragment patterns at the global bound, and keeps rejected or
+truncated directives as non-fatal discovery diagnostics for `mant --doctor`.
+Windows then adds `%APPDATA%\ManT\man` and the compatible
 `%USERPROFILE%\.local\share\man` fallback; Unix hosts use user, PATH-derived,
 and conventional system locations when native configuration is unavailable.
 No lookup spawns the host `man`, `manpath`, or `xcode-select` program.

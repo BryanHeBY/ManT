@@ -394,11 +394,13 @@ PATH-conditioned `MANPATH_MAP`, and `MANDATORY_MANPATH`; paths accept optional
 double quotes and single-pass `%NAME%` environment expansion. Direct primary
 and fragment roots precede mapped and mandatory roots, then ManT automatically
 checks `%APPDATA%\ManT\man` and the compatible
-`%USERPROFILE%\.local\share\man` fallback. Invalid directives are omitted;
-the native CLI exposes their local file and line through `mant --doctor`, while
-structured document results retain logical identities rather than physical
-configuration paths. Discovery is read-only and does not invoke a host
-command.
+`%USERPROFILE%\.local\share\man` fallback. Windows environment names use the
+platform's case-insensitive semantics, and fragment expansion stops before
+traversing patterns beyond its global bound. Invalid directives are omitted;
+the native CLI exposes their local file and line through `mant --doctor`,
+while structured document results retain logical identities rather than
+physical configuration paths. Discovery is read-only and does not invoke a
+host command.
 A root may contain `tool.1` directly or a hierarchy such as
 `project-man/man1/tool.1`; both become the logical catalog address
 `manual/1/tool`. Raw, gzip, and zstd sources are indexed because those are the

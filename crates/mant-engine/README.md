@@ -125,7 +125,9 @@ one-level fragments, PATH-conditioned mappings, quoted paths, and single-pass
 `%NAME%` expansion before automatically adding `%APPDATA%\ManT\man` and the
 compatible `%USERPROFILE%\.local\share\man` fallback. Invalid directives are
 omitted from queries and returned by `inspect_manual_roots` for local doctor
-reporting, all without spawning a host manual utility.
+reporting. Windows environment names are matched case-insensitively, and the
+fragment bound stops later pattern traversal, all without spawning a host
+manual utility.
 
 Native lowering conserves validated zero-width navigation targets as section,
 semantic-entry, or inline identities. This includes targets libmandoc moves

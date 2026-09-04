@@ -308,9 +308,10 @@ Direct roots from the primary file come first, followed by direct roots from
 at most 256 one-level `MANCONFIG` fragments, mapped roots in current `PATH`
 order, mandatory roots, `%APPDATA%\ManT\man`, and finally
 `%USERPROFILE%\.local\share\man`. A fragment cannot recursively import more
-fragments. Each configuration file is bounded to 1 MiB. `MANDB_MAP`, `DEFINE`,
-`SECTION`, and formatter or pager directives do not describe source roots and
-are ignored.
+fragments. Once fragment expansion reaches its bound, later matches and
+patterns are not traversed and `mant --doctor` reports the truncation. Each
+configuration file is bounded to 1 MiB. `MANDB_MAP`, `DEFINE`, `SECTION`, and
+formatter or pager directives do not describe source roots and are ignored.
 
 A single-path directive consumes the whole remainder of its line, so an
 unquoted path may contain spaces. Double quotes may optionally delimit a path;
@@ -339,6 +340,10 @@ MANDATORY_MANPATH "%PROGRAMDATA%\ManT\man"
 
 These percent expansions do not apply to `MANT_MANPATH`, `MANPATH`, Unix
 configuration files, registered Markdown sources, or roff include paths.
+Windows process-environment names themselves are matched without ASCII case
+sensitivity, so preserved spellings such as `Path`, `AppData`, `UserProfile`,
+`ManPath`, and `Mant_ManPath` have their normal Windows meaning. Unix
+environment lookup remains case-sensitive.
 
 The index accepts a leaf page symlink whose target is a regular file, including
 one outside the configured root. It does not traverse directory symlinks or

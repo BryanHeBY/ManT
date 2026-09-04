@@ -619,10 +619,18 @@ fn config_directive(line: &str) -> Option<(&str, &str)> {
 }
 
 fn expand_path_pattern(pattern: &Path) -> Vec<PathBuf> {
+    expand_path_pattern_bounded(pattern, MAX_EXPANDED_CONFIG_PATHS).0
+}
+
+fn expand_path_pattern_bounded(pattern: &Path, limit: usize) -> (Vec<PathBuf>, bool) {
+    if limit == 0 {
+        return (Vec::new(), true);
+    }
     if !pattern.as_os_str().to_string_lossy().contains(['*', '?']) {
-        return vec![pattern.to_path_buf()];
+        return (vec![pattern.to_path_buf()], false);
     }
     let mut candidates = vec![PathBuf::new()];
+    let mut truncated = false;
     for component in pattern.components() {
         match component {
             Component::Prefix(prefix) => {
@@ -646,7 +654,7 @@ fn expand_path_pattern(pattern: &Path) -> Vec<PathBuf> {
             }
             Component::Normal(component) => {
                 let Some(component) = component.to_str() else {
-                    return Vec::new();
+                    return (Vec::new(), truncated);
                 };
                 if !component.contains(['*', '?']) {
                     for candidate in &mut candidates {
@@ -656,7 +664,7 @@ fn expand_path_pattern(pattern: &Path) -> Vec<PathBuf> {
                 }
 
                 let mut expanded = Vec::new();
-                for candidate in candidates {
+                'candidate: for candidate in candidates {
                     let Ok(entries) = fs::read_dir(&candidate) else {
                         continue;
                     };
@@ -668,10 +676,11 @@ fn expand_path_pattern(pattern: &Path) -> Vec<PathBuf> {
                             .to_str()
                             .is_some_and(|name| wildcard_matches(component, name))
                         {
-                            expanded.push(entry.path());
-                            if expanded.len() >= MAX_EXPANDED_CONFIG_PATHS {
-                                return expanded;
+                            if expanded.len() >= limit {
+                                truncated = true;
+                                break 'candidate;
                             }
+                            expanded.push(entry.path());
                         }
                     }
                 }
@@ -679,7 +688,7 @@ fn expand_path_pattern(pattern: &Path) -> Vec<PathBuf> {
             }
         }
     }
-    candidates
+    (candidates, truncated)
 }
 
 fn wildcard_matches(pattern: &str, value: &str) -> bool {
