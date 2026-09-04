@@ -27,7 +27,8 @@ that crate was not published for that change.
 - Restrict semantic document references to Markdown and manual destinations,
   centralize namespace-only resolution, and remove the unused union domain.
 - Validate cross-document entry domains in the shared IR, including non-empty
-  references and role sets and rejection of duplicate roles.
+  references, native manual-section grammar, role sets, duplicate roles, and
+  optional source provenance used to retain relationship order.
 
 ### mant-protocol 0.11.0
 
@@ -47,7 +48,13 @@ that crate was not published for that change.
   add item-scoped `mant:domain` declarations for evidence-backed value spaces
   in relative Markdown documents or exact native manuals.
 - Include linked entry destinations and entry-set domains in bounded document
-  traversal, and show both relationships in expanded compact outlines.
+  traversal in authored source order, and show both relationships in expanded
+  compact outlines. Plain-text CLI outlines now share that renderer, preserve
+  resolved Markdown fragments, and distinguish labels from destinations.
+- Attach `mant:domain` to the structural CommonMark list item rather than a
+  coincidental source line, including multiline, nested, blank-line, and CRLF
+  forms. Require exact directive names and reject duplicate roles or malformed
+  manual references without reporting a complete semantic projection.
 
 ### libmandoc-rs 0.10.0
 
@@ -76,6 +83,10 @@ that crate was not published for that change.
   deduplicate final roots by Windows path equivalence, stop traversing
   `MANCONFIG` patterns once the 256-fragment budget is exhausted, and diagnose
   both that truncation and known directives with missing arguments.
+- Separate Windows `MANCONFIG` resource limits into at most 4096 matching path
+  candidates traversed and at most 256 unique configuration fragments loaded,
+  so overlapping patterns neither waste fragment capacity nor bypass the scan
+  bound.
 - Keep target-only native definition containers as zero-width navigation
   placements without manufacturing empty `term-entry-*` semantic entries.
 - Retain formatter-generated native anchors independently of semantic-entry
