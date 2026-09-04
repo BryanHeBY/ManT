@@ -1640,6 +1640,35 @@ fn declared_entries_preserve_roles_at_arbitrary_list_depth() {
 }
 
 #[test]
+fn semantic_directives_are_independent_of_markdown_line_endings() {
+    let source = "# Tool\n\n<!-- mant:entries role=environment-variable case=sensitive -->\n- `MANT_MANPATH`: Select roots.\n\n  <!-- mant:domain entries=manual/5/manpath roles=environment-variable -->\n";
+    for newline in ["\n", "\r\n"] {
+        let source = source.replace('\n', newline);
+        let parsed = parse_markdown(&source, None).expect("semantic directives parse");
+        assert!(
+            parsed.document.diagnostics.is_empty(),
+            "{newline:?}: {:?}",
+            parsed.document.diagnostics
+        );
+        let semantic_index = mant_ir::SemanticIndex::build(&parsed.document);
+        let [entry] = semantic_index.root() else {
+            panic!("{newline:?}: one semantic entry expected");
+        };
+        assert_eq!(entry.aliases, ["MANT_MANPATH"]);
+        assert!(matches!(
+            entry.value_domain,
+            Some(mant_ir::ValueDomain::EntrySet {
+                reference: mant_ir::SemanticDocumentReference::Manual {
+                    ref name,
+                    manual_section: Some(ref section),
+                },
+                ..
+            }) if name == "manpath" && section == "5"
+        ));
+    }
+}
+
+#[test]
 fn indented_code_does_not_activate_semantic_entry_directives() {
     let parsed = parse_markdown(
         "# Tool\n\n    <!-- mant:entries role=command case=sensitive -->\n    - `not-a-command`: code\n",

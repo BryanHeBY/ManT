@@ -96,18 +96,20 @@ fn collect_entry_declarations(
     declarations: &mut SemanticDeclarations,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    for (event_index, window) in events.windows(3).enumerate() {
-        let [
-            (Event::Start(Tag::HtmlBlock), _),
-            (Event::Html(raw), range),
-            (Event::End(TagEnd::HtmlBlock), _),
-        ] = window
-        else {
+    for (event_index, (event, range)) in events.iter().enumerate() {
+        let Event::Html(raw) = event else {
             continue;
         };
         if !raw.trim().starts_with("<!-- mant:entries") {
             continue;
         }
+        let Some(block_end_index) = events[event_index + 1..]
+            .iter()
+            .position(|(event, _)| matches!(event, Event::End(TagEnd::HtmlBlock)))
+            .map(|relative| event_index + relative + 1)
+        else {
+            continue;
+        };
         let index = source_line_index(line_starts, range.start);
         let line = lines[index];
         let without_newline = line.trim_end_matches(['\r', '\n']);
@@ -122,7 +124,7 @@ fn collect_entry_declarations(
             continue;
         };
         let source_span = declaration.source;
-        let Some((Event::Start(Tag::List(None)), target_range)) = events.get(event_index + 3)
+        let Some((Event::Start(Tag::List(None)), target_range)) = events.get(block_end_index + 1)
         else {
             semantic_diagnostic(
                 diagnostics,
