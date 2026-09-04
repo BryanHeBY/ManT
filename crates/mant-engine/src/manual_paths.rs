@@ -28,6 +28,7 @@ const DEFAULT_UNIX_MANUAL_ROOTS: [&str; 4] = [
 ];
 const MAX_MANUAL_PATH_CONFIG_BYTES: u64 = 1024 * 1024;
 const MAX_EXPANDED_CONFIG_PATHS: usize = 256;
+const MAX_EXPANDED_CONFIG_CANDIDATES: usize = 4096;
 
 /// One rejected entry in the host manual-path configuration.
 #[derive(Clone, Debug, Eq, PartialEq)]

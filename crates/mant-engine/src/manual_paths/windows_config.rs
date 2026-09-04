@@ -8,8 +8,8 @@ use std::{
 };
 
 use super::{
-    MAX_EXPANDED_CONFIG_PATHS, MAX_MANUAL_PATH_CONFIG_BYTES, ManualPathDiagnostic,
-    ManualRootDiscovery, expand_path_pattern, expand_path_pattern_bounded,
+    MAX_EXPANDED_CONFIG_CANDIDATES, MAX_EXPANDED_CONFIG_PATHS, MAX_MANUAL_PATH_CONFIG_BYTES,
+    ManualPathDiagnostic, ManualRootDiscovery, expand_path_pattern, expand_path_pattern_bounded,
 };
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -34,15 +34,21 @@ pub(super) fn load(
         };
     };
     let mut plan = parse(&text, path, environment, true);
-    let (included, truncated) = collect_include_paths(&plan.include_patterns);
-    if truncated {
+    let included = collect_include_paths(&plan.include_patterns);
+    if included.candidate_truncated {
         plan.diagnostics.push(file_diagnostic(
             path,
-            "MANCONFIG expansion exceeds the 256-fragment limit; remaining matches and patterns were not read",
+            "MANCONFIG expansion exceeds the 4096-candidate scan limit; remaining matches and patterns were not traversed",
+        ));
+    }
+    if included.fragment_truncated {
+        plan.diagnostics.push(file_diagnostic(
+            path,
+            "MANCONFIG expansion exceeds the 256-unique-fragment limit; remaining matches and patterns were not read",
         ));
     }
 
-    for included_path in included {
+    for included_path in included.paths {
         let mut diagnostics = Vec::new();
         if let Some(text) = read_config(&included_path, &mut diagnostics) {
             let fragment = parse(&text, &included_path, environment, false);
@@ -190,38 +196,70 @@ fn is_known_directive(directive: &str) -> bool {
         .any(|known| directive.eq_ignore_ascii_case(known))
 }
 
-fn collect_include_paths(patterns: &[PathBuf]) -> (Vec<PathBuf>, bool) {
+#[derive(Debug, Default, Eq, PartialEq)]
+struct IncludedPaths {
+    paths: Vec<PathBuf>,
+    candidate_truncated: bool,
+    fragment_truncated: bool,
+}
+
+fn collect_include_paths(patterns: &[PathBuf]) -> IncludedPaths {
     collect_include_paths_with(patterns, expand_path_pattern_bounded)
 }
 
 fn collect_include_paths_with(
     patterns: &[PathBuf],
     mut expand: impl FnMut(&Path, usize) -> (Vec<PathBuf>, bool),
-) -> (Vec<PathBuf>, bool) {
+) -> IncludedPaths {
     let mut included = Vec::new();
     let mut seen = HashSet::new();
-    let mut truncated = false;
+    let mut remaining_candidates = MAX_EXPANDED_CONFIG_CANDIDATES;
+    let mut candidate_truncated = false;
+    let mut fragment_truncated = false;
     for (index, pattern) in patterns.iter().enumerate() {
-        let remaining = MAX_EXPANDED_CONFIG_PATHS - included.len();
-        if remaining == 0 {
-            truncated = true;
+        if included.len() == MAX_EXPANDED_CONFIG_PATHS {
+            fragment_truncated = true;
             break;
         }
-        let (expanded, pattern_truncated) = expand(pattern, remaining);
+        if remaining_candidates == 0 {
+            candidate_truncated = true;
+            break;
+        }
+        let (expanded, pattern_truncated) = expand(pattern, remaining_candidates);
+        remaining_candidates = remaining_candidates.saturating_sub(expanded.len());
         for included_path in expanded {
-            if seen.insert(normalized_windows_path(&included_path)) {
+            if !seen.insert(normalized_windows_path(&included_path)) {
+                continue;
+            }
+            if included.len() == MAX_EXPANDED_CONFIG_PATHS {
+                fragment_truncated = true;
+                break;
+            } else {
                 included.push(included_path);
             }
         }
-        if pattern_truncated
-            || (included.len() == MAX_EXPANDED_CONFIG_PATHS && index + 1 < patterns.len())
-        {
-            truncated = true;
+        if fragment_truncated {
+            break;
+        }
+        if pattern_truncated {
+            candidate_truncated = true;
+            break;
+        }
+        if remaining_candidates == 0 && index + 1 < patterns.len() {
+            candidate_truncated = true;
+            break;
+        }
+        if included.len() == MAX_EXPANDED_CONFIG_PATHS && index + 1 < patterns.len() {
+            fragment_truncated = true;
             break;
         }
     }
     included.sort_unstable_by_key(|path| normalized_windows_path(path));
-    (included, truncated)
+    IncludedPaths {
+        paths: included,
+        candidate_truncated,
+        fragment_truncated,
+    }
 }
 
 fn push_single_path(
@@ -392,7 +430,7 @@ mod tests {
     use std::{collections::HashMap, ffi::OsString, path::PathBuf};
 
     use super::{collect_include_paths_with, materialize, parse, split_arguments};
-    use crate::manual_paths::MAX_EXPANDED_CONFIG_PATHS;
+    use crate::manual_paths::{MAX_EXPANDED_CONFIG_CANDIDATES, MAX_EXPANDED_CONFIG_PATHS};
 
     #[test]
     fn single_paths_preserve_spaces_and_accept_one_optional_double_quote_pair() {
@@ -505,8 +543,8 @@ mod tests {
     #[test]
     fn reaching_the_fragment_limit_skips_later_patterns() {
         let patterns = [PathBuf::from("first"), PathBuf::from("must-not-expand")];
-        let (included, truncated) = collect_include_paths_with(&patterns, |pattern, limit| {
-            assert_eq!(limit, MAX_EXPANDED_CONFIG_PATHS);
+        let included = collect_include_paths_with(&patterns, |pattern, limit| {
+            assert_eq!(limit, MAX_EXPANDED_CONFIG_CANDIDATES);
             assert_eq!(pattern, PathBuf::from("first"));
             (
                 (0..MAX_EXPANDED_CONFIG_PATHS)
@@ -516,8 +554,67 @@ mod tests {
             )
         });
 
-        assert_eq!(included.len(), MAX_EXPANDED_CONFIG_PATHS);
-        assert!(truncated);
+        assert_eq!(included.paths.len(), MAX_EXPANDED_CONFIG_PATHS);
+        assert!(!included.candidate_truncated);
+        assert!(included.fragment_truncated);
+    }
+
+    #[test]
+    fn overlapping_patterns_can_fill_the_unique_fragment_budget() {
+        let patterns = [PathBuf::from("first"), PathBuf::from("second")];
+        let mut calls = 0;
+        let included = collect_include_paths_with(&patterns, |pattern, limit| {
+            calls += 1;
+            match pattern.to_string_lossy().as_ref() {
+                "first" => {
+                    assert_eq!(limit, MAX_EXPANDED_CONFIG_CANDIDATES);
+                    (
+                        (0..MAX_EXPANDED_CONFIG_PATHS - 1)
+                            .map(|index| PathBuf::from(format!(r"C:\fragments\{index:03}.conf")))
+                            .collect(),
+                        false,
+                    )
+                }
+                "second" => {
+                    assert_eq!(
+                        limit,
+                        MAX_EXPANDED_CONFIG_CANDIDATES - (MAX_EXPANDED_CONFIG_PATHS - 1)
+                    );
+                    (
+                        vec![
+                            PathBuf::from(r"c:/FRAGMENTS/000.conf"),
+                            PathBuf::from(r"C:\fragments\unique.conf"),
+                        ],
+                        false,
+                    )
+                }
+                _ => panic!("unexpected pattern"),
+            }
+        });
+
+        assert_eq!(calls, 2);
+        assert_eq!(included.paths.len(), MAX_EXPANDED_CONFIG_PATHS);
+        assert!(
+            included
+                .paths
+                .contains(&PathBuf::from(r"C:\fragments\unique.conf"))
+        );
+        assert!(!included.candidate_truncated);
+        assert!(!included.fragment_truncated);
+    }
+
+    #[test]
+    fn candidate_scan_budget_is_independent_of_fragment_deduplication() {
+        let patterns = [PathBuf::from("first"), PathBuf::from("must-not-expand")];
+        let included = collect_include_paths_with(&patterns, |pattern, limit| {
+            assert_eq!(pattern, PathBuf::from("first"));
+            assert_eq!(limit, MAX_EXPANDED_CONFIG_CANDIDATES);
+            (vec![PathBuf::from(r"C:\fragments\same.conf"); limit], false)
+        });
+
+        assert_eq!(included.paths, [PathBuf::from(r"C:\fragments\same.conf")]);
+        assert!(included.candidate_truncated);
+        assert!(!included.fragment_truncated);
     }
 
     #[test]

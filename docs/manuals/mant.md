@@ -305,11 +305,13 @@ case-insensitive path directives are:
   roots.
 
 Direct roots from the primary file come first, followed by direct roots from
-at most 256 one-level `MANCONFIG` fragments, mapped roots in current `PATH`
-order, mandatory roots, `%APPDATA%\ManT\man`, and finally
+at most 256 unique one-level `MANCONFIG` fragments, mapped roots in current
+`PATH` order, mandatory roots, `%APPDATA%\ManT\man`, and finally
 `%USERPROFILE%\.local\share\man`. A fragment cannot recursively import more
-fragments. Once fragment expansion reaches its bound, later matches and
-patterns are not traversed and `mant --doctor` reports the truncation. Each
+fragments. Expansion traverses at most 4096 matching path candidates before
+Windows-aware deduplication; this scan budget is independent of the 256 unique
+fragments that may be loaded. Reaching either bound stops later matches and
+patterns, and `mant --doctor` identifies which bound truncated discovery. Each
 configuration file is bounded to 1 MiB. `MANDB_MAP`, `DEFINE`, `SECTION`, and
 formatter or pager directives do not describe source roots and are ignored.
 
