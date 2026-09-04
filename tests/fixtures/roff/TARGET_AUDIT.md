@@ -117,6 +117,30 @@ following source owner or to libmandoc's preceding paragraph owner. The exact
 reports are `/tmp/mant-target-full-45036-bd92d5c.json` and
 `/tmp/mant-target-full-45036-bd92d5c.csv`.
 
+The occurrence-aware v4 contract was run over the same 45,036-path inventory
+after exact IR owner coordinates and native owner spans were added. An initial
+complete run found 83 misplaced owner spans: 82 logical aliases of the
+editline(3) source and one ctfmerge(1) source retained an `Fo` destination in
+the correct definition but attributed it to the surrounding prose line. That
+finding produced the focused `Fo`-inside-definition regression and the
+high-level structural-part ownership fix in commit
+`a07f6529a399dbd9927edc84b148afdd38a4703f`.
+
+The final complete v4 rerun used that commit as its producer. The profiler
+binary SHA-256 was
+`f834254fe219f888aa0d8756ff2f76abadd6559914cc2b0aecb4cf1f0a4b8791`;
+the unchanged inventory manifest SHA-256 was
+`a5cd7919d1ac2774a335d077611b47680de8c1babe1b031d31ff8808f568879c`.
+All 45,036 pages were clean. Their 1,192,621 raw target owners formed exactly
+1,192,621 classified logical obligations, and every retained obligation
+matched one compatible IR occurrence at the same native owner line. Missing
+and unexpected occurrences, role collisions, invalid identities, duplicate
+identities, dangling links, and unclassified raw or logical owners were all
+zero. The path-bearing local reports are
+`/tmp/mant-target-full-45036-a07f652.json` and
+`/tmp/mant-target-full-45036-a07f652.csv`; this checked-in summary and the
+manifest digest are the durable, host-independent evidence.
+
 CI does not depend on `/usr/share/man`. It builds the profiler and verifies the
 small checked-in fixture corpus against recorded rows:
 

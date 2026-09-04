@@ -101,3 +101,20 @@ aliasless generic terms and 10,063 entries in note-like sections; these remain
 review populations, not automatic defects. The exact reports on the audit host
 are `/tmp/mant-semantic-full-45036-9233968.json` and
 `/tmp/mant-semantic-full-45036-9233968.csv`.
+
+After the source-side mdoc ordinal-conversion ledger was added, the same
+45,036-path inventory was rescanned with the v2 profiler at producer commit
+`a07f6529a399dbd9927edc84b148afdd38a4703f`. The profiler binary SHA-256 was
+`a7b259fbcd074c992ea10fc9434bd079ec153e44faf82b75aafb01c38092378e`;
+the inventory manifest SHA-256 remained
+`a5cd7919d1ac2774a335d077611b47680de8c1babe1b031d31ff8808f568879c`.
+All 45,036 pages were clean. Their 651,428 semantic entries contained zero
+punctuated ordinal entries, retained ordinal definitions, empty entries, or
+value-domain violations. The source/IR ledger observed one eligible
+`.Bl -tag` conversion and zero conversion-policy violations; a non-tag conversion
+would therefore fail even after its original ordinal terms disappeared from
+the IR. The informational aliasless-generic and note-like populations remained
+439,875 and 10,063 respectively. The path-bearing local reports are
+`/tmp/mant-semantic-full-45036-a07f652.json` and
+`/tmp/mant-semantic-full-45036-a07f652.csv`; this checked-in summary and the
+manifest digest are the durable, host-independent evidence.
