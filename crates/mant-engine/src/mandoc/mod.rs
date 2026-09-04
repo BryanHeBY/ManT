@@ -1723,6 +1723,34 @@ second line\n\
     }
 
     #[test]
+    fn preserves_targets_moved_to_paragraph_breaks_inside_no_fill_displays() {
+        let document = parse_manual_bytes(
+            std::path::Path::new("no-fill-paragraph-target.8"),
+            b".Dd September 4, 2026\n.Dt NO-FILL-PARAGRAPH-TARGET 8\n.Os\n\
+.Sh EXAMPLES\n\
+.Bd -unfilled\n\
+.Li first line\n\
+.Pp\n\
+.Li prompt Sy hp(0,0)\n\
+.Ed\n",
+        )
+        .expect("lower a target moved onto a no-fill paragraph break");
+
+        let [Block::Preformatted { children, .. }] = document.sections[0].blocks.as_slice() else {
+            panic!(
+                "no-fill display must remain preformatted: {:?}",
+                document.sections[0].blocks
+            );
+        };
+        assert!(
+            children
+                .iter()
+                .any(|inline| matches!(inline, Inline::Anchor { id, .. } if id == "hp-0-0"))
+        );
+        assert!(inline_text(children).contains("prompt hp(0,0)"));
+    }
+
+    #[test]
     fn preserves_zero_width_guard_rows_inside_no_fill_displays() {
         let document = parse_manual_bytes(
             std::path::Path::new("no-fill-zero-width-row.7"),

@@ -314,7 +314,17 @@ pub(super) fn append_inline_node(
         // it separates alternative terms without ending the owning item.
         // Keeping both inline lets the definition lowering retain that
         // distinction instead of concatenating the alternatives.
-        Some("br" | "Pp") => builder.hard_break(),
+        Some("br") => builder.hard_break(),
+        Some("Pp") => {
+            // In no-fill displays libmandoc can move the automatic target of
+            // a later semantic macro onto this paragraph break. The regular
+            // block lowering path conserves structural Pp targets, but this
+            // inline path must do so before replacing the node with a break.
+            if let Some(target) = super::targets::raw_target(node) {
+                builder.append(vec![Inline::anchor(target)]);
+            }
+            builder.hard_break();
+        }
         // Formatting requests carry control arguments such as `CW` and `R`.
         // `Es` likewise only changes the delimiters later `En` nodes use;
         // libmandoc resolves those delimiters onto each invocation. These
