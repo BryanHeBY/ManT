@@ -28,7 +28,11 @@ pub(super) fn node_target(node: &Node, fallback: Option<&str>) -> Option<String>
 
 /// Return the first source token used by libmandoc when a target has no tag.
 pub(super) fn raw_target(node: &Node) -> Option<String> {
-    let fallback = source_token(node);
+    let fallback = if node.macro_name.as_deref() == Some("Tg") {
+        explicit_target_argument(node)
+    } else {
+        source_token(node)
+    };
     node_target(node, fallback.as_deref())
 }
 
@@ -398,7 +402,10 @@ fn first_text(node: &Node) -> Option<&str> {
 }
 
 fn first_text_on_line(node: &Node, line: u32) -> Option<&str> {
-    if node.kind == NodeKind::Text && !node.flags.no_print && node.line == line {
+    // Explicit `.Tg` arguments are source syntax and intentionally no-print.
+    // Their source line, not their presentation flag, distinguishes them from
+    // a destination derived from a following macro.
+    if node.kind == NodeKind::Text && node.line == line {
         return node.text.as_deref();
     }
     node.children
