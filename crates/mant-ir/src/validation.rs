@@ -109,6 +109,29 @@ pub fn validate_document(document: &Document) -> Vec<Diagnostic> {
     diagnostics
 }
 
+/// Return whether a shared IR invariant diagnostic makes semantic projection incomplete.
+///
+/// Producers may add source-specific diagnostics, but consumers should use
+/// this classification for source-neutral identity and relationship failures
+/// instead of maintaining their own subsets of `ir.*` codes.
+#[must_use]
+pub fn is_semantic_completeness_diagnostic(code: &str) -> bool {
+    matches!(
+        code,
+        "ir.empty-identity"
+            | "ir.invalid-identity"
+            | "ir.identity-role-collision"
+            | "ir.duplicate-identity"
+            | "ir.empty-fragment-alias"
+            | "ir.invalid-fragment-alias"
+            | "ir.ambiguous-fragment-alias"
+            | "ir.empty-semantic-document-reference"
+            | "ir.invalid-semantic-document-reference"
+            | "ir.empty-entry-value-domain"
+            | "ir.duplicate-entry-value-kind"
+    )
+}
+
 fn is_normalized_node_id(id: &str) -> bool {
     let mut characters = id.chars();
     let Some(first) = characters.next() else {
@@ -1053,5 +1076,24 @@ mod tests {
             .collect::<Vec<_>>();
         assert!(codes.contains(&"ir.invalid-semantic-document-reference"));
         assert!(codes.contains(&"ir.duplicate-entry-value-kind"));
+    }
+
+    #[test]
+    fn classifies_only_semantic_invariant_diagnostics_as_incomplete() {
+        for code in [
+            "ir.invalid-identity",
+            "ir.ambiguous-fragment-alias",
+            "ir.invalid-semantic-document-reference",
+            "ir.empty-entry-value-domain",
+        ] {
+            assert!(is_semantic_completeness_diagnostic(code), "{code}");
+        }
+        for code in [
+            "ir.invalid-table-span",
+            "ir.invalid-source-position",
+            "ir.invalid-external-uri",
+        ] {
+            assert!(!is_semantic_completeness_diagnostic(code), "{code}");
+        }
     }
 }

@@ -209,6 +209,7 @@ pub fn build_outline_projection(
         !diagnostic.code.as_deref().is_some_and(|code| {
             crate::markdown::is_semantic_entry_rejection_code(code)
                 || code == "manual.semantic-entry.unclassified-definition"
+                || mant_ir::is_semantic_completeness_diagnostic(code)
         })
     });
     let materialized_entries = if root.is_some() {
@@ -1857,9 +1858,9 @@ mod tests {
 
     #[test]
     fn semantic_completeness_distinguishes_rejections_from_author_warnings() {
-        let mut query = query();
+        let mut markdown_query = query();
         {
-            let document = query.document.as_mut().expect("document");
+            let document = markdown_query.document.as_mut().expect("document");
             document.diagnostics.push(Diagnostic {
                 level: DiagnosticLevel::Warning,
                 code: Some("markdown.semantic-entry.ambiguous-selector".to_owned()),
@@ -1868,12 +1869,12 @@ mod tests {
             });
         }
         assert!(
-            build_outline(&query)
+            build_outline(&markdown_query)
                 .expect("complete outline")
                 .semantics_complete
         );
 
-        query
+        markdown_query
             .document
             .as_mut()
             .expect("document")
@@ -1885,12 +1886,12 @@ mod tests {
                 source: None,
             });
         assert!(
-            !build_outline(&query)
+            !build_outline(&markdown_query)
                 .expect("partial outline")
                 .semantics_complete
         );
 
-        query
+        markdown_query
             .document
             .as_mut()
             .expect("document")
@@ -1902,8 +1903,26 @@ mod tests {
                 source: None,
             });
         assert!(
-            !build_outline(&query)
+            !build_outline(&markdown_query)
                 .expect("partial outline")
+                .semantics_complete
+        );
+
+        let mut ir_query = query();
+        ir_query
+            .document
+            .as_mut()
+            .expect("document")
+            .diagnostics
+            .push(Diagnostic {
+                level: DiagnosticLevel::Warning,
+                code: Some("ir.invalid-semantic-document-reference".to_owned()),
+                message: "invalid producer relationship".to_owned(),
+                source: None,
+            });
+        assert!(
+            !build_outline(&ir_query)
+                .expect("IR-invalid outline")
                 .semantics_complete
         );
     }
