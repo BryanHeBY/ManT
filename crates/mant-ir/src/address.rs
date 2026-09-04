@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 ///
 /// Numeric sections may carry an ASCII-alphanumeric extension such as `1p`
 /// or `3type`; the historical single-letter `l` and `n` sections are also
-/// accepted. The 16-byte bound matches ManT's public selector boundary.
+/// accepted. The 16-byte bound matches `ManT`'s public selector boundary.
 #[must_use]
 pub fn is_manual_section(value: &str) -> bool {
     if value.is_empty() || value.len() > 16 {
