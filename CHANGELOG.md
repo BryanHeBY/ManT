@@ -108,6 +108,9 @@ that crate was not published for that change.
 
 - Resolve exact document, section, and inline fragment aliases to the same TUI
   rows as their normalized internal targets.
+- Emphasize literal commands and options in tldr examples while leaving
+  replaceable placeholders in the ordinary foreground color, matching their
+  source semantics in both the TUI and one-shot terminal presentation.
 
 ### mant 0.11.0
 

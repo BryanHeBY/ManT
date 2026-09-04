@@ -11,9 +11,9 @@ pub enum TldrRole {
     Body,
     /// Human explanation for a command example.
     Example,
-    /// Literal shell command text.
+    /// Literal command syntax, including executable names and options.
     Command,
-    /// Replaceable command value.
+    /// Replaceable command value rendered without command emphasis.
     Placeholder,
     /// More-information link.
     Link,
@@ -134,9 +134,9 @@ fn line(indent: usize, role: TldrRole, text: impl Into<String>) -> TldrLine {
 const fn ansi_style(role: TldrRole) -> &'static str {
     match role {
         TldrRole::Title => "\x1b[1;38;2;203;166;247m",
-        TldrRole::Body | TldrRole::Command => "\x1b[38;2;166;173;200m",
+        TldrRole::Body | TldrRole::Placeholder => "\x1b[38;2;166;173;200m",
         TldrRole::Example => "\x1b[38;2;166;227;161m",
-        TldrRole::Placeholder => "\x1b[38;2;249;226;175m",
+        TldrRole::Command => "\x1b[38;2;250;179;135m",
         TldrRole::Link => "\x1b[4;38;2;137;180;250m",
         TldrRole::Attribution => "\x1b[38;2;127;132;156m",
     }
@@ -144,7 +144,7 @@ const fn ansi_style(role: TldrRole) -> &'static str {
 
 #[cfg(test)]
 mod tests {
-    use mant_ir::{TldrDocument, TldrOrigin};
+    use mant_ir::{TldrCommandPart, TldrDocument, TldrExample, TldrOrigin};
 
     use super::render_tldr_terminal;
 
@@ -154,7 +154,18 @@ mod tests {
             title: "demo".to_owned(),
             description: vec!["Do the thing.".to_owned()],
             more_information: None,
-            examples: Vec::new(),
+            examples: vec![TldrExample {
+                description: "Write a file.".to_owned(),
+                command: "demo --output file".to_owned(),
+                command_parts: vec![
+                    TldrCommandPart::Text {
+                        value: "demo --output ".to_owned(),
+                    },
+                    TldrCommandPart::Placeholder {
+                        value: "file".to_owned(),
+                    },
+                ],
+            }],
             platform: "common".to_owned(),
             language: "en".to_owned(),
             source_path: "demo.md".to_owned(),
@@ -166,6 +177,9 @@ mod tests {
         assert!(plain.contains("TLDR QUICK REFERENCE · demo"));
         assert!(colored.contains("TLDR QUICK REFERENCE · demo"));
         assert!(plain.contains("tldr-pages · CC BY 4.0 · common · en"));
+        assert!(plain.contains("  demo --output file\n"));
+        assert!(colored.contains("\x1b[38;2;250;179;135mdemo --output \x1b[0m"));
+        assert!(colored.contains("\x1b[38;2;166;173;200mfile\x1b[0m"));
 
         let embedded = TldrDocument {
             origin: TldrOrigin::Embedded,

@@ -768,14 +768,14 @@ fn tldr_is_rendered_as_a_bordered_full_width_panel() {
         .expect("tldr command");
     assert!(
         command.spans.iter().any(|span| {
-            span.content.contains("--output") && span.style.fg == Some(theme::TEXT)
+            span.content.contains("--output") && span.style.fg == Some(theme::PEACH)
         })
     );
     assert!(
         command
             .spans
             .iter()
-            .any(|span| span.content == "file" && span.style.fg == Some(theme::YELLOW))
+            .any(|span| span.content == "file" && span.style.fg == Some(theme::TEXT))
     );
 }
 

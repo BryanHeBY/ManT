@@ -12,9 +12,9 @@ pub(super) fn tldr_style(role: crate::tldr::TldrRole) -> Style {
         TldrRole::Title => Style::default()
             .fg(theme::MAUVE)
             .add_modifier(Modifier::BOLD),
-        TldrRole::Body | TldrRole::Command => Style::default().fg(theme::TEXT),
+        TldrRole::Body | TldrRole::Placeholder => Style::default().fg(theme::TEXT),
         TldrRole::Example => Style::default().fg(theme::GREEN),
-        TldrRole::Placeholder => Style::default().fg(theme::YELLOW),
+        TldrRole::Command => Style::default().fg(theme::PEACH),
         TldrRole::Link => Style::default()
             .fg(theme::BLUE)
             .add_modifier(Modifier::UNDERLINED),
