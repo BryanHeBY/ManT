@@ -952,7 +952,7 @@ before an agent requests content:
 | `address` | Exact logical address, omitted for direct-file input |
 | `source`, `meta` | Optional document identity |
 | `diagnostics` | Optional recoverable parser findings |
-| `semanticsComplete` | Present as `false` when semantic declarations were rejected or native definitions could not be classified without guessing |
+| `semanticsComplete` | Present as `false` when semantic declarations were rejected, native definitions could not be classified without guessing, or shared IR validation found an identity or relationship violation |
 | `nodes` | Recursive addressable tree |
 
 Node kinds are:

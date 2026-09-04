@@ -29,6 +29,8 @@ that crate was not published for that change.
 - Validate cross-document entry domains in the shared IR, including non-empty
   references, native manual-section grammar, role sets, duplicate roles, and
   optional source provenance used to retain relationship order.
+- Publish a shared classification for IR identity and relationship diagnostics
+  that make semantic projections incomplete.
 
 ### mant-protocol 0.11.0
 
@@ -55,6 +57,8 @@ that crate was not published for that change.
   coincidental source line, including multiline, nested, blank-line, and CRLF
   forms. Require exact directive names and reject duplicate roles or malformed
   manual references without reporting a complete semantic projection.
+- Treat repeated `mant:domain` declarations on one entry as ambiguous: retain
+  the diagnostic but attach and traverse none of the competing relationships.
 
 ### libmandoc-rs 0.10.0
 

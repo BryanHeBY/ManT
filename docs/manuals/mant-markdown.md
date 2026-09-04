@@ -136,9 +136,12 @@ fragments are rejected. `roles` is a non-empty comma-separated list drawn from
 the same roles as `mant:entries`; repeating a role is an error. Unknown,
 duplicate, malformed, or unattached declarations produce
 `markdown.semantic-value-domain`, leave document content visible, and make the
-semantic projection incomplete. A syntactically valid reference remains useful
-even when catalog lookup is unavailable; resolution is an engine/protocol
-concern rather than a Markdown parsing requirement.
+semantic projection incomplete. Multiple valid declarations on one entry are
+ambiguous rather than first- or last-wins: ManT attaches no value domain and
+does not traverse any of those references. A syntactically valid reference
+remains useful when it is the entry's only declaration even if catalog lookup
+is unavailable; resolution is an engine/protocol concern rather than a
+Markdown parsing requirement.
 
 Ordinary option-shaped definition lists produced by native manuals can receive identities automatically. Markdown lists require either the explicit directive or the conservative complete-list inference described in the shipped examples; authors should use the directive when role or case policy matters.
 

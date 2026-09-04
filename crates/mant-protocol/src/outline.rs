@@ -120,7 +120,7 @@ pub struct QueryOutline {
     /// Recoverable parser findings available to diagnostic-oriented transports.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub diagnostics: Vec<Diagnostic>,
-    /// False when semantic-entry declarations were rejected during lowering.
+    /// False when lowering or shared IR validation found incomplete semantics.
     ///
     /// The field is omitted for complete outlines so compact transports pay no
     /// steady-state bandwidth cost.
