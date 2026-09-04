@@ -466,6 +466,8 @@ def self_check() -> None:
             "container": "paragraph",
             "sectionOrdinal": 1,
             "sectionSourceLine": 1,
+            "ownerSourceLine": 2,
+            "ownerPath": "section[0]/block[0]",
             "irPath": "section[0]/block[0]/inline[0]",
         }
     )
