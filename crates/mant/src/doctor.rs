@@ -332,7 +332,11 @@ fn push_configured_source(builder: &mut DoctorBuilder, source: &ConfiguredSource
 }
 
 fn inspect_manuals(builder: &mut DoctorBuilder) {
-    let roots = mant_engine::discover_manual_roots();
+    let discovery = mant_engine::inspect_manual_roots();
+    for diagnostic in &discovery.diagnostics {
+        push_manual_path_diagnostic(builder, diagnostic);
+    }
+    let roots = discovery.roots;
     builder.environment.manual_roots = roots
         .iter()
         .map(|root| root.to_string_lossy().into_owned())
@@ -363,6 +367,22 @@ fn inspect_manuals(builder: &mut DoctorBuilder) {
     if pages == 0 && !cfg!(windows) {
         check.remediation = Some("install manual pages or set MANT_MANPATH".to_owned());
     }
+}
+
+fn push_manual_path_diagnostic(
+    builder: &mut DoctorBuilder,
+    diagnostic: &mant_engine::ManualPathDiagnostic,
+) {
+    let check = builder.push(
+        "manuals.configuration",
+        DoctorCheckStatus::Warning,
+        &diagnostic.message,
+    );
+    check.subject = Some(diagnostic.config_path.to_string_lossy().into_owned());
+    if let Some(line) = diagnostic.line {
+        check.details.push(format!("line={line}"));
+    }
+    check.remediation = Some("fix or remove the reported man.conf directive".to_owned());
 }
 
 fn inspect_tldr(builder: &mut DoctorBuilder) {
@@ -508,7 +528,10 @@ mod tests {
     };
     use mant_sources::{ConfiguredSourceInspection, SourceInstallationStatus, SourceTransport};
 
-    use super::{DoctorBuilder, push_configured_source, render_text, terminal_safe};
+    use super::{
+        DoctorBuilder, push_configured_source, push_manual_path_diagnostic, render_text,
+        terminal_safe,
+    };
 
     fn report() -> DoctorReport {
         DoctorReport::new(
@@ -586,5 +609,27 @@ mod tests {
                 .any(|detail| detail == "remote freshness was not checked")
         );
         assert!(!check.message.contains("current"));
+    }
+
+    #[test]
+    fn invalid_manual_configuration_is_visible_without_stopping_the_index() {
+        let mut builder = DoctorBuilder::new();
+        push_manual_path_diagnostic(
+            &mut builder,
+            &mant_engine::ManualPathDiagnostic {
+                config_path: std::path::PathBuf::from(r"C:\Users\demo\man.conf"),
+                line: Some(7),
+                message: "manual path must be absolute".to_owned(),
+            },
+        );
+
+        let check = builder.checks.first().expect("manual configuration check");
+        assert_eq!(check.code, "manuals.configuration");
+        assert_eq!(check.status, DoctorCheckStatus::Warning);
+        assert_eq!(check.details, ["line=7"]);
+        assert_eq!(
+            check.remediation.as_deref(),
+            Some("fix or remove the reported man.conf directive")
+        );
     }
 }

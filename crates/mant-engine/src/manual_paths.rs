@@ -7,6 +7,8 @@
 //! does not inherit pager, formatter, cache, or locale behaviour from the
 //! host implementation.
 
+mod windows_config;
+
 use std::{
     collections::HashMap,
     env,
@@ -27,6 +29,26 @@ const DEFAULT_UNIX_MANUAL_ROOTS: [&str; 4] = [
 const MAX_MANUAL_PATH_CONFIG_BYTES: u64 = 1024 * 1024;
 const MAX_EXPANDED_CONFIG_PATHS: usize = 256;
 
+/// One rejected entry in the host manual-path configuration.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ManualPathDiagnostic {
+    /// Configuration file containing the invalid directive.
+    pub config_path: PathBuf,
+    /// One-based source line, or `None` for a whole-file failure.
+    pub line: Option<usize>,
+    /// Bounded explanation suitable for a local doctor report.
+    pub message: String,
+}
+
+/// Effective manual roots plus non-fatal host-configuration findings.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct ManualRootDiscovery {
+    /// Manual hierarchy roots in effective lookup precedence.
+    pub roots: Vec<PathBuf>,
+    /// Invalid configuration entries omitted from `roots`.
+    pub diagnostics: Vec<ManualPathDiagnostic>,
+}
+
 /// Discover effective manual hierarchy roots for the current host.
 ///
 /// `MANT_MANPATH` is a complete `ManT` override.  Otherwise `MANPATH` follows
@@ -35,8 +57,39 @@ const MAX_EXPANDED_CONFIG_PATHS: usize = 256;
 /// read without spawning `man`, `manpath`, or any other external program.
 #[must_use]
 pub fn discover_manual_roots() -> Vec<PathBuf> {
+    inspect_manual_roots().roots
+}
+
+/// Inspect effective native-manual roots without mutating host state.
+///
+/// Explicit `MANT_MANPATH` and complete `MANPATH` overrides do not read or
+/// report an inactive host configuration. Diagnostics currently describe the
+/// ManT-owned Windows `man.conf`; ordinary document queries intentionally use
+/// only [`discover_manual_roots`].
+#[must_use]
+pub fn inspect_manual_roots() -> ManualRootDiscovery {
     let environment = env::vars_os().collect::<HashMap<_, _>>();
-    discover_manual_roots_from(&environment, host_default_manual_roots(&environment))
+    if environment.contains_key(OsStr::new("MANT_MANPATH")) {
+        return ManualRootDiscovery {
+            roots: discover_manual_roots_from(&environment, Vec::new()),
+            diagnostics: Vec::new(),
+        };
+    }
+    if environment
+        .get(OsStr::new("MANPATH"))
+        .is_some_and(|value| env::split_paths(value).all(|path| !path.as_os_str().is_empty()))
+    {
+        return ManualRootDiscovery {
+            roots: discover_manual_roots_from(&environment, Vec::new()),
+            diagnostics: Vec::new(),
+        };
+    }
+
+    let defaults = host_default_manual_roots(&environment);
+    ManualRootDiscovery {
+        roots: discover_manual_roots_from(&environment, defaults.roots),
+        diagnostics: defaults.diagnostics,
+    }
 }
 
 #[cfg(test)]
@@ -70,20 +123,31 @@ fn discover_manual_roots_from(
     defaults
 }
 
-fn host_default_manual_roots(environment: &HashMap<OsString, OsString>) -> Vec<PathBuf> {
-    let native = match host_platform() {
-        ManualPathPlatform::Linux => linux_configured_manual_roots(environment),
-        ManualPathPlatform::Macos => macos_configured_manual_roots(environment),
-        ManualPathPlatform::Windows => mant_configured_manual_roots(),
-        ManualPathPlatform::OtherUnix => mandoc_configured_manual_roots(Path::new("/etc/man.conf")),
+fn host_default_manual_roots(environment: &HashMap<OsString, OsString>) -> ManualRootDiscovery {
+    let mut discovery = match host_platform() {
+        ManualPathPlatform::Linux => ManualRootDiscovery {
+            roots: linux_configured_manual_roots(environment),
+            diagnostics: Vec::new(),
+        },
+        ManualPathPlatform::Macos => ManualRootDiscovery {
+            roots: macos_configured_manual_roots(environment),
+            diagnostics: Vec::new(),
+        },
+        ManualPathPlatform::Windows => mant_configured_manual_roots(environment),
+        ManualPathPlatform::OtherUnix => ManualRootDiscovery {
+            roots: mandoc_configured_manual_roots(Path::new("/etc/man.conf")),
+            diagnostics: Vec::new(),
+        },
     };
-    if native.is_empty() {
-        fallback_manual_roots(environment)
+    if discovery.roots.is_empty() {
+        discovery.roots = fallback_manual_roots(environment);
     } else {
-        let mut roots = native;
-        roots.extend(supplemental_manual_roots(environment));
-        deduplicate_paths(roots)
+        discovery
+            .roots
+            .extend(supplemental_manual_roots(environment));
+        discovery.roots = deduplicate_paths(discovery.roots);
     }
+    discovery
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -302,10 +366,16 @@ fn read_selected_developer_directory(path: &Path) -> Option<PathBuf> {
         .filter(|path| path.is_dir())
 }
 
-fn mant_configured_manual_roots() -> Vec<PathBuf> {
+fn mant_configured_manual_roots(environment: &HashMap<OsString, OsString>) -> ManualRootDiscovery {
     mant_sources::document_paths()
         .ok()
-        .map(|paths| bsd_configured_manual_roots(&paths.root.join("man.conf")))
+        .map(|paths| {
+            let executable_paths = environment
+                .get(OsStr::new("PATH"))
+                .map(|value| env::split_paths(value).collect::<Vec<_>>())
+                .unwrap_or_default();
+            windows_config::load(&paths.root.join("man.conf"), environment, &executable_paths)
+        })
         .unwrap_or_default()
 }
 
@@ -314,23 +384,6 @@ fn mandoc_configured_manual_roots(path: &Path) -> Vec<PathBuf> {
         .map(|text| parse_mandoc_manpaths(&text))
         .map(deduplicate_paths)
         .unwrap_or_default()
-}
-
-fn bsd_configured_manual_roots(path: &Path) -> Vec<PathBuf> {
-    let Some(text) = read_config(path) else {
-        return Vec::new();
-    };
-    let configuration = parse_bsd_man_config(&text);
-    let mut roots = configuration.paths;
-    if let Some(pattern) = configuration.include_pattern {
-        for included in expand_path_pattern(&pattern) {
-            let Some(text) = read_config(&included) else {
-                continue;
-            };
-            roots.extend(parse_bsd_man_config(&text).paths);
-        }
-    }
-    deduplicate_paths(roots)
 }
 
 fn macos_configuration_roots(path: &Path) -> Vec<PathBuf> {
@@ -649,7 +702,7 @@ mod tests {
             Some(fragments.join("*.conf"))
         );
         assert_eq!(
-            super::bsd_configured_manual_roots(&root.join("man.conf")),
+            super::macos_configuration_roots(&root.join("man.conf")),
             Vec::<PathBuf>::new()
         );
         fs::write(
@@ -662,7 +715,7 @@ mod tests {
         )
         .expect("write man.conf");
         assert_eq!(
-            super::bsd_configured_manual_roots(&root.join("man.conf")),
+            super::macos_configuration_roots(&root.join("man.conf")),
             vec![root.join("primary"), port]
         );
         fs::remove_dir_all(root).expect("remove fixture");

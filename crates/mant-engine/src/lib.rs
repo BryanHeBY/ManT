@@ -32,7 +32,9 @@ pub use mandoc::{
 };
 pub use mant_ir::ResolvedContent;
 pub use manual::{is_command_manual_section, is_manual_section, parenthesized_manual_reference};
-pub use manual_paths::discover_manual_roots;
+pub use manual_paths::{
+    ManualPathDiagnostic, ManualRootDiscovery, discover_manual_roots, inspect_manual_roots,
+};
 pub use markdown::{MarkdownParseError, ParsedMarkdown, TldrDirectiveError, parse_markdown};
 pub use output::{
     MarkdownOptions, SearchTextRole, render_excerpt_json, render_excerpt_markdown,

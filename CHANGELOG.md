@@ -46,6 +46,11 @@ that crate was not published for that change.
   root after configured `man.conf` entries and before the
   `%USERPROFILE%\.local\share\man` compatibility fallback. Explicit
   `MANT_MANPATH` and `MANPATH` behavior is unchanged.
+- Extend the ManT-owned Windows `man.conf` with bounded, one-level
+  `MANCONFIG` fragments, PATH-conditioned `MANPATH_MAP` entries, trailing
+  `MANDATORY_MANPATH` roots, optional double-quoted paths, and case-insensitive
+  single-pass `%NAME%` expansion. Invalid directives are omitted and exposed
+  through the new `inspect_manual_roots` diagnostics used by `mant --doctor`.
 - Keep target-only native definition containers as zero-width navigation
   placements without manufacturing empty `term-entry-*` semantic entries.
 - Retain formatter-generated native anchors independently of semantic-entry
