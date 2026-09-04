@@ -51,6 +51,9 @@ that crate was not published for that change.
   that item, and stop exposing singleton footnotes or numbered steps as
   semantic entries while preserving bare numeric value domains such as
   `0`/`1`.
+- Recover complete consecutive numbered procedures authored as mdoc
+  `Bl -tag` lists while retaining singleton, gapped, mixed-style, bare, and
+  decimal terms as definitions.
 - Preserve validated mdoc targets moved by libmandoc onto paragraph, display,
   list, item, function, and section owners; keep `.Tg` zero-width; and run the
   same navigation-resolution passes over root and section content.

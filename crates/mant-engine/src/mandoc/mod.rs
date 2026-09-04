@@ -3503,6 +3503,57 @@ Sean\n\
     }
 
     #[test]
+    fn recovers_complete_numbered_sequences_from_mdoc_tag_lists() {
+        let document = parse_manual_bytes(
+            std::path::Path::new("mdoc-tag-enumeration.4"),
+            b".Dd September 4, 2026\n.Dt MDOC-TAG-ENUMERATION 4\n.Os\n.Sh EXAMPLES\n\
+.Bl -tag -width \"1.\"\n\
+.It 1.\nFirst step.\n\
+.Tg second-step\n\
+.It 2.\nSecond step.\n\
+.It 3.\nThird step.\n\
+.El\n\
+.Bl -tag -width \"1.\"\n\
+.It 1.\nA real singleton definition.\n\
+.El\n\
+.Bl -tag -width \"1.\"\n\
+.It 1.\nFirst non-sequence term.\n\
+.It 3.\nThird non-sequence term.\n\
+.El\n",
+        )
+        .expect("lower mdoc tag lists with numeric terms");
+
+        assert!(matches!(
+            document.sections[0].blocks[0],
+            Block::List {
+                kind: ListKind::Ordered,
+                start: Some(1),
+                ref items,
+                ..
+            } if items.len() == 3
+        ));
+        assert!(matches!(
+            document.sections[0].blocks[1],
+            Block::DefinitionList { ref items, .. } if items.len() == 1
+        ));
+        assert!(matches!(
+            document.sections[0].blocks[2],
+            Block::DefinitionList { ref items, .. } if items.len() == 2
+        ));
+        assert!(
+            SemanticIndex::build(&document)
+                .section("examples")
+                .iter()
+                .all(|entry| entry.aliases.iter().all(|alias| alias != "2."))
+        );
+        assert!(
+            mant_ir::DocumentIndex::build(&document)
+                .fragment_target("second-step")
+                .is_some()
+        );
+    }
+
+    #[test]
     fn distinguishes_man_ip_enumeration_from_numeric_option_values() {
         let document = parse_manual_bytes(
             std::path::Path::new("ip-enumeration.1"),

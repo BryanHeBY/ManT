@@ -249,6 +249,19 @@ pub(super) fn append_targets(
     });
 }
 
+/// Collect zero-width anchor identities nested in an inline sequence.
+pub(super) fn inline_anchor_ids(nodes: &[Inline], output: &mut Vec<String>) {
+    for node in nodes {
+        match node {
+            Inline::Anchor { id, .. } => output.push(id.to_string()),
+            Inline::Strong { children }
+            | Inline::Emphasis { children }
+            | Inline::Link { children, .. } => inline_anchor_ids(children, output),
+            Inline::Text { .. } | Inline::Code { .. } | Inline::LineBreak => {}
+        }
+    }
+}
+
 fn prepend_to_first_descendant(blocks: &mut [Block], targets: &[String]) -> bool {
     for block in blocks {
         match block {

@@ -1,6 +1,6 @@
 //! Reconstructs source-proven lists expressed with man(7) tagged paragraphs.
 
-use mant_ir::{Block, DefinitionItem, Inline, ListItem, ListKind, SourceSpan};
+use mant_ir::{Block, DefinitionItem, ListItem, ListKind, SourceSpan};
 
 use super::super::{
     inline::plain_text,
@@ -36,6 +36,12 @@ impl ManListState {
 pub(super) struct ManOrdinalMarker {
     value: u64,
     style: IpOrdinalStyle,
+}
+
+impl ManOrdinalMarker {
+    pub(super) const fn value(self) -> u64 {
+        self.value
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -86,6 +92,28 @@ pub(super) fn ordinal_marker(
     };
     let value = digits.parse().ok()?;
     Some(ManOrdinalMarker { value, style })
+}
+
+/// Recognize an entire mdoc tag list as one explicit ordinal sequence.
+///
+/// Unlike man(7) tagged paragraphs, `.Bl -tag` is explicit evidence for a
+/// definition list. Override it only when at least two described items form a
+/// complete, consecutive sequence with one punctuation style. This leaves
+/// singleton numeric terms and value domains untouched.
+pub(super) fn ordinal_sequence(items: &[DefinitionItem]) -> Option<ManOrdinalMarker> {
+    if items.len() < 2 {
+        return None;
+    }
+    let first = ordinal_marker(&items[0], false)?;
+    let mut previous = first;
+    for item in &items[1..] {
+        let marker = ordinal_marker(item, false)?;
+        if marker.style != previous.style || previous.value.checked_add(1) != Some(marker.value) {
+            return None;
+        }
+        previous = marker;
+    }
+    Some(first)
 }
 
 /// Convert a source-proven man enumerator into an ordered list, appending it
@@ -234,23 +262,11 @@ pub(super) fn list_item_from_definition(
     }
     let mut anchors = Vec::new();
     for term in &terms {
-        collect_inline_anchors(term, &mut anchors);
+        targets::inline_anchor_ids(term, &mut anchors);
     }
     targets::attach_targets(&mut description, anchors, layout(0), source);
     ListItem {
         blocks: description,
-    }
-}
-
-fn collect_inline_anchors(nodes: &[Inline], output: &mut Vec<String>) {
-    for node in nodes {
-        match node {
-            Inline::Anchor { id, .. } => output.push(id.to_string()),
-            Inline::Strong { children }
-            | Inline::Emphasis { children }
-            | Inline::Link { children, .. } => collect_inline_anchors(children, output),
-            Inline::Text { .. } | Inline::Code { .. } | Inline::LineBreak => {}
-        }
     }
 }
 
@@ -288,6 +304,31 @@ mod tests {
         let mut empty = definition("1.", "");
         empty.description.clear();
         assert!(super::ordinal_marker(&empty, false).is_none());
+    }
+
+    #[test]
+    fn recognizes_only_complete_punctuated_mdoc_sequences() {
+        let sequence = [
+            definition("1.", "one"),
+            definition("2.", "two"),
+            definition("3.", "three"),
+        ];
+        assert_eq!(
+            super::ordinal_sequence(&sequence).map(super::ManOrdinalMarker::value),
+            Some(1)
+        );
+
+        assert!(super::ordinal_sequence(&sequence[..1]).is_none());
+        assert!(
+            super::ordinal_sequence(&[definition("1.", "one"), definition("3.", "three")])
+                .is_none()
+        );
+        assert!(
+            super::ordinal_sequence(&[definition("1.", "one"), definition("2)", "two")]).is_none()
+        );
+        assert!(
+            super::ordinal_sequence(&[definition("0", "off"), definition("1", "on")]).is_none()
+        );
     }
 
     #[test]

@@ -23,7 +23,7 @@ use super::{
     lower_blocks_with_spacing,
     man_lists::{
         DefinitionLocation, MAN_DEFINITION_BODY_INDENT, ManListState, append_ordered,
-        list_item_from_definition, ordinal_marker,
+        list_item_from_definition, ordinal_marker, ordinal_sequence,
     },
 };
 use crate::block::block_layout_mut;
@@ -512,36 +512,14 @@ pub(super) fn lower_mdoc_list(
             paragraph_distance,
         )
     } else if is_definition {
-        let max_term_width = node
-            .width
-            .as_deref()
-            .and_then(horizontal_distance_columns)
-            .unwrap_or(6);
-        let lowered_items = items
-            .into_iter()
-            .map(|item| {
-                let mut lowered = definition_item(
-                    item.node,
-                    context,
-                    list_indent,
-                    paragraph_distance,
-                    max_term_width,
-                    item.spacing_enabled,
-                );
-                let targets = item
-                    .leading_targets
-                    .into_iter()
-                    .chain(targets::item_targets(item.node));
-                targets::attach_definition_targets(&mut lowered, targets);
-                lowered
-            })
-            .collect();
-        Block::DefinitionList {
-            items: coalesce_pending_definition_terms(lowered_items, max_term_width),
-            compact: node.compact,
-            layout: layout(indent_columns),
-            source: source_span(node),
-        }
+        lower_mdoc_definition_list(
+            node,
+            items,
+            context,
+            indent_columns,
+            list_indent,
+            paragraph_distance,
+        )
     } else {
         Block::List {
             kind: match node.list_kind {
@@ -589,6 +567,84 @@ pub(super) fn lower_mdoc_list(
         source_span(node),
     );
     block
+}
+
+fn lower_mdoc_definition_list(
+    node: &Node,
+    items: Vec<MdocListItem<'_>>,
+    context: &LoweringContext<'_>,
+    indent_columns: u16,
+    list_indent: u16,
+    paragraph_distance: &mut u16,
+) -> Block {
+    let max_term_width = node
+        .width
+        .as_deref()
+        .and_then(horizontal_distance_columns)
+        .unwrap_or(6);
+    let lowered_items = items
+        .into_iter()
+        .map(|item| {
+            let mut lowered = definition_item(
+                item.node,
+                context,
+                list_indent,
+                paragraph_distance,
+                max_term_width,
+                item.spacing_enabled,
+            );
+            let targets = item
+                .leading_targets
+                .into_iter()
+                .chain(targets::item_targets(item.node));
+            targets::attach_definition_targets(&mut lowered, targets);
+            lowered
+        })
+        .collect::<Vec<_>>();
+    if node.list_kind == Some(NormalizedListKind::Definition)
+        && let Some(first) = ordinal_sequence(&lowered_items)
+    {
+        return Block::List {
+            kind: ListKind::Ordered,
+            start: Some(first.value()),
+            compact: node.compact,
+            items: lowered_items
+                .into_iter()
+                .map(|item| mdoc_list_item_from_definition(item, list_indent, source_span(node)))
+                .collect(),
+            layout: layout(indent_columns),
+            source: source_span(node),
+        };
+    }
+    Block::DefinitionList {
+        items: coalesce_pending_definition_terms(lowered_items, max_term_width),
+        compact: node.compact,
+        layout: layout(indent_columns),
+        source: source_span(node),
+    }
+}
+
+/// Drop source-visible ordinal terms after a complete mdoc tag list has proved
+/// ordered-list semantics, while retaining any navigation targets attached to
+/// those terms at the same item position.
+fn mdoc_list_item_from_definition(
+    item: DefinitionItem,
+    list_indent: u16,
+    source: Option<mant_ir::SourceSpan>,
+) -> ListItem {
+    let DefinitionItem {
+        terms,
+        mut description,
+        ..
+    } = item;
+    let mut anchors = Vec::new();
+    for term in &terms {
+        targets::inline_anchor_ids(term, &mut anchors);
+    }
+    targets::attach_targets(&mut description, anchors, layout(list_indent), source);
+    ListItem {
+        blocks: description,
+    }
 }
 
 /// Attach consecutive description-less definition heads to the next item.

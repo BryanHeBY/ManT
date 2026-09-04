@@ -146,13 +146,21 @@ Parsing does not consult the installed manual index, so the same roff bytes prod
 | --- | --- |
 | `-bullet`, `-dash`, `-hyphen` | Bullet list |
 | `-enum` | Ordered list |
-| `-diag`, `-hang`, `-inset`, `-ohang`, `-tag` | Definition list |
+| `-diag`, `-hang`, `-inset`, `-ohang`, `-tag` | Definition list, except a complete proven ordinal sequence |
 | `-column` | Definition-list representation with column semantics retained by terms |
 | `-item` | Plain list |
 
 `-compact`, `-offset`, and `-width` are normalized where they affect terminal structure. Definition descriptions and list items retain nested blocks.
 
 Consecutive option-shaped mdoc `It` heads without bodies are retained as alternative terms of the next described definition. This covers both several forms of one option and distinct options such as `-I` and `-O` that intentionally share one description; a trailing run with no following body remains separate.
+
+Some deployed mdoc pages use `Bl -tag` for numbered procedures instead of the
+standard `Bl -enum`. ManT recovers ordered-list semantics only when the entire
+tag list contains at least two described, consecutively increasing integers
+with one explicit punctuation style such as `1.`/`2.`. A singleton, a gap, a
+style change, a bare integer, or a decimal remains a definition term. This
+keeps procedures out of the semantic-entry index without reclassifying numeric
+configuration values.
 
 Displays lower as follows:
 
