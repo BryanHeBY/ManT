@@ -3,8 +3,11 @@
 use std::collections::{BTreeMap, VecDeque};
 use std::{error::Error, fmt, io::Write};
 
-use mant_ir::visit::{Visit, walk_inline};
-use mant_ir::{DocumentAddress, Inline, LinkTarget, ResolvedContent, SemanticDocumentReference};
+use mant_ir::visit::{Visit, walk_definition_item, walk_inline};
+use mant_ir::{
+    DefinitionItem, DocumentAddress, Inline, ResolvedContent, SemanticDocumentReference,
+    ValueDomain,
+};
 use mant_protocol::{
     DocumentEdge, DocumentEdgeKind, DocumentFrontier, DocumentScope, DocumentSelector,
     MAX_DOCUMENT_SELECTOR_CHARS, MAX_SCOPE_CONTENT_BYTES, MAX_SCOPE_DEPTH,
@@ -680,18 +683,18 @@ fn execute_scope_search(
 
 #[derive(Clone)]
 struct DocumentReference {
-    target: LinkTarget,
+    target: SemanticDocumentReference,
     kind: DocumentEdgeKind,
 }
 
 impl DocumentReference {
     fn exact_address(&self, from: &DocumentAddress) -> Option<DocumentAddress> {
-        logical_document_address(from, &self.target)
+        self.target.resolve_from(from)
     }
 
     fn selector(&self, from: &DocumentAddress) -> Option<DocumentSelector> {
         match &self.target {
-            LinkTarget::Document { name, .. } => {
+            SemanticDocumentReference::Document { name, .. } => {
                 let address = from.resolve_document_reference(name)?;
                 Some(DocumentSelector {
                     selector: address.catalog_path(),
@@ -699,7 +702,7 @@ impl DocumentReference {
                     manual_section: None,
                 })
             }
-            LinkTarget::Manual {
+            SemanticDocumentReference::Manual {
                 name,
                 manual_section,
             } => Some(DocumentSelector {
@@ -707,18 +710,13 @@ impl DocumentReference {
                 source: None,
                 manual_section: manual_section.clone(),
             }),
-            LinkTarget::External { .. } | LinkTarget::Email { .. } | LinkTarget::Section { .. } => {
-                None
-            }
         }
     }
 
     fn fallback_selector(&self) -> DocumentSelector {
         let selector = match &self.target {
-            LinkTarget::Document { name, .. } | LinkTarget::Manual { name, .. } => name.clone(),
-            LinkTarget::External { uri } => uri.clone(),
-            LinkTarget::Email { address } => address.clone(),
-            LinkTarget::Section { id } => id.to_string(),
+            SemanticDocumentReference::Document { name, .. }
+            | SemanticDocumentReference::Manual { name, .. } => name.clone(),
         };
         DocumentSelector {
             selector,
@@ -728,40 +726,35 @@ impl DocumentReference {
     }
 }
 
-/// Resolve one typed source reference to an exact catalog address without I/O.
-///
-/// Relative Markdown targets remain inside the referring registered namespace,
-/// and native-manual targets require an explicit section. Other link families
-/// are not logical document references.
-pub(crate) fn logical_document_address(
-    from: &DocumentAddress,
-    target: &LinkTarget,
-) -> Option<DocumentAddress> {
-    SemanticDocumentReference::from_link_target(target)?.resolve_from(from)
-}
-
 fn document_references(bundle: &ResolvedContent) -> Vec<DocumentReference> {
     struct Collector {
         references: Vec<DocumentReference>,
     }
     impl<'ir> Visit<'ir> for Collector {
         fn visit_inline(&mut self, inline: &'ir Inline) {
-            if let Inline::Link { target, .. } = inline {
-                let kind = match target {
-                    LinkTarget::Document { .. } => Some(DocumentEdgeKind::Document),
-                    LinkTarget::Manual { .. } => Some(DocumentEdgeKind::Manual),
-                    LinkTarget::External { .. }
-                    | LinkTarget::Email { .. }
-                    | LinkTarget::Section { .. } => None,
-                };
-                if let Some(kind) = kind {
-                    self.references.push(DocumentReference {
-                        target: target.clone(),
-                        kind,
-                    });
-                }
+            if let Inline::Link { target, .. } = inline
+                && let Some(target) = SemanticDocumentReference::from_link_target(target)
+            {
+                self.references.push(DocumentReference {
+                    kind: reference_edge_kind(&target),
+                    target,
+                });
             }
             walk_inline(self, inline);
+        }
+
+        fn visit_definition_item(&mut self, item: &'ir DefinitionItem) {
+            if let Some(ValueDomain::EntrySet { reference, .. }) = item
+                .identity
+                .as_ref()
+                .and_then(|identity| identity.value_domain.as_ref())
+            {
+                self.references.push(DocumentReference {
+                    kind: reference_edge_kind(reference),
+                    target: reference.clone(),
+                });
+            }
+            walk_definition_item(self, item);
         }
     }
     let mut collector = Collector {
@@ -773,11 +766,47 @@ fn document_references(bundle: &ResolvedContent) -> Vec<DocumentReference> {
     collector.references
 }
 
+const fn reference_edge_kind(reference: &SemanticDocumentReference) -> DocumentEdgeKind {
+    match reference {
+        SemanticDocumentReference::Document { .. } => DocumentEdgeKind::Document,
+        SemanticDocumentReference::Manual { .. } => DocumentEdgeKind::Manual,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use mant_ir::{DocumentAddress, MarkdownOrigin};
 
     use super::*;
+
+    #[test]
+    fn entry_domains_participate_in_typed_document_traversal() {
+        let parsed = crate::parse_markdown(
+            "# SSH\n\n<!-- mant:entries role=option case=sensitive -->\n- `-o OPTION`: Set a key.\n\n  <!-- mant:domain entries=manual/5/ssh_config roles=configuration-key -->\n",
+            None,
+        )
+        .expect("semantic domain document");
+        let references = document_references(&ResolvedContent {
+            label: "ssh".to_owned(),
+            address: Some(DocumentAddress::Manual {
+                name: "ssh".to_owned(),
+                manual_section: "1".to_owned(),
+            }),
+            document: Some(parsed.document),
+            tldr: None,
+        });
+
+        assert!(matches!(
+            references.as_slice(),
+            [DocumentReference {
+                target: SemanticDocumentReference::Manual {
+                    name,
+                    manual_section: Some(section),
+                },
+                kind: DocumentEdgeKind::Manual,
+            }] if name == "ssh_config" && section == "5"
+        ));
+    }
 
     #[test]
     fn scope_bounds_include_every_root() {
@@ -1026,7 +1055,7 @@ mod tests {
     #[test]
     fn relative_links_use_the_current_markdown_namespace() {
         let reference = DocumentReference {
-            target: LinkTarget::Document {
+            target: SemanticDocumentReference::Document {
                 name: "../other".to_owned(),
                 fragment: None,
             },
@@ -1061,7 +1090,7 @@ mod tests {
             manual_section: "1".to_owned(),
         };
         let reference = DocumentReference {
-            target: LinkTarget::Manual {
+            target: SemanticDocumentReference::Manual {
                 name: "child".to_owned(),
                 manual_section: None,
             },

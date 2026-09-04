@@ -11,7 +11,7 @@ use mant_protocol::{
 
 use crate::{
     ProjectionError, ResolvedContent, build_outline_projection, build_outline_with_detail,
-    search_query, select_excerpt, select_explanation,
+    render_outline_text, search_query, select_excerpt, select_explanation,
 };
 
 use super::{parse_document, parse_markdown};
@@ -1725,6 +1725,7 @@ fn linked_code_terms_define_entry_document_destinations() {
             origin: MarkdownOrigin::Documents,
         })
     );
+    assert!(render_outline_text(&outline).contains("documents: documents/indexes/winget.exe"));
 }
 
 #[test]
@@ -1784,6 +1785,9 @@ fn entry_domain_directives_resolve_cross_document_value_spaces() {
             && address_section == "5"
             && entry_kinds == &[EntryKind::ConfigurationKey])
     ));
+    assert!(
+        render_outline_text(&outline).contains("values: configuration key in manual/5/ssh_config")
+    );
 }
 
 #[test]

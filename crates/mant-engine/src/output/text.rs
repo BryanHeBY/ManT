@@ -4,7 +4,10 @@ use mant_ir::{
     Block, DefinitionItem, EntryKind, EntrySummary, Inline, ListItem, ListKind, ParameterKind,
     Section, TableCell, TldrCommandPart, TldrDocument, TldrOrigin,
 };
-use mant_protocol::{ExcerptSelection, OutlineNode, QueryExcerpt, QueryOutline};
+use mant_protocol::{
+    EntryDocumentTarget, EntryValueDomain, ExcerptSelection, OutlineNode, QueryExcerpt,
+    QueryOutline,
+};
 
 use crate::ResolvedContent;
 
@@ -83,14 +86,81 @@ fn render_outline_nodes(nodes: &[OutlineNode], prefix: &str, output: &mut Vec<St
         let last = index + 1 == nodes.len();
         let connector = if last { "└─" } else { "├─" };
         let summary = outline_summary(node).map_or_else(String::new, render_outline_entry_summary);
+        let relationships = outline_relationships(node);
         output.push(format!(
-            "{prefix}{connector} {} [{}] {}{summary}",
+            "{prefix}{connector} {} [{}] {}{summary}{relationships}",
             node.path(),
             node.id(),
             node.title()
         ));
         let child_prefix = format!("{prefix}{}", if last { "  " } else { "│ " });
         render_outline_nodes(node.children(), &child_prefix, output);
+    }
+}
+
+fn outline_relationships(node: &OutlineNode) -> String {
+    let OutlineNode::DocumentEntry {
+        document_targets,
+        value_domain,
+        ..
+    } = node
+    else {
+        return String::new();
+    };
+    let mut relationships = Vec::new();
+    if !document_targets.is_empty() {
+        relationships.push(format!(
+            "documents: {}",
+            document_targets
+                .iter()
+                .map(entry_document_label)
+                .collect::<Vec<_>>()
+                .join(", ")
+        ));
+    }
+    if let Some(EntryValueDomain::EntrySet {
+        reference,
+        address,
+        entry_kinds,
+    }) = value_domain.as_deref()
+    {
+        let document = address.as_ref().map_or_else(
+            || semantic_reference_label(reference),
+            mant_ir::DocumentAddress::catalog_path,
+        );
+        let kinds = entry_kinds
+            .iter()
+            .map(|kind| entry_kind_label(*kind, true))
+            .collect::<Vec<_>>()
+            .join(", ");
+        relationships.push(format!("values: {kinds} in {document}"));
+    }
+    if relationships.is_empty() {
+        String::new()
+    } else {
+        format!(" — {}", relationships.join("; "))
+    }
+}
+
+fn entry_document_label(target: &EntryDocumentTarget) -> String {
+    target.address.as_ref().map_or_else(
+        || semantic_reference_label(&target.reference),
+        mant_ir::DocumentAddress::catalog_path,
+    )
+}
+
+fn semantic_reference_label(reference: &mant_ir::SemanticDocumentReference) -> String {
+    match reference {
+        mant_ir::SemanticDocumentReference::Document { name, fragment } => fragment
+            .as_ref()
+            .map_or_else(|| name.clone(), |fragment| format!("{name}#{fragment}")),
+        mant_ir::SemanticDocumentReference::Manual {
+            name,
+            manual_section,
+        } => manual_section.as_ref().map_or_else(
+            || name.clone(),
+            |section| format!("manual/{section}/{name}"),
+        ),
     }
 }
 
