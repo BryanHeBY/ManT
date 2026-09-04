@@ -241,6 +241,7 @@ mod tests {
             column: 0,
             flags: NodeFlags::default(),
             list_kind: None,
+            definition_list_style: None,
             display_kind: None,
             font: None,
             author_mode: None,

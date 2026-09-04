@@ -146,7 +146,8 @@ Parsing does not consult the installed manual index, so the same roff bytes prod
 | --- | --- |
 | `-bullet`, `-dash`, `-hyphen` | Bullet list |
 | `-enum` | Ordered list |
-| `-diag`, `-hang`, `-inset`, `-ohang`, `-tag` | Definition list, except a complete proven ordinal sequence |
+| `-diag`, `-hang`, `-inset`, `-ohang` | Definition list |
+| `-tag` | Definition list, except a complete proven ordinal sequence |
 | `-column` | Definition-list representation with column semantics retained by terms |
 | `-item` | Plain list |
 

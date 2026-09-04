@@ -1,11 +1,12 @@
 //! Lowers mdoc(7) `.Bl` and `.It` list structures.
 
 use super::{
-    AstTableAlignment, AstTableCell, Block, DefinitionItem, Inline, ListItem, ListKind,
-    LoweringContext, Node, NodeKind, NormalizedListKind, TableRow, definition_item, display_indent,
-    first_part_children, horizontal_distance_columns, layout, lower_blocks_with_spacing,
-    ordinal_sequence, part_child_groups, plain_text, source_span, spacing_after_node,
-    spacing_after_nodes, targets, terms_fit_inline,
+    AstTableAlignment, AstTableCell, Block, DefinitionItem, DefinitionListStyle, Inline, ListItem,
+    ListKind, LoweringContext, MAN_DEFINITION_BODY_INDENT, Node, NodeKind, NormalizedListKind,
+    TableRow, block_layout_mut, definition_item, display_indent, first_part_children,
+    horizontal_distance_columns, layout, lower_blocks_with_spacing, ordinal_sequence,
+    part_child_groups, plain_text, source_span, spacing_after_node, spacing_after_nodes, targets,
+    terms_fit_inline,
 };
 
 pub(in crate::mandoc::blocks) fn lower_mdoc_list(
@@ -126,7 +127,7 @@ fn lower_mdoc_definition_list(
             lowered
         })
         .collect::<Vec<_>>();
-    if node.list_kind == Some(NormalizedListKind::Definition)
+    if node.definition_list_style == Some(DefinitionListStyle::Tag)
         && let Some(first) = ordinal_sequence(&lowered_items)
     {
         return Block::List {
@@ -162,6 +163,13 @@ fn mdoc_list_item_from_definition(
         mut description,
         ..
     } = item;
+    for block in &mut description {
+        if let Some(layout) = block_layout_mut(block) {
+            layout.indent_columns = layout
+                .indent_columns
+                .saturating_sub(MAN_DEFINITION_BODY_INDENT);
+        }
+    }
     let mut anchors = Vec::new();
     for term in &terms {
         targets::inline_anchor_ids(term, &mut anchors);

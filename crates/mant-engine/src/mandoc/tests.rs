@@ -1,7 +1,8 @@
 use std::{collections::HashSet, fmt::Write as _, fs, process};
 
 use mant_ir::{
-    Block, DiagnosticLevel, Inline, ListKind, SemanticIndex, SourceFormat, ValueDomain,
+    Block, DiagnosticLevel, Inline, ListKind, ResolvedContent, SemanticIndex, SourceFormat,
+    ValueDomain,
     visit::{self, Visit},
 };
 
@@ -2891,6 +2892,12 @@ fn recovers_complete_numbered_sequences_from_mdoc_tag_lists() {
             ..
         } if items.len() == 3
     ));
+    let Block::List { items, .. } = &document.sections[0].blocks[0] else {
+        unreachable!("numbered tag list was asserted above")
+    };
+    assert!(items.iter().all(|item| {
+        matches!(item.blocks.first(), Some(Block::Paragraph { layout, .. }) if layout.indent_columns == 4)
+    }));
     assert!(matches!(
         document.sections[0].blocks[1],
         Block::DefinitionList { ref items, .. } if items.len() == 1
@@ -2910,6 +2917,68 @@ fn recovers_complete_numbered_sequences_from_mdoc_tag_lists() {
             .fragment_target("second-step")
             .is_some()
     );
+    let rendered = crate::render_query_text(&ResolvedContent {
+        label: "mdoc-tag-enumeration".to_owned(),
+        address: None,
+        document: Some(document),
+        tldr: None,
+    });
+    assert!(rendered.contains("1.     First step.\n2.     Second step.\n3.     Third step."));
+    assert!(!rendered.contains("1.         First step."));
+}
+
+#[test]
+fn only_tag_definition_lists_recover_ordered_procedures() {
+    for style in ["tag", "diag", "hang", "inset", "ohang"] {
+        let source = format!(
+            ".Dd September 4, 2026\n.Dt MDOC-{style} 4\n.Os\n.Sh EXAMPLES\n\
+.Bl -{style} -offset 4n -width \"1.\"\n\
+.It 1.\nFirst step.\n\
+.It 2.\nSecond step.\n\
+.El\n"
+        );
+        let document = parse_manual_bytes(
+            std::path::Path::new("mdoc-definition-style.4"),
+            source.as_bytes(),
+        )
+        .expect("lower mdoc definition style");
+        if style == "tag" {
+            let Block::List {
+                kind: ListKind::Ordered,
+                items,
+                layout,
+                ..
+            } = &document.sections[0].blocks[0]
+            else {
+                panic!("-{style} must recover one ordered list")
+            };
+            assert_eq!(layout.indent_columns, 0);
+            assert!(items.iter().all(|item| {
+                matches!(item.blocks.first(), Some(Block::Paragraph { layout, .. }) if layout.indent_columns == 4)
+            }));
+        } else {
+            assert!(
+                matches!(document.sections[0].blocks[0], Block::DefinitionList { .. }),
+                "-{style} must retain definition semantics"
+            );
+        }
+    }
+
+    let native = parse_manual_bytes(
+        std::path::Path::new("mdoc-native-enum.4"),
+        b".Dd September 4, 2026\n.Dt MDOC-ENUM 4\n.Os\n.Sh EXAMPLES\n\
+.Bl -enum -offset 4n\n\
+.It\nFirst step.\n\
+.It\nSecond step.\n\
+.El\n",
+    )
+    .expect("lower native mdoc enum");
+    let Block::List { items, .. } = &native.sections[0].blocks[0] else {
+        panic!("native enum must remain an ordered list")
+    };
+    assert!(items.iter().all(|item| {
+        matches!(item.blocks.first(), Some(Block::Paragraph { layout, .. }) if layout.indent_columns == 4)
+    }));
 }
 
 #[test]

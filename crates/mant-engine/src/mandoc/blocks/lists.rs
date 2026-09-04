@@ -1,6 +1,6 @@
 //! Lowers man and mdoc list and definition structures.
 
-use libmandoc_rs::{Node, NodeKind, NormalizedListKind};
+use libmandoc_rs::{DefinitionListStyle, Node, NodeKind, NormalizedListKind};
 use mant_ir::{
     Block, DefinitionItem, Inline, ListItem, ListKind, TableAlignment as AstTableAlignment,
     TableCell as AstTableCell, TableRow,
