@@ -78,3 +78,16 @@ value-domain violations. The informational census found 241,323 aliasless
 generic terms and 6,914 entries in note-like sections; these remain sampling
 populations rather than automated defects. The exact JSON report is
 `/tmp/mant-semantic-archlinux-v1-c51be9d.json` on the audit host.
+
+The broader 45,036-path restored logical inventory described in
+[TARGET_AUDIT.md](TARGET_AUDIT.md) was rescanned on 2026-09-04 at producer
+commit `9233968b21f046bdcf301f5b34954ee43cdd2292`. The v1 semantic profiler
+binary SHA-256 was
+`597b0db7de4380bafe1e3d39ab1aed219da59f9274e241828c607c6eb52d5b52`.
+All 45,036 pages were clean. Their 651,428 semantic entries contained zero
+punctuated ordinal entries, retained ordinal definitions, empty entries, or
+value-domain violations. The informational census contained 439,875
+aliasless generic terms and 10,063 entries in note-like sections; these remain
+review populations, not automatic defects. The exact reports on the audit host
+are `/tmp/mant-semantic-full-45036-9233968.json` and
+`/tmp/mant-semantic-full-45036-9233968.csv`.

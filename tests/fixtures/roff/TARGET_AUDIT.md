@@ -77,6 +77,28 @@ Historical v1/v2 rows remain for source identities absent from the current
 host, while every page present in this complete sweep and every checked-in
 fixture now has a v3 record.
 
+On 2026-09-04 a broader restored logical inventory was then scanned after the
+numbered-paragraph and target-conservation fixes at producer commit
+`9233968b21f046bdcf301f5b34954ee43cdd2292`. Its inventory manifest contained
+45,036 logical paths backed by 37,286 physical source paths; the manifest
+SHA-256 was
+`a5cd7919d1ac2774a335d077611b47680de8c1babe1b031d31ff8808f568879c`.
+It combined the recorded Alpine, Arch Linux host, Apple OSS, Debian sid,
+DragonFly BSD, Fedora, FreeBSD, illumos, NetBSD 10/11, OpenBSD, generated,
+current-host, Miniconda, and checked-in fixture inputs. The audit used the
+current available bytes at each logical path; the exact decompressed source
+digests remain in the local CSV ledger.
+
+The v3 profiler binary SHA-256 was
+`ed52581a5a7c2d6a042b0fbb760ae4bf89ac14a0ea7bb017197c00f4b772af1c`.
+All 45,036 pages were clean. Their 1,192,621 raw owners formed 1,192,621
+logical obligations; every owner was classified and every retained obligation
+matched a compatible occurrence. Missing and unexpected targets, role
+collisions, invalid identities, duplicate identities, dangling links, and
+unclassified raw or logical owners were all zero. The exact reports on the
+audit host are `/tmp/mant-target-full-45036-9233968.json` and
+`/tmp/mant-target-full-45036-9233968.csv`.
+
 CI does not depend on `/usr/share/man`. It builds the profiler and verifies the
 small checked-in fixture corpus against recorded rows:
 
