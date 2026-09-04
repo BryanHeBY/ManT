@@ -1525,6 +1525,77 @@ fn declared_entry_directive_does_not_skip_an_intervening_construct() {
 }
 
 #[test]
+fn declared_entries_preserve_roles_at_arbitrary_list_depth() {
+    let parsed = parse_markdown(
+        "# Tool\n\n## Commands\n\n<!-- mant:entries role=command case=insensitive -->\n- `query`: Dispatch queries.\n\n  <!-- mant:entries role=command case=insensitive -->\n  - `query user`: Inspect users.\n\n    <!-- mant:entries role=option case=insensitive -->\n    - `/server:NAME`: Select a server.\n\n      <!-- mant:entries role=value case=insensitive -->\n      - `local`: Use the local server.\n",
+        None,
+    )
+    .expect("deep semantic entry declarations");
+    assert!(parsed.document.diagnostics.is_empty());
+
+    let outline = build_outline_with_detail(
+        &ResolvedContent {
+            address: None,
+            label: "tool.md".to_owned(),
+            document: Some(parsed.document),
+            tldr: None,
+        },
+        OutlineDetail::Entries,
+    )
+    .expect("deep semantic outline");
+    let OutlineNode::DocumentSection { children, .. } = &outline.nodes[0] else {
+        panic!("commands should be a section");
+    };
+    let OutlineNode::DocumentEntry {
+        entry_kind: EntryKind::Command,
+        case: DefinitionCase::Insensitive,
+        children,
+        ..
+    } = &children[0]
+    else {
+        panic!("query should be a command");
+    };
+    let OutlineNode::DocumentEntry {
+        entry_kind: EntryKind::Command,
+        children,
+        ..
+    } = &children[0]
+    else {
+        panic!("query user should be a nested command");
+    };
+    let OutlineNode::DocumentEntry {
+        entry_kind: EntryKind::Parameter { .. },
+        children,
+        ..
+    } = &children[0]
+    else {
+        panic!("/server should be a nested parameter");
+    };
+    assert!(matches!(
+        children.as_slice(),
+        [OutlineNode::DocumentEntry {
+            entry_kind: EntryKind::Value,
+            aliases,
+            ..
+        }] if aliases == &["local"]
+    ));
+}
+
+#[test]
+fn indented_code_does_not_activate_semantic_entry_directives() {
+    let parsed = parse_markdown(
+        "# Tool\n\n    <!-- mant:entries role=command case=sensitive -->\n    - `not-a-command`: code\n",
+        None,
+    )
+    .expect("indented code remains ordinary Markdown");
+    assert!(parsed.document.diagnostics.is_empty());
+    assert!(matches!(
+        parsed.document.blocks.as_slice(),
+        [Block::Preformatted { .. }]
+    ));
+}
+
+#[test]
 fn declared_entry_description_requires_a_leading_paragraph_delimiter() {
     let parsed = parse_markdown(
         "# Tool\n\n<!-- mant:entries role=command case=insensitive -->\n- `query`\n\n  Query data in a following paragraph.\n",

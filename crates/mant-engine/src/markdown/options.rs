@@ -11,6 +11,7 @@ use mant_ir::{
     Block, DefinitionCase, DefinitionIdentity, DefinitionItem, DefinitionRole, Diagnostic,
     DiagnosticLevel, Inline, ListItem, ListKind, SourceSpan,
 };
+use pulldown_cmark::{Event, Parser, Tag, TagEnd};
 
 use crate::block::block_source;
 use crate::definitions::{environment_variable_alias, option_names_from_terms, option_prefix};
@@ -38,73 +39,56 @@ pub(super) fn extract_entry_directives(
     let mut masked = source.as_bytes().to_vec();
     let mut declarations = BTreeMap::new();
     let lines = source.split_inclusive('\n').collect::<Vec<_>>();
-    let mut offset = 0usize;
-    let mut fence = None;
+    let line_starts = lines
+        .iter()
+        .scan(0usize, |offset, line| {
+            let start = *offset;
+            *offset = offset.saturating_add(line.len());
+            Some(start)
+        })
+        .collect::<Vec<_>>();
+    let events = Parser::new_ext(source, super::markdown_options())
+        .into_offset_iter()
+        .collect::<Vec<_>>();
 
-    for (index, line) in lines.iter().enumerate() {
+    for (event_index, window) in events.windows(3).enumerate() {
+        let [
+            (Event::Start(Tag::HtmlBlock), _),
+            (Event::Html(raw), range),
+            (Event::End(TagEnd::HtmlBlock), _),
+        ] = window
+        else {
+            continue;
+        };
+        if !raw.trim().starts_with("<!-- mant:entries") {
+            continue;
+        }
+        let index = source_line_index(&line_starts, range.start);
+        let line = lines[index];
         let without_newline = line.trim_end_matches(['\r', '\n']);
-        let trimmed = without_newline.trim();
-        let trimmed_start = without_newline.trim_start_matches(' ');
-        let indentation = without_newline.len() - trimmed_start.len();
-        if let Some((marker, width)) = fence {
-            if is_closing_fence(trimmed_start, marker, width) {
-                fence = None;
-            }
-            offset += line.len();
-            continue;
-        }
-        if indentation <= 3
-            && let Some(opening) = opening_fence(trimmed_start)
-        {
-            fence = Some(opening);
-            offset += line.len();
-            continue;
-        }
-        if indentation >= 4 {
-            offset += line.len();
-            continue;
-        }
-        if !trimmed.starts_with("<!-- mant:entries") {
-            offset += line.len();
-            continue;
-        }
         let line_number = u32::try_from(index + 1).unwrap_or(u32::MAX);
         let Some(declaration) = read_declaration(
             without_newline,
-            offset,
+            line_starts[index],
             line_number,
             &mut masked,
             diagnostics,
         ) else {
-            offset += line.len();
             continue;
         };
         let source_span = declaration.source;
-        let target = lines[index + 1..]
-            .iter()
-            .enumerate()
-            .find(|(_, candidate)| !candidate.trim().is_empty())
-            .map(|(relative, candidate)| (index + relative + 2, candidate.trim_start()));
-        let Some((target_line, target_text)) = target else {
-            semantic_diagnostic(
-                diagnostics,
-                source_span,
-                "semantic-entry directive is not followed by a bullet list".to_owned(),
-            );
-            offset += line.len();
-            continue;
-        };
-        if !is_bullet_line(target_text) {
+        let Some((Event::Start(Tag::List(None)), target_range)) = events.get(event_index + 3)
+        else {
             semantic_diagnostic(
                 diagnostics,
                 source_span,
                 "semantic-entry directive must immediately precede a complete bullet list"
                     .to_owned(),
             );
-            offset += line.len();
             continue;
-        }
-        let target_line = u32::try_from(target_line).unwrap_or(u32::MAX);
+        };
+        let target_line = u32::try_from(source_line_index(&line_starts, target_range.start) + 1)
+            .unwrap_or(u32::MAX);
         if declarations.insert(target_line, declaration).is_some() {
             semantic_diagnostic(
                 diagnostics,
@@ -112,12 +96,17 @@ pub(super) fn extract_entry_directives(
                 "more than one semantic-entry directive targets the same list".to_owned(),
             );
         }
-        offset += line.len();
     }
 
     let masked = (!declarations.is_empty() || masked.as_slice() != source.as_bytes())
         .then(|| String::from_utf8(masked).expect("masking ASCII preserves UTF-8"));
     (masked, declarations)
+}
+
+fn source_line_index(line_starts: &[usize], offset: usize) -> usize {
+    line_starts
+        .partition_point(|start| *start <= offset)
+        .saturating_sub(1)
 }
 
 fn read_declaration(
@@ -168,20 +157,6 @@ fn read_declaration(
             None
         }
     }
-}
-
-fn opening_fence(value: &str) -> Option<(u8, usize)> {
-    let marker = *value.as_bytes().first()?;
-    if !matches!(marker, b'`' | b'~') {
-        return None;
-    }
-    let width = value.bytes().take_while(|byte| *byte == marker).count();
-    (width >= 3).then_some((marker, width))
-}
-
-fn is_closing_fence(value: &str, marker: u8, opening_width: usize) -> bool {
-    let width = value.bytes().take_while(|byte| *byte == marker).count();
-    width >= opening_width && value[width..].trim().is_empty()
 }
 
 fn parse_declaration(value: &str, source: SourceSpan) -> Result<EntryDeclaration, String> {
@@ -251,10 +226,6 @@ fn parse_declaration(value: &str, source: SourceSpan) -> Result<EntryDeclaration
         attached: attached.unwrap_or_default(),
         source,
     })
-}
-
-fn is_bullet_line(value: &str) -> bool {
-    matches!(value.as_bytes(), [b'-' | b'*' | b'+', b' ' | b'\t', ..])
 }
 
 /// Convert unambiguous entry lists without changing mixed or prose lists.
