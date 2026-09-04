@@ -297,7 +297,7 @@ intro\n.Pp\n.Fn alpha\n",
     assert!(
         anchor_owner_lines(&paragraph)
             .iter()
-            .any(|(id, line)| id == "alpha" && *line == 7)
+            .any(|(id, line)| id == "alpha" && *line == 6)
     );
     assert!(visible_document_text(&paragraph).contains("alpha"));
 
