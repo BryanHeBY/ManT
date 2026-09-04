@@ -103,6 +103,7 @@ pub enum ValueDomain {
         /// Source-neutral reference to the document that owns the entries.
         reference: SemanticDocumentReference,
         /// Accepted semantic categories in the referenced document.
+        #[schemars(length(min = 1, max = 9))]
         entry_kinds: Vec<EntryKind>,
     },
 }
@@ -118,17 +119,21 @@ pub enum SemanticDocumentReference {
     /// A relative Markdown document in the current registered namespace.
     Document {
         /// Extension-free relative document path.
+        #[schemars(length(min = 1))]
         name: String,
         /// Optional document-local fragment.
         #[serde(skip_serializing_if = "Option::is_none")]
+        #[schemars(length(min = 1))]
         fragment: Option<String>,
     },
     /// A typed native manual reference.
     Manual {
         /// Manual topic without a section suffix.
+        #[schemars(length(min = 1))]
         name: String,
         /// Native manual category, when source-specified.
         #[serde(skip_serializing_if = "Option::is_none")]
+        #[schemars(length(min = 1))]
         manual_section: Option<String>,
     },
 }

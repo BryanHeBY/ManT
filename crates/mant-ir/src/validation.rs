@@ -1,8 +1,8 @@
 //! Validation for invariants shared by every normalized document source.
 
 use crate::{
-    Block, Diagnostic, DiagnosticLevel, Document, DocumentIndex, IndexedRole, Inline, LinkTarget,
-    NodeId, Section, SourceSpan,
+    Block, DefinitionItem, Diagnostic, DiagnosticLevel, Document, DocumentIndex, IndexedRole,
+    Inline, LinkTarget, NodeId, Section, SemanticDocumentReference, SourceSpan, ValueDomain,
     visit::{self, Visit},
 };
 
@@ -555,6 +555,37 @@ impl<'ir> Visit<'ir> for InvariantCollector {
         visit::walk_block(self, block);
     }
 
+    fn visit_definition_item(&mut self, item: &'ir DefinitionItem) {
+        if let Some(ValueDomain::EntrySet {
+            reference,
+            entry_kinds,
+        }) = item
+            .identity
+            .as_ref()
+            .and_then(|identity| identity.value_domain.as_ref())
+        {
+            validate_semantic_document_reference(&mut self.diagnostics, reference);
+            if entry_kinds.is_empty() {
+                self.diagnostics.push(invariant(
+                    "ir.empty-entry-value-domain",
+                    "cross-document entry value domain must select at least one entry kind"
+                        .to_owned(),
+                ));
+            }
+            if entry_kinds
+                .iter()
+                .enumerate()
+                .any(|(index, kind)| entry_kinds[..index].contains(kind))
+            {
+                self.diagnostics.push(invariant(
+                    "ir.duplicate-entry-value-kind",
+                    "cross-document entry value domain must not repeat entry kinds".to_owned(),
+                ));
+            }
+        }
+        visit::walk_definition_item(self, item);
+    }
+
     fn visit_inline(&mut self, inline: &'ir Inline) {
         match inline {
             Inline::Link {
@@ -578,6 +609,35 @@ impl<'ir> Visit<'ir> for InvariantCollector {
             _ => {}
         }
         visit::walk_inline(self, inline);
+    }
+}
+
+fn validate_semantic_document_reference(
+    diagnostics: &mut Vec<Diagnostic>,
+    reference: &SemanticDocumentReference,
+) {
+    let invalid = match reference {
+        SemanticDocumentReference::Document { name, fragment } => {
+            name.trim().is_empty()
+                || fragment
+                    .as_deref()
+                    .is_some_and(|fragment| fragment.trim().is_empty())
+        }
+        SemanticDocumentReference::Manual {
+            name,
+            manual_section,
+        } => {
+            name.trim().is_empty()
+                || manual_section
+                    .as_deref()
+                    .is_some_and(|section| section.trim().is_empty())
+        }
+    };
+    if invalid {
+        diagnostics.push(invariant(
+            "ir.empty-semantic-document-reference",
+            "semantic document reference components must not be empty".to_owned(),
+        ));
     }
 }
 
@@ -919,5 +979,65 @@ mod tests {
                 .any(|code| code == "ir.invalid-source-position")
         );
         assert!(codes.iter().any(|code| code == "ir.reverse-source-range"));
+    }
+
+    #[test]
+    fn reports_invalid_cross_document_entry_domains() {
+        let mut definition = DefinitionItem {
+            identity: Some(DefinitionIdentity {
+                id: "option-output".into(),
+                role: DefinitionRole::Option,
+                case: DefinitionCase::Sensitive,
+                names: vec!["--output".to_owned()],
+                value_domain: Some(crate::ValueDomain::EntrySet {
+                    reference: crate::SemanticDocumentReference::Manual {
+                        name: String::new(),
+                        manual_section: Some(String::new()),
+                    },
+                    entry_kinds: Vec::new(),
+                }),
+            }),
+            terms: vec![vec![Inline::anchor("option-output")]],
+            description: Vec::new(),
+            inline_term: false,
+            spacing_before_lines: None,
+        };
+        let blocks = vec![Block::DefinitionList {
+            items: vec![definition.clone()],
+            compact: true,
+            layout: LayoutHint::default(),
+            source: None,
+        }];
+        let diagnostics = validate_document(&document(Vec::new(), blocks));
+        let codes = diagnostics
+            .iter()
+            .filter_map(|diagnostic| diagnostic.code.as_deref())
+            .collect::<Vec<_>>();
+        assert!(codes.contains(&"ir.empty-semantic-document-reference"));
+        assert!(codes.contains(&"ir.empty-entry-value-domain"));
+
+        definition.identity.as_mut().expect("identity").value_domain =
+            Some(crate::ValueDomain::EntrySet {
+                reference: crate::SemanticDocumentReference::Document {
+                    name: "keys".to_owned(),
+                    fragment: None,
+                },
+                entry_kinds: vec![
+                    crate::EntryKind::ConfigurationKey,
+                    crate::EntryKind::ConfigurationKey,
+                ],
+            });
+        let diagnostics = validate_document(&document(
+            Vec::new(),
+            vec![Block::DefinitionList {
+                items: vec![definition],
+                compact: true,
+                layout: LayoutHint::default(),
+                source: None,
+            }],
+        ));
+        assert!(diagnostics.iter().any(|diagnostic| {
+            diagnostic.code.as_deref() == Some("ir.duplicate-entry-value-kind")
+        }));
     }
 }
