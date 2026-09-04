@@ -658,6 +658,7 @@ fn classify_target_owner(logical: &LogicalOwner) -> ClassifiedOwner {
             | "Dv"
             | "Ic"
             | "Li"
+            | "Ms"
             | "Er"
             | "Va"
             | "Ev"
@@ -1437,5 +1438,17 @@ mod tests {
         let classified = classify_target_owner(&owner);
         assert_eq!(classified.disposition, OwnerDisposition::Excluded);
         assert_eq!(classified.expected_role, TargetRole::Section);
+    }
+
+    #[test]
+    fn mathematical_symbol_targets_are_retained_navigation_owners() {
+        let mut owner = logical_owner("sigma", "0.4.1");
+        owner.owner_macro = "Ms".to_owned();
+        owner.owner_kind = "element".to_owned();
+
+        let classified = classify_target_owner(&owner);
+        assert_eq!(classified.disposition, OwnerDisposition::Retained);
+        assert_eq!(classified.expected_role, TargetRole::Anchor);
+        assert_eq!(classified.target.as_deref(), Some("sigma"));
     }
 }
