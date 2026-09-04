@@ -1880,6 +1880,81 @@ fn entry_domains_attach_to_multiline_nested_items_with_crlf() {
 }
 
 #[test]
+fn duplicate_entry_domains_are_ambiguous_instead_of_last_wins() {
+    for second_reference in ["first.md", "second.md"] {
+        let parsed = parse_markdown(
+            &format!(
+                "# Tool\n\n<!-- mant:entries role=option case=sensitive -->\n- `-o OPTION`: Set a key.\n\n  <!-- mant:domain entries=first.md roles=configuration-key -->\n  <!-- mant:domain entries={second_reference} roles=configuration-key -->\n"
+            ),
+            None,
+        )
+        .expect("duplicate domains remain recoverable");
+
+        assert_eq!(
+            parsed
+                .document
+                .diagnostics
+                .iter()
+                .filter(|diagnostic| {
+                    diagnostic.code.as_deref() == Some("markdown.semantic-value-domain")
+                        && diagnostic.message.contains("more than one")
+                })
+                .count(),
+            1
+        );
+        let semantic_index = mant_ir::SemanticIndex::build(&parsed.document);
+        let [entry] = semantic_index.root() else {
+            panic!("one semantic entry expected");
+        };
+        assert!(entry.value_domain.is_none());
+
+        let outline = build_outline_with_detail(
+            &ResolvedContent {
+                label: "tool".to_owned(),
+                address: None,
+                document: Some(parsed.document),
+                tldr: None,
+            },
+            OutlineDetail::Entries,
+        )
+        .expect("incomplete outline");
+        assert!(!outline.semantics_complete);
+    }
+}
+
+#[test]
+fn entry_domains_on_nested_items_remain_independent() {
+    let parsed = parse_markdown(
+        "# Query\n\n<!-- mant:entries role=command case=sensitive -->\n- `query`: Dispatch queries.\n\n  <!-- mant:domain entries=query-values.md roles=value -->\n\n  <!-- mant:entries role=option case=sensitive -->\n  - `--user`: Select users.\n\n    <!-- mant:domain entries=user-values.md roles=value -->\n",
+        None,
+    )
+    .expect("nested independent domains parse");
+    assert!(parsed.document.diagnostics.is_empty());
+
+    let semantic_index = mant_ir::SemanticIndex::build(&parsed.document);
+    let [parent] = semantic_index.root() else {
+        panic!("one parent entry expected");
+    };
+    let [child] = parent.children.as_slice() else {
+        panic!("one child entry expected");
+    };
+    assert!(matches!(
+        parent.value_domain,
+        Some(mant_ir::ValueDomain::EntrySet {
+            reference: mant_ir::SemanticDocumentReference::Document { ref name, .. },
+            ..
+        }) if name == "query-values"
+    ));
+    assert!(matches!(
+        child.value_domain,
+        Some(mant_ir::ValueDomain::EntrySet {
+            reference: mant_ir::SemanticDocumentReference::Document { ref name, .. },
+            ..
+        }) if name == "user-values"
+    ));
+}
+
+#[test]
 fn malformed_entry_domains_remain_visible_and_incomplete() {
     for directive in [
         "<!-- mant:domain entries=manual/5/ssh_config roles=configuration-key,configuration-key -->",

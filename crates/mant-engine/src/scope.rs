@@ -859,6 +859,26 @@ mod tests {
     }
 
     #[test]
+    fn ambiguous_entry_domains_do_not_participate_in_traversal() {
+        let parsed = crate::parse_markdown(
+            "# SSH\n\n<!-- mant:entries role=option case=sensitive -->\n- `-o OPTION`: Set a key.\n\n  <!-- mant:domain entries=first.md roles=configuration-key -->\n  <!-- mant:domain entries=second.md roles=configuration-key -->\n",
+            None,
+        )
+        .expect("ambiguous semantic domain document");
+        let references = document_references(&ResolvedContent {
+            label: "ssh".to_owned(),
+            address: Some(DocumentAddress::Markdown {
+                path: "ssh".to_owned(),
+                origin: MarkdownOrigin::Documents,
+            }),
+            document: Some(parsed.document),
+            tldr: None,
+        });
+
+        assert!(references.is_empty());
+    }
+
+    #[test]
     fn semantic_relationships_follow_authored_source_order() {
         let parsed = crate::parse_markdown(
             "# Tools\n\n<!-- mant:entries role=command case=sensitive -->\n- [`target`](target.md): See [description](description.md).\n\n  <!-- mant:domain entries=domain.md roles=command -->\n",

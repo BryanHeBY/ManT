@@ -28,13 +28,28 @@ pub(super) struct EntryDeclaration {
 #[derive(Debug, Clone, Default)]
 pub(super) struct SemanticDeclarations {
     pub(super) entries: BTreeMap<u32, EntryDeclaration>,
-    pub(super) domains: BTreeMap<usize, DomainDeclaration>,
+    pub(super) domains: BTreeMap<usize, DomainDeclarationState>,
 }
 
 #[derive(Debug, Clone)]
 pub(super) struct DomainDeclaration {
     value: ValueDomain,
     pub(super) source: SourceSpan,
+}
+
+#[derive(Debug, Clone)]
+pub(super) enum DomainDeclarationState {
+    Unique(DomainDeclaration),
+    Ambiguous,
+}
+
+impl DomainDeclarationState {
+    pub(super) fn into_unique(self) -> Option<DomainDeclaration> {
+        match self {
+            Self::Unique(declaration) => Some(declaration),
+            Self::Ambiguous => None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -191,11 +206,17 @@ fn collect_domain_declarations(
                     continue;
                 };
                 let source_span = declaration.source;
-                if declarations
-                    .domains
-                    .insert(item_offset, declaration)
-                    .is_some()
-                {
+                let duplicate = match declarations.domains.entry(item_offset) {
+                    std::collections::btree_map::Entry::Vacant(entry) => {
+                        entry.insert(DomainDeclarationState::Unique(declaration));
+                        false
+                    }
+                    std::collections::btree_map::Entry::Occupied(mut entry) => {
+                        entry.insert(DomainDeclarationState::Ambiguous);
+                        true
+                    }
+                };
+                if duplicate {
                     domain_diagnostic(
                         diagnostics,
                         source_span,
@@ -602,6 +623,7 @@ pub(super) fn normalize_entry_lists(
                             .domains
                             .remove(&usize::try_from(range.start.get()).unwrap_or(usize::MAX))
                     })
+                    .and_then(DomainDeclarationState::into_unique)
                     .map(|declaration| declaration.value);
                 entry_definition(item, signature, role, case, value_domain)
             })

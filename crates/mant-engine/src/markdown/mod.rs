@@ -237,7 +237,11 @@ fn parse_document_with_entries(
             source: Some(declaration.source),
         });
     }
-    for declaration in declarations.domains.into_values() {
+    for declaration in declarations
+        .domains
+        .into_values()
+        .filter_map(entries::DomainDeclarationState::into_unique)
+    {
         entry_diagnostics.push(Diagnostic {
             level: DiagnosticLevel::Warning,
             code: Some("markdown.semantic-value-domain".to_owned()),
