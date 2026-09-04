@@ -625,46 +625,33 @@ fn entry_names(
             })
             .filter(|names| !names.is_empty())
             .ok_or(EntryRejectionReason::InvalidOptionName),
-        DefinitionRole::Command => {
-            plain_entry_names(value, is_command_name).ok_or(EntryRejectionReason::InvalidEntryName)
-        }
-        DefinitionRole::EnvironmentVariable => {
-            environment_entry_names(value).ok_or(EntryRejectionReason::InvalidEntryName)
-        }
-        DefinitionRole::Variable => {
-            plain_entry_names(value, is_variable_name).ok_or(EntryRejectionReason::InvalidEntryName)
-        }
+        DefinitionRole::Command => plain_entry_name(value, is_command_name),
+        DefinitionRole::EnvironmentVariable => environment_variable_alias(value)
+            .map(|name| vec![name])
+            .ok_or(EntryRejectionReason::InvalidEntryName),
+        DefinitionRole::Variable => plain_entry_name(value, is_variable_name),
         DefinitionRole::Marker
         | DefinitionRole::Operand
         | DefinitionRole::ConfigurationKey
         | DefinitionRole::Value
-        | DefinitionRole::Term => plain_entry_names(value, |name| {
+        | DefinitionRole::Term => plain_entry_name(value, |name| {
             !name.is_empty() && !name.contains(['\r', '\n'])
-        })
-        .ok_or(EntryRejectionReason::InvalidEntryName),
+        }),
     }
 }
 
-fn plain_entry_names(value: &str, validate: fn(&str) -> bool) -> Option<Vec<String>> {
-    let names = value
-        .split([',', '|'])
-        .map(str::trim)
-        .filter(|name| !name.is_empty())
-        .map(ToOwned::to_owned)
-        .collect::<Vec<_>>();
-    (!names.is_empty() && names.iter().all(|name| validate(name))).then_some(names)
+fn plain_entry_name(
+    value: &str,
+    validate: fn(&str) -> bool,
+) -> Result<Vec<String>, EntryRejectionReason> {
+    let name = value.trim();
+    validate(name)
+        .then(|| vec![name.to_owned()])
+        .ok_or(EntryRejectionReason::InvalidEntryName)
 }
 
 fn is_command_name(value: &str) -> bool {
     !value.is_empty() && !value.contains(['\r', '\n']) && !value.starts_with(['-', '/'])
-}
-
-fn environment_entry_names(value: &str) -> Option<Vec<String>> {
-    let names = value
-        .split([',', '|'])
-        .map(environment_variable_alias)
-        .collect::<Option<Vec<_>>>()?;
-    (!names.is_empty()).then_some(names)
 }
 
 fn is_variable_name(value: &str) -> bool {

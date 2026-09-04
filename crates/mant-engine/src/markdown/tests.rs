@@ -892,6 +892,52 @@ fn declared_entries_expose_every_protocol_semantic_role() {
 }
 
 #[test]
+fn declared_non_option_code_spans_are_atomic_names() {
+    let parsed = parse_markdown(
+        "# tool\n\n## Terms\n\n<!-- mant:entries role=term case=sensitive -->\n- `Send, Env`: Preserve punctuation.\n- `A | B`: Preserve a grammar expression.\n\n## Commands\n\n<!-- mant:entries role=command case=sensitive -->\n- `alpha|beta`: Preserve a literal command.\n- `cd`, `chdir`: Expose explicit aliases.\n",
+        Some("atomic.md".to_owned()),
+    )
+    .expect("atomic semantic entry names");
+    assert!(parsed.document.diagnostics.is_empty());
+
+    let identities = parsed
+        .document
+        .sections
+        .iter()
+        .flat_map(|section| &section.blocks)
+        .filter_map(|block| match block {
+            Block::DefinitionList { items, .. } => Some(items),
+            _ => None,
+        })
+        .flatten()
+        .map(|item| item.identity.as_ref().expect("semantic identity"))
+        .collect::<Vec<_>>();
+    assert_eq!(identities[0].names, ["Send, Env"]);
+    assert_eq!(identities[1].names, ["A | B"]);
+    assert_eq!(identities[2].names, ["alpha|beta"]);
+    assert_eq!(identities[3].names, ["cd", "chdir"]);
+
+    let content = ResolvedContent {
+        address: None,
+        label: "atomic.md".to_owned(),
+        document: Some(parsed.document),
+        tldr: None,
+    };
+    for selector in ["Send, Env", "A | B", "alpha|beta", "cd", "chdir"] {
+        assert!(
+            select_explanation(&content, selector).is_ok(),
+            "semantic selector {selector}"
+        );
+    }
+    for truncated in ["Send", "Env", "A", "B", "alpha", "beta"] {
+        assert!(
+            select_explanation(&content, truncated).is_err(),
+            "truncated selector {truncated} must not resolve"
+        );
+    }
+}
+
+#[test]
 fn declared_dotted_dash_options_preserve_their_exact_names() {
     let parsed = parse_markdown(
         "# tool\n\n## Options\n\n<!-- mant:entries role=option case=insensitive -->\n- `-ca.cert`: Retrieve a CA certificate.\n- `-ca.chain`: Retrieve a CA chain.\n- `--foo.bar`: Use a dotted long option.\n- `--config.file=FILE`: Read a configuration file.\n- `--output.name <PATH>`: Write to a path.\n",
