@@ -48,6 +48,8 @@ run "check roff target-conservation audit" python3 scripts/audit-roff-targets.py
 run "check roff semantic-entry audit" python3 scripts/audit-roff-semantics.py --self-check
 run "check roff audit coverage contract" python3 scripts/check-roff-audit-coverage.py
 run "test Rust workspace" cargo test --locked --workspace
+run "test roff audit profilers" \
+  cargo test --locked --package mant-engine --examples
 run "test optional libmandoc features" \
   cargo test --locked --package libmandoc-rs --all-features
 run "check libmandoc native symbol namespace" \
