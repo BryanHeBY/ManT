@@ -99,6 +99,19 @@ unclassified raw or logical owners were all zero. The exact reports on the
 audit host are `/tmp/mant-target-full-45036-9233968.json` and
 `/tmp/mant-target-full-45036-9233968.csv`.
 
+After target derivation was made source-authoritative, the same restored
+inventory was rescanned at producer commit
+`bd92d5cec46fca550819a5c890e56bbdcf69b8e4`. The v3 profiler binary SHA-256
+was `6b5c2cf3db0e22454f5cb1c65f0c79b1e8ed4aef30744c3b7cd8e2a9f9c7ecc3`.
+All 45,036 pages were clean: 1,192,621 raw target owners formed exactly
+1,192,621 classified logical obligations, and every retained obligation
+matched a compatible IR occurrence. All missing, unexpected, role-collision,
+invalid-identity, duplicate, dangling, and unclassified counts were zero.
+This rerun includes the argument-less `.Tg` forms that can bind either to a
+following source owner or to libmandoc's preceding paragraph owner. The exact
+reports are `/tmp/mant-target-full-45036-bd92d5c.json` and
+`/tmp/mant-target-full-45036-bd92d5c.csv`.
+
 CI does not depend on `/usr/share/man`. It builds the profiler and verifies the
 small checked-in fixture corpus against recorded rows:
 
