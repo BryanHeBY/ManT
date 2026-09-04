@@ -1804,14 +1804,12 @@ mod tests {
         let mut query = query();
         {
             let document = query.document.as_mut().expect("document");
-            for code in ["markdown.semantic-entry.ambiguous-selector"] {
-                document.diagnostics.push(Diagnostic {
-                    level: DiagnosticLevel::Warning,
-                    code: Some(code.to_owned()),
-                    message: "author warning".to_owned(),
-                    source: None,
-                });
-            }
+            document.diagnostics.push(Diagnostic {
+                level: DiagnosticLevel::Warning,
+                code: Some("markdown.semantic-entry.ambiguous-selector".to_owned()),
+                message: "author warning".to_owned(),
+                source: None,
+            });
         }
         assert!(
             build_outline(&query)
