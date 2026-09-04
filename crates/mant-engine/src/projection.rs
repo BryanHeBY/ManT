@@ -12,9 +12,9 @@ use mant_ir::{
     SemanticIndex, SourceSpan,
 };
 use mant_protocol::{
-    EntryDocumentTarget, EntryProjection, ExcerptSchema, ExcerptSelection, NodeSelector,
-    OutlineDetail, OutlineNode, OutlineNodeReference, OutlineReference, OutlineSchema,
-    OutlineTrail, QueryExcerpt, QueryOutline,
+    EntryDocumentTarget, EntryProjection, EntryValueDomain, ExcerptSchema, ExcerptSelection,
+    NodeSelector, OutlineDetail, OutlineNode, OutlineNodeReference, OutlineReference,
+    OutlineSchema, OutlineTrail, QueryExcerpt, QueryOutline,
 };
 
 use crate::{
@@ -649,12 +649,34 @@ fn project_entries(
                             .and_then(|address| target.reference.resolve_from(address)),
                     })
                     .collect(),
-                value_domain: entry.value_domain.clone(),
+                value_domain: entry
+                    .value_domain
+                    .as_ref()
+                    .map(|domain| project_value_domain(domain, current_address)),
                 entry_summary: projected_summary(&entry.children, projection),
                 children,
             })
         })
         .collect()
+}
+
+fn project_value_domain(
+    domain: &mant_ir::ValueDomain,
+    current_address: Option<&mant_ir::DocumentAddress>,
+) -> EntryValueDomain {
+    match domain {
+        mant_ir::ValueDomain::Choices { exhaustive } => EntryValueDomain::Choices {
+            exhaustive: *exhaustive,
+        },
+        mant_ir::ValueDomain::EntrySet {
+            reference,
+            entry_kinds,
+        } => EntryValueDomain::EntrySet {
+            reference: reference.clone(),
+            address: current_address.and_then(|address| reference.resolve_from(address)),
+            entry_kinds: entry_kinds.clone(),
+        },
+    }
 }
 
 fn find_outline_node<'a>(

@@ -6,7 +6,7 @@ use serde::{Deserialize, Deserializer, Serialize};
 use mant_ir::{
     Block, DefinitionCase, DefinitionItem, DefinitionRole, Diagnostic, DocumentAddress,
     DocumentMeta, DocumentSource, EntryKind, EntrySummary, NodeId, Section,
-    SemanticDocumentReference, TldrDocument, ValueDomain,
+    SemanticDocumentReference, TldrDocument,
 };
 
 use crate::{NodePath, NodeSelector, Producer};
@@ -146,6 +146,31 @@ pub struct EntryDocumentTarget {
     pub address: Option<DocumentAddress>,
 }
 
+/// Resolved value space accepted by one semantic entry.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(
+    tag = "kind",
+    rename_all = "kebab-case",
+    rename_all_fields = "camelCase"
+)]
+pub enum EntryValueDomain {
+    /// Values represented by nested entry nodes.
+    Choices {
+        /// True when the listed choices are known to be exhaustive.
+        exhaustive: bool,
+    },
+    /// Entries owned by another logical document form the value space.
+    EntrySet {
+        /// Source-authored logical reference.
+        reference: SemanticDocumentReference,
+        /// Exact logical destination when namespace-only resolution suffices.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        address: Option<DocumentAddress>,
+        /// Accepted semantic categories in the referenced document.
+        entry_kinds: Vec<EntryKind>,
+    },
+}
+
 const fn default_true() -> bool {
     true
 }
@@ -223,7 +248,7 @@ pub enum OutlineNode {
         document_targets: Vec<EntryDocumentTarget>,
         /// Optional finite or cross-document value space.
         #[serde(skip_serializing_if = "Option::is_none")]
-        value_domain: Option<ValueDomain>,
+        value_domain: Option<EntryValueDomain>,
         /// Recursive semantic entry coverage owned by this entry.
         #[serde(skip_serializing_if = "Option::is_none")]
         entry_summary: Option<EntrySummary>,
