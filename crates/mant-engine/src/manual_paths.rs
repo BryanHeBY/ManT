@@ -373,13 +373,22 @@ struct ManDbConfig {
 fn parse_man_db_config(text: &str) -> ManDbConfig {
     let mut configuration = ManDbConfig::default();
     for line in config_lines(text) {
-        let fields = line.split_whitespace().collect::<Vec<_>>();
-        match fields.as_slice() {
-            ["MANPATH_MAP", binary, manual, ..] => configuration
-                .mappings
-                .push((PathBuf::from(binary), PathBuf::from(manual))),
-            ["MANDATORY_MANPATH", manual, ..] => {
-                configuration.mandatory.push(PathBuf::from(manual));
+        let Some((directive, value)) = config_directive(line) else {
+            continue;
+        };
+        match directive {
+            "MANPATH_MAP" => {
+                let mut fields = value.split_whitespace();
+                if let Some((binary, manual)) = fields.next().zip(fields.next()) {
+                    configuration
+                        .mappings
+                        .push((PathBuf::from(binary), PathBuf::from(manual)));
+                }
+            }
+            "MANDATORY_MANPATH" => {
+                if let Some(manual) = value.split_whitespace().next() {
+                    configuration.mandatory.push(PathBuf::from(manual));
+                }
             }
             _ => {}
         }
@@ -473,13 +482,9 @@ struct BsdManConfig {
 fn parse_bsd_man_config(text: &str) -> BsdManConfig {
     let mut configuration = BsdManConfig::default();
     for line in config_lines(text) {
-        let Some((directive, value)) = line.split_once(char::is_whitespace) else {
+        let Some((directive, value)) = config_directive(line) else {
             continue;
         };
-        let value = value.trim();
-        if value.is_empty() {
-            continue;
-        }
         match directive {
             "MANPATH" | "manpath" => configuration
                 .paths
@@ -493,11 +498,8 @@ fn parse_bsd_man_config(text: &str) -> BsdManConfig {
 
 fn parse_mandoc_manpaths(text: &str) -> Vec<PathBuf> {
     config_lines(text)
-        .filter_map(|line| {
-            let (directive, value) = line.split_once(char::is_whitespace)?;
-            (directive == "manpath").then_some(value.trim())
-        })
-        .filter(|path| !path.is_empty())
+        .filter_map(config_directive)
+        .filter_map(|(directive, value)| (directive == "manpath").then_some(value))
         .flat_map(|path| expand_path_pattern(Path::new(path)))
         .collect()
 }
@@ -514,6 +516,12 @@ fn config_lines(text: &str) -> impl Iterator<Item = &str> {
     text.lines()
         .map(str::trim)
         .filter(|line| !line.is_empty() && !line.starts_with('#'))
+}
+
+fn config_directive(line: &str) -> Option<(&str, &str)> {
+    let (directive, value) = line.split_once(char::is_whitespace)?;
+    let value = value.trim();
+    (!value.is_empty()).then_some((directive, value))
 }
 
 fn expand_path_pattern(pattern: &Path) -> Vec<PathBuf> {
@@ -613,7 +621,7 @@ mod tests {
     use std::{collections::HashMap, env, ffi::OsString, fs, path::PathBuf};
 
     use super::{
-        BsdManConfig, ManDbConfig, ManualPathPlatform, developer_manual_roots,
+        BsdManConfig, ManDbConfig, ManualPathPlatform, config_directive, developer_manual_roots,
         discover_manual_roots_from, expand_man_db_systems, parse_bsd_man_config,
         parse_man_db_config, parse_mandoc_manpaths, supplemental_manual_roots_for,
         wildcard_matches,
@@ -666,6 +674,16 @@ mod tests {
             "# comment\nmanpath /usr/share/man\nMANPATH /not-mandoc\noutput style css\n",
         );
         assert_eq!(paths, vec![PathBuf::from("/usr/share/man")]);
+    }
+
+    #[test]
+    fn directive_parser_preserves_internal_path_whitespace() {
+        assert_eq!(
+            config_directive("manpath   C:\\Program Files\\Tool\\man   "),
+            Some(("manpath", "C:\\Program Files\\Tool\\man"))
+        );
+        assert_eq!(config_directive("manpath   "), None);
+        assert_eq!(config_directive("manpath"), None);
     }
 
     #[test]
