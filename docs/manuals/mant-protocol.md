@@ -626,7 +626,7 @@ The request has three fields:
 
 `maxDepth` and `maxDocuments` are optional and valid only when `followLinks` is `true`; supplying either field while traversal is disabled is rejected. `maxDepth = 0` resolves only the initial documents and follows no links. `maxDepth = 1` additionally resolves their one-hop neighbours.
 
-Only `LinkTarget::Document` and `LinkTarget::Manual` create edges. Markdown targets resolve relative to the referring document and retain its personal/source namespace; a path escaping that namespace is rejected. Manual links with a section resolve that exact logical address. Page-local, external, and email links are excluded. Plain prose and filename prefixes are never interpreted as edges.
+`LinkTarget::Document` and `LinkTarget::Manual` create edges. Explicit semantic entry destinations and entry-set value domains use the same restricted Markdown/manual reference family and also participate in traversal. Markdown targets resolve relative to the referring document and retain its personal/source namespace; a path escaping that namespace is rejected. Manual links with a section resolve that exact logical address. Page-local, external, and email links are excluded. Plain prose and filename prefixes are never interpreted as edges.
 
 Traversal is breadth-first. Initial selector order comes first, followed by typed links in source order. A canonical `DocumentAddress` supplies cycle detection and deduplication. A document reached by several parents is queried once while `reachedFrom` retains each distinct parent. Missing roots and links appear in `unresolved`; `from` is absent for an initial selector and present for a followed link. A request fails only when no initial document is readable.
 
@@ -947,9 +947,10 @@ before an agent requests content:
 | `entries` | Echoed `none`, `summary`, `all`, or role-filtered projection |
 | `root` | Optional selector used as the returned tree root |
 | `label` | Query label |
+| `address` | Exact logical address, omitted for direct-file input |
 | `source`, `meta` | Optional document identity |
 | `diagnostics` | Optional recoverable parser findings |
-| `entriesComplete` | Present as `false` when declarations were rejected or native definitions could not be classified without guessing |
+| `semanticsComplete` | Present as `false` when semantic declarations were rejected or native definitions could not be classified without guessing |
 | `nodes` | Recursive addressable tree |
 
 Node kinds are:
@@ -959,13 +960,13 @@ Node kinds are:
 | `tldr` | `0` | Reserved quick reference |
 | `document-root` | `root` | Content before the first heading; optional `entrySummary` |
 | `document-section` | `1`, `1.2`, `1.2.1` | Recursive `children`; optional `entrySummary` |
-| `document-entry` | `1.2/e3`, `1.2/e3/e2` | `entryKind`, aliases, forms, targets, optional value domain and nested children |
+| `document-entry` | `1.2/e3`, `1.2/e3/e2` | `entryKind`, aliases, forms, optional `documentTargets`, value domain and nested children |
 
 The default `summary` projection emits no individual entries. Instead, each
 non-empty root or section scope carries recursive counts for direct entries,
 descendants, authored forms, and semantic kinds. `all` emits every entry;
 `kinds` emits selected kinds and the ancestors required to preserve their
-hierarchy. Empty summaries are omitted. A missing `entriesComplete` field means
+hierarchy. Empty summaries are omitted. A missing `semanticsComplete` field means
 `true`; the exceptional `false` value distinguishes a genuinely empty index
 from one made incomplete by rejected source declarations.
 
@@ -976,8 +977,9 @@ accepted `ssh -L` argument layouts or `[+-]O [shopt_option]`. `entryKind`
 distinguishes commands; option, marker, and operand parameters; configuration
 keys; environment variables; variables; values; and unclassified terms.
 Nested values can declare a `choices` value domain. Cross-document `entry-set`
-and `union` domains are available only when a producer has explicit evidence;
-ManT does not infer them from prose.
+domains are available only when a producer has explicit evidence; ManT does not infer them from prose. An entry-set carries the authored `reference`, an exact `address` when namespace-only resolution is possible, and the accepted `entryKinds`. An unqualified manual reference or direct-file input can therefore retain its source reference without claiming an exact address.
+
+`documentTargets` has the same reference/address distinction but serves navigation rather than value validation. Each target records the visible linked-term `label`. The entry's own `id`, not a separate target array, selects its authoritative content definition.
 
 This is a projection boundary rather than a second semantic model. The
 content-attached `DefinitionIdentity`, derived `SemanticEntry`, and selected
@@ -994,7 +996,7 @@ definition term must match, apart from one explicitly delimited trailing
 parenthetical annotation such as Readline's `(On)` default notation. ManT never
 takes only its first word, promotes a shell example label, or scans prose. A definition-shaped term that cannot be
 classified in a native semantic section remains a generic term, emits
-`manual.semantic-entry.unclassified-definition`, and makes `entriesComplete`
+`manual.semantic-entry.unclassified-definition`, and makes `semanticsComplete`
 false. Composite headings such as `ENVIRONMENT OPTIONS` use the more specific
 option grammar.
 
@@ -1018,6 +1020,7 @@ An illustrative response is:
   "schema": "mant.outline/v0.11",
   "entries": {"kind": "all"},
   "label": "tool.md",
+  "address": {"kind": "markdown", "path": "tool", "origin": {"kind": "documents"}},
   "source": {
     "format": "markdown",
     "path": "tool.md"
@@ -1060,8 +1063,7 @@ An illustrative response is:
             "-h",
             "--help"
           ],
-          "forms": ["-h, --help"],
-          "targets": ["option-help"]
+          "forms": ["-h, --help"]
         }
       ]
     }

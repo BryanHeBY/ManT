@@ -492,6 +492,23 @@ description blocks follow. For example:
 - `/query`, `/Q`: Query the current state.
 ```
 
+A relative document link wrapping exactly one code term is also accepted and becomes an explicit entry destination, while links in the description remain ordinary content:
+
+```markdown
+<!-- mant:entries role=command case=insensitive -->
+- [`winget.exe`](winget.exe.md): Open the command manual.
+```
+
+Semantic lists may nest to the normal Markdown depth budget; each nested list declares its own role. An entry can also declare a cross-document value space inside its list item:
+
+```markdown
+- `-o OPTION`: Set an SSH configuration key.
+
+  <!-- mant:domain entries=manual/5/ssh_config roles=configuration-key -->
+```
+
+The domain target is a relative Markdown document or exact `manual/<section>/<name>` path, and `roles` is a comma-separated semantic-role list. Fragments and inferred prose relationships are rejected.
+
 This is intentionally not a semantic entry because the leading paragraph has
 no description delimiter:
 
@@ -540,7 +557,7 @@ aliases and then normalized conveniences such as omitting leading dashes. This
 lets an exact command `?` coexist with option spelling `-?`. When aliases at
 the same precedence remain ambiguous, or a structural ID shadows an entry
 alias, the outline carries a source diagnostic and selection returns or points
-to candidate paths and IDs for exact qualification. `entriesComplete: false`
+to candidate paths and IDs for exact qualification. `semanticsComplete: false`
 is reserved for rejected declarations or native definitions that could not be
 classified without guessing.
 

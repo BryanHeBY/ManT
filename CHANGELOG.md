@@ -21,12 +21,33 @@ that crate was not published for that change.
 - Retain an inline anchor's addressable-owner source span independently from
   its nested IR placement, allowing target-conservation tools to distinguish
   neighbouring paragraphs, definitions, list items, and table cells.
+- Make one semantic entry ID its authoritative local content address, replace
+  the redundant target vector with explicit linked-document relationships,
+  and attach source-declared cross-document value domains to definitions.
+- Restrict semantic document references to Markdown and manual destinations,
+  centralize namespace-only resolution, and remove the unused union domain.
+- Validate cross-document entry domains in the shared IR, including non-empty
+  references and role sets and rejection of duplicate roles.
 
 ### mant-protocol 0.11.0
 
 - Advance the native process family to v0.11 and expose optional
   `fragmentAliases` beside normalized document, section, and anchor identities.
   The published v0.10 schema snapshot remains immutable.
+- Finalize the unreleased outline contract with a top-level logical `address`,
+  typed `documentTargets`, protocol-owned resolved entry domains, and the
+  broader `semanticsComplete` signal. Remove the redundant entry `targets`.
+
+### mant-engine 0.11.0
+
+- Recognize semantic-entry directives at arbitrary CommonMark list depth and
+  preserve complete non-option names rather than splitting punctuation inside
+  a code span.
+- Accept a document link wrapping one code term as an entry destination, and
+  add item-scoped `mant:domain` declarations for evidence-backed value spaces
+  in relative Markdown documents or exact native manuals.
+- Include linked entry destinations and entry-set domains in bounded document
+  traversal, and show both relationships in expanded compact outlines.
 
 ### libmandoc-rs 0.10.0
 

@@ -48,8 +48,11 @@ integrators must act.
    If a deliberate protocol version change modified a generated structural
    schema, update every affected discriminator first and then regenerate its
    versioned snapshot with `scripts/update-protocol-schema-snapshot.sh`. Never
-   refresh an existing-version snapshot merely to silence a compatibility
-   failure. The `mant-protocol` crate version and native wire identifiers are
+   refresh a released or frozen version snapshot merely to silence a
+   compatibility failure. An explicitly unreleased protocol family may be
+   regenerated while its design is still being finalized, but its changelog
+   must call out the resulting wire change and all checked-in examples must
+   move together. The `mant-protocol` crate version and native wire identifiers are
    separate: a crate-only implementation or documentation release can retain
    `mant.request/v0.11` and its related identifiers, while a breaking wire change
    must choose a new protocol family regardless of the crate's current semver.

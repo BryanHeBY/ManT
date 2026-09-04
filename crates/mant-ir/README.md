@@ -48,7 +48,7 @@ within-document navigation.
 `DocumentIndex` addresses content nodes. `SemanticIndex` separately groups
 identified definitions into commands, parameter families, configuration keys,
 variables, values, and terms. A semantic entry keeps exact selector aliases,
-complete authored forms, content targets, and nested ownership; it does not
+complete authored forms, explicit linked-document destinations, and nested ownership; it does not
 replace the definitions in the document tree.
 
 Build both indexes and run shared validation after obtaining a document from

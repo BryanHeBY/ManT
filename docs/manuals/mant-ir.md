@@ -162,6 +162,7 @@ addressable entry. The identity records:
 | `role` | Option, marker, operand, command, configuration key, environment variable, variable, value, or generic term |
 | `case` | Sensitive or insensitive alias matching |
 | `names` | Exact normalized aliases exposed to selectors |
+| `valueDomain` | Optional source-declared value space |
 
 The identity is assigned during lowering, before source-specific macro information is discarded. Ordinary prose definitions remain valid definition items without an identity.
 
@@ -197,16 +198,13 @@ Each `SemanticEntry` contains:
 | `aliases` | Exact selectable spellings, derived from identity `names` |
 | `case` | Alias matching policy |
 | `forms` | Complete author-written terms, including argument layouts |
-| `targets` | Definition-node IDs that provide content for the concept |
+| `documentTargets` | Explicit cross-document destinations carried by linked terms |
 | `children` | Entries semantically owned by this entry |
 | `valueDomain` | Optional value-space evidence |
 
-Aliases answer “how can this concept be selected?”, forms answer “how did the
-source say it can be used?”, and targets answer “which content definitions
-explain it?”. Consumers must not reconstruct one field from another. In
+The entry `id` is also the document-local address of its authoritative definition. Aliases answer “how can this concept be selected?”, forms answer “how did the source say it can be used?”, and document targets answer “which other document did an explicitly linked term name?”. Consumers must not reconstruct one field from another. In
 particular, a complete form such as `[+-]O [shopt_option]` is not necessarily a
-safe selector, and one logical concept may be backed by more than one definition
-node.
+safe selector. Description links remain ordinary content links rather than entry destinations.
 
 `EntrySummary` describes a scope without materializing individual entry nodes:
 
@@ -218,10 +216,7 @@ node.
 | `byKind` | Recursive counts grouped by `EntryKind` |
 
 `ValueDomain::Choices { exhaustive }` says child entries are observed choices
-and records whether the source proves the set complete. `EntrySet` references
-selected entry kinds in another logical `DocumentAddress`; `Union` combines
-several independently evidenced domains. Producers must not infer either form
-from prose.
+and records whether the source proves the set complete. `EntrySet` holds a restricted source-neutral document reference and selected entry kinds in that document. It is resolved against the referring logical address only at the engine/protocol boundary. Producers must not infer a cross-document set from prose.
 
 ## Addresses and Resolution
 

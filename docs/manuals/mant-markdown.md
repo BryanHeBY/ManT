@@ -105,21 +105,44 @@ Environment-variable declarations use one cross-platform name grammar shared wit
 
 Each list item must begin with one or more code spans containing names and then an explicit description delimiter. Ambiguous, malformed, mixed-purpose, or colliding declarations remain ordinary lists and produce author-facing diagnostics instead of silently losing selectors.
 
+A term may instead be one document link wrapping exactly one code span:
+
+```markdown
+<!-- mant:entries role=command case=insensitive -->
+- [`winget.exe`](winget.exe.md): Open the Windows package manager manual.
+```
+
+The linked code remains the selectable name and the relative Markdown target becomes an explicit semantic document destination. A link in the description remains ordinary reference material; it does not change the entry destination. External links, section links, linked prose, and links wrapping mixed inline content are not accepted as semantic terms.
+
+Declared entry lists may nest at any Markdown list depth within the parser's 64-level structural budget. Every nested list that needs a semantic role has its own immediately preceding `mant:entries` directive; the derived index preserves parent → child ownership rather than flattening it.
+
+An entry whose accepted values are entries in another document can declare that relationship inside its list item:
+
+```markdown
+<!-- mant:entries role=option case=sensitive -->
+- `-o OPTION`: Set an SSH configuration key.
+
+  <!-- mant:domain entries=manual/5/ssh_config roles=configuration-key -->
+```
+
+`mant:domain` must be the only construct on its line and must be structurally contained by the semantic list item it describes. `entries` accepts one relative `.md` or `.markdown` document, or an exact `manual/<section>/<name>` path. It addresses the complete target document, so fragments are rejected. `roles` is a non-empty comma-separated list drawn from the same roles as `mant:entries`. Unknown, duplicate, malformed, or unattached declarations produce `markdown.semantic-value-domain`, leave document content visible, and make the semantic projection incomplete. A syntactically valid reference remains useful even when catalog lookup is unavailable; resolution is an engine/protocol concern rather than a Markdown parsing requirement.
+
 Ordinary option-shaped definition lists produced by native manuals can receive identities automatically. Markdown lists require either the explicit directive or the conservative complete-list inference described in the shipped examples; authors should use the directive when role or case policy matters.
 
 An accepted list item remains a normal definition item in the document tree;
 the directive adds its source-neutral `DefinitionIdentity`. From those content
 facts, `SemanticIndex` derives entry kinds, selector aliases, complete authored
-forms, content targets, and any nested ownership. Outline, excerpt, explanation,
+forms, explicit document targets, value domains, and nested ownership. Outline, excerpt, explanation,
 TUI, and MCP projections consume that derived index rather than reparsing the
 Markdown list. See [mant-ir(7)](mant-ir.md) for the distinction between content
 definitions and indexed concepts.
 
 Links follow the same source-to-IR boundary: a fragment becomes a local section
 target, a relative Markdown path becomes a same-source document edge, and web
-or email destinations remain host actions. Only document edges may expand a
-bounded multi-document query; the Markdown parser does not perform catalog or
-filesystem lookup while classifying the link.
+or email destinations remain host actions. Linked entry terms and entry-set
+domains join ordinary typed document links in bounded multi-document
+traversal; the Markdown parser does not perform catalog or filesystem lookup
+while classifying the reference.
 
 ## Embedded tldr
 

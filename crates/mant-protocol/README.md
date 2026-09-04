@@ -127,7 +127,8 @@ can expose evidence-backed value domains.
 
 Definitions remain authoritative content in `mant-ir`; `SemanticEntry` is a
 rebuildable concept index, and an outline entry is the selected protocol
-projection. Its targets lead back to the definition nodes that supply content.
+projection. Its `id` selects the definition that supplies content, while
+`documentTargets` describes explicit links carried by entry terms.
 This separation lets summary and role-filtered outlines omit entries without
 changing the document or inventing another semantic model.
 
