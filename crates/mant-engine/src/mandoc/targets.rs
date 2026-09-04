@@ -28,11 +28,14 @@ pub(super) fn node_target(node: &Node, fallback: Option<&str>) -> Option<String>
 
 /// Return the first source token used by libmandoc when a target has no tag.
 pub(super) fn raw_target(node: &Node) -> Option<String> {
-    let fallback = if node.macro_name.as_deref() == Some("Tg") {
-        explicit_target_argument(node)
-    } else {
-        source_token(node)
-    };
+    if node.macro_name.as_deref() == Some("Tg") {
+        return node
+            .flags
+            .deep_link_target
+            .then(|| explicit_target_argument(node))
+            .flatten();
+    }
+    let fallback = source_token(node);
     node_target(node, fallback.as_deref())
 }
 
@@ -54,16 +57,7 @@ pub(super) fn source_token(node: &Node) -> Option<String> {
 /// source syntax, so retain its explicit argument independently from where the
 /// parser later places `NODE_ID`.
 pub(super) fn explicit_target(node: &Node) -> Option<String> {
-    if node.macro_name.as_deref() != Some("Tg") {
-        return None;
-    }
-    let target = node
-        .tag
-        .as_deref()
-        .map(visible_text)
-        .or_else(|| first_text(node).map(visible_text))?;
-    let target = target.trim();
-    (!target.is_empty()).then(|| target.to_owned())
+    explicit_target_argument(node)
 }
 
 /// Return only the destination written as an argument to an explicit `.Tg`.
@@ -116,11 +110,15 @@ pub(super) fn section_target(node: &Node) -> Option<String> {
 }
 
 /// Return a target owned by one direct structural part.
-pub(super) fn part_target(node: &Node, kind: NodeKind, fallback: &str) -> Option<String> {
+///
+/// The fallback must come from the source node rather than its rendered IR.
+/// Renderer spacing and decoration are presentation policy and cannot change
+/// the identity selected by libmandoc.
+pub(super) fn part_target(node: &Node, kind: NodeKind) -> Option<String> {
     node.children
         .iter()
         .filter(|child| child.kind == kind)
-        .find_map(|owner| node_target(owner, Some(fallback)))
+        .find_map(raw_target)
 }
 
 /// Attach zero-width targets to the first addressable descendant.
@@ -432,7 +430,130 @@ fn node_and_part_targets(node: &Node) -> Vec<String> {
 
 #[cfg(test)]
 mod tests {
+    use libmandoc_rs::{Node, NodeFlags, NodeKind};
     use mant_ir::{Block, Inline, LayoutHint, ListItem};
+
+    fn node(
+        kind: NodeKind,
+        macro_name: Option<&str>,
+        text: Option<&str>,
+        tag: Option<&str>,
+        line: u32,
+        flags: NodeFlags,
+        children: Vec<Node>,
+    ) -> Node {
+        Node {
+            kind,
+            macro_name: macro_name.map(ToOwned::to_owned),
+            text: text.map(ToOwned::to_owned),
+            tag: tag.map(ToOwned::to_owned),
+            line,
+            column: 1,
+            flags,
+            list_kind: None,
+            display_kind: None,
+            font: None,
+            author_mode: None,
+            enclosure: None,
+            compact: false,
+            offset: None,
+            width: None,
+            table_cells: Vec::new(),
+            equation: None,
+            children,
+        }
+    }
+
+    #[test]
+    fn explicit_targets_ignore_stale_parser_tags() {
+        let text = node(
+            NodeKind::Text,
+            None,
+            Some("--Exact.Target"),
+            None,
+            7,
+            NodeFlags {
+                no_print: true,
+                ..NodeFlags::default()
+            },
+            Vec::new(),
+        );
+        let target = node(
+            NodeKind::Element,
+            Some("Tg"),
+            None,
+            Some("stale-automatic-target"),
+            7,
+            NodeFlags {
+                deep_link_target: true,
+                ..NodeFlags::default()
+            },
+            vec![text],
+        );
+
+        assert_eq!(
+            super::raw_target(&target).as_deref(),
+            Some("--Exact.Target")
+        );
+        assert_eq!(
+            super::explicit_target(&target).as_deref(),
+            Some("--Exact.Target")
+        );
+
+        let argumentless = node(
+            NodeKind::Element,
+            Some("Tg"),
+            None,
+            Some("stale-automatic-target"),
+            9,
+            NodeFlags {
+                deep_link_target: true,
+                ..NodeFlags::default()
+            },
+            Vec::new(),
+        );
+        assert_eq!(super::raw_target(&argumentless), None);
+        assert_eq!(super::explicit_target(&argumentless), None);
+    }
+
+    #[test]
+    fn structural_part_targets_use_source_tokens() {
+        let source = node(
+            NodeKind::Text,
+            None,
+            Some("--source-target rendered suffix"),
+            None,
+            11,
+            NodeFlags::default(),
+            Vec::new(),
+        );
+        let head = node(
+            NodeKind::Head,
+            None,
+            None,
+            None,
+            11,
+            NodeFlags {
+                deep_link_target: true,
+                ..NodeFlags::default()
+            },
+            vec![source],
+        );
+        let block = node(
+            NodeKind::Block,
+            Some("Fo"),
+            None,
+            None,
+            11,
+            NodeFlags::default(),
+            vec![head],
+        );
+
+        assert_eq!(
+            super::part_target(&block, NodeKind::Head).as_deref(),
+            Some("source-target")
+        );
+    }
 
     #[test]
     fn target_attachment_descends_into_nested_lists() {

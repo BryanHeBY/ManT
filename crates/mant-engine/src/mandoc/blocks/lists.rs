@@ -903,7 +903,7 @@ fn definition_item(
         ));
     }
     let mut term = term_builder.finish();
-    if let Some(id) = definition_head_anchor(node, &term) {
+    if let Some(id) = definition_head_anchor(node) {
         term.insert(0, Inline::anchor(id));
     }
     let terms = split_definition_terms(term);
@@ -989,17 +989,8 @@ fn split_definition_terms(term: Vec<Inline>) -> Vec<Vec<Inline>> {
 /// Preserve libmandoc's tag on a man(7) `.TP`/`.IP` head. Unlike mdoc `Fl`
 /// tags, this identity lives on the structural head rather than a visible
 /// inline child, so it has to be copied before lowering discards that wrapper.
-fn definition_head_anchor(node: &Node, term: &[Inline]) -> Option<String> {
-    let fallback = plain_text(term);
-    targets::part_target(
-        node,
-        NodeKind::Head,
-        fallback
-            .trim_start_matches('-')
-            .split_whitespace()
-            .next()
-            .unwrap_or_default(),
-    )
+fn definition_head_anchor(node: &Node) -> Option<String> {
+    targets::part_target(node, NodeKind::Head)
 }
 
 /// Return only document content from a definition macro's mixed-purpose head.
