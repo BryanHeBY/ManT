@@ -708,8 +708,8 @@ fn enclosure_marks(name: &str) -> Option<(&'static str, &'static str)> {
 }
 
 /// Convert libmandoc's validated deep-link marker into a zero-width IR node.
-/// Explicit `.Tg` tags carry `node.tag`; automatically discovered tags fall
-/// back to the same first visible word that libmandoc uses.
+/// Explicit `.Tg` requests retain their authored argument; automatically
+/// discovered tags fall back to libmandoc's first printable source token.
 fn navigation_anchor(node: &Node) -> Option<Inline> {
     super::targets::raw_target(node).map(Inline::anchor)
 }

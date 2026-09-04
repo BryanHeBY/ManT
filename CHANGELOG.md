@@ -56,7 +56,9 @@ that crate was not published for that change.
   decimal terms as definitions.
 - Preserve validated mdoc targets moved by libmandoc onto paragraph, display,
   list, item, function, and section owners; keep `.Tg` zero-width; and run the
-  same navigation-resolution passes over root and section content.
+  same navigation-resolution passes over root and section content. Explicit
+  `.Tg` spellings and automatic wrapper fallbacks now come from source tokens,
+  so inherited parser tags and renderer spacing cannot change a destination.
 - Add an independent target-conservation audit and a licensed `libpipeline(3)`
   regression fixture so invisible destination loss is covered separately from
   visible-content, structure, CommonMark, and renderer-layout audits.
