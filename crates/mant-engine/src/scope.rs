@@ -3,9 +3,9 @@
 use std::collections::{BTreeMap, VecDeque};
 use std::{error::Error, fmt, io::Write};
 
-use mant_ir::visit::{Visit, walk_definition_item, walk_inline};
+use mant_ir::visit::{Visit, walk_block, walk_definition_item, walk_inline};
 use mant_ir::{
-    DefinitionItem, DocumentAddress, Inline, ResolvedContent, SemanticDocumentReference,
+    Block, DefinitionItem, DocumentAddress, Inline, ResolvedContent, SemanticDocumentReference,
     ValueDomain,
 };
 use mant_protocol::{
@@ -685,6 +685,8 @@ fn execute_scope_search(
 struct DocumentReference {
     target: SemanticDocumentReference,
     kind: DocumentEdgeKind,
+    source_offset: Option<u32>,
+    sequence: usize,
 }
 
 impl DocumentReference {
@@ -729,40 +731,87 @@ impl DocumentReference {
 fn document_references(bundle: &ResolvedContent) -> Vec<DocumentReference> {
     struct Collector {
         references: Vec<DocumentReference>,
+        source_offset: Option<u32>,
+        sequence: usize,
+    }
+    impl Collector {
+        fn push(
+            &mut self,
+            target: SemanticDocumentReference,
+            kind: DocumentEdgeKind,
+            source_offset: Option<u32>,
+        ) {
+            self.references.push(DocumentReference {
+                target,
+                kind,
+                source_offset,
+                sequence: self.sequence,
+            });
+            self.sequence += 1;
+        }
     }
     impl<'ir> Visit<'ir> for Collector {
+        fn visit_block(&mut self, block: &'ir Block) {
+            let previous = self.source_offset;
+            self.source_offset = crate::block::block_source(block)
+                .and_then(|source| source.byte_range)
+                .map(|range| range.start.get());
+            walk_block(self, block);
+            self.source_offset = previous;
+        }
+
         fn visit_inline(&mut self, inline: &'ir Inline) {
             if let Inline::Link { target, .. } = inline
                 && let Some(target) = SemanticDocumentReference::from_link_target(target)
             {
-                self.references.push(DocumentReference {
-                    kind: reference_edge_kind(&target),
-                    target,
-                });
+                let kind = reference_edge_kind(&target);
+                self.push(target, kind, self.source_offset);
             }
             walk_inline(self, inline);
         }
 
         fn visit_definition_item(&mut self, item: &'ir DefinitionItem) {
-            if let Some(ValueDomain::EntrySet { reference, .. }) = item
+            let previous = self.source_offset;
+            self.source_offset = item
+                .description
+                .first()
+                .and_then(crate::block::block_source)
+                .and_then(|source| source.byte_range)
+                .map(|range| range.start.get())
+                .or(previous);
+            walk_definition_item(self, item);
+            if let Some(ValueDomain::EntrySet {
+                reference, source, ..
+            }) = item
                 .identity
                 .as_ref()
                 .and_then(|identity| identity.value_domain.as_ref())
             {
-                self.references.push(DocumentReference {
-                    kind: reference_edge_kind(reference),
-                    target: reference.clone(),
-                });
+                self.push(
+                    reference.clone(),
+                    reference_edge_kind(reference),
+                    source
+                        .and_then(|source| source.byte_range)
+                        .map(|range| range.start.get()),
+                );
             }
-            walk_definition_item(self, item);
+            self.source_offset = previous;
         }
     }
     let mut collector = Collector {
         references: Vec::new(),
+        source_offset: None,
+        sequence: 0,
     };
     if let Some(document) = bundle.document.as_ref() {
         collector.visit_document(document);
     }
+    collector.references.sort_by_key(|reference| {
+        (
+            reference.source_offset.unwrap_or(u32::MAX),
+            reference.sequence,
+        )
+    });
     collector.references
 }
 
@@ -804,8 +853,38 @@ mod tests {
                     manual_section: Some(section),
                 },
                 kind: DocumentEdgeKind::Manual,
+                ..
             }] if name == "ssh_config" && section == "5"
         ));
+    }
+
+    #[test]
+    fn semantic_relationships_follow_authored_source_order() {
+        let parsed = crate::parse_markdown(
+            "# Tools\n\n<!-- mant:entries role=command case=sensitive -->\n- [`target`](target.md): See [description](description.md).\n\n  <!-- mant:domain entries=domain.md roles=command -->\n",
+            None,
+        )
+        .expect("semantic relationships");
+        let references = document_references(&ResolvedContent {
+            label: "tools".to_owned(),
+            address: Some(DocumentAddress::Markdown {
+                path: "indexes/tools".to_owned(),
+                origin: mant_ir::MarkdownOrigin::Documents,
+            }),
+            document: Some(parsed.document),
+            tldr: None,
+        });
+
+        assert_eq!(
+            references
+                .iter()
+                .map(|reference| match &reference.target {
+                    SemanticDocumentReference::Document { name, .. }
+                    | SemanticDocumentReference::Manual { name, .. } => name.as_str(),
+                })
+                .collect::<Vec<_>>(),
+            ["target", "description", "domain"]
+        );
     }
 
     #[test]
@@ -1060,6 +1139,8 @@ mod tests {
                 fragment: None,
             },
             kind: DocumentEdgeKind::Document,
+            source_offset: None,
+            sequence: 0,
         };
         let from = DocumentAddress::Markdown {
             path: "guide/start".to_owned(),
@@ -1095,6 +1176,8 @@ mod tests {
                 manual_section: None,
             },
             kind: DocumentEdgeKind::Manual,
+            source_offset: None,
+            sequence: 0,
         };
         let mut resolution = ScopeResolution::new(&scope);
         resolution.record_frontier(&from, &reference, TraversalLimit::MaxDocuments);

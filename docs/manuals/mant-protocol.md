@@ -981,7 +981,13 @@ keys; environment variables; variables; values; and unclassified terms.
 Nested values can declare a `choices` value domain. Cross-document `entry-set`
 domains are available only when a producer has explicit evidence; ManT does not infer them from prose. An entry-set carries the authored `reference`, an exact `address` when namespace-only resolution is possible, and the accepted `entryKinds`. An unqualified manual reference or direct-file input can therefore retain its source reference without claiming an exact address.
 
-`documentTargets` has the same reference/address distinction but serves navigation rather than value validation. Each target records the visible linked-term `label`. The entry's own `id`, not a separate target array, selects its authoritative content definition.
+`documentTargets` has the same reference/address distinction but serves
+navigation rather than value validation. Each target records the visible
+linked-term `label`. Plain-text outlines render a differing label as
+`label → logical-target`, retain an authored `#fragment` after a resolved
+Markdown address, and list multiple aliases even when they share one target.
+The entry's own `id`, not a separate target array, selects its authoritative
+content definition.
 
 This is a projection boundary rather than a second semantic model. The
 content-attached `DefinitionIdentity`, derived `SemanticEntry`, and selected

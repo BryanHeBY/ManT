@@ -1359,6 +1359,80 @@ fn unqualified_names_prefer_registered_markdown() {
 }
 
 #[test]
+fn text_outlines_include_resolved_semantic_relationships() {
+    let fixture_root = std::env::temp_dir().join(format!(
+        "mant-outline-relationships-process-{}",
+        std::process::id()
+    ));
+    let documents = registered_documents_dir(&fixture_root);
+    let indexes = documents.join("indexes");
+    fs::create_dir_all(&indexes).expect("create outline relationship documents");
+    fs::write(
+        indexes.join("tools.md"),
+        "# Tools\n\n<!-- mant:entries role=command case=insensitive -->\n- [`winget`](winget.md#install), [`w`](winget.md#install): See the [description](description.md).\n\n  <!-- mant:domain entries=values.md roles=value -->\n",
+    )
+    .expect("write outline relationship index");
+    fs::write(indexes.join("winget.md"), "# Winget\n\n## Install\n")
+        .expect("write linked document");
+    fs::write(indexes.join("description.md"), "# Description\n")
+        .expect("write description document");
+    fs::write(indexes.join("values.md"), "# Values\n").expect("write value-domain document");
+
+    let output = run_with_registered_documents(
+        &fixture_root,
+        &[
+            "indexes/tools",
+            "--outline",
+            "--outline-entries",
+            "all",
+            "--format",
+            "text",
+            "--color",
+            "never",
+        ],
+    );
+    assert!(output.status.success(), "{output:?}");
+    assert!(output.stderr.is_empty());
+    let text = String::from_utf8(output.stdout).expect("UTF-8 text outline");
+    assert!(
+        text.contains(
+            "documents: winget → documents/indexes/winget#install, w → documents/indexes/winget#install"
+        ),
+        "{text}"
+    );
+    assert!(
+        text.contains("values: value in documents/indexes/values"),
+        "{text}"
+    );
+
+    let scope = run_with_registered_documents(
+        &fixture_root,
+        &[
+            "indexes/tools",
+            "--follow-links",
+            "--max-depth",
+            "8",
+            "--max-documents",
+            "2",
+            "--search",
+            "heading",
+            "--format",
+            "json",
+            "--compact",
+        ],
+    );
+    assert!(scope.status.success(), "{scope:?}");
+    let scope: serde_json::Value =
+        serde_json::from_slice(&scope.stdout).expect("scope relationship JSON");
+    assert_eq!(
+        scope_document_paths(&scope),
+        ["indexes/tools", "indexes/winget"]
+    );
+
+    fs::remove_dir_all(fixture_root).expect("remove outline relationship fixture");
+}
+
+#[test]
 fn document_scopes_follow_typed_links_breadth_first_and_query_multiple_roots() {
     let fixture_root = document_scope_fixture("traversal");
 

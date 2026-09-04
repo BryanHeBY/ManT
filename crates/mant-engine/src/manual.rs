@@ -8,17 +8,7 @@
 /// request boundary.
 #[must_use]
 pub fn is_manual_section(value: &str) -> bool {
-    if value.is_empty() || value.len() > 16 {
-        return false;
-    }
-    let mut characters = value.chars();
-    match characters.next() {
-        Some(first) if first.is_ascii_digit() => {
-            characters.all(|character| character.is_ascii_alphanumeric())
-        }
-        Some('l' | 'n') => characters.next().is_none(),
-        _ => false,
-    }
+    mant_ir::is_manual_section(value)
 }
 
 /// Return whether a manual section belongs to a command-page family.

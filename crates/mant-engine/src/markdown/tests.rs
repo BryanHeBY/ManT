@@ -1699,7 +1699,7 @@ fn declared_entry_description_requires_a_leading_paragraph_delimiter() {
 #[test]
 fn linked_code_terms_define_entry_document_destinations() {
     let parsed = parse_markdown(
-        "# Tools\n\n<!-- mant:entries role=command case=insensitive -->\n- [`winget.exe`](winget.exe.md): Windows package manager.\n- `plain`: See [details](plain.md).\n",
+        "# Tools\n\n<!-- mant:entries role=command case=insensitive -->\n- [`winget`](winget.exe.md#install), [`w`](winget.exe.md#install): Windows package manager.\n- `plain`: See [details](plain.md).\n",
         None,
     )
     .expect("linked entry terms parse");
@@ -1708,13 +1708,27 @@ fn linked_code_terms_define_entry_document_destinations() {
     let index = mant_ir::SemanticIndex::build(&parsed.document);
     let entries = index.root();
     assert_eq!(entries.len(), 2);
-    assert_eq!(entries[0].aliases, ["winget.exe"]);
+    assert_eq!(entries[0].aliases, ["winget", "w"]);
     assert!(matches!(
         entries[0].document_targets.as_slice(),
         [mant_ir::SemanticDocumentTarget {
-            label,
-            reference: mant_ir::SemanticDocumentReference::Document { name, fragment: None },
-        }] if label == "winget.exe" && name == "winget.exe"
+            label: first_label,
+            reference: mant_ir::SemanticDocumentReference::Document {
+                name: first_name,
+                fragment: Some(first_fragment),
+            },
+        }, mant_ir::SemanticDocumentTarget {
+            label: second_label,
+            reference: mant_ir::SemanticDocumentReference::Document {
+                name: second_name,
+                fragment: Some(second_fragment),
+            },
+        }] if first_label == "winget"
+            && second_label == "w"
+            && first_name == "winget.exe"
+            && second_name == "winget.exe"
+            && first_fragment == "install"
+            && second_fragment == "install"
     ));
     assert!(entries[1].document_targets.is_empty());
 
@@ -1741,10 +1755,21 @@ fn linked_code_terms_define_entry_document_destinations() {
             if matches!(
                 document_targets.as_slice(),
                 [mant_protocol::EntryDocumentTarget {
-                    label,
-                    reference: mant_ir::SemanticDocumentReference::Document { name, fragment: None },
+                    label: first_label,
+                    reference: mant_ir::SemanticDocumentReference::Document { name: first_name, fragment: Some(first_fragment) },
+                    address: Some(DocumentAddress::Markdown { path: first_path, origin: MarkdownOrigin::Documents }),
+                }, mant_protocol::EntryDocumentTarget {
+                    label: second_label,
+                    reference: mant_ir::SemanticDocumentReference::Document { name: second_name, fragment: Some(second_fragment) },
                     address: Some(DocumentAddress::Markdown { path, origin: MarkdownOrigin::Documents }),
-                }] if label == "winget.exe" && name == "winget.exe" && path == "indexes/winget.exe"
+                }] if first_label == "winget"
+                    && second_label == "w"
+                    && first_name == "winget.exe"
+                    && second_name == "winget.exe"
+                    && first_fragment == "install"
+                    && second_fragment == "install"
+                    && first_path == "indexes/winget.exe"
+                    && path == "indexes/winget.exe"
             )
     ));
     assert_eq!(
@@ -1754,7 +1779,9 @@ fn linked_code_terms_define_entry_document_destinations() {
             origin: MarkdownOrigin::Documents,
         })
     );
-    assert!(render_outline_text(&outline).contains("documents: documents/indexes/winget.exe"));
+    assert!(render_outline_text(&outline).contains(
+        "documents: winget → documents/indexes/winget.exe#install, w → documents/indexes/winget.exe#install"
+    ));
 }
 
 #[test]
@@ -1777,6 +1804,7 @@ fn entry_domain_directives_resolve_cross_document_value_spaces() {
                 manual_section: Some(ref section),
             },
             ref entry_kinds,
+            ..
         }) if name == "ssh_config"
             && section == "5"
             && entry_kinds == &[EntryKind::ConfigurationKey]
@@ -1817,6 +1845,85 @@ fn entry_domain_directives_resolve_cross_document_value_spaces() {
     assert!(
         render_outline_text(&outline).contains("values: configuration key in manual/5/ssh_config")
     );
+}
+
+#[test]
+fn entry_domains_attach_to_multiline_nested_items_with_crlf() {
+    let source = "# Query\n\n<!-- mant:entries role=command case=insensitive -->\n-\n  `query`: Dispatch a query family.\n\n  <!-- mant:entries role=option case=insensitive -->\n  -\n    `--user`: Select users.\n\n    <!-- mant:domain entries=manual/5/ssh_config roles=configuration-key -->\n";
+    for newline in ["\n", "\r\n"] {
+        let parsed = parse_markdown(&source.replace('\n', newline), None)
+            .expect("nested multiline entry domains parse");
+        assert!(
+            parsed.document.diagnostics.is_empty(),
+            "{newline:?}: {:?}",
+            parsed.document.diagnostics
+        );
+        let semantic_index = mant_ir::SemanticIndex::build(&parsed.document);
+        let [parent] = semantic_index.root() else {
+            panic!("one parent entry expected");
+        };
+        let [child] = parent.children.as_slice() else {
+            panic!("one nested entry expected");
+        };
+        assert!(matches!(
+            child.value_domain,
+            Some(mant_ir::ValueDomain::EntrySet {
+                reference: mant_ir::SemanticDocumentReference::Manual {
+                    ref name,
+                    manual_section: Some(ref section),
+                },
+                source: Some(_),
+                ..
+            }) if name == "ssh_config" && section == "5"
+        ));
+    }
+}
+
+#[test]
+fn malformed_entry_domains_remain_visible_and_incomplete() {
+    for directive in [
+        "<!-- mant:domain entries=manual/5/ssh_config roles=configuration-key,configuration-key -->",
+        "<!-- mant:domain entries=manual/qgroup/ssh_config roles=configuration-key -->",
+    ] {
+        let parsed = parse_markdown(
+            &format!(
+                "# SSH\n\n<!-- mant:entries role=option case=sensitive -->\n- `-o OPTION`: Set a key.\n\n  {directive}\n"
+            ),
+            None,
+        )
+        .expect("invalid domain remains recoverable");
+        assert!(parsed.document.diagnostics.iter().any(|diagnostic| {
+            diagnostic.code.as_deref() == Some("markdown.semantic-value-domain")
+        }));
+        let outline = build_outline_with_detail(
+            &ResolvedContent {
+                label: "ssh".to_owned(),
+                address: None,
+                document: Some(parsed.document),
+                tldr: None,
+            },
+            OutlineDetail::Entries,
+        )
+        .expect("incomplete outline");
+        assert!(!outline.semantics_complete);
+    }
+}
+
+#[test]
+fn similarly_prefixed_html_is_not_a_semantic_domain_directive() {
+    let parsed = parse_markdown(
+        "# Tool\n\n<!-- mant:entries role=command case=sensitive -->\n- `run`: Execute.\n\n  <!-- mant:domainentries=other.md roles=command -->\n",
+        None,
+    )
+    .expect("ordinary HTML remains recoverable");
+    assert!(parsed.document.diagnostics.iter().all(|diagnostic| {
+        diagnostic.code.as_deref() != Some("markdown.semantic-value-domain")
+    }));
+    let semantic_index = mant_ir::SemanticIndex::build(&parsed.document);
+    let [entry] = semantic_index.root() else {
+        panic!("one semantic entry expected");
+    };
+    assert!(entry.value_domain.is_none());
 }
 
 #[test]

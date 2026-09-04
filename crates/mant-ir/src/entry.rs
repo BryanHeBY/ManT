@@ -105,6 +105,9 @@ pub enum ValueDomain {
         /// Accepted semantic categories in the referenced document.
         #[schemars(length(min = 1, max = 9))]
         entry_kinds: Vec<EntryKind>,
+        /// Source position of the relationship declaration, when available.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        source: Option<crate::SourceSpan>,
     },
 }
 
@@ -139,6 +142,37 @@ pub enum SemanticDocumentReference {
 }
 
 impl SemanticDocumentReference {
+    /// Return whether every component follows the source-neutral reference
+    /// grammar shared by producers and IR validation.
+    #[must_use]
+    pub fn is_well_formed(&self) -> bool {
+        match self {
+            Self::Document { name, fragment } => {
+                !name.is_empty()
+                    && !name.starts_with('/')
+                    && !name.contains(['\\', '?', '#'])
+                    && !name.chars().any(char::is_control)
+                    && name.split('/').all(|component| !component.is_empty())
+                    && fragment.as_deref().is_none_or(|fragment| {
+                        !fragment.is_empty() && !fragment.chars().any(char::is_control)
+                    })
+            }
+            Self::Manual {
+                name,
+                manual_section,
+            } => {
+                !name.is_empty()
+                    && !name.contains(['/', '\\'])
+                    && !name
+                        .chars()
+                        .any(|character| character.is_whitespace() || character.is_control())
+                    && manual_section
+                        .as_deref()
+                        .is_none_or(crate::is_manual_section)
+            }
+        }
+    }
+
     /// Retain a locally addressable document target and reject other links.
     #[must_use]
     pub fn from_link_target(target: &LinkTarget) -> Option<Self> {
@@ -655,6 +689,7 @@ mod tests {
                 manual_section: Some("5".to_owned()),
             },
             entry_kinds: vec![EntryKind::ConfigurationKey],
+            source: None,
         });
 
         let entry = entry_from_definition(&item).expect("entry");
@@ -663,12 +698,41 @@ mod tests {
             Some(ValueDomain::EntrySet {
                 reference: SemanticDocumentReference::Manual {
                     ref name,
-                    manual_section: Some(ref section),
+                manual_section: Some(ref section),
                 },
                 ref entry_kinds,
+                source: None,
             }) if name == "ssh_config"
                 && section == "5"
                 && entry_kinds == &[EntryKind::ConfigurationKey]
         ));
+    }
+
+    #[test]
+    fn semantic_document_references_share_one_strict_grammar() {
+        for reference in [
+            SemanticDocumentReference::Document {
+                name: "../reference/options".to_owned(),
+                fragment: Some("output".to_owned()),
+            },
+            SemanticDocumentReference::Manual {
+                name: "ssh_config".to_owned(),
+                manual_section: Some("5".to_owned()),
+            },
+        ] {
+            assert!(reference.is_well_formed(), "{reference:?}");
+        }
+        for reference in [
+            SemanticDocumentReference::Document {
+                name: "broken//path".to_owned(),
+                fragment: None,
+            },
+            SemanticDocumentReference::Manual {
+                name: "ssh_config".to_owned(),
+                manual_section: Some("qgroup".to_owned()),
+            },
+        ] {
+            assert!(!reference.is_well_formed(), "{reference:?}");
+        }
     }
 }

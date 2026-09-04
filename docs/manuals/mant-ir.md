@@ -216,7 +216,13 @@ safe selector. Description links remain ordinary content links rather than entry
 | `byKind` | Recursive counts grouped by `EntryKind` |
 
 `ValueDomain::Choices { exhaustive }` says child entries are observed choices
-and records whether the source proves the set complete. `EntrySet` holds a restricted source-neutral document reference and selected entry kinds in that document. It is resolved against the referring logical address only at the engine/protocol boundary. Producers must not infer a cross-document set from prose.
+and records whether the source proves the set complete. `EntrySet` holds a
+restricted source-neutral document reference, selected entry kinds in that
+document, and an optional source span for the declaration. The span preserves
+authored relationship order; it is not part of the destination identity. The
+reference is resolved against the referring logical address only at the
+engine/protocol boundary. Producers must not infer a cross-document set from
+prose.
 
 ## Addresses and Resolution
 

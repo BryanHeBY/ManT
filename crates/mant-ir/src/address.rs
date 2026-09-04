@@ -3,6 +3,26 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
+/// Return whether a value is a conventional native manual section.
+///
+/// Numeric sections may carry an ASCII-alphanumeric extension such as `1p`
+/// or `3type`; the historical single-letter `l` and `n` sections are also
+/// accepted. The 16-byte bound matches ManT's public selector boundary.
+#[must_use]
+pub fn is_manual_section(value: &str) -> bool {
+    if value.is_empty() || value.len() > 16 {
+        return false;
+    }
+    let mut characters = value.chars();
+    match characters.next() {
+        Some(first) if first.is_ascii_digit() => {
+            characters.all(|character| character.is_ascii_alphanumeric())
+        }
+        Some('l' | 'n') => characters.next().is_none(),
+        _ => false,
+    }
+}
+
 /// Storage identity of one registered Markdown document.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, JsonSchema)]
 #[serde(

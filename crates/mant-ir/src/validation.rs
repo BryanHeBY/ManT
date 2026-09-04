@@ -559,12 +559,16 @@ impl<'ir> Visit<'ir> for InvariantCollector {
         if let Some(ValueDomain::EntrySet {
             reference,
             entry_kinds,
+            source,
         }) = item
             .identity
             .as_ref()
             .and_then(|identity| identity.value_domain.as_ref())
         {
             validate_semantic_document_reference(&mut self.diagnostics, reference);
+            if let Some(source) = source {
+                validate_source_span(&mut self.diagnostics, *source);
+            }
             if entry_kinds.is_empty() {
                 self.diagnostics.push(invariant(
                     "ir.empty-entry-value-domain",
@@ -616,7 +620,7 @@ fn validate_semantic_document_reference(
     diagnostics: &mut Vec<Diagnostic>,
     reference: &SemanticDocumentReference,
 ) {
-    let invalid = match reference {
+    let empty = match reference {
         SemanticDocumentReference::Document { name, fragment } => {
             name.trim().is_empty()
                 || fragment
@@ -633,10 +637,15 @@ fn validate_semantic_document_reference(
                     .is_some_and(|section| section.trim().is_empty())
         }
     };
-    if invalid {
+    if empty {
         diagnostics.push(invariant(
             "ir.empty-semantic-document-reference",
             "semantic document reference components must not be empty".to_owned(),
+        ));
+    } else if !reference.is_well_formed() {
+        diagnostics.push(invariant(
+            "ir.invalid-semantic-document-reference",
+            "semantic document reference does not follow the document or manual grammar".to_owned(),
         ));
     }
 }
@@ -995,6 +1004,7 @@ mod tests {
                         manual_section: Some(String::new()),
                     },
                     entry_kinds: Vec::new(),
+                    source: None,
                 }),
             }),
             terms: vec![vec![Inline::anchor("option-output")]],
@@ -1018,14 +1028,15 @@ mod tests {
 
         definition.identity.as_mut().expect("identity").value_domain =
             Some(crate::ValueDomain::EntrySet {
-                reference: crate::SemanticDocumentReference::Document {
-                    name: "keys".to_owned(),
-                    fragment: None,
+                reference: crate::SemanticDocumentReference::Manual {
+                    name: "ssh_config".to_owned(),
+                    manual_section: Some("qgroup".to_owned()),
                 },
                 entry_kinds: vec![
                     crate::EntryKind::ConfigurationKey,
                     crate::EntryKind::ConfigurationKey,
                 ],
+                source: None,
             });
         let diagnostics = validate_document(&document(
             Vec::new(),
@@ -1036,8 +1047,11 @@ mod tests {
                 source: None,
             }],
         ));
-        assert!(diagnostics.iter().any(|diagnostic| {
-            diagnostic.code.as_deref() == Some("ir.duplicate-entry-value-kind")
-        }));
+        let codes = diagnostics
+            .iter()
+            .filter_map(|diagnostic| diagnostic.code.as_deref())
+            .collect::<Vec<_>>();
+        assert!(codes.contains(&"ir.invalid-semantic-document-reference"));
+        assert!(codes.contains(&"ir.duplicate-entry-value-kind"));
     }
 }

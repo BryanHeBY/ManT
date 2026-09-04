@@ -125,7 +125,20 @@ An entry whose accepted values are entries in another document can declare that 
   <!-- mant:domain entries=manual/5/ssh_config roles=configuration-key -->
 ```
 
-`mant:domain` must be the only construct on its line and must be structurally contained by the semantic list item it describes. `entries` accepts one relative `.md` or `.markdown` document, or an exact `manual/<section>/<name>` path. It addresses the complete target document, so fragments are rejected. `roles` is a non-empty comma-separated list drawn from the same roles as `mant:entries`. Unknown, duplicate, malformed, or unattached declarations produce `markdown.semantic-value-domain`, leave document content visible, and make the semantic projection incomplete. A syntactically valid reference remains useful even when catalog lookup is unavailable; resolution is an engine/protocol concern rather than a Markdown parsing requirement.
+`mant:domain` must be the exact directive name, be the only construct on its
+line, and be structurally contained by the semantic list item it describes.
+Its attachment follows the CommonMark item rather than a particular source-line
+layout, so the list marker, leading term, blank lines, and directive may occupy
+separate lines. `entries` accepts one relative `.md` or `.markdown` document,
+or an exact `manual/<section>/<name>` path whose section follows the native
+manual-section grammar. It addresses the complete target document, so
+fragments are rejected. `roles` is a non-empty comma-separated list drawn from
+the same roles as `mant:entries`; repeating a role is an error. Unknown,
+duplicate, malformed, or unattached declarations produce
+`markdown.semantic-value-domain`, leave document content visible, and make the
+semantic projection incomplete. A syntactically valid reference remains useful
+even when catalog lookup is unavailable; resolution is an engine/protocol
+concern rather than a Markdown parsing requirement.
 
 Ordinary option-shaped definition lists produced by native manuals can receive identities automatically. Markdown lists require either the explicit directive or the conservative complete-list inference described in the shipped examples; authors should use the directive when role or case policy matters.
 
@@ -142,7 +155,10 @@ target, a relative Markdown path becomes a same-source document edge, and web
 or email destinations remain host actions. Linked entry terms and entry-set
 domains join ordinary typed document links in bounded multi-document
 traversal; the Markdown parser does not perform catalog or filesystem lookup
-while classifying the reference.
+while classifying the reference. Scope traversal orders linked terms,
+description links, and value-domain declarations by their authored source
+positions; declaring a domain later in an item does not move it ahead of an
+earlier visible link when a document budget truncates traversal.
 
 ## Embedded tldr
 

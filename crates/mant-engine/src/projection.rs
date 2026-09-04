@@ -671,6 +671,7 @@ fn project_value_domain(
         mant_ir::ValueDomain::EntrySet {
             reference,
             entry_kinds,
+            ..
         } => EntryValueDomain::EntrySet {
             reference: reference.clone(),
             address: current_address.and_then(|address| reference.resolve_from(address)),

@@ -86,7 +86,7 @@ fn render_outline_nodes(nodes: &[OutlineNode], prefix: &str, output: &mut Vec<St
         let last = index + 1 == nodes.len();
         let connector = if last { "└─" } else { "├─" };
         let summary = outline_summary(node).map_or_else(String::new, render_outline_entry_summary);
-        let relationships = outline_relationships(node);
+        let relationships = render_outline_relationships(node);
         output.push(format!(
             "{prefix}{connector} {} [{}] {}{summary}{relationships}",
             node.path(),
@@ -98,7 +98,12 @@ fn render_outline_nodes(nodes: &[OutlineNode], prefix: &str, output: &mut Vec<St
     }
 }
 
-fn outline_relationships(node: &OutlineNode) -> String {
+/// Render the semantic-relationship suffix for one outline node.
+///
+/// Terminal frontends should style this already-rendered suffix rather than
+/// reconstructing document targets or value domains independently.
+#[must_use]
+pub fn render_outline_relationships(node: &OutlineNode) -> String {
     let OutlineNode::DocumentEntry {
         document_targets,
         value_domain,
@@ -124,10 +129,7 @@ fn outline_relationships(node: &OutlineNode) -> String {
         entry_kinds,
     }) = value_domain.as_deref()
     {
-        let document = address.as_ref().map_or_else(
-            || semantic_reference_label(reference),
-            mant_ir::DocumentAddress::catalog_path,
-        );
+        let document = resolved_reference_label(reference, address.as_ref());
         let kinds = entry_kinds
             .iter()
             .map(|kind| entry_kind_label(*kind, true))
@@ -143,10 +145,31 @@ fn outline_relationships(node: &OutlineNode) -> String {
 }
 
 fn entry_document_label(target: &EntryDocumentTarget) -> String {
-    target.address.as_ref().map_or_else(
-        || semantic_reference_label(&target.reference),
-        mant_ir::DocumentAddress::catalog_path,
-    )
+    let destination = resolved_reference_label(&target.reference, target.address.as_ref());
+    if target.label == destination {
+        destination
+    } else {
+        format!("{} → {destination}", target.label)
+    }
+}
+
+fn resolved_reference_label(
+    reference: &mant_ir::SemanticDocumentReference,
+    address: Option<&mant_ir::DocumentAddress>,
+) -> String {
+    let Some(address) = address else {
+        return semantic_reference_label(reference);
+    };
+    let mut destination = address.catalog_path();
+    if let mant_ir::SemanticDocumentReference::Document {
+        fragment: Some(fragment),
+        ..
+    } = reference
+    {
+        destination.push('#');
+        destination.push_str(fragment);
+    }
+    destination
 }
 
 fn semantic_reference_label(reference: &mant_ir::SemanticDocumentReference) -> String {

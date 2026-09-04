@@ -129,6 +129,10 @@ fn render_outline_nodes(nodes: &[OutlineNode], prefix: &str, output: &mut Termin
                 &mant_engine::render_outline_entry_summary(summary),
             );
         }
+        output.styled(
+            TerminalRole::Muted,
+            &mant_engine::render_outline_relationships(node),
+        );
         if index + 1 < nodes.len() || !node.children().is_empty() {
             output.line();
         }

@@ -28,7 +28,7 @@ pub(super) struct EntryDeclaration {
 #[derive(Debug, Clone, Default)]
 pub(super) struct SemanticDeclarations {
     pub(super) entries: BTreeMap<u32, EntryDeclaration>,
-    pub(super) domains: BTreeMap<u32, DomainDeclaration>,
+    pub(super) domains: BTreeMap<usize, DomainDeclaration>,
 }
 
 #[derive(Debug, Clone)]
@@ -100,7 +100,7 @@ fn collect_entry_declarations(
         let Event::Html(raw) = event else {
             continue;
         };
-        if !raw.trim().starts_with("<!-- mant:entries") {
+        if !is_semantic_directive(raw, "mant:entries") {
             continue;
         }
         let Some(block_end_index) = events[event_index + 1..]
@@ -158,23 +158,20 @@ fn collect_domain_declarations(
     declarations: &mut SemanticDeclarations,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    let mut item_lines = Vec::new();
-    for (event, range) in events {
+    let mut item_offsets = Vec::new();
+    for (event_index, (event, range)) in events.iter().enumerate() {
         match event {
             Event::Start(Tag::Item) => {
-                item_lines.push(
-                    u32::try_from(source_line_index(line_starts, range.start) + 1)
-                        .unwrap_or(u32::MAX),
-                );
+                item_offsets.push(first_item_block_offset(events, event_index));
             }
             Event::End(TagEnd::Item) => {
-                item_lines.pop();
+                item_offsets.pop();
             }
-            Event::Html(raw) if raw.trim().starts_with("<!-- mant:domain") => {
+            Event::Html(raw) if is_semantic_directive(raw, "mant:domain") => {
                 let index = source_line_index(line_starts, range.start);
                 let line = lines[index].trim_end_matches(['\r', '\n']);
                 let line_number = u32::try_from(index + 1).unwrap_or(u32::MAX);
-                let Some(item_line) = item_lines.last().copied() else {
+                let Some(item_offset) = item_offsets.last().copied().flatten() else {
                     let source_span = directive_source(line, line_starts[index], line_number);
                     mask_directive(line, line_starts[index], masked);
                     domain_diagnostic(
@@ -196,7 +193,7 @@ fn collect_domain_declarations(
                 let source_span = declaration.source;
                 if declarations
                     .domains
-                    .insert(item_line, declaration)
+                    .insert(item_offset, declaration)
                     .is_some()
                 {
                     domain_diagnostic(
@@ -210,6 +207,29 @@ fn collect_domain_declarations(
             _ => {}
         }
     }
+}
+
+fn first_item_block_offset(
+    events: &[(Event<'_>, std::ops::Range<usize>)],
+    item_index: usize,
+) -> Option<usize> {
+    for (event, range) in &events[item_index + 1..] {
+        match event {
+            Event::Start(_) => return Some(range.start),
+            Event::End(TagEnd::Item) => break,
+            _ => {}
+        }
+    }
+    None
+}
+
+fn is_semantic_directive(raw: &str, name: &str) -> bool {
+    raw.trim()
+        .strip_prefix("<!--")
+        .and_then(|value| value.strip_suffix("-->"))
+        .map(str::trim)
+        .and_then(|value| value.strip_prefix(name))
+        .is_some_and(|suffix| suffix.is_empty() || suffix.starts_with(char::is_whitespace))
 }
 
 fn source_line_index(line_starts: &[usize], offset: usize) -> usize {
@@ -339,7 +359,7 @@ fn parse_domain_declaration(value: &str, source: SourceSpan) -> Result<DomainDec
         .strip_prefix("<!--")
         .and_then(|value| value.strip_suffix("-->"))
         .map(str::trim)
-        .and_then(|value| value.strip_prefix("mant:domain"))
+        .and_then(|value| strip_directive_name(value, "mant:domain"))
     else {
         return Err("malformed semantic value-domain directive".to_owned());
     };
@@ -364,6 +384,7 @@ fn parse_domain_declaration(value: &str, source: SourceSpan) -> Result<DomainDec
                 .ok_or_else(|| "semantic value-domain directive requires entries=...".to_owned())?,
             entry_kinds: roles
                 .ok_or_else(|| "semantic value-domain directive requires roles=...".to_owned())?,
+            source: Some(source),
         },
         source,
     })
@@ -374,13 +395,14 @@ fn parse_domain_reference(value: &str) -> Result<SemanticDocumentReference, Stri
         let Some((manual_section, name)) = rest.split_once('/') else {
             return Err("manual entry domains use manual/<section>/<name>".to_owned());
         };
-        if manual_section.is_empty() || name.is_empty() || name.contains('/') {
-            return Err("manual entry domains use manual/<section>/<name>".to_owned());
-        }
-        return Ok(SemanticDocumentReference::Manual {
+        let reference = SemanticDocumentReference::Manual {
             name: name.to_owned(),
             manual_section: Some(manual_section.to_owned()),
-        });
+        };
+        if !reference.is_well_formed() {
+            return Err("manual entry domains use manual/<section>/<name>".to_owned());
+        }
+        return Ok(reference);
     }
     let Some((name, fragment)) = super::inline::markdown_document_reference(value) else {
         return Err(
@@ -390,13 +412,19 @@ fn parse_domain_reference(value: &str) -> Result<SemanticDocumentReference, Stri
     if fragment.is_some() {
         return Err("entry domains must reference a complete document, not a fragment".to_owned());
     }
-    Ok(SemanticDocumentReference::Document { name, fragment })
+    let reference = SemanticDocumentReference::Document { name, fragment };
+    reference
+        .is_well_formed()
+        .then_some(reference)
+        .ok_or_else(|| {
+            "entry domains require a relative Markdown path or manual/<section>/<name>".to_owned()
+        })
 }
 
 fn parse_domain_roles(value: &str) -> Result<Vec<EntryKind>, String> {
     let mut roles = Vec::new();
-    for role in value.split(',') {
-        let role = match role {
+    for role_name in value.split(',') {
+        let role = match role_name {
             "option" => EntryKind::Parameter {
                 parameter_kind: mant_ir::ParameterKind::Option,
             },
@@ -413,11 +441,14 @@ fn parse_domain_roles(value: &str) -> Result<Vec<EntryKind>, String> {
             "value" => EntryKind::Value,
             "term" => EntryKind::Term,
             "" => return Err("semantic value-domain roles must not be empty".to_owned()),
-            _ => return Err(format!("unknown semantic value-domain role '{role}'")),
+            _ => return Err(format!("unknown semantic value-domain role '{role_name}'")),
         };
-        if !roles.contains(&role) {
-            roles.push(role);
+        if roles.contains(&role) {
+            return Err(format!(
+                "duplicate semantic value-domain role '{role_name}'"
+            ));
         }
+        roles.push(role);
     }
     Ok(roles)
 }
@@ -427,7 +458,7 @@ fn parse_declaration(value: &str, source: SourceSpan) -> Result<EntryDeclaration
         .strip_prefix("<!--")
         .and_then(|value| value.strip_suffix("-->"))
         .map(str::trim)
-        .and_then(|value| value.strip_prefix("mant:entries"))
+        .and_then(|value| strip_directive_name(value, "mant:entries"))
     else {
         return Err("malformed semantic-entry directive".to_owned());
     };
@@ -489,6 +520,11 @@ fn parse_declaration(value: &str, source: SourceSpan) -> Result<EntryDeclaration
         attached: attached.unwrap_or_default(),
         source,
     })
+}
+
+fn strip_directive_name<'a>(value: &'a str, name: &str) -> Option<&'a str> {
+    let suffix = value.strip_prefix(name)?;
+    (suffix.is_empty() || suffix.starts_with(char::is_whitespace)).then(|| suffix.trim_start())
 }
 
 /// Convert unambiguous entry lists without changing mixed or prose lists.
@@ -560,7 +596,12 @@ pub(super) fn normalize_entry_lists(
                     .blocks
                     .first()
                     .and_then(block_source)
-                    .and_then(|source| declarations.domains.remove(&source.line))
+                    .and_then(|source| source.byte_range)
+                    .and_then(|range| {
+                        declarations
+                            .domains
+                            .remove(&usize::try_from(range.start.get()).unwrap_or(usize::MAX))
+                    })
                     .map(|declaration| declaration.value);
                 entry_definition(item, signature, role, case, value_domain)
             })

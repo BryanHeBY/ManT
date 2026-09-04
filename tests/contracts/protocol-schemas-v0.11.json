@@ -2618,6 +2618,17 @@
               "reference": {
                 "description": "Source-neutral reference to the document that owns the entries.",
                 "$ref": "#/$defs/SemanticDocumentReference"
+              },
+              "source": {
+                "description": "Source position of the relationship declaration, when available.",
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/SourceSpan"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
               }
             },
             "required": [
@@ -5554,6 +5565,17 @@
               "reference": {
                 "description": "Source-neutral reference to the document that owns the entries.",
                 "$ref": "#/$defs/SemanticDocumentReference"
+              },
+              "source": {
+                "description": "Source position of the relationship declaration, when available.",
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/SourceSpan"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
               }
             },
             "required": [
@@ -9096,6 +9118,17 @@
               "reference": {
                 "description": "Source-neutral reference to the document that owns the entries.",
                 "$ref": "#/$defs/SemanticDocumentReference"
+              },
+              "source": {
+                "description": "Source position of the relationship declaration, when available.",
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/SourceSpan"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
               }
             },
             "required": [
