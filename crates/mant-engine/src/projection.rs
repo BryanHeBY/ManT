@@ -298,9 +298,10 @@ pub fn select_excerpt<S: AsRef<str>>(
         collect_root_entries(&manual.blocks, &mut located);
         collect_sections(&manual.sections, &[], &[], &mut located);
     }
+    let index = DocumentSelectorIndex::new(&located);
 
     let (tldr_selected, document_root_selected, mut selected) =
-        resolve_excerpt_candidates(query, selectors, &located)?;
+        resolve_excerpt_candidates(query, selectors, &index)?;
     let selected_sections = selected
         .iter()
         .filter(|candidate| candidate.is_section())
@@ -372,7 +373,7 @@ pub fn select_excerpt<S: AsRef<str>>(
 fn resolve_excerpt_candidates<'a, S: AsRef<str>>(
     query: &ResolvedContent,
     selectors: &[S],
-    located: &'a [LocatedNode<'a>],
+    index: &DocumentSelectorIndex<'a>,
 ) -> Result<(bool, bool, Vec<&'a LocatedNode<'a>>), ProjectionError> {
     let mut tldr_selected = false;
     let mut document_root_selected = false;
@@ -398,7 +399,7 @@ fn resolve_excerpt_candidates<'a, S: AsRef<str>>(
             document_root_selected = true;
             continue;
         }
-        let candidate = resolve_candidate(query, located, selector)?;
+        let candidate = index.resolve(&query.label, selector)?;
         if selected_ids.insert(candidate.id()) {
             selected.push(candidate);
         }
@@ -434,13 +435,14 @@ pub fn select_explanation(
         collect_root_entries(&manual.blocks, &mut located);
         collect_sections(&manual.sections, &[], &[], &mut located);
     }
-    let candidate = resolve_explanation_candidate(query, &located, selector)?;
+    let index = DocumentSelectorIndex::new(&located);
+    let candidate = resolve_explanation_candidate(query, &index, selector)?;
     select_excerpt(query, &[candidate.path().to_string()])
 }
 
 fn resolve_explanation_candidate<'a>(
     query: &ResolvedContent,
-    located: &'a [LocatedNode<'a>],
+    index: &DocumentSelectorIndex<'a>,
     selector: &str,
 ) -> Result<&'a LocatedNode<'a>, ProjectionError> {
     let selects_tldr =
@@ -457,7 +459,7 @@ fn resolve_explanation_candidate<'a>(
             selector: selector.to_owned(),
         });
     }
-    let candidate = resolve_candidate(query, located, selector)?;
+    let candidate = index.resolve(&query.label, selector)?;
     if candidate.is_section() {
         return Err(ProjectionError::ExplanationRequiresEntry {
             document: query.label.clone(),
@@ -467,45 +469,13 @@ fn resolve_explanation_candidate<'a>(
     Ok(candidate)
 }
 
-fn resolve_candidate<'a>(
-    query: &ResolvedContent,
-    located: &'a [LocatedNode<'a>],
-    selector: &str,
-) -> Result<&'a LocatedNode<'a>, ProjectionError> {
-    if let Some(candidate) = located
-        .iter()
-        .find(|candidate| candidate.matches_path(selector))
-    {
-        return Ok(candidate);
-    }
-    let ids = located
-        .iter()
-        .filter(|candidate| candidate.id() == selector)
-        .collect::<Vec<_>>();
-    match ids.as_slice() {
-        [candidate] => return Ok(candidate),
-        [] => {}
-        _ => return Err(ambiguous_selector(query, selector, ids)),
-    }
-
-    let matches = matching_aliases(located, selector).1;
-    match matches.as_slice() {
-        [] => Err(ProjectionError::UnknownSelector {
-            document: query.label.clone(),
-            selector: selector.to_owned(),
-        }),
-        [candidate] => Ok(candidate),
-        _ => Err(ambiguous_selector(query, selector, matches)),
-    }
-}
-
 fn ambiguous_selector(
-    query: &ResolvedContent,
+    document: &str,
     selector: &str,
     matches: Vec<&LocatedNode<'_>>,
 ) -> ProjectionError {
     ProjectionError::AmbiguousSelector {
-        document: query.label.clone(),
+        document: document.to_owned(),
         selector: selector.to_owned(),
         candidates: matches
             .into_iter()
@@ -702,9 +672,8 @@ fn resolve_outline_root<'a>(
         collect_root_entries(&manual.blocks, &mut located);
         collect_sections(&manual.sections, &[], &[], &mut located);
     }
-    let path = resolve_candidate(query, &located, selector)?
-        .path()
-        .to_string();
+    let index = DocumentSelectorIndex::new(&located);
+    let path = index.resolve(&query.label, selector)?.path().to_string();
     find_outline_node(nodes, &|node| node.path() == path).ok_or_else(|| {
         ProjectionError::UnknownSelector {
             document: query.label.clone(),
@@ -840,12 +809,6 @@ impl LocatedNode<'_> {
         }
     }
 
-    fn matches_path(&self, selector: &str) -> bool {
-        selector
-            .parse::<OutlinePath>()
-            .is_ok_and(|path| path == *self.path())
-    }
-
     fn id(&self) -> &str {
         match self {
             Self::Section { section, .. } => &section.id,
@@ -856,31 +819,6 @@ impl LocatedNode<'_> {
                     .expect("located entries have identities")
                     .id
             }
-        }
-    }
-
-    fn matches_exact_alias(&self, selector: &str) -> bool {
-        match self {
-            Self::Entry { entry, .. } => entry.identity.as_ref().is_some_and(|identity| {
-                identity
-                    .names
-                    .iter()
-                    .any(|name| semantic_name_equivalent(identity.case, name, selector))
-            }),
-            Self::Section { .. } => false,
-        }
-    }
-
-    fn matches_shorthand_alias(&self, selector: &str) -> bool {
-        match self {
-            Self::Entry { entry, .. } => entry.identity.as_ref().is_some_and(|identity| {
-                identity.names.iter().any(|name| {
-                    semantic_name_shorthand(identity.role, name).is_some_and(|shorthand| {
-                        semantic_name_equivalent(identity.case, shorthand, selector)
-                    })
-                })
-            }),
-            Self::Section { .. } => false,
         }
     }
 
@@ -950,13 +888,6 @@ impl LocatedNode<'_> {
     }
 }
 
-fn semantic_name_equivalent(case: DefinitionCase, left: &str, right: &str) -> bool {
-    match case {
-        DefinitionCase::Sensitive => left == right,
-        DefinitionCase::Insensitive => left.eq_ignore_ascii_case(right),
-    }
-}
-
 fn semantic_name_shorthand(role: DefinitionRole, name: &str) -> Option<&str> {
     match role {
         DefinitionRole::Option => {
@@ -991,26 +922,6 @@ impl AliasMatchKind {
     }
 }
 
-fn matching_aliases<'a>(
-    located: &'a [LocatedNode<'a>],
-    selector: &str,
-) -> (AliasMatchKind, Vec<&'a LocatedNode<'a>>) {
-    let exact = located
-        .iter()
-        .filter(|candidate| candidate.matches_exact_alias(selector))
-        .collect::<Vec<_>>();
-    if !exact.is_empty() {
-        return (AliasMatchKind::Exact, exact);
-    }
-    (
-        AliasMatchKind::Shorthand,
-        located
-            .iter()
-            .filter(|candidate| candidate.matches_shorthand_alias(selector))
-            .collect(),
-    )
-}
-
 /// Report selectors that cannot address exactly one semantic entry.
 ///
 /// The lookup policy itself remains usable through stable paths and IDs, but
@@ -1024,7 +935,7 @@ pub(crate) fn semantic_selector_diagnostics(
     let mut located = Vec::new();
     collect_root_entries(blocks, &mut located);
     collect_sections(sections, &[], &[], &mut located);
-    let index = SelectorDiagnosticsIndex::new(&located);
+    let index = DocumentSelectorIndex::new(&located);
     let mut selectors = BTreeSet::new();
     for candidate in &located {
         let Some(identity) = candidate.identity() else {
@@ -1077,20 +988,29 @@ impl<'a> AliasIndex<'a> {
     }
 }
 
-struct SelectorDiagnosticsIndex<'a> {
+/// One immutable lookup policy shared by excerpts, explanations, outline-root
+/// selection, and producer diagnostics.
+///
+/// Keeping path, ID, exact-alias, and shorthand precedence in this one index
+/// prevents a diagnostic from promising a selector that a query surface
+/// resolves differently.
+struct DocumentSelectorIndex<'a> {
+    paths: HashMap<String, &'a LocatedNode<'a>>,
     exact_aliases: AliasIndex<'a>,
     shorthand_aliases: AliasIndex<'a>,
     ids: BTreeMap<&'a str, Vec<&'a LocatedNode<'a>>>,
 }
 
-impl<'a> SelectorDiagnosticsIndex<'a> {
+impl<'a> DocumentSelectorIndex<'a> {
     fn new(located: &'a [LocatedNode<'a>]) -> Self {
         let mut index = Self {
+            paths: HashMap::new(),
             exact_aliases: AliasIndex::default(),
             shorthand_aliases: AliasIndex::default(),
             ids: BTreeMap::new(),
         };
         for candidate in located {
+            index.paths.insert(candidate.path().to_string(), candidate);
             index.ids.entry(candidate.id()).or_default().push(candidate);
             let Some(identity) = candidate.identity() else {
                 continue;
@@ -1107,6 +1027,34 @@ impl<'a> SelectorDiagnosticsIndex<'a> {
         index
     }
 
+    fn resolve(
+        &self,
+        document: &str,
+        selector: &str,
+    ) -> Result<&'a LocatedNode<'a>, ProjectionError> {
+        if let Ok(path) = selector.parse::<OutlinePath>()
+            && let Some(candidate) = self.paths.get(&path.to_string())
+        {
+            return Ok(candidate);
+        }
+        let ids = self.ids.get(selector).cloned().unwrap_or_default();
+        match ids.as_slice() {
+            [candidate] => return Ok(candidate),
+            [] => {}
+            _ => return Err(ambiguous_selector(document, selector, ids)),
+        }
+
+        let matches = self.matching_aliases(selector).1;
+        match matches.as_slice() {
+            [] => Err(ProjectionError::UnknownSelector {
+                document: document.to_owned(),
+                selector: selector.to_owned(),
+            }),
+            [candidate] => Ok(candidate),
+            _ => Err(ambiguous_selector(document, selector, matches)),
+        }
+    }
+
     fn matching_aliases(&self, selector: &str) -> (AliasMatchKind, Vec<&'a LocatedNode<'a>>) {
         let exact = self.exact_aliases.matches(selector);
         if !exact.is_empty() {
@@ -1120,7 +1068,7 @@ impl<'a> SelectorDiagnosticsIndex<'a> {
 }
 
 fn selector_alias_diagnostics(
-    index: &SelectorDiagnosticsIndex<'_>,
+    index: &DocumentSelectorIndex<'_>,
     selectors: BTreeSet<String>,
     source_family: &str,
 ) -> Vec<Diagnostic> {
