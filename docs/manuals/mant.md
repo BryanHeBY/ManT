@@ -294,12 +294,51 @@ instead of invoking `xcode-select`. Only when no native root is available does
 it fall back to `/etc/manpaths` and sorted `/etc/manpaths.d` files.
 
 Windows has no system `man(1)` convention. If present,
-`%APPDATA%\ManT\man.conf` is a ManT-owned portable configuration containing
-one `manpath DIRECTORY` line per root; its entries precede the automatic
-`%APPDATA%\ManT\man` root and the compatible
-`%USERPROFILE%\.local\share\man` fallback, in that order. The parser also
-accepts uppercase `MANPATH` for familiarity with macOS and FreeBSD
-configuration files.
+`%APPDATA%\ManT\man.conf` is a ManT-owned portable configuration. Its
+case-insensitive path directives are:
+
+- `MANPATH DIRECTORY` (or `manpath`) adds an unconditional root;
+- `MANCONFIG PATTERN` imports sorted matching configuration fragments;
+- `MANPATH_MAP EXECUTABLE-DIRECTORY MANUAL-DIRECTORY` adds the manual root
+  when the executable directory occurs in the current `PATH`; and
+- `MANDATORY_MANPATH DIRECTORY` adds an unconditional root after mapped
+  roots.
+
+Direct roots from the primary file come first, followed by direct roots from
+at most 256 one-level `MANCONFIG` fragments, mapped roots in current `PATH`
+order, mandatory roots, `%APPDATA%\ManT\man`, and finally
+`%USERPROFILE%\.local\share\man`. A fragment cannot recursively import more
+fragments. Each configuration file is bounded to 1 MiB. `MANDB_MAP`, `DEFINE`,
+`SECTION`, and formatter or pager directives do not describe source roots and
+are ignored.
+
+A single-path directive consumes the whole remainder of its line, so an
+unquoted path may contain spaces. Double quotes may optionally delimit a path;
+`MANPATH_MAP` paths containing spaces must be quoted separately. Backslashes
+are literal path separators, single quotes have no special meaning, and only a
+line whose first non-space character is `#` is a comment. Inline comments are
+therefore not supported.
+
+Within this Windows-only file, `%NAME%` expands any defined process environment
+variable using a case-insensitive name match. Expansion is deliberately one
+pass: text supplied by an environment value is not rescanned. Write `%%` for a
+literal percent sign. ManT does not expand `~`. An undefined variable,
+malformed quote or expansion, wrong argument count, or non-absolute Windows
+path omits that directive without breaking document lookup; `mant --doctor`
+reports the configuration file and line as `manuals.configuration`.
+
+For example:
+
+```text
+# Direct roots can contain spaces without quoting.
+manpath C:\Program Files\Git\usr\share\man
+MANCONFIG "%APPDATA%\ManT\man.d\*.conf"
+MANPATH_MAP "%USERPROFILE%\scoop\shims" "%SCOOP%\apps\cmake\current\man"
+MANDATORY_MANPATH "%PROGRAMDATA%\ManT\man"
+```
+
+These percent expansions do not apply to `MANT_MANPATH`, `MANPATH`, Unix
+configuration files, registered Markdown sources, or roff include paths.
 
 The index accepts a leaf page symlink whose target is a regular file, including
 one outside the configured root. It does not traverse directory symlinks or
@@ -995,7 +1034,8 @@ for the schema and update lifecycle.
 - `HOME`: On Unix, supply conventional document, manual, and cache locations
   when their XDG overrides are absent.
 - `APPDATA`: Select the per-user ManT data root and its automatic `man/`
-  manual root on Windows.
+  manual root on Windows. Variables referenced as `%NAME%` in the ManT-owned
+  Windows `man.conf` are read from the same process environment.
 - `LOCALAPPDATA`: Select ManT and installed-client cache roots on Windows.
 - `USERPROFILE`: Supply the compatible Windows manual fallback and
   installed-client tldr cache locations.

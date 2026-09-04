@@ -280,8 +280,9 @@ The same index works on Linux with glibc, macOS, and Windows. On Unix it reads
 the host's man-path configuration (man-db, mandoc, or macOS `man.conf`) before
 using conservative fallbacks; macOS also follows its active Xcode or Command
 Line Tools tree. Windows automatically checks `%APPDATA%\ManT\man`, and can
-add roots through `%APPDATA%\ManT\man.conf` `manpath DIRECTORY` lines. Logical
-queries
+add persistent roots through `%APPDATA%\ManT\man.conf`; that file supports
+direct roots, bounded fragments, PATH mappings, mandatory roots, and
+single-pass `%NAME%` expansion. Logical queries
 accept `mant 1 git`, `mant 'git(1)'`, `mant git --man-section 1`, and the
 canonical path `mant manual/1/git`. A dotted selector such as `git.1` remains
 an exact logical document name; ManT never guesses whether its suffix is a

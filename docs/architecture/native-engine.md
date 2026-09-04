@@ -189,8 +189,11 @@ derives roots from `MANT_MANPATH`, `MANPATH`, and platform conventions, then
 indexes raw, gzip, and zstd files in traditional `man<section>/` directories
 and flat roots. Its dedicated path layer reads Linux man-db maps and mandatory
 roots (or mandoc `man.conf`), macOS PATH, active-developer, `MANPATH`, and
-`MANCONFIG` sources, and an optional ManT-owned Windows `man.conf`. Windows
-then adds `%APPDATA%\ManT\man` and the compatible
+`MANCONFIG` sources, and an optional ManT-owned Windows `man.conf`. That
+Windows parser materializes normalized directives in four phases: primary and
+one-level fragment roots, current-PATH mappings, then mandatory roots. It
+expands `%NAME%` once and keeps rejected directives as non-fatal discovery
+diagnostics for `mant --doctor`. Windows then adds `%APPDATA%\ManT\man` and the compatible
 `%USERPROFILE%\.local\share\man` fallback; Unix hosts use user, PATH-derived,
 and conventional system locations when native configuration is unavailable.
 No lookup spawns the host `man`, `manpath`, or `xcode-select` program.

@@ -168,7 +168,10 @@ outside its indexed root, but directory symlinks are not traversed and every
 `.so` target must remain inside that root. Windows defaults to
 `%APPDATA%\ManT\man`, followed by the compatible
 `%USERPROFILE%\.local\share\man` fallback, and also honors configured manual
-paths.
+paths. Its optional `%APPDATA%\ManT\man.conf` accepts direct and mandatory
+roots, bounded fragments, PATH mappings, quoted paths, and one-pass `%NAME%`
+expansion; `mant --doctor` reports malformed directives without stopping
+ordinary document lookup.
 
 Reusable Markdown documents can be registered by relative path below:
 

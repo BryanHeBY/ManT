@@ -388,10 +388,17 @@ entries. macOS follows its `$PATH`, active Xcode or Command Line Tools manual
 trees, system defaults, then `/etc/man.conf` `MANPATH` plus `MANCONFIG`
 fragments; it reads the xcode-select state directly rather than spawning that
 tool. Windows has no native convention; ManT reads an optional
-`%APPDATA%\ManT\man.conf` with `manpath DIRECTORY` lines, then automatically
+`%APPDATA%\ManT\man.conf`. Its Windows-only, case-insensitive source-root
+subset accepts `MANPATH`, bounded one-level `MANCONFIG` fragments,
+PATH-conditioned `MANPATH_MAP`, and `MANDATORY_MANPATH`; paths accept optional
+double quotes and single-pass `%NAME%` environment expansion. Direct primary
+and fragment roots precede mapped and mandatory roots, then ManT automatically
 checks `%APPDATA%\ManT\man` and the compatible
-`%USERPROFILE%\.local\share\man` fallback. Discovery is read-only and does not
-invoke a host command.
+`%USERPROFILE%\.local\share\man` fallback. Invalid directives are omitted;
+the native CLI exposes their local file and line through `mant --doctor`, while
+structured document results retain logical identities rather than physical
+configuration paths. Discovery is read-only and does not invoke a host
+command.
 A root may contain `tool.1` directly or a hierarchy such as
 `project-man/man1/tool.1`; both become the logical catalog address
 `manual/1/tool`. Raw, gzip, and zstd sources are indexed because those are the
