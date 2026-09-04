@@ -631,6 +631,11 @@ fn classify_target_owner(logical: &LogicalOwner) -> ClassifiedOwner {
             OwnerDisposition::Excluded,
             "section uses the complete visible heading as its normalized identity",
         )
+    } else if owner_macro == "Tg" && target.is_none() {
+        (
+            OwnerDisposition::Excluded,
+            "argument-less Tg delegates its destination to the following owner",
+        )
     } else if target.is_none() {
         (
             OwnerDisposition::Unclassified,
@@ -687,11 +692,16 @@ fn classify_target_owner(logical: &LogicalOwner) -> ClassifiedOwner {
 
 fn explicit_targets(nodes: &[AstNodeRef<'_>]) -> Vec<ExplicitTarget> {
     let mut targets = Vec::new();
-    for reference in nodes {
+    for (index, reference) in nodes.iter().enumerate() {
         if reference.node.macro_name.as_deref() != Some("Tg") {
             continue;
         }
-        let target = target_name(reference.node);
+        let target = explicit_target_argument(reference.node).or_else(|| {
+            nodes[index + 1..]
+                .iter()
+                .filter(|candidate| candidate.node.line > reference.node.line)
+                .find_map(|candidate| source_token(candidate.node))
+        });
         if let Some(target) = target.filter(|target| !target.is_empty()) {
             targets.push(ExplicitTarget {
                 id: target,
@@ -737,10 +747,29 @@ fn expected_container(owner_macro: &str) -> &'static str {
 }
 
 fn target_name(node: &Node) -> Option<String> {
+    if node.macro_name.as_deref() == Some("Tg") {
+        return explicit_target_argument(node);
+    }
     node.tag
         .as_deref()
         .map(str::to_owned)
-        .or_else(|| first_text(node).map(first_token))
+        .or_else(|| source_token(node))
+        .filter(|target| !target.is_empty())
+}
+
+fn explicit_target_argument(node: &Node) -> Option<String> {
+    if node.macro_name.as_deref() != Some("Tg") {
+        return None;
+    }
+    first_text_on_line(node, node.line)
+        .map(str::trim)
+        .filter(|target| !target.is_empty())
+        .map(str::to_owned)
+}
+
+fn source_token(node: &Node) -> Option<String> {
+    first_text(node)
+        .map(first_token)
         .filter(|target| !target.is_empty())
 }
 
@@ -749,6 +778,15 @@ fn first_text(node: &Node) -> Option<&str> {
         return node.text.as_deref();
     }
     node.children.iter().find_map(first_text)
+}
+
+fn first_text_on_line(node: &Node, line: u32) -> Option<&str> {
+    if node.kind == NodeKind::Text && node.line == line {
+        return node.text.as_deref();
+    }
+    node.children
+        .iter()
+        .find_map(|child| first_text_on_line(child, line))
 }
 
 fn first_token(value: &str) -> String {
@@ -1238,13 +1276,134 @@ fn document_id_slug(value: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use libmandoc_rs::NodeKind;
+    use libmandoc_rs::{Node, NodeFlags, NodeKind};
 
     use super::{
         ExpectedTarget, ExplicitTarget, LogicalOwner, ObservedRole, ObservedTarget,
         OwnerDisposition, TargetRole, bind_explicit_targets, classify_target_owner,
-        generated_identity_matches, logical_owner_path_for, match_targets,
+        generated_identity_matches, logical_owner_path_for, match_targets, native_target_profile,
     };
+
+    fn node(
+        kind: NodeKind,
+        macro_name: Option<&str>,
+        text: Option<&str>,
+        tag: Option<&str>,
+        line: u32,
+        flags: NodeFlags,
+        children: Vec<Node>,
+    ) -> Node {
+        Node {
+            kind,
+            macro_name: macro_name.map(ToOwned::to_owned),
+            text: text.map(ToOwned::to_owned),
+            tag: tag.map(ToOwned::to_owned),
+            line,
+            column: 1,
+            flags,
+            list_kind: None,
+            display_kind: None,
+            font: None,
+            author_mode: None,
+            enclosure: None,
+            compact: false,
+            offset: None,
+            width: None,
+            table_cells: Vec::new(),
+            equation: None,
+            children,
+        }
+    }
+
+    fn root(children: Vec<Node>) -> Node {
+        node(
+            NodeKind::Root,
+            None,
+            None,
+            None,
+            0,
+            NodeFlags::default(),
+            children,
+        )
+    }
+
+    #[test]
+    fn target_profile_uses_authored_tg_arguments_instead_of_stale_tags() {
+        let argument = node(
+            NodeKind::Text,
+            None,
+            Some("--Exact.Target"),
+            None,
+            7,
+            NodeFlags {
+                no_print: true,
+                ..NodeFlags::default()
+            },
+            Vec::new(),
+        );
+        let target = node(
+            NodeKind::Element,
+            Some("Tg"),
+            None,
+            Some("stale-automatic-target"),
+            7,
+            NodeFlags {
+                deep_link_target: true,
+                ..NodeFlags::default()
+            },
+            vec![argument],
+        );
+
+        let profile = native_target_profile(&root(vec![target]));
+        assert!(profile.unclassified.is_empty());
+        assert_eq!(profile.expected.len(), 1);
+        assert_eq!(profile.expected[0].id, "--Exact.Target");
+        assert!(profile.expected[0].explicit);
+    }
+
+    #[test]
+    fn target_profile_binds_argumentless_tg_to_the_following_source_owner() {
+        let request = node(
+            NodeKind::Element,
+            Some("Tg"),
+            None,
+            Some("stale-automatic-target"),
+            7,
+            NodeFlags {
+                deep_link_target: true,
+                ..NodeFlags::default()
+            },
+            Vec::new(),
+        );
+        let derived_text = node(
+            NodeKind::Text,
+            None,
+            Some("derived-target"),
+            None,
+            8,
+            NodeFlags::default(),
+            Vec::new(),
+        );
+        let derived = node(
+            NodeKind::Element,
+            Some("Sy"),
+            None,
+            Some("derived-target"),
+            8,
+            NodeFlags {
+                deep_link_target: true,
+                ..NodeFlags::default()
+            },
+            vec![derived_text],
+        );
+
+        let profile = native_target_profile(&root(vec![request, derived]));
+        assert!(profile.unclassified.is_empty());
+        assert_eq!(profile.expected.len(), 1);
+        assert_eq!(profile.expected[0].id, "derived-target");
+        assert_eq!(profile.expected[0].owner_macro, "Sy");
+        assert!(profile.expected[0].explicit);
+    }
 
     fn expected(
         id: &str,
