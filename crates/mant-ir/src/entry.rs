@@ -7,7 +7,7 @@ use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::{
     Block, DefinitionCase, DefinitionItem, DefinitionRole, Document, DocumentAddress, Inline,
-    NodeId,
+    LinkTarget, NodeId,
 };
 
 /// Semantic category used for outline filtering and nested presentation.
@@ -113,6 +113,20 @@ pub enum ValueDomain {
     },
 }
 
+/// One explicit cross-document destination carried by an entry term.
+///
+/// The relationship is derived only from a link that wraps term content. A
+/// link in the entry description remains ordinary reference material and does
+/// not change where the semantic entry itself leads.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SemanticDocumentTarget {
+    /// Visible term text associated with this destination.
+    pub label: String,
+    /// Source-neutral logical destination.
+    pub target: LinkTarget,
+}
+
 /// One indexed semantic concept backed by one or more document definitions.
 ///
 /// This value is derived from [`DefinitionIdentity`](crate::DefinitionIdentity)
@@ -132,8 +146,9 @@ pub struct SemanticEntry {
     pub case: DefinitionCase,
     /// Complete author-written input forms, distinct from selectable aliases.
     pub forms: Vec<String>,
-    /// Document-local definition IDs that supply content for this concept.
-    pub targets: Vec<NodeId>,
+    /// Explicit cross-document destinations carried by linked terms.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub document_targets: Vec<SemanticDocumentTarget>,
     /// Nested semantic entries owned by this concept.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub children: Vec<SemanticEntry>,
@@ -292,10 +307,47 @@ fn entry_from_definition(item: &DefinitionItem) -> Option<SemanticEntry> {
         aliases: identity.names.clone(),
         case: identity.case,
         forms: item.terms.iter().map(|term| inline_text(term)).collect(),
-        targets: vec![identity.id.clone()],
+        document_targets: document_targets(&item.terms),
         children,
         value_domain,
     })
+}
+
+fn document_targets(terms: &[Vec<Inline>]) -> Vec<SemanticDocumentTarget> {
+    let mut targets = Vec::new();
+    for term in terms {
+        collect_document_targets(term, &mut targets);
+    }
+    targets
+}
+
+fn collect_document_targets(inlines: &[Inline], output: &mut Vec<SemanticDocumentTarget>) {
+    for inline in inlines {
+        match inline {
+            Inline::Link {
+                target, children, ..
+            } if matches!(
+                target,
+                LinkTarget::Document { .. } | LinkTarget::Manual { .. }
+            ) =>
+            {
+                let candidate = SemanticDocumentTarget {
+                    label: inline_text(children),
+                    target: target.clone(),
+                };
+                if !output.contains(&candidate) {
+                    output.push(candidate);
+                }
+            }
+            Inline::Strong { children }
+            | Inline::Emphasis { children }
+            | Inline::Link { children, .. } => collect_document_targets(children, output),
+            Inline::Text { .. }
+            | Inline::Code { .. }
+            | Inline::Anchor { .. }
+            | Inline::LineBreak => {}
+        }
+    }
 }
 
 const fn entry_kind(role: DefinitionRole) -> EntryKind {
@@ -470,6 +522,52 @@ mod tests {
                     },
                 ],
             }
+        );
+    }
+
+    #[test]
+    fn derives_document_targets_only_from_linked_terms() {
+        let mut item = definition(
+            "command-winget",
+            DefinitionRole::Command,
+            &["winget.exe"],
+            &[],
+            vec![Block::Paragraph {
+                children: vec![Inline::Link {
+                    target: LinkTarget::Document {
+                        name: "description-only".to_owned(),
+                        fragment: None,
+                    },
+                    title: None,
+                    children: vec![Inline::Text {
+                        value: "details".to_owned(),
+                    }],
+                }],
+                layout: LayoutHint::default(),
+                source: None,
+            }],
+        );
+        item.terms = vec![vec![Inline::Link {
+            target: LinkTarget::Document {
+                name: "winget.exe".to_owned(),
+                fragment: None,
+            },
+            title: None,
+            children: vec![Inline::Code {
+                value: "winget.exe".to_owned(),
+            }],
+        }]];
+
+        let entry = entry_from_definition(&item).expect("entry");
+        assert_eq!(
+            entry.document_targets,
+            [SemanticDocumentTarget {
+                label: "winget.exe".to_owned(),
+                target: LinkTarget::Document {
+                    name: "winget.exe".to_owned(),
+                    fragment: None,
+                },
+            }]
         );
     }
 }

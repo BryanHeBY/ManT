@@ -616,7 +616,7 @@ fn project_entries(
                 case: entry.case,
                 aliases: entry.aliases.clone(),
                 forms: entry.forms.clone(),
-                targets: entry.targets.clone(),
+                targets: vec![entry.id.clone()],
                 value_domain: entry.value_domain.clone(),
                 entry_summary: projected_summary(&entry.children, projection),
                 children,

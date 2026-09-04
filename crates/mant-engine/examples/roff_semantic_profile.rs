@@ -274,7 +274,7 @@ fn collect_entries(
             kind: entry_kind(entry.kind),
             aliases: entry.aliases.clone(),
             forms: entry.forms.clone(),
-            targets: entry.targets.iter().map(ToString::to_string).collect(),
+            targets: vec![entry.id.to_string()],
             containing_section: section.map(str::to_owned),
             containing_section_title: section_title.map(str::to_owned),
             containing_section_source_line: section_source_line,

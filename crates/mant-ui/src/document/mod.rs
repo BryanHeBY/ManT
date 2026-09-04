@@ -567,10 +567,7 @@ impl DocumentBuilder {
                 .unwrap_or_else(|| entry.id.to_string());
             self.navigation(NavNode {
                 id: entry.id.to_string(),
-                target_id: entry
-                    .targets
-                    .first()
-                    .map_or_else(|| entry.id.to_string(), ToString::to_string),
+                target_id: entry.id.to_string(),
                 full_title: (full_title != title).then_some(full_title),
                 title,
                 depth,

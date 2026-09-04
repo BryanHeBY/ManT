@@ -64,8 +64,9 @@ fn inspect(document: &Document) {
 
     for entry in semantics.root() {
         println!("{}: {:?}", entry.id, entry.aliases);
-        for target in &entry.targets {
-            assert!(content.get(target).is_some());
+        assert!(content.get(&entry.id).is_some());
+        for target in &entry.document_targets {
+            println!("  linked document: {:?}", target.target);
         }
     }
 
