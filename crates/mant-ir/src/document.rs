@@ -429,6 +429,9 @@ pub struct DefinitionIdentity {
     pub case: DefinitionCase,
     /// Plain normalized names used as [`crate::SemanticEntry::aliases`].
     pub names: Vec<String>,
+    /// Optional value space explicitly declared by the source producer.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub value_domain: Option<crate::ValueDomain>,
 }
 
 /// Case policy used when matching one semantic entry's names.

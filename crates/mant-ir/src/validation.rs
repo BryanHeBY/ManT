@@ -702,6 +702,7 @@ mod tests {
                         role: DefinitionRole::Term,
                         case: DefinitionCase::Sensitive,
                         names: vec!["term".to_owned()],
+                        value_domain: None,
                     }),
                     terms: vec![vec![Inline::anchor(shared.clone())]],
                     description: Vec::new(),

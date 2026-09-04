@@ -316,7 +316,6 @@ const fn value_domain_origin(domain: &ValueDomain) -> &'static str {
     match domain {
         ValueDomain::Choices { .. } => "child-choices",
         ValueDomain::EntrySet { .. } => "external-entry-set",
-        ValueDomain::Union { .. } => "union",
     }
 }
 

@@ -21,7 +21,6 @@ use crate::{
     ResolvedContent,
     definitions::{definition_entries, environment_variable_body},
     inline::plain_text,
-    scope::logical_document_address,
 };
 
 pub(crate) const TLDR_ID: &str = "tldr";
@@ -645,9 +644,9 @@ fn project_entries(
                     .iter()
                     .map(|target| EntryDocumentTarget {
                         label: target.label.clone(),
-                        reference: target.target.clone(),
+                        reference: target.reference.clone(),
                         address: current_address
-                            .and_then(|address| logical_document_address(address, &target.target)),
+                            .and_then(|address| target.reference.resolve_from(address)),
                     })
                     .collect(),
                 value_domain: entry.value_domain.clone(),
@@ -1416,6 +1415,7 @@ mod tests {
                 role,
                 case: DefinitionCase::Sensitive,
                 names: aliases.iter().map(|alias| (*alias).to_owned()).collect(),
+                value_domain: None,
             }),
             terms: forms
                 .iter()
@@ -1973,6 +1973,7 @@ mod tests {
                         role: DefinitionRole::Option,
                         case: DefinitionCase::Sensitive,
                         names: vec!["-3".to_owned()],
+                        value_domain: None,
                     }),
                     terms: vec![vec![Inline::Code {
                         value: "-3".to_owned(),

@@ -34,6 +34,7 @@ fn sidebar_exposes_every_semantic_role_supported_by_the_document_contract() {
             role,
             case: DefinitionCase::Sensitive,
             names: vec![name.to_owned()],
+            value_domain: None,
         }),
         terms: Vec::new(),
         description: Vec::new(),
@@ -56,6 +57,7 @@ fn sidebar_exposes_every_semantic_role_supported_by_the_document_contract() {
                 role: DefinitionRole::Value,
                 case: DefinitionCase::Sensitive,
                 names: vec!["brief".to_owned()],
+                value_domain: None,
             }),
             terms: vec![vec![Inline::Code {
                 value: "brief".to_owned(),

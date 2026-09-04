@@ -1126,6 +1126,7 @@ fn addressable_rendering_returns_exact_semantic_node_ranges() {
             role: DefinitionRole::Option,
             case: DefinitionCase::Sensitive,
             names: vec!["--help".to_owned()],
+            value_domain: None,
         }),
         terms: vec![vec![
             Inline::anchor("help-entry"),

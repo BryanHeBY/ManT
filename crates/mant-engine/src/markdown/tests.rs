@@ -1684,7 +1684,7 @@ fn linked_code_terms_define_entry_document_destinations() {
         entries[0].document_targets.as_slice(),
         [mant_ir::SemanticDocumentTarget {
             label,
-            target: mant_ir::LinkTarget::Document { name, fragment: None },
+            reference: mant_ir::SemanticDocumentReference::Document { name, fragment: None },
         }] if label == "winget.exe" && name == "winget.exe"
     ));
     assert!(entries[1].document_targets.is_empty());
@@ -1713,7 +1713,7 @@ fn linked_code_terms_define_entry_document_destinations() {
                 document_targets.as_slice(),
                 [mant_protocol::EntryDocumentTarget {
                     label,
-                    reference: mant_ir::LinkTarget::Document { name, fragment: None },
+                    reference: mant_ir::SemanticDocumentReference::Document { name, fragment: None },
                     address: Some(DocumentAddress::Markdown { path, origin: MarkdownOrigin::Documents }),
                 }] if label == "winget.exe" && name == "winget.exe" && path == "indexes/winget.exe"
             )

@@ -5,8 +5,8 @@ use serde::{Deserialize, Deserializer, Serialize};
 
 use mant_ir::{
     Block, DefinitionCase, DefinitionItem, DefinitionRole, Diagnostic, DocumentAddress,
-    DocumentMeta, DocumentSource, EntryKind, EntrySummary, LinkTarget, NodeId, Section,
-    TldrDocument, ValueDomain,
+    DocumentMeta, DocumentSource, EntryKind, EntrySummary, NodeId, Section,
+    SemanticDocumentReference, TldrDocument, ValueDomain,
 };
 
 use crate::{NodePath, NodeSelector, Producer};
@@ -137,7 +137,7 @@ pub struct EntryDocumentTarget {
     /// Visible term text associated with this destination.
     pub label: String,
     /// Source-authored logical reference.
-    pub reference: LinkTarget,
+    pub reference: SemanticDocumentReference,
     /// Exact logical destination resolved in the source document namespace.
     ///
     /// This is absent for direct-file inputs and references, such as an

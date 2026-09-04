@@ -884,6 +884,7 @@ fn inline_definitions_hang_the_description_and_expose_their_anchor() {
                 role: DefinitionRole::Option,
                 case: DefinitionCase::Sensitive,
                 names: vec!["-h".to_owned()],
+                value_domain: None,
             }),
             terms: vec![vec![Inline::Strong {
                 children: vec![Inline::Text {

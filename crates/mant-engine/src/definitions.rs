@@ -14,7 +14,7 @@ use std::{
 
 use mant_ir::{
     Block, DefinitionCase, DefinitionIdentity, DefinitionItem, DefinitionRole, Inline, LayoutHint,
-    Section, SourceSpan,
+    Section, SourceSpan, ValueDomain,
     visit::{self, Visit},
 };
 use sha2::{Digest, Sha256};
@@ -763,13 +763,24 @@ struct IdentityPlan {
     role: DefinitionRole,
     case: DefinitionCase,
     names: Vec<String>,
+    value_domain: Option<ValueDomain>,
     preferred: String,
 }
 
 fn identity_plan(item: &DefinitionItem, context: DefinitionContext) -> IdentityPlan {
-    let (role, case, names) = item.identity.as_ref().map_or_else(
-        || infer_identity(item, context),
-        |identity| (identity.role, identity.case, identity.names.clone()),
+    let (role, case, names, value_domain) = item.identity.as_ref().map_or_else(
+        || {
+            let (role, case, names) = infer_identity(item, context);
+            (role, case, names, None)
+        },
+        |identity| {
+            (
+                identity.role,
+                identity.case,
+                identity.names.clone(),
+                identity.value_domain.clone(),
+            )
+        },
     );
     let name = names.first().cloned().unwrap_or_else(|| {
         item.terms
@@ -781,6 +792,7 @@ fn identity_plan(item: &DefinitionItem, context: DefinitionContext) -> IdentityP
         role,
         case,
         names,
+        value_domain,
         preferred,
     }
 }
@@ -802,6 +814,7 @@ fn identify_item(
         role,
         case,
         names,
+        value_domain,
         mut preferred,
     } = identity_plan(item, context);
 
@@ -848,6 +861,7 @@ fn identify_item(
         role,
         case,
         names,
+        value_domain,
     });
     role
 }
@@ -1114,6 +1128,7 @@ mod tests {
             role: DefinitionRole::Option,
             case: DefinitionCase::Sensitive,
             names: vec!["--verbose".to_owned()],
+            value_domain: None,
         });
         let mut sections = vec![Section {
             id: "options".into(),

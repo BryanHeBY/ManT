@@ -6,8 +6,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::{
-    Block, DefinitionCase, DefinitionItem, DefinitionRole, Document, DocumentAddress, Inline,
-    LinkTarget, NodeId,
+    Block, DefinitionCase, DefinitionItem, DefinitionRole, Document, Inline, LinkTarget, NodeId,
 };
 
 /// Semantic category used for outline filtering and nested presentation.
@@ -101,16 +100,82 @@ pub enum ValueDomain {
     },
     /// Entries owned by another logical document form the value space.
     EntrySet {
-        /// Logical document that owns the referenced entries.
-        document: DocumentAddress,
+        /// Source-neutral reference to the document that owns the entries.
+        reference: SemanticDocumentReference,
         /// Accepted semantic categories in the referenced document.
         entry_kinds: Vec<EntryKind>,
     },
-    /// Union of several independently described value spaces.
-    Union {
-        /// Constituent value spaces in source order.
-        domains: Vec<ValueDomain>,
+}
+
+/// A source-neutral reference to another locally addressable document.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(
+    tag = "kind",
+    rename_all = "kebab-case",
+    rename_all_fields = "camelCase"
+)]
+pub enum SemanticDocumentReference {
+    /// A relative Markdown document in the current registered namespace.
+    Document {
+        /// Extension-free relative document path.
+        name: String,
+        /// Optional document-local fragment.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        fragment: Option<String>,
     },
+    /// A typed native manual reference.
+    Manual {
+        /// Manual topic without a section suffix.
+        name: String,
+        /// Native manual category, when source-specified.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        manual_section: Option<String>,
+    },
+}
+
+impl SemanticDocumentReference {
+    /// Retain a locally addressable document target and reject other links.
+    #[must_use]
+    pub fn from_link_target(target: &LinkTarget) -> Option<Self> {
+        match target {
+            LinkTarget::Document { name, fragment } => Some(Self::Document {
+                name: name.clone(),
+                fragment: fragment.clone(),
+            }),
+            LinkTarget::Manual {
+                name,
+                manual_section,
+            } => Some(Self::Manual {
+                name: name.clone(),
+                manual_section: manual_section.clone(),
+            }),
+            LinkTarget::External { .. } | LinkTarget::Email { .. } | LinkTarget::Section { .. } => {
+                None
+            }
+        }
+    }
+
+    /// Resolve this reference without catalog I/O in the referring namespace.
+    ///
+    /// An unqualified manual reference remains unresolved because selecting a
+    /// section requires catalog precedence and ambiguity handling.
+    #[must_use]
+    pub fn resolve_from(&self, from: &crate::DocumentAddress) -> Option<crate::DocumentAddress> {
+        match self {
+            Self::Document { name, .. } => from.resolve_document_reference(name),
+            Self::Manual {
+                name,
+                manual_section: Some(manual_section),
+            } => Some(crate::DocumentAddress::Manual {
+                name: name.clone(),
+                manual_section: manual_section.clone(),
+            }),
+            Self::Manual {
+                manual_section: None,
+                ..
+            } => None,
+        }
+    }
 }
 
 /// One explicit cross-document destination carried by an entry term.
@@ -124,7 +189,7 @@ pub struct SemanticDocumentTarget {
     /// Visible term text associated with this destination.
     pub label: String,
     /// Source-neutral logical destination.
-    pub target: LinkTarget,
+    pub reference: SemanticDocumentReference,
 }
 
 /// One indexed semantic concept backed by one or more document definitions.
@@ -298,9 +363,10 @@ fn entries_in_blocks(blocks: &[Block]) -> Vec<SemanticEntry> {
 fn entry_from_definition(item: &DefinitionItem) -> Option<SemanticEntry> {
     let identity = item.identity.as_ref()?;
     let children = entries_in_blocks(&item.description);
-    let value_domain = (!children.is_empty()
-        && children.iter().all(|child| child.kind == EntryKind::Value))
-    .then_some(ValueDomain::Choices { exhaustive: false });
+    let value_domain = identity.value_domain.clone().or_else(|| {
+        (!children.is_empty() && children.iter().all(|child| child.kind == EntryKind::Value))
+            .then_some(ValueDomain::Choices { exhaustive: false })
+    });
     Some(SemanticEntry {
         id: identity.id.clone(),
         kind: entry_kind(identity.role),
@@ -326,14 +392,11 @@ fn collect_document_targets(inlines: &[Inline], output: &mut Vec<SemanticDocumen
         match inline {
             Inline::Link {
                 target, children, ..
-            } if matches!(
-                target,
-                LinkTarget::Document { .. } | LinkTarget::Manual { .. }
-            ) =>
-            {
+            } if SemanticDocumentReference::from_link_target(target).is_some() => {
                 let candidate = SemanticDocumentTarget {
                     label: inline_text(children),
-                    target: target.clone(),
+                    reference: SemanticDocumentReference::from_link_target(target)
+                        .expect("the match guard accepts a document reference"),
                 };
                 if !output.contains(&candidate) {
                     output.push(candidate);
@@ -432,6 +495,7 @@ mod tests {
                 role,
                 case: DefinitionCase::Sensitive,
                 names: aliases.iter().map(|alias| (*alias).to_owned()).collect(),
+                value_domain: None,
             }),
             terms: forms
                 .iter()
@@ -563,11 +627,43 @@ mod tests {
             entry.document_targets,
             [SemanticDocumentTarget {
                 label: "winget.exe".to_owned(),
-                target: LinkTarget::Document {
+                reference: SemanticDocumentReference::Document {
                     name: "winget.exe".to_owned(),
                     fragment: None,
                 },
             }]
         );
+    }
+
+    #[test]
+    fn explicit_cross_document_domain_survives_index_derivation() {
+        let mut item = definition(
+            "option-config",
+            DefinitionRole::Option,
+            &["-o"],
+            &["-o option"],
+            Vec::new(),
+        );
+        item.identity.as_mut().expect("identity").value_domain = Some(ValueDomain::EntrySet {
+            reference: SemanticDocumentReference::Manual {
+                name: "ssh_config".to_owned(),
+                manual_section: Some("5".to_owned()),
+            },
+            entry_kinds: vec![EntryKind::ConfigurationKey],
+        });
+
+        let entry = entry_from_definition(&item).expect("entry");
+        assert!(matches!(
+            entry.value_domain,
+            Some(ValueDomain::EntrySet {
+                reference: SemanticDocumentReference::Manual {
+                    ref name,
+                    manual_section: Some(ref section),
+                },
+                ref entry_kinds,
+            }) if name == "ssh_config"
+                && section == "5"
+                && entry_kinds == &[EntryKind::ConfigurationKey]
+        ));
     }
 }

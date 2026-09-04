@@ -108,6 +108,7 @@ fn navigation_bundle() -> ResolvedContent {
                             role: DefinitionRole::Option,
                             case: DefinitionCase::Sensitive,
                             names: vec!["-h".to_owned(), "--help".to_owned()],
+                            value_domain: None,
                         }),
                         terms: vec![vec![Inline::Text {
                             value: "-h, --help".to_owned(),

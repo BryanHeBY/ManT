@@ -147,6 +147,7 @@ fn excerpt_contract_can_return_one_semantic_definition() {
             role: DefinitionRole::Option,
             case: DefinitionCase::Sensitive,
             names: vec!["-a".to_owned(), "--all".to_owned()],
+            value_domain: None,
         }),
         terms: Vec::new(),
         description: Vec::new(),

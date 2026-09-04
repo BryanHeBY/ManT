@@ -4,7 +4,7 @@ use std::collections::{BTreeMap, VecDeque};
 use std::{error::Error, fmt, io::Write};
 
 use mant_ir::visit::{Visit, walk_inline};
-use mant_ir::{DocumentAddress, Inline, LinkTarget, ResolvedContent};
+use mant_ir::{DocumentAddress, Inline, LinkTarget, ResolvedContent, SemanticDocumentReference};
 use mant_protocol::{
     DocumentEdge, DocumentEdgeKind, DocumentFrontier, DocumentScope, DocumentSelector,
     MAX_DOCUMENT_SELECTOR_CHARS, MAX_SCOPE_CONTENT_BYTES, MAX_SCOPE_DEPTH,
@@ -737,23 +737,7 @@ pub(crate) fn logical_document_address(
     from: &DocumentAddress,
     target: &LinkTarget,
 ) -> Option<DocumentAddress> {
-    match target {
-        LinkTarget::Document { name, .. } => from.resolve_document_reference(name),
-        LinkTarget::Manual {
-            name,
-            manual_section: Some(manual_section),
-        } => Some(DocumentAddress::Manual {
-            name: name.clone(),
-            manual_section: manual_section.clone(),
-        }),
-        LinkTarget::Manual {
-            manual_section: None,
-            ..
-        }
-        | LinkTarget::External { .. }
-        | LinkTarget::Email { .. }
-        | LinkTarget::Section { .. } => None,
-    }
+    SemanticDocumentReference::from_link_target(target)?.resolve_from(from)
 }
 
 fn document_references(bundle: &ResolvedContent) -> Vec<DocumentReference> {

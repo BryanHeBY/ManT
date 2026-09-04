@@ -574,6 +574,7 @@ fn entry_definition(
             role,
             case,
             names: signature.names,
+            value_domain: None,
         }),
         inline_term: false,
         terms: vec![terms],

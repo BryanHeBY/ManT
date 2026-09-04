@@ -872,6 +872,7 @@ mod tests {
                                 role: DefinitionRole::Option,
                                 case: DefinitionCase::Sensitive,
                                 names: vec!["--acls".to_owned()],
+                                value_domain: None,
                             }),
                             terms: vec![vec![
                                 Inline::anchor("option-acls"),

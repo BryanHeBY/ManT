@@ -540,6 +540,7 @@ fn explainable_manual() -> Document {
                 role: DefinitionRole::Option,
                 case: DefinitionCase::Sensitive,
                 names: vec!["--exclude".to_owned()],
+                value_domain: None,
             }),
             terms: vec![vec![Inline::Text {
                 value: "--exclude=PATTERN".to_owned(),

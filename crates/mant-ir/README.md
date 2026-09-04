@@ -66,7 +66,7 @@ fn inspect(document: &Document) {
         println!("{}: {:?}", entry.id, entry.aliases);
         assert!(content.get(&entry.id).is_some());
         for target in &entry.document_targets {
-            println!("  linked document: {:?}", target.target);
+            println!("  linked document: {:?}", target.reference);
         }
     }
 
