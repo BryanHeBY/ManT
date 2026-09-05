@@ -308,11 +308,18 @@ Direct roots from the primary file come first, followed by direct roots from
 at most 256 unique one-level `MANCONFIG` fragments, mapped roots in current
 `PATH` order, mandatory roots, `%APPDATA%\ManT\man`, and finally
 `%USERPROFILE%\.local\share\man`. A fragment cannot recursively import more
-fragments. Expansion traverses at most 4096 matching path candidates before
-Windows-aware deduplication; this scan budget is independent of the 256 unique
-fragments that may be loaded. Reaching either bound stops later matches and
-patterns, and `mant --doctor` identifies which bound truncated discovery. Each
-configuration file is bounded to 1 MiB. `MANDB_MAP`, `DEFINE`, `SECTION`, and
+fragments. Expansion shares a 4096-step work budget across patterns, path
+components, and enumerated directory entries, including nonmatches. Wildcard
+matching additionally shares a budget of 4 Mi comparison cells; `?` matches one
+Unicode scalar. These work limits are independent of the 256 unique fragments
+that may be loaded. An incomplete pattern contributes no paths, and later
+patterns are not traversed after exhaustion. `mant --doctor` reports truncated
+discovery. Each configuration file is bounded to 1 MiB of actually read bytes;
+the Windows configuration tree is bounded to 8 MiB and 4096 input lines.
+Expanded paths are limited to 4096 encoded bytes. Only `MANCONFIG` expands
+wildcards in this Windows configuration;
+all root and map directives describe literal directories.
+`MANDB_MAP`, `DEFINE`, `SECTION`, and
 formatter or pager directives do not describe source roots and are ignored.
 
 A single-path directive consumes the whole remainder of its line, so an

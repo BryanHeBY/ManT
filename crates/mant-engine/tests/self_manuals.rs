@@ -134,7 +134,7 @@ fn shipped_manuals_explain_project_local_roff_lookup() {
         "literal percent sign",
         "manuals.configuration",
         "at most 256 unique one-level `MANCONFIG` fragments",
-        "at most 4096 matching path candidates",
+        "4096-step work budget across patterns",
         "project-man/man1/widget.1",
         "%USERPROFILE%\\.local\\share\\man",
         "pages can live directly below it as `widget.1`",

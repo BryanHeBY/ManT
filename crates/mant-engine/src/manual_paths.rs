@@ -7,14 +7,19 @@
 //! does not inherit pager, formatter, cache, or locale behaviour from the
 //! host implementation.
 
+mod expansion;
 mod windows_config;
+#[cfg(test)]
+use expansion::wildcard_matches;
+use expansion::{ScanBudget, expand_path_pattern_bounded};
 
 use std::{
     collections::HashMap,
     env,
     ffi::{OsStr, OsString},
     fs,
-    path::{Component, Path, PathBuf},
+    io::Read,
+    path::{Path, PathBuf},
 };
 
 use crate::source::deduplicate_paths;
@@ -432,16 +437,28 @@ fn macos_configuration_roots(path: &Path) -> Vec<PathBuf> {
     let Some(text) = read_config(path) else {
         return Vec::new();
     };
-    let configuration = parse_bsd_man_config(&text);
+    let mut budget = ScanBudget::new(MAX_EXPANDED_CONFIG_CANDIDATES);
+    let mut bytes = 8 * MAX_MANUAL_PATH_CONFIG_BYTES - text.len() as u64;
+    let configuration = parse_bsd_man_config_bounded(&text, &mut budget);
     let mut roots = configuration.paths;
     let pattern = configuration
         .include_pattern
         .unwrap_or_else(|| PathBuf::from("/usr/local/etc/man.d/*.conf"));
-    for included in expand_path_pattern(&pattern) {
-        let Some(text) = read_config(&included) else {
+    for included in expand_path_pattern_bounded(&pattern, &mut budget)
+        .0
+        .into_iter()
+        .take(MAX_EXPANDED_CONFIG_PATHS)
+    {
+        if bytes == 0 || budget.remaining == 0 {
+            break;
+        }
+        let limit = bytes.min(MAX_MANUAL_PATH_CONFIG_BYTES);
+        let Ok(text) = read_config_text(&included, limit) else {
+            bytes -= limit;
             continue;
         };
-        roots.extend(parse_bsd_man_config(&text).paths);
+        bytes -= text.len() as u64;
+        roots.extend(parse_bsd_man_config_bounded(&text, &mut budget).paths);
     }
     deduplicate_paths(roots)
 }
@@ -449,8 +466,23 @@ fn macos_configuration_roots(path: &Path) -> Vec<PathBuf> {
 fn read_config(path: &Path) -> Option<String> {
     let metadata = fs::metadata(path).ok()?;
     (metadata.is_file() && metadata.len() <= MAX_MANUAL_PATH_CONFIG_BYTES)
-        .then(|| fs::read_to_string(path).ok())
+        .then(|| read_config_text(path, MAX_MANUAL_PATH_CONFIG_BYTES).ok())
         .flatten()
+}
+
+fn read_config_text(path: &Path, limit: u64) -> std::io::Result<String> {
+    let file = fs::File::open(path)?;
+    if !file.metadata()?.is_file() {
+        return Err(std::io::Error::other("configuration is not a regular file"));
+    }
+    let mut bytes = Vec::new();
+    file.take(limit + 1).read_to_end(&mut bytes)?;
+    if bytes.len() as u64 > limit {
+        return Err(std::io::Error::other(
+            "configuration exceeds the read budget",
+        ));
+    }
+    String::from_utf8(bytes).map_err(std::io::Error::other)
 }
 
 fn read_path_list(path: &Path) -> Vec<PathBuf> {
@@ -574,16 +606,24 @@ struct BsdManConfig {
     include_pattern: Option<PathBuf>,
 }
 
+#[cfg(test)]
 fn parse_bsd_man_config(text: &str) -> BsdManConfig {
+    parse_bsd_man_config_bounded(text, &mut ScanBudget::new(MAX_EXPANDED_CONFIG_CANDIDATES))
+}
+
+fn parse_bsd_man_config_bounded(text: &str, budget: &mut ScanBudget) -> BsdManConfig {
     let mut configuration = BsdManConfig::default();
     for line in config_lines(text) {
+        if !budget.charge() {
+            break;
+        }
         let Some((directive, value)) = config_directive(line) else {
             continue;
         };
         match directive {
             "MANPATH" | "manpath" => configuration
                 .paths
-                .extend(expand_path_pattern(Path::new(value))),
+                .extend(expand_path_pattern_bounded(Path::new(value), budget).0),
             "MANCONFIG" => configuration.include_pattern = Some(PathBuf::from(value)),
             _ => {}
         }
@@ -592,18 +632,21 @@ fn parse_bsd_man_config(text: &str) -> BsdManConfig {
 }
 
 fn parse_mandoc_manpaths(text: &str) -> Vec<PathBuf> {
+    let mut budget = ScanBudget::new(MAX_EXPANDED_CONFIG_CANDIDATES);
     config_lines(text)
+        .take(MAX_EXPANDED_CONFIG_CANDIDATES)
         .filter_map(config_directive)
         .filter_map(|(directive, value)| (directive == "manpath").then_some(value))
-        .flat_map(|path| expand_path_pattern(Path::new(path)))
+        .flat_map(|path| expand_path_pattern_bounded(Path::new(path), &mut budget).0)
         .collect()
 }
 
 fn parse_path_list(text: &str) -> Vec<PathBuf> {
     config_lines(text)
+        .take(MAX_EXPANDED_CONFIG_CANDIDATES)
         .map(str::trim)
         .filter(|path| !path.is_empty())
-        .flat_map(|path| expand_path_pattern(Path::new(path)))
+        .map(PathBuf::from)
         .collect()
 }
 
@@ -619,105 +662,14 @@ fn config_directive(line: &str) -> Option<(&str, &str)> {
     (!value.is_empty()).then_some((directive, value))
 }
 
+#[cfg(all(test, windows))]
 fn expand_path_pattern(pattern: &Path) -> Vec<PathBuf> {
-    expand_path_pattern_bounded(pattern, MAX_EXPANDED_CONFIG_PATHS).0
-}
-
-fn expand_path_pattern_bounded(pattern: &Path, limit: usize) -> (Vec<PathBuf>, bool) {
-    if limit == 0 {
-        return (Vec::new(), true);
-    }
-    if !pattern.as_os_str().to_string_lossy().contains(['*', '?']) {
-        return (vec![pattern.to_path_buf()], false);
-    }
-    let mut candidates = vec![PathBuf::new()];
-    let mut truncated = false;
-    for component in pattern.components() {
-        match component {
-            Component::Prefix(prefix) => {
-                for candidate in &mut candidates {
-                    candidate.push(prefix.as_os_str());
-                }
-            }
-            Component::RootDir => {
-                // On Windows, the root must be appended after a drive or UNC
-                // prefix. Dropping it turns `C:\path` into the drive-relative
-                // `C:path`, whose result depends on process-global drive state.
-                for candidate in &mut candidates {
-                    candidate.push(std::path::MAIN_SEPARATOR.to_string());
-                }
-            }
-            Component::CurDir => {}
-            Component::ParentDir => {
-                for candidate in &mut candidates {
-                    candidate.push("..");
-                }
-            }
-            Component::Normal(component) => {
-                let Some(component) = component.to_str() else {
-                    return (Vec::new(), truncated);
-                };
-                if !component.contains(['*', '?']) {
-                    for candidate in &mut candidates {
-                        candidate.push(component);
-                    }
-                    continue;
-                }
-
-                let mut expanded = Vec::new();
-                'candidate: for candidate in candidates {
-                    let Ok(entries) = fs::read_dir(&candidate) else {
-                        continue;
-                    };
-                    let mut entries = entries.flatten().collect::<Vec<_>>();
-                    entries.sort_unstable_by_key(fs::DirEntry::file_name);
-                    for entry in entries {
-                        let name = entry.file_name();
-                        if name
-                            .to_str()
-                            .is_some_and(|name| wildcard_matches(component, name))
-                        {
-                            if expanded.len() >= limit {
-                                truncated = true;
-                                break 'candidate;
-                            }
-                            expanded.push(entry.path());
-                        }
-                    }
-                }
-                candidates = expanded;
-            }
-        }
-    }
-    (candidates, truncated)
-}
-
-fn wildcard_matches(pattern: &str, value: &str) -> bool {
-    let pattern = pattern.as_bytes();
-    let value = value.as_bytes();
-    let mut previous = vec![false; value.len() + 1];
-    previous[0] = true;
-    for token in pattern {
-        let mut current = vec![false; value.len() + 1];
-        match token {
-            b'*' => {
-                current[0] = previous[0];
-                for index in 1..=value.len() {
-                    current[index] = previous[index] || current[index - 1];
-                }
-            }
-            b'?' => {
-                current[1..].copy_from_slice(&previous[..value.len()]);
-            }
-            token => {
-                for index in 1..=value.len() {
-                    current[index] = previous[index - 1] && value[index - 1] == *token;
-                }
-            }
-        }
-        previous = current;
-    }
-    previous[value.len()]
+    let mut budget = ScanBudget::new(MAX_EXPANDED_CONFIG_CANDIDATES);
+    expand_path_pattern_bounded(pattern, &mut budget)
+        .0
+        .into_iter()
+        .take(MAX_EXPANDED_CONFIG_PATHS)
+        .collect()
 }
 
 #[cfg(test)]

@@ -9,8 +9,25 @@ use std::{
 
 use super::{
     MAX_EXPANDED_CONFIG_CANDIDATES, MAX_EXPANDED_CONFIG_PATHS, MAX_MANUAL_PATH_CONFIG_BYTES,
-    ManualPathDiagnostic, ManualRootDiscovery, expand_path_pattern, expand_path_pattern_bounded,
+    ManualPathDiagnostic, ManualRootDiscovery, ScanBudget, expand_path_pattern_bounded,
 };
+
+const MAX_CONFIG_TREE_BYTES: u64 = 8 * 1024 * 1024;
+const MAX_CONFIG_LINES: usize = 4096;
+
+struct ConfigBudget {
+    bytes: u64,
+    lines: usize,
+}
+
+impl Default for ConfigBudget {
+    fn default() -> Self {
+        Self {
+            bytes: MAX_CONFIG_TREE_BYTES,
+            lines: MAX_CONFIG_LINES,
+        }
+    }
+}
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 struct WindowsConfigPlan {
@@ -26,32 +43,40 @@ pub(super) fn load(
     environment: &HashMap<OsString, OsString>,
     executable_paths: &[PathBuf],
 ) -> ManualRootDiscovery {
+    let mut budget = ConfigBudget::default();
     let mut diagnostics = Vec::new();
-    let Some(text) = read_config(path, &mut diagnostics) else {
+    let Some(text) = read_config(path, &mut diagnostics, &mut budget) else {
         return ManualRootDiscovery {
             roots: Vec::new(),
             diagnostics,
         };
     };
-    let mut plan = parse(&text, path, environment, true);
+    let mut plan = parse_bounded(&text, path, environment, true, &mut budget);
     let included = collect_include_paths(&plan.include_patterns);
     if included.candidate_truncated {
         plan.diagnostics.push(file_diagnostic(
             path,
-            "MANCONFIG expansion exceeds the 4096-candidate scan limit; remaining matches and patterns were not traversed",
+            &format!("MANCONFIG expansion exceeds its {MAX_EXPANDED_CONFIG_CANDIDATES}-step work budget or 4096-unit path limit; incomplete patterns were discarded and later patterns were not traversed"),
         ));
     }
     if included.fragment_truncated {
         plan.diagnostics.push(file_diagnostic(
             path,
-            "MANCONFIG expansion exceeds the 256-unique-fragment limit; remaining matches and patterns were not read",
+            &format!("MANCONFIG expansion exceeds the {MAX_EXPANDED_CONFIG_PATHS}-unique-fragment limit; remaining matches and patterns were not read"),
         ));
     }
 
     for included_path in included.paths {
+        if budget.lines == 0 || budget.bytes == 0 {
+            plan.diagnostics.push(file_diagnostic(
+                path,
+                "configuration tree budget exhausted; remaining fragments were not read",
+            ));
+            break;
+        }
         let mut diagnostics = Vec::new();
-        if let Some(text) = read_config(&included_path, &mut diagnostics) {
-            let fragment = parse(&text, &included_path, environment, false);
+        if let Some(text) = read_config(&included_path, &mut diagnostics, &mut budget) {
+            let fragment = parse_bounded(&text, &included_path, environment, false, &mut budget);
             plan.roots.extend(fragment.roots);
             plan.mappings.extend(fragment.mappings);
             plan.mandatory.extend(fragment.mandatory);
@@ -63,7 +88,11 @@ pub(super) fn load(
     materialize(plan, executable_paths)
 }
 
-fn read_config(path: &Path, diagnostics: &mut Vec<ManualPathDiagnostic>) -> Option<String> {
+fn read_config(
+    path: &Path,
+    diagnostics: &mut Vec<ManualPathDiagnostic>,
+    budget: &mut ConfigBudget,
+) -> Option<String> {
     let metadata = match fs::metadata(path) {
         Ok(metadata) => metadata,
         Err(error) if error.kind() == io::ErrorKind::NotFound => return None,
@@ -89,12 +118,17 @@ fn read_config(path: &Path, diagnostics: &mut Vec<ManualPathDiagnostic>) -> Opti
         ));
         return None;
     }
-    if let Ok(text) = fs::read_to_string(path) {
+    if let Ok(text) = super::read_config_text(path, MAX_MANUAL_PATH_CONFIG_BYTES.min(budget.bytes))
+    {
+        budget.bytes -= text.len() as u64;
         Some(text)
     } else {
+        // Conservatively charge a failed read too: an invalid UTF-8 file or a
+        // growing file must not grant subsequent fragments a fresh budget.
+        budget.bytes = budget.bytes.saturating_sub(MAX_MANUAL_PATH_CONFIG_BYTES);
         diagnostics.push(file_diagnostic(
             path,
-            "manual-path configuration is not readable UTF-8 text",
+            "manual-path configuration is not readable UTF-8 text within the remaining read budget",
         ));
         None
     }
@@ -108,14 +142,40 @@ fn file_diagnostic(path: &Path, message: &str) -> ManualPathDiagnostic {
     }
 }
 
+#[cfg(test)]
 fn parse(
     text: &str,
     source: &Path,
     environment: &HashMap<OsString, OsString>,
     allow_includes: bool,
 ) -> WindowsConfigPlan {
+    parse_bounded(
+        text,
+        source,
+        environment,
+        allow_includes,
+        &mut ConfigBudget::default(),
+    )
+}
+
+fn parse_bounded(
+    text: &str,
+    source: &Path,
+    environment: &HashMap<OsString, OsString>,
+    allow_includes: bool,
+    budget: &mut ConfigBudget,
+) -> WindowsConfigPlan {
     let mut plan = WindowsConfigPlan::default();
     for (index, raw_line) in text.lines().enumerate() {
+        if budget.lines == 0 {
+            plan.diagnostics.push(line_diagnostic(
+                source,
+                index + 1,
+                "configuration tree exceeds the 4096-line limit; remaining directives were omitted",
+            ));
+            break;
+        }
+        budget.lines -= 1;
         let line = raw_line.trim();
         if line.is_empty() || line.starts_with('#') {
             continue;
@@ -209,11 +269,11 @@ fn collect_include_paths(patterns: &[PathBuf]) -> IncludedPaths {
 
 fn collect_include_paths_with(
     patterns: &[PathBuf],
-    mut expand: impl FnMut(&Path, usize) -> (Vec<PathBuf>, bool),
+    mut expand: impl FnMut(&Path, &mut ScanBudget) -> (Vec<PathBuf>, bool),
 ) -> IncludedPaths {
     let mut included = Vec::new();
     let mut seen = HashSet::new();
-    let mut remaining_candidates = MAX_EXPANDED_CONFIG_CANDIDATES;
+    let mut budget = ScanBudget::new(MAX_EXPANDED_CONFIG_CANDIDATES);
     let mut candidate_truncated = false;
     let mut fragment_truncated = false;
     for (index, pattern) in patterns.iter().enumerate() {
@@ -221,12 +281,11 @@ fn collect_include_paths_with(
             fragment_truncated = true;
             break;
         }
-        if remaining_candidates == 0 {
+        if budget.remaining == 0 {
             candidate_truncated = true;
             break;
         }
-        let (expanded, pattern_truncated) = expand(pattern, remaining_candidates);
-        remaining_candidates = remaining_candidates.saturating_sub(expanded.len());
+        let (expanded, pattern_truncated) = expand(pattern, &mut budget);
         for included_path in expanded {
             if !seen.insert(normalized_windows_path(&included_path)) {
                 continue;
@@ -244,7 +303,7 @@ fn collect_include_paths_with(
             candidate_truncated = true;
             break;
         }
-        if remaining_candidates == 0 && index + 1 < patterns.len() {
+        if budget.remaining == 0 && index + 1 < patterns.len() {
             candidate_truncated = true;
             break;
         }
@@ -331,7 +390,7 @@ fn split_arguments(value: &str, expected: usize) -> Result<Vec<String>, &'static
 
 fn parse_path(value: &str, environment: &HashMap<OsString, OsString>) -> Option<PathBuf> {
     let expanded = expand_environment(value, environment)?;
-    is_absolute_windows_path(&expanded).then(|| PathBuf::from(expanded))
+    (expanded.len() <= 4096 && is_absolute_windows_path(&expanded)).then(|| PathBuf::from(expanded))
 }
 
 fn expand_environment(value: &str, environment: &HashMap<OsString, OsString>) -> Option<OsString> {
@@ -350,13 +409,12 @@ fn expand_environment(value: &str, environment: &HashMap<OsString, OsString>) ->
         if name.is_empty() {
             return None;
         }
-        let value = environment.iter().find_map(|(candidate, value)| {
-            candidate
-                .to_string_lossy()
-                .eq_ignore_ascii_case(name)
-                .then_some(value)
-        })?;
+        let value =
+            super::environment_value_for(environment, name, super::ManualPathPlatform::Windows)?;
         output.push(value);
+        if output.len() > 4096 {
+            return None;
+        }
         remaining = &remaining[end + 1..];
     }
     output.push(remaining);
@@ -378,11 +436,8 @@ const fn is_separator(byte: u8) -> bool {
 }
 
 fn materialize(plan: WindowsConfigPlan, executable_paths: &[PathBuf]) -> ManualRootDiscovery {
-    let mut roots = plan
-        .roots
-        .iter()
-        .flat_map(|path| expand_path_pattern(path))
-        .collect::<Vec<_>>();
+    // All root directives are literal; only MANCONFIG accepts patterns.
+    let mut roots = plan.roots;
     for executable in executable_paths {
         roots.extend(
             plan.mappings
@@ -426,9 +481,17 @@ pub(super) fn deduplicate_windows_paths(paths: Vec<PathBuf>) -> Vec<PathBuf> {
 
 #[cfg(test)]
 mod tests {
-    use std::{collections::HashMap, ffi::OsString, path::PathBuf};
+    use std::{
+        collections::HashMap,
+        ffi::OsString,
+        fs,
+        path::{Path, PathBuf},
+    };
 
-    use super::{collect_include_paths_with, materialize, parse, split_arguments};
+    use super::{
+        ConfigBudget, collect_include_paths_with, expand_environment, materialize, parse,
+        parse_bounded, read_config, split_arguments,
+    };
     use crate::manual_paths::{MAX_EXPANDED_CONFIG_CANDIDATES, MAX_EXPANDED_CONFIG_PATHS};
 
     #[test]
@@ -540,10 +603,62 @@ mod tests {
     }
 
     #[test]
+    fn configuration_tree_limits_lines_across_fragments_and_reads_actual_bytes() {
+        let source = Path::new(r"C:\man.conf");
+        let mut budget = ConfigBudget { bytes: 3, lines: 2 };
+        let first = parse_bounded("MANPATH\n", source, &HashMap::new(), true, &mut budget);
+        let second = parse_bounded(
+            "MANPATH\nMANPATH\nMANPATH\n",
+            source,
+            &HashMap::new(),
+            false,
+            &mut budget,
+        );
+        assert_eq!(first.diagnostics.len(), 1);
+        assert_eq!(second.diagnostics.len(), 2);
+        assert_eq!(budget.lines, 0);
+        assert!(second.diagnostics[1].message.contains("limit"));
+        let path =
+            std::env::temp_dir().join(format!("mant-config-read-budget-{}", std::process::id()));
+        fs::write(&path, "four").unwrap();
+        let mut diagnostics = Vec::new();
+        assert!(read_config(&path, &mut diagnostics, &mut budget).is_none());
+        assert_eq!(budget.bytes, 0);
+        assert_eq!(diagnostics.len(), 1);
+        fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn root_directives_are_literal_and_environment_prefers_exact_spelling() {
+        let environment = HashMap::from([
+            (OsString::from("Path"), OsString::from(r"C:\other")),
+            (OsString::from("PATH"), OsString::from(r"C:\exact")),
+        ]);
+        assert_eq!(
+            expand_environment("%PATH%", &environment),
+            Some(OsString::from(r"C:\exact"))
+        );
+        let plan = parse(
+            "manpath C:\\tools\\*\\man\nMANDATORY_MANPATH C:\\required\\?\n",
+            Path::new(r"C:\man.conf"),
+            &environment,
+            true,
+        );
+        let roots = materialize(plan, &[]).roots;
+        assert_eq!(
+            roots,
+            [
+                PathBuf::from(r"C:\tools\*\man"),
+                PathBuf::from(r"C:\required\?")
+            ]
+        );
+    }
+
+    #[test]
     fn reaching_the_fragment_limit_skips_later_patterns() {
         let patterns = [PathBuf::from("first"), PathBuf::from("must-not-expand")];
-        let included = collect_include_paths_with(&patterns, |pattern, limit| {
-            assert_eq!(limit, MAX_EXPANDED_CONFIG_CANDIDATES);
+        let included = collect_include_paths_with(&patterns, |pattern, budget| {
+            assert_eq!(budget.remaining, MAX_EXPANDED_CONFIG_CANDIDATES);
             assert_eq!(pattern, PathBuf::from("first"));
             (
                 (0..MAX_EXPANDED_CONFIG_PATHS)
@@ -562,11 +677,12 @@ mod tests {
     fn overlapping_patterns_can_fill_the_unique_fragment_budget() {
         let patterns = [PathBuf::from("first"), PathBuf::from("second")];
         let mut calls = 0;
-        let included = collect_include_paths_with(&patterns, |pattern, limit| {
+        let included = collect_include_paths_with(&patterns, |pattern, budget| {
             calls += 1;
             match pattern.to_string_lossy().as_ref() {
                 "first" => {
-                    assert_eq!(limit, MAX_EXPANDED_CONFIG_CANDIDATES);
+                    assert_eq!(budget.remaining, MAX_EXPANDED_CONFIG_CANDIDATES);
+                    budget.remaining -= MAX_EXPANDED_CONFIG_PATHS - 1;
                     (
                         (0..MAX_EXPANDED_CONFIG_PATHS - 1)
                             .map(|index| PathBuf::from(format!(r"C:\fragments\{index:03}.conf")))
@@ -576,7 +692,7 @@ mod tests {
                 }
                 "second" => {
                     assert_eq!(
-                        limit,
+                        budget.remaining,
                         MAX_EXPANDED_CONFIG_CANDIDATES - (MAX_EXPANDED_CONFIG_PATHS - 1)
                     );
                     (
@@ -605,10 +721,14 @@ mod tests {
     #[test]
     fn candidate_scan_budget_is_independent_of_fragment_deduplication() {
         let patterns = [PathBuf::from("first"), PathBuf::from("must-not-expand")];
-        let included = collect_include_paths_with(&patterns, |pattern, limit| {
+        let included = collect_include_paths_with(&patterns, |pattern, budget| {
             assert_eq!(pattern, PathBuf::from("first"));
-            assert_eq!(limit, MAX_EXPANDED_CONFIG_CANDIDATES);
-            (vec![PathBuf::from(r"C:\fragments\same.conf"); limit], false)
+            assert_eq!(budget.remaining, MAX_EXPANDED_CONFIG_CANDIDATES);
+            budget.remaining = 0;
+            (
+                vec![PathBuf::from(r"C:\fragments\same.conf"); MAX_EXPANDED_CONFIG_CANDIDATES],
+                false,
+            )
         });
 
         assert_eq!(included.paths, [PathBuf::from(r"C:\fragments\same.conf")]);

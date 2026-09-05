@@ -43,6 +43,11 @@ that crate was not published for that change.
 
 ### mant-engine 0.11.0
 
+- Bound manual configuration work across directory enumeration, wildcard
+  matching, path components, and fragments, not just successful matches.
+  Windows configuration reads share byte and line limits; root directives
+  now consistently denote literal directories while `MANCONFIG` expands globs.
+
 - Recognize semantic-entry directives at arbitrary CommonMark list depth and
   preserve complete non-option names rather than splitting punctuation inside
   a code span.
