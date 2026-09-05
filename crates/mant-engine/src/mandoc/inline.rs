@@ -9,10 +9,10 @@ use crate::inline::{first_visible_character, has_printable_character, last_visib
 pub(crate) use crate::inline::{plain_text, terms_fit_inline};
 
 mod source;
-mod source_mdoc;
+mod source_fragment;
 
 pub(super) use source::roff_macro_arguments;
-pub(super) use source_mdoc::lower_source_mdoc_request;
+pub(super) use source_fragment::lower_source_fragment;
 
 use super::{
     first_part_children,
@@ -967,22 +967,6 @@ fn lower_alternating_fonts(
         output.extend(lowered);
     }
     output
-}
-
-/// Lower a source request that libmandoc flattened while parsing a `tbl`
-/// `T{ ... T}` cell. This shares the ordinary man(7) alternating-font model,
-/// including tight argument concatenation and explicit `\\f` overrides.
-pub(super) fn lower_source_alternating_fonts(
-    macro_name: &str,
-    source: &str,
-) -> Option<Vec<Inline>> {
-    let (first, second) = alternating_font_pair(Some(macro_name))?;
-    let mut output = Vec::new();
-    for (index, argument) in roff_macro_arguments(source).into_iter().enumerate() {
-        let font = if index % 2 == 0 { first } else { second };
-        output.extend(parse_roff_text_with_font(&argument, font, true));
-    }
-    Some(output)
 }
 
 fn alternating_font_pair(macro_name: Option<&str>) -> Option<(Font, Font)> {

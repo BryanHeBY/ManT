@@ -139,6 +139,7 @@ fn lower_mandoc_document_with_source(
     let target_plan = targets::NativeTargetPlan::build(&parsed.root);
     let explicit_targets = target_plan.explicit();
     let mut context = LoweringContext::new(parsed.metadata.name.as_deref(), source);
+    context.macro_set = parsed.macro_set;
     context.reserve_section_ids(explicit_targets);
     let mut diagnostics = diagnostics::lower_diagnostics(&report.diagnostics);
     let mut sections = blocks::lower_sections(&parsed.root, &mut context);
@@ -207,6 +208,7 @@ fn normalize_metadata(value: Option<&str>) -> Option<String> {
 }
 
 struct LoweringContext<'a> {
+    macro_set: MacroSet,
     default_name: Option<&'a str>,
     source_lines: Option<SourceLineIndex<'a>>,
     equation_delimiters: Vec<EquationDelimiterChange>,
@@ -254,6 +256,7 @@ impl TableTextBlock {
 impl<'a> LoweringContext<'a> {
     fn new(default_name: Option<&'a str>, source: Option<&'a str>) -> Self {
         Self {
+            macro_set: MacroSet::None,
             default_name,
             source_lines: source.map(SourceLineIndex::new),
             equation_delimiters: source.map_or_else(Vec::new, equation_delimiter_changes),

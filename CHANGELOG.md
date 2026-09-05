@@ -55,6 +55,10 @@ that crate was not published for that change.
 
 ### mant-engine 0.11.0
 
+- Reuse dialect-specific native inline parsing for supported tbl text blocks,
+  preserving nested calls, explicit enclosure closers, links, and cross-line
+  spacing state instead of reconstructing a separate flat macro language.
+
 - Preserve validated argument-less `.Tg` destinations and original fragment
   spellings when recovering explicit targets on empty mdoc list items.
 

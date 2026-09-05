@@ -10,7 +10,7 @@ use super::super::{
     LoweringContext, TableTextBlock,
     inline::{
         FilledBoundary, InlineBuilder, lower_inline_nodes_with_spacing, lower_man_link,
-        lower_source_alternating_fonts, lower_source_mdoc_request, parse_roff_text, plain_text,
+        lower_source_fragment, parse_roff_text, plain_text,
     },
     layout::layout,
     roff_escape::visible_text,
@@ -302,6 +302,14 @@ fn lower_table_text_block(
     semantic_nodes: &[&Node],
     context: &LoweringContext<'_>,
 ) -> Vec<Inline> {
+    if let Some(recovered) =
+        lower_source_fragment(&block.source, context.macro_set, context.default_name)
+    {
+        if !recovered.complete {
+            context.warn_unhandled_table_text_block_line(block.start_line);
+        }
+        return recovered.inlines;
+    }
     let mut builder = InlineBuilder::new();
     for (offset, source_line) in block.source.lines().enumerate() {
         let line = block
@@ -313,10 +321,6 @@ fn lower_table_text_block(
             .filter(|node| node.line == line)
             .collect::<Vec<_>>();
         if !nodes.is_empty() {
-            if let Some(inline) = source_table_inline(source_line.trim(), context.default_name) {
-                builder.append_filled(inline, FilledBoundary::Word);
-                continue;
-            }
             for node in nodes {
                 let spacing_enabled = builder.spacing_enabled();
                 let lowered = if matches!(node.macro_name.as_deref(), Some("UR" | "MT")) {
@@ -337,27 +341,13 @@ fn lower_table_text_block(
         if source_line.is_empty() {
             continue;
         }
-        if let Some(inline) = source_table_inline(source_line, context.default_name) {
-            builder.append_filled(inline, FilledBoundary::Word);
-        } else if source_line.starts_with('.') || source_line.starts_with('\'') {
+        if source_line.starts_with('.') || source_line.starts_with('\'') {
             context.warn_unhandled_table_text_block_line(line);
         } else {
             builder.append_filled(parse_roff_text(source_line), FilledBoundary::Word);
         }
     }
     builder.finish()
-}
-
-fn source_table_inline(source_line: &str, default_name: Option<&str>) -> Option<Vec<Inline>> {
-    let request = source_line.strip_prefix(['.', '\''])?;
-    let (name, rest) = request
-        .split_once(char::is_whitespace)
-        .unwrap_or((request, ""));
-    let argument = rest.trim();
-    if matches!(name, "BI" | "BR" | "IB" | "IR" | "RB" | "RI") {
-        return lower_source_alternating_fonts(name, argument);
-    }
-    lower_source_mdoc_request(name, argument, default_name)
 }
 
 #[cfg(test)]
@@ -368,12 +358,14 @@ mod tests {
 
     #[test]
     fn source_requests_dispatch_to_man_and_mdoc_inline_lowering() {
-        let man =
-            super::source_table_inline(".BR git (1)", None).expect("recognized man source request");
+        let man = super::lower_source_fragment(".BR git (1)", libmandoc_rs::MacroSet::Man, None)
+            .unwrap()
+            .inlines;
         assert_eq!(plain_text(&man), "git(1)");
 
-        let mdoc = super::source_table_inline(".Xr git 1 ,", None)
-            .expect("recognized mdoc source request");
+        let mdoc = super::lower_source_fragment(".Xr git 1 ,", libmandoc_rs::MacroSet::Mdoc, None)
+            .unwrap()
+            .inlines;
         assert_eq!(plain_text(&mdoc), "git(1),");
         assert!(matches!(
             mdoc.first(),

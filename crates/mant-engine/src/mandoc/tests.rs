@@ -3842,6 +3842,62 @@ fn restores_alternating_font_arguments_inside_tbl_text_blocks() {
 }
 
 #[test]
+fn table_inline_requests_match_their_native_dialect_and_keep_cross_line_state() {
+    for (header, request, expected) in [
+        (
+            ".Dd September 5, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION",
+            ".Fl Fl help",
+            "--help",
+        ),
+        (
+            ".Dd September 5, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION",
+            ".Cm TOKENA Ns : Ns Ar TOKENB",
+            "TOKENA:TOKENB",
+        ),
+        (
+            ".Dd September 5, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION",
+            ".Oo Fl a Oc No TOKENA",
+            "[-a] TOKENA",
+        ),
+        (
+            ".Dd September 5, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION",
+            ".Sm off\n.Cm TOKENA\n.Ar TOKENB\n.Sm on\n.No TOKENC",
+            "TOKENATOKENB TOKENC",
+        ),
+        (
+            ".Dd September 5, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION",
+            ".Oo\n.Fl a\n.Oc\n.No TOKENA",
+            "[-a] TOKENA",
+        ),
+        (".TH PROBE 1\n.SH DESCRIPTION", ".B Fl", "Fl"),
+        (".TH PROBE 1\n.SH DESCRIPTION", ".I Ar Ns Op", "Ar Ns Op"),
+    ] {
+        let table_source = format!("{header}\n.TS\nl.\nT{{\n{request}\nT}}\n.TE\n");
+        let table =
+            parse_manual_bytes(std::path::Path::new("table.1"), table_source.as_bytes()).unwrap();
+        let plain_source = format!("{header}\n{request}\n");
+        let plain =
+            parse_manual_bytes(std::path::Path::new("plain.1"), plain_source.as_bytes()).unwrap();
+        let [Block::Table { rows, .. }] = table.sections[0].blocks.as_slice() else {
+            panic!("expected table: {table:#?}")
+        };
+        let [Block::Paragraph { children, .. }] = rows[0].cells[0].blocks.as_slice() else {
+            panic!("expected cell paragraph")
+        };
+        let actual = inline_text(children);
+        assert_eq!(actual, expected, "{request}");
+        let [Block::Paragraph { children, .. }] = plain.sections[0].blocks.as_slice() else {
+            panic!("expected native paragraph")
+        };
+        assert_eq!(
+            actual,
+            inline_text(children),
+            "body/table disagreement for {request}"
+        );
+    }
+}
+
+#[test]
 fn restores_nested_mdoc_requests_inside_tbl_text_blocks() {
     let document = parse_manual_bytes(
         std::path::Path::new("table-mdoc-requests.8"),
