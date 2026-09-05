@@ -56,6 +56,19 @@ restoration after paging or TUI exit. Platform-neutral policy matrices and
 redirected-process tests run on Windows as well; PTY checks do not substitute
 for Windows Terminal interactive testing.
 
+CLI help embeds generated TLDR examples from the leading preface in
+`docs/manuals/mant.md`. After editing that preface, regenerate them with:
+
+```sh
+cargo run --locked -p mant --example generate_help_tldr
+```
+
+Commit the generated `crates/mant/src/arguments/help_tldr_generated.rs` with
+the manual change. The normal `mant` integration tests compare it with the
+production TLDR parser's output, so Unix and Windows verification catch drift.
+The generated constants are included in the published crate; installed users
+need neither the repository manual nor a generator to build or display help.
+
 CI uses `--build-profile debug` for the final smoke test because its test and
 Clippy steps have already populated that profile. Local checks keep `release`
 as the default, and tagged publication performs a separate optimized build.

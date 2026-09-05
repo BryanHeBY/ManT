@@ -911,6 +911,16 @@ JSON queries, schemas, protocol descriptions, doctor reports, and update reports
 
 ### Display Policy
 
+`mant --help` prints the product summary, usage, option groups, an embedded
+TLDR quick reference, and finally the self-manual commands. With no arguments,
+`mant` prints a shorter usage diagnostic followed by the same TLDR and manual
+footer; it exits with status `2` on stderr rather than opening a reader.
+The quick reference is compiled from this manual and remains available when
+the self manual is not installed. The final `mant mant` and
+`mant mant --outline` suggestions require an installed self manual. Help uses
+its own heading and command colours; TLDR descriptions and replaceable
+values retain the terminal's normal foreground colour.
+
 `auto` is the default. When both stdin and stdout are usable terminals,
 ordinary full reading opens the TUI. Text outlines, excerpts, explanations,
 searches, quick references, and catalog results use the built-in less-like

@@ -182,6 +182,10 @@ that crate was not published for that change.
 
 ### mant 0.11.0
 
+- Replace the independent help examples with the self-manual's generated,
+  embedded TLDR. Both help and no-argument usage end with the quick reference
+  followed by optional self-manual commands, styled consistently with help.
+  No installed documentation is required to display the examples.
 - Replace `--ui` and `--no-pager` with the independent
   `--display auto|direct|pager|tui` policy. Migrate explicit reader invocations to
   `--display tui`, and noninteractive invocations to `--display direct`.

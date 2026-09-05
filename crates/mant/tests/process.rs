@@ -129,8 +129,10 @@ fn help_groups_the_public_query_surface() {
     assert!(output.stderr.is_empty());
     let help = String::from_utf8(output.stdout).expect("UTF-8 help");
     assert!(help.contains("mant <SELECTOR> [OPTIONS]"));
-    assert!(help.contains("mant --input README.md"));
-    assert!(help.contains("cat guide.md | mant --input - --input-format markdown"));
+    assert!(help.contains(
+        "mant --input ./tool.md --outline --outline-entries all --format json --compact"
+    ));
+    assert!(help.contains("mant --input <PATH|-> [--input-format <FORMAT>] [OPTIONS]"));
     assert!(help.contains("Document selection:"));
     assert!(help.contains("Search:"));
     assert!(help.contains("Integration:"));
@@ -165,10 +167,13 @@ fn help_groups_the_public_query_surface() {
 #[test]
 fn help_and_empty_invocations_offer_the_manual_without_reading_it() {
     for flags in [vec!["--help"], vec!["-h"], vec![]] {
-        let output = Command::new(executable())
-            .args(&flags)
-            .output()
-            .expect("run help entry point");
+        let missing_home =
+            std::env::temp_dir().join(format!("mant-help-no-manual-{}", std::process::id()));
+        assert!(!missing_home.exists());
+        let mut command = Command::new(executable());
+        configure_registered_documents(&mut command, &missing_home);
+        command.env("MANT_MANPATH", missing_home.join("man"));
+        let output = command.args(&flags).output().expect("run help entry point");
         let text = if flags.is_empty() {
             assert_eq!(output.status.code(), Some(2));
             assert!(output.stdout.is_empty());
@@ -178,15 +183,28 @@ fn help_and_empty_invocations_offer_the_manual_without_reading_it() {
             assert!(output.stderr.is_empty());
             let help = String::from_utf8(output.stdout).expect("help text");
             assert!(help.starts_with("Read or query structured local manuals and Markdown\n"));
-            assert!(help.find("ManT manual:").unwrap() < help.find("Document selection:").unwrap());
+            assert!(help.find("Document selection:").unwrap() < help.find("TLDR:").unwrap());
             help
         };
-        assert!(text.contains("mant mant             Read the full manual"));
+        assert!(text.contains("mant mant            Read the full manual"));
         assert!(text.contains("mant mant --outline"));
-        assert!(text.contains("TUI on an interactive terminal; text otherwise"));
+        assert!(text.contains("When the self manual is installed:"));
         assert!(text.find("Usage:").unwrap() < text.find("ManT manual:").unwrap());
+        assert!(text.find("TLDR:").unwrap() < text.find("ManT manual:").unwrap());
+        assert!(text.trim_end().ends_with("Explore its outline"));
+        assert!(!text.contains("Examples:"));
+        assert!(text.contains(
+            "mant --find '^git' --regex --kind manual --limit 20 --format json --compact"
+        ));
+        if flags.is_empty() {
+            assert!(!text.contains("Document selection:"));
+        }
         assert!(!text.contains('\x1b'));
         assert!(!text.contains("## Description"));
+        assert!(
+            !missing_home.exists(),
+            "help must not initialize document storage"
+        );
     }
 }
 

@@ -276,10 +276,32 @@ fn self_hosted_markdown_manuals_use_the_same_terminal_pipeline() {
         .expect("query self-hosted Markdown manual");
         assert!(bundle.tldr.is_some(), "{relative} has no embedded tldr");
         let view = DocumentView::new(&bundle);
+        let tldr_nodes: Vec<_> = view
+            .navigation()
+            .iter()
+            .filter(|node| node.kind == mant_ui::NavKind::Tldr)
+            .collect();
+        assert_eq!(tldr_nodes.len(), 1, "one semantic quick-reference panel");
 
         for width in [32, 80, 132] {
             let rendered = view.render(width);
-            assert_eq!(rendered.search("TLDR QUICK REFERENCE").len(), 1);
+            // The manual body may itself discuss a "TLDR quick reference".
+            // Count the heading within the panel, not prose search hits.
+            let body_start = view
+                .navigation()
+                .iter()
+                .filter(|node| node.kind != mant_ui::NavKind::Tldr)
+                .filter_map(|node| rendered.anchor_row(&node.target_id))
+                .min()
+                .expect("manual body follows the quick reference");
+            assert_eq!(
+                rendered
+                    .search("TLDR QUICK REFERENCE")
+                    .iter()
+                    .filter(|hit| hit.row < body_start)
+                    .count(),
+                1,
+            );
             assert!(
                 !rendered.search("Synopsis").is_empty(),
                 "{relative} lost its manual body at width {width}"

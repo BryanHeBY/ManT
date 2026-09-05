@@ -497,6 +497,40 @@ fn color_policy_is_global_without_changing_deterministic_presentations() {
 }
 
 #[test]
+fn tldr_footer_preserves_semantic_parts_and_is_shared_by_help_and_usage() {
+    let header = super::CLI_STYLES.get_header();
+    let literal = super::CLI_STYLES.get_literal();
+    for arguments in [args(&["--help"]), args(&["-h"]), vec![]] {
+        let error = parse_process(&arguments).expect_err("help or usage output");
+        let styled = error.render().ansi().to_string();
+        assert!(styled.contains(&format!("{header}TLDR:{header:#}")));
+        let plain = error.to_string();
+        assert!(!plain.contains('\x1b'));
+        assert!(!plain.contains("Examples:"));
+        assert!(!plain.contains("{{"));
+        assert!(plain.trim_end().ends_with("Explore its outline"));
+        let footer = plain.split_once("TLDR:\n").unwrap().1;
+        let tldr = footer.split_once("\n\nManT manual:").unwrap().0;
+        assert!(!tldr.contains("\n\n"), "TLDR examples stay compact");
+        assert_eq!(tldr.lines().count(), super::help::EXAMPLES.len() * 2);
+        let mut remaining = footer;
+        for (description, parts) in super::help::EXAMPLES {
+            remaining = remaining.split_once(description).unwrap().1;
+            let command: String = parts.iter().map(|(value, _)| *value).collect();
+            remaining = remaining.split_once(&command).unwrap().1;
+            for (value, placeholder) in *parts {
+                if *placeholder {
+                    assert!(!styled.contains(&format!("{literal}{value}{literal:#}")));
+                } else {
+                    assert!(styled.contains(&format!("{literal}{value}{literal:#}")));
+                }
+            }
+        }
+        assert!(remaining.contains("ManT manual:"));
+    }
+}
+
+#[test]
 fn normalizes_man_style_and_hierarchical_selectors() {
     for values in [vec!["1", "git"], vec!["git(1)"]] {
         assert!(matches!(
