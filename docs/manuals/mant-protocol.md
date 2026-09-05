@@ -1116,9 +1116,11 @@ namespace; an address never proves that a target document is installed.
 
 The completeness signal also travels inside single- and multi-document explain
 excerpts. Text and MCP excerpts retain a concise incomplete-semantics notice
-even when ordinary parser diagnostics are hidden. Full raw document and search
-responses continue to carry diagnostics rather than an outline-completeness
-claim. In-process producers must run `mant_ir::validate_document` and attach its
+even when ordinary parser diagnostics are hidden. Full raw document responses
+carry diagnostics rather than an outline-completeness claim. Search responses
+make no semantic-index completeness claim: search examines rendered content,
+not just recognized entries. In-process producers must run
+`mant_ir::validate_document` and attach its
 findings before handing documents to projection APIs; projections reuse those
 findings rather than revalidating the whole tree for every selected node.
 
