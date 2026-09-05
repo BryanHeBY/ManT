@@ -11,9 +11,8 @@ use super::{
         updated_spacing,
     },
     layout::{
-        add_leading_spacing, display_indent, layout, layout_with_spacing,
-        normalize_explicit_vertical_spacing, section_spacing, set_block_spacing,
-        update_paragraph_distance, vertical_distance_lines,
+        add_leading_spacing, layout, layout_with_spacing, normalize_explicit_vertical_spacing,
+        section_spacing, set_block_spacing, update_paragraph_distance, vertical_distance_lines,
     },
     part_child_groups,
     roff_escape::visible_text,
@@ -635,7 +634,11 @@ impl StructuralLowerer<'_, '_, '_> {
                 let mut nested = preformatted_blocks(
                     node,
                     self.context,
-                    self.indent_columns + display_indent(node),
+                    self.context.nested_indent(
+                        node,
+                        self.indent_columns,
+                        self.context.display_offset(node),
+                    ),
                     self.spacing_enabled,
                 );
                 if node.macro_name.as_deref() == Some("Bd")
@@ -735,7 +738,11 @@ impl StructuralLowerer<'_, '_, '_> {
                 let nested = lower_blocks_with_spacing(
                     first_part_children(node, NodeKind::Body),
                     self.context,
-                    self.indent_columns + display_indent(node),
+                    self.context.nested_indent(
+                        node,
+                        self.indent_columns,
+                        self.context.display_offset(node),
+                    ),
                     self.paragraph_distance,
                     self.spacing_enabled,
                 );
@@ -746,7 +753,7 @@ impl StructuralLowerer<'_, '_, '_> {
                     let mut nested = lower_blocks_with_spacing(
                         first_part_children(node, NodeKind::Body),
                         self.context,
-                        self.indent_columns + 4,
+                        self.context.nested_indent(node, self.indent_columns, 4),
                         self.paragraph_distance,
                         self.spacing_enabled,
                     );
@@ -766,7 +773,7 @@ impl StructuralLowerer<'_, '_, '_> {
                 *self.output = lower_blocks_onto(
                     first_part_children(node, NodeKind::Body),
                     self.context,
-                    self.indent_columns + 4,
+                    self.context.nested_indent(node, self.indent_columns, 4),
                     self.paragraph_distance,
                     self.spacing_enabled,
                     output,

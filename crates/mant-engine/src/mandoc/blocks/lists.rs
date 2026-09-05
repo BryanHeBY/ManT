@@ -13,7 +13,7 @@ use super::super::{
         spacing_after_nodes, terms_fit_inline,
     },
     layout::{
-        block_indent, display_indent, horizontal_distance_columns, layout, layout_with_spacing,
+        block_indent, horizontal_distance_columns, layout, layout_with_spacing,
         paragraph_distance_lines,
     },
     part_child_groups, source_span, targets,
@@ -523,7 +523,7 @@ fn definition_item(
         description: lower_blocks_with_spacing(
             body,
             context,
-            indent_columns.saturating_add(MAN_DEFINITION_BODY_INDENT),
+            context.nested_indent(node, indent_columns, MAN_DEFINITION_BODY_INDENT),
             paragraph_distance,
             spacing_after_nodes(head, spacing_enabled, context.default_name),
         ),

@@ -3,10 +3,9 @@
 use super::{
     AstTableAlignment, AstTableCell, Block, DefinitionItem, DefinitionListStyle, Inline, ListItem,
     ListKind, LoweringContext, MAN_DEFINITION_BODY_INDENT, Node, NodeKind, NormalizedListKind,
-    TableRow, block_layout_mut, definition_item, display_indent, first_part_children,
-    horizontal_distance_columns, layout, lower_blocks_with_spacing, ordinal_sequence,
-    part_child_groups, plain_text, source_span, spacing_after_node, spacing_after_nodes, targets,
-    terms_fit_inline,
+    TableRow, block_layout_mut, definition_item, first_part_children, horizontal_distance_columns,
+    layout, lower_blocks_with_spacing, ordinal_sequence, part_child_groups, plain_text,
+    source_span, spacing_after_node, spacing_after_nodes, targets, terms_fit_inline,
 };
 
 pub(in crate::mandoc::blocks) fn lower_mdoc_list(
@@ -27,7 +26,7 @@ pub(in crate::mandoc::blocks) fn lower_mdoc_list(
         && items
             .iter()
             .any(|item| !first_part_children(item.node, NodeKind::Head).is_empty()));
-    let list_indent = indent_columns + display_indent(node);
+    let list_indent = context.nested_indent(node, indent_columns, context.display_offset(node));
     let mut block = if node.list_kind == Some(NormalizedListKind::Column) {
         lower_mdoc_column_list(
             node,

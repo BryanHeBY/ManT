@@ -77,6 +77,10 @@ The following `man(7)` macros have dedicated lowering behavior:
 
 `br` inside a flow becomes an inline line break. `sp` becomes explicit vertical space. Filled source lines normally join with spaces; an indented input line and no-fill input preserve line boundaries. In a no-fill display, a run of raw blank input lines is one visual separator, while an explicit `sp` retains its requested separation. A final unescaped `\c` suppresses that implicit space or line break and joins the next input line directly.
 
+Display offsets use terminal-column unit conversion. Unsupported or excessive
+offsets use the default indentation; cumulative indentation is capped at 4096
+columns with a `manual.indentation-limit` warning rather than integer overflow.
+
 The `IP` and `TP` macros are source-ambiguous: a leading mark can introduce a
 bullet, an enumerated paragraph, or a glossary-style definition. ManT
 recognizes single-glyph bullet marks at that source boundary. A punctuated

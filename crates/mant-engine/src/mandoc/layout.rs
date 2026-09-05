@@ -9,6 +9,43 @@ use mant_ir::{Block, LayoutHint};
 
 use crate::block::{block_layout, block_layout_mut};
 
+const MAX_INDENT_COLUMNS: u16 = 4096;
+
+impl super::LoweringContext<'_> {
+    pub(super) fn nested_indent(&self, node: &Node, parent: u16, extra: u16) -> u16 {
+        let sum = parent.saturating_add(extra);
+        if sum > MAX_INDENT_COLUMNS {
+            self.warn_indent(node);
+        }
+        sum.min(MAX_INDENT_COLUMNS)
+    }
+
+    pub(super) fn display_offset(&self, node: &Node) -> u16 {
+        if node.offset.as_deref().is_some_and(|offset| {
+            !matches!(offset, "left" | "indent") && horizontal_distance_columns(offset).is_none()
+        }) {
+            self.warn_indent(node);
+        }
+        display_indent(node)
+    }
+
+    fn warn_indent(&self, node: &Node) {
+        let mut diagnostics = self.diagnostics.borrow_mut();
+        if diagnostics
+            .iter()
+            .any(|item| item.code.as_deref() == Some("manual.indentation-limit"))
+        {
+            return;
+        }
+        diagnostics.push(mant_ir::Diagnostic {
+            level: mant_ir::DiagnosticLevel::Warning,
+            code: Some("manual.indentation-limit".into()),
+            message: "unsupported or excessive indentation was bounded; invalid offsets use the default and cumulative indentation is limited to 4096 columns".into(),
+            source: super::source_span(node),
+        });
+    }
+}
+
 /// Update the current man(7) paragraph distance after a `.PD` request.
 pub(super) fn update_paragraph_distance(node: &Node, paragraph_distance: &mut u16) {
     if node.macro_name.as_deref() == Some("PD")
@@ -177,7 +214,7 @@ pub(super) fn horizontal_distance_columns(argument: &str) -> Option<usize> {
     // Real tag widths are tiny. Bounding the conversion also mirrors
     // libmandoc's refusal of values that cannot fit its signed margin state,
     // while avoiding architecture-dependent float-to-integer casts.
-    for rounded in 0_u16..=4096 {
+    for rounded in 0_u16..=MAX_INDENT_COLUMNS {
         if columns < f64::from(rounded) + 0.5 {
             return Some(usize::from(rounded));
         }
@@ -215,9 +252,8 @@ pub(super) fn display_indent(node: &Node) -> u16 {
     if offset == "indent" {
         return 4;
     }
-    offset
-        .trim_end_matches(|character: char| character.is_ascii_alphabetic())
-        .parse()
+    horizontal_distance_columns(offset)
+        .and_then(|columns| u16::try_from(columns).ok())
         .unwrap_or(4)
 }
 
@@ -278,6 +314,12 @@ mod tests {
         assert_eq!(display_indent(&node(NodeKind::Root, None, None)), 4);
         assert_eq!(display_indent(&node(NodeKind::Root, None, Some("left"))), 0);
         assert_eq!(display_indent(&node(NodeKind::Root, None, Some("8n"))), 8);
+        assert_eq!(display_indent(&node(NodeKind::Root, None, Some("1i"))), 10);
+        assert_eq!(display_indent(&node(NodeKind::Root, None, Some("24u"))), 1);
+        assert_eq!(
+            display_indent(&node(NodeKind::Root, None, Some("65535n"))),
+            4
+        );
         assert_eq!(layout(3).indent_columns, 3);
     }
 

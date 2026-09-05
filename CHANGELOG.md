@@ -49,6 +49,9 @@ that crate was not published for that change.
 
 ### mant-engine 0.11.0
 
+- Bound cumulative native indentation and report excessive or unsupported
+  offsets instead of overflowing; display offsets now share horizontal unit
+  conversion with definition widths.
 - Reject special files at the shared manual-path configuration boundary before
   and after opening. Unix nonblocking opens prevent FIFO fragments, including
   macOS `MANCONFIG` matches, from hanging discovery while preserving regular

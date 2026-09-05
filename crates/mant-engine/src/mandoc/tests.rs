@@ -17,6 +17,43 @@ fn temporary_source(label: &str, source: &str) -> std::path::PathBuf {
     path
 }
 
+#[test]
+fn excessive_display_and_list_offsets_are_bounded_without_losing_content() {
+    struct LayoutBounds;
+    impl<'ir> Visit<'ir> for LayoutBounds {
+        fn visit_block(&mut self, block: &'ir Block) {
+            if let Some(layout) = crate::block::block_layout(block) {
+                assert!(layout.indent_columns <= 4096);
+            }
+            visit::walk_block(self, block);
+        }
+    }
+    for offset in ["65535n", "4096n", "100000i"] {
+        for body in [
+            ".Bl -bullet\n.It\nCONTENT\n.El",
+            ".Bl -tag\n.It NAME\nCONTENT\n.El",
+            ".D1 CONTENT",
+        ] {
+            let source = format!(
+                ".Dd September 5, 2026\n.Dt OFFSET 1\n.Os\n.Sh DESCRIPTION\n.Bd -ragged -offset {offset}\n{body}\n.Ed\n"
+            );
+            let document =
+                parse_manual_bytes(std::path::Path::new("offset.1"), source.as_bytes()).unwrap();
+            LayoutBounds.visit_document(&document);
+            assert!(
+                document.diagnostics.iter().any(
+                    |diagnostic| diagnostic.code.as_deref() == Some("manual.indentation-limit")
+                )
+            );
+            assert!(
+                crate::query_roff_bytes(source.as_bytes())
+                    .map(|query| crate::render_query_text(&query).contains("CONTENT"))
+                    .unwrap()
+            );
+        }
+    }
+}
+
 fn anchor_ids(document: &mant_ir::Document) -> Vec<String> {
     struct AnchorCollector(Vec<String>);
 
