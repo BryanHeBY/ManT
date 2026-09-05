@@ -1,6 +1,6 @@
 //! Resolves typed document links into bounded, deterministic query scopes.
 
-use std::collections::{BTreeMap, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::{error::Error, fmt, io::Write};
 
 use mant_ir::visit::{Visit, walk_block, walk_definition_item, walk_inline};
@@ -290,6 +290,50 @@ struct ScopeResolution {
     positions: BTreeMap<DocumentAddress, usize>,
     queue: VecDeque<usize>,
     content_bytes: u64,
+    failures: ResolutionFailures,
+    unresolved_keys: BTreeSet<UnresolvedKey>,
+}
+
+type ResolutionKey = (u8, String, Option<String>, Option<String>);
+type UnresolvedKey = (
+    Option<DocumentAddress>,
+    String,
+    Option<String>,
+    Option<String>,
+    String,
+);
+
+/// Request-local negative cache. Keys include policy and the fully qualified
+/// selector, never a bare link label. Nothing survives into the next request.
+#[derive(Default)]
+struct ResolutionFailures(BTreeMap<ResolutionKey, String>);
+
+impl ResolutionFailures {
+    fn resolve<T>(
+        &mut self,
+        selector: &DocumentSelector,
+        policy: QueryPolicy,
+        load: impl FnOnce() -> Result<T, String>,
+    ) -> Result<T, String> {
+        let key = (
+            match policy {
+                QueryPolicy::Combined => 0,
+                QueryPolicy::ManualOnly => 1,
+                QueryPolicy::TldrOnly => 2,
+            },
+            selector.selector.clone(),
+            selector.source.clone(),
+            selector.manual_section.clone(),
+        );
+        if let Some(reason) = self.0.get(&key) {
+            return Err(reason.clone());
+        }
+        let result = load();
+        if let Err(reason) = &result {
+            self.0.insert(key, reason.clone());
+        }
+        result
+    }
 }
 
 impl ScopeResolution {
@@ -306,19 +350,25 @@ impl ScopeResolution {
             positions: BTreeMap::new(),
             queue: VecDeque::new(),
             content_bytes: 0,
+            failures: ResolutionFailures::default(),
+            unresolved_keys: BTreeSet::new(),
         }
     }
 
     fn resolve_roots(&mut self, resolver: &DocumentResolver) {
         for (root_index, selector) in self.graph.query.documents.clone().iter().enumerate() {
-            match resolver.resolve_selector(selector, QueryPolicy::Combined) {
+            match self.failures.resolve(selector, QueryPolicy::Combined, || {
+                resolver
+                    .resolve_selector(selector, QueryPolicy::Combined)
+                    .map_err(|error| error.to_string())
+            }) {
                 Ok(bundle) => {
                     self.insert_root(bundle, selector, root_index);
                 }
-                Err(error) => self.graph.unresolved.push(UnresolvedDocument {
+                Err(error) => self.record_unresolved(UnresolvedDocument {
                     from: None,
                     selector: selector.clone(),
-                    reason: error.to_string(),
+                    reason: error,
                 }),
             }
         }
@@ -331,7 +381,7 @@ impl ScopeResolution {
         root_index: usize,
     ) {
         let Some(address) = bundle.address.clone() else {
-            self.graph.unresolved.push(UnresolvedDocument {
+            self.record_unresolved(UnresolvedDocument {
                 from: None,
                 selector: selector.clone(),
                 reason: "selector did not resolve to a registered document".to_owned(),
@@ -347,7 +397,7 @@ impl ScopeResolution {
             return;
         }
         if !self.reserve_content_bytes(&bundle) {
-            self.graph.unresolved.push(UnresolvedDocument {
+            self.record_unresolved(UnresolvedDocument {
                 from: None,
                 selector: selector.clone(),
                 reason: format!(
@@ -426,7 +476,7 @@ impl ScopeResolution {
         }
 
         let Some(selector) = reference.selector(from) else {
-            self.graph.unresolved.push(UnresolvedDocument {
+            self.record_unresolved(UnresolvedDocument {
                 from: Some(from.clone()),
                 selector: reference.fallback_selector(),
                 reason: "relative document link escapes its registered namespace".to_owned(),
@@ -438,19 +488,23 @@ impl ScopeResolution {
         } else {
             QueryPolicy::Combined
         };
-        let bundle = match resolver.resolve_selector(&selector, policy) {
+        let bundle = match self.failures.resolve(&selector, policy, || {
+            resolver
+                .resolve_selector(&selector, policy)
+                .map_err(|error| error.to_string())
+        }) {
             Ok(bundle) => bundle,
             Err(error) => {
-                self.graph.unresolved.push(UnresolvedDocument {
+                self.record_unresolved(UnresolvedDocument {
                     from: Some(from.clone()),
                     selector,
-                    reason: error.to_string(),
+                    reason: error,
                 });
                 return;
             }
         };
         let Some(address) = bundle.address.clone() else {
-            self.graph.unresolved.push(UnresolvedDocument {
+            self.record_unresolved(UnresolvedDocument {
                 from: Some(from.clone()),
                 selector,
                 reason: "link did not resolve to a registered document".to_owned(),
@@ -491,6 +545,19 @@ impl ScopeResolution {
                 .push(edge.from.clone());
         }
         true
+    }
+
+    fn record_unresolved(&mut self, failure: UnresolvedDocument) {
+        let key = (
+            failure.from.clone(),
+            failure.selector.selector.clone(),
+            failure.selector.source.clone(),
+            failure.selector.manual_section.clone(),
+            failure.reason.clone(),
+        );
+        if self.unresolved_keys.insert(key) {
+            self.graph.unresolved.push(failure);
+        }
     }
 
     fn insert_linked(
@@ -827,6 +894,77 @@ mod tests {
     use mant_ir::{DocumentAddress, MarkdownOrigin};
 
     use super::*;
+
+    #[test]
+    fn failed_resolution_is_cached_by_policy_and_qualified_selector_only_for_one_request() {
+        let mut cache = ResolutionFailures::default();
+        let mut calls = 0;
+        let base = DocumentSelector {
+            selector: "missing".into(),
+            source: None,
+            manual_section: None,
+        };
+        for (policy, selector) in [
+            (QueryPolicy::Combined, base.clone()),
+            (QueryPolicy::Combined, base.clone()),
+            (QueryPolicy::ManualOnly, base.clone()),
+            (
+                QueryPolicy::Combined,
+                DocumentSelector {
+                    source: Some("other".into()),
+                    ..base.clone()
+                },
+            ),
+            (
+                QueryPolicy::Combined,
+                DocumentSelector {
+                    manual_section: Some("7".into()),
+                    ..base.clone()
+                },
+            ),
+        ] {
+            let result: Result<(), String> = cache.resolve(&selector, policy, || {
+                calls += 1;
+                Err("not found".into())
+            });
+            assert!(result.is_err());
+        }
+        assert_eq!(calls, 4);
+        assert!(
+            ResolutionFailures::default()
+                .resolve(&base, QueryPolicy::Combined, || Ok::<_, String>(()))
+                .is_ok()
+        );
+    }
+
+    #[test]
+    fn unresolved_records_keep_distinct_origins_without_repeating_the_same_edge() {
+        let scope = DocumentScope {
+            documents: vec![],
+            traversal: Default::default(),
+        };
+        let mut resolution = ScopeResolution::new(&scope);
+        let failure = UnresolvedDocument {
+            from: None,
+            selector: DocumentSelector {
+                selector: "missing".into(),
+                source: None,
+                manual_section: None,
+            },
+            reason: "not found".into(),
+        };
+        resolution.record_unresolved(failure.clone());
+        resolution.record_unresolved(failure.clone());
+        resolution.record_unresolved(UnresolvedDocument {
+            from: Some(DocumentAddress::Manual {
+                name: "other".into(),
+                manual_section: "1".into(),
+            }),
+            ..failure
+        });
+        assert_eq!(resolution.graph.unresolved.len(), 2);
+        assert!(resolution.graph.unresolved[0].from.is_none());
+    }
 
     #[test]
     fn entry_domains_participate_in_typed_document_traversal() {

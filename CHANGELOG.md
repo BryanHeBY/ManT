@@ -43,6 +43,8 @@ that crate was not published for that change.
 
 ### mant-engine 0.11.0
 
+- Deduplicate unresolved scope links per origin and cache failed qualified
+  resolutions within a request, without hiding distinct referring documents.
 - Preserve argument-less `.Tg` targets that remain on their own native owner,
   including `Va`, `Pa`, and `Ar`, and keep exact leading hyphens in authored
   destinations. Only retained native targets reserve the section namespace.
