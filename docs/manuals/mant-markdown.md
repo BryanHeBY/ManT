@@ -202,7 +202,7 @@ definitions and indexed concepts.
 | `kind` | `role=` on the owning list; option, marker, and operand map to parameter kinds. |
 | `case` | Required `case=` on the owning list. |
 | `aliases` | Selectable names extracted from the visible code terms, including linked code; comma-grouped terms are equivalent aliases, not separate entries. |
-| `forms` | Complete leading terms, including placeholders; an outside-code `|` splits independent forms without creating another entry. |
+| `forms` | Complete leading terms, including placeholders; an outside-code `\|` splits independent forms without creating another entry. |
 | `documentTargets` | Typed document links wrapping a code term; links in the description remain ordinary references. |
 | `children` | Structurally nested semantic lists with their own role and case declarations. |
 | `valueDomain` | Explicit `mant:domain choices=...` or `entries=... roles=...`; otherwise all-value children infer open choices. |

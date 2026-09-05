@@ -287,6 +287,11 @@ fn json_fenced_examples(markdown: &str) -> Vec<String> {
 
 #[test]
 fn documented_semantic_entry_examples_are_executable_authoring_contracts() {
+    let query = query_markdown_text(MARKDOWN_MANUAL, None).expect("authoring manual");
+    assert!(
+        render_query_text(&query).contains("without creating another entry"),
+        "the form separator must not split or truncate its Markdown table cell"
+    );
     for newline in ["\n", "\r\n"] {
         let source = MARKDOWN_MANUAL.replace('\n', newline);
         let examples = fenced_examples(&source, "markdown")
