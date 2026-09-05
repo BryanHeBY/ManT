@@ -1,0 +1,12 @@
+--- a/man_macro.c
++++ b/man_macro.c
+@@ -109,7 +109,8 @@
+ 				    n->line, n->pos,
+ 				    "EOF breaks %s", roff_name[n->tok]);
+ 				if (man->flags & MAN_ELINE) {
+-					if ((man_macro(n->parent->tok)->flags &
++					if (n->parent->type == ROFFT_ROOT ||
++					    (man_macro(n->parent->tok)->flags &
+ 					    MAN_ESCOPED) == 0)
+ 						man->flags &= ~MAN_ELINE;
+ 				} else {

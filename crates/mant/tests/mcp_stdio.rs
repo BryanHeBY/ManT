@@ -14,6 +14,54 @@ use serde_json::{Value, json};
 use support::{configure_registered_documents, registered_documents_dir};
 
 #[test]
+fn incomplete_native_scopes_do_not_terminate_the_mcp_session() {
+    let fixture_root = std::env::temp_dir().join(format!("mant-mcp-eof-{}", std::process::id()));
+    let manuals = fixture_root.join("man1");
+    fs::create_dir_all(&manuals).expect("manual directory");
+    fs::write(manuals.join("incomplete.1"), ".I\n.B\n").expect("incomplete manual");
+    fs::write(
+        manuals.join("healthy.1"),
+        ".TH HEALTHY 1\n.SH NAME\nhealthy \\- retained\n",
+    )
+    .expect("healthy manual");
+    let mut child = Command::new(env!("CARGO_BIN_EXE_mant"))
+        .arg("--mcp")
+        .env("MANT_MANPATH", &fixture_root)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("MCP server");
+    let mut input = child.stdin.take().expect("stdin");
+    let mut lines = BufReader::new(child.stdout.take().expect("stdout")).lines();
+    let stderr = child.stderr.take().expect("stderr");
+    initialize(&mut input);
+    input.flush().expect("flush initialization");
+    assert_eq!(parse_reply(lines.next().expect("initialization"))["id"], 1);
+    call_tool(
+        &mut input,
+        3,
+        "mant_outline",
+        &json!({"document":"incomplete"}),
+    );
+    input.flush().expect("flush incomplete request");
+    let reply = parse_reply(lines.next().expect("recoverable incomplete reply"));
+    assert_eq!(reply["id"], 3);
+    assert_eq!(reply["result"]["isError"], true);
+    call_tool(
+        &mut input,
+        4,
+        "mant_outline",
+        &json!({"document":"healthy"}),
+    );
+    input.flush().expect("flush healthy request");
+    let reply = parse_reply(lines.next().expect("healthy reply"));
+    assert_eq!(reply["id"], 4);
+    assert_ne!(reply["result"]["isError"], true);
+    assert_silent_shutdown(child, input, stderr, fixture_root);
+}
+
+#[test]
 fn stdio_mode_exposes_compact_text_first_document_tools() {
     let executable = env!("CARGO_BIN_EXE_mant");
     let fixture_root = registered_document_fixture();

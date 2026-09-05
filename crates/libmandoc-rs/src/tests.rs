@@ -23,6 +23,26 @@ fn source_path(label: &str) -> std::path::PathBuf {
     std::env::temp_dir().join(format!("mant-{label}-{}.1", process::id()))
 }
 
+#[test]
+fn incomplete_root_font_scopes_report_diagnostics_and_reset() {
+    let parser = Parser::default();
+    for macro_name in ["I", "B", "R", "SM", "SB"] {
+        for prefix in ["", ".TH PROBE 1\n", ".I\n", ".SH NAME\n", ".TP\n"] {
+            for suffix in ["", "\\c\n"] {
+                let source = format!("{prefix}.{macro_name}\n{suffix}");
+                let report = parser
+                    .parse_bytes("incomplete.1", source.as_bytes())
+                    .expect("incomplete scope is recoverable");
+                assert!(!report.diagnostics.is_empty(), "{source:?}");
+                let report = parser
+                    .parse_bytes("next.1", b".TH NEXT 1\n.SH NAME\nnext \\- retained\n")
+                    .expect("next session succeeds");
+                assert_eq!(report.document.metadata.title.as_deref(), Some("NEXT"));
+            }
+        }
+    }
+}
+
 fn measured_depth(node: &Node) -> usize {
     1 + node.children.iter().map(measured_depth).max().unwrap_or(0)
 }

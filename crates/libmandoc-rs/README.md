@@ -349,6 +349,10 @@ the ordered patches in `patches/series`:
 - `0028-initialize-terminal-escape-state.patch` gives terminal horizontal-line
   byte counts and string-width escape code points explicit neutral defaults,
   removing MSVC dataflow ambiguity without changing reachable output paths.
+- `0030-close-root-element-scope.patch` treats the synthetic document root as
+  the end of a man next-line element scope during EOF cleanup, matching normal
+  line cleanup. Incomplete font macros therefore report a diagnostic instead
+  of passing the root's non-macro token to the macro dispatch table.
 - `0029-avoid-retagging-mdoc-parts.patch` keeps an explicit `.Tg` on its own
   zero-width node when the following section or function head already owns an
   automatic ID, and prevents later automatic tagging from overwriting an

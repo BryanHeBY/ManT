@@ -109,7 +109,8 @@ man_unscope(struct roff_man *man, const struct roff_node *to)
 				    n->line, n->pos,
 				    "EOF breaks %s", roff_name[n->tok]);
 				if (man->flags & MAN_ELINE) {
-					if ((man_macro(n->parent->tok)->flags &
+					if (n->parent->type == ROFFT_ROOT ||
+					    (man_macro(n->parent->tok)->flags &
 					    MAN_ESCOPED) == 0)
 						man->flags &= ~MAN_ELINE;
 				} else {
