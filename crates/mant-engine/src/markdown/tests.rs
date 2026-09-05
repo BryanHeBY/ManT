@@ -432,6 +432,8 @@ fn markdown_link_components_decode_once_and_validate_before_navigation() {
             Some("Mixed%2ETarget"),
         ),
         ("%E6%97%A5%E6%9C%AC.md", "日本", None),
+        ("other.md#part:two", "other", Some("part:two")),
+        ("other.md#part%3Atwo", "other", Some("part:two")),
         ("../other.md", "../other", None),
     ] {
         let document = parse_document(&format!("[LINK]({uri})\n"), None);

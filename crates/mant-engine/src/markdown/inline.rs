@@ -170,7 +170,7 @@ pub(super) fn markdown_document_reference(destination: &str) -> Option<(String, 
     // URI classification precedes extension recognition: a host named
     // example.md or a URI ending in .md is never a local document. The first
     // path component of a relative URI cannot contain a scheme separator.
-    if destination.split('/').next()?.contains(':') {
+    if destination.split(['/', '#', '?']).next()?.contains(':') {
         return None;
     }
     let (path, fragment) = if let Some((path, fragment)) = destination.split_once('#') {
