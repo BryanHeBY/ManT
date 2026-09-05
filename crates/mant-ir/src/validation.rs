@@ -129,6 +129,7 @@ pub fn is_semantic_completeness_diagnostic(code: &str) -> bool {
             | "ir.invalid-semantic-document-reference"
             | "ir.empty-entry-value-domain"
             | "ir.duplicate-entry-value-kind"
+            | "ir.invalid-entry-choices"
     )
 }
 
@@ -579,6 +580,19 @@ impl<'ir> Visit<'ir> for InvariantCollector {
     }
 
     fn visit_definition_item(&mut self, item: &'ir DefinitionItem) {
+        if matches!(
+            item.identity
+                .as_ref()
+                .and_then(|identity| identity.value_domain.as_ref()),
+            Some(ValueDomain::Choices { .. })
+        ) && !item.has_value_choices()
+        {
+            self.diagnostics.push(invariant(
+                "ir.invalid-entry-choices",
+                "a choices domain requires nonempty direct semantic children of kind value"
+                    .to_owned(),
+            ));
+        }
         if let Some(ValueDomain::EntrySet {
             reference,
             entry_kinds,

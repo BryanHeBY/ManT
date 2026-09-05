@@ -14,6 +14,9 @@ that crate was not published for that change.
 
 ### mant-ir 0.11.0
 
+- Share direct semantic-child ownership between indexing and choice-domain
+  validation. Explicit choices require nonempty value children; invalid
+  producer claims make semantic projections incomplete.
 - Separate normalized document-local `NodeId` values from exact
   source-authored fragment aliases on document roots, sections, and inline
   anchors. `DocumentIndex` resolves either spelling without admitting
@@ -46,6 +49,9 @@ that crate was not published for that change.
 
 ### mant-engine 0.11.0
 
+- Accept local `mant:domain choices=exhaustive|open` declarations with structural
+  validation. Reject mixed domain modes and incompatible child kinds while
+  keeping entries and their visible descriptions addressable.
 - Let Markdown authors separate invocation forms with `|` between code terms
   while retaining comma-grouped aliases within each form. Both forms share one
   entry identity, and empty alternatives reject the declaration atomically.

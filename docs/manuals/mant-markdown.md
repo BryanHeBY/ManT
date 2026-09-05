@@ -131,7 +131,30 @@ The linked code remains the selectable name and the relative Markdown target bec
 
 Declared entry lists may nest at any Markdown list depth within the parser's 64-level structural budget. Every nested list that needs a semantic role has its own immediately preceding `mant:entries` directive; the derived index preserves parent → child ownership rather than flattening it.
 
-An entry whose accepted values are entries in another document can declare that relationship inside its list item:
+An entry can explicitly state whether its locally listed values are complete:
+
+```markdown
+<!-- mant:entries role=option case=sensitive -->
+- `--color WHEN`: Select color behavior.
+
+  <!-- mant:domain choices=exhaustive -->
+
+  <!-- mant:entries role=value case=sensitive -->
+  - `auto`: Decide automatically.
+  - `always`: Always use color.
+  - `never`: Never use color.
+```
+
+`choices=exhaustive` is the author's assertion that the listed choices are the
+complete value space. `choices=open` explicitly leaves that space open.
+Both require at least one direct semantic child and require every direct
+semantic child to have `role=value`. Ordinary descriptive paragraphs are not
+choices. The parser cannot prove exhaustiveness against an executable; it
+validates the declaration's structure, not the program's behavior. Without a
+domain declaration, all-value children still infer non-exhaustive choices.
+
+An entry whose accepted values are entries in another document can instead
+declare that relationship inside its list item:
 
 ```markdown
 <!-- mant:entries role=option case=sensitive -->
@@ -152,8 +175,11 @@ the same roles as `mant:entries`; repeating a role is an error. Unknown,
 duplicate, malformed, or unattached declarations produce
 `markdown.semantic-value-domain`, leave document content visible, and make the
 semantic projection incomplete. Multiple valid declarations on one entry are
-ambiguous rather than first- or last-wins: ManT attaches no value domain and
-does not traverse any of those references. A syntactically valid reference
+ambiguous rather than first- or last-wins: ManT attaches none of the competing
+domain declarations and does not traverse their references. Independently
+observed all-value children may still infer open choices, never an exhaustive
+claim. The `choices` form cannot be combined with `entries` or `roles`.
+A syntactically valid reference
 remains useful when it is the entry's only declaration even if catalog lookup
 is unavailable; resolution is an engine/protocol concern rather than a
 Markdown parsing requirement.

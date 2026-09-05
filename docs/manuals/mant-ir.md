@@ -216,7 +216,11 @@ safe selector. Description links remain ordinary content links rather than entry
 | `byKind` | Recursive counts grouped by `EntryKind` |
 
 `ValueDomain::Choices { exhaustive }` says child entries are observed choices
-and records whether the source proves the set complete. `EntrySet` holds a
+and records whether the source declares the set complete. Explicit choices
+must have nonempty direct semantic children consisting only of values;
+`DefinitionItem::has_value_choices()` uses the same ownership walk as the
+semantic index, and shared validation reports `ir.invalid-entry-choices` for
+incompatible producer claims. `EntrySet` holds a
 restricted source-neutral document reference, selected entry kinds in that
 document, and an optional source span for the declaration. The span preserves
 authored relationship order; it is not part of the destination identity. The

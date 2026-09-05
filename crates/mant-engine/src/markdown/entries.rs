@@ -386,6 +386,7 @@ fn parse_domain_declaration(value: &str, source: SourceSpan) -> Result<DomainDec
     };
     let mut entries = None;
     let mut roles = None;
+    let mut choices = None;
     for field in fields.split_whitespace() {
         let Some((key, value)) = field.split_once('=') else {
             return Err(format!("invalid semantic value-domain field '{field}'"));
@@ -393,22 +394,34 @@ fn parse_domain_declaration(value: &str, source: SourceSpan) -> Result<DomainDec
         match key {
             "entries" if entries.is_none() => entries = Some(parse_domain_reference(value)?),
             "roles" if roles.is_none() => roles = Some(parse_domain_roles(value)?),
-            "entries" | "roles" => {
+            "choices" if choices.is_none() => {
+                choices = Some(match value {
+                    "exhaustive" => true,
+                    "open" => false,
+                    _ => return Err("choices must be exhaustive or open".to_owned()),
+                });
+            }
+            "entries" | "roles" | "choices" => {
                 return Err(format!("duplicate semantic value-domain field '{key}'"));
             }
             _ => return Err(format!("unknown semantic value-domain field '{key}'")),
         }
     }
-    Ok(DomainDeclaration {
-        value: ValueDomain::EntrySet {
+    let value = if let Some(exhaustive) = choices {
+        if entries.is_some() || roles.is_some() {
+            return Err("choices cannot be combined with entries or roles".to_owned());
+        }
+        ValueDomain::Choices { exhaustive }
+    } else {
+        ValueDomain::EntrySet {
             reference: entries
                 .ok_or_else(|| "semantic value-domain directive requires entries=...".to_owned())?,
             entry_kinds: roles
                 .ok_or_else(|| "semantic value-domain directive requires roles=...".to_owned())?,
             source: Some(source),
-        },
-        source,
-    })
+        }
+    };
+    Ok(DomainDeclaration { value, source })
 }
 
 fn parse_domain_reference(value: &str) -> Result<SemanticDocumentReference, String> {
@@ -613,7 +626,7 @@ pub(super) fn normalize_entry_lists(
             .into_iter()
             .zip(signatures)
             .map(|(item, signature)| {
-                let value_domain = item
+                let declaration = item
                     .blocks
                     .first()
                     .and_then(block_source)
@@ -623,9 +636,16 @@ pub(super) fn normalize_entry_lists(
                             .domains
                             .remove(&usize::try_from(range.start.get()).unwrap_or(usize::MAX))
                     })
-                    .and_then(DomainDeclarationState::into_unique)
-                    .map(|declaration| declaration.value);
-                entry_definition(item, signature, role, case, value_domain)
+                    .and_then(DomainDeclarationState::into_unique);
+                let mut definition = entry_definition(item, signature, role, case, None);
+                if let Some(declaration) = declaration {
+                    if matches!(declaration.value, ValueDomain::Choices { .. }) && !definition.has_value_choices() {
+                        domain_diagnostic(diagnostics, declaration.source, "choices requires nonempty direct semantic children of role=value; the declared domain was omitted".to_owned());
+                    } else {
+                        definition.identity.as_mut().expect("a declared entry has an identity").value_domain = Some(declaration.value);
+                    }
+                }
+                definition
             })
             .collect();
         *block = Block::DefinitionList {

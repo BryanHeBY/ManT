@@ -373,19 +373,32 @@ fn collect_section_entries(
 
 fn entries_in_blocks(blocks: &[Block]) -> Vec<SemanticEntry> {
     let mut entries = Vec::new();
+    visit_child_definitions(blocks, &mut |item| {
+        if let Some(entry) = entry_from_definition(item) {
+            entries.push(entry);
+        }
+    });
+    entries
+}
+
+/// Visit direct semantic children through transparent structural containers.
+/// An entry's description belongs to that child, not to the current parent.
+fn visit_child_definitions(blocks: &[Block], visit: &mut impl FnMut(&DefinitionItem)) {
     for block in blocks {
         match block {
             Block::DefinitionList { items, .. } => {
-                entries.extend(items.iter().filter_map(entry_from_definition));
+                for item in items.iter().filter(|item| item.identity.is_some()) {
+                    visit(item);
+                }
             }
             Block::List { items, .. } => {
                 for item in items {
-                    entries.extend(entries_in_blocks(&item.blocks));
+                    visit_child_definitions(&item.blocks, visit);
                 }
             }
             Block::Table { rows, .. } => {
                 for cell in rows.iter().flat_map(|row| &row.cells) {
-                    entries.extend(entries_in_blocks(&cell.blocks));
+                    visit_child_definitions(&cell.blocks, visit);
                 }
             }
             Block::Paragraph { .. }
@@ -396,7 +409,26 @@ fn entries_in_blocks(blocks: &[Block]) -> Vec<SemanticEntry> {
             | Block::Unsupported { .. } => {}
         }
     }
-    entries
+}
+
+impl DefinitionItem {
+    /// Whether the direct semantic children form a nonempty set of values.
+    ///
+    /// Uses the same ownership walk as [`SemanticIndex`], without building or
+    /// cloning entries. Deeper descendants of a child are not sibling choices.
+    #[must_use]
+    pub fn has_value_choices(&self) -> bool {
+        let mut found = false;
+        let mut only_values = true;
+        visit_child_definitions(&self.description, &mut |item| {
+            found = true;
+            only_values &= item
+                .identity
+                .as_ref()
+                .is_some_and(|identity| identity.role == DefinitionRole::Value);
+        });
+        found && only_values
+    }
 }
 
 fn entry_from_definition(item: &DefinitionItem) -> Option<SemanticEntry> {
@@ -548,6 +580,54 @@ mod tests {
             inline_term: false,
             spacing_before_lines: None,
         }
+    }
+
+    #[test]
+    fn choice_validation_uses_direct_entry_ownership_through_containers() {
+        let list = |item| Block::DefinitionList {
+            items: vec![item],
+            compact: true,
+            layout: LayoutHint::default(),
+            source: None,
+        };
+        let grandchild = definition(
+            "command-child",
+            DefinitionRole::Command,
+            &["child"],
+            &["child"],
+            Vec::new(),
+        );
+        let value = definition(
+            "value-auto",
+            DefinitionRole::Value,
+            &["auto"],
+            &["auto"],
+            vec![list(grandchild)],
+        );
+        assert!(!value.has_value_choices());
+        let parent = definition(
+            "option-color",
+            DefinitionRole::Option,
+            &["--color"],
+            &["--color WHEN"],
+            vec![Block::List {
+                kind: crate::ListKind::Bullet,
+                start: None,
+                compact: true,
+                items: vec![crate::ListItem {
+                    blocks: vec![list(value)],
+                }],
+                layout: LayoutHint::default(),
+                source: None,
+            }],
+        );
+        assert!(parent.has_value_choices());
+        let entry = entry_from_definition(&parent).unwrap();
+        assert_eq!(
+            entry.value_domain,
+            Some(ValueDomain::Choices { exhaustive: false })
+        );
+        assert_eq!(entry.children[0].children[0].kind, EntryKind::Command);
     }
 
     #[test]

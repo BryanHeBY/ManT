@@ -17,6 +17,93 @@ use crate::{
 use super::{parse_document, parse_markdown};
 
 #[test]
+fn declared_choice_domains_require_values_and_preserve_exhaustiveness() {
+    for (policy, exhaustive) in [("exhaustive", true), ("open", false)] {
+        for newline in ["\n", "\r\n"] {
+            let source = format!("# Tool\n\n<!-- mant:entries role=option case=sensitive -->\n-\n  `--color WHEN`: Color policy.\n\n  <!-- mant:domain choices={policy} -->\n\n  <!-- mant:entries role=value case=sensitive -->\n  - `auto`: Automatic.\n  - `never`: Disabled.\n").replace('\n', newline);
+            let parsed = parse_markdown(&source, None).unwrap();
+            assert!(
+                parsed.document.diagnostics.is_empty(),
+                "{:?}",
+                parsed.document.diagnostics
+            );
+            let index = mant_ir::SemanticIndex::build(&parsed.document);
+            assert_eq!(
+                index.root()[0].value_domain,
+                Some(mant_ir::ValueDomain::Choices { exhaustive })
+            );
+            assert_eq!(index.root()[0].children.len(), 2);
+        }
+    }
+}
+
+#[test]
+fn invalid_choices_do_not_turn_into_an_exhaustive_claim() {
+    for (declaration, children) in [
+        ("choices=exhaustive", ""),
+        (
+            "choices=exhaustive",
+            "\n  <!-- mant:entries role=command case=sensitive -->\n  - `auto`: A command, not a value.\n",
+        ),
+        ("choices=yes", ""),
+        ("choices=open choices=exhaustive", ""),
+        ("choices=exhaustive entries=values.md roles=value", ""),
+        ("choices=exhaustive roles=value", ""),
+    ] {
+        let source = format!(
+            "# Tool\n\n<!-- mant:entries role=option case=sensitive -->\n- `--color WHEN`: Color policy.\n\n  <!-- mant:domain {declaration} -->\n{children}"
+        );
+        let parsed = parse_markdown(&source, None).unwrap();
+        assert!(
+            parsed
+                .document
+                .diagnostics
+                .iter()
+                .any(|finding| finding.code.as_deref() == Some("markdown.semantic-value-domain")),
+            "{source}"
+        );
+        let index = mant_ir::SemanticIndex::build(&parsed.document);
+        assert_eq!(index.root().len(), 1);
+        assert_eq!(index.root()[0].value_domain, None);
+    }
+}
+
+#[test]
+fn ambiguous_choice_claims_leave_only_independent_open_child_inference() {
+    let parsed = parse_markdown("# Tool\n\n<!-- mant:entries role=option case=sensitive -->\n- `--color WHEN`: Color policy.\n\n  <!-- mant:domain choices=exhaustive -->\n  <!-- mant:domain entries=other.md roles=value -->\n\n  <!-- mant:entries role=value case=sensitive -->\n  - `auto`: Automatic.\n", None).unwrap();
+    assert!(
+        parsed
+            .document
+            .diagnostics
+            .iter()
+            .any(|finding| finding.code.as_deref() == Some("markdown.semantic-value-domain"))
+    );
+    assert_eq!(
+        mant_ir::SemanticIndex::build(&parsed.document).root()[0].value_domain,
+        Some(mant_ir::ValueDomain::Choices { exhaustive: false })
+    );
+}
+
+#[test]
+fn shared_ir_validation_rejects_a_producer_choices_claim_without_values() {
+    let mut document = parse_markdown("# Tool\n\n<!-- mant:entries role=option case=sensitive -->\n- `--color WHEN`: Color policy.\n", None).unwrap().document;
+    let Block::DefinitionList { items, .. } = &mut document.blocks[0] else {
+        panic!("definition")
+    };
+    items[0].identity.as_mut().unwrap().value_domain =
+        Some(mant_ir::ValueDomain::Choices { exhaustive: true });
+    let findings = mant_ir::validate_document(&document);
+    assert!(
+        findings
+            .iter()
+            .any(|finding| finding.code.as_deref() == Some("ir.invalid-entry-choices"))
+    );
+    assert!(mant_ir::is_semantic_completeness_diagnostic(
+        "ir.invalid-entry-choices"
+    ));
+}
+
+#[test]
 fn declared_forms_are_separate_from_alias_groups() {
     let parsed = parse_markdown("# Tool\n\n<!-- mant:entries role=option case=sensitive -->\n- `-o FILE`, `--output FILE` | `--output=FILE`: Write output.\n", None).unwrap();
     assert!(
