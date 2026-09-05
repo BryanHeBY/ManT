@@ -259,10 +259,13 @@ pub(crate) fn inspect_installed_identity(path: &Path, name: &str) -> Result<(Str
     if metadata.file_type().is_symlink() || !metadata.file_type().is_file() {
         return Err("source metadata is not a regular file".to_owned());
     }
-    let file = fs::File::open(metadata_path)
-        .map_err(|error| format!("could not open source metadata: {error}"))?;
-    let text = crate::bounded::read_utf8(file, MAX_METADATA_BYTES, "source metadata")
-        .map_err(|error| error.to_string())?;
+    let text = crate::bounded::read_file_utf8(
+        &metadata_path,
+        MAX_METADATA_BYTES,
+        "source metadata",
+        false,
+    )
+    .map_err(|error| error.to_string())?;
     let identity = toml::from_str::<InstalledSourceIdentity>(&text)
         .map_err(|error| format!("source metadata identity is invalid: {error}"))?;
     if identity.source != name {

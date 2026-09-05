@@ -193,9 +193,7 @@ pub(crate) fn read_source_metadata(directory: &Path) -> Result<SourceMetadata, S
     if metadata.file_type().is_symlink() || !metadata.file_type().is_file() {
         return Err("source metadata is not a regular file".to_owned());
     }
-    let file =
-        fs::File::open(path).map_err(|error| format!("could not open source metadata: {error}"))?;
-    let text = crate::bounded::read_utf8(file, MAX_METADATA_BYTES, "source metadata")
+    let text = crate::bounded::read_file_utf8(&path, MAX_METADATA_BYTES, "source metadata", false)
         .map_err(|error| error.to_string())?;
     toml::from_str(&text).map_err(|error| format!("source metadata is invalid: {error}"))
 }

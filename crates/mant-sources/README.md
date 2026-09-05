@@ -66,6 +66,12 @@ remain portable. Discovery, doctor, metadata reads, and update fast paths share
 the same physical managed-root gate, so a linked cache cannot bypass the
 installation boundary.
 
+Configuration and metadata readers reject non-regular files before opening
+and validate opened handles before bounded UTF-8 reads. Unix opens are
+nonblocking, so a FIFO cannot wait for a writer during registry discovery or
+maintenance. User configuration may link to a regular file; managed metadata
+continues to reject leaf symlinks, including at the Unix open boundary.
+
 With `update` enabled, Git and archive acquisition share resource budgets,
 staging, and one atomic activation transaction. Git uses a no-checkout shallow
 clone before materializing only the configured path; Unix requests a blobless

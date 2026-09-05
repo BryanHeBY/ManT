@@ -12,6 +12,12 @@ that crate was not published for that change.
 
 ## Unreleased
 
+### mant-sources (next release)
+
+- Reject FIFO and other non-regular configuration/metadata inputs without
+  blocking source discovery, doctor or updates. Preserve user configuration
+  symlinks while rejecting managed metadata links at the Unix open boundary.
+
 ### mant-ir 0.11.0
 
 - Share direct semantic-child ownership between indexing and choice-domain

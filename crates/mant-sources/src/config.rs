@@ -4,7 +4,7 @@ use std::{
     collections::BTreeMap,
     env,
     ffi::{OsStr, OsString},
-    fmt, fs, io,
+    fmt, io,
     path::{Component, Path, PathBuf},
 };
 
@@ -372,7 +372,7 @@ fn validate_relative_selector(value: &str, field: &str, allow_dot: bool) -> Resu
 }
 
 fn read_bounded_utf8(path: &Path, limit: u64) -> io::Result<String> {
-    crate::bounded::read_utf8(fs::File::open(path)?, limit, "file")
+    crate::bounded::read_file_utf8(path, limit, "file", true)
 }
 
 #[cfg(test)]
