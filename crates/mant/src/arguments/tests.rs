@@ -10,6 +10,8 @@ use super::{
     SchemaContract, parse, parse_process, requested_color,
 };
 
+mod manual_coverage;
+
 fn args(values: &[&str]) -> Vec<String> {
     values.iter().map(ToString::to_string).collect()
 }

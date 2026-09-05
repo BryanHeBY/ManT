@@ -69,6 +69,15 @@ production TLDR parser's output, so Unix and Windows verification catch drift.
 The generated constants are included in the published crate; installed users
 need neither the repository manual nor a generator to build or display help.
 
+The repository's CLI manual-coverage test also compares clap's public option
+metadata (including generated help/version flags and visible aliases) with
+the self-manual's semantic entries. Every spelling must uniquely explain the
+same case-sensitive option as its aliases, and obsolete options must not remain
+in the manual. This is a checkout-only corpus check because published crates
+omit repository manuals; the coverage checker's synthetic regressions still
+run against packaged sources. Add or change the authoritative entry whenever
+the public CLI changes, rather than extending a separate option allowlist.
+
 CI uses `--build-profile debug` for the final smoke test because its test and
 Clippy steps have already populated that profile. Local checks keep `release`
 as the default, and tagged publication performs a separate optimized build.
