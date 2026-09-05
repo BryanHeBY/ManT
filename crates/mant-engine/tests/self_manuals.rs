@@ -101,6 +101,17 @@ fn shipped_manual_options_are_addressable_for_agents_and_the_tui() {
         build_outline_with_detail(&query, OutlineDetail::Entries).expect("manual outline");
 
     for expected in [
+        "--document",
+        "--follow-links",
+        "--max-depth",
+        "--max-documents",
+        "--input",
+        "--input-format",
+        "--list",
+        "--find",
+        "--kind",
+        "--doctor",
+        "--dry-run",
         "--manual",
         "--search",
         "--grep",
@@ -112,6 +123,10 @@ fn shipped_manual_options_are_addressable_for_agents_and_the_tui() {
         assert!(
             contains_entry(&outline.nodes, expected),
             "mant.md should expose {expected} as a semantic entry"
+        );
+        assert!(
+            select_explanation(&query, expected).is_ok(),
+            "mant.md must resolve {expected} without ambiguity"
         );
     }
     assert!(select_explanation(&query, "MANT_MANPATH").is_ok());
@@ -128,6 +143,27 @@ fn shipped_manual_options_are_addressable_for_agents_and_the_tui() {
         entry.identity.as_ref().unwrap().names,
         ["--search", "--grep"]
     );
+}
+
+#[test]
+fn self_manual_option_excerpts_retain_examples_and_operational_limits() {
+    let query = query_markdown_text(MANT_MANUAL, None).expect("self manual");
+    for (selector, required) in [
+        ("--document", "mant --document git --document git-lfs"),
+        ("--follow-links", "breadth-first"),
+        ("--max-depth", "defaults to 8"),
+        ("--max-documents", "cannot exceed 256"),
+        ("--input", "standard input"),
+        ("--input-format", "stdin requires"),
+        ("--doctor", "remote freshness was not checked"),
+        ("--dry-run", "Requires --prune-docs"),
+    ] {
+        let excerpt = select_explanation(&query, selector).expect("option entry");
+        assert!(
+            mant_engine::render_excerpt_text(&excerpt).contains(required),
+            "{selector} must retain {required:?} in its own description"
+        );
+    }
 }
 
 #[test]

@@ -182,6 +182,10 @@ that crate was not published for that change.
 
 ### mant 0.11.0
 
+- Make all public CLI options addressable in the self manual, including
+  document-scope, input, discovery, doctor, and dry-run options previously
+  described only in prose or tables. Keep their examples and constraints in
+  the semantic definition returned by explanation and outline queries.
 - Replace the independent help examples with the self-manual's generated,
   embedded TLDR. Both help and no-argument usage end with the quick reference
   followed by optional self-manual commands, styled consistently with help.

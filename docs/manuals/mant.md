@@ -100,14 +100,14 @@ physical paths.
 
 ## Document Discovery
 
-| Invocation | Behavior |
-| --- | --- |
-| `--list` | List documents grouped by configured source or native manual section. |
-| `--find PATTERN` | Filter document names and emit one stable record per match. |
-| `--kind KIND` | Restrict discovery to `markdown` or `manual`. |
-| `--source SOURCE` | Restrict Markdown discovery to one configured source. |
-| `--man-section MAN_SECTION` | Restrict discovery to one exact native manual category. |
-| `--display direct` | Print `--list` or `--find` text directly even on a terminal. |
+<!-- mant:entries role=option case=sensitive -->
+- `--list`: List documents grouped by configured source or native manual section.
+- `--find PATTERN`: Filter document names and emit one stable record per match. Matching defaults to a case-insensitive literal substring; combine `--regex` and `--case` to change matching, and `--limit` and `--offset` for pagination.
+- `--kind KIND`: Restrict discovery to `markdown` or `manual`. It applies to `--list` and `--find`.
+
+Use `--source SOURCE` to restrict Markdown discovery to one configured source,
+or `--man-section MAN_SECTION` for one native manual category.
+`--display direct` prints discovery text without the interactive pager.
 
 Discovery uses a case-insensitive literal substring by default. `--find` also
 accepts `--regex` and `--case`; `--limit` and `--offset` apply deterministic
@@ -138,7 +138,11 @@ mant --find '^git' --regex --kind manual
 mant --list --man-section 3 --format json
 ```
 
-## Input
+## Input {#input-section}
+
+<!-- mant:entries role=option case=sensitive -->
+- `--input PATH`: Read one explicit Markdown or roff file, or use `-` for standard input. Physical filesystem paths are never inferred from positional document selectors. Stdin requires an explicit `--input-format markdown` or `--input-format roff`. Direct file input does not follow redirect-only `.so` pages; those require an indexed MANPATH root.
+- `--input-format FORMAT`: Select `auto`, `markdown`, or `roff` for `--input`. Files default to `auto`, which selects the parser from the filename suffix; stdin requires `markdown` or `roff` explicitly. The roff loader accepts plain, gzip, and zstd sources and detects compression safely.
 
 Input is resolved before parsing. An ordinary selector first checks the user's
 hierarchical `documents` tree. Configured installed sources then compete with
@@ -164,12 +168,6 @@ cannot be combined with `--source`. `--manual` also excludes the independent
 quick-reference channel; `--man-section` alone does not. A manual category is
 distinct from a heading or other node inside the loaded document, which is
 selected with `--node`.
-
-`--input-format auto|markdown|roff` defaults to `auto` for files and infers the
-parser from the filename suffix. The roff loader accepts plain, gzip, and zstd
-sources and detects their compression safely. Stdin requires `markdown` or
-`roff` explicitly. Direct input may use any OS path but does not follow
-redirect-only `.so` pages; those require an indexed MANPATH root.
 
 Windows document packages should retain executable suffixes in canonical
 filenames, such as `cargo.exe.md`. An extensionless query such as `mant cargo`
@@ -216,6 +214,7 @@ Windows automatically checks `%APPDATA%\ManT\man`, then the compatible
 `%APPDATA%\ManT\man.conf` can provide persistent roots without requiring a
 shell profile.
 
+<!-- mant:entries role=option case=sensitive -->
 - `--man-section MAN_SECTION`: Select the full document from one exact native
   manual category such as `1` or `3p`. In an ordinary combined query, a selected
   section `1` or `8` family page may still receive its command quick reference.
@@ -763,22 +762,26 @@ copy. Terminal setup is restored on normal exit, errors, and Rust panics.
 
 ## Document Selection
 
-`--document SELECTOR` is repeatable and supplies an ordered set of initial registered documents. It is the multi-document form of the ordinary positional selector:
+<!-- mant:entries role=option case=sensitive -->
+- `--document SELECTOR`: Supply an ordered set of initial registered documents by repeating this option. It is the multi-document form of the ordinary positional selector.
 
-```sh
-mant --document git --document git-lfs --search worktree --follow-links --max-depth 2 --max-documents 32
-mant --document git --document git-config --explain core.worktree --follow-links --max-depth 1 --max-documents 16
-```
+  ```sh
+  mant --document git --document git-lfs --search worktree --follow-links --max-depth 2 --max-documents 32
+  mant --document git --document git-config --explain core.worktree --follow-links --max-depth 1 --max-documents 16
+  ```
 
-`--follow-links` expands either one positional selector or the repeated `--document` set through typed manual references and same-source Markdown document links. Expansion is breadth-first in initial-document and source-link order. Exact logical addresses deduplicate cycles and diamonds. Ordinary prose resembling `name(section)`, filename prefixes such as `git-*`, page-local links, and external links never create graph edges.
+- `--follow-links`: Expand either one positional selector or the repeated `--document` set through typed manual references and same-source Markdown document links. Expansion is breadth-first in initial-document and source-link order. Exact logical addresses deduplicate cycles and diamonds. Ordinary prose resembling `name(section)`, filename prefixes such as `git-*`, page-local links, and external links never create graph edges. Bound expansion with `--max-depth` and `--max-documents`.
+- `--max-depth DEPTH`: Limit followed link edges from an initial document; defaults to 8. Zero loads only initial documents, while one also loads their one-hop neighbours. Requires `--follow-links`.
+- `--max-documents COUNT`: Limit distinct loaded documents, including initial documents; defaults to 64 and cannot exceed 256. Requires `--follow-links`. Links excluded by this bound remain visible in `frontier`.
 
-`--max-depth` limits the number of followed edges from an initial document and defaults to 8: zero loads only the initial documents, while one also loads their one-hop neighbours. `--max-documents` includes initial documents, defaults to 64, and cannot exceed 256. Both limits require `--follow-links`. Scope resolution also retains at most 64 MiB of normalized semantic content. A linked page that would exceed that aggregate budget remains visible in `frontier` with a `max-content-bytes` reason; an initial document excluded by the same budget appears in `unresolved` and the request fails only if no initial document remains readable. JSON results distinguish missing initial documents and links through `unresolved.from`, and retain every logical link excluded by a depth, document, or content bound. Search applies one global `--limit` and `--offset` over breadth-first document order; document groups contain coordinate descriptors and globally numbered hits but no competing local cursors. Explain checks each document independently, so the same option in two manuals is two qualified results rather than a cross-document ambiguity. A document with neither an entry nor a literal occurrence contributes to `missed`; when every document misses, text output points to a complete entries outline and then to `--search`. A prose-only occurrence is instead a qualified failure containing its outline node and line so CLI callers can use `--search` and MCP callers can use `mant_search`.
+Scope resolution also retains at most 64 MiB of normalized semantic content. A linked page that would exceed that aggregate budget remains visible in `frontier` with a `max-content-bytes` reason; an initial document excluded by the same budget appears in `unresolved` and the request fails only if no initial document remains readable. JSON results distinguish missing initial documents and links through `unresolved.from`, and retain every logical link excluded by a depth, document, or content bound. Search applies one global `--limit` and `--offset` over breadth-first document order; document groups contain coordinate descriptors and globally numbered hits but no competing local cursors. Explain checks each document independently, so the same option in two manuals is two qualified results rather than a cross-document ambiguity. A document with neither an entry nor a literal occurrence contributes to `missed`; when every document misses, text output points to a complete entries outline and then to `--search`. A prose-only occurrence is instead a qualified failure containing its outline node and line so CLI callers can use `--search` and MCP callers can use `mant_search`.
 
 Multi-document deterministic output supports `--search` and `--explain`. Outline, node, tldr, full Markdown, and man-format output remain single-document operations instead of silently selecting or concatenating pages. `--display tui` opens the first initial document; confirmed text search spans the resolved set, cross-document results participate in history, and the ordinary document finder remains global.
 
+<!-- mant:entries role=option case=sensitive -->
 - `--outline`: Print section topology plus a compact semantic-entry summary for
   each non-empty scope.
-- `--outline-entries MODE|KINDS`: Select `none`, `summary`, `all`, or a
+- `--outline-entries MODE`: Select `none`, `summary`, `all`, or a
   comma-separated list of `command`, `option`, `marker`, `operand`,
   `configuration-key`, `environment-variable`, `variable`, `value`, and
   `term`. A kind filter retains only matching entries and their structural
@@ -891,6 +894,7 @@ mant tar --explain=--exclude
 
 ## Output
 
+<!-- mant:entries role=option case=sensitive -->
 - `--format FORMAT`: Select `markdown`, `text`, `man`, or `json`.
 - `--color WHEN`: Select `auto`, `always`, or `never` for human-readable terminal output.
 - `--display MODE`: Select `auto`, `direct`, `pager`, or `tui`, independently of the content format.
@@ -975,26 +979,27 @@ stdout and stderr apply colour detection independently.
 
 ## Diagnostics
 
-`--doctor` performs an offline, read-only inspection of the effective data root,
-source configuration and installations, registered documents, bundled
-libmandoc, native manual index, conditional Git requirement, and tldr roots. It
-does not create directories or lock files, invoke external programs, access the
-network, update caches, or remove orphaned sources. Suggested repairs name the
-existing explicit maintenance command instead of running it.
-An installed source reported as consistent matches its active local
-configuration, metadata, and recorded document count; this does not claim the
-remote source is current. The corresponding check explicitly says that remote
-freshness was not checked.
+<!-- mant:entries role=option case=sensitive -->
+- `--doctor`: Perform an offline, read-only inspection of the effective data root,
+  source configuration and installations, registered documents, bundled
+  libmandoc, native manual index, conditional Git requirement, and tldr roots. It
+  does not create directories or lock files, invoke external programs, access the
+  network, update caches, or remove orphaned sources. Suggested repairs name the
+  existing explicit maintenance command instead of running it.
+  An installed source reported as consistent matches its active local
+  configuration, metadata, and recorded document count; this does not claim the
+  remote source is current. The corresponding check explicitly says that remote
+  freshness was not checked.
 
-Human-readable text is the default. `--format json` returns the independent
-`mant.doctor/v1` contract; add `--compact` for one-line JSON, and inspect its
-authoritative schema with `mant --schema doctor`. Warnings describe degraded or
-actionable local state and exit successfully. An error means a promised runtime
-capability is broken and exits with status `1`; invalid usage exits with status
-`2`.
+  Human-readable text is the default. `--format json` returns the independent
+  `mant.doctor/v1` contract; add `--compact` for one-line JSON, and inspect its
+  authoritative schema with `mant --schema doctor`. Warnings describe degraded or
+  actionable local state and exit successfully. An error means a promised runtime
+  capability is broken and exits with status `1`; invalid usage exits with status
+  `2`.
 
-Doctor JSON intentionally includes local filesystem paths for diagnosis. It is
-a native CLI interface and is not exposed through the read-only MCP server.
+  Doctor JSON intentionally includes local filesystem paths for diagnosis. It is
+  a native CLI interface and is not exposed through the read-only MCP server.
 
 `--update-tldr` JSON uses the independent `mant.tldr-update/v1` maintenance
 contract. It reports `action` plus optional `cacheDir`, `client`, `output`, and
@@ -1003,6 +1008,7 @@ read-only and cannot invoke this operation.
 
 ## Integration
 
+<!-- mant:entries role=option case=sensitive -->
 - `--request-json`: Read one closed `mant.request/v0.11` or `mant.scope-request/v0.11` object from standard input.
 - `--schema CONTRACT`: Print a generated JSON Schema for `doctor`, `tldr-update`, `request`, `query`, `outline`, `excerpt`, `search`, `scope-request`, `scope-query`, `catalog`, or `all`.
 - `--protocol-version`: Print the exact native protocol versions.
@@ -1069,8 +1075,10 @@ tool, and makes no cross-call snapshot guarantee.
 
 ## Data
 
+<!-- mant:entries role=option case=sensitive -->
 - `--update-docs`: Update Git or direct archive sources declared in `sources.toml` and print a complete JSON report.
 - `--prune-docs`: Explicitly remove installed source directories absent from `sources.toml`; add `--dry-run` to report exact targets without removal.
+- `--dry-run`: Preview the exact targets of `--prune-docs` without removing them. Requires `--prune-docs` and does not apply to source updates.
 - `--update-tldr`: Update through an installed tldr client when available, otherwise through ManT's private cache.
 
 Git-backed document sources require a `git` executable on `PATH`; direct
@@ -1141,6 +1149,7 @@ for the schema and update lifecycle.
 
 ## General
 
+<!-- mant:entries role=option case=sensitive -->
 - `-h`, `--help`: Show command help and exit.
 - `-V`, `--version`: Show the installed ManT version and exit.
 
