@@ -78,6 +78,9 @@ that crate was not published for that change.
 
 ### libmandoc-rs 0.10.0
 
+- Close incomplete root font-macro scopes at EOF without dispatching the
+  synthetic root token as a macro; malformed `.I`, `.B`, `.R`, `.SM`, and
+  `.SB` inputs now report recoverable findings instead of aborting the process.
 - Avoid an upstream assertion when an explicit mdoc `.Tg` precedes an already
   tagged section by preserving the existing section target instead of trying
   to assign it twice.

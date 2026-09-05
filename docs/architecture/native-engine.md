@@ -344,6 +344,13 @@ Unicode-scalar page metadata and no server-side paging state; they omit ASTs,
 schema metadata, physical paths, and ordinary lowering diagnostics. CLI JSON
 remains the structured diagnostic inspection surface.
 
+Parsing runs in the MCP server process on blocking worker threads, with four
+concurrent operations admitted by a semaphore. This is a work/concurrency
+boundary, not process isolation: a native abort would still terminate the
+server. The current design retains this architecture and hardens the shared
+parser with bounded input and expansion, native regression tests, and
+process-level checks that recoverable parse failures leave MCP usable.
+
 ## Layout ownership
 
 Vertical spacing and filled inline flow are normalized before presentation.

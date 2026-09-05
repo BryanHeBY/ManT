@@ -76,6 +76,16 @@ env \
     --package libmandoc-rs --features render --test renderer \
     renderer_address_safety_boundaries
 
+env \
+  CARGO_TARGET_DIR="$sanitizer_target_dir" \
+  LIBMANDOC_RS_ASAN=1 \
+  RUSTFLAGS=-Zsanitizer=address \
+  RUSTDOCFLAGS=-Zsanitizer=address \
+  ASAN_OPTIONS="$sanitizer_options" \
+  cargo +nightly test --locked -Zbuild-std --target "$target" \
+    --package libmandoc-rs --features render \
+    incomplete_root_font_scopes_report_diagnostics_and_reset
+
 archive=$(find "$sanitizer_target_dir/$target/debug/build" \
   -name libmant_mandoc.a -print -quit)
 if [[ -z "$archive" ]]; then
