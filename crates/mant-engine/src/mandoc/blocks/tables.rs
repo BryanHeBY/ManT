@@ -192,7 +192,12 @@ fn lower_table_cell(
         // flattened libmandoc cell text has already discarded request-level
         // font and spacing semantics. Reconstruct from the bounded source
         // block first even when no printable AST siblings escaped the table.
-        let reconstructed = lower_table_text_block(text_block, &semantic_nodes, context);
+        let reconstructed = lower_table_text_block(
+            text_block,
+            &semantic_nodes,
+            context,
+            node.flags.synopsis_pretty,
+        );
         if !reconstructed.is_empty() {
             // libmandoc associates the row with its first physical input
             // line, but an empty `T{ T}` cell can be normalized to an
@@ -301,10 +306,14 @@ fn lower_table_text_block(
     block: &TableTextBlock,
     semantic_nodes: &[&Node],
     context: &LoweringContext<'_>,
+    synopsis: bool,
 ) -> Vec<Inline> {
-    if let Some(recovered) =
-        lower_source_fragment(&block.source, context.macro_set, context.default_name)
-    {
+    if let Some(recovered) = lower_source_fragment(
+        &block.source,
+        context.macro_set,
+        context.default_name,
+        synopsis,
+    ) {
         if !recovered.complete {
             context.warn_unhandled_table_text_block_line(block.start_line);
         }
@@ -358,14 +367,16 @@ mod tests {
 
     #[test]
     fn source_requests_dispatch_to_man_and_mdoc_inline_lowering() {
-        let man = super::lower_source_fragment(".BR git (1)", libmandoc_rs::MacroSet::Man, None)
-            .unwrap()
-            .inlines;
+        let man =
+            super::lower_source_fragment(".BR git (1)", libmandoc_rs::MacroSet::Man, None, false)
+                .unwrap()
+                .inlines;
         assert_eq!(plain_text(&man), "git(1)");
 
-        let mdoc = super::lower_source_fragment(".Xr git 1 ,", libmandoc_rs::MacroSet::Mdoc, None)
-            .unwrap()
-            .inlines;
+        let mdoc =
+            super::lower_source_fragment(".Xr git 1 ,", libmandoc_rs::MacroSet::Mdoc, None, false)
+                .unwrap()
+                .inlines;
         assert_eq!(plain_text(&mdoc), "git(1),");
         assert!(matches!(
             mdoc.first(),

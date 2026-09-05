@@ -55,6 +55,9 @@ that crate was not published for that change.
 
 ### mant-engine 0.11.0
 
+- Render mdoc `.In` as a header reference in prose and as an include directive
+  only at a synopsis source-line start, including recovered table cells.
+
 - Preserve the optional brackets and option/metavariable styling of man `.OP`
   requests inside and outside command synopses.
 

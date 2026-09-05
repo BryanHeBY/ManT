@@ -470,7 +470,15 @@ fn lower_macro_inline(
             value: plain_text(&lowered),
         }],
         Some("In") if !lowered.is_empty() => vec![Inline::Code {
-            value: format!("#include <{}>", plain_text(&lowered)),
+            value: format!(
+                "{}<{}>",
+                if node.flags.synopsis_pretty && node.flags.line_start {
+                    "#include "
+                } else {
+                    ""
+                },
+                plain_text(&lowered)
+            ),
         }],
         Some("Xr" | "MR") => lower_manual_reference(children, default_name, spacing_enabled),
         Some("Lk") => lower_link(children, default_name, false, spacing_enabled),

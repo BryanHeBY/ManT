@@ -20,6 +20,7 @@ pub(in crate::mandoc) fn lower_source_fragment(
     source: &str,
     dialect: MacroSet,
     default_name: Option<&str>,
+    synopsis: bool,
 ) -> Option<RecoveredFragment> {
     let mut requests = 0;
     for line in source.lines() {
@@ -49,6 +50,7 @@ pub(in crate::mandoc) fn lower_source_fragment(
     {
         return Some(fallback());
     }
+    let section = if synopsis { "SYNOPSIS" } else { "DESCRIPTION" };
     let (prefix, format) = match dialect {
         MacroSet::Mdoc => {
             let name = default_name
@@ -58,13 +60,13 @@ pub(in crate::mandoc) fn lower_source_fragment(
                 .replace(['\n', '\r'], " ");
             (
                 format!(
-                    ".Dd January 1, 2000\n.Dt MANT-TABLE 1\n.Os\n.Sh NAME\n.Nm \"{name}\"\n.Nd table fragment\n.Sh DESCRIPTION\n"
+                    ".Dd January 1, 2000\n.Dt MANT-TABLE 1\n.Os\n.Sh NAME\n.Nm \"{name}\"\n.Nd table fragment\n.Sh {section}\n"
                 ),
                 InputFormat::Mdoc,
             )
         }
         MacroSet::Man => (
-            ".TH MANT-TABLE 1\n.SH DESCRIPTION\n".to_owned(),
+            format!(".TH MANT-TABLE 1\n.SH {section}\n"),
             InputFormat::Man,
         ),
         MacroSet::None => return None,
@@ -213,12 +215,12 @@ mod tests {
     #[test]
     fn bounded_recovery_retains_unparsed_tail_and_never_accepts_include_requests() {
         let source = format!(".Op {}tail-marker", "Op ".repeat(2_000));
-        let recovered = lower_source_fragment(&source, MacroSet::Mdoc, None).unwrap();
+        let recovered = lower_source_fragment(&source, MacroSet::Mdoc, None, false).unwrap();
         assert!(!recovered.complete);
         assert!(plain_text(&recovered.inlines).contains("tail-marker"));
         for dialect in [MacroSet::Man, MacroSet::Mdoc] {
-            assert!(lower_source_fragment(".so external.1", dialect, None).is_none());
-            assert!(lower_source_fragment(".TS\nl.\ntext\n.TE", dialect, None).is_none());
+            assert!(lower_source_fragment(".so external.1", dialect, None, false).is_none());
+            assert!(lower_source_fragment(".TS\nl.\ntext\n.TE", dialect, None, false).is_none());
         }
     }
 }

@@ -3842,6 +3842,31 @@ fn restores_alternating_font_arguments_inside_tbl_text_blocks() {
 }
 
 #[test]
+fn mdoc_header_references_require_both_synopsis_and_line_start_for_include() {
+    for section in ["DESCRIPTION", "SYNOPSIS"] {
+        for (request, inline) in [(".In stdio.h", false), (".No See In stdio.h", true)] {
+            for table in [false, true] {
+                let body = if table {
+                    format!(".TS\nl.\nT{{\n{request}\nT}}\n.TE")
+                } else {
+                    request.to_owned()
+                };
+                let source =
+                    format!(".Dd September 5, 2026\n.Dt PROBE 1\n.Os\n.Sh {section}\n{body}\n");
+                let query = crate::query_roff_bytes(source.as_bytes()).unwrap();
+                let text = crate::render_query_text(&query);
+                assert!(text.contains("<stdio.h>"), "{source}: {text}");
+                assert_eq!(
+                    text.contains("#include"),
+                    section == "SYNOPSIS" && !inline,
+                    "{source}: {text}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
 fn man_optional_arguments_keep_brackets_and_argument_styles() {
     for (requests, expected) in [
         (".OP --verbose", "[--verbose]"),

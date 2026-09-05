@@ -190,7 +190,7 @@ The following macros receive dedicated inline treatment:
 | Strong | `Nm`, `Fl`, `Cm`, `Ic`, `Sy` |
 | Emphasis | `Ar`, `Pa`, `Em`, `Va`, `Vt`, `Ft`, `Fa` |
 | Code | `Li` |
-| Include directive | `In` (`#include <header>`) |
+| Header reference | `In` (`<header>` in prose; `#include <header>` at the start of a synopsis source line) |
 | Manual link | `Xr` |
 | External or email link | `Lk`, `Mt` |
 | Section link | `Sx` |
