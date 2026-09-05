@@ -57,8 +57,8 @@ impl From<CatalogKindMode> for CatalogDocumentKind {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum QueryPresentation {
     /// Use the interactive reader when the process owns a terminal, otherwise
-    /// retain the conventional Markdown output.
-    Auto,
+    /// render text with the requested colour policy.
+    Auto(ColorMode),
     /// Require the Ratatui reader and a usable terminal.
     Interactive,
     /// Render a deterministic representation to standard output, with
@@ -679,7 +679,7 @@ struct Cli {
     )]
     mcp: bool,
 
-    /// Output format. Full content defaults to markdown; outlines and search default to text.
+    /// Output format. Document queries default to text; interactive full reading opens the TUI.
     #[arg(long, value_name = "FORMAT", value_enum, help_heading = "Output")]
     format: Option<QueryFormat>,
 

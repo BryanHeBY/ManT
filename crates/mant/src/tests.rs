@@ -103,7 +103,7 @@ fn terminal_capabilities_resolve_interactivity_and_text_colour() {
         redirected_query,
         Command::Query {
             presentation: QueryPresentation::Output {
-                format: QueryFormat::Markdown,
+                format: QueryFormat::Text,
                 color: ColorMode::Never
             },
             ..
@@ -201,12 +201,54 @@ fn dumb_term_uses_copyable_output_for_automatic_queries() {
         command,
         Command::Query {
             presentation: QueryPresentation::Output {
-                format: QueryFormat::Markdown,
+                format: QueryFormat::Text,
                 color: ColorMode::Never,
             },
             ..
         }
     ));
+}
+
+#[test]
+fn automatic_full_text_retains_explicit_and_detected_colour() {
+    for (flags, input, output, capable_color, expected) in [
+        (vec![], false, true, true, ColorMode::Always),
+        (vec![], true, false, true, ColorMode::Never),
+        (vec![], false, true, false, ColorMode::Never),
+        (
+            vec!["--color", "always"],
+            true,
+            false,
+            false,
+            ColorMode::Always,
+        ),
+        (
+            vec!["--color", "never"],
+            false,
+            true,
+            true,
+            ColorMode::Never,
+        ),
+    ] {
+        let mut args = vec!["demo".to_owned()];
+        args.extend(flags.into_iter().map(str::to_owned));
+        let mut command = arguments::parse(&args).expect("full query");
+        resolve_process_presentation(
+            &mut command,
+            TerminalCapabilities {
+                input,
+                output,
+                color: capable_color,
+                kind: TerminalKind::Capable,
+            },
+        )
+        .expect("resolve text colour");
+        assert!(matches!(command, Command::Query {
+            presentation: QueryPresentation::Output {
+                format: QueryFormat::Text, color,
+            }, ..
+        } if color == expected));
+    }
 }
 
 #[test]
@@ -722,7 +764,7 @@ fn direct_queries_render_outlines_and_selected_nodes_in_requested_formats() {
 #[test]
 fn markdown_is_clean_by_default_and_preserves_anchors_on_request() {
     let host = FakeHost::with_manual();
-    let (status, output, diagnostics) = invoke(&["demo"], b"", &host);
+    let (status, output, diagnostics) = invoke(&["demo", "--format", "markdown"], b"", &host);
     assert_eq!(status, 0);
     assert!(!output.contains("<a "));
     assert!(diagnostics.is_empty());

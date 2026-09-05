@@ -47,6 +47,77 @@ fn run_with_registered_documents(
 
 const PROTOCOL_REFERENCE: &str = include_str!("../../../docs/manuals/mant-protocol.md");
 
+fn run_text_input(arguments: &[&str], input: &str) -> std::process::Output {
+    let mut child = Command::new(executable())
+        .args(arguments)
+        .env_remove("NO_COLOR")
+        .env_remove("CLICOLOR_FORCE")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("start text query");
+    child
+        .stdin
+        .take()
+        .expect("stdin")
+        .write_all(input.as_bytes())
+        .expect("write query input");
+    child.wait_with_output().expect("finish query")
+}
+
+#[test]
+fn default_file_stdin_and_request_outputs_are_text() {
+    let path = std::env::temp_dir().join(format!("mant-text-default-{}.md", std::process::id()));
+    let source = "# Text Default\n\n## Options\n\n<!-- mant:entries role=option -->\n- `--flag`: A **strong** description.\n\n```sh\necho example\n```\n";
+    fs::write(&path, source).expect("write text fixture");
+    let path_text = path.to_str().expect("UTF-8 fixture path");
+    for (arguments, input) in [
+        (vec!["--input", path_text], String::new()),
+        (
+            vec!["--input", "-", "--input-format", "markdown"],
+            source.to_owned(),
+        ),
+        (
+            vec!["--request-json"],
+            serde_json::json!({
+                "schema": "mant.request/v0.11",
+                "input": {"kind": "file", "path": path_text, "format": "markdown"},
+                "view": {"kind": "full"}
+            })
+            .to_string(),
+        ),
+    ] {
+        let default = run_text_input(&arguments, &input);
+        assert!(default.status.success(), "{:?}", default.stderr);
+        assert!(default.stderr.is_empty());
+        let body = String::from_utf8_lossy(&default.stdout);
+        assert!(body.contains("A strong description."), "{body}");
+        assert!(body.contains("echo example"));
+        assert!(!body.contains("```"));
+        assert!(!body.contains('\x1b'));
+        let mut explicit = arguments.clone();
+        explicit.extend(["--format", "text"]);
+        assert_eq!(default.stdout, run_text_input(&explicit, &input).stdout);
+        let mut markdown = arguments;
+        markdown.extend(["--format", "markdown", "--color", "always"]);
+        let markdown = run_text_input(&markdown, &input);
+        assert!(markdown.status.success());
+        let body = String::from_utf8_lossy(&markdown.stdout);
+        assert!(body.contains("**strong**"));
+        assert!(body.contains("```sh"));
+        assert!(!body.contains('\x1b'));
+    }
+    for extra in [vec![], vec!["--format", "text"]] {
+        let mut args = vec!["--input", path_text, "--color", "always"];
+        args.extend(extra);
+        let colored = run_text_input(&args, "");
+        assert!(colored.status.success());
+        assert!(colored.stdout.contains(&0x1b));
+    }
+    fs::remove_file(path).expect("remove text fixture");
+}
+
 #[test]
 fn help_groups_the_public_query_surface() {
     let output = Command::new(executable())

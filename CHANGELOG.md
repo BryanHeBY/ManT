@@ -182,6 +182,12 @@ that crate was not published for that change.
 
 ### mant 0.11.0
 
+- Default all CLI document queries to text, including redirected full reading,
+  stdin documents, and request JSON. Use `--format markdown` for the former full
+  output default; `--preserve-anchors` still selects Markdown explicitly.
+  Share full/excerpt text colour presentation without changing visible layout.
+  Automatic TUI reading, MCP presentations, and JSON maintenance reports remain
+  unchanged.
 - Advertise and accept the v0.11 native protocol family required by the new
   fragment-alias wire model.
 

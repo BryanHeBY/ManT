@@ -15,7 +15,7 @@ fn args(values: &[&str]) -> Vec<String> {
 }
 
 #[test]
-fn defaults_direct_queries_to_markdown() {
+fn defaults_direct_queries_to_automatic_text_reading() {
     assert_eq!(
         parse(&args(&["git"])).expect("query"),
         Command::Query {
@@ -28,12 +28,38 @@ fn defaults_direct_queries_to_markdown() {
                 },
                 view: QueryView::Full {},
             }),
-            presentation: QueryPresentation::Auto,
+            presentation: QueryPresentation::Auto(ColorMode::Auto),
             pretty: true,
             policy: QueryPolicy::Combined,
             preserve_anchors: false,
         }
     );
+}
+
+#[test]
+fn noninteractive_input_modes_share_the_text_default() {
+    for values in [
+        vec!["--input", "-", "--input-format", "markdown"],
+        vec!["--request-json"],
+        vec!["--document", "git", "--explain=--help"],
+        vec!["git", "--outline"],
+        vec!["git", "--node", "1"],
+        vec!["git", "--search", "help"],
+    ] {
+        assert!(
+            matches!(
+                parse(&args(&values)).expect("text query"),
+                Command::Query {
+                    presentation: QueryPresentation::Output {
+                        format: QueryFormat::Text,
+                        color: ColorMode::Auto,
+                    },
+                    ..
+                }
+            ),
+            "{values:?}"
+        );
+    }
 }
 
 #[test]
@@ -986,7 +1012,7 @@ fn help_is_side_effect_free_and_the_option_terminator_preserves_a_name() {
                 },
                 view: QueryView::Full {},
             }),
-            presentation: QueryPresentation::Auto,
+            presentation: QueryPresentation::Auto(ColorMode::Auto),
             pretty: true,
             policy: QueryPolicy::Combined,
             preserve_anchors: false,

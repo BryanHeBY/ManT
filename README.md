@@ -212,7 +212,7 @@ mant --document git --document git-lfs --explain=--work-tree
 
 With `--ui`, the first initial document opens normally and confirmed text search spans the resolved set. Selecting a match in another document uses the existing back/forward history. The document finder remains global rather than being restricted to the query set.
 
-Partial document queries default to text; Markdown and JSON remain explicit
+All document queries default to text; Markdown and JSON remain explicit
 alternatives. Full output supports Markdown, text, and JSON. Native roff manuals
 additionally support `--format man`, which emits manual-only plain text without
 tldr content:

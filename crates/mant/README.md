@@ -109,8 +109,11 @@ mant --document git --document git-lfs --explain=--work-tree
 
 Repeated `--document` values form an ordered query set. `--follow-links` adds typed native-manual and same-source Markdown destinations with bounded breadth-first traversal. Search uses one global offset/`nextOffset` and globally unique hit ordinals across the set; document groups carry no local pagination state. Explain returns exact per-document matches and gives outline/search guidance when every document misses. Interactive search spans the same pre-resolved set while ordinary document discovery remains global.
 
-Partial document queries default to text and can explicitly select Markdown or
-JSON. A complete native roff manual also supports `--format man` for manual-only
+All document queries, including `--request-json`, default to text and can
+explicitly select Markdown or JSON. Full reading still opens the TUI on an
+interactive terminal; redirected output is plain text. `--preserve-anchors`
+explicitly selects Markdown unless a format is given. A complete native roff
+manual also supports `--format man` for manual-only
 plain text without tldr content.
 The default outline returns section topology plus compact entry coverage.
 `--outline-entries none|summary|all|KINDS` controls expansion, while
@@ -124,7 +127,8 @@ guess from display titles, and rediscover after the underlying document
 changes. Entry paths remain source-order coordinates; generated native IDs
 avoid source-order collision suffixes and unrelated-section renumbering.
 Text projections use semantic ANSI styles on capable terminals and remain plain
-under redirection; Markdown, JSON, man, request JSON, and MCP never contain ANSI.
+under redirection by default; `--color always` explicitly forces text styling.
+Markdown, JSON, man, and MCP never contain ANSI presentation styling.
 Terminal-bound Markdown masks control characters in dynamic document identities,
 while redirected Markdown preserves those data bytes exactly.
 Search results carry reusable outline selectors and exact generated-Markdown

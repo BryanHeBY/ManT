@@ -385,61 +385,30 @@ fn normalize_presentation(
     tldr: bool,
     color: Option<ColorMode>,
 ) -> QueryPresentation {
-    let view = match source {
-        QuerySource::Arguments(request) => Some(&request.view),
-        QuerySource::ScopeArguments { view, .. } => {
-            return if ui {
-                QueryPresentation::Interactive
-            } else if let Some(format) = format {
-                QueryPresentation::Output {
-                    format,
-                    color: color.unwrap_or_default(),
-                }
-            } else if view.is_none() {
-                QueryPresentation::Auto
-            } else {
-                QueryPresentation::Output {
-                    format: QueryFormat::Text,
-                    color: color.unwrap_or_default(),
-                }
-            };
-        }
-        QuerySource::InputStdin { view, .. } => Some(view),
-        QuerySource::StdinJson => None,
-    };
-    let default_format = view.map_or(QueryFormat::Markdown, |view| {
-        if matches!(view, QueryView::Full {}) {
-            QueryFormat::Markdown
-        } else {
-            QueryFormat::Text
-        }
-    });
+    let color = color.unwrap_or_default();
     if ui {
         QueryPresentation::Interactive
     } else if let Some(format) = format {
-        QueryPresentation::Output {
-            format,
-            color: color.unwrap_or_default(),
-        }
+        QueryPresentation::Output { format, color }
     } else if tldr {
-        QueryPresentation::Tldr(color.unwrap_or_default())
+        QueryPresentation::Tldr(color)
     } else if preserve_anchors {
         QueryPresentation::Output {
             format: QueryFormat::Markdown,
-            color: color.unwrap_or_default(),
+            color,
         }
     } else if matches!(
         source,
         QuerySource::Arguments(QueryRequest {
             view: QueryView::Full {},
             ..
-        })
+        }) | QuerySource::ScopeArguments { view: None, .. }
     ) {
-        QueryPresentation::Auto
+        QueryPresentation::Auto(color)
     } else {
         QueryPresentation::Output {
-            format: default_format,
-            color: color.unwrap_or_default(),
+            format: QueryFormat::Text,
+            color,
         }
     }
 }

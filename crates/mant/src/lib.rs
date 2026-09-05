@@ -77,7 +77,7 @@ struct QueryOutput {
 /// Terminal capabilities consulted only by the OS process entry point.
 ///
 /// The injectable [`run`] boundary intentionally remains deterministic and
-/// treats `Auto` as conventional Markdown output.
+/// treats `Auto` as text output without automatic terminal styling.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct TerminalCapabilities {
     input: bool,
@@ -329,15 +329,19 @@ fn resolve_process_presentation(
         return Ok(());
     };
     match *presentation {
-        QueryPresentation::Auto
+        QueryPresentation::Auto(_)
             if terminal.input && terminal.output && terminal.kind == TerminalKind::Capable =>
         {
             *presentation = QueryPresentation::Interactive;
         }
-        QueryPresentation::Auto => {
+        QueryPresentation::Auto(color) => {
             *presentation = QueryPresentation::Output {
-                format: QueryFormat::Markdown,
-                color: ColorMode::Never,
+                format: QueryFormat::Text,
+                color: match color {
+                    ColorMode::Auto if terminal.output && terminal.color => ColorMode::Always,
+                    ColorMode::Auto => ColorMode::Never,
+                    explicit => explicit,
+                },
             };
         }
         QueryPresentation::Interactive
@@ -669,7 +673,7 @@ fn execute_query(
         );
     }
     let (format, color) = match output.presentation {
-        QueryPresentation::Auto => (QueryFormat::Markdown, ColorMode::Never),
+        QueryPresentation::Auto(color) => (QueryFormat::Text, color),
         QueryPresentation::Output { format, color } => (format, color),
         QueryPresentation::Interactive => {
             return Err(Failure::usage(
@@ -723,7 +727,7 @@ fn execute_scope_request(
     let response = host.query_scope(request)?;
     let (format, color) = match output.presentation {
         QueryPresentation::Output { format, color } => (format, color),
-        QueryPresentation::Auto => (QueryFormat::Markdown, ColorMode::Never),
+        QueryPresentation::Auto(color) => (QueryFormat::Text, color),
         QueryPresentation::Interactive | QueryPresentation::Tldr(_) => {
             return Err(Failure::usage(
                 "scope request JSON supports only deterministic output",

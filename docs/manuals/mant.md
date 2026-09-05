@@ -64,7 +64,7 @@ model.
 Local Markdown enters the same model, so terminal navigation, outlines,
 excerpts, search, Markdown/text/JSON output, and MCP tools behave consistently
 across both sources. A full query opens the interactive reader when stdin and
-stdout are terminals; redirection falls back to clean Markdown. `--ui` and
+stdout are terminals; redirection falls back to plain text. `--ui` and
 `--format` make either behavior explicit.
 
 ## Semantic Document Model
@@ -893,18 +893,22 @@ mant tar --explain=--exclude
 Clean Markdown output omits internal HTML anchors by default. The `man` format
 applies only to a complete native roff manual and emits plain manual content
 without an external tldr preface; it rejects Markdown documents and partial
-document views. Outline, node, explanation, and search projections default to
-text; request Markdown explicitly when its structure is useful. JSON must be
-selected explicitly for document queries. `--compact` removes indentation from
+document views. All document queries default to text, including full documents,
+outlines, nodes, explanations, searches, and queries supplied by `--request-json`.
+Full interactive reading still opens the TUI; piped input never opens it
+automatically. Select `--format markdown` when Markdown structure is useful;
+`--preserve-anchors` also explicitly selects Markdown if no format is given.
+JSON must be selected explicitly for document queries. Maintenance reports,
+schemas, and protocol descriptions retain their JSON output. `--compact` removes indentation from
 JSON queries, schemas, protocol descriptions, doctor reports, and update reports.
 
-Help, diagnostics, the default tldr presentation, and partial-document text
+Help, diagnostics, the default tldr presentation, and document text
 projections share the colour policy. Outline trees, selected nodes,
 explanations, and search results use semantic ANSI roles without changing their
 visible text. `auto` emits styling only to a capable terminal and respects
 `NO_COLOR`, `CLICOLOR`, and `TERM=dumb`; `always` and `never` explicitly
-override automatic detection. JSON, Markdown, man-format, MCP, and native
-protocol results never gain ANSI presentation styling. When Markdown is written
+override automatic detection. JSON, Markdown, man-format, and MCP results never
+gain ANSI presentation styling. When Markdown is written
 directly to a terminal, control characters in dynamic document identities are
 masked so a path or catalog label cannot issue terminal commands. Redirected
 Markdown preserves those data bytes exactly.

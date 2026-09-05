@@ -165,6 +165,15 @@ fn render_terminal_excerpt(excerpt: &QueryExcerpt, color: bool) -> String {
     for selection in &excerpt.selections {
         collect_excerpt_semantics(selection, &mut headings, &mut terms);
     }
+    style_content_text(&plain, &headings, terms)
+}
+
+/// Add presentation styling without changing the text renderer's layout.
+fn style_content_text(
+    plain: &str,
+    headings: &[String],
+    mut terms: Vec<(String, DefinitionRole)>,
+) -> String {
     terms.sort_by_key(|term| std::cmp::Reverse(term.0.len()));
 
     let mut output = TerminalText::new(true);
@@ -172,7 +181,7 @@ fn render_terminal_excerpt(excerpt: &QueryExcerpt, color: bool) -> String {
         if index > 0 {
             output.line();
         }
-        render_excerpt_line(line, index == 0, &headings, &terms, &mut output);
+        render_excerpt_line(line, index == 0, headings, &terms, &mut output);
     }
     output.finish()
 }
@@ -741,7 +750,19 @@ fn render_full_query(query: &ResolvedContent, options: RenderOptions) -> Result<
         }
         QueryFormat::Text => {
             let query = terminal_content(query);
-            Ok(mant_engine::render_query_text(&query))
+            let plain = mant_engine::render_query_text(&query);
+            if !options.color || plain.is_empty() {
+                return Ok(plain);
+            }
+            let mut headings = Vec::new();
+            let mut terms = Vec::new();
+            if let Some(document) = &query.document {
+                collect_block_semantics(&document.blocks, &mut terms);
+                for section in &document.sections {
+                    collect_section_semantics(section, &mut headings, &mut terms);
+                }
+            }
+            Ok(style_content_text(&plain, &headings, terms))
         }
         QueryFormat::Man => {
             let Some(document) = query.document.as_ref() else {
@@ -791,6 +812,7 @@ The selected color is visible in terminal output.
     #[test]
     fn terminal_styles_do_not_change_visible_query_text() {
         for view in [
+            QueryView::Full {},
             QueryView::Outline {
                 entries: EntryProjection::All,
                 root: None,
