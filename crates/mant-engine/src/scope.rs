@@ -941,7 +941,7 @@ mod tests {
     fn unresolved_records_keep_distinct_origins_without_repeating_the_same_edge() {
         let scope = DocumentScope {
             documents: vec![],
-            traversal: Default::default(),
+            traversal: mant_protocol::DocumentTraversal::default(),
         };
         let mut resolution = ScopeResolution::new(&scope);
         let failure = UnresolvedDocument {
