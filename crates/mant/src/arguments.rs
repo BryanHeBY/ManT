@@ -293,7 +293,16 @@ const CLI_STYLES: Styles = Styles::styled()
     .valid(AnsiColor::Green.on_default())
     .invalid(AnsiColor::Yellow.on_default());
 
-const SELF_MANUAL_HELP: &str = "ManT manual:\n  mant mant             Read the full manual (TUI on an interactive terminal; text otherwise)\n  mant mant --outline   Explore the manual before reading selected nodes";
+const CLI_USAGE: &str = "mant <SELECTOR> [OPTIONS]\n       mant <MAN_SECTION> <NAME> [OPTIONS]\n       mant --document <SELECTOR>... [--follow-links] [OPTIONS]\n       mant --input <PATH|-> [--input-format <FORMAT>] [OPTIONS]\n       mant --list [FILTERS]\n       mant --find <PATTERN> [FILTERS]\n       mant --request-json [--format <FORMAT>] [--compact]\n       mant --doctor [--format <text|json>] [--compact]\n       mant --schema <CONTRACT> [--compact]\n       mant --update-docs [--compact]\n       mant --prune-docs [--dry-run] [--compact]\n       mant --update-tldr [--compact]\n       mant --protocol-version [--compact]\n       mant --mcp";
+
+/// Use clap's shared roles and leave ANSI filtering to its output boundary.
+fn self_manual_help() -> clap::builder::StyledStr {
+    let header = CLI_STYLES.get_header();
+    let literal = CLI_STYLES.get_literal();
+    format!(
+        "{header}ManT manual:{header:#}\n  {literal}mant mant{literal:#}             Read the full manual (TUI on an interactive terminal; text otherwise)\n  {literal}mant mant --outline{literal:#}   Explore the manual before reading selected nodes"
+    ).into()
+}
 
 #[derive(Debug, clap::Parser)]
 // These booleans are declarative CLI switches, not coupled domain state; clap
@@ -302,11 +311,12 @@ const SELF_MANUAL_HELP: &str = "ManT manual:\n  mant mant             Read the f
 #[command(
     name = "mant",
     about = "Read or query structured local manuals and Markdown",
-    before_help = SELF_MANUAL_HELP,
+    before_help = self_manual_help(),
+    help_template = "{about-with-newline}\n{usage-heading} {usage}\n\n{before-help}{all-args}{after-help}",
     styles = CLI_STYLES,
     disable_help_flag = true,
     version,
-    override_usage = "mant <SELECTOR> [OPTIONS]\n       mant <MAN_SECTION> <NAME> [OPTIONS]\n       mant --document <SELECTOR>... [--follow-links] [OPTIONS]\n       mant --input <PATH|-> [--input-format <FORMAT>] [OPTIONS]\n       mant --list [FILTERS]\n       mant --find <PATTERN> [FILTERS]\n       mant --request-json [--format <FORMAT>] [--compact]\n       mant --doctor [--format <text|json>] [--compact]\n       mant --schema <CONTRACT> [--compact]\n       mant --update-docs [--compact]\n       mant --prune-docs [--dry-run] [--compact]\n       mant --update-tldr [--compact]\n       mant --protocol-version [--compact]\n       mant --mcp",
+    override_usage = CLI_USAGE,
     after_help = "Examples:\n  mant git\n  mant 1 git\n  mant 'git(1)'\n  mant manual/1/git\n  mant git --search worktree --follow-links\n  mant --document git --document git-lfs --explain=--work-tree\n  mant --input README.md\n  mant --input /usr/share/man/man1/git.1.gz\n  cat guide.md | mant --input - --input-format markdown\n  mant --list\n  mant --find process --source pwsh7\n  mant git --tldr\n  mant 1 tar --tldr\n  mant gcc --outline\n  mant tar --explain=--exclude\n  mant git --format json --compact\n  mant --doctor\n  mant --update-docs\n  mant --mcp",
     group = ArgGroup::new("action")
         .args(["selector", "document", "input", "list", "find", "request_json", "doctor", "update_docs", "prune_docs", "update_tldr", "protocol_version", "schema", "mcp"])
@@ -710,11 +720,13 @@ fn parse_with_help(
 ) -> Result<Command, clap::Error> {
     let color = requested_color(arguments);
     if arguments.is_empty() {
-        return Err(command_error(
-            ErrorKind::MissingRequiredArgument,
-            format!("choose a document or action\n\n{SELF_MANUAL_HELP}"),
-            color,
-        ));
+        return Err(Cli::command()
+            .color(color.into())
+            .override_usage(format!("{CLI_USAGE}\n\n{}", self_manual_help().ansi()))
+            .error(
+                ErrorKind::MissingRequiredArgument,
+                "choose a document or action",
+            ));
     }
     if uses_removed_section_option(arguments) {
         return Err(command_error(

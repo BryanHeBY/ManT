@@ -441,6 +441,22 @@ fn process_help_retains_styles_while_injected_help_stays_plain() {
 }
 
 #[test]
+fn manual_guidance_uses_shared_header_and_command_styles_after_usage() {
+    let header = super::CLI_STYLES.get_header();
+    let literal = super::CLI_STYLES.get_literal();
+    for arguments in [args(&["--help"]), args(&["-h"]), vec![]] {
+        let error = parse_process(&arguments).expect_err("help or missing action");
+        let styled = error.render().ansi().to_string();
+        assert!(styled.contains(&format!("{header}ManT manual:{header:#}")));
+        assert!(styled.contains(&format!("{literal}mant mant{literal:#}")));
+        assert!(styled.contains(&format!("{literal}mant mant --outline{literal:#}")));
+        let plain = error.to_string();
+        assert!(!plain.contains('\x1b'));
+        assert!(plain.find("Usage:").unwrap() < plain.find("ManT manual:").unwrap());
+    }
+}
+
+#[test]
 fn color_policy_is_global_without_changing_deterministic_presentations() {
     assert!(matches!(
         parse(&args(&["git", "--format", "json", "--color", "always"]))

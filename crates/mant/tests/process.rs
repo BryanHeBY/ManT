@@ -176,12 +176,15 @@ fn help_and_empty_invocations_offer_the_manual_without_reading_it() {
         } else {
             assert!(output.status.success());
             assert!(output.stderr.is_empty());
-            String::from_utf8(output.stdout).expect("help text")
+            let help = String::from_utf8(output.stdout).expect("help text");
+            assert!(help.starts_with("Read or query structured local manuals and Markdown\n"));
+            assert!(help.find("ManT manual:").unwrap() < help.find("Document selection:").unwrap());
+            help
         };
         assert!(text.contains("mant mant             Read the full manual"));
         assert!(text.contains("mant mant --outline"));
         assert!(text.contains("TUI on an interactive terminal; text otherwise"));
-        assert!(text.find("ManT manual:") < text.find("Usage:"));
+        assert!(text.find("Usage:").unwrap() < text.find("ManT manual:").unwrap());
         assert!(!text.contains('\x1b'));
         assert!(!text.contains("## Description"));
     }
@@ -250,6 +253,22 @@ fn clap_color_is_terminal_aware_and_explicitly_controllable() {
     assert!(protocol.status.success());
     assert!(!protocol.stdout.contains(&0x1b));
     serde_json::from_slice::<serde_json::Value>(&protocol.stdout).expect("plain protocol JSON");
+}
+
+#[test]
+fn self_manual_help_respects_disabled_colour_and_dumb_terminals() {
+    for (key, value) in [("NO_COLOR", "1"), ("TERM", "dumb")] {
+        let output = Command::new(executable())
+            .arg("--help")
+            .env_remove("CLICOLOR_FORCE")
+            .env(key, value)
+            .output()
+            .expect("uncoloured help");
+        assert!(output.status.success());
+        assert!(output.stderr.is_empty());
+        assert!(!output.stdout.contains(&0x1b));
+        assert!(String::from_utf8_lossy(&output.stdout).contains("ManT manual:"));
+    }
 }
 
 #[test]
