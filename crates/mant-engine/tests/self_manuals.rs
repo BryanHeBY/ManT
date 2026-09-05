@@ -103,6 +103,7 @@ fn shipped_manual_options_are_addressable_for_agents_and_the_tui() {
     for expected in [
         "--manual",
         "--search",
+        "--grep",
         "--ui",
         "--help",
         "MANT_MANPATH",
@@ -114,6 +115,19 @@ fn shipped_manual_options_are_addressable_for_agents_and_the_tui() {
         );
     }
     assert!(select_explanation(&query, "MANT_MANPATH").is_ok());
+    let search = select_explanation(&query, "--search").expect("search entry");
+    let grep = select_explanation(&query, "--grep").expect("grep alias");
+    assert_eq!(
+        search, grep,
+        "both aliases must select the complete same entry"
+    );
+    let [ExcerptSelection::DocumentEntry { entry, .. }] = search.selections.as_slice() else {
+        panic!("one search definition")
+    };
+    assert_eq!(
+        entry.identity.as_ref().unwrap().names,
+        ["--search", "--grep"]
+    );
 }
 
 #[test]
@@ -268,18 +282,47 @@ fn protocol_json_examples_are_independent_from_checkout_line_endings() {
 /// Read JSON examples through `CommonMark` events instead of checkout-specific
 /// newline bytes. Git may materialize the same tracked Markdown as LF or CRLF.
 fn json_fenced_examples(markdown: &str) -> Vec<String> {
+    fenced_examples(markdown, "json")
+}
+
+#[test]
+fn documented_semantic_entry_examples_are_executable_authoring_contracts() {
+    for newline in ["\n", "\r\n"] {
+        let source = MARKDOWN_MANUAL.replace('\n', newline);
+        let examples = fenced_examples(&source, "markdown")
+            .into_iter()
+            .filter(|example| example.starts_with("<!-- mant:entries"))
+            .collect::<Vec<_>>();
+        assert!(examples.len() >= 5);
+        for example in examples {
+            let query = query_markdown_text(&example, None).expect("authoring example");
+            let document = query.document.unwrap();
+            assert!(
+                document.diagnostics.is_empty(),
+                "{example}\n{:?}",
+                document.diagnostics
+            );
+            assert!(!mant_ir::SemanticIndex::build(&document).root().is_empty());
+        }
+    }
+}
+
+fn fenced_examples(markdown: &str, language: &str) -> Vec<String> {
     let mut examples = Vec::new();
     let mut current = None;
 
     for event in Parser::new(markdown) {
         match event {
             Event::Start(Tag::CodeBlock(CodeBlockKind::Fenced(info)))
-                if info.split_whitespace().next() == Some("json") =>
+                if info.split_whitespace().next() == Some(language) =>
             {
                 current = Some(String::new());
             }
             Event::Text(text) if current.is_some() => {
-                current.as_mut().expect("JSON block state").push_str(&text);
+                current
+                    .as_mut()
+                    .expect("fenced block state")
+                    .push_str(&text);
             }
             Event::End(TagEnd::CodeBlock) => {
                 if let Some(json) = current.take() {

@@ -15,6 +15,10 @@ deterministic output without owning a terminal or command-line process.
   every supported platform.
 - Semantic outlines with compact scope summaries, role filters, nested entry
   paths, authored forms, value domains, and optional section/entry roots.
+- Markdown entry authoring with visible alias groups, independent invocation
+  forms, linked code terms, and explicitly open or exhaustive local choices.
+  See the [authoring field map](https://github.com/BryanHeBY/ManT/blob/main/docs/manuals/mant-markdown.md#authoring-to-entry-field-map)
+  for declared fields versus index-derived facts.
 - Typed local and cross-document navigation: only logical document and manual
   links become bounded scope edges; external, email, and page-local targets do
   not expand a query.

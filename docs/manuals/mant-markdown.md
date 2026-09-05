@@ -86,10 +86,10 @@ ManT uses definition identities to make options, markers, operands, commands, co
 ```markdown
 <!-- mant:entries role=option case=sensitive -->
 - `-h`, `--help`: Show help.
-- `--color` _WHEN_: Select color output.
+- `--color WHEN`: Select color output.
 ```
 
-The directive must be the only construct on its line and immediately precede a complete bullet list. Required fields are:
+The directive must be the only construct on its line and immediately precede a complete bullet list. `role` and `case` are required; `attached` is optional:
 
 | Field | Values | Meaning |
 | --- | --- | --- |
@@ -193,6 +193,27 @@ forms, explicit document targets, value domains, and nested ownership. Outline, 
 TUI, and MCP projections consume that derived index rather than reparsing the
 Markdown list. See [mant-ir(7)](mant-ir.md) for the distinction between content
 definitions and indexed concepts.
+
+### Authoring-to-entry field map
+
+| Semantic entry field | Authoring source |
+| --- | --- |
+| `id` | Generated from the semantic identity; no entry-level `id=` directive exists. Heading `{#id}` attributes address headings, not entries. |
+| `kind` | `role=` on the owning list; option, marker, and operand map to parameter kinds. |
+| `case` | Required `case=` on the owning list. |
+| `aliases` | Selectable names extracted from the visible code terms, including linked code; comma-grouped terms are equivalent aliases, not separate entries. |
+| `forms` | Complete leading terms, including placeholders; an outside-code `|` splits independent forms without creating another entry. |
+| `documentTargets` | Typed document links wrapping a code term; links in the description remain ordinary references. |
+| `children` | Structurally nested semantic lists with their own role and case declarations. |
+| `valueDomain` | Explicit `mant:domain choices=...` or `entries=... roles=...`; otherwise all-value children infer open choices. |
+
+There are no independent `aliases=` or `forms=` attributes. This keeps indexed
+spellings and invocation forms grounded in content visible to human readers.
+For example, one `` `cd`, `chdir` `` item in a declared command list creates
+one command with two selectable aliases. Likewise ManT's own manual groups
+`` `--search PATTERN`, `--grep PATTERN` `` into one option entry; explaining
+either alias returns the same full description. Place genuinely different
+commands in separate items even when their descriptions happen to be similar.
 
 Links follow the same source-to-IR boundary: a fragment becomes a local section
 target, a relative Markdown path becomes a same-source document edge, and web
