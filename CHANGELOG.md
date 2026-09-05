@@ -55,6 +55,9 @@ that crate was not published for that change.
 
 ### mant-engine 0.11.0
 
+- Classify URI schemes and authorities before relative Markdown destinations,
+  so external `.md` URLs cannot create local document links or scope edges.
+
 - Render mdoc `.In` as a header reference in prose and as an include directive
   only at a synopsis source-line start, including recovered table cells.
 

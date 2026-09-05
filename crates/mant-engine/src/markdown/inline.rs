@@ -164,6 +164,12 @@ fn unescape_commonmark_punctuation(value: &str) -> String {
 }
 
 pub(super) fn markdown_document_reference(destination: &str) -> Option<(String, Option<String>)> {
+    // URI classification precedes extension recognition: a host named
+    // example.md or a URI ending in .md is never a local document. The first
+    // path component of a relative URI cannot contain a scheme separator.
+    if destination.split('/').next()?.contains(':') {
+        return None;
+    }
     let (path, fragment) = destination
         .split_once('#')
         .map_or((destination, None), |(path, fragment)| {
@@ -172,19 +178,23 @@ pub(super) fn markdown_document_reference(destination: &str) -> Option<(String, 
     if path.contains(['\\', '?']) || path.starts_with('/') || path.chars().any(char::is_control) {
         return None;
     }
-    let physical = std::path::Path::new(path);
-    let extension = physical.extension()?.to_str()?;
+    // Document addresses use URI/POSIX separators on every host, not Path's
+    // platform-specific interpretation of drive prefixes and components.
+    let (parent, leaf) = path
+        .rsplit_once('/')
+        .map_or(("", path), |(parent, leaf)| (parent, leaf));
+    let (filename, extension) = leaf.rsplit_once('.')?;
     if !extension.eq_ignore_ascii_case("md") && !extension.eq_ignore_ascii_case("markdown") {
         return None;
     }
-    let filename = physical.file_stem()?.to_str()?;
     if filename.is_empty() {
         return None;
     }
-    let parent = physical
-        .parent()
-        .unwrap_or_else(|| std::path::Path::new(""));
-    let logical = parent.join(filename).to_str()?.replace('\\', "/");
+    let logical = if parent.is_empty() {
+        filename.to_owned()
+    } else {
+        format!("{parent}/{filename}")
+    };
     let valid = logical.split('/').all(|component| {
         !component.is_empty()
             && (matches!(component, "." | "..") || !component.chars().any(char::is_control))

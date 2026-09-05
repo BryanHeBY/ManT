@@ -418,6 +418,28 @@ fn unsupported_math_does_not_leak_markdown_bracket_escapes() {
 }
 
 #[test]
+fn markdown_extension_does_not_turn_uri_schemes_or_authorities_into_documents() {
+    for uri in [
+        "https://example.md",
+        "https://example.test/path.md#fragment",
+        "HTTP://example.markdown",
+        "ftp://host/manual.md",
+        "custom:manual.md",
+        "//example.md/path.md",
+        "C:/manual.md",
+    ] {
+        let document = parse_document(&format!("[LINK]({uri})\n"), None);
+        let Block::Paragraph { children, .. } = &document.blocks[0] else {
+            panic!("link paragraph")
+        };
+        assert!(
+            matches!(&children[0], Inline::Link { target: mant_ir::LinkTarget::External { uri: actual }, .. } if actual == uri),
+            "{uri}: {children:?}"
+        );
+    }
+}
+
+#[test]
 fn lowers_hierarchical_markdown_links_into_same_source_document_references() {
     let document = parse_document(
         "[Start](Start-Process.md) [Guide](about_Profiles.markdown#examples) [Nested](../other.md)\n",
