@@ -451,6 +451,20 @@ fn lower_macro_inline(
             wrap_strong(content)
         }
         Some("Cm" | "Ic" | "Sy" | "B" | "SB") => wrap_strong(lowered),
+        Some("OP") => {
+            // man(7) OP makes the entire invocation optional. Its first
+            // argument is an option name (bold), the second a metavariable.
+            let mut builder = InlineBuilder::with_spacing(spacing_enabled);
+            for (index, child) in children.iter().enumerate() {
+                let value = lower_inline_node(child, default_name, spacing_enabled);
+                builder.append(if index == 0 {
+                    wrap_strong(value)
+                } else {
+                    wrap_emphasis(value)
+                });
+            }
+            surround("[", builder.finish(), "]")
+        }
         Some("Ar" | "Pa" | "Em" | "Va" | "Vt" | "Ft" | "Fa" | "I") => wrap_emphasis(lowered),
         Some("Li") => vec![Inline::Code {
             value: plain_text(&lowered),

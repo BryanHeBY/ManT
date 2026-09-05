@@ -3842,6 +3842,34 @@ fn restores_alternating_font_arguments_inside_tbl_text_blocks() {
 }
 
 #[test]
+fn man_optional_arguments_keep_brackets_and_argument_styles() {
+    for (requests, expected) in [
+        (".OP --verbose", "[--verbose]"),
+        (".OP --file FILE", "[--file FILE]"),
+        (
+            ".OP --file FILE\n.OP --verbose",
+            "[--file FILE] [--verbose]",
+        ),
+    ] {
+        for wrapper in [false, true] {
+            let source = if wrapper {
+                format!(".TH PROBE 1\n.SH SYNOPSIS\n.SY probe\n{requests}\n.YS\n")
+            } else {
+                format!(".TH PROBE 1\n.SH DESCRIPTION\n{requests}\n")
+            };
+            let query = crate::query_roff_bytes(source.as_bytes()).unwrap();
+            let text = crate::render_query_text(&query);
+            assert!(text.contains(expected), "{source}: {text}");
+            let markdown = crate::render_markdown(&query);
+            assert!(markdown.contains("**--"), "{markdown}");
+            if requests.contains("FILE") {
+                assert!(markdown.contains("*FILE*"), "{markdown}");
+            }
+        }
+    }
+}
+
+#[test]
 fn table_inline_requests_match_their_native_dialect_and_keep_cross_line_state() {
     for (header, request, expected) in [
         (

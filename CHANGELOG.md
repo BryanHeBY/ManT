@@ -55,6 +55,9 @@ that crate was not published for that change.
 
 ### mant-engine 0.11.0
 
+- Preserve the optional brackets and option/metavariable styling of man `.OP`
+  requests inside and outside command synopses.
+
 - Reuse dialect-specific native inline parsing for supported tbl text blocks,
   preserving nested calls, explicit enclosure closers, links, and cross-line
   spacing state instead of reconstructing a separate flat macro language.
