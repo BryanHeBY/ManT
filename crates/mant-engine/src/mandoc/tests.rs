@@ -457,6 +457,15 @@ fn list_target_recovery_preserves_native_and_authored_fragment_spellings() {
 }
 
 #[test]
+fn pending_targets_retain_their_native_source_lines_when_no_item_owns_them() {
+    let source = b".Dd September 5, 2026\n.Dt TARGETS 7\n.Os\n.Sh DESCRIPTION\n.Bl -bullet\n.Tg\n.Sm off\n.It\nCONTENT\n.El\n.Sm on\n.Bl -column one two\n.Tg Mixed.Target\n.It\n.El\n";
+    let document = parse_manual_bytes(std::path::Path::new("target-provenance.7"), source).unwrap();
+    let owners = anchor_owner_lines(&document);
+    assert!(owners.contains(&("off".to_owned(), 6)));
+    assert!(owners.contains(&("mixed-target".to_owned(), 13)));
+}
+
+#[test]
 fn preserves_explicit_targets_on_empty_mdoc_list_items() {
     let document = parse_manual_bytes(
         std::path::Path::new("empty-list-targets.7"),

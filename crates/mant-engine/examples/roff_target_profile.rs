@@ -424,6 +424,37 @@ mod tests {
         native_target_profile, unexpected_targets,
     };
 
+    #[test]
+    fn pending_list_targets_conserve_native_owner_locations_and_fragments() {
+        for style in ["-bullet", "-enum", "-item", "-tag", "-column one two"] {
+            for (request, text) in [(".Tg\n.Sm off", "CONTENT"), (".Tg Mixed.Target", "")] {
+                let source = format!(
+                    ".Dd September 5, 2026\n.Dt TARGETS 7\n.Os\n.Sh DESCRIPTION\n.Bl {style}\n{request}\n.It\n{text}\n.El\n"
+                );
+                let path = std::path::Path::new("target-provenance.7");
+                let report = super::Parser::new(super::ParseOptions {
+                    includes: super::IncludePolicy::Deny,
+                    compression: super::Compression::Plain,
+                })
+                .parse_bytes(path, source.as_bytes())
+                .unwrap();
+                let native = native_target_profile(&report.document.root);
+                let document = super::lower_mandoc_document(path, &report);
+                let observed = super::observed_targets(&document);
+                let (missing, matched, used) =
+                    match_targets(&native.expected, &observed.occurrences);
+                assert!(!native.expected.is_empty());
+                assert!(
+                    missing.is_empty(),
+                    "{source}: {}",
+                    serde_json::to_string(&missing).unwrap()
+                );
+                assert_eq!(matched.len(), native.expected.len());
+                assert!(unexpected_targets(&observed, &used).is_empty(), "{source}");
+            }
+        }
+    }
+
     fn node(
         kind: NodeKind,
         macro_name: Option<&str>,

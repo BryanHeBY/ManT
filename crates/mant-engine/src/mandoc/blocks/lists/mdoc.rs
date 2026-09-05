@@ -68,16 +68,7 @@ pub(in crate::mandoc::blocks) fn lower_mdoc_list(
                             context.default_name,
                         ),
                     );
-                    let targets = item
-                        .leading_targets
-                        .into_iter()
-                        .chain(targets::item_targets(item.node));
-                    targets::attach_targets(
-                        &mut blocks,
-                        targets,
-                        layout(list_indent),
-                        source_span(item.node),
-                    );
+                    attach_item_targets(&mut blocks, &item, layout(list_indent));
                     ListItem { blocks }
                 })
                 .collect(),
@@ -85,12 +76,9 @@ pub(in crate::mandoc::blocks) fn lower_mdoc_list(
             source: source_span(node),
         }
     };
-    append_list_targets(
-        &mut block,
-        trailing_targets,
-        layout(list_indent),
-        source_span(node),
-    );
+    for (target, source) in trailing_targets {
+        append_list_targets(&mut block, vec![target], layout(list_indent), source);
+    }
     block
 }
 
@@ -118,11 +106,9 @@ fn lower_mdoc_definition_list(
                 max_term_width,
                 item.spacing_enabled,
             );
-            let targets = item
-                .leading_targets
-                .into_iter()
-                .chain(targets::item_targets(item.node));
-            targets::attach_definition_targets(&mut lowered, targets, source_span(item.node));
+            for (target, source) in item.targets().into_iter().rev() {
+                targets::attach_definition_targets(&mut lowered, [target], source);
+            }
             lowered
         })
         .collect::<Vec<_>>();
@@ -235,12 +221,43 @@ fn is_option_definition(item: &DefinitionItem) -> bool {
 struct MdocListItem<'a> {
     node: &'a Node,
     spacing_enabled: bool,
-    leading_targets: Vec<String>,
+    leading_targets: Vec<(String, Option<mant_ir::SourceSpan>)>,
+}
+
+impl MdocListItem<'_> {
+    fn targets(&self) -> Vec<(String, Option<mant_ir::SourceSpan>)> {
+        let native = targets::item_targets(self.node);
+        // Prefer the actual It wrapper when native validation moved ownership
+        // there. Otherwise the pending Tg remains the owner, including native
+        // argument-less targets and authored recovery of removed empty rows.
+        let mut targets = self
+            .leading_targets
+            .iter()
+            .filter(|(target, _)| !native.contains(target))
+            .cloned()
+            .collect::<Vec<_>>();
+        targets.extend(
+            native
+                .into_iter()
+                .map(|target| (target, source_span(self.node))),
+        );
+        targets
+    }
+}
+
+fn attach_item_targets(
+    blocks: &mut Vec<Block>,
+    item: &MdocListItem<'_>,
+    layout: mant_ir::LayoutHint,
+) {
+    for (target, source) in item.targets().into_iter().rev() {
+        targets::attach_targets(blocks, [target], layout, source);
+    }
 }
 
 struct MdocListItems<'a> {
     items: Vec<MdocListItem<'a>>,
-    trailing_targets: Vec<String>,
+    trailing_targets: Vec<(String, Option<mant_ir::SourceSpan>)>,
 }
 
 /// Pair each mdoc list item with the formatter spacing state active at its
@@ -261,9 +278,11 @@ fn mdoc_list_items<'a>(
     let mut pending_targets = Vec::new();
     for child in first_part_children(node, NodeKind::Body) {
         if let Some(target) = targets::list_stream_target(child)
-            && !pending_targets.contains(&target)
+            && !pending_targets
+                .iter()
+                .any(|(pending, _)| pending == &target)
         {
-            pending_targets.push(target);
+            pending_targets.push((target, source_span(child)));
         }
         if child.macro_name.as_deref() == Some("It") {
             items.push(MdocListItem {
@@ -317,28 +336,10 @@ fn lower_mdoc_column_list(
                 })
                 .collect::<Vec<_>>();
             if let Some(cell) = cells.first_mut() {
-                let targets = item
-                    .leading_targets
-                    .into_iter()
-                    .chain(targets::item_targets(item.node));
-                targets::attach_targets(
-                    &mut cell.blocks,
-                    targets,
-                    layout(cell_indent),
-                    source_span(item.node),
-                );
+                attach_item_targets(&mut cell.blocks, &item, layout(cell_indent));
             } else {
                 let mut blocks = Vec::new();
-                let targets = item
-                    .leading_targets
-                    .into_iter()
-                    .chain(targets::item_targets(item.node));
-                targets::attach_targets(
-                    &mut blocks,
-                    targets,
-                    layout(cell_indent),
-                    source_span(item.node),
-                );
+                attach_item_targets(&mut blocks, &item, layout(cell_indent));
                 if !blocks.is_empty() {
                     cells.push(AstTableCell {
                         blocks,
@@ -386,7 +387,12 @@ fn append_list_targets(
             } else {
                 items.push(DefinitionItem {
                     identity: None,
-                    terms: vec![targets.into_iter().map(Inline::anchor).collect()],
+                    terms: vec![
+                        targets
+                            .into_iter()
+                            .map(|target| Inline::anchor_at(target, source))
+                            .collect(),
+                    ],
                     description: Vec::new(),
                     inline_term: true,
                     spacing_before_lines: None,
