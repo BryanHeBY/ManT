@@ -53,31 +53,28 @@ impl From<CatalogKindMode> for CatalogDocumentKind {
     }
 }
 
-/// How a complete native query is presented to its caller.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum QueryPresentation {
-    /// Use the interactive reader when the process owns a terminal, otherwise
-    /// render text with the requested colour policy.
-    Auto(ColorMode),
-    /// Require the Ratatui reader and a usable terminal.
-    Interactive,
-    /// Render a deterministic representation to standard output, with
-    /// terminal styling enabled only for human-readable text.
-    Output {
-        /// Selected serialization or text format.
-        format: QueryFormat,
-        /// Requested terminal colour policy.
-        color: ColorMode,
-    },
-    /// Render the tldr semantic layout directly to a terminal.
-    Tldr(ColorMode),
+/// Independent output choices; terminal policy resolves display and colour once.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(crate) struct OutputOptions {
+    pub(crate) format: Option<QueryFormat>,
+    pub(crate) color: ColorMode,
+    pub(crate) display: DisplayMode,
 }
 
-/// Whether process-owned catalog text may use the terminal pager.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum CatalogPaging {
+impl OutputOptions {
+    pub(crate) fn format(self) -> QueryFormat {
+        self.format.unwrap_or(QueryFormat::Text)
+    }
+}
+
+/// Where a result is presented, independently from its content format.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, ValueEnum)]
+pub(crate) enum DisplayMode {
+    #[default]
     Auto,
-    Disabled,
+    Direct,
+    Pager,
+    Tui,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, ValueEnum)]
@@ -245,7 +242,7 @@ pub(crate) enum Command {
     Help(String),
     Query {
         source: QuerySource,
-        presentation: QueryPresentation,
+        presentation: OutputOptions,
         pretty: bool,
         policy: QueryPolicy,
         preserve_anchors: bool,
@@ -253,14 +250,12 @@ pub(crate) enum Command {
     Catalog {
         query: CatalogQuery,
         grouped: bool,
-        format: QueryFormat,
+        presentation: OutputOptions,
         pretty: bool,
-        paging: CatalogPaging,
     },
     Doctor {
-        format: QueryFormat,
+        presentation: OutputOptions,
         pretty: bool,
-        color: ColorMode,
     },
     UpdateTldr {
         pretty: bool,
@@ -410,7 +405,7 @@ struct Cli {
     #[arg(
         long,
         requires = "selector",
-        conflicts_with_all = ["manual", "outline", "node", "explain", "search", "ui", "input"],
+        conflicts_with_all = ["manual", "outline", "node", "explain", "search", "input"],
         help_heading = "Document selection"
     )]
     tldr: bool,
@@ -541,28 +536,6 @@ struct Cli {
     )]
     request_json: bool,
 
-    /// Open the interactive terminal reader explicitly.
-    #[arg(
-        long,
-        conflicts_with_all = [
-            "outline",
-            "tldr",
-            "node",
-            "explain",
-            "search",
-            "request_json",
-            "update_tldr",
-            "protocol_version",
-            "schema",
-            "mcp",
-            "format",
-            "compact",
-            "preserve_anchors"
-        ],
-        help_heading = "Reading"
-    )]
-    ui: bool,
-
     /// Diagnose local paths, sources, manuals, and tldr caches without changing them.
     #[arg(
         long,
@@ -589,10 +562,8 @@ struct Cli {
             "limit",
             "offset",
             "request_json",
-            "ui",
             "dry_run",
-            "preserve_anchors",
-            "no_pager"
+            "preserve_anchors"
         ],
         help_heading = "Diagnostics"
     )]
@@ -694,9 +665,9 @@ struct Cli {
     #[arg(long, help_heading = "Output")]
     compact: bool,
 
-    /// Print discovery text directly instead of opening the terminal pager.
-    #[arg(long, help_heading = "Output")]
-    no_pager: bool,
+    /// Choose automatic presentation, direct printing, a pager, or the document TUI.
+    #[arg(long, value_enum, help_heading = "Output")]
+    display: Option<DisplayMode>,
 
     /// Preserve raw HTML anchors and document-local links in Markdown output.
     #[arg(
@@ -759,7 +730,21 @@ fn parse_with_help(
         {
             return Ok(Command::Help(error.to_string()));
         }
-        Err(error) => return Err(error),
+        Err(error) => {
+            if error.kind() == ErrorKind::UnknownArgument
+                && let Some(clap::error::ContextValue::String(old)) =
+                    error.get(clap::error::ContextKind::InvalidArg)
+                && matches!(old.as_str(), "--ui" | "--no-pager")
+            {
+                let replacement = if old == "--ui" { "tui" } else { "direct" };
+                return Err(command_error(
+                    ErrorKind::UnknownArgument,
+                    format!("{old} was removed; use --display {replacement}"),
+                    color,
+                ));
+            }
+            return Err(error);
+        }
     };
 
     normalize(parsed, color)

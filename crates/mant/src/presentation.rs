@@ -39,6 +39,28 @@ impl RenderOptions {
     }
 }
 
+/// Keep protocol-owned catalog text intact while applying optional CLI styling.
+pub(super) fn render_catalog_output(
+    catalog: &mant_protocol::DocumentCatalog,
+    grouped: bool,
+    color: bool,
+) -> String {
+    let text = mant_protocol::render_catalog_coverage_text(catalog)
+        .unwrap_or_else(|| mant_protocol::render_catalog_text(catalog, grouped));
+    if !color || text.is_empty() {
+        return text;
+    }
+    let style = terminal_style(TerminalRole::Path);
+    let mut output = String::new();
+    for line in text.split_inclusive('\n') {
+        let (body, ending) = line
+            .strip_suffix('\n')
+            .map_or((line, ""), |body| (body, "\n"));
+        let _ = write!(output, "{style}{body}{style:#}{ending}");
+    }
+    output
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum TerminalRole {
     Document,

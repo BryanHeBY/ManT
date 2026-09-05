@@ -1,23 +1,24 @@
 //! Converts clap's syntax model into `ManT`'s validated command model.
 
 use super::{
-    CatalogKindMode, CatalogPaging, CatalogQuery, Cli, ColorMode, Command, CommandFactory,
+    CatalogKindMode, CatalogQuery, Cli, ColorMode, Command, CommandFactory, DisplayMode,
     DocumentScope, DocumentSelector, DocumentTraversal, EntryProjection, ErrorKind, InputFormat,
-    InputFormatMode, NodeSelector, QueryFormat, QueryInput, QueryPolicy, QueryPresentation,
+    InputFormatMode, NodeSelector, OutputOptions, QueryFormat, QueryInput, QueryPolicy,
     QueryRequest, QuerySource, QueryView, RequestSchema, ScopeQueryView, SearchCase, SearchScope,
     SearchSyntax, default_search_limit, is_manual_section, normalize_tldr_topic,
     parenthesized_manual_reference,
 };
 
-pub(super) fn normalize(mut parsed: Cli, color: ColorMode) -> Result<Command, clap::Error> {
+pub(super) fn normalize(parsed: Cli, color: ColorMode) -> Result<Command, clap::Error> {
+    let command = normalize_command(parsed, color)?;
+    crate::output_policy::validate(&command)
+        .map_err(|error| command_error(ErrorKind::ArgumentConflict, error.into_message(), color))?;
+    Ok(command)
+}
+
+fn normalize_command(mut parsed: Cli, color: ColorMode) -> Result<Command, clap::Error> {
     validate_scope_mode(&parsed, color)?;
-    if parsed.no_pager && !parsed.list && parsed.find.is_none() {
-        return Err(command_error(
-            ErrorKind::ArgumentConflict,
-            "--no-pager applies only to --list and --find",
-            color,
-        ));
-    }
+    validate_machine_display(&parsed, color)?;
     if parsed.mcp {
         return Ok(Command::Mcp);
     }
@@ -82,14 +83,13 @@ pub(super) fn normalize(mut parsed: Cli, color: ColorMode) -> Result<Command, cl
         color,
     )?;
     validate_manual_source(parsed.manual, &source, color)?;
-    let presentation = normalize_presentation(
-        parsed.ui,
-        parsed.format,
-        parsed.preserve_anchors,
-        &source,
-        parsed.tldr,
-        parsed.color,
-    );
+    let presentation = OutputOptions {
+        format: parsed
+            .format
+            .or(parsed.preserve_anchors.then_some(QueryFormat::Markdown)),
+        color: parsed.color.unwrap_or_default(),
+        display: parsed.display.unwrap_or_default(),
+    };
 
     Ok(Command::Query {
         source,
@@ -104,6 +104,33 @@ pub(super) fn normalize(mut parsed: Cli, color: ColorMode) -> Result<Command, cl
         },
         preserve_anchors: parsed.preserve_anchors,
     })
+}
+
+fn validate_machine_display(parsed: &Cli, color: ColorMode) -> Result<(), clap::Error> {
+    if parsed
+        .display
+        .is_some_and(|display| display != DisplayMode::Direct && display != DisplayMode::Auto)
+        && (parsed.mcp
+            || parsed.update_docs
+            || parsed.prune_docs
+            || parsed.update_tldr
+            || parsed.protocol_version
+            || parsed.schema.is_some())
+    {
+        return Err(command_error(
+            ErrorKind::ArgumentConflict,
+            "machine reports support only --display auto or direct",
+            color,
+        ));
+    }
+    if parsed.mcp && parsed.display.is_some() {
+        return Err(command_error(
+            ErrorKind::ArgumentConflict,
+            "--display does not apply to MCP",
+            color,
+        ));
+    }
+    Ok(())
 }
 
 fn validate_scope_mode(parsed: &Cli, color: ColorMode) -> Result<(), clap::Error> {
@@ -148,9 +175,12 @@ fn normalize_doctor(parsed: &Cli, color: ColorMode) -> Result<Command, clap::Err
         ));
     }
     Ok(Command::Doctor {
-        format,
+        presentation: OutputOptions {
+            format: Some(format),
+            color: parsed.color.unwrap_or_default(),
+            display: parsed.display.unwrap_or_default(),
+        },
         pretty: !parsed.compact,
-        color: parsed.color.unwrap_or_default(),
     })
 }
 
@@ -218,13 +248,12 @@ fn normalize_catalog(parsed: Cli, color: ColorMode) -> Result<Command, clap::Err
             offset: parsed.offset.unwrap_or(0),
         },
         grouped: parsed.list,
-        format,
-        pretty: !parsed.compact,
-        paging: if parsed.no_pager {
-            CatalogPaging::Disabled
-        } else {
-            CatalogPaging::Auto
+        presentation: OutputOptions {
+            format: Some(format),
+            color: parsed.color.unwrap_or_default(),
+            display: parsed.display.unwrap_or_default(),
         },
+        pretty: !parsed.compact,
     })
 }
 
@@ -375,42 +404,6 @@ fn validate_manual_source(
         ));
     }
     Ok(())
-}
-
-fn normalize_presentation(
-    ui: bool,
-    format: Option<QueryFormat>,
-    preserve_anchors: bool,
-    source: &QuerySource,
-    tldr: bool,
-    color: Option<ColorMode>,
-) -> QueryPresentation {
-    let color = color.unwrap_or_default();
-    if ui {
-        QueryPresentation::Interactive
-    } else if let Some(format) = format {
-        QueryPresentation::Output { format, color }
-    } else if tldr {
-        QueryPresentation::Tldr(color)
-    } else if preserve_anchors {
-        QueryPresentation::Output {
-            format: QueryFormat::Markdown,
-            color,
-        }
-    } else if matches!(
-        source,
-        QuerySource::Arguments(QueryRequest {
-            view: QueryView::Full {},
-            ..
-        }) | QuerySource::ScopeArguments { view: None, .. }
-    ) {
-        QueryPresentation::Auto(color)
-    } else {
-        QueryPresentation::Output {
-            format: QueryFormat::Text,
-            color,
-        }
-    }
 }
 
 struct QuerySourceOptions {

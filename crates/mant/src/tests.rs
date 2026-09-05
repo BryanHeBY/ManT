@@ -20,9 +20,9 @@ use mant_protocol::{
 use super::{
     CLI_PROTOCOL_VERSION, CatalogQuery, CliHost, DocumentAddress, DocumentCatalog, Failure,
     MarkdownOrigin, QueryPolicy, TerminalCapabilities, TerminalKind,
-    arguments::{self, ColorMode, Command, QueryFormat, QueryPresentation},
+    arguments::{self, ColorMode, Command, DisplayMode, OutputOptions},
     read_native_request, request_for_address, resolve_process_presentation, run_command,
-    run_with_host, should_page_catalog,
+    run_with_host,
 };
 
 struct FakeHost {
@@ -83,7 +83,10 @@ fn terminal_capabilities_resolve_interactivity_and_text_colour() {
     assert!(matches!(
         terminal_query,
         Command::Query {
-            presentation: QueryPresentation::Interactive,
+            presentation: OutputOptions {
+                display: DisplayMode::Tui,
+                ..
+            },
             ..
         }
     ));
@@ -102,9 +105,10 @@ fn terminal_capabilities_resolve_interactivity_and_text_colour() {
     assert!(matches!(
         redirected_query,
         Command::Query {
-            presentation: QueryPresentation::Output {
-                format: QueryFormat::Text,
-                color: ColorMode::Never
+            presentation: OutputOptions {
+                format: None,
+                color: ColorMode::Never,
+                display: DisplayMode::Direct
             },
             ..
         }
@@ -125,9 +129,10 @@ fn terminal_capabilities_resolve_interactivity_and_text_colour() {
     assert!(matches!(
         outline,
         Command::Query {
-            presentation: QueryPresentation::Output {
-                format: QueryFormat::Text,
-                color: ColorMode::Always
+            presentation: OutputOptions {
+                format: None,
+                color: ColorMode::Always,
+                display: DisplayMode::Pager
             },
             ..
         }
@@ -147,7 +152,11 @@ fn terminal_capabilities_resolve_interactivity_and_text_colour() {
     assert!(matches!(
         tldr,
         Command::Query {
-            presentation: QueryPresentation::Tldr(ColorMode::Always),
+            presentation: OutputOptions {
+                format: None,
+                color: ColorMode::Always,
+                ..
+            },
             ..
         }
     ));
@@ -176,10 +185,11 @@ fn explicit_interactive_queries_require_both_terminal_streams() {
         },
     ] {
         let mut command =
-            arguments::parse(&["git".to_owned(), "--ui".to_owned()]).expect("UI query");
+            arguments::parse(&["git".to_owned(), "--display".to_owned(), "tui".to_owned()])
+                .expect("UI query");
         let error = resolve_process_presentation(&mut command, terminal)
             .expect_err("incomplete terminal must fail");
-        assert!(error.message().contains("interactive view requires"));
+        assert!(error.message().contains("interactive display requires"));
     }
 }
 
@@ -200,9 +210,10 @@ fn dumb_term_uses_copyable_output_for_automatic_queries() {
     assert!(matches!(
         command,
         Command::Query {
-            presentation: QueryPresentation::Output {
-                format: QueryFormat::Text,
+            presentation: OutputOptions {
+                format: None,
                 color: ColorMode::Never,
+                display: DisplayMode::Direct
             },
             ..
         }
@@ -244,8 +255,8 @@ fn automatic_full_text_retains_explicit_and_detected_colour() {
         )
         .expect("resolve text colour");
         assert!(matches!(command, Command::Query {
-            presentation: QueryPresentation::Output {
-                format: QueryFormat::Text, color,
+            presentation: OutputOptions {
+                format: None, color, ..
             }, ..
         } if color == expected));
     }
@@ -253,6 +264,10 @@ fn automatic_full_text_retains_explicit_and_detected_colour() {
 
 #[test]
 fn catalog_paging_requires_text_and_a_complete_non_dumb_terminal() {
+    let should_page_catalog = |command: &Command, terminal| {
+        resolve_process_presentation(&mut command.clone(), terminal).expect("resolve catalog")
+            == DisplayMode::Pager
+    };
     let terminal = TerminalCapabilities {
         input: true,
         output: true,
@@ -262,8 +277,12 @@ fn catalog_paging_requires_text_and_a_complete_non_dumb_terminal() {
     let list = arguments::parse(&["--list".to_owned()]).expect("catalog list");
     assert!(should_page_catalog(&list, terminal));
 
-    let direct = arguments::parse(&["--list".to_owned(), "--no-pager".to_owned()])
-        .expect("direct catalog list");
+    let direct = arguments::parse(&[
+        "--list".to_owned(),
+        "--display".to_owned(),
+        "direct".to_owned(),
+    ])
+    .expect("direct catalog list");
     assert!(!should_page_catalog(&direct, terminal));
 
     let json = arguments::parse(&[
@@ -1041,6 +1060,34 @@ fn stdin_search_requests_use_the_same_projection_contract() {
             .is_some_and(|matches| !matches.is_empty())
     );
     assert!(diagnostics.is_empty());
+}
+
+#[test]
+fn catalog_colour_preserves_records_and_newlines() {
+    let host = FakeHost::new();
+    let catalog = host
+        .discover(&CatalogQuery::default())
+        .expect("fake catalog");
+    for grouped in [false, true] {
+        let plain = super::presentation::render_catalog_output(&catalog, grouped, false);
+        let colored = super::presentation::render_catalog_output(&catalog, grouped, true);
+        assert!(colored.contains('\x1b'));
+        // Catalog uses only SGR styling; stripping it must retain tabs and final newlines.
+        let mut visible = String::new();
+        let mut chars = colored.chars();
+        while let Some(ch) = chars.next() {
+            if ch == '\x1b' {
+                for ch in chars.by_ref() {
+                    if ch == 'm' {
+                        break;
+                    }
+                }
+            } else {
+                visible.push(ch);
+            }
+        }
+        assert_eq!(visible, plain);
+    }
 }
 
 #[test]

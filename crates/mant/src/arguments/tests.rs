@@ -6,7 +6,7 @@ use mant_protocol::{
 };
 
 use super::{
-    CatalogPaging, ColorMode, Command, QueryFormat, QueryPolicy, QueryPresentation, QuerySource,
+    ColorMode, Command, DisplayMode, OutputOptions, QueryFormat, QueryPolicy, QuerySource,
     SchemaContract, parse, parse_process, requested_color,
 };
 
@@ -28,12 +28,36 @@ fn defaults_direct_queries_to_automatic_text_reading() {
                 },
                 view: QueryView::Full {},
             }),
-            presentation: QueryPresentation::Auto(ColorMode::Auto),
+            presentation: OutputOptions::default(),
             pretty: true,
             policy: QueryPolicy::Combined,
             preserve_anchors: false,
         }
     );
+}
+
+#[test]
+fn removed_display_flags_offer_replacements_without_becoming_aliases() {
+    for (old, new) in [("--ui", "tui"), ("--no-pager", "direct")] {
+        let error = parse(&args(&["git", old])).expect_err("removed flag");
+        assert!(
+            error
+                .to_string()
+                .contains(&format!("{old} was removed; use --display {new}"))
+        );
+        assert!(
+            parse(&args(&["--", old])).is_ok(),
+            "a positional document name is not a flag"
+        );
+        assert!(parse(&args(&["git", &format!("--search={old}")])).is_ok());
+    }
+    for values in [
+        vec!["git", "--display", "direct"],
+        vec!["git", "--format", "json", "--display", "direct"],
+        vec!["--schema", "all", "--display", "direct"],
+    ] {
+        assert!(parse(&args(&values)).is_ok());
+    }
 }
 
 #[test]
@@ -50,9 +74,10 @@ fn noninteractive_input_modes_share_the_text_default() {
             matches!(
                 parse(&args(&values)).expect("text query"),
                 Command::Query {
-                    presentation: QueryPresentation::Output {
-                        format: QueryFormat::Text,
+                    presentation: OutputOptions {
+                        format: None,
                         color: ColorMode::Auto,
+                        display: DisplayMode::Auto
                     },
                     ..
                 }
@@ -74,9 +99,12 @@ fn parses_grouped_lists_and_grep_like_catalog_searches() {
                 ..CatalogQuery::default()
             },
             grouped: true,
-            format: QueryFormat::Text,
+            presentation: OutputOptions {
+                format: Some(QueryFormat::Text),
+                color: ColorMode::Auto,
+                display: DisplayMode::Auto
+            },
             pretty: true,
-            paging: CatalogPaging::Auto,
         }
     );
     assert_eq!(
@@ -109,16 +137,22 @@ fn parses_grouped_lists_and_grep_like_catalog_searches() {
                 offset: 0,
             },
             grouped: false,
-            format: QueryFormat::Json,
+            presentation: OutputOptions {
+                format: Some(QueryFormat::Json),
+                color: ColorMode::Auto,
+                display: DisplayMode::Auto
+            },
             pretty: false,
-            paging: CatalogPaging::Auto,
         }
     );
 
     assert!(matches!(
-        parse(&args(&["--list", "--no-pager"])).expect("direct catalog list"),
+        parse(&args(&["--list", "--display", "direct"])).expect("direct catalog list"),
         Command::Catalog {
-            paging: CatalogPaging::Disabled,
+            presentation: OutputOptions {
+                display: DisplayMode::Direct,
+                ..
+            },
             ..
         }
     ));
@@ -128,7 +162,6 @@ fn parses_grouped_lists_and_grep_like_catalog_searches() {
         vec!["--list", "--format", "markdown"],
         vec!["git", "--limit", "2"],
         vec!["git", "--kind", "manual"],
-        vec!["git", "--no-pager"],
         vec!["git", "--outline", "--format", "man"],
         vec!["git", "--node", "1", "--format", "man"],
         vec!["git", "--explain", "branch", "--format", "man"],
@@ -141,21 +174,21 @@ fn parses_grouped_lists_and_grep_like_catalog_searches() {
 #[test]
 fn parses_an_explicit_interactive_query_without_an_output_projection() {
     assert!(matches!(
-        parse(&args(&["git", "--ui"])).expect("interactive query"),
+        parse(&args(&["git", "--display", "tui"])).expect("interactive query"),
         Command::Query {
             source: QuerySource::Arguments(QueryRequest {
                 input: QueryInput::Document { ref selector, .. },
                 view: QueryView::Full {},
                 ..
             }),
-            presentation: QueryPresentation::Interactive,
+            presentation: OutputOptions { display: DisplayMode::Tui, .. },
             ..
         } if selector == "git"
     ));
 
     for conflicting in ["--outline", "--search=git", "--format=json"] {
         assert!(
-            parse(&args(&["git", "--ui", conflicting])).is_err(),
+            parse(&args(&["git", "--display", "tui", conflicting])).is_err(),
             "accepted {conflicting}"
         );
     }
@@ -210,9 +243,10 @@ fn parses_bounded_multi_document_queries_without_changing_single_document_syntax
                     offset: 0,
                 }),
             },
-            presentation: QueryPresentation::Output {
-                format: QueryFormat::Text,
+            presentation: OutputOptions {
+                format: None,
                 color: ColorMode::Auto,
+                display: DisplayMode::Auto
             },
             pretty: true,
             policy: QueryPolicy::Combined,
@@ -221,7 +255,7 @@ fn parses_bounded_multi_document_queries_without_changing_single_document_syntax
     );
 
     assert!(matches!(
-        parse(&args(&["git", "--follow-links", "--ui"]))
+        parse(&args(&["git", "--follow-links", "--display", "tui"]))
             .expect("interactive transitive scope"),
         Command::Query {
             source: QuerySource::ScopeArguments {
@@ -234,7 +268,7 @@ fn parses_bounded_multi_document_queries_without_changing_single_document_syntax
                     },
                 },
             },
-            presentation: QueryPresentation::Interactive,
+            presentation: OutputOptions { display: DisplayMode::Tui, .. },
             ..
         } if documents[0].selector == "git"
     ));
@@ -285,9 +319,10 @@ fn dispatches_explicit_files_and_direct_stdin_without_embedding_content() {
                     root: None,
                 }
             },
-            presentation: QueryPresentation::Output {
-                format: QueryFormat::Text,
-                color: ColorMode::Auto
+            presentation: OutputOptions {
+                format: None,
+                color: ColorMode::Auto,
+                display: DisplayMode::Auto
             },
             ..
         }
@@ -305,9 +340,10 @@ fn preserves_markdown_anchors_only_when_requested() {
     assert!(matches!(
         parse(&args(&["git", "--preserve-anchors"])).expect("addressable Markdown"),
         Command::Query {
-            presentation: QueryPresentation::Output {
-                format: QueryFormat::Markdown,
-                color: ColorMode::Auto
+            presentation: OutputOptions {
+                format: Some(QueryFormat::Markdown),
+                color: ColorMode::Auto,
+                display: DisplayMode::Auto
             },
             preserve_anchors: true,
             ..
@@ -337,9 +373,10 @@ fn parses_format_man_section_and_compact_json_options() {
                 },
                 view: QueryView::Full {},
             }),
-            presentation: QueryPresentation::Output {
-                format: QueryFormat::Json,
-                color: ColorMode::Auto
+            presentation: OutputOptions {
+                format: Some(QueryFormat::Json),
+                color: ColorMode::Auto,
+                display: DisplayMode::Auto
             },
             pretty: false,
             policy: QueryPolicy::Combined,
@@ -409,9 +446,10 @@ fn color_policy_is_global_without_changing_deterministic_presentations() {
         parse(&args(&["git", "--format", "json", "--color", "always"]))
             .expect("JSON query with terminal color policy"),
         Command::Query {
-            presentation: QueryPresentation::Output {
-                format: QueryFormat::Json,
-                color: ColorMode::Always
+            presentation: OutputOptions {
+                format: Some(QueryFormat::Json),
+                color: ColorMode::Always,
+                display: DisplayMode::Auto
             },
             ..
         }
@@ -419,7 +457,11 @@ fn color_policy_is_global_without_changing_deterministic_presentations() {
     assert!(matches!(
         parse(&args(&["git", "--tldr", "--color", "never"])).expect("plain tldr query"),
         Command::Query {
-            presentation: QueryPresentation::Tldr(ColorMode::Never),
+            presentation: OutputOptions {
+                format: None,
+                color: ColorMode::Never,
+                ..
+            },
             ..
         }
     ));
@@ -491,16 +533,17 @@ fn tldr_joins_multiword_topics_and_keeps_explicit_formats() {
                 input: QueryInput::Document { ref selector, .. },
                 ..
             }),
-            presentation: QueryPresentation::Tldr(ColorMode::Auto),
+            presentation: OutputOptions { format: None, color: ColorMode::Auto, .. },
             ..
         } if selector == "git-checkout"
     ));
     assert!(matches!(
         parse(&args(&["git", "--tldr", "--format", "json"])).expect("structured tldr output"),
         Command::Query {
-            presentation: QueryPresentation::Output {
-                format: QueryFormat::Json,
-                color: ColorMode::Auto
+            presentation: OutputOptions {
+                format: Some(QueryFormat::Json),
+                color: ColorMode::Auto,
+                display: DisplayMode::Auto
             },
             ..
         }
@@ -552,9 +595,10 @@ fn parses_the_closed_stdin_request_mode_used_by_the_tui() {
         parse(&args(&["--request-json", "--format", "json", "--compact",])).expect("stdin query"),
         Command::Query {
             source: QuerySource::StdinJson,
-            presentation: QueryPresentation::Output {
-                format: QueryFormat::Json,
-                color: ColorMode::Auto
+            presentation: OutputOptions {
+                format: Some(QueryFormat::Json),
+                color: ColorMode::Auto,
+                display: DisplayMode::Auto
             },
             pretty: false,
             policy: QueryPolicy::Combined,
@@ -579,7 +623,7 @@ fn parses_explicit_manual_and_tldr_selections() {
                 view: QueryView::Excerpt { ref selectors },
                 ..
             }),
-            presentation: QueryPresentation::Tldr(ColorMode::Auto),
+            presentation: OutputOptions { format: None, color: ColorMode::Auto, .. },
             policy: QueryPolicy::TldrOnly,
             ..
         } if selectors == &["tldr"]
@@ -603,9 +647,10 @@ fn parses_outline_and_repeatable_node_views_with_contextual_defaults() {
                     root: None,
                 },
             }),
-            presentation: QueryPresentation::Output {
-                format: QueryFormat::Text,
-                color: ColorMode::Auto
+            presentation: OutputOptions {
+                format: None,
+                color: ColorMode::Auto,
+                display: DisplayMode::Auto
             },
             pretty: true,
             policy: QueryPolicy::Combined,
@@ -693,9 +738,10 @@ fn parses_filtered_outlines_and_repeatable_nodes() {
                     root: None,
                 },
             }),
-            presentation: QueryPresentation::Output {
-                format: QueryFormat::Json,
-                color: ColorMode::Auto
+            presentation: OutputOptions {
+                format: Some(QueryFormat::Json),
+                color: ColorMode::Auto,
+                display: DisplayMode::Auto
             },
             pretty: true,
             policy: QueryPolicy::Combined,
@@ -719,9 +765,10 @@ fn parses_filtered_outlines_and_repeatable_nodes() {
                     selectors: vec!["4.2".into(), "files-8".into()],
                 },
             }),
-            presentation: QueryPresentation::Output {
-                format: QueryFormat::Text,
-                color: ColorMode::Auto
+            presentation: OutputOptions {
+                format: Some(QueryFormat::Text),
+                color: ColorMode::Auto,
+                display: DisplayMode::Auto
             },
             pretty: true,
             policy: QueryPolicy::Combined,
@@ -751,9 +798,10 @@ fn parses_explain_as_a_first_class_semantic_view() {
                         entry: selector.to_owned(),
                     },
                 }),
-                presentation: QueryPresentation::Output {
-                    format: QueryFormat::Text,
-                    color: ColorMode::Auto
+                presentation: OutputOptions {
+                    format: None,
+                    color: ColorMode::Auto,
+                    display: DisplayMode::Auto
                 },
                 pretty: true,
                 policy: QueryPolicy::Combined,
@@ -773,9 +821,10 @@ fn defaults_all_partial_document_views_to_text() {
         assert!(matches!(
             parse(&args(&values)).expect("partial document query"),
             Command::Query {
-                presentation: QueryPresentation::Output {
-                    format: QueryFormat::Text,
-                    color: ColorMode::Auto
+                presentation: OutputOptions {
+                    format: None,
+                    color: ColorMode::Auto,
+                    display: DisplayMode::Auto
                 },
                 ..
             }
@@ -806,9 +855,10 @@ fn parses_literal_and_regex_searches_with_text_as_the_default() {
                     offset: 0,
                 },
             }),
-            presentation: QueryPresentation::Output {
-                format: QueryFormat::Text,
-                color: ColorMode::Auto
+            presentation: OutputOptions {
+                format: None,
+                color: ColorMode::Auto,
+                display: DisplayMode::Auto
             },
             pretty: true,
             policy: QueryPolicy::Combined,
@@ -855,9 +905,10 @@ fn parses_literal_and_regex_searches_with_text_as_the_default() {
                     offset: 5,
                 },
             }),
-            presentation: QueryPresentation::Output {
-                format: QueryFormat::Json,
-                color: ColorMode::Auto
+            presentation: OutputOptions {
+                format: Some(QueryFormat::Json),
+                color: ColorMode::Auto,
+                display: DisplayMode::Auto
             },
             pretty: true,
             policy: QueryPolicy::Combined,
@@ -871,9 +922,12 @@ fn parses_long_option_actions_without_ad_hoc_subcommands() {
     assert_eq!(
         parse(&args(&["--doctor"])).expect("doctor"),
         Command::Doctor {
-            format: QueryFormat::Text,
+            presentation: OutputOptions {
+                format: Some(QueryFormat::Text),
+                color: ColorMode::Auto,
+                display: DisplayMode::Auto
+            },
             pretty: true,
-            color: ColorMode::Auto,
         }
     );
     assert_eq!(
@@ -887,9 +941,12 @@ fn parses_long_option_actions_without_ad_hoc_subcommands() {
         ]))
         .expect("compact doctor JSON"),
         Command::Doctor {
-            format: QueryFormat::Json,
+            presentation: OutputOptions {
+                format: Some(QueryFormat::Json),
+                color: ColorMode::Always,
+                display: DisplayMode::Auto
+            },
             pretty: false,
-            color: ColorMode::Always,
         }
     );
     assert_eq!(
@@ -967,7 +1024,7 @@ fn rejects_ambiguous_or_incompatible_inputs() {
         vec!["git", "--source", "team", "--manual"],
         vec!["git", "--manual", "--tldr"],
         vec!["git", "--tldr", "--node", "0"],
-        vec!["git", "--tldr", "--ui"],
+        vec!["git", "--tldr", "--display", "tui"],
         vec!["--input", "README.md", "--source", "team"],
         vec!["--schema", "request", "--format", "json"],
         vec!["--mcp", "git"],
@@ -1012,7 +1069,7 @@ fn help_is_side_effect_free_and_the_option_terminator_preserves_a_name() {
                 },
                 view: QueryView::Full {},
             }),
-            presentation: QueryPresentation::Auto(ColorMode::Auto),
+            presentation: OutputOptions::default(),
             pretty: true,
             policy: QueryPolicy::Combined,
             preserve_anchors: false,

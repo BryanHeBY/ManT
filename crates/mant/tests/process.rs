@@ -135,9 +135,10 @@ fn help_groups_the_public_query_surface() {
     assert!(help.contains("Search:"));
     assert!(help.contains("Integration:"));
     assert!(help.contains("Diagnostics:"));
-    assert!(help.contains("Reading:"));
     assert!(help.contains("-h, --help"));
-    assert!(help.contains("--ui"));
+    assert!(help.contains("--display"));
+    assert!(!help.contains("--ui"));
+    assert!(!help.contains("--no-pager"));
     assert!(help.contains("-V, --version"));
     assert!(help.contains("--format <FORMAT>"));
     assert!(help.contains("--preserve-anchors"));
@@ -213,7 +214,15 @@ fn clap_color_is_terminal_aware_and_explicitly_controllable() {
     assert!(colored_error.stdout.is_empty());
     assert!(colored_error.stderr.contains(&0x1b));
 
-    let colored_semantic_error = run(&["git", "--no-pager", "--color", "always"]);
+    let colored_semantic_error = run(&[
+        "git",
+        "--display",
+        "tui",
+        "--format",
+        "json",
+        "--color",
+        "always",
+    ]);
     assert_eq!(colored_semantic_error.status.code(), Some(2));
     assert!(colored_semantic_error.stdout.is_empty());
     assert!(colored_semantic_error.stderr.contains(&0x1b));
@@ -545,16 +554,16 @@ fn short_help_alias_matches_long_help() {
 }
 
 #[test]
-fn explicit_ui_requires_a_real_terminal_before_loading_a_document() {
+fn explicit_tui_requires_a_real_terminal_before_loading_a_document() {
     let output = Command::new(executable())
-        .args(["definitely-not-a-real-manual", "--ui"])
+        .args(["definitely-not-a-real-manual", "--display", "tui"])
         .output()
         .expect("run redirected mant UI");
 
     assert_eq!(output.status.code(), Some(2));
     assert!(output.stdout.is_empty());
     let diagnostic = String::from_utf8(output.stderr).expect("UTF-8 diagnostic");
-    assert!(diagnostic.contains("interactive view requires"));
+    assert!(diagnostic.contains("interactive display requires"));
     assert!(!diagnostic.contains("No manual entry"));
 }
 

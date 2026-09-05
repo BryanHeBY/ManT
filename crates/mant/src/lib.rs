@@ -14,7 +14,9 @@ mod terminal;
 
 use std::io::{self, IsTerminal, Read, Write};
 
-use arguments::{ColorMode, Command, QueryFormat, QueryPresentation, QuerySource, SchemaContract};
+use arguments::{
+    ColorMode, Command, DisplayMode, OutputOptions, QueryFormat, QuerySource, SchemaContract,
+};
 use clipboard::SystemClipboard;
 use error::{
     Failure, query_execution_failure, query_failure, report_argument_error, report_failure,
@@ -27,13 +29,10 @@ use mant_protocol::{
     CatalogQuery, CatalogSchema, DoctorReport, DocumentAddress, DocumentCatalog, DocumentSchema,
     ExcerptSchema, InputFormat, MarkdownOrigin, OutlineSchema, QueryInput, QueryRequest,
     QuerySchema, QueryView, RequestSchema, ScopeQueryRequest, ScopeQueryResponse, ScopeQuerySchema,
-    ScopeRequestSchema, SearchSchema, TldrCacheUpdate, render_catalog_coverage_text,
-    render_catalog_text,
+    ScopeRequestSchema, SearchSchema, TldrCacheUpdate,
 };
 use mant_sources::{DocumentSourcesPrune, DocumentSourcesUpdate};
-use output_policy::{
-    TerminalCapabilities, TerminalKind, resolve_process_presentation, should_page_catalog,
-};
+use output_policy::{TerminalCapabilities, TerminalKind, resolve_process_presentation};
 use presentation::{render_json, render_query_result};
 use serde::Serialize;
 
@@ -70,7 +69,7 @@ struct QueryExecution {
 /// Resolved presentation policy shared by single- and multi-document queries.
 #[derive(Debug, Clone, Copy)]
 struct QueryOutput {
-    presentation: QueryPresentation,
+    presentation: OutputOptions,
     pretty: bool,
     preserve_anchors: bool,
     target: presentation::OutputTarget,
@@ -221,21 +220,15 @@ pub async fn run_process(arguments: &[String]) -> u8 {
         kind: terminal_kind,
     };
 
-    if let Err(error) = resolve_process_presentation(&mut command, terminal) {
-        return report_failure(&error, &mut diagnostics, true);
-    }
-
-    if matches!(
-        command,
-        Command::Query {
-            presentation: QueryPresentation::Interactive,
-            ..
-        }
-    ) {
+    let display = match resolve_process_presentation(&mut command, terminal) {
+        Ok(display) => display,
+        Err(error) => return report_failure(&error, &mut diagnostics, true),
+    };
+    if display == DisplayMode::Tui {
         return run_interactive(command, &mut diagnostics, &host, true);
     }
-    if should_page_catalog(&command, terminal) {
-        return run_paged_catalog(command, &mut diagnostics, &host, true);
+    if display == DisplayMode::Pager {
+        return run_paged(command, &mut diagnostics, &host, true);
     }
 
     run_command(
@@ -253,28 +246,35 @@ pub async fn run_process(arguments: &[String]) -> u8 {
     )
 }
 
-fn run_paged_catalog(
+/// Buffer one successful human-readable result before lending the terminal to the pager.
+/// The exit status and stderr stay owned by the command even if the user quits paging.
+fn run_paged(
     command: Command,
     diagnostics: &mut dyn Write,
     host: &dyn CliHost,
     diagnostics_color: bool,
 ) -> u8 {
-    let prompt = match &command {
-        Command::Catalog { grouped: true, .. } => "mant --list",
-        Command::Catalog { grouped: false, .. } => "mant --find",
-        _ => unreachable!("pager accepts only catalog commands"),
-    };
-    let rendered = match execute(
+    let mut output = Vec::new();
+    let status = run_command(
         command,
         &mut io::empty(),
+        &mut output,
+        diagnostics,
         host,
-        presentation::OutputTarget::Stream,
-    ) {
+        diagnostics_color,
+        presentation::OutputTarget::Terminal,
+    );
+    if output.is_empty() {
+        return status;
+    }
+    let rendered = match String::from_utf8(output) {
         Ok(rendered) => rendered,
-        Err(error) => return report_failure(&error, diagnostics, diagnostics_color),
+        Err(error) => {
+            return report_failure(&Failure::operational(error), diagnostics, diagnostics_color);
+        }
     };
-    match mant_ui::page_text(rendered, prompt) {
-        Ok(()) => 0,
+    match mant_ui::page_text(rendered, "mant") {
+        Ok(()) => status,
         Err(error) => report_failure(&Failure::operational(error), diagnostics, diagnostics_color),
     }
 }
@@ -287,10 +287,15 @@ fn run_with_host(
     host: &dyn CliHost,
 ) -> u8 {
     let diagnostics_color = arguments::requested_color(arguments) == ColorMode::Always;
-    let command = match arguments::parse(arguments) {
+    let mut command = match arguments::parse(arguments) {
         Ok(command) => command,
         Err(error) => return report_argument_error(&error, diagnostics),
     };
+
+    if let Err(error) = resolve_process_presentation(&mut command, TerminalCapabilities::detached())
+    {
+        return report_failure(&error, diagnostics, diagnostics_color);
+    }
 
     run_command(
         command,
@@ -322,7 +327,10 @@ fn run_command(
     if matches!(
         command,
         Command::Query {
-            presentation: QueryPresentation::Interactive,
+            presentation: OutputOptions {
+                display: DisplayMode::Tui,
+                ..
+            },
             ..
         }
     ) {
@@ -359,10 +367,11 @@ fn run_command(
             (rendered, status)
         }
         Command::Doctor {
-            format,
+            presentation,
             pretty,
-            color,
         } => {
+            let format = presentation.format();
+            let color = presentation.color;
             let report = match host.doctor() {
                 Ok(report) => report,
                 Err(error) => return report_failure(&error, diagnostics, diagnostics_color),
@@ -423,15 +432,19 @@ fn execute(
         Command::Catalog {
             query,
             grouped,
-            format,
+            presentation,
             pretty,
             ..
         } => {
+            let format = presentation.format();
             let catalog = host.discover(&query)?;
             match format {
                 QueryFormat::Json => render_json(&catalog, pretty),
-                QueryFormat::Text => Ok(render_catalog_coverage_text(&catalog)
-                    .unwrap_or_else(|| render_catalog_text(&catalog, grouped))),
+                QueryFormat::Text => Ok(presentation::render_catalog_output(
+                    &catalog,
+                    grouped,
+                    presentation.color == ColorMode::Always,
+                )),
                 QueryFormat::Markdown | QueryFormat::Man => {
                     unreachable!("argument validation limits catalog formats")
                 }
@@ -547,7 +560,8 @@ fn execute_query(
                 .map_err(query_execution_failure)?
         }
     };
-    if let QueryPresentation::Tldr(color) = output.presentation {
+    if policy == QueryPolicy::TldrOnly && output.presentation.format.is_none() {
+        let color = output.presentation.color;
         let mant_engine::QueryViewResult::Excerpt(mant_protocol::QueryExcerpt {
             selections, ..
         }) = &result
@@ -570,16 +584,8 @@ fn execute_query(
             },
         );
     }
-    let (format, color) = match output.presentation {
-        QueryPresentation::Auto(color) => (QueryFormat::Text, color),
-        QueryPresentation::Output { format, color } => (format, color),
-        QueryPresentation::Interactive => {
-            return Err(Failure::usage(
-                "interactive mode requires the native terminal process boundary",
-            ));
-        }
-        QueryPresentation::Tldr(_) => unreachable!("tldr presentation returned above"),
-    };
+    let format = output.presentation.format();
+    let color = output.presentation.color;
     render_query_result(
         &result,
         presentation::RenderOptions {
@@ -601,7 +607,7 @@ fn execute_scope_arguments(
 ) -> Result<String, Failure> {
     let Some(view) = view else {
         return Err(Failure::usage(
-            "multi-document output requires --search or --explain; use --ui for interactive reading",
+            "multi-document output requires --search or --explain; use --display tui for interactive reading",
         ));
     };
     if policy != QueryPolicy::Combined {
@@ -623,15 +629,8 @@ fn execute_scope_request(
     host: &dyn CliHost,
 ) -> Result<String, Failure> {
     let response = host.query_scope(request)?;
-    let (format, color) = match output.presentation {
-        QueryPresentation::Output { format, color } => (format, color),
-        QueryPresentation::Auto(color) => (QueryFormat::Text, color),
-        QueryPresentation::Interactive | QueryPresentation::Tldr(_) => {
-            return Err(Failure::usage(
-                "scope request JSON supports only deterministic output",
-            ));
-        }
-    };
+    let format = output.presentation.format();
+    let color = output.presentation.color;
     presentation::render_scope_query_result(
         &response,
         presentation::RenderOptions {
@@ -653,7 +652,11 @@ fn run_interactive(
 ) -> u8 {
     let Command::Query {
         source,
-        presentation: QueryPresentation::Interactive,
+        presentation:
+            OutputOptions {
+                display: DisplayMode::Tui,
+                ..
+            },
         policy,
         ..
     } = command

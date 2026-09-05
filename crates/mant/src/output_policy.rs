@@ -1,12 +1,10 @@
-//! Pure process output decisions, separate from terminal detection and rendering.
+//! Pure output policy: content format, terminal colour, and display are independent.
 
-use crate::arguments::{CatalogPaging, ColorMode, Command, QueryFormat, QueryPresentation};
+use crate::arguments::{ColorMode, Command, DisplayMode, OutputOptions, QueryFormat, QuerySource};
 use crate::error::Failure;
+use mant_protocol::{QueryRequest, QueryView};
 
-/// Terminal capabilities consulted only by the OS process entry point.
-///
-/// The injectable [`crate::run`] boundary intentionally remains deterministic and
-/// treats `Auto` as text output without automatic terminal styling.
+/// Capabilities are sampled once by the process; injected streams supply no terminal.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct TerminalCapabilities {
     pub(crate) input: bool,
@@ -15,94 +13,278 @@ pub(crate) struct TerminalCapabilities {
     pub(crate) kind: TerminalKind,
 }
 
+impl TerminalCapabilities {
+    pub(crate) const fn detached() -> Self {
+        Self {
+            input: false,
+            output: false,
+            color: false,
+            kind: TerminalKind::Dumb,
+        }
+    }
+
+    fn interactive(self) -> bool {
+        self.input && self.output && self.kind == TerminalKind::Capable
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum TerminalKind {
     Capable,
     Dumb,
 }
 
-pub(crate) fn should_page_catalog(command: &Command, terminal: TerminalCapabilities) -> bool {
-    terminal.input
-        && terminal.output
-        && terminal.kind == TerminalKind::Capable
-        && matches!(
-            command,
-            Command::Catalog {
-                format: QueryFormat::Text,
-                paging: CatalogPaging::Auto,
-                ..
-            }
-        )
+/// Display eligibility belongs to the operation, not the renderer or pager.
+#[derive(Debug, Clone, Copy)]
+struct DisplayCapabilities {
+    reader: bool,
+    pager: bool,
+    auto_page: bool,
 }
 
-/// Resolve terminal-sensitive defaults without coupling argument parsing to
-/// operating-system streams.
+impl DisplayCapabilities {
+    fn for_command(command: &Command) -> Self {
+        match command {
+            Command::Query { source, policy, .. } => {
+                let stdin = matches!(
+                    source,
+                    QuerySource::StdinJson | QuerySource::InputStdin { .. }
+                );
+                let full = matches!(
+                    source,
+                    QuerySource::Arguments(QueryRequest {
+                        view: QueryView::Full {},
+                        ..
+                    }) | QuerySource::ScopeArguments { view: None, .. }
+                );
+                Self {
+                    reader: full && *policy != mant_engine::QueryPolicy::TldrOnly,
+                    pager: !stdin,
+                    auto_page: !stdin,
+                }
+            }
+            Command::Catalog { .. } => Self {
+                reader: false,
+                pager: true,
+                auto_page: true,
+            },
+            Command::Doctor { .. } => Self {
+                reader: false,
+                pager: true,
+                auto_page: false,
+            },
+            _ => Self {
+                reader: false,
+                pager: false,
+                auto_page: false,
+            },
+        }
+    }
+}
+
+fn options(command: &Command) -> Option<OutputOptions> {
+    match command {
+        Command::Query { presentation, .. }
+        | Command::Catalog { presentation, .. }
+        | Command::Doctor { presentation, .. } => Some(*presentation),
+        _ => None,
+    }
+}
+
+/// Validate explicit requests independently of host capabilities or document loading.
+pub(crate) fn validate(command: &Command) -> Result<(), Failure> {
+    let Some(output) = options(command) else {
+        return Ok(());
+    };
+    let capabilities = DisplayCapabilities::for_command(command);
+    match output.display {
+        DisplayMode::Tui if !capabilities.reader || output.format.is_some() => Err(Failure::usage(
+            "--display tui requires full document reading without --format or stdin input",
+        )),
+        DisplayMode::Pager if !capabilities.pager || output.format() == QueryFormat::Json => {
+            Err(Failure::usage(
+                "--display pager requires textual output without stdin document or request input",
+            ))
+        }
+        _ => Ok(()),
+    }
+}
+
+/// Resolve once; execution receives only direct, pager, or TUI display and fixed colour.
 pub(crate) fn resolve_process_presentation(
     command: &mut Command,
     terminal: TerminalCapabilities,
-) -> Result<(), Failure> {
-    if let Command::Doctor { color, .. } = command {
-        if *color == ColorMode::Auto {
-            *color = if terminal.output && terminal.color {
-                ColorMode::Always
-            } else {
-                ColorMode::Never
-            };
-        }
-        return Ok(());
-    }
-    let Command::Query { presentation, .. } = command else {
-        return Ok(());
+) -> Result<DisplayMode, Failure> {
+    validate(command)?;
+    let Some(mut output) = options(command) else {
+        return Ok(DisplayMode::Direct);
     };
-    match *presentation {
-        QueryPresentation::Auto(_)
-            if terminal.input && terminal.output && terminal.kind == TerminalKind::Capable =>
+    let capabilities = DisplayCapabilities::for_command(command);
+    output.display = match output.display {
+        DisplayMode::Auto
+            if terminal.interactive() && capabilities.reader && output.format.is_none() =>
         {
-            *presentation = QueryPresentation::Interactive;
+            DisplayMode::Tui
         }
-        QueryPresentation::Auto(color) => {
-            *presentation = QueryPresentation::Output {
-                format: QueryFormat::Text,
-                color: match color {
-                    ColorMode::Auto if terminal.output && terminal.color => ColorMode::Always,
-                    ColorMode::Auto => ColorMode::Never,
-                    explicit => explicit,
-                },
-            };
-        }
-        QueryPresentation::Interactive
-            if !terminal.input || !terminal.output || terminal.kind == TerminalKind::Dumb =>
+        DisplayMode::Auto
+            if terminal.interactive()
+                && capabilities.auto_page
+                && output.format() == QueryFormat::Text =>
         {
+            DisplayMode::Pager
+        }
+        DisplayMode::Auto => DisplayMode::Direct,
+        DisplayMode::Pager | DisplayMode::Tui if !terminal.interactive() => {
             return Err(Failure::usage(
-                "interactive view requires a capable input and output terminal; omit --ui or select --format",
+                "interactive display requires a capable input and output terminal; use --display direct or auto",
             ));
         }
-        QueryPresentation::Tldr(ColorMode::Auto) => {
-            *presentation = QueryPresentation::Tldr(if terminal.output && terminal.color {
-                ColorMode::Always
-            } else {
-                ColorMode::Never
-            });
-        }
-        QueryPresentation::Output {
-            format,
-            color: ColorMode::Auto,
-        } => {
-            *presentation = QueryPresentation::Output {
-                format,
-                color: if terminal.output && terminal.color {
-                    ColorMode::Always
-                } else {
-                    ColorMode::Never
-                },
-            };
-        }
-        QueryPresentation::Interactive
-        | QueryPresentation::Output {
-            color: ColorMode::Always | ColorMode::Never,
-            ..
-        }
-        | QueryPresentation::Tldr(ColorMode::Always | ColorMode::Never) => {}
+        explicit => explicit,
+    };
+    output.color = match output.color {
+        _ if output.format() != QueryFormat::Text => ColorMode::Never,
+        ColorMode::Auto if terminal.output && terminal.color => ColorMode::Always,
+        ColorMode::Auto => ColorMode::Never,
+        explicit => explicit,
+    };
+    match command {
+        Command::Query { presentation, .. }
+        | Command::Catalog { presentation, .. }
+        | Command::Doctor { presentation, .. } => *presentation = output,
+        _ => unreachable!("only commands with output options reach resolution"),
     }
-    Ok(())
+    Ok(output.display)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::arguments;
+
+    fn command(args: &[&str]) -> Command {
+        arguments::parse(&args.iter().map(ToString::to_string).collect::<Vec<_>>())
+            .expect("valid output options")
+    }
+
+    fn terminal() -> TerminalCapabilities {
+        TerminalCapabilities {
+            input: true,
+            output: true,
+            color: true,
+            kind: TerminalKind::Capable,
+        }
+    }
+
+    #[test]
+    fn display_policy_covers_every_operation_without_changing_formats() {
+        for (args, expected) in [
+            (vec!["git"], DisplayMode::Tui),
+            (vec!["git", "--display", "direct"], DisplayMode::Direct),
+            (vec!["git", "--format", "text"], DisplayMode::Pager),
+            (vec!["git", "--outline"], DisplayMode::Pager),
+            (vec!["git", "--node", "1"], DisplayMode::Pager),
+            (vec!["git", "--explain=--help"], DisplayMode::Pager),
+            (vec!["git", "--search", "help"], DisplayMode::Pager),
+            (vec!["git", "--tldr"], DisplayMode::Pager),
+            (vec!["--list"], DisplayMode::Pager),
+            (vec!["--find", "git"], DisplayMode::Pager),
+            (vec!["--doctor"], DisplayMode::Direct),
+            (vec!["--doctor", "--display", "pager"], DisplayMode::Pager),
+            (vec!["--request-json"], DisplayMode::Direct),
+            (
+                vec!["--input", "-", "--input-format", "markdown"],
+                DisplayMode::Direct,
+            ),
+            (vec!["git", "--format", "json"], DisplayMode::Direct),
+            (vec!["git", "--format", "markdown"], DisplayMode::Direct),
+            (vec!["git", "--format", "man"], DisplayMode::Direct),
+            (vec!["git", "--preserve-anchors"], DisplayMode::Direct),
+            (
+                vec!["git", "--format", "markdown", "--display", "pager"],
+                DisplayMode::Pager,
+            ),
+            (
+                vec!["git", "--format", "man", "--display", "pager"],
+                DisplayMode::Pager,
+            ),
+            (vec!["--schema", "all"], DisplayMode::Direct),
+            (vec!["--update-docs"], DisplayMode::Direct),
+        ] {
+            let mut command = command(&args);
+            let format = options(&command).map(OutputOptions::format);
+            assert_eq!(
+                resolve_process_presentation(&mut command, terminal()).unwrap(),
+                expected,
+                "{args:?}"
+            );
+            assert_eq!(options(&command).map(OutputOptions::format), format);
+        }
+    }
+
+    #[test]
+    fn automatic_output_never_enters_an_incomplete_terminal() {
+        for terminal in [
+            TerminalCapabilities::detached(),
+            TerminalCapabilities {
+                input: false,
+                ..terminal()
+            },
+            TerminalCapabilities {
+                output: false,
+                ..terminal()
+            },
+            TerminalCapabilities {
+                kind: TerminalKind::Dumb,
+                ..terminal()
+            },
+        ] {
+            for args in [vec!["git"], vec!["git", "--outline"], vec!["--list"]] {
+                assert_eq!(
+                    resolve_process_presentation(&mut command(&args), terminal).unwrap(),
+                    DisplayMode::Direct
+                );
+            }
+            for display in ["pager", "tui"] {
+                assert!(
+                    resolve_process_presentation(
+                        &mut command(&["git", "--display", display]),
+                        terminal
+                    )
+                    .is_err()
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn incompatible_display_requests_fail_during_argument_validation() {
+        for args in [
+            vec!["git", "--format", "json", "--display", "pager"],
+            vec!["--list", "--format", "json", "--display", "pager"],
+            vec!["--doctor", "--format", "json", "--display", "pager"],
+            vec!["--list", "--display", "tui"],
+            vec!["--doctor", "--display", "tui"],
+            vec!["git", "--outline", "--display", "tui"],
+            vec!["--request-json", "--display", "pager"],
+            vec!["--request-json", "--display", "tui"],
+            vec![
+                "--input",
+                "-",
+                "--input-format",
+                "roff",
+                "--display",
+                "pager",
+            ],
+            vec!["--update-docs", "--display", "pager"],
+            vec!["--protocol-version", "--display", "tui"],
+            vec!["--mcp", "--display", "direct"],
+            vec!["git", "--display", "direct", "--display", "tui"],
+        ] {
+            assert!(
+                arguments::parse(&args.iter().map(ToString::to_string).collect::<Vec<_>>())
+                    .is_err(),
+                "{args:?}"
+            );
+        }
+    }
 }
