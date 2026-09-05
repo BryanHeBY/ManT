@@ -28,6 +28,10 @@ impl NativeTargetPlan {
     pub(super) fn build(root: &Node) -> Self {
         let mut nodes = Vec::new();
         flatten_nodes(root, &mut nodes);
+        let retained = nodes
+            .iter()
+            .filter_map(|node| raw_target(node))
+            .collect::<HashSet<_>>();
         let mut explicit = HashSet::new();
         for (index, node) in nodes.iter().enumerate() {
             if node.macro_name.as_deref() != Some("Tg") {
@@ -40,10 +44,12 @@ impl NativeTargetPlan {
                 // the next target owner is not necessarily the source macro.
                 nodes[index + 1..]
                     .iter()
-                    .filter(|candidate| candidate.line > node.line)
-                    .find_map(|candidate| source_token(candidate))
+                    .find(|candidate| candidate.line > node.line)
+                    .and_then(|candidate| candidate.children.first())
+                    .filter(|child| child.kind == NodeKind::Text)
+                    .and_then(source_token)
             });
-            if let Some(target) = target.filter(|target| !target.is_empty()) {
+            if let Some(target) = target.filter(|target| retained.contains(target)) {
                 explicit.insert(target);
             }
         }
@@ -61,7 +67,9 @@ pub(super) fn raw_target(node: &Node) -> Option<String> {
         return node
             .flags
             .deep_link_target
-            .then(|| explicit_target_argument(node))
+            .then(|| {
+                explicit_target_argument(node).or_else(|| node.tag.as_deref().map(visible_text))
+            })
             .flatten();
     }
     if !node.flags.deep_link_target {
@@ -80,7 +88,6 @@ pub(super) fn raw_target(node: &Node) -> Option<String> {
 pub(super) fn source_token(node: &Node) -> Option<String> {
     let value = visible_text(first_text(node)?);
     value
-        .trim_start_matches('-')
         .split_whitespace()
         .next()
         .filter(|value| !value.is_empty())
@@ -93,7 +100,9 @@ pub(super) fn source_token(node: &Node) -> Option<String> {
 /// automatic tag on the `.Tg` node itself while placing the destination
 /// derived from the following macro on that following node. Callers that need
 /// to distinguish authored arguments from derived destinations must therefore
-/// not consult `node.tag`.
+/// not consult `node.tag`. In contrast, a validated `NODE_ID` on the `.Tg`
+/// itself is an actual native owner: `raw_target` retains that destination,
+/// without claiming that its spelling was written as an explicit argument.
 pub(super) fn explicit_target_argument(node: &Node) -> Option<String> {
     if node.macro_name.as_deref() != Some("Tg") {
         return None;
@@ -614,7 +623,10 @@ mod tests {
             },
             Vec::new(),
         );
-        assert_eq!(super::raw_target(&argumentless), None);
+        assert_eq!(
+            super::raw_target(&argumentless).as_deref(),
+            Some("stale-automatic-target")
+        );
         assert_eq!(super::explicit_target_argument(&argumentless), None);
     }
 
@@ -653,7 +665,7 @@ mod tests {
 
         assert_eq!(
             super::part_target(&block, NodeKind::Head).as_deref(),
-            Some("source-target")
+            Some("--source-target")
         );
     }
 

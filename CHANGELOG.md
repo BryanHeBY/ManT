@@ -43,6 +43,9 @@ that crate was not published for that change.
 
 ### mant-engine 0.11.0
 
+- Preserve argument-less `.Tg` targets that remain on their own native owner,
+  including `Va`, `Pa`, and `Ar`, and keep exact leading hyphens in authored
+  destinations. Only retained native targets reserve the section namespace.
 - Bound manual configuration work across directory enumeration, wildcard
   matching, path components, and fragments, not just successful matches.
   Windows configuration reads share byte and line limits; root directives

@@ -380,8 +380,10 @@ fn explicit_targets(nodes: &[AstNodeRef<'_>]) -> Vec<ExplicitTarget> {
         let target = authored.clone().or_else(|| {
             nodes[index + 1..]
                 .iter()
-                .filter(|candidate| candidate.node.line > reference.node.line)
-                .find_map(|candidate| source_token(candidate.node))
+                .find(|candidate| candidate.node.line > reference.node.line)
+                .and_then(|candidate| candidate.node.children.first())
+                .filter(|child| child.kind == NodeKind::Text)
+                .and_then(source_token)
         });
         if let Some(target) = target.filter(|target| !target.is_empty()) {
             targets.push(ExplicitTarget {
@@ -430,7 +432,7 @@ fn expected_container(owner_macro: &str) -> &'static str {
 
 fn target_name(node: &Node) -> Option<String> {
     if node.macro_name.as_deref() == Some("Tg") {
-        return explicit_target_argument(node);
+        return explicit_target_argument(node).or_else(|| node.tag.clone());
     }
     node.tag
         .as_deref()
@@ -473,7 +475,6 @@ fn first_text_on_line(node: &Node, line: u32) -> Option<&str> {
 
 fn first_token(value: &str) -> String {
     value
-        .trim_start_matches('-')
         .split_whitespace()
         .next()
         .unwrap_or_default()

@@ -189,6 +189,39 @@ fn automatic_targets_use_source_tokens_independently_of_spacing_mode() {
 }
 
 #[test]
+fn argumentless_targets_keep_non_relocated_owners_and_exact_prefixes() {
+    for (macro_name, target) in [
+        ("Va", "myvariable"),
+        ("Pa", "mypath"),
+        ("Ar", "myargument"),
+        ("Cm", "--long"),
+        ("Fl", "-long"),
+    ] {
+        let source = format!(
+            ".Dd September 5, 2026\n.Dt TARGET 7\n.Os\n.Sh DESCRIPTION\n.Tg\n.{macro_name} {target}\nordinary text\n.Sh {target}\nOther section.\n"
+        );
+        let document =
+            parse_manual_bytes(std::path::Path::new("target.7"), source.as_bytes()).unwrap();
+        let index = mant_ir::DocumentIndex::build(&document);
+        assert!(
+            index.fragment_target(target).is_some(),
+            "missing {macro_name} {target}"
+        );
+        assert!(
+            document
+                .diagnostics
+                .iter()
+                .all(|diagnostic| diagnostic.code.as_deref() != Some("ir.invalid-identity"))
+        );
+        let anchors = anchor_ids(&document);
+        assert!(
+            !anchors.is_empty(),
+            "a displaced section alone must not satisfy {target}"
+        );
+    }
+}
+
+#[test]
 fn argumentless_targets_retain_libmandoc_derived_destinations() {
     let document = parse_manual_bytes(
         std::path::Path::new("derived-target.8"),

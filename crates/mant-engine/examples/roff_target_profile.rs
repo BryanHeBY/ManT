@@ -540,10 +540,22 @@ mod tests {
 
         let profile = native_target_profile(&root(vec![request, derived]));
         assert!(profile.unclassified.is_empty());
-        assert_eq!(profile.expected.len(), 1);
-        assert_eq!(profile.expected[0].id, "derived-target");
-        assert_eq!(profile.expected[0].owner_macro, "Sy");
-        assert!(profile.expected[0].explicit);
+        // A surviving NODE_ID is a real owner even when an unrelated
+        // argument-less request derives a different explicit destination.
+        assert_eq!(profile.expected.len(), 2);
+        let derived = profile
+            .expected
+            .iter()
+            .find(|target| target.id == "derived-target")
+            .unwrap();
+        assert_eq!(derived.owner_macro, "Sy");
+        assert!(derived.explicit);
+        assert!(
+            profile
+                .expected
+                .iter()
+                .any(|target| target.id == "stale-automatic-target" && !target.explicit)
+        );
     }
 
     #[test]
