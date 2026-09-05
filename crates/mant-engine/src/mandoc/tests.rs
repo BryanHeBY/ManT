@@ -432,6 +432,31 @@ fn same_named_list_target_owners_retain_their_individual_source_positions() {
 }
 
 #[test]
+fn list_target_recovery_preserves_native_and_authored_fragment_spellings() {
+    for style in ["-bullet", "-enum", "-item", "-tag", "-column one two"] {
+        for (request, target, body) in [
+            (".Tg\n.Sm off", "off", "CONTENT"),
+            (".Tg Mixed.Target", "Mixed.Target", ""),
+        ] {
+            let source = format!(
+                ".Dd September 5, 2026\n.Dt TARGET 7\n.Os\n.Sh DESCRIPTION\n.Bl {style}\n{request}\n.It\n{body}\n.El\n"
+            );
+            let document =
+                parse_manual_bytes(std::path::Path::new("target.7"), source.as_bytes()).unwrap();
+            let index = mant_ir::DocumentIndex::build(&document);
+            assert!(index.fragment_target(target).is_some(), "{style}: {target}");
+            assert!(
+                !document
+                    .diagnostics
+                    .iter()
+                    .any(|d| d.code.as_deref() == Some("ir.invalid-identity"))
+            );
+            assert!(!visible_document_text(&document).contains(target));
+        }
+    }
+}
+
+#[test]
 fn preserves_explicit_targets_on_empty_mdoc_list_items() {
     let document = parse_manual_bytes(
         std::path::Path::new("empty-list-targets.7"),

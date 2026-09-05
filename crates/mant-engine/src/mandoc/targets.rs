@@ -33,22 +33,32 @@ impl NativeTargetPlan {
             .filter_map(|node| raw_target(node))
             .collect::<HashSet<_>>();
         let mut explicit = HashSet::new();
+        // The list stream also recovers authored targets whose empty owner was
+        // removed by native validation. Reserve exactly that recovery set so
+        // normalization preserves their original fragment spellings as well.
+        for node in &nodes {
+            if node.macro_name.as_deref() == Some("Bl") && node.kind == NodeKind::Body {
+                explicit.extend(node.children.iter().filter_map(list_stream_target));
+            }
+        }
         for (index, node) in nodes.iter().enumerate() {
             if node.macro_name.as_deref() != Some("Tg") {
                 continue;
             }
-            let target = explicit_target_argument(node).or_else(|| {
-                // An argument-less `.Tg` names the first argument of its
-                // following source macro. libmandoc can move the validated
-                // target backwards onto an enclosing structural wrapper, so
-                // the next target owner is not necessarily the source macro.
-                nodes[index + 1..]
-                    .iter()
-                    .find(|candidate| candidate.line > node.line)
-                    .and_then(|candidate| candidate.children.first())
-                    .filter(|child| child.kind == NodeKind::Text)
-                    .and_then(source_token)
-            });
+            let target = raw_target(node)
+                .or_else(|| explicit_target_argument(node))
+                .or_else(|| {
+                    // An argument-less `.Tg` names the first argument of its
+                    // following source macro. libmandoc can move the validated
+                    // target backwards onto an enclosing structural wrapper, so
+                    // the next target owner is not necessarily the source macro.
+                    nodes[index + 1..]
+                        .iter()
+                        .find(|candidate| candidate.line > node.line)
+                        .and_then(|candidate| candidate.children.first())
+                        .filter(|child| child.kind == NodeKind::Text)
+                        .and_then(source_token)
+                });
             if let Some(target) = target.filter(|target| retained.contains(target)) {
                 explicit.insert(target);
             }
@@ -59,6 +69,16 @@ impl NativeTargetPlan {
     pub(super) fn explicit(&self) -> &HashSet<String> {
         &self.explicit
     }
+}
+
+/// Destination consumed by the list's pending-target stream. A validated
+/// argument-less Tg is authoritative; only an actual authored argument may
+/// recover a target discarded with an empty native item. Never revive stale
+/// tags on unflagged argument-less requests.
+pub(super) fn list_stream_target(node: &Node) -> Option<String> {
+    (node.macro_name.as_deref() == Some("Tg"))
+        .then(|| raw_target(node).or_else(|| explicit_target_argument(node)))
+        .flatten()
 }
 
 /// Return the first source token used by libmandoc when a target has no tag.

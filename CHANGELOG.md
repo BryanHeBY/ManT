@@ -55,6 +55,9 @@ that crate was not published for that change.
 
 ### mant-engine 0.11.0
 
+- Preserve validated argument-less `.Tg` destinations and original fragment
+  spellings when recovering explicit targets on empty mdoc list items.
+
 - Bound cumulative native indentation and report excessive or unsupported
   offsets instead of overflowing; display offsets now share horizontal unit
   conversion with definition widths.
