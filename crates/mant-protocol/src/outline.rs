@@ -328,6 +328,13 @@ pub struct QueryExcerpt {
     pub schema: ExcerptSchema,
     /// Human-readable selected-document label.
     pub label: String,
+    /// Logical namespace for references in the selected raw IR content.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub address: Option<DocumentAddress>,
+    /// False when the selected document has rejected or invalid semantics.
+    /// This is document-wide, not a claim restricted to the selected range.
+    #[serde(default = "default_true", skip_serializing_if = "is_true")]
+    pub semantics_complete: bool,
     /// Process and parser provenance, when a document was loaded.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub producer: Option<Producer>,

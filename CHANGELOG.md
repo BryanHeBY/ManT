@@ -34,6 +34,9 @@ that crate was not published for that change.
 
 ### mant-protocol 0.11.0
 
+- Carry document-wide `semanticsComplete` and the logical source `address` in
+  excerpts, including nested explain responses; compact content retains an
+  incomplete-semantics notice even when parser findings are hidden.
 - Advance the native process family to v0.11 and expose optional
   `fragmentAliases` beside normalized document, section, and anchor identities.
   The published v0.10 schema snapshot remains immutable.

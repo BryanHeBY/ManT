@@ -122,6 +122,8 @@ fn excerpt_contract_keeps_breadcrumbs_separate_from_complete_sections() {
     };
     let excerpt = QueryExcerpt {
         schema: ExcerptSchema::V0Dot11,
+        address: None,
+        semantics_complete: true,
         label: "demo(1)".to_owned(),
         producer: Some(Producer {
             name: "mant".to_owned(),
@@ -178,6 +180,8 @@ fn excerpt_contract_can_return_one_semantic_definition() {
     let excerpt = QueryExcerpt {
         schema: ExcerptSchema::V0Dot11,
         label: "demo(1)".to_owned(),
+        address: None,
+        semantics_complete: true,
         producer: None,
         source: Some(source()),
         meta: None,
@@ -239,6 +243,8 @@ fn document_root_contract_addresses_content_before_the_first_heading() {
     let excerpt = QueryExcerpt {
         schema: ExcerptSchema::V0Dot11,
         label: "guide.md".to_owned(),
+        address: None,
+        semantics_complete: true,
         producer: None,
         source: outline.source.clone(),
         meta: outline.meta.clone(),
@@ -298,6 +304,8 @@ fn tldr_uses_the_reserved_zero_path_in_outline_and_excerpt_contracts() {
     let excerpt = QueryExcerpt {
         schema: ExcerptSchema::V0Dot11,
         label: "demo".to_owned(),
+        address: None,
+        semantics_complete: true,
         producer: None,
         source: None,
         meta: None,

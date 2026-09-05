@@ -75,6 +75,9 @@ pub fn render_excerpt_text(excerpt: &QueryExcerpt) -> String {
             .as_ref()
             .and_then(|meta| meta.manual_section.as_deref()),
     )];
+    if !excerpt.semantics_complete {
+        parts.push("Semantic entries are incomplete; use search to inspect unclassified or rejected content.".to_owned());
+    }
     for selection in &excerpt.selections {
         parts.push(render_selection(selection));
     }

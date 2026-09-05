@@ -635,6 +635,17 @@
     "description": "One or more independently selected nodes from a complete query.",
     "type": "object",
     "properties": {
+      "address": {
+        "description": "Logical namespace for references in the selected raw IR content.",
+        "anyOf": [
+          {
+            "$ref": "#/$defs/DocumentAddress"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
       "diagnostics": {
         "description": "Recoverable parser and validation findings.",
         "type": "array",
@@ -678,6 +689,10 @@
         "items": {
           "$ref": "#/$defs/ExcerptSelection"
         }
+      },
+      "semanticsComplete": {
+        "description": "False when the selected document has rejected or invalid semantics.\nThis is document-wide, not a claim restricted to the selected range.",
+        "type": "boolean"
       },
       "source": {
         "description": "Authoritative document source, when one was loaded.",
@@ -1261,6 +1276,57 @@
             "description": "Valid construct that the active parser cannot represent fully.",
             "type": "string",
             "const": "unsupported"
+          }
+        ]
+      },
+      "DocumentAddress": {
+        "description": "Stable selector for one discoverable document candidate.",
+        "oneOf": [
+          {
+            "description": "A Markdown document registered in the document catalog.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "markdown"
+              },
+              "origin": {
+                "description": "Storage namespace containing the relative path.",
+                "$ref": "#/$defs/MarkdownOrigin"
+              },
+              "path": {
+                "description": "Extension-free path relative to the selected Markdown origin.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "path",
+              "origin"
+            ]
+          },
+          {
+            "description": "An installed native manual page.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "manual"
+              },
+              "manualSection": {
+                "description": "Native manual category such as `1` or `3p`.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Manual topic without its section suffix.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "name",
+              "manualSection"
+            ]
           }
         ]
       },
@@ -1913,6 +1979,42 @@
             "description": "Marker-free list.",
             "type": "string",
             "const": "plain"
+          }
+        ]
+      },
+      "MarkdownOrigin": {
+        "description": "Storage identity of one registered Markdown document.",
+        "oneOf": [
+          {
+            "description": "The user's primary `documents` tree.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "documents"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "description": "A configured source cache.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "source"
+              },
+              "name": {
+                "description": "Configured source name.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "name"
+            ]
           }
         ]
       },
@@ -2708,7 +2810,7 @@
         "$ref": "#/$defs/OutlineSchema"
       },
       "semanticsComplete": {
-        "description": "False when semantic-entry declarations were rejected during lowering.\n\nThe field is omitted for complete outlines so compact transports pay no\nsteady-state bandwidth cost.",
+        "description": "False when lowering or shared IR validation found incomplete semantics.\n\nThe field is omitted for complete outlines so compact transports pay no\nsteady-state bandwidth cost.",
         "type": "boolean"
       },
       "source": {
@@ -7874,6 +7976,17 @@
         "description": "One or more independently selected nodes from a complete query.",
         "type": "object",
         "properties": {
+          "address": {
+            "description": "Logical namespace for references in the selected raw IR content.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/DocumentAddress"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "diagnostics": {
             "description": "Recoverable parser and validation findings.",
             "type": "array",
@@ -7917,6 +8030,10 @@
             "items": {
               "$ref": "#/$defs/ExcerptSelection"
             }
+          },
+          "semanticsComplete": {
+            "description": "False when the selected document has rejected or invalid semantics.\nThis is document-wide, not a claim restricted to the selected range.",
+            "type": "boolean"
           },
           "source": {
             "description": "Authoritative document source, when one was loaded.",

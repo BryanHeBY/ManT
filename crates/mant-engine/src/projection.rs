@@ -205,13 +205,7 @@ pub fn build_outline_projection(
         .document
         .as_ref()
         .map_or_else(Vec::new, |document| document.diagnostics.clone());
-    let semantics_complete = diagnostics.iter().all(|diagnostic| {
-        !diagnostic.code.as_deref().is_some_and(|code| {
-            crate::markdown::is_semantic_entry_rejection_code(code)
-                || code == "manual.semantic-entry.unclassified-definition"
-                || mant_ir::is_semantic_completeness_diagnostic(code)
-        })
-    });
+    let semantics_complete = semantics_complete(&diagnostics);
     let materialized_entries = if root.is_some() {
         EntryProjection::All
     } else {
@@ -369,6 +363,9 @@ pub fn select_excerpt<S: AsRef<str>>(
     Ok(QueryExcerpt {
         schema: ExcerptSchema::V0Dot11,
         label: query.label.clone(),
+        address: query.address.clone(),
+        semantics_complete: document
+            .is_none_or(|document| semantics_complete(&document.diagnostics)),
         producer: document.map(mant_protocol::Producer::for_document),
         source: document.map(|document| document.source.clone()),
         meta: document.map(|document| document.meta.clone()),
@@ -376,6 +373,16 @@ pub fn select_excerpt<S: AsRef<str>>(
             .map(|document| document.diagnostics.clone())
             .unwrap_or_default(),
         selections,
+    })
+}
+
+fn semantics_complete(diagnostics: &[Diagnostic]) -> bool {
+    diagnostics.iter().all(|diagnostic| {
+        !diagnostic.code.as_deref().is_some_and(|code| {
+            crate::markdown::is_semantic_entry_rejection_code(code)
+                || code == "manual.semantic-entry.unclassified-definition"
+                || mant_ir::is_semantic_completeness_diagnostic(code)
+        })
     })
 }
 
@@ -1924,6 +1931,24 @@ mod tests {
             !build_outline(&ir_query)
                 .expect("IR-invalid outline")
                 .semantics_complete
+        );
+        ir_query.address = Some(mant_ir::DocumentAddress::Manual {
+            name: "demo".into(),
+            manual_section: "1".into(),
+        });
+        let excerpt =
+            select_excerpt(&ir_query, &["1"]).expect("excerpt with invalid producer semantics");
+        assert!(!excerpt.semantics_complete);
+        assert_eq!(excerpt.address, ir_query.address);
+        assert!(crate::render_excerpt_text(&excerpt).contains("Semantic entries are incomplete"));
+        assert!(
+            crate::render_excerpt_markdown(&excerpt).contains("Semantic entries are incomplete")
+        );
+        // MCP strips parser findings but must not erase completeness.
+        let mut compact = excerpt;
+        compact.diagnostics.clear();
+        assert!(
+            crate::render_excerpt_markdown(&compact).contains("Semantic entries are incomplete")
         );
     }
 

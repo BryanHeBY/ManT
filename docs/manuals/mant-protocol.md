@@ -1093,6 +1093,8 @@ sections:
 | --- | --- |
 | `schema` | `mant.excerpt/v0.11` |
 | `label` | Query label |
+| `address` | Optional logical namespace for references in selected content |
+| `semanticsComplete` | Same document-wide completeness signal as outline; omitted when true |
 | `producer`, `source`, `meta` | Optional document identity |
 | `diagnostics` | Relevant recoverable findings |
 | `selections` | Selected content in source order |
@@ -1103,6 +1105,22 @@ Selection kinds are:
 - `document-root`, containing root `blocks`;
 - `document-section`, containing a complete section subtree;
 - `document-entry`, containing one complete definition item.
+
+Selections retain source-neutral IR: an entry-set `valueDomain` carries its
+authored reference and source span, not a catalog lookup result. Outline uses
+the protocol-owned summary with a namespace-resolved `address` instead.
+Excerpt clients can use the excerpt's `address` with
+`SemanticDocumentReference::resolve_from`, or request the corresponding outline
+node for its resolved relationship summary. Direct-file inputs have no logical
+namespace; an address never proves that a target document is installed.
+
+The completeness signal also travels inside single- and multi-document explain
+excerpts. Text and MCP excerpts retain a concise incomplete-semantics notice
+even when ordinary parser diagnostics are hidden. Full raw document and search
+responses continue to carry diagnostics rather than an outline-completeness
+claim. In-process producers must run `mant_ir::validate_document` and attach its
+findings before handing documents to projection APIs; projections reuse those
+findings rather than revalidating the whole tree for every selected node.
 
 Every selection has an `outline` trail. Its `ancestors` array contains compact
 `path`, `id`, and `title` references from the outermost section to the direct

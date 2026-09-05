@@ -344,6 +344,9 @@ pub fn render_excerpt_markdown_with_options(
             .and_then(|meta| meta.manual_section.as_deref()),
     );
     let mut output = vec![heading(1, &label)];
+    if !excerpt.semantics_complete {
+        output.push("Semantic entries are incomplete; use search to inspect unclassified or rejected content.".to_owned());
+    }
     for (index, selection) in excerpt.selections.iter().enumerate() {
         if index > 0 {
             output.push("---".to_owned());
