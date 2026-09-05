@@ -954,6 +954,7 @@ dependencies = [
  "flate2",
  "grep-matcher",
  "grep-regex",
+ "libc",
  "libmandoc-rs",
  "mant-ir",
  "mant-protocol",

@@ -298,6 +298,13 @@ includes both tool and SDK manual directories. ManT reads that state directly
 instead of invoking `xcode-select`. Only when no native root is available does
 it fall back to `/etc/manpaths` and sorted `/etc/manpaths.d` files.
 
+Manual-path configuration readers accept only regular UTF-8 files within the
+read budget, including symlinks to regular files. Directories and special files
+such as FIFOs are skipped. Unix opens are nonblocking and recheck the opened
+file so a FIFO cannot make discovery wait for a writer, including when a path
+changes after its initial check. This does not impose a deadline on regular
+filesystem or network-mounted storage operations.
+
 Windows has no system `man(1)` convention. If present,
 `%APPDATA%\ManT\man.conf` is a ManT-owned portable configuration. Its
 case-insensitive path directives are:

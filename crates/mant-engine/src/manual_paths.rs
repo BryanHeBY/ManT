@@ -7,8 +7,10 @@
 //! does not inherit pager, formatter, cache, or locale behaviour from the
 //! host implementation.
 
+mod config_file;
 mod expansion;
 mod windows_config;
+use config_file::read_text as read_config_text;
 #[cfg(test)]
 use expansion::wildcard_matches;
 use expansion::{ScanBudget, expand_path_pattern_bounded};
@@ -18,7 +20,6 @@ use std::{
     env,
     ffi::{OsStr, OsString},
     fs,
-    io::Read,
     path::{Path, PathBuf},
 };
 
@@ -464,25 +465,7 @@ fn macos_configuration_roots(path: &Path) -> Vec<PathBuf> {
 }
 
 fn read_config(path: &Path) -> Option<String> {
-    let metadata = fs::metadata(path).ok()?;
-    (metadata.is_file() && metadata.len() <= MAX_MANUAL_PATH_CONFIG_BYTES)
-        .then(|| read_config_text(path, MAX_MANUAL_PATH_CONFIG_BYTES).ok())
-        .flatten()
-}
-
-fn read_config_text(path: &Path, limit: u64) -> std::io::Result<String> {
-    let file = fs::File::open(path)?;
-    if !file.metadata()?.is_file() {
-        return Err(std::io::Error::other("configuration is not a regular file"));
-    }
-    let mut bytes = Vec::new();
-    file.take(limit + 1).read_to_end(&mut bytes)?;
-    if bytes.len() as u64 > limit {
-        return Err(std::io::Error::other(
-            "configuration exceeds the read budget",
-        ));
-    }
-    String::from_utf8(bytes).map_err(std::io::Error::other)
+    read_config_text(path, MAX_MANUAL_PATH_CONFIG_BYTES).ok()
 }
 
 fn read_path_list(path: &Path) -> Vec<PathBuf> {

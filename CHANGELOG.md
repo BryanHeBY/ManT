@@ -49,6 +49,10 @@ that crate was not published for that change.
 
 ### mant-engine 0.11.0
 
+- Reject special files at the shared manual-path configuration boundary before
+  and after opening. Unix nonblocking opens prevent FIFO fragments, including
+  macOS `MANCONFIG` matches, from hanging discovery while preserving regular
+  file symlinks and existing read budgets.
 - Accept local `mant:domain choices=exhaustive|open` declarations with structural
   validation. Reject mixed domain modes and incompatible child kinds while
   keeping entries and their visible descriptions addressable.

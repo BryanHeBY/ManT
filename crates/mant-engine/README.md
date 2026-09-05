@@ -13,6 +13,9 @@ deterministic output without owning a terminal or command-line process.
 - Bounded native manual loading, explicit leaf-file symlink support,
   root-constrained `.so` alias resolution, and `man(7)`/`mdoc(7)` lowering on
   every supported platform.
+- Shared regular-file-only manual-path configuration reads. Unix nonblocking
+  opens and handle checks reject FIFOs without waiting for a writer, while
+  retaining symlinks to regular configuration files and bounded UTF-8 reads.
 - Semantic outlines with compact scope summaries, role filters, nested entry
   paths, authored forms, value domains, and optional section/entry roots.
 - Markdown entry authoring with visible alias groups, independent invocation
