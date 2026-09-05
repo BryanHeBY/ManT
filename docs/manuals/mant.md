@@ -857,6 +857,10 @@ semantic entry. All three selectors reject control characters and values over
 - `--limit COUNT`: Limit returned matching lines.
 - `--offset COUNT`: Skip matching lines for deterministic pagination.
 
+`markdown` searches the generated source, not a superset of visible text:
+styling and escapes may interrupt an otherwise contiguous visible identifier.
+Use `visible` to find names such as `NAME_PID` across those boundaries.
+
 Search defaults to a case-insensitive literal over visible text, returns at
 most 100 matching lines, and includes no context lines. Context cannot exceed
 100 lines on either side of a match. Multiple occurrences on the same rendered

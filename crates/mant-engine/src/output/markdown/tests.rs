@@ -23,6 +23,54 @@ fn paragraph(children: Vec<Inline>) -> Block {
     }
 }
 
+#[test]
+fn underscore_escaping_is_independent_of_text_segmentation_but_respects_styles() {
+    let text = |value: &str| Inline::Text {
+        value: value.to_owned(),
+    };
+    for parts in [
+        vec![text("NAME_PID")],
+        vec![text("NAME"), text("_"), text("PID")],
+    ] {
+        let rendered = super::inline::render_inline(&parts, MarkdownOptions::default());
+        assert_eq!(rendered, "NAME_PID");
+    }
+    let styled = vec![
+        Inline::Emphasis {
+            children: vec![text("NAME")],
+        },
+        text("_PID suffix_"),
+    ];
+    let rendered = super::inline::render_inline(&styled, MarkdownOptions::default());
+    let events = Parser::new(&rendered).collect::<Vec<_>>();
+    assert_eq!(
+        events
+            .iter()
+            .filter(|event| matches!(event, Event::Start(Tag::Emphasis)))
+            .count(),
+        1
+    );
+    let visible = events
+        .into_iter()
+        .filter_map(|event| {
+            if let Event::Text(value) = event {
+                Some(value.into_string())
+            } else {
+                None
+            }
+        })
+        .collect::<String>();
+    assert_eq!(visible, "NAME_PID suffix_");
+    // Looking through the emitted '*' to the visible 'E' is unsafe: the
+    // first underscore can now open a new emphasis delimiter run.
+    assert_eq!(
+        Parser::new("*NAME*_PID suffix_")
+            .filter(|event| matches!(event, Event::Start(Tag::Emphasis)))
+            .count(),
+        2
+    );
+}
+
 fn manual(sections: Vec<Section>) -> Document {
     Document {
         parser: None,

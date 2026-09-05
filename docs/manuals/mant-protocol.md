@@ -1202,7 +1202,11 @@ the spaces that encode a hard line break.
 coordinates. Columns count Unicode scalar values rather than UTF-8 bytes.
 
 `scope = "visible"` changes what can match, but coordinates still point into
-the canonical Markdown. `scope = "markdown"` also allows matches in markup.
+the canonical Markdown. `scope = "markdown"` searches the generated source,
+including markup and escapes; it is not a superset of visible matches. For
+example, the visible identifier `NAME_PID` can be emitted as `*NAME*\_PID`.
+Search `visible` for the identifier and `markdown` for the actual source
+spelling. Styling boundaries and escapes can interrupt a source-level match.
 Regex `^` and `$` anchors apply at every rendered line boundary in either
 scope. Regex compilation has a fixed project resource budget in addition to
 the pattern-length bound; an expression whose compiled program exceeds that

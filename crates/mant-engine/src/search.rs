@@ -955,6 +955,35 @@ mod tests {
     }
 
     #[test]
+    fn styled_identifiers_are_visible_matches_not_contiguous_markdown_source() {
+        let mut query = query();
+        query.document.as_mut().unwrap().sections[0]
+            .blocks
+            .push(Block::Paragraph {
+                children: vec![
+                    Inline::Emphasis {
+                        children: vec![Inline::Text {
+                            value: "NAME".into(),
+                        }],
+                    },
+                    Inline::Text {
+                        value: "_PID".into(),
+                    },
+                ],
+                layout: LayoutHint::default(),
+                source: None,
+            });
+        assert_eq!(search_query(&query, &request("NAME_PID")).unwrap().total, 1);
+        let raw = SearchQuery {
+            scope: SearchScope::Markdown,
+            ..request("NAME_PID")
+        };
+        assert_eq!(search_query(&query, &raw).unwrap().total, 0);
+        let rendered = crate::render_markdown(&query);
+        assert!(rendered.contains("*NAME*\\_PID"));
+    }
+
+    #[test]
     fn searches_contiguous_text_across_an_unsafe_style_boundary() {
         let mut query = query();
         query.document.as_mut().expect("fixture document").sections[0]

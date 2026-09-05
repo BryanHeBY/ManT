@@ -1,6 +1,6 @@
 //! Converts renderer-neutral inline nodes to safe `CommonMark` phrasing.
 
-use std::collections::VecDeque;
+use std::{borrow::Cow, collections::VecDeque};
 
 use mant_ir::{Inline, LinkTarget};
 
@@ -156,7 +156,19 @@ fn render_inline_raw(nodes: &[Inline], options: MarkdownOptions) -> String {
     let mut index = 0;
     while let Some(child) = nodes.get(index) {
         match child {
-            Inline::Text { value } => pieces.push(InlinePiece::plain(escape_text(value))),
+            Inline::Text { value } => {
+                // AST text segmentation must not change delimiter decisions.
+                // Merge only transparent text siblings: crossing a style or
+                // link would ignore real emitted Markdown punctuation.
+                let mut text = Cow::Borrowed(value.as_str());
+                index += 1;
+                while let Some(Inline::Text { value }) = nodes.get(index) {
+                    text.to_mut().push_str(value);
+                    index += 1;
+                }
+                pieces.push(InlinePiece::plain(escape_text(&text)));
+                continue;
+            }
             Inline::Strong {
                 children: styled_children,
             } => {

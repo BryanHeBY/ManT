@@ -207,6 +207,14 @@ Preserved source is rendered as visible text, not interpreted HTML, executable c
 
 ## Input Safety
 
+Generated Markdown is a presentation of IR, not a lossless serialization of
+the original source. It can be read again with `--input`, but parse/render
+cycles need not be byte-identical: source wrapping, list continuation layout,
+escaping, and source-specific semantic annotations can change. Search
+coordinates refer to the exact generated output from the same query, not to
+the output of a later parse/render cycle. Use structured IR for semantic
+inspection and retain the original generated Markdown to reuse its offsets.
+
 A leading UTF-8 byte-order mark is masked so it cannot hide the embedded tldr marker or demote the first heading. Terminal-unsafe control characters are replaced with spaces. Both cases produce diagnostics while preserving source offsets.
 
 Markdown parsing never executes HTML, follows remote links, loads images, or reads linked local files. Cross-document navigation resolves only through ManT's registered catalog.

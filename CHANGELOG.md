@@ -46,6 +46,9 @@ that crate was not published for that change.
 
 ### mant-engine 0.11.0
 
+- Escape adjacent plain-text runs as one unit so AST segmentation cannot
+  introduce redundant intraword escapes. Preserve delimiter protection at
+  actual style boundaries and clarify raw-Markdown versus visible search.
 - Deduplicate unresolved scope links per origin and cache failed qualified
   resolutions within a request, without hiding distinct referring documents.
 - Preserve argument-less `.Tg` targets that remain on their own native owner,
