@@ -207,6 +207,10 @@ that crate was not published for that change.
 
 ### mant-ui 0.11.0
 
+- Apply the same Unicode scalar lowercase transform to search queries and
+  rendered text, preventing identical Greek sigma text from being missed
+  while retaining exact cell highlights through expansions and wrapping.
+
 - Resolve exact document, section, and inline fragment aliases to the same TUI
   rows as their normalized internal targets.
 - Emphasize literal commands and options in tldr examples while leaving

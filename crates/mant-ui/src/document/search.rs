@@ -47,7 +47,10 @@ impl RenderedDocument {
     /// Search visible terminal rows without rebuilding or traversing the IR.
     #[must_use]
     pub fn search(&self, query: &str) -> Vec<RenderedSearchMatch> {
-        let needle = query.to_lowercase();
+        // Use the same context-independent scalar transform as indexed text.
+        // Whole-string lowercase has context rules (notably final sigma) that
+        // differ from the per-scalar transform needed for exact cell mapping.
+        let needle = fold_for_search(query).value;
         if needle.is_empty() {
             return Vec::new();
         }

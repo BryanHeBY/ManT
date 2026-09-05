@@ -1204,6 +1204,45 @@ fn rendered_search_finds_literal_options_and_decorates_every_match() {
 }
 
 #[test]
+fn unicode_search_uses_the_same_transform_before_and_after_visual_wrapping() {
+    for (text, query) in [
+        ("ΟΣ", "ΟΣ"),
+        ("ΟΣ", "οσ"),
+        ("ος", "ος"),
+        ("İstanbul", "İSTANBUL"),
+        ("İstanbul", "i\u{307}stanbul"),
+    ] {
+        let mut bundle = bundle();
+        bundle.document.as_mut().unwrap().sections[0].blocks = vec![Block::Preformatted {
+            children: vec![Inline::Text {
+                value: text.to_owned(),
+            }],
+            language: None,
+            layout: LayoutHint::default(),
+            source: None,
+        }];
+        let view = DocumentView::new(&bundle);
+        for width in [1, 2, 80] {
+            let rendered = view.render(width);
+            let matches = rendered.search(query);
+            assert_eq!(matches.len(), 1, "{text:?}/{query:?}, width {width}");
+            let hit = &matches[0];
+            let columns = hit.end_column - hit.start_column
+                + hit
+                    .additional_fragments
+                    .iter()
+                    .map(|f| f.end_column - f.start_column)
+                    .sum::<usize>();
+            assert_eq!(
+                columns,
+                text.width(),
+                "fold expansion changed the highlight range"
+            );
+        }
+    }
+}
+
+#[test]
 fn case_folding_maps_expanding_unicode_back_to_the_source_character() {
     let rendered = RenderedDocument {
         text: Text::from(Line::from("İstanbul")),
