@@ -50,6 +50,12 @@ runs clippy with all targets and features, builds the optimized executable,
 and smoke-tests its human and JSON surfaces. The result is
 `target/release/mant`.
 
+Unix process tests also use Python 3's standard-library PTY support to verify
+display selection, wrapped overflow, short-output pass-through, and terminal
+restoration after paging or TUI exit. Platform-neutral policy matrices and
+redirected-process tests run on Windows as well; PTY checks do not substitute
+for Windows Terminal interactive testing.
+
 CI uses `--build-profile debug` for the final smoke test because its test and
 Clippy steps have already populated that profile. Local checks keep `release`
 as the default, and tagged publication performs a separate optimized build.

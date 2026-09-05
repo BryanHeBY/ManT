@@ -28,8 +28,9 @@ catalog, search, and cross-document interactions without serializing the IR.
 - A Crossterm lifecycle boundary that restores raw mode and the alternate
   screen after normal exit, setup failure, panic, or a handled POSIX
   termination signal before the signal's default action resumes.
-- A static, less-like text pager for terminal-owned catalog output; short and
-  redirected results pass through without opening a full-screen interface.
+- A static, less-like pager for process-owned textual query and catalog output;
+  short results print directly. The CLI owns display/colour policy and bypasses
+  the pager entirely for redirected automatic output and machine protocols.
 - Public `App` and `DocumentView` layers for callers embedding the frontend in
   an existing Ratatui host.
 

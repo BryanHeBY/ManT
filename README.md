@@ -50,7 +50,7 @@ change still needed.
 
 | Interface | Entry point | Designed for |
 | --- | --- | --- |
-| Interactive TUI | `mant NAME` in a terminal, or `--ui` | Hierarchical reading, document discovery, typed links, history, search, mouse input, and tldr quick references |
+| Interactive TUI | `mant NAME` in a terminal, or `--display tui` | Hierarchical reading, document discovery, typed links, history, search, mouse input, and tldr quick references |
 | Structured CLI | Projection options, `--format`, or redirection | Outlines, excerpts, semantic explanations, location-aware search, and stable Markdown/text/JSON |
 | Read-only MCP | `mant --mcp` | Local discovery and focused document retrieval for agents over stdio |
 
@@ -58,12 +58,13 @@ A complete query automatically opens the reader only when both standard input
 and output are terminals. Redirection remains useful and predictable:
 
 ```sh
-mant git > git.md
+mant git --format markdown > git.md
 mant git | less
 ```
 
-Use `--ui` to require the reader or `--format markdown` to require output,
-independent of terminal detection.
+Use `--display tui` to require the reader or `--display direct` to print without
+any interactive interface. `--format` selects the content representation;
+`--display` selects how it is shown.
 
 ## Why ManT
 
@@ -103,7 +104,7 @@ as navigation.
 ```sh
 mant git
 mant --input README.md
-mant tar --ui
+mant tar --display tui
 ```
 
 The Outline sidebar mirrors nested document sections and reveals semantic
@@ -171,7 +172,7 @@ containing `/` also matches the complete canonical path.
 When both standard streams are terminals, text from `--list` and `--find`
 opens in a built-in less-like pager only if it exceeds the terminal height.
 Use the mouse or the usual less navigation and `/` search bindings;
-`--no-pager` forces direct text. Redirected output and `--format json` always
+`--display direct` forces direct text. Redirected output and `--format json` always
 remain plain, deterministic standard output.
 
 Start with an outline and retrieve only the section or option that matters:
@@ -210,7 +211,7 @@ mant --document git --document git-lfs --explain=--work-tree
 
 `--document` is repeatable and defines an ordered set of initial registered documents. `--follow-links` expands that set breadth-first through typed manual and same-source Markdown links; `--max-depth` and `--max-documents` bound the traversal. Search pagination and hit ordinals are global across the stable document order, and per-document groups expose no competing local cursor; explanations remain grouped by exact document address and point to outline/search discovery when every document misses. Cycles and duplicate paths query a document once, missing links remain visible in JSON, and the typed frontier distinguishes links excluded by depth from links excluded by the document budget.
 
-With `--ui`, the first initial document opens normally and confirmed text search spans the resolved set. Selecting a match in another document uses the existing back/forward history. The document finder remains global rather than being restricted to the query set.
+With `--display tui`, the first initial document opens normally and confirmed text search spans the resolved set. Selecting a match in another document uses the existing back/forward history. The document finder remains global rather than being restricted to the query set.
 
 All document queries default to text; Markdown and JSON remain explicit
 alternatives. Full output supports Markdown, text, and JSON. Native roff manuals

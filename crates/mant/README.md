@@ -47,11 +47,11 @@ and notarized.
 ## Interactive reader
 
 An ordinary complete query opens the reader when standard input and output are
-terminals. Use `--ui` to require it explicitly:
+terminals. Use `--display tui` to require it explicitly:
 
 ```sh
 mant git
-mant --input README.md --ui
+mant --input README.md --display tui
 ```
 
 The reader provides a resizable outline, collapsible sections, semantic option
@@ -83,12 +83,12 @@ Use `--color auto|always|never`; automatic mode respects terminal capability,
 `NO_COLOR`, and `TERM=dumb`, while structured formats stay undecorated.
 
 Document discovery follows the same rule: long terminal text is pageable,
-while short, redirected, JSON, and explicit `--no-pager` output stays direct.
+while short, redirected, JSON, and explicit `--display direct` output stays direct.
 
 ```sh
 mant --list
 mant --find git
-mant --find git --no-pager
+mant --find git --display direct
 mant --find git --format json
 ```
 
@@ -115,6 +115,16 @@ interactive terminal; redirected output is plain text. `--preserve-anchors`
 explicitly selects Markdown unless a format is given. A complete native roff
 manual also supports `--format man` for manual-only
 plain text without tldr content.
+
+`--display auto|direct|pager|tui` independently controls presentation. Automatic
+full reading uses the TUI; other terminal-owned text queries use the built-in
+pager only when they exceed the screen. `direct` forbids either interactive
+interface. Explicit `pager` and `tui` require usable stdin/stdout terminals;
+JSON cannot be paged, and stdin documents/request JSON remain noninteractive.
+Explicit formats disable automatic TUI selection; Markdown and man can be
+paged only when explicitly requested. Doctor, help, and maintenance reports
+stay direct by default. The removed `--ui` and `--no-pager` flags are replaced
+by `--display tui` and `--display direct`.
 The default outline returns section topology plus compact entry coverage.
 `--outline-entries none|summary|all|KINDS` controls expansion, while
 `--outline-root` focuses the result on one exact section or semantic entry.

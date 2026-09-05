@@ -104,7 +104,7 @@ fn shipped_manual_options_are_addressable_for_agents_and_the_tui() {
         "--manual",
         "--search",
         "--grep",
-        "--ui",
+        "--display",
         "--help",
         "MANT_MANPATH",
         "APPDATA",

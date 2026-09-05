@@ -64,7 +64,7 @@ model.
 Local Markdown enters the same model, so terminal navigation, outlines,
 excerpts, search, Markdown/text/JSON output, and MCP tools behave consistently
 across both sources. A full query opens the interactive reader when stdin and
-stdout are terminals; redirection falls back to plain text. `--ui` and
+stdout are terminals; redirection falls back to plain text. `--display tui` and
 `--format` make either behavior explicit.
 
 `mant --help` (or `-h`) lists command-line options and points to this manual:
@@ -107,7 +107,7 @@ physical paths.
 | `--kind KIND` | Restrict discovery to `markdown` or `manual`. |
 | `--source SOURCE` | Restrict Markdown discovery to one configured source. |
 | `--man-section MAN_SECTION` | Restrict discovery to one exact native manual category. |
-| `--no-pager` | Print `--list` or `--find` text directly even on a terminal. |
+| `--display direct` | Print `--list` or `--find` text directly even on a terminal. |
 
 Discovery uses a case-insensitive literal substring by default. `--find` also
 accepts `--regex` and `--case`; `--limit` and `--offset` apply deterministic
@@ -128,7 +128,7 @@ independent exact sections rather than being folded into `2` or `3`.
 When stdin and stdout are terminals, discovery text longer than the terminal
 height opens in the built-in pager. It supports mouse scrolling, ordinary
 less-style movement, and `/` search. Short results print directly. Pipelines,
-redirection, `TERM=dumb`, `--format json`, and `--no-pager` never enter the
+redirection, `TERM=dumb`, `--format json`, and `--display direct` never enter the
 pager.
 
 ```sh
@@ -636,7 +636,7 @@ embedded tldr preface does not shift those coordinates.
 ## Interactive Reader
 
 With a complete logical selector or `--input` file and a terminal on stdin and stdout,
-`mant` opens its Ratatui reader. `--ui` requires this mode explicitly. A
+`mant` opens its Ratatui reader. `--display tui` requires this mode explicitly. A
 projection option or `--format` selects deterministic output instead.
 
 The resizable Outline sidebar forms one tree of addressable nodes: document
@@ -774,7 +774,7 @@ mant --document git --document git-config --explain core.worktree --follow-links
 
 `--max-depth` limits the number of followed edges from an initial document and defaults to 8: zero loads only the initial documents, while one also loads their one-hop neighbours. `--max-documents` includes initial documents, defaults to 64, and cannot exceed 256. Both limits require `--follow-links`. Scope resolution also retains at most 64 MiB of normalized semantic content. A linked page that would exceed that aggregate budget remains visible in `frontier` with a `max-content-bytes` reason; an initial document excluded by the same budget appears in `unresolved` and the request fails only if no initial document remains readable. JSON results distinguish missing initial documents and links through `unresolved.from`, and retain every logical link excluded by a depth, document, or content bound. Search applies one global `--limit` and `--offset` over breadth-first document order; document groups contain coordinate descriptors and globally numbered hits but no competing local cursors. Explain checks each document independently, so the same option in two manuals is two qualified results rather than a cross-document ambiguity. A document with neither an entry nor a literal occurrence contributes to `missed`; when every document misses, text output points to a complete entries outline and then to `--search`. A prose-only occurrence is instead a qualified failure containing its outline node and line so CLI callers can use `--search` and MCP callers can use `mant_search`.
 
-Multi-document deterministic output supports `--search` and `--explain`. Outline, node, tldr, full Markdown, and man-format output remain single-document operations instead of silently selecting or concatenating pages. `--ui` opens the first initial document; confirmed text search spans the resolved set, cross-document results participate in history, and the ordinary document finder remains global.
+Multi-document deterministic output supports `--search` and `--explain`. Outline, node, tldr, full Markdown, and man-format output remain single-document operations instead of silently selecting or concatenating pages. `--display tui` opens the first initial document; confirmed text search spans the resolved set, cross-document results participate in history, and the ordinary document finder remains global.
 
 - `--outline`: Print section topology plus a compact semantic-entry summary for
   each non-empty scope.
@@ -893,6 +893,7 @@ mant tar --explain=--exclude
 
 - `--format FORMAT`: Select `markdown`, `text`, `man`, or `json`.
 - `--color WHEN`: Select `auto`, `always`, or `never` for human-readable terminal output.
+- `--display MODE`: Select `auto`, `direct`, `pager`, or `tui`, independently of the content format.
 - `--compact`: Omit JSON indentation.
 - `--preserve-anchors`: Retain addressable HTML anchors in full-document or excerpt Markdown output.
 
@@ -908,6 +909,44 @@ JSON must be selected explicitly for document queries. Maintenance reports,
 schemas, and protocol descriptions retain their JSON output. `--compact` removes indentation from
 JSON queries, schemas, protocol descriptions, doctor reports, and update reports.
 
+### Display Policy
+
+`auto` is the default. When both stdin and stdout are usable terminals,
+ordinary full reading opens the TUI. Text outlines, excerpts, explanations,
+searches, quick references, and catalog results use the built-in less-like
+pager if their rendered content exceeds the screen; short content prints
+directly. An explicit `--format text` selects this text/pager route rather
+than the TUI. Terminal width, wrapping, and ANSI styling are handled by the
+pager rather than estimated from byte counts.
+
+Pipes, redirection, and `TERM=dumb` make automatic display direct. Standard-input
+documents and request JSON always stay noninteractive, even if stdout is a
+terminal. Help, diagnostics, doctor, and maintenance reports do not page
+automatically. Explicit Markdown, man, and JSON output also stays direct in
+automatic mode.
+
+- `direct`: Never open the pager or TUI, including for full reading. It does not disable colour; use `--color never` when necessary.
+- `pager`: Require a usable stdin/stdout terminal and show textual output through the pager. Short output still prints directly. Text, Markdown, and man output are supported; JSON and stdin document/request input are rejected. Doctor text may be explicitly paged.
+- `tui`: Require full document reading and a usable stdin/stdout terminal. It cannot be combined with an explicit format, a partial projection, tldr-only reading, or stdin input.
+
+Explicit interactive modes fail before document loading when no usable terminal
+exists; only `auto` falls back to direct printing. Unsupported combinations
+report usage errors rather than silently ignoring an option. Machine reports
+accept only automatic or direct display; MCP does not accept `--display`.
+Pager exit preserves the command's result status and restores the terminal;
+diagnostics remain on stderr rather than entering the paged body.
+
+The former `--ui` and `--no-pager` flags are removed, not aliases. Replace them
+with `--display tui` and `--display direct`, respectively.
+
+```sh
+mant gcc --explain=-O --display pager
+mant mant --outline --display direct
+mant git --format markdown --display direct
+```
+
+### Colour and Terminal Safety
+
 Help, diagnostics, the default tldr presentation, and document text
 projections share the colour policy. Outline trees, selected nodes,
 explanations, and search results use semantic ANSI roles without changing their
@@ -918,6 +957,11 @@ gain ANSI presentation styling. When Markdown is written
 directly to a terminal, control characters in dynamic document identities are
 masked so a path or catalog label cannot issue terminal commands. Redirected
 Markdown preserves those data bytes exactly.
+
+Colour controls text styling, not the TUI theme or terminal-control sequences
+needed to operate an interactive screen. A pager is still a terminal destination:
+its text receives the same terminal-safety treatment even with `--color never`.
+stdout and stderr apply colour detection independently.
 
 ## Diagnostics
 
@@ -1087,7 +1131,6 @@ for the schema and update lifecycle.
 
 ## General
 
-- `--ui`: Require the interactive reader instead of automatic terminal detection.
 - `-h`, `--help`: Show command help and exit.
 - `-V`, `--version`: Show the installed ManT version and exit.
 

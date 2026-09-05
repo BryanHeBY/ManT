@@ -80,6 +80,7 @@ with tempfile.TemporaryDirectory(prefix="mant-display-pty-") as root:
     for name, path, extra, interactive in [
         ("short text", short, ["--format", "text"], False),
         ("long text", long, ["--format", "text"], True),
+        ("coloured text", long, ["--format", "text", "--color", "always"], True),
         ("wrapped text", wrapped, ["--format", "text"], True),
         ("direct text", long, ["--display", "direct"], False),
         ("markdown", long, ["--format", "markdown"], False),

@@ -56,8 +56,12 @@ impl From<CatalogKindMode> for CatalogDocumentKind {
 /// Independent output choices; terminal policy resolves display and colour once.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub(crate) struct OutputOptions {
+    /// None means default text, while preserving eligibility for automatic
+    /// full-document TUI reading or the specialized tldr text layout.
     pub(crate) format: Option<QueryFormat>,
+    /// Fixed to Always/Never by process policy before rendering.
     pub(crate) color: ColorMode,
+    /// Fixed to Direct/Pager/Tui by process policy before execution.
     pub(crate) display: DisplayMode,
 }
 

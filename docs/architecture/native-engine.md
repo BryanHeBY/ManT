@@ -327,6 +327,15 @@ Complete queries, outlines, excerpts, semantic explanations, searches, and
 catalog results have independent versioned contracts. Human text and
 CommonMark are renderers over those values rather than alternate parsers.
 
+The composition root's `output_policy` separates content format, text colour,
+and display mode. It resolves command capabilities and a once-sampled terminal
+environment before execution; parsers and the IR do not inspect terminal state.
+Automatic full reading uses the TUI, terminal-owned text projections may page,
+and redirected or stdin-protocol queries remain direct. The `mant-ui` pager
+receives already rendered, terminal-sanitized content, owns overflow/wrapping
+and terminal restoration, and never queries documents itself. Shared command
+execution retains result status and stderr across direct and paged delivery.
+
 Search renders one canonical CommonMark projection together with structured
 semantic node ranges. A visible-text map then preserves exact generated
 Markdown coordinates without rediscovering owners from rendered anchors. This

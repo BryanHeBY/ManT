@@ -182,6 +182,13 @@ that crate was not published for that change.
 
 ### mant 0.11.0
 
+- Replace `--ui` and `--no-pager` with the independent
+  `--display auto|direct|pager|tui` policy. Migrate explicit reader invocations to
+  `--display tui`, and noninteractive invocations to `--display direct`.
+  Automatic terminal text queries now share the less-like pager with catalog
+  output; short content prints directly, while stdin requests and machine
+  outputs never automatically page. Explicit interactive modes require a
+  usable terminal, and format/colour rules remain independent of delivery.
 - Point help and missing-action diagnostics to `mant mant` for full reading and
   `mant mant --outline` for focused exploration, without automatically loading
   documentation or changing the TUI.
