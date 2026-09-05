@@ -17,6 +17,36 @@ use crate::{
 use super::{parse_document, parse_markdown};
 
 #[test]
+fn declared_forms_are_separate_from_alias_groups() {
+    let parsed = parse_markdown("# Tool\n\n<!-- mant:entries role=option case=sensitive -->\n- `-o FILE`, `--output FILE` | `--output=FILE`: Write output.\n", None).unwrap();
+    assert!(
+        parsed.document.diagnostics.is_empty(),
+        "{:?}",
+        parsed.document.diagnostics
+    );
+    let index = mant_ir::SemanticIndex::build(&parsed.document);
+    let entry = &index.root()[0];
+    assert_eq!(entry.aliases, ["-o", "--output"]);
+    assert_eq!(entry.forms, ["-o FILE, --output FILE", "--output=FILE"]);
+    for term in [
+        "`-o` | : Empty.",
+        "`-o` || `--output`: Empty.",
+        "`-o` | | `--output`: Empty.",
+    ] {
+        let source =
+            format!("# Tool\n\n<!-- mant:entries role=option case=sensitive -->\n- {term}\n");
+        let parsed = parse_markdown(&source, None).unwrap();
+        assert!(!parsed.document.diagnostics.is_empty(), "{term}");
+        assert!(
+            mant_ir::SemanticIndex::build(&parsed.document)
+                .root()
+                .is_empty(),
+            "{term}"
+        );
+    }
+}
+
+#[test]
 fn lowers_root_content_headings_inlines_lists_tables_and_code() {
     let markdown = "\
 Intro with **bold**, *emphasis*, `code`, and [docs](https://example.test).

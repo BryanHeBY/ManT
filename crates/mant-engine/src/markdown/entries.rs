@@ -673,6 +673,7 @@ struct EntrySignature {
     byte_index: usize,
     width: usize,
     names: Vec<String>,
+    form_breaks: Vec<usize>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -793,31 +794,18 @@ fn entry_signature(
     };
     let mut names = Vec::new();
     let mut leading_term = None;
+    let mut form_breaks = Vec::new();
+    let mut form_has_term = false;
     for (delimiter_inline, inline) in children.iter().enumerate() {
+        if let Some(value) = entry_term_text(inline) {
+            form_has_term = true;
+            leading_term.get_or_insert(value);
+            let parsed = entry_names(value, role, explicitly_declared, attached)
+                .map_err(|reason| EntryRejection::new(reason, Some(value), source))?;
+            extend_unique(&mut names, parsed);
+            continue;
+        }
         match inline {
-            Inline::Code { value } => {
-                leading_term.get_or_insert(value.as_str());
-                let parsed = entry_names(value, role, explicitly_declared, attached)
-                    .map_err(|reason| EntryRejection::new(reason, Some(value), source))?;
-                extend_unique(&mut names, parsed);
-            }
-            Inline::Link {
-                target,
-                children: linked,
-                ..
-            } if matches!(
-                target,
-                LinkTarget::Document { .. } | LinkTarget::Manual { .. }
-            ) && matches!(linked.as_slice(), [Inline::Code { .. }]) =>
-            {
-                let [Inline::Code { value }] = linked.as_slice() else {
-                    unreachable!("the match guard accepts exactly one code child");
-                };
-                leading_term.get_or_insert(value.as_str());
-                let parsed = entry_names(value, role, explicitly_declared, attached)
-                    .map_err(|reason| EntryRejection::new(reason, Some(value), source))?;
-                extend_unique(&mut names, parsed);
-            }
             Inline::Text { value } => {
                 if let Some((delimiter_byte, delimiter_width)) = delimiter_location(value) {
                     if names.is_empty() {
@@ -827,7 +815,10 @@ fn entry_signature(
                             source,
                         ));
                     }
-                    if !is_alias_separator(&value[..delimiter_byte]) {
+                    if !form_has_term
+                        || value[..delimiter_byte].contains('|')
+                        || !is_alias_separator(&value[..delimiter_byte])
+                    {
                         return Err(EntryRejection::new(
                             EntryRejectionReason::InvalidAliasSeparator,
                             leading_term,
@@ -839,6 +830,7 @@ fn entry_signature(
                         byte_index: delimiter_byte,
                         width: delimiter_width,
                         names,
+                        form_breaks,
                     });
                 }
                 if names.is_empty() {
@@ -848,7 +840,10 @@ fn entry_signature(
                         source,
                     ));
                 }
-                if !is_alias_separator(value) {
+                if value.trim() == "|" && form_has_term {
+                    form_breaks.push(delimiter_inline);
+                    form_has_term = false;
+                } else if value.contains('|') || !is_alias_separator(value) {
                     return Err(EntryRejection::new(
                         EntryRejectionReason::InvalidAliasSeparator,
                         leading_term,
@@ -874,6 +869,22 @@ fn entry_signature(
         leading_term,
         source,
     ))
+}
+
+/// Linked and unlinked terms share exactly the same name/form grammar.
+fn entry_term_text(inline: &Inline) -> Option<&str> {
+    match inline {
+        Inline::Code { value } => Some(value),
+        Inline::Link {
+            target: LinkTarget::Document { .. } | LinkTarget::Manual { .. },
+            children,
+            ..
+        } => match children.as_slice() {
+            [Inline::Code { value }] => Some(value),
+            _ => None,
+        },
+        _ => None,
+    }
 }
 
 /// Move one previously validated item into its semantic definition.
@@ -913,7 +924,7 @@ fn entry_definition(
             value_domain,
         }),
         inline_term: false,
-        terms: vec![terms],
+        terms,
         description,
         spacing_before_lines: None,
     }
@@ -922,12 +933,18 @@ fn entry_definition(
 fn apply_entry_signature(
     children: Vec<Inline>,
     signature: &EntrySignature,
-) -> (Vec<Inline>, Vec<Inline>) {
-    let mut terms = Vec::new();
+) -> (Vec<Vec<Inline>>, Vec<Inline>) {
+    let mut terms = vec![Vec::new()];
+    let mut form_breaks = signature.form_breaks.iter().copied().peekable();
     let mut description = Vec::new();
     for (index, inline) in children.into_iter().enumerate() {
         if index < signature.inline_index {
-            terms.push(inline);
+            if form_breaks.peek() == Some(&index) {
+                form_breaks.next();
+                terms.push(Vec::new());
+            } else {
+                terms.last_mut().expect("at least one form").push(inline);
+            }
             continue;
         }
         if index > signature.inline_index {
@@ -940,9 +957,12 @@ fn apply_entry_signature(
         let after_start = signature.byte_index + signature.width;
         let before = &value[..signature.byte_index];
         if !before.is_empty() {
-            terms.push(Inline::Text {
-                value: before.to_owned(),
-            });
+            terms
+                .last_mut()
+                .expect("at least one form")
+                .push(Inline::Text {
+                    value: before.to_owned(),
+                });
         }
         let after = value[after_start..].trim_start();
         if !after.is_empty() {

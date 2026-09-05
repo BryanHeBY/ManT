@@ -105,6 +105,21 @@ Environment-variable declarations use one cross-platform name grammar shared wit
 
 Each list item must begin with one or more code spans containing names and then an explicit description delimiter. Ambiguous, malformed, mixed-purpose, or colliding declarations remain ordinary lists and produce author-facing diagnostics instead of silently losing selectors.
 
+Separate equivalent aliases within one displayed form with commas. Use a
+standalone `|` between code terms to separate complete invocation forms of the
+same entry:
+
+```markdown
+<!-- mant:entries role=option case=sensitive -->
+- `-o FILE`, `--output FILE` | `--output=FILE`: Write output.
+```
+
+This produces aliases `-o` and `--output`, and two forms: `-o FILE, --output FILE`
+and `--output=FILE`. All aliases select the same definition and description.
+The pipe must be outside code spans and links, with a term on both sides;
+empty forms are rejected without partially indexing the list. A pipe inside a
+code span remains part of that authored form and follows its role's name grammar.
+
 A term may instead be one document link wrapping exactly one code span:
 
 ```markdown

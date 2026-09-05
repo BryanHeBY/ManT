@@ -46,6 +46,9 @@ that crate was not published for that change.
 
 ### mant-engine 0.11.0
 
+- Let Markdown authors separate invocation forms with `|` between code terms
+  while retaining comma-grouped aliases within each form. Both forms share one
+  entry identity, and empty alternatives reject the declaration atomically.
 - Escape adjacent plain-text runs as one unit so AST segmentation cannot
   introduce redundant intraword escapes. Preserve delimiter protection at
   actual style boundaries and clarify raw-Markdown versus visible search.
