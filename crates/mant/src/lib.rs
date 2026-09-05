@@ -8,14 +8,13 @@ mod error;
 mod external;
 mod json_boundary;
 mod mcp;
+mod output_policy;
 mod presentation;
 mod terminal;
 
 use std::io::{self, IsTerminal, Read, Write};
 
-use arguments::{
-    CatalogPaging, ColorMode, Command, QueryFormat, QueryPresentation, QuerySource, SchemaContract,
-};
+use arguments::{ColorMode, Command, QueryFormat, QueryPresentation, QuerySource, SchemaContract};
 use clipboard::SystemClipboard;
 use error::{
     Failure, query_execution_failure, query_failure, report_argument_error, report_failure,
@@ -32,6 +31,9 @@ use mant_protocol::{
     render_catalog_text,
 };
 use mant_sources::{DocumentSourcesPrune, DocumentSourcesUpdate};
+use output_policy::{
+    TerminalCapabilities, TerminalKind, resolve_process_presentation, should_page_catalog,
+};
 use presentation::{render_json, render_query_result};
 use serde::Serialize;
 
@@ -72,24 +74,6 @@ struct QueryOutput {
     pretty: bool,
     preserve_anchors: bool,
     target: presentation::OutputTarget,
-}
-
-/// Terminal capabilities consulted only by the OS process entry point.
-///
-/// The injectable [`run`] boundary intentionally remains deterministic and
-/// treats `Auto` as text output without automatic terminal styling.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct TerminalCapabilities {
-    input: bool,
-    output: bool,
-    color: bool,
-    kind: TerminalKind,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum TerminalKind {
-    Capable,
-    Dumb,
 }
 
 // ── Host boundary ─────────────────────────────────────────────────────────
@@ -269,20 +253,6 @@ pub async fn run_process(arguments: &[String]) -> u8 {
     )
 }
 
-fn should_page_catalog(command: &Command, terminal: TerminalCapabilities) -> bool {
-    terminal.input
-        && terminal.output
-        && terminal.kind == TerminalKind::Capable
-        && matches!(
-            command,
-            Command::Catalog {
-                format: QueryFormat::Text,
-                paging: CatalogPaging::Auto,
-                ..
-            }
-        )
-}
-
 fn run_paged_catalog(
     command: Command,
     diagnostics: &mut dyn Write,
@@ -307,78 +277,6 @@ fn run_paged_catalog(
         Ok(()) => 0,
         Err(error) => report_failure(&Failure::operational(error), diagnostics, diagnostics_color),
     }
-}
-
-/// Resolve terminal-sensitive defaults without coupling argument parsing to
-/// operating-system streams.
-fn resolve_process_presentation(
-    command: &mut Command,
-    terminal: TerminalCapabilities,
-) -> Result<(), Failure> {
-    if let Command::Doctor { color, .. } = command {
-        if *color == ColorMode::Auto {
-            *color = if terminal.output && terminal.color {
-                ColorMode::Always
-            } else {
-                ColorMode::Never
-            };
-        }
-        return Ok(());
-    }
-    let Command::Query { presentation, .. } = command else {
-        return Ok(());
-    };
-    match *presentation {
-        QueryPresentation::Auto(_)
-            if terminal.input && terminal.output && terminal.kind == TerminalKind::Capable =>
-        {
-            *presentation = QueryPresentation::Interactive;
-        }
-        QueryPresentation::Auto(color) => {
-            *presentation = QueryPresentation::Output {
-                format: QueryFormat::Text,
-                color: match color {
-                    ColorMode::Auto if terminal.output && terminal.color => ColorMode::Always,
-                    ColorMode::Auto => ColorMode::Never,
-                    explicit => explicit,
-                },
-            };
-        }
-        QueryPresentation::Interactive
-            if !terminal.input || !terminal.output || terminal.kind == TerminalKind::Dumb =>
-        {
-            return Err(Failure::usage(
-                "interactive view requires a capable input and output terminal; omit --ui or select --format",
-            ));
-        }
-        QueryPresentation::Tldr(ColorMode::Auto) => {
-            *presentation = QueryPresentation::Tldr(if terminal.output && terminal.color {
-                ColorMode::Always
-            } else {
-                ColorMode::Never
-            });
-        }
-        QueryPresentation::Output {
-            format,
-            color: ColorMode::Auto,
-        } => {
-            *presentation = QueryPresentation::Output {
-                format,
-                color: if terminal.output && terminal.color {
-                    ColorMode::Always
-                } else {
-                    ColorMode::Never
-                },
-            };
-        }
-        QueryPresentation::Interactive
-        | QueryPresentation::Output {
-            color: ColorMode::Always | ColorMode::Never,
-            ..
-        }
-        | QueryPresentation::Tldr(ColorMode::Always | ColorMode::Never) => {}
-    }
-    Ok(())
 }
 
 fn run_with_host(
