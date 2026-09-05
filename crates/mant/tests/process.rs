@@ -162,6 +162,31 @@ fn help_groups_the_public_query_surface() {
 }
 
 #[test]
+fn help_and_empty_invocations_offer_the_manual_without_reading_it() {
+    for flags in [vec!["--help"], vec!["-h"], vec![]] {
+        let output = Command::new(executable())
+            .args(&flags)
+            .output()
+            .expect("run help entry point");
+        let text = if flags.is_empty() {
+            assert_eq!(output.status.code(), Some(2));
+            assert!(output.stdout.is_empty());
+            String::from_utf8(output.stderr).expect("usage diagnostic")
+        } else {
+            assert!(output.status.success());
+            assert!(output.stderr.is_empty());
+            String::from_utf8(output.stdout).expect("help text")
+        };
+        assert!(text.contains("mant mant             Read the full manual"));
+        assert!(text.contains("mant mant --outline"));
+        assert!(text.contains("TUI on an interactive terminal; text otherwise"));
+        assert!(text.find("ManT manual:") < text.find("Usage:"));
+        assert!(!text.contains('\x1b'));
+        assert!(!text.contains("## Description"));
+    }
+}
+
+#[test]
 fn clap_color_is_terminal_aware_and_explicitly_controllable() {
     let run = |arguments: &[&str]| {
         Command::new(executable())

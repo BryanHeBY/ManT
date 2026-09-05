@@ -67,6 +67,12 @@ across both sources. A full query opens the interactive reader when stdin and
 stdout are terminals; redirection falls back to plain text. `--ui` and
 `--format` make either behavior explicit.
 
+`mant --help` (or `-h`) lists command-line options and points to this manual:
+`mant mant` reads it in the TUI on an interactive terminal, or as text otherwise.
+Use `mant mant --outline` to explore its structure before selecting content with
+`--node` or `--explain`. Running `mant` without arguments reports a missing action
+and shows the same manual hints; it does not automatically read the full manual.
+
 ## Semantic Document Model
 
 ManT preserves source meaning before presentation. Markdown and native manuals

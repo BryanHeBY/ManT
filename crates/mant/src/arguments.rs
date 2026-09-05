@@ -294,6 +294,8 @@ const CLI_STYLES: Styles = Styles::styled()
     .valid(AnsiColor::Green.on_default())
     .invalid(AnsiColor::Yellow.on_default());
 
+const SELF_MANUAL_HELP: &str = "ManT manual:\n  mant mant             Read the full manual (TUI on an interactive terminal; text otherwise)\n  mant mant --outline   Explore the manual before reading selected nodes";
+
 #[derive(Debug, clap::Parser)]
 // These booleans are declarative CLI switches, not coupled domain state; clap
 // validates their relationships before `Cli` is normalized into `Command`.
@@ -301,6 +303,7 @@ const CLI_STYLES: Styles = Styles::styled()
 #[command(
     name = "mant",
     about = "Read or query structured local manuals and Markdown",
+    before_help = SELF_MANUAL_HELP,
     styles = CLI_STYLES,
     disable_help_flag = true,
     version,
@@ -731,6 +734,13 @@ fn parse_with_help(
     help_behavior: HelpBehavior,
 ) -> Result<Command, clap::Error> {
     let color = requested_color(arguments);
+    if arguments.is_empty() {
+        return Err(command_error(
+            ErrorKind::MissingRequiredArgument,
+            format!("choose a document or action\n\n{SELF_MANUAL_HELP}"),
+            color,
+        ));
+    }
     if uses_removed_section_option(arguments) {
         return Err(command_error(
             ErrorKind::UnknownArgument,

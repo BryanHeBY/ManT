@@ -182,6 +182,9 @@ that crate was not published for that change.
 
 ### mant 0.11.0
 
+- Point help and missing-action diagnostics to `mant mant` for full reading and
+  `mant mant --outline` for focused exploration, without automatically loading
+  documentation or changing the TUI.
 - Default all CLI document queries to text, including redirected full reading,
   stdin documents, and request JSON. Use `--format markdown` for the former full
   output default; `--preserve-anchors` still selects Markdown explicitly.
