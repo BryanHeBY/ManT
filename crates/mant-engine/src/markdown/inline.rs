@@ -139,7 +139,10 @@ fn parse_inline_sequence(
 }
 
 fn link_target(destination: String) -> mant_ir::LinkTarget {
-    if let Some(target) = destination.strip_prefix('#') {
+    if let Some(target) = destination
+        .strip_prefix('#')
+        .and_then(super::link_destination::decode_fragment)
+    {
         mant_ir::LinkTarget::Section { id: target.into() }
     } else if let Some(address) = mant_ir::email_address_from_mailto_uri(&destination) {
         mant_ir::LinkTarget::Email { address }
@@ -170,11 +173,22 @@ pub(super) fn markdown_document_reference(destination: &str) -> Option<(String, 
     if destination.split('/').next()?.contains(':') {
         return None;
     }
-    let (path, fragment) = destination
-        .split_once('#')
-        .map_or((destination, None), |(path, fragment)| {
-            (path, (!fragment.is_empty()).then(|| fragment.to_owned()))
-        });
+    let (path, fragment) = if let Some((path, fragment)) = destination.split_once('#') {
+        (
+            path,
+            if fragment.is_empty() {
+                None
+            } else {
+                Some(super::link_destination::decode_fragment(fragment)?)
+            },
+        )
+    } else {
+        (destination, None)
+    };
+    let path = super::link_destination::decode_path(path)?;
+    if path.split('/').next()?.contains(':') {
+        return None;
+    }
     if path.contains(['\\', '?']) || path.starts_with('/') || path.chars().any(char::is_control) {
         return None;
     }
@@ -182,7 +196,7 @@ pub(super) fn markdown_document_reference(destination: &str) -> Option<(String, 
     // platform-specific interpretation of drive prefixes and components.
     let (parent, leaf) = path
         .rsplit_once('/')
-        .map_or(("", path), |(parent, leaf)| (parent, leaf));
+        .map_or(("", path.as_str()), |(parent, leaf)| (parent, leaf));
     let (filename, extension) = leaf.rsplit_once('.')?;
     if !extension.eq_ignore_ascii_case("md") && !extension.eq_ignore_ascii_case("markdown") {
         return None;

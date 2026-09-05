@@ -418,6 +418,69 @@ fn unsupported_math_does_not_leak_markdown_bracket_escapes() {
 }
 
 #[test]
+fn markdown_link_components_decode_once_and_validate_before_navigation() {
+    use mant_ir::LinkTarget;
+    for (uri, expected_name, expected_fragment) in [
+        (
+            "space%20name.md#Mixed%2ETarget",
+            "space name",
+            Some("Mixed.Target"),
+        ),
+        (
+            "literal%2520name.md#Mixed%252ETarget",
+            "literal%20name",
+            Some("Mixed%2ETarget"),
+        ),
+        ("%E6%97%A5%E6%9C%AC.md", "日本", None),
+        ("../other.md", "../other", None),
+    ] {
+        let document = parse_document(&format!("[LINK]({uri})\n"), None);
+        let Block::Paragraph { children, .. } = &document.blocks[0] else {
+            panic!("link paragraph")
+        };
+        assert!(
+            matches!(&children[0], Inline::Link { target: LinkTarget::Document { name, fragment }, .. } if name == expected_name && fragment.as_deref() == expected_fragment),
+            "{uri}: {children:?}"
+        );
+    }
+    for uri in [
+        "bad%2Fname.md",
+        "bad%5Cname.md",
+        "bad%00.md",
+        "bad%FF.md",
+        "bad%GG.md",
+        "bad%2.md",
+        "bad%3Fquery.md",
+        "bad%23fragment.md",
+        "C%3A/page.md",
+        "#bad%00",
+        "#bad%FF",
+    ] {
+        let document = parse_document(&format!("[LINK]({uri})\n"), None);
+        let Block::Paragraph { children, .. } = &document.blocks[0] else {
+            panic!("link paragraph")
+        };
+        assert!(
+            matches!(
+                &children[0],
+                Inline::Link {
+                    target: LinkTarget::External { .. },
+                    ..
+                }
+            ),
+            "{uri}: {children:?}"
+        );
+    }
+    let document = parse_document("## Mixed {#Mixed.Target}\n[LINK](#Mixed%2ETarget)\n", None);
+    assert!(
+        !document
+            .diagnostics
+            .iter()
+            .any(|d| d.code.as_deref() == Some("ir.dangling-section-link"))
+    );
+}
+
+#[test]
 fn markdown_extension_does_not_turn_uri_schemes_or_authorities_into_documents() {
     for uri in [
         "https://example.md",

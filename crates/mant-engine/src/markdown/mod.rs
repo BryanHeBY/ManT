@@ -8,6 +8,7 @@ mod container;
 mod entries;
 mod inline;
 mod layout;
+pub(crate) mod link_destination;
 mod source;
 
 #[cfg(test)]

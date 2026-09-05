@@ -1290,6 +1290,39 @@ mod tests {
     }
 
     #[test]
+    fn decoded_document_paths_still_respect_the_registered_namespace() {
+        let from = DocumentAddress::Markdown {
+            path: "guide/start".to_owned(),
+            origin: MarkdownOrigin::Documents,
+        };
+        for (uri, expected) in [
+            ("../space%20name.md", Some("documents/space name")),
+            ("%2E%2E/%2E%2E/outside.md", None),
+            ("literal%2520.md", Some("documents/guide/literal%20")),
+        ] {
+            let query = crate::query_markdown_text(&format!("[link]({uri})"), None).unwrap();
+            let document = query.document.unwrap();
+            let Block::Paragraph { children, .. } = &document.blocks[0] else {
+                panic!("paragraph")
+            };
+            let Inline::Link { target, .. } = &children[0] else {
+                panic!("link")
+            };
+            let reference = DocumentReference {
+                target: SemanticDocumentReference::from_link_target(target).unwrap(),
+                kind: DocumentEdgeKind::Document,
+                source_offset: None,
+                sequence: 0,
+            };
+            assert_eq!(
+                reference.selector(&from).map(|s| s.selector),
+                expected.map(str::to_owned),
+                "{uri}"
+            );
+        }
+    }
+
+    #[test]
     fn relative_links_use_the_current_markdown_namespace() {
         let reference = DocumentReference {
             target: SemanticDocumentReference::Document {

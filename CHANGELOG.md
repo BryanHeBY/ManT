@@ -55,6 +55,10 @@ that crate was not published for that change.
 
 ### mant-engine 0.11.0
 
+- Decode local Markdown path/fragment escapes once before validation and
+  re-encode logical destinations when rendering Markdown, preserving spaces,
+  Unicode, literal percent escapes, and registered-source confinement.
+
 - Classify URI schemes and authorities before relative Markdown destinations,
   so external `.md` URLs cannot create local document links or scope edges.
 

@@ -73,7 +73,9 @@ domain. URI-sensitive mailbox characters such as `%` and `/` are percent-
 encoded during activation; quoted, internationalized, leading-dot, trailing-
 dot, and consecutive-dot local parts remain visible but invalid.
 
-Relative document links retain an extension-free logical path. `.md` and `.markdown` matching is case-insensitive. Absolute paths, query strings, control characters, and non-Markdown suffixes do not become document-navigation links.
+Relative document links retain an extension-free logical path. `.md` and `.markdown` matching is case-insensitive. URI schemes and network authorities are classified first, even when a host or URI path ends in `.md`. Absolute paths, query strings, control characters, and non-Markdown suffixes do not become document-navigation links.
+
+Percent-encoded local path components and fragments are decoded exactly once as UTF-8 before logical-address validation. For example, `space%20name.md#Mixed%2ETarget` addresses `space name` and fragment `Mixed.Target`; `%2520` instead represents literal `%20`. Invalid escapes, invalid UTF-8, controls, and encoded path separators or query/fragment delimiters do not create document-navigation links. Rendered Markdown re-encodes logical components, including literal percent signs. External URI escapes are preserved, not decoded as local paths.
 
 Paths containing `.` or `..` components are represented but navigation remains constrained to the current registered document source. A document link cannot escape its source boundary. Unresolved local fragments remain visible and are diagnosed rather than silently redirected.
 

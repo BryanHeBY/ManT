@@ -24,6 +24,45 @@ fn paragraph(children: Vec<Inline>) -> Block {
 }
 
 #[test]
+fn logical_link_serialization_preserves_literal_percent_and_unicode_components() {
+    #[derive(Default)]
+    struct Links(Vec<mant_ir::LinkTarget>);
+    impl<'a> Visit<'a> for Links {
+        fn visit_inline(&mut self, inline: &'a Inline) {
+            if let Inline::Link { target, .. } = inline {
+                self.0.push(target.clone());
+            }
+            walk_inline(self, inline);
+        }
+    }
+    let source = "## Mixed {#Mixed%2ETarget}\n[local](#Mixed%252ETarget) [doc](space%20name.md#Mixed%2ETarget) [literal](literal%2520.md#literal%252E) [unicode](%E6%97%A5%E6%9C%AC.md)\n";
+    let query = crate::query_markdown_text(source, None).unwrap();
+    let options = MarkdownOptions {
+        preserve_anchors: true,
+    };
+    let markdown = render_markdown_with_options(&query, options);
+    assert!(
+        markdown.contains("literal%2520.md#literal%252E"),
+        "{markdown}"
+    );
+    let reparsed = crate::query_markdown_text(&markdown, None).unwrap();
+    assert!(
+        !reparsed
+            .document
+            .as_ref()
+            .unwrap()
+            .diagnostics
+            .iter()
+            .any(|d| d.code.as_deref() == Some("ir.dangling-section-link"))
+    );
+    let mut original_links = Links::default();
+    original_links.visit_document(query.document.as_ref().unwrap());
+    let mut reparsed_links = Links::default();
+    reparsed_links.visit_document(reparsed.document.as_ref().unwrap());
+    assert_eq!(reparsed_links.0, original_links.0);
+}
+
+#[test]
 fn underscore_escaping_is_independent_of_text_segmentation_but_respects_styles() {
     let text = |value: &str| Inline::Text {
         value: value.to_owned(),

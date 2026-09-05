@@ -215,11 +215,10 @@ fn render_inline_raw(nodes: &[Inline], options: MarkdownOptions) -> String {
                     pieces.push(InlinePiece::plain(rendered));
                 }
                 LinkTarget::Document { name, fragment } => {
-                    let mut destination = format!("{name}.md");
-                    if let Some(fragment) = fragment {
-                        destination.push('#');
-                        destination.push_str(fragment);
-                    }
+                    let destination = crate::markdown::link_destination::document_destination(
+                        name,
+                        fragment.as_deref(),
+                    );
                     pieces.push(InlinePiece::plain(render_link(
                         &destination,
                         title.as_deref(),
@@ -229,7 +228,10 @@ fn render_inline_raw(nodes: &[Inline], options: MarkdownOptions) -> String {
                 }
                 LinkTarget::Section { id } if options.preserve_anchors => {
                     pieces.push(InlinePiece::plain(render_link(
-                        &format!("#{id}"),
+                        &format!(
+                            "#{}",
+                            crate::markdown::link_destination::encode_fragment(id.as_str())
+                        ),
                         title.as_deref(),
                         children,
                         options,
