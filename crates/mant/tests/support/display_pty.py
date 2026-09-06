@@ -5,12 +5,14 @@ import fcntl
 import os
 import pty
 import select
+import signal
 import struct
 import subprocess
 import sys
 import tempfile
 import termios
 import time
+import traceback
 from pathlib import Path
 
 
@@ -37,25 +39,68 @@ def drain(fd, output, deadline):
         output.extend(chunk)
 
 
+def in_session(callback):
+    """Keep a disposable session leader alive through all post-child checks.
+
+    Darwin revokes a controlling terminal when its session leader exits. The
+    command must therefore be a child of this supervisor, not the leader itself.
+    The outer harness never acquires a controlling terminal or changes signals.
+    """
+    supervisor = os.fork()
+    if supervisor == 0:
+        try:
+            os.setsid()
+            callback()
+        except BaseException:
+            traceback.print_exc()
+            sys.stderr.flush()
+            os._exit(1)
+        sys.stdout.flush()
+        os._exit(0)
+    reaped = False
+    try:
+        deadline = time.monotonic() + 25
+        while time.monotonic() < deadline:
+            finished, status = os.waitpid(supervisor, os.WNOHANG)
+            if finished:
+                reaped = True
+                assert os.waitstatus_to_exitcode(status) == 0, (
+                    "PTY session supervisor failed", status
+                )
+                return
+            time.sleep(0.02)
+        raise AssertionError("PTY session supervisor timed out")
+    finally:
+        if not reaped:
+            # The group contains only this case's supervisor and command.
+            try:
+                os.killpg(supervisor, signal.SIGKILL)
+            except ProcessLookupError:
+                os.kill(supervisor, signal.SIGKILL)
+            os.waitpid(supervisor, 0)
+
+
 def check(arguments, expected_interactive, env, stdin=None):
+    in_session(lambda: check_in_session(
+        [sys.argv[1], *arguments], expected_interactive, env, stdin
+    ))
+
+
+def check_in_session(arguments, expected_interactive, env, stdin=None):
     master, slave = pty.openpty()
+    fcntl.ioctl(slave, termios.TIOCSCTTY, 0)
     fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 16, 70, 0, 0))
     original = termios.tcgetattr(slave)
     os.set_blocking(master, False)
 
-    def controlling_terminal():
-        os.setsid()
-        fcntl.ioctl(slave, termios.TIOCSCTTY, 0)
-
     # A file cannot fill a pipe and deadlock the child before it exits.
     diagnostics_file = tempfile.TemporaryFile()
     process = subprocess.Popen(
-        [sys.argv[1], *arguments],
+        arguments,
         stdin=slave if stdin is None else subprocess.PIPE,
         stdout=slave,
         stderr=diagnostics_file,
         env=env,
-        preexec_fn=controlling_terminal,
     )
     result = bytearray()
     quit_sent = False
@@ -90,11 +135,15 @@ def check(arguments, expected_interactive, env, stdin=None):
         assert termios.tcgetattr(slave) == original, (arguments, "terminal mode leaked")
         if interactive:
             assert b"\x1b[?1049l" in result, (arguments, "alternate screen not restored")
+        return bytes(result)
     finally:
         if process.poll() is None:
             process.kill()
             process.wait(timeout=5)
         diagnostics_file.close()
+        # Closing our own controlling PTY can send SIGHUP. Only ignore it after
+        # the command has exited, so the command retains normal signal behavior.
+        signal.signal(signal.SIGHUP, signal.SIG_IGN)
         os.close(master)
         os.close(slave)
 
@@ -154,6 +203,37 @@ def test_drain_boundaries():
             raise AssertionError("unexpected read error was swallowed")
 
 
+def test_session_lifecycle():
+    def final_output():
+        program = (
+            "import os; "
+            "assert os.getsid(0) != os.getpid(); "
+            "assert os.tcgetpgrp(0) == os.getpgrp(); "
+            "tty = os.open('/dev/tty', os.O_RDWR); os.close(tty); "
+            "print('x' * 200000 + 'FINAL', end='', flush=True)"
+        )
+        output = check_in_session([sys.executable, "-c", program], False, os.environ)
+        assert output == b"x" * 200000 + b"FINAL", "final PTY output lost"
+
+    def leaked_mode():
+        program = (
+            "import termios; attrs = termios.tcgetattr(0); "
+            "attrs[3] ^= termios.ECHO; "
+            "termios.tcsetattr(0, termios.TCSANOW, attrs)"
+        )
+        try:
+            check_in_session([sys.executable, "-c", program], False, os.environ)
+        except AssertionError as error:
+            assert "terminal mode leaked" in str(error), error
+        else:
+            raise AssertionError("supervisor concealed a terminal restoration failure")
+
+    in_session(final_output)
+    in_session(leaked_mode)
+    print("session lifetime and restoration-negative checks passed", flush=True)
+
+
 test_drain_boundaries()
+test_session_lifecycle()
 with tempfile.TemporaryDirectory(prefix="mant-display-pty-") as root:
     run_cases(root)
