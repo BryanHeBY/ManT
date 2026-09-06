@@ -55,6 +55,10 @@ that crate was not published for that change.
 
 ### mant-engine 0.11.0
 
+- Make tbl cell recovery transactional: unsupported mixed block/inline
+  requests keep the complete native payload or complete source spelling,
+  never a partial reconstruction that silently drops earlier text.
+
 - Decode local Markdown path/fragment escapes once before validation and
   re-encode logical destinations when rendering Markdown, preserving spaces,
   Unicode, literal percent escapes, and registered-source confinement.

@@ -515,7 +515,7 @@ impl<'a> LoweringContext<'a> {
         self.diagnostics.borrow_mut().push(Diagnostic {
             level: DiagnosticLevel::Warning,
             code: Some("manual.unhandled-table-text-block".to_owned()),
-            message: "tbl text block contains semantic roff that could not be retained".to_owned(),
+            message: "tbl inline semantics could not be reconstructed completely; complete native cell text or source spelling was retained".to_owned(),
             source: Some(SourceSpan {
                 byte_range: None,
                 line,

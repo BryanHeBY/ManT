@@ -3851,6 +3851,74 @@ fn restores_alternating_font_arguments_inside_tbl_text_blocks() {
 }
 
 #[test]
+fn mixed_mdoc_table_requests_preserve_content_when_block_semantics_are_unsupported() {
+    for body in [
+        ".Cm TOKENA\n.Pp\nTOKENB",
+        ".Em TOKENA\n.Bl -bullet\n.It\nTOKENB\n.El",
+        ".Cm TOKENA\n.Bd -literal\nTOKENB\n.Ed",
+    ] {
+        let source = format!(
+            ".Dd September 6, 2026\n.Dt MIXED 1\n.Os\n.Sh DESCRIPTION\n.TS\nl.\nT{{\n{body}\nT}}\n.TE\n"
+        );
+        let query = crate::query_roff_bytes(source.as_bytes()).unwrap();
+        let text = crate::render_query_text(&query);
+        assert!(
+            text.contains("TOKENA") && text.contains("TOKENB"),
+            "{source}: {text}"
+        );
+        assert_eq!(text.matches("TOKENA").count(), 1, "{text}");
+        assert_eq!(text.matches("TOKENB").count(), 1, "{text}");
+        assert!(
+            query
+                .document
+                .as_ref()
+                .unwrap()
+                .diagnostics
+                .iter()
+                .any(|d| d.code.as_deref() == Some("manual.unhandled-table-text-block"))
+        );
+    }
+}
+
+#[test]
+fn mixed_table_requests_never_replace_complete_content_with_partial_recovery() {
+    for font in ["B", "I", "BR"] {
+        for paragraph in ["PP", "TP"] {
+            for apostrophe in [false, true] {
+                let control = if apostrophe { "'" } else { "." };
+                let source = format!(
+                    ".TH MIXED 1\n.SH DESCRIPTION\n.TS\nl l.\nT{{\n{control}{font} TOKENA\n{control}{paragraph}\nTOKENB\nT}}\tNEIGHBOR\n.TE\n"
+                );
+                let document =
+                    parse_manual_bytes(std::path::Path::new("mixed-table.1"), source.as_bytes())
+                        .unwrap();
+                let [Block::Table { rows, .. }] = document.sections[0].blocks.as_slice() else {
+                    panic!("table structure must survive {source}")
+                };
+                let [Block::Paragraph { children, .. }] = rows[0].cells[0].blocks.as_slice() else {
+                    panic!("table cell")
+                };
+                let text = inline_text(children);
+                assert!(
+                    text.contains("TOKENA") && text.contains("TOKENB"),
+                    "{source}: {text}"
+                );
+                assert!(text.find("TOKENA") < text.find("TOKENB"));
+                assert!(!text.contains("NEIGHBOR"));
+                assert_eq!(text.matches("TOKENA").count(), 1);
+                assert_eq!(text.matches("TOKENB").count(), 1);
+                assert!(
+                    document
+                        .diagnostics
+                        .iter()
+                        .any(|d| d.code.as_deref() == Some("manual.unhandled-table-text-block"))
+                );
+            }
+        }
+    }
+}
+
+#[test]
 fn mdoc_header_references_require_both_synopsis_and_line_start_for_include() {
     for section in ["DESCRIPTION", "SYNOPSIS"] {
         for (request, inline) in [(".In stdio.h", false), (".No See In stdio.h", true)] {

@@ -192,12 +192,24 @@ fn lower_table_cell(
         // flattened libmandoc cell text has already discarded request-level
         // font and spacing semantics. Reconstruct from the bounded source
         // block first even when no printable AST siblings escaped the table.
-        let reconstructed = lower_table_text_block(
+        let recovered = lower_table_text_block(
             text_block,
             &semantic_nodes,
             context,
             node.flags.synopsis_pretty,
         );
+        // Recovery is transactional: a partially lowered cell is not a
+        // replacement for the native payload. If that payload is absent,
+        // retain the entire source rather than only the supported lines.
+        let reconstructed = match recovered {
+            TableTextRecovery::Complete(inlines) => inlines,
+            TableTextRecovery::Incomplete => {
+                if let Some(text) = cell.text.as_deref().filter(|text| !text.is_empty()) {
+                    return lower_table_cell_text(text, node.line, context);
+                }
+                parse_roff_text(&text_block.source)
+            }
+        };
         if !reconstructed.is_empty() {
             // libmandoc associates the row with its first physical input
             // line, but an empty `T{ T}` cell can be normalized to an
@@ -302,12 +314,17 @@ fn lower_table_cell_text(source: &str, line: u32, context: &LoweringContext<'_>)
     output
 }
 
+enum TableTextRecovery {
+    Complete(Vec<Inline>),
+    Incomplete,
+}
+
 fn lower_table_text_block(
     block: &TableTextBlock,
     semantic_nodes: &[&Node],
     context: &LoweringContext<'_>,
     synopsis: bool,
-) -> Vec<Inline> {
+) -> TableTextRecovery {
     if let Some(recovered) = lower_source_fragment(
         &block.source,
         context.macro_set,
@@ -316,8 +333,24 @@ fn lower_table_text_block(
     ) {
         if !recovered.complete {
             context.warn_unhandled_table_text_block_line(block.start_line);
+            return TableTextRecovery::Incomplete;
         }
-        return recovered.inlines;
+        return TableTextRecovery::Complete(recovered.inlines);
+    }
+    // A rejected request sequence cannot be proven complete by stitching
+    // together whichever AST siblings escaped tbl. Even a present node may
+    // only represent part of that sequence. Keep the whole cell instead.
+    if let Some(offset) = block
+        .source
+        .lines()
+        .position(|line| line.trim_start().starts_with(['.', '\'']))
+    {
+        context.warn_unhandled_table_text_block_line(
+            block
+                .start_line
+                .saturating_add(u32::try_from(offset).unwrap_or(u32::MAX)),
+        );
+        return TableTextRecovery::Incomplete;
     }
     let mut builder = InlineBuilder::new();
     for (offset, source_line) in block.source.lines().enumerate() {
@@ -350,13 +383,9 @@ fn lower_table_text_block(
         if source_line.is_empty() {
             continue;
         }
-        if source_line.starts_with('.') || source_line.starts_with('\'') {
-            context.warn_unhandled_table_text_block_line(line);
-        } else {
-            builder.append_filled(parse_roff_text(source_line), FilledBoundary::Word);
-        }
+        builder.append_filled(parse_roff_text(source_line), FilledBoundary::Word);
     }
-    builder.finish()
+    TableTextRecovery::Complete(builder.finish())
 }
 
 #[cfg(test)]
@@ -364,6 +393,57 @@ mod tests {
     use mant_ir::Inline;
 
     use crate::mandoc::inline::plain_text;
+
+    #[test]
+    fn incomplete_cell_recovery_keeps_whole_native_payload_or_whole_source() {
+        fn table_node(node: &libmandoc_rs::Node) -> Option<&libmandoc_rs::Node> {
+            if node.kind == libmandoc_rs::NodeKind::Table {
+                return Some(node);
+            }
+            node.children.iter().find_map(table_node)
+        }
+        let report = libmandoc_rs::Parser::new(libmandoc_rs::ParseOptions {
+            includes: libmandoc_rs::IncludePolicy::Deny,
+            compression: libmandoc_rs::Compression::Plain,
+        })
+        .parse_bytes(
+            "fallback.1",
+            b".TH FALLBACK 1\n.SH DESCRIPTION\n.TS\nl.\nplaceholder\n.TE\n",
+        )
+        .unwrap();
+        let node = table_node(&report.document.root).unwrap();
+        let mut context = crate::mandoc::LoweringContext::new(None, None);
+        context.macro_set = libmandoc_rs::MacroSet::Man;
+        let block = super::TableTextBlock {
+            source: ".B TOKENA\n.PP\nTOKENB".to_owned(),
+            start_line: 6,
+            end_line: 8,
+        };
+        for native in [
+            None,
+            Some(""),
+            Some("TOKENA TOKENB complete native payload"),
+        ] {
+            let mut cell = node.table_cells[0].clone();
+            cell.text = native.map(str::to_owned);
+            cell.text_block = true;
+            let inlines = super::lower_table_cell(
+                &cell,
+                0,
+                std::slice::from_ref(&cell),
+                node,
+                &context,
+                Some(&block),
+                &[],
+            );
+            assert_eq!(
+                plain_text(&inlines),
+                native
+                    .filter(|text| !text.is_empty())
+                    .unwrap_or(&block.source)
+            );
+        }
+    }
 
     #[test]
     fn source_requests_dispatch_to_man_and_mdoc_inline_lowering() {
