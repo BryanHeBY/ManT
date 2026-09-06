@@ -4,6 +4,8 @@
 *.svg text eol=lf
 *.patch text eol=lf
 *.sh text eol=lf
+# Compared byte-for-byte with the platform-independent manual generator.
+crates/mant/src/arguments/help_tldr_generated.rs text eol=lf
 crates/libmandoc-rs/patches/series text eol=lf
 crates/libmandoc-rs/scripts/* text eol=lf
 crates/libmandoc-rs/vendor/mandoc-1.14.6/** text eol=lf
