@@ -13,30 +13,6 @@ pub(crate) struct InstalledSourceProbe<'a> {
     inventory: OnceLock<Result<u32, String>>,
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn absent_probe_does_not_create_or_recover_an_installation() {
-        let root = std::env::temp_dir().join(format!(
-            "mant-probe-{}-{:?}",
-            std::process::id(),
-            std::thread::current().id()
-        ));
-        assert!(!root.exists());
-        let probe = InstalledSourceProbe::new(&root);
-        assert_eq!(probe.directory(), Ok(false));
-        assert!(probe.metadata().is_err());
-        assert!(!root.exists());
-        // A fresh probe observes later changes; a command-local fact is stable.
-        std::fs::create_dir(&root).unwrap();
-        assert_eq!(probe.directory(), Ok(false));
-        assert_eq!(InstalledSourceProbe::new(&root).directory(), Ok(true));
-        std::fs::remove_dir(&root).unwrap();
-    }
-}
-
 impl<'a> InstalledSourceProbe<'a> {
     pub(crate) fn new(path: &'a Path) -> Self {
         Self {
@@ -63,5 +39,29 @@ impl<'a> InstalledSourceProbe<'a> {
         self.inventory
             .get_or_init(|| managed_document_count(self.path))
             .clone()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn absent_probe_does_not_create_or_recover_an_installation() {
+        let root = std::env::temp_dir().join(format!(
+            "mant-probe-{}-{:?}",
+            std::process::id(),
+            std::thread::current().id()
+        ));
+        assert!(!root.exists());
+        let probe = InstalledSourceProbe::new(&root);
+        assert_eq!(probe.directory(), Ok(false));
+        assert!(probe.metadata().is_err());
+        assert!(!root.exists());
+        // A fresh probe observes later changes; a command-local fact is stable.
+        std::fs::create_dir(&root).unwrap();
+        assert_eq!(probe.directory(), Ok(false));
+        assert_eq!(InstalledSourceProbe::new(&root).directory(), Ok(true));
+        std::fs::remove_dir(&root).unwrap();
     }
 }
