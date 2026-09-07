@@ -4,6 +4,57 @@ use crate::common::{self, GCC_SECTIONS};
 use crate::fixtures::archlinux_manual;
 use mant_ir::Block;
 
+#[test]
+fn help_classes_qualifiers_and_tail_examples_share_one_owner() {
+    fn help(nodes: &[mant_protocol::OutlineNode]) -> Option<&mant_protocol::OutlineNode> {
+        nodes.iter().find_map(|node| {
+            if node.title().starts_with("--help") && !node.children().is_empty() {
+                Some(node)
+            } else {
+                help(node.children())
+            }
+        })
+    }
+    let document = archlinux_manual("gcc");
+    let query = common::query_for_document("gcc", document);
+    let outline =
+        mant_engine::build_outline_projection(&query, mant_protocol::EntryProjection::All, None)
+            .unwrap();
+    let help = help(&outline.nodes).expect("help with classes");
+    for qualifier in ["undocumented", "joined", "separate"] {
+        assert!(
+            common::find_outline_entry(help.children(), qualifier).is_some(),
+            "missing {qualifier}"
+        );
+    }
+    assert_eq!(help.children().len(), 9);
+    let excerpt = mant_engine::select_excerpt(&query, &[help.path()]).unwrap();
+    let text = mant_engine::render_excerpt_text(&excerpt);
+    for retained in [
+        "These are the supported qualifiers",
+        "should not consist solely of inverted",
+        "--help=target,undocumented",
+        "--help=warnings,^joined,^undocumented",
+        "diff /tmp/O2-opts /tmp/O3-opts | grep enabled",
+    ] {
+        assert!(text.contains(retained), "missing {retained}: {text}");
+    }
+    assert!(!text.contains("Display the version number and copyrights"));
+    let [mant_protocol::ExcerptSelection::DocumentEntry { entry, .. }] = &excerpt.selections[..]
+    else {
+        panic!("help entry")
+    };
+    assert!(
+        entry
+            .entry_owner()
+            .unwrap()
+            .facts()
+            .unwrap()
+            .value_domain
+            .is_none()
+    );
+}
+
 /// Deeply nested OPTIONS hierarchy (20 sub-sections), >250 preformatted
 /// blocks, C++ class-hierarchy examples, phantom-paragraph suppression,
 /// and definition-list paragraph spacing.

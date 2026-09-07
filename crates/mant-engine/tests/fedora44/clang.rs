@@ -8,7 +8,7 @@ use mant_engine::build_outline_with_detail;
 use mant_ir::SourceFormat;
 use mant_protocol::OutlineDetail;
 
-/// 9 sections, `os = "22"`, 90 semantic entries, and no duplicate
+/// 9 sections, `os = "22"`, 89 semantic entries, and no duplicate
 /// vertical spacing.
 #[test]
 fn keeps_complete_sections_and_semantic_option_outlines() {
@@ -22,10 +22,21 @@ fn keeps_complete_sections_and_semantic_option_outlines() {
     let query = query_for_document("clang", document);
     let outline = build_outline_with_detail(&query, OutlineDetail::Entries)
         .unwrap_or_else(|error| panic!("build clang option outline: {error}"));
-    assert_eq!(count_outline_entries(&outline.nodes), 90);
+    assert_eq!(count_outline_entries(&outline.nodes), 89);
     assert!(find_outline_entry(&outline.nodes, "-std").is_some());
     assert!(find_outline_entry(&outline.nodes, "TMPDIR").is_some());
     assert!(find_outline_entry(&outline.nodes, "TEMP").is_some());
+
+    // Sphinx's indented "-O4 and higher" is explanatory continuation, not a
+    // second option definition detached at the preceding .sp. The real -O4
+    // alias remains on the optimization-level definition with its whole body.
+    let optimization = find_outline_entry(&outline.nodes, "-O4").unwrap();
+    assert_eq!(optimization.id(), "option-o0");
+    let explanation = mant_engine::select_explanation(&query, "-O4").unwrap();
+    let text = mant_engine::render_excerpt_text(&explanation);
+    assert!(text.contains("-O4 and higher"), "{text}");
+    assert!(text.contains("Currently equivalent to -O3"), "{text}");
+    assert!(!text.contains("Control debug information output"), "{text}");
 
     common::assert_no_duplicate_vertical_spacing(&document.sections, "fedora44/clang");
 }

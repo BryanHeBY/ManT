@@ -96,6 +96,8 @@ required for generated references and hierarchically indented lists.
 
 `RS` nesting currently uses a normalized four-column increment, not the exact authored distance. This layout policy does not change semantic parentage: visual indentation alone never turns a top-level command into its parameter. Ordinary man paragraphs (`PP`, `P`, `LP`) restore the default seven-column tag width for later `TP`/`IP` definitions; `HP` is not that reset boundary.
 
+When indented continuation blocks are reattached to a preceding definition, explicit vertical spacing does not by itself end ownership. A consecutive run of spacing belongs to that continuation only if the next content block remains more deeply indented. Same-level or outer content, other layout-less boundaries, and the end of a container stop collection; trailing spacing is left outside. This retains successive `RS` regions, nested definitions, and trailing examples in node excerpts without deleting blank lines or absorbing the next option or section. Hanging-definition recovery uses the same continuation boundary. Restoring content ownership does not declare those children to be an exhaustive value domain.
+
 `OP` retains its optional-argument brackets, bold option name, and emphasized metavariable both inside and outside a `SY` synopsis; it does not create a separate IR variant. `AT`, `DT`, `SM`, `UC`, and other libmandoc-recognized man macros retain printable children where available but do not currently have a dedicated ManT semantic variant. For example, `SM` does not preserve point size.
 
 ## mdoc Structure

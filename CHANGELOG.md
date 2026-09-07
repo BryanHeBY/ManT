@@ -81,6 +81,13 @@ that crate was not published for that change.
 
 ### mant-engine 0.11.0
 
+- Keep indented definition continuations together across explicit vertical
+  spacing, including GCC help classes, qualifiers and trailing examples.
+  Bound lookahead at the next substantive block; do not absorb outer content
+  or trailing spacing. Hanging definitions share the same boundary. This also
+  removes Clang's spurious detached `-O4 and higher` entry while retaining the
+  real `-O4` alias and its complete optimization-level explanation.
+
 - Align plain-text non-inline definition indentation with the IR/TUI's
   four-column description origin (previously two columns in plain text).
   This prevents a continuation's layout from drifting when its semantic

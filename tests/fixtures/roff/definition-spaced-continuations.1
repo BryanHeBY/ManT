@@ -1,0 +1,36 @@
+.\" Original ManT regression fixture; SPDX-License-Identifier: Apache-2.0
+.TH CONTINUATIONS 1 "2026-09-07"
+.SH OPTIONS
+.IP "--help=CLASS" 4
+HELP_INTRO.
+.RS 4
+.IP "classes" 4
+CLASS_BODY.
+.RS 4
+.sp
+.sp
+.IP "nested" 4
+NESTED_BODY.
+.RE
+.RE
+.RS 4
+.sp
+.sp
+.IP "undocumented" 4
+QUALIFIER_BODY.
+.IP "joined" 4
+JOINED_BODY.
+.RE
+.RS 4
+.sp
+TAIL_RESTRICTION.
+.nf
+tool --help=classes,undocumented
+.fi
+.RE
+.sp
+.IP "--version" 4
+NEXT_OPTION_BODY.
+.sp
+.SH AFTER
+NEXT_SECTION_BODY.
