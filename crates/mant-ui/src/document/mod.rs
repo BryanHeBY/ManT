@@ -207,16 +207,17 @@ impl DocumentView {
             }
         }
 
+        let built = builder.finish();
         Self {
-            label: builder.label,
+            label: built.label,
             terminal_label,
             source_label,
             top_level_count,
             section_count,
             has_tldr: bundle.tldr.is_some(),
-            lines: builder.lines,
-            navigation: builder.navigation,
-            anchors: builder.anchors,
+            lines: built.content.lines,
+            navigation: built.navigation,
+            anchors: built.content.anchors,
         }
     }
 

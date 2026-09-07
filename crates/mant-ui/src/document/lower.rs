@@ -15,7 +15,29 @@ pub(super) struct DocumentBuilder {
     pub(super) anchors: HashMap<String, usize>,
 }
 
+/// Logical payload and its anchors must cross layout boundaries together.
+pub(super) struct LogicalFragment {
+    pub(super) lines: Vec<LogicalLine>,
+    pub(super) anchors: HashMap<String, usize>,
+}
+
+pub(super) struct BuiltDocument {
+    pub(super) label: String,
+    pub(super) navigation: Vec<NavNode>,
+    pub(super) content: LogicalFragment,
+}
+
 impl DocumentBuilder {
+    pub(super) fn finish(self) -> BuiltDocument {
+        BuiltDocument {
+            label: self.label,
+            navigation: self.navigation,
+            content: LogicalFragment {
+                lines: self.lines,
+                anchors: self.anchors,
+            },
+        }
+    }
     pub(super) fn new(label: String, address: Option<DocumentAddress>) -> Self {
         Self {
             label,
@@ -330,11 +352,12 @@ impl DocumentBuilder {
                                 if let Some(cell) = cell {
                                     builder.blocks(&cell.blocks, 0);
                                 }
+                                let content = builder.finish().content;
                                 let mut rendered = LogicalTableCell::new(
-                                    builder.lines,
+                                    content.lines,
                                     cell.and_then(|cell| cell.alignment),
                                 );
-                                rendered.anchors = builder.anchors;
+                                rendered.anchors = content.anchors;
                                 rendered
                             })
                             .collect::<Vec<_>>()
