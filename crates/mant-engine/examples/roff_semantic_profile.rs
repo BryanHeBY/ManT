@@ -32,6 +32,9 @@ struct EntryRecord {
     id: String,
     kind: &'static str,
     aliases: Vec<String>,
+    /// Explicit relationships, never inferred from a shared definition head.
+    alias_groups: Vec<Vec<String>>,
+    alias_of: Option<String>,
     forms: Vec<String>,
     targets: Vec<String>,
     containing_section: Option<String>,
@@ -107,22 +110,7 @@ fn profile_document(
             entry.aliases.is_empty() && entry.forms.iter().all(|form| form.trim().is_empty())
         })
         .collect::<Vec<_>>();
-    let mut ordinal_definitions = Vec::new();
-    collect_definition_candidates(
-        &document.blocks,
-        None,
-        None,
-        0,
-        "document",
-        &mut ordinal_definitions,
-    );
-    for (index, section) in document.sections.iter().enumerate() {
-        collect_section_definition_candidates(
-            section,
-            &format!("section[{index}]"),
-            &mut ordinal_definitions,
-        );
-    }
+    let ordinal_definitions = ordinal_definition_candidates(document);
     let value_domain_violations = value_domain_violations(document);
     let ordinal_conversions = ordinal_conversions(native_root, document);
     let ordinal_conversion_violations = conversion_violations(&ordinal_conversions);
@@ -171,12 +159,23 @@ fn profile_document(
     }));
     violations.extend(value_domain_violations.iter().cloned());
     violations.extend(ordinal_conversion_violations.iter().cloned());
+    let semantic_diagnostics = mant_ir::validate_document(document)
+        .into_iter()
+        .filter(|diagnostic| !mant_engine::semantics_complete(std::slice::from_ref(diagnostic)))
+        .collect::<Vec<_>>();
+    violations.extend(
+        semantic_diagnostics
+            .iter()
+            .map(|diagnostic| diagnostic.message.clone()),
+    );
 
     json!({
         "schema": PROFILE_SCHEMA,
         "id": id,
         "entries": entries,
         "entryCounts": counts,
+        "relationshipCounts": relationship_counts(&entries),
+        "semanticsComplete": mant_engine::semantics_complete(&document.diagnostics) && semantic_diagnostics.is_empty(),
         "ordinalEntries": ordinal_entries,
         "ordinalDefinitions": ordinal_definitions,
         "emptyEntries": empty_entries,
@@ -202,6 +201,19 @@ fn path_field(request: &Value, field: &str) -> Result<PathBuf, String> {
         .filter(|value| !value.is_empty())
         .map(PathBuf::from)
         .ok_or_else(|| format!("request.{field} must be a non-empty string"))
+}
+
+fn ordinal_definition_candidates(document: &Document) -> Vec<DefinitionCandidate> {
+    let mut candidates = Vec::new();
+    collect_definition_candidates(&document.blocks, None, None, 0, "document", &mut candidates);
+    for (index, section) in document.sections.iter().enumerate() {
+        collect_section_definition_candidates(
+            section,
+            &format!("section[{index}]"),
+            &mut candidates,
+        );
+    }
+    candidates
 }
 
 fn entry_records(document: &Document) -> Vec<EntryRecord> {
@@ -245,6 +257,8 @@ fn collect_entries(
             id: entry.id.to_string(),
             kind: entry_kind(entry.kind),
             aliases: entry.aliases.clone(),
+            alias_groups: entry.alias_groups.clone(),
+            alias_of: entry.alias_of.as_ref().map(ToString::to_string),
             forms: entry.forms.clone(),
             targets: vec![entry.id.to_string()],
             containing_section: section.map(str::to_owned),
@@ -262,6 +276,15 @@ fn collect_entries(
             output,
         );
     }
+}
+
+fn relationship_counts(entries: &[EntryRecord]) -> Value {
+    json!({
+        "names": entries.iter().map(|entry| entry.aliases.len()).sum::<usize>(),
+        "aliasGroups": entries.iter().map(|entry| entry.alias_groups.len()).sum::<usize>(),
+        "aliasGroupMembers": entries.iter().flat_map(|entry| &entry.alias_groups).map(Vec::len).sum::<usize>(),
+        "aliasOf": entries.iter().filter(|entry| entry.alias_of.is_some()).count(),
+    })
 }
 
 const fn entry_kind(kind: EntryKind) -> &'static str {
@@ -491,6 +514,32 @@ fn check_value_domains(entries: &[SemanticEntry], scope: &str, violations: &mut 
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn shared_names_and_explicit_relationships_are_counted_separately() {
+        let query = mant_engine::query_markdown_text(
+            r#"# Probe
+
+<!-- mant:entries role=option case=sensitive -->
+- `-a`, `--all`: Shared content without an equivalence claim.
+- `-h`, `--help`: Usage. <!-- mant:entry {"id":"help","aliasGroups":[["-h","--help"]]} -->
+- `--assist`: Additional examples. <!-- mant:entry {"aliasOf":"help"} -->
+"#,
+            None,
+        )
+        .unwrap();
+        let document = query.document.unwrap();
+        assert!(
+            document.diagnostics.is_empty(),
+            "{:?}",
+            document.diagnostics
+        );
+        let entries = super::entry_records(&document);
+        assert_eq!(
+            super::relationship_counts(&entries),
+            serde_json::json!({"names":5,"aliasGroups":1,"aliasGroupMembers":2,"aliasOf":1})
+        );
+        assert!(entries[0].alias_groups.is_empty());
+    }
     #[test]
     fn ordinal_probe_accepts_only_punctuated_integers() {
         for value in ["1.", "2)", "(3)", "[4]"] {

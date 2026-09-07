@@ -10,7 +10,7 @@ agent-visible semantic index.
 
 The development-only `roff_semantic_profile` example parses and lowers each
 page once, builds the final `SemanticIndex`, and records each entry's ID, kind,
-aliases, visible forms, targets, containing section, nested depth, and
+selectable names (the legacy `aliases` field), explicit `aliasGroups` / `aliasOf`, visible forms, targets, containing section, nested depth, and
 value-domain origin. Profile schema `mant.roff-semantic-profile/v2` also walks
 the IR definition lists independently so an ordinal that failed to become a
 list cannot hide merely because semantic discovery declined it. Independently,
@@ -32,6 +32,14 @@ The following are high-confidence review findings:
   list; or
 - an ordinal candidate from any other mdoc definition-list style does not
   remain a definition list.
+
+The additive `relationshipCounts` object counts names, explicit groups, group
+members and aliasOf declarations independently. Native shared names never
+become declared aliases merely because they share content. Shared IR semantic
+validation findings are violations, and `semanticsComplete` records producer
+coverage independently of those counts. An independent Markdown test exercises
+the same final-index counter with shared names, declared groups and aliasOf;
+zero native relation counts are expected, not a recall metric.
 
 The profile separately counts aliasless generic terms and entries below
 NOTES, FOOTNOTES, or REFERENCES headings. Those are sampling signals, not
