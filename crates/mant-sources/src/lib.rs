@@ -5,6 +5,7 @@
 mod archive;
 mod bounded;
 mod config;
+mod document_path;
 #[cfg(feature = "update")]
 mod download;
 mod inspection;

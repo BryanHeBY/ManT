@@ -19,10 +19,11 @@ use crate::limits::{
     MAX_SOURCE_ENTRIES,
 };
 use crate::{
+    document_path::{markdown_extension_priority, normalize_relative_document_path},
     metadata::{
         SourceMetadata, read_source_metadata, source_fingerprint, validate_source_directory,
     },
-    registry::{managed_document_count, normalize_relative_document_path},
+    registry::managed_document_count,
 };
 use prune::discover_orphaned_sources;
 #[cfg(test)]
@@ -465,14 +466,6 @@ fn source_selects_path(source: &ConfiguredSource, relative: &Path) -> bool {
             .exclude
             .iter()
             .any(|selector| selector_matches(relative, selector))
-}
-
-fn markdown_extension_priority(path: &Path) -> Option<u8> {
-    let extension = path.extension()?.to_str()?;
-    ["md", "markdown"]
-        .iter()
-        .position(|candidate| extension.eq_ignore_ascii_case(candidate))
-        .and_then(|index| u8::try_from(index).ok())
 }
 
 fn selector_matches(relative: &Path, selector: &str) -> bool {

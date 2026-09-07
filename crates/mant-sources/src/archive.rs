@@ -261,7 +261,7 @@ fn normalize_archive_name(name: &str) -> Result<Option<PathBuf>, String> {
     if name.contains('\\')
         || name
             .chars()
-            .any(crate::registry::is_unsafe_logical_path_character)
+            .any(crate::document_path::is_unsafe_logical_path_character)
     {
         return Err(format!("archive entry '{name}' has an unsafe path"));
     }
