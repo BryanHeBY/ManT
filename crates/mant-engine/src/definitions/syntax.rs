@@ -100,8 +100,33 @@ pub(super) fn name_occurrences(
     item: &DefinitionItem,
     kind: EntryKind,
 ) -> Vec<Vec<super::RecognizedName>> {
-    if matches!(kind, EntryKind::Parameter { .. }) {
-        return options::parameter_occurrences(&item.terms);
+    if let EntryKind::Parameter { parameter_kind } = kind {
+        if parameter_kind == ParameterKind::Option {
+            return options::parameter_occurrences(&item.terms);
+        }
+        // Marker/operand inference requires an exact complete first term,
+        // not a prefix of a longer invocation. Repeated matching terms may
+        // contribute evidence without promoting other terms into names.
+        let first = item
+            .terms
+            .first()
+            .map_or_else(String::new, |term| plain_text(term));
+        return item
+            .terms
+            .iter()
+            .map(|term| {
+                let text = plain_text(term);
+                let trimmed = text.trim();
+                if trimmed == first.trim() && !trimmed.is_empty() {
+                    vec![RecognizedName::contiguous(
+                        trimmed,
+                        text.len() - text.trim_start().len(),
+                    )]
+                } else {
+                    Vec::new()
+                }
+            })
+            .collect();
     }
     item.terms
         .iter()

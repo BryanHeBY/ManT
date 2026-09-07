@@ -111,6 +111,21 @@ fn grammar_selected_ranges_survive_wrappers_arguments_and_styles() {
 }
 
 #[test]
+fn marker_prefixes_do_not_widen_the_existing_native_admission_grammar() {
+    for (form, expected) in [
+        ("--", vec!["--"]),
+        ("-", vec!["-"]),
+        ("-- FILE", vec![]),
+        ("- FILE", vec![]),
+    ] {
+        let source = format!(".TH PROBE 1\n.SH OPTIONS\n.TP\n.B {form}\nPAYLOAD.\n");
+        let query = mant_engine::query_roff_bytes(source.as_bytes()).unwrap();
+        let index = SemanticIndex::build(query.document.as_ref().unwrap());
+        assert_eq!(index.section("options")[0].names, expected, "{form}");
+    }
+}
+
+#[test]
 fn inferred_markdown_uses_its_recognizer_evidence_not_declaration_boundaries() {
     for (form, names) in [
         ("--color[=WHEN]", vec!["--color"]),

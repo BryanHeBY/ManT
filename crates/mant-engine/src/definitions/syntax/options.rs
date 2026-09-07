@@ -58,9 +58,7 @@ pub(in crate::definitions) fn parameter_occurrences(
                     ],
                 });
             }
-        } else if token.strip_prefix('+').is_some_and(is_option_name_body)
-            || matches!(token, "--" | "--%" | "-")
-        {
+        } else if token.strip_prefix('+').is_some_and(is_option_name_body) {
             names.push(RecognizedName::contiguous(token, start));
         }
     }
