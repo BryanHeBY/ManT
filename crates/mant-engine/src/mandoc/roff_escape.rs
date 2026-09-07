@@ -203,10 +203,12 @@ impl Decoder {
                 });
             }
             'z' => {
-                let argument = self.take_character().map(|character| character.to_string());
+                // Suppress the glyph's advance, not its visible spelling. Let
+                // the normal iterative decoder consume the complete glyph
+                // (including named escapes), without recursive \z handling.
                 self.emit(RoffInlineEvent::Presentation {
                     kind: PresentationKind::Spacing,
-                    argument,
+                    argument: None,
                 });
             }
             '%' if self.characters.get(self.index..self.index + 2) == Some(&['<', '>']) => {
@@ -681,7 +683,17 @@ mod tests {
         assert_eq!(visible_text(r"alpha\qbeta"), "alphaqbeta");
         assert_eq!(visible_text(r"\EfBbold\EfR"), "bold");
         assert_eq!(visible_text(r"before\N1after"), "beforeafter");
-        assert_eq!(visible_text(r"before\zXafter"), "beforeafter");
+        assert_eq!(visible_text(r"before\zXafter"), "beforeXafter");
+    }
+
+    #[test]
+    fn zero_advance_retains_complete_glyphs_without_recursive_decoding() {
+        for source in [r"\z\(emTOKENB", r"\z\[em]TOKENB", r"\z\C'em'TOKENB"] {
+            assert_eq!(visible_text(source), "—TOKENB", "{source}");
+        }
+        assert_eq!(visible_text(r"\z\[future-glyph]"), r"\[future-glyph]");
+        assert_eq!(visible_text(r"\z"), "");
+        assert_eq!(visible_text(&format!("{}X", r"\z".repeat(20_000))), "X");
     }
 
     #[test]

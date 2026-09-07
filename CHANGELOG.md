@@ -55,6 +55,8 @@ that crate was not published for that change.
 
 ### mant-engine 0.11.0
 
+- Preserve the complete visible glyph after `\z`, including named glyphs,
+  while approximating its zero advance in renderer-neutral text.
 - Share stateful man font decoding across prose and table recovery: explicit
   resets override macro defaults, consecutive text keeps its font, and `fP`
   restores the previous selection. Retain `.ft` and `.SM` font behavior.

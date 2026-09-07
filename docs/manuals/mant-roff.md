@@ -300,6 +300,8 @@ escaping is minimal but lossless: intraword underscores such as the one in
 
 Color, point size, vertical or non-literal motion, drawing, overstrike, register, string, device, and postprocessor escape operands are consumed so control syntax cannot leak into prose. Their presentation effect is omitted. A positive literal relative horizontal motion retains one space as a text-mode approximation, including before a `\c` line join; negative, absolute, register-based, and compound motions remain presentation-only. Known zero-width spacing and formatter controls remain zero width. An otherwise undefined one-character escape follows roff's visible-trigger fallback after terminal-control filtering.
 
+The zero-advance `\z` escape retains its complete following glyph, including named glyph escapes, at ordinary advance as a text-mode approximation. It never exposes a partial glyph operand or removes the glyph's visible content.
+
 ## Tables
 
 `tbl(7)` rows become IR tables, including tables nested inside an mdoc literal or unfilled display. ManT retains cell text, left/center/right alignment, column spans, and row spans supplied by libmandoc. It does not reproduce line drawing, exact column widths, vertical positioning, fonts, or device-specific rules.
