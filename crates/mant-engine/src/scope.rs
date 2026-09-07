@@ -20,7 +20,7 @@ use mant_protocol::{
 
 use crate::{
     DocumentResolver, ProjectionError, QueryError, QueryPolicy,
-    query::select_explanation_with_text_hint, search_query, validate_search_query,
+    query::select_explanation_with_text_hint, validate_search_query,
 };
 
 /// A logical scope together with the loaded documents in matching order.
@@ -696,21 +696,16 @@ fn execute_scope_search(
     loaded: &LoadedDocumentScope,
     query: &SearchQuery,
 ) -> Result<ScopeQueryResult, ScopeQueryError> {
+    let plan = crate::search::SearchPlan::new(query).map_err(ScopeQueryError::Search)?;
     let mut total = 0_u32;
     let mut remaining_skip = query.offset;
     let mut remaining_take = query.limit;
     let mut groups = Vec::new();
     for (scoped, bundle) in loaded.scope.documents.iter().zip(&loaded.documents) {
         let document_ordinal_base = total;
-        let local = search_query(
-            bundle,
-            &SearchQuery {
-                offset: remaining_skip,
-                limit: remaining_take.max(1),
-                ..query.clone()
-            },
-        )
-        .map_err(ScopeQueryError::Search)?;
+        let local = plan
+            .execute(bundle, remaining_skip, remaining_take.max(1))
+            .map_err(ScopeQueryError::Search)?;
         total = total.saturating_add(local.total);
         remaining_skip = remaining_skip.saturating_sub(local.total);
         if remaining_take == 0 || local.matches.is_empty() {
