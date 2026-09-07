@@ -281,6 +281,48 @@ fn preserves_compact_invocation_aliases_and_their_shared_description() {
     }
 }
 
+#[test]
+fn explanation_preserves_history_builtin_and_nested_value_as_independent_evidence() {
+    let query = crate::common::query_for_document("sh", fedora44_manual("sh"));
+    let result = mant_engine::explain_query(
+        &query,
+        &mant_protocol::ExplanationQuery {
+            entry: "history".into(),
+            options: mant_protocol::ExplanationOptions {
+                limit: 256,
+                ..mant_protocol::ExplanationOptions::default()
+            },
+        },
+    )
+    .unwrap();
+    let named = result
+        .evidence
+        .iter()
+        .filter(|evidence| evidence.bases.contains(&mant_protocol::EvidenceBasis::Name))
+        .collect::<Vec<_>>();
+    for role in [
+        mant_ir::DefinitionRole::Command,
+        mant_ir::DefinitionRole::Value,
+    ] {
+        assert!(
+            named.iter().any(|evidence| evidence
+                .entry
+                .as_ref()
+                .is_some_and(|entry| entry.role == role && entry.names == ["history"])),
+            "missing {role:?}"
+        );
+    }
+    assert!(
+        named
+            .iter()
+            .all(|evidence| evidence.entry.as_ref().unwrap().alias_groups.is_empty()),
+        "shared native names are not declared equivalence"
+    );
+    for evidence in named {
+        assert!(mant_engine::select_excerpt(&query, &[evidence.outline.path()]).is_ok());
+    }
+}
+
 fn has_parameter(entry: &SemanticEntry, parameter_kind: ParameterKind, alias: &str) -> bool {
     entry.children.iter().any(|child| {
         child.kind == EntryKind::Parameter { parameter_kind }

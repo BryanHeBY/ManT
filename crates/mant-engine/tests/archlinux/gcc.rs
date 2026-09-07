@@ -5,6 +5,41 @@ use crate::fixtures::archlinux_manual;
 use mant_ir::Block;
 
 #[test]
+fn explanation_retains_both_help_definitions_and_the_qualified_tail() {
+    let query = common::query_for_document("gcc", archlinux_manual("gcc"));
+    let result = mant_engine::select_explanation(&query, "--help").unwrap();
+    assert_eq!(result.outcome, mant_protocol::ExplanationOutcome::Evidence);
+    let named = result
+        .evidence
+        .iter()
+        .filter(|evidence| evidence.bases.contains(&mant_protocol::EvidenceBasis::Name))
+        .collect::<Vec<_>>();
+    assert_eq!(
+        named.len(),
+        2,
+        "independently documented plain and CLASS help"
+    );
+    assert_ne!(named[0].outline.node.id(), named[1].outline.node.id());
+    assert!(result.evidence.iter().any(|evidence| {
+        evidence.entry.is_none()
+            && evidence
+                .bases
+                .contains(&mant_protocol::EvidenceBasis::Literal)
+    }));
+    assert!(mant_engine::select_excerpt(&query, &["--help"]).is_err());
+    let full = mant_engine::render_explanation_text(&result);
+    for text in [
+        "undocumented",
+        "joined",
+        "separate",
+        "should not consist solely of inverted",
+        "--help=warnings,^joined,^undocumented",
+    ] {
+        assert!(full.contains(text), "missing {text}");
+    }
+}
+
+#[test]
 fn help_classes_qualifiers_and_tail_examples_share_one_owner() {
     fn help(nodes: &[mant_protocol::OutlineNode]) -> Option<&mant_protocol::OutlineNode> {
         nodes.iter().find_map(|node| {
