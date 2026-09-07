@@ -6,6 +6,9 @@ independently; this document distinguishes planned contracts from completed work
 
 ## S0: baseline and frozen contract
 
+For the post-implementation review and CI corrections, see the final section
+below. The S0–S6 evidence remains historical and is not overwritten by reruns.
+
 Baseline producer: `c9918c0dfd43d7f57cab5e8b32212a8ec8e68191`, clean before
 adding the measurement harness. The retained release executable lives at
 `target/ir-convergence/baseline-mant`; its native-load companion measures the
@@ -312,4 +315,66 @@ Compile only in repository targets. Run the allowed checks individually;
 `scripts/check.sh` includes packaged-crate compilation in a temporary extraction
 tree and is therefore not run locally. Do not weaken that CI gate, override
 TMPDIR, or claim native Windows/macOS verification on this Linux machine.
-No automatic push, main sync, tags, or release is part of this work.
+The initial implementation did not authorize automatic publication. The later
+review follow-up explicitly authorizes pushing `dev` and waiting for CI; it does
+not authorize main sync, tags, or release.
+
+## Post-implementation review and CI corrections (2026-09-08)
+
+Review baseline: `fe9315ca`. Final functional producer for this follow-up:
+`5c965751`. These changes close the reported counterexamples without reopening
+the completed type/layout/list-kind migrations or changing a published schema.
+
+| Finding | Change and executable evidence |
+| --- | --- |
+| Linux packaged-crate compilation | `9408e269`: move the frozen JSON fixture into `mant-ir/src/entry`, within the declared package include set; five `entry::wire` decoder tests pass, and `cargo package --list --allow-dirty -p mant-ir` includes the asset. Full isolated package compilation remains CI-only. |
+| macOS pager signal restoration | `478d751e`: the pager lacked termination handlers and emitted alternate-screen entry before enabling raw mode. Reuse deferred signal registrations, restore only after setup is complete, and keep stdout locked through signal termination. `terminal_display` tests both early setup and active raw mode for SIGINT/SIGTERM, retaining exact termios and screen checks. Linux passed; native macOS verification is pending the new CI run. |
+| IR-R01 / A04, A05, A12 | `82283e8d`, `149f879a`, `5c965751`: carry grammar-selected visible ranges into binding mapping; derive native names and evidence from one recognition result and retain parsed Markdown occurrences in the signature. `entry_name_boundaries` checks brace/angle/optional arguments, curly quotes, leading/whitespace-only styling, split sign/suffix runs, projected binding spelling, Name/direct-entry evidence and selected descriptions. Existing styled-argument, literal, export and invalid-IR tests remain active. Marker admission stays exact rather than widening to prefixes. |
+| IR-R02 / A07, A12 | `1c5ba2ac`: hanging conversion inherits its head source; shared man/mdoc head merging transfers the first source with the terms. `entry_owner_sources` checks two/three-head TP/TQ and It, PP/RS, non-merged controls, and actual explain/search source spans. A list-lowering unit test preserves unknown first-head sources without fabricating ranges. |
+| IR-R03 / A14, A15 | `2002526d`: replace old normative protocol examples in place. `self_manuals::protocol_owner_examples_are_decodable_valid_ir_not_parallel_test_copies` reads both real JSON examples from the manual, decodes blocks/document envelopes, validates IR, round-trips, and rejects mixed legacy fields. Extraction accepts LF and CRLF checkouts. |
+
+Local verification used only the repository `target/` and `fuzz/target/`:
+
+- Workspace/all-features: **1,344 passed, 6 ignored**; HTTP fixture tests ran
+  with local-loopback permission. Strict workspace/all-targets/all-features
+  Clippy and formatting passed.
+- Engine example tests: **32 passed**. Rebuilt the three profilers; all **37**
+  fixture pages passed projection, target and semantic verification without
+  ledger writes. Projection checked 106 excerpts; all 14,985 target owners were
+  classified, with no target differences. Semantic count remains 10,725,
+  including 1,846 aliasless generic terms, and zero reported violations.
+  Generic terms are not a claim of complete semantic discovery.
+- Six audit self-checks, audit coverage, native symbol namespace, installer/
+  maintenance script syntax, read-only engine feature check, strict rustdoc,
+  and fuzz compilation passed. No new 45,036-page sweep is claimed.
+- `scripts/check.sh` and its temporary-tree packaged-crate compilation were
+  deliberately not run locally; the unchanged full gate is assigned to CI.
+
+Local logs are under `target/ir-convergence/final-*.log`; these are supporting
+artifacts, not substitutes for the exact pushed commit's native CI results.
+
+Release/default build and `scripts/build-and-smoke.sh release` passed. A fresh
+seven-round alternating comparison with the retained S6 executables is recorded
+in [review measurements](ir-convergence-review-measurements.json), including
+all samples, hashes, argv and reference samples. No tests or compilation ran
+during these measurements. This compares the review fixes with S6, **not** with
+the original S0; the previously disclosed S0 JSON expansion/cost still applies.
+
+| Mode | S6 median ms | Review median ms | S6 peak KiB | Review peak KiB |
+| --- | ---: | ---: | ---: | ---: |
+| Full JSON | 252.25 | 249.06 | 91,160 | 91,148 |
+| Outline | 185.36 | 185.72 | 67,256 | 67,248 |
+| Explain | 204.54 | 204.20 | 67,272 | 67,140 |
+| Native process (eight loads) | 1,194.62 | 1,211.04 | 63,220 | 63,192 |
+
+These small timing differences are observations, not a performance guarantee.
+GCC full text and Markdown remain byte-identical to S0, and all 3,836 owner IDs
+match S6. The 37-page semantic census also matches the pre-review producer.
+
+The local Vim gzip with SHA-256
+`f3732161727a85a2ebba77acee97a62d6bd613c09fc741dbd676e1bb5b906609`
+was checked using `review-mant --input /usr/share/man/man1/vim.1.gz --explain=-w
+--format json --display direct`: both `-w{number}` (source line 393) and
+`-w {scriptout}` (396) now produce direct Name evidence. This local real-page
+check supplements, rather than replaces, the redistributable source-input
+regressions in `entry_name_boundaries`.

@@ -122,6 +122,15 @@ that crate was not published for that change.
 
 ### mant-engine 0.11.0
 
+- Bind recognized names from the grammar's original byte ranges, including
+  Vim-style `-w{number}`, enclosing punctuation, leading whitespace and
+  cross-style `[-+]O`. Native and inferred Markdown definitions retain their
+  complete forms and direct Name explanation evidence without broadening
+  explicit Markdown declaration or marker admission rules.
+- Preserve the original head source when hanging paragraphs become definitions
+  and when man `.TP/.TQ` or mdoc `.It` heads share a body. Explain and search
+  report the first head rather than a later surviving head or a missing source.
+
 - Preserve nearest semantic ownership when table cells flatten into portable
   Markdown. Compose byte ranges alongside rendered content, instead of deriving
   item boundaries from HTML anchor markers; text and Markdown presentation stay
@@ -430,6 +439,10 @@ that crate was not published for that change.
   original term has disappeared.
 
 ### mant-ui 0.11.0
+
+- Defer POSIX termination until pager setup completes, restore raw mode and the
+  alternate screen, then terminate with the original signal. Early and active
+  paging interruptions share the same restoration guarantee as the reader.
 
 - Preserve table-cell anchors and exact fragment aliases through cell wrapping,
   narrow-view stacking and nested tables; destinations resolve to their own
