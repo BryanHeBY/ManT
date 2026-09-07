@@ -91,7 +91,20 @@ pub fn inspect_manual_roots() -> ManualRootDiscovery {
         };
     }
 
-    let defaults = host_default_manual_roots(&environment);
+    let platform = host_platform();
+    let mant_config = (platform == ManualPathPlatform::Windows)
+        .then(|| {
+            mant_sources::document_paths()
+                .ok()
+                .map(|paths| paths.root.join("man.conf"))
+        })
+        .flatten();
+    let context = DiscoveryContext {
+        environment: &environment,
+        platform,
+        mant_config: mant_config.as_deref(),
+    };
+    let defaults = host_default_manual_roots(&context);
     ManualRootDiscovery {
         roots: discover_manual_roots_from(&environment, defaults.roots),
         diagnostics: defaults.diagnostics,
@@ -138,8 +151,16 @@ fn discover_manual_roots_from_for(
     defaults
 }
 
-fn host_default_manual_roots(environment: &HashMap<OsString, OsString>) -> ManualRootDiscovery {
-    let mut discovery = match host_platform() {
+/// All host input is sampled at the public boundary, not during config parsing.
+struct DiscoveryContext<'a> {
+    environment: &'a HashMap<OsString, OsString>,
+    platform: ManualPathPlatform,
+    mant_config: Option<&'a Path>,
+}
+
+fn host_default_manual_roots(context: &DiscoveryContext<'_>) -> ManualRootDiscovery {
+    let environment = context.environment;
+    let mut discovery = match context.platform {
         ManualPathPlatform::Linux => ManualRootDiscovery {
             roots: linux_configured_manual_roots(environment),
             diagnostics: Vec::new(),
@@ -148,19 +169,26 @@ fn host_default_manual_roots(environment: &HashMap<OsString, OsString>) -> Manua
             roots: macos_configured_manual_roots(environment),
             diagnostics: Vec::new(),
         },
-        ManualPathPlatform::Windows => mant_configured_manual_roots(environment),
+        ManualPathPlatform::Windows => mant_configured_manual_roots(context),
         ManualPathPlatform::OtherUnix => ManualRootDiscovery {
             roots: mandoc_configured_manual_roots(Path::new("/etc/man.conf")),
             diagnostics: Vec::new(),
         },
     };
     if discovery.roots.is_empty() {
-        discovery.roots = fallback_manual_roots(environment);
+        discovery.roots = if context.platform == ManualPathPlatform::Windows {
+            deduplicate_manual_paths(
+                supplemental_manual_roots_for(environment, context.platform),
+                context.platform,
+            )
+        } else {
+            fallback_manual_roots(environment)
+        };
     } else {
         discovery
             .roots
-            .extend(supplemental_manual_roots(environment));
-        discovery.roots = deduplicate_manual_paths(discovery.roots, host_platform());
+            .extend(supplemental_manual_roots_for(environment, context.platform));
+        discovery.roots = deduplicate_manual_paths(discovery.roots, context.platform);
     }
     discovery
 }
@@ -415,14 +443,15 @@ fn read_selected_developer_directory(path: &Path) -> Option<PathBuf> {
         .filter(|path| path.is_dir())
 }
 
-fn mant_configured_manual_roots(environment: &HashMap<OsString, OsString>) -> ManualRootDiscovery {
-    mant_sources::document_paths()
-        .ok()
-        .map(|paths| {
-            let executable_paths = environment_value(environment, "PATH")
-                .map(|value| env::split_paths(value).collect::<Vec<_>>())
-                .unwrap_or_default();
-            windows_config::load(&paths.root.join("man.conf"), environment, &executable_paths)
+fn mant_configured_manual_roots(context: &DiscoveryContext<'_>) -> ManualRootDiscovery {
+    context
+        .mant_config
+        .map(|path| {
+            let executable_paths =
+                environment_value_for(context.environment, "PATH", context.platform)
+                    .map(|value| env::split_paths(value).collect::<Vec<_>>())
+                    .unwrap_or_default();
+            windows_config::load(path, context.environment, &executable_paths)
         })
         .unwrap_or_default()
 }
@@ -665,6 +694,41 @@ mod tests {
         environment_value_for, expand_man_db_systems, parse_bsd_man_config, parse_man_db_config,
         parse_mandoc_manpaths, supplemental_manual_roots_for, wildcard_matches,
     };
+
+    #[test]
+    fn injected_windows_discovery_uses_only_its_config_and_environment() {
+        let root = temporary_root("injected-windows-config");
+        fs::create_dir_all(&root).unwrap();
+        let config = root.join("man.conf");
+        fs::write(&config, "MANPATH C:\\isolated\\manuals\n").unwrap();
+        let environment = HashMap::from([(
+            OsString::from("AppData"),
+            OsString::from(r"C:\isolated\roaming"),
+        )]);
+        let context = super::DiscoveryContext {
+            environment: &environment,
+            platform: ManualPathPlatform::Windows,
+            mant_config: Some(&config),
+        };
+        let result = super::host_default_manual_roots(&context);
+        assert!(result.diagnostics.is_empty());
+        assert_eq!(
+            result.roots,
+            [
+                PathBuf::from(r"C:\isolated\manuals"),
+                PathBuf::from(r"C:\isolated\roaming").join("ManT/man")
+            ]
+        );
+        let absent = super::DiscoveryContext {
+            mant_config: None,
+            ..context
+        };
+        assert_eq!(
+            super::host_default_manual_roots(&absent).roots,
+            [PathBuf::from(r"C:\isolated\roaming").join("ManT/man")]
+        );
+        fs::remove_dir_all(root).unwrap();
+    }
 
     #[test]
     fn macos_man_conf_reads_paths_and_imports_port_fragments() {
