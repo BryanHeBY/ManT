@@ -78,6 +78,24 @@ struct QueryOutput {
     target: presentation::OutputTarget,
 }
 
+impl QueryOutput {
+    fn render_options(self) -> presentation::RenderOptions {
+        presentation::RenderOptions {
+            format: self.presentation.format(),
+            pretty: self.pretty,
+            preserve_anchors: self.preserve_anchors,
+            color: self.presentation.color == ColorMode::Always,
+            target: self.target,
+        }
+    }
+}
+
+/// Rendered data and its business outcome remain paired through delivery.
+struct CommandOutcome {
+    rendered: String,
+    status: u8,
+}
+
 // ── Host boundary ─────────────────────────────────────────────────────────
 
 trait CliHost {
@@ -344,7 +362,7 @@ fn run_command(
         );
     }
 
-    let (rendered, success_status) = match command {
+    let outcome = match command {
         Command::UpdateDocs { pretty } => {
             let update = match host.update_docs() {
                 Ok(update) => update,
@@ -355,7 +373,7 @@ fn run_command(
                 Ok(rendered) => rendered,
                 Err(error) => return report_failure(&error, diagnostics, diagnostics_color),
             };
-            (rendered, status)
+            CommandOutcome { rendered, status }
         }
         Command::PruneDocs { pretty, dry_run } => {
             let prune = match host.prune_docs(dry_run) {
@@ -367,7 +385,7 @@ fn run_command(
                 Ok(rendered) => rendered,
                 Err(error) => return report_failure(&error, diagnostics, diagnostics_color),
             };
-            (rendered, status)
+            CommandOutcome { rendered, status }
         }
         Command::Doctor {
             presentation,
@@ -392,17 +410,20 @@ fn run_command(
                     unreachable!("argument validation limits doctor formats")
                 }
             };
-            (rendered, status)
+            CommandOutcome { rendered, status }
         }
         command => match execute(command, input, host, output_target) {
-            Ok(rendered) => (rendered, 0),
+            Ok(rendered) => CommandOutcome {
+                rendered,
+                status: 0,
+            },
             Err(error) => return report_failure(&error, diagnostics, diagnostics_color),
         },
     };
 
-    match write_output(output, &rendered) {
-        Ok(()) => success_status,
-        Err(error) if error.kind() == io::ErrorKind::BrokenPipe => success_status,
+    match write_output(output, &outcome.rendered) {
+        Ok(()) => outcome.status,
+        Err(error) if error.kind() == io::ErrorKind::BrokenPipe => outcome.status,
         Err(error) => report_failure(&Failure::operational(error), diagnostics, diagnostics_color),
     }
 }
@@ -587,18 +608,7 @@ fn execute_query(
             },
         );
     }
-    let format = output.presentation.format();
-    let color = output.presentation.color;
-    render_query_result(
-        &result,
-        presentation::RenderOptions {
-            format,
-            pretty: output.pretty,
-            preserve_anchors: output.preserve_anchors,
-            color: color == ColorMode::Always,
-            target: output.target,
-        },
-    )
+    render_query_result(&result, output.render_options())
 }
 
 fn execute_scope_arguments(
@@ -632,18 +642,7 @@ fn execute_scope_request(
     host: &dyn CliHost,
 ) -> Result<String, Failure> {
     let response = host.query_scope(request)?;
-    let format = output.presentation.format();
-    let color = output.presentation.color;
-    presentation::render_scope_query_result(
-        &response,
-        presentation::RenderOptions {
-            format,
-            pretty: output.pretty,
-            preserve_anchors: output.preserve_anchors,
-            color: color == ColorMode::Always,
-            target: output.target,
-        },
-    )
+    presentation::render_scope_query_result(&response, output.render_options())
 }
 
 /// Load one full query and hand the normalized document directly to Ratatui.
