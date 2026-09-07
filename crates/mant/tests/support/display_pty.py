@@ -86,7 +86,8 @@ def check(arguments, expected_interactive, env, stdin=None):
     ))
 
 
-def check_in_session(arguments, expected_interactive, env, stdin=None):
+def check_in_session(arguments, expected_interactive, env, stdin=None,
+                     action=None, returncodes=(0,), diagnostic=None):
     master, slave = pty.openpty()
     fcntl.ioctl(slave, termios.TIOCSCTTY, 0)
     fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 16, 70, 0, 0))
@@ -119,17 +120,25 @@ def check_in_session(arguments, expected_interactive, env, stdin=None):
                     result.extend(chunk)
             if b"\x1b[?1049h" in result and not quit_sent:
                 # The queued key is consumed after initial drawing completes.
-                os.write(master, b"q")
+                if action is None:
+                    os.write(master, b"q")
+                else:
+                    action(process, master)
                 quit_sent = True
             if process.poll() is not None:
                 drain(master, result, deadline)
                 break
         else:
+            diagnostics_file.seek(0)
+            print("timeout diagnostics:", diagnostics_file.read(), file=sys.stderr)
             raise AssertionError(f"display timed out: {arguments}: {result[-500:]!r}")
         diagnostics_file.seek(0)
         diagnostics = diagnostics_file.read()
-        assert process.returncode == 0, (arguments, process.returncode, diagnostics)
-        assert not diagnostics, (arguments, diagnostics)
+        assert process.returncode in returncodes, (arguments, process.returncode, diagnostics)
+        if diagnostic is None:
+            assert not diagnostics, (arguments, diagnostics)
+        else:
+            assert diagnostic in diagnostics, (arguments, diagnostics)
         interactive = b"\x1b[?1049h" in result
         assert interactive == expected_interactive, (arguments, result[:500])
         assert termios.tcgetattr(slave) == original, (arguments, "terminal mode leaked")
@@ -173,6 +182,13 @@ def run_cases(root):
     check(["--input", str(long)], False, dict(environment, TERM="dumb"))
     check(["--input", "-", "--input-format", "markdown"], False, environment, b"# Stdin\n\nBody.\n")
     check(["--help"], False, environment)
+    for termination in [signal.SIGINT, signal.SIGTERM]:
+        in_session(lambda: check_in_session(
+            [sys.argv[1], "--input", str(long)], True, environment,
+            action=lambda process, _master: process.send_signal(termination),
+            returncodes=(-termination, 128 + termination),
+        ))
+        print("ManT signal restoration", termination, "passed", flush=True)
 
 
 def test_drain_boundaries():
@@ -233,7 +249,8 @@ def test_session_lifecycle():
     print("session lifetime and restoration-negative checks passed", flush=True)
 
 
-test_drain_boundaries()
-test_session_lifecycle()
-with tempfile.TemporaryDirectory(prefix="mant-display-pty-") as root:
-    run_cases(root)
+if __name__ == "__main__":
+    test_drain_boundaries()
+    test_session_lifecycle()
+    with tempfile.TemporaryDirectory(prefix="mant-display-pty-") as root:
+        run_cases(root)
