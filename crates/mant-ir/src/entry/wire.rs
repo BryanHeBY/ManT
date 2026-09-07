@@ -4,10 +4,7 @@ use serde::{Serialize, de::DeserializeOwned};
 use serde_json::{Value, json};
 
 fn cases() -> Value {
-    serde_json::from_str(include_str!(
-        "../../../../tests/fixtures/ir/convergence-wire.json"
-    ))
-    .unwrap()
+    serde_json::from_str(include_str!("convergence-wire.json")).unwrap()
 }
 
 fn definition() -> Value {

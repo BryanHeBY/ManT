@@ -31,7 +31,7 @@ baseline CLI SHA-256:
 `8c9fbf483e949e0191ae7bc189450ccfaccc39f098dd0f99645efb6452a5227e`.
 
 The machine-readable transition examples are
-`tests/fixtures/ir/convergence-wire.json`. The `new` cases are the target contract,
+`crates/mant-ir/src/entry/convergence-wire.json`. The `new` cases are the target contract,
 not claims about S0's decoder. At S0 old `identity`/role/string list kinds still
 decode; ordinary item unknown fields are not yet closed. Each field migration
 must activate the respective positive and negative *real deserialization* tests
@@ -166,7 +166,7 @@ not a claim that every possible third-party producer has been proved correct.
 
 | Acceptance | Regression / evidence |
 | --- | --- |
-| A01 public types and closed wire | `mant-ir/src/entry/wire.rs`, `mant-protocol/tests/entry_convergence.rs`, frozen `tests/fixtures/ir/convergence-wire.json`: actual direct/nested old, unknown, duplicate, mixed and null decoding |
+| A01 public types and closed wire | `mant-ir/src/entry/wire.rs`, `mant-protocol/tests/entry_convergence.rs`, frozen crate-owned `mant-ir/src/entry/convergence-wire.json`: actual direct/nested old, unknown, duplicate, mixed and null decoding |
 | A02 content orthogonality | `mant-engine/tests/list_entry_consumers.rs`, `mant-ir/src/entry/content.rs`: facts removed from identical original content, unchanged rendering and owner shape |
 | A03 original Markdown events | `mant-engine/src/markdown/tests/source_contracts.rs`: same original event tree with interpretation enabled/disabled; numbering, delimiters, nesting and links |
 | A04 explicit forms | `mant-ir/src/entry/content.rs`: borrowed complete/nonconsecutive terms, unknown and invalid forms, UTF-8/path validation, owner/child survival and independent names |
