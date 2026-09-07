@@ -109,6 +109,11 @@ that crate was not published for that change.
 
 ### mant-engine 0.11.0
 
+- Strict binding exposed native option-name truncation at internal `+` signs.
+  Preserve complete spellings such as `-nostdinc++` and `-Wc++11-compat`;
+  previously truncated selectors no longer address those definitions. IDs for
+  corrected names and their former collision groups must be rediscovered.
+
 - Propagate bounded BSD/mandoc configuration expansion findings through native
   root discovery to doctor, including macOS fragments and Linux mandoc fallback.
   Truncated patterns no longer silently omit roots without an inspection finding.

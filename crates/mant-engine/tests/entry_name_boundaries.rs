@@ -54,3 +54,34 @@ fn a_bold_invocation_fragment_is_not_a_complete_command_name() {
     assert_eq!(commands[0].forms, ["launch -p [-x]"]);
     assert_eq!(commands[1].aliases, ["["]);
 }
+
+#[test]
+fn plus_signs_inside_executable_options_are_not_argument_boundaries() {
+    for (name, truncated) in [
+        ("-nostdinc++", "-nostdinc"),
+        ("-Wc++11-compat", "-Wc"),
+        ("-ObjC++", "-ObjC"),
+    ] {
+        for source in [
+            format!(".TH PLUS 1\n.SH OPTIONS\n.TP\n.B {name}\nPAYLOAD.\n"),
+            format!(
+                ".Dd September 7, 2026\n.Dt PLUS 1\n.Os\n.Sh OPTIONS\n.Bl -tag -width Ds\n.It Fl {}\nPAYLOAD.\n.El\n",
+                &name[1..]
+            ),
+        ] {
+            let query = mant_engine::query_roff_bytes(source.as_bytes()).unwrap();
+            let doc = query.document.as_ref().unwrap();
+            assert!(
+                !doc.diagnostics
+                    .iter()
+                    .any(|d| d.code.as_deref() == Some("ir.invalid-entry-name-binding")),
+                "{:?}",
+                doc.diagnostics
+            );
+            let index = SemanticIndex::build(doc);
+            assert_eq!(index.section("options")[0].aliases, [name]);
+            assert!(mant_engine::select_excerpt(&query, &[name]).is_ok());
+            assert!(mant_engine::select_excerpt(&query, &[truncated]).is_err());
+        }
+    }
+}

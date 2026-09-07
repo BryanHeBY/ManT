@@ -106,7 +106,7 @@ pub(crate) fn option_prefix(token: &str) -> Option<&str> {
         .char_indices()
         .skip(1)
         .take_while(|(_, character)| {
-            character.is_ascii_alphanumeric() || matches!(character, '-' | '_' | '?' | '.')
+            character.is_ascii_alphanumeric() || matches!(character, '-' | '_' | '?' | '.' | '+')
         })
         .map(|(index, character)| index + character.len_utf8())
         .last()?;
@@ -119,7 +119,7 @@ pub(in crate::definitions) fn is_option_name_body(value: &str) -> bool {
     value.split('.').all(|segment| {
         !segment.is_empty()
             && segment.chars().all(|character| {
-                character.is_ascii_alphanumeric() || matches!(character, '-' | '_' | '?')
+                character.is_ascii_alphanumeric() || matches!(character, '-' | '_' | '?' | '+')
             })
             && segment
                 .chars()
