@@ -108,9 +108,13 @@ set_mant_progname(void)
  * same cap itself. Any future payload with its own nested source structure
  * must do likewise -- one cap on the node walk is not automatically enough.
  *
- * libmandoc's own parser is iterative and does not overflow on deep input, so
- * no pre-parse depth check is needed; the caps on our recursive walks suffice.
- * Real manuals nest only a handful of levels, far below this limit.
+ * These transfer caps do not protect native construction or rendering.
+ * The vendor construction guard rejects syntax parent chains beyond 512
+ * levels; owned syntax/equation transfer truncates at 256 with diagnostics;
+ * reference rendering rejects trees beyond its separate 256-level preflight.
+ * Native syntax/equation cleanup is iterative, including rejected trees.
+ * Keep these lifecycle boundaries and their existing root-counting rules
+ * separate: none of them substitutes for the others.
  */
 #define MANT_MANDOC_MAX_COPY_DEPTH 256
 
