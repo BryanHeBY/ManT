@@ -114,6 +114,14 @@ fn collect_direct<'a>(
                             direct_index,
                             output,
                         );
+                    } else {
+                        collect_direct(
+                            &item.description,
+                            parent_indices,
+                            ancestors,
+                            direct_index,
+                            output,
+                        );
                     }
                 }
             }

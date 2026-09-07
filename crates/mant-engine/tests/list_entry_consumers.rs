@@ -171,3 +171,62 @@ fn search_maps_ordinary_list_content_to_the_innermost_entry() {
     assert_eq!(search.matches.len(), 1);
     assert_eq!(search.matches[0].outline.path(), "root/e1");
 }
+
+#[test]
+fn transparent_definition_and_table_preserve_entry_paths_and_nearest_owner() {
+    for table in [false, true] {
+        let mut query = query(true);
+        let document = query.document.as_mut().unwrap();
+        let ordinary = document.blocks.remove(0);
+        let content = if table {
+            serde_json::json!({"type": "table", "rows": [{"cells": [{"blocks": [ordinary]}]}]})
+        } else {
+            serde_json::to_value(ordinary).unwrap()
+        };
+        let transparent: Block = serde_json::from_value(serde_json::json!({
+            "type": "definition-list",
+            "items": [{"terms": [], "description": [content]}]
+        }))
+        .unwrap();
+        document.blocks.push(transparent);
+        let outline =
+            build_outline_projection(&query, EntryProjection::All, Some("run".into())).unwrap();
+        assert!(
+            matches!(&outline.nodes[..], [OutlineNode::DocumentEntry {path, ..}] if path.as_ref() == "root/e1")
+        );
+        let excerpt = select_excerpt(&query, &["root/e1"]).unwrap();
+        assert!(render_excerpt_text(&excerpt).contains("SECOND"));
+        assert!(!render_excerpt_text(&excerpt).contains("FIRST"));
+        let explained = mant_engine::explain_query(
+            &query,
+            &mant_protocol::ExplanationQuery {
+                entry: "SECOND".into(),
+                options: mant_protocol::ExplanationOptions::default(),
+            },
+        )
+        .unwrap();
+        assert_eq!(explained.total, 1);
+        assert_eq!(explained.evidence[0].outline.path(), "root/e1");
+        // Table search currently uses a flattened fenced-code projection without
+        // owner offsets; tracked separately in the convergence verification log.
+        if table {
+            continue;
+        }
+        let search = mant_engine::search_query(
+            &query,
+            &mant_protocol::SearchQuery {
+                pattern: "SECOND".into(),
+                syntax: mant_protocol::SearchSyntax::default(),
+                case: mant_protocol::SearchCase::default(),
+                scope: mant_protocol::SearchScope::default(),
+                word: false,
+                context_lines: 0,
+                limit: 10,
+                offset: 0,
+            },
+        )
+        .unwrap();
+        assert_eq!(search.matches.len(), 1);
+        assert_eq!(search.matches[0].outline.path(), "root/e1");
+    }
+}

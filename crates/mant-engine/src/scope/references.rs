@@ -158,7 +158,7 @@ mod tests {
 
     #[test]
     fn ordinary_item_domains_follow_earlier_head_and_body_links() {
-        let query = crate::query_markdown_text(
+        let mut query = crate::query_markdown_text(
             "# Tools\n\n<!-- mant:entries role=command case=sensitive -->\n- [`target`](target.md): See [body](body.md).\n\n  <!-- mant:domain entries=domain.md roles=command -->\n", None,
         ).unwrap();
         assert!(
@@ -172,6 +172,21 @@ mod tests {
             assert!(
                 matches!(&reference.target, SemanticDocumentReference::Document { name, .. } if name == expected)
             );
+        }
+        let document = query.document.as_mut().unwrap();
+        let blocks = std::mem::take(&mut document.blocks);
+        document.blocks = vec![
+            serde_json::from_value(serde_json::json!({
+                "type": "definition-list", "items": [{"terms": [], "description": [{
+                    "type": "table", "rows": [{"cells": [{"blocks": blocks}]}]
+                }]}]
+            }))
+            .unwrap(),
+        ];
+        let nested = document_references(&query);
+        assert_eq!(nested.len(), references.len());
+        for (nested, original) in nested.iter().zip(&references) {
+            assert_eq!(nested.target, original.target);
         }
     }
 }

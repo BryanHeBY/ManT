@@ -61,7 +61,21 @@ diagnostics. Markdown `role=` remains an input spelling, not a second IR type.
 - S5: ordered-only start with saturating numbering and excerpt offsets.
 - S6: documentation, A01–A15 evidence, corpus and performance comparison.
 
-Not yet completed: S1–S6. Current successful baseline verification is recorded
+S1 fixes both the index/choices walker and the contextual navigation walker:
+unannotated definition items now behave like unannotated ordinary items. Direct
+child traversal stops at annotated owners; full scope traversal is unchanged.
+Regression coverage: `entry::tests::choice_validation_uses_direct_entry_ownership_through_containers`,
+`list_entry_consumers`, `scope::references`, `entry_choices_coverage`,
+`explanation_evidence`. This covers alternating owners, table cells, empty terms,
+nearest explanation owner, excerpts, search outside flattened tables, nested
+choices and source-order links.
+
+Additional observed gap to resolve during consumer convergence: table cells are
+flattened into fenced Markdown text without entry byte ranges. Search therefore
+attributes cell content to the section, although outline/excerpt/explain now
+reach the actual nested owner. Do not call A12 complete until this is addressed.
+
+Not yet completed: S2–S6. Current successful baseline verification is recorded
 in `remaining-review-verification.md`; it is not evidence for later changes.
 
 ## Local verification boundary

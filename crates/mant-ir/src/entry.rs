@@ -98,6 +98,9 @@ mod tests {
             vec![list(grandchild)],
         );
         assert!(!value.has_value_choices());
+        let mut transparent =
+            definition("unused", DefinitionRole::Term, &[], &[], vec![list(value)]);
+        transparent.identity = None;
         let parent = definition(
             "option-color",
             DefinitionRole::Option,
@@ -109,7 +112,7 @@ mod tests {
                 compact: true,
                 items: vec![crate::ListItem {
                     entry: None,
-                    blocks: vec![list(value)],
+                    blocks: vec![list(transparent)],
                 }],
                 layout: LayoutHint::default(),
                 source: None,

@@ -7,17 +7,13 @@ pub fn visit_child_entries<'a>(blocks: &'a [Block], visit: &mut impl FnMut(Entry
     for block in blocks {
         match block {
             Block::DefinitionList { items, .. } => {
-                for item in items.iter().filter(|item| item.identity.is_some()) {
-                    visit(EntryOwner::Definition(item));
+                for item in items {
+                    visit_or_descend(EntryOwner::Definition(item), visit);
                 }
             }
             Block::List { items, .. } => {
                 for item in items {
-                    if item.entry.is_some() {
-                        visit(EntryOwner::List(item));
-                    } else {
-                        visit_child_entries(&item.blocks, visit);
-                    }
+                    visit_or_descend(EntryOwner::List(item), visit);
                 }
             }
             Block::Table { rows, .. } => {
@@ -32,6 +28,17 @@ pub fn visit_child_entries<'a>(blocks: &'a [Block], visit: &mut impl FnMut(Entry
             | Block::ThematicBreak { .. }
             | Block::Unsupported { .. } => {}
         }
+    }
+}
+
+fn visit_or_descend<'a>(owner: EntryOwner<'a>, visit: &mut impl FnMut(EntryOwner<'a>)) {
+    // Attachment, not field validity or source format, establishes ownership.
+    // Consumers needing every descendant (scope links, literal evidence) retain
+    // their full traversal; this walker reports only direct semantic children.
+    if owner.facts().is_some() {
+        visit(owner);
+    } else {
+        visit_child_entries(owner.blocks(), visit);
     }
 }
 
