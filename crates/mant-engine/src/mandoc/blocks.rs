@@ -213,6 +213,8 @@ fn lower_blocks_onto(
     lowerer.finish()
 }
 
+const DEFAULT_MAN_TAG_WIDTH: usize = 7;
+
 struct BlockLowerer<'a, 'source> {
     context: &'a LoweringContext<'source>,
     indent_columns: u16,
@@ -248,7 +250,7 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
             paragraph_distance,
             state: BlockState::with_output(indent_columns, spacing_enabled, output),
             font: FontState::new(),
-            definition_hanging_width: 7,
+            definition_hanging_width: DEFAULT_MAN_TAG_WIDTH,
             split_authors: false,
             synopsis_return_type_open: false,
             man_alias_state: ManAliasState::None,
@@ -734,6 +736,11 @@ impl StructuralLowerer<'_, '_, '_> {
     fn lower_transparent_container(&mut self, node: &Node) -> bool {
         match node.macro_name.as_deref() {
             Some("PP" | "P" | "LP" | "HP") => {
+                // man(7) ordinary paragraphs restore the prevailing tag
+                // width; HP is a hanging paragraph, not that reset boundary.
+                if matches!(node.macro_name.as_deref(), Some("PP" | "P" | "LP")) {
+                    *self.definition_hanging_width = DEFAULT_MAN_TAG_WIDTH;
+                }
                 let spacing_before = if self.output.is_empty() {
                     0
                 } else {

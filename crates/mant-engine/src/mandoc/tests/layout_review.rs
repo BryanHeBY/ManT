@@ -1,6 +1,39 @@
 //! End-to-end name, ownership and layout regression matrices.
 
 #[test]
+fn ordinary_man_paragraphs_reset_prevailing_definition_width() {
+    use mant_ir::visit::{Visit, walk_definition_item};
+    struct Widths(Vec<bool>);
+    impl<'a> Visit<'a> for Widths {
+        fn visit_definition_item(&mut self, item: &'a mant_ir::DefinitionItem) {
+            self.0.push(item.inline_term);
+            walk_definition_item(self, item);
+        }
+    }
+    for (boundary, inline_second) in [("PP", false), ("P", false), ("LP", false), ("HP", true)] {
+        let source = format!(
+            ".TH PROBE 1\n.SH DESCRIPTION\n.TP 15\nFIRSTLONGTAG\nFIRST\n.{boundary}\nBETWEEN\n.TP\nSECONDLONGTAG\nSECOND\n"
+        );
+        let query = crate::query_roff_bytes(source.as_bytes()).unwrap();
+        let mut widths = Widths(Vec::new());
+        widths.visit_document(query.document.as_ref().unwrap());
+        assert_eq!(widths.0, [true, inline_second], "{source}");
+        let text = crate::render_query_text(&query);
+        assert!(
+            text.lines()
+                .any(|line| line.contains("FIRSTLONGTAG") && line.contains("FIRSTLONGTAG FIRST")),
+            "{text}"
+        );
+        assert_eq!(
+            text.lines()
+                .any(|line| line.contains("SECONDLONGTAG") && line.ends_with("SECOND")),
+            inline_second,
+            "{text}"
+        );
+    }
+}
+
+#[test]
 fn literal_display_controls_preserve_physical_rows_and_continuation() {
     for display in ["literal", "unfilled"] {
         for (body, expected) in [
