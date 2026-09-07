@@ -5,6 +5,7 @@
 
 mod blocks;
 mod container;
+mod directives;
 mod entries;
 mod inline;
 mod layout;
@@ -37,7 +38,8 @@ use pulldown_cmark::{Event, HeadingLevel, Options, Tag, TagEnd};
 use self::{
     blocks::parse_block,
     container::split_markdown,
-    entries::{extract_semantic_directives, normalize_entry_lists},
+    directives::PreparedMarkdown,
+    entries::normalize_entry_lists,
     inline::{inline_text, parse_inlines},
     layout::normalize_markdown_layout,
     source::MarkdownSource,
@@ -115,15 +117,8 @@ pub fn parse_markdown(
         })
         .transpose()?;
     let mut entry_diagnostics = Vec::new();
-    let (events, declarations) =
-        extract_semantic_directives(parts.document.as_ref(), &mut entry_diagnostics);
-    let mut document = parse_document_with_entries(
-        parts.document.as_ref(),
-        events,
-        source_path,
-        declarations,
-        &mut entry_diagnostics,
-    );
+    let prepared = PreparedMarkdown::new(parts.document.as_ref(), &mut entry_diagnostics);
+    let mut document = parse_document_with_entries(prepared, source_path, &mut entry_diagnostics);
     if !entry_diagnostics.is_empty() {
         entry_diagnostics.extend(std::mem::take(&mut document.diagnostics));
         document.diagnostics = entry_diagnostics;
@@ -182,23 +177,28 @@ fn sanitize_source(source_text: &str, diagnostics: &mut Vec<Diagnostic>) -> Opti
 fn parse_document(source_text: &str, source_path: Option<String>) -> Document {
     let mut diagnostics = Vec::new();
     parse_document_with_entries(
-        source_text,
-        Parser::new_ext(source_text, markdown_options())
-            .into_offset_iter()
-            .collect(),
+        PreparedMarkdown {
+            source: source_text,
+            events: Parser::new_ext(source_text, markdown_options())
+                .into_offset_iter()
+                .collect(),
+            declarations: directives::SemanticDeclarations::default(),
+        },
         source_path,
-        entries::SemanticDeclarations::default(),
         &mut diagnostics,
     )
 }
 
 fn parse_document_with_entries(
-    source_text: &str,
-    events: Vec<SpannedEvent<'_>>,
+    prepared: PreparedMarkdown<'_>,
     source_path: Option<String>,
-    mut declarations: entries::SemanticDeclarations,
     entry_diagnostics: &mut Vec<Diagnostic>,
 ) -> Document {
+    let PreparedMarkdown {
+        source: source_text,
+        events,
+        mut declarations,
+    } = prepared;
     let source = MarkdownSource::new(source_text);
     let ParsedDocumentStructure {
         diagnostics,
@@ -243,7 +243,7 @@ fn parse_document_with_entries(
     for declaration in declarations
         .domains
         .into_values()
-        .filter_map(entries::DomainDeclarationState::into_unique)
+        .filter_map(directives::DomainDeclarationState::into_unique)
     {
         entry_diagnostics.push(Diagnostic {
             level: DiagnosticLevel::Warning,
@@ -404,7 +404,7 @@ fn markdown_parser() -> ParserInfo {
 
 fn normalize_section_entries(
     sections: &mut [Section],
-    declarations: &mut entries::SemanticDeclarations,
+    declarations: &mut directives::SemanticDeclarations,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     for section in sections {
