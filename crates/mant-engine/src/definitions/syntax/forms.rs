@@ -70,7 +70,9 @@ mod tests {
             Inline::Text {
                 value: " \t".into(),
             },
-            Inline::Code { value: "".into() },
+            Inline::Code {
+                value: String::new(),
+            },
             Inline::Code {
                 value: " \t".into(),
             },

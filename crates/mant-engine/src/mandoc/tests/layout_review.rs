@@ -2,9 +2,6 @@
 
 #[test]
 fn invocation_forms_and_aliases_agree_across_query_consumers() {
-    use mant_protocol::{
-        EntryProjection, OutlineNode, SearchCase, SearchQuery, SearchScope, SearchSyntax,
-    };
     for (section, head, form, aliases, rejected) in [
         (
             "OPTIONS",
@@ -56,60 +53,73 @@ fn invocation_forms_and_aliases_agree_across_query_consumers() {
             "blue",
         ),
     ] {
-        let query = crate::query_roff_bytes(
-            format!(".TH NAMES 1\n.SH {section}\n.TP\n{head}\nOWNEDPAYLOAD.\n").as_bytes(),
+        assert_invocation_consumers(section, head, form, &aliases, rejected);
+    }
+}
+
+fn assert_invocation_consumers(
+    section: &str,
+    head: &str,
+    form: &str,
+    aliases: &[&str],
+    rejected: &str,
+) {
+    use mant_protocol::{
+        EntryProjection, OutlineNode, SearchCase, SearchQuery, SearchScope, SearchSyntax,
+    };
+    let query = crate::query_roff_bytes(
+        format!(".TH NAMES 1\n.SH {section}\n.TP\n{head}\nOWNEDPAYLOAD.\n").as_bytes(),
+    )
+    .unwrap();
+    let index = mant_ir::SemanticIndex::build(query.document.as_ref().unwrap());
+    let indexed = &index.section(&query.document.as_ref().unwrap().sections[0].id)[0];
+    assert_eq!(indexed.aliases, aliases);
+    assert_eq!(indexed.forms, [form]);
+    let outline = crate::build_outline_projection(&query, EntryProjection::All, None).unwrap();
+    let OutlineNode::DocumentSection { children, .. } = &outline.nodes[0] else {
+        panic!("{outline:?}")
+    };
+    let OutlineNode::DocumentEntry {
+        id,
+        path,
+        aliases: projected,
+        forms,
+        ..
+    } = &children[0]
+    else {
+        panic!("{children:?}")
+    };
+    assert_eq!(projected, aliases);
+    assert_eq!(forms, &[form]);
+    let direct = crate::select_excerpt(&query, &[path.as_str()]).unwrap();
+    for alias in aliases {
+        let explained = crate::select_explanation(&query, alias).unwrap();
+        assert_eq!(explained.selections, direct.selections);
+        assert!(crate::render_excerpt_text(&explained).contains("OWNEDPAYLOAD"));
+    }
+    assert!(crate::select_explanation(&query, rejected).is_err());
+    for scope in [SearchScope::Visible, SearchScope::Markdown] {
+        let found = crate::search_query(
+            &query,
+            &SearchQuery {
+                pattern: "OWNEDPAYLOAD".into(),
+                syntax: SearchSyntax::Literal,
+                case: SearchCase::Sensitive,
+                scope,
+                word: false,
+                context_lines: 0,
+                offset: 0,
+                limit: 10,
+            },
         )
         .unwrap();
-        let index = mant_ir::SemanticIndex::build(query.document.as_ref().unwrap());
-        let indexed = &index.section(&query.document.as_ref().unwrap().sections[0].id)[0];
-        assert_eq!(indexed.aliases, aliases);
-        assert_eq!(indexed.forms, [form]);
-        let outline = crate::build_outline_projection(&query, EntryProjection::All, None).unwrap();
-        let OutlineNode::DocumentSection { children, .. } = &outline.nodes[0] else {
-            panic!("{outline:?}")
-        };
-        let OutlineNode::DocumentEntry {
-            id,
-            path,
-            aliases: projected,
-            forms,
-            ..
-        } = &children[0]
-        else {
-            panic!("{children:?}")
-        };
-        assert_eq!(projected, &aliases);
-        assert_eq!(forms, &[form]);
-        let direct = crate::select_excerpt(&query, &[path.as_str()]).unwrap();
-        for alias in aliases {
-            let explained = crate::select_explanation(&query, alias).unwrap();
-            assert_eq!(explained.selections, direct.selections);
-            assert!(crate::render_excerpt_text(&explained).contains("OWNEDPAYLOAD"));
-        }
-        assert!(crate::select_explanation(&query, rejected).is_err());
-        for scope in [SearchScope::Visible, SearchScope::Markdown] {
-            let found = crate::search_query(
-                &query,
-                &SearchQuery {
-                    pattern: "OWNEDPAYLOAD".into(),
-                    syntax: SearchSyntax::Literal,
-                    case: SearchCase::Sensitive,
-                    scope,
-                    word: false,
-                    context_lines: 0,
-                    offset: 0,
-                    limit: 10,
-                },
-            )
-            .unwrap();
-            assert_eq!(found.matches.len(), 1);
-            let hit = &found.matches[0];
-            assert!(
-                matches!(&hit.outline.node, mant_protocol::OutlineNodeReference::DocumentEntry { id: found_id, path: found_path, .. } if found_id == id && found_path == path)
-            );
-            assert_eq!(hit.node_source.unwrap().line, 3);
-            assert_eq!(hit.occurrences[0].matched_text, "OWNEDPAYLOAD");
-        }
+        assert_eq!(found.matches.len(), 1);
+        let hit = &found.matches[0];
+        assert!(
+            matches!(&hit.outline.node, mant_protocol::OutlineNodeReference::DocumentEntry { id: found_id, path: found_path, .. } if found_id == id && found_path == path)
+        );
+        assert_eq!(hit.node_source.unwrap().line, 3);
+        assert_eq!(hit.occurrences[0].matched_text, "OWNEDPAYLOAD");
     }
 }
 
