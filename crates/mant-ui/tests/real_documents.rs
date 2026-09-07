@@ -3,6 +3,8 @@
 //! These tests intentionally avoid distribution-specific pixel snapshots.
 //! They prove that large, structurally different manuals survive every common
 //! terminal width while keeping all sidebar destinations addressable.
+//! Small independently authored cases additionally constrain state and grid
+//! boundaries that broad visible-character checks cannot prove.
 
 use std::path::{Path, PathBuf};
 
@@ -59,6 +61,51 @@ fn visible_characters(value: &str) -> String {
         .chars()
         .filter(|character| !character.is_whitespace() && !character.is_control())
         .collect()
+}
+
+/// Independently authored state-boundary cases exercise native IR through
+/// the terminal consumer; no reference executable or copied golden is needed.
+#[test]
+fn literal_scope_continuations_remain_searchable_after_terminal_wrapping() {
+    let source = b".Dd September 7, 2026\n.Dt FLOW 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal -offset left\nFIRST\\c\n.Bf -emphasis\nSECOND\\c\n.Ef\nTHIRD\n.Ed\n";
+    let query = mant_engine::query_roff_bytes(source).unwrap();
+    let view = DocumentView::new(&query);
+    for width in [4, 16, 80] {
+        let rendered = view.render(width);
+        let found = rendered.search("FIRSTSECONDTHIRD");
+        assert_eq!(found.len(), 1, "width={width}: {:?}", rendered.text);
+        assert!(found[0].row < rendered.row_count);
+        assert!(rendered.search("FIRST SECOND").is_empty());
+        assert!(rendered.search("SECOND THIRD").is_empty());
+    }
+}
+
+#[test]
+fn empty_cells_and_span_owners_keep_payloads_in_every_terminal_width() {
+    let query = mant_engine::query_roff_bytes(
+        b".TH GRID 1\n.SH DESCRIPTION\n.TS\nl s l\nl l l.\nWIDE\tRIGHT\nLEFT\t\tEND\n.TE\nAFTER\n",
+    )
+    .unwrap();
+    for output in [
+        mant_engine::render_query_text(&query),
+        mant_engine::render_markdown(&query),
+    ] {
+        assert!(output.contains("WIDE |  | RIGHT"), "{output}");
+        assert!(output.contains("LEFT |  | END"), "{output}");
+    }
+    let view = DocumentView::new(&query);
+    for width in [5, 24, 80] {
+        let rendered = view.render(width);
+        for token in ["WIDE", "RIGHT", "LEFT", "END", "AFTER"] {
+            assert_eq!(
+                rendered.search(token).len(),
+                1,
+                "width={width}, {token}: {:?}",
+                rendered.text
+            );
+        }
+        assert!(rendered.search("AFTER")[0].row > rendered.search("END")[0].row);
+    }
 }
 
 #[derive(Debug)]
