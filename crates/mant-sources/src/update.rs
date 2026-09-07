@@ -20,10 +20,7 @@ use crate::limits::{
 };
 use crate::{
     document_path::{markdown_extension_priority, normalize_relative_document_path},
-    metadata::{
-        SourceMetadata, read_source_metadata, source_fingerprint, validate_source_directory,
-    },
-    registry::managed_document_count,
+    metadata::{SourceMetadata, source_fingerprint},
 };
 use prune::discover_orphaned_sources;
 #[cfg(test)]
@@ -173,14 +170,16 @@ impl<'a> SourceUpdateContext<'a> {
     ) -> Result<Self, String> {
         let target = paths.sources.join(name);
         recover_directory(&target)?;
-        let installed = validate_source_directory(&target)?;
+        let probe = crate::installed::InstalledSourceProbe::new(&target);
+        let installed = probe.directory()?;
         let fingerprint = source_fingerprint(configured);
         let metadata = installed
-            .then(|| read_source_metadata(&target).ok())
+            .then(|| probe.metadata().ok())
             .flatten()
             .filter(|metadata| metadata.matches(name, configured, &fingerprint))
             .filter(|metadata| {
-                managed_document_count(&target)
+                probe
+                    .document_count()
                     .is_ok_and(|documents| documents == metadata.documents())
             });
         Ok(Self {

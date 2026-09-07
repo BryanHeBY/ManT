@@ -7,10 +7,7 @@ use serde::Deserialize;
 use crate::{
     ConfiguredSource, DocumentPaths, SOURCE_METADATA_FILE, SourceConfig, SourceConfigError,
     SourceLocation, is_source_name, load_source_config,
-    metadata::{
-        MAX_METADATA_BYTES, read_source_metadata, source_fingerprint, validate_source_directory,
-    },
-    registry::managed_document_count,
+    metadata::{MAX_METADATA_BYTES, source_fingerprint, validate_source_directory},
 };
 
 /// Transport required to update one configured source.
@@ -124,6 +121,7 @@ fn inspect_configured_source(
         SourceLocation::Archive { .. } => SourceTransport::Archive,
     };
     let target = paths.sources.join(name);
+    let probe = crate::installed::InstalledSourceProbe::new(&target);
     let base = |status, revision, documents, detail| ConfiguredSourceInspection {
         source: name.to_owned(),
         transport,
@@ -133,7 +131,7 @@ fn inspect_configured_source(
         documents,
         detail,
     };
-    match validate_source_directory(&target) {
+    match probe.directory() {
         Ok(false) => {
             return base(SourceInstallationStatus::Missing, None, None, None);
         }
@@ -142,7 +140,7 @@ fn inspect_configured_source(
         }
         Ok(true) => {}
     }
-    let metadata = match read_source_metadata(&target) {
+    let metadata = match probe.metadata() {
         Ok(metadata) => metadata,
         Err(error) => {
             return base(SourceInstallationStatus::Invalid, None, None, Some(error));
@@ -150,7 +148,7 @@ fn inspect_configured_source(
     };
     let revision = Some(metadata.revision().to_owned());
     let documents = Some(metadata.documents());
-    let actual_documents = match managed_document_count(&target) {
+    let actual_documents = match probe.document_count() {
         Ok(documents) => documents,
         Err(error) => {
             return base(

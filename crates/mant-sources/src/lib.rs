@@ -9,6 +9,7 @@ mod document_path;
 #[cfg(feature = "update")]
 mod download;
 mod inspection;
+mod installed;
 #[cfg(feature = "update")]
 mod limits;
 mod metadata;
