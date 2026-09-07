@@ -1,5 +1,6 @@
 //! Renders the native query contract as deterministic portable `CommonMark`.
 
+mod anchors;
 mod blocks;
 mod inline;
 
@@ -19,6 +20,7 @@ use self::{
     inline::{code_span, escape_text},
 };
 use crate::{ResolvedContent, projection::DOCUMENT_ROOT_ID};
+pub(crate) use anchors::anchor_markers;
 
 /// Markdown serialization controls that do not alter the query IR.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]

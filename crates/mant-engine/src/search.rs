@@ -441,7 +441,7 @@ fn build_match(
 ) -> SearchHit {
     let first = &found.occurrences[0];
     let start = lines.position(markdown, first.markdown.start);
-    let preview = display_markdown_line(lines.line(markdown, start.line_index));
+    let preview = lines.presented_line(markdown, start.line_index).text;
     let context_start = found
         .start_line_index
         .saturating_sub(usize::from(context_lines));
@@ -455,7 +455,7 @@ fn build_match(
         (context_start..=context_end)
             .map(|line_index| SearchContextLine {
                 line: u32::try_from(line_index.saturating_add(1)).unwrap_or(u32::MAX),
-                text: display_markdown_line(lines.line(markdown, line_index)),
+                text: lines.presented_line(markdown, line_index).text,
                 matched: (found.start_line_index..=found.end_line_index).contains(&line_index),
             })
             .collect()
@@ -513,7 +513,7 @@ fn occurrence_line_ranges(
             let intersection =
                 markdown_range.start.max(line_start)..markdown_range.end.min(line_end);
             (intersection.start < intersection.end)
-                .then(|| AnchorStrippedLine::new(line))
+                .then(|| lines.presented_line(markdown, line_index))
                 .into_iter()
                 .flat_map(move |visible| {
                     visible.map_range(
@@ -538,7 +538,7 @@ fn presented_matched_text(occurrence: &RawOccurrence, markdown: &str, lines: &Li
         if previous_line.is_some_and(|previous| previous != line_index) {
             text.push('\n');
         }
-        let line = display_markdown_line(lines.line(markdown, line_index));
+        let line = lines.presented_line(markdown, line_index).text;
         let start = usize::try_from(range.start_byte).unwrap_or(usize::MAX);
         let end = usize::try_from(range.end_byte).unwrap_or(usize::MAX);
         if let Some(fragment) = line.get(start..end) {
@@ -549,9 +549,10 @@ fn presented_matched_text(occurrence: &RawOccurrence, markdown: &str, lines: &Li
     text
 }
 
-/// Hide `ManT`'s zero-width source-map anchors from human-facing snippets.
+/// Test convenience; production uses the full-document marker index.
+#[cfg(test)]
 fn display_markdown_line(line: &str) -> String {
-    AnchorStrippedLine::new(line.trim_end()).text
+    LineIndex::new(line).presented_line(line, 0).text
 }
 
 struct AnchorStrippedLine {
@@ -560,24 +561,18 @@ struct AnchorStrippedLine {
 }
 
 impl AnchorStrippedLine {
-    fn new(line: &str) -> Self {
+    fn new(line: &str, hidden: impl Iterator<Item = Range<usize>>) -> Self {
         let mut text = String::with_capacity(line.len());
         let mut segments = Vec::new();
         let mut cursor = 0;
-        while let Some(relative_start) = line[cursor..].find("<a id=\"") {
-            let anchor_start = cursor + relative_start;
-            push_retained_line_segment(line, cursor..anchor_start, &mut text, &mut segments);
-            let anchor = &line[anchor_start..];
-            let Some(relative_end) = anchor.find("\"></a>") else {
-                push_retained_line_segment(
-                    line,
-                    anchor_start..line.len(),
-                    &mut text,
-                    &mut segments,
-                );
-                return Self { text, segments };
-            };
-            cursor = anchor_start + relative_end + "\"></a>".len();
+        for range in hidden {
+            push_retained_line_segment(
+                line,
+                cursor..range.start.min(line.len()),
+                &mut text,
+                &mut segments,
+            );
+            cursor = range.end.min(line.len());
         }
         push_retained_line_segment(line, cursor..line.len(), &mut text, &mut segments);
         Self { text, segments }
@@ -623,6 +618,7 @@ struct TextPosition {
 
 struct LineIndex {
     starts: Vec<usize>,
+    anchors: Vec<Range<usize>>,
 }
 
 impl LineIndex {
@@ -633,7 +629,24 @@ impl LineIndex {
                 .enumerate()
                 .filter_map(|(index, byte)| (byte == b'\n').then_some(index + 1)),
         );
-        Self { starts }
+        Self {
+            starts,
+            anchors: crate::output::anchor_markers(text)
+                .into_iter()
+                .map(|marker| marker.range)
+                .collect(),
+        }
+    }
+
+    fn presented_line(&self, text: &str, index: usize) -> AnchorStrippedLine {
+        let start = self.start(index);
+        let line = self.line(text, index).trim_end();
+        let first = self.anchors.partition_point(|range| range.end <= start);
+        let hidden = self.anchors[first..]
+            .iter()
+            .take_while(|range| range.start < start + line.len())
+            .map(|range| range.start.saturating_sub(start)..range.end.saturating_sub(start));
+        AnchorStrippedLine::new(line, hidden)
     }
 
     fn count(&self) -> usize {

@@ -2,6 +2,57 @@
 use super::*;
 
 #[test]
+fn literal_anchor_code_is_searchable_and_cannot_steal_entry_ownership() {
+    for heading in ["", "## Section\n\n"] {
+        for literal in [
+            "```html\n<a id=\"option-alpha\"></a>\nSENTINEL\n```",
+            "`<a id=\"option-alpha\"></a>` SENTINEL",
+        ] {
+            let source = format!(
+                "# Tool\n\n{heading}{literal}\n\nA separate paragraph.\n\n<!-- mant:entries role=option case=sensitive -->\n- `--alpha`: Alpha description.\n\n{literal}\n"
+            );
+            let document = parse_markdown(&source, None).unwrap().document;
+            let query = ResolvedContent {
+                label: "tool".into(),
+                address: None,
+                document: Some(document),
+                tldr: None,
+            };
+            for scope in [SearchScope::Visible, SearchScope::Markdown] {
+                for pattern in ["<a", "SENTINEL", "separate"] {
+                    let result = search_query(
+                        &query,
+                        &SearchQuery {
+                            pattern: pattern.into(),
+                            syntax: SearchSyntax::Literal,
+                            case: SearchCase::Sensitive,
+                            scope,
+                            word: false,
+                            context_lines: 1,
+                            offset: 0,
+                            limit: 100,
+                        },
+                    )
+                    .unwrap();
+                    assert!(result.total > 0, "{source}: {pattern}: {scope:?}");
+                    for hit in result.matches {
+                        assert!(
+                            !matches!(hit.outline.node, OutlineNodeReference::DocumentEntry { .. }),
+                            "{pattern}: {hit:?}"
+                        );
+                        assert!(
+                            hit.occurrences
+                                .iter()
+                                .any(|occurrence| occurrence.matched_text.contains(pattern))
+                        );
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[test]
 fn environment_assignments_retain_punctuation_in_values() {
     for form in ["FOO=one,two", "FOO=one|two"] {
         let parsed = parse_markdown(&format!("# Tool\n\n<!-- mant:entries role=environment-variable case=sensitive -->\n- `{form}`: Set values.\n"), None).unwrap();

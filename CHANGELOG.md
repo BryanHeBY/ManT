@@ -58,6 +58,9 @@ that crate was not published for that change.
 
 ### mant-engine 0.11.0
 
+- Keep literal HTML anchors searchable in code and use parsed HTML/item
+  ranges for internal source-map markers and semantic search ownership.
+
 - Consume Markdown semantic directives in the original parser event tree;
   removing a directive cannot merge independent lists or spread a role/domain.
 

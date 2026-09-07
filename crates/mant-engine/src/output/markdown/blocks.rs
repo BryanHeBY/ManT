@@ -38,6 +38,7 @@ pub(super) fn render_blocks_with_entries(
     let text = render_blocks(blocks, options).join("\n\n");
     let mut entries = Vec::new();
     if options.preserve_anchors {
+        let markers = super::anchor_markers(&text);
         let mut cursor = 0;
         for located in definition_entries(blocks) {
             let entry = located.item;
@@ -45,11 +46,13 @@ pub(super) fn render_blocks_with_entries(
                 continue;
             };
             let anchor = html_anchor(&identity.id);
-            let Some(relative) = text[cursor..].find(&anchor) else {
+            let Some(marker) = markers.iter().find(|marker| {
+                marker.range.start >= cursor && text[marker.range.clone()] == anchor
+            }) else {
                 continue;
             };
-            let start = cursor + relative;
-            let end = definition_item_end(&text, start);
+            let start = marker.range.start;
+            let end = marker.item_end.unwrap_or(marker.range.end);
             entries.push(RenderedEntry {
                 indices: located.indices,
                 start,
@@ -61,45 +64,6 @@ pub(super) fn render_blocks_with_entries(
         }
     }
     RenderedBlocks { text, entries }
-}
-
-fn definition_item_end(markdown: &str, anchor_start: usize) -> usize {
-    let line_start = markdown[..anchor_start]
-        .rfind('\n')
-        .map_or(0, |index| index + 1);
-    let prefix = &markdown[line_start..anchor_start];
-    if prefix.is_empty() {
-        return markdown.len();
-    }
-    let content_indent = prefix.chars().count();
-    let mut cursor = markdown[anchor_start..]
-        .find('\n')
-        .map_or(markdown.len(), |relative| anchor_start + relative + 1);
-    let mut after_blank = false;
-
-    while cursor < markdown.len() {
-        let end = markdown[cursor..]
-            .find('\n')
-            .map_or(markdown.len(), |relative| cursor + relative);
-        let line = &markdown[cursor..end];
-        if line.starts_with(prefix) {
-            return cursor;
-        }
-        if line.trim().is_empty() {
-            after_blank = true;
-        } else {
-            let indent = line
-                .chars()
-                .take_while(|character| *character == ' ')
-                .count();
-            if after_blank && indent < content_indent {
-                return cursor;
-            }
-            after_blank = false;
-        }
-        cursor = end.saturating_add(1);
-    }
-    markdown.len()
 }
 
 fn render_block(block: &Block, options: MarkdownOptions) -> Option<String> {
