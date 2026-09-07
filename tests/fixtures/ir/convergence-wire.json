@@ -1,0 +1,16 @@
+{
+  "definition": {
+    "old": {"identity": {"id": "option-output", "role": "option", "case": "sensitive", "names": [], "valueDomain": null}, "terms": [[{"type":"code","value":"-o FILE"}]], "description": [], "inlineTerm": true, "spacingBeforeLines": 0},
+    "new": {"entry": {"id": "option-output", "kind": {"kind":"parameter","parameterKind":"option"}, "case": "sensitive", "names": [], "forms": [{"parts":[{"root":{"kind":"term","index":0},"path":[]}]}]}, "terms": [[{"type":"code","value":"-o FILE"}]], "description": [], "layout": {"inlineTerm":true,"spacingBeforeLines":0}},
+    "rejectFields": ["identity", "inlineTerm", "spacingBeforeLines", "unknown"]
+  },
+  "listItem": {"new": {"blocks":[]}, "rejectFields": ["identity", "unknown"]},
+  "facts": {"rejectFields": ["role", "aliases", "unknown"], "rejectForms": [null]},
+  "semanticEntry": {"rejectFields": ["aliases", "role", "unknown"]},
+  "layout": {"accept": [{}, {"spacingBeforeLines":null}, {"spacingBeforeLines":0}, {"inlineTerm":true}], "reject": [null, {"unknown":true}]},
+  "listKind": {
+    "accept": [{"kind":"bullet"},{"kind":"plain"},{"kind":"ordered"},{"kind":"ordered","start":null},{"kind":"ordered","start":0},{"kind":"ordered","start":7},{"kind":"ordered","start":18446744073709551615}],
+    "reject": ["ordered",{"kind":"bullet","start":null},{"kind":"plain","start":1},{"kind":"ordered","start":-1},{"kind":"ordered","start":1.5},{"kind":"ordered","unknown":0}],
+    "rejectRaw": ["{\"kind\":\"ordered\",\"start\":18446744073709551616}","{\"kind\":\"ordered\",\"start\":1,\"start\":2}","{\"kind\":\"plain\",\"kind\":\"bullet\"}"]
+  }
+}

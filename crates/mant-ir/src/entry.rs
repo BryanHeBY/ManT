@@ -24,6 +24,24 @@ mod tests {
 
     use super::*;
 
+    #[test]
+    fn convergence_records_pre_migration_wire_behavior() {
+        // A measurement of the old decoder, not its desired final contract.
+        // Replace these assertions in the first field-migration commit.
+        let cases: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../tests/fixtures/ir/convergence-wire.json"
+        ))
+        .unwrap();
+        let old: DefinitionItem =
+            serde_json::from_value(cases["definition"]["old"].clone()).unwrap();
+        assert_eq!(old.identity.unwrap().role, DefinitionRole::Option);
+        assert!(
+            serde_json::from_value::<DefinitionItem>(cases["definition"]["new"].clone()).is_ok()
+        );
+        assert!(serde_json::from_str::<crate::ListItem>(r#"{"blocks":[],"unknown":true}"#).is_ok());
+        assert!(serde_json::from_str::<crate::ListKind>(r#""ordered""#).is_ok());
+    }
+
     fn definition(
         id: &str,
         role: DefinitionRole,
