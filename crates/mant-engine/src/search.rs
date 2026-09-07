@@ -500,7 +500,10 @@ mod tests {
                     blocks: vec![Block::DefinitionList {
                         items: vec![DefinitionItem {
                             source: None,
-                            inline_term: false,
+                            layout: mant_ir::DefinitionLayout {
+                                inline_term: false,
+                                spacing_before_lines: None,
+                            },
                             entry: Some(EntryFacts {
                                 name_bindings: Vec::new(),
                                 alias_groups: Vec::new(),
@@ -537,7 +540,6 @@ mod tests {
                                 layout: LayoutHint::default(),
                                 source: None,
                             }],
-                            spacing_before_lines: None,
                         }],
                         compact: true,
                         layout: LayoutHint::default(),

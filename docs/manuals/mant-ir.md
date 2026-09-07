@@ -65,6 +65,14 @@ The block union preserves structures that matter across renderers:
 
 A standalone definition description block adds `DefinitionItem::DESCRIPTION_INDENT_COLUMNS` (four columns) before applying its own layout hint, whether or not the term is inline. `DefinitionItem::inline_description()` identifies the first paragraph that may share the term's line: explicit leading spacing or a non-paragraph block prevents that presentation. Only that first paragraph hangs from the displayed label; later paragraphs, nested blocks and code use the structural four-column origin, not the label's width. Native continuation normalization, plain text, and the TUI share this distinction. Their first-line typography and paragraph wrapping remain presentation policy. Markdown expresses ownership through its own block syntax rather than terminal-column geometry.
 
+`DefinitionItem.layout: DefinitionLayout` groups these item-level choices:
+`inlineTerm` defaults to false; optional `spacingBeforeLines` defaults to
+inheriting list compactness. Explicit zero spacing is preserved and does not
+mean inheritance. Missing layout and `{}` have the same default; `layout:null`,
+unknown fields, and the former top-level `inlineTerm`/`spacingBeforeLines` fields
+are rejected. Canonical output omits empty layout but retains
+`"layout":{"spacingBeforeLines":0}`. Semantic annotation never changes layout.
+
 Lists contain block-capable items so nested lists and displays do not flatten into prose. Definition terms contain inline trees and descriptions contain blocks. Table cells likewise contain blocks even when a source parser currently produces a single paragraph.
 
 Every canonical ID in `DocumentIndex` is a local navigation target, including entries attached directly to ordinary list items or native definitions. A `LinkTarget::Section` may target any such ID; its historical variant name does not restrict links to heading-backed sections. Entry targets do not need an additional inline anchor. Producers resolve exact authored fragments to canonical IDs before validation; duplicate identities and incompatible roles remain separate errors.

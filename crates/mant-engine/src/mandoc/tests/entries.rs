@@ -694,8 +694,8 @@ fn mdoc_definition_layout_uses_the_normalized_list_width() {
         })
         .collect::<Vec<_>>();
     assert_eq!(lists.len(), 2);
-    assert!(lists[0][0].inline_term);
-    assert!(!lists[1][0].inline_term);
+    assert!(lists[0][0].layout.inline_term);
+    assert!(!lists[1][0].layout.inline_term);
 }
 
 #[test]

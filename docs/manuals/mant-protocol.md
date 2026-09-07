@@ -1056,6 +1056,12 @@ JSON shape. A shape-valid but out-of-bounds reference instead remains in the
 content tree and produces a semantic validation diagnostic. It cannot cause
 that item's body to be attributed to its parent.
 
+Definition-item presentation is nested under `layout`, for example
+`"layout":{"inlineTerm":true,"spacingBeforeLines":0}`. Missing or empty
+layout uses the normal default; null layout and the former top-level layout
+fields are rejected. Null/missing spacing inherits, while explicit zero is
+retained. This is a shape migration, not a change in renderer geometry.
+
 Environment-variable aliases share one source-neutral grammar across native
 and Markdown documents: bare `NAME`, shell `$NAME`, PowerShell `$Env:NAME` or
 `${Env:NAME}`, Windows `%NAME%`, and one assignment `NAME=value`. Assignment

@@ -11,11 +11,7 @@ fn cases() -> Value {
 }
 
 fn definition() -> Value {
-    let mut value = cases()["definition"]["new"].clone();
-    // Layout is a separate migration; activate that part of the frozen sample
-    // when DefinitionLayout replaces the current top-level fields.
-    value.as_object_mut().unwrap().remove("layout");
-    value
+    cases()["definition"]["new"].clone()
 }
 
 fn reject_fields<T: DeserializeOwned>(value: &Value, fields: &Value) {
@@ -42,7 +38,7 @@ fn owners_reject_old_and_unknown_fields_including_mixed_shapes() {
     assert!(
         serde_json::from_value::<DefinitionItem>(cases()["definition"]["old"].clone()).is_err()
     );
-    reject_fields::<DefinitionItem>(&definition, &json!(["identity", "unknown"]));
+    reject_fields::<DefinitionItem>(&definition, &cases()["definition"]["rejectFields"]);
     reject_fields::<ListItem>(
         &cases()["listItem"]["new"],
         &cases()["listItem"]["rejectFields"],
@@ -120,4 +116,41 @@ fn derived_names_are_not_a_second_alias_vocabulary() {
     assert_eq!(canonical["names"], json!(["example"]));
     assert_eq!(canonical["aliasOf"], "other");
     assert!(serde_json::from_str::<SemanticEntry>(r#"{"id":"x","kind":{"kind":"term"},"case":"sensitive","forms":[],"names":[],"names":[]}"#).is_err());
+}
+
+#[test]
+fn definition_layout_keeps_inherited_and_explicit_zero_spacing_distinct() {
+    use crate::DefinitionLayout;
+    for value in cases()["layout"]["accept"].as_array().unwrap() {
+        let layout: DefinitionLayout = serde_json::from_value(value.clone()).unwrap();
+        let canonical = serde_json::to_value(layout).unwrap();
+        assert_eq!(
+            canonical.get("spacingBeforeLines"),
+            value.get("spacingBeforeLines").filter(|v| !v.is_null())
+        );
+        let mut item = definition();
+        item["layout"] = value.clone();
+        let output = roundtrip::<DefinitionItem>(item);
+        assert_eq!(output.get("layout").is_none(), layout.is_empty());
+    }
+    for value in cases()["layout"]["reject"].as_array().unwrap() {
+        assert!(serde_json::from_value::<DefinitionLayout>(value.clone()).is_err());
+        let mut item = definition();
+        item["layout"] = value.clone();
+        assert!(serde_json::from_value::<DefinitionItem>(item).is_err());
+    }
+    for invalid in [
+        r#"{"inlineTerm":true,"inlineTerm":false}"#,
+        r#"{"spacingBeforeLines":null,"spacingBeforeLines":0}"#,
+        r#"{"spacingBeforeLines":-1}"#,
+        r#"{"inlineTerm":null}"#,
+    ] {
+        assert!(
+            serde_json::from_str::<DefinitionLayout>(invalid).is_err(),
+            "{invalid}"
+        );
+    }
+    let inherited: DefinitionItem =
+        serde_json::from_value(json!({"terms":[],"description":[]})).unwrap();
+    assert_eq!(inherited.layout, DefinitionLayout::default());
 }

@@ -633,8 +633,10 @@ mod tests {
                 }],
             ],
             description: vec![list(vec![item("child", EntryKind::Value, "auto")])],
-            inline_term: false,
-            spacing_before_lines: None,
+            layout: crate::DefinitionLayout {
+                inline_term: false,
+                spacing_before_lines: None,
+            },
         };
         let facts = native.entry.as_mut().unwrap();
         facts.names.clear();

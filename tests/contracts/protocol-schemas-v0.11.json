@@ -1091,9 +1091,9 @@
               }
             ]
           },
-          "inlineTerm": {
-            "description": "Render the term on the same line as the first description line (a man(7)\nhanging tag that fits the indent) instead of on its own line. Decided\nonce during lowering so every renderer lays the item out identically.",
-            "type": "boolean"
+          "layout": {
+            "description": "Item presentation, independent of any attached semantic facts.",
+            "$ref": "#/$defs/DefinitionLayout"
           },
           "source": {
             "description": "Original term-and-description owner span, not its containing list.",
@@ -1105,16 +1105,6 @@
                 "type": "null"
               }
             ]
-          },
-          "spacingBeforeLines": {
-            "description": "Terminal rows requested before this item when man(7) changes `.PD`.\n`None` inherits the containing list's compactness policy.",
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "uint16",
-            "maximum": 65535,
-            "minimum": 0
           },
           "terms": {
             "description": "One or more displayed terms sharing this description, not necessarily\nequivalent names or interchangeable invocation forms.",
@@ -1132,6 +1122,27 @@
           "terms",
           "description"
         ]
+      },
+      "DefinitionLayout": {
+        "description": "Definition-item presentation. Missing spacing inherits list compactness;\nexplicit zero spacing is a distinct, preserved source request.",
+        "type": "object",
+        "properties": {
+          "inlineTerm": {
+            "description": "Render the term on the same line as the first description line (a man(7)\nhanging tag that fits the indent) instead of on its own line. Decided\nonce during lowering so every renderer lays the item out identically.",
+            "type": "boolean"
+          },
+          "spacingBeforeLines": {
+            "description": "Terminal rows requested before this item when man(7) changes `.PD`.\n`None` inherits the containing list's compactness policy.",
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint16",
+            "maximum": 65535,
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false
       },
       "Diagnostic": {
         "description": "Recoverable parser or IR validation finding attached to the document.",
@@ -3445,9 +3456,9 @@
               }
             ]
           },
-          "inlineTerm": {
-            "description": "Render the term on the same line as the first description line (a man(7)\nhanging tag that fits the indent) instead of on its own line. Decided\nonce during lowering so every renderer lays the item out identically.",
-            "type": "boolean"
+          "layout": {
+            "description": "Item presentation, independent of any attached semantic facts.",
+            "$ref": "#/$defs/DefinitionLayout"
           },
           "source": {
             "description": "Original term-and-description owner span, not its containing list.",
@@ -3459,16 +3470,6 @@
                 "type": "null"
               }
             ]
-          },
-          "spacingBeforeLines": {
-            "description": "Terminal rows requested before this item when man(7) changes `.PD`.\n`None` inherits the containing list's compactness policy.",
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "uint16",
-            "maximum": 65535,
-            "minimum": 0
           },
           "terms": {
             "description": "One or more displayed terms sharing this description, not necessarily\nequivalent names or interchangeable invocation forms.",
@@ -3486,6 +3487,27 @@
           "terms",
           "description"
         ]
+      },
+      "DefinitionLayout": {
+        "description": "Definition-item presentation. Missing spacing inherits list compactness;\nexplicit zero spacing is a distinct, preserved source request.",
+        "type": "object",
+        "properties": {
+          "inlineTerm": {
+            "description": "Render the term on the same line as the first description line (a man(7)\nhanging tag that fits the indent) instead of on its own line. Decided\nonce during lowering so every renderer lays the item out identically.",
+            "type": "boolean"
+          },
+          "spacingBeforeLines": {
+            "description": "Terminal rows requested before this item when man(7) changes `.PD`.\n`None` inherits the containing list's compactness policy.",
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint16",
+            "maximum": 65535,
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false
       },
       "Diagnostic": {
         "description": "Recoverable parser or IR validation finding attached to the document.",
@@ -7007,9 +7029,9 @@
               }
             ]
           },
-          "inlineTerm": {
-            "description": "Render the term on the same line as the first description line (a man(7)\nhanging tag that fits the indent) instead of on its own line. Decided\nonce during lowering so every renderer lays the item out identically.",
-            "type": "boolean"
+          "layout": {
+            "description": "Item presentation, independent of any attached semantic facts.",
+            "$ref": "#/$defs/DefinitionLayout"
           },
           "source": {
             "description": "Original term-and-description owner span, not its containing list.",
@@ -7021,16 +7043,6 @@
                 "type": "null"
               }
             ]
-          },
-          "spacingBeforeLines": {
-            "description": "Terminal rows requested before this item when man(7) changes `.PD`.\n`None` inherits the containing list's compactness policy.",
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "uint16",
-            "maximum": 65535,
-            "minimum": 0
           },
           "terms": {
             "description": "One or more displayed terms sharing this description, not necessarily\nequivalent names or interchangeable invocation forms.",
@@ -7048,6 +7060,27 @@
           "terms",
           "description"
         ]
+      },
+      "DefinitionLayout": {
+        "description": "Definition-item presentation. Missing spacing inherits list compactness;\nexplicit zero spacing is a distinct, preserved source request.",
+        "type": "object",
+        "properties": {
+          "inlineTerm": {
+            "description": "Render the term on the same line as the first description line (a man(7)\nhanging tag that fits the indent) instead of on its own line. Decided\nonce during lowering so every renderer lays the item out identically.",
+            "type": "boolean"
+          },
+          "spacingBeforeLines": {
+            "description": "Terminal rows requested before this item when man(7) changes `.PD`.\n`None` inherits the containing list's compactness policy.",
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint16",
+            "maximum": 65535,
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false
       },
       "Diagnostic": {
         "description": "Recoverable parser or IR validation finding attached to the document.",
@@ -9631,9 +9664,9 @@
               }
             ]
           },
-          "inlineTerm": {
-            "description": "Render the term on the same line as the first description line (a man(7)\nhanging tag that fits the indent) instead of on its own line. Decided\nonce during lowering so every renderer lays the item out identically.",
-            "type": "boolean"
+          "layout": {
+            "description": "Item presentation, independent of any attached semantic facts.",
+            "$ref": "#/$defs/DefinitionLayout"
           },
           "source": {
             "description": "Original term-and-description owner span, not its containing list.",
@@ -9645,16 +9678,6 @@
                 "type": "null"
               }
             ]
-          },
-          "spacingBeforeLines": {
-            "description": "Terminal rows requested before this item when man(7) changes `.PD`.\n`None` inherits the containing list's compactness policy.",
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "uint16",
-            "maximum": 65535,
-            "minimum": 0
           },
           "terms": {
             "description": "One or more displayed terms sharing this description, not necessarily\nequivalent names or interchangeable invocation forms.",
@@ -9672,6 +9695,27 @@
           "terms",
           "description"
         ]
+      },
+      "DefinitionLayout": {
+        "description": "Definition-item presentation. Missing spacing inherits list compactness;\nexplicit zero spacing is a distinct, preserved source request.",
+        "type": "object",
+        "properties": {
+          "inlineTerm": {
+            "description": "Render the term on the same line as the first description line (a man(7)\nhanging tag that fits the indent) instead of on its own line. Decided\nonce during lowering so every renderer lays the item out identically.",
+            "type": "boolean"
+          },
+          "spacingBeforeLines": {
+            "description": "Terminal rows requested before this item when man(7) changes `.PD`.\n`None` inherits the containing list's compactness policy.",
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint16",
+            "maximum": 65535,
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false
       },
       "Diagnostic": {
         "description": "Recoverable parser or IR validation finding attached to the document.",

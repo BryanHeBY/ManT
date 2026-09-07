@@ -538,7 +538,7 @@ fn preserves_man_paragraph_distance_between_indented_paragraphs() {
     assert_eq!(
         items
             .iter()
-            .map(|item| item.spacing_before_lines)
+            .map(|item| item.layout.spacing_before_lines)
             .collect::<Vec<_>>(),
         [Some(0), Some(1), Some(0), Some(0), Some(1)]
     );

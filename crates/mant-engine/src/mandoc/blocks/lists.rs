@@ -519,7 +519,10 @@ fn definition_item(
     DefinitionItem {
         source: source_span(node),
         entry: None,
-        inline_term: terms_fit_inline(&terms, max_term_width),
+        layout: mant_ir::DefinitionLayout {
+            inline_term: terms_fit_inline(&terms, max_term_width),
+            spacing_before_lines: None,
+        },
         terms,
         description: lower_blocks_with_spacing(
             body,
@@ -528,7 +531,6 @@ fn definition_item(
             paragraph_distance,
             spacing_after_nodes(head, spacing_enabled, context.default_name),
         ),
-        spacing_before_lines: None,
     }
 }
 
@@ -656,10 +658,10 @@ fn append_definition(
                 item.terms.splice(0..0, pending_terms);
                 // Source-proven `.TQ`, `\c`, and bounded compact aliases are
                 // collected as pending terms. Recompute their combined layout.
-                item.inline_term = terms_fit_inline(&item.terms, max_term_width);
+                item.layout.inline_term = terms_fit_inline(&item.terms, max_term_width);
             }
         }
-        item.spacing_before_lines = Some(if items.is_empty() {
+        item.layout.spacing_before_lines = Some(if items.is_empty() {
             0
         } else {
             paragraph_distance
@@ -672,7 +674,7 @@ fn append_definition(
             item: item_index,
         }
     } else {
-        item.spacing_before_lines = Some(0);
+        item.layout.spacing_before_lines = Some(0);
         let spacing_before_lines = if output.is_empty() {
             0
         } else {
@@ -776,14 +778,16 @@ mod tests {
         DefinitionItem {
             source: None,
             entry: None,
-            inline_term: false,
+            layout: mant_ir::DefinitionLayout {
+                inline_term: false,
+                spacing_before_lines: None,
+            },
             terms: vec![text(term)],
             description: vec![Block::Paragraph {
                 children: text(description),
                 layout: LayoutHint::default(),
                 source: None,
             }],
-            spacing_before_lines: None,
         }
     }
 

@@ -153,7 +153,7 @@ fn keeps_large_hierarchy_fonts_and_pod_displays_without_control_text() {
         })
         .expect("GCC -Wsuggest-final-methods option");
     assert_eq!(
-        suggest_final_methods.spacing_before_lines,
+        suggest_final_methods.layout.spacing_before_lines,
         Some(1),
         "default man(7) paragraph distance must separate adjacent GCC options",
     );

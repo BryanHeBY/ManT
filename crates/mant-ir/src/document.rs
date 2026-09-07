@@ -415,6 +415,16 @@ pub struct DefinitionItem {
     pub terms: Vec<Vec<Inline>>,
     /// Block content describing the terms.
     pub description: Vec<Block>,
+    /// Item presentation, independent of any attached semantic facts.
+    #[serde(default, skip_serializing_if = "DefinitionLayout::is_empty")]
+    pub layout: DefinitionLayout,
+}
+
+/// Definition-item presentation. Missing spacing inherits list compactness;
+/// explicit zero spacing is a distinct, preserved source request.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct DefinitionLayout {
     /// Render the term on the same line as the first description line (a man(7)
     /// hanging tag that fits the indent) instead of on its own line. Decided
     /// once during lowering so every renderer lays the item out identically.
@@ -424,6 +434,14 @@ pub struct DefinitionItem {
     /// `None` inherits the containing list's compactness policy.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub spacing_before_lines: Option<u16>,
+}
+
+impl DefinitionLayout {
+    /// Whether all presentation choices inherit their existing defaults.
+    #[must_use]
+    pub const fn is_empty(&self) -> bool {
+        !self.inline_term && self.spacing_before_lines.is_none()
+    }
 }
 
 impl DefinitionItem {
@@ -442,7 +460,7 @@ impl DefinitionItem {
     /// inline presentation; it must not be consumed by joining the term.
     #[must_use]
     pub fn inline_description(&self) -> Option<(&[Inline], &LayoutHint)> {
-        if !self.inline_term {
+        if !self.layout.inline_term {
             return None;
         }
         match self.description.first()? {

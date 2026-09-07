@@ -106,8 +106,10 @@ fn definition_lists_honour_compact_and_per_item_spacing() {
             layout: LayoutHint::default(),
             source: None,
         }],
-        inline_term: false,
-        spacing_before_lines,
+        layout: mant_ir::DefinitionLayout {
+            inline_term: false,
+            spacing_before_lines,
+        },
     };
     let mut bundle = bundle();
     bundle.document.as_mut().expect("document").sections[0].blocks = vec![Block::DefinitionList {

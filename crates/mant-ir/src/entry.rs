@@ -76,8 +76,10 @@ mod tests {
                 })
                 .collect(),
             description,
-            inline_term: false,
-            spacing_before_lines: None,
+            layout: crate::DefinitionLayout {
+                inline_term: false,
+                spacing_before_lines: None,
+            },
         }
     }
 

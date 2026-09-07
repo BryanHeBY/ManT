@@ -200,12 +200,14 @@ mod tests {
         DefinitionItem {
             source: None,
             entry: None,
-            inline_term: false,
+            layout: mant_ir::DefinitionLayout {
+                inline_term: false,
+                spacing_before_lines: None,
+            },
             terms: vec![vec![Inline::Text {
                 value: value.into(),
             }]],
             description: Vec::new(),
-            spacing_before_lines: None,
         }
     }
 
@@ -213,14 +215,16 @@ mod tests {
         DefinitionItem {
             source: None,
             entry: None,
-            inline_term: false,
+            layout: mant_ir::DefinitionLayout {
+                inline_term: false,
+                spacing_before_lines: None,
+            },
             terms: vec![vec![Inline::Strong {
                 children: vec![Inline::Text {
                     value: value.into(),
                 }],
             }]],
             description: Vec::new(),
-            spacing_before_lines: None,
         }
     }
 
@@ -299,10 +303,12 @@ mod tests {
         let target_only = DefinitionItem {
             source: None,
             entry: None,
-            inline_term: true,
+            layout: mant_ir::DefinitionLayout {
+                inline_term: true,
+                spacing_before_lines: None,
+            },
             terms: vec![vec![Inline::anchor("native-target")]],
             description: Vec::new(),
-            spacing_before_lines: None,
         };
         let mut sections = vec![Section {
             id: "notes".into(),
@@ -578,7 +584,7 @@ mod tests {
             Block::Paragraph { layout, .. }
                 if layout.indent_columns == 0 && layout.spacing_before_lines == 0
         ));
-        assert_eq!(items[0].spacing_before_lines, Some(1));
+        assert_eq!(items[0].layout.spacing_before_lines, Some(1));
         let Block::DefinitionList { items, .. } = &sections[0].blocks[1] else {
             panic!("second option should remain independently addressable");
         };

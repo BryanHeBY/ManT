@@ -483,8 +483,10 @@ mod tests {
                     }),
                     terms: vec![vec![Inline::anchor(shared.clone())]],
                     description: Vec::new(),
-                    inline_term: false,
-                    spacing_before_lines: None,
+                    layout: crate::DefinitionLayout {
+                        inline_term: false,
+                        spacing_before_lines: None,
+                    },
                 }],
                 compact: true,
                 layout: LayoutHint::default(),
@@ -724,8 +726,10 @@ mod tests {
             }),
             terms: vec![vec![Inline::anchor("option-output")]],
             description: Vec::new(),
-            inline_term: false,
-            spacing_before_lines: None,
+            layout: crate::DefinitionLayout {
+                inline_term: false,
+                spacing_before_lines: None,
+            },
         };
         let blocks = vec![Block::DefinitionList {
             items: vec![definition.clone()],

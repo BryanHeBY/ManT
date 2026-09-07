@@ -353,7 +353,10 @@ fn preserves_inline_lists_definitions_and_nested_headings() {
         items: vec![DefinitionItem {
             source: None,
             entry: None,
-            inline_term: false,
+            layout: mant_ir::DefinitionLayout {
+                inline_term: false,
+                spacing_before_lines: None,
+            },
             terms: vec![
                 vec![Inline::Strong {
                     children: vec![Inline::Text {
@@ -369,7 +372,6 @@ fn preserves_inline_lists_definitions_and_nested_headings() {
             description: vec![paragraph(vec![Inline::Text {
                 value: "Show all entries.".to_owned(),
             }])],
-            spacing_before_lines: None,
         }],
         compact: false,
         layout: LayoutHint::default(),
@@ -403,7 +405,10 @@ fn keeps_adjacent_bold_and_italic_runs_unambiguous_in_commonmark() {
         items: vec![DefinitionItem {
             source: None,
             entry: None,
-            inline_term: false,
+            layout: mant_ir::DefinitionLayout {
+                inline_term: false,
+                spacing_before_lines: None,
+            },
             terms: vec![vec![
                 Inline::Strong {
                     children: vec![Inline::Text {
@@ -432,7 +437,6 @@ fn keeps_adjacent_bold_and_italic_runs_unambiguous_in_commonmark() {
             description: vec![paragraph(vec![Inline::Text {
                 value: "Set the pager prompt.".to_owned(),
             }])],
-            spacing_before_lines: None,
         }],
         compact: true,
         layout: LayoutHint::default(),
@@ -1068,8 +1072,10 @@ fn protects_hanging_definition_terms_from_becoming_nested_lists() {
                     description: vec![paragraph(vec![Inline::Text {
                         value: "first reference".to_owned(),
                     }])],
-                    inline_term: true,
-                    spacing_before_lines: None,
+                    layout: mant_ir::DefinitionLayout {
+                        inline_term: true,
+                        spacing_before_lines: None,
+                    },
                 }],
                 compact: true,
                 layout: LayoutHint::default(),
@@ -1094,7 +1100,10 @@ fn keeps_block_definition_descriptions_on_their_own_commonmark_line() {
         items: vec![DefinitionItem {
             source: None,
             entry: None,
-            inline_term: true,
+            layout: mant_ir::DefinitionLayout {
+                inline_term: true,
+                spacing_before_lines: None,
+            },
             terms: vec![vec![Inline::Text {
                 value: "plain".to_owned(),
             }]],
@@ -1106,7 +1115,6 @@ fn keeps_block_definition_descriptions_on_their_own_commonmark_line() {
                 layout: LayoutHint::default(),
                 source: None,
             }],
-            spacing_before_lines: None,
         }],
         compact: true,
         layout: LayoutHint::default(),
@@ -1262,8 +1270,10 @@ fn addressable_rendering_returns_exact_semantic_node_ranges() {
         description: vec![paragraph(vec![Inline::Text {
             value: "Show help.".to_owned(),
         }])],
-        inline_term: false,
-        spacing_before_lines: None,
+        layout: mant_ir::DefinitionLayout {
+            inline_term: false,
+            spacing_before_lines: None,
+        },
     };
     let query = ResolvedContent {
         address: None,

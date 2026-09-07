@@ -54,8 +54,10 @@ fn sidebar_exposes_every_semantic_role_supported_by_the_document_contract() {
             value: name.to_owned(),
         }]],
         description: Vec::new(),
-        inline_term: false,
-        spacing_before_lines: None,
+        layout: mant_ir::DefinitionLayout {
+            inline_term: false,
+            spacing_before_lines: None,
+        },
     })
     .collect::<Vec<_>>();
     entries[0].terms = vec![
@@ -97,8 +99,10 @@ fn sidebar_exposes_every_semantic_role_supported_by_the_document_contract() {
                 value: "brief".to_owned(),
             }]],
             description: Vec::new(),
-            inline_term: false,
-            spacing_before_lines: None,
+            layout: mant_ir::DefinitionLayout {
+                inline_term: false,
+                spacing_before_lines: None,
+            },
         }],
         compact: true,
         layout: LayoutHint::default(),

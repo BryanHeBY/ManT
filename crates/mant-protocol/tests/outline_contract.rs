@@ -168,7 +168,10 @@ fn excerpt_contract_keeps_breadcrumbs_separate_from_complete_sections() {
 fn excerpt_contract_can_return_one_semantic_definition() {
     let entry = DefinitionItem {
         source: None,
-        inline_term: false,
+        layout: mant_ir::DefinitionLayout {
+            inline_term: false,
+            spacing_before_lines: None,
+        },
         entry: Some(EntryFacts {
             name_bindings: Vec::new(),
             alias_groups: Vec::new(),
@@ -184,7 +187,6 @@ fn excerpt_contract_can_return_one_semantic_definition() {
         }),
         terms: Vec::new(),
         description: Vec::new(),
-        spacing_before_lines: None,
     };
     let excerpt = QueryExcerpt {
         schema: ExcerptSchema::V0Dot11,

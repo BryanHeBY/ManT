@@ -121,8 +121,10 @@ fn navigation_bundle() -> ResolvedContent {
                             value: "-h, --help".to_owned(),
                         }]],
                         description: vec![paragraph("Show help")],
-                        inline_term: false,
-                        spacing_before_lines: None,
+                        layout: mant_ir::DefinitionLayout {
+                            inline_term: false,
+                            spacing_before_lines: None,
+                        },
                     }],
                     compact: true,
                     layout: LayoutHint::default(),

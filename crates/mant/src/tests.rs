@@ -595,7 +595,10 @@ fn explainable_manual() -> Document {
     options.blocks.push(Block::DefinitionList {
         items: vec![DefinitionItem {
             source: None,
-            inline_term: false,
+            layout: mant_ir::DefinitionLayout {
+                inline_term: false,
+                spacing_before_lines: None,
+            },
             entry: Some(EntryFacts {
                 name_bindings: vec![mant_ir::EntryNameBinding {
                     name: 0,
@@ -629,7 +632,6 @@ fn explainable_manual() -> Document {
                 layout: LayoutHint::default(),
                 source: None,
             }],
-            spacing_before_lines: None,
         }],
         compact: true,
         layout: LayoutHint::default(),

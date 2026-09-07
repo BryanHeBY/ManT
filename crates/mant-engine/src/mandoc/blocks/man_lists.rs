@@ -281,7 +281,10 @@ mod tests {
         DefinitionItem {
             source: None,
             entry: None,
-            inline_term: false,
+            layout: mant_ir::DefinitionLayout {
+                inline_term: false,
+                spacing_before_lines: None,
+            },
             terms: vec![vec![Inline::Text {
                 value: term.to_owned(),
             }]],
@@ -292,7 +295,6 @@ mod tests {
                 layout: LayoutHint::default(),
                 source: None,
             }],
-            spacing_before_lines: None,
         }
     }
 

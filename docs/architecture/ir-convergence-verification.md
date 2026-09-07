@@ -117,7 +117,27 @@ space. It is not claimed memory-equivalent. Native and non-full-JSON memory
 remain below the 5 MiB threshold. No complete body copies or global caches were
 introduced into the borrowed forms path.
 
-Not yet completed: S3–S6. Current successful baseline verification is recorded
+S3 (`f156bc01`) removes the transitional public types and closes entry/item/
+outline decoding, including nested protocol negatives. Workspace all-features
+passed 1,328 tests with six intentional ignores; focused post-adaptation CLI,
+engine and example tests, strict Clippy and schema guards also passed.
+The final S3/S2 alternating comparison is recorded under `target/ir-convergence/s3/`:
+full JSON 249.73 / 251.80 ms, outline 187.43 / 182.29 ms, explain 202.09 / 202.26 ms,
+native eight-load process 1,209.19 / 1,180.70 ms. Peak RSS respectively
+90,960 / 89,984, 66,968 / 66,512, 67,252 / 66,556 and 63,220 / 63,196 KiB.
+No mode crosses both investigation thresholds. The 3,836 IDs and both complete
+text/Markdown outputs match S2 exactly; this naming migration does not change
+the ID allocator. The native figures in this paragraph are process costs.
+
+S4 organizes the two existing item-level presentation fields into
+`DefinitionLayout`, preserving every original value and renderer algorithm.
+Direct and nested decoders reject old top-level fields; actual default/null/
+explicit-zero and duplicate-key tests are in `entry/wire.rs` and
+`mant-protocol/tests/entry_convergence.rs`. Existing UI row-coordinate matrices,
+native continuation/inline-term tests and the real Arch fixture suite exercise
+the migrated consumers. GCC full text and Markdown remain byte-identical to S3.
+
+Not yet completed: S5–S6. Current successful baseline verification is recorded
 in `remaining-review-verification.md`; it is not evidence for later changes.
 
 ## Local verification boundary

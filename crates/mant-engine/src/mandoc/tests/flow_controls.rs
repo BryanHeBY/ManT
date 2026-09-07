@@ -6,7 +6,7 @@ fn ordinary_man_paragraphs_reset_prevailing_definition_width() {
     struct Widths(Vec<bool>);
     impl<'a> Visit<'a> for Widths {
         fn visit_definition_item(&mut self, item: &'a mant_ir::DefinitionItem) {
-            self.0.push(item.inline_term);
+            self.0.push(item.layout.inline_term);
             walk_definition_item(self, item);
         }
     }

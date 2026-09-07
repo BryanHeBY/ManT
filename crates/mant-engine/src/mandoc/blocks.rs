@@ -1174,7 +1174,7 @@ fn extend_transparent_blocks(
             }),
         ) if previous_layout.indent_columns == nested_layout.indent_columns => {
             if let Some(first) = nested_items.first_mut() {
-                first.spacing_before_lines = Some(if previous_items.is_empty() {
+                first.layout.spacing_before_lines = Some(if previous_items.is_empty() {
                     0
                 } else {
                     nested_layout.spacing_before_lines

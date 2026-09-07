@@ -538,7 +538,7 @@ fn render_definitions(items: &[DefinitionItem], compact: bool, base_indent: usiz
                     (true, true) => None,
                 }
             }?;
-            Some((value, item.spacing_before_lines))
+            Some((value, item.layout.spacing_before_lines))
         })
         .collect::<Vec<_>>();
 
@@ -954,7 +954,10 @@ mod tests {
                             DefinitionItem {
                                 source: None,
                                 entry: None,
-                                inline_term: true,
+                                layout: mant_ir::DefinitionLayout {
+                                    inline_term: true,
+                                    spacing_before_lines: Some(1),
+                                },
                                 terms: vec![vec![Inline::Text {
                                     value: "* / %".to_owned(),
                                 }]],
@@ -965,12 +968,14 @@ mod tests {
                                     layout: LayoutHint::default(),
                                     source: None,
                                 }],
-                                spacing_before_lines: Some(1),
                             },
                             DefinitionItem {
                                 source: None,
                                 entry: None,
-                                inline_term: true,
+                                layout: mant_ir::DefinitionLayout {
+                                    inline_term: true,
+                                    spacing_before_lines: Some(1),
+                                },
                                 terms: vec![vec![Inline::Text {
                                     value: "space".to_owned(),
                                 }]],
@@ -981,7 +986,6 @@ mod tests {
                                     layout: LayoutHint::default(),
                                     source: None,
                                 }],
-                                spacing_before_lines: Some(1),
                             },
                         ],
                     }],
@@ -1038,7 +1042,10 @@ mod tests {
                             DefinitionItem {
                                 source: None,
                                 entry: None,
-                                inline_term: true,
+                                layout: mant_ir::DefinitionLayout {
+                                    inline_term: true,
+                                    spacing_before_lines: Some(1),
+                                },
                                 terms: vec![vec![Inline::Text {
                                     value: "&&".to_owned(),
                                 }]],
@@ -1049,12 +1056,14 @@ mod tests {
                                     layout: LayoutHint::default(),
                                     source: None,
                                 }],
-                                spacing_before_lines: Some(1),
                             },
                             DefinitionItem {
                                 source: None,
                                 entry: None,
-                                inline_term: false,
+                                layout: mant_ir::DefinitionLayout {
+                                    inline_term: false,
+                                    spacing_before_lines: Some(1),
+                                },
                                 terms: vec![vec![Inline::Text {
                                     value: "--long-option-name".to_owned(),
                                 }]],
@@ -1065,7 +1074,6 @@ mod tests {
                                     layout: LayoutHint::default(),
                                     source: None,
                                 }],
-                                spacing_before_lines: Some(1),
                             },
                         ],
                     }],

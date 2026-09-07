@@ -19,8 +19,10 @@ fn entry_fragments_validate_without_inserting_a_head_anchor() {
                     entry: item.entry,
                     terms: Vec::new(),
                     description: item.blocks,
-                    inline_term: false,
-                    spacing_before_lines: None,
+                    layout: mant_ir::DefinitionLayout {
+                        inline_term: false,
+                        spacing_before_lines: None,
+                    },
                 }],
                 compact: false,
                 layout: LayoutHint::default(),

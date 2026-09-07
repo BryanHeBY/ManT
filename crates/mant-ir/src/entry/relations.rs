@@ -345,8 +345,10 @@ mod tests {
                 layout: LayoutHint::default(),
                 source: None,
             }],
-            inline_term: false,
-            spacing_before_lines: None,
+            layout: crate::DefinitionLayout {
+                inline_term: false,
+                spacing_before_lines: None,
+            },
         }
     }
 

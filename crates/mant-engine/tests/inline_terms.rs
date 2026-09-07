@@ -52,7 +52,7 @@ fn short_terms_are_flagged_inline_and_long_terms_are_not() {
             })
             .unwrap_or_else(|| panic!("missing operator term {needle:?}"));
         assert!(
-            item.inline_term,
+            item.layout.inline_term,
             "term {needle:?} should be inline_term=true"
         );
     }
@@ -66,7 +66,10 @@ fn short_terms_are_flagged_inline_and_long_terms_are_not() {
                 .any(|term| common::inline_text(term).contains("< >"))
         })
         .expect("relational operators term");
-    assert!(!wide.inline_term, "wide term should be inline_term=false");
+    assert!(
+        !wide.layout.inline_term,
+        "wide term should be inline_term=false"
+    );
 }
 
 #[test]
@@ -84,7 +87,7 @@ fn long_option_names_are_not_inline() {
         })
         .expect("--verbose option");
     assert!(
-        !verbose.inline_term,
+        !verbose.layout.inline_term,
         "--verbose should be inline_term=false"
     );
 }
@@ -161,7 +164,7 @@ fn tq_aliases_share_one_definition_and_recompute_its_layout() {
         ["-a", "--all"]
     );
     assert!(
-        !item.inline_term,
+        !item.layout.inline_term,
         "combined '-a, --all' width must not inherit --all's stale layout"
     );
 }
@@ -182,15 +185,15 @@ fn explicit_tp_widths_control_layout_and_persist() {
     };
 
     assert!(
-        find("tenletters").inline_term,
+        find("tenletters").layout.inline_term,
         "a ten-column term fits a `.TP 20` hanging margin"
     );
     assert!(
-        !find("short").inline_term,
+        !find("short").layout.inline_term,
         "a five-column term does not fit a `.TP 3` hanging margin"
     );
     assert!(
-        find("xy").inline_term,
+        find("xy").layout.inline_term,
         "a width-less `.TP` inherits the preceding three-column margin"
     );
 }

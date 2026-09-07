@@ -210,7 +210,7 @@ fn coalesce_pending_definition_terms(
                 .drain(..)
                 .flat_map(|pending: DefinitionItem| pending.terms);
             item.terms.splice(0..0, pending_terms);
-            item.inline_term = terms_fit_inline(&item.terms, max_term_width);
+            item.layout.inline_term = terms_fit_inline(&item.terms, max_term_width);
         } else {
             output.append(&mut pending);
         }
@@ -416,8 +416,10 @@ fn append_list_targets(
                             .collect(),
                     ],
                     description: Vec::new(),
-                    inline_term: true,
-                    spacing_before_lines: None,
+                    layout: mant_ir::DefinitionLayout {
+                        inline_term: true,
+                        spacing_before_lines: None,
+                    },
                 });
             }
         }

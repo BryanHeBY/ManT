@@ -268,7 +268,7 @@ pub(super) fn attach_definition_targets(
                 .map(|target| Inline::anchor_at(target, source))
                 .collect(),
         );
-        item.inline_term = true;
+        item.layout.inline_term = true;
     }
 }
 
@@ -309,7 +309,7 @@ pub(super) fn append_definition_targets(
                 .map(|target| Inline::anchor_at(target, source))
                 .collect(),
         );
-        item.inline_term = true;
+        item.layout.inline_term = true;
     }
 }
 

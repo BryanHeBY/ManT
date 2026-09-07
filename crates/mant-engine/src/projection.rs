@@ -146,8 +146,10 @@ mod tests {
                 })
                 .collect(),
             description,
-            inline_term: false,
-            spacing_before_lines: None,
+            layout: mant_ir::DefinitionLayout {
+                inline_term: false,
+                spacing_before_lines: None,
+            },
         }
     }
 
@@ -750,8 +752,10 @@ mod tests {
                         value: "-3".to_owned(),
                     }]],
                     description: Vec::new(),
-                    inline_term: false,
-                    spacing_before_lines: None,
+                    layout: mant_ir::DefinitionLayout {
+                        inline_term: false,
+                        spacing_before_lines: None,
+                    },
                 }],
                 compact: true,
                 layout: LayoutHint::default(),

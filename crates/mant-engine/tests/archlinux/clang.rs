@@ -51,7 +51,7 @@ fn keeps_option_pairs_and_discards_rst_control_dimensions() {
         "Sphinx INDENT wrappers must remain one semantic option list",
     );
     assert!(target_lists[0].len() > 5);
-    assert_eq!(target_lists[0][0].spacing_before_lines, Some(0));
+    assert_eq!(target_lists[0][0].layout.spacing_before_lines, Some(0));
     let target_list_layout = target_options
         .blocks
         .iter()
@@ -68,7 +68,7 @@ fn keeps_option_pairs_and_discards_rst_control_dimensions() {
         target_lists[0]
             .iter()
             .skip(1)
-            .all(|item| item.spacing_before_lines == Some(1)),
+            .all(|item| item.layout.spacing_before_lines == Some(1)),
         "default man(7) paragraph distance must survive INDENT wrappers",
     );
 

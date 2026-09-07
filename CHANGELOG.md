@@ -24,6 +24,10 @@ that crate was not published for that change.
 
 ### mant-ir 0.11.0
 
+- Move definition-item `inline_term` and `spacing_before_lines` into
+  `layout: DefinitionLayout` (JSON `layout`). Preserve inherited versus explicit
+  zero spacing and existing inline/hanging geometry. Old top-level fields and
+  null layout are rejected; Rust consumers initialize `layout` explicitly.
 - Converge both item shapes on `entry: Option<EntryFacts>`, with structured
   `EntryKind`, `NameCase` and derived `names`. Remove `DefinitionIdentity`,
   `DefinitionRole`, `DefinitionCase` and semantic `aliases`; migrate Rust

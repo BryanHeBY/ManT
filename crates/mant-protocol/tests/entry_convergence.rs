@@ -17,7 +17,13 @@ fn document(item: &Value) -> Value {
 
 #[test]
 fn document_and_query_envelopes_reject_legacy_nested_facts() {
-    for legacy in [None, Some("identity"), Some("unknown")] {
+    for legacy in [
+        None,
+        Some("identity"),
+        Some("inlineTerm"),
+        Some("spacingBeforeLines"),
+        Some("unknown"),
+    ] {
         let mut item = definition();
         if let Some(field) = legacy {
             item[field] = Value::Null;

@@ -321,6 +321,7 @@ impl DocumentBuilder {
                 let indent = base_indent + usize::from(layout.indent_columns);
                 for (index, item) in items.iter().enumerate() {
                     let spacing = item
+                        .layout
                         .spacing_before_lines
                         .unwrap_or(u16::from(index > 0 && !compact));
                     self.spacing(spacing);
@@ -328,7 +329,7 @@ impl DocumentBuilder {
                         self.anchors
                             .insert(identity.id.to_string(), self.lines.len());
                     }
-                    if item.inline_term {
+                    if item.layout.inline_term {
                         self.inline_definition(item, indent);
                     } else {
                         for term in &item.terms {

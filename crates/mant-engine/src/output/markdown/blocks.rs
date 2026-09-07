@@ -195,7 +195,7 @@ fn render_definition_list(
                     // inline prose. Gluing a fenced code block, nested list,
                     // table, or display equation to the term produces invalid
                     // CommonMark and changes the block's meaning.
-                    let sep = if item.inline_term
+                    let sep = if item.layout.inline_term
                         && matches!(item.description.first(), Some(Block::Paragraph { .. }))
                     {
                         " "
@@ -216,7 +216,7 @@ fn render_definition_list(
             if has_terms {
                 content = protect_block_prefix(&content);
             }
-            prefix_item(&content, "- ").map(|content| (content, item.spacing_before_lines))
+            prefix_item(&content, "- ").map(|content| (content, item.layout.spacing_before_lines))
         })
         .collect::<Vec<_>>();
     join_definition_items(rendered, compact)

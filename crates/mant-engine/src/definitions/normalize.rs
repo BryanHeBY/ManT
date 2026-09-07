@@ -128,10 +128,12 @@ pub(super) fn normalize_hanging_definitions(blocks: &mut Vec<Block>, context: De
             items: vec![DefinitionItem {
                 source: None,
                 entry: None,
-                inline_term: terms_fit_inline(&terms, DEFAULT_INLINE_TERM_MAX_WIDTH),
+                layout: mant_ir::DefinitionLayout {
+                    inline_term: terms_fit_inline(&terms, DEFAULT_INLINE_TERM_MAX_WIDTH),
+                    spacing_before_lines: Some(layout.spacing_before_lines),
+                },
                 terms,
                 description,
-                spacing_before_lines: Some(layout.spacing_before_lines),
             }],
             compact: true,
             layout: LayoutHint {
@@ -200,8 +202,10 @@ mod tests {
                     value: "--owner".into(),
                 }]],
                 description: vec![paragraph("Initial description.", 4)],
-                inline_term: false,
-                spacing_before_lines: None,
+                layout: mant_ir::DefinitionLayout {
+                    inline_term: false,
+                    spacing_before_lines: None,
+                },
             }],
             compact: false,
             layout: LayoutHint {
@@ -234,7 +238,7 @@ mod tests {
                     let Block::DefinitionList { items, .. } = &mut owner else {
                         unreachable!()
                     };
-                    items[0].inline_term = inline_term;
+                    items[0].layout.inline_term = inline_term;
                     items[0].terms = vec![vec![Inline::Text {
                         value: label.into(),
                     }]];

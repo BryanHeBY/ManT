@@ -32,7 +32,7 @@ fn operator_table_has_correct_inline_term_decisions() {
             })
             .unwrap_or_else(|| panic!("missing gawk operator term {needle:?}"));
         assert!(
-            item.inline_term,
+            item.layout.inline_term,
             "gawk operator {needle:?} should be inline_term=true"
         );
     }
@@ -47,7 +47,7 @@ fn operator_table_has_correct_inline_term_decisions() {
         })
         .expect("gawk relational operator term");
     assert!(
-        !relational.inline_term,
+        !relational.layout.inline_term,
         "gawk wide operator term should be inline_term=false"
     );
 }

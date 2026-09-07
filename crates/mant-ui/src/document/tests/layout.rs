@@ -24,8 +24,10 @@ fn definition_continuations_keep_rows_when_reparented_across_spacing() {
                             value: label.into(),
                         }]],
                         description: vec![paragraph("Initial description.")],
-                        inline_term,
-                        spacing_before_lines: None,
+                        layout: mant_ir::DefinitionLayout {
+                            inline_term,
+                            spacing_before_lines: None,
+                        },
                     }],
                     compact: false,
                     layout: LayoutHint::default(),
