@@ -83,6 +83,27 @@ DTOs project selected semantic types and provide explicit conversions,
 but the IR never depends on a protocol version. Dependency direction therefore
 keeps the semantic model usable without process framing.
 
+### Internal ownership boundaries
+
+Private modules preserve the public crate APIs and wire contracts. They make
+the following operation-local handoffs explicit; none adds a global cache or
+a second parser, selector resolver, or audit oracle.
+
+| Owner | Handoff and invariant |
+| --- | --- |
+| Engine definitions and selectors | Styled form candidates retain parameter evidence; topology/context preparation precedes identity allocation, then one selector policy serves projections and producer diagnostics. |
+| Engine lowering | Prepared Markdown pairs original events with source declarations. Roff flow state, target provenance, and table recovery plans preserve their distinct physical-line and owner policies. |
+| Engine search and discovery | A validated matcher is reused within one scope request. Markdown artifacts own final anchor ranges; source-coordinate mapping remains separate from result collection. Discovery captures environment/configuration inputs at the host boundary. |
+| CLI and MCP | Native request decoding is separate from execution; rendered CLI data travels with its business status. Owned MCP presentations perform preparation before rendering, sanitization and character paging. |
+| Sources | Read-only installation probes collect lazy facts, while callers retain their own trust policy. Selection precedes staging; only synced metadata produces a prepared installation for controlled activation. |
+| UI | Logical fragments carry text and anchors together. A document session owns its view, viewport and width cache; explicit switch reasons preserve search only when appropriate. Terminal acquisition/restoration remains separate from host callbacks. |
+| Native wrapper | Raw ABI views, synchronous session ownership, immediate owned transfer and optional renderer output are private boundaries. Bundle arguments retain their path allocations and borrowed source bytes for the complete call. |
+
+Developer profilers share JSON-lines framing only. Their schemas, expected
+owners, observed structure and matching policies remain independent of
+product lowering. Test modules are grouped by behavior rather than by the
+historical review that introduced them.
+
 ## Shared document model
 
 `mant-ir::Document` is the source-neutral in-memory representation. It contains

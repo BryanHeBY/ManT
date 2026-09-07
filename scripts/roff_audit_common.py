@@ -2,9 +2,10 @@
 
 The module owns only deterministic, renderer-independent mechanics plus the
 shared failure-isolating JSON-lines transport used by native profilers. Audit
-contracts, ledgers, response interpretation, and human-review policy remain in
-their individual drivers so evolving one oracle cannot silently change
-another oracle's interpretation.
+contracts, ledger formats, response interpretation, and the choice of review
+policy remain in their individual drivers. The identical target/semantic
+per-result review-state transition is shared explicitly; evolving one oracle
+must not silently change another oracle's interpretation.
 """
 
 from __future__ import annotations

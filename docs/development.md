@@ -193,6 +193,7 @@ scripts/audit-roff-targets.py  Native zero-width target-conservation audit
 scripts/audit-roff-semantics.py  Semantic-entry precision audit
 scripts/check-roff-audit-coverage.py  Cross-ledger corpus coverage verification
 scripts/roff_audit_common.py  Shared roff audit identities and helpers
+crates/mant-engine/examples/support/  Shared profiler framing, not semantic oracles
 docs/architecture/           Design decisions and stable-boundary documentation
 docs/installation.md         User installation methods and platform requirements
 docs/sources.md              Markdown source configuration and update behavior
