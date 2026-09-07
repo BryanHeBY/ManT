@@ -30,6 +30,9 @@ from fractions import Fraction
 from pathlib import Path, PurePosixPath
 from typing import Iterable, Sequence
 
+from roff_reference import reference_environment, run_renderer
+from roff_reference import self_check as reference_runner_self_check
+
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURE_ROOT = ROOT / "tests/fixtures/roff/real"
@@ -919,48 +922,6 @@ def rare_feature_sample_by_section(
         )
     ]
     return sorted(sampled, key=lambda path: path.as_posix())
-
-
-def run_renderer(
-    command: Sequence[str],
-    timeout: int,
-    environment: dict[str, str],
-    input_bytes: bytes | None = None,
-) -> tuple[int, str, str]:
-    try:
-        result = subprocess.run(
-            command,
-            input=input_bytes,
-            stdin=subprocess.DEVNULL if input_bytes is None else None,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            env=environment,
-            timeout=timeout,
-            check=False,
-        )
-    except subprocess.TimeoutExpired:
-        return 124, "", f"timed out after {timeout}s"
-    return (
-        result.returncode,
-        result.stdout.decode("utf-8", errors="replace"),
-        result.stderr.decode("utf-8", errors="replace"),
-    )
-
-
-def reference_environment() -> dict[str, str]:
-    environment = os.environ.copy()
-    environment.update(
-        {
-            "MANWIDTH": "200",
-            "MANROFFOPT": "-rHY=0",
-            "MANPAGER": "cat",
-            "PAGER": "cat",
-            "GROFF_NO_SGR": "1",
-            "TERM": "dumb",
-            "LC_ALL": environment.get("LC_ALL", "C.UTF-8"),
-        }
-    )
-    return environment
 
 
 def strip_terminal_formatting(value: str) -> str:
@@ -2310,6 +2271,7 @@ def write_syntax_report(
 
 
 def self_check() -> None:
+    reference_runner_self_check()
     digest = "0" * 64
     assert source_audit_identity("share/man/man1/git.1.gz", digest) == (
         digest,
