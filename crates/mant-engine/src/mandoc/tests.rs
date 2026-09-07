@@ -11,6 +11,7 @@ use super::{
     parse_manual_bytes, parse_manual_source,
 };
 
+mod layout_review;
 mod upstream_inline;
 mod upstream_tables;
 

@@ -10,6 +10,8 @@ use crate::inline::plain_text;
 
 use super::{DefinitionContext, key_binding_command_form};
 
+mod forms;
+
 pub(super) fn infer_identity(
     item: &DefinitionItem,
     context: DefinitionContext,
@@ -363,10 +365,12 @@ pub(super) fn option_names(item: &DefinitionItem) -> Vec<String> {
 pub(crate) fn option_names_from_terms(terms: &[Vec<Inline>]) -> Vec<String> {
     let mut names = Vec::new();
     for term in terms {
-        let text = plain_text(term);
-        for token in text.split(|character: char| {
-            character.is_whitespace() || matches!(character, ',' | '|' | '/' | ';')
-        }) {
+        for group in forms::alias_groups(term) {
+            if forms::starts_with_parameter(&group) {
+                continue;
+            }
+            let text = plain_text(&group);
+            let token = text.split_whitespace().next().unwrap_or_default();
             let token = token.trim_matches(|character: char| {
                 matches!(
                     character,

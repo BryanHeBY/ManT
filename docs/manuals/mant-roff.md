@@ -98,6 +98,8 @@ required for generated references and hierarchically indented lists.
 
 ## mdoc Structure
 
+Option aliases come from invocation names separated by explicit alias punctuation, not arbitrary later dash-prefixed argument tokens. Emphasized argument spans retain their spelling in forms but cannot introduce another alias.
+
 The required mdoc prologue and structural macros are normalized as follows:
 
 | Macros | ManT result |
