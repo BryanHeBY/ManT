@@ -38,6 +38,7 @@ pub(super) enum PresentationKind {
 pub(super) enum RoffInlineEvent {
     Text(String),
     Font(RoffFont),
+    PreviousFont,
     Link(Option<String>),
     /// Exact legacy Sphinx `\%<>` output. It is invisible only when the
     /// preceding visible text proves that it belongs to a manual reference.
@@ -63,6 +64,7 @@ pub(super) fn visible_text(source: &str) -> String {
             RoffInlineEvent::EmptyDestination => output.push_str("<>"),
             RoffInlineEvent::LineBreak => output.push('\n'),
             RoffInlineEvent::Font(_)
+            | RoffInlineEvent::PreviousFont
             | RoffInlineEvent::Link(_)
             | RoffInlineEvent::Presentation { .. } => {}
         }
@@ -123,7 +125,11 @@ impl Decoder {
         match trigger {
             'f' => {
                 let operand = self.take_opaque_argument().unwrap_or_default();
-                self.emit(RoffInlineEvent::Font(font(&operand)));
+                self.emit(if operand == "P" || operand.is_empty() {
+                    RoffInlineEvent::PreviousFont
+                } else {
+                    RoffInlineEvent::Font(font(&operand))
+                });
             }
             'm' | 'M' => {
                 let argument = self.take_opaque_argument();
@@ -463,7 +469,7 @@ fn is_positive_literal_motion(argument: &str) -> bool {
                 .all(|character| character.is_ascii_alphabetic()))
 }
 
-fn font(name: &str) -> RoffFont {
+pub(super) fn font(name: &str) -> RoffFont {
     match name {
         "B" | "3" => RoffFont::Strong,
         "I" | "2" => RoffFont::Emphasis,

@@ -50,6 +50,107 @@ fn mdoc(body: &str) -> mant_ir::Document {
     parse_manual_bytes(std::path::Path::new("probe.1"), source.as_bytes()).unwrap()
 }
 
+fn styled_text(document: &mant_ir::Document) -> Vec<(String, bool, bool)> {
+    #[derive(Default)]
+    struct Collector {
+        runs: Vec<(String, bool, bool)>,
+        strong: bool,
+        emphasis: bool,
+    }
+    impl<'ir> Visit<'ir> for Collector {
+        fn visit_inline(&mut self, inline: &'ir Inline) {
+            let previous = (self.strong, self.emphasis);
+            match inline {
+                Inline::Strong { .. } => self.strong = true,
+                Inline::Emphasis { .. } => self.emphasis = true,
+                Inline::Text { value } => {
+                    self.runs.push((value.clone(), self.strong, self.emphasis));
+                }
+                _ => {}
+            }
+            visit::walk_inline(self, inline);
+            (self.strong, self.emphasis) = previous;
+        }
+    }
+    let mut collector = Collector::default();
+    collector.visit_document(document);
+    collector.runs
+}
+
+#[test]
+fn man_fonts_preserve_previous_selection_and_respect_macro_scope() {
+    for (body, expected) in [
+        (
+            ".B \"TOKENA\\fRTOKENB\"",
+            [("TOKENA", true, false), ("TOKENB", false, false)],
+        ),
+        (
+            ".I \"TOKENA\\fRTOKENB\"",
+            [("TOKENA", false, true), ("TOKENB", false, false)],
+        ),
+        (
+            ".OP \"TOKENA\\fRTOKENB\"",
+            [("TOKENA", true, false), ("TOKENB", false, false)],
+        ),
+        (
+            "\\fBTOKENA\nTOKENB",
+            [("TOKENA", true, false), ("TOKENB", true, false)],
+        ),
+        (
+            ".nf\n\\fBTOKENA\nTOKENB\n.fi",
+            [("TOKENA", true, false), ("TOKENB", true, false)],
+        ),
+        (
+            ".ft B\nTOKENA\nTOKENB",
+            [("TOKENA", true, false), ("TOKENB", true, false)],
+        ),
+        (
+            ".B TOKENA\nTOKENB",
+            [("TOKENA", true, false), ("TOKENB", false, false)],
+        ),
+        (
+            ".B TOKENA\n\\fPTOKENB",
+            [("TOKENA", true, false), ("TOKENB", true, false)],
+        ),
+        (
+            "\\fBTOKENA\n.PP\nTOKENB",
+            [("TOKENA", true, false), ("TOKENB", false, false)],
+        ),
+        (
+            "\\fBTOKENA\n.SM TOKENB",
+            [("TOKENA", true, false), ("TOKENB", true, false)],
+        ),
+        (
+            "\\fBTOKENA\\fIITALIC\\fPTOKENB",
+            [("TOKENA", true, false), ("TOKENB", true, false)],
+        ),
+    ] {
+        for table in [false, true] {
+            // Block requests intentionally fall back to complete native/source
+            // text in tbl; only inline-only cells claim semantic restoration.
+            if table && (body.contains(".PP") || body.contains(".nf") || body.contains(".ft")) {
+                continue;
+            }
+            let body = if table {
+                format!(".TS\nl.\nT{{\n{body}\nT}}\n.TE")
+            } else {
+                body.into()
+            };
+            let source = format!(".TH PROBE 1\n.SH DESCRIPTION\n{body}\n");
+            let document =
+                parse_manual_bytes(std::path::Path::new("probe.1"), source.as_bytes()).unwrap();
+            let runs = styled_text(&document);
+            for (token, strong, emphasis) in expected {
+                assert!(
+                    runs.iter()
+                        .any(|(text, s, e)| text.contains(token) && *s == strong && *e == emphasis),
+                    "{body}: {runs:?}"
+                );
+            }
+        }
+    }
+}
+
 #[test]
 fn enclosure_parts_have_one_owner_even_when_empty_or_reparented() {
     for (body, expected) in [

@@ -32,7 +32,14 @@ pub(in crate::mandoc) fn lower_source_fragment(
             requests += 1;
         }
     }
-    if requests == 0 {
+    if requests == 0
+        && !super::decode(source).iter().any(|event| {
+            matches!(
+                event,
+                super::RoffInlineEvent::Font(_) | super::RoffInlineEvent::PreviousFont
+            )
+        })
+    {
         return None;
     }
     // Bound extra parsing work and nesting before entering the native parser.

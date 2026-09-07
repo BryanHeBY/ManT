@@ -246,7 +246,7 @@ Requests with direct lowering behavior are:
 | `br` | Inline line break |
 | `sp` | Vertical-space block, with normalized height |
 | `nf`, `fi` | Enter and leave preformatted flow |
-| `ft` | Consumed formatter state; explicit text font escapes remain semantic |
+| `ft` | Changes the current/previous inline font without emitting its argument |
 | `in` | Consumed indentation state around structures normalized by libmandoc |
 | `ad`, `na` | Adjustment state omitted |
 | `hy`, `nh` | Hyphenation state omitted |
@@ -287,7 +287,10 @@ Font names map as follows:
 | `C`, `CR`, `CW`, `V` | Code |
 | `CB`, `VB` | Strong code |
 | `CI`, `VI` | Emphasized code |
-| Other names, `R`, `P`, `1` | Regular |
+| `P` or empty font operand | Restore the previous font selection |
+| Other names, `R`, `1` | Regular |
+
+Continuous man text retains font state across source line breaks. A font macro establishes its initial font without overriding later escapes inside its operands; ordinary man paragraph/font scopes reset to regular, while `SM` retains the current font. These rules also apply to inline-only table recovery.
 
 Adjacent runs with the same effective style are one semantic span in Markdown
 output. For example, `\fB\-\fP\fB\-emulate\fP` becomes

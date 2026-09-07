@@ -1,22 +1,25 @@
 //! Lowers typed roff events and semantic mdoc macros into inline IR nodes.
 
-use std::borrow::Cow;
-
 use libmandoc_rs::{Node, NodeKind};
 use mant_ir::Inline;
 
 use crate::inline::{first_visible_character, has_printable_character, last_visible_character};
 pub(crate) use crate::inline::{plain_text, terms_fit_inline};
 
+mod font;
 mod source;
 mod source_fragment;
+
+#[cfg(test)]
+use font::parse_roff_text_with_font;
+use font::{lower_font_scope, lower_man_font_scope, lower_text_node, parse_roff_text_with_state};
+pub(super) use font::{lower_inline_nodes_with_font_state, parse_roff_text};
 
 pub(super) use source::roff_macro_arguments;
 pub(super) use source_fragment::lower_source_fragment;
 
 use super::{
     first_part_children,
-    reference::trailing_sphinx_manual_reference,
     roff_escape::{RoffFont as Font, RoffInlineEvent, decode, visible_text},
 };
 
@@ -26,6 +29,32 @@ pub(super) struct InlineBuilder {
     spacing: SpacingMode,
     last_visible_character: Option<char>,
     has_printable_content: bool,
+    font: FontState,
+}
+
+/// Roff remembers the previous selection independently of the current font.
+#[derive(Clone, Copy, Debug)]
+pub(super) struct FontState {
+    current: Font,
+    previous: Font,
+}
+
+impl FontState {
+    pub(super) const fn new() -> Self {
+        Self {
+            current: Font::Regular,
+            previous: Font::Regular,
+        }
+    }
+
+    fn select(&mut self, font: Font) {
+        self.previous = self.current;
+        self.current = font;
+    }
+
+    fn restore(&mut self) {
+        std::mem::swap(&mut self.current, &mut self.previous);
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -83,6 +112,7 @@ impl InlineBuilder {
             spacing: SpacingMode::Enabled,
             last_visible_character: None,
             has_printable_content: false,
+            font: FontState::new(),
         }
     }
 
@@ -93,6 +123,7 @@ impl InlineBuilder {
             spacing: SpacingMode::from_enabled(spacing_enabled),
             last_visible_character: None,
             has_printable_content: false,
+            font: FontState::new(),
         }
     }
 
@@ -293,10 +324,34 @@ pub(super) fn append_inline_node(
     node: &Node,
     default_name: Option<&str>,
 ) {
+    if node.kind == NodeKind::Text && !node.flags.no_print {
+        if node.flags.delimiter_close {
+            builder.tighten_next_boundary();
+        }
+        let inlines = parse_roff_text_with_state(
+            node.text.as_deref().unwrap_or_default(),
+            &mut builder.font,
+            !node.flags.no_fill,
+        );
+        builder.append(inlines);
+        if node.flags.delimiter_open || node.flags.line_continuation {
+            builder.tighten_next_boundary();
+        }
+        return;
+    }
     if node.flags.delimiter_close {
         builder.tighten_next_boundary();
     }
     match node.macro_name.as_deref() {
+        Some("B" | "I" | "SB" | "R") => {
+            let inlines = lower_man_font_scope(
+                node,
+                default_name,
+                builder.spacing_enabled(),
+                &mut builder.font,
+            );
+            builder.append(inlines);
+        }
         Some("Ns") => builder.tighten_next_boundary(),
         // `Pf` owns visible prefix text and suppresses only the boundary to
         // the following sibling. Treating it like the empty `Ns` request
@@ -332,14 +387,29 @@ pub(super) fn append_inline_node(
         // Verbatim regions already retain their semantics through
         // libmandoc's no-fill flag, so leaking these arguments would only
         // create phantom paragraphs around preformatted blocks.
+        Some("ft") => {
+            let name = node
+                .children
+                .first()
+                .and_then(|node| node.text.as_deref())
+                .unwrap_or("P");
+            if name == "P" {
+                builder.font.restore();
+            } else {
+                builder.font.select(super::roff_escape::font(name));
+            }
+        }
+        Some("SM") => {
+            for child in &node.children {
+                append_inline_node(builder, child, default_name);
+            }
+        }
         Some("Sm") => {
             let setting = plain_text(&lower_inline_nodes(&node.children, default_name));
             builder.set_spacing(setting.trim());
         }
-        Some(
-            "Es" | "PD" | "ad" | "fi" | "ft" | "hy" | "in" | "na" | "ne" | "nf" | "nh" | "nr"
-            | "ta",
-        ) => {}
+        Some("Es" | "PD" | "ad" | "fi" | "hy" | "in" | "na" | "ne" | "nf" | "nh" | "nr" | "ta") => {
+        }
         Some("Ap") => {
             builder.tighten_next_boundary();
             builder.append(vec![Inline::Text { value: "'".into() }]);
@@ -350,6 +420,12 @@ pub(super) fn append_inline_node(
             default_name,
             builder.spacing_enabled(),
         )),
+    }
+    if matches!(
+        node.macro_name.as_deref(),
+        Some("BI" | "BR" | "IB" | "IR" | "RB" | "RI" | "OP")
+    ) {
+        builder.font.select(Font::Regular);
     }
     if node.flags.delimiter_open || node.flags.line_continuation || ends_with_no_space_control(node)
     {
@@ -405,6 +481,9 @@ fn lower_inline_node(
         return lower_structural_name(node, default_name, spacing_enabled);
     }
     let children = inline_children(node);
+    if matches!(macro_name, Some("B" | "SB" | "I" | "R")) {
+        return lower_man_font_scope(node, default_name, spacing_enabled, &mut FontState::new());
+    }
     // man(7) alternating-font macros concatenate their arguments without
     // inserting spaces. Each argument switches to the next named font.
     let lowered = alternating_font_pair(macro_name).map_or_else(
@@ -456,12 +535,16 @@ fn lower_macro_inline(
             // argument is an option name (bold), the second a metavariable.
             let mut builder = InlineBuilder::with_spacing(spacing_enabled);
             for (index, child) in children.iter().enumerate() {
-                let value = lower_inline_node(child, default_name, spacing_enabled);
-                builder.append(if index == 0 {
-                    wrap_strong(value)
-                } else {
-                    wrap_emphasis(value)
-                });
+                builder.append(lower_font_scope(
+                    std::slice::from_ref(child),
+                    default_name,
+                    spacing_enabled,
+                    if index == 0 {
+                        Font::Strong
+                    } else {
+                        Font::Emphasis
+                    },
+                ));
             }
             surround("[", builder.finish(), "]")
         }
@@ -1050,170 +1133,6 @@ fn text_node(value: &str) -> Vec<Inline> {
     vec![Inline::Text {
         value: value.to_owned(),
     }]
-}
-
-pub(super) fn parse_roff_text(source: &str) -> Vec<Inline> {
-    parse_roff_text_with_font(source, Font::Regular, true)
-}
-
-/// Decode one roff text run using the font selected by its enclosing macro.
-/// Explicit `\\f` escapes change `font` while the run is scanned, so a reset
-/// to regular text remains visible even inside an alternating `.BI` argument.
-fn parse_roff_text_with_font(
-    source: &str,
-    initial_font: Font,
-    recognize_generated_references: bool,
-) -> Vec<Inline> {
-    let mut output = Vec::new();
-    let mut buffer = String::new();
-    let mut font = initial_font;
-    let mut link: Option<String> = None;
-
-    for event in decode(source) {
-        match event {
-            RoffInlineEvent::Text(value) => {
-                buffer.push_str(&normalize_redundant_escaped_font(&value, font));
-            }
-            RoffInlineEvent::Font(next_font) => {
-                flush_segment(&mut output, &mut buffer, font, link.as_deref());
-                font = next_font;
-            }
-            RoffInlineEvent::Link(target) => {
-                flush_segment(&mut output, &mut buffer, font, link.as_deref());
-                link = target;
-            }
-            RoffInlineEvent::EmptyDestination => {
-                if !recognize_generated_references
-                    || !promote_sphinx_manual_reference(
-                        &mut output,
-                        &mut buffer,
-                        font,
-                        link.as_deref(),
-                    )
-                {
-                    buffer.push_str("<>");
-                }
-            }
-            RoffInlineEvent::LineBreak => {
-                flush_segment(&mut output, &mut buffer, font, link.as_deref());
-                if !matches!(output.last(), Some(Inline::LineBreak)) {
-                    output.push(Inline::LineBreak);
-                }
-            }
-            RoffInlineEvent::Presentation { .. } => {}
-        }
-    }
-    flush_segment(&mut output, &mut buffer, font, link.as_deref());
-    output
-}
-
-/// Some generated manuals wrap a link label in a font and then escape another
-/// copy of that same font request as visible text. libmandoc correctly reports
-/// the enclosing font, so remove only the redundant escaped request. Keeping
-/// this conditional on the enclosing font preserves literal `\\f` examples in
-/// formatter manuals and ordinary prose.
-fn normalize_redundant_escaped_font(source: &str, font: Font) -> Cow<'_, str> {
-    let opening = match font {
-        Font::Strong => r"\fB",
-        Font::Emphasis => r"\fI",
-        Font::StrongEmphasis => r"\f[BI]",
-        Font::Code => r"\fC",
-        Font::CodeStrong => r"\f[CB]",
-        Font::CodeEmphasis => r"\f[CI]",
-        Font::Regular => return Cow::Borrowed(source),
-    };
-    if !source.contains(opening) {
-        return Cow::Borrowed(source);
-    }
-
-    Cow::Owned(source.replace(opening, "").replace(r"\fR", ""))
-}
-
-/// Lower a text node after honoring a macro-provided default font. Nodes marked
-/// non-printing by libmandoc are never allowed to escape through this shortcut.
-fn lower_text_node(node: &Node, initial_font: Font) -> Vec<Inline> {
-    if node.flags.no_print || node.kind == NodeKind::Comment {
-        Vec::new()
-    } else {
-        parse_roff_text_with_font(
-            node.text.as_deref().unwrap_or_default(),
-            initial_font,
-            !node.flags.no_fill,
-        )
-    }
-}
-
-fn promote_sphinx_manual_reference(
-    output: &mut Vec<Inline>,
-    buffer: &mut String,
-    font: Font,
-    external_link: Option<&str>,
-) -> bool {
-    if external_link.is_some() || matches!(font, Font::Code | Font::CodeStrong | Font::CodeEmphasis)
-    {
-        return false;
-    }
-    let Some(reference) = trailing_sphinx_manual_reference(buffer) else {
-        return false;
-    };
-    let prefix = reference.prefix.to_owned();
-    let display = reference.display.to_owned();
-    let name = reference.name.to_owned();
-    let manual_section = reference.manual_section.to_owned();
-    *buffer = prefix;
-    flush_segment(output, buffer, font, None);
-    output.push(Inline::Link {
-        target: mant_ir::LinkTarget::Manual {
-            name,
-            manual_section: Some(manual_section),
-        },
-        title: None,
-        children: vec![styled_segment(display, font)],
-    });
-    true
-}
-
-fn flush_segment(output: &mut Vec<Inline>, buffer: &mut String, font: Font, link: Option<&str>) {
-    if buffer.is_empty() {
-        return;
-    }
-    let value = std::mem::take(buffer);
-    let styled = styled_segment(value, font);
-    if let Some(target) = link {
-        output.push(Inline::Link {
-            target: mant_ir::LinkTarget::External {
-                uri: target.to_owned(),
-            },
-            title: None,
-            children: vec![styled],
-        });
-    } else {
-        output.push(styled);
-    }
-}
-
-fn styled_segment(value: String, font: Font) -> Inline {
-    match font {
-        Font::Regular => Inline::Text { value },
-        Font::Strong => Inline::Strong {
-            children: vec![Inline::Text { value }],
-        },
-        Font::Emphasis => Inline::Emphasis {
-            children: vec![Inline::Text { value }],
-        },
-        Font::StrongEmphasis => Inline::Strong {
-            children: vec![Inline::Emphasis {
-                children: vec![Inline::Text { value }],
-            }],
-        },
-        Font::Code => Inline::Code { value },
-        Font::CodeStrong => Inline::Strong {
-            children: vec![Inline::Code { value }],
-        },
-        Font::CodeEmphasis => Inline::Emphasis {
-            children: vec![Inline::Code { value }],
-        },
-    }
 }
 
 fn needs_boundary_space(left: Option<char>, right: Option<char>) -> bool {
