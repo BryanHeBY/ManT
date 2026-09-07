@@ -67,6 +67,9 @@ fn append_name_prefix(nodes: &[Inline], output: &mut String) -> bool {
                 if first_content_is_parameter(children).is_some() {
                     return false;
                 }
+                // Whitespace-only styling is not a parameter, but still
+                // occupies bytes before a later recognized name.
+                output.push_str(&plain_text(children));
             }
             Inline::Anchor { .. } => {}
             Inline::LineBreak => output.push('\n'),

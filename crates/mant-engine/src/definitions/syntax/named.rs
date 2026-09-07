@@ -1,6 +1,6 @@
 //! named recognition; complete forms retain their role-specific grammar.
 use crate::inline::plain_text;
-use mant_ir::{DefinitionItem, Inline};
+use mant_ir::Inline;
 
 pub(in crate::definitions) fn is_value_name(value: &str) -> bool {
     !value.is_empty()
@@ -28,26 +28,6 @@ pub(in crate::definitions) fn is_ordinal_marker(value: &str) -> bool {
     })
 }
 
-pub(in crate::definitions) fn named_term(
-    item: &DefinitionItem,
-    validate: fn(&str) -> bool,
-) -> Vec<String> {
-    item.terms
-        .iter()
-        .flat_map(|term| {
-            let text = plain_text(term);
-            text.split(',')
-                .filter_map(|part| named_term_name(part, validate).map(str::to_owned))
-                .collect::<Vec<_>>()
-        })
-        .fold(Vec::new(), |mut names, name| {
-            if !names.contains(&name) {
-                names.push(name);
-            }
-            names
-        })
-}
-
 /// Accept a complete semantic name and one delimited trailing annotation.
 pub(in crate::definitions) fn named_term_name(
     value: &str,
@@ -59,10 +39,6 @@ pub(in crate::definitions) fn named_term_name(
     }
     let (name, annotation) = value.rsplit_once(" (")?;
     (annotation.ends_with(')') && validate(name)).then_some(name)
-}
-
-pub(in crate::definitions) fn environment_names(item: &DefinitionItem) -> Vec<String> {
-    environment_names_from_terms(&item.terms)
 }
 
 pub(in crate::definitions) fn environment_names_from_terms(terms: &[Vec<Inline>]) -> Vec<String> {

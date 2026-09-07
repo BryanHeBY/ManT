@@ -1,89 +1,95 @@
-//! Source-neutral grammars for semantic definition names.
-//!
-//! These recognizers deliberately consume complete authored forms. Section
-//! context decides which grammar to try; this module only decides whether a
-//! spelling is trustworthy enough to expose as an addressable entry.
-
-use mant_ir::{DefinitionItem, EntryKind, NameCase};
-
+//! Source-neutral grammars for semantic definition names and lexical evidence.
+//! Context selects a grammar; one recognition result carries both selectable
+//! spellings and their original ranges to the binding mapper.
+use super::{RecognizedName, context::DefinitionContext};
 use crate::inline::plain_text;
-
-use super::context::DefinitionContext;
+use mant_ir::{DefinitionItem, EntryKind, NameCase, ParameterKind};
 
 mod commands;
 mod forms;
 mod named;
 mod options;
-use commands::command_names;
 pub(super) use named::environment_names_from_terms;
 pub(super) use named::is_value_name;
-use named::{environment_names, is_configuration_key, is_variable_term, named_term};
 pub(crate) use named::{environment_variable_alias, environment_variable_body};
+use named::{is_configuration_key, is_variable_term};
 #[cfg(test)]
 pub(super) use options::option_names;
-use options::parameter_identity;
 pub(crate) use options::{
     option_names_from_terms, option_occurrences_from_terms, option_prefix, slash_option_forms,
 };
 
+pub(super) struct InferredIdentity {
+    pub(super) kind: EntryKind,
+    pub(super) case: NameCase,
+    pub(super) names: Vec<String>,
+    pub(super) occurrences: Vec<Vec<RecognizedName>>,
+}
+
 pub(super) fn infer_identity(
     item: &DefinitionItem,
     context: DefinitionContext,
-) -> (EntryKind, NameCase, Vec<String>) {
+) -> InferredIdentity {
     let first = item
         .terms
         .first()
         .map_or_else(String::new, |term| plain_text(term));
     let trimmed = first.trim();
-    match context {
+    let parameter = || EntryKind::Parameter {
+        parameter_kind: match trimmed {
+            "--" | "--%" => ParameterKind::Marker,
+            "-" => ParameterKind::Operand,
+            _ => ParameterKind::Option,
+        },
+    };
+    let (kind, case) = match context {
         DefinitionContext::Commands
             if trimmed.starts_with(['-', '+']) || trimmed.starts_with("[-+]") =>
         {
-            parameter_identity(item, trimmed)
+            (parameter(), NameCase::Sensitive)
         }
-        DefinitionContext::Commands => {
-            let names = command_names(item);
-            if names.is_empty() {
-                (EntryKind::Term, NameCase::Sensitive, Vec::new())
-            } else {
-                (EntryKind::Command, NameCase::Sensitive, names)
-            }
+        DefinitionContext::Commands => (EntryKind::Command, NameCase::Sensitive),
+        DefinitionContext::EnvironmentVariables => {
+            (EntryKind::EnvironmentVariable, NameCase::Sensitive)
         }
-        DefinitionContext::EnvironmentVariables => named_identity(
-            EntryKind::EnvironmentVariable,
-            NameCase::Sensitive,
-            environment_names(item),
-        ),
-        DefinitionContext::Variables => named_identity(
-            EntryKind::Variable,
-            NameCase::Sensitive,
-            named_term(item, is_variable_term),
-        ),
-        DefinitionContext::ConfigurationKeys => named_identity(
-            EntryKind::ConfigurationKey,
-            NameCase::Insensitive,
-            named_term(item, is_configuration_key),
-        ),
-        DefinitionContext::Values => named_identity(
-            EntryKind::Value,
-            NameCase::Sensitive,
-            named_term(item, is_value_name),
-        ),
-        DefinitionContext::Parameters => parameter_identity(item, trimmed),
-        DefinitionContext::Generic if trimmed.starts_with('-') => parameter_identity(item, trimmed),
-        DefinitionContext::Generic => (EntryKind::Term, NameCase::Sensitive, Vec::new()),
+        DefinitionContext::Variables => (EntryKind::Variable, NameCase::Sensitive),
+        DefinitionContext::ConfigurationKeys => {
+            (EntryKind::ConfigurationKey, NameCase::Insensitive)
+        }
+        DefinitionContext::Values => (EntryKind::Value, NameCase::Sensitive),
+        DefinitionContext::Parameters => (parameter(), NameCase::Sensitive),
+        DefinitionContext::Generic if trimmed.starts_with('-') => {
+            (parameter(), NameCase::Sensitive)
+        }
+        DefinitionContext::Generic => (EntryKind::Term, NameCase::Sensitive),
+    };
+    let occurrences = name_occurrences(item, kind);
+    let mut names = Vec::new();
+    let all = || occurrences.iter().flatten();
+    // Preserve the established native order: ordinary dash options first,
+    // followed by finite sign alternations and plus-prefixed forms.
+    let is_extra = |found: &&RecognizedName| {
+        matches!(kind, EntryKind::Parameter { .. })
+            && (found.name.starts_with('+') || found.parts.len() > 1)
+    };
+    for found in all()
+        .filter(|found| !is_extra(found))
+        .chain(all().filter(is_extra))
+    {
+        if !names.contains(&found.name) {
+            names.push(found.name.clone());
+        }
     }
-}
-
-fn named_identity(
-    role: EntryKind,
-    case: NameCase,
-    names: Vec<String>,
-) -> (EntryKind, NameCase, Vec<String>) {
-    if names.is_empty() {
-        (EntryKind::Term, NameCase::Sensitive, names)
+    let (kind, case) = if names.is_empty() {
+        (EntryKind::Term, NameCase::Sensitive)
     } else {
-        (role, case, names)
+        (kind, case)
+    };
+    InferredIdentity {
+        kind,
+        case,
+        names,
+        occurrences,
     }
 }
 

@@ -47,16 +47,23 @@ pub(super) struct IdentityPlan {
 }
 
 pub(super) fn identity_plan(item: &DefinitionItem, context: DefinitionContext) -> IdentityPlan {
-    let (kind, case, names, value_domain) = item.entry.as_ref().map_or_else(
+    let (kind, case, names, occurrences, value_domain) = item.entry.as_ref().map_or_else(
         || {
-            let (kind, case, names) = infer_identity(item, context);
-            (kind, case, names, None)
+            let inferred = infer_identity(item, context);
+            (
+                inferred.kind,
+                inferred.case,
+                inferred.names,
+                inferred.occurrences,
+                None,
+            )
         },
         |identity| {
             (
                 identity.kind,
                 identity.case,
                 identity.names.clone(),
+                super::syntax::name_occurrences(item, identity.kind),
                 identity.value_domain.clone(),
             )
         },
@@ -70,8 +77,8 @@ pub(super) fn identity_plan(item: &DefinitionItem, context: DefinitionContext) -
     IdentityPlan {
         kind,
         case,
-        occurrences: super::syntax::name_occurrences(item, kind),
         names,
+        occurrences,
         value_domain,
         preferred,
     }

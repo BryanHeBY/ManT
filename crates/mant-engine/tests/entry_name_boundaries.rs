@@ -99,6 +99,7 @@ fn grammar_selected_ranges_survive_wrappers_arguments_and_styles() {
         (".B \" [-+]O\"", vec!["-O", "+O"], " [-+]O"),
         (".BR \" [\" - + ] O", vec!["-O", "+O"], " [-+]O"),
         (".BR “ -- foo ”", vec!["--foo"], "“--foo”"),
+        (".IB \" \" --foo", vec!["--foo"], " --foo"),
         (".B --color[=WHEN]", vec!["--color"], "--color[=WHEN]"),
         (".B -D<NAME>", vec!["-D"], "-D<NAME>"),
         (".BI \"{-n/\" -NUM", vec!["-n"], "{-n/-NUM"),

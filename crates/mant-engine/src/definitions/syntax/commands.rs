@@ -1,33 +1,6 @@
 //! commands recognition; complete forms retain their role-specific grammar.
-use super::forms;
-use crate::definitions::context::key_binding_command_form;
 use crate::inline::plain_text;
-use mant_ir::{DefinitionItem, Inline};
-
-pub(in crate::definitions) fn command_names(item: &DefinitionItem) -> Vec<String> {
-    item.terms
-        .iter()
-        .flat_map(|term| {
-            let text = plain_text(term);
-            if let Some((name, _)) = key_binding_command_form(&text) {
-                return vec![name.to_owned()];
-            }
-            forms::alias_groups(term)
-                .into_iter()
-                .filter_map(|group| {
-                    leading_styled_command_name(&group).or_else(|| {
-                        command_name_from_authored_form(&plain_text(&group)).map(str::to_owned)
-                    })
-                })
-                .collect::<Vec<_>>()
-        })
-        .fold(Vec::new(), |mut names, name| {
-            if !names.contains(&name) {
-                names.push(name);
-            }
-            names
-        })
-}
+use mant_ir::Inline;
 
 /// Extract the command token from an unstyled authored form.
 pub(in crate::definitions) fn command_name_from_authored_form(value: &str) -> Option<&str> {

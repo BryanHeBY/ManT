@@ -2,54 +2,11 @@
 use super::forms;
 use crate::definitions::RecognizedName;
 use crate::inline::plain_text;
-use mant_ir::{DefinitionItem, EntryKind, Inline, NameCase};
+#[cfg(test)]
+use mant_ir::DefinitionItem;
+use mant_ir::Inline;
 
-pub(in crate::definitions) fn parameter_identity(
-    item: &DefinitionItem,
-    first_term: &str,
-) -> (EntryKind, NameCase, Vec<String>) {
-    if first_term == "--" || first_term == "--%" {
-        return (
-            EntryKind::Parameter {
-                parameter_kind: mant_ir::ParameterKind::Marker,
-            },
-            NameCase::Sensitive,
-            vec![first_term.to_owned()],
-        );
-    }
-    if first_term == "-" {
-        return (
-            EntryKind::Parameter {
-                parameter_kind: mant_ir::ParameterKind::Operand,
-            },
-            NameCase::Sensitive,
-            vec![first_term.to_owned()],
-        );
-    }
-    let names = parameter_names(item);
-    if names.is_empty() {
-        (EntryKind::Term, NameCase::Sensitive, Vec::new())
-    } else {
-        (
-            EntryKind::Parameter {
-                parameter_kind: mant_ir::ParameterKind::Option,
-            },
-            NameCase::Sensitive,
-            names,
-        )
-    }
-}
-
-pub(in crate::definitions) fn parameter_names(item: &DefinitionItem) -> Vec<String> {
-    let mut names = option_names(item);
-    for found in parameter_occurrences(&item.terms).into_iter().flatten() {
-        if !names.contains(&found.name) {
-            names.push(found.name);
-        }
-    }
-    names
-}
-
+#[cfg(test)]
 pub(in crate::definitions) fn option_names(item: &DefinitionItem) -> Vec<String> {
     option_names_from_terms(&item.terms)
 }
