@@ -22,6 +22,8 @@ catalog, search, and cross-document interactions without serializing the IR.
   bounded back/forward history.
 - Confirmed full-document search with active and inactive match highlighting.
 - tldr quick-reference and source-document rendering through one layout model.
+- Span-aware table columns and cell-local anchors that retain their exact
+  rendered rows through independent wrapping, stacking and nested tables.
 - Keyboard, mouse, scrollbar, and resizable-pane interaction.
 - Width-aware visual text selection plus typed requests for plain-text and
   complete-node Text/Markdown clipboard content.

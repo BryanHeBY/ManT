@@ -268,6 +268,7 @@ impl DocumentView {
         let mut search_records = Vec::new();
         let mut surfaces = Vec::new();
         let mut logical_rows = Vec::with_capacity(self.lines.len() + 1);
+        let mut anchor_rows = HashMap::new();
 
         for line in &self.lines {
             logical_rows.push(rows.len());
@@ -275,6 +276,9 @@ impl DocumentView {
             search_records.extend(search_records_for_lines(&wrapped_lines, rows.len()));
             for wrapped in wrapped_lines {
                 let row = rows.len();
+                for id in wrapped.anchors {
+                    anchor_rows.entry(id).or_insert(row);
+                }
                 links.extend(wrapped.links.into_iter().map(|link| RenderedLinkRegion {
                     target: link.target,
                     row,
@@ -287,16 +291,12 @@ impl DocumentView {
         }
         logical_rows.push(rows.len());
 
-        let anchor_rows = self
-            .anchors
-            .iter()
-            .map(|(id, logical_line)| {
-                (
-                    id.clone(),
-                    logical_rows.get(*logical_line).copied().unwrap_or_default(),
-                )
-            })
-            .collect();
+        anchor_rows.extend(self.anchors.iter().map(|(id, logical_line)| {
+            (
+                id.clone(),
+                logical_rows.get(*logical_line).copied().unwrap_or_default(),
+            )
+        }));
 
         RenderedDocument {
             row_count: rows.len(),
@@ -730,10 +730,12 @@ impl DocumentBuilder {
                                 if let Some(cell) = cell {
                                     builder.blocks(&cell.blocks, 0);
                                 }
-                                LogicalTableCell::new(
+                                let mut rendered = LogicalTableCell::new(
                                     builder.lines,
                                     cell.and_then(|cell| cell.alignment),
-                                )
+                                );
+                                rendered.anchors = builder.anchors;
+                                rendered
                             })
                             .collect::<Vec<_>>()
                     })

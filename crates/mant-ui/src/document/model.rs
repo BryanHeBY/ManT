@@ -76,6 +76,7 @@ pub(super) struct LogicalLinkRange {
 pub(super) struct LogicalTableCell {
     pub(super) lines: Vec<LogicalLine>,
     pub(super) alignment: TableAlignment,
+    pub(super) anchors: std::collections::HashMap<String, usize>,
 }
 
 #[derive(Debug, Clone)]
@@ -120,6 +121,7 @@ impl LogicalTableCell {
         Self {
             lines,
             alignment: alignment.unwrap_or(TableAlignment::Left),
+            anchors: std::collections::HashMap::new(),
         }
     }
 

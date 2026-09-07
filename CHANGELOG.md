@@ -239,6 +239,11 @@ that crate was not published for that change.
 
 ### mant-ui 0.11.0
 
+- Preserve table-cell anchors and exact fragment aliases through cell wrapping,
+  narrow-view stacking and nested tables; destinations resolve to their own
+  content row rather than disappearing or falling back to the table start.
+- Share logical span-aware column placement with CLI output.
+
 - Apply the same Unicode scalar lowercase transform to search queries and
   rendered text, preventing identical Greek sigma text from being missed
   while retaining exact cell highlights through expansions and wrapping.

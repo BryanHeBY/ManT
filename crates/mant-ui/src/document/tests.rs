@@ -1014,6 +1014,70 @@ fn adjacent_blocks_add_only_explicit_vertical_space() {
 }
 
 #[test]
+fn table_anchors_follow_their_cell_content_through_wrapping_and_stacking() {
+    let paragraph = |children| Block::Paragraph {
+        children,
+        layout: LayoutHint::default(),
+        source: None,
+    };
+    let cell = |blocks| TableCell {
+        blocks,
+        column_span: 1,
+        row_span: 1,
+        alignment: None,
+    };
+    let table = |cells| Block::Table {
+        rows: vec![TableRow { cells }],
+        layout: LayoutHint::default(),
+        source: None,
+    };
+    for nested in [false, true] {
+        let mut bundle = bundle();
+        let content = vec![
+            paragraph(vec![Inline::Text {
+                value: "preceding words take several wrapped rows".into(),
+            }]),
+            paragraph(vec![
+                Inline::anchor_with_aliases("destination", vec!["Mixed.Target".into()]),
+                Inline::Text {
+                    value: "DESTINATION".into(),
+                },
+            ]),
+        ];
+        let content = if nested {
+            vec![table(vec![cell(content)])]
+        } else {
+            content
+        };
+        bundle.document.as_mut().unwrap().sections[0].blocks = vec![table(vec![
+            cell(vec![paragraph(vec![Inline::Text {
+                value: "NEIGHBOUR".into(),
+            }])]),
+            cell(content),
+            cell(vec![paragraph(vec![Inline::anchor("empty-target")])]),
+        ])];
+        for width in [8, 24, 48, 90] {
+            let rendered = DocumentView::new(&bundle).render(width);
+            let found = rendered.search("DESTINATION");
+            assert_eq!(
+                found.len(),
+                1,
+                "nested={nested}, width={width}: {:?}",
+                rendered.text
+            );
+            assert_eq!(rendered.anchor_row("destination"), Some(found[0].row));
+            assert_eq!(rendered.anchor_row("Mixed.Target"), Some(found[0].row));
+            assert!(
+                rendered
+                    .anchor_row("empty-target")
+                    .is_some_and(|row| row < rendered.row_count)
+            );
+            assert!(found[0].row > rendered.search("NEIGHBOUR")[0].row);
+        }
+    }
+}
+
+#[test]
 fn horizontal_spans_align_the_following_cell_with_later_rows() {
     let mut bundle = bundle();
     let cell = |text: &str, column_span| TableCell {

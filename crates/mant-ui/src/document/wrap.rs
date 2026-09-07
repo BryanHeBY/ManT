@@ -12,7 +12,10 @@ use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 use mant_ir::TableAlignment;
 
-use super::{LineSurface, LinkTarget, LogicalLine, WrapMode, model::LogicalTableRow};
+use super::{
+    LineSurface, LinkTarget, LogicalLine, WrapMode,
+    model::{LogicalTableCell, LogicalTableRow},
+};
 use crate::theme;
 
 const TABLE_COLUMN_GAP: usize = 2;
@@ -27,6 +30,7 @@ struct StyledCell {
 }
 
 pub(super) struct WrappedLine {
+    pub(super) anchors: Vec<String>,
     pub(super) line: Line<'static>,
     pub(super) links: Vec<WrappedLink>,
     pub(super) search_cells: Vec<WrappedSearchCell>,
@@ -63,6 +67,7 @@ pub(super) fn wrap_line_with_links(line: &LogicalLine, width: usize) -> Vec<Wrap
     match line.surface {
         LineSurface::TldrTop => {
             return vec![WrappedLine {
+                anchors: Vec::new(),
                 line: panel_border(width, '┌', '┐'),
                 links: Vec::new(),
                 search_cells: Vec::new(),
@@ -70,6 +75,7 @@ pub(super) fn wrap_line_with_links(line: &LogicalLine, width: usize) -> Vec<Wrap
         }
         LineSurface::TldrBottom => {
             return vec![WrappedLine {
+                anchors: Vec::new(),
                 line: panel_border(width, '└', '┘'),
                 links: Vec::new(),
                 search_cells: Vec::new(),
@@ -77,6 +83,7 @@ pub(super) fn wrap_line_with_links(line: &LogicalLine, width: usize) -> Vec<Wrap
         }
         LineSurface::Divider => {
             return vec![WrappedLine {
+                anchors: Vec::new(),
                 line: Line::from(Span::styled(
                     "─".repeat(width),
                     Style::default().fg(theme::OVERLAY),
@@ -88,6 +95,7 @@ pub(super) fn wrap_line_with_links(line: &LogicalLine, width: usize) -> Vec<Wrap
         LineSurface::Rule => {
             let indent = line.indent.min(width.saturating_sub(1));
             return vec![WrappedLine {
+                anchors: Vec::new(),
                 line: Line::from(vec![
                     Span::raw(" ".repeat(indent)),
                     Span::styled(
@@ -254,6 +262,7 @@ fn render_table_row_with_links(
 ) -> Vec<WrappedLine> {
     if table.cells.is_empty() {
         return vec![WrappedLine {
+            anchors: Vec::new(),
             line: Line::default(),
             links: Vec::new(),
             search_cells: Vec::new(),
@@ -271,25 +280,66 @@ fn render_table_row_with_links(
 }
 
 fn stack_table_cells(indent: usize, table: &LogicalTableRow, width: usize) -> Vec<WrappedLine> {
+    let mut next_group = 0;
     let mut rows = table
         .cells
         .iter()
-        .flat_map(|cell| cell.lines.iter())
-        .flat_map(|line| {
-            let mut line = line.clone();
-            line.indent = line.indent.saturating_add(indent);
-            line.continuation_indent = line.continuation_indent.saturating_add(indent);
-            wrap_line_with_links(&line, width)
-        })
+        .flat_map(|cell| wrap_table_cell(cell, width, indent, &mut next_group))
         .collect::<Vec<_>>();
     if rows.is_empty() {
         rows.push(WrappedLine {
+            anchors: Vec::new(),
             line: Line::default(),
             links: Vec::new(),
             search_cells: Vec::new(),
         });
     }
     rows
+}
+
+/// Preserve child-local coordinates until the actual cell width is known.
+/// The resulting anchors travel with visual rows through columns, stacking
+/// and nested tables, just like links and search coordinates.
+fn wrap_table_cell(
+    cell: &LogicalTableCell,
+    width: usize,
+    indent: usize,
+    next_group: &mut usize,
+) -> Vec<WrappedLine> {
+    let mut rendered = Vec::new();
+    let mut logical_rows = Vec::with_capacity(cell.lines.len());
+    for line in &cell.lines {
+        logical_rows.push(rendered.len());
+        let mut line = line.clone();
+        line.indent = line.indent.saturating_add(indent);
+        line.continuation_indent = line.continuation_indent.saturating_add(indent);
+        let mut wrapped = wrap_line_with_links(&line, width);
+        for row in &mut wrapped {
+            for search_cell in &mut row.search_cells {
+                search_cell.group = *next_group;
+            }
+        }
+        *next_group += 1;
+        rendered.extend(wrapped);
+    }
+    if rendered.is_empty() && !cell.anchors.is_empty() {
+        rendered.push(WrappedLine {
+            anchors: Vec::new(),
+            line: Line::default(),
+            links: Vec::new(),
+            search_cells: Vec::new(),
+        });
+    }
+    for (id, logical) in &cell.anchors {
+        let row = logical_rows
+            .get(*logical)
+            .copied()
+            .unwrap_or(rendered.len().saturating_sub(1));
+        if let Some(row) = rendered.get_mut(row) {
+            row.anchors.push(id.clone());
+        }
+    }
+    rendered
 }
 
 fn render_table_columns(
@@ -306,25 +356,19 @@ fn render_table_columns(
             if *column_width == 0 {
                 return Vec::new();
             }
-            let mut rendered = Vec::new();
-            for line in &cell.lines {
-                let group = next_search_group;
-                next_search_group += 1;
-                let mut wrapped = wrap_line_with_links(line, *column_width);
-                for row in &mut wrapped {
-                    for cell in &mut row.search_cells {
-                        cell.group = group;
-                    }
-                }
-                rendered.extend(wrapped);
-            }
-            rendered
+            wrap_table_cell(cell, *column_width, 0, &mut next_search_group)
         })
         .collect::<Vec<_>>();
-    let row_count = rendered_cells.iter().map(Vec::len).max().unwrap_or(1);
+    let row_count = rendered_cells
+        .iter()
+        .map(Vec::len)
+        .max()
+        .unwrap_or(0)
+        .max(1);
 
     (0..row_count)
         .map(|row_index| {
+            let mut anchors = Vec::new();
             let mut spans = Vec::new();
             let mut links = Vec::new();
             let mut search_cells = Vec::new();
@@ -341,6 +385,7 @@ fn render_table_columns(
                 let mut used = 0;
                 let mut left_padding = 0;
                 if let Some(row) = cell_rows.and_then(|rows| rows.get(row_index)) {
+                    anchors.extend(row.anchors.iter().cloned());
                     used = UnicodeWidthStr::width(row.line.to_string().as_str());
                     let free = column_width.saturating_sub(used);
                     left_padding = match alignment {
@@ -375,6 +420,7 @@ fn render_table_columns(
                 }
             }
             WrappedLine {
+                anchors,
                 line: Line::from(spans),
                 links,
                 search_cells,
@@ -566,6 +612,7 @@ fn wrapped_cells_to_line(
         });
     }
     WrappedLine {
+        anchors: Vec::new(),
         line: cells_to_line(line, width, indent, cells),
         links,
         search_cells,
