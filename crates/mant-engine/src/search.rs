@@ -87,7 +87,7 @@ fn search_with_matcher(
     matcher: &grep_regex::RegexMatcher,
 ) -> Result<QuerySearch, SearchError> {
     let artifact = render_addressable_markdown(query);
-    let markdown = &artifact.text;
+    let markdown = artifact.text();
     let lines = LineIndex::with_anchors(markdown, artifact.anchor_ranges().to_vec());
     let owners = OwnerIndex::new(&artifact);
     let searchable = SearchableText::new(markdown, request.scope);
@@ -724,7 +724,7 @@ mod tests {
 
     #[test]
     fn markdown_matches_crossing_an_anchor_expose_only_presented_text() {
-        let markdown = render_addressable_markdown(&query()).text;
+        let markdown = render_addressable_markdown(&query()).into_text();
         let marker = "\"></a>`--acls";
         assert!(
             markdown.contains(marker),
@@ -758,7 +758,7 @@ mod tests {
                 layout: LayoutHint::default(),
                 source: None,
             }];
-            let markdown = render_addressable_markdown(&query).text;
+            let markdown = render_addressable_markdown(&query).into_text();
 
             let result = search_query(&query, &request(value)).expect("search");
             let occurrence = &result.matches[0].occurrences[0];
@@ -799,7 +799,7 @@ mod tests {
             layout: LayoutHint::default(),
             source: None,
         }];
-        let markdown = render_addressable_markdown(&query).text;
+        let markdown = render_addressable_markdown(&query).into_text();
 
         let result = search_query(&query, &request("alpha\n")).expect("search");
         let occurrence = &result.matches[0].occurrences[0];

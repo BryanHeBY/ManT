@@ -52,16 +52,31 @@ pub fn render_markdown(query: &ResolvedContent) -> String {
 /// Render a complete query using explicit presentation-only options.
 #[must_use]
 pub fn render_markdown_with_options(query: &ResolvedContent, options: MarkdownOptions) -> String {
-    render_markdown_artifact(query, options).text
+    render_markdown_artifact(query, options).into_text()
 }
 
 pub(crate) struct MarkdownArtifact {
-    pub(crate) text: String,
-    pub(crate) nodes: Vec<MarkdownNodeRange>,
+    text: String,
+    nodes: Vec<MarkdownNodeRange>,
     anchors: std::sync::OnceLock<Vec<Range<usize>>>,
 }
 
 impl MarkdownArtifact {
+    /// Final, trimmed bytes against which all node and anchor ranges are indexed.
+    pub(crate) fn text(&self) -> &str {
+        &self.text
+    }
+
+    /// Read-only node ranges; callers cannot detach them from the final bytes.
+    pub(crate) fn nodes(&self) -> &[MarkdownNodeRange] {
+        &self.nodes
+    }
+
+    /// Consume the complete artifact when no coordinate mapping is needed.
+    pub(crate) fn into_text(self) -> String {
+        self.text
+    }
+
     /// Internal markers are indexed against final bytes, on demand. The
     /// operation-local artifact owns the map; presentation-only rendering
     /// does not pay for a second `CommonMark` parse.

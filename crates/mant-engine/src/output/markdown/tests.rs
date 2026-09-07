@@ -1280,7 +1280,7 @@ fn addressable_rendering_returns_exact_semantic_node_ranges() {
 
     let artifact = render_addressable_markdown(&query);
     let mapped = artifact
-        .nodes
+        .nodes()
         .iter()
         .find(|mapped| matches!(mapped.node, MarkdownNode::DocumentEntry { .. }))
         .expect("semantic entry range");
@@ -1289,7 +1289,7 @@ fn addressable_rendering_returns_exact_semantic_node_ranges() {
     };
     assert_eq!(path.to_string(), "1/e1");
     assert_eq!(id, "help-entry");
-    let rendered = &artifact.text[mapped.range.clone()];
+    let rendered = &artifact.text()[mapped.range.clone()];
     assert!(rendered.contains("--help"));
     assert!(rendered.contains("Show help."));
     assert!(!rendered.contains("Following section prose."));
@@ -1322,13 +1322,22 @@ fn serializes_a_large_source_lowered_document() {
 #[test]
 fn final_artifact_owns_only_real_anchor_ranges() {
     let mut builder = super::ArtifactBuilder::default();
+    builder.begin_root(0);
     builder.push("<a id=\"real\"></a>\n`<a id=\"literal\"></a>`\n\n ");
     let artifact = builder.finish();
     assert!(artifact.anchors.get().is_none());
     let ranges = artifact.anchor_ranges();
     assert_eq!(ranges.len(), 1);
     assert_eq!(ranges[0], 0.."<a id=\"real\"></a>".len());
-    assert_eq!(&artifact.text[ranges[0].clone()], "<a id=\"real\"></a>");
+    assert_eq!(&artifact.text()[ranges[0].clone()], "<a id=\"real\"></a>");
     assert!(std::ptr::eq(ranges, artifact.anchor_ranges()));
-    assert!(artifact.text.ends_with('`'));
+    assert!(artifact.text().ends_with('`'));
+    assert_eq!(artifact.nodes().len(), 1);
+    assert_eq!(artifact.nodes()[0].range, 0..artifact.text().len());
+    assert!(matches!(
+        artifact.nodes()[0].node,
+        MarkdownNode::DocumentRoot
+    ));
+    let final_text = artifact.text().to_owned();
+    assert_eq!(artifact.into_text(), final_text);
 }

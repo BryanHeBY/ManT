@@ -30,7 +30,7 @@ impl OwnerIndex {
         let mut root = None;
         let mut tldr = None;
 
-        for (key, mapped) in artifact.nodes.iter().enumerate() {
+        for (key, mapped) in artifact.nodes().iter().enumerate() {
             let owner = owner_from_range(key, mapped);
             match mapped.node {
                 MarkdownNode::Tldr => tldr = Some(owner),
