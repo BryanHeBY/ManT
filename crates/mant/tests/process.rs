@@ -1480,19 +1480,13 @@ fn exact_semantic_option_spellings_survive_the_cli_boundary() {
     assert!(dotted.status.success(), "{dotted:?}");
     assert!(dotted.stderr.is_empty());
     let dotted: serde_json::Value = serde_json::from_slice(&dotted.stdout).expect("dotted JSON");
-    assert_eq!(
-        dotted["selections"][0]["entry"]["items"][0]["entry"]["names"][0],
-        "-ca.cert"
-    );
+    assert_eq!(dotted["evidence"][0]["entry"]["names"][0], "-ca.cert");
 
     assert!(positional_help.status.success(), "{positional_help:?}");
     assert!(positional_help.stderr.is_empty());
     let positional_help: serde_json::Value =
         serde_json::from_slice(&positional_help.stdout).expect("help JSON");
-    assert_eq!(
-        positional_help["selections"][0]["entry"]["items"][0]["entry"]["role"],
-        "command"
-    );
+    assert_eq!(positional_help["evidence"][0]["entry"]["role"], "command");
 }
 
 #[test]
@@ -1666,13 +1660,17 @@ fn document_scopes_follow_typed_links_breadth_first_and_query_multiple_roots() {
     assert!(explain.status.success(), "{explain:?}");
     let explain: serde_json::Value =
         serde_json::from_slice(&explain.stdout).expect("scope explain JSON");
-    let matches = explain["result"]["matches"]
+    let matches = explain["result"]["explanation"]["documents"]
         .as_array()
         .expect("scope explanations");
     assert_eq!(matches.len(), 2);
     assert_eq!(matches[0]["address"]["path"], "beta");
     assert_eq!(matches[1]["address"]["path"], "alpha");
-    assert_eq!(explain["result"]["missed"], 0);
+    assert_eq!(explain["result"]["explanation"]["outcome"], "evidence");
+    assert_eq!(
+        explain["result"]["explanation"]["failures"],
+        serde_json::json!([])
+    );
 
     let missing = run_with_registered_documents(
         &fixture_root,
@@ -1688,14 +1686,13 @@ fn document_scopes_follow_typed_links_breadth_first_and_query_multiple_roots() {
     assert!(missing.stderr.is_empty());
     let missing = String::from_utf8(missing.stdout).expect("scope miss text");
     assert!(
-        missing.contains("No semantic entry 'missing-entry' across 2 resolved documents."),
+        missing.contains("no-evidence; owners=0, returned=0"),
         "{missing}"
     );
     assert!(
-        missing.contains("mant documents/alpha --outline --outline-entries all --format json"),
+        missing.contains("Coverage: loaded=2, unresolved=0"),
         "{missing}"
     );
-    assert!(missing.contains("use `--search`"), "{missing}");
 
     fs::remove_dir_all(fixture_root).expect("remove scope fixture");
 }

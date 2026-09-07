@@ -151,68 +151,6 @@ fn resolve_excerpt_candidates<'a, S: AsRef<str>>(
     Ok((tldr_selected, document_root_selected, selected))
 }
 
-/// Select exactly one semantic entry by stable path, ID, or alias.
-///
-/// Exact paths and IDs take precedence over aliases. Repeated aliases are
-/// rejected with deterministic candidates instead of silently choosing the
-/// first entry in source order.
-///
-/// # Errors
-///
-/// Returns an error when the selector is empty, unknown, names a section, or
-/// matches more than one semantic entry.
-pub fn select_explanation(
-    query: &ResolvedContent,
-    selector: &str,
-) -> Result<QueryExcerpt, ProjectionError> {
-    if query.tldr.is_none() && query.document.is_none() {
-        return Err(ProjectionError::MissingContent {
-            document: query.label.clone(),
-        });
-    }
-    let selector = selector.trim();
-    if selector.is_empty() {
-        return Err(ProjectionError::EmptySelector);
-    }
-    let mut located = Vec::new();
-    if let Some(manual) = &query.document {
-        collect_root_entries(&manual.blocks, &mut located);
-        collect_sections(&manual.sections, &[], &[], &mut located);
-    }
-    let index = DocumentSelectorIndex::new(&located);
-    let candidate = resolve_explanation_candidate(query, &index, selector)?;
-    select_excerpt(query, &[candidate.path().to_string()])
-}
-
-fn resolve_explanation_candidate<'a>(
-    query: &ResolvedContent,
-    index: &DocumentSelectorIndex<'a>,
-    selector: &str,
-) -> Result<&'a LocatedNode<'a>, ProjectionError> {
-    let selects_tldr =
-        (selector == TLDR_ID || selector.parse() == Ok(OutlinePath::Tldr)) && query.tldr.is_some();
-    let selects_root = (selector == DOCUMENT_ROOT_ID
-        || selector.parse() == Ok(OutlinePath::DocumentRoot))
-        && query
-            .document
-            .as_ref()
-            .is_some_and(|document| !document.blocks.is_empty());
-    if selects_tldr || selects_root {
-        return Err(ProjectionError::ExplanationRequiresEntry {
-            document: query.label.clone(),
-            selector: selector.to_owned(),
-        });
-    }
-    let candidate = index.resolve(&query.label, selector)?;
-    if candidate.is_section() {
-        return Err(ProjectionError::ExplanationRequiresEntry {
-            document: query.label.clone(),
-            selector: selector.to_owned(),
-        });
-    }
-    Ok(candidate)
-}
-
 impl LocatedNode<'_> {
     pub(crate) fn selection(&self) -> ExcerptSelection {
         match self {

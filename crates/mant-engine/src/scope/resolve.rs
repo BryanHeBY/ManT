@@ -55,7 +55,13 @@ impl DocumentResolver {
         validate_scope_query_request(request)?;
         let loaded = self.resolve_scope(&request.scope)?;
         let result = match &request.view {
-            ScopeQueryView::Explain { entry } => execute_scope_explain(&loaded, entry),
+            ScopeQueryView::Explain { entry, options } => execute_scope_explain(
+                &loaded,
+                &mant_protocol::ExplanationQuery {
+                    entry: entry.clone(),
+                    options: *options,
+                },
+            )?,
             ScopeQueryView::Search {
                 pattern,
                 syntax,

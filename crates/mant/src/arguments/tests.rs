@@ -848,6 +848,7 @@ fn parses_explain_as_a_first_class_semantic_view() {
                     },
                     view: QueryView::Explain {
                         entry: selector.to_owned(),
+                        options: mant_protocol::ExplanationOptions::default()
                     },
                 }),
                 presentation: OutputOptions {

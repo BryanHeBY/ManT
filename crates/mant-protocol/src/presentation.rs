@@ -6,6 +6,89 @@ use mant_ir::{DocumentAddress, MarkdownOrigin};
 
 use crate::DocumentCatalog;
 
+/// Transport-neutral evidence outcome and paging/coverage labels.
+#[must_use]
+pub fn render_explanation_status(result: &crate::QueryExplanation) -> String {
+    let outcome = match result.outcome {
+        crate::ExplanationOutcome::Evidence => "evidence",
+        crate::ExplanationOutcome::NoEvidence => "no-evidence",
+    };
+    let mut text = format!(
+        "{} — explanation {:?}: {outcome}; owners={}, returned={}, offset={}; semanticsComplete={}",
+        sanitize_terminal_text(&result.label),
+        sanitize_terminal_text(&result.query.entry),
+        result.total,
+        result.returned,
+        result.query.options.offset,
+        result.semantics_complete
+    );
+    if let Some(next) = result.next_offset {
+        write!(text, "; nextOffset={next}").expect("String writer");
+    }
+    if result.truncation != crate::ExplanationTruncation::default() {
+        write!(
+            text,
+            "; truncated: candidates={}, relations={}, content={}",
+            result.truncation.candidates, result.truncation.relations, result.truncation.content
+        )
+        .expect("String writer");
+    }
+    text
+}
+
+/// Original owner position and independently declared match bases.
+#[must_use]
+pub fn render_evidence_heading(evidence: &crate::ExplanationEvidence) -> String {
+    let bases = evidence
+        .bases
+        .iter()
+        .map(|basis| match basis {
+            crate::EvidenceBasis::Name => "name".to_owned(),
+            crate::EvidenceBasis::Form => "form".to_owned(),
+            crate::EvidenceBasis::Literal => "literal".to_owned(),
+            crate::EvidenceBasis::Identity => "identity".to_owned(),
+            crate::EvidenceBasis::AliasGroup { members } => format!(
+                "explicit alias group: {}",
+                members
+                    .iter()
+                    .map(|v| sanitize_terminal_text(v))
+                    .collect::<Vec<_>>()
+                    .join(" = ")
+            ),
+            crate::EvidenceBasis::Related { from, declarations } => format!(
+                "related from {} via {}",
+                sanitize_terminal_text(from),
+                declarations
+                    .iter()
+                    .map(|v| sanitize_terminal_text(v))
+                    .collect::<Vec<_>>()
+                    .join(" → ")
+            ),
+        })
+        .collect::<Vec<_>>()
+        .join("; ");
+    let context = evidence
+        .outline
+        .ancestors
+        .iter()
+        .map(|a| sanitize_terminal_text(&a.title))
+        .chain(std::iter::once(sanitize_terminal_text(
+            evidence.outline.title(),
+        )))
+        .collect::<Vec<_>>()
+        .join(" > ");
+    format!(
+        "{} [{}] {context}{} — {bases}",
+        sanitize_terminal_text(evidence.outline.path()),
+        sanitize_terminal_text(evidence.outline.node.id()),
+        evidence
+            .block_path
+            .as_ref()
+            .map(|p| format!(" ({})", sanitize_terminal_text(p)))
+            .unwrap_or_default()
+    )
+}
+
 /// Replace control characters in dynamic text before terminal presentation.
 ///
 /// Logical document identities and diagnostics can originate in local file

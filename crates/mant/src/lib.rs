@@ -56,6 +56,7 @@ struct ProtocolDescription<'a> {
     document_schema: &'a str,
     outline_schema: &'a str,
     excerpt_schema: &'a str,
+    explanation_schema: &'a str,
     search_schema: &'a str,
     scope_request_schema: &'a str,
     scope_query_schema: &'a str,
@@ -445,6 +446,7 @@ fn execute(
                 document_schema: DocumentSchema::ID,
                 outline_schema: OutlineSchema::ID,
                 excerpt_schema: ExcerptSchema::ID,
+                explanation_schema: mant_protocol::ExplanationSchema::ID,
                 search_schema: SearchSchema::ID,
                 scope_request_schema: ScopeRequestSchema::ID,
                 scope_query_schema: ScopeQuerySchema::ID,
@@ -521,6 +523,9 @@ fn render_schema(contract: SchemaContract, pretty: bool) -> Result<String, Failu
         SchemaContract::Query => render_json(&mant_protocol::query_bundle_json_schema(), pretty),
         SchemaContract::Outline => render_json(&mant_protocol::query_outline_json_schema(), pretty),
         SchemaContract::Excerpt => render_json(&mant_protocol::query_excerpt_json_schema(), pretty),
+        SchemaContract::Explanation => {
+            render_json(&mant_protocol::query_explanation_json_schema(), pretty)
+        }
         SchemaContract::Search => render_json(&mant_protocol::query_search_json_schema(), pretty),
         SchemaContract::ScopeRequest => {
             render_json(&mant_protocol::scope_query_request_json_schema(), pretty)

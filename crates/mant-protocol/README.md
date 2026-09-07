@@ -3,7 +3,7 @@
 `mant-protocol` is `ManT`'s transport-neutral interaction boundary. It defines
 query contracts and projections shared by in-process hosts, CLI JSON, request
 JSON, and compact MCP presentation without owning any transport. It owns schema
-markers, logical catalog addresses, pagination, outline, excerpt, search,
+markers, logical catalog addresses, pagination, outline, excerpt, explanation, search,
 tldr-update results, local doctor reports, deterministic catalog presentation,
 and JSON Schema generation. The `mant` crate separately composes host
 callbacks, process framing, terminal policy, and MCP transport.
@@ -21,6 +21,7 @@ discovery, parsing, query execution, terminal I/O, or MCP transport.
 QueryRequest ──> host / mant-engine ──┬─> QueryBundle
                                      ├─> QueryOutline
                                      ├─> QueryExcerpt
+                                     ├─> QueryExplanation
                                      └─> QuerySearch
 
 ScopeQueryRequest ──> host / mant-engine ──> ScopeQueryResponse
@@ -40,6 +41,7 @@ explicit cache maintenance ─────────────> TldrCacheUpd
 | Document | `mant.document/v0.11` | Versioned projection of the normalized document |
 | Catalog | `mant.catalog/v0.11` | Registered Markdown and native-manual discovery |
 | Outline, excerpt, search | `mant.outline/v0.11`, `mant.excerpt/v0.11`, `mant.search/v0.11` | Focused query projections |
+| Explanation | `mant.explanation/v0.11` | Bounded independent name/form/content/relationship evidence |
 | Doctor | `mant.doctor/v1` | Read-only local installation diagnostics |
 | tldr update | `mant.tldr-update/v1` | Explicit native cache-maintenance result |
 
@@ -104,6 +106,15 @@ global total, offset, truncation flag, and continuation offset; each
 Markdown render descriptor, and globally numbered hits. Consumers must never
 derive a continuation cursor from an individual document group.
 
+Explanation is a separate `QueryExplanation` contract, not an excerpt wrapper.
+`ExplanationQuery` supplies a literal and bounded `ExplanationOptions` (50
+owners by default, at most 256; zero-based offset; 1 MiB default / 4 MiB maximum
+forms/facts/body copy budget). Each owner retains original content and explicit
+match bases. `ScopeExplanation` shares one cursor and copy budget across its
+ordered documents. Normal multiple results and no-evidence are not failures;
+check `outcome`, source coverage, truncation and diagnostics separately.
+`semanticsComplete` is validation coverage, not exhaustive recall.
+
 `mant-protocol` deliberately reuses the semantic `Block`, `Section`, `Inline`,
 `DefinitionIdentity`, `DocumentAddress`, source, metadata, diagnostic, and tldr
 types from `mant-ir`. Those types form the wire-bearing semantic subset: a
@@ -113,17 +124,17 @@ IR representation change fails until compatibility is restored or the
 affected protocol discriminator is advanced explicitly. Rustdoc descriptions
 and schema titles are excluded from that structural comparison.
 
-Focused excerpt and search results share `OutlineTrail`: ordered compact
+Focused excerpt, explanation and search results share `OutlineTrail`: ordered compact
 ancestors plus one typed terminal node. This keeps full tree-chain rendering
-and machine navigation consistent without treating exact explanation as a
-text search.
+and machine navigation consistent. Ordinary evidence adds its real IR block
+path, without manufacturing an entry or replacing strict selection.
 
 Outline requests use `EntryProjection`: `Summary` is the compact default,
 `None` emits section topology only, `All` emits the complete nested semantic
 index, and `Kinds` retains selected roles plus their required ancestors. An
 optional root selector can focus any projection on one section or entry.
-Outline entries keep exact selector aliases separate from authored forms and
-can expose evidence-backed value domains.
+Outline entries keep exact selector names (`aliases`) separate from authored
+forms, explicit `aliasGroups` / `aliasOf`, and evidence-backed value domains.
 
 Definitions remain authoritative content in `mant-ir`; `SemanticEntry` is a
 rebuildable concept index, and an outline entry is the selected protocol
@@ -135,7 +146,7 @@ changing the document or inventing another semantic model.
 This supports stateless agent exploration: inspect the compact summary, reuse
 a path or ID from that current response as the next request's root, expand all
 or selected entry kinds below it, then read the chosen node. Exact path and ID
-resolution precedes aliases and shorthands across every view. Paths remain
+resolution precedes aliases and shorthands in strict navigation. Paths remain
 source-order coordinates; clients rediscover after the source manual changes.
 A kind filter with no matches returns an empty node set rather than the
 unrelated section topology.

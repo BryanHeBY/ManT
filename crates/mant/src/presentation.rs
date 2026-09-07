@@ -190,6 +190,28 @@ fn render_terminal_excerpt(excerpt: &QueryExcerpt, color: bool) -> String {
     style_content_text(&plain, &headings, terms)
 }
 
+fn render_terminal_explanation(
+    explanation: &mant_protocol::QueryExplanation,
+    color: bool,
+) -> String {
+    let plain = mant_engine::render_explanation_text(explanation);
+    if !color {
+        return plain;
+    }
+    let headings = explanation
+        .evidence
+        .iter()
+        .map(mant_protocol::render_evidence_heading)
+        .collect::<Vec<_>>();
+    let terms = explanation
+        .evidence
+        .iter()
+        .filter_map(|evidence| evidence.entry.as_ref())
+        .flat_map(|entry| entry.names.iter().map(|name| (name.clone(), entry.role)))
+        .collect();
+    style_content_text(&plain, &headings, terms)
+}
+
 /// Add presentation styling without changing the text renderer's layout.
 fn style_content_text(
     plain: &str,
@@ -507,6 +529,14 @@ pub(super) fn render_query_result(
             }
         },
         QueryViewResult::Excerpt(excerpt) => render_excerpt(excerpt, options),
+        QueryViewResult::Explanation(explanation) => match format {
+            QueryFormat::Json => render_json(explanation, pretty),
+            QueryFormat::Text => Ok(render_terminal_explanation(explanation, color)),
+            QueryFormat::Markdown => Ok(mant_engine::render_explanation_markdown(explanation)),
+            QueryFormat::Man => Err(Failure::usage(
+                "--format man applies only to full documents",
+            )),
+        },
         QueryViewResult::Search(search) => match format {
             QueryFormat::Markdown if output_terminal => Ok(mant_engine::render_search_markdown(
                 &terminal_search(search),
@@ -530,7 +560,6 @@ pub(super) fn render_scope_query_result(
     let RenderOptions {
         format,
         pretty,
-        preserve_anchors,
         color,
         ..
     } = options;
@@ -545,26 +574,37 @@ pub(super) fn render_scope_query_result(
     }
     let mut output = String::new();
     match &response.result {
-        ScopeQueryResult::Explain {
-            entry,
-            matches,
-            missed,
-            failures,
-        } => {
-            if matches.is_empty() && failures.is_empty() && *missed > 0 {
-                write_scope_explain_miss(
-                    &mut output,
-                    response,
-                    entry,
-                    *missed,
-                    format,
-                    output_terminal,
-                );
+        ScopeQueryResult::Explain { explanation } => {
+            let outcome = match explanation.outcome {
+                mant_protocol::ExplanationOutcome::Evidence => "evidence",
+                mant_protocol::ExplanationOutcome::NoEvidence => "no-evidence",
+            };
+            let _ = write!(
+                output,
+                "Explanation {:?}: {outcome}; owners={}, returned={}, offset={}",
+                sanitize_terminal_text(&explanation.query.entry),
+                explanation.total,
+                explanation.returned,
+                explanation.query.options.offset
+            );
+            if let Some(next) = explanation.next_offset {
+                let _ = write!(output, "; nextOffset={next}");
             }
-            for (index, found) in matches.iter().enumerate() {
-                if index > 0 {
-                    output.push_str("\n\n");
+            let _ = write!(
+                output,
+                "\nCoverage: loaded={}, unresolved={}, frontier={}; truncated: candidates={}, relations={}, content={}",
+                explanation.documents.len(),
+                response.scope.unresolved.len(),
+                response.scope.frontier.len(),
+                explanation.truncation.candidates,
+                explanation.truncation.relations,
+                explanation.truncation.content
+            );
+            for found in &explanation.documents {
+                if found.explanation.evidence.is_empty() {
+                    continue;
                 }
+                output.push_str("\n\n");
                 write_scope_heading(
                     &mut output,
                     &found.address.catalog_path(),
@@ -573,23 +613,20 @@ pub(super) fn render_scope_query_result(
                     output_terminal,
                 );
                 output.push('\n');
-                let rendered = match format {
-                    QueryFormat::Markdown => {
-                        let excerpt = output_terminal.then(|| terminal_excerpt(&found.excerpt));
-                        mant_engine::render_excerpt_markdown_with_options(
-                            excerpt.as_ref().unwrap_or(&found.excerpt),
-                            mant_engine::MarkdownOptions {
-                                preserve_anchors,
-                                ..Default::default()
-                            },
-                        )
-                    }
-                    QueryFormat::Text => render_terminal_excerpt(&found.excerpt, color),
-                    QueryFormat::Json | QueryFormat::Man => unreachable!(),
+                let rendered = if format == QueryFormat::Markdown {
+                    mant_engine::render_explanation_markdown(&found.explanation)
+                } else {
+                    render_terminal_explanation(&found.explanation, color)
                 };
-                output.push_str(rendered.trim());
+                output.push_str(&rendered);
             }
-            write_scope_failures(&mut output, failures, format, color, output_terminal);
+            write_scope_failures(
+                &mut output,
+                &explanation.failures,
+                format,
+                color,
+                output_terminal,
+            );
         }
         ScopeQueryResult::Search { search } => {
             for (index, found) in search.documents.iter().enumerate() {
@@ -646,31 +683,6 @@ fn write_scope_failures(
         } else {
             output.push_str(&failure.reason);
         }
-    }
-}
-
-fn write_scope_explain_miss(
-    output: &mut String,
-    response: &ScopeQueryResponse,
-    entry: &str,
-    missed: u32,
-    format: QueryFormat,
-    output_terminal: bool,
-) {
-    let document = response.scope.documents.first().map_or_else(
-        || "DOCUMENT".to_owned(),
-        |document| document.address.catalog_path(),
-    );
-    let message = format!(
-        "No semantic entry '{entry}' across {missed} resolved documents.\n\
-         hint: run `mant {document} --outline --outline-entries all --format json` \
-         for available selectors, then repeat for the other resolved documents; \
-         use `--search` when the term may occur only in prose"
-    );
-    if format == QueryFormat::Text || output_terminal {
-        output.push_str(&sanitize_terminal_text(&message));
-    } else {
-        output.push_str(&message);
     }
 }
 
@@ -854,6 +866,7 @@ The selected color is visible in terminal output.
             },
             QueryView::Explain {
                 entry: "--color".to_owned(),
+                options: mant_protocol::ExplanationOptions::default(),
             },
             QueryView::Search {
                 pattern: "color".to_owned(),
@@ -915,6 +928,7 @@ The selected color is visible in terminal output.
             query,
             &QueryView::Explain {
                 entry: "--color".to_owned(),
+                options: mant_protocol::ExplanationOptions::default(),
             },
         )
         .expect("explanation");
@@ -937,6 +951,7 @@ The selected color is visible in terminal output.
             },
             QueryView::Explain {
                 entry: "--color".to_owned(),
+                options: mant_protocol::ExplanationOptions::default(),
             },
             QueryView::Search {
                 pattern: "color".to_owned(),
@@ -975,6 +990,7 @@ The selected color is visible in terminal output.
             },
             QueryView::Explain {
                 entry: "--color".to_owned(),
+                options: mant_protocol::ExplanationOptions::default(),
             },
             QueryView::Search {
                 pattern: "color".to_owned(),
@@ -1003,7 +1019,12 @@ The selected color is visible in terminal output.
             )
             .expect("terminal Markdown");
 
-            assert!(redirected.contains('\u{1b}'), "{view:?}: {redirected:?}");
+            if matches!(view, QueryView::Explain { .. }) {
+                // The new evidence presentation is safe even for unchecked public IR.
+                assert!(!redirected.contains('\u{1b}'), "{redirected:?}");
+            } else {
+                assert!(redirected.contains('\u{1b}'), "{view:?}: {redirected:?}");
+            }
             assert!(!terminal.contains('\u{1b}'), "{view:?}: {terminal:?}");
             assert!(terminal.contains("ris�c"));
         }

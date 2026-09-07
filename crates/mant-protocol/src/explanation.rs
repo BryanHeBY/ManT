@@ -9,11 +9,11 @@ use serde::{Deserialize, Serialize};
 
 /// Maximum evidence owners materialized in one page.
 pub const MAX_EXPLANATION_RESULTS: u32 = 256;
-/// Maximum matching owners indexed before explicitly reporting incomplete recall.
+/// Maximum matching owners indexed per document before reporting incomplete recall.
 pub const MAX_EXPLANATION_CANDIDATES: usize = 10_000;
 /// Maximum serialized content bytes copied into one response page.
 pub const MAX_EXPLANATION_CONTENT_BYTES: u32 = 4 * 1024 * 1024;
-/// Maximum explicit relationship edges followed in one collection operation.
+/// Maximum explicit relationship edges followed per document.
 pub const MAX_EXPLANATION_RELATIONS: usize = 4096;
 /// Maximum edges in one returned relationship chain.
 pub const MAX_EXPLANATION_RELATION_DEPTH: usize = 32;
@@ -90,7 +90,7 @@ pub enum ExplanationOutcome {
 }
 
 /// Why this owner is included. Multiple bases do not duplicate its content.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
 #[serde(
     tag = "kind",
     rename_all = "kebab-case",
@@ -118,6 +118,45 @@ pub enum EvidenceBasis {
         /// Declaration owners in traversal order, each supplying one aliasOf edge.
         declarations: Vec<NodeId>,
     },
+}
+
+// Serde's internally tagged unit variants ignore extra fields, even with
+// deny_unknown_fields. Empty struct variants close the deserialization boundary
+// while retaining the convenient public unit-variant API and serialized shape.
+#[derive(Deserialize)]
+#[serde(
+    tag = "kind",
+    rename_all = "kebab-case",
+    rename_all_fields = "camelCase",
+    deny_unknown_fields
+)]
+enum ClosedEvidenceBasis {
+    Name {},
+    Form {},
+    Literal {},
+    Identity {},
+    AliasGroup {
+        members: Vec<String>,
+    },
+    Related {
+        from: NodeId,
+        declarations: Vec<NodeId>,
+    },
+}
+
+impl<'de> Deserialize<'de> for EvidenceBasis {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        Ok(match ClosedEvidenceBasis::deserialize(deserializer)? {
+            ClosedEvidenceBasis::Name {} => Self::Name,
+            ClosedEvidenceBasis::Form {} => Self::Form,
+            ClosedEvidenceBasis::Literal {} => Self::Literal,
+            ClosedEvidenceBasis::Identity {} => Self::Identity,
+            ClosedEvidenceBasis::AliasGroup { members } => Self::AliasGroup { members },
+            ClosedEvidenceBasis::Related { from, declarations } => {
+                Self::Related { from, declarations }
+            }
+        })
+    }
 }
 
 /// Original semantic facts and forms; no executable argument grammar is implied.

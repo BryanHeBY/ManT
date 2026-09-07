@@ -117,10 +117,11 @@ fn stdio_mode_exposes_compact_text_first_document_tools() {
     request_document_tools(&mut input);
     input.flush().expect("flush tool calls");
 
-    let replies = (0..(14 + usize::from(cfg!(windows))))
+    let replies = (0..(16 + usize::from(cfg!(windows))))
         .map(|_| parse_reply(lines.next().expect("tool reply")))
         .collect::<Vec<_>>();
     assert_tool_replies(&replies);
+    assert_explanation_paging(&replies);
 
     assert_silent_shutdown(child, input, diagnostics, fixture_root);
 }
@@ -274,6 +275,7 @@ fn request_document_tools(input: &mut impl Write) {
         }),
     );
     request_compatibility_and_page_tools(input);
+    request_explanation_pages(input);
     #[cfg(windows)]
     call_tool(
         input,
@@ -281,6 +283,20 @@ fn request_document_tools(input: &mut impl Write) {
         "mant_outline",
         &json!({ "document": "mcp-suffix" }),
     );
+}
+
+fn request_explanation_pages(input: &mut impl Write) {
+    for (id, start, max) in [(18, 0, 32768), (19, 3, 17)] {
+        call_tool(
+            input,
+            id,
+            "mant_explain",
+            &json!({
+                "documents": ["documents/mcp-registered"], "entry":"/f",
+                "maxResults":"1", "offset":"1", "contentBytes":"1", "startChar":start, "maxChars":max
+            }),
+        );
+    }
 }
 
 fn request_compatibility_and_page_tools(input: &mut impl Write) {
@@ -427,7 +443,8 @@ fn assert_tool_replies(replies: &[Value]) {
     assert_page_header(explain);
     assert!(explain.contains("Query registry data."));
     assert!(
-        explain.contains("[explain: matched=1, missed=1, failed=0]"),
+        explain.contains("evidence; owners=1, returned=1")
+            && explain.contains("Coverage: loaded=2, unresolved=0"),
         "{explain}"
     );
 
@@ -436,12 +453,9 @@ fn assert_tool_replies(replies: &[Value]) {
     assert!(ambiguity.matches("option-f-").count() >= 2, "{ambiguity}");
 
     let probe = successful_text(reply(replies, 15));
-    assert!(probe.contains("has no semantic entry 'VISUAL'"), "{probe}");
-    assert!(probe.contains("outline node 1 (Query) at line"), "{probe}");
-    assert!(
-        probe.contains("[explain: matched=0, missed=0, failed=1]"),
-        "{probe}"
-    );
+    assert!(probe.contains("VISUAL"), "{probe}");
+    assert!(probe.contains("Query (blocks/b0) — literal"), "{probe}");
+    assert!(probe.contains("evidence; owners=1, returned=1"), "{probe}");
 
     assert_empty_outline(replies);
     assert_missing_explain_guidance(replies);
@@ -520,8 +534,32 @@ fn assert_missing_explain_guidance(replies: &[Value]) {
     );
     assert!(!missing.contains("--format json"), "{missing}");
     assert!(
-        missing.contains("[explain: matched=0, missed=1, failed=0]"),
+        missing.contains("no-evidence; owners=0, returned=0"),
         "{missing}"
+    );
+}
+
+fn assert_explanation_paging(replies: &[Value]) {
+    let complete = successful_text(reply(replies, 18));
+    assert!(
+        complete.contains("owners=2, returned=1, offset=1"),
+        "{complete}"
+    );
+    assert!(complete.contains("bodyOmitted=true"), "{complete}");
+    assert!(complete.contains("Use mant_read"), "{complete}");
+    assert!(!complete.contains("--offset"), "{complete}");
+    let body = complete.split_once("\n\n").unwrap().1;
+    let page = successful_text(reply(replies, 19));
+    assert!(
+        page.starts_with(&format!(
+            "[mant-page chars=3..20 totalChars={} nextChar=20]",
+            body.chars().count()
+        )),
+        "{page}"
+    );
+    assert_eq!(
+        page.split_once("\n\n").unwrap().1,
+        body.chars().skip(3).take(17).collect::<String>()
     );
 }
 

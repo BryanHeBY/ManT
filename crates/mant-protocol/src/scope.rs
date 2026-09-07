@@ -4,8 +4,8 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    DocumentAddress, QueryExcerpt, SearchCase, SearchHit, SearchQuery, SearchRender, SearchScope,
-    SearchSyntax, default_search_limit,
+    DocumentAddress, SearchCase, SearchHit, SearchQuery, SearchRender, SearchScope, SearchSyntax,
+    default_search_limit,
 };
 
 /// Maximum number of initial documents accepted by the native scope contract.
@@ -173,11 +173,14 @@ impl ScopeRequestSchema {
     deny_unknown_fields
 )]
 pub enum ScopeQueryView {
-    /// Resolve one semantic entry independently in every document.
+    /// Collect independent evidence across loaded documents.
     Explain {
-        /// Exact alias, outline path, or stable ID.
+        /// Documented name, full form, exact entry ID/path, or bounded literal.
         #[schemars(length(min = 1, max = MAX_SEMANTIC_ENTRY_CHARS))]
         entry: String,
+        /// Global result pagination and copied-content budget.
+        #[serde(default)]
+        options: crate::ExplanationOptions,
     },
     /// Search visible or generated-Markdown text over the complete scope.
     Search {
@@ -371,7 +374,7 @@ pub struct ScopeSearch {
     pub documents: Vec<ScopedSearchDocument>,
 }
 
-/// One successful semantic-entry selection in a document scope.
+/// One readable document's contribution to the evidence result.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ScopedExplanation {
@@ -379,8 +382,8 @@ pub struct ScopedExplanation {
     pub address: DocumentAddress,
     /// Distance retained from the resolved scope.
     pub depth: u16,
-    /// Complete selected semantic entry or ambiguity candidates.
-    pub excerpt: QueryExcerpt,
+    /// Local collection totals and records; evidence ordinals are global in a scope.
+    pub explanation: crate::QueryExplanation,
 }
 
 /// One per-document projection failure that does not invalidate other results.
@@ -403,21 +406,38 @@ pub struct ScopedQueryFailure {
 pub enum ScopeQueryResult {
     /// Semantic entries found across the scope.
     Explain {
-        /// Requested entry selector.
-        entry: String,
-        /// Documents with one or more exact candidates.
-        matches: Vec<ScopedExplanation>,
-        /// Resolved documents in which the entry was not present.
-        missed: u32,
-        /// Ambiguity or projection failures, excluding ordinary misses.
-        #[serde(default, skip_serializing_if = "Vec::is_empty")]
-        failures: Vec<ScopedQueryFailure>,
+        /// Globally bounded evidence with coverage separate from the scope graph.
+        explanation: ScopeExplanation,
     },
     /// Globally paginated text search.
     Search {
         /// Search result grouped by document.
         search: ScopeSearch,
     },
+}
+
+/// Global evidence page over a resolved scope. Source loading failures/frontier
+/// remain in `ScopeQueryResponse.scope`, independently of this normal outcome.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ScopeExplanation {
+    /// Original global pagination/content request.
+    pub query: crate::ExplanationQuery,
+    /// Evidence/no-evidence before pagination, never uniqueness or recall proof.
+    pub outcome: crate::ExplanationOutcome,
+    /// Sum of collected owner counts (a lower bound when collection is truncated).
+    pub total: u32,
+    /// Owners present on this global page.
+    pub returned: u32,
+    /// Next global result offset when more collected evidence remains.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub next_offset: Option<u32>,
+    /// Independent bounds, combined across readable sources.
+    pub truncation: crate::ExplanationTruncation,
+    /// Readable documents, including normal zero-evidence contributions.
+    pub documents: Vec<ScopedExplanation>,
+    /// Unexpected unreadable loaded content, never normal multiple/zero hits.
+    pub failures: Vec<ScopedQueryFailure>,
 }
 
 /// Complete bounded multi-document response.

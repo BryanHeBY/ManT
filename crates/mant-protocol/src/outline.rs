@@ -241,8 +241,14 @@ pub enum OutlineNode {
         entry_kind: EntryKind,
         /// Alias case-matching policy.
         case: DefinitionCase,
-        /// Exact selectable aliases.
+        /// Exact selectable names, not proof of behavioral equivalence.
         aliases: Vec<String>,
+        /// Explicit owner-local equivalence groups; no default canonical member.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        alias_groups: Vec<Vec<String>>,
+        /// Explicit same-document entry relationship; bodies stay independent.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        alias_of: Option<NodeId>,
         /// Author-written input forms.
         forms: Vec<String>,
         /// Exact cross-document destinations declared by linked entry terms.

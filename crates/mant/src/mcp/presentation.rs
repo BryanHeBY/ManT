@@ -4,7 +4,7 @@ use std::fmt::Write as _;
 
 use mant_protocol::{
     DocumentCatalog, QueryExcerpt, QueryOutline, ScopeQueryResponse, ScopeQueryResult,
-    TraversalLimit, sanitize_terminal_text,
+    TraversalLimit,
 };
 
 use super::params::MAX_PAGE_CHARS;
@@ -86,13 +86,7 @@ fn render_scope_explain(
     response: &ScopeQueryResponse,
     page: PageRequest,
 ) -> Result<TextPage, String> {
-    let ScopeQueryResult::Explain {
-        entry,
-        matches,
-        missed,
-        failures,
-    } = &response.result
-    else {
+    let ScopeQueryResult::Explain { explanation } = &response.result else {
         return Err("scope response does not contain an explanation".to_owned());
     };
     let mut text = crate::presentation::render_scope_query_result(
@@ -106,31 +100,25 @@ fn render_scope_explain(
         },
     )
     .map_err(crate::error::Failure::into_message)?;
-    if matches.is_empty() && failures.is_empty() {
+    if explanation.outcome == mant_protocol::ExplanationOutcome::NoEvidence {
         let document = response.scope.documents.first().map_or_else(
             || "DOCUMENT".to_owned(),
             |document| document.address.catalog_path(),
         );
         let document = serde_json::to_string(&document)
             .expect("serializing a String for an MCP hint cannot fail");
-        let entry =
-            serde_json::to_string(entry).expect("serializing a String for an MCP hint cannot fail");
-        text = format!(
-            "0 matches for semantic entry {entry} across {} documents\n\
-             Next: call mant_outline(document={document}, entries={{\"kind\":\"all\"}}) for \
+        let entry = serde_json::to_string(&explanation.query.entry)
+            .expect("serializing a String for an MCP hint cannot fail");
+        let _ = write!(
+            text,
+            "\nNext: call mant_outline(document={document}, entries={{\"kind\":\"all\"}}) for \
              available selectors, repeating it for other resolved documents; call mant_search \
-             with the same documents and pattern={entry} when the term may occur only in prose.",
-            response.scope.documents.len(),
+             with the same documents and pattern={entry} for a broader literal search."
         );
     }
-    append_status_line(
-        &mut text,
-        &format!(
-            "[explain: matched={}, missed={missed}, failed={}]",
-            matches.len(),
-            failures.len()
-        ),
-    );
+    if explanation.truncation.content {
+        text.push_str("\nUse mant_read(document=DOCUMENT, selectors=[RETURNED_PATH]) for omitted original content, or increase contentBytes.");
+    }
     append_scope_status(&mut text, response);
     Ok(page_text(&text, page))
 }
@@ -315,15 +303,12 @@ fn prepare_scope(response: &mut ScopeQueryResponse) {
         "document could not be resolved".clone_into(&mut unresolved.reason);
     }
     match &mut response.result {
-        ScopeQueryResult::Explain {
-            matches, failures, ..
-        } => {
-            for found in matches {
-                prepare_excerpt(&mut found.excerpt);
+        ScopeQueryResult::Explain { explanation } => {
+            for found in &mut explanation.documents {
+                found.explanation.diagnostics.clear();
             }
-            for failure in failures {
-                let reason = sanitize_terminal_text(&failure.reason).into_owned();
-                reason.clone_into(&mut failure.reason);
+            for failure in &mut explanation.failures {
+                "document could not be projected".clone_into(&mut failure.reason);
             }
         }
         ScopeQueryResult::Search { .. } => {}
@@ -484,23 +469,35 @@ mod tests {
                 unresolved: Vec::new(),
             },
             result: ScopeQueryResult::Explain {
-                entry: "-f".to_owned(),
-                matches: Vec::new(),
-                missed: 0,
-                failures: vec![ScopedQueryFailure {
-                    address: DocumentAddress::Manual {
-                        name: "tool".to_owned(),
-                        manual_section: "1".to_owned(),
+                explanation: mant_protocol::ScopeExplanation {
+                    query: mant_protocol::ExplanationQuery {
+                        entry: "-f".to_owned(),
+                        options: mant_protocol::ExplanationOptions::default(),
                     },
-                    reason: "multiple entries\u{1b}[2J: 1/e1 (first)".to_owned(),
-                }],
+                    outcome: mant_protocol::ExplanationOutcome::NoEvidence,
+                    total: 0,
+                    returned: 0,
+                    next_offset: None,
+                    truncation: mant_protocol::ExplanationTruncation::default(),
+                    documents: Vec::new(),
+                    failures: vec![ScopedQueryFailure {
+                        address: DocumentAddress::Manual {
+                            name: "tool".to_owned(),
+                            manual_section: "1".to_owned(),
+                        },
+                        reason: "multiple entries\u{1b}[2J: 1/e1 (first)".to_owned(),
+                    }],
+                },
             },
         };
 
         prepare_scope(&mut response);
-        let ScopeQueryResult::Explain { failures, .. } = response.result else {
+        let ScopeQueryResult::Explain { explanation } = response.result else {
             panic!("fixture must stay an explanation");
         };
-        assert_eq!(failures[0].reason, "multiple entries�[2J: 1/e1 (first)");
+        assert_eq!(
+            explanation.failures[0].reason,
+            "document could not be projected"
+        );
     }
 }

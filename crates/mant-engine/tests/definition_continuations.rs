@@ -3,7 +3,7 @@ use std::path::Path;
 
 use mant_engine::{
     build_outline_projection, parse_manual_bytes, query_markdown_text, render_excerpt_text,
-    select_excerpt, select_explanation,
+    select_excerpt,
 };
 use mant_ir::Block;
 use mant_protocol::{EntryProjection, ExcerptSelection, OutlineNode};
@@ -27,7 +27,7 @@ fn inline_definition_continuations_keep_the_structural_description_origin() {
         text.contains("Initial.\n\n\n    INLINE_CONTINUATION."),
         "{text}"
     );
-    let excerpt = select_explanation(&query, "-a").unwrap();
+    let excerpt = select_excerpt(&query, &["-a"]).unwrap();
     let extracted = render_excerpt_text(&excerpt);
     assert!(extracted.contains("    SECOND_CONTINUATION."));
     assert!(!extracted.contains("--next-option"));
@@ -61,7 +61,7 @@ fn spaced_relative_scopes_stay_with_their_definition_across_query_surfaces() {
     .unwrap();
     let mut query = query_markdown_text("# Placeholder\n\nBody.\n", None).unwrap();
     query.document = Some(doc);
-    let excerpt = select_explanation(&query, "--help").unwrap();
+    let excerpt = select_excerpt(&query, &["--help"]).unwrap();
     let text = render_excerpt_text(&excerpt);
     for retained in [
         "HELP_INTRO",
@@ -113,7 +113,7 @@ fn spaced_relative_scopes_stay_with_their_definition_across_query_surfaces() {
     }
     assert_eq!(select_excerpt(&query, &[path.as_ref()]).unwrap(), excerpt);
     assert!(
-        render_excerpt_text(&select_explanation(&query, "--version").unwrap())
+        render_excerpt_text(&select_excerpt(&query, &["--version"]).unwrap())
             .contains("NEXT_OPTION_BODY")
     );
 }

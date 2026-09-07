@@ -101,6 +101,10 @@ pub(super) fn query_failure(error: QueryError) -> Failure {
         | QueryError::EmptyEntry
         | QueryError::InvalidViewSelector { .. } => Failure::usage(error),
         QueryError::InvalidSearch(error) => search_failure(&error),
+        QueryError::InvalidExplanation(mant_engine::ExplanationError::MissingContent) => {
+            Failure::operational("explanation requires readable content")
+        }
+        QueryError::InvalidExplanation(error) => Failure::usage(error),
         QueryError::ManualWithTldr { error, topic } => Failure::operational_lines(
             error,
             [format!(
@@ -125,23 +129,6 @@ fn projection_failure(error: ProjectionError) -> Failure {
             [format!(
                 "hint: run `mant {document} --outline --outline-entries all --format json` for available selectors and diagnostics"
             )],
-        ),
-        ProjectionError::SelectorFoundOnlyInText {
-            document,
-            selector,
-            path,
-            title,
-            line,
-        } => Failure::usage_lines(
-            format!("document '{document}' has no semantic entry '{selector}'"),
-            [
-                format!("note: that text appears in outline node {path} ({title}) at line {line}"),
-                "hint: use --search to inspect the matching document text".to_owned(),
-            ],
-        ),
-        ProjectionError::ExplanationRequiresEntry { document, selector } => Failure::usage_lines(
-            format!("document '{document}' outline node '{selector}' is not a semantic entry"),
-            ["hint: use --node to read sections"],
         ),
         ProjectionError::EmptySelection
         | ProjectionError::EmptySelector
@@ -168,6 +155,7 @@ pub(super) fn scope_query_failure(error: ScopeQueryError) -> Failure {
         | ScopeQueryError::DocumentSelector(_)
         | ScopeQueryError::EntrySelector(_) => Failure::usage(error),
         ScopeQueryError::Search(error) => search_failure(&error),
+        ScopeQueryError::Explanation(error) => Failure::usage(error),
     }
 }
 

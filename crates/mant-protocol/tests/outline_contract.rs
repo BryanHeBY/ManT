@@ -47,6 +47,8 @@ fn outline_contract_exposes_both_human_paths_and_document_ids() {
                 },
                 case: DefinitionCase::Sensitive,
                 aliases: vec!["-a".to_owned(), "--all".to_owned()],
+                alias_groups: vec![vec!["-a".to_owned(), "--all".to_owned()]],
+                alias_of: None,
                 forms: vec!["-a, --all".to_owned()],
                 document_targets: vec![EntryDocumentTarget {
                     label: "help(1)".to_owned(),

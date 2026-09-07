@@ -164,6 +164,7 @@ fn schema_catalog_exposes_every_public_query_contract() {
             "catalog",
             "doctor",
             "excerpt",
+            "explanation",
             "outline",
             "query",
             "request",

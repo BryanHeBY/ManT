@@ -5,7 +5,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use clap::CommandFactory;
 use mant_engine::{build_outline_with_detail, query_markdown_text, select_explanation};
 use mant_ir::{DefinitionCase, DefinitionRole, EntryKind, ParameterKind};
-use mant_protocol::{ExcerptSelection, OutlineDetail, OutlineNode};
+use mant_protocol::{EvidenceBasis, OutlineDetail, OutlineNode};
 
 fn public_flags(command: &mut clap::Command) -> Vec<BTreeSet<String>> {
     // Include generated help/version switches as well as authored arguments.
@@ -78,16 +78,21 @@ fn check_manual(command: &mut clap::Command, manual: &str) -> Result<(), String>
     for names in groups {
         let mut entry_id = None;
         for name in &names {
-            let excerpt = select_explanation(&query, name)
-                .map_err(|error| format!("{name} is not uniquely explainable: {error}"))?;
-            let [ExcerptSelection::DocumentEntry { entry, .. }] = excerpt.selections.as_slice()
-            else {
-                return Err(format!("{name} did not select one entry"));
+            let result = select_explanation(&query, name)
+                .map_err(|error| format!("{name} evidence collection failed: {error}"))?;
+            // The independent clap oracle describes one definition per flag;
+            // ordinary supporting content in the same response is unrestricted.
+            let direct = result
+                .evidence
+                .iter()
+                .filter(|e| e.bases.contains(&EvidenceBasis::Name))
+                .collect::<Vec<_>>();
+            let [evidence] = direct.as_slice() else {
+                return Err(format!(
+                    "{name} did not retain its one documented name owner"
+                ));
             };
-            let identity = entry
-                .entry_owner()
-                .and_then(mant_ir::EntryOwner::facts)
-                .ok_or("entry without identity")?;
+            let identity = evidence.entry.as_ref().ok_or("entry without identity")?;
             if identity.role != DefinitionRole::Option || identity.case != DefinitionCase::Sensitive
             {
                 return Err(format!("{name} must be a case-sensitive option"));
@@ -98,10 +103,21 @@ fn check_manual(command: &mut clap::Command, manual: &str) -> Result<(), String>
                     "{name} alias grouping differs: expected {names:?}, observed {aliases:?}"
                 ));
             }
-            if entry_id.as_ref().is_some_and(|id| id != &identity.id) {
+            if names.len() > 1
+                && !identity
+                    .alias_groups
+                    .iter()
+                    .any(|group| group.iter().cloned().collect::<BTreeSet<_>>() == names)
+            {
+                return Err(format!("{name} is missing its explicit clap alias group"));
+            }
+            if entry_id
+                .as_ref()
+                .is_some_and(|id| id != evidence.outline.node.id())
+            {
                 return Err(format!("{name} aliases select different entries"));
             }
-            entry_id = Some(identity.id.clone());
+            entry_id = Some(evidence.outline.node.id().to_owned());
         }
     }
     Ok(())
@@ -164,11 +180,12 @@ fn coverage_rejects_prose_only_obsolete_and_wrongly_grouped_options() {
     let prefix = "# demo\n\n## Parameters\n\n<!-- mant:entries role=option case=sensitive -->\n";
     check_manual(
         &mut command(),
-        &format!("{prefix}- `-o`, `--output`: Write output.\n"),
+        &format!("{prefix}- `-o`, `--output`: Write output. <!-- mant:entry {{\"aliasGroups\":[[\"-o\",\"--output\"]]}} -->\n"),
     )
     .unwrap();
     for body in [
         "The --output option writes output.",
+        "- `-o`, `--output`: Shared names without an explicit alias group.",
         "- `--output`: Missing short alias.",
         "- `-o`: Separate entry.\n- `--output`: Separate entry.",
         "- `-o`, `--output`: Write output.\n- `--obsolete`: Removed flag.",

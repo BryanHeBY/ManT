@@ -813,12 +813,15 @@ fn man_format_rejects_a_tldr_only_result() {
 }
 
 #[test]
-fn explains_one_semantic_entry_through_the_excerpt_response() {
+fn explains_semantic_evidence_without_turning_sections_into_entries() {
     let host = FakeHost::with_explainable_manual();
     let (status, output, diagnostics) = invoke(&["demo", "--explain", "--exclude"], b"", &host);
 
     assert_eq!(status, 0);
-    assert!(output.contains("Outline 2/e1: OPTIONS > --exclude"));
+    assert!(
+        output.contains("2/e1 [exclude] OPTIONS > --exclude"),
+        "{output}"
+    );
     assert!(output.contains("--exclude=PATTERN"));
     assert!(output.contains("Exclude matching files from the archive."));
     assert!(diagnostics.is_empty());
@@ -836,16 +839,15 @@ fn explains_one_semantic_entry_through_the_excerpt_response() {
     );
     assert_eq!(status, 0);
     let value: serde_json::Value = serde_json::from_str(&output).expect("excerpt JSON");
-    assert_eq!(value["schema"], "mant.excerpt/v0.11");
-    assert_eq!(value["selections"][0]["kind"], "document-entry");
-    assert_eq!(value["selections"][0]["outline"]["node"]["id"], "exclude");
+    assert_eq!(value["schema"], "mant.explanation/v0.11");
+    assert_eq!(value["outcome"], "evidence");
+    assert_eq!(value["evidence"][0]["outline"]["node"]["id"], "exclude");
     assert!(diagnostics.is_empty());
 
     let (status, output, diagnostics) = invoke(&["demo", "--explain=2"], b"", &host);
-    assert_eq!(status, 2);
-    assert!(output.is_empty());
-    assert!(diagnostics.contains("is not a semantic entry"));
-    assert!(diagnostics.contains("hint: use --node to read sections"));
+    assert_eq!(status, 0);
+    assert!(output.contains("no-evidence"), "{output}");
+    assert!(diagnostics.is_empty());
 }
 
 #[test]
@@ -900,9 +902,17 @@ fn semantic_entry_selectors_work_through_cli_and_request_json() {
         b"",
         &host,
     );
-    assert_eq!(status, 2);
-    assert!(output.is_empty());
-    assert!(diagnostics.contains("outline node 'query' is not a semantic entry"));
+    assert_eq!(status, 0);
+    let evidence: serde_json::Value = serde_json::from_str(&output).unwrap();
+    assert!(evidence["evidence"].as_array().unwrap().iter().any(|item| {
+        item["entry"]["role"] == "command"
+            && item["bases"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|basis| basis["kind"] == "name")
+    }));
+    assert!(diagnostics.is_empty());
 
     let (status, output, _) = invoke(
         &[
@@ -917,11 +927,7 @@ fn semantic_entry_selectors_work_through_cli_and_request_json() {
     );
     assert_eq!(status, 0);
     let excerpt: serde_json::Value = serde_json::from_str(&output).expect("excerpt JSON");
-    assert_eq!(excerpt["selections"][0]["kind"], "document-entry");
-    assert_eq!(
-        excerpt["selections"][0]["entry"]["items"][0]["entry"]["role"],
-        "command"
-    );
+    assert_eq!(excerpt["evidence"][0]["entry"]["role"], "command");
 
     let (status, output, _) = invoke(
         &["demo", "--node=query", "--format", "json", "--compact"],
@@ -942,10 +948,7 @@ fn semantic_entry_selectors_work_through_cli_and_request_json() {
         );
         assert_eq!(status, 0);
         let excerpt: serde_json::Value = serde_json::from_str(&output).expect("role explanation");
-        assert_eq!(
-            excerpt["selections"][0]["entry"]["items"][0]["entry"]["role"],
-            role
-        );
+        assert_eq!(excerpt["evidence"][0]["entry"]["role"], role);
         assert!(diagnostics.is_empty());
     }
 
@@ -956,10 +959,7 @@ fn semantic_entry_selectors_work_through_cli_and_request_json() {
     );
     assert_eq!(status, 0);
     let excerpt: serde_json::Value = serde_json::from_str(&output).expect("request excerpt");
-    assert_eq!(
-        excerpt["selections"][0]["entry"]["items"][0]["entry"]["role"],
-        "command"
-    );
+    assert_eq!(excerpt["evidence"][0]["entry"]["role"], "command");
     assert!(diagnostics.is_empty());
 }
 
@@ -967,10 +967,11 @@ fn semantic_entry_selectors_work_through_cli_and_request_json() {
 fn ambiguous_semantic_entries_remain_addressable_by_returned_id() {
     let host = FakeHost::with_semantic_markdown();
     let (status, output, diagnostics) = invoke(&["demo", "--explain=/f"], b"", &host);
-    assert_eq!(status, 2);
-    assert!(output.is_empty());
-    assert!(diagnostics.contains("multiple semantic entries"));
-    assert!(diagnostics.contains("option-f"));
+    assert_eq!(status, 0);
+    assert!(output.contains("option-f"));
+    assert!(output.contains("owners=2"), "{output}");
+    assert!(diagnostics.is_empty());
+    let multiple = output;
 
     let (status, outline, outline_diagnostics) = invoke(
         &[
@@ -992,7 +993,7 @@ fn ambiguous_semantic_entries_remain_addressable_by_returned_id() {
         .as_str()
         .expect("returned semantic ID");
     assert!(qualified_id.starts_with("option-f-"));
-    assert!(diagnostics.contains(qualified_id));
+    assert!(multiple.contains(qualified_id));
 
     let qualified_argument = format!("--explain={qualified_id}");
     let (status, output, diagnostics) = invoke(
@@ -1003,7 +1004,7 @@ fn ambiguous_semantic_entries_remain_addressable_by_returned_id() {
     assert_eq!(status, 0);
     let excerpt: serde_json::Value = serde_json::from_str(&output).expect("qualified entry");
     assert_eq!(
-        excerpt["selections"][0]["entry"]["items"][0]["entry"]["id"],
+        excerpt["evidence"][0]["outline"]["node"]["id"],
         qualified_id
     );
     assert!(diagnostics.is_empty());
@@ -1114,16 +1115,15 @@ fn unknown_nodes_are_concise_usage_failures() {
 }
 
 #[test]
-fn explain_misses_point_to_matching_document_text() {
+fn explain_reports_ordinary_support_without_inventing_a_definition() {
     let host = FakeHost::with_manual();
     let (status, output, diagnostics) = invoke(&["demo", "--explain=details"], b"", &host);
 
-    assert_eq!(status, 2);
-    assert!(output.is_empty());
-    assert!(diagnostics.contains("has no semantic entry 'details'"));
-    assert!(diagnostics.contains("appears in outline node 2.1 (Common options)"));
-    assert!(diagnostics.contains("hint: use --search"));
-    assert!(!diagnostics.contains("--outline-entries"));
+    assert_eq!(status, 0);
+    assert!(output.contains("2.1"), "{output}");
+    assert!(output.contains("Common options"), "{output}");
+    assert!(output.contains("literal"), "{output}");
+    assert!(diagnostics.is_empty());
 }
 
 #[test]

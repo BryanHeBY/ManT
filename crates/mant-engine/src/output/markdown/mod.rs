@@ -1,7 +1,7 @@
 //! Renders the native query contract as deterministic portable `CommonMark`.
 
 mod anchors;
-mod blocks;
+pub(super) mod blocks;
 mod inline;
 mod semantic;
 

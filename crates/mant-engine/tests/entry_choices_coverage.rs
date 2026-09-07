@@ -1,5 +1,5 @@
 //! A producer's rejected child cannot leave a false local exhaustive claim.
-use mant_engine::{build_outline_projection, query_markdown_text, select_explanation};
+use mant_engine::{build_outline_projection, query_markdown_text, select_excerpt};
 use mant_ir::{Block, Document, SemanticIndex, ValueDomain};
 use mant_protocol::{EntryProjection, ExcerptSelection, OutlineNode};
 use std::fmt::Write;
@@ -66,7 +66,7 @@ fn every_rejected_position_invalidates_only_the_local_exhaustive_claim() {
                 .unwrap()
                 .contains("\"exhaustive\":true")
         );
-        let excerpt = select_explanation(&query, "--mode").unwrap();
+        let excerpt = select_excerpt(&query, &["--mode"]).unwrap();
         let [ExcerptSelection::DocumentEntry { entry, .. }] = &excerpt.selections[..] else {
             panic!("entry")
         };
@@ -243,7 +243,7 @@ fn rejected_declarations_flow_through_ordinary_containers_to_the_semantic_owner(
                             .unwrap()
                             .contains("\"exhaustive\":true")
                     );
-                    let excerpt = select_explanation(&query, "--mode").unwrap();
+                    let excerpt = select_excerpt(&query, &["--mode"]).unwrap();
                     let [ExcerptSelection::DocumentEntry { entry, .. }] = &excerpt.selections[..]
                     else {
                         panic!("parent entry")

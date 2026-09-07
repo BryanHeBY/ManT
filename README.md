@@ -209,7 +209,7 @@ mant git --search worktree --follow-links
 mant --document git --document git-lfs --explain=--work-tree
 ```
 
-`--document` is repeatable and defines an ordered set of initial registered documents. `--follow-links` expands that set breadth-first through typed manual and same-source Markdown links; `--max-depth` and `--max-documents` bound the traversal. Search pagination and hit ordinals are global across the stable document order, and per-document groups expose no competing local cursor; explanations remain grouped by exact document address and point to outline/search discovery when every document misses. Cycles and duplicate paths query a document once, missing links remain visible in JSON, and the typed frontier distinguishes links excluded by depth from links excluded by the document budget.
+`--document` is repeatable and defines an ordered set of initial registered documents. `--follow-links` expands that set breadth-first through typed manual and same-source Markdown links; `--max-depth` and `--max-documents` bound traversal. Search and explain pagination are global across document order. Explain retains independent name/form/content/explicit-alias evidence instead of guessing one owner; readable no-evidence queries also succeed with an explicit outcome. Use `--node` for strict navigation. Cycles query a document once, missing links remain visible in JSON, and the typed frontier reports traversal limits.
 
 With `--display tui`, the first initial document opens normally and confirmed text search spans the resolved set. Selecting a match in another document uses the existing back/forward history. The document finder remains global rather than being restricted to the query set.
 

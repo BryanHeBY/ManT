@@ -24,7 +24,7 @@ pub(super) struct RenderedEntry {
     pub(super) source: Option<SourceSpan>,
 }
 
-pub(super) fn render_blocks(blocks: &[Block], options: MarkdownOptions) -> Vec<String> {
+pub(crate) fn render_blocks(blocks: &[Block], options: MarkdownOptions) -> Vec<String> {
     blocks
         .iter()
         .filter_map(|block| render_block(block, options))

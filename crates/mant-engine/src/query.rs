@@ -13,8 +13,8 @@ use mant_ir::{Document, DocumentAddress, MarkdownOrigin, ResolvedContent, TldrDo
 use mant_protocol::{
     CatalogQuery, DocumentCatalog, EntryProjection, InputFormat, MAX_DOCUMENT_SELECTOR_CHARS,
     MAX_NODE_SELECTORS, MAX_SEMANTIC_ENTRY_CHARS, MAX_SOURCE_SELECTOR_CHARS, QueryExcerpt,
-    QueryInput, QueryOutline, QueryRequest, QuerySearch, QueryView, ScopeTextError, SearchCase,
-    SearchQuery, SearchScope, SearchSyntax, validate_scope_text,
+    QueryInput, QueryOutline, QueryRequest, QuerySearch, QueryView, ScopeTextError, SearchQuery,
+    validate_scope_text,
 };
 use mant_sources::{RegisteredDocumentIndex, RegisteredDocumentOrigin, SourceConfigError};
 
@@ -22,7 +22,7 @@ use crate::{
     ManualIndex, ManualPage, ManualRequest, ProjectionError, SearchError, discover_manual_roots,
     executable::query_name_candidates, locate_manual_source_in, parse_manual_bytes,
     parse_manual_page, parse_manual_source, parse_markdown, read_cached_tldr_page, search_query,
-    select_excerpt, select_explanation, validate_search_query,
+    select_excerpt, validate_search_query,
 };
 
 mod execution;
@@ -31,7 +31,6 @@ mod named;
 mod resolver;
 mod validation;
 pub use execution::project_query_view;
-pub(crate) use execution::select_explanation_with_text_hint;
 pub use resolver::DocumentResolver;
 pub use validation::validate_query_request;
 
@@ -92,6 +91,8 @@ pub enum QueryError {
     },
     /// Search configuration failed validation.
     InvalidSearch(SearchError),
+    /// Explanation configuration failed validation or had no readable content.
+    InvalidExplanation(crate::ExplanationError),
     /// Markdown input could not be read or parsed.
     Markdown {
         /// Caller-facing source path.
@@ -174,6 +175,8 @@ pub enum QueryViewResult {
     Outline(QueryOutline),
     /// One or more selected document nodes.
     Excerpt(QueryExcerpt),
+    /// Independent semantic evidence; multiple and zero owners are normal.
+    Explanation(mant_protocol::QueryExplanation),
     /// Paginatable structure-aware search result.
     Search(QuerySearch),
 }
@@ -280,6 +283,7 @@ impl fmt::Display for QueryError {
                 write!(formatter, "{field} {}", view_selector_error_message(*error))
             }
             Self::InvalidSearch(error) => error.fmt(formatter),
+            Self::InvalidExplanation(error) => error.fmt(formatter),
             Self::Markdown { path, detail } => {
                 write!(
                     formatter,
@@ -321,6 +325,7 @@ impl Error for QueryError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
             Self::InvalidSearch(error) => Some(error),
+            Self::InvalidExplanation(error) => Some(error),
             Self::Manual(error) | Self::ManualWithTldr { error, .. } => Some(error),
             Self::EmptyName
             | Self::InvalidManualSection

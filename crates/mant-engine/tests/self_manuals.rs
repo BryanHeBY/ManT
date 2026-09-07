@@ -2,7 +2,7 @@
 
 use mant_engine::{
     build_outline_with_detail, query_markdown_text, render_markdown, render_query_text,
-    select_excerpt, select_explanation,
+    select_excerpt,
 };
 use mant_ir::{TldrCommandPart, TldrOrigin};
 use mant_protocol::{ExcerptSelection, OutlineDetail, OutlineNode};
@@ -125,13 +125,13 @@ fn shipped_manual_options_are_addressable_for_agents_and_the_tui() {
             "mant.md should expose {expected} as a semantic entry"
         );
         assert!(
-            select_explanation(&query, expected).is_ok(),
+            select_excerpt(&query, &[expected]).is_ok(),
             "mant.md must resolve {expected} without ambiguity"
         );
     }
-    assert!(select_explanation(&query, "MANT_MANPATH").is_ok());
-    let search = select_explanation(&query, "--search").expect("search entry");
-    let grep = select_explanation(&query, "--grep").expect("grep alias");
+    assert!(select_excerpt(&query, &["MANT_MANPATH"]).is_ok());
+    let search = select_excerpt(&query, &["--search"]).expect("search entry");
+    let grep = select_excerpt(&query, &["--grep"]).expect("grep alias");
     assert_eq!(
         search, grep,
         "both aliases must select the complete same entry"
@@ -162,7 +162,7 @@ fn self_manual_option_excerpts_retain_examples_and_operational_limits() {
         ("--doctor", "remote freshness was not checked"),
         ("--dry-run", "Requires --prune-docs"),
     ] {
-        let excerpt = select_explanation(&query, selector).expect("option entry");
+        let excerpt = select_excerpt(&query, &[selector]).expect("option entry");
         assert!(
             mant_engine::render_excerpt_text(&excerpt).contains(required),
             "{selector} must retain {required:?} in its own description"

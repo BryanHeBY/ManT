@@ -71,6 +71,13 @@ pub fn explain_query(
     content: &ResolvedContent,
     query: &ExplanationQuery,
 ) -> Result<QueryExplanation, ExplanationError> {
+    explain_with_usage(content, query).map(|(response, _)| response)
+}
+
+pub(crate) fn explain_with_usage(
+    content: &ResolvedContent,
+    query: &ExplanationQuery,
+) -> Result<(QueryExplanation, u32), ExplanationError> {
     validate_explanation_query(query)?;
     if content.document.is_none() && content.tldr.is_none() {
         return Err(ExplanationError::MissingContent);
@@ -96,6 +103,25 @@ pub fn explain_query(
         truncated,
         relations_truncated,
     ))
+}
+
+/// Collect semantic evidence with the documented default page/copy budgets.
+/// Use [`explain_query`] for explicit pagination; use [`crate::select_excerpt`]
+/// for strict node navigation. No-evidence is a normal response.
+///
+/// # Errors
+/// Returns invalid literal input or missing readable content.
+pub fn select_explanation(
+    content: &ResolvedContent,
+    entry: &str,
+) -> Result<QueryExplanation, ExplanationError> {
+    explain_query(
+        content,
+        &ExplanationQuery {
+            entry: entry.to_owned(),
+            options: mant_protocol::ExplanationOptions::default(),
+        },
+    )
 }
 
 struct Candidate<'a> {

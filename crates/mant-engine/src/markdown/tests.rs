@@ -11,7 +11,7 @@ use mant_protocol::{
 
 use crate::{
     ProjectionError, ResolvedContent, build_outline_projection, build_outline_with_detail,
-    render_outline_text, search_query, select_excerpt, select_explanation,
+    render_outline_text, search_query, select_excerpt,
 };
 
 use super::{parse_document, parse_markdown};
@@ -486,10 +486,10 @@ fn normalized_shorthand_collisions_are_reported_before_selection() {
         tldr: None,
     };
     for selector in ["-help", "--help"] {
-        assert!(select_explanation(&query, selector).is_ok());
+        assert!(select_excerpt(&query, &[selector]).is_ok());
     }
     assert!(matches!(
-        select_explanation(&query, "help"),
+        select_excerpt(&query, &["help"]),
         Err(ProjectionError::AmbiguousSelector { .. })
     ));
 }
@@ -532,7 +532,7 @@ fn declared_fixed_attached_values_keep_their_official_identity() {
             && equals_names == &["perf=default"]
     ));
     for selector in ["/F", "/F:Y", "/f:y", "perf=default"] {
-        select_explanation(&query, selector).expect("fixed attached value selector");
+        select_excerpt(&query, &[selector]).expect("fixed attached value selector");
     }
 }
 

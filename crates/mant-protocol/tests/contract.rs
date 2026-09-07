@@ -12,6 +12,25 @@ const MINIMAL_QUERY: &str = include_str!("../../../tests/contracts/minimal-query
 const ROOTED_OUTLINE: &str = include_str!("../../../tests/contracts/rooted-outline-v0.11.json");
 const SCOPE_SEARCH: &str = include_str!("../../../tests/contracts/scope-search-v0.11.json");
 const SCOPE_EXPLAIN: &str = include_str!("../../../tests/contracts/scope-explain-v0.11.json");
+const EXPLANATION: &str = include_str!("../../../tests/contracts/explanation-v0.11.json");
+
+#[test]
+fn independent_evidence_contract_preserves_ordinary_owners_and_omission_state() {
+    let expected: Value = serde_json::from_str(EXPLANATION).unwrap();
+    let result: mant_protocol::QueryExplanation = serde_json::from_value(expected.clone()).unwrap();
+    assert_eq!(result.total, 2);
+    assert!(result.evidence[0].entry.is_none());
+    assert!(result.evidence[1].content_omitted);
+    assert_eq!(serde_json::to_value(result).unwrap(), expected);
+    for invalid in [
+        r#"{"kind":"literal","extra":true}"#,
+        r#"{"kind":"related","from":"a","declarations":["b"],"extra":true}"#,
+    ] {
+        assert!(serde_json::from_str::<mant_protocol::EvidenceBasis>(invalid).is_err());
+    }
+    let invalid = EXPLANATION.replace("\"limit\": 50", "\"limit\": 50, \"unknown\": true");
+    assert!(serde_json::from_str::<mant_protocol::QueryExplanation>(&invalid).is_err());
+}
 
 #[test]
 fn shared_query_fixture_round_trips_without_shape_changes() {
@@ -86,11 +105,7 @@ fn v0_11_breaking_projection_shapes_have_cross_language_golden_examples() {
     let explain: ScopeQueryResponse = serde_json::from_str(SCOPE_EXPLAIN).expect("scope explain");
     assert!(matches!(
         explain.result,
-        ScopeQueryResult::Explain {
-            missed: 1,
-            ref matches,
-            ..
-        } if matches.is_empty()
+        ScopeQueryResult::Explain { ref explanation } if explanation.outcome == mant_protocol::ExplanationOutcome::NoEvidence && explanation.total == 0
     ));
 }
 
@@ -150,6 +165,7 @@ fn native_query_request_covers_every_projection_and_rejects_unknown_fields() {
         explain.view,
         QueryView::Explain {
             entry: "--exclude".to_owned(),
+            options: mant_protocol::ExplanationOptions::default()
         }
     );
 

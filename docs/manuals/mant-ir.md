@@ -233,6 +233,8 @@ Each `SemanticEntry` contains:
 | `id` | Current-document semantic identity |
 | `kind` | Role-aware index category shown above |
 | `aliases` | Exact selectable spellings, derived from identity `names` |
+| `aliasGroups` | Explicit owner-local equivalence groups, copied from facts; shared names imply none |
+| `aliasOf` | Explicit same-document relationship to another independent entry; no inherited content, children or domain |
 | `case` | Alias matching policy |
 | `forms` | Complete author-written terms, including argument layouts |
 | `documentTargets` | Explicit cross-document destinations carried by linked terms |

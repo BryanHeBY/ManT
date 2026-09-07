@@ -23,8 +23,6 @@ use super::{
     query_markdown_text, query_with, read_capped_utf8, read_capped_utf8_io, validate_query_request,
 };
 
-use crate::ProjectionError;
-
 #[derive(Clone)]
 struct StubHost {
     name_candidates: Option<Vec<String>>,
@@ -782,6 +780,7 @@ fn every_single_document_selector_obeys_the_shared_native_bound() {
             "semantic entry",
             QueryView::Explain {
                 entry: oversized.clone(),
+                options: mant_protocol::ExplanationOptions::default(),
             },
         ),
         (
@@ -817,7 +816,13 @@ fn focused_projection_enforces_view_bounds_without_a_request_producer() {
     let query = query_markdown_text("# Demo\n\nBody.\n", None).expect("Markdown query");
     let oversized = "x".repeat(MAX_SEMANTIC_ENTRY_CHARS + 1);
     assert_eq!(
-        project_query_view(query.clone(), &QueryView::Explain { entry: oversized }),
+        project_query_view(
+            query.clone(),
+            &QueryView::Explain {
+                entry: oversized,
+                options: mant_protocol::ExplanationOptions::default()
+            }
+        ),
         Err(QueryExecutionError::Query(
             QueryError::InvalidViewSelector {
                 field: "semantic entry",
@@ -877,38 +882,31 @@ fn explanation_misses_distinguish_visible_prose_from_absent_text() {
         None,
     )
     .expect("Markdown query");
-    let error = project_query_view(
+    let result = project_query_view(
         query.clone(),
         &QueryView::Explain {
             entry: "-b".to_owned(),
+            options: mant_protocol::ExplanationOptions::default(),
         },
     )
-    .expect_err("prose is not a semantic entry");
-    let QueryExecutionError::Projection(ProjectionError::SelectorFoundOnlyInText {
-        selector,
-        path,
-        title,
-        line,
-        ..
-    }) = error
-    else {
-        panic!("expected prose-only selector diagnostic");
+    .expect("prose is normal evidence");
+    let crate::QueryViewResult::Explanation(result) = result else {
+        panic!("expected evidence result");
     };
-    assert_eq!(selector, "-b");
-    assert_eq!(path, "1");
-    assert_eq!(title, "Invocation");
-    assert!(line > 0);
+    assert_eq!(result.evidence[0].outline.path(), "1");
+    assert_eq!(result.evidence[0].outline.title(), "Invocation");
+    assert!(result.evidence[0].entry.is_none());
+    assert!(result.evidence[0].source.is_some());
 
     assert!(matches!(
         project_query_view(
             query,
             &QueryView::Explain {
                 entry: "--absent".to_owned(),
+                options: mant_protocol::ExplanationOptions::default()
             },
         ),
-        Err(QueryExecutionError::Projection(
-            ProjectionError::UnknownSelector { .. }
-        ))
+        Ok(crate::QueryViewResult::Explanation(result)) if result.outcome == mant_protocol::ExplanationOutcome::NoEvidence
     ));
 }
 

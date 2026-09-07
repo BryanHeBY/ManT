@@ -99,7 +99,7 @@ pub(super) fn validate_query_view(view: &QueryView) -> Result<(), QueryError> {
                 })?;
             }
         }
-        QueryView::Explain { entry } => {
+        QueryView::Explain { entry, options } => {
             validate_scope_text(entry, MAX_SEMANTIC_ENTRY_CHARS).map_err(|error| {
                 if error == ScopeTextError::Empty {
                     QueryError::EmptyEntry
@@ -110,6 +110,11 @@ pub(super) fn validate_query_view(view: &QueryView) -> Result<(), QueryError> {
                     }
                 }
             })?;
+            crate::validate_explanation_query(&mant_protocol::ExplanationQuery {
+                entry: entry.clone(),
+                options: *options,
+            })
+            .map_err(QueryError::InvalidExplanation)?;
         }
         QueryView::Search {
             pattern,

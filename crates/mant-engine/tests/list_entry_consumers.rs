@@ -1,7 +1,7 @@
 //! Entry projections must borrow ordinary content, not reconstruct definitions.
 use mant_engine::{
     build_outline_projection, query_markdown_text, render_excerpt_markdown, render_excerpt_text,
-    render_markdown, render_query_text, select_excerpt, select_explanation,
+    render_markdown, render_query_text, select_excerpt,
 };
 use mant_ir::{
     Block, DefinitionCase, DefinitionRole, EntryContentSlice, EntryFacts, EntryForm,
@@ -112,7 +112,7 @@ fn ordinary_owner_navigation_and_excerpts_preserve_the_original_item() {
             markdown.contains(r"8. `run` — SECOND\: punctuation \| stays."),
             "{markdown}"
         );
-        assert_eq!(select_explanation(&query, selector).unwrap(), excerpt);
+        assert_eq!(select_excerpt(&query, &[selector]).unwrap(), excerpt);
         let roundtrip = serde_json::from_str::<mant_protocol::QueryExcerpt>(
             &serde_json::to_string(&excerpt).unwrap(),
         )

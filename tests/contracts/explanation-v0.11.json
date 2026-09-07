@@ -1,0 +1,30 @@
+{
+  "schema": "mant.explanation/v0.11",
+  "query": {"entry": "--help", "options": {"limit": 50, "offset": 0, "contentBytes": 1048576}},
+  "label": "probe",
+  "outcome": "evidence",
+  "total": 2,
+  "returned": 2,
+  "truncation": {"candidates": false, "relations": false, "content": true},
+  "semanticsComplete": true,
+  "diagnostics": [],
+  "evidence": [
+    {
+      "ordinal": 0,
+      "outline": {"node": {"kind": "document-root", "path": "root", "id": "document-overview", "title": "Overview"}},
+      "blockPath": "blocks/b0",
+      "bases": [{"kind": "literal"}],
+      "content": {"kind": "block", "block": {"type": "paragraph", "children": [{"type": "text", "value": "See --help."}]}},
+      "detailsOmitted": false,
+      "contentOmitted": false
+    },
+    {
+      "ordinal": 1,
+      "outline": {"node": {"kind": "document-entry", "path": "root/e1", "id": "help", "title": "--help", "role": "option", "case": "sensitive", "names": ["--help"]}},
+      "bases": [{"kind": "name"}, {"kind": "form"}],
+      "entry": {"role": "option", "case": "sensitive", "names": ["--help"], "forms": [[{"type": "code", "value": "--help"}]], "aliasGroups": []},
+      "detailsOmitted": false,
+      "contentOmitted": true
+    }
+  ]
+}

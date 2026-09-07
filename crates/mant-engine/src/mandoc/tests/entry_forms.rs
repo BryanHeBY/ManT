@@ -96,11 +96,11 @@ fn assert_invocation_consumers(
     assert_eq!(forms, &[form]);
     let direct = crate::select_excerpt(&query, &[path.as_str()]).unwrap();
     for alias in aliases {
-        let explained = crate::select_explanation(&query, alias).unwrap();
+        let explained = crate::select_excerpt(&query, &[alias]).unwrap();
         assert_eq!(explained.selections, direct.selections);
         assert!(crate::render_excerpt_text(&explained).contains("OWNEDPAYLOAD"));
     }
-    assert!(crate::select_explanation(&query, rejected).is_err());
+    assert!(crate::select_excerpt(&query, &[rejected]).is_err());
     for scope in [SearchScope::Visible, SearchScope::Markdown] {
         let found = crate::search_query(
             &query,
@@ -265,12 +265,12 @@ fn assert_names(source: &str, names: &[&str], missed: &str) {
     assert_eq!(entries[0].aliases, names, "{source}");
     for name in names {
         assert!(
-            crate::select_explanation(&query, name).is_ok(),
+            crate::select_excerpt(&query, &[name]).is_ok(),
             "{source}: {name}"
         );
     }
     assert!(
-        crate::select_explanation(&query, missed).is_err(),
+        crate::select_excerpt(&query, &[missed]).is_err(),
         "{source}: {missed}"
     );
 }
@@ -294,8 +294,8 @@ fn environment_assignment_values_are_not_alias_groups() {
             format!(".TH PROBE 1\n.SH ENVIRONMENT\n.TP\n.B \"{form}\"\nSet values.\n").as_bytes(),
         )
         .unwrap();
-        assert!(crate::select_explanation(&query, "BAR").is_err());
-        assert!(crate::select_explanation(&query, "FOO").is_err());
+        assert!(crate::select_excerpt(&query, &["BAR"]).is_err());
+        assert!(crate::select_excerpt(&query, &["FOO"]).is_err());
         assert!(query.document.unwrap().diagnostics.iter().any(|d| d.code.as_deref() == Some("manual.semantic-entry.unclassified-definition")));
     }
 }

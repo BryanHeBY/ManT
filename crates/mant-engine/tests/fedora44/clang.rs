@@ -32,7 +32,7 @@ fn keeps_complete_sections_and_semantic_option_outlines() {
     // alias remains on the optimization-level definition with its whole body.
     let optimization = find_outline_entry(&outline.nodes, "-O4").unwrap();
     assert_eq!(optimization.id(), "option-o0");
-    let explanation = mant_engine::select_explanation(&query, "-O4").unwrap();
+    let explanation = mant_engine::select_excerpt(&query, &["-O4"]).unwrap();
     let text = mant_engine::render_excerpt_text(&explanation);
     assert!(text.contains("-O4 and higher"), "{text}");
     assert!(text.contains("Currently equivalent to -O3"), "{text}");

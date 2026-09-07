@@ -243,6 +243,12 @@ pub struct SemanticEntry {
     /// equivalence between the named subjects.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub aliases: Vec<String>,
+    /// Explicit equivalence groups; shared selectable names alone imply none.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub alias_groups: Vec<Vec<String>>,
+    /// Explicit same-document relationship, never inherited content or children.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub alias_of: Option<NodeId>,
     /// Alias case-matching policy.
     pub case: DefinitionCase,
     /// Complete author-written input forms, distinct from selectable aliases.

@@ -207,17 +207,20 @@ fn declared_entries_cover_windows_options_commands_and_environment_variables() {
         document: Some(parsed.document),
         tldr: None,
     };
-    let explanation = select_explanation(&query, "/QUERY").expect("case-insensitive option");
+    let explanation = select_excerpt(&query, &["/QUERY"]).expect("case-insensitive option");
     assert!(matches!(
         explanation.selections.as_slice(),
         [ExcerptSelection::DocumentEntry { entry, .. }]
             if entry.entry_owner().and_then(mant_ir::EntryOwner::facts).is_some_and(|identity| identity.names == ["/query"])
     ));
     assert!(matches!(
-        select_explanation(&query, "query"),
-        Err(ProjectionError::ExplanationRequiresEntry { .. })
+        select_excerpt(&query, &["query"])
+            .unwrap()
+            .selections
+            .as_slice(),
+        [ExcerptSelection::DocumentSection { .. }]
     ));
-    let command = select_explanation(&query, "QUERY")
+    let command = select_excerpt(&query, &["QUERY"])
         .expect("a differently cased alias does not equal the case-sensitive section ID");
     assert!(matches!(
         command.selections.as_slice(),
@@ -226,11 +229,14 @@ fn declared_entries_cover_windows_options_commands_and_environment_variables() {
     ));
     for selector in ["3", "environment"] {
         assert!(matches!(
-            select_explanation(&query, selector),
-            Err(ProjectionError::ExplanationRequiresEntry { .. })
+            select_excerpt(&query, &[selector])
+                .unwrap()
+                .selections
+                .as_slice(),
+            [ExcerptSelection::DocumentSection { .. }]
         ));
     }
-    let environment = select_explanation(&query, "path").expect("environment alias");
+    let environment = select_excerpt(&query, &["path"]).expect("environment alias");
     assert!(matches!(
         environment.selections.as_slice(),
         [ExcerptSelection::DocumentEntry { entry, .. }]
@@ -244,7 +250,7 @@ fn declared_entries_cover_windows_options_commands_and_environment_variables() {
         "RUST_LOG",
     ] {
         assert!(
-            select_explanation(&query, selector).is_ok(),
+            select_excerpt(&query, &[selector]).is_ok(),
             "environment selector {selector}"
         );
     }
@@ -283,7 +289,7 @@ fn declared_entries_expose_every_protocol_semantic_role() {
     };
     for selector in ["--", "FILE", "authorizedkeysfile", "ALWAYS", "exit status"] {
         assert!(
-            select_explanation(&content, selector).is_ok(),
+            select_excerpt(&content, &[selector]).is_ok(),
             "semantic selector {selector}"
         );
     }
@@ -323,13 +329,13 @@ fn declared_non_option_code_spans_are_atomic_names() {
     };
     for selector in ["Send, Env", "A | B", "alpha|beta", "cd", "chdir"] {
         assert!(
-            select_explanation(&content, selector).is_ok(),
+            select_excerpt(&content, &[selector]).is_ok(),
             "semantic selector {selector}"
         );
     }
     for truncated in ["Send", "Env", "A", "B", "alpha", "beta"] {
         assert!(
-            select_explanation(&content, truncated).is_err(),
+            select_excerpt(&content, &[truncated]).is_err(),
             "truncated selector {truncated} must not resolve"
         );
     }
@@ -380,7 +386,7 @@ fn declared_dotted_dash_options_preserve_their_exact_names() {
         "--config.file",
         "--output.name",
     ] {
-        let explanation = select_explanation(&query, selector).expect("exact dotted selector");
+        let explanation = select_excerpt(&query, &[selector]).expect("exact dotted selector");
         assert!(matches!(
             explanation.selections.as_slice(),
             [ExcerptSelection::DocumentEntry { entry, .. }]
@@ -442,7 +448,7 @@ fn declared_variables_keep_shell_and_powershell_automatic_names() {
             if id == "variable-question-mark" && aliases == &["$?"]
     ));
     for selector in ["$?", "$$", "$^", "$_", "$lastexitcode", "$PSVersionTable"] {
-        let explanation = select_explanation(&query, selector).expect("variable selector");
+        let explanation = select_excerpt(&query, &[selector]).expect("variable selector");
         assert!(matches!(
             explanation.selections.as_slice(),
             [ExcerptSelection::DocumentEntry { entry, .. }]
@@ -450,7 +456,7 @@ fn declared_variables_keep_shell_and_powershell_automatic_names() {
         ));
     }
     assert!(matches!(
-        select_explanation(&query, "$env:PATH")
+        select_excerpt(&query, &["$env:PATH"])
             .expect("environment variable selector")
             .selections
             .as_slice(),
@@ -458,7 +464,7 @@ fn declared_variables_keep_shell_and_powershell_automatic_names() {
             if entry.entry_owner().and_then(mant_ir::EntryOwner::facts).is_some_and(|identity| identity.role == DefinitionRole::EnvironmentVariable)
     ));
     assert!(matches!(
-        select_explanation(&query, "$PATH")
+        select_excerpt(&query, &["$PATH"])
             .expect("ordinary variable selector")
             .selections
             .as_slice(),
@@ -497,7 +503,7 @@ fn exact_aliases_win_before_normalized_option_shorthands() {
         tldr: None,
     };
 
-    let command = select_explanation(&query, "?").expect("exact command spelling");
+    let command = select_excerpt(&query, &["?"]).expect("exact command spelling");
     assert!(matches!(
         command.selections.as_slice(),
         [ExcerptSelection::DocumentEntry { entry, .. }]
@@ -514,7 +520,7 @@ fn exact_aliases_win_before_normalized_option_shorthands() {
             })
     ));
     for selector in ["/?", "-?"] {
-        let option = select_explanation(&query, selector).expect("exact option spelling");
+        let option = select_excerpt(&query, &[selector]).expect("exact option spelling");
         assert!(matches!(
             option.selections.as_slice(),
             [ExcerptSelection::DocumentEntry { entry, .. }]
@@ -540,7 +546,7 @@ fn the_same_alias_in_different_roles_is_ambiguous() {
         tldr: None,
     };
 
-    let error = select_explanation(&query, "PATH").expect_err("cross-role alias is ambiguous");
+    let error = select_excerpt(&query, &["PATH"]).expect_err("cross-role alias is ambiguous");
     let ProjectionError::AmbiguousSelector { candidates, .. } = error else {
         panic!("expected structured ambiguity");
     };
@@ -567,7 +573,7 @@ fn exact_entry_id_takes_precedence_over_another_entry_alias() {
         tldr: None,
     };
 
-    let explanation = select_explanation(&query, "command-query").expect("exact entry ID");
+    let explanation = select_excerpt(&query, &["command-query"]).expect("exact entry ID");
     assert!(matches!(
         explanation.selections.as_slice(),
         [ExcerptSelection::DocumentEntry { entry, .. }]
@@ -592,7 +598,7 @@ fn declared_case_policy_preserves_distinct_sensitive_aliases() {
     };
 
     for (selector, expected) in [("p", "-p"), ("P", "-P")] {
-        let explanation = select_explanation(&query, selector).expect("case-sensitive alias");
+        let explanation = select_excerpt(&query, &[selector]).expect("case-sensitive alias");
         assert!(matches!(
             explanation.selections.as_slice(),
             [ExcerptSelection::DocumentEntry { entry, .. }]
@@ -703,10 +709,10 @@ fn declared_option_entries_cover_windows_native_token_families() {
     );
 
     for selector in ["START=", "//b", "//e", "/DRIVER.EXCLUDE", "+R", "/+n"] {
-        select_explanation(&query, selector).expect("case-insensitive Windows entry selector");
+        select_excerpt(&query, &[selector]).expect("case-insensitive Windows entry selector");
     }
-    let option = select_explanation(&query, "start=").expect("equals-bearing option selector");
-    let command = select_explanation(&query, "start").expect("command selector");
+    let option = select_excerpt(&query, &["start="]).expect("equals-bearing option selector");
+    let command = select_excerpt(&query, &["start"]).expect("command selector");
     assert!(matches!(
         option.selections.as_slice(),
         [ExcerptSelection::DocumentEntry { entry, .. }]
@@ -1267,8 +1273,8 @@ fn declared_negated_dash_options_preserve_their_executable_spelling() {
         document: Some(parsed.document),
         tldr: None,
     };
-    assert!(select_explanation(&content, "!--reloadEnvironment").is_ok());
-    assert!(select_explanation(&content, "!--profile").is_ok());
+    assert!(select_excerpt(&content, &["!--reloadEnvironment"]).is_ok());
+    assert!(select_excerpt(&content, &["!--profile"]).is_ok());
 }
 
 #[test]
@@ -1290,7 +1296,7 @@ fn duplicate_entry_aliases_require_a_stable_path_or_id() {
         tldr: None,
     };
 
-    let error = select_explanation(&query, "/F").expect_err("bare alias must be ambiguous");
+    let error = select_excerpt(&query, &["/F"]).expect_err("bare alias must be ambiguous");
     let ProjectionError::AmbiguousSelector { candidates, .. } = error else {
         panic!("expected a structured ambiguity");
     };
@@ -1302,7 +1308,7 @@ fn duplicate_entry_aliases_require_a_stable_path_or_id() {
         ["1/e1", "2/e1"]
     );
     assert_eq!(
-        select_explanation(&query, "2/e1")
+        select_excerpt(&query, &["2/e1"])
             .expect("qualified path")
             .selections
             .len(),

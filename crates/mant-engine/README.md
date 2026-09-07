@@ -31,8 +31,11 @@ deterministic output without owning a terminal or command-line process.
 - Typed local and cross-document navigation: only logical document and manual
   links become bounded scope edges; external, email, and page-local targets do
   not expand a query.
-- One selector resolver for outline roots, excerpts, and explanations: exact
+- One strict selector resolver for outline roots and excerpts: exact
   path, exact ID, exact alias, then normalized shorthand.
+- Independent bounded explanation evidence: exact names/forms, literal content
+  and validated alias relationships. Multiple owners and no-evidence are normal;
+  ordinary support retains its section and block path without becoming an entry.
 - Excerpt selection and literal or regular-expression search with generated
   Markdown coordinates.
 - Markdown, text, man-style text, and JSON renderers over one normalized IR.
@@ -108,6 +111,22 @@ filesystem snapshot; constructing a new resolver refreshes discovery.
 aggregate content budgets, and breadth-first projections at that same engine
 boundary. Process and MCP adapters should pass a `ScopeQueryRequest` rather
 than reimplementing scope traversal.
+
+`explain_query` returns `QueryExplanation`, not a unique excerpt. Its options
+bound returned owners (default 50, maximum 256), a zero-based offset, and copied
+forms/facts/body payload (default 1 MiB, maximum 4 MiB). Scope requests share
+those limits across readable documents. `select_explanation` uses the defaults;
+`select_excerpt` is the strict navigation API. Check `outcome`, scope coverage
+and `truncation` separately; `semanticsComplete` describes semantic validation,
+not exhaustive recall. No evidence query performs I/O or executes examples.
+
+```rust
+let query = mant_engine::query_markdown_text("# Demo\n\n- `--help`: Usage.\n", None)?;
+let evidence = mant_engine::select_explanation(&query, "--help")?;
+assert_eq!(evidence.outcome, mant_protocol::ExplanationOutcome::Evidence);
+assert!(evidence.evidence.iter().any(|owner| owner.bases.contains(&mant_protocol::EvidenceBasis::Name)));
+# Ok::<(), Box<dyn std::error::Error>>(())
+```
 
 Named resolution treats the full document and command quick reference as two
 orthogonal facets. A manual section selects an exact native full document; it

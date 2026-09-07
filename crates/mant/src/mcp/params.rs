@@ -111,7 +111,7 @@ pub(super) struct ReadParams {
     pub(super) max_chars: Option<u32>,
 }
 
-/// Resolve one semantic entry.
+/// Collect bounded independent semantic evidence.
 #[derive(Debug, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(super) struct ExplainParams {
@@ -130,9 +130,26 @@ pub(super) struct ExplainParams {
     #[schemars(range(min = 1, max = 256))]
     #[serde(default, deserialize_with = "deserialize_compat_optional_scalar")]
     pub(super) max_documents: Option<u32>,
-    /// Exact alias, outline path, or stable ID of the entry.
+    /// Documented name, complete form, exact owner coordinate, or bounded literal.
     #[schemars(length(min = 1, max = 512))]
     pub(super) entry: String,
+    /// Maximum evidence owners, independent of Unicode presentation paging.
+    #[serde(
+        default = "mant_protocol::default_explanation_limit",
+        deserialize_with = "deserialize_compat_scalar"
+    )]
+    #[schemars(range(min = 1, max = 256))]
+    pub(super) max_results: u32,
+    /// Global zero-based evidence offset.
+    #[serde(default, deserialize_with = "deserialize_compat_scalar")]
+    pub(super) offset: u32,
+    /// Aggregate original forms/body copy budget, in JSON payload bytes.
+    #[serde(
+        default = "mant_protocol::default_explanation_content_bytes",
+        deserialize_with = "deserialize_compat_scalar"
+    )]
+    #[schemars(range(min = 1, max = 4_194_304))]
+    pub(super) content_bytes: u32,
     /// Zero-based Unicode scalar offset into the canonical result text.
     #[serde(default, deserialize_with = "deserialize_compat_scalar")]
     pub(super) start_char: u32,
@@ -227,6 +244,7 @@ pub(super) struct ValidatedReadParams {
 pub(super) struct ValidatedExplainParams {
     pub(super) scope: DocumentScope,
     pub(super) entry: String,
+    pub(super) options: mant_protocol::ExplanationOptions,
     pub(super) page: PageRequest,
 }
 
@@ -401,18 +419,30 @@ impl ReadParams {
 
 impl ExplainParams {
     pub(super) fn validate(self) -> Result<ValidatedExplainParams, String> {
+        let options = mant_protocol::ExplanationOptions {
+            limit: self.max_results,
+            offset: self.offset,
+            content_bytes: self.content_bytes,
+        };
+        let entry = bounded_normalized(
+            &self.entry,
+            "entry",
+            mant_protocol::MAX_SEMANTIC_ENTRY_CHARS,
+        )?;
+        mant_engine::validate_explanation_query(&mant_protocol::ExplanationQuery {
+            entry: entry.clone(),
+            options,
+        })
+        .map_err(|error| error.to_string())?;
         Ok(ValidatedExplainParams {
+            options,
             scope: validate_scope(
                 self.documents,
                 self.follow_links,
                 self.max_depth,
                 self.max_documents,
             )?,
-            entry: bounded_normalized(
-                &self.entry,
-                "entry",
-                mant_protocol::MAX_SEMANTIC_ENTRY_CHARS,
-            )?,
+            entry,
             page: validate_page(self.start_char, self.max_chars)?,
         })
     }

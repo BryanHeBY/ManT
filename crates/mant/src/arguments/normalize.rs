@@ -261,12 +261,11 @@ fn validate_query_search_options(parsed: &Cli, color: ColorMode) -> Result<(), c
     if parsed.search.is_none()
         && (parsed.regex
             || parsed.search_case.is_some()
-            || parsed.limit.is_some()
-            || parsed.offset.is_some())
+            || (parsed.explain.is_none() && (parsed.limit.is_some() || parsed.offset.is_some())))
     {
         return Err(command_error(
             ErrorKind::ArgumentConflict,
-            "--regex, --case, --limit, and --offset require --search or --find",
+            "--regex and --case require --search or --find; --limit and --offset also support --explain",
             color,
         ));
     }
@@ -332,7 +331,20 @@ fn normalize_query_view(parsed: &mut Cli) -> QueryView {
             offset: parsed.offset.take().unwrap_or(0),
         }
     } else if let Some(selector) = parsed.explain.take() {
-        QueryView::Explain { entry: selector }
+        QueryView::Explain {
+            entry: selector,
+            options: mant_protocol::ExplanationOptions {
+                limit: parsed
+                    .limit
+                    .take()
+                    .unwrap_or_else(mant_protocol::default_explanation_limit),
+                offset: parsed.offset.take().unwrap_or(0),
+                content_bytes: parsed
+                    .explain_content_bytes
+                    .take()
+                    .unwrap_or_else(mant_protocol::default_explanation_content_bytes),
+            },
+        }
     } else if parsed.node.is_empty() {
         QueryView::Full {}
     } else {
@@ -366,7 +378,12 @@ fn validate_output_options(
             color,
         ));
     }
-    if preserve_anchors && matches!(view, QueryView::Outline { .. } | QueryView::Search { .. }) {
+    if preserve_anchors
+        && matches!(
+            view,
+            QueryView::Outline { .. } | QueryView::Search { .. } | QueryView::Explain { .. }
+        )
+    {
         return Err(command_error(
             ErrorKind::ArgumentConflict,
             "--preserve-anchors applies only to full documents and excerpts",
@@ -523,7 +540,7 @@ fn normalize_scope_query_source(
         .collect::<Vec<_>>();
     let view = match view {
         QueryView::Full {} => None,
-        QueryView::Explain { entry } => Some(ScopeQueryView::Explain { entry }),
+        QueryView::Explain { entry, options } => Some(ScopeQueryView::Explain { entry, options }),
         QueryView::Search {
             pattern,
             syntax,

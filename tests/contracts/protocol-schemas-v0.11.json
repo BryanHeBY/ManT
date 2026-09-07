@@ -2110,11 +2110,11 @@
             ]
           },
           {
-            "description": "A reference to a section in this document, normally originating at\nmdoc `Sx`.\n\n`target` is the document-local [`Section::id`] rather than a rendered\nheading slug. This keeps navigation stable across output formats.",
+            "description": "A reference to addressable content in this document, including a\nsection, entry-backed owner, or inline anchor (such as mdoc `Sx`).\n\nThe target is a canonical document-local identity in [`crate::DocumentIndex`],\nnot a rendered heading slug or unresolved authored fragment.",
             "type": "object",
             "properties": {
               "id": {
-                "description": "Target section identity in the current document.",
+                "description": "Canonical target identity in the current document.",
                 "$ref": "#/$defs/NodeId"
               },
               "kind": {
@@ -2891,6 +2891,2359 @@
             "const": "embedded"
           }
         ]
+      },
+      "ValueDomain": {
+        "description": "Logical value space accepted by one semantic entry.",
+        "oneOf": [
+          {
+            "description": "Values represented by child [`SemanticEntry`] nodes.",
+            "type": "object",
+            "properties": {
+              "exhaustive": {
+                "description": "True when the listed choices are known to be exhaustive.",
+                "type": "boolean"
+              },
+              "kind": {
+                "type": "string",
+                "const": "choices"
+              }
+            },
+            "required": [
+              "kind",
+              "exhaustive"
+            ]
+          },
+          {
+            "description": "Entries owned by another logical document form the value space.",
+            "type": "object",
+            "properties": {
+              "entryKinds": {
+                "description": "Accepted semantic categories in the referenced document.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/EntryKind"
+                },
+                "maxItems": 9,
+                "minItems": 1
+              },
+              "kind": {
+                "type": "string",
+                "const": "entry-set"
+              },
+              "reference": {
+                "description": "Source-neutral reference to the document that owns the entries.",
+                "$ref": "#/$defs/SemanticDocumentReference"
+              },
+              "source": {
+                "description": "Source position of the relationship declaration, when available.",
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/SourceSpan"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "kind",
+              "reference",
+              "entryKinds"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "explanation": {
+    "$id": "urn:mant:explanation:v0.11",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "title": "QueryExplanation",
+    "description": "One readable document's independently collected explanation evidence.",
+    "type": "object",
+    "properties": {
+      "address": {
+        "description": "Logical identity, absent for explicit local input.",
+        "anyOf": [
+          {
+            "$ref": "#/$defs/DocumentAddress"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "diagnostics": {
+        "description": "Original recoverable validation/parser findings.",
+        "type": "array",
+        "items": {
+          "$ref": "#/$defs/Diagnostic"
+        }
+      },
+      "evidence": {
+        "description": "Records in document source order, with independent owners never merged.",
+        "type": "array",
+        "items": {
+          "$ref": "#/$defs/ExplanationEvidence"
+        }
+      },
+      "label": {
+        "description": "Selected document label.",
+        "type": "string"
+      },
+      "nextOffset": {
+        "description": "More already-collected owners remain after this page.",
+        "type": [
+          "integer",
+          "null"
+        ],
+        "format": "uint32",
+        "minimum": 0
+      },
+      "outcome": {
+        "description": "Evidence versus no-evidence before page slicing.",
+        "$ref": "#/$defs/ExplanationOutcome"
+      },
+      "producer": {
+        "description": "Parser/process provenance, when available.",
+        "anyOf": [
+          {
+            "$ref": "#/$defs/Producer"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "query": {
+        "description": "Normalized request and applied bounds.",
+        "$ref": "#/$defs/ExplanationQuery"
+      },
+      "returned": {
+        "description": "Matching owners returned on this page.",
+        "type": "integer",
+        "format": "uint32",
+        "minimum": 0
+      },
+      "schema": {
+        "description": "Exact result family.",
+        "$ref": "#/$defs/ExplanationSchema"
+      },
+      "semanticsComplete": {
+        "description": "Semantic validation coverage, never a recall-completeness claim.",
+        "type": "boolean"
+      },
+      "total": {
+        "description": "Number of collected matching owners before pagination; a lower bound\nwhen candidate or relationship traversal is truncated.",
+        "type": "integer",
+        "format": "uint32",
+        "minimum": 0
+      },
+      "truncation": {
+        "description": "Independent collection, relation traversal and body-copy bounds.",
+        "$ref": "#/$defs/ExplanationTruncation"
+      }
+    },
+    "additionalProperties": false,
+    "required": [
+      "schema",
+      "query",
+      "label",
+      "outcome",
+      "total",
+      "returned",
+      "truncation",
+      "semanticsComplete",
+      "diagnostics",
+      "evidence"
+    ],
+    "$defs": {
+      "Block": {
+        "description": "A document block capable of preserving nested manual structures.",
+        "oneOf": [
+          {
+            "description": "Reflowable prose.",
+            "type": "object",
+            "properties": {
+              "children": {
+                "description": "Styled inline content in source order.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/Inline"
+                }
+              },
+              "layout": {
+                "description": "Source-derived indentation and vertical spacing.",
+                "$ref": "#/$defs/LayoutHint"
+              },
+              "source": {
+                "description": "Original source range.",
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/SourceSpan"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "type": {
+                "type": "string",
+                "const": "paragraph"
+              }
+            },
+            "required": [
+              "type",
+              "children"
+            ]
+          },
+          {
+            "description": "Literal content that preserves line boundaries.",
+            "type": "object",
+            "properties": {
+              "children": {
+                "description": "Styled literal runs and line breaks.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/Inline"
+                }
+              },
+              "language": {
+                "description": "Optional language hint, primarily from fenced Markdown.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "layout": {
+                "description": "Source-derived indentation and vertical spacing.",
+                "$ref": "#/$defs/LayoutHint"
+              },
+              "source": {
+                "description": "Original source range.",
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/SourceSpan"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "type": {
+                "type": "string",
+                "const": "preformatted"
+              }
+            },
+            "required": [
+              "type",
+              "children"
+            ]
+          },
+          {
+            "description": "Ordered, unordered, or marker-free block list.",
+            "type": "object",
+            "properties": {
+              "compact": {
+                "description": "Whether renderers should suppress extra spacing between items.",
+                "type": "boolean"
+              },
+              "items": {
+                "description": "List items in source order.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/ListItem"
+                }
+              },
+              "kind": {
+                "description": "Marker behavior for the list.",
+                "$ref": "#/$defs/ListKind"
+              },
+              "layout": {
+                "description": "Source-derived indentation and vertical spacing.",
+                "$ref": "#/$defs/LayoutHint"
+              },
+              "source": {
+                "description": "Original source range.",
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/SourceSpan"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "start": {
+                "description": "First ordinal for an ordered list.",
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "uint64",
+                "minimum": 0
+              },
+              "type": {
+                "type": "string",
+                "const": "list"
+              }
+            },
+            "required": [
+              "type",
+              "kind",
+              "items"
+            ]
+          },
+          {
+            "description": "Term-and-description list.",
+            "type": "object",
+            "properties": {
+              "compact": {
+                "description": "Whether renderers should suppress extra spacing between definitions.",
+                "type": "boolean"
+              },
+              "items": {
+                "description": "Definitions in source order.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/DefinitionItem"
+                }
+              },
+              "layout": {
+                "description": "Source-derived indentation and vertical spacing.",
+                "$ref": "#/$defs/LayoutHint"
+              },
+              "source": {
+                "description": "Original source range.",
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/SourceSpan"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "type": {
+                "type": "string",
+                "const": "definition-list"
+              }
+            },
+            "required": [
+              "type",
+              "items"
+            ]
+          },
+          {
+            "description": "Block-capable table.",
+            "type": "object",
+            "properties": {
+              "layout": {
+                "description": "Source-derived indentation and vertical spacing.",
+                "$ref": "#/$defs/LayoutHint"
+              },
+              "rows": {
+                "description": "Logical rows in source order.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/TableRow"
+                }
+              },
+              "source": {
+                "description": "Original source range.",
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/SourceSpan"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "type": {
+                "type": "string",
+                "const": "table"
+              }
+            },
+            "required": [
+              "type",
+              "rows"
+            ]
+          },
+          {
+            "description": "Equation retained as a normalized expression.",
+            "type": "object",
+            "properties": {
+              "display": {
+                "description": "Whether the equation occupies its own display block.",
+                "type": "boolean"
+              },
+              "layout": {
+                "description": "Source-derived indentation and vertical spacing.",
+                "$ref": "#/$defs/LayoutHint"
+              },
+              "source": {
+                "description": "Original source range.",
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/SourceSpan"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "type": {
+                "type": "string",
+                "const": "equation"
+              },
+              "value": {
+                "description": "Equation source after parser normalization.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "type",
+              "value"
+            ]
+          },
+          {
+            "description": "Explicit vertical spacing requested by the source.",
+            "type": "object",
+            "properties": {
+              "lines": {
+                "description": "Number of terminal rows requested.",
+                "type": "integer",
+                "format": "uint16",
+                "maximum": 65535,
+                "minimum": 0
+              },
+              "source": {
+                "description": "Original source range.",
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/SourceSpan"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "type": {
+                "type": "string",
+                "const": "vertical-space"
+              }
+            },
+            "required": [
+              "type",
+              "lines"
+            ]
+          },
+          {
+            "description": "Horizontal thematic separator.",
+            "type": "object",
+            "properties": {
+              "source": {
+                "description": "Original source range.",
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/SourceSpan"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "type": {
+                "type": "string",
+                "const": "thematic-break"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          {
+            "description": "Source construct retained because it has no native IR representation.",
+            "type": "object",
+            "properties": {
+              "layout": {
+                "description": "Source-derived indentation and vertical spacing.",
+                "$ref": "#/$defs/LayoutHint"
+              },
+              "name": {
+                "description": "Macro or construct name, when known.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "source": {
+                "description": "Original source range.",
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/SourceSpan"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "text": {
+                "description": "Best-effort visible text retained for consumers.",
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "const": "unsupported"
+              }
+            },
+            "required": [
+              "type",
+              "text"
+            ]
+          }
+        ]
+      },
+      "DefinitionCase": {
+        "description": "Case policy used when matching one semantic entry's names.",
+        "oneOf": [
+          {
+            "description": "Names must match with the same Unicode scalar values and case.",
+            "type": "string",
+            "const": "sensitive"
+          },
+          {
+            "description": "Names match without ASCII case distinctions.",
+            "type": "string",
+            "const": "insensitive"
+          }
+        ]
+      },
+      "DefinitionItem": {
+        "description": "Displayed terms share a description containing arbitrary blocks.\nSharing that content does not establish behavioral equivalence of the terms.",
+        "type": "object",
+        "properties": {
+          "description": {
+            "description": "Block content describing the terms.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/Block"
+            }
+          },
+          "identity": {
+            "description": "Present when the native lowering pass can identify this definition as\na stable semantic entry, such as a command-line option.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/EntryFacts"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "inlineTerm": {
+            "description": "Render the term on the same line as the first description line (a man(7)\nhanging tag that fits the indent) instead of on its own line. Decided\nonce during lowering so every renderer lays the item out identically.",
+            "type": "boolean"
+          },
+          "spacingBeforeLines": {
+            "description": "Terminal rows requested before this item when man(7) changes `.PD`.\n`None` inherits the containing list's compactness policy.",
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint16",
+            "maximum": 65535,
+            "minimum": 0
+          },
+          "terms": {
+            "description": "One or more displayed terms sharing this description, not necessarily\nequivalent names or interchangeable invocation forms.",
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/Inline"
+              }
+            }
+          }
+        },
+        "required": [
+          "terms",
+          "description"
+        ]
+      },
+      "DefinitionRole": {
+        "description": "Semantic role assigned before source-specific details leave the parser.\n\n[`crate::SemanticIndex`] maps option, marker, and operand roles to\n[`crate::EntryKind::Parameter`] and maps the remaining roles directly to\ntheir corresponding entry categories.",
+        "oneOf": [
+          {
+            "description": "Command-line option or switch.",
+            "type": "string",
+            "const": "option"
+          },
+          {
+            "description": "End-of-options or parser-control marker such as `--` or `--%`.",
+            "type": "string",
+            "const": "marker"
+          },
+          {
+            "description": "Positional or special operand documented as a definition.",
+            "type": "string",
+            "const": "operand"
+          },
+          {
+            "description": "Executable subcommand or verb.",
+            "type": "string",
+            "const": "command"
+          },
+          {
+            "description": "Named key accepted by a configuration language or command option.",
+            "type": "string",
+            "const": "configuration-key"
+          },
+          {
+            "description": "Process environment variable.",
+            "type": "string",
+            "const": "environment-variable"
+          },
+          {
+            "description": "Other named configuration or language variable.",
+            "type": "string",
+            "const": "variable"
+          },
+          {
+            "description": "One documented value accepted by a parent entry.",
+            "type": "string",
+            "const": "value"
+          },
+          {
+            "description": "Addressable definition without a more specific reliable role.",
+            "type": "string",
+            "const": "term"
+          }
+        ]
+      },
+      "Diagnostic": {
+        "description": "Recoverable parser or IR validation finding attached to the document.",
+        "type": "object",
+        "properties": {
+          "code": {
+            "description": "Stable machine-readable code, when the producer defines one.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "level": {
+            "description": "Severity of the finding.",
+            "$ref": "#/$defs/DiagnosticLevel"
+          },
+          "message": {
+            "description": "Concise human-readable explanation.",
+            "type": "string"
+          },
+          "source": {
+            "description": "Original source location associated with the finding.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/SourceSpan"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "level",
+          "message"
+        ]
+      },
+      "DiagnosticLevel": {
+        "description": "Severity reported by the parser without turning useful output into failure.",
+        "oneOf": [
+          {
+            "description": "Non-semantic source style issue.",
+            "type": "string",
+            "const": "style"
+          },
+          {
+            "description": "Recoverable source defect or portability concern.",
+            "type": "string",
+            "const": "warning"
+          },
+          {
+            "description": "Invalid source that left partial output available.",
+            "type": "string",
+            "const": "error"
+          },
+          {
+            "description": "Valid construct that the active parser cannot represent fully.",
+            "type": "string",
+            "const": "unsupported"
+          }
+        ]
+      },
+      "DocumentAddress": {
+        "description": "Stable selector for one discoverable document candidate.",
+        "oneOf": [
+          {
+            "description": "A Markdown document registered in the document catalog.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "markdown"
+              },
+              "origin": {
+                "description": "Storage namespace containing the relative path.",
+                "$ref": "#/$defs/MarkdownOrigin"
+              },
+              "path": {
+                "description": "Extension-free path relative to the selected Markdown origin.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "path",
+              "origin"
+            ]
+          },
+          {
+            "description": "An installed native manual page.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "manual"
+              },
+              "manualSection": {
+                "description": "Native manual category such as `1` or `3p`.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Manual topic without its section suffix.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "name",
+              "manualSection"
+            ]
+          }
+        ]
+      },
+      "Engine": {
+        "description": "Parser implementation recorded at the process boundary.",
+        "type": "object",
+        "properties": {
+          "name": {
+            "description": "Parser implementation name.",
+            "type": "string"
+          },
+          "version": {
+            "description": "Parser implementation version.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "version"
+        ]
+      },
+      "EntryContentSlice": {
+        "description": "A checked slice of the final IR, never an offset into original source bytes.",
+        "type": "object",
+        "properties": {
+          "bytes": {
+            "description": "Optional half-open UTF-8 byte range, allowed only on Text/Code leaves.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/Range_of_uint"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "path": {
+            "description": "Zero-based inline indices, descending through styled/link children.\nAn empty path addresses the entire root inline container.",
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint",
+              "minimum": 0
+            }
+          },
+          "root": {
+            "description": "Direct owner container.",
+            "$ref": "#/$defs/EntryInlineRoot"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "root",
+          "path"
+        ]
+      },
+      "EntryFacts": {
+        "description": "Renderer-independent identity attached to one navigable content definition.\n\n[`crate::SemanticIndex`] derives logical entries from these source facts.\nThe identity remains part of the authoritative document tree; an outline or\nanother projection may omit the entry without removing its definition.",
+        "type": "object",
+        "properties": {
+          "aliasGroups": {
+            "description": "Explicit same-owner equivalence groups referencing visible names.\nAn empty collection means the relationships are unknown, not unequal.",
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "aliasOf": {
+            "description": "Explicit same-document relationship to another single-subject entry.\nIt never redirects or replaces either owner's content.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/NodeId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "case": {
+            "description": "Matching policy used for aliases in semantic entry lookup.",
+            "$ref": "#/$defs/DefinitionCase"
+          },
+          "forms": {
+            "description": "Read-only authored-form bindings into this owner's content.\nNative definitions may omit these and use their complete terms.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/EntryForm"
+            }
+          },
+          "id": {
+            "description": "Unique within one document and shared with the term's inline anchor.",
+            "$ref": "#/$defs/NodeId"
+          },
+          "nameBindings": {
+            "description": "Validated occurrences of documented names within authored forms.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/EntryNameBinding"
+            }
+          },
+          "names": {
+            "description": "Plain normalized names used as [`crate::SemanticEntry::aliases`].",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "role": {
+            "description": "Semantic category used by lookup and presentation.",
+            "$ref": "#/$defs/DefinitionRole"
+          },
+          "valueDomain": {
+            "description": "Optional value space explicitly declared by the source producer.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/ValueDomain"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "role",
+          "case",
+          "names"
+        ]
+      },
+      "EntryForm": {
+        "description": "An authored form projected from ordered content slices rather than a template.",
+        "type": "object",
+        "properties": {
+          "parts": {
+            "description": "Source-order pieces of this form; empty or invalid forms are rejected.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/EntryContentSlice"
+            }
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "parts"
+        ]
+      },
+      "EntryInlineRoot": {
+        "description": "A direct inline container within an entry owner.",
+        "oneOf": [
+          {
+            "description": "One native definition term (zero-based).",
+            "type": "object",
+            "properties": {
+              "index": {
+                "description": "Zero-based index in the definition's terms.",
+                "type": "integer",
+                "format": "uint",
+                "minimum": 0
+              },
+              "kind": {
+                "type": "string",
+                "const": "term"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "index"
+            ]
+          },
+          {
+            "description": "One direct paragraph or preformatted block (zero-based).",
+            "type": "object",
+            "properties": {
+              "index": {
+                "description": "Zero-based index in the owner's direct blocks.",
+                "type": "integer",
+                "format": "uint",
+                "minimum": 0
+              },
+              "kind": {
+                "type": "string",
+                "const": "block"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "index"
+            ]
+          }
+        ]
+      },
+      "EntryKind": {
+        "description": "Semantic category used for outline filtering and nested presentation.",
+        "oneOf": [
+          {
+            "description": "Executable command, builtin, subcommand, or verb.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "command"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "description": "Command input whose exact behavior is described by [`ParameterKind`].",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "parameter"
+              },
+              "parameterKind": {
+                "description": "Parameter syntax family.",
+                "$ref": "#/$defs/ParameterKind"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "parameterKind"
+            ]
+          },
+          {
+            "description": "Named key accepted by a configuration language or parameter.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "configuration-key"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "description": "Process environment variable.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "environment-variable"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "description": "Shell, language, or application variable.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "variable"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "description": "One value accepted by a parent entry.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "value"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "description": "Addressable definition without a more specific reliable category.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "term"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
+          }
+        ]
+      },
+      "EntryNameBinding": {
+        "description": "A name's occurrences in the owner's displayed forms.",
+        "type": "object",
+        "properties": {
+          "evidence": {
+            "description": "Evidence available to the producer.",
+            "$ref": "#/$defs/EntryNameEvidence"
+          },
+          "name": {
+            "description": "Zero-based index in `EntryFacts.names`, not a global identity.",
+            "type": "integer",
+            "format": "uint",
+            "minimum": 0
+          },
+          "occurrences": {
+            "description": "One or more complete occurrences, each represented by ordered slices.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/EntryForm"
+            }
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "occurrences",
+          "evidence"
+        ]
+      },
+      "EntryNameEvidence": {
+        "description": "Why a producer recognized a documented name; not a confidence score.",
+        "oneOf": [
+          {
+            "description": "An explicit source-format semantic mark.",
+            "type": "string",
+            "const": "native-markup"
+          },
+          {
+            "description": "The finite source-independent name grammar.",
+            "type": "string",
+            "const": "lexical"
+          },
+          {
+            "description": "An author's explicit semantic declaration on visible content.",
+            "type": "string",
+            "const": "declared"
+          }
+        ]
+      },
+      "EvidenceBasis": {
+        "description": "Why this owner is included. Multiple bases do not duplicate its content.",
+        "oneOf": [
+          {
+            "description": "Exact documented name under the owner's declared case policy.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "name"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "description": "Complete authored form under the owner's declared case policy.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "form"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "description": "Literal visible content with finite token boundaries, always case-sensitive.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "literal"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "description": "Exact entry ID or structural coordinate (no alias/shorthand resolver).",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "identity"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "description": "A directly matched name participates in a validated explicit alias group.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "alias-group"
+              },
+              "members": {
+                "description": "Exact member spellings; there is no canonical first member.",
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "members"
+            ]
+          },
+          {
+            "description": "Evidence connected by explicit same-document aliasOf edges.",
+            "type": "object",
+            "properties": {
+              "declarations": {
+                "description": "Declaration owners in traversal order, each supplying one aliasOf edge.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/NodeId"
+                }
+              },
+              "from": {
+                "description": "Starting directly matched owner.",
+                "$ref": "#/$defs/NodeId"
+              },
+              "kind": {
+                "type": "string",
+                "const": "related"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "from",
+              "declarations"
+            ]
+          }
+        ]
+      },
+      "ExplanationContent": {
+        "description": "Original content copied for one evidence owner, not a navigation selection.",
+        "oneOf": [
+          {
+            "description": "One original entry in a single-item list retaining its numbering/layout.",
+            "type": "object",
+            "properties": {
+              "block": {
+                "description": "Complete original owner, including independently addressable children.",
+                "$ref": "#/$defs/Block"
+              },
+              "kind": {
+                "type": "string",
+                "const": "entry"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "block"
+            ]
+          },
+          {
+            "description": "One literal-support block belonging to the reported root/section.",
+            "type": "object",
+            "properties": {
+              "block": {
+                "description": "Original ordinary IR content, without synthetic semantic facts.",
+                "$ref": "#/$defs/Block"
+              },
+              "kind": {
+                "type": "string",
+                "const": "block"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "block"
+            ]
+          }
+        ]
+      },
+      "ExplanationEntry": {
+        "description": "Original semantic facts and forms; no executable argument grammar is implied.",
+        "type": "object",
+        "properties": {
+          "aliasGroups": {
+            "description": "Explicit same-owner equivalence groups.",
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "aliasOf": {
+            "description": "Explicit independent same-document subject relation.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/NodeId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "case": {
+            "description": "Matching policy for documented names/forms.",
+            "$ref": "#/$defs/DefinitionCase"
+          },
+          "forms": {
+            "description": "Original visible forms projected through validated content bindings.",
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/Inline"
+              }
+            }
+          },
+          "names": {
+            "description": "Documented selectable names, not implicit equivalence groups.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "role": {
+            "description": "Source-neutral role.",
+            "$ref": "#/$defs/DefinitionRole"
+          },
+          "valueDomain": {
+            "description": "Local choices or remote entry set; never implicitly inherited/resolved.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/ValueDomain"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "role",
+          "case",
+          "names",
+          "forms",
+          "aliasGroups"
+        ]
+      },
+      "ExplanationEvidence": {
+        "description": "One independently addressable evidence owner.",
+        "type": "object",
+        "properties": {
+          "bases": {
+            "description": "All retained reasons for this owner's inclusion.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/EvidenceBasis"
+            }
+          },
+          "blockPath": {
+            "description": "IR block/item/cell coordinate for ordinary supporting content.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "content": {
+            "description": "Original owner body, omitted atomically rather than silently clipped.\nProse retains only its matched block, never an invented section/entry.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/ExplanationContent"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "contentOmitted": {
+            "description": "Original body was too large for the remaining copy budget.",
+            "type": "boolean"
+          },
+          "detailsOmitted": {
+            "description": "Original forms/facts were too large for the remaining copy budget.",
+            "type": "boolean"
+          },
+          "entry": {
+            "description": "Semantic metadata, absent for prose or when its copy exceeds the budget.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/ExplanationEntry"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ordinal": {
+            "description": "Zero-based ordinal before result pagination.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          },
+          "outline": {
+            "description": "Real owner/containing section; prose is never assigned a synthetic entry.",
+            "$ref": "#/$defs/OutlineTrail"
+          },
+          "source": {
+            "description": "Original source coordinates, when known.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/SourceSpan"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "ordinal",
+          "outline",
+          "bases",
+          "detailsOmitted",
+          "contentOmitted"
+        ]
+      },
+      "ExplanationOptions": {
+        "description": "Request-local semantic pagination and materialization controls.",
+        "type": "object",
+        "properties": {
+          "contentBytes": {
+            "description": "Aggregate UTF-8 JSON byte budget for original forms/facts and body copies.\nOversized bodies are omitted atomically, with location retained for reads.",
+            "type": "integer",
+            "format": "uint32",
+            "default": 1048576,
+            "maximum": 4194304,
+            "minimum": 1
+          },
+          "limit": {
+            "description": "Maximum evidence records on this page (default 50, maximum 256).",
+            "type": "integer",
+            "format": "uint32",
+            "default": 50,
+            "maximum": 256,
+            "minimum": 1
+          },
+          "offset": {
+            "description": "Number of matching owners skipped in deterministic source order.",
+            "type": "integer",
+            "format": "uint32",
+            "default": 0,
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "limit",
+          "offset",
+          "contentBytes"
+        ]
+      },
+      "ExplanationOutcome": {
+        "description": "A normal result outcome, independent of pagination and source coverage.",
+        "oneOf": [
+          {
+            "description": "At least one supporting owner was found before pagination.",
+            "type": "string",
+            "const": "evidence"
+          },
+          {
+            "description": "No owner was found by the bounded rules; not proof of absence of behavior.",
+            "type": "string",
+            "const": "no-evidence"
+          }
+        ]
+      },
+      "ExplanationQuery": {
+        "description": "A literal evidence request, not executable syntax or a unique selector.",
+        "type": "object",
+        "properties": {
+          "entry": {
+            "description": "Documented name, complete form, exact owner coordinate, or bounded literal.",
+            "type": "string",
+            "maxLength": 512,
+            "minLength": 1
+          },
+          "options": {
+            "description": "Semantic result and content pagination, independent of MCP character paging.",
+            "$ref": "#/$defs/ExplanationOptions",
+            "default": {
+              "contentBytes": 1048576,
+              "limit": 50,
+              "offset": 0
+            }
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "entry",
+          "options"
+        ]
+      },
+      "ExplanationSchema": {
+        "description": "Exact marker for the independent explanation result contract.",
+        "oneOf": [
+          {
+            "description": "Unreleased v0.11 explanation family.",
+            "type": "string",
+            "const": "mant.explanation/v0.11"
+          }
+        ]
+      },
+      "ExplanationTruncation": {
+        "description": "Independent reasons that a bounded explanation may omit material.",
+        "type": "object",
+        "properties": {
+          "candidates": {
+            "description": "Collection hit its matching-owner budget.",
+            "type": "boolean"
+          },
+          "content": {
+            "description": "Some selected body or details were omitted by the copy budget.",
+            "type": "boolean"
+          },
+          "relations": {
+            "description": "Relation traversal hit its edge or depth budget.",
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "candidates",
+          "relations",
+          "content"
+        ]
+      },
+      "FragmentAlias": {
+        "description": "Exact source-authored fragment spelling for one local navigation target.\n\nA fragment alias is not a [`NodeId`]: formats such as mdoc deliberately\npermit stable external destinations containing uppercase letters or\npunctuation. Producers retain that spelling here while assigning the\ntarget a separate normalized internal identity. Shared validation rejects\nempty, whitespace-containing, and control-containing aliases.",
+        "type": "string"
+      },
+      "Inline": {
+        "description": "Inline content shared by prose, terms, and styled preformatted runs.",
+        "oneOf": [
+          {
+            "description": "Plain visible text.",
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "text"
+              },
+              "value": {
+                "description": "Text after source escape processing.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "type",
+              "value"
+            ]
+          },
+          {
+            "description": "Strongly emphasized content.",
+            "type": "object",
+            "properties": {
+              "children": {
+                "description": "Nested inline content.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/Inline"
+                }
+              },
+              "type": {
+                "type": "string",
+                "const": "strong"
+              }
+            },
+            "required": [
+              "type",
+              "children"
+            ]
+          },
+          {
+            "description": "Emphasized content.",
+            "type": "object",
+            "properties": {
+              "children": {
+                "description": "Nested inline content.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/Inline"
+                }
+              },
+              "type": {
+                "type": "string",
+                "const": "emphasis"
+              }
+            },
+            "required": [
+              "type",
+              "children"
+            ]
+          },
+          {
+            "description": "Literal code or symbolic token.",
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "code"
+              },
+              "value": {
+                "description": "Literal text value.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "type",
+              "value"
+            ]
+          },
+          {
+            "description": "A typed link whose navigation semantics are explicit in the IR.\n\nOnly document and manual targets form cross-document graph edges.\nSection targets remain local, while external and email targets require a\nhost action and never expand a documentation scope.",
+            "type": "object",
+            "properties": {
+              "children": {
+                "description": "Visible linked content.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/Inline"
+                }
+              },
+              "target": {
+                "description": "Typed navigation destination.",
+                "$ref": "#/$defs/LinkTarget"
+              },
+              "title": {
+                "description": "Optional advisory title.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "type": {
+                "type": "string",
+                "const": "link"
+              }
+            },
+            "required": [
+              "type",
+              "target",
+              "children"
+            ]
+          },
+          {
+            "description": "A zero-width, document-local navigation destination such as mdoc `Tg`.\n\nAnchor IDs and section IDs share one namespace within a document.",
+            "type": "object",
+            "properties": {
+              "fragmentAliases": {
+                "description": "Exact source fragments resolving to this normalized identity.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/FragmentAlias"
+                }
+              },
+              "id": {
+                "description": "Document-local destination identity.",
+                "$ref": "#/$defs/NodeId"
+              },
+              "ownerSource": {
+                "description": "Source location of the addressable owner receiving this target.\n\nFor a standalone target this is the target request itself; when a\nparser attaches the target to a paragraph, definition, list item,\nor table cell, it is that owning construct's location.",
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/SourceSpan"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "type": {
+                "type": "string",
+                "const": "anchor"
+              }
+            },
+            "required": [
+              "type",
+              "id"
+            ]
+          },
+          {
+            "description": "Hard line break that renderers must preserve.",
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "line-break"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          }
+        ]
+      },
+      "LayoutHint": {
+        "description": "Presentation hints retained from roff but optional for semantic outputs.",
+        "type": "object",
+        "properties": {
+          "indentColumns": {
+            "description": "Additional terminal columns requested before the block.",
+            "type": "integer",
+            "format": "uint16",
+            "maximum": 65535,
+            "minimum": 0
+          },
+          "spacingBeforeLines": {
+            "description": "Terminal rows requested before this block.",
+            "type": "integer",
+            "format": "uint16",
+            "maximum": 65535,
+            "minimum": 0
+          }
+        }
+      },
+      "LinkTarget": {
+        "description": "Typed destination kind for [`Inline::Link`].\n\nThis enum records navigation intent, not host resolution state. The query\nengine resolves [`LinkTarget::Document`] and [`LinkTarget::Manual`] against\nthe catalog; consumers must not infer equivalent edges from rendered text.",
+        "oneOf": [
+          {
+            "description": "An external URI from mdoc `Lk`, man `UR`, or Markdown links.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "external"
+              },
+              "uri": {
+                "description": "Absolute URI.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "uri"
+            ]
+          },
+          {
+            "description": "An email address without a `mailto:` prefix.",
+            "type": "object",
+            "properties": {
+              "address": {
+                "description": "Mailbox address without a URI scheme.",
+                "type": "string"
+              },
+              "kind": {
+                "type": "string",
+                "const": "email"
+              }
+            },
+            "required": [
+              "kind",
+              "address"
+            ]
+          },
+          {
+            "description": "A relative Markdown link to another document in the current source.\n\nThis is a logical cross-document graph edge, not a physical path.",
+            "type": "object",
+            "properties": {
+              "fragment": {
+                "description": "Optional document-local destination.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "kind": {
+                "type": "string",
+                "const": "document"
+              },
+              "name": {
+                "description": "Extension-free relative document path.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "name"
+            ]
+          },
+          {
+            "description": "A typed reference to another installed manual page.\n\nThis is a logical cross-document graph edge resolved through the manual\ncatalog and its normal ambiguity rules.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "manual"
+              },
+              "manualSection": {
+                "description": "Native manual category, when specified by the source.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "name": {
+                "description": "Manual topic without a section suffix.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "name"
+            ]
+          },
+          {
+            "description": "A reference to addressable content in this document, including a\nsection, entry-backed owner, or inline anchor (such as mdoc `Sx`).\n\nThe target is a canonical document-local identity in [`crate::DocumentIndex`],\nnot a rendered heading slug or unresolved authored fragment.",
+            "type": "object",
+            "properties": {
+              "id": {
+                "description": "Canonical target identity in the current document.",
+                "$ref": "#/$defs/NodeId"
+              },
+              "kind": {
+                "type": "string",
+                "const": "section"
+              }
+            },
+            "required": [
+              "kind",
+              "id"
+            ]
+          }
+        ]
+      },
+      "ListItem": {
+        "description": "A list item contains blocks so nested lists and displays remain intact.",
+        "type": "object",
+        "properties": {
+          "blocks": {
+            "description": "Arbitrary item content in source order.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/Block"
+            }
+          },
+          "entry": {
+            "description": "Optional semantic facts; these never replace or render the item body.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/EntryFacts"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "blocks"
+        ]
+      },
+      "ListKind": {
+        "description": "Marker behavior of an ordinary list.",
+        "oneOf": [
+          {
+            "description": "Unordered list with bullets.",
+            "type": "string",
+            "const": "bullet"
+          },
+          {
+            "description": "Ordered list with ordinal markers.",
+            "type": "string",
+            "const": "ordered"
+          },
+          {
+            "description": "Marker-free list.",
+            "type": "string",
+            "const": "plain"
+          }
+        ]
+      },
+      "MarkdownOrigin": {
+        "description": "Storage identity of one registered Markdown document.",
+        "oneOf": [
+          {
+            "description": "The user's primary `documents` tree.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "documents"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "description": "A configured source cache.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "source"
+              },
+              "name": {
+                "description": "Configured source name.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "name"
+            ]
+          }
+        ]
+      },
+      "NodeId": {
+        "description": "Document-local identity shared by sections, anchors, and entries.\n\nLowering layers normalize these values; [`crate::validate_document`] reports\nany invalid value introduced through deserialization or custom producers.",
+        "type": "string"
+      },
+      "NodePath": {
+        "description": "Canonical structural address emitted for a node in a projected outline.",
+        "type": "string"
+      },
+      "OutlineNodeReference": {
+        "description": "Compact typed identity for the terminal node in an [`OutlineTrail`].",
+        "oneOf": [
+          {
+            "description": "Optional quick-reference node.",
+            "type": "object",
+            "properties": {
+              "id": {
+                "description": "Stable document-local identity.",
+                "$ref": "#/$defs/NodeId"
+              },
+              "kind": {
+                "type": "string",
+                "const": "tldr"
+              },
+              "path": {
+                "description": "Canonical structural outline path.",
+                "$ref": "#/$defs/NodePath"
+              },
+              "title": {
+                "description": "Display title.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "path",
+              "id",
+              "title"
+            ]
+          },
+          {
+            "description": "Addressable content before the first heading.",
+            "type": "object",
+            "properties": {
+              "id": {
+                "description": "Virtual document-root identity.",
+                "$ref": "#/$defs/NodeId"
+              },
+              "kind": {
+                "type": "string",
+                "const": "document-root"
+              },
+              "path": {
+                "description": "Canonical structural outline path.",
+                "$ref": "#/$defs/NodePath"
+              },
+              "title": {
+                "description": "Display title.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "path",
+              "id",
+              "title"
+            ]
+          },
+          {
+            "description": "One semantic document section.",
+            "type": "object",
+            "properties": {
+              "id": {
+                "description": "Stable document-local identity.",
+                "$ref": "#/$defs/NodeId"
+              },
+              "kind": {
+                "type": "string",
+                "const": "document-section"
+              },
+              "path": {
+                "description": "Canonical structural outline path.",
+                "$ref": "#/$defs/NodePath"
+              },
+              "title": {
+                "description": "Section heading text.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "path",
+              "id",
+              "title"
+            ]
+          },
+          {
+            "description": "One semantic command, option, or variable definition.",
+            "type": "object",
+            "properties": {
+              "case": {
+                "description": "Alias case-matching policy.",
+                "$ref": "#/$defs/DefinitionCase"
+              },
+              "id": {
+                "description": "Stable document-local identity.",
+                "$ref": "#/$defs/NodeId"
+              },
+              "kind": {
+                "type": "string",
+                "const": "document-entry"
+              },
+              "names": {
+                "description": "Normalized selectable aliases.",
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "path": {
+                "description": "Canonical structural outline path.",
+                "$ref": "#/$defs/NodePath"
+              },
+              "role": {
+                "description": "Semantic category of the definition.",
+                "$ref": "#/$defs/DefinitionRole"
+              },
+              "title": {
+                "description": "Primary display term.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "path",
+              "id",
+              "title",
+              "role",
+              "case",
+              "names"
+            ]
+          }
+        ]
+      },
+      "OutlineReference": {
+        "description": "Compact ancestor identity attached to an excerpt selection.",
+        "type": "object",
+        "properties": {
+          "id": {
+            "description": "Stable document-local identity.",
+            "$ref": "#/$defs/NodeId"
+          },
+          "path": {
+            "description": "Canonical structural outline path.",
+            "$ref": "#/$defs/NodePath"
+          },
+          "title": {
+            "description": "Display title.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "id",
+          "title"
+        ]
+      },
+      "OutlineTrail": {
+        "description": "Complete logical location of one addressable document node.",
+        "type": "object",
+        "properties": {
+          "ancestors": {
+            "description": "Ordered ancestors from the document root to the direct parent.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/OutlineReference"
+            }
+          },
+          "node": {
+            "description": "Selected or matching node at the end of the trail.",
+            "$ref": "#/$defs/OutlineNodeReference"
+          }
+        },
+        "required": [
+          "node"
+        ]
+      },
+      "ParameterKind": {
+        "description": "Semantic behavior of one command parameter.",
+        "oneOf": [
+          {
+            "description": "Named option or switch such as `-L`, `/?`, or `+r`.",
+            "type": "string",
+            "const": "option"
+          },
+          {
+            "description": "Parser-control marker such as `--` or PowerShell's `--%`.",
+            "type": "string",
+            "const": "marker"
+          },
+          {
+            "description": "Positional or special operand such as a documented stdin `-`.",
+            "type": "string",
+            "const": "operand"
+          }
+        ]
+      },
+      "Producer": {
+        "description": "Identifies `ManT` and the parser used to build a wire document.",
+        "type": "object",
+        "properties": {
+          "engine": {
+            "description": "Parser implementation, when an authoritative document was parsed.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/Engine"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "name": {
+            "description": "Process implementation name.",
+            "type": "string"
+          },
+          "version": {
+            "description": "Process package version.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "version"
+        ]
+      },
+      "Range_of_uint": {
+        "type": "object",
+        "properties": {
+          "end": {
+            "type": "integer",
+            "format": "uint",
+            "minimum": 0
+          },
+          "start": {
+            "type": "integer",
+            "format": "uint",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "start",
+          "end"
+        ]
+      },
+      "SemanticDocumentReference": {
+        "description": "A source-neutral reference to another locally addressable document.",
+        "oneOf": [
+          {
+            "description": "A relative Markdown document in the current registered namespace.",
+            "type": "object",
+            "properties": {
+              "fragment": {
+                "description": "Optional document-local fragment.",
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "minLength": 1
+              },
+              "kind": {
+                "type": "string",
+                "const": "document"
+              },
+              "name": {
+                "description": "Extension-free relative document path.",
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "kind",
+              "name"
+            ]
+          },
+          {
+            "description": "A typed native manual reference.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "manual"
+              },
+              "manualSection": {
+                "description": "Native manual category, when source-specified.",
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "minLength": 1
+              },
+              "name": {
+                "description": "Manual topic without a section suffix.",
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "kind",
+              "name"
+            ]
+          }
+        ]
+      },
+      "SourceSpan": {
+        "description": "Location in the original source file.\n\nLines and columns are one-based for diagnostics. `byte_range`, when the\nparser provides exact offsets, is the canonical machine-facing boundary.",
+        "type": "object",
+        "properties": {
+          "byteRange": {
+            "description": "Exact half-open byte range, when supplied by the parser.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/TextRange"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "column": {
+            "description": "One-based starting column.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          },
+          "endColumn": {
+            "description": "One-based exclusive ending column, when known.",
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint32",
+            "minimum": 0
+          },
+          "endLine": {
+            "description": "One-based inclusive ending line, when known.",
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint32",
+            "minimum": 0
+          },
+          "line": {
+            "description": "One-based starting line.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "line",
+          "column"
+        ]
+      },
+      "TableAlignment": {
+        "description": "Horizontal alignment requested by a source table.",
+        "oneOf": [
+          {
+            "description": "Align content to the left edge.",
+            "type": "string",
+            "const": "left"
+          },
+          {
+            "description": "Center content horizontally.",
+            "type": "string",
+            "const": "center"
+          },
+          {
+            "description": "Align content to the right edge.",
+            "type": "string",
+            "const": "right"
+          }
+        ]
+      },
+      "TableCell": {
+        "description": "Block-capable table cell with optional layout information.",
+        "type": "object",
+        "properties": {
+          "alignment": {
+            "description": "Requested horizontal alignment, if explicitly known.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/TableAlignment"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "blocks": {
+            "description": "Block content contained in the cell.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/Block"
+            }
+          },
+          "columnSpan": {
+            "description": "Number of logical columns occupied by the cell.",
+            "type": "integer",
+            "format": "uint16",
+            "maximum": 65535,
+            "minimum": 0
+          },
+          "rowSpan": {
+            "description": "Number of logical rows occupied by the cell.",
+            "type": "integer",
+            "format": "uint16",
+            "maximum": 65535,
+            "minimum": 0
+          }
+        },
+        "required": [
+          "blocks"
+        ]
+      },
+      "TableRow": {
+        "description": "One logical table row.",
+        "type": "object",
+        "properties": {
+          "cells": {
+            "description": "Cells in column order. Horizontal spans omit covered cells; vertical\ncontinuations retain empty cells at their logical positions. Use\n[`crate::TableGrid`] to place cells without losing horizontal spans.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/TableCell"
+            }
+          }
+        },
+        "required": [
+          "cells"
+        ]
+      },
+      "TextRange": {
+        "description": "Half-open UTF-8 byte range (`start..end`) in the original source.",
+        "type": "object",
+        "properties": {
+          "end": {
+            "description": "Exclusive end offset.",
+            "$ref": "#/$defs/TextSize"
+          },
+          "start": {
+            "description": "Inclusive start offset.",
+            "$ref": "#/$defs/TextSize"
+          }
+        },
+        "required": [
+          "start",
+          "end"
+        ]
+      },
+      "TextSize": {
+        "description": "Zero-based UTF-8 byte offset in the original source.",
+        "type": "integer",
+        "format": "uint32",
+        "minimum": 0
       },
       "ValueDomain": {
         "description": "Logical value space accepted by one semantic entry.",
@@ -3759,8 +6112,29 @@
             "description": "One source-neutral semantic definition.",
             "type": "object",
             "properties": {
+              "aliasGroups": {
+                "description": "Explicit owner-local equivalence groups; no default canonical member.",
+                "type": "array",
+                "items": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "aliasOf": {
+                "description": "Explicit same-document entry relationship; bodies stay independent.",
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/NodeId"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
               "aliases": {
-                "description": "Exact selectable aliases.",
+                "description": "Exact selectable names, not proof of behavioral equivalence.",
                 "type": "array",
                 "items": {
                   "type": "string"
@@ -5442,11 +7816,11 @@
             ]
           },
           {
-            "description": "A reference to a section in this document, normally originating at\nmdoc `Sx`.\n\n`target` is the document-local [`Section::id`] rather than a rendered\nheading slug. This keeps navigation stable across output formats.",
+            "description": "A reference to addressable content in this document, including a\nsection, entry-backed owner, or inline anchor (such as mdoc `Sx`).\n\nThe target is a canonical document-local identity in [`crate::DocumentIndex`],\nnot a rendered heading slug or unresolved authored fragment.",
             "type": "object",
             "properties": {
               "id": {
-                "description": "Target section identity in the current document.",
+                "description": "Canonical target identity in the current document.",
                 "$ref": "#/$defs/NodeId"
               },
               "kind": {
@@ -6322,6 +8696,36 @@
           }
         ]
       },
+      "ExplanationOptions": {
+        "description": "Request-local semantic pagination and materialization controls.",
+        "type": "object",
+        "properties": {
+          "contentBytes": {
+            "description": "Aggregate UTF-8 JSON byte budget for original forms/facts and body copies.\nOversized bodies are omitted atomically, with location retained for reads.",
+            "type": "integer",
+            "format": "uint32",
+            "default": 1048576,
+            "maximum": 4194304,
+            "minimum": 1
+          },
+          "limit": {
+            "description": "Maximum evidence records on this page (default 50, maximum 256).",
+            "type": "integer",
+            "format": "uint32",
+            "default": 50,
+            "maximum": 256,
+            "minimum": 1
+          },
+          "offset": {
+            "description": "Number of matching owners skipped in deterministic source order.",
+            "type": "integer",
+            "format": "uint32",
+            "default": 0,
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false
+      },
       "InputFormat": {
         "description": "Parser selected for an explicit physical input.",
         "oneOf": [
@@ -6510,11 +8914,11 @@
             ]
           },
           {
-            "description": "Resolve exactly one semantic entry and return its complete description.",
+            "description": "Collect independent semantic and bounded literal evidence.",
             "type": "object",
             "properties": {
               "entry": {
-                "description": "Exact or normalized semantic entry name.",
+                "description": "Documented name, full authored form, exact entry ID/path, or literal support.",
                 "type": "string",
                 "maxLength": 512,
                 "minLength": 1
@@ -6522,6 +8926,15 @@
               "kind": {
                 "type": "string",
                 "const": "explain"
+              },
+              "options": {
+                "description": "Semantic result and original-content budgets.",
+                "$ref": "#/$defs/ExplanationOptions",
+                "default": {
+                  "contentBytes": 1048576,
+                  "limit": 50,
+                  "offset": 0
+                }
               }
             },
             "additionalProperties": false,
@@ -7326,68 +9739,6 @@
           "limit"
         ]
       },
-      "DocumentMeta": {
-        "description": "Metadata normalized from TH, Dt, and the validated libmandoc result.",
-        "type": "object",
-        "properties": {
-          "aliasTarget": {
-            "description": "Logical target of a native `.so` alias page.",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "arch": {
-            "description": "Architecture qualifier declared by the source.",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "date": {
-            "description": "Normalized publication or revision date.",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "manualSection": {
-            "description": "Native manual category such as `1` or `3p`; unrelated to document headings.",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "names": {
-            "description": "Primary name followed by any aliases from the NAME section.",
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "os": {
-            "description": "Operating-system label declared by the source.",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "title": {
-            "description": "Canonical document title.",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "volume": {
-            "description": "Manual volume or collection label.",
-            "type": [
-              "string",
-              "null"
-            ]
-          }
-        }
-      },
       "DocumentScope": {
         "description": "Initial documents and the link policy used to expand them.",
         "type": "object",
@@ -7447,26 +9798,6 @@
         "additionalProperties": false,
         "required": [
           "selector"
-        ]
-      },
-      "DocumentSource": {
-        "description": "Original source identity; temporary decompression paths must not appear.",
-        "type": "object",
-        "properties": {
-          "format": {
-            "description": "Syntax family consumed by the parser.",
-            "$ref": "#/$defs/SourceFormat"
-          },
-          "path": {
-            "description": "Stable caller-facing path, when the source has one.",
-            "type": [
-              "string",
-              "null"
-            ]
-          }
-        },
-        "required": [
-          "format"
         ]
       },
       "DocumentTraversal": {
@@ -7855,114 +10186,417 @@
           }
         ]
       },
-      "ExcerptSchema": {
-        "description": "Exact schema marker for selected query content.",
+      "EvidenceBasis": {
+        "description": "Why this owner is included. Multiple bases do not duplicate its content.",
         "oneOf": [
           {
-            "description": "Version 0.11 of the pre-stable excerpt protocol.",
-            "type": "string",
-            "const": "mant.excerpt/v0.11"
+            "description": "Exact documented name under the owner's declared case policy.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "name"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "description": "Complete authored form under the owner's declared case policy.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "form"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "description": "Literal visible content with finite token boundaries, always case-sensitive.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "literal"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "description": "Exact entry ID or structural coordinate (no alias/shorthand resolver).",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "identity"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "description": "A directly matched name participates in a validated explicit alias group.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "alias-group"
+              },
+              "members": {
+                "description": "Exact member spellings; there is no canonical first member.",
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "members"
+            ]
+          },
+          {
+            "description": "Evidence connected by explicit same-document aliasOf edges.",
+            "type": "object",
+            "properties": {
+              "declarations": {
+                "description": "Declaration owners in traversal order, each supplying one aliasOf edge.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/NodeId"
+                }
+              },
+              "from": {
+                "description": "Starting directly matched owner.",
+                "$ref": "#/$defs/NodeId"
+              },
+              "kind": {
+                "type": "string",
+                "const": "related"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "from",
+              "declarations"
+            ]
           }
         ]
       },
-      "ExcerptSelection": {
-        "description": "One selected document node together with its location in the complete outline.",
+      "ExplanationContent": {
+        "description": "Original content copied for one evidence owner, not a navigation selection.",
         "oneOf": [
           {
-            "description": "Optional quick-reference content preceding the primary document.",
+            "description": "One original entry in a single-item list retaining its numbering/layout.",
             "type": "object",
             "properties": {
-              "document": {
-                "description": "Complete quick-reference content.",
-                "$ref": "#/$defs/TldrDocument"
-              },
-              "kind": {
-                "type": "string",
-                "const": "tldr"
-              },
-              "outline": {
-                "description": "Complete logical location in the document outline.",
-                "$ref": "#/$defs/OutlineTrail"
-              }
-            },
-            "required": [
-              "kind",
-              "outline",
-              "document"
-            ]
-          },
-          {
-            "description": "Complete document content that appears before the first heading.",
-            "type": "object",
-            "properties": {
-              "blocks": {
-                "description": "Complete leading blocks.",
-                "type": "array",
-                "items": {
-                  "$ref": "#/$defs/Block"
-                }
-              },
-              "kind": {
-                "type": "string",
-                "const": "document-root"
-              },
-              "outline": {
-                "description": "Complete logical location in the document outline.",
-                "$ref": "#/$defs/OutlineTrail"
-              }
-            },
-            "required": [
-              "kind",
-              "outline",
-              "blocks"
-            ]
-          },
-          {
-            "description": "Complete selected document node, including all descendant sections.",
-            "type": "object",
-            "properties": {
-              "kind": {
-                "type": "string",
-                "const": "document-section"
-              },
-              "outline": {
-                "description": "Complete logical location in the document outline.",
-                "$ref": "#/$defs/OutlineTrail"
-              },
-              "section": {
-                "description": "Complete selected section including descendants.",
-                "$ref": "#/$defs/Section"
-              }
-            },
-            "required": [
-              "kind",
-              "outline",
-              "section"
-            ]
-          },
-          {
-            "description": "One addressable owner with its complete, original content.",
-            "type": "object",
-            "properties": {
-              "entry": {
-                "description": "A single-item list or definition list, retaining original layout and\nnumbering. Its sole item owns the entry facts; no body is rewritten.",
+              "block": {
+                "description": "Complete original owner, including independently addressable children.",
                 "$ref": "#/$defs/Block"
               },
               "kind": {
                 "type": "string",
-                "const": "document-entry"
-              },
-              "outline": {
-                "description": "Complete logical location in the document outline.",
-                "$ref": "#/$defs/OutlineTrail"
+                "const": "entry"
               }
             },
+            "additionalProperties": false,
             "required": [
               "kind",
-              "outline",
-              "entry"
+              "block"
+            ]
+          },
+          {
+            "description": "One literal-support block belonging to the reported root/section.",
+            "type": "object",
+            "properties": {
+              "block": {
+                "description": "Original ordinary IR content, without synthetic semantic facts.",
+                "$ref": "#/$defs/Block"
+              },
+              "kind": {
+                "type": "string",
+                "const": "block"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "block"
             ]
           }
+        ]
+      },
+      "ExplanationEntry": {
+        "description": "Original semantic facts and forms; no executable argument grammar is implied.",
+        "type": "object",
+        "properties": {
+          "aliasGroups": {
+            "description": "Explicit same-owner equivalence groups.",
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "aliasOf": {
+            "description": "Explicit independent same-document subject relation.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/NodeId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "case": {
+            "description": "Matching policy for documented names/forms.",
+            "$ref": "#/$defs/DefinitionCase"
+          },
+          "forms": {
+            "description": "Original visible forms projected through validated content bindings.",
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/Inline"
+              }
+            }
+          },
+          "names": {
+            "description": "Documented selectable names, not implicit equivalence groups.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "role": {
+            "description": "Source-neutral role.",
+            "$ref": "#/$defs/DefinitionRole"
+          },
+          "valueDomain": {
+            "description": "Local choices or remote entry set; never implicitly inherited/resolved.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/ValueDomain"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "role",
+          "case",
+          "names",
+          "forms",
+          "aliasGroups"
+        ]
+      },
+      "ExplanationEvidence": {
+        "description": "One independently addressable evidence owner.",
+        "type": "object",
+        "properties": {
+          "bases": {
+            "description": "All retained reasons for this owner's inclusion.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/EvidenceBasis"
+            }
+          },
+          "blockPath": {
+            "description": "IR block/item/cell coordinate for ordinary supporting content.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "content": {
+            "description": "Original owner body, omitted atomically rather than silently clipped.\nProse retains only its matched block, never an invented section/entry.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/ExplanationContent"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "contentOmitted": {
+            "description": "Original body was too large for the remaining copy budget.",
+            "type": "boolean"
+          },
+          "detailsOmitted": {
+            "description": "Original forms/facts were too large for the remaining copy budget.",
+            "type": "boolean"
+          },
+          "entry": {
+            "description": "Semantic metadata, absent for prose or when its copy exceeds the budget.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/ExplanationEntry"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ordinal": {
+            "description": "Zero-based ordinal before result pagination.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          },
+          "outline": {
+            "description": "Real owner/containing section; prose is never assigned a synthetic entry.",
+            "$ref": "#/$defs/OutlineTrail"
+          },
+          "source": {
+            "description": "Original source coordinates, when known.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/SourceSpan"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "ordinal",
+          "outline",
+          "bases",
+          "detailsOmitted",
+          "contentOmitted"
+        ]
+      },
+      "ExplanationOptions": {
+        "description": "Request-local semantic pagination and materialization controls.",
+        "type": "object",
+        "properties": {
+          "contentBytes": {
+            "description": "Aggregate UTF-8 JSON byte budget for original forms/facts and body copies.\nOversized bodies are omitted atomically, with location retained for reads.",
+            "type": "integer",
+            "format": "uint32",
+            "default": 1048576,
+            "maximum": 4194304,
+            "minimum": 1
+          },
+          "limit": {
+            "description": "Maximum evidence records on this page (default 50, maximum 256).",
+            "type": "integer",
+            "format": "uint32",
+            "default": 50,
+            "maximum": 256,
+            "minimum": 1
+          },
+          "offset": {
+            "description": "Number of matching owners skipped in deterministic source order.",
+            "type": "integer",
+            "format": "uint32",
+            "default": 0,
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "limit",
+          "offset",
+          "contentBytes"
+        ]
+      },
+      "ExplanationOutcome": {
+        "description": "A normal result outcome, independent of pagination and source coverage.",
+        "oneOf": [
+          {
+            "description": "At least one supporting owner was found before pagination.",
+            "type": "string",
+            "const": "evidence"
+          },
+          {
+            "description": "No owner was found by the bounded rules; not proof of absence of behavior.",
+            "type": "string",
+            "const": "no-evidence"
+          }
+        ]
+      },
+      "ExplanationQuery": {
+        "description": "A literal evidence request, not executable syntax or a unique selector.",
+        "type": "object",
+        "properties": {
+          "entry": {
+            "description": "Documented name, complete form, exact owner coordinate, or bounded literal.",
+            "type": "string",
+            "maxLength": 512,
+            "minLength": 1
+          },
+          "options": {
+            "description": "Semantic result and content pagination, independent of MCP character paging.",
+            "$ref": "#/$defs/ExplanationOptions",
+            "default": {
+              "contentBytes": 1048576,
+              "limit": 50,
+              "offset": 0
+            }
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "entry",
+          "options"
+        ]
+      },
+      "ExplanationSchema": {
+        "description": "Exact marker for the independent explanation result contract.",
+        "oneOf": [
+          {
+            "description": "Unreleased v0.11 explanation family.",
+            "type": "string",
+            "const": "mant.explanation/v0.11"
+          }
+        ]
+      },
+      "ExplanationTruncation": {
+        "description": "Independent reasons that a bounded explanation may omit material.",
+        "type": "object",
+        "properties": {
+          "candidates": {
+            "description": "Collection hit its matching-owner budget.",
+            "type": "boolean"
+          },
+          "content": {
+            "description": "Some selected body or details were omitted by the copy budget.",
+            "type": "boolean"
+          },
+          "relations": {
+            "description": "Relation traversal hit its edge or depth budget.",
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "candidates",
+          "relations",
+          "content"
         ]
       },
       "FragmentAlias": {
@@ -8244,11 +10878,11 @@
             ]
           },
           {
-            "description": "A reference to a section in this document, normally originating at\nmdoc `Sx`.\n\n`target` is the document-local [`Section::id`] rather than a rendered\nheading slug. This keeps navigation stable across output formats.",
+            "description": "A reference to addressable content in this document, including a\nsection, entry-backed owner, or inline anchor (such as mdoc `Sx`).\n\nThe target is a canonical document-local identity in [`crate::DocumentIndex`],\nnot a rendered heading slug or unresolved authored fragment.",
             "type": "object",
             "properties": {
               "id": {
-                "description": "Target section identity in the current document.",
+                "description": "Canonical target identity in the current document.",
                 "$ref": "#/$defs/NodeId"
               },
               "kind": {
@@ -8591,13 +11225,13 @@
           "version"
         ]
       },
-      "QueryExcerpt": {
-        "$id": "urn:mant:excerpt:v0.11",
-        "description": "One or more independently selected nodes from a complete query.",
+      "QueryExplanation": {
+        "$id": "urn:mant:explanation:v0.11",
+        "description": "One readable document's independently collected explanation evidence.",
         "type": "object",
         "properties": {
           "address": {
-            "description": "Logical namespace for references in the selected raw IR content.",
+            "description": "Logical identity, absent for explicit local input.",
             "anyOf": [
               {
                 "$ref": "#/$defs/DocumentAddress"
@@ -8608,29 +11242,38 @@
             ]
           },
           "diagnostics": {
-            "description": "Recoverable parser and validation findings.",
+            "description": "Original recoverable validation/parser findings.",
             "type": "array",
             "items": {
               "$ref": "#/$defs/Diagnostic"
             }
           },
+          "evidence": {
+            "description": "Records in document source order, with independent owners never merged.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/ExplanationEvidence"
+            }
+          },
           "label": {
-            "description": "Human-readable selected-document label.",
+            "description": "Selected document label.",
             "type": "string"
           },
-          "meta": {
-            "description": "Document metadata, when one was loaded.",
-            "anyOf": [
-              {
-                "$ref": "#/$defs/DocumentMeta"
-              },
-              {
-                "type": "null"
-              }
-            ]
+          "nextOffset": {
+            "description": "More already-collected owners remain after this page.",
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint32",
+            "minimum": 0
+          },
+          "outcome": {
+            "description": "Evidence versus no-evidence before page slicing.",
+            "$ref": "#/$defs/ExplanationOutcome"
           },
           "producer": {
-            "description": "Process and parser provenance, when a document was loaded.",
+            "description": "Parser/process provenance, when available.",
             "anyOf": [
               {
                 "$ref": "#/$defs/Producer"
@@ -8640,37 +11283,47 @@
               }
             ]
           },
-          "schema": {
-            "description": "Exact response schema discriminator.",
-            "$ref": "#/$defs/ExcerptSchema"
+          "query": {
+            "description": "Normalized request and applied bounds.",
+            "$ref": "#/$defs/ExplanationQuery"
           },
-          "selections": {
-            "description": "Selected nodes in canonical source order after duplicate selectors are removed.",
-            "type": "array",
-            "items": {
-              "$ref": "#/$defs/ExcerptSelection"
-            }
+          "returned": {
+            "description": "Matching owners returned on this page.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          },
+          "schema": {
+            "description": "Exact result family.",
+            "$ref": "#/$defs/ExplanationSchema"
           },
           "semanticsComplete": {
-            "description": "False when the selected document has rejected or invalid semantics.\nThis is document-wide, not a claim restricted to the selected range.",
+            "description": "Semantic validation coverage, never a recall-completeness claim.",
             "type": "boolean"
           },
-          "source": {
-            "description": "Authoritative document source, when one was loaded.",
-            "anyOf": [
-              {
-                "$ref": "#/$defs/DocumentSource"
-              },
-              {
-                "type": "null"
-              }
-            ]
+          "total": {
+            "description": "Number of collected matching owners before pagination; a lower bound\nwhen candidate or relationship traversal is truncated.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          },
+          "truncation": {
+            "description": "Independent collection, relation traversal and body-copy bounds.",
+            "$ref": "#/$defs/ExplanationTruncation"
           }
         },
+        "additionalProperties": false,
         "required": [
           "schema",
+          "query",
           "label",
-          "selections"
+          "outcome",
+          "total",
+          "returned",
+          "truncation",
+          "semanticsComplete",
+          "diagnostics",
+          "evidence"
         ]
       },
       "Range_of_uint": {
@@ -8735,6 +11388,69 @@
           "edges"
         ]
       },
+      "ScopeExplanation": {
+        "description": "Global evidence page over a resolved scope. Source loading failures/frontier\nremain in `ScopeQueryResponse.scope`, independently of this normal outcome.",
+        "type": "object",
+        "properties": {
+          "documents": {
+            "description": "Readable documents, including normal zero-evidence contributions.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/ScopedExplanation"
+            }
+          },
+          "failures": {
+            "description": "Unexpected unreadable loaded content, never normal multiple/zero hits.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/ScopedQueryFailure"
+            }
+          },
+          "nextOffset": {
+            "description": "Next global result offset when more collected evidence remains.",
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint32",
+            "minimum": 0
+          },
+          "outcome": {
+            "description": "Evidence/no-evidence before pagination, never uniqueness or recall proof.",
+            "$ref": "#/$defs/ExplanationOutcome"
+          },
+          "query": {
+            "description": "Original global pagination/content request.",
+            "$ref": "#/$defs/ExplanationQuery"
+          },
+          "returned": {
+            "description": "Owners present on this global page.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          },
+          "total": {
+            "description": "Sum of collected owner counts (a lower bound when collection is truncated).",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          },
+          "truncation": {
+            "description": "Independent bounds, combined across readable sources.",
+            "$ref": "#/$defs/ExplanationTruncation"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "query",
+          "outcome",
+          "total",
+          "returned",
+          "truncation",
+          "documents",
+          "failures"
+        ]
+      },
       "ScopeQueryResult": {
         "description": "Projection result carried by a scope-query response.",
         "oneOf": [
@@ -8742,40 +11458,18 @@
             "description": "Semantic entries found across the scope.",
             "type": "object",
             "properties": {
-              "entry": {
-                "description": "Requested entry selector.",
-                "type": "string"
-              },
-              "failures": {
-                "description": "Ambiguity or projection failures, excluding ordinary misses.",
-                "type": "array",
-                "items": {
-                  "$ref": "#/$defs/ScopedQueryFailure"
-                }
+              "explanation": {
+                "description": "Globally bounded evidence with coverage separate from the scope graph.",
+                "$ref": "#/$defs/ScopeExplanation"
               },
               "kind": {
                 "type": "string",
                 "const": "explain"
-              },
-              "matches": {
-                "description": "Documents with one or more exact candidates.",
-                "type": "array",
-                "items": {
-                  "$ref": "#/$defs/ScopedExplanation"
-                }
-              },
-              "missed": {
-                "description": "Resolved documents in which the entry was not present.",
-                "type": "integer",
-                "format": "uint32",
-                "minimum": 0
               }
             },
             "required": [
               "kind",
-              "entry",
-              "matches",
-              "missed"
+              "explanation"
             ]
           },
           {
@@ -8903,7 +11597,7 @@
         ]
       },
       "ScopedExplanation": {
-        "description": "One successful semantic-entry selection in a document scope.",
+        "description": "One readable document's contribution to the evidence result.",
         "type": "object",
         "properties": {
           "address": {
@@ -8917,15 +11611,15 @@
             "maximum": 65535,
             "minimum": 0
           },
-          "excerpt": {
-            "description": "Complete selected semantic entry or ambiguity candidates.",
-            "$ref": "#/$defs/QueryExcerpt"
+          "explanation": {
+            "description": "Local collection totals and records; evidence ordinals are global in a scope.",
+            "$ref": "#/$defs/QueryExplanation"
           }
         },
         "required": [
           "address",
           "depth",
-          "excerpt"
+          "explanation"
         ]
       },
       "ScopedQueryFailure": {
@@ -9358,65 +12052,6 @@
           }
         ]
       },
-      "Section": {
-        "description": "Source-neutral document section headed by Markdown, man, or mdoc content.\n\nThis is a content subtree, not the native manual category stored in\n[`DocumentMeta::manual_section`]. Depth is derived from tree position.",
-        "type": "object",
-        "properties": {
-          "blocks": {
-            "description": "Content directly owned by this section.",
-            "type": "array",
-            "items": {
-              "$ref": "#/$defs/Block"
-            }
-          },
-          "children": {
-            "description": "Nested subsections in source order.",
-            "type": "array",
-            "items": {
-              "$ref": "#/$defs/Section"
-            }
-          },
-          "fragmentAliases": {
-            "description": "Exact source fragments resolving to this normalized section identity.",
-            "type": "array",
-            "items": {
-              "$ref": "#/$defs/FragmentAlias"
-            }
-          },
-          "id": {
-            "description": "Unique within one document; consumers must not treat it as a global ID.",
-            "$ref": "#/$defs/NodeId"
-          },
-          "source": {
-            "description": "Heading location in the original source.",
-            "anyOf": [
-              {
-                "$ref": "#/$defs/SourceSpan"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "spacingBeforeLines": {
-            "description": "Terminal rows requested before this heading by the source macro set.",
-            "type": "integer",
-            "format": "uint16",
-            "maximum": 65535,
-            "minimum": 0
-          },
-          "title": {
-            "description": "Visible heading text.",
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "title",
-          "blocks",
-          "children"
-        ]
-      },
       "SemanticDocumentReference": {
         "description": "A source-neutral reference to another locally addressable document.",
         "oneOf": [
@@ -9473,26 +12108,6 @@
               "kind",
               "name"
             ]
-          }
-        ]
-      },
-      "SourceFormat": {
-        "description": "Source format consumed by the normalization engine.",
-        "oneOf": [
-          {
-            "description": "Traditional man(7) macros.",
-            "type": "string",
-            "const": "man"
-          },
-          {
-            "description": "Semantic mdoc(7) macros.",
-            "type": "string",
-            "const": "mdoc"
-          },
-          {
-            "description": "Markdown with `ManT` semantic extensions.",
-            "type": "string",
-            "const": "markdown"
           }
         ]
       },
@@ -9647,142 +12262,6 @@
         "type": "integer",
         "format": "uint32",
         "minimum": 0
-      },
-      "TldrCommandPart": {
-        "description": "Styled command fragment used by the TUI to distinguish placeholders.",
-        "oneOf": [
-          {
-            "description": "Literal command text.",
-            "type": "object",
-            "properties": {
-              "type": {
-                "type": "string",
-                "const": "text"
-              },
-              "value": {
-                "description": "Literal fragment value.",
-                "type": "string"
-              }
-            },
-            "required": [
-              "type",
-              "value"
-            ]
-          },
-          {
-            "description": "Replaceable value marked by the tldr placeholder syntax.",
-            "type": "object",
-            "properties": {
-              "type": {
-                "type": "string",
-                "const": "placeholder"
-              },
-              "value": {
-                "description": "Placeholder text without presentation styling.",
-                "type": "string"
-              }
-            },
-            "required": [
-              "type",
-              "value"
-            ]
-          }
-        ]
-      },
-      "TldrDocument": {
-        "description": "One normalized quick reference included in a query bundle.",
-        "type": "object",
-        "properties": {
-          "description": {
-            "description": "`CommonMark` paragraphs from the page's leading block quote.\n\nSource-only soft line breaks are normalized to spaces inside each\nelement; distinct paragraphs remain distinct elements.",
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "examples": {
-            "description": "Command examples in display order.",
-            "type": "array",
-            "items": {
-              "$ref": "#/$defs/TldrExample"
-            }
-          },
-          "language": {
-            "description": "BCP-47-like tldr language directory, such as `en` or `zh`.",
-            "type": "string"
-          },
-          "moreInformation": {
-            "description": "Upstream reference URL extracted from the page, when present.",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "origin": {
-            "description": "Distinguishes community cache data from a document-owned quick reference.\n\nThe field is omitted for tldr-pages data to preserve the established\nwire representation. Absence therefore means [`TldrOrigin::TldrPages`].",
-            "$ref": "#/$defs/TldrOrigin"
-          },
-          "platform": {
-            "description": "tldr platform bucket such as `common`, `linux`, or `windows`.",
-            "type": "string"
-          },
-          "sourcePath": {
-            "description": "Stable source path used for diagnostics and attribution.",
-            "type": "string"
-          },
-          "title": {
-            "description": "Page title, normally the command name.",
-            "type": "string"
-          }
-        },
-        "required": [
-          "title",
-          "description",
-          "examples",
-          "platform",
-          "language"
-        ]
-      },
-      "TldrExample": {
-        "description": "Human explanation paired with one shell command example.",
-        "type": "object",
-        "properties": {
-          "command": {
-            "description": "Complete shell command with placeholders in their source spelling.",
-            "type": "string"
-          },
-          "commandParts": {
-            "description": "Styled fragments whose concatenation equals [`Self::command`].",
-            "type": "array",
-            "items": {
-              "$ref": "#/$defs/TldrCommandPart"
-            }
-          },
-          "description": {
-            "description": "One normalized prose paragraph describing the command example.",
-            "type": "string"
-          }
-        },
-        "required": [
-          "description",
-          "command",
-          "commandParts"
-        ]
-      },
-      "TldrOrigin": {
-        "description": "Provenance controls attribution without changing quick-reference rendering.",
-        "oneOf": [
-          {
-            "description": "Content obtained from the community tldr-pages cache.",
-            "type": "string",
-            "const": "tldr-pages"
-          },
-          {
-            "description": "Quick reference embedded in the authoritative Markdown document.",
-            "type": "string",
-            "const": "embedded"
-          }
-        ]
       },
       "TraversalLimit": {
         "description": "Traversal bound that excluded an outbound logical link.",
@@ -10016,15 +12495,45 @@
         },
         "additionalProperties": false
       },
+      "ExplanationOptions": {
+        "description": "Request-local semantic pagination and materialization controls.",
+        "type": "object",
+        "properties": {
+          "contentBytes": {
+            "description": "Aggregate UTF-8 JSON byte budget for original forms/facts and body copies.\nOversized bodies are omitted atomically, with location retained for reads.",
+            "type": "integer",
+            "format": "uint32",
+            "default": 1048576,
+            "maximum": 4194304,
+            "minimum": 1
+          },
+          "limit": {
+            "description": "Maximum evidence records on this page (default 50, maximum 256).",
+            "type": "integer",
+            "format": "uint32",
+            "default": 50,
+            "maximum": 256,
+            "minimum": 1
+          },
+          "offset": {
+            "description": "Number of matching owners skipped in deterministic source order.",
+            "type": "integer",
+            "format": "uint32",
+            "default": 0,
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false
+      },
       "ScopeQueryView": {
         "description": "Query projection supported over a document set.",
         "oneOf": [
           {
-            "description": "Resolve one semantic entry independently in every document.",
+            "description": "Collect independent evidence across loaded documents.",
             "type": "object",
             "properties": {
               "entry": {
-                "description": "Exact alias, outline path, or stable ID.",
+                "description": "Documented name, full form, exact entry ID/path, or bounded literal.",
                 "type": "string",
                 "maxLength": 512,
                 "minLength": 1
@@ -10032,6 +12541,15 @@
               "kind": {
                 "type": "string",
                 "const": "explain"
+              },
+              "options": {
+                "description": "Global result pagination and copied-content budget.",
+                "$ref": "#/$defs/ExplanationOptions",
+                "default": {
+                  "contentBytes": 1048576,
+                  "limit": 50,
+                  "offset": 0
+                }
               }
             },
             "additionalProperties": false,

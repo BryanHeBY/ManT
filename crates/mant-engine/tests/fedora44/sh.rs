@@ -1,6 +1,6 @@
 //! Tests for Fedora Linux 44's `sh(1)` alias of the Bash manual.
 
-use mant_engine::{ProjectionError, render_excerpt_markdown, select_explanation};
+use mant_engine::{ProjectionError, render_excerpt_markdown, select_excerpt};
 use mant_ir::{EntryKind, ParameterKind, SemanticEntry, SemanticIndex, SourceFormat, ValueDomain};
 
 use crate::common::{self, collect_sections, source_path_ends_with};
@@ -108,7 +108,7 @@ fn preserves_complete_readline_command_names_as_selectable_aliases() {
     }
 
     let query = common::query_for_document("sh", document);
-    let excerpt = select_explanation(&query, "operate-and-get-next")
+    let excerpt = select_excerpt(&query, &["operate-and-get-next"])
         .expect("full Readline command alias is explainable");
     let markdown = render_excerpt_markdown(&excerpt);
     assert!(markdown.contains("operate-and-get-next"));
@@ -121,11 +121,11 @@ fn preserves_complete_readline_command_names_as_selectable_aliases() {
         .expect("set-mark Readline command");
     assert_eq!(set_mark.id.as_str(), "command-set-mark");
     assert!(
-        select_explanation(&query, "command-set-mark").is_ok(),
+        select_excerpt(&query, &["command-set-mark"]).is_ok(),
         "generated role-qualified ID must select set-mark"
     );
 
-    let builtin = select_explanation(&query, "set").expect("set builtin alias");
+    let builtin = select_excerpt(&query, &["set"]).expect("set builtin alias");
     let rendered = render_excerpt_markdown(&builtin);
     assert!(rendered.contains("SHELL BUILTIN COMMANDS"));
     assert!(!rendered.contains("set-mark (C-@"));
@@ -159,7 +159,7 @@ fn discovers_styled_builtin_names_without_promoting_argument_prose() {
 
     let query = common::query_for_document("sh", document);
     for name in ["let", "test", "getopts"] {
-        let excerpt = select_explanation(&query, name)
+        let excerpt = select_excerpt(&query, &[name])
             .unwrap_or_else(|error| panic!("builtin {name} must be explainable: {error}"));
         assert!(
             render_excerpt_markdown(&excerpt).contains("SHELL BUILTIN COMMANDS"),
@@ -168,7 +168,7 @@ fn discovers_styled_builtin_names_without_promoting_argument_prose() {
     }
     assert!(
         matches!(
-            select_explanation(&query, "builtin"),
+            select_excerpt(&query, &["builtin"]),
             Err(ProjectionError::AmbiguousSelector { .. })
         ),
         "a command/value collision must be explicit instead of silently choosing one entry"
@@ -224,22 +224,25 @@ fn preserves_complete_readline_variable_names_without_shadowing_builtins() {
         "keyseq-timeout",
     ] {
         assert!(
-            select_explanation(&query, name).is_ok(),
+            select_excerpt(&query, &[name]).is_ok(),
             "complete Readline variable {name} must be explainable"
         );
     }
     for builtin in ["bind", "echo", "enable", "set"] {
-        let excerpt = select_explanation(&query, builtin)
+        let excerpt = select_excerpt(&query, &[builtin])
             .unwrap_or_else(|error| panic!("builtin {builtin} must remain exact: {error}"));
         let rendered = render_excerpt_markdown(&excerpt);
         assert!(rendered.contains("SHELL BUILTIN COMMANDS"), "{rendered}");
     }
     assert!(matches!(
-        select_explanation(&query, "history"),
-        Err(ProjectionError::ExplanationRequiresEntry { .. })
+        select_excerpt(&query, &["history"])
+            .unwrap()
+            .selections
+            .as_slice(),
+        [mant_protocol::ExcerptSelection::DocumentSection { .. }]
     ));
     assert!(matches!(
-        select_explanation(&query, "complete"),
+        select_excerpt(&query, &["complete"]),
         Err(ProjectionError::AmbiguousSelector { .. })
     ));
 }
@@ -269,7 +272,7 @@ fn preserves_compact_invocation_aliases_and_their_shared_description() {
 
     let query = common::query_for_document("sh", document);
     for alias in aliases {
-        let excerpt = select_explanation(&query, alias)
+        let excerpt = select_excerpt(&query, &[alias])
             .unwrap_or_else(|error| panic!("{alias} must be explainable: {error}"));
         let rendered = render_excerpt_markdown(&excerpt);
         assert!(rendered.contains("--init-file"), "{rendered}");

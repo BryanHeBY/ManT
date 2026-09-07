@@ -110,12 +110,27 @@ pub fn render_outline_relationships(node: &OutlineNode) -> String {
     let OutlineNode::DocumentEntry {
         document_targets,
         value_domain,
+        alias_groups,
+        alias_of,
         ..
     } = node
     else {
         return String::new();
     };
     let mut relationships = Vec::new();
+    if !alias_groups.is_empty() {
+        relationships.push(format!(
+            "alias groups: {}",
+            alias_groups
+                .iter()
+                .map(|group| group.join(" = "))
+                .collect::<Vec<_>>()
+                .join("; ")
+        ));
+    }
+    if let Some(target) = alias_of {
+        relationships.push(format!("alias of: {target}"));
+    }
     if !document_targets.is_empty() {
         relationships.push(format!(
             "documents: {}",
@@ -368,7 +383,7 @@ fn render_section(section: &Section, depth: usize) -> String {
     join_parts(parts)
 }
 
-fn render_blocks(blocks: &[Block], base_indent: usize) -> String {
+pub(super) fn render_blocks(blocks: &[Block], base_indent: usize) -> String {
     render_block_sequence(blocks, base_indent, None)
 }
 

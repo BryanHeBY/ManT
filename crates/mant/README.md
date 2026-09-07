@@ -8,7 +8,7 @@ interface consumes the same normalized document model.
 ```sh
 mant git                              # interactive reader in a terminal
 mant gcc --outline                    # semantic hierarchy for an agent
-mant tar --explain=--exclude          # retrieve one option directly
+mant tar --explain=--exclude          # collect documented option evidence
 mant --input README.md --node 1       # select one Markdown section
 mant git --format json --compact      # deterministic machine output
 mant --mcp                            # read-only MCP over stdio
@@ -107,7 +107,12 @@ mant git --search worktree --follow-links
 mant --document git --document git-lfs --explain=--work-tree
 ```
 
-Repeated `--document` values form an ordered query set. `--follow-links` adds typed native-manual and same-source Markdown destinations with bounded breadth-first traversal. Search uses one global offset/`nextOffset` and globally unique hit ordinals across the set; document groups carry no local pagination state. Explain returns exact per-document matches and gives outline/search guidance when every document misses. Interactive search spans the same pre-resolved set while ordinary document discovery remains global.
+Repeated `--document` values form an ordered query set. `--follow-links` adds typed native-manual and same-source Markdown destinations with bounded breadth-first traversal. Search and explain each use one global offset/`nextOffset` across the set. Explain preserves independent same-name owners, original forms/content, literal support and explicit alias relationships; it never chooses a first result as uniquely correct. Readable no-evidence queries succeed with an explicit outcome; partial source failures retain available evidence and coverage. Interactive search spans the same pre-resolved set while ordinary document discovery remains global.
+
+Explanation pages default to 50 owners (`--limit`, maximum 256). `--offset`
+continues the result set; `--explain-content-bytes` bounds copied facts/forms
+and original bodies (default 1 MiB, maximum 4 MiB). Omitted bodies retain their
+strict `--node` location. MCP's character pages remain independent.
 
 All document queries, including `--request-json`, default to text and can
 explicitly select Markdown or JSON. Full reading still opens the TUI on an
@@ -140,7 +145,9 @@ Text projections use semantic ANSI styles on capable terminals and remain plain
 under redirection by default; `--color always` explicitly forces text styling.
 Markdown, JSON, man, and MCP never contain ANSI presentation styling.
 Terminal-bound Markdown masks control characters in dynamic document identities,
-while redirected Markdown preserves those data bytes exactly.
+while redirected full/excerpt Markdown preserves those data bytes exactly.
+The independent explanation text/CommonMark presentation always masks controls,
+including data supplied by unchecked in-process IR producers.
 Search results carry reusable outline selectors and exact generated-Markdown
 coordinates. Machine consumers can discover the authoritative contracts from
 the installed executable:

@@ -1,6 +1,8 @@
 //! Deterministic textual serializers owned by the native document engine.
 
+mod explanation;
 mod json;
+pub use explanation::{render_explanation_markdown, render_explanation_text};
 mod markdown;
 mod search;
 mod table;

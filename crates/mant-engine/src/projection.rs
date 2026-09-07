@@ -1,15 +1,19 @@
 //! Project documents through shared selector policy into outline and excerpt DTOs.
 pub(crate) mod excerpt;
 mod outline;
+pub use crate::explanation::select_explanation;
 #[cfg(test)]
 use crate::selectors::semantic_selector_diagnostics;
 pub use crate::selectors::{ProjectionError, SelectorCandidate};
-pub use excerpt::{select_excerpt, select_explanation};
+pub use excerpt::select_excerpt;
 use mant_ir::Diagnostic;
 pub use outline::{build_outline, build_outline_projection, build_outline_with_detail};
 const TLDR_TITLE: &str = "TLDR QUICK REFERENCE";
 
-pub(crate) fn semantics_complete(diagnostics: &[Diagnostic]) -> bool {
+/// Whether diagnostics permit semantic projections to claim extraction completeness.
+/// This is validation/producer coverage, never proof of exhaustive recall.
+#[must_use]
+pub fn semantics_complete(diagnostics: &[Diagnostic]) -> bool {
     diagnostics.iter().all(|diagnostic| {
         !diagnostic.code.as_deref().is_some_and(|code| {
             crate::markdown::is_semantic_entry_rejection_code(code)
@@ -385,10 +389,8 @@ mod tests {
             let explanation = super::select_explanation(&query, &path).unwrap_or_else(|error| {
                 panic!("explain must accept projected path {path}: {error}")
             });
-            assert!(matches!(
-                explanation.selections.as_slice(),
-                [ExcerptSelection::DocumentEntry { outline, .. }] if outline.path() == path
-            ));
+            assert!(explanation.evidence.iter().any(|e| e.outline.path() == path
+                && e.bases.contains(&mant_protocol::EvidenceBasis::Identity)));
         }
     }
 
@@ -495,10 +497,14 @@ mod tests {
             excerpt.selections.as_slice(),
             [ExcerptSelection::DocumentSection { outline, .. }] if outline.path() == "1"
         ));
-        assert!(matches!(
-            super::select_explanation(&query, "force"),
-            Err(ProjectionError::ExplanationRequiresEntry { .. })
-        ));
+        let explanation = super::select_explanation(&query, "force").unwrap();
+        assert!(
+            explanation
+                .evidence
+                .iter()
+                .any(|e| e.outline.node.id() == "command-force"
+                    && e.bases.contains(&mant_protocol::EvidenceBasis::Name))
+        );
         let outline = build_outline_projection(
             &query,
             EntryProjection::All,
@@ -727,10 +733,12 @@ mod tests {
             excerpt.selections.as_slice(),
             [ExcerptSelection::DocumentSection { outline, .. }] if outline.path() == "3"
         ));
-        assert!(matches!(
-            super::select_explanation(&query, "3"),
-            Err(ProjectionError::ExplanationRequiresEntry { .. })
-        ));
+        let explanation = super::select_explanation(&query, "3").unwrap();
+        assert!(explanation.evidence.iter().all(|e| !matches!(
+            e.outline.node,
+            mant_protocol::OutlineNodeReference::DocumentSection { .. }
+        )
+            || !e.bases.contains(&mant_protocol::EvidenceBasis::Identity)));
     }
 
     #[test]

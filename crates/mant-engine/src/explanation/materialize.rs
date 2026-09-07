@@ -13,7 +13,7 @@ pub(super) fn response(
     candidates: Vec<Candidate<'_>>,
     candidates_truncated: bool,
     relations_truncated: bool,
-) -> QueryExplanation {
+) -> (QueryExplanation, u32) {
     let total = u32::try_from(candidates.len()).unwrap_or(u32::MAX);
     let mut budget = Budget(usize::try_from(query.options.content_bytes).unwrap_or(usize::MAX));
     let evidence = candidates
@@ -41,7 +41,11 @@ pub(super) fn response(
             }
         }
     }
-    QueryExplanation {
+    let used = query
+        .options
+        .content_bytes
+        .saturating_sub(u32::try_from(budget.0).unwrap_or(u32::MAX));
+    let response = QueryExplanation {
         schema: ExplanationSchema::V0Dot11,
         label: content.label.clone(),
         address: content.address.clone(),
@@ -65,7 +69,8 @@ pub(super) fn response(
         semantics_complete: crate::projection::semantics_complete(&diagnostics),
         diagnostics,
         evidence,
-    }
+    };
+    (response, used)
 }
 
 fn materialize(

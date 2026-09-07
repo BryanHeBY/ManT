@@ -20,20 +20,6 @@ pub enum ProjectionError {
         /// Unresolved selector.
         selector: String,
     },
-    /// Explanation lookup found no semantic entry, but the same text occurs
-    /// elsewhere in the rendered document.
-    SelectorFoundOnlyInText {
-        /// Requested document label.
-        document: String,
-        /// Unresolved semantic-entry selector.
-        selector: String,
-        /// Canonical path of the nearest addressable node.
-        path: String,
-        /// Display title of the nearest addressable node.
-        title: String,
-        /// One-based rendered line containing the first occurrence.
-        line: u32,
-    },
     /// An alias matched more than one semantic entry.
     AmbiguousSelector {
         /// Requested document label.
@@ -42,13 +28,6 @@ pub enum ProjectionError {
         selector: String,
         /// Stable paths and IDs that disambiguate the match.
         candidates: Vec<SelectorCandidate>,
-    },
-    /// Explanation lookup selected a non-entry node.
-    ExplanationRequiresEntry {
-        /// Requested document label.
-        document: String,
-        /// Selector naming the non-entry node.
-        selector: String,
     },
 }
 
@@ -73,16 +52,6 @@ impl fmt::Display for ProjectionError {
                 formatter,
                 "document '{document}' has no outline node '{selector}'; inspect its entries outline for available selectors and diagnostics"
             ),
-            Self::SelectorFoundOnlyInText {
-                document,
-                selector,
-                path,
-                title,
-                line,
-            } => write!(
-                formatter,
-                "document '{document}' has no semantic entry '{selector}', but that text appears in outline node {path} ({title}) at line {line}"
-            ),
             Self::AmbiguousSelector {
                 document,
                 selector,
@@ -100,10 +69,6 @@ impl fmt::Display for ProjectionError {
                 }
                 formatter.write_str("; select one by path or ID")
             }
-            Self::ExplanationRequiresEntry { document, selector } => write!(
-                formatter,
-                "document '{document}' outline node '{selector}' is not a semantic entry; select a semantic entry instead"
-            ),
         }
     }
 }

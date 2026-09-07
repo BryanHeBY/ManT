@@ -87,7 +87,7 @@ fn declared_items_fail_independently_and_bind_only_visible_name_occurrences() {
             .unwrap()
             .semantics_complete
     );
-    assert!(select_explanation(&query, "--last").is_ok());
+    assert!(select_excerpt(&query, &["--last"]).is_ok());
 }
 
 #[test]

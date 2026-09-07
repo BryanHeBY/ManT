@@ -92,6 +92,8 @@ fn entry_from_owner(item: EntryOwner<'_>) -> Option<SemanticEntry> {
         id: identity.id.clone(),
         kind: entry_kind(identity.role),
         aliases: identity.names.clone(),
+        alias_groups: identity.alias_groups.clone(),
+        alias_of: identity.alias_of.clone(),
         case: identity.case,
         forms: forms.iter().map(|term| inline_text(term)).collect(),
         document_targets: document_targets(&forms),

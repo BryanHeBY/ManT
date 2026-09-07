@@ -118,6 +118,7 @@ pub(crate) enum SchemaContract {
     Query,
     Outline,
     Excerpt,
+    Explanation,
     Search,
     ScopeRequest,
     ScopeQuery,
@@ -454,7 +455,7 @@ struct Cli {
     )]
     node: Vec<String>,
 
-    /// Explain one semantic entry by alias, ID, or outline path.
+    /// Collect semantic evidence by name, full form, owner coordinate, or literal.
     #[arg(
         long,
         value_name = "ENTRY",
@@ -464,6 +465,15 @@ struct Cli {
         help_heading = "Document selection"
     )]
     explain: Option<String>,
+
+    /// Bound copied explanation forms/body bytes (default 1 MiB, maximum 4 MiB).
+    #[arg(
+        long,
+        value_name = "BYTES",
+        requires = "explain",
+        help_heading = "Document selection"
+    )]
+    explain_content_bytes: Option<u32>,
 
     /// Search visible document text and report Markdown lines plus outline nodes.
     #[arg(
@@ -512,11 +522,11 @@ struct Cli {
     )]
     context: Option<u16>,
 
-    /// Return at most this many matching lines.
+    /// Return at most this many search lines, catalog rows, or explanation owners.
     #[arg(long, value_name = "COUNT", help_heading = "Search")]
     limit: Option<u32>,
 
-    /// Skip this many matching lines for deterministic pagination.
+    /// Skip this many search lines, catalog rows, or explanation owners.
     #[arg(long, value_name = "COUNT", help_heading = "Search")]
     offset: Option<u32>,
 

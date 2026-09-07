@@ -18,10 +18,7 @@ use mant_protocol::{
     TraversalLimit, UnresolvedDocument, validate_scope_text,
 };
 
-use crate::{
-    DocumentResolver, ProjectionError, QueryError, QueryPolicy,
-    query::select_explanation_with_text_hint, validate_search_query,
-};
+use crate::{DocumentResolver, QueryError, QueryPolicy, validate_search_query};
 
 mod execute;
 mod references;
@@ -59,6 +56,8 @@ pub enum ScopeQueryError {
     DocumentSelector(ScopeTextError),
     /// A semantic-entry selector violated its native bound.
     EntrySelector(ScopeTextError),
+    /// Invalid explanation result/content bounds.
+    Explanation(crate::ExplanationError),
     /// Search configuration was invalid.
     Search(crate::SearchError),
     /// No initial document could be loaded.
@@ -102,6 +101,7 @@ impl fmt::Display for ScopeQueryError {
                 )
             }
             Self::Search(error) => error.fmt(formatter),
+            Self::Explanation(error) => error.fmt(formatter),
             Self::NoResolvedDocuments { reasons } => {
                 formatter.write_str("none of the initial documents could be resolved")?;
                 if !reasons.is_empty() {
@@ -117,6 +117,7 @@ impl Error for ScopeQueryError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
             Self::Search(error) => Some(error),
+            Self::Explanation(error) => Some(error),
             Self::EmptyScope
             | Self::TooManyDocuments
             | Self::DepthLimit
@@ -137,8 +138,15 @@ impl Error for ScopeQueryError {
 pub fn validate_scope_query_request(request: &ScopeQueryRequest) -> Result<(), ScopeQueryError> {
     validate_document_scope(&request.scope)?;
     match &request.view {
-        ScopeQueryView::Explain { entry } => validate_scope_text(entry, MAX_SEMANTIC_ENTRY_CHARS)
-            .map_err(ScopeQueryError::EntrySelector),
+        ScopeQueryView::Explain { entry, options } => {
+            validate_scope_text(entry, MAX_SEMANTIC_ENTRY_CHARS)
+                .map_err(ScopeQueryError::EntrySelector)?;
+            crate::validate_explanation_query(&mant_protocol::ExplanationQuery {
+                entry: entry.clone(),
+                options: *options,
+            })
+            .map_err(ScopeQueryError::Explanation)
+        }
         ScopeQueryView::Search {
             pattern,
             syntax,
@@ -446,6 +454,7 @@ mod tests {
             },
             view: ScopeQueryView::Explain {
                 entry: "x".repeat(MAX_SEMANTIC_ENTRY_CHARS + 1),
+                options: mant_protocol::ExplanationOptions::default(),
             },
         };
         assert_eq!(
@@ -457,6 +466,7 @@ mod tests {
 
         request.view = ScopeQueryView::Explain {
             entry: "界".repeat(MAX_SEMANTIC_ENTRY_CHARS),
+            options: mant_protocol::ExplanationOptions::default(),
         };
         assert_eq!(validate_scope_query_request(&request), Ok(()));
     }
@@ -496,21 +506,24 @@ mod tests {
             ],
         };
 
-        let ScopeQueryResult::Explain {
-            matches,
-            missed,
-            failures,
-            ..
-        } = execute_scope_explain(&loaded, "VISUAL")
-        else {
+        let ScopeQueryResult::Explain { explanation } = execute_scope_explain(
+            &loaded,
+            &mant_protocol::ExplanationQuery {
+                entry: "VISUAL".to_owned(),
+                options: mant_protocol::ExplanationOptions::default(),
+            },
+        )
+        .unwrap() else {
             panic!("explain result");
         };
-        assert!(matches.is_empty());
-        assert_eq!(missed, 0);
-        assert_eq!(failures.len(), 1);
-        assert_eq!(failures[0].address, address);
-        assert!(failures[0].reason.contains("outline node 1 (Startup)"));
-        assert!(failures[0].reason.contains("at line"));
+        assert!(explanation.failures.is_empty());
+        assert_eq!(explanation.total, 1);
+        assert_eq!(explanation.documents[0].address, address);
+        let evidence = &explanation.documents[0].explanation.evidence[0];
+        assert_eq!(evidence.outline.path(), "1");
+        assert_eq!(evidence.outline.title(), "Startup");
+        assert!(evidence.entry.is_none());
+        assert!(evidence.source.is_some());
     }
 
     #[test]

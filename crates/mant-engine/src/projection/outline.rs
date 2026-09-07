@@ -272,6 +272,8 @@ fn project_entries(
                 entry_kind: entry.kind,
                 case: entry.case,
                 aliases: entry.aliases.clone(),
+                alias_groups: entry.alias_groups.clone(),
+                alias_of: entry.alias_of.clone(),
                 forms: entry.forms.clone(),
                 document_targets: entry
                     .document_targets

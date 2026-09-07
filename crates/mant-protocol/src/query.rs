@@ -113,11 +113,14 @@ pub enum QueryView {
         #[schemars(length(min = 1, max = MAX_NODE_SELECTORS))]
         selectors: Vec<NodeSelector>,
     },
-    /// Resolve exactly one semantic entry and return its complete description.
+    /// Collect independent semantic and bounded literal evidence.
     Explain {
-        /// Exact or normalized semantic entry name.
+        /// Documented name, full authored form, exact entry ID/path, or literal support.
         #[schemars(length(min = 1, max = MAX_SEMANTIC_ENTRY_CHARS))]
         entry: String,
+        /// Semantic result and original-content budgets.
+        #[serde(default)]
+        options: crate::ExplanationOptions,
     },
     /// Search visible document content with bounded pagination.
     Search {

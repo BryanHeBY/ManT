@@ -51,6 +51,12 @@ pub fn query_excerpt_json_schema() -> Schema {
     serialize_schema::<QueryExcerpt>()
 }
 
+/// Generate the independent semantic-evidence response representation.
+#[must_use]
+pub fn query_explanation_json_schema() -> Schema {
+    serialize_schema::<crate::QueryExplanation>()
+}
+
 /// Generate the structure-aware search result emitted by `mant`.
 #[must_use]
 pub fn query_search_json_schema() -> Schema {
@@ -76,6 +82,7 @@ pub fn query_json_schema_catalog() -> BTreeMap<&'static str, Schema> {
         ("catalog", document_catalog_json_schema()),
         ("doctor", doctor_report_json_schema()),
         ("excerpt", query_excerpt_json_schema()),
+        ("explanation", query_explanation_json_schema()),
         ("outline", query_outline_json_schema()),
         ("query", query_bundle_json_schema()),
         ("request", query_request_json_schema()),

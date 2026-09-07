@@ -781,7 +781,7 @@ copy. Terminal setup is restored on normal exit, errors, and Rust panics.
 - `--max-depth DEPTH`: Limit followed link edges from an initial document; defaults to 8. Zero loads only initial documents, while one also loads their one-hop neighbours. Requires `--follow-links`.
 - `--max-documents COUNT`: Limit distinct loaded documents, including initial documents; defaults to 64 and cannot exceed 256. Requires `--follow-links`. Links excluded by this bound remain visible in `frontier`.
 
-Scope resolution also retains at most 64 MiB of normalized semantic content. A linked page that would exceed that aggregate budget remains visible in `frontier` with a `max-content-bytes` reason; an initial document excluded by the same budget appears in `unresolved` and the request fails only if no initial document remains readable. JSON results distinguish missing initial documents and links through `unresolved.from`, and retain every logical link excluded by a depth, document, or content bound. Search applies one global `--limit` and `--offset` over breadth-first document order; document groups contain coordinate descriptors and globally numbered hits but no competing local cursors. Explain checks each document independently, so the same option in two manuals is two qualified results rather than a cross-document ambiguity. A document with neither an entry nor a literal occurrence contributes to `missed`; when every document misses, text output points to a complete entries outline and then to `--search`. A prose-only occurrence is instead a qualified failure containing its outline node and line so CLI callers can use `--search` and MCP callers can use `mant_search`.
+Scope resolution also retains at most 64 MiB of normalized semantic content. A linked page that would exceed that aggregate budget remains visible in `frontier` with a `max-content-bytes` reason; an initial document excluded by the same budget appears in `unresolved` and the request fails only if no initial document remains readable. JSON results distinguish missing initial documents and links through `unresolved.from`, and retain every logical link excluded by a depth, document, or content bound. Search and explain apply one global `--limit` and `--offset` over breadth-first document order. Explain preserves each independent owner, even when several owners in one document or different documents share a name. Ordinary literal content is supporting evidence, not a failure or a new definition. Readable sources with no evidence remain represented in coverage; all sources failing is a source error, not a no-evidence result.
 
 Multi-document deterministic output supports `--search` and `--explain`. Outline, node, tldr, full Markdown, and man-format output remain single-document operations instead of silently selecting or concatenating pages. `--display tui` opens the first initial document; confirmed text search spans the resolved set, cross-document results participate in history, and the ordinary document finder remains global.
 
@@ -798,9 +798,8 @@ Multi-document deterministic output supports `--search` and `--explain`. Outline
   path, stable ID, or unambiguous semantic alias.
 - `--node SELECTOR`: Return an outline node selected by path, stable ID, or
   semantic-entry alias; repeat the option to select several nodes.
-- `--explain ENTRY`: Return exactly one semantic entry, including commands,
-  parameters, configuration keys, environment variables, variables, values,
-  and generic terms.
+- `--explain ENTRY`: Collect independent evidence for a documented name, complete form, exact entry ID/path, or bounded literal. Multiple owners and no evidence are normal results (exit 0). Names/forms follow the owner's case policy; literal supporting content is case-sensitive and is not promoted to a definition. Use `--node` for strict navigation.
+- `--explain-content-bytes BYTES`: Bound aggregate original forms/facts and body copies in an explanation page. The default is 1 MiB, the maximum 4 MiB, and the minimum one byte. An oversized body is omitted atomically with its location retained; increase the budget or read that node separately.
 
 For progressive agent exploration, begin with the default summary, then reuse
 the bracketed ID of a relevant section as `--outline-root` and request
@@ -847,19 +846,33 @@ uses the normal document priority chain, but considers only Markdown documents
 that actually contain an embedded tldr preface; cached tldr occupies the same
 priority-zero built-in position as native manuals.
 
-`--node`, `--outline-root`, and `--explain` use one selector resolver: exact
-path, exact ID, exact semantic alias, then normalized entry shorthand.
-`--explain` applies that same resolution first and then rejects a structural
-section, document root, or tldr node. It never changes precedence to find a
-different entry. Duplicate matches at one precedence return deterministic
-candidate paths and IDs. If an entry alias equals an exact structural ID, the
-structural ID therefore wins; the outline reports the shadowing diagnostic and
-the entry remains reachable by its returned path or ID. If no semantic entry
-matches but the same literal text occurs in the document, the failure
-identifies its first outline node and directs the caller to `--search`. This
-remains a diagnostic only: prose never silently becomes an explainable
-semantic entry. All three selectors reject control characters and values over
-512 Unicode scalar values before document resolution.
+`--node` and `--outline-root` share strict resolution: exact path, exact ID,
+exact semantic alias, then normalized entry shorthand. Duplicate matches at
+one precedence return candidate paths and IDs. A structural ID can shadow an
+entry alias in strict navigation; the entry remains reachable by its path/ID.
+
+`--explain` is independent evidence collection. Exact names, complete authored
+forms, entry IDs/paths, literal content and validated explicit alias relations
+are separate match bases. One owner's bases are combined; different owners,
+including parent and child entries, remain separate in source order. A section
+whose ID equals a documented name cannot hide the name's evidence. Name/form
+matching follows the entry's declared case; literal content is case-sensitive
+with token boundaries (`-a` does not match `--all`, and `-I` differs from `-i`).
+There is no shorthand, fuzzy search, inferred synonym or command execution.
+All three inputs reject controls and values over 512 Unicode scalars before
+document resolution.
+
+Explanation JSON is `mant.explanation/v0.11`, not an excerpt. Check `outcome`
+(`evidence` or `no-evidence`), `total`, `returned`, `nextOffset`, independent
+`truncation` flags and diagnostics. The outcome is computed before pagination,
+so an empty later page can still have `outcome: evidence`. The collector keeps
+at most 10,000 matching owners per document and follows at most 4,096 explicit
+relationship edges with chains capped at 32. `semanticsComplete` describes
+validation/producer coverage, not exhaustive recall. Use `--search` for broader
+text investigation or `--node` to retrieve one complete owner. Scope JSON puts
+the aggregate under `result.explanation` and includes each readable document's
+evidence and coverage. MCP has the same semantics, with separate character
+paging of the completed text.
 
 ## Search {#search-section}
 
@@ -870,8 +883,8 @@ semantic entry. All three selectors reject control characters and values over
 - `--word`: Require Unicode-aware word boundaries.
 - `--scope SCOPE`: Search `visible` text or generated `markdown`.
 - `--context LINES`: Include surrounding Markdown lines.
-- `--limit COUNT`: Limit returned matching lines.
-- `--offset COUNT`: Skip matching lines for deterministic pagination.
+- `--limit COUNT`: Limit returned search lines, catalog rows, or explanation owners. Explanation defaults to 50 owners and accepts 1–256; search/catalog limits remain independent.
+- `--offset COUNT`: Skip search lines, catalog rows, or explanation owners for deterministic pagination. Scope explanation uses one global cursor over document order, then source-order owners; returned `nextOffset` continues the result page. MCP character paging is independent.
 
 `markdown` searches the generated source, not a superset of visible text:
 styling and escapes may interrupt an otherwise contiguous visible identifier.
@@ -977,7 +990,8 @@ override automatic detection. JSON, Markdown, man-format, and MCP results never
 gain ANSI presentation styling. When Markdown is written
 directly to a terminal, control characters in dynamic document identities are
 masked so a path or catalog label cannot issue terminal commands. Redirected
-Markdown preserves those data bytes exactly.
+full/excerpt Markdown preserves those data bytes exactly. Explanation text and
+CommonMark always mask controls, including unchecked public IR producer data.
 
 Colour controls text styling, not the TUI theme or terminal-control sequences
 needed to operate an interactive screen. A pager is still a terminal destination:
@@ -1017,7 +1031,7 @@ read-only and cannot invoke this operation.
 
 <!-- mant:entries role=option case=sensitive -->
 - `--request-json`: Read one closed `mant.request/v0.11` or `mant.scope-request/v0.11` object from standard input.
-- `--schema CONTRACT`: Print a generated JSON Schema for `doctor`, `tldr-update`, `request`, `query`, `outline`, `excerpt`, `search`, `scope-request`, `scope-query`, `catalog`, or `all`.
+- `--schema CONTRACT`: Print a generated JSON Schema for `doctor`, `tldr-update`, `request`, `query`, `outline`, `excerpt`, `explanation`, `search`, `scope-request`, `scope-query`, `catalog`, or `all`.
 - `--protocol-version`: Print the exact native protocol versions.
 - `--mcp`: Serve read-only ManT tools over silent MCP stdio. Successful calls
   return bounded plain text or CommonMark without ordinary lowering
@@ -1075,7 +1089,7 @@ The largest page body is 32,768 scalars and therefore at most 131,072 UTF-8
 bytes before MCP/JSON framing; it is not a 32 KiB byte page. `maxResults` and
 `maxMatches` truncate the canonical result before character paging, so callers
 must raise those limits or narrow the query to reach omitted rows or matches.
-Result `offset` skips catalog rows or matching-line groups before that
+Result `offset` skips catalog rows, explanation owners or matching-line groups before that
 materialization; `startChar` then pages only the resulting canonical text.
 Paging is stateless: MCP reads current local files on every call, has no update
 tool, and makes no cross-call snapshot guarantee.
@@ -1157,13 +1171,17 @@ for the schema and update lifecycle.
 ## General
 
 <!-- mant:entries role=option case=sensitive -->
-- `-h`, `--help`: Show command help and exit.
-- `-V`, `--version`: Show the installed ManT version and exit.
+- `-h`, `--help`: Show command help and exit. <!-- mant:entry {"aliasGroups":[["-h","--help"]]} -->
+- `-V`, `--version`: Show the installed ManT version and exit. <!-- mant:entry {"aliasGroups":[["-V","--version"]]} -->
 
 ## Exit Status
 
 `0` indicates success, `2` indicates invalid input or usage, and `1` indicates
 an operational failure.
+
+Readable explanation queries with zero or multiple evidence owners return `0`;
+inspect `outcome` and coverage instead of treating them as selection errors.
+Strict node navigation still rejects unresolved or ambiguous selectors.
 
 ## See Also
 

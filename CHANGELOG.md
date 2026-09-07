@@ -27,8 +27,8 @@ that crate was not published for that change.
 - Separate documented-name occurrences from explicit `aliasGroups` and
   same-document `aliasOf` facts. Validate visible-head binding, group disjointness,
   exact member identity, unique compatible targets and cycles without merging
-  or rewriting content. This is IR support; Markdown declaration and explanation
-  consumers are still being migrated.
+  or rewriting content. Markdown declarations, semantic indexes, outlines and
+  independent explanation consumers now preserve these distinct relationships.
 
 - Introduce common `EntryFacts` for native definitions and ordinary list items,
   borrowed `EntryOwner` views, and validated owner-relative form references.
@@ -36,8 +36,8 @@ that crate was not published for that change.
   The old `DefinitionIdentity` name temporarily aliases the common facts type;
   facts gain a `forms` field. Ordinary content remains authoritative and is not
   reconstructed from these references. This deliberately revises the unreleased
-  v0.11 document schema; Markdown production and query consumers migrate in
-  subsequent stages.
+  v0.11 document schema; Markdown production and all query consumers support
+  both content-owner kinds.
 
 - Add sparse `TableGrid` coordinates and bounded slot expansion for shared
   table presentation without changing the serialized table shape.
@@ -65,12 +65,22 @@ that crate was not published for that change.
 
 ### mant-protocol 0.11.0
 
+- Introduce `mant.explanation/v0.11` and `ExplanationOptions`. Explain requests
+  return independent name/form/literal/explicit-relationship evidence, not a
+  unique excerpt. Scope results move from `matches`/`missed` to
+  `result.explanation` with global paging, per-source evidence, outcome,
+  coverage and independent truncation. Consumers must inspect `outcome`, not
+  assume one record or infer no-evidence from an empty later page.
+- Expose explicit `aliasGroups` and `aliasOf` separately from selectable
+  outline names. Update the authorized unreleased v0.11 snapshot in place;
+  unrelated native/source/doctor contracts and published snapshots are unchanged.
+
 - Change the unreleased excerpt `document-entry.entry` to a single-item IR
   block, preserving ordinary list content, numbering and layout instead of
   requiring every owner to be a standalone native definition.
 
 - Carry document-wide `semanticsComplete` and the logical source `address` in
-  excerpts, including nested explain responses; compact content retains an
+  excerpts and independent explanations; compact content retains an
   incomplete-semantics notice even when parser findings are hidden.
 - Advance the native process family to v0.11 and expose optional
   `fragmentAliases` beside normalized document, section, and anchor identities.
@@ -134,7 +144,7 @@ that crate was not published for that change.
 
 - Share entry coordinates and original-content excerpts across ordinary list
   items and native definitions. Read, outline, search, scope traversal and TUI
-  navigation now support both; Markdown authoring migration remains separate.
+  navigation now support both, including explicit Markdown authoring.
 
 - Retain every visible name inside linked native definition heads and stop
   name extraction at adjacent styled parameters (`-L` plus italic `dir`).
@@ -366,6 +376,13 @@ that crate was not published for that change.
 
 ### mant 0.11.0
 
+- Migrate CLI/request JSON/MCP explain to bounded multi-evidence results.
+  Readable zero/multiple results now exit 0; strict `--node` and `mant_read`
+  retain ambiguity errors. `--limit`/`--offset` page owners globally and
+  `--explain-content-bytes` bounds payload copies. MCP exposes equivalent
+  `maxResults`/`offset`/`contentBytes`, independently of Unicode character paging.
+  Update help, schema discovery, protocol description and the independent clap
+  self-manual oracle; real names and declared alias groups are checked separately.
 - Make all public CLI options addressable in the self manual, including
   document-scope, input, discovery, doctor, and dry-run options previously
   described only in prose or tables. Keep their examples and constraints in

@@ -4,7 +4,6 @@ use crate::common::{self, GIT_SECTIONS};
 use crate::fixtures::{archlinux_manual, archlinux_manual_query};
 use mant_engine::{
     build_outline, build_outline_projection, build_outline_with_detail, select_excerpt,
-    select_explanation,
 };
 use mant_ir::{Block, EntryKind, Inline};
 use mant_protocol::EntryProjection;
@@ -162,7 +161,7 @@ fn supports_outline_discovery_and_targeted_excerpts() {
 #[test]
 fn identifies_git_environment_variables_from_hanging_definitions() {
     let query = archlinux_manual_query("git");
-    let explanation = select_explanation(&query, "GIT_DIR").expect("GIT_DIR environment entry");
+    let explanation = select_excerpt(&query, &["GIT_DIR"]).expect("GIT_DIR environment entry");
     assert!(matches!(
         explanation.selections.as_slice(),
         [ExcerptSelection::DocumentEntry { outline, entry }]

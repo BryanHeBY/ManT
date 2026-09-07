@@ -1,6 +1,6 @@
 //! Regressions from Arch Linux libarchive's `bsdunzip(1)` page.
 
-use mant_engine::{render_excerpt_markdown, select_explanation};
+use mant_engine::{render_excerpt_markdown, select_excerpt};
 use mant_ir::{Block, DefinitionRole};
 
 use crate::{
@@ -45,7 +45,7 @@ fn distinct_option_heads_share_the_following_mdoc_description() {
     );
     let query = archlinux_manual_query("bsdunzip");
     for selector in ["-I", "-O"] {
-        let excerpt = select_explanation(&query, selector)
+        let excerpt = select_excerpt(&query, &[selector])
             .unwrap_or_else(|error| panic!("explain {selector}: {error}"));
         assert!(
             render_excerpt_markdown(&excerpt)

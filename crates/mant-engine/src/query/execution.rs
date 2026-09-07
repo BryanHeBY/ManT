@@ -1,8 +1,7 @@
 //! Query execution boundary; public entry points remain validated.
 use super::{
-    ProjectionError, QueryExcerpt, QueryExecutionError, QueryView, QueryViewResult,
-    ResolvedContent, SearchCase, SearchQuery, SearchScope, SearchSyntax, search_query,
-    select_excerpt, select_explanation,
+    QueryExecutionError, QueryView, QueryViewResult, ResolvedContent, SearchQuery, search_query,
+    select_excerpt,
 };
 
 /// Materialize one view from an already loaded query.
@@ -25,9 +24,15 @@ pub fn project_query_view(
         QueryView::Excerpt { selectors } => select_excerpt(&query, selectors)
             .map(QueryViewResult::Excerpt)
             .map_err(QueryExecutionError::Projection),
-        QueryView::Explain { entry } => select_explanation_with_text_hint(&query, entry)
-            .map(QueryViewResult::Excerpt)
-            .map_err(QueryExecutionError::Projection),
+        QueryView::Explain { entry, options } => crate::explain_query(
+            &query,
+            &mant_protocol::ExplanationQuery {
+                entry: entry.clone(),
+                options: *options,
+            },
+        )
+        .map(QueryViewResult::Explanation)
+        .map_err(|error| QueryExecutionError::Query(super::QueryError::InvalidExplanation(error))),
         QueryView::Search {
             pattern,
             syntax,
@@ -55,41 +60,4 @@ pub fn project_query_view(
     }
 }
 
-pub(crate) fn select_explanation_with_text_hint(
-    query: &ResolvedContent,
-    entry: &str,
-) -> Result<QueryExcerpt, ProjectionError> {
-    match select_explanation(query, entry) {
-        Err(ProjectionError::UnknownSelector { document, selector }) => {
-            let probe = SearchQuery {
-                pattern: selector.clone(),
-                syntax: SearchSyntax::Literal,
-                case: SearchCase::Insensitive,
-                scope: SearchScope::Visible,
-                word: false,
-                context_lines: 0,
-                limit: 1,
-                offset: 0,
-            };
-            if let Some(found) = search_query(query, &probe)
-                .ok()
-                .and_then(|result| result.matches.into_iter().next())
-            {
-                let line = found
-                    .occurrences
-                    .first()
-                    .map_or(1, |occurrence| occurrence.markdown.start_line);
-                return Err(ProjectionError::SelectorFoundOnlyInText {
-                    document,
-                    selector,
-                    path: found.outline.path().to_owned(),
-                    title: found.outline.title().to_owned(),
-                    line,
-                });
-            }
-            Err(ProjectionError::UnknownSelector { document, selector })
-        }
-        result => result,
-    }
-}
 use super::validation::validate_query_view;
