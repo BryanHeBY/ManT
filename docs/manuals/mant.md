@@ -864,7 +864,7 @@ semantic entry. All three selectors reject control characters and values over
 ## Search {#search-section}
 
 <!-- mant:entries role=option case=sensitive -->
-- `--search PATTERN`, `--grep PATTERN`: Search visible text and report reusable nodes plus Markdown coordinates. Both spellings select the same search operation.
+- `--search PATTERN`, `--grep PATTERN`: Search visible text and report reusable nodes plus Markdown coordinates. Both spellings select the same search operation. <!-- mant:entry {"aliasGroups":[["--search","--grep"]]} -->
 - `--regex`: Interpret the pattern as a regular expression.
 - `--case POLICY`: Use `insensitive`, `sensitive`, or `smart` case handling.
 - `--word`: Require Unicode-aware word boundaries.

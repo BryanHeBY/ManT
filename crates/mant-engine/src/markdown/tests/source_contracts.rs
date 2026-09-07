@@ -17,6 +17,8 @@ fn annotations_preserve_the_original_event_tree_and_every_visible_delimiter() {
             "<!-- mant:entries role=command case=sensitive -->\n7. [`get`](get.md) / `fetch` | `get all`: Get **body**.\n\n8. `put`: Put.\n\n   <!-- mant:entries role=option case=sensitive -->\n   - `-f`: Child.\n",
             "<!-- mant:entries role=command case=insensitive -->\n- `good`: Valid.\n- This remains visible prose.\n- `other`: Also valid.\n",
             "<!-- mant:entries role=option case=sensitive -->\n- `--mode MODE`: Choose.\n\n  <!-- mant:domain choices=exhaustive -->\n\n  <!-- mant:entries role=value case=sensitive -->\n  - `auto`: Automatic.\n  - `manual`\n",
+            "<!-- mant:entries role=option case=sensitive -->\n4. `-h`, `--help`: Help.  \n   Hard break. <!-- mant:entry {\"id\":\"help\",\"aliasGroups\":[[\"-h\",\"--help\"]]} -->\n\n5. `--more` — More. <!-- mant:entry {\"id\":\"more\",\"aliasOf\":\"help\"} -->\n",
+            "<!-- mant:entries role=option case=sensitive -->\n- `--help`: Help. <!-- mant:entry {\"unknown\":true} -->\n\n  <!-- mant:entries role=command case=sensitive -->\n  - `go` | `go all`: [Details](other.md). <!-- mant:entry {\"id\":\"go\"} -->\n",
             "<!-- mant:entries role=option case=sensitive -->\n- `--mode MODE`: Choose.\n\n  <!-- mant:domain choices=exhaustive -->\n\n  <!-- mant:entries role=value case=sensitive -->\n  - `auto`: Automatic.\n\n  Additional modes:\n\n  1. Ordinary container.\n\n     - Nested container.\n\n       <!-- mant:entries role=invalid case=sensitive -->\n       - `manual`: Manual mode.\n",
         ] {
             let source = body.replace('\n', newline);

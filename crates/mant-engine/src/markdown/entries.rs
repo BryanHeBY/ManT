@@ -48,11 +48,7 @@ fn entry_coverage(
             coverage.rejected |= normalize_nested_blocks(block, declarations, diagnostics).rejected;
             continue;
         };
-        let owner_offsets = source
-            .and_then(|source| source.byte_range)
-            .and_then(|range| usize::try_from(range.start.get()).ok())
-            .and_then(|start| declarations.list_items.remove(&start))
-            .unwrap_or_default();
+        let owner_offsets = declarations.item_positions(*source);
         let child_coverage = items
             .iter_mut()
             .enumerate()
@@ -130,6 +126,11 @@ fn entry_coverage(
                 attached,
                 declaration.is_some(),
             ));
+            if declaration.is_some()
+                && let Some(offset) = owner_offsets.get(item_index)
+            {
+                declarations.declared_items.insert(*offset);
+            }
             if let Some(declaration) = domain {
                 attach_domain(item, declaration, children, diagnostics);
             }
@@ -273,6 +274,7 @@ impl EntryRejectionReason {
 
 pub(crate) fn is_semantic_entry_rejection_code(code: &str) -> bool {
     code == "markdown.semantic-entry-list"
+        || code == "markdown.semantic-entry-metadata"
         || code == "markdown.semantic-value-domain"
         || EntryRejectionReason::ALL
             .iter()
@@ -632,10 +634,9 @@ fn is_safe_dotted_name(value: &str) -> bool {
 }
 
 fn is_placeholder(value: &str) -> bool {
-    let value = value
-        .strip_prefix('<')
-        .and_then(|value| value.strip_suffix('>'))
-        .unwrap_or(value);
+    if is_explicit_placeholder(value) {
+        return true;
+    }
     !value.is_empty()
         && value.bytes().any(|byte| byte.is_ascii_alphabetic())
         && value.bytes().all(|byte| {
@@ -647,7 +648,11 @@ fn is_explicit_placeholder(value: &str) -> bool {
     value
         .strip_prefix('<')
         .and_then(|value| value.strip_suffix('>'))
-        .is_some_and(is_placeholder)
+        .is_some_and(|name| {
+            !name.is_empty()
+                && name.bytes().any(|byte| byte.is_ascii_alphabetic())
+                && is_safe_segment(name)
+        })
 }
 
 fn dash_option_name(

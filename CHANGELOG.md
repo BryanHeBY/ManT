@@ -81,6 +81,12 @@ that crate was not published for that change.
 
 ### mant-engine 0.11.0
 
+- Accept bounded, annotation-only `mant:entry` JSON for explicit IDs,
+  visible-name alias groups and same-document alias relationships. Validate
+  forward references, subject/case compatibility and cycles through the shared
+  IR policy; reject competing objects atomically and invalid relationship fields
+  independently while keeping original content and successful sibling entries.
+
 - Separate inline definition first-paragraph hanging layout from standalone
   description blocks. Continuations now retain their structural indentation
   in text and the TUI regardless of label width; explicit leading and

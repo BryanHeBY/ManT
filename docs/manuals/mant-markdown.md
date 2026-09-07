@@ -100,8 +100,8 @@ blank line can itself change the parsed structure.
 Accepted semantic items remain ordinary list items. Their code terms, `:`,
 dash and pipe delimiters, paragraphs, numbering and tightness are preserved;
 read-only form/name bindings point into that same content. The supported
-syntax below describes current behavior, not the proposed
-`mant:entry` JSON, `aliasGroups` or `aliasOf` fields, which are not implemented.
+syntax below includes list declarations and optional item-owned `mant:entry`
+JSON metadata. Neither kind of annotation supplies replacement body text.
 
 ### Current declarations
 
@@ -228,7 +228,7 @@ definitions and indexed concepts.
 
 | Semantic entry field | Authoring source |
 | --- | --- |
-| `id` | Generated from the semantic identity; no entry-level `id=` directive exists. Heading `{#id}` attributes address headings, not entries. |
+| `id` | Derived by default; optional `mant:entry` JSON `id` selects an exact validated identity. Heading `{#id}` attributes still address headings, not entries. |
 | `kind` | `role=` on the owning list; option, marker, and operand map to parameter kinds. |
 | `case` | Required `case=` on the owning list. |
 | `aliases` | Selectable names extracted from the visible code terms, including linked code; grouped terms select shared content, not necessarily equivalent behavior. |
@@ -236,6 +236,8 @@ definitions and indexed concepts.
 | `documentTargets` | Typed document links wrapping a code term; links in the description remain ordinary references. |
 | `children` | Structurally nested semantic lists with their own role and case declarations. |
 | `valueDomain` | Explicit `mant:domain choices=...` or `entries=... roles=...`; otherwise all-value children infer open choices. |
+| `aliasGroups` | Optional `mant:entry` JSON groups, each grounded in two or more disjoint visible names. |
+| `aliasOf` | Optional `mant:entry` JSON same-document entry ID; a validated relation between independent owners, not content redirection. |
 
 There are no independent `aliases=` or `forms=` attributes. This keeps indexed
 spellings and invocation forms grounded in content visible to human readers.
@@ -249,6 +251,26 @@ The current `aliases` field describes lookup, not a verified equivalence
 relation. A common description alone does not prove that two options are
 interchangeable or accept the same argument syntax. ManT does not infer that
 claim from commas, shared prose or the number of forms.
+
+### Explicit item relationships
+
+Inside an explicitly declared list, an item may carry one metadata object:
+
+```markdown
+<!-- mant:entries role=option case=sensitive -->
+- `-h`, `--help`: Show help. <!-- mant:entry {"id":"help","aliasGroups":[["-h","--help"]]} -->
+- `-S`, `--since`, `-U`, `--until`: Set bounds. <!-- mant:entry {"id":"bounds","aliasGroups":[["-S","--since"],["-U","--until"]]} -->
+- `--data-ascii <data>`: Another data name. <!-- mant:entry {"id":"ascii","aliasOf":"data"} -->
+- `-d <data>`, `--data <data>`: Submit data. <!-- mant:entry {"id":"data","aliasGroups":[["-d","--data"]]} -->
+```
+
+The object has only optional `id`, `aliasGroups`, and `aliasOf` fields. Role and case come from the list; value domains keep their separate declaration. Place the comment at the end of the item's first paragraph, or as a single-line standalone comment directly inside that item. Nested items own their declarations; metadata never borrows an owner across a block quote, code block, link, or another container. Code-span, fenced-code, and link-destination examples do not activate declarations. Conservative undeclared option recognition does not authorize metadata.
+
+Each object is limited to 8192 UTF-8 bytes on one physical line, with at most 32 groups and 32 members per group. The closed shape permits no arbitrary JSON nesting. Invalid JSON, types (including explicit null), unknown or duplicate keys, competing objects, and object-limit violations reject the entire object. All recognized metadata comments remain non-visible, including rejected and unclosed comments; unclosed input follows the original parser event boundary rather than being reconstructed across events. Escape comment terminators inside JSON strings, for example as `\u002d\u002d\u003e`.
+
+An explicit ID must satisfy the canonical ID grammar, fit 512 Unicode scalars, avoid reserved selectors, and be unique. Invalid or duplicated declarations retain the derived identity with a diagnostic; they are not silently renamed. `aliasGroups` members use the exact visible name spelling, not complete argument forms: `-o FILE` and `--output=FILE` contribute `-o` and `--output`. Explicit `<data>` placeholders may use lowercase; unbracketed placeholders retain the uppercase convention. Groups have at least two uniquely bound names, cannot overlap under the entry's case policy, and have no implied canonical first member. Partial grouping is allowed; ungrouped names remain independent subjects. An invalid group rejects the complete `aliasGroups` field, not otherwise valid metadata or body content.
+
+`aliasOf` supports forward references to same-document IDs only. Both owners must have the same role and case policy and each describe one name or one group covering all their names. Missing, duplicate, ambiguous multi-subject, incompatible, self-referential, and cyclic relationships are rejected without first/last-wins behavior. A rejected relation does not erase an independent ID or valid group. The shared IR relationship validator is also the authoring validator. Relationships never merge owners, change nesting, copy descriptions, inherit value domains, execute examples, or expand filesystem/network authority.
 
 Links follow the same source-to-IR boundary: a fragment becomes a local section
 target, a relative Markdown path becomes a same-source document edge, and web

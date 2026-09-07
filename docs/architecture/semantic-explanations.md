@@ -32,14 +32,15 @@ required a content/semantic ownership change, not renderer punctuation patches.
 The ordinary-owner migration now removes this conversion. Regression tests
 compare the same original parser events before and after annotation, including
 ordered/nested lists, invalid siblings, line endings and head punctuation.
-Per-entry relationship authoring and multi-evidence explain remain later
-stages; this does not claim that the entire design is implemented.
+Per-entry relationship authoring now uses original list-item identities across
+comment removal. Multi-evidence explain remains a later stage; this does not
+claim that the entire design is implemented.
 
 The follow-up owner checks now distinguish partial child extraction from an
 author's exhaustive-choice claim, validate links to all indexed content owners,
 and keep inline first-paragraph hanging layout separate from later block
 coordinates. These are correctness repairs to the migrated foundation, not
-implementation of the pending relationship authoring or explanation collector.
+implementation of the pending explanation collector.
 
 The target model attaches common entry facts to both ordinary `ListItem` and
 native `DefinitionItem` owners. Keep one authoritative content tree; derive
@@ -51,10 +52,9 @@ nested entries, navigation, scope links, value domains and TUI anchors.
 
 Metadata must not invent a documented name absent from the visible definition
 head, move children, generate visible choices, or replace a description.
-Unknown or invalid facts must not erase the underlying content. The planned
-comment handling must keep invalid metadata non-visible and report it through
-diagnostics; that is a target requirement, not a claim that current handling of
-all HTML comments already does so. This principle applies to semantic comments,
+Unknown or invalid facts must not erase the underlying content. The implemented
+metadata handling keeps invalid declarations non-visible and reports them through
+diagnostics, using the original parser events without reparsing. This applies to semantic comments,
 not a promise that existing heading attributes or embedded TLDR directives
 are interpreted by every ordinary Markdown viewer.
 
@@ -66,10 +66,10 @@ Current `names` / projected `aliases` fields expose selector spellings, not
 proof that the corresponding options can be substituted for one another.
 Complete forms preserve documented usage, not an executable argv grammar.
 
-The proposed model separates documented names, explicit same-owner
+The implemented model separates documented names, explicit same-owner
 `aliasGroups`, and explicit same-document `aliasOf` relationships between
-independent entries. These names are design vocabulary, **not supported
-Markdown fields yet**. In particular, grouping `-S`, `--since`, `-U`, `--until`
+independent entries. Markdown declares these fields in a closed `mant:entry`
+JSON comment attached to an explicitly declared item. In particular, grouping `-S`, `--since`, `-U`, `--until`
 in one item must not assert that since and until are equivalent. Explicit
 groups could record those two pairs without splitting or duplicating content.
 

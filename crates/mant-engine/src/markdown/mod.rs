@@ -10,6 +10,7 @@ mod entries;
 mod inline;
 mod layout;
 pub(crate) mod link_destination;
+mod metadata;
 mod source;
 
 #[cfg(test)]
@@ -179,6 +180,7 @@ fn parse_document(source_text: &str, source_path: Option<String>) -> Document {
     parse_document_with_entries(
         PreparedMarkdown {
             source: source_text,
+            display_source: source_text.to_owned(),
             events: Parser::new_ext(source_text, markdown_options())
                 .into_offset_iter()
                 .collect(),
@@ -196,10 +198,11 @@ fn parse_document_with_entries(
 ) -> Document {
     let PreparedMarkdown {
         source: source_text,
+        display_source,
         events,
         mut declarations,
     } = prepared;
-    let source = MarkdownSource::new(source_text);
+    let source = MarkdownSource::new(&display_source);
     let ParsedDocumentStructure {
         diagnostics,
         mut root_blocks,
@@ -228,30 +231,14 @@ fn parse_document_with_entries(
             section.fragment_aliases.extend(fragment_aliases);
         }
     }
-    normalize_markdown_layout(&source, &mut root_blocks, &mut sections);
+    normalize_markdown_layout(
+        &MarkdownSource::new(source_text),
+        &mut root_blocks,
+        &mut sections,
+    );
     normalize_entry_lists(&mut root_blocks, &mut declarations, entry_diagnostics);
     normalize_section_entries(&mut sections, &mut declarations, entry_diagnostics);
-    for declaration in declarations.entries.into_values() {
-        entry_diagnostics.push(Diagnostic {
-            level: DiagnosticLevel::Warning,
-            code: Some("markdown.semantic-entry-list".to_owned()),
-            message: "semantic-entry directive did not resolve to a Markdown list".to_owned(),
-            source: Some(declaration.source),
-        });
-    }
-    for declaration in declarations
-        .domains
-        .into_values()
-        .filter_map(directives::DomainDeclarationState::into_unique)
-    {
-        entry_diagnostics.push(Diagnostic {
-            level: DiagnosticLevel::Warning,
-            code: Some("markdown.semantic-value-domain".to_owned()),
-            message: "semantic value-domain directive did not resolve to a semantic entry"
-                .to_owned(),
-            source: Some(declaration.source),
-        });
-    }
+    declarations.report_unattached(entry_diagnostics);
     let retained_targets = crate::definitions::identify_definitions(
         &mut root_blocks,
         &mut sections,
@@ -264,11 +251,6 @@ fn parse_document_with_entries(
     for target in retained_targets {
         ids.targets.insert(target.clone(), target);
     }
-    entry_diagnostics.extend(crate::selectors::semantic_selector_diagnostics(
-        &root_blocks,
-        &sections,
-        "markdown",
-    ));
     let mut document = Document {
         parser: Some(markdown_parser()),
         source: DocumentSource {
@@ -284,6 +266,20 @@ fn parse_document_with_entries(
         blocks: root_blocks,
         sections,
     };
+    for (old, new) in metadata::apply(
+        &mut document,
+        declarations.metadata,
+        &declarations.list_items,
+        &declarations.declared_items,
+    ) {
+        ids.targets.retain(|_, target| *target != old);
+        ids.targets.insert(new.clone(), new);
+    }
+    entry_diagnostics.extend(crate::selectors::semantic_selector_diagnostics(
+        &document.blocks,
+        &document.sections,
+        "markdown",
+    ));
     LocalLinkResolver::new(&ids.targets).visit_document_mut(&mut document);
     document.diagnostics.extend(validate_document(&document));
     document

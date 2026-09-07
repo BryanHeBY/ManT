@@ -9,14 +9,17 @@ use std::collections::{BTreeMap, BTreeSet};
 /// Events and declarations always describe this exact borrowed source.
 pub(super) struct PreparedMarkdown<'a> {
     pub(super) source: &'a str,
+    pub(super) display_source: String,
     pub(super) events: Vec<super::SpannedEvent<'a>>,
     pub(super) declarations: SemanticDeclarations,
 }
 impl<'a> PreparedMarkdown<'a> {
     pub(super) fn new(source: &'a str, diagnostics: &mut Vec<Diagnostic>) -> Self {
-        let (events, declarations) = extract_semantic_directives(source, diagnostics);
+        let (events, declarations, display_source) =
+            extract_semantic_directives(source, diagnostics);
         Self {
             source,
+            display_source,
             events,
             declarations,
         }
@@ -40,6 +43,39 @@ pub(super) struct SemanticDeclarations {
     pub(super) domains: BTreeMap<usize, DomainDeclarationState>,
     /// Item owners with a rejected or unattached child-list declaration.
     pub(super) incomplete_entry_children: BTreeSet<usize>,
+    pub(super) metadata: super::metadata::MetadataDeclarations,
+    pub(super) declared_items: BTreeSet<usize>,
+}
+
+impl SemanticDeclarations {
+    pub(super) fn item_positions(&self, source: Option<SourceSpan>) -> Vec<usize> {
+        source
+            .and_then(|span| span.byte_range)
+            .and_then(|range| usize::try_from(range.start.get()).ok())
+            .and_then(|start| self.list_items.get(&start).cloned())
+            .unwrap_or_default()
+    }
+
+    /// Close collection only after every root and section has been normalized.
+    pub(super) fn report_unattached(&mut self, diagnostics: &mut Vec<Diagnostic>) {
+        for declaration in std::mem::take(&mut self.entries).into_values() {
+            semantic_diagnostic(
+                diagnostics,
+                declaration.source,
+                "semantic-entry directive did not resolve to a Markdown list".into(),
+            );
+        }
+        for declaration in std::mem::take(&mut self.domains)
+            .into_values()
+            .filter_map(DomainDeclarationState::into_unique)
+        {
+            domain_diagnostic(
+                diagnostics,
+                declaration.source,
+                "semantic value-domain directive did not resolve to a semantic entry".into(),
+            );
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -75,7 +111,7 @@ pub(super) enum AttachedValuePolicy {
 fn extract_semantic_directives<'a>(
     source: &'a str,
     diagnostics: &mut Vec<Diagnostic>,
-) -> (Vec<super::SpannedEvent<'a>>, SemanticDeclarations) {
+) -> (Vec<super::SpannedEvent<'a>>, SemanticDeclarations, String) {
     let mut masked = source.as_bytes().to_vec();
     let mut declarations = SemanticDeclarations::default();
     let lines = super::source::physical_lines(source).collect::<Vec<_>>();
@@ -88,6 +124,7 @@ fn extract_semantic_directives<'a>(
         })
         .collect::<Vec<_>>();
     let events = super::source::parser_events(source);
+    declarations.metadata = super::metadata::collect(&events, source, &mut masked, diagnostics);
     let mut lists = Vec::new();
     for (event, range) in &events {
         match event {
@@ -128,6 +165,11 @@ fn extract_semantic_directives<'a>(
     let mut output = Vec::with_capacity(events.len());
     let mut events = events.into_iter();
     while let Some((event, range)) = events.next() {
+        if let Event::InlineHtml(raw) = &event
+            && super::metadata::payload(raw).is_some()
+        {
+            continue;
+        }
         if event != Event::Start(Tag::HtmlBlock) {
             output.push((event, range));
             continue;
@@ -150,7 +192,11 @@ fn extract_semantic_directives<'a>(
             }
         }
     }
-    (output, declarations)
+    (
+        output,
+        declarations,
+        String::from_utf8(masked).expect("ASCII masking preserves UTF-8"),
+    )
 }
 
 fn collect_entry_declarations(
