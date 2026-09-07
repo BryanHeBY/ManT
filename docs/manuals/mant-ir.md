@@ -276,7 +276,7 @@ Each `SemanticEntry` contains:
 | `children` | Entries semantically owned by this entry |
 | `valueDomain` | Optional value-space evidence |
 
-The entry `id` is also the document-local address of its authoritative definition. Aliases answer “how can this content be selected?”, forms answer “what usage did the source display?”, and document targets answer “which other document did an explicitly linked term name?”. Consumers must not reconstruct one field from another. In
+The entry `id` is also the document-local address of its authoritative item. Names answer “how can this content be selected?”, forms answer “what usage did the source display?”, and document targets answer “which other document did an explicitly linked term name?”. Consumers must not reconstruct one field from another. In
 particular, a complete form such as `[+-]O [shopt_option]` is not necessarily a
 safe selector. Description links remain ordinary content links rather than entry destinations.
 

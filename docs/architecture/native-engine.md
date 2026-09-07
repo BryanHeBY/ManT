@@ -116,7 +116,7 @@ historical review that introduced them.
 
 `mant-ir::Document` is the source-neutral in-memory representation. It contains
 root content, recursive sections, blocks, inline nodes, layout hints, source
-locations, diagnostics, and semantic definition identities. Node identities
+locations, diagnostics, and optional semantic entry facts. Node identities
 use `NodeId`; exact Markdown coordinates use half-open UTF-8 `TextRange`
 values; `DocumentIndex` provides a derived lookup sidecar without embedding
 mutable caches in the tree. Syn-style `Visit` and `VisitMut` traits keep
@@ -132,11 +132,26 @@ source syntax
                             └─> CLI / TUI / MCP   shared selection and content
 ```
 
-The index does not own another copy of the prose. Entry aliases select a
-concept, forms preserve its complete authored syntax, targets point back to the
-definitions that supply content, and children preserve semantic ownership. An
+The index does not own another copy of the prose. Validated entry names select
+an owner, forms preserve its complete authored syntax, the entry ID addresses
+that original item, and children preserve semantic ownership. Linked-document
+targets are separate typed relationships, not replacement content. An
 outline may emit only summaries or selected kinds without changing the source
 document.
+
+Producer-specific evidence is resolved before it disappears: Markdown keeps
+the original item/event identity through annotation removal; native lowering
+records explicit term forms and styled name bindings after content normalization.
+Both retain the original item source span. Shared IR validation then checks
+forms, names and relationships independently. Unannotated containers are
+transparent to semantic discovery, while any annotated child establishes an
+owner boundary even when some of its facts are invalid. Link traversal still
+visits the full tree in source order; it is not the direct-child index walk.
+
+Search uses ranges composed alongside Markdown rendering, including flattened
+table cells. HTML anchors control presentation/navigation, not semantic ownership.
+The render operation's owner keys and validated-name caches are local to one
+immutable document view; they are neither wire identities nor process caches.
 
 Typed inline navigation forms a second, orthogonal graph:
 
@@ -164,9 +179,9 @@ The model carries intent that a renderer cannot safely recover from text:
 - section and anchor IDs identify page-local destinations;
 - native zero-width targets survive structural lowering even when libmandoc
   moves them onto paragraph, display, list, item, function, or section owners;
-- definition identities remain attached to content, while the rebuildable
+- entry facts remain attached to either item shape, while the rebuildable
   `SemanticIndex` classifies commands, parameter families, configuration keys,
-  variables, values, and terms; it preserves selector aliases separately from
+  variables, values, and terms; it preserves selectable names separately from
   authored forms and reconstructs nested ownership;
 - `Inline::Link` has an explicit target kind for a hierarchical Markdown
   document, installed manual, page-local section, external URI, or email;

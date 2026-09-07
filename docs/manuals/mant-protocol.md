@@ -20,7 +20,7 @@ together and how clients should use them; it is not a substitute for validating
 structured input against the appropriate schema.
 
 Protocol projections reuse selected semantic types from `mant-ir`, including
-blocks, sections, inline nodes, definition identities, logical document
+blocks, sections, inline nodes, entry facts, logical document
 addresses, metadata, diagnostics, and tldr content. These types are the
 wire-bearing semantic subset. Their Serde representations are locked by a
 complete structural Schema snapshot; changing one under an unchanged schema

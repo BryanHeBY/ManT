@@ -89,6 +89,74 @@ Entries owned by a heading are available through `SemanticIndex::section`.
 Nested entries remain under their parent `SemanticEntry`; callers should not
 flatten that hierarchy when ownership affects interpretation.
 
+### Construct either owner without changing content
+
+This complete example starts with an ordinary item, adds facts to an identical
+copy, and then constructs a distinct term-and-description item. Annotation does
+not convert one shape into the other. A native or custom producer must record
+known forms explicitly; missing forms never imply “use the terms”.
+
+```rust
+use mant_ir::{
+    Block, DefinitionItem, DefinitionLayout, EntryContentSlice, EntryFacts,
+    EntryForm, EntryInlineRoot, EntryKind, EntryNameBinding, EntryNameEvidence,
+    EntryOwner, Inline, LayoutHint, ListItem, NameCase,
+};
+
+fn facts(form: EntryForm) -> EntryFacts {
+    EntryFacts {
+        id: "command-run".into(), kind: EntryKind::Command,
+        case: NameCase::Sensitive, names: vec!["run".into()],
+        forms: vec![form.clone()],
+        name_bindings: vec![EntryNameBinding {
+            name: 0, evidence: EntryNameEvidence::Declared,
+            occurrences: vec![form],
+        }],
+        alias_groups: Vec::new(), alias_of: None, value_domain: None,
+    }
+}
+fn paragraph(children: Vec<Inline>) -> Block {
+    Block::Paragraph { children, layout: LayoutHint::default(), source: None }
+}
+
+// 1. Ordinary content is useful on its own, with no semantic owner.
+let ordinary = ListItem {
+    source: None, entry: None,
+    blocks: vec![paragraph(vec![
+        Inline::Code { value: "run".into() },
+        Inline::Text { value: ": Start the task.".into() },
+    ])],
+};
+assert!(EntryOwner::List(&ordinary).facts().is_none());
+
+// 2. The same blocks, with an explicit reference to only their displayed name.
+let mut annotated = ordinary.clone();
+annotated.entry = Some(facts(EntryForm { parts: vec![EntryContentSlice {
+    root: EntryInlineRoot::Block { index: 0 }, path: vec![0], bytes: None,
+}] }));
+assert_eq!(ordinary.blocks, annotated.blocks);
+assert_eq!(EntryOwner::List(&annotated).validated_names().unwrap(), ["run"]);
+
+// 3. A source-neutral definition owns actual terms and a separate description.
+// This is an alternative owner, not another node with the same ID in one tree.
+let definition = DefinitionItem {
+    source: None, layout: DefinitionLayout::default(),
+    terms: vec![vec![Inline::Code { value: "run".into() }]],
+    description: vec![paragraph(vec![Inline::Text {
+        value: "Start the task.".into(),
+    }])],
+    entry: Some(facts(EntryForm::term(0))),
+};
+assert_eq!(EntryOwner::Definition(&definition).validated_names().unwrap(), ["run"]);
+assert!(EntryOwner::Definition(&definition).forms().is_some());
+```
+
+`source: None` here denotes synthetic content. Parsers retain the original item
+span, not the first surviving block after removing annotations. References bind
+to the final owned content; complete term forms borrow the original inlines.
+Invalid forms and invalid names are independent findings: neither deletes the
+owner or its nested entries. Validate the completed document before consumption.
+
 ## Typed links and the document graph
 
 `Inline::Link` carries a closed `LinkTarget` rather than an unclassified URL

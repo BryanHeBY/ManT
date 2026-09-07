@@ -66,6 +66,16 @@ DocumentResolver ──> Markdown parser or libmandoc lowering
          └─> versioned mant-protocol responses
 ```
 
+Lowering preserves ordinary lists as ordinary lists and genuine definitions as
+terms plus descriptions. Both can carry `mant_ir::EntryFacts`; annotation never
+replaces their blocks. Markdown binds declarations and coverage to original
+item positions before consuming comments, then binds forms to final content.
+Native lowering records explicit term forms while styled macro evidence is
+still available. Shared validation independently filters invalid forms, names
+and relationships without erasing owners or their children. Derived selectors
+reuse a single immutable location snapshot, and search composes byte ownership
+with rendered text even when table cells flatten for portable Markdown.
+
 | Need | Preferred API |
 | --- | --- |
 | Reuse one stable discovery snapshot | `DocumentResolver` |

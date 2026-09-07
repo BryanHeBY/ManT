@@ -57,8 +57,8 @@ that crate was not published for that change.
 - Introduce common `EntryFacts` for native definitions and ordinary list items,
   borrowed `EntryOwner` views, and validated owner-relative form references.
   `ListItem` gains an optional `entry`; Rust struct literals must initialize it.
-  The old `DefinitionIdentity` name temporarily aliases the common facts type;
-  facts gain a `forms` field. Ordinary content remains authoritative and is not
+  Both content owners use the same facts type with explicit `forms`; no legacy
+  type alias remains. Ordinary content remains authoritative and is not
   reconstructed from these references. This deliberately revises the unreleased
   v0.11 document schema; Markdown production and all query consumers support
   both content-owner kinds.
