@@ -2158,7 +2158,7 @@
                 "const": "ordered"
               },
               "start": {
-                "description": "First ordinal, or unknown. Renderers use one for an unknown start\nwithout changing the source fact. Zero and u64::MAX are valid.",
+                "description": "First ordinal, or unknown. Renderers use one for an unknown start\nwithout changing the source fact. Zero and `u64::MAX` are valid.",
                 "type": [
                   "integer",
                   "null"
@@ -4926,7 +4926,7 @@
                 "const": "ordered"
               },
               "start": {
-                "description": "First ordinal, or unknown. Renderers use one for an unknown start\nwithout changing the source fact. Zero and u64::MAX are valid.",
+                "description": "First ordinal, or unknown. Renderers use one for an unknown start\nwithout changing the source fact. Zero and `u64::MAX` are valid.",
                 "type": [
                   "integer",
                   "null"
@@ -8104,7 +8104,7 @@
                 "const": "ordered"
               },
               "start": {
-                "description": "First ordinal, or unknown. Renderers use one for an unknown start\nwithout changing the source fact. Zero and u64::MAX are valid.",
+                "description": "First ordinal, or unknown. Renderers use one for an unknown start\nwithout changing the source fact. Zero and `u64::MAX` are valid.",
                 "type": [
                   "integer",
                   "null"
@@ -11340,7 +11340,7 @@
                 "const": "ordered"
               },
               "start": {
-                "description": "First ordinal, or unknown. Renderers use one for an unknown start\nwithout changing the source fact. Zero and u64::MAX are valid.",
+                "description": "First ordinal, or unknown. Renderers use one for an unknown start\nwithout changing the source fact. Zero and `u64::MAX` are valid.",
                 "type": [
                   "integer",
                   "null"

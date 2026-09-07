@@ -131,6 +131,12 @@ that crate was not published for that change.
   Preserve complete spellings such as `-nostdinc++` and `-Wc++11-compat`;
   previously truncated selectors no longer address those definitions. IDs for
   corrected names and their former collision groups must be rediscovered.
+- Bind already recognized native names immediately before angle-delimited
+  arguments, including Clang's `-D<NAME>` and `-fno-builtin-<function>` forms.
+  Keep complete authored forms and reject invalid bindings independently.
+- Reuse validated names within immutable selection snapshots and skip repeated
+  name validation when there are no explicit alias groups to project. This does
+  not bypass validation of names or nonempty relationships.
 
 - Propagate bounded BSD/mandoc configuration expansion findings through native
   root discovery to doctor, including macOS fragments and Linux mandoc fallback.
