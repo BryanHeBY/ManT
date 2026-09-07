@@ -147,7 +147,9 @@ pub(super) fn append_table_row(
             })
             .collect(),
     };
-    if let Some(Block::Table { rows, .. }) = output.last_mut() {
+    if !node.flags.table_start
+        && let Some(Block::Table { rows, .. }) = output.last_mut()
+    {
         rows.push(row);
     } else {
         output.push(Block::Table {

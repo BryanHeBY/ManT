@@ -1087,6 +1087,7 @@ static unsigned int
 snapshot_node_flags(const struct roff_node *source)
 {
 	unsigned int flags;
+	const struct tbl_span *previous;
 
 	flags = 0;
 	if (source->flags & NODE_NOSRC)
@@ -1109,6 +1110,16 @@ snapshot_node_flags(const struct roff_node *source)
 		flags |= MANT_MANDOC_NODE_DELIMITER_CLOSE;
 	if (source->flags & NODE_SYNPRETTY)
 		flags |= MANT_MANDOC_NODE_SYNOPSIS_PRETTY;
+	if (source->type == ROFFT_TBL && source->span != NULL &&
+	    source->span->pos == TBL_SPAN_DATA) {
+		/* Rule-only rows do not produce owned cells. Mark the first
+		 * data row of this native table, not every layout restart (T&). */
+		previous = source->span->prev;
+		while (previous != NULL && previous->pos != TBL_SPAN_DATA)
+			previous = previous->prev;
+		if (previous == NULL)
+			flags |= MANT_MANDOC_NODE_TABLE_START;
+	}
 	return flags;
 }
 

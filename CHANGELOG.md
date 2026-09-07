@@ -137,6 +137,9 @@ that crate was not published for that change.
 
 ### libmandoc-rs 0.10.0
 
+- Retain the first data row of each native table in `NodeFlags::table_start`,
+  independently of leading rules and `T&` layout changes.
+
 - Expose effective table-cell content kinds, including layout-rule precedence
   and connecting versus isolated horizontal rules, for faithful consumers.
 

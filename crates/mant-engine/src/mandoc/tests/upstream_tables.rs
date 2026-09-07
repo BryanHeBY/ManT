@@ -10,6 +10,28 @@ fn man(body: &str) -> mant_ir::Document {
 }
 
 #[test]
+fn adjacent_tables_remain_distinct_but_layout_restarts_do_not_split() {
+    for leading_rule in ["", "_\n"] {
+        let document = man(&format!(
+            ".TS\nl.\nFIRST\n.T&\nr.\nSECOND\n.TE\n.TS\nl.\n{leading_rule}THIRD\nFOURTH\n.TE"
+        ));
+        let [
+            Block::Table { rows: first, .. },
+            Block::Table { rows: second, .. },
+        ] = document.sections[0].blocks.as_slice()
+        else {
+            panic!("separate tables: {document:?}")
+        };
+        assert_eq!(first.len(), 2);
+        assert_eq!(second.len(), 2);
+        assert_eq!(
+            first[1].cells[0].alignment,
+            Some(mant_ir::TableAlignment::Right)
+        );
+    }
+}
+
+#[test]
 fn table_rule_cells_never_resurrect_suppressed_source_payload() {
     for (layout, payload) in [
         ("_", "HIDDEN"),

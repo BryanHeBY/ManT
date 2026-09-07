@@ -9,6 +9,21 @@ fn cells(node: &Node) -> Vec<&TableCell> {
 }
 
 #[test]
+fn table_boundaries_survive_leading_rules_and_layout_restarts() {
+    fn starts(node: &Node) -> Vec<bool> {
+        let mut result = Vec::new();
+        if !node.table_cells.is_empty() {
+            result.push(node.flags.table_start);
+        }
+        result.extend(node.children.iter().flat_map(starts));
+        result
+    }
+    let source = b".TH PROBE 1\n.SH DESCRIPTION\n.TS\nl.\nFIRST\n.T&\nr.\nSECOND\n.TE\n.TS\nl.\n_\nTHIRD\nFOURTH\n.TE\n";
+    let parsed = Parser::default().parse_bytes("table.1", source).unwrap();
+    assert_eq!(starts(&parsed.document.root), [true, false, true, false]);
+}
+
+#[test]
 fn layout_rules_override_payload_and_data_rules_retain_their_kind() {
     for (layout, payload, expected) in [
         ("_", "HIDDEN", TableCellKind::HorizontalRule),

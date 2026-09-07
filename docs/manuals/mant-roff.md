@@ -304,6 +304,8 @@ The zero-advance `\z` escape retains its complete following glyph, including nam
 
 ## Tables
 
+Separate native tables remain separate IR blocks even when adjacent. A `T&` layout restart changes rows within the same table; leading rule-only rows do not hide its boundary.
+
 Rule cells retain their column positions but no printable body. Both layout rules and data rules suppress their payload; source recovery never resurrects that intentionally hidden text. Escaped literal underscores remain ordinary text.
 
 `tbl(7)` rows become IR tables, including tables nested inside an mdoc literal or unfilled display. ManT retains cell text, left/center/right alignment, column spans, and row spans supplied by libmandoc. It does not reproduce line drawing, exact column widths, vertical positioning, fonts, or device-specific rules.
