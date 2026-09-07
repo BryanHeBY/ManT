@@ -105,7 +105,10 @@ pub(crate) fn apply(
 fn valid_id(id: &str) -> bool {
     id.chars().count() <= 512
         && mant_ir::is_normalized_node_id(id)
-        && !crate::selectors::is_reserved_selector(id)
+        // Entry IDs live in the semantic namespace. Unlike section IDs they
+        // may use role-qualified prefixes, including exported derived IDs.
+        && !matches!(id, mant_ir::DOCUMENT_ROOT_ID | "tldr")
+        && id.parse::<mant_ir::OutlinePath>().is_err()
 }
 
 fn reject_relations(

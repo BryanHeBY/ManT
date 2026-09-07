@@ -304,6 +304,12 @@ The opening marker must be the first non-empty construct and must have a closing
 
 The boundary comments are invisible to ordinary CommonMark renderers. ManT masks the complete preface before parsing the manual body so source byte offsets and line numbers remain stable. Embedded content has `embedded` provenance and does not claim the community cache license.
 
+### Semantic export subset
+
+The Rust renderer's `MarkdownOptions.preserve_semantics` opt-in emits list declarations, item IDs, explicit alias groups, same-document aliasOf relationships and supported value-domain comments. It supports documents whose annotated owners are ordinary lists containing only successfully declared items with the same role/case within each list. Nested lists are checked independently. Relation comments escape HTML delimiter characters in JSON strings. Reimport rebuilds bindings against the new content; original source spans are not retained.
+
+Documents with native definition owners, inferred or mixed/partly rejected lists, invalid IR facts, or an entry-set reference without a representable document destination fall back to ordinary portable Markdown without semantic comments. Roff shared names never manufacture alias groups. Semantic export takes precedence over raw HTML anchor export when both options are set: entry IDs are carried by metadata, not injected into the head. Heading IDs, arbitrary native layout, unsupported containers and exact source bytes are outside this subset. Use IR JSON for a complete facts/bindings serialization; Markdown is not a lossless semantic round trip.
+
 ## Preserved Unsupported Syntax
 
 The parser recognizes several CommonMark or GFM extensions that ManT does not assign semantic IR nodes. Their source remains visible in an `unsupported` block or text run with a diagnostic:

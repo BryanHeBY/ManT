@@ -578,7 +578,10 @@ pub(super) fn render_scope_query_result(
                         let excerpt = output_terminal.then(|| terminal_excerpt(&found.excerpt));
                         mant_engine::render_excerpt_markdown_with_options(
                             excerpt.as_ref().unwrap_or(&found.excerpt),
-                            mant_engine::MarkdownOptions { preserve_anchors },
+                            mant_engine::MarkdownOptions {
+                                preserve_anchors,
+                                ..Default::default()
+                            },
                         )
                     }
                     QueryFormat::Text => render_terminal_excerpt(&found.excerpt, color),
@@ -745,7 +748,10 @@ fn render_excerpt(
             let terminal_copy = output_terminal.then(|| terminal_excerpt(excerpt));
             Ok(mant_engine::render_excerpt_markdown_with_options(
                 terminal_copy.as_ref().unwrap_or(excerpt),
-                mant_engine::MarkdownOptions { preserve_anchors },
+                mant_engine::MarkdownOptions {
+                    preserve_anchors,
+                    ..Default::default()
+                },
             ))
         }
         QueryFormat::Text => Ok(render_terminal_excerpt(excerpt, color)),
@@ -771,7 +777,10 @@ fn render_full_query(query: &ResolvedContent, options: RenderOptions) -> Result<
             let terminal_copy = output_terminal.then(|| terminal_content(query));
             Ok(mant_engine::render_markdown_with_options(
                 terminal_copy.as_ref().unwrap_or(query),
-                mant_engine::MarkdownOptions { preserve_anchors },
+                mant_engine::MarkdownOptions {
+                    preserve_anchors,
+                    ..Default::default()
+                },
             ))
         }
         QueryFormat::Text => {

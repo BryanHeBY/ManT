@@ -9,7 +9,7 @@ use mant_ir::Diagnostic;
 pub use outline::{build_outline, build_outline_projection, build_outline_with_detail};
 const TLDR_TITLE: &str = "TLDR QUICK REFERENCE";
 
-fn semantics_complete(diagnostics: &[Diagnostic]) -> bool {
+pub(crate) fn semantics_complete(diagnostics: &[Diagnostic]) -> bool {
     diagnostics.iter().all(|diagnostic| {
         !diagnostic.code.as_deref().is_some_and(|code| {
             crate::markdown::is_semantic_entry_rejection_code(code)

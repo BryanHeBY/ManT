@@ -231,3 +231,23 @@ fn metadata_limits_and_examples_never_invent_facts() {
     assert!(doc.diagnostics.is_empty(), "{:?}", doc.diagnostics);
     assert!(!facts(&doc).contains_key("wrong"));
 }
+
+#[test]
+fn explicit_entry_ids_can_use_the_entry_namespace_but_not_navigation_tokens() {
+    let doc = parse(
+        r#"- `--help`: Help. <!-- mant:entry {"id":"option-help"} -->
+- `--assist`: Assistance. <!-- mant:entry {"aliasOf":"option-help"} -->"#,
+    );
+    assert!(doc.diagnostics.is_empty(), "{:?}", doc.diagnostics);
+    assert_eq!(
+        facts(&doc)["option-assist"].alias_of.as_deref(),
+        Some("option-help")
+    );
+    for id in ["tldr", "document-overview", "1", "1/e2"] {
+        let doc = parse(&format!(
+            "- `--help`: Help. <!-- mant:entry {{\"id\":\"{id}\"}} -->"
+        ));
+        assert!(!doc.diagnostics.is_empty(), "{id}");
+        assert!(facts(&doc).contains_key("option-help"));
+    }
+}

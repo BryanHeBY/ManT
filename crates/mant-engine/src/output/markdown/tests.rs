@@ -27,6 +27,7 @@ fn large_entry_source_maps_keep_monotonic_exact_ownership() {
         &query.document.unwrap().blocks,
         MarkdownOptions {
             preserve_anchors: true,
+            ..MarkdownOptions::default()
         },
     );
     assert_eq!(rendered.entries.len(), 1000);
@@ -62,6 +63,7 @@ fn logical_link_serialization_preserves_literal_percent_and_unicode_components()
     let query = crate::query_markdown_text(source, None).unwrap();
     let options = MarkdownOptions {
         preserve_anchors: true,
+        ..MarkdownOptions::default()
     };
     let markdown = render_markdown_with_options(&query, options);
     assert!(

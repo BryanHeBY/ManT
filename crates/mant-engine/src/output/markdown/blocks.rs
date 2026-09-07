@@ -134,7 +134,22 @@ fn render_list(
                 ListKind::Bullet | ListKind::Plain => "- ".to_owned(),
             };
             let mut content = render_blocks(&item.blocks, options).join("\n\n");
-            if options.preserve_anchors
+            if options.preserve_semantics
+                && let Some(facts) = &item.entry
+            {
+                let mut blocks = render_blocks(&item.blocks, options);
+                if let Some(head) = blocks.first_mut() {
+                    head.push_str(&super::semantic::metadata(facts));
+                }
+                if let Some(domain) = facts
+                    .value_domain
+                    .as_ref()
+                    .and_then(super::semantic::domain)
+                {
+                    blocks.insert(1, domain);
+                }
+                content = blocks.join("\n\n");
+            } else if options.preserve_anchors
                 && let Some(facts) = &item.entry
             {
                 content.insert_str(0, &html_anchor(&facts.id));
@@ -142,7 +157,16 @@ fn render_list(
             prefix_item(&content, &marker)
         })
         .collect::<Vec<_>>();
-    (!rendered.is_empty()).then(|| rendered.join(if compact { "\n" } else { "\n\n" }))
+    (!rendered.is_empty()).then(|| {
+        let content = rendered.join(if compact { "\n" } else { "\n\n" });
+        if options.preserve_semantics
+            && let Some(facts) = items.first().and_then(|i| i.entry.as_ref())
+        {
+            format!("{}\n{content}", super::semantic::declaration(facts))
+        } else {
+            content
+        }
+    })
 }
 
 fn render_definition_list(

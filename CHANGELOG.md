@@ -81,6 +81,11 @@ that crate was not published for that change.
 
 ### mant-engine 0.11.0
 
+- Add opt-in semantic Markdown export for homogeneous explicitly declared
+  ordinary-list owners, including IDs, explicit aliases and value domains.
+  Unsupported documents retain portable content without claiming a lossless
+  semantic round trip; IR JSON remains the complete serialization.
+
 - Accept bounded, annotation-only `mant:entry` JSON for explicit IDs,
   visible-name alias groups and same-document alias relationships. Validate
   forward references, subject/case compatibility and cycles through the shared

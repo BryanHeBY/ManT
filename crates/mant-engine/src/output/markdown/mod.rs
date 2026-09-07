@@ -3,6 +3,7 @@
 mod anchors;
 mod blocks;
 mod inline;
+mod semantic;
 
 use std::ops::Range;
 
@@ -28,12 +29,17 @@ use mant_ir::DOCUMENT_ROOT_ID;
 pub struct MarkdownOptions {
     /// Emit stable raw-HTML destinations and links for document-local references.
     pub preserve_anchors: bool,
+    /// Emit nonvisible declarations for the supported ordinary-list subset.
+    /// Unsupported documents retain portable content without semantic comments;
+    /// this is not a lossless serialization (use IR JSON for that).
+    pub preserve_semantics: bool,
 }
 
 impl MarkdownOptions {
     /// Addressable Markdown used by consumers of `mant.markdown/v1`.
     pub const ADDRESSABLE: Self = Self {
         preserve_anchors: true,
+        preserve_semantics: false,
     };
 }
 
@@ -107,7 +113,14 @@ pub(crate) fn render_addressable_markdown(query: &ResolvedContent) -> MarkdownAr
     render_markdown_artifact(query, MarkdownOptions::ADDRESSABLE)
 }
 
-fn render_markdown_artifact(query: &ResolvedContent, options: MarkdownOptions) -> MarkdownArtifact {
+fn render_markdown_artifact(
+    query: &ResolvedContent,
+    mut options: MarkdownOptions,
+) -> MarkdownArtifact {
+    options.preserve_semantics &= query.document.as_ref().is_some_and(semantic::supported);
+    // Raw HTML anchor blocks are not part of the reimportable subset. Entry
+    // identities travel in metadata; preserve-anchors remains a separate mode.
+    options.preserve_anchors &= !options.preserve_semantics;
     let mut output = ArtifactBuilder::default();
     output.push(&heading(
         1,
