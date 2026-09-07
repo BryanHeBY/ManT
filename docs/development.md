@@ -444,8 +444,13 @@ Unix CI boundary; local host corpora remain incremental and non-gating.
 The optional renderer-layout audit is separate from both the content and
 AST-to-IR ledgers. It uses the same local `man(1)`/groff reference rendering as
 the fidelity auditor, but only compares source-gated line boundaries, spacing,
-and authored relative indentation; formatter-owned display gutters and body
-margins are out of scope. It
+and authored relative indentation within the documented lowering policy;
+formatter-owned display gutters and body margins are out of scope. In
+particular, `RS` nesting currently uses a normalized four-column increment
+rather than reproducing its numeric distance. Differences caused solely by
+that policy need an explained review outcome, not a product-fidelity claim;
+the structure audit checks retained nesting or semantic-container ownership.
+Exact `HP` hanging geometry is likewise outside the current contract. It
 does not re-run, modify, or invalidate completed `FIDELITY_AUDIT.csv` or
 `STRUCTURE_AUDIT.csv` rows.
 

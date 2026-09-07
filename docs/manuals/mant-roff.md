@@ -94,11 +94,15 @@ keeping numbered instructions and references out of the semantic-entry index.
 An immediately following `RS` region remains content of the current item, as
 required for generated references and hierarchically indented lists.
 
+`RS` nesting currently uses a normalized four-column increment, not the exact authored distance. This layout policy does not change semantic parentage: visual indentation alone never turns a top-level command into its parameter. Ordinary man paragraphs (`PP`, `P`, `LP`) restore the default seven-column tag width for later `TP`/`IP` definitions; `HP` is not that reset boundary.
+
 `OP` retains its optional-argument brackets, bold option name, and emphasized metavariable both inside and outside a `SY` synopsis; it does not create a separate IR variant. `AT`, `DT`, `SM`, `UC`, and other libmandoc-recognized man macros retain printable children where available but do not currently have a dedicated ManT semantic variant. For example, `SM` does not preserve point size.
 
 ## mdoc Structure
 
 Option aliases come from invocation names separated by explicit alias punctuation, not arbitrary later dash-prefixed argument tokens. Emphasized argument spans retain their spelling in forms but cannot introduce another alias.
+
+Styled command aliases are likewise grouped before separating each command name from its arguments. A single environment assignment retains its complete value, including commas and pipes, but only its variable name becomes a selector. Mixed assignments with unprovable name/value boundaries remain unclassified rather than introducing guessed aliases. Variable subscripts must be completely closed, with no trailing text or repeated brackets.
 
 The required mdoc prologue and structural macros are normalized as follows:
 
@@ -183,6 +187,8 @@ Displays lower as follows:
 
 Closing macros such as `Ed`, `Ef`, and `El` terminate libmandoc scopes and do not produce independent visible nodes.
 
+Literal and unfilled flows preserve physical line boundaries without resetting inline font or spacing state. `br` ends a line once; `sp N` adds vertical blank rows rather than printing its argument; `Sm` changes spacing without adding a row. A trailing `\c` joins the following source line unless an explicit break intervenes.
+
 ## mdoc Inline Semantics
 
 The following macros receive dedicated inline treatment:
@@ -209,7 +215,8 @@ Delimiter macros preserve their visible punctuation and libmandoc spacing roles:
 | --- | --- | --- |
 | Optional brackets | `Op`, `Oo` | `Oc` |
 | Brackets | `Bq`, `Bo` | `Bc` |
-| Double quotes | `Dq`, `Do`, `Qq`, `Qo` | `Dc`, `Qc` |
+| Typographic double quotes (`“…”`) | `Dq`, `Do` | `Dc` |
+| Typewriter double quotes (`"…"`) | `Qq`, `Qo` | `Qc` |
 | Single quotes | `Sq`, `So`, `Ql` | `Sc` |
 | Parentheses | `Pq`, `Po` | `Pc` |
 | Braces | `Brq`, `Bro` | `Brc` |

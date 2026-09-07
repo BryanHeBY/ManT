@@ -34,6 +34,8 @@ An explicit heading ID written as a whitespace-separated final `{#configuration}
 
 Lists may contain paragraphs, code blocks, tables, and nested lists. Content deeper than the recursion budget is preserved as unsupported source rather than recursed into indefinitely.
 
+List tightness follows the parser's direct item structure: a loose nested list does not make its tight parent loose. LF, CRLF and CR are equivalent line endings; an empty line or one containing only spaces or tabs counts as a blank line. Original byte ranges and physical source-line coordinates remain available in IR spans. Semantic declarations are consumed within the original event tree, so removing a declaration cannot merge two independently authored lists.
+
 ## Supported Inline Syntax
 
 | Markdown construct | IR result | Notes |
@@ -78,6 +80,8 @@ Relative document links retain an extension-free logical path. `.md` and `.markd
 Percent-encoded local path components and fragments are decoded exactly once as UTF-8 before logical-address validation. For example, `space%20name.md#Mixed%2ETarget` addresses `space name` and fragment `Mixed.Target`; `%2520` instead represents literal `%20`. Invalid escapes, invalid UTF-8, controls, and encoded path separators or query/fragment delimiters do not create document-navigation links. Rendered Markdown re-encodes logical components, including literal percent signs. External URI escapes are preserved, not decoded as local paths.
 
 Paths containing `.` or `..` components are represented but navigation remains constrained to the current registered document source. A document link cannot escape its source boundary. Unresolved local fragments remain visible and are diagnosed rather than silently redirected.
+
+Decoded fragments match exact authored aliases or normalized IDs. Resolution does not strip a second `#`, trim whitespace, change case, or generate a fallback slug: `#%23foo` addresses the alias `#foo`, not `foo`.
 
 Wiki links are not part of the supported link contract.
 

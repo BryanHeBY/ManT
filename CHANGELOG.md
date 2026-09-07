@@ -58,9 +58,20 @@ that crate was not published for that change.
 
 ### mant-engine 0.11.0
 
+- Extract option and styled command names per alias group without treating
+  argument tokens or environment-assignment values as additional aliases.
+  Command context follows semantic ancestry, not visual indentation; malformed
+  variable subscripts remain visible with an unclassified-entry diagnostic.
+- Resolve decoded Markdown fragments exactly, without stripping another `#`,
+  trimming authored whitespace, changing case, or guessing a normalized ID.
+- Preserve literal display breaks, spacing controls, font state and explicit
+  continuations; ordinary man paragraphs reset the prevailing tag width.
+  Distinguish mdoc typewriter `Qq`/`Qo` from typographic `Dq`/`Do` quotes.
+- Derive Markdown list tightness from direct parser-item structure, independently
+  of nested list spacing. LF, CRLF, CR and space/tab blank lines share source
+  location and paragraph-spacing rules without changing original byte offsets.
 - Keep literal HTML anchors searchable in code and use parsed HTML/item
   ranges for internal source-map markers and semantic search ownership.
-
 - Consume Markdown semantic directives in the original parser event tree;
   removing a directive cannot merge independent lists or spread a role/domain.
 
