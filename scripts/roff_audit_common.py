@@ -29,6 +29,22 @@ MANUAL_SUFFIX = re.compile(
 )
 
 
+def merge_clean_review_state(previous: str | None, status: str) -> str:
+    """Existing target/semantic transition, after driver-specific validation.
+
+    This only merges one newly scanned result, never rescans or rewrites an
+    old ledger. Durable human conclusions remain authoritative. Other drivers
+    keep their own candidate/status policies and schema validation.
+    """
+    if previous is None:
+        return "not-required" if status == "clean" else "pending"
+    if previous == "not-required" and status != "clean":
+        return "pending"
+    if previous == "pending" and status == "clean":
+        return "not-required"
+    return previous
+
+
 def non_negative_integer(value: str) -> int:
     parsed = int(value)
     if parsed < 0:

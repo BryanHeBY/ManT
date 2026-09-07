@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Iterable, Sequence
 
 from roff_audit_common import (
+    merge_clean_review_state,
     compile_source_patterns,
     discover_pages,
     filter_pages_by_source,
@@ -177,13 +178,7 @@ def write_database(path: Path, records: Iterable[AuditRecord]) -> None:
 
 
 def merge_review_status(previous: AuditRecord | None, status: str) -> str:
-    if previous is None:
-        return "not-required" if status == "clean" else "pending"
-    if previous.review_status == "not-required" and status != "clean":
-        return "pending"
-    if previous.review_status == "pending" and status == "clean":
-        return "not-required"
-    return previous.review_status
+    return merge_clean_review_state(previous.review_status if previous is not None else None, status)
 
 
 def valid_entry(value: object) -> bool:
@@ -372,6 +367,11 @@ def file_digest(path: Path) -> str:
 
 
 def self_check() -> None:
+    for reviewed in ("false-positive", "confirmed-open", "confirmed-fixed"):
+        for scanned in ("clean", "review", "hard-failure"):
+            assert merge_clean_review_state(reviewed, scanned) == reviewed
+    assert merge_clean_review_state("not-required", "review") == "pending"
+    assert merge_clean_review_state("pending", "clean") == "not-required"
     assert manual_section(Path("git.1.gz")) == "1"
     assert merge_review_status(None, "clean") == "not-required"
     assert merge_review_status(None, "review") == "pending"
