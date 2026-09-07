@@ -24,8 +24,8 @@ use params::{
     ExplainParams, FindParams, OutlineParams, ReadParams, SearchParams, catalog_query, request_for,
 };
 use presentation::{
-    finish_error, finish_page, prepare_excerpt, prepare_outline, prepare_scope, render_excerpt,
-    render_find, render_outline, render_scope_explain, render_scope_search,
+    finish_error, present_excerpt, present_find, present_outline, present_scope_explain,
+    present_scope_search,
 };
 use service::QueryService;
 
@@ -78,7 +78,7 @@ impl MantMcpServer {
             .discover(catalog_query(&parameters))
             .await
             .map_err(finish_error)?;
-        Ok(finish_page(&render_find(&catalog, parameters.page)))
+        Ok(present_find(&catalog, parameters.page))
     }
 
     /// Return a selectable hierarchy with compact semantic summaries by default.
@@ -103,13 +103,11 @@ impl MantMcpServer {
                 root: parameters.root,
             },
         );
-        let QueryViewResult::Outline(mut outline) =
-            self.query(request).await.map_err(finish_error)?
+        let QueryViewResult::Outline(outline) = self.query(request).await.map_err(finish_error)?
         else {
             unreachable!("outline request materializes an outline")
         };
-        prepare_outline(&mut outline);
-        Ok(finish_page(&render_outline(&outline, page)))
+        Ok(present_outline(outline, page))
     }
 
     /// Read complete content for one or more outline selectors as `CommonMark`.
@@ -131,13 +129,11 @@ impl MantMcpServer {
                 selectors: parameters.selectors,
             },
         );
-        let QueryViewResult::Excerpt(mut excerpt) =
-            self.query(request).await.map_err(finish_error)?
+        let QueryViewResult::Excerpt(excerpt) = self.query(request).await.map_err(finish_error)?
         else {
             unreachable!("read request materializes an excerpt")
         };
-        prepare_excerpt(&mut excerpt);
-        Ok(finish_page(&render_excerpt(&excerpt, page)))
+        Ok(present_excerpt(excerpt, page))
     }
 
     /// Explain one semantic entry across one or more bounded documents.
@@ -160,11 +156,8 @@ impl MantMcpServer {
                 entry: parameters.entry,
             },
         };
-        let mut response = self.query_scope(request).await.map_err(finish_error)?;
-        prepare_scope(&mut response);
-        Ok(finish_page(
-            &render_scope_explain(&response, page).map_err(finish_error)?,
-        ))
+        let response = self.query_scope(request).await.map_err(finish_error)?;
+        present_scope_explain(response, page)
     }
 
     /// Search visible text or generated `CommonMark` across bounded documents.
@@ -194,11 +187,8 @@ impl MantMcpServer {
                 offset: parameters.offset,
             },
         };
-        let mut response = self.query_scope(request).await.map_err(finish_error)?;
-        prepare_scope(&mut response);
-        Ok(finish_page(
-            &render_scope_search(&response, page).map_err(finish_error)?,
-        ))
+        let response = self.query_scope(request).await.map_err(finish_error)?;
+        present_scope_search(response, page)
     }
 }
 

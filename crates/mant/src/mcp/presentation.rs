@@ -11,16 +11,47 @@ use super::params::MAX_PAGE_CHARS;
 use super::params::PageRequest;
 use crate::arguments::QueryFormat;
 
-/// One stateless character page of a canonical rendered result.
-#[derive(Debug, PartialEq, Eq)]
-pub(super) struct TextPage {
-    pub(super) text: String,
-    pub(super) start_char: usize,
-    pub(super) end_char: usize,
-    pub(super) total_chars: usize,
+/// Consume complete responses so cleanup cannot be omitted by tool handlers.
+pub(super) fn present_find(catalog: &DocumentCatalog, page: PageRequest) -> String {
+    finish_page(&render_find(catalog, page))
+}
+pub(super) fn present_outline(mut outline: QueryOutline, page: PageRequest) -> String {
+    prepare_outline(&mut outline);
+    finish_page(&render_outline(&outline, page))
+}
+pub(super) fn present_excerpt(mut excerpt: QueryExcerpt, page: PageRequest) -> String {
+    prepare_excerpt(&mut excerpt);
+    finish_page(&render_excerpt(&excerpt, page))
+}
+pub(super) fn present_scope_explain(
+    mut response: ScopeQueryResponse,
+    page: PageRequest,
+) -> Result<String, String> {
+    prepare_scope(&mut response);
+    render_scope_explain(&response, page)
+        .map(|page| finish_page(&page))
+        .map_err(finish_error)
+}
+pub(super) fn present_scope_search(
+    mut response: ScopeQueryResponse,
+    page: PageRequest,
+) -> Result<String, String> {
+    prepare_scope(&mut response);
+    render_scope_search(&response, page)
+        .map(|page| finish_page(&page))
+        .map_err(finish_error)
 }
 
-pub(super) fn render_find(catalog: &DocumentCatalog, page: PageRequest) -> TextPage {
+/// One stateless character page of a canonical rendered result.
+#[derive(Debug, PartialEq, Eq)]
+struct TextPage {
+    text: String,
+    start_char: usize,
+    end_char: usize,
+    total_chars: usize,
+}
+
+fn render_find(catalog: &DocumentCatalog, page: PageRequest) -> TextPage {
     let mut text = format!("{} matches", catalog.total);
     if catalog.offset != 0 || catalog.returned < catalog.total {
         let _ = write!(
@@ -43,15 +74,15 @@ pub(super) fn render_find(catalog: &DocumentCatalog, page: PageRequest) -> TextP
     page_text(&text, page)
 }
 
-pub(super) fn render_outline(outline: &QueryOutline, page: PageRequest) -> TextPage {
+fn render_outline(outline: &QueryOutline, page: PageRequest) -> TextPage {
     page_text(&mant_engine::render_outline_text(outline), page)
 }
 
-pub(super) fn render_excerpt(excerpt: &QueryExcerpt, page: PageRequest) -> TextPage {
+fn render_excerpt(excerpt: &QueryExcerpt, page: PageRequest) -> TextPage {
     page_text(&mant_engine::render_excerpt_markdown(excerpt), page)
 }
 
-pub(super) fn render_scope_explain(
+fn render_scope_explain(
     response: &ScopeQueryResponse,
     page: PageRequest,
 ) -> Result<TextPage, String> {
@@ -104,7 +135,7 @@ pub(super) fn render_scope_explain(
     Ok(page_text(&text, page))
 }
 
-pub(super) fn render_scope_search(
+fn render_scope_search(
     response: &ScopeQueryResponse,
     page: PageRequest,
 ) -> Result<TextPage, String> {
@@ -198,7 +229,7 @@ fn append_status_line(text: &mut String, status: &str) {
 }
 
 /// Attach the stable, model-visible page metadata to a successful result.
-pub(super) fn finish_page(page: &TextPage) -> String {
+fn finish_page(page: &TextPage) -> String {
     let mut output = format!(
         "[mant-page chars={}..{} totalChars={}",
         page.start_char, page.end_char, page.total_chars
@@ -222,7 +253,7 @@ pub(super) fn finish_error(error: impl AsRef<str>) -> String {
         .collect()
 }
 
-pub(super) fn page_text(text: &str, page: PageRequest) -> TextPage {
+fn page_text(text: &str, page: PageRequest) -> TextPage {
     // MCP success bodies are model-visible protocol data. Sanitize the whole
     // canonical body here so every tool and every dynamically rendered
     // identity shares the same control-character boundary before paging.
@@ -264,7 +295,7 @@ fn char_offset_to_byte(text: &str, offset: usize, total_chars: usize) -> usize {
         .map_or(text.len(), |(byte, _)| byte)
 }
 
-pub(super) fn prepare_excerpt(excerpt: &mut QueryExcerpt) {
+fn prepare_excerpt(excerpt: &mut QueryExcerpt) {
     excerpt.diagnostics.clear();
     discard_document_source_path(&mut excerpt.source);
     for selection in &mut excerpt.selections {
@@ -274,12 +305,12 @@ pub(super) fn prepare_excerpt(excerpt: &mut QueryExcerpt) {
     }
 }
 
-pub(super) fn prepare_outline(outline: &mut QueryOutline) {
+fn prepare_outline(outline: &mut QueryOutline) {
     outline.diagnostics.clear();
     discard_document_source_path(&mut outline.source);
 }
 
-pub(super) fn prepare_scope(response: &mut ScopeQueryResponse) {
+fn prepare_scope(response: &mut ScopeQueryResponse) {
     for unresolved in &mut response.scope.unresolved {
         "document could not be resolved".clone_into(&mut unresolved.reason);
     }
