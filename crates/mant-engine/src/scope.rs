@@ -294,14 +294,21 @@ struct ScopeResolution {
     unresolved_keys: BTreeSet<UnresolvedKey>,
 }
 
-type ResolutionKey = (u8, String, Option<String>, Option<String>);
-type UnresolvedKey = (
-    Option<DocumentAddress>,
-    String,
-    Option<String>,
-    Option<String>,
-    String,
-);
+#[derive(PartialEq, Eq, PartialOrd, Ord)]
+struct ResolutionKey {
+    policy: u8,
+    selector: String,
+    source: Option<String>,
+    manual_section: Option<String>,
+}
+#[derive(PartialEq, Eq, PartialOrd, Ord)]
+struct UnresolvedKey {
+    from: Option<DocumentAddress>,
+    selector: String,
+    source: Option<String>,
+    manual_section: Option<String>,
+    reason: String,
+}
 
 /// Request-local negative cache. Keys include policy and the fully qualified
 /// selector, never a bare link label. Nothing survives into the next request.
@@ -315,16 +322,16 @@ impl ResolutionFailures {
         policy: QueryPolicy,
         load: impl FnOnce() -> Result<T, String>,
     ) -> Result<T, String> {
-        let key = (
-            match policy {
+        let key = ResolutionKey {
+            policy: match policy {
                 QueryPolicy::Combined => 0,
                 QueryPolicy::ManualOnly => 1,
                 QueryPolicy::TldrOnly => 2,
             },
-            selector.selector.clone(),
-            selector.source.clone(),
-            selector.manual_section.clone(),
-        );
+            selector: selector.selector.clone(),
+            source: selector.source.clone(),
+            manual_section: selector.manual_section.clone(),
+        };
         if let Some(reason) = self.0.get(&key) {
             return Err(reason.clone());
         }
@@ -548,13 +555,13 @@ impl ScopeResolution {
     }
 
     fn record_unresolved(&mut self, failure: UnresolvedDocument) {
-        let key = (
-            failure.from.clone(),
-            failure.selector.selector.clone(),
-            failure.selector.source.clone(),
-            failure.selector.manual_section.clone(),
-            failure.reason.clone(),
-        );
+        let key = UnresolvedKey {
+            from: failure.from.clone(),
+            selector: failure.selector.selector.clone(),
+            source: failure.selector.source.clone(),
+            manual_section: failure.selector.manual_section.clone(),
+            reason: failure.reason.clone(),
+        };
         if self.unresolved_keys.insert(key) {
             self.graph.unresolved.push(failure);
         }

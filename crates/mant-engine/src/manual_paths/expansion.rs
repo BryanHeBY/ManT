@@ -5,6 +5,12 @@ use std::{
     path::{Component, Path, PathBuf},
 };
 
+/// Final paths and whether this expansion exhausted its work budget.
+pub(super) struct ExpansionOutcome {
+    pub(super) paths: Vec<PathBuf>,
+    pub(super) exhausted: bool,
+}
+
 /// Shared across every component and pattern in one configuration expansion.
 pub(super) struct ScanBudget {
     pub(super) remaining: usize,
@@ -31,10 +37,13 @@ impl ScanBudget {
 pub(super) fn expand_path_pattern_bounded(
     pattern: &Path,
     budget: &mut ScanBudget,
-) -> (Vec<PathBuf>, bool) {
+) -> ExpansionOutcome {
     // Bound both component count and wildcard-matcher work for a single path.
     if pattern.as_os_str().len() > 4096 || !budget.charge() {
-        return (Vec::new(), true);
+        return ExpansionOutcome {
+            paths: Vec::new(),
+            exhausted: true,
+        };
     }
     let mut candidates = vec![PathBuf::new()];
     for component in pattern.components() {
@@ -44,7 +53,10 @@ pub(super) fn expand_path_pattern_bounded(
         let mut expanded = Vec::new();
         for mut candidate in candidates {
             if !budget.charge() {
-                return (Vec::new(), true);
+                return ExpansionOutcome {
+                    paths: Vec::new(),
+                    exhausted: true,
+                };
             }
             match component {
                 Component::RootDir => {
@@ -60,7 +72,10 @@ pub(super) fn expand_path_pattern_bounded(
                     // pattern: intermediate prefixes are never final roots.
                     for entry in entries {
                         if !budget.charge() {
-                            return (Vec::new(), true);
+                            return ExpansionOutcome {
+                                paths: Vec::new(),
+                                exhausted: true,
+                            };
                         }
                         let Ok(entry) = entry else {
                             continue;
@@ -75,7 +90,10 @@ pub(super) fn expand_path_pattern_bounded(
                             &mut budget.matcher_cells,
                         ) else {
                             budget.remaining = 0;
-                            return (Vec::new(), true);
+                            return ExpansionOutcome {
+                                paths: Vec::new(),
+                                exhausted: true,
+                            };
                         };
                         if matches {
                             expanded.push(entry.path());
@@ -92,7 +110,10 @@ pub(super) fn expand_path_pattern_bounded(
         expanded.dedup();
         candidates = expanded;
     }
-    (candidates, false)
+    ExpansionOutcome {
+        paths: candidates,
+        exhausted: false,
+    }
 }
 
 #[cfg(test)]
@@ -149,13 +170,18 @@ mod tests {
             fs::write(root.join(format!("{index}.conf")), "").unwrap();
         }
         let mut budget = ScanBudget::new(20);
-        let (paths, truncated) = expand_path_pattern_bounded(&root.join("*.missing"), &mut budget);
+        let ExpansionOutcome {
+            paths,
+            exhausted: truncated,
+        } = expand_path_pattern_bounded(&root.join("*.missing"), &mut budget);
         assert!(paths.is_empty() && truncated);
         assert_eq!(budget.remaining, 0);
-        assert!(expand_path_pattern_bounded(&root.join("*.conf"), &mut budget).1);
+        assert!(expand_path_pattern_bounded(&root.join("*.conf"), &mut budget).exhausted);
         let mut budget = ScanBudget::new(90);
-        let (paths, truncated) =
-            expand_path_pattern_bounded(&root.join("*/../*/../*/../final"), &mut budget);
+        let ExpansionOutcome {
+            paths,
+            exhausted: truncated,
+        } = expand_path_pattern_bounded(&root.join("*/../*/../*/../final"), &mut budget);
         assert!(paths.is_empty() && truncated);
         fs::remove_dir_all(root).unwrap();
     }

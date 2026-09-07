@@ -13,7 +13,7 @@ mod windows_config;
 use config_file::read_text as read_config_text;
 #[cfg(test)]
 use expansion::wildcard_matches;
-use expansion::{ScanBudget, expand_path_pattern_bounded};
+use expansion::{ExpansionOutcome, ScanBudget, expand_path_pattern_bounded};
 
 use std::{
     collections::HashMap,
@@ -446,7 +446,7 @@ fn macos_configuration_roots(path: &Path) -> Vec<PathBuf> {
         .include_pattern
         .unwrap_or_else(|| PathBuf::from("/usr/local/etc/man.d/*.conf"));
     for included in expand_path_pattern_bounded(&pattern, &mut budget)
-        .0
+        .paths
         .into_iter()
         .take(MAX_EXPANDED_CONFIG_PATHS)
     {
@@ -606,7 +606,7 @@ fn parse_bsd_man_config_bounded(text: &str, budget: &mut ScanBudget) -> BsdManCo
         match directive {
             "MANPATH" | "manpath" => configuration
                 .paths
-                .extend(expand_path_pattern_bounded(Path::new(value), budget).0),
+                .extend(expand_path_pattern_bounded(Path::new(value), budget).paths),
             "MANCONFIG" => configuration.include_pattern = Some(PathBuf::from(value)),
             _ => {}
         }
@@ -620,7 +620,7 @@ fn parse_mandoc_manpaths(text: &str) -> Vec<PathBuf> {
         .take(MAX_EXPANDED_CONFIG_CANDIDATES)
         .filter_map(config_directive)
         .filter_map(|(directive, value)| (directive == "manpath").then_some(value))
-        .flat_map(|path| expand_path_pattern_bounded(Path::new(path), &mut budget).0)
+        .flat_map(|path| expand_path_pattern_bounded(Path::new(path), &mut budget).paths)
         .collect()
 }
 
@@ -649,7 +649,7 @@ fn config_directive(line: &str) -> Option<(&str, &str)> {
 fn expand_path_pattern(pattern: &Path) -> Vec<PathBuf> {
     let mut budget = ScanBudget::new(MAX_EXPANDED_CONFIG_CANDIDATES);
     expand_path_pattern_bounded(pattern, &mut budget)
-        .0
+        .paths
         .into_iter()
         .take(MAX_EXPANDED_CONFIG_PATHS)
         .collect()

@@ -8,8 +8,9 @@ use std::{
 };
 
 use super::{
-    MAX_EXPANDED_CONFIG_CANDIDATES, MAX_EXPANDED_CONFIG_PATHS, MAX_MANUAL_PATH_CONFIG_BYTES,
-    ManualPathDiagnostic, ManualRootDiscovery, ScanBudget, expand_path_pattern_bounded,
+    ExpansionOutcome, MAX_EXPANDED_CONFIG_CANDIDATES, MAX_EXPANDED_CONFIG_PATHS,
+    MAX_MANUAL_PATH_CONFIG_BYTES, ManualPathDiagnostic, ManualRootDiscovery, ScanBudget,
+    expand_path_pattern_bounded,
 };
 
 const MAX_CONFIG_TREE_BYTES: u64 = 8 * 1024 * 1024;
@@ -269,7 +270,7 @@ fn collect_include_paths(patterns: &[PathBuf]) -> IncludedPaths {
 
 fn collect_include_paths_with(
     patterns: &[PathBuf],
-    mut expand: impl FnMut(&Path, &mut ScanBudget) -> (Vec<PathBuf>, bool),
+    mut expand: impl FnMut(&Path, &mut ScanBudget) -> ExpansionOutcome,
 ) -> IncludedPaths {
     let mut included = Vec::new();
     let mut seen = HashSet::new();
@@ -285,7 +286,10 @@ fn collect_include_paths_with(
             candidate_truncated = true;
             break;
         }
-        let (expanded, pattern_truncated) = expand(pattern, &mut budget);
+        let ExpansionOutcome {
+            paths: expanded,
+            exhausted: pattern_truncated,
+        } = expand(pattern, &mut budget);
         for included_path in expanded {
             if !seen.insert(normalized_windows_path(&included_path)) {
                 continue;
@@ -658,14 +662,17 @@ mod tests {
     fn reaching_the_fragment_limit_skips_later_patterns() {
         let patterns = [PathBuf::from("first"), PathBuf::from("must-not-expand")];
         let included = collect_include_paths_with(&patterns, |pattern, budget| {
-            assert_eq!(budget.remaining, MAX_EXPANDED_CONFIG_CANDIDATES);
-            assert_eq!(pattern, PathBuf::from("first"));
-            (
-                (0..MAX_EXPANDED_CONFIG_PATHS)
-                    .map(|index| PathBuf::from(format!(r"C:\fragments\{index:03}.conf")))
-                    .collect(),
-                false,
-            )
+            let (paths, exhausted) = {
+                assert_eq!(budget.remaining, MAX_EXPANDED_CONFIG_CANDIDATES);
+                assert_eq!(pattern, PathBuf::from("first"));
+                (
+                    (0..MAX_EXPANDED_CONFIG_PATHS)
+                        .map(|index| PathBuf::from(format!(r"C:\fragments\{index:03}.conf")))
+                        .collect(),
+                    false,
+                )
+            };
+            super::ExpansionOutcome { paths, exhausted }
         });
 
         assert_eq!(included.paths.len(), MAX_EXPANDED_CONFIG_PATHS);
@@ -678,33 +685,38 @@ mod tests {
         let patterns = [PathBuf::from("first"), PathBuf::from("second")];
         let mut calls = 0;
         let included = collect_include_paths_with(&patterns, |pattern, budget| {
-            calls += 1;
-            match pattern.to_string_lossy().as_ref() {
-                "first" => {
-                    assert_eq!(budget.remaining, MAX_EXPANDED_CONFIG_CANDIDATES);
-                    budget.remaining -= MAX_EXPANDED_CONFIG_PATHS - 1;
-                    (
-                        (0..MAX_EXPANDED_CONFIG_PATHS - 1)
-                            .map(|index| PathBuf::from(format!(r"C:\fragments\{index:03}.conf")))
-                            .collect(),
-                        false,
-                    )
+            let (paths, exhausted) = {
+                calls += 1;
+                match pattern.to_string_lossy().as_ref() {
+                    "first" => {
+                        assert_eq!(budget.remaining, MAX_EXPANDED_CONFIG_CANDIDATES);
+                        budget.remaining -= MAX_EXPANDED_CONFIG_PATHS - 1;
+                        (
+                            (0..MAX_EXPANDED_CONFIG_PATHS - 1)
+                                .map(|index| {
+                                    PathBuf::from(format!(r"C:\fragments\{index:03}.conf"))
+                                })
+                                .collect(),
+                            false,
+                        )
+                    }
+                    "second" => {
+                        assert_eq!(
+                            budget.remaining,
+                            MAX_EXPANDED_CONFIG_CANDIDATES - (MAX_EXPANDED_CONFIG_PATHS - 1)
+                        );
+                        (
+                            vec![
+                                PathBuf::from(r"c:/FRAGMENTS/000.conf"),
+                                PathBuf::from(r"C:\fragments\unique.conf"),
+                            ],
+                            false,
+                        )
+                    }
+                    _ => panic!("unexpected pattern"),
                 }
-                "second" => {
-                    assert_eq!(
-                        budget.remaining,
-                        MAX_EXPANDED_CONFIG_CANDIDATES - (MAX_EXPANDED_CONFIG_PATHS - 1)
-                    );
-                    (
-                        vec![
-                            PathBuf::from(r"c:/FRAGMENTS/000.conf"),
-                            PathBuf::from(r"C:\fragments\unique.conf"),
-                        ],
-                        false,
-                    )
-                }
-                _ => panic!("unexpected pattern"),
-            }
+            };
+            super::ExpansionOutcome { paths, exhausted }
         });
 
         assert_eq!(calls, 2);
@@ -722,13 +734,16 @@ mod tests {
     fn candidate_scan_budget_is_independent_of_fragment_deduplication() {
         let patterns = [PathBuf::from("first"), PathBuf::from("must-not-expand")];
         let included = collect_include_paths_with(&patterns, |pattern, budget| {
-            assert_eq!(pattern, PathBuf::from("first"));
-            assert_eq!(budget.remaining, MAX_EXPANDED_CONFIG_CANDIDATES);
-            budget.remaining = 0;
-            (
-                vec![PathBuf::from(r"C:\fragments\same.conf"); MAX_EXPANDED_CONFIG_CANDIDATES],
-                false,
-            )
+            let (paths, exhausted) = {
+                assert_eq!(pattern, PathBuf::from("first"));
+                assert_eq!(budget.remaining, MAX_EXPANDED_CONFIG_CANDIDATES);
+                budget.remaining = 0;
+                (
+                    vec![PathBuf::from(r"C:\fragments\same.conf"); MAX_EXPANDED_CONFIG_CANDIDATES],
+                    false,
+                )
+            };
+            super::ExpansionOutcome { paths, exhausted }
         });
 
         assert_eq!(included.paths, [PathBuf::from(r"C:\fragments\same.conf")]);
