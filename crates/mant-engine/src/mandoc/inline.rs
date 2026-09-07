@@ -12,8 +12,8 @@ mod source_fragment;
 
 #[cfg(test)]
 use font::parse_roff_text_with_font;
-use font::{lower_font_scope, lower_man_font_scope, lower_text_node, parse_roff_text_with_state};
 pub(super) use font::{lower_inline_nodes_with_font_state, parse_roff_text};
+use font::{lower_man_font_scope, lower_text_node, parse_roff_text_with_state};
 
 pub(super) use source::roff_macro_arguments;
 pub(super) use source_fragment::lower_source_fragment;
@@ -343,7 +343,7 @@ pub(super) fn append_inline_node(
         builder.tighten_next_boundary();
     }
     match node.macro_name.as_deref() {
-        Some("B" | "I" | "SB" | "R") => {
+        Some("B" | "I" | "SB" | "R" | "BI" | "BR" | "IB" | "IR" | "RB" | "RI" | "OP") => {
             let inlines = lower_man_font_scope(
                 node,
                 default_name,
@@ -421,12 +421,6 @@ pub(super) fn append_inline_node(
             builder.spacing_enabled(),
         )),
     }
-    if matches!(
-        node.macro_name.as_deref(),
-        Some("BI" | "BR" | "IB" | "IR" | "RB" | "RI" | "OP")
-    ) {
-        builder.font.select(Font::Regular);
-    }
     if node.flags.delimiter_open || node.flags.line_continuation || ends_with_no_space_control(node)
     {
         builder.tighten_next_boundary();
@@ -481,17 +475,13 @@ fn lower_inline_node(
         return lower_structural_name(node, default_name, spacing_enabled);
     }
     let children = inline_children(node);
-    if matches!(macro_name, Some("B" | "SB" | "I" | "R")) {
+    if matches!(
+        macro_name,
+        Some("B" | "SB" | "I" | "R" | "BI" | "BR" | "IB" | "IR" | "RB" | "RI" | "OP")
+    ) {
         return lower_man_font_scope(node, default_name, spacing_enabled, &mut FontState::new());
     }
-    // man(7) alternating-font macros concatenate their arguments without
-    // inserting spaces. Each argument switches to the next named font.
-    let lowered = alternating_font_pair(macro_name).map_or_else(
-        || lower_inline_nodes_with_spacing(children, default_name, spacing_enabled),
-        |(first, second)| {
-            lower_alternating_fonts(children, default_name, first, second, spacing_enabled)
-        },
-    );
+    let lowered = lower_inline_nodes_with_spacing(children, default_name, spacing_enabled);
     let anchor = navigation_anchor(node);
     let mut output = lower_macro_inline(
         node,
@@ -530,24 +520,6 @@ fn lower_macro_inline(
             wrap_strong(content)
         }
         Some("Cm" | "Ic" | "Sy" | "B" | "SB") => wrap_strong(lowered),
-        Some("OP") => {
-            // man(7) OP makes the entire invocation optional. Its first
-            // argument is an option name (bold), the second a metavariable.
-            let mut builder = InlineBuilder::with_spacing(spacing_enabled);
-            for (index, child) in children.iter().enumerate() {
-                builder.append(lower_font_scope(
-                    std::slice::from_ref(child),
-                    default_name,
-                    spacing_enabled,
-                    if index == 0 {
-                        Font::Strong
-                    } else {
-                        Font::Emphasis
-                    },
-                ));
-            }
-            surround("[", builder.finish(), "]")
-        }
         Some("Ar" | "Pa" | "Em" | "Va" | "Vt" | "Ft" | "Fa" | "I") => wrap_emphasis(lowered),
         Some("Li") => vec![Inline::Code {
             value: plain_text(&lowered),
@@ -1058,33 +1030,6 @@ fn wrap_emphasis(children: Vec<Inline>) -> Vec<Inline> {
         .collect()
 }
 
-fn lower_alternating_fonts(
-    children: &[Node],
-    default_name: Option<&str>,
-    first: Font,
-    second: Font,
-    spacing_enabled: bool,
-) -> Vec<Inline> {
-    let mut output = Vec::new();
-    for (index, child) in children.iter().enumerate() {
-        let font = if index % 2 == 0 { first } else { second };
-        // An alternating man(7) macro establishes the *initial* font for
-        // each argument. Explicit `\\f` escapes inside that argument must
-        // still be able to reset or replace it; wrapping an already-lowered
-        // argument would incorrectly nest the outer font around the reset.
-        let lowered = if child.kind == NodeKind::Text {
-            lower_text_node(child, font)
-        } else {
-            apply_font(
-                lower_inline_node(child, default_name, spacing_enabled),
-                font,
-            )
-        };
-        output.extend(lowered);
-    }
-    output
-}
-
 fn alternating_font_pair(macro_name: Option<&str>) -> Option<(Font, Font)> {
     match macro_name {
         Some("BI") => Some((Font::Strong, Font::Emphasis)),
@@ -1094,31 +1039,6 @@ fn alternating_font_pair(macro_name: Option<&str>) -> Option<(Font, Font)> {
         Some("RB") => Some((Font::Regular, Font::Strong)),
         Some("RI") => Some((Font::Regular, Font::Emphasis)),
         _ => None,
-    }
-}
-
-fn apply_font(children: Vec<Inline>, font: Font) -> Vec<Inline> {
-    match font {
-        Font::Regular => children,
-        Font::Strong => wrap_strong(children),
-        Font::Emphasis => wrap_emphasis(children),
-        Font::StrongEmphasis => wrap_strong(wrap_emphasis(children)),
-        Font::Code | Font::CodeStrong | Font::CodeEmphasis => {
-            let code = (!children.is_empty())
-                .then(|| Inline::Code {
-                    value: plain_text(&children),
-                })
-                .into_iter()
-                .collect();
-            match font {
-                Font::Code => code,
-                Font::CodeStrong => wrap_strong(code),
-                Font::CodeEmphasis => wrap_emphasis(code),
-                Font::Regular | Font::Strong | Font::Emphasis | Font::StrongEmphasis => {
-                    unreachable!()
-                }
-            }
-        }
     }
 }
 

@@ -81,6 +81,22 @@ fn styled_text(document: &mant_ir::Document) -> Vec<(String, bool, bool)> {
 fn man_fonts_preserve_previous_selection_and_respect_macro_scope() {
     for (body, expected) in [
         (
+            ".BI TOKENA TOKENB\n\\fPTOKENC",
+            [("TOKENB", false, true), ("TOKENC", false, true)],
+        ),
+        (
+            ".BI TOKENA \"\\fPTOKENB\"",
+            [("TOKENA", true, false), ("TOKENB", true, false)],
+        ),
+        (
+            ".OP TOKENA \"\\fPTOKENB\"",
+            [("TOKENA", true, false), ("TOKENB", true, false)],
+        ),
+        (
+            "\\fBTOKENA\n.OP --opt ARG\n\\fPTOKENB",
+            [("TOKENA", true, false), ("TOKENB", false, false)],
+        ),
+        (
             ".B \"TOKENA\\fRTOKENB\"",
             [("TOKENA", true, false), ("TOKENB", false, false)],
         ),

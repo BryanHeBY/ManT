@@ -30,6 +30,41 @@ pub(super) fn lower_man_font_scope(
     state: &mut FontState,
 ) -> Vec<Inline> {
     state.select(Font::Regular);
+    if let Some((first, second)) = super::alternating_font_pair(node.macro_name.as_deref()) {
+        let mut output = Vec::new();
+        for (index, child) in node.children.iter().enumerate() {
+            state.select(if index % 2 == 0 { first } else { second });
+            output.extend(lower_inline_nodes_with_font_state(
+                std::slice::from_ref(child),
+                default_name,
+                spacing,
+                state,
+            ));
+        }
+        state.select(Font::Regular);
+        return output;
+    }
+    if node.macro_name.as_deref() == Some("OP") {
+        let mut output = InlineBuilder::with_spacing(spacing);
+        for (index, child) in node.children.iter().enumerate() {
+            state.select(if index == 0 {
+                Font::Strong
+            } else {
+                Font::Emphasis
+            });
+            output.append(lower_inline_nodes_with_font_state(
+                std::slice::from_ref(child),
+                default_name,
+                spacing,
+                state,
+            ));
+        }
+        // OP resets for its closing bracket, then the man macro scope resets
+        // again. Consequently a following fP selects regular, not its operand.
+        state.select(Font::Regular);
+        state.select(Font::Regular);
+        return super::surround("[", output.finish(), "]");
+    }
     match node.macro_name.as_deref() {
         Some("B" | "SB") => state.select(Font::Strong),
         Some("I") => state.select(Font::Emphasis),
@@ -38,20 +73,6 @@ pub(super) fn lower_man_font_scope(
     let result = lower_inline_nodes_with_font_state(&node.children, default_name, spacing, state);
     state.select(Font::Regular);
     result
-}
-
-pub(super) fn lower_font_scope(
-    nodes: &[Node],
-    default_name: Option<&str>,
-    spacing: bool,
-    initial_font: Font,
-) -> Vec<Inline> {
-    let mut builder = InlineBuilder::with_spacing(spacing);
-    builder.font.select(initial_font);
-    for node in nodes {
-        append_inline_node(&mut builder, node, default_name);
-    }
-    builder.finish()
 }
 
 pub(in crate::mandoc) fn lower_inline_nodes_with_font_state(
