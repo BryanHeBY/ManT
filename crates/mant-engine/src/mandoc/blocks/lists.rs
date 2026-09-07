@@ -624,6 +624,24 @@ fn visible_definition_head(node: &Node) -> &[Node] {
     }
 }
 
+/// Combining heads changes the owner start as well as its displayed terms.
+/// Retain the first head's actual source (including unknown), without inventing
+/// an end position from a later head or borrowing the body/container location.
+fn prepend_definition_heads(
+    item: &mut DefinitionItem,
+    mut heads: impl Iterator<Item = DefinitionItem>,
+) {
+    if let Some(first) = heads.next() {
+        item.source = first.source;
+        item.terms.splice(
+            0..0,
+            std::iter::once(first)
+                .chain(heads)
+                .flat_map(|head| head.terms),
+        );
+    }
+}
+
 fn append_definition(
     output: &mut Vec<Block>,
     mut item: DefinitionItem,
@@ -652,10 +670,7 @@ fn append_definition(
                 DefinitionMerge::None | DefinitionMerge::From(_) => None,
             };
             if let Some(first_pending) = first_pending {
-                let pending_terms = items
-                    .drain(first_pending..)
-                    .flat_map(|pending| pending.terms);
-                item.terms.splice(0..0, pending_terms);
+                prepend_definition_heads(&mut item, items.drain(first_pending..));
                 // Source-proven `.TQ`, `\c`, and bounded compact aliases are
                 // collected as pending terms. Recompute their combined layout.
                 item.layout.inline_term = terms_fit_inline(&item.terms, max_term_width);
@@ -788,6 +803,24 @@ mod tests {
                 source: None,
             }],
         }
+    }
+
+    #[test]
+    fn prepending_heads_preserves_unknown_sources_without_inventing_a_range() {
+        let later_source = Some(mant_ir::SourceSpan {
+            byte_range: None,
+            line: 9,
+            column: 1,
+            end_line: None,
+            end_column: None,
+        });
+        let mut item = definition("--all", "body");
+        item.source = later_source;
+        super::prepend_definition_heads(&mut item, std::iter::empty());
+        assert_eq!(item.source, later_source);
+        super::prepend_definition_heads(&mut item, std::iter::once(definition("-a", "")));
+        assert_eq!(item.source, None);
+        assert_eq!(item.terms.len(), 2);
     }
 
     #[test]

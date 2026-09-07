@@ -126,7 +126,7 @@ pub(super) fn normalize_hanging_definitions(blocks: &mut Vec<Block>, context: De
         let terms = vec![children];
         normalized.push(Block::DefinitionList {
             items: vec![DefinitionItem {
-                source: None,
+                source,
                 entry: None,
                 layout: mant_ir::DefinitionLayout {
                     inline_term: terms_fit_inline(&terms, DEFAULT_INLINE_TERM_MAX_WIDTH),

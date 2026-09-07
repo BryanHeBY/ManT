@@ -206,10 +206,7 @@ fn coalesce_pending_definition_terms(
             continue;
         }
         if is_option_definition(&item) && pending.iter().all(is_option_definition) {
-            let pending_terms = pending
-                .drain(..)
-                .flat_map(|pending: DefinitionItem| pending.terms);
-            item.terms.splice(0..0, pending_terms);
+            super::prepend_definition_heads(&mut item, pending.drain(..));
             item.layout.inline_term = terms_fit_inline(&item.terms, max_term_width);
         } else {
             output.append(&mut pending);
