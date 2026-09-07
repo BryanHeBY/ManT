@@ -1,0 +1,160 @@
+//! Definition context policy; coordinated by the parent discovery passes.
+use crate::inline::plain_text;
+use mant_ir::{DefinitionItem, DefinitionRole};
+
+/// Only semantic topology changes inherited context; visual indentation does not.
+pub(super) fn definition_group_context(
+    items: &[DefinitionItem],
+    context: DefinitionContext,
+) -> DefinitionContext {
+    if context == DefinitionContext::Generic && is_key_binding_command_group(items) {
+        DefinitionContext::Commands
+    } else {
+        context
+    }
+}
+
+pub(super) fn child_definition_context(
+    role: DefinitionRole,
+    item_context: DefinitionContext,
+) -> DefinitionContext {
+    match role {
+        DefinitionRole::Command => DefinitionContext::Parameters,
+        DefinitionRole::Option
+        | DefinitionRole::Marker
+        | DefinitionRole::Operand
+        | DefinitionRole::ConfigurationKey => DefinitionContext::Values,
+        DefinitionRole::EnvironmentVariable
+        | DefinitionRole::Variable
+        | DefinitionRole::Value
+        | DefinitionRole::Term => item_context,
+    }
+}
+
+/// Recognize a definition group whose authored forms are editor commands and
+/// optional key bindings.
+///
+/// Manuals such as Bash group Readline commands under topical headings like
+/// "Killing and Yanking" or "Miscellaneous", so a heading-only classifier
+/// cannot recover their executable names. Requiring a whole multi-item group
+/// of command-name tokens plus at least one recognizable binding keeps this
+/// inference narrower than treating arbitrary hyphenated glossary terms as
+/// commands.
+fn is_key_binding_command_group(items: &[DefinitionItem]) -> bool {
+    items.len() > 1
+        && items.iter().all(|item| {
+            item.terms
+                .first()
+                .is_some_and(|term| key_binding_command_form(&plain_text(term)).is_some())
+        })
+        && items.iter().any(|item| {
+            item.terms.first().is_some_and(|term| {
+                key_binding_command_form(&plain_text(term))
+                    .is_some_and(|(_, binding)| binding.is_some())
+            })
+        })
+}
+
+pub(super) fn key_binding_command_form(value: &str) -> Option<(&str, Option<&str>)> {
+    let value = value.trim();
+    let split = value
+        .char_indices()
+        .find(|(_, character)| character.is_whitespace());
+    let (name, suffix) = split.map_or((value, ""), |(index, _)| {
+        (&value[..index], value[index..].trim())
+    });
+    let mut characters = name.chars();
+    if !characters
+        .next()
+        .is_some_and(|character| character.is_ascii_alphabetic())
+        || !characters
+            .all(|character| character.is_ascii_alphanumeric() || matches!(character, '-' | '_'))
+    {
+        return None;
+    }
+    if suffix.is_empty() {
+        return Some((name, None));
+    }
+    let binding = suffix.strip_prefix('(')?.strip_suffix(')')?.trim();
+    (!binding.is_empty() && looks_like_key_binding(binding)).then_some((name, Some(binding)))
+}
+
+fn looks_like_key_binding(value: &str) -> bool {
+    value
+        .split([',', ' '])
+        .filter(|part| !part.is_empty() && *part != "usually" && *part != "...")
+        .any(|part| {
+            part.starts_with("C-")
+                || part.starts_with("M-")
+                || matches!(
+                    part,
+                    "TAB" | "Return" | "Newline" | "Rubout" | "ESC" | "<space>"
+                )
+        })
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum DefinitionContext {
+    Generic,
+    Parameters,
+    Commands,
+    EnvironmentVariables,
+    Variables,
+    ConfigurationKeys,
+    Values,
+}
+
+impl DefinitionContext {
+    pub(super) const fn label(self) -> &'static str {
+        match self {
+            Self::Generic => "generic",
+            Self::Parameters => "parameter",
+            Self::Commands => "command",
+            Self::EnvironmentVariables => "environment-variable",
+            Self::Variables => "variable",
+            Self::ConfigurationKeys => "configuration-key",
+            Self::Values => "value",
+        }
+    }
+
+    pub(super) fn for_section(title: &str, inherited: Self) -> Self {
+        let normalized = title
+            .chars()
+            .map(|character| {
+                if character.is_ascii_alphanumeric() {
+                    character.to_ascii_uppercase()
+                } else {
+                    ' '
+                }
+            })
+            .collect::<String>();
+        let words = normalized.split_whitespace().collect::<Vec<_>>();
+        // Composite headings describe the more specific syntax family.  In
+        // particular, "ENVIRONMENT OPTIONS" documents command-line options
+        // whose defaults happen to come from the environment; it is not a
+        // declaration list of environment-variable names.
+        if words.contains(&"OPTIONS")
+            || words.contains(&"OPTION")
+            || words.contains(&"SWITCHES")
+            || words.contains(&"FLAGS")
+        {
+            return Self::Parameters;
+        }
+        if words.contains(&"ENVIRONMENT") || words.contains(&"ENVIRONMENTS") {
+            return Self::EnvironmentVariables;
+        }
+        if words.contains(&"VARIABLES") || words.contains(&"VARIABLE") {
+            return Self::Variables;
+        }
+        if normalized.trim() == "COMMANDS"
+            || normalized.contains("BUILTIN COMMANDS")
+            || normalized.contains("SUBCOMMANDS")
+        {
+            return Self::Commands;
+        }
+        if normalized.contains("CONFIGURATION") || normalized.trim() == "KEYWORDS" {
+            return Self::ConfigurationKeys;
+        }
+        inherited
+    }
+}

@@ -8,7 +8,7 @@ use mant_ir::{DefinitionCase, DefinitionItem, DefinitionRole, Inline};
 
 use crate::inline::plain_text;
 
-use super::{DefinitionContext, key_binding_command_form};
+use super::context::{DefinitionContext, key_binding_command_form};
 
 mod forms;
 
