@@ -186,7 +186,7 @@ fn trail(node: &LocatedNode<'_>) -> OutlineTrail {
                     title: title.clone(),
                     role: facts.role,
                     case: facts.case,
-                    names: entry.item.validated_names().unwrap_or_default().to_vec(),
+                    names: entry.names.to_vec(),
                 },
             )
         }

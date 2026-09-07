@@ -124,7 +124,7 @@ pub(crate) fn collect_sections<'a>(
                 coordinates: coordinates.clone(),
                 path: OutlinePath::nested_entry(Some(&coordinates), &located.indices)
                     .expect("enumerated entry paths are one-based"),
-                title: definition_title(entry),
+                title: definition_title(entry, located.names),
                 breadcrumbs: entry_breadcrumbs,
                 source: located.source,
                 entry: located,
@@ -154,7 +154,7 @@ pub(crate) fn collect_root_entries<'a>(blocks: &'a [Block], output: &mut Vec<Loc
             coordinates: Vec::new(),
             path: OutlinePath::nested_entry(None, &located.indices)
                 .expect("enumerated entry paths are one-based"),
-            title: definition_title(entry),
+            title: definition_title(entry, located.names),
             breadcrumbs: entry_breadcrumbs,
             source: located.source,
             entry: located,
@@ -177,16 +177,14 @@ fn append_entry_breadcrumbs(
         breadcrumbs.push(LocatedBreadcrumb {
             path: path.clone(),
             id: identity.id.clone(),
-            title: definition_title(*ancestor),
+            title: definition_title(*ancestor, ancestor.validated_names().unwrap_or_default()),
         });
     }
 }
 
-fn definition_title(entry: EntryOwner<'_>) -> String {
+fn definition_title(entry: EntryOwner<'_>, names: &[String]) -> String {
     let identity = entry.facts().expect("semantic entries have identities");
-    if let Some(names) = entry.validated_names()
-        && !names.is_empty()
-    {
+    if !names.is_empty() {
         return names.join(", ");
     }
     let forms = entry

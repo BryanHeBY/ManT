@@ -68,9 +68,11 @@ impl<'a> Scan<'a, '_> {
         self.next_order += 1;
         let facts = owner.facts().expect("indexed semantic owner");
         let mut bases = Vec::new();
-        if owner
-            .validated_names()
-            .unwrap_or_default()
+        let LocatedNode::Entry { entry, .. } = &self.located[index] else {
+            unreachable!("owner location")
+        };
+        if entry
+            .names
             .iter()
             .any(|name| same(name, self.query, facts.case))
         {

@@ -4,6 +4,8 @@ use mant_ir::{Block, EntryOwner, ListKind, SourceSpan};
 /// One identified owner, retaining enough context to excerpt its original item.
 pub(crate) struct ContentEntry<'a> {
     pub(crate) item: EntryOwner<'a>,
+    /// Validated once for this immutable location snapshot, never raw facts.
+    pub(crate) names: &'a [String],
     pub(crate) source: Option<SourceSpan>,
     pub(crate) indices: Vec<usize>,
     pub(crate) ancestors: Vec<EntryOwner<'a>>,
@@ -160,6 +162,7 @@ fn collect_owner<'a>(
     indices.push(*direct_index);
     output.push(ContentEntry {
         item,
+        names: item.validated_names().unwrap_or_default(),
         source: item.source(),
         indices: indices.clone(),
         ancestors: ancestors.clone(),
