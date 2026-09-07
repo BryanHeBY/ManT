@@ -39,8 +39,13 @@ The following are high-confidence review findings:
 The additive `relationshipCounts` object counts names, explicit groups, group
 members and aliasOf declarations independently. Native shared names never
 become declared aliases merely because they share content. Shared IR semantic
-validation findings are violations, and `semanticsComplete` records producer
-coverage independently of those counts. An independent Markdown test exercises
+validation findings are deduplicated into
+`semanticViolations` and included in `violations`; `semanticsComplete` is false
+when these findings are present. Producer coverage (for example deliberately
+unclassified native terms) can also make it false without a precision violation.
+The driver validates this category explicitly,
+so an invalid name binding is review evidence, not an invalid profiler response.
+An independent Markdown test exercises
 the same final-index counter with shared names, declared groups and aliasOf;
 zero native relation counts are expected, not a recall metric.
 

@@ -162,12 +162,9 @@ fn profile_document(
     let semantic_diagnostics = mant_ir::validate_document(document)
         .into_iter()
         .filter(|diagnostic| !mant_engine::semantics_complete(std::slice::from_ref(diagnostic)))
-        .collect::<Vec<_>>();
-    violations.extend(
-        semantic_diagnostics
-            .iter()
-            .map(|diagnostic| diagnostic.message.clone()),
-    );
+        .map(|diagnostic| diagnostic.message)
+        .collect::<std::collections::BTreeSet<_>>();
+    violations.extend(semantic_diagnostics.iter().cloned());
 
     json!({
         "schema": PROFILE_SCHEMA,
@@ -176,6 +173,7 @@ fn profile_document(
         "entryCounts": counts,
         "relationshipCounts": relationship_counts(&entries),
         "semanticsComplete": mant_engine::semantics_complete(&document.diagnostics) && semantic_diagnostics.is_empty(),
+        "semanticViolations": semantic_diagnostics,
         "ordinalEntries": ordinal_entries,
         "ordinalDefinitions": ordinal_definitions,
         "emptyEntries": empty_entries,
@@ -500,6 +498,33 @@ fn check_value_domains(entries: &[SemanticEntry], scope: &str, violations: &mut 
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn invalid_binding_and_producer_coverage_are_explicit_review_evidence() {
+        let source = b".TH PROBE 1 2026-09-08\n.SH OPTIONS\n.TP\n.B -D<NAME>\nDefine it.\n";
+        let parsed = libmandoc_rs::Parser::default()
+            .parse_bytes("probe.1", source)
+            .unwrap();
+        let mut document =
+            mant_engine::lower_mandoc_document(std::path::Path::new("probe.1"), &parsed);
+        let clean = super::profile_document("probe", &parsed.document.root, &document, 0);
+        assert_eq!(clean["semanticViolations"], serde_json::json!([]));
+        assert_eq!(clean["semanticsComplete"], true);
+
+        let mant_ir::Block::DefinitionList { items, .. } = &mut document.sections[0].blocks[0]
+        else {
+            panic!("definition owner");
+        };
+        items[0].entry.as_mut().unwrap().name_bindings.clear();
+        // The same finding can be present in producer diagnostics and shared
+        // validation. It must be reported once, not misclassified as bad JSON.
+        document.diagnostics = mant_ir::validate_document(&document);
+        let failed = super::profile_document("probe", &parsed.document.root, &document, 0);
+        assert_eq!(failed["semanticsComplete"], false);
+        assert_eq!(failed["semanticViolations"].as_array().unwrap().len(), 1);
+        assert_eq!(failed["violations"], failed["semanticViolations"]);
+        assert_eq!(failed["emptyEntries"], serde_json::json!([]));
+    }
+
     #[test]
     fn shared_names_and_explicit_relationships_are_counted_separately() {
         let query = mant_engine::query_markdown_text(

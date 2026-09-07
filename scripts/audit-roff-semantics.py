@@ -319,14 +319,7 @@ def profile_findings(
                 and all(isinstance(item, str) for item in ordinal_conversion_violations)
                 and isinstance(violations, list)
                 and all(isinstance(item, str) for item in violations)
-                and bool(violations)
-                == bool(
-                    ordinal_entries
-                    or ordinal_definitions
-                    or empty_entries
-                    or value_domain_violations
-                    or ordinal_conversion_violations
-                )
+                and valid_violation_summary(response)
             )
             if not valid:
                 yield Finding(label, "hard-failure", [], "invalid profiler response")
@@ -358,6 +351,23 @@ def repository_commit() -> str | None:
     return result.stdout.strip() if result.returncode == 0 else None
 
 
+def valid_violation_summary(response: dict[str, object]) -> bool:
+    """IR semantic failures are review evidence, not a malformed response."""
+    semantic = response.get("semanticViolations")
+    return (
+        isinstance(semantic, list)
+        and all(isinstance(item, str) for item in semantic)
+        and isinstance(response.get("semanticsComplete"), bool)
+        and not (semantic and response["semanticsComplete"])
+        and bool(response.get("violations")) == any(
+            response.get(field) for field in (
+                "ordinalEntries", "ordinalDefinitions", "emptyEntries",
+                "valueDomainViolations", "ordinalConversionViolations", "semanticViolations",
+            )
+        )
+    )
+
+
 def file_digest(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as source:
@@ -367,6 +377,23 @@ def file_digest(path: Path) -> str:
 
 
 def self_check() -> None:
+    semantic_only = {
+        "semanticViolations": ["name is not bound"],
+        "semanticsComplete": False, "violations": ["name is not bound"],
+    }
+    assert valid_violation_summary(semantic_only)
+    assert not valid_violation_summary({**semantic_only, "semanticsComplete": True})
+    assert not valid_violation_summary({**semantic_only, "violations": []})
+    assert not valid_violation_summary({**semantic_only, "semanticViolations": [42]})
+    assert not valid_violation_summary({"violations": []})
+    assert valid_violation_summary({
+        "semanticViolations": [], "semanticsComplete": True, "violations": [],
+    })
+    # Intentionally unclassified native terms can make coverage incomplete
+    # without violating a shared IR invariant or the precision-audit oracle.
+    assert valid_violation_summary({
+        "semanticViolations": [], "semanticsComplete": False, "violations": [],
+    })
     for reviewed in ("false-positive", "confirmed-open", "confirmed-fixed"):
         for scanned in ("clean", "review", "hard-failure"):
             assert merge_clean_review_state(reviewed, scanned) == reviewed
