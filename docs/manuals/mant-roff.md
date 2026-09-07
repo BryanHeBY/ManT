@@ -304,6 +304,8 @@ The zero-advance `\z` escape retains its complete following glyph, including nam
 
 ## Tables
 
+Rule cells retain their column positions but no printable body. Both layout rules and data rules suppress their payload; source recovery never resurrects that intentionally hidden text. Escaped literal underscores remain ordinary text.
+
 `tbl(7)` rows become IR tables, including tables nested inside an mdoc literal or unfilled display. ManT retains cell text, left/center/right alignment, column spans, and row spans supplied by libmandoc. It does not reproduce line drawing, exact column widths, vertical positioning, fonts, or device-specific rules.
 
 Cell text passes through the same roff inline decoder as ordinary prose. For source-backed `T{`/`T}` text blocks, supported inline requests are parsed together using the document's man/mdoc dialect and lowered through the ordinary inline path. This preserves callable macro nesting, enclosure closure, links, and spacing state across lines; an argument-less `.Nm` resolves to the validated document name. The private parse accepts no includes or nested block/table requests and does not invent navigation targets. Recovery is bounded to 64 requests and 64 callable tokens per cell; exceeding either limit retains complete native cell text or source spelling with `manual.unhandled-table-text-block`. Other complex nested block markup may flatten to the visible cell payload exposed by libmandoc. If an empty semantic text block cannot be recovered from the bounded input source, ManT emits the same diagnostic instead of claiming silent fidelity.

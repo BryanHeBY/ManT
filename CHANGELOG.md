@@ -137,6 +137,9 @@ that crate was not published for that change.
 
 ### libmandoc-rs 0.10.0
 
+- Expose effective table-cell content kinds, including layout-rule precedence
+  and connecting versus isolated horizontal rules, for faithful consumers.
+
 - Reject excessive native syntax nesting before validation and syntax/equation
   nesting before reference rendering; release both trees iteratively so depth
   errors and truncated ownership transfers remain safe to clean up.

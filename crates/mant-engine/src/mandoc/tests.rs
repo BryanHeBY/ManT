@@ -12,6 +12,7 @@ use super::{
 };
 
 mod upstream_inline;
+mod upstream_tables;
 
 fn temporary_source(label: &str, source: &str) -> std::path::PathBuf {
     let path = std::env::temp_dir().join(format!("mant-lower-{label}-{}.1", process::id()));

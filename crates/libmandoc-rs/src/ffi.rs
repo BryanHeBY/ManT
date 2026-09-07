@@ -15,7 +15,7 @@ mod windows_root;
 use super::{
     AuthorMode, DefinitionListStyle, DisplayKind, Document, InputFormat, MacroSet, Metadata, Node,
     NodeFlags, NodeKind, NormalizedEnclosure, NormalizedFont, NormalizedListKind, RawDocument,
-    SourceBundle, TableAlignment, TableCell,
+    SourceBundle, TableAlignment, TableCell, TableCellKind,
 };
 
 #[cfg(feature = "render")]
@@ -66,6 +66,7 @@ struct CNodeView {
 #[repr(C)]
 struct CTableCellView {
     text: *const c_char,
+    kind: i32,
     text_block: i32,
     vertical_continuation: i32,
     column_span: u32,
@@ -767,6 +768,14 @@ unsafe fn copy_table_cells(
         }
         let view = unsafe { view.assume_init() };
         cells.push(TableCell {
+            kind: match view.kind {
+                1 => TableCellKind::Empty,
+                2 => TableCellKind::HorizontalRule,
+                3 => TableCellKind::DoubleHorizontalRule,
+                4 => TableCellKind::IsolatedHorizontalRule,
+                5 => TableCellKind::IsolatedDoubleHorizontalRule,
+                _ => TableCellKind::Text,
+            },
             text: unsafe { visible_string(view.text) },
             text_block: view.text_block != 0,
             vertical_continuation: view.vertical_continuation != 0,

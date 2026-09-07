@@ -53,6 +53,7 @@ struct mant_mandoc_node_view {
 /* Borrowed projection of one live tbl(7) data cell. */
 struct mant_mandoc_table_cell_view {
 	const char		*text;
+	int			 kind;
 	int			 text_block;
 	int			 vertical_continuation;
 	unsigned int		 column_span;

@@ -72,6 +72,11 @@ escapes the call and no intermediate heap-owned C AST is materialized. The
 private parser handle is destroyed on the calling thread before `Parser`
 returns, while the returned report remains fully owned and freely movable.
 
+Table cells expose their effective `TableCellKind`: layout rules override data,
+and connecting/isolated single/double rules remain distinguishable. A rule may
+retain a native text payload for inspection; consumers must not print it or
+recover discarded source content as though it were a text cell.
+
 ## Basic use
 
 ```rust,no_run

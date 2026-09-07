@@ -1,6 +1,6 @@
 //! Reconstructs native tbl rows and source-backed semantic cell content.
 
-use libmandoc_rs::{Node, NodeKind, TableAlignment as MandocTableAlignment};
+use libmandoc_rs::{Node, NodeKind, TableAlignment as MandocTableAlignment, TableCellKind};
 use mant_ir::{
     Block, Inline, LayoutHint, TableAlignment as AstTableAlignment, TableCell as AstTableCell,
     TableRow,
@@ -96,11 +96,15 @@ pub(super) fn append_table_row(
                     .as_ref()
                     .and_then(|cells| cells.get(index))
                     .copied();
-                let blocks = if vertical_continuation {
+                let blocks = if vertical_continuation
+                    || cell.is_some_and(|cell| cell.kind != TableCellKind::Text)
+                {
                     // `\^` is tbl's vertical-span control marker. The
                     // preceding cell owns the actual content and its copied
                     // `row_span`; rendering the marker as text would invent
                     // a visible token that groff and mandoc both suppress.
+                    // Rules likewise own layout, not their data-column
+                    // payload: source recovery must never resurrect it.
                     Vec::new()
                 } else {
                     let children = cell.map_or_else(

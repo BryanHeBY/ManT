@@ -1469,6 +1469,21 @@ mant_mandoc_table_cell_snapshot(const struct mant_mandoc_document *document,
 	source = (const struct tbl_dat *)cell;
 	memset(view, 0, sizeof(*view));
 	view->text = source->string;
+	/* Layout rules override data, including otherwise printable strings. */
+	if (source->layout != NULL && source->layout->pos == TBL_CELL_HORIZ)
+		view->kind = 2;
+	else if (source->layout != NULL && source->layout->pos == TBL_CELL_DHORIZ)
+		view->kind = 3;
+	else {
+		switch (source->pos) {
+		case TBL_DATA_NONE: view->kind = 1; break;
+		case TBL_DATA_HORIZ: view->kind = 2; break;
+		case TBL_DATA_DHORIZ: view->kind = 3; break;
+		case TBL_DATA_NHORIZ: view->kind = 4; break;
+		case TBL_DATA_NDHORIZ: view->kind = 5; break;
+		default: break;
+		}
+	}
 	view->text_block = source->block;
 	view->vertical_continuation =
 	    (source->layout != NULL && source->layout->pos == TBL_CELL_DOWN) ||

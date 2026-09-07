@@ -138,11 +138,33 @@ pub enum TableAlignment {
     Right,
 }
 
+/// Effective native tbl cell content after layout-rule precedence.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum TableCellKind {
+    /// Printable data (subject to vertical continuation).
+    Text,
+    /// Uninitialized data, with no printable payload.
+    Empty,
+    /// A connecting single horizontal rule.
+    HorizontalRule,
+    /// A connecting double horizontal rule.
+    DoubleHorizontalRule,
+    /// An isolated single horizontal rule.
+    IsolatedHorizontalRule,
+    /// An isolated double horizontal rule.
+    IsolatedDoubleHorizontalRule,
+}
+
 /// Owned payload of one cell in a libmandoc table row.
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TableCell {
-    /// Visible cell content, or `None` for a spanning/empty cell.
+    /// Native content kind; rule cells suppress even a nonempty text payload.
+    pub kind: TableCellKind,
+    /// Native cell payload, or `None` for a spanning/empty cell.
+    /// Only printable when [`Self::kind`] is [`TableCellKind::Text`] and the
+    /// cell is not a vertical continuation.
     pub text: Option<String>,
     /// The cell was written using a multiline tbl(7) `T{`/`T}` text block.
     pub text_block: bool,
