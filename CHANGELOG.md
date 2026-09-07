@@ -96,6 +96,8 @@ that crate was not published for that change.
   ordered containers to their nearest semantic owner, without leaking past
   recognized child entries or across unrelated document content. Explicit and
   inferred open choices remain non-exhaustive.
+  Bind declarations to original parser item positions, not the first retained
+  content block, so removing leading comments cannot lose failure or domain ownership.
 
 - Keep indented definition continuations together across explicit vertical
   spacing, including GCC help classes, qualifiers and trailing examples.

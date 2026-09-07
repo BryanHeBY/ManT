@@ -3,8 +3,8 @@
 mod bindings;
 
 use super::directives::{
-    AttachedValuePolicy, DomainDeclarationState, SemanticDeclarations, domain_diagnostic,
-    semantic_diagnostic,
+    AttachedValuePolicy, DomainDeclaration, DomainDeclarationState, SemanticDeclarations,
+    domain_diagnostic, semantic_diagnostic,
 };
 use mant_ir::{
     Block, DefinitionRole, Diagnostic, DiagnosticLevel, Inline, LinkTarget, ListItem, ListKind,
@@ -48,9 +48,22 @@ fn entry_coverage(
             coverage.rejected |= normalize_nested_blocks(block, declarations, diagnostics).rejected;
             continue;
         };
+        let owner_offsets = source
+            .and_then(|source| source.byte_range)
+            .and_then(|range| usize::try_from(range.start.get()).ok())
+            .and_then(|start| declarations.list_items.remove(&start))
+            .unwrap_or_default();
         let child_coverage = items
             .iter_mut()
-            .map(|item| item_child_coverage(item, declarations, diagnostics))
+            .enumerate()
+            .map(|(index, item)| {
+                item_child_coverage(
+                    item,
+                    owner_offsets.get(index).copied(),
+                    declarations,
+                    diagnostics,
+                )
+            })
             .collect::<Vec<_>>();
         if items.is_empty() {
             continue;
@@ -88,7 +101,12 @@ fn entry_coverage(
             }
             continue;
         }
-        for ((item, signature), children) in items.iter_mut().zip(signatures).zip(child_coverage) {
+        for (item_index, ((item, signature), children)) in items
+            .iter_mut()
+            .zip(signatures)
+            .zip(child_coverage)
+            .enumerate()
+        {
             let signature = match signature {
                 Ok(signature) => signature,
                 Err(rejection) => {
@@ -100,8 +118,9 @@ fn entry_coverage(
                     continue;
                 }
             };
-            let domain = item_owner_offset(item)
-                .and_then(|offset| declarations.domains.remove(&offset))
+            let domain = owner_offsets
+                .get(item_index)
+                .and_then(|offset| declarations.domains.remove(offset))
                 .and_then(DomainDeclarationState::into_unique);
             item.entry = Some(bindings::entry_facts(
                 item,
@@ -112,24 +131,30 @@ fn entry_coverage(
                 declaration.is_some(),
             ));
             if let Some(declaration) = domain {
-                if matches!(declaration.value, ValueDomain::Choices { exhaustive: true })
-                    && children.rejected
-                {
-                    domain_diagnostic(diagnostics, declaration.source, "exhaustive choices requires complete extraction of the direct child entries; rejected children remain visible and the declared domain was omitted".to_owned());
-                } else if matches!(declaration.value, ValueDomain::Choices { .. })
-                    && !item.has_value_choices()
-                {
-                    domain_diagnostic(diagnostics, declaration.source, "choices requires nonempty direct semantic children of role=value; the declared domain was omitted".to_owned());
-                } else {
-                    item.entry
-                        .as_mut()
-                        .expect("an annotated entry has facts")
-                        .value_domain = Some(declaration.value);
-                }
+                attach_domain(item, declaration, children, diagnostics);
             }
         }
     }
     coverage
+}
+
+fn attach_domain(
+    item: &mut ListItem,
+    declaration: DomainDeclaration,
+    children: EntryCoverage,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    if matches!(declaration.value, ValueDomain::Choices { exhaustive: true }) && children.rejected {
+        domain_diagnostic(diagnostics, declaration.source, "exhaustive choices requires complete extraction of the direct child entries; rejected children remain visible and the declared domain was omitted".to_owned());
+    } else if matches!(declaration.value, ValueDomain::Choices { .. }) && !item.has_value_choices()
+    {
+        domain_diagnostic(diagnostics, declaration.source, "choices requires nonempty direct semantic children of role=value; the declared domain was omitted".to_owned());
+    } else {
+        item.entry
+            .as_mut()
+            .expect("an annotated entry has facts")
+            .value_domain = Some(declaration.value);
+    }
 }
 
 /// Collect both kinds of child failure before deciding whether this item is a
@@ -137,22 +162,15 @@ fn entry_coverage(
 /// failures upward just like failures returned by their nested content.
 fn item_child_coverage(
     item: &mut ListItem,
+    owner_offset: Option<usize>,
     declarations: &mut SemanticDeclarations,
     diagnostics: &mut Vec<Diagnostic>,
 ) -> EntryCoverage {
-    let rejected_declaration = item_owner_offset(item)
-        .is_some_and(|offset| declarations.incomplete_entry_children.remove(&offset));
+    let rejected_declaration =
+        owner_offset.is_some_and(|offset| declarations.incomplete_entry_children.remove(&offset));
     let mut coverage = entry_coverage(&mut item.blocks, declarations, diagnostics);
     coverage.rejected |= rejected_declaration;
     coverage
-}
-
-fn item_owner_offset(item: &ListItem) -> Option<usize> {
-    item.blocks
-        .first()
-        .and_then(block_source)
-        .and_then(|source| source.byte_range)
-        .map(|range| usize::try_from(range.start.get()).unwrap_or(usize::MAX))
 }
 
 fn normalize_nested_blocks(
@@ -162,13 +180,8 @@ fn normalize_nested_blocks(
 ) -> EntryCoverage {
     let mut coverage = EntryCoverage::default();
     match block {
-        Block::List { items, .. } => {
-            for item in items {
-                let children = item_child_coverage(item, declarations, diagnostics);
-                if item.entry.is_none() {
-                    coverage.rejected |= children.rejected;
-                }
-            }
+        Block::List { .. } => {
+            return entry_coverage(std::slice::from_mut(block), declarations, diagnostics);
         }
         Block::DefinitionList { items, .. } => {
             for item in items {

@@ -179,6 +179,10 @@ choices. The parser cannot prove exhaustiveness against an executable; it
 validates the declaration's structure, not the program's behavior. Without a
 domain declaration, all-value children still infer non-exhaustive choices.
 
+Declaration ownership uses the original parser's list and item positions;
+removing a leading semantic comment never reassigns its domain or failure
+state to another content block or item.
+
 An entry whose accepted values are entries in another document can instead
 declare that relationship inside its list item:
 

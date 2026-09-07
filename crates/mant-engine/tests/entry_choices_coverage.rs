@@ -295,3 +295,41 @@ fn recognized_children_stop_rejections_from_their_ordinary_descendants() {
         );
     }
 }
+
+#[test]
+fn leading_removed_comments_do_not_change_item_ownership() {
+    for marker in ["-", "1."] {
+        for newline in ["\n", "\r\n", "\r"] {
+            for role in ["value", "invalid"] {
+                let input = source(&format!(
+                    "  <!-- mant:entries role=value case=sensitive -->\n  - `auto`: Automatic.\n\n  Other values:\n\n  {marker}\n{}",
+                    indent(&format!("<!-- mant:entries role={role} case=sensitive -->\n- `manual`: Manual mode.\n"), marker.len() + 3)
+                )).replace('\n', newline);
+                let query = query_markdown_text(&input, None).unwrap();
+                let doc = query.document.as_ref().unwrap();
+                let index = SemanticIndex::build(doc);
+                let parent = &index.root()[0];
+                assert_eq!(
+                    parent.children.len(),
+                    if role == "value" { 2 } else { 1 },
+                    "{input:?}"
+                );
+                assert_eq!(
+                    parent.value_domain,
+                    Some(ValueDomain::Choices {
+                        exhaustive: role == "value"
+                    }),
+                    "{input:?}"
+                );
+                assert!(mant_engine::render_query_text(&query).contains("Manual mode."));
+                if role == "invalid" {
+                    assert!(
+                        doc.diagnostics
+                            .iter()
+                            .any(|d| d.code.as_deref() == Some("markdown.semantic-value-domain"))
+                    );
+                }
+            }
+        }
+    }
+}

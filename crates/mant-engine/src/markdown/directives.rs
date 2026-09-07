@@ -33,6 +33,9 @@ pub(super) struct EntryDeclaration {
 
 #[derive(Debug, Clone, Default)]
 pub(super) struct SemanticDeclarations {
+    /// Original list start -> original item starts, in parser order. These
+    /// identities survive removal of any leading semantic comment blocks.
+    pub(super) list_items: BTreeMap<usize, Vec<usize>>,
     pub(super) entries: BTreeMap<u32, EntryDeclaration>,
     pub(super) domains: BTreeMap<usize, DomainDeclarationState>,
     /// Item owners with a rejected or unattached child-list declaration.
@@ -85,6 +88,25 @@ fn extract_semantic_directives<'a>(
         })
         .collect::<Vec<_>>();
     let events = super::source::parser_events(source);
+    let mut lists = Vec::new();
+    for (event, range) in &events {
+        match event {
+            Event::Start(Tag::List(_)) => lists.push(range.start),
+            Event::End(TagEnd::List(_)) => {
+                lists.pop();
+            }
+            Event::Start(Tag::Item) => {
+                if let Some(list) = lists.last() {
+                    declarations
+                        .list_items
+                        .entry(*list)
+                        .or_default()
+                        .push(range.start);
+                }
+            }
+            _ => {}
+        }
+    }
 
     collect_entry_declarations(
         &events,
@@ -143,7 +165,7 @@ fn collect_entry_declarations(
     for (event_index, (event, range)) in events.iter().enumerate() {
         match event {
             Event::Start(Tag::Item) => {
-                item_offsets.push(first_item_block_offset(events, event_index));
+                item_offsets.push(range.start);
             }
             Event::End(TagEnd::Item) => {
                 item_offsets.pop();
@@ -176,7 +198,7 @@ fn collect_entry_declarations(
         ) else {
             declarations
                 .incomplete_entry_children
-                .extend(item_offsets.last().copied().flatten());
+                .extend(item_offsets.last().copied());
             continue;
         };
         let source_span = declaration.source;
@@ -184,7 +206,7 @@ fn collect_entry_declarations(
         else {
             declarations
                 .incomplete_entry_children
-                .extend(item_offsets.last().copied().flatten());
+                .extend(item_offsets.last().copied());
             semantic_diagnostic(
                 diagnostics,
                 source_span,
@@ -201,7 +223,7 @@ fn collect_entry_declarations(
         {
             declarations
                 .incomplete_entry_children
-                .extend(item_offsets.last().copied().flatten());
+                .extend(item_offsets.last().copied());
             semantic_diagnostic(
                 diagnostics,
                 source_span,
@@ -220,10 +242,10 @@ fn collect_domain_declarations(
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     let mut item_offsets = Vec::new();
-    for (event_index, (event, range)) in events.iter().enumerate() {
+    for (event, range) in events {
         match event {
             Event::Start(Tag::Item) => {
-                item_offsets.push(first_item_block_offset(events, event_index));
+                item_offsets.push(range.start);
             }
             Event::End(TagEnd::Item) => {
                 item_offsets.pop();
@@ -232,7 +254,7 @@ fn collect_domain_declarations(
                 let index = source_line_index(line_starts, range.start);
                 let line = lines[index].trim_end_matches(['\r', '\n']);
                 let line_number = u32::try_from(index + 1).unwrap_or(u32::MAX);
-                let Some(item_offset) = item_offsets.last().copied().flatten() else {
+                let Some(item_offset) = item_offsets.last().copied() else {
                     let source_span = directive_source(line, line_starts[index], line_number);
                     mask_directive(line, line_starts[index], masked);
                     domain_diagnostic(
@@ -274,20 +296,6 @@ fn collect_domain_declarations(
             _ => {}
         }
     }
-}
-
-fn first_item_block_offset(
-    events: &[(Event<'_>, std::ops::Range<usize>)],
-    item_index: usize,
-) -> Option<usize> {
-    for (event, range) in &events[item_index + 1..] {
-        match event {
-            Event::Start(_) => return Some(range.start),
-            Event::End(TagEnd::Item) => break,
-            _ => {}
-        }
-    }
-    None
 }
 
 fn is_semantic_directive(raw: &str, name: &str) -> bool {
