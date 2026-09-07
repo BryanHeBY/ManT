@@ -58,6 +58,9 @@ that crate was not published for that change.
 
 ### mant-engine 0.11.0
 
+- Consume Markdown semantic directives in the original parser event tree;
+  removing a directive cannot merge independent lists or spread a role/domain.
+
 - Retain separate native table boundaries and logical columns after spans;
   text and Markdown no longer shift the following cell left.
 

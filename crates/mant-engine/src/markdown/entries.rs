@@ -59,11 +59,12 @@ enum AttachedValuePolicy {
     Fixed,
 }
 
-/// Remove invisible semantic directives while retaining source offsets.
-pub(super) fn extract_semantic_directives(
-    source: &str,
+/// Consume directives in the original event stream. Never reparse masked
+/// Markdown: HTML blocks can be the only boundary between adjacent lists.
+pub(super) fn extract_semantic_directives<'a>(
+    source: &'a str,
     diagnostics: &mut Vec<Diagnostic>,
-) -> (Option<String>, SemanticDeclarations) {
+) -> (Vec<super::SpannedEvent<'a>>, SemanticDeclarations) {
     let mut masked = source.as_bytes().to_vec();
     let mut declarations = SemanticDeclarations::default();
     let lines = source.split_inclusive('\n').collect::<Vec<_>>();
@@ -96,11 +97,32 @@ pub(super) fn extract_semantic_directives(
         diagnostics,
     );
 
-    let masked = (!declarations.entries.is_empty()
-        || !declarations.domains.is_empty()
-        || masked.as_slice() != source.as_bytes())
-    .then(|| String::from_utf8(masked).expect("masking ASCII preserves UTF-8"));
-    (masked, declarations)
+    let mut output = Vec::with_capacity(events.len());
+    let mut events = events.into_iter();
+    while let Some((event, range)) = events.next() {
+        if event != Event::Start(Tag::HtmlBlock) {
+            output.push((event, range));
+            continue;
+        }
+        let start = (event, range);
+        let mut body = Vec::new();
+        for (event, range) in events.by_ref() {
+            if event == Event::End(TagEnd::HtmlBlock) {
+                if !body.is_empty() {
+                    output.push(start);
+                    output.append(&mut body);
+                    output.push((event, range));
+                }
+                break;
+            }
+            let retained =
+                std::str::from_utf8(&masked[range.clone()]).expect("ASCII masking preserves UTF-8");
+            if !retained.trim().is_empty() {
+                body.push((Event::Html(retained.to_owned().into()), range));
+            }
+        }
+    }
+    (output, declarations)
 }
 
 fn collect_entry_declarations(

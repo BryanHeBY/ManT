@@ -29,7 +29,9 @@ use mant_ir::{
     Section, SourceFormat, TldrDocument, TldrOrigin, validate_document,
     visit::{self, VisitMut},
 };
-use pulldown_cmark::{Event, HeadingLevel, Options, Parser, Tag, TagEnd};
+#[cfg(test)]
+use pulldown_cmark::Parser;
+use pulldown_cmark::{Event, HeadingLevel, Options, Tag, TagEnd};
 
 use self::{
     blocks::parse_block,
@@ -115,13 +117,11 @@ pub fn parse_markdown(
         })
         .transpose()?;
     let mut entry_diagnostics = Vec::new();
-    let (masked_document, declarations) =
+    let (events, declarations) =
         extract_semantic_directives(parts.document.as_ref(), &mut entry_diagnostics);
-    let document_source = masked_document
-        .as_deref()
-        .unwrap_or_else(|| parts.document.as_ref());
     let mut document = parse_document_with_entries(
-        document_source,
+        parts.document.as_ref(),
+        events,
         source_path,
         declarations,
         &mut entry_diagnostics,
@@ -185,6 +185,9 @@ fn parse_document(source_text: &str, source_path: Option<String>) -> Document {
     let mut diagnostics = Vec::new();
     parse_document_with_entries(
         source_text,
+        Parser::new_ext(source_text, markdown_options())
+            .into_offset_iter()
+            .collect(),
         source_path,
         entries::SemanticDeclarations::default(),
         &mut diagnostics,
@@ -193,6 +196,7 @@ fn parse_document(source_text: &str, source_path: Option<String>) -> Document {
 
 fn parse_document_with_entries(
     source_text: &str,
+    events: Vec<SpannedEvent<'_>>,
     source_path: Option<String>,
     mut declarations: entries::SemanticDeclarations,
     entry_diagnostics: &mut Vec<Diagnostic>,
@@ -205,7 +209,7 @@ fn parse_document_with_entries(
         mut ids,
         title,
         document_title_id,
-    } = lower_document_structure(source_text, &source);
+    } = lower_document_structure(events, &source);
     let mut sections = nest_sections(flat_sections);
     let extracted_title_aliases = extract_document_title(
         &mut root_blocks,
@@ -299,11 +303,10 @@ struct ParsedDocumentStructure {
 
 /// Lower the Markdown event stream without imposing final document layout.
 fn lower_document_structure(
-    source_text: &str,
+    events: Vec<SpannedEvent<'_>>,
     source: &MarkdownSource<'_>,
 ) -> ParsedDocumentStructure {
-    let parser = Parser::new_ext(source_text, markdown_options());
-    let mut cursor = EventCursor::new(parser.into_offset_iter().collect());
+    let mut cursor = EventCursor::new(events);
     let mut diagnostics = Vec::new();
     let mut root_blocks = Vec::new();
     let mut flat_sections = Vec::new();

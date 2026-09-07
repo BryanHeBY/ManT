@@ -16,6 +16,8 @@ use crate::{
 
 use super::{parse_document, parse_markdown};
 
+mod layout_review;
+
 #[test]
 fn declared_choice_domains_require_values_and_preserve_exhaustiveness() {
     for (policy, exhaustive) in [("exhaustive", true), ("open", false)] {
