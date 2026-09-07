@@ -71,6 +71,11 @@ that crate was not published for that change.
 
 ### mant-engine 0.11.0
 
+- Retain every visible name inside linked native definition heads and stop
+  name extraction at adjacent styled parameters (`-L` plus italic `dir`).
+  Preserve complete displayed forms and fixed names such as `-Wall` / `-O2`;
+  a bold invocation fragment no longer becomes a malformed command name.
+
 - Retain historical `-h/--help` option aliases across Markdown and native
   manuals without splitting argument paths or assignment values into names.
   Slash candidates retain inline styling until parameter exclusion, including

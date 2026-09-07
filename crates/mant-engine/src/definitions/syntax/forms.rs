@@ -32,8 +32,34 @@ impl FormCandidate {
         if starts_with_parameter(&self.inlines) {
             return None;
         }
-        Some(invocation_token(&plain_text(&self.inlines)).to_owned())
+        let mut prefix = String::new();
+        append_name_prefix(&self.inlines, &mut prefix);
+        let token = invocation_token(&prefix);
+        (!token.is_empty()).then(|| token.to_owned())
     }
+}
+
+/// Read visible literal content only until an explicitly styled parameter.
+/// Transparent wrappers do not erase that boundary, even without whitespace.
+fn append_name_prefix(nodes: &[Inline], output: &mut String) -> bool {
+    for node in nodes {
+        match node {
+            Inline::Text { value } | Inline::Code { value } => output.push_str(value),
+            Inline::Strong { children } | Inline::Link { children, .. } => {
+                if !append_name_prefix(children, output) {
+                    return false;
+                }
+            }
+            Inline::Emphasis { children } => {
+                if first_content_is_parameter(children).is_some() {
+                    return false;
+                }
+            }
+            Inline::Anchor { .. } => {}
+            Inline::LineBreak => output.push('\n'),
+        }
+    }
+    true
 }
 
 /// Split explicit alias separators without flattening argument spans. A generic
@@ -78,7 +104,8 @@ fn invocation_token(text: &str) -> &str {
 }
 
 /// One style-preserving splitter for alias punctuation. A bounded pass counts
-/// visible bytes even in opaque argument/link nodes, but never splits them.
+/// visible bytes even in opaque arguments. Links preserve their wrapper while
+/// exposing their visible children; their destination is never name evidence.
 fn split_groups(
     term: &[Inline],
     separators: &[char],
@@ -106,6 +133,20 @@ fn split_groups(
             Inline::Strong { children } => split_groups(children, separators, remaining)
                 .into_iter()
                 .map(|children| vec![Inline::Strong { children }])
+                .collect(),
+            Inline::Link {
+                target,
+                title,
+                children,
+            } => split_groups(children, separators, remaining)
+                .into_iter()
+                .map(|children| {
+                    vec![Inline::Link {
+                        target: target.clone(),
+                        title: title.clone(),
+                        children,
+                    }]
+                })
                 .collect(),
             _ => {
                 if let Some(bytes) = remaining {
@@ -155,6 +196,44 @@ fn first_content_is_parameter(term: &[Inline]) -> Option<bool> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn transparent_links_preserve_separators_and_parameter_ancestry() {
+        let text = |value: &str| Inline::Text {
+            value: value.into(),
+        };
+        let link = |children| Inline::Link {
+            target: mant_ir::LinkTarget::External {
+                uri: "https://example.invalid/--not-a-name".into(),
+            },
+            title: None,
+            children,
+        };
+        let source = vec![link(vec![Inline::Strong {
+            children: vec![
+                text("-L"),
+                Inline::Emphasis {
+                    children: vec![text("dir,--FAKE")],
+                },
+                text(", --library"),
+            ],
+        }])];
+        let original = source.clone();
+        assert_eq!(
+            super::super::option_names_from_terms(std::slice::from_ref(&source)),
+            ["-L", "--library"]
+        );
+        assert_eq!(source, original);
+        let argument = vec![Inline::Emphasis {
+            children: vec![link(vec![text("-n,--FAKE")])],
+        }];
+        assert!(super::super::option_names_from_terms(&[argument]).is_empty());
+        let slash = vec![link(vec![text("-n/-NUM")])];
+        assert_eq!(
+            super::super::option_names_from_terms(&[slash]),
+            ["-n", "-NUM"]
+        );
+    }
 
     #[test]
     fn slash_grouping_keeps_styles_and_excludes_later_argument_paths() {
