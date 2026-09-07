@@ -54,7 +54,7 @@ The block union preserves structures that matter across renderers:
 | `paragraph` | Filled inline flow |
 | `preformatted` | Literal flow with an optional language |
 | `list` | Bullet, ordered, or plain items containing blocks |
-| `definition-list` | Terms, aliases, identities, and block descriptions |
+| `definition-list` | Terms and block descriptions with item layout, source, and optional `entry` facts |
 | `table` | Rows and block-capable cells with spans and alignment |
 | `equation` | Normalized equation source |
 | `vertical-space` | Explicit source-requested blank terminal rows |

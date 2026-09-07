@@ -71,6 +71,66 @@ fn protocol_owner_examples_are_decodable_valid_ir_not_parallel_test_copies() {
 }
 
 #[test]
+fn protocol_outline_example_uses_current_names_and_rejects_legacy_fields() {
+    let manual = PROTOCOL_REFERENCE.replace("\r\n", "\n");
+    for newline in ["\n", "\r\n"] {
+        let source = manual.replace('\n', newline);
+        let section = source
+            .split_once("## Outline Projection")
+            .expect("outline section")
+            .1
+            .split_once("## Excerpt Projection")
+            .expect("next section")
+            .0;
+        let examples = json_fenced_examples(section);
+        assert_eq!(examples.len(), 1, "one complete outline example");
+        let outline: mant_protocol::QueryOutline =
+            serde_json::from_str(&examples[0]).expect("documented outline decodes as its DTO");
+        let OutlineNode::DocumentEntry {
+            names,
+            entry_kind,
+            case,
+            forms,
+            ..
+        } = &outline.nodes[1].children()[0]
+        else {
+            panic!("documented section contains an entry");
+        };
+        assert_eq!(names, &["-h", "--help"]);
+        assert_eq!(
+            *entry_kind,
+            mant_ir::EntryKind::Parameter {
+                parameter_kind: mant_ir::ParameterKind::Option,
+            }
+        );
+        assert_eq!(*case, mant_ir::NameCase::Sensitive);
+        assert_eq!(forms, &["-h, --help"]);
+        let encoded = serde_json::to_value(&outline).expect("serialize outline");
+        let decoded: mant_protocol::QueryOutline =
+            serde_json::from_value(encoded).expect("decode round trip");
+        assert_eq!(outline, decoded);
+
+        for keep_names in [false, true] {
+            let mut invalid: serde_json::Value = serde_json::from_str(&examples[0]).unwrap();
+            let entry = invalid["nodes"][1]["children"][0]
+                .as_object_mut()
+                .expect("entry object");
+            let names = entry["names"].clone();
+            if !keep_names {
+                entry.remove("names");
+            }
+            entry.insert("aliases".to_owned(), names);
+            let error = serde_json::from_value::<mant_protocol::QueryOutline>(invalid)
+                .expect_err("old aliases, alone or alongside names, must be rejected");
+            assert!(
+                error.to_string().contains("unknown field `aliases`"),
+                "{error}"
+            );
+        }
+    }
+}
+
+#[test]
 fn shipped_manual_parses_without_lossy_fallbacks() {
     let name = "mant.md";
     let query = query_markdown_text(MANT_MANUAL, Some(format!("docs/manuals/{name}")))

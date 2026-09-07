@@ -231,7 +231,7 @@ definitions and indexed concepts.
 | `id` | Derived by default; optional `mant:entry` JSON `id` selects an exact validated identity. Heading `{#id}` attributes still address headings, not entries. |
 | `kind` | `role=` on the owning list; option, marker, and operand map to parameter kinds. |
 | `case` | Required `case=` on the owning list. |
-| `aliases` | Selectable names extracted from the visible code terms, including linked code; grouped terms select shared content, not necessarily equivalent behavior. |
+| `names` | Selectable names extracted from the visible code terms, including linked code; grouped terms select shared content, not necessarily equivalent behavior. |
 | `forms` | Complete leading terms, including placeholders; an outside-code `\|` splits independent forms without creating another entry. |
 | `documentTargets` | Typed document links wrapping a code term; links in the description remain ordinary references. |
 | `children` | Structurally nested semantic lists with their own role and case declarations. |
@@ -247,7 +247,7 @@ one command with two selectable aliases. Likewise ManT's own manual groups
 either alias returns the same full description. Place genuinely different
 commands in separate items even when their descriptions happen to be similar.
 
-The current `aliases` field describes lookup, not a verified equivalence
+The `names` field describes lookup, not a verified equivalence
 relation. A common description alone does not prove that two options are
 interchangeable or accept the same argument syntax. ManT does not infer that
 claim from commas, shared prose or the number of forms.

@@ -1046,7 +1046,7 @@ Node kinds are:
 | `tldr` | `0` | Reserved quick reference |
 | `document-root` | `root` | Content before the first heading; optional `entrySummary` |
 | `document-section` | `1`, `1.2`, `1.2.1` | Recursive `children`; optional `entrySummary` |
-| `document-entry` | `1.2/e3`, `1.2/e3/e2` | `entryKind`, selectable aliases, forms, explicit `aliasGroups` / `aliasOf`, optional `documentTargets`, value domain and nested children |
+| `document-entry` | `1.2/e3`, `1.2/e3/e2` | `entryKind`, selectable `names`, forms, explicit `aliasGroups` / `aliasOf`, optional `documentTargets`, value domain and nested children |
 
 The default `summary` projection emits no individual entries. Instead, each
 non-empty root or section scope carries recursive counts for direct entries,
@@ -1164,7 +1164,7 @@ An illustrative response is:
           "title": "-h, --help",
           "entryKind": {"kind": "parameter", "parameterKind": "option"},
           "case": "sensitive",
-          "aliases": [
+          "names": [
             "-h",
             "--help"
           ],
