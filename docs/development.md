@@ -3,6 +3,28 @@
 This guide is for contributors. User-facing installation and command examples
 live in the [project README](../README.md).
 
+## Documentation and local work records
+
+Keep `docs/` focused on maintained user guides, architecture decisions and
+reusable development procedures. Update the authoritative page in place;
+do not add per-session review replies, commit-by-commit acceptance histories,
+machine-specific timings, raw logs or temporary measurement JSON here.
+
+Keep those work records in an untracked local review directory or the existing
+ignored `target/` output directories. Report verification results in the change
+discussion and CI; retain release evidence with the release workflow artifacts.
+Extract enduring design constraints into the appropriate guide. Regression
+fixtures, protocol snapshots and intentional audit ledgers remain versioned
+at their established locations: they are executable contracts, not work logs.
+
+For performance comparisons, retain already-built baseline binaries, use fixed
+source identities, warm both versions, and alternate runs without concurrent
+builds or tests. Measure native loading separately from rendering/serialization;
+report timing and peak memory together. Keep raw samples outside `docs/` and
+do not rebuild historical trees in temporary directories on a space-constrained
+host. Use the repository's existing build directory and leave isolated package
+compilation to CI when local constraints prohibit it.
+
 ## Prerequisites
 
 - Linux with glibc, macOS, or Windows
