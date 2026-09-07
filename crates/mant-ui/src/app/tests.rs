@@ -34,7 +34,7 @@ use crate::{
 fn click_document_cell(app: &mut App, column: usize, row: usize) {
     let column = app.geometry.content.x + u16::try_from(column).expect("document column");
     let row = app.geometry.content.y
-        + u16::try_from(row.saturating_sub(app.content_scroll)).expect("document row");
+        + u16::try_from(row.saturating_sub(app.session.content_scroll)).expect("document row");
     for kind in [
         MouseEventKind::Down(MouseButton::Left),
         MouseEventKind::Up(MouseButton::Left),
@@ -568,7 +568,7 @@ fn cross_document_history_moves_back_and_forward_transactionally() {
     app.request_open(second.address.clone().expect("second address"), None);
     let request = app.take_open_request().expect("open second");
     app.complete_open(&second, request);
-    assert_eq!(app.document.label(), "second");
+    assert_eq!(app.session.document.label(), "second");
 
     app.navigate_history(true);
     let request = app.take_open_request().expect("back to first");
@@ -577,7 +577,7 @@ fn cross_document_history_moves_back_and_forward_transactionally() {
         first.address.as_ref().expect("first address")
     );
     app.complete_open(&first, request);
-    assert_eq!(app.document.label(), "first");
+    assert_eq!(app.session.document.label(), "first");
 
     app.navigate_history(false);
     let request = app.take_open_request().expect("forward to second");
@@ -586,7 +586,7 @@ fn cross_document_history_moves_back_and_forward_transactionally() {
         second.address.as_ref().expect("second address")
     );
     app.complete_open(&second, request);
-    assert_eq!(app.document.label(), "second");
+    assert_eq!(app.session.document.label(), "second");
 }
 
 #[test]
@@ -601,7 +601,7 @@ fn history_restores_an_initial_direct_markdown_without_a_host_request() {
     app.navigate_history(true);
 
     assert!(app.take_open_request().is_none());
-    assert_eq!(app.document.label(), "demo");
+    assert_eq!(app.session.document.label(), "demo");
     assert!(app.current_address.is_none());
 }
 
@@ -613,11 +613,20 @@ fn same_document_fragment_jumps_participate_in_history() {
     app.geometry.content.width = 60;
 
     app.request_open(address, Some("details".to_owned()));
-    assert_eq!(app.document.navigation()[app.selected].target_id, "details");
+    assert_eq!(
+        app.session.document.navigation()[app.selected].target_id,
+        "details"
+    );
     app.navigate_history(true);
-    assert_eq!(app.document.navigation()[app.selected].target_id, "options");
+    assert_eq!(
+        app.session.document.navigation()[app.selected].target_id,
+        "options"
+    );
     app.navigate_history(false);
-    assert_eq!(app.document.navigation()[app.selected].target_id, "details");
+    assert_eq!(
+        app.session.document.navigation()[app.selected].target_id,
+        "details"
+    );
 }
 
 #[test]
@@ -854,7 +863,7 @@ fn collapse_all_over_an_empty_navigation_does_not_panic() {
     let mut app = App::new(&empty_bundle());
     app.set_selected_index(3);
     app.activate_menu_action(MenuAction::CollapseAll);
-    assert!(app.document.navigation().is_empty());
+    assert!(app.session.document.navigation().is_empty());
 }
 
 #[test]
@@ -889,7 +898,7 @@ fn the_final_section_heading_can_become_the_first_content_row() {
     app.set_selected_index(3);
     app.scroll_to_selected();
     let width = app.geometry.content.width;
-    let expected = app.rendered_cache[&width]
+    let expected = app.session.rendered_cache[&width]
         .anchor_row("details")
         .expect("details anchor");
 
@@ -897,7 +906,7 @@ fn the_final_section_heading_can_become_the_first_content_row() {
         .draw(|frame| app.draw(frame))
         .expect("scrolled draw");
 
-    assert_eq!(app.content_scroll, expected);
+    assert_eq!(app.session.content_scroll, expected);
     let row = app.geometry.content.y;
     let content = (app.geometry.content.x..app.geometry.content.right())
         .filter_map(|column| terminal.backend().buffer().cell((column, row)))
@@ -946,12 +955,13 @@ fn overflowing_navigation_reserves_its_final_column_for_the_scrollbar() {
         let mut terminal = Terminal::new(backend).expect("test terminal");
         let mut app = App::new(&bundle);
         let options = app
+            .session
             .document
             .navigation()
             .iter()
             .position(|node| node.target_id == "options")
             .expect("options navigation node");
-        app.selected = (0..app.document.navigation().len())
+        app.selected = (0..app.session.document.navigation().len())
             .find(|index| *index != options)
             .expect("another navigation node");
 
@@ -1156,7 +1166,10 @@ fn semantic_entries_are_revealed_only_after_their_group_expands() {
     assert_eq!(app.visible_navigation_indices(), vec![0, 1, 2, 3]);
     app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE));
     assert_eq!(app.selected, 2);
-    assert_eq!(app.document.navigation()[2].target_id, "help-option");
+    assert_eq!(
+        app.session.document.navigation()[2].target_id,
+        "help-option"
+    );
 }
 
 #[test]
@@ -1172,11 +1185,14 @@ fn clicking_the_sidebar_selects_and_reclicking_a_branch_collapses_it() {
         row: 7,
         modifiers: KeyModifiers::NONE,
     });
-    assert_eq!(app.document.navigation()[app.selected].id, "details");
+    assert_eq!(
+        app.session.document.navigation()[app.selected].id,
+        "details"
+    );
     let width = app.geometry.content.width;
     assert_eq!(
-        app.content_scroll,
-        app.rendered_cache[&width]
+        app.session.content_scroll,
+        app.session.rendered_cache[&width]
             .anchor_row("details")
             .expect("details anchor")
     );
@@ -1187,7 +1203,10 @@ fn clicking_the_sidebar_selects_and_reclicking_a_branch_collapses_it() {
         row: 5,
         modifiers: KeyModifiers::NONE,
     });
-    assert_eq!(app.document.navigation()[app.selected].id, "options");
+    assert_eq!(
+        app.session.document.navigation()[app.selected].id,
+        "options"
+    );
     app.handle_mouse(MouseEvent {
         kind: MouseEventKind::Down(MouseButton::Left),
         column: 5,
@@ -1270,6 +1289,7 @@ fn outline_reflows_preserve_the_selected_nodes_viewport_row() {
     let mut app = App::new(&reflow_navigation_bundle());
     app.expanded.clear();
     app.selected = app
+        .session
         .document
         .navigation()
         .iter()
@@ -1328,6 +1348,7 @@ fn navigation_visibility_keeps_the_complete_selected_title_on_screen() {
 }
 
 #[test]
+#[allow(clippy::too_many_lines)] // One continuous drag checks leading, throttled and final frames.
 fn dragging_the_sidebar_boundary_renders_leading_throttled_and_final_widths() {
     let backend = TestBackend::new(100, 18);
     let mut terminal = Terminal::new(backend).expect("test terminal");
@@ -1372,7 +1393,11 @@ fn dragging_the_sidebar_boundary_renders_leading_throttled_and_final_widths() {
     assert_eq!(app.pointer_drag, PointerDrag::Sidebar);
     assert_ne!(app.geometry.content.width, initial_render_width);
     assert_eq!(
-        app.rendered_cache.keys().copied().collect::<HashSet<_>>(),
+        app.session
+            .rendered_cache
+            .keys()
+            .copied()
+            .collect::<HashSet<_>>(),
         HashSet::from([app.geometry.content.width])
     );
 
@@ -1512,12 +1537,12 @@ fn settled_sidebar_resize_keeps_the_visible_code_logically_anchored() {
         .expect("initial draw");
 
     let initial_width = app.geometry.content.width;
-    let initial_rendered = &app.rendered_cache[&initial_width];
+    let initial_rendered = &app.session.rendered_cache[&initial_width];
     let code_row = initial_rendered.search("sentinel_code_block")[0].row;
     let logical_anchor = initial_rendered
         .viewport_anchor(code_row)
         .expect("code viewport anchor");
-    app.content_scroll = code_row;
+    app.session.content_scroll = code_row;
 
     let boundary = app.geometry.sidebar_splitter.x;
     app.handle_mouse(MouseEvent {
@@ -1539,16 +1564,16 @@ fn settled_sidebar_resize_keeps_the_visible_code_logically_anchored() {
         .draw(|frame| app.draw(frame))
         .expect("resized draw");
 
-    let resized = &app.rendered_cache[&app.geometry.content.width];
+    let resized = &app.session.rendered_cache[&app.geometry.content.width];
     assert_eq!(
-        app.content_scroll,
+        app.session.content_scroll,
         resized
             .row_for_viewport_anchor(logical_anchor)
             .expect("resized code anchor")
     );
     assert!(
         resized
-            .viewport_text(app.content_scroll, 1, &[], None, None)
+            .viewport_text(app.session.content_scroll, 1, &[], None, None)
             .lines[0]
             .to_string()
             .contains("sentinel_code_block")
@@ -1581,7 +1606,7 @@ fn clicking_and_dragging_the_content_scrollbar_moves_the_document() {
         row: area.bottom() - 1,
         modifiers: KeyModifiers::NONE,
     });
-    assert_eq!(app.content_scroll, maximum);
+    assert_eq!(app.session.content_scroll, maximum);
     assert!(matches!(app.pointer_drag, PointerDrag::ContentScrollbar(_)));
 
     app.handle_mouse(MouseEvent {
@@ -1590,7 +1615,7 @@ fn clicking_and_dragging_the_content_scrollbar_moves_the_document() {
         row: area.y,
         modifiers: KeyModifiers::NONE,
     });
-    assert_eq!(app.content_scroll, 0);
+    assert_eq!(app.session.content_scroll, 0);
     app.handle_mouse(MouseEvent {
         kind: MouseEventKind::Up(MouseButton::Left),
         column: area.x,
@@ -1607,7 +1632,7 @@ fn dragging_document_text_emits_a_plain_text_copy_request() {
     let mut app = App::new(&navigation_bundle());
     terminal.draw(|frame| app.draw(frame)).expect("draw app");
     let width = app.geometry.content.width;
-    let region = app.rendered_cache[&width]
+    let region = app.session.rendered_cache[&width]
         .search("Show help")
         .into_iter()
         .next()
@@ -1643,7 +1668,7 @@ fn right_click_in_document_content_copies_the_retained_selection() {
     let mut app = App::new(&navigation_bundle());
     terminal.draw(|frame| app.draw(frame)).expect("draw app");
     let width = app.geometry.content.width;
-    let region = app.rendered_cache[&width]
+    let region = app.session.rendered_cache[&width]
         .search("Show help")
         .into_iter()
         .next()
@@ -1721,7 +1746,7 @@ fn selection_drag_auto_scrolls_repeatedly_at_both_viewport_edges() {
         pointer(MouseEventKind::Drag(MouseButton::Left), area.bottom() - 1),
         started,
     );
-    assert_eq!(app.content_scroll, 1);
+    assert_eq!(app.session.content_scroll, 1);
     let deadline = app
         .selection_auto_scroll
         .expect("scheduled downward selection scroll")
@@ -1732,7 +1757,7 @@ fn selection_drag_auto_scrolls_repeatedly_at_both_viewport_edges() {
         .expect("draw scrolled selection");
 
     assert_eq!(app.tick(deadline), UpdateOutcome::Redraw);
-    assert_eq!(app.content_scroll, 2);
+    assert_eq!(app.session.content_scroll, 2);
     app.handle_pointer_control_at(
         pointer(MouseEventKind::Up(MouseButton::Left), area.bottom() - 1),
         deadline,
@@ -1752,7 +1777,7 @@ fn selection_drag_auto_scrolls_repeatedly_at_both_viewport_edges() {
         pointer(MouseEventKind::Drag(MouseButton::Left), area.y),
         restarted,
     );
-    assert_eq!(app.content_scroll, 1);
+    assert_eq!(app.session.content_scroll, 1);
     assert_eq!(
         app.selection_auto_scroll.map(|scroll| scroll.direction),
         Some(-1)
@@ -1771,7 +1796,7 @@ fn shift_click_moves_the_active_endpoint_and_retains_the_true_anchor() {
     let mut app = App::new(&navigation_bundle());
     terminal.draw(|frame| app.draw(frame)).expect("draw app");
     let width = app.geometry.content.width;
-    let region = app.rendered_cache[&width]
+    let region = app.session.rendered_cache[&width]
         .search("Show help")
         .into_iter()
         .next()
@@ -1814,13 +1839,13 @@ fn visual_tldr_copy_omits_panel_decoration() {
     let mut terminal = Terminal::new(backend).expect("test terminal");
     let mut app = App::new(&tldr_bundle());
     terminal.draw(|frame| app.draw(frame)).expect("draw app");
-    let rendered = &app.rendered_cache[&app.content_render_width];
+    let rendered = &app.session.rendered_cache[&app.session.content_render_width];
     let last_row = rendered.row_count.saturating_sub(1);
     app.selection = Some(RenderedSelection {
         anchor: TextPosition { row: 0, column: 0 },
         focus: TextPosition {
             row: last_row,
-            column: usize::from(app.content_render_width.saturating_sub(1)),
+            column: usize::from(app.session.content_render_width.saturating_sub(1)),
         },
     });
 
@@ -1895,6 +1920,7 @@ fn edit_actions_copy_complete_semantic_nodes_only() {
     }
 
     app.selected = app
+        .session
         .document
         .navigation()
         .iter()
@@ -2110,7 +2136,7 @@ fn question_mark_opens_and_closes_keyboard_help() {
 fn content_scrolling_updates_navigation_only_after_the_idle_deadline() {
     let mut app = App::new(&navigation_bundle());
     app.geometry.content = Rect::new(0, 0, 80, 10);
-    app.content_scroll = 100;
+    app.session.content_scroll = 100;
     let deadline = Instant::now() + NAVIGATION_SYNC_IDLE;
     app.navigation_sync_deadline = Some(deadline);
 
@@ -2122,7 +2148,10 @@ fn content_scrolling_updates_navigation_only_after_the_idle_deadline() {
     assert_eq!(app.selected, 0);
 
     app.tick(deadline);
-    assert_eq!(app.document.navigation()[app.selected].id, "details");
+    assert_eq!(
+        app.session.document.navigation()[app.selected].id,
+        "details"
+    );
     assert!(app.navigation_sync_deadline.is_none());
 }
 
@@ -2158,7 +2187,7 @@ fn clicking_a_wrapped_section_reference_opens_its_target() {
     terminal.draw(|frame| app.draw(frame)).expect("draw app");
     app.expanded.clear();
     let width = app.geometry.content.width;
-    let region = app.rendered_cache[&width]
+    let region = app.session.rendered_cache[&width]
         .search("nested")
         .into_iter()
         .next()
@@ -2166,11 +2195,14 @@ fn clicking_a_wrapped_section_reference_opens_its_target() {
 
     click_document_cell(&mut app, region.start_column, region.row);
 
-    assert_eq!(app.document.navigation()[app.selected].id, "details");
+    assert_eq!(
+        app.session.document.navigation()[app.selected].id,
+        "details"
+    );
     assert!(app.expanded.contains("options"));
     assert_eq!(
-        app.content_scroll,
-        app.rendered_cache[&width]
+        app.session.content_scroll,
+        app.session.rendered_cache[&width]
             .anchor_row("details")
             .expect("details anchor")
     );
@@ -2188,7 +2220,7 @@ fn clicking_a_parsed_markdown_fragment_jumps_and_participates_in_history() {
     let mut app = App::new(&bundle);
     terminal.draw(|frame| app.draw(frame)).expect("draw app");
     let width = app.geometry.content.width;
-    let region = app.rendered_cache[&width]
+    let region = app.session.rendered_cache[&width]
         .search("detailed")
         .into_iter()
         .next()
@@ -2196,12 +2228,21 @@ fn clicking_a_parsed_markdown_fragment_jumps_and_participates_in_history() {
 
     click_document_cell(&mut app, region.start_column, region.row);
 
-    assert_eq!(app.document.navigation()[app.selected].id, "details");
+    assert_eq!(
+        app.session.document.navigation()[app.selected].id,
+        "details"
+    );
     assert_eq!(app.back_history.len(), 1);
     app.navigate_history(true);
-    assert_ne!(app.document.navigation()[app.selected].id, "details");
+    assert_ne!(
+        app.session.document.navigation()[app.selected].id,
+        "details"
+    );
     app.navigate_history(false);
-    assert_eq!(app.document.navigation()[app.selected].id, "details");
+    assert_eq!(
+        app.session.document.navigation()[app.selected].id,
+        "details"
+    );
 }
 
 #[test]
@@ -2247,7 +2288,7 @@ fn clicking_a_manual_reference_requests_the_exact_page() {
     let mut app = App::new(&bundle);
     terminal.draw(|frame| app.draw(frame)).expect("draw app");
     let width = app.geometry.content.width;
-    let region = app.rendered_cache[&width]
+    let region = app.session.rendered_cache[&width]
         .search("git-add")
         .into_iter()
         .next()
@@ -2288,11 +2329,11 @@ fn clicking_a_real_git_manual_reference_requests_git_add_section_one() {
     let mut app = App::new(&bundle);
     terminal.draw(|frame| app.draw(frame)).expect("draw git");
     let width = app.geometry.content.width;
-    let matches = app.rendered_cache[&width].search("git-add(1)");
+    let matches = app.session.rendered_cache[&width].search("git-add(1)");
 
     let mut opened = None;
     for region in matches {
-        app.content_scroll = region.row;
+        app.session.content_scroll = region.row;
         click_document_cell(&mut app, region.start_column, region.row);
         if let Some(request) = app.take_open_request() {
             opened = Some(request.address().clone());
@@ -2327,7 +2368,7 @@ fn clicking_a_relative_markdown_link_preserves_its_source_and_fragment() {
     let mut app = App::new(&bundle);
     terminal.draw(|frame| app.draw(frame)).expect("draw app");
     let width = app.geometry.content.width;
-    let region = app.rendered_cache[&width]
+    let region = app.session.rendered_cache[&width]
         .search("Build")
         .into_iter()
         .next()
@@ -2374,7 +2415,7 @@ fn clicking_an_external_link_returns_the_uri_to_the_host() {
     let mut app = App::new(&bundle);
     terminal.draw(|frame| app.draw(frame)).expect("draw app");
     let width = app.geometry.content.width;
-    let region = app.rendered_cache[&width]
+    let region = app.session.rendered_cache[&width]
         .search("external docs")
         .into_iter()
         .next()
@@ -2442,7 +2483,7 @@ fn clicking_encoded_invalid_mailto_links_never_reaches_the_host() {
         let mut app = App::new(&bundle);
         terminal.draw(|frame| app.draw(frame)).expect("draw app");
         let width = app.geometry.content.width;
-        let region = app.rendered_cache[&width]
+        let region = app.session.rendered_cache[&width]
             .search(&label)
             .into_iter()
             .next()
@@ -2466,7 +2507,7 @@ fn clicking_unsafe_tldr_more_information_does_not_reach_the_host() {
     let mut app = App::new(&bundle);
     terminal.draw(|frame| app.draw(frame)).expect("draw app");
     let width = app.geometry.content.width;
-    let region = app.rendered_cache[&width]
+    let region = app.session.rendered_cache[&width]
         .search("file:///etc/passwd")
         .into_iter()
         .next()
@@ -2487,7 +2528,7 @@ fn clicking_safe_tldr_more_information_reaches_the_host() {
     let mut app = App::new(&bundle);
     terminal.draw(|frame| app.draw(frame)).expect("draw app");
     let width = app.geometry.content.width;
-    let region = app.rendered_cache[&width]
+    let region = app.session.rendered_cache[&width]
         .search("https://example.test/tldr")
         .into_iter()
         .next()
@@ -2508,9 +2549,15 @@ fn keyboard_navigation_moves_from_tldr_and_markdown_overview_to_manual_sections(
     let mut with_tldr = navigation_bundle();
     with_tldr.tldr = tldr_bundle().tldr;
     let mut app = App::new(&with_tldr);
-    assert_eq!(app.document.navigation()[app.selected].kind, NavKind::Tldr);
+    assert_eq!(
+        app.session.document.navigation()[app.selected].kind,
+        NavKind::Tldr
+    );
     app.handle_key(KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE));
-    assert_eq!(app.document.navigation()[app.selected].id, "options");
+    assert_eq!(
+        app.session.document.navigation()[app.selected].id,
+        "options"
+    );
 
     let mut with_overview = navigation_bundle();
     with_overview.document.as_mut().expect("document").blocks = vec![AstBlock::Paragraph {
@@ -2521,9 +2568,15 @@ fn keyboard_navigation_moves_from_tldr_and_markdown_overview_to_manual_sections(
         source: None,
     }];
     let mut app = App::new(&with_overview);
-    assert_eq!(app.document.navigation()[app.selected].kind, NavKind::Root);
+    assert_eq!(
+        app.session.document.navigation()[app.selected].kind,
+        NavKind::Root
+    );
     app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
-    assert_eq!(app.document.navigation()[app.selected].id, "options");
+    assert_eq!(
+        app.session.document.navigation()[app.selected].id,
+        "options"
+    );
 }
 
 #[test]
@@ -2532,7 +2585,7 @@ fn mouse_wheel_over_sidebar_does_not_scroll_the_document() {
     let mut terminal = Terminal::new(backend).expect("test terminal");
     let mut app = App::new(&navigation_bundle());
     terminal.draw(|frame| app.draw(frame)).expect("draw app");
-    let content_scroll = app.content_scroll;
+    let content_scroll = app.session.content_scroll;
 
     app.handle_mouse(MouseEvent {
         kind: MouseEventKind::ScrollDown,
@@ -2542,7 +2595,7 @@ fn mouse_wheel_over_sidebar_does_not_scroll_the_document() {
     });
 
     assert_eq!(app.navigation_scroll, 3);
-    assert_eq!(app.content_scroll, content_scroll);
+    assert_eq!(app.session.content_scroll, content_scroll);
     assert!(app.navigation_sync_deadline.is_none());
 }
 

@@ -242,14 +242,12 @@ impl App {
             else {
                 return;
             };
-            let search = self.search.clone();
             super::push_history(&mut self.back_history, current);
             self.forward_history.clear();
-            self.replace_document(&bundle);
-            self.search = search;
+            self.replace_document(&bundle, super::DocumentChangeReason::SearchResult);
         }
         self.sync_current_search_matches();
-        self.content_scroll = search_match.rendered.row;
+        self.session.content_scroll = search_match.rendered.row;
         self.select_section_at_row(search_match.rendered.row);
     }
 

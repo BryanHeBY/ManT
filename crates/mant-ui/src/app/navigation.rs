@@ -49,12 +49,13 @@ impl App {
         let width = self.geometry.content.width.max(1);
         let visible = self.visible_navigation_indices();
         let rendered = self
+            .session
             .rendered_cache
             .entry(width)
-            .or_insert_with(|| self.document.render(width));
+            .or_insert_with(|| self.session.document.render(width));
         let mut selected = None;
         for index in visible {
-            let item = &self.document.navigation()[index];
+            let item = &self.session.document.navigation()[index];
             if !matches!(item.kind, NavKind::Tldr | NavKind::Root | NavKind::Section) {
                 continue;
             }
@@ -73,26 +74,28 @@ impl App {
 
     pub(super) fn scroll_to_selected(&mut self) {
         self.navigation_sync_deadline = None;
-        let Some(item) = self.document.navigation().get(self.selected) else {
+        let Some(item) = self.session.document.navigation().get(self.selected) else {
             return;
         };
         let width = self.geometry.content.width.max(1);
         let rendered = self
+            .session
             .rendered_cache
             .entry(width)
-            .or_insert_with(|| self.document.render(width));
+            .or_insert_with(|| self.session.document.render(width));
         if let Some(row) = rendered.anchor_row(&item.target_id) {
-            self.content_scroll = row;
+            self.session.content_scroll = row;
         }
     }
 
     pub(super) fn activate_content_link(&mut self, column: u16, row: u16) {
         let width = self.geometry.content.width.max(1);
         let rendered = self
+            .session
             .rendered_cache
             .entry(width)
-            .or_insert_with(|| self.document.render(width));
-        let document_row = self.content_scroll + usize::from(row - self.geometry.content.y);
+            .or_insert_with(|| self.session.document.render(width));
+        let document_row = self.session.content_scroll + usize::from(row - self.geometry.content.y);
         let document_column = usize::from(column - self.geometry.content.x);
         let Some(target) = rendered
             .link_target_at(document_row, document_column)
@@ -118,16 +121,18 @@ impl App {
     pub(super) fn jump_to_anchor(&mut self, target: &str) -> bool {
         let width = self.geometry.content.width.max(1);
         let rendered = self
+            .session
             .rendered_cache
             .entry(width)
-            .or_insert_with(|| self.document.render(width));
+            .or_insert_with(|| self.session.document.render(width));
         let Some(target_row) = rendered.anchor_row(target) else {
             self.notice = Some(format!("No outline node matches #{target}"));
             return false;
         };
         self.notice = None;
-        self.content_scroll = target_row;
+        self.session.content_scroll = target_row;
         if let Some(index) = self
+            .session
             .document
             .navigation()
             .iter()
@@ -142,10 +147,13 @@ impl App {
     }
 
     fn expand_navigation_ancestors(&mut self, index: usize) {
-        let mut parent = self.document.navigation()[index].parent_id.as_deref();
+        let mut parent = self.session.document.navigation()[index]
+            .parent_id
+            .as_deref();
         while let Some(parent_id) = parent {
             self.expanded.insert(parent_id.to_owned());
             parent = self
+                .session
                 .document
                 .navigation()
                 .iter()
@@ -155,7 +163,7 @@ impl App {
     }
 
     pub(super) fn scroll_content(&mut self, delta: isize) {
-        self.content_scroll = self.content_scroll.saturating_add_signed(delta);
+        self.session.content_scroll = self.session.content_scroll.saturating_add_signed(delta);
         self.schedule_navigation_sync();
     }
 
@@ -165,7 +173,7 @@ impl App {
 
     pub(super) fn scroll_content_to_pointer(&mut self, row: u16, drag: ScrollbarDrag) {
         if let Some(scrollbar) = self.geometry.content_scrollbar {
-            self.content_scroll = scrollbar.position_for_pointer(row, drag);
+            self.session.content_scroll = scrollbar.position_for_pointer(row, drag);
             self.schedule_navigation_sync();
         }
     }
@@ -177,12 +185,12 @@ impl App {
     }
 
     pub(super) fn jump_content(&mut self, end: bool) {
-        self.content_scroll = if end { usize::MAX } else { 0 };
+        self.session.content_scroll = if end { usize::MAX } else { 0 };
         self.navigation_sync_deadline = Some(Instant::now() + NAVIGATION_SYNC_IDLE);
     }
 
     pub(super) fn sync_selection_to_scroll(&mut self) {
-        self.select_section_at_row(self.content_scroll);
+        self.select_section_at_row(self.session.content_scroll);
     }
 
     pub(super) fn keep_selected_navigation_visible(
@@ -221,7 +229,7 @@ impl App {
     pub(super) fn visible_navigation_indices(&self) -> Vec<usize> {
         let mut visible_ids = HashSet::new();
         let mut indices = Vec::new();
-        for (index, item) in self.document.navigation().iter().enumerate() {
+        for (index, item) in self.session.document.navigation().iter().enumerate() {
             let visible = item.parent_id.as_ref().is_none_or(|parent| {
                 visible_ids.contains(parent) && self.expanded.contains(parent)
             });
@@ -243,12 +251,13 @@ impl App {
             return;
         }
 
-        let Some(selected) = self.document.navigation().get(self.selected) else {
+        let Some(selected) = self.session.document.navigation().get(self.selected) else {
             return;
         };
         let mut parent = selected.parent_id.as_deref();
         while let Some(parent_id) = parent {
             if let Some(index) = self
+                .session
                 .document
                 .navigation()
                 .iter()
@@ -258,7 +267,9 @@ impl App {
                     self.set_selected_index(index);
                     return;
                 }
-                parent = self.document.navigation()[index].parent_id.as_deref();
+                parent = self.session.document.navigation()[index]
+                    .parent_id
+                    .as_deref();
             } else {
                 break;
             }
@@ -269,7 +280,7 @@ impl App {
     }
 
     pub(super) fn toggle_selected(&mut self) {
-        let Some(item) = self.document.navigation().get(self.selected) else {
+        let Some(item) = self.session.document.navigation().get(self.selected) else {
             return;
         };
         if !item.has_children {
@@ -281,7 +292,7 @@ impl App {
     }
 
     pub(super) fn collapse_or_select_parent(&mut self) {
-        let Some(item) = self.document.navigation().get(self.selected) else {
+        let Some(item) = self.session.document.navigation().get(self.selected) else {
             return;
         };
         if item.has_children && self.expanded.remove(&item.id) {
@@ -291,6 +302,7 @@ impl App {
             return;
         };
         if let Some(index) = self
+            .session
             .document
             .navigation()
             .iter()
@@ -302,7 +314,7 @@ impl App {
     }
 
     pub(super) fn expand_or_select_child(&mut self) {
-        let Some(item) = self.document.navigation().get(self.selected) else {
+        let Some(item) = self.session.document.navigation().get(self.selected) else {
             return;
         };
         if !item.has_children {
@@ -313,6 +325,7 @@ impl App {
         }
         let parent_id = item.id.clone();
         if let Some(index) = self
+            .session
             .document
             .navigation()
             .iter()

@@ -133,8 +133,8 @@ impl App {
         .areas(area);
 
         let metadata = sidebar_metadata(
-            self.document.navigation().len(),
-            self.document.has_tldr(),
+            self.session.document.navigation().len(),
+            self.session.document.has_tldr(),
             navigation_area.width,
         );
         frame.render_widget(
@@ -142,8 +142,8 @@ impl App {
                 Line::from(Span::styled(
                     format!(
                         " {} · {}",
-                        sanitize_terminal_text(self.document.source_label()),
-                        sanitize_terminal_text(self.document.label())
+                        sanitize_terminal_text(self.session.document.source_label()),
+                        sanitize_terminal_text(self.session.document.label())
                     ),
                     Style::default().fg(theme::SUBTEXT_BRIGHT),
                 )),
@@ -172,7 +172,7 @@ impl App {
         // the scrollbar never replaces its final cell (or half of a wide one).
         let gutter_width = navigation_area.width.saturating_sub(1);
         let gutter_rows = navigation::rows(
-            self.document.navigation(),
+            self.session.document.navigation(),
             &visible,
             self.selected,
             &self.expanded,
@@ -183,7 +183,7 @@ impl App {
             gutter_rows
         } else {
             navigation::rows(
-                self.document.navigation(),
+                self.session.document.navigation(),
                 &visible,
                 self.selected,
                 &self.expanded,
@@ -260,9 +260,10 @@ impl App {
         // second full-width document merely to discover that fact.
         let sizing_width = inner.width.saturating_sub(scrollbar_gutter).max(1);
         let sizing_rows = self
+            .session
             .rendered_cache
             .entry(sizing_width)
-            .or_insert_with(|| self.document.render(sizing_width))
+            .or_insert_with(|| self.session.document.render(sizing_width))
             .row_count;
         let needs_scrollbar = virtual_content_rows(sizing_rows, viewport_height) > viewport_height;
         let document_area = if needs_scrollbar && inner.width > scrollbar_gutter {
@@ -277,47 +278,51 @@ impl App {
         };
         self.geometry.content = document_area;
         let render_width = document_area.width.max(1);
-        if self.content_render_width != 0 && self.content_render_width != render_width {
+        if self.session.content_render_width != 0
+            && self.session.content_render_width != render_width
+        {
             self.selection = None;
             if matches!(self.pointer_drag, PointerDrag::ContentSelection { .. }) {
                 self.pointer_drag = PointerDrag::None;
                 self.selection_auto_scroll = None;
             }
         }
-        let viewport_anchor = (self.content_render_width != 0
-            && self.content_render_width != render_width)
+        let viewport_anchor = (self.session.content_render_width != 0
+            && self.session.content_render_width != render_width)
             .then(|| {
-                self.rendered_cache
-                    .get(&self.content_render_width)
-                    .and_then(|rendered| rendered.viewport_anchor(self.content_scroll))
+                self.session
+                    .rendered_cache
+                    .get(&self.session.content_render_width)
+                    .and_then(|rendered| rendered.viewport_anchor(self.session.content_scroll))
             })
             .flatten();
-        self.rendered_cache
+        self.session
+            .rendered_cache
             .entry(render_width)
-            .or_insert_with(|| self.document.render(render_width));
+            .or_insert_with(|| self.session.document.render(render_width));
         if !self.search.query.is_empty() && self.search.render_width != render_width {
             self.refresh_search(render_width);
         }
-        let rendered = &self.rendered_cache[&render_width];
+        let rendered = &self.session.rendered_cache[&render_width];
         if let Some(anchor) = viewport_anchor
             && let Some(row) = rendered.row_for_viewport_anchor(anchor)
         {
-            self.content_scroll = row;
+            self.session.content_scroll = row;
         }
-        self.content_render_width = render_width;
+        self.session.content_render_width = render_width;
         // Keep enough virtual trailing space for every addressable row,
         // including the final section heading, to become the viewport's first
         // line by retaining a terminal-height spacer after the document.
         let virtual_rows = virtual_content_rows(rendered.row_count, viewport_height);
         let maximum = virtual_rows.saturating_sub(viewport_height);
-        self.content_scroll = self.content_scroll.min(maximum);
+        self.session.content_scroll = self.session.content_scroll.min(maximum);
         let matches = if self.search.query.is_empty() {
             &[]
         } else {
             self.search.matches.as_slice()
         };
         let text = rendered.viewport_text(
-            self.content_scroll,
+            self.session.content_scroll,
             viewport_height,
             matches,
             self.active_rendered_search_match(),
@@ -327,8 +332,12 @@ impl App {
             Paragraph::new(text).style(Style::default().bg(theme::CONTENT)),
             document_area,
         );
-        self.geometry.content_scrollbar =
-            VerticalScrollbar::new(inner, virtual_rows, viewport_height, self.content_scroll);
+        self.geometry.content_scrollbar = VerticalScrollbar::new(
+            inner,
+            virtual_rows,
+            viewport_height,
+            self.session.content_scroll,
+        );
         if let Some(scrollbar) = self.geometry.content_scrollbar {
             scrollbar.render(frame);
         } else if matches!(self.pointer_drag, PointerDrag::ContentScrollbar(_)) {
@@ -337,12 +346,14 @@ impl App {
         // A width-dependent rendering can be large (notably for GCC). Keeping
         // the current width hot is useful; retaining every prior terminal
         // width turns repeated resizing into unbounded growth.
-        self.rendered_cache
+        self.session
+            .rendered_cache
             .retain(|width, _| *width == render_width);
     }
 
     fn draw_status(&self, frame: &mut Frame<'_>, area: Rect) {
         let current = self
+            .session
             .document
             .navigation()
             .get(self.selected)
@@ -375,7 +386,7 @@ impl App {
                 self.search.query,
                 self.search.scope_matches.len()
             )
-        } else if self.document.has_tldr() {
+        } else if self.session.document.has_tldr() {
             format!("{} visible nodes · TLDR ", self.visible_node_count())
         } else {
             format!("{} visible nodes ", self.visible_node_count())

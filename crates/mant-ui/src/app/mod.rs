@@ -6,6 +6,8 @@ mod menu;
 mod navigation;
 mod render;
 mod search;
+mod session;
+use session::{DocumentChangeReason, DocumentSession};
 mod tabs;
 
 use std::{
@@ -228,11 +230,9 @@ impl NavigationViewportRequest {
 
 /// All mutable interaction state for one `ManT` reader session.
 pub struct App {
-    current_bundle: Arc<ResolvedContent>,
-    document: DocumentView,
+    session: DocumentSession,
     selected: usize,
     expanded: HashSet<String>,
-    content_scroll: usize,
     navigation_scroll: usize,
     navigation_viewport_request: Option<NavigationViewportRequest>,
     sidebar_width: u16,
@@ -264,8 +264,6 @@ pub struct App {
     geometry: FrameGeometry,
     navigation_sync_deadline: Option<Instant>,
     sidebar_resize: SidebarResizeSchedule,
-    content_render_width: u16,
-    rendered_cache: HashMap<u16, RenderedDocument>,
 }
 
 impl App {
@@ -307,11 +305,9 @@ impl App {
             scope_documents.insert(0, Arc::new(bundle.clone()));
         }
         let mut app = Self {
-            current_bundle: Arc::clone(&current_bundle),
-            document,
+            session: DocumentSession::new(Arc::clone(&current_bundle), document),
             selected: 0,
             expanded,
-            content_scroll: 0,
             navigation_scroll: 0,
             navigation_viewport_request: Some(NavigationViewportRequest::Reveal { node_index: 0 }),
             sidebar_width: DEFAULT_SIDEBAR_WIDTH,
@@ -343,8 +339,6 @@ impl App {
             geometry: FrameGeometry::default(),
             navigation_sync_deadline: None,
             sidebar_resize: SidebarResizeSchedule::default(),
-            content_render_width: 0,
-            rendered_cache: HashMap::new(),
         };
         app.sync_current_document_tab();
         app
@@ -377,38 +371,37 @@ impl App {
 
     pub(crate) fn complete_open(&mut self, bundle: &ResolvedContent, request: NavigationRequest) {
         self.commit_history(request.direction);
-        self.replace_document(bundle);
+        self.replace_document(bundle, DocumentChangeReason::from(request.direction));
         if let Some(target) = request.target {
             self.jump_to_anchor(&target);
         }
     }
 
-    fn replace_document(&mut self, bundle: &ResolvedContent) {
+    fn replace_document(&mut self, bundle: &ResolvedContent, reason: DocumentChangeReason) {
         self.remember_current_document_tab();
-        self.current_bundle = Arc::new(bundle.clone());
-        self.document = DocumentView::new(bundle);
+        self.session = DocumentSession::new(Arc::new(bundle.clone()), DocumentView::new(bundle));
         self.current_address.clone_from(&bundle.address);
         self.fallback_bundle = bundle.address.is_none().then(|| Arc::new(bundle.clone()));
         self.selected = 0;
         self.expanded = self
+            .session
             .document
             .navigation()
             .iter()
             .filter(|item| item.kind == NavKind::Section && item.depth == 0)
             .map(|item| item.id.clone())
             .collect();
-        self.content_scroll = 0;
         self.navigation_scroll = 0;
         self.navigation_viewport_request =
             Some(NavigationViewportRequest::Reveal { node_index: 0 });
-        self.search = SearchState::default();
+        if reason != DocumentChangeReason::SearchResult {
+            self.search = SearchState::default();
+        }
         self.overlay = Overlay::None;
         self.pointer_drag = PointerDrag::None;
         self.selection = None;
         self.selection_auto_scroll = None;
         self.navigation_sync_deadline = None;
-        self.rendered_cache.clear();
-        self.content_render_width = 0;
         self.notice = None;
         self.copy_toast = None;
         self.sync_current_document_tab();
@@ -419,7 +412,11 @@ impl App {
             self.report_notice("Drag across document text before copying".to_owned());
             return;
         };
-        let Some(rendered) = self.rendered_cache.get(&self.content_render_width) else {
+        let Some(rendered) = self
+            .session
+            .rendered_cache
+            .get(&self.session.content_render_width)
+        else {
             self.report_notice("The document is not ready to copy".to_owned());
             return;
         };
@@ -434,7 +431,7 @@ impl App {
     }
 
     pub(super) fn copy_selected_node(&mut self, format: CopyFormat) {
-        let Some(node) = self.document.navigation().get(self.selected) else {
+        let Some(node) = self.session.document.navigation().get(self.selected) else {
             self.report_notice("No document node is selected".to_owned());
             return;
         };
@@ -443,7 +440,7 @@ impl App {
             return;
         }
         self.pending_copy = Some(CopyRequest::Node {
-            content: Arc::clone(&self.current_bundle),
+            content: Arc::clone(&self.session.current_bundle),
             selector: NodeSelector::new(node.id.clone()),
             format,
         });
@@ -475,6 +472,7 @@ impl App {
             address: self.current_address.clone(),
             fallback: self.fallback_bundle.clone(),
             target: self
+                .session
                 .document
                 .navigation()
                 .get(self.selected)
@@ -547,7 +545,7 @@ impl App {
         direction: HistoryDirection,
     ) {
         self.commit_history(direction);
-        self.replace_document(bundle);
+        self.replace_document(bundle, DocumentChangeReason::from(direction));
         if let Some(target) = target {
             self.jump_to_anchor(&target);
         }

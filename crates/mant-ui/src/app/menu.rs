@@ -412,6 +412,7 @@ impl App {
             MenuAction::ExpandAll => {
                 let row = self.selected_navigation_viewport_row();
                 self.expanded = self
+                    .session
                     .document
                     .navigation()
                     .iter()

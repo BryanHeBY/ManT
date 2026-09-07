@@ -167,13 +167,15 @@ impl App {
             {
                 let local_row = usize::from(mouse.row - self.geometry.navigation.y);
                 if let Some(index) = self.geometry.navigation_rows.get(local_row).copied() {
-                    if self.selected == index && self.document.navigation()[index].has_children {
+                    if self.selected == index
+                        && self.session.document.navigation()[index].has_children
+                    {
                         self.toggle_selected();
                     } else {
                         self.set_selected_index(index);
-                        if self.document.navigation()[index].has_children {
+                        if self.session.document.navigation()[index].has_children {
                             self.expanded
-                                .insert(self.document.navigation()[index].id.clone());
+                                .insert(self.session.document.navigation()[index].id.clone());
                         }
                         self.scroll_to_selected();
                     }
@@ -227,7 +229,7 @@ impl App {
             {
                 let scrollbar = self.geometry.content_scrollbar.expect("guarded scrollbar");
                 let (drag, position) = scrollbar.begin_drag(mouse.row);
-                self.content_scroll = position;
+                self.session.content_scroll = position;
                 self.schedule_navigation_sync();
                 self.pointer_drag = PointerDrag::ContentScrollbar(drag);
                 UpdateOutcome::Redraw
@@ -348,13 +350,14 @@ impl App {
             return false;
         };
         let next = self
+            .session
             .content_scroll
             .saturating_add_signed(direction)
             .min(maximum);
-        if next == self.content_scroll {
+        if next == self.session.content_scroll {
             return false;
         }
-        self.content_scroll = next;
+        self.session.content_scroll = next;
         self.navigation_sync_deadline = Some(now + NAVIGATION_SYNC_IDLE);
         let row = if direction < 0 {
             self.geometry.content.y
@@ -436,7 +439,7 @@ impl App {
         let column = column.clamp(area.x, area.x.saturating_add(area.width - 1));
         let row = row.clamp(area.y, area.y.saturating_add(area.height - 1));
         Some(crate::TextPosition {
-            row: self.content_scroll + usize::from(row - area.y),
+            row: self.session.content_scroll + usize::from(row - area.y),
             column: usize::from(column - area.x),
         })
     }

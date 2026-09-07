@@ -34,8 +34,8 @@ impl App {
         let fallback = self
             .current_address
             .is_none()
-            .then(|| Arc::clone(&self.current_bundle));
-        let label = self.document.terminal_label().to_owned();
+            .then(|| Arc::clone(&self.session.current_bundle));
+        let label = self.session.document.terminal_label().to_owned();
         let index = if let Some(index) = existing {
             let tab = &mut self.document_tabs[index];
             tab.label = label;
@@ -61,6 +61,7 @@ impl App {
 
     pub(super) fn remember_current_document_tab(&mut self) {
         let target = self
+            .session
             .document
             .navigation()
             .get(self.selected)
