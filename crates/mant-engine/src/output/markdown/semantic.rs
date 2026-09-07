@@ -27,7 +27,7 @@ pub(super) fn supported(document: &Document) -> bool {
                                     .iter()
                                     .all(|b| b.evidence == EntryNameEvidence::Declared)
                                 && matches!(item.blocks.first(), Some(Block::Paragraph { .. }))
-                                && metadata(facts).len() <= 8192
+                                && crate::markdown::export_entry_metadata(facts).is_some()
                                 && facts
                                     .value_domain
                                     .as_ref()
@@ -59,24 +59,7 @@ pub(super) fn declaration(facts: &EntryFacts, items: &[mant_ir::ListItem]) -> St
 }
 
 pub(super) fn metadata(facts: &EntryFacts) -> String {
-    let mut object = serde_json::Map::new();
-    object.insert("id".into(), serde_json::Value::String(facts.id.to_string()));
-    if !facts.alias_groups.is_empty() {
-        object.insert("aliasGroups".into(), serde_json::json!(facts.alias_groups));
-    }
-    if let Some(target) = &facts.alias_of {
-        object.insert(
-            "aliasOf".into(),
-            serde_json::Value::String(target.to_string()),
-        );
-    }
-    // JSON escapes protect HTML comment boundaries, not visible source text.
-    let json = serde_json::Value::Object(object)
-        .to_string()
-        .replace('<', "\\u003c")
-        .replace('>', "\\u003e")
-        .replace('&', "\\u0026");
-    format!(" <!-- mant:entry {json} -->")
+    crate::markdown::export_entry_metadata(facts).expect("supported semantic export metadata")
 }
 
 pub(super) fn domain(value: &ValueDomain) -> Option<String> {

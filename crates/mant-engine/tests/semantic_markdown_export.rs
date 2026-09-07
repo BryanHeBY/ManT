@@ -123,3 +123,117 @@ fn unsupported_partial_or_native_owners_keep_content_without_invented_relations(
     assert!(!markdown.contains("aliasGroups"));
     assert!(markdown.contains("Help."));
 }
+
+struct Metadata {
+    groups: Vec<Vec<String>>,
+    id: String,
+}
+impl visit::VisitMut for Metadata {
+    fn visit_list_item_mut(&mut self, item: &mut ListItem) {
+        if let Some(entry) = &mut item.entry {
+            entry.alias_groups.clone_from(&self.groups);
+            entry.id = self.id.clone().into();
+        }
+        visit::walk_list_item_mut(self, item);
+    }
+}
+
+/// Public IR producers need not obey Markdown's authoring-size limits.
+#[test]
+fn metadata_representation_limits_are_shared_by_import_and_export() {
+    use mant_ir::visit::VisitMut;
+
+    // Count limits, ID limits, and payload bytes are independent constraints.
+    for (group_count, members, name_padding, id_length, supported) in [
+        (32, 2, 0, 4, true),
+        (1, 32, 0, 4, true),
+        (33, 2, 0, 4, false),
+        (1, 33, 0, 4, false),
+        (1, 34, 0, 4, false),
+        (1, 2, 0, 512, true),
+        (1, 2, 0, 513, false),
+        (32, 2, 140, 4, false),
+    ] {
+        let names: Vec<_> = (0..group_count * members)
+            .map(|i| format!("--alias{i}{}", "x".repeat(name_padding)))
+            .collect();
+        let head = names
+            .iter()
+            .map(|n| format!("`{n}`"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let source =
+            format!("<!-- mant:entries role=option case=sensitive -->\n- {head}: Kept body.\n");
+        let mut query = query_markdown_text(&source, None).unwrap();
+        let document = query.document.as_mut().unwrap();
+        assert!(
+            document.diagnostics.is_empty(),
+            "{:?}",
+            document.diagnostics
+        );
+        Metadata {
+            groups: names.chunks(members).map(<[String]>::to_vec).collect(),
+            id: "i".repeat(id_length),
+        }
+        .visit_document_mut(document);
+        assert!(mant_ir::validate_document(document).is_empty());
+        let original = facts(document);
+        assert_eq!(original.len(), 1);
+        let json = serde_json::json!({
+            "id": original[0].id,
+            "aliasGroups": original[0].alias_groups,
+        });
+        let authored = format!("{} <!-- mant:entry {json} -->\n", source.trim_end());
+        let imported = query_markdown_text(&authored, None)
+            .unwrap()
+            .document
+            .unwrap();
+        assert_eq!(
+            imported.diagnostics.is_empty(),
+            supported,
+            "authoring and export limits disagree: {:?}",
+            imported.diagnostics
+        );
+        for preserve_anchors in [false, true] {
+            let markdown = render_markdown_with_options(
+                &query,
+                MarkdownOptions {
+                    preserve_anchors,
+                    preserve_semantics: true,
+                },
+            );
+            assert_eq!(
+                markdown.contains("mant:entry"),
+                supported,
+                "groups={group_count}, members={members}, id={id_length}, padding={name_padding}"
+            );
+            if supported {
+                let document = query_markdown_text(&markdown, None)
+                    .unwrap()
+                    .document
+                    .unwrap();
+                assert!(
+                    document.diagnostics.is_empty(),
+                    "{:?}",
+                    document.diagnostics
+                );
+                assert!(mant_ir::validate_document(&document).is_empty());
+                assert_eq!(facts(&document), original);
+            } else {
+                let ordinary = render_markdown_with_options(
+                    &query,
+                    MarkdownOptions {
+                        preserve_anchors,
+                        preserve_semantics: false,
+                    },
+                );
+                assert_eq!(markdown, ordinary);
+                assert!(!markdown.contains("mant:entries"));
+                assert!(markdown.contains("Kept body."));
+                for name in &names {
+                    assert!(markdown.contains(name));
+                }
+            }
+        }
+    }
+}

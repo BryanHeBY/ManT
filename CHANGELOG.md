@@ -98,6 +98,11 @@ that crate was not published for that change.
 
 ### mant-engine 0.11.0
 
+- Share Markdown metadata constraints between import and semantic export.
+  Valid public IR exceeding alias-group, member, ID or JSON payload limits
+  falls back to ordinary Markdown for the whole document, rather than emitting
+  annotations that the reader would reject.
+
 - Recognize literal mentions beside typographic Unicode quotes and CJK
   punctuation, including unspaced prose. Keep executable punctuation and
   Unicode name continuations from turning longer names into prefix evidence.

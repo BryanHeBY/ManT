@@ -2,7 +2,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use super::super::bindings::{ItemBindings, OriginalItemId};
-use super::{MetadataDeclaration, diagnostic};
+use super::{MetadataDeclaration, diagnostic, valid_id};
 use mant_ir::{
     Block, Document, EntryRelationIssueKind, ListItem, SourceSpan,
     visit::{self, VisitMut},
@@ -97,15 +97,6 @@ pub(crate) fn apply(document: &mut Document, mut bindings: ItemBindings) -> Vec<
     reject_relations(document, &bindings, &sources, false, &mut diagnostics);
     document.diagnostics.extend(diagnostics);
     renamed
-}
-
-fn valid_id(id: &str) -> bool {
-    id.chars().count() <= 512
-        && mant_ir::is_normalized_node_id(id)
-        // Entry IDs live in the semantic namespace. Unlike section IDs they
-        // may use role-qualified prefixes, including exported derived IDs.
-        && !matches!(id, mant_ir::DOCUMENT_ROOT_ID | "tldr")
-        && id.parse::<mant_ir::OutlinePath>().is_err()
 }
 
 fn reject_relations(

@@ -17,6 +17,60 @@ const MAX_METADATA_BYTES: usize = 8192;
 const MAX_GROUPS: usize = 32;
 const MAX_GROUP_MEMBERS: usize = 32;
 
+fn validate_payload(json: &str) -> Result<(), &'static str> {
+    if json.len() > MAX_METADATA_BYTES || json.contains(['\r', '\n']) {
+        Err("entry metadata must fit one physical line and 8192 bytes")
+    } else {
+        Ok(())
+    }
+}
+
+fn validate_groups(groups: &[Vec<String>]) -> Result<(), &'static str> {
+    if groups.len() > MAX_GROUPS || groups.iter().any(|g| g.len() > MAX_GROUP_MEMBERS) {
+        Err("entry metadata exceeds 32 groups or 32 members per group")
+    } else {
+        Ok(())
+    }
+}
+
+fn valid_id(id: &str) -> bool {
+    id.chars().count() <= 512
+        && mant_ir::is_normalized_node_id(id)
+        // Entry IDs may use role-qualified prefixes, including derived IDs.
+        && !matches!(id, mant_ir::DOCUMENT_ROOT_ID | "tldr")
+        && id.parse::<mant_ir::OutlinePath>().is_err()
+}
+
+/// Encode only metadata that fits the authoring grammar. General IR validation
+/// remains the caller's responsibility: these are Markdown representation limits,
+/// not restrictions on other IR producers. Import and export use the same checks.
+pub(crate) fn export_entry_metadata(facts: &mant_ir::EntryFacts) -> Option<String> {
+    validate_groups(&facts.alias_groups).ok()?;
+    if !valid_id(&facts.id) || facts.alias_of.as_deref().is_some_and(|id| !valid_id(id)) {
+        return None;
+    }
+    let mut object = serde_json::Map::new();
+    object.insert("id".into(), serde_json::Value::String(facts.id.to_string()));
+    if !facts.alias_groups.is_empty() {
+        object.insert("aliasGroups".into(), serde_json::json!(facts.alias_groups));
+    }
+    if let Some(target) = &facts.alias_of {
+        object.insert(
+            "aliasOf".into(),
+            serde_json::Value::String(target.to_string()),
+        );
+    }
+    // Escaping protects HTML comments. Measure the exact emitted JSON, without
+    // counting the surrounding comment delimiters as part of the payload limit.
+    let json = serde_json::Value::Object(object)
+        .to_string()
+        .replace('<', "\\u003c")
+        .replace('>', "\\u003e")
+        .replace('&', "\\u0026");
+    validate_payload(&json).ok()?;
+    Some(format!(" <!-- mant:entry {json} -->"))
+}
+
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(super) struct EntryMetadata {
@@ -186,12 +240,8 @@ fn read(raw: &str, source: SourceSpan, diagnostics: &mut Vec<Diagnostic>) -> Opt
         );
         return None;
     };
-    if json.len() > MAX_METADATA_BYTES || json.contains(['\r', '\n']) {
-        diagnostic(
-            diagnostics,
-            source,
-            "entry metadata must fit one physical line and 8192 bytes",
-        );
+    if let Err(message) = validate_payload(json) {
+        diagnostic(diagnostics, source, message);
         return None;
     }
     let value: EntryMetadata = match serde_json::from_str(json) {
@@ -205,14 +255,8 @@ fn read(raw: &str, source: SourceSpan, diagnostics: &mut Vec<Diagnostic>) -> Opt
             return None;
         }
     };
-    if value.alias_groups.as_ref().is_some_and(|groups| {
-        groups.len() > MAX_GROUPS || groups.iter().any(|g| g.len() > MAX_GROUP_MEMBERS)
-    }) {
-        diagnostic(
-            diagnostics,
-            source,
-            "entry metadata exceeds 32 groups or 32 members per group",
-        );
+    if let Err(message) = validate_groups(value.alias_groups.as_deref().unwrap_or_default()) {
+        diagnostic(diagnostics, source, message);
         return None;
     }
     Some(value)
@@ -225,4 +269,17 @@ pub(super) fn diagnostic(diagnostics: &mut Vec<Diagnostic>, source: SourceSpan, 
         message: message.into(),
         source: Some(source),
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn payload_budget_counts_utf8_bytes_and_rejects_physical_newlines() {
+        assert!(validate_payload(&"é".repeat(MAX_METADATA_BYTES / 2)).is_ok());
+        assert!(validate_payload(&format!("{}x", "é".repeat(MAX_METADATA_BYTES / 2))).is_err());
+        assert!(validate_payload("{}\n").is_err());
+        assert!(validate_payload("{}\r").is_err());
+    }
 }
