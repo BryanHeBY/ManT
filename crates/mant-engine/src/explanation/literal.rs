@@ -40,7 +40,9 @@ fn right_boundary(tail: &str) -> bool {
         // Dot/colon may terminate a sentence, but remain internal in names
         // such as -ca.cert and /F:Y. '=' deliberately admits parameter forms.
         Some('.' | ':') => chars.next().is_none_or(|c| {
-            c.is_whitespace() || matches!(c, ')' | ']' | '}' | ',' | ';' | '"' | '\'')
+            c.is_whitespace()
+                || unicode_prose_punctuation(c)
+                || matches!(c, ')' | ']' | '}' | ',' | ';' | '"' | '\'')
         }),
         Some(c) => !name_continuation(c),
         None => true,
@@ -51,10 +53,72 @@ fn name_continuation(c: char) -> bool {
     // Use a closed set of prose separators, not an alphabetic whitelist:
     // #, %, ?, *, ! and other executable punctuation must not shorten names.
     !c.is_whitespace()
+        && !unicode_prose_punctuation(c)
         && !matches!(
             c,
             '(' | ')' | '[' | ']' | '{' | '}' | '<' | '>' | '"' | '\'' | '`' | ',' | ';' | '='
         )
+}
+
+/// Typographic quotation/enclosure and sentence punctuation delimit prose,
+/// including punctuation adjacent to CJK text without whitespace. This is a
+/// finite policy, not "all non-ASCII/non-alphanumeric characters": Unicode
+/// letters, combining marks, symbols and name-internal dashes remain intact.
+fn unicode_prose_punctuation(c: char) -> bool {
+    matches!(
+        c,
+        '‘' | '’'
+            | '‚'
+            | '‛'
+            | '“'
+            | '”'
+            | '„'
+            | '‟'
+            | '«'
+            | '»'
+            | '‹'
+            | '›'
+            | '「'
+            | '」'
+            | '『'
+            | '』'
+            | '〈'
+            | '〉'
+            | '《'
+            | '》'
+            | '【'
+            | '】'
+            | '〔'
+            | '〕'
+            | '〖'
+            | '〗'
+            | '〘'
+            | '〙'
+            | '〚'
+            | '〛'
+            | '〝'
+            | '〞'
+            | '〟'
+            | '（'
+            | '）'
+            | '［'
+            | '］'
+            | '｛'
+            | '｝'
+            | '、'
+            | '。'
+            | '，'
+            | '．'
+            | '：'
+            | '；'
+            | '！'
+            | '？'
+            | '｡'
+            | '､'
+            | '،'
+            | '؛'
+            | '؟'
+    )
 }
 
 #[cfg(test)]

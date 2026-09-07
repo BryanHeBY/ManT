@@ -1269,7 +1269,11 @@ the owner's declared ASCII case policy. Literal matching is case-sensitive;
 name-internal punctuation cannot terminate a match, so `-a` cannot
 match `--all`, `-ca` cannot match `-ca.cert`, and `-I` never folds into `-i`.
 `-#` does not match `-###`, and `--` does not match `--%`. Sentence-ending
-periods/colons may terminate a literal; `--help=CLASS` still mentions `--help`. There is no shorthand,
+periods/colons may terminate a literal; `--help=CLASS` still mentions `--help`.
+Typographic quotes, CJK enclosures and sentence punctuation also delimit prose:
+`“--help”` and `--help。` retain literal evidence. This finite separator policy
+does not split Unicode letters, combining marks or arbitrary symbols inside
+a longer name. There is no shorthand,
 NLP, regular expression, executable grammar or inferred synonym relationship.
 
 The same owner's bases are combined. Distinct owners are never merged because

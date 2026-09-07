@@ -98,6 +98,10 @@ that crate was not published for that change.
 
 ### mant-engine 0.11.0
 
+- Recognize literal mentions beside typographic Unicode quotes and CJK
+  punctuation, including unspaced prose. Keep executable punctuation and
+  Unicode name continuations from turning longer names into prefix evidence.
+
 - Keep executable punctuation in literal matching: `-#` no longer matches
   `-###`, nor `--` the longer `--%` marker; sentence boundaries and parameter
   forms remain usable evidence. Semantic Markdown export now proves one
