@@ -2,6 +2,39 @@
 use super::*;
 
 #[test]
+fn entry_search_sources_point_into_original_bytes_for_each_line_ending() {
+    for newline in ["\n", "\r\n", "\r"] {
+        let source = "# Tool\n\n## Commands\n\n`<a id=\"command-run\"></a>` OUTSIDE\n\n<!-- mant:entries role=command case=sensitive -->\n- `run`: OWNEDPAYLOAD\n".replace('\n', newline);
+        let query = crate::query_markdown_text(&source, None).unwrap();
+        let found = search_query(
+            &query,
+            &SearchQuery {
+                pattern: "OWNEDPAYLOAD".into(),
+                syntax: SearchSyntax::Literal,
+                case: SearchCase::Sensitive,
+                scope: SearchScope::Visible,
+                word: false,
+                context_lines: 1,
+                offset: 0,
+                limit: 10,
+            },
+        )
+        .unwrap();
+        assert_eq!(found.matches.len(), 1);
+        let hit = &found.matches[0];
+        assert!(
+            matches!(&hit.outline.node, OutlineNodeReference::DocumentEntry { names, .. } if names == &["run"])
+        );
+        let span = hit.node_source.unwrap();
+        assert_eq!(span.line, 8);
+        let bytes = span.byte_range.unwrap();
+        let original = &source[bytes.start.get() as usize..bytes.end.get() as usize];
+        assert!(original.contains("`run`: OWNEDPAYLOAD"), "{original:?}");
+        assert!(!original.contains("OUTSIDE"));
+    }
+}
+
+#[test]
 fn list_tightness_comes_from_direct_parser_items_not_source_substrings() {
     use mant_ir::visit::{Visit, walk_block};
     struct Lists(Vec<bool>);

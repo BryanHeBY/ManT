@@ -1,6 +1,113 @@
 //! End-to-end name, ownership and layout regression matrices.
 
 #[test]
+fn invocation_forms_and_aliases_agree_across_query_consumers() {
+    use mant_protocol::{
+        EntryProjection, OutlineNode, SearchCase, SearchQuery, SearchScope, SearchSyntax,
+    };
+    for (section, head, form, aliases, rejected) in [
+        (
+            "OPTIONS",
+            ".BI \"-q \" -COUNT",
+            "-q -COUNT",
+            vec!["-q"],
+            "-COUNT",
+        ),
+        (
+            "COMMANDS",
+            ".B \"create, duplicate\"",
+            "create, duplicate",
+            vec!["create", "duplicate"],
+            "create, duplicate",
+        ),
+        (
+            "ENVIRONMENT",
+            ".B MODE=red,blue",
+            "MODE=red,blue",
+            vec!["MODE"],
+            "blue",
+        ),
+    ] {
+        let query = crate::query_roff_bytes(
+            format!(".TH NAMES 1\n.SH {section}\n.TP\n{head}\nOWNEDPAYLOAD.\n").as_bytes(),
+        )
+        .unwrap();
+        let index = mant_ir::SemanticIndex::build(query.document.as_ref().unwrap());
+        let indexed = &index.section(&query.document.as_ref().unwrap().sections[0].id)[0];
+        assert_eq!(indexed.aliases, aliases);
+        assert_eq!(indexed.forms, [form]);
+        let outline = crate::build_outline_projection(&query, EntryProjection::All, None).unwrap();
+        let OutlineNode::DocumentSection { children, .. } = &outline.nodes[0] else {
+            panic!("{outline:?}")
+        };
+        let OutlineNode::DocumentEntry {
+            id,
+            path,
+            aliases: projected,
+            forms,
+            ..
+        } = &children[0]
+        else {
+            panic!("{children:?}")
+        };
+        assert_eq!(projected, &aliases);
+        assert_eq!(forms, &[form]);
+        let direct = crate::select_excerpt(&query, &[path.as_str()]).unwrap();
+        for alias in aliases {
+            let explained = crate::select_explanation(&query, alias).unwrap();
+            assert_eq!(explained.selections, direct.selections);
+            assert!(crate::render_excerpt_text(&explained).contains("OWNEDPAYLOAD"));
+        }
+        assert!(crate::select_explanation(&query, rejected).is_err());
+        for scope in [SearchScope::Visible, SearchScope::Markdown] {
+            let found = crate::search_query(
+                &query,
+                &SearchQuery {
+                    pattern: "OWNEDPAYLOAD".into(),
+                    syntax: SearchSyntax::Literal,
+                    case: SearchCase::Sensitive,
+                    scope,
+                    word: false,
+                    context_lines: 0,
+                    offset: 0,
+                    limit: 10,
+                },
+            )
+            .unwrap();
+            assert_eq!(found.matches.len(), 1);
+            let hit = &found.matches[0];
+            assert!(
+                matches!(&hit.outline.node, mant_protocol::OutlineNodeReference::DocumentEntry { id: found_id, path: found_path, .. } if found_id == id && found_path == path)
+            );
+            assert_eq!(hit.node_source.unwrap().line, 3);
+            assert_eq!(hit.occurrences[0].matched_text, "OWNEDPAYLOAD");
+        }
+    }
+}
+
+#[test]
+fn incomplete_tag_paragraphs_preserve_visible_terms_at_eof() {
+    for tail in [
+        ".B --unfinished",
+        ".BI \"--unfinished \" VALUE",
+        ".B --first\n.TP\n.B --unfinished",
+    ] {
+        let query =
+            crate::query_roff_bytes(format!(".TH TAGS 1\n.SH OPTIONS\n.TP\n{tail}\n").as_bytes())
+                .unwrap();
+        for text in [
+            crate::render_query_text(&query),
+            crate::render_markdown(&query),
+        ] {
+            assert!(text.contains("--unfinished"), "{tail}: {text}");
+            if tail.contains("--first") {
+                assert!(text.contains("--first"), "{text}");
+            }
+        }
+    }
+}
+
+#[test]
 fn variable_subscripts_must_be_complete_authored_forms() {
     for name in ["FOO", "FOO[bar]", "FOO[0]", "$FOO[_index]"] {
         assert_names(
