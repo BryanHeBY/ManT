@@ -1,6 +1,39 @@
 //! End-to-end name, ownership and layout regression matrices.
 
 #[test]
+fn variable_subscripts_must_be_complete_authored_forms() {
+    for name in ["FOO", "FOO[bar]", "FOO[0]", "$FOO[_index]"] {
+        assert_names(
+            &format!(".TH PROBE 1\n.SH VARIABLES\n.TP\n.B {name}\nValue.\n"),
+            &[name],
+            "missing",
+        );
+    }
+    for name in [
+        "FOO[bar",
+        "FOO[bar]TRAILING",
+        "FOO[]",
+        "FOO[[bar]]",
+        "FOO[a][b]",
+        "FOO]",
+        "FOO[bar]]",
+    ] {
+        let source = format!(".TH PROBE 1\n.SH VARIABLES\n.TP\n.B {name}\nValue.\n");
+        let query = crate::query_roff_bytes(source.as_bytes()).unwrap();
+        let document = query.document.as_ref().unwrap();
+        let index = mant_ir::SemanticIndex::build(document);
+        assert!(
+            index.section(&document.sections[0].id)[0]
+                .aliases
+                .is_empty(),
+            "{name}"
+        );
+        assert!(document.diagnostics.iter().any(|d| d.code.as_deref() == Some("manual.semantic-entry.unclassified-definition")), "{name}: {:?}", document.diagnostics);
+        assert!(crate::render_query_text(&query).contains(name), "{name}");
+    }
+}
+
+#[test]
 fn ordinary_man_paragraphs_reset_prevailing_definition_width() {
     use mant_ir::visit::{Visit, walk_definition_item};
     struct Widths(Vec<bool>);

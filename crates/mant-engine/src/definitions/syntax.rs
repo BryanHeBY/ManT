@@ -328,9 +328,14 @@ fn is_environment_variable_body(value: &str) -> bool {
 
 fn is_variable_term(value: &str) -> bool {
     let value = value.strip_prefix('$').unwrap_or(value);
-    let (head, index) = value
-        .split_once('[')
-        .map_or((value, None), |(head, tail)| (head, tail.strip_suffix(']')));
+    let (head, index) = if let Some((head, tail)) = value.split_once('[') {
+        let Some(index) = tail.strip_suffix(']') else {
+            return false;
+        };
+        (head, Some(index))
+    } else {
+        (value, None)
+    };
     !head.is_empty()
         && head
             .chars()
