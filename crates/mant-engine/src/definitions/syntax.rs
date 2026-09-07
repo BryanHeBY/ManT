@@ -236,6 +236,13 @@ pub(super) fn environment_names_from_terms(terms: &[Vec<Inline>]) -> Vec<String>
         .iter()
         .flat_map(|term| {
             let text = plain_text(term);
+            // Assignment values may contain alias punctuation. Recognize the
+            // complete assignment before considering any alias separators.
+            if text.contains('=') {
+                return environment_variable_alias(&text)
+                    .into_iter()
+                    .collect::<Vec<_>>();
+            }
             text.split([',', '|'])
                 .filter_map(environment_variable_alias)
                 .collect::<Vec<_>>()
@@ -270,11 +277,13 @@ pub(crate) fn environment_variable_alias(value: &str) -> Option<String> {
 }
 
 fn contains_additional_environment_assignment(value: &str) -> bool {
-    value.split_whitespace().any(|token| {
-        token.split_once('=').is_some_and(|(name, _)| {
-            environment_variable_body(name).is_some_and(is_environment_variable_body)
+    value
+        .split(|c: char| c.is_whitespace() || matches!(c, ',' | '|'))
+        .any(|token| {
+            token.split_once('=').is_some_and(|(name, _)| {
+                environment_variable_body(name).is_some_and(is_environment_variable_body)
+            })
         })
-    })
 }
 
 /// Remove a recognized shell/provider wrapper from an environment selector.

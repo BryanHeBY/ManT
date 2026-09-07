@@ -42,3 +42,28 @@ fn assert_names(source: &str, names: &[&str], missed: &str) {
         "{source}: {missed}"
     );
 }
+
+#[test]
+fn environment_assignment_values_are_not_alias_groups() {
+    for form in ["FOO=one,two", "FOO=one|two", "\"FOO=one,two\""] {
+        assert_names(
+            &format!(".TH PROBE 1\n.SH ENVIRONMENT\n.TP\n.B {form}\nSet values.\n"),
+            &["FOO"],
+            "two",
+        );
+    }
+    assert_names(
+        ".TH PROBE 1\n.SH ENVIRONMENT\n.TP\n.B \"FOO, BAR\"\nSet values.\n",
+        &["FOO", "BAR"],
+        "missing",
+    );
+    for form in ["FOO=one, BAR=two", "FOO=one|BAR=two", "FOO=one BAR=two"] {
+        let query = crate::query_roff_bytes(
+            format!(".TH PROBE 1\n.SH ENVIRONMENT\n.TP\n.B \"{form}\"\nSet values.\n").as_bytes(),
+        )
+        .unwrap();
+        assert!(crate::select_explanation(&query, "BAR").is_err());
+        assert!(crate::select_explanation(&query, "FOO").is_err());
+        assert!(query.document.unwrap().diagnostics.iter().any(|d| d.code.as_deref() == Some("manual.semantic-entry.unclassified-definition")));
+    }
+}
