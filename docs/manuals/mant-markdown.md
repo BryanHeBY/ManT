@@ -306,6 +306,8 @@ The boundary comments are invisible to ordinary CommonMark renderers. ManT masks
 
 ### Semantic export subset
 
+For each annotated list, export proves that either the default attached-value policy or `attached=fixed` reconstructs the same final names, forms and visible-name bindings. It emits `attached=fixed` only when that policy is required for the whole list. Lists mixing incompatible policies fall back to ordinary Markdown; neither fixed suffixes nor placeholders may silently change meaning. Nested lists select their policies independently.
+
 The Rust renderer's `MarkdownOptions.preserve_semantics` opt-in emits list declarations, item IDs, explicit alias groups, same-document aliasOf relationships and supported value-domain comments. It supports documents whose annotated owners are ordinary lists containing only successfully declared items with the same role/case within each list. Nested lists are checked independently. Relation comments escape HTML delimiter characters in JSON strings. Reimport rebuilds bindings against the new content; original source spans are not retained.
 
 Documents with native definition owners, inferred or mixed/partly rejected lists, invalid IR facts, or an entry-set reference without a representable document destination fall back to ordinary portable Markdown without semantic comments. Roff shared names never manufacture alias groups. Semantic export takes precedence over raw HTML anchor export when both options are set: entry IDs are carried by metadata, not injected into the head. Heading IDs, arbitrary native layout, unsupported containers and exact source bytes are outside this subset. Use IR JSON for a complete facts/bindings serialization; Markdown is not a lossless semantic round trip.

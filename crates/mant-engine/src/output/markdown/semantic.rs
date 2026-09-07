@@ -16,23 +16,24 @@ pub(super) fn supported(document: &Document) -> bool {
             if let Block::List { items, .. } = block
                 && let Some(first) = items.iter().find_map(|item| item.entry.as_ref())
             {
-                self.0 &= items.iter().all(|item| {
-                    item.entry.as_ref().is_some_and(|facts| {
-                        facts.role == first.role
-                            && facts.case == first.case
-                            && !facts.name_bindings.is_empty()
-                            && facts
-                                .name_bindings
-                                .iter()
-                                .all(|b| b.evidence == EntryNameEvidence::Declared)
-                            && matches!(item.blocks.first(), Some(Block::Paragraph { .. }))
-                            && metadata(facts).len() <= 8192
-                            && facts
-                                .value_domain
-                                .as_ref()
-                                .is_none_or(|v| domain(v).is_some())
-                    })
-                });
+                self.0 &= crate::markdown::export_attached_policy(items).is_some()
+                    && items.iter().all(|item| {
+                        item.entry.as_ref().is_some_and(|facts| {
+                            facts.role == first.role
+                                && facts.case == first.case
+                                && !facts.name_bindings.is_empty()
+                                && facts
+                                    .name_bindings
+                                    .iter()
+                                    .all(|b| b.evidence == EntryNameEvidence::Declared)
+                                && matches!(item.blocks.first(), Some(Block::Paragraph { .. }))
+                                && metadata(facts).len() <= 8192
+                                && facts
+                                    .value_domain
+                                    .as_ref()
+                                    .is_none_or(|v| domain(v).is_some())
+                        })
+                    });
             }
             visit::walk_block(self, block);
         }
@@ -45,14 +46,15 @@ pub(super) fn supported(document: &Document) -> bool {
     check.0
 }
 
-pub(super) fn declaration(facts: &EntryFacts) -> String {
+pub(super) fn declaration(facts: &EntryFacts, items: &[mant_ir::ListItem]) -> String {
     format!(
-        "<!-- mant:entries role={} case={} -->",
+        "<!-- mant:entries role={} case={}{} -->",
         role(facts.role),
         match facts.case {
             DefinitionCase::Sensitive => "sensitive",
             DefinitionCase::Insensitive => "insensitive",
-        }
+        },
+        crate::markdown::export_attached_policy(items).expect("supported semantic export list")
     )
 }
 

@@ -4,6 +4,31 @@ mod bindings;
 mod diagnostics;
 mod names;
 mod signature;
+/// Prove that one list-wide declaration reconstructs the final visible bindings.
+/// This is producer grammar reuse, not a hidden spelling or parser-state export.
+pub(crate) fn export_attached_policy(items: &[ListItem]) -> Option<&'static str> {
+    [AttachedValuePolicy::Infer, AttachedValuePolicy::Fixed]
+        .into_iter()
+        .find(|policy| {
+            items.iter().all(|item| {
+                let Some(facts) = &item.entry else {
+                    return false;
+                };
+                let Ok(signature) = entry_signature(item, facts.role, true, *policy) else {
+                    return false;
+                };
+                let rebuilt =
+                    bindings::entry_facts(item, &signature, facts.role, facts.case, *policy, true);
+                rebuilt.names == facts.names
+                    && rebuilt.forms == facts.forms
+                    && rebuilt.name_bindings == facts.name_bindings
+            })
+        })
+        .map(|policy| match policy {
+            AttachedValuePolicy::Infer => "",
+            AttachedValuePolicy::Fixed => " attached=fixed",
+        })
+}
 use super::bindings::{OriginalItemId, OriginalListId};
 pub(crate) use diagnostics::is_semantic_entry_rejection_code;
 use names::{entry_names, is_option_code};

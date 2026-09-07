@@ -162,7 +162,7 @@ fn render_list(
         if options.preserve_semantics
             && let Some(facts) = items.first().and_then(|i| i.entry.as_ref())
         {
-            format!("{}\n{content}", super::semantic::declaration(facts))
+            format!("{}\n{content}", super::semantic::declaration(facts, items))
         } else {
             content
         }

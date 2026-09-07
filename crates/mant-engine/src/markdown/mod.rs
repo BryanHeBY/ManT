@@ -18,6 +18,7 @@ mod source;
 mod tests;
 
 pub use container::TldrDirectiveError;
+pub(crate) use entries::export_attached_policy;
 pub(crate) use entries::is_semantic_entry_rejection_code;
 
 use mant_ir::DOCUMENT_ROOT_ID;
