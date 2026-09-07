@@ -25,7 +25,7 @@ pub fn is_valid_email_address(address: &str) -> bool {
 /// Decode one single-recipient `mailto:` URI into its typed email address.
 ///
 /// Header fields, fragments, and recipient lists remain external URIs because
-/// they cannot be represented by [`LinkTarget::Email`]. Percent escapes are
+/// they cannot be represented by [`crate::LinkTarget::Email`]. Percent escapes are
 /// decoded exactly once before the conservative ASCII mailbox is validated.
 #[must_use]
 pub fn email_address_from_mailto_uri(uri: &str) -> Option<String> {
