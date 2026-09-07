@@ -1,5 +1,7 @@
 //! Bounded semantic evidence, deliberately separate from strict navigation.
+mod classification;
 use crate::{OutlineTrail, Producer};
+pub use classification::*;
 use mant_ir::{
     DefinitionCase, DefinitionRole, Diagnostic, DocumentAddress, Inline, NodeId, SourceSpan,
     ValueDomain,
