@@ -340,6 +340,7 @@ fn preserves_inline_lists_definitions_and_nested_headings() {
         start: None,
         compact: true,
         items: vec![ListItem {
+            source: None,
             entry: None,
             blocks: vec![paragraph(vec![Inline::Text {
                 value: "first item".to_owned(),
@@ -350,6 +351,7 @@ fn preserves_inline_lists_definitions_and_nested_headings() {
     };
     let definitions = Block::DefinitionList {
         items: vec![DefinitionItem {
+            source: None,
             identity: None,
             inline_term: false,
             terms: vec![
@@ -399,6 +401,7 @@ fn preserves_inline_lists_definitions_and_nested_headings() {
 fn keeps_adjacent_bold_and_italic_runs_unambiguous_in_commonmark() {
     let definitions = Block::DefinitionList {
         items: vec![DefinitionItem {
+            source: None,
             identity: None,
             inline_term: false,
             terms: vec![vec![
@@ -1057,6 +1060,7 @@ fn protects_hanging_definition_terms_from_becoming_nested_lists() {
             "NOTES",
             vec![Block::DefinitionList {
                 items: vec![DefinitionItem {
+                    source: None,
                     identity: None,
                     terms: vec![vec![Inline::Text {
                         value: "1.".to_owned(),
@@ -1088,6 +1092,7 @@ fn protects_hanging_definition_terms_from_becoming_nested_lists() {
 fn keeps_block_definition_descriptions_on_their_own_commonmark_line() {
     let definitions = Block::DefinitionList {
         items: vec![DefinitionItem {
+            source: None,
             identity: None,
             inline_term: true,
             terms: vec![vec![Inline::Text {
@@ -1234,6 +1239,7 @@ fn renders_selectable_outline_paths_and_excerpt_breadcrumbs() {
 #[test]
 fn addressable_rendering_returns_exact_semantic_node_ranges() {
     let entry = DefinitionItem {
+        source: None,
         identity: Some(DefinitionIdentity {
             name_bindings: Vec::new(),
             alias_groups: Vec::new(),

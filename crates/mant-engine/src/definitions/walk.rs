@@ -160,14 +160,7 @@ fn collect_owner<'a>(
     indices.push(*direct_index);
     output.push(ContentEntry {
         item,
-        source: match item {
-            EntryOwner::Definition(_) => crate::block::block_source(container),
-            EntryOwner::List(_) => item
-                .blocks()
-                .first()
-                .and_then(crate::block::block_source)
-                .or_else(|| crate::block::block_source(container)),
-        },
+        source: item.source(),
         indices: indices.clone(),
         ancestors: ancestors.clone(),
         container,

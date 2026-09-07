@@ -1,6 +1,7 @@
 //! Identify definitions in explicit preparation, counting and allocation passes.
 //! Source-neutral topology is stable before identities are allocated.
 
+mod binding;
 mod context;
 mod diagnostics;
 mod identity;
@@ -198,6 +199,7 @@ mod tests {
 
     fn item(value: &str) -> DefinitionItem {
         DefinitionItem {
+            source: None,
             identity: None,
             inline_term: false,
             terms: vec![vec![Inline::Text {
@@ -210,6 +212,7 @@ mod tests {
 
     fn strong_item(value: &str) -> DefinitionItem {
         DefinitionItem {
+            source: None,
             identity: None,
             inline_term: false,
             terms: vec![vec![Inline::Strong {
@@ -293,6 +296,7 @@ mod tests {
     #[test]
     fn target_only_definitions_retain_anchors_without_becoming_entries() {
         let target_only = DefinitionItem {
+            source: None,
             identity: None,
             inline_term: true,
             terms: vec![vec![Inline::anchor("native-target")]],

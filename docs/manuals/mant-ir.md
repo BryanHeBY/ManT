@@ -168,8 +168,8 @@ Ordinary `ListItem` values can carry optional `EntryFacts` through `entry`.
 `DefinitionIdentity` is a transitional name for the same facts on native
 definitions. `EntryForm` and `EntryContentSlice` bind forms to direct owner
 blocks or native terms, preserving styled inline ancestry and validating UTF-8
-leaf ranges. Missing, overlapping or reordered references are invalid, not
-partial forms. Markdown attaches these references without converting its
+leaf ranges. Out-of-bounds, overlapping or reordered pieces are invalid, not
+partial forms; an empty forms collection instead means unrecorded. Markdown attaches these references without converting its
 ordinary lists to native definition items, as described in
 [mant-markdown(7)](mant-markdown.md).
 
@@ -188,12 +188,31 @@ addressable entry. The identity records:
 | `case` | Sensitive or insensitive alias matching |
 | `names` | Exact normalized names exposed to selectors; not an equivalence relation |
 | `nameBindings` | Name indices, evidence kinds and occurrences bound to final-IR authored forms |
-| `forms` | Optional ordered owner-relative content slices; native definitions may use their original terms |
+| `forms` | Explicit ordered owner-relative content slices; empty means unrecorded, never implicit terms |
 | `aliasGroups` | Explicit disjoint groups of at least two visible, uniquely bound names; absent means unknown |
 | `aliasOf` | Explicit same-document relation to a unique, compatible single-subject entry; not content redirection |
 | `valueDomain` | Optional source-declared value space |
 
 The identity is assigned during lowering, before source-specific macro information is discarded. Ordinary prose definitions remain valid definition items without an identity.
+
+Both item types carry their own optional `source` span. It refers to the original
+item, not the first remaining paragraph after annotation comments are consumed.
+Synthetic owners can leave it unknown; source positions never determine IDs.
+
+Forms and names fail independently. Unrecorded forms retain the owner and its
+children without inventing usage text. Invalid nonempty references produce
+`ir.invalid-entry-content` and suppress the entire forms projection, not the
+owner. Every selectable name needs exact occurrences within valid explicit
+forms. Invalid or missing name bindings suppress the complete names field and
+dependent aliases, while valid Form evidence, ID/path navigation and literal
+content remain available. Case policy affects lookup, not the exact spelling
+required by a binding. Links become form-linked document targets only through
+valid explicit forms; ordinary description links still participate in scope.
+
+`EntryOwner::forms()` returns `EntryForms::Unrecorded`, borrowed/projected valid
+forms, or `None` for invalid references (also for an unannotated owner). Native
+producers use `EntryForm::term(index)` explicitly. Complete consecutive terms
+borrow their original slice; nonconsecutive complete forms borrow individually.
 
 Shared validation rejects name bindings into descriptions or mismatching text,
 overlapping/hidden group members, incompatible or missing relationship targets,

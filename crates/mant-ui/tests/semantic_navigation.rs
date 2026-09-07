@@ -9,7 +9,7 @@ fn assert_compact_and_complete_entry_labels(view: &DocumentView) {
     assert_eq!(view.navigation()[1].title, "ENTRIES · 4");
     assert_eq!(
         view.navigation()[1].full_title.as_deref(),
-        Some("ENTRIES (4 direct · 1 nested · 3 forms)")
+        Some("ENTRIES (4 direct · 1 nested · 6 forms)")
     );
     assert_eq!(view.navigation()[2].title, "--help");
     assert_eq!(
@@ -30,18 +30,25 @@ fn sidebar_exposes_every_semantic_role_supported_by_the_document_contract() {
     .into_iter()
     .enumerate()
     .map(|(index, (role, name))| DefinitionItem {
+        source: None,
         identity: Some(DefinitionIdentity {
-            name_bindings: Vec::new(),
+            name_bindings: vec![mant_ir::EntryNameBinding {
+                name: 0,
+                evidence: mant_ir::EntryNameEvidence::Declared,
+                occurrences: vec![mant_ir::EntryForm::term(0)],
+            }],
             alias_groups: Vec::new(),
             alias_of: None,
-            forms: Vec::new(),
+            forms: vec![mant_ir::EntryForm::term(0)],
             id: format!("entry-{index}").into(),
             role,
             case: DefinitionCase::Sensitive,
             names: vec![name.to_owned()],
             value_domain: None,
         }),
-        terms: Vec::new(),
+        terms: vec![vec![Inline::Code {
+            value: name.to_owned(),
+        }]],
         description: Vec::new(),
         inline_term: false,
         spacing_before_lines: None,
@@ -55,13 +62,27 @@ fn sidebar_exposes_every_semantic_role_supported_by_the_document_contract() {
             value: "-h".to_owned(),
         }],
     ];
+    let facts = entries[0].identity.as_mut().unwrap();
+    facts.forms = vec![mant_ir::EntryForm::term(0), mant_ir::EntryForm::term(1)];
+    facts.name_bindings[0].occurrences = vec![mant_ir::EntryForm {
+        parts: vec![mant_ir::EntryContentSlice {
+            root: mant_ir::EntryInlineRoot::Term { index: 0 },
+            path: vec![0],
+            bytes: Some(0..6),
+        }],
+    }];
     entries[0].description = vec![Block::DefinitionList {
         items: vec![DefinitionItem {
+            source: None,
             identity: Some(DefinitionIdentity {
-                name_bindings: Vec::new(),
+                name_bindings: vec![mant_ir::EntryNameBinding {
+                    name: 0,
+                    evidence: mant_ir::EntryNameEvidence::Declared,
+                    occurrences: vec![mant_ir::EntryForm::term(0)],
+                }],
                 alias_groups: Vec::new(),
                 alias_of: None,
-                forms: Vec::new(),
+                forms: vec![mant_ir::EntryForm::term(0)],
                 id: "entry-help-value".into(),
                 role: DefinitionRole::Value,
                 case: DefinitionCase::Sensitive,

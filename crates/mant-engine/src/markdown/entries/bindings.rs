@@ -81,10 +81,11 @@ pub(super) fn entry_facts(
                     .chars()
                     .next_back()
                     .is_none_or(name_separator)
-                    || !value[end..]
-                        .chars()
-                        .next()
-                        .is_none_or(|ch| name_separator(ch) || matches!(ch, '=' | ':'))
+                    || !(spelling.ends_with(['=', ':'])
+                        || value[end..]
+                            .chars()
+                            .next()
+                            .is_none_or(|ch| name_separator(ch) || matches!(ch, '=' | ':')))
                 {
                     continue;
                 }

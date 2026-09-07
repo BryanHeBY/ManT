@@ -952,6 +952,7 @@ mod tests {
                         source: None,
                         items: vec![
                             DefinitionItem {
+                                source: None,
                                 identity: None,
                                 inline_term: true,
                                 terms: vec![vec![Inline::Text {
@@ -967,6 +968,7 @@ mod tests {
                                 spacing_before_lines: Some(1),
                             },
                             DefinitionItem {
+                                source: None,
                                 identity: None,
                                 inline_term: true,
                                 terms: vec![vec![Inline::Text {
@@ -1034,6 +1036,7 @@ mod tests {
                         source: None,
                         items: vec![
                             DefinitionItem {
+                                source: None,
                                 identity: None,
                                 inline_term: true,
                                 terms: vec![vec![Inline::Text {
@@ -1049,6 +1052,7 @@ mod tests {
                                 spacing_before_lines: Some(1),
                             },
                             DefinitionItem {
+                                source: None,
                                 identity: None,
                                 inline_term: false,
                                 terms: vec![vec![Inline::Text {

@@ -386,6 +386,10 @@ pub enum ListKind {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ListItem {
+    /// Original item span, independent of any removed declaration or first
+    /// visible block. Unknown for synthetic content; never an identity key.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<SourceSpan>,
     /// Optional semantic facts; these never replace or render the item body.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub entry: Option<EntryFacts>,
@@ -398,6 +402,9 @@ pub struct ListItem {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct DefinitionItem {
+    /// Original term-and-description owner span, not its containing list.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<SourceSpan>,
     /// Present when the native lowering pass can identify this definition as
     /// a stable semantic entry, such as a command-line option.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -466,7 +473,7 @@ pub struct EntryFacts {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub alias_of: Option<NodeId>,
     /// Read-only authored-form bindings into this owner's content.
-    /// Native definitions may omit these and use their complete terms.
+    /// Empty means unknown; producers reference known terms explicitly.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub forms: Vec<crate::EntryForm>,
     /// Unique within one document and shared with the term's inline anchor.

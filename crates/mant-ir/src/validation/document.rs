@@ -194,6 +194,9 @@ struct InvariantCollector {
 
 impl InvariantCollector {
     fn validate_entry(&mut self, item: crate::EntryOwner<'_>) {
+        if let Some(source) = item.source() {
+            validate_source_span(&mut self.diagnostics, source);
+        }
         if item.facts().is_some() && item.forms().is_none() {
             self.diagnostics.push(invariant(
                 "ir.invalid-entry-content",
@@ -467,6 +470,7 @@ mod tests {
             spacing_before_lines: 0,
             blocks: vec![Block::DefinitionList {
                 items: vec![DefinitionItem {
+                    source: None,
                     identity: Some(DefinitionIdentity {
                         name_bindings: Vec::new(),
                         alias_groups: Vec::new(),
@@ -698,6 +702,7 @@ mod tests {
     #[test]
     fn reports_invalid_cross_document_entry_domains() {
         let mut definition = DefinitionItem {
+            source: None,
             identity: Some(DefinitionIdentity {
                 name_bindings: Vec::new(),
                 alias_groups: Vec::new(),

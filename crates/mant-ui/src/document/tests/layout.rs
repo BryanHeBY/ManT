@@ -18,6 +18,7 @@ fn definition_continuations_keep_rows_when_reparented_across_spacing() {
                 };
                 let definition = Block::DefinitionList {
                     items: vec![DefinitionItem {
+                        source: None,
                         identity: None,
                         terms: vec![vec![Inline::Text {
                             value: label.into(),
@@ -176,6 +177,7 @@ fn bullet_lists_share_the_first_row_and_use_a_hanging_indent() {
         start: None,
         compact: true,
         items: vec![ListItem {
+            source: None,
             entry: None,
             blocks: vec![Block::Paragraph {
                 children: vec![Inline::Text {
@@ -262,10 +264,12 @@ fn ordered_list_markers_saturate_instead_of_overflowing() {
         compact: true,
         items: vec![
             ListItem {
+                source: None,
                 entry: None,
                 blocks: vec![paragraph("first")],
             },
             ListItem {
+                source: None,
                 entry: None,
                 blocks: vec![paragraph("second")],
             },

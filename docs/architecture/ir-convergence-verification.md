@@ -75,7 +75,24 @@ flattened into fenced Markdown text without entry byte ranges. Search therefore
 attributes cell content to the section, although outline/excerpt/explain now
 reach the actual nested owner. Do not call A12 complete until this is addressed.
 
-Not yet completed: S2–S6. Current successful baseline verification is recorded
+S2 implementation uses explicit native term references, a borrowed `EntryForms`
+view (including nonconsecutive borrowed terms), exact source-slice name binding,
+and original owner source spans. Empty/invalid forms preserve semantic owners
+and children; invalid names cannot suppress independent valid Form evidence.
+Names, local groups and rejected cross-owner aliases are filtered in derived
+metadata, while original facts remain available in content for diagnostics.
+The primitive name comparison walks referenced visible text without constructing
+styled inline copies. Native `[-+]O` binds the sign and suffix as separate source
+pieces, and style boundaries retain adjacent arguments without losing `-L`.
+
+New tests cover pointer-identical borrowing, unknown/invalid form ownership,
+missing bindings, independent Form/Name evidence and LF/CRLF/CR original item
+positions after removed leading comments. Existing native consumer source tests
+now assert the `.It` line, not its containing `.Bl`. UI test fixtures explicitly
+record their displayed forms instead of relying on the removed fallback.
+S2 performance and final verification remain pending until recorded below.
+
+Not yet completed: S2 verification, S3–S6. Current successful baseline verification is recorded
 in `remaining-review-verification.md`; it is not evidence for later changes.
 
 ## Local verification boundary

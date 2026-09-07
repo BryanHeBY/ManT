@@ -249,6 +249,7 @@ pub(super) fn list_item_from_definition(
     source: Option<SourceSpan>,
 ) -> ListItem {
     let DefinitionItem {
+        source: item_source,
         terms,
         mut description,
         ..
@@ -266,6 +267,7 @@ pub(super) fn list_item_from_definition(
     }
     targets::attach_targets(&mut description, anchors, layout(0), source);
     ListItem {
+        source: item_source,
         entry: None,
         blocks: description,
     }
@@ -277,6 +279,7 @@ mod tests {
 
     fn definition(term: &str, description: &str) -> DefinitionItem {
         DefinitionItem {
+            source: None,
             identity: None,
             inline_term: false,
             terms: vec![vec![Inline::Text {

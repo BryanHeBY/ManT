@@ -1,6 +1,7 @@
 //! Borrowed semantic owners and references into their authoritative content.
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use std::borrow::Cow;
 
 use crate::{Block, DefinitionItem, EntryFacts, Inline, ListItem};
 
@@ -69,6 +70,60 @@ pub struct EntryForm {
     pub parts: Vec<EntryContentSlice>,
 }
 
+impl EntryForm {
+    /// Reference one complete displayed definition term, without copying it.
+    #[must_use]
+    pub fn term(index: usize) -> Self {
+        Self {
+            parts: vec![EntryContentSlice {
+                root: EntryInlineRoot::Term { index },
+                path: Vec::new(),
+                bytes: None,
+            }],
+        }
+    }
+}
+
+/// Validated, operation-local forms. Unknown is distinct from invalid references
+/// (`EntryOwner::forms` returns `None` for the latter). No content fallback is
+/// performed for either state.
+#[derive(Debug, Default)]
+pub enum EntryForms<'a> {
+    /// The owner exists, but no authored forms were recorded.
+    #[default]
+    Unrecorded,
+    /// Complete consecutive native terms borrowed as one slice.
+    Borrowed(&'a [Vec<Inline>]),
+    /// Explicit forms, borrowing complete roots and materializing only slices
+    /// that actually require reconstruction of text or style wrappers.
+    Projected(Vec<Cow<'a, [Inline]>>),
+}
+
+impl EntryForms<'_> {
+    /// Iterate complete forms in their declared order, without cloning content.
+    pub fn iter(&self) -> impl Iterator<Item = &[Inline]> {
+        let (terms, projected): (&[Vec<Inline>], &[Cow<'_, [Inline]>]) = match self {
+            Self::Unrecorded => (&[], &[]),
+            Self::Borrowed(terms) => (terms, &[]),
+            Self::Projected(forms) => (&[], forms),
+        };
+        terms
+            .iter()
+            .map(Vec::as_slice)
+            .chain(projected.iter().map(AsRef::as_ref))
+    }
+
+    /// Materialize forms only at a boundary that needs owned output.
+    #[must_use]
+    pub fn into_owned(self) -> Vec<Vec<Inline>> {
+        match self {
+            Self::Unrecorded => Vec::new(),
+            Self::Borrowed(terms) => terms.to_vec(),
+            Self::Projected(forms) => forms.into_iter().map(Cow::into_owned).collect(),
+        }
+    }
+}
+
 /// Why a producer recognized a documented name; not a confidence score.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "kebab-case")]
@@ -94,6 +149,65 @@ pub struct EntryNameBinding {
 }
 
 impl<'a> EntryOwner<'a> {
+    /// Compare visible form text without constructing styled inline copies.
+    /// Used by exact binding validation, independently of lookup case policy.
+    pub(crate) fn form_text_equals(self, form: &EntryForm, mut expected: &str) -> bool {
+        if form.parts.is_empty()
+            || !form
+                .parts
+                .windows(2)
+                .all(|pair| precedes(&pair[0], &pair[1]))
+        {
+            return false;
+        }
+        for part in &form.parts {
+            let Some(mut nodes) = self.inline_root(&part.root) else {
+                return false;
+            };
+            for (depth, &index) in part.path.iter().enumerate() {
+                let Some(node) = nodes.get(index) else {
+                    return false;
+                };
+                if depth + 1 == part.path.len() {
+                    nodes = std::slice::from_ref(node);
+                } else {
+                    nodes = match node {
+                        Inline::Strong { children }
+                        | Inline::Emphasis { children }
+                        | Inline::Link { children, .. } => children,
+                        _ => return false,
+                    };
+                }
+            }
+            if let Some(range) = &part.bytes {
+                if part.path.is_empty() || range.start >= range.end {
+                    return false;
+                }
+                let [Inline::Text { value } | Inline::Code { value }] = nodes else {
+                    return false;
+                };
+                let Some(text) = value.get(range.clone()) else {
+                    return false;
+                };
+                let Some(rest) = expected.strip_prefix(text) else {
+                    return false;
+                };
+                expected = rest;
+            } else if !consume_text(nodes, &mut expected) {
+                return false;
+            }
+        }
+        expected.is_empty()
+    }
+
+    /// Source span attached to the original owner, never guessed from content.
+    #[must_use]
+    pub const fn source(self) -> Option<crate::SourceSpan> {
+        match self {
+            Self::Definition(item) => item.source,
+            Self::List(item) => item.source,
+        }
+    }
     /// Facts attached to this owner, if it is addressable.
     #[must_use]
     pub const fn facts(self) -> Option<&'a EntryFacts> {
@@ -193,27 +307,49 @@ impl<'a> EntryOwner<'a> {
     }
 
     /// Project complete authored forms, failing atomically on invalid bindings.
-    /// Native owners without explicit bindings retain their original terms.
+    /// Empty bindings are unknown even when displayed native terms exist.
+    /// An absent owner or any invalid form returns `None`, never a partial set.
     #[must_use]
-    pub fn forms(self) -> Option<std::borrow::Cow<'a, [Vec<Inline>]>> {
+    pub fn forms(self) -> Option<EntryForms<'a>> {
         let facts = self.facts()?;
         if facts.forms.is_empty() {
-            return match self {
-                Self::Definition(item) => Some(std::borrow::Cow::Borrowed(&item.terms)),
-                Self::List(_) => None,
-            };
+            return Some(EntryForms::Unrecorded);
+        }
+        if let Self::Definition(item) = self
+            && facts.forms.len() == item.terms.len()
+            && facts.forms.iter().enumerate().all(|(index, form)| {
+                matches!(&form.parts[..], [EntryContentSlice {root: EntryInlineRoot::Term {index: term}, path, bytes: None}] if *term == index && path.is_empty())
+            })
+        {
+            return Some(EntryForms::Borrowed(&item.terms));
         }
         facts
             .forms
             .iter()
             .map(|form| self.form(form))
             .collect::<Option<Vec<_>>>()
-            .map(std::borrow::Cow::Owned)
+            .map(EntryForms::Projected)
     }
 
     /// Project one ordered form without accepting a partial binding.
     #[must_use]
-    pub fn form(self, form: &EntryForm) -> Option<Vec<Inline>> {
+    pub fn form(self, form: &EntryForm) -> Option<Cow<'a, [Inline]>> {
+        if let [
+            EntryContentSlice {
+                root,
+                path,
+                bytes: None,
+            },
+        ] = &form.parts[..]
+        {
+            let nodes = self.inline_root(root)?;
+            if path.is_empty() {
+                return Some(Cow::Borrowed(nodes));
+            }
+            if let [index] = path[..] {
+                return nodes.get(index..index.checked_add(1)?).map(Cow::Borrowed);
+            }
+        }
         if form.parts.is_empty()
             || !form
                 .parts
@@ -227,8 +363,31 @@ impl<'a> EntryOwner<'a> {
             .iter()
             .map(|part| self.content_slice(part))
             .collect::<Option<Vec<_>>>()?;
-        Some(parts.into_iter().flatten().collect())
+        Some(Cow::Owned(parts.into_iter().flatten().collect()))
     }
+}
+
+fn consume_text(nodes: &[Inline], expected: &mut &str) -> bool {
+    for node in nodes {
+        let text = match node {
+            Inline::Text { value } | Inline::Code { value } => value.as_str(),
+            Inline::LineBreak => "\n",
+            Inline::Anchor { .. } => continue,
+            Inline::Strong { children }
+            | Inline::Emphasis { children }
+            | Inline::Link { children, .. } => {
+                if !consume_text(children, expected) {
+                    return false;
+                }
+                continue;
+            }
+        };
+        let Some(rest) = expected.strip_prefix(text) else {
+            return false;
+        };
+        *expected = rest;
+    }
+    true
 }
 
 fn precedes(left: &EntryContentSlice, right: &EntryContentSlice) -> bool {
@@ -257,8 +416,19 @@ mod tests {
 
     fn item(id: &str, role: DefinitionRole, name: &str) -> ListItem {
         ListItem {
+            source: None,
             entry: Some(EntryFacts {
-                name_bindings: Vec::new(),
+                name_bindings: vec![EntryNameBinding {
+                    name: 0,
+                    evidence: EntryNameEvidence::Declared,
+                    occurrences: vec![EntryForm {
+                        parts: vec![EntryContentSlice {
+                            root: EntryInlineRoot::Block { index: 0 },
+                            path: vec![0],
+                            bytes: None,
+                        }],
+                    }],
+                }],
                 alias_groups: Vec::new(),
                 alias_of: None,
                 id: id.into(),
@@ -428,10 +598,84 @@ mod tests {
                     .iter()
                     .any(|d| d.code.as_deref() == Some("ir.invalid-entry-content"))
             );
-            assert!(SemanticIndex::build(&doc).root().is_empty());
+            let index = SemanticIndex::build(&doc);
+            assert_eq!(index.root().len(), 1);
+            assert!(index.root()[0].forms.is_empty());
+            assert!(index.root()[0].aliases.is_empty());
         }
         assert!(crate::is_semantic_completeness_diagnostic(
             "ir.invalid-entry-content"
         ));
+    }
+
+    #[test]
+    fn explicit_terms_borrow_and_unrecorded_forms_do_not_remove_owners() {
+        let list_item = item("parent", DefinitionRole::Term, "one");
+        let mut native = DefinitionItem {
+            source: None,
+            identity: list_item.entry,
+            terms: vec![
+                vec![Inline::Code {
+                    value: "one".into(),
+                }],
+                vec![Inline::Code {
+                    value: "two".into(),
+                }],
+            ],
+            description: vec![list(vec![item("child", DefinitionRole::Value, "auto")])],
+            inline_term: false,
+            spacing_before_lines: None,
+        };
+        let facts = native.identity.as_mut().unwrap();
+        facts.names.clear();
+        facts.name_bindings.clear();
+        facts.forms = vec![EntryForm::term(0), EntryForm::term(1)];
+        let owner = EntryOwner::Definition(&native);
+        let Some(EntryForms::Borrowed(terms)) = owner.forms() else {
+            panic!("complete terms must borrow")
+        };
+        assert!(std::ptr::eq(terms, native.terms.as_slice()));
+        assert!(
+            matches!(owner.form(&EntryForm::term(1)), Some(Cow::Borrowed(term)) if std::ptr::eq(term, native.terms[1].as_slice()))
+        );
+        native.identity.as_mut().unwrap().forms = vec![EntryForm::term(1), EntryForm::term(0)];
+        let Some(EntryForms::Projected(forms)) = EntryOwner::Definition(&native).forms() else {
+            panic!("separate borrowed forms")
+        };
+        assert!(forms.iter().all(|form| matches!(form, Cow::Borrowed(_))));
+        native.identity.as_mut().unwrap().forms.clear();
+        assert!(matches!(
+            EntryOwner::Definition(&native).forms(),
+            Some(EntryForms::Unrecorded)
+        ));
+        let doc = document(vec![Block::DefinitionList {
+            items: vec![native],
+            compact: true,
+            layout: LayoutHint::default(),
+            source: None,
+        }]);
+        let index = SemanticIndex::build(&doc);
+        assert!(index.root()[0].forms.is_empty());
+        assert_eq!(index.root()[0].children[0].id, "child");
+        assert!(crate::validate_document(&doc).is_empty());
+    }
+
+    #[test]
+    fn invalid_names_leave_valid_forms_and_children_intact() {
+        let mut parent = item("parent", DefinitionRole::Command, "run");
+        parent.entry.as_mut().unwrap().name_bindings.clear();
+        parent
+            .blocks
+            .push(list(vec![item("child", DefinitionRole::Value, "auto")]));
+        let doc = document(vec![list(vec![parent])]);
+        let index = SemanticIndex::build(&doc);
+        assert!(index.root()[0].aliases.is_empty());
+        assert_eq!(index.root()[0].forms, ["run"]);
+        assert_eq!(index.root()[0].children.len(), 1);
+        assert!(
+            crate::validate_document(&doc)
+                .iter()
+                .any(|d| d.code.as_deref() == Some("ir.invalid-entry-name-binding"))
+        );
     }
 }

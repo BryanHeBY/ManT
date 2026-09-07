@@ -64,6 +64,7 @@ pub(crate) fn explain(
                 u32::try_from(ordinal).expect("bounded documents and candidates"),
                 &plan.candidates[index],
                 &plan.located,
+                &plan.rejected_aliases,
                 &mut budget,
             );
             copy_omitted[doc] |= omitted(&record);

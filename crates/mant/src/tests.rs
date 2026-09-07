@@ -595,12 +595,23 @@ fn explainable_manual() -> Document {
         .expect("options section");
     options.blocks.push(Block::DefinitionList {
         items: vec![DefinitionItem {
+            source: None,
             inline_term: false,
             identity: Some(DefinitionIdentity {
-                name_bindings: Vec::new(),
+                name_bindings: vec![mant_ir::EntryNameBinding {
+                    name: 0,
+                    evidence: mant_ir::EntryNameEvidence::Declared,
+                    occurrences: vec![mant_ir::EntryForm {
+                        parts: vec![mant_ir::EntryContentSlice {
+                            root: mant_ir::EntryInlineRoot::Term { index: 0 },
+                            path: vec![0],
+                            bytes: Some(0..9),
+                        }],
+                    }],
+                }],
                 alias_groups: Vec::new(),
                 alias_of: None,
-                forms: Vec::new(),
+                forms: vec![mant_ir::EntryForm::term(0)],
                 id: "exclude".to_owned().into(),
                 role: DefinitionRole::Option,
                 case: DefinitionCase::Sensitive,

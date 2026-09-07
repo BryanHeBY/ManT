@@ -187,7 +187,7 @@ impl LocatedNode<'_> {
                             title: title.clone(),
                             role: identity.role,
                             case: identity.case,
-                            names: identity.names.clone(),
+                            names: entry.item.validated_names().unwrap_or_default().to_vec(),
                         }
                     },
                 },

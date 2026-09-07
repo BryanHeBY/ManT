@@ -167,6 +167,7 @@ fn excerpt_contract_keeps_breadcrumbs_separate_from_complete_sections() {
 #[test]
 fn excerpt_contract_can_return_one_semantic_definition() {
     let entry = DefinitionItem {
+        source: None,
         inline_term: false,
         identity: Some(DefinitionIdentity {
             name_bindings: Vec::new(),

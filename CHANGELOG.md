@@ -24,6 +24,17 @@ that crate was not published for that change.
 
 ### mant-ir 0.11.0
 
+- Require explicit form references for both content-owner kinds; empty forms
+  mean unknown and never fall back to native terms. Invalid forms or names do
+  not erase owners/children. Every selectable name needs an exact binding;
+  rejected names/aliases are omitted from derived projections while independent
+  valid Form, identity and literal evidence remain usable. Complete term forms
+  borrow content rather than clone it.
+- Add optional original-item `source` to both `ListItem` and `DefinitionItem`;
+  Rust literals must initialize it. Native excerpts now report the item location,
+  not the containing list. Unannotated definitions transparently expose nested
+  semantic entries, matching ordinary-list ownership.
+
 - Separate documented-name occurrences from explicit `aliasGroups` and
   same-document `aliasOf` facts. Validate visible-head binding, group disjointness,
   exact member identity, unique compatible targets and cycles without merging

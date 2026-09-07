@@ -126,6 +126,7 @@ pub(super) fn normalize_hanging_definitions(blocks: &mut Vec<Block>, context: De
         let terms = vec![children];
         normalized.push(Block::DefinitionList {
             items: vec![DefinitionItem {
+                source: None,
                 identity: None,
                 inline_term: terms_fit_inline(&terms, DEFAULT_INLINE_TERM_MAX_WIDTH),
                 terms,
@@ -193,6 +194,7 @@ mod tests {
     fn definition(indent_columns: u16) -> Block {
         Block::DefinitionList {
             items: vec![DefinitionItem {
+                source: None,
                 identity: None,
                 terms: vec![vec![Inline::Text {
                     value: "--owner".into(),

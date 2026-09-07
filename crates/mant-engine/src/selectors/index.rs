@@ -79,7 +79,10 @@ impl<'a> DocumentSelectorIndex<'a> {
             let Some(identity) = candidate.identity() else {
                 continue;
             };
-            for name in &identity.names {
+            let LocatedNode::Entry { entry, .. } = candidate else {
+                continue;
+            };
+            for name in entry.item.validated_names().unwrap_or_default() {
                 index.exact_aliases.insert(identity.case, name, candidate);
                 if let Some(shorthand) = semantic_name_shorthand(identity.role, name) {
                     index

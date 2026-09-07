@@ -120,6 +120,18 @@ fn collection_plan<'a>(
         .as_ref()
         .map(|d| d.diagnostics.clone())
         .unwrap_or_default();
+    let rejected_aliases = validation
+        .as_ref()
+        .into_iter()
+        .flat_map(mant_ir::DocumentValidation::relation_issues)
+        .filter(|issue| {
+            matches!(
+                issue.kind,
+                mant_ir::EntryRelationIssueKind::AliasOf | mant_ir::EntryRelationIssueKind::Cycle
+            )
+        })
+        .map(|issue| issue.owner.clone())
+        .collect();
     if let Some(validation) = validation {
         for diagnostic in validation.into_diagnostics() {
             if !diagnostics.contains(&diagnostic) {
@@ -132,6 +144,7 @@ fn collection_plan<'a>(
         located,
         candidates,
         diagnostics,
+        rejected_aliases,
         truncation: mant_protocol::ExplanationTruncation {
             candidates: truncated,
             relations,

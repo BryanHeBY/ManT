@@ -698,6 +698,7 @@ mod tests {
             start: None,
             compact: false,
             items: vec![ListItem {
+                source: None,
                 entry: None,
                 blocks: vec![Block::Preformatted {
                     children: vec![Inline::Text {

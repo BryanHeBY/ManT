@@ -122,8 +122,12 @@ fn empty_names_still_have_a_real_owner_and_invalid_bindings_never_match_names() 
     Invalidate.visit_document_mut(content.document.as_mut().unwrap());
     let result = explain_query(&content, &query()).unwrap();
     assert!(!result.semantics_complete);
-    assert_eq!(result.evidence[0].class, EvidenceClass::EntryMention);
-    assert_eq!(result.evidence[0].bases, [EvidenceBasis::Literal]);
+    assert_eq!(result.evidence[0].class, EvidenceClass::DirectEntry);
+    assert_eq!(
+        result.evidence[0].bases,
+        [EvidenceBasis::Form, EvidenceBasis::Literal]
+    );
+    assert!(result.evidence[0].entry.as_ref().unwrap().names.is_empty());
     let mut content = mant_engine::query_roff_bytes(
         b".TH PROBE 1\n.SH DESCRIPTION\n.TP\n.B A\nRead --help here.\n",
     )
@@ -132,4 +136,54 @@ fn empty_names_still_have_a_real_owner_and_invalid_bindings_never_match_names() 
     let result = explain_query(&content, &query()).unwrap();
     assert_eq!(result.evidence[0].class, EvidenceClass::EntryMention);
     assert!(result.evidence[0].entry.as_ref().unwrap().names.is_empty());
+}
+
+#[test]
+fn unrecorded_or_invalid_forms_preserve_literal_ownership_and_nested_entries() {
+    use mant_ir::{Block, EntryForms, EntryOwner};
+    for invalid in [false, true] {
+        let mut content = query_markdown_text(
+            "<!-- mant:entries role=command case=sensitive -->\n- `run`: Read TOKEN here.\n\n  <!-- mant:entries role=value case=sensitive -->\n  - `auto`: CHILD.\n", None,
+        ).unwrap();
+        let Block::List { items, .. } = &mut content.document.as_mut().unwrap().blocks[0] else {
+            panic!("list")
+        };
+        let parent = &mut items[0];
+        let facts = parent.entry.as_mut().unwrap();
+        let id = facts.id.clone();
+        if invalid {
+            facts.forms[0].parts[0].path = vec![usize::MAX];
+        } else {
+            facts.forms.clear();
+        }
+        let owner = EntryOwner::List(parent);
+        assert_eq!(owner.forms().is_none(), invalid);
+        if !invalid {
+            assert!(matches!(owner.forms(), Some(EntryForms::Unrecorded)));
+        }
+        let evidence = mant_engine::select_explanation(&content, "TOKEN").unwrap();
+        assert_eq!(evidence.total, 1);
+        assert_eq!(evidence.evidence[0].outline.node.id(), id.as_str());
+        assert!(
+            evidence.evidence[0]
+                .entry
+                .as_ref()
+                .unwrap()
+                .forms
+                .is_empty()
+        );
+        assert!(
+            evidence.evidence[0]
+                .entry
+                .as_ref()
+                .unwrap()
+                .names
+                .is_empty()
+        );
+        assert!(mant_engine::select_excerpt(&content, &[id.as_str()]).is_ok());
+        assert!(mant_engine::select_excerpt(&content, &["run"]).is_err());
+        assert!(mant_engine::select_excerpt(&content, &["root/e1/e1"]).is_ok());
+        let index = mant_ir::SemanticIndex::build(content.document.as_ref().unwrap());
+        assert_eq!(index.root()[0].children.len(), 1);
+    }
 }

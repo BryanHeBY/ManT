@@ -27,6 +27,7 @@ pub(super) fn response(
                 u32::try_from(ordinal).expect("bounded candidates"),
                 candidate,
                 &plan.located,
+                &plan.rejected_aliases,
                 &mut budget,
             ));
         }
@@ -80,6 +81,7 @@ pub(super) fn materialize(
     ordinal: u32,
     candidate: &Candidate<'_>,
     located: &[LocatedNode<'_>],
+    rejected_aliases: &std::collections::BTreeSet<mant_ir::NodeId>,
     budget: &mut Budget,
 ) -> ExplanationEvidence {
     let node = candidate.located.or(candidate.section).map(|i| &located[i]);
@@ -92,10 +94,13 @@ pub(super) fn materialize(
         let details = ExplanationEntry {
             role: facts.role,
             case: facts.case,
-            names: facts.names.clone(),
+            names: owner.validated_names().unwrap_or_default().to_vec(),
             forms: owner.forms().unwrap_or_default().into_owned(),
-            alias_groups: facts.alias_groups.clone(),
-            alias_of: facts.alias_of.clone(),
+            alias_groups: owner.validated_alias_groups().unwrap_or_default().to_vec(),
+            alias_of: facts
+                .alias_of
+                .clone()
+                .filter(|_| !rejected_aliases.contains(&facts.id)),
             value_domain: facts.value_domain.clone(),
         };
         if budget.take(&details) {
@@ -181,7 +186,7 @@ fn trail(node: &LocatedNode<'_>) -> OutlineTrail {
                     title: title.clone(),
                     role: facts.role,
                     case: facts.case,
-                    names: facts.names.clone(),
+                    names: entry.item.validated_names().unwrap_or_default().to_vec(),
                 },
             )
         }

@@ -57,11 +57,14 @@ pub(super) fn render_blocks_with_entries(
             };
             let start = marker.range.start;
             let end = marker.item_end.unwrap_or(marker.range.end);
+            let mut identity = identity.clone();
+            identity.names = entry.validated_names().unwrap_or_default().to_vec();
+            identity.alias_groups = entry.validated_alias_groups().unwrap_or_default().to_vec();
             entries.push(RenderedEntry {
                 indices: located.indices,
                 start,
                 end,
-                identity: identity.clone(),
+                identity,
                 source: located.source,
             });
             cursor = start.saturating_add(anchor.len());

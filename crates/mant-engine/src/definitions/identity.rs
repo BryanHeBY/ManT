@@ -173,10 +173,12 @@ pub(super) fn identify_item(
     }
     retained.insert(id.clone());
     item.identity = Some(DefinitionIdentity {
-        name_bindings: Vec::new(),
+        name_bindings: super::binding::native_name_bindings(item, &names),
         alias_groups: Vec::new(),
         alias_of: None,
-        forms: Vec::new(),
+        forms: (0..item.terms.len())
+            .map(mant_ir::EntryForm::term)
+            .collect(),
         id: id.into(),
         role,
         case,

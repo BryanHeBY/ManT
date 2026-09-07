@@ -3,7 +3,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{
     DefinitionCase, Diagnostic, DiagnosticLevel, Document, EntryContentSlice, EntryFacts,
-    EntryInlineRoot, EntryOwner,
+    EntryOwner,
     visit::{self, Visit},
 };
 
@@ -195,7 +195,28 @@ pub(crate) fn relation_issues(
 }
 
 fn has_relationship_facts(facts: &EntryFacts) -> bool {
-    !facts.name_bindings.is_empty() || !facts.alias_groups.is_empty() || facts.alias_of.is_some()
+    !facts.names.is_empty()
+        || !facts.name_bindings.is_empty()
+        || !facts.alias_groups.is_empty()
+        || facts.alias_of.is_some()
+}
+
+impl<'a> EntryOwner<'a> {
+    /// Selectable names, validated atomically against every explicit form
+    /// binding. Failure leaves the owner, forms and original content intact.
+    #[must_use]
+    pub fn validated_names(self) -> Option<&'a [String]> {
+        valid_name_bindings(self)?;
+        Some(&self.facts()?.names)
+    }
+
+    /// Same-owner groups only when all names and the complete group set bind.
+    #[must_use]
+    pub fn validated_alias_groups(self) -> Option<&'a [Vec<String>]> {
+        let bound = valid_name_bindings(self)?;
+        let facts = self.facts()?;
+        groups_are_valid(facts, &bound).then_some(&facts.alias_groups)
+    }
 }
 
 fn valid_name_bindings(owner: EntryOwner<'_>) -> Option<BTreeSet<usize>> {
@@ -215,19 +236,15 @@ fn valid_name_bindings(owner: EntryOwner<'_>) -> Option<BTreeSet<usize>> {
             {
                 return None;
             }
-            let nodes = owner.form(occurrence)?;
-            if super::index::inline_text(&nodes) != *expected {
+            if !owner.form_text_equals(occurrence, expected) {
                 return None;
             }
         }
     }
-    Some(names)
+    (names.len() == facts.names.len()).then_some(names)
 }
 
 fn inside_head(facts: &EntryFacts, piece: &EntryContentSlice) -> bool {
-    if facts.forms.is_empty() {
-        return matches!(piece.root, EntryInlineRoot::Term { .. });
-    }
     facts.forms.iter().flat_map(|form| &form.parts).any(|head| {
         if piece.root != head.root || !piece.path.starts_with(&head.path) {
             return false;
@@ -281,18 +298,19 @@ mod tests {
     use super::*;
     use crate::{
         Block, DefinitionItem, DefinitionRole, DocumentMeta, DocumentSource, EntryForm,
-        EntryNameBinding, EntryNameEvidence, Inline, LayoutHint, SourceFormat,
+        EntryInlineRoot, EntryNameBinding, EntryNameEvidence, Inline, LayoutHint, SourceFormat,
     };
 
     fn entry(id: &str, names: &[&str]) -> DefinitionItem {
         DefinitionItem {
+            source: None,
             identity: Some(EntryFacts {
                 id: id.into(),
                 role: DefinitionRole::Option,
                 case: DefinitionCase::Sensitive,
                 names: names.iter().map(|name| (*name).into()).collect(),
                 value_domain: None,
-                forms: Vec::new(),
+                forms: (0..names.len()).map(EntryForm::term).collect(),
                 alias_groups: Vec::new(),
                 alias_of: None,
                 name_bindings: names

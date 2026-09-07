@@ -1100,6 +1100,17 @@
             "description": "Render the term on the same line as the first description line (a man(7)\nhanging tag that fits the indent) instead of on its own line. Decided\nonce during lowering so every renderer lays the item out identically.",
             "type": "boolean"
           },
+          "source": {
+            "description": "Original term-and-description owner span, not its containing list.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/SourceSpan"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "spacingBeforeLines": {
             "description": "Terminal rows requested before this item when man(7) changes `.PD`.\n`None` inherits the containing list's compactness policy.",
             "type": [
@@ -1453,7 +1464,7 @@
             "$ref": "#/$defs/DefinitionCase"
           },
           "forms": {
-            "description": "Read-only authored-form bindings into this owner's content.\nNative definitions may omit these and use their complete terms.",
+            "description": "Read-only authored-form bindings into this owner's content.\nEmpty means unknown; producers reference known terms explicitly.",
             "type": "array",
             "items": {
               "$ref": "#/$defs/EntryForm"
@@ -2145,6 +2156,17 @@
             "anyOf": [
               {
                 "$ref": "#/$defs/EntryFacts"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source": {
+            "description": "Original item span, independent of any removed declaration or first\nvisible block. Unknown for synthetic content; never an identity key.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/SourceSpan"
               },
               {
                 "type": "null"
@@ -3457,6 +3479,17 @@
             "description": "Render the term on the same line as the first description line (a man(7)\nhanging tag that fits the indent) instead of on its own line. Decided\nonce during lowering so every renderer lays the item out identically.",
             "type": "boolean"
           },
+          "source": {
+            "description": "Original term-and-description owner span, not its containing list.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/SourceSpan"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "spacingBeforeLines": {
             "description": "Terminal rows requested before this item when man(7) changes `.PD`.\n`None` inherits the containing list's compactness policy.",
             "type": [
@@ -3728,7 +3761,7 @@
             "$ref": "#/$defs/DefinitionCase"
           },
           "forms": {
-            "description": "Read-only authored-form bindings into this owner's content.\nNative definitions may omit these and use their complete terms.",
+            "description": "Read-only authored-form bindings into this owner's content.\nEmpty means unknown; producers reference known terms explicitly.",
             "type": "array",
             "items": {
               "$ref": "#/$defs/EntryForm"
@@ -4882,6 +4915,17 @@
             "anyOf": [
               {
                 "$ref": "#/$defs/EntryFacts"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source": {
+            "description": "Original item span, independent of any removed declaration or first\nvisible block. Unknown for synthetic content; never an identity key.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/SourceSpan"
               },
               {
                 "type": "null"
@@ -7018,6 +7062,17 @@
             "description": "Render the term on the same line as the first description line (a man(7)\nhanging tag that fits the indent) instead of on its own line. Decided\nonce during lowering so every renderer lays the item out identically.",
             "type": "boolean"
           },
+          "source": {
+            "description": "Original term-and-description owner span, not its containing list.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/SourceSpan"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "spacingBeforeLines": {
             "description": "Terminal rows requested before this item when man(7) changes `.PD`.\n`None` inherits the containing list's compactness policy.",
             "type": [
@@ -7438,7 +7493,7 @@
             "$ref": "#/$defs/DefinitionCase"
           },
           "forms": {
-            "description": "Read-only authored-form bindings into this owner's content.\nNative definitions may omit these and use their complete terms.",
+            "description": "Read-only authored-form bindings into this owner's content.\nEmpty means unknown; producers reference known terms explicitly.",
             "type": "array",
             "items": {
               "$ref": "#/$defs/EntryForm"
@@ -8020,6 +8075,17 @@
             "anyOf": [
               {
                 "$ref": "#/$defs/EntryFacts"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source": {
+            "description": "Original item span, independent of any removed declaration or first\nvisible block. Unknown for synthetic content; never an identity key.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/SourceSpan"
               },
               {
                 "type": "null"
@@ -9654,6 +9720,17 @@
             "description": "Render the term on the same line as the first description line (a man(7)\nhanging tag that fits the indent) instead of on its own line. Decided\nonce during lowering so every renderer lays the item out identically.",
             "type": "boolean"
           },
+          "source": {
+            "description": "Original term-and-description owner span, not its containing list.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/SourceSpan"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "spacingBeforeLines": {
             "description": "Terminal rows requested before this item when man(7) changes `.PD`.\n`None` inherits the containing list's compactness policy.",
             "type": [
@@ -10087,7 +10164,7 @@
             "$ref": "#/$defs/DefinitionCase"
           },
           "forms": {
-            "description": "Read-only authored-form bindings into this owner's content.\nNative definitions may omit these and use their complete terms.",
+            "description": "Read-only authored-form bindings into this owner's content.\nEmpty means unknown; producers reference known terms explicitly.",
             "type": "array",
             "items": {
               "$ref": "#/$defs/EntryForm"
@@ -11231,6 +11308,17 @@
             "anyOf": [
               {
                 "$ref": "#/$defs/EntryFacts"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source": {
+            "description": "Original item span, independent of any removed declaration or first\nvisible block. Unknown for synthetic content; never an identity key.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/SourceSpan"
               },
               {
                 "type": "null"

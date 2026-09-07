@@ -165,7 +165,7 @@ fn slash_alias_candidates_retain_parameter_styles_across_native_dialects() {
             form,
             &aliases,
             rejected,
-            5,
+            6,
         );
         assert_invocation_consumers(
             &format!(".TH NAMES 1\n.SH OPTIONS\n.TP\n{man}\nOWNEDPAYLOAD.\n"),

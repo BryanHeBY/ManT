@@ -499,6 +499,7 @@ mod tests {
                     spacing_before_lines: 0,
                     blocks: vec![Block::DefinitionList {
                         items: vec![DefinitionItem {
+                            source: None,
                             inline_term: false,
                             identity: Some(DefinitionIdentity {
                                 name_bindings: Vec::new(),

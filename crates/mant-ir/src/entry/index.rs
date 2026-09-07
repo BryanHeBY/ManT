@@ -27,7 +27,30 @@ impl SemanticIndex {
         let root = entries_in_blocks(&document.blocks);
         let mut sections = BTreeMap::new();
         collect_section_entries(&document.sections, &mut sections);
-        Self { root, sections }
+        let mut result = Self { root, sections };
+        if result
+            .root
+            .iter()
+            .chain(result.sections.values().flatten())
+            .any(has_alias_of)
+        {
+            let rejected = crate::entry_relation_issues(document)
+                .into_iter()
+                .filter(|issue| {
+                    matches!(
+                        issue.kind,
+                        crate::EntryRelationIssueKind::AliasOf
+                            | crate::EntryRelationIssueKind::Cycle
+                    )
+                })
+                .map(|issue| issue.owner)
+                .collect::<std::collections::BTreeSet<_>>();
+            clear_rejected_relations(&mut result.root, &rejected);
+            for entries in result.sections.values_mut() {
+                clear_rejected_relations(entries, &rejected);
+            }
+        }
+        result
     }
 
     /// Entries directly owned by content before the first section.
@@ -52,6 +75,22 @@ impl SemanticIndex {
     #[must_use]
     pub fn section_summary(&self, id: &str) -> EntrySummary {
         EntrySummary::for_entries(self.section(id))
+    }
+}
+
+fn has_alias_of(entry: &SemanticEntry) -> bool {
+    entry.alias_of.is_some() || entry.children.iter().any(has_alias_of)
+}
+
+fn clear_rejected_relations(
+    entries: &mut [SemanticEntry],
+    rejected: &std::collections::BTreeSet<NodeId>,
+) {
+    for entry in entries {
+        if rejected.contains(&entry.id) {
+            entry.alias_of = None;
+        }
+        clear_rejected_relations(&mut entry.children, rejected);
     }
 }
 
@@ -82,7 +121,7 @@ pub(super) fn entry_from_definition(item: &crate::DefinitionItem) -> Option<Sema
 
 fn entry_from_owner(item: EntryOwner<'_>) -> Option<SemanticEntry> {
     let identity = item.facts()?;
-    let forms = item.forms()?;
+    let forms = item.forms().unwrap_or_default();
     let children = entries_in_blocks(item.blocks());
     let value_domain = identity.value_domain.clone().or_else(|| {
         (!children.is_empty() && children.iter().all(|child| child.kind == EntryKind::Value))
@@ -91,20 +130,20 @@ fn entry_from_owner(item: EntryOwner<'_>) -> Option<SemanticEntry> {
     Some(SemanticEntry {
         id: identity.id.clone(),
         kind: entry_kind(identity.role),
-        aliases: identity.names.clone(),
-        alias_groups: identity.alias_groups.clone(),
+        aliases: item.validated_names().unwrap_or_default().to_vec(),
+        alias_groups: item.validated_alias_groups().unwrap_or_default().to_vec(),
         alias_of: identity.alias_of.clone(),
         case: identity.case,
-        forms: forms.iter().map(|term| inline_text(term)).collect(),
+        forms: forms.iter().map(inline_text).collect(),
         document_targets: document_targets(&forms),
         children,
         value_domain,
     })
 }
 
-fn document_targets(terms: &[Vec<Inline>]) -> Vec<SemanticDocumentTarget> {
+fn document_targets(terms: &crate::EntryForms<'_>) -> Vec<SemanticDocumentTarget> {
     let mut targets = Vec::new();
-    for term in terms {
+    for term in terms.iter() {
         collect_document_targets(term, &mut targets);
     }
     targets

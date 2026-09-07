@@ -23,17 +23,29 @@ fn ordinary_list_entry_anchors_preserve_rows_and_numbering() {
         compact: false,
         items: vec![
             mant_ir::ListItem {
+                source: None,
                 entry: None,
                 blocks: vec![paragraph("intro")],
             },
             mant_ir::ListItem {
+                source: None,
                 entry: Some(mant_ir::EntryFacts {
                     id: "run".into(),
                     names: vec!["run".into()],
                     role: mant_ir::DefinitionRole::Command,
                     case: mant_ir::DefinitionCase::Sensitive,
                     value_domain: None,
-                    name_bindings: Vec::new(),
+                    name_bindings: vec![mant_ir::EntryNameBinding {
+                        name: 0,
+                        evidence: mant_ir::EntryNameEvidence::Declared,
+                        occurrences: vec![mant_ir::EntryForm {
+                            parts: vec![mant_ir::EntryContentSlice {
+                                root: mant_ir::EntryInlineRoot::Block { index: 0 },
+                                path: vec![0],
+                                bytes: None,
+                            }],
+                        }],
+                    }],
                     alias_groups: Vec::new(),
                     alias_of: None,
                     forms: vec![mant_ir::EntryForm {
@@ -310,6 +322,7 @@ fn inline_definitions_hang_the_description_and_expose_their_anchor() {
     let mut bundle = bundle();
     bundle.document.as_mut().expect("document").sections[0].blocks = vec![Block::DefinitionList {
         items: vec![DefinitionItem {
+            source: None,
             identity: Some(DefinitionIdentity {
                 name_bindings: Vec::new(),
                 alias_groups: Vec::new(),

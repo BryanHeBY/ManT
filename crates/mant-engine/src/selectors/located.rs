@@ -184,14 +184,16 @@ fn append_entry_breadcrumbs(
 
 fn definition_title(entry: EntryOwner<'_>) -> String {
     let identity = entry.facts().expect("semantic entries have identities");
-    if !identity.names.is_empty() {
-        return identity.names.join(", ");
+    if let Some(names) = entry.validated_names()
+        && !names.is_empty()
+    {
+        return names.join(", ");
     }
     let forms = entry
         .forms()
         .unwrap_or_default()
         .iter()
-        .map(|term| plain_text(term))
+        .map(plain_text)
         .filter(|form| !form.is_empty())
         .collect::<Vec<_>>();
     if !forms.is_empty() {

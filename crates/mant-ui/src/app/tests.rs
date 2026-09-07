@@ -103,6 +103,7 @@ fn navigation_bundle() -> ResolvedContent {
                 spacing_before_lines: 0,
                 blocks: vec![AstBlock::DefinitionList {
                     items: vec![DefinitionItem {
+                        source: None,
                         identity: Some(DefinitionIdentity {
                             name_bindings: Vec::new(),
                             alias_groups: Vec::new(),

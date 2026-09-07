@@ -278,6 +278,7 @@ mod tests {
     #[test]
     fn annotates_only_complete_undeclared_option_lists() {
         let option = |name: &str, description: &str| ListItem {
+            source: None,
             entry: None,
             blocks: vec![paragraph(vec![
                 Inline::Code {
@@ -326,6 +327,7 @@ mod tests {
             start: None,
             compact: false,
             items: vec![ListItem {
+                source: None,
                 entry: None,
                 blocks: vec![
                     paragraph(vec![
@@ -370,6 +372,7 @@ mod tests {
             compact: true,
             items: vec![
                 ListItem {
+                    source: None,
                     entry: None,
                     blocks: vec![paragraph(vec![
                         Inline::Code {
@@ -381,6 +384,7 @@ mod tests {
                     ])],
                 },
                 ListItem {
+                    source: None,
                     entry: None,
                     blocks: vec![paragraph(vec![Inline::Text {
                         value: "ordinary prose".to_owned(),

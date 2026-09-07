@@ -11,6 +11,7 @@ pub(super) struct CollectionPlan<'a> {
     pub located: Vec<LocatedNode<'a>>,
     pub candidates: Vec<Candidate<'a>>,
     pub diagnostics: Vec<Diagnostic>,
+    pub rejected_aliases: std::collections::BTreeSet<mant_ir::NodeId>,
     pub truncation: ExplanationTruncation,
 }
 impl Candidate<'_> {

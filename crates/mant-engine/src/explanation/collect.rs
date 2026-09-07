@@ -9,7 +9,7 @@ pub(super) fn collect<'a>(
     content: &'a ResolvedContent,
     query: &str,
     located: &[LocatedNode<'a>],
-    validation: Option<&mant_ir::DocumentValidation<'_>>,
+    _validation: Option<&mant_ir::DocumentValidation<'_>>,
 ) -> (Candidates<'a>, Vec<usize>) {
     let mut scan = Scan {
         query,
@@ -30,12 +30,6 @@ pub(super) fn collect<'a>(
             })
             .collect(),
         candidates: Candidates::default(),
-        invalid_names: validation
-            .into_iter()
-            .flat_map(mant_ir::DocumentValidation::relation_issues)
-            .filter(|i| i.kind == mant_ir::EntryRelationIssueKind::NameBinding)
-            .map(|i| i.owner.clone())
-            .collect(),
         next_order: 0,
         orders: vec![0; located.len()],
     };
@@ -52,7 +46,6 @@ struct Scan<'a, 'b> {
     owners: HashMap<usize, usize>,
     sections: HashMap<usize, usize>,
     candidates: Candidates<'a>,
-    invalid_names: std::collections::BTreeSet<mant_ir::NodeId>,
     next_order: usize,
     orders: Vec<usize>,
 }
@@ -75,21 +68,19 @@ impl<'a> Scan<'a, '_> {
         self.next_order += 1;
         let facts = owner.facts().expect("indexed semantic owner");
         let mut bases = Vec::new();
-        if !self.invalid_names.contains(&facts.id)
-            && facts
-                .names
-                .iter()
-                .any(|name| same(name, self.query, facts.case))
+        if owner
+            .validated_names()
+            .unwrap_or_default()
+            .iter()
+            .any(|name| same(name, self.query, facts.case))
         {
             bases.push(EvidenceBasis::Name);
         }
-        if !self.invalid_names.contains(&facts.id)
-            && owner.forms().is_some_and(|forms| {
-                forms
-                    .iter()
-                    .any(|form| same(&crate::inline::plain_text(form), self.query, facts.case))
-            })
-        {
+        if owner.forms().is_some_and(|forms| {
+            forms
+                .iter()
+                .any(|form| same(&crate::inline::plain_text(form), self.query, facts.case))
+        }) {
             bases.push(EvidenceBasis::Form);
         }
         if is_identity(&self.located[index], self.query) {

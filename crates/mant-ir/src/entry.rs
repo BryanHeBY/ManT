@@ -50,11 +50,32 @@ mod tests {
         description: Vec<Block>,
     ) -> DefinitionItem {
         DefinitionItem {
+            source: None,
             identity: Some(DefinitionIdentity {
-                name_bindings: Vec::new(),
+                name_bindings: aliases
+                    .iter()
+                    .enumerate()
+                    .map(|(name, spelling)| crate::EntryNameBinding {
+                        name,
+                        evidence: crate::EntryNameEvidence::Declared,
+                        occurrences: forms
+                            .iter()
+                            .enumerate()
+                            .filter_map(|(index, form)| {
+                                form.find(spelling).map(|start| crate::EntryForm {
+                                    parts: vec![crate::EntryContentSlice {
+                                        root: crate::EntryInlineRoot::Term { index },
+                                        path: vec![0],
+                                        bytes: Some(start..start + spelling.len()),
+                                    }],
+                                })
+                            })
+                            .collect(),
+                    })
+                    .collect(),
                 alias_groups: Vec::new(),
                 alias_of: None,
-                forms: Vec::new(),
+                forms: (0..forms.len()).map(crate::EntryForm::term).collect(),
                 id: id.into(),
                 role,
                 case: DefinitionCase::Sensitive,
@@ -111,6 +132,7 @@ mod tests {
                 start: None,
                 compact: true,
                 items: vec![crate::ListItem {
+                    source: None,
                     entry: None,
                     blocks: vec![list(transparent)],
                 }],
@@ -237,6 +259,14 @@ mod tests {
                 value: "winget.exe".to_owned(),
             }],
         }]];
+
+        assert!(
+            entry_from_definition(&item)
+                .unwrap()
+                .document_targets
+                .is_empty()
+        );
+        item.identity.as_mut().unwrap().forms = vec![crate::EntryForm::term(0)];
 
         let entry = entry_from_definition(&item).expect("entry");
         assert_eq!(

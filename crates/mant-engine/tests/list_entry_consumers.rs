@@ -11,6 +11,7 @@ use mant_protocol::{EntryProjection, ExcerptSelection, OutlineNode};
 
 fn item(name: &str, payload: &str, entry: bool) -> ListItem {
     ListItem {
+        source: None,
         entry: entry.then(|| EntryFacts {
             id: name.into(),
             role: DefinitionRole::Command,
@@ -19,7 +20,17 @@ fn item(name: &str, payload: &str, entry: bool) -> ListItem {
             value_domain: None,
             alias_groups: Vec::new(),
             alias_of: None,
-            name_bindings: Vec::new(),
+            name_bindings: vec![mant_ir::EntryNameBinding {
+                name: 0,
+                evidence: mant_ir::EntryNameEvidence::Declared,
+                occurrences: vec![EntryForm {
+                    parts: vec![EntryContentSlice {
+                        root: EntryInlineRoot::Block { index: 0 },
+                        path: vec![0],
+                        bytes: None,
+                    }],
+                }],
+            }],
             forms: vec![EntryForm {
                 parts: vec![EntryContentSlice {
                     root: EntryInlineRoot::Block { index: 0 },

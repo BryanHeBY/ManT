@@ -70,6 +70,7 @@ pub(in crate::mandoc::blocks) fn lower_mdoc_list(
                     );
                     attach_item_targets(&mut blocks, &item, layout(list_indent));
                     ListItem {
+                        source: source_span(item.node),
                         entry: None,
                         blocks,
                     }
@@ -155,6 +156,7 @@ fn mdoc_list_item_from_definition(
     source: Option<mant_ir::SourceSpan>,
 ) -> ListItem {
     let DefinitionItem {
+        source: item_source,
         terms,
         mut description,
         ..
@@ -176,6 +178,7 @@ fn mdoc_list_item_from_definition(
     }
     targets::attach_targets(&mut description, anchors, layout(list_indent), owner_source);
     ListItem {
+        source: item_source,
         entry: None,
         blocks: description,
     }
@@ -387,6 +390,7 @@ fn append_list_targets(
         Block::List { items, .. } => {
             if items.is_empty() {
                 items.push(ListItem {
+                    source: None,
                     entry: None,
                     blocks: Vec::new(),
                 });
@@ -403,6 +407,7 @@ fn append_list_targets(
                 targets::append_definition_targets(item, targets, layout, source);
             } else {
                 items.push(DefinitionItem {
+                    source: None,
                     identity: None,
                     terms: vec![
                         targets

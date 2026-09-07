@@ -105,11 +105,32 @@ mod tests {
         description: Vec<Block>,
     ) -> DefinitionItem {
         DefinitionItem {
+            source: None,
             identity: Some(DefinitionIdentity {
-                name_bindings: Vec::new(),
+                name_bindings: aliases
+                    .iter()
+                    .enumerate()
+                    .map(|(name, spelling)| mant_ir::EntryNameBinding {
+                        name,
+                        evidence: mant_ir::EntryNameEvidence::Declared,
+                        occurrences: forms
+                            .iter()
+                            .enumerate()
+                            .filter_map(|(index, form)| {
+                                form.find(spelling).map(|start| mant_ir::EntryForm {
+                                    parts: vec![mant_ir::EntryContentSlice {
+                                        root: mant_ir::EntryInlineRoot::Term { index },
+                                        path: vec![0],
+                                        bytes: Some(start..start + spelling.len()),
+                                    }],
+                                })
+                            })
+                            .collect(),
+                    })
+                    .collect(),
                 alias_groups: Vec::new(),
                 alias_of: None,
-                forms: Vec::new(),
+                forms: (0..forms.len()).map(mant_ir::EntryForm::term).collect(),
                 id: id.into(),
                 role,
                 case: DefinitionCase::Sensitive,
@@ -182,7 +203,7 @@ mod tests {
             "command-insensitive-mode",
             DefinitionRole::Command,
             &["MODE", "mode"],
-            &["MODE"],
+            &["MODE", "mode"],
             Vec::new(),
         );
         insensitive.identity.as_mut().expect("identity").case = DefinitionCase::Insensitive;
@@ -705,6 +726,7 @@ mod tests {
             .blocks
             .push(Block::DefinitionList {
                 items: vec![DefinitionItem {
+                    source: None,
                     identity: Some(DefinitionIdentity {
                         name_bindings: Vec::new(),
                         alias_groups: Vec::new(),
