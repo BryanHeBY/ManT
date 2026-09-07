@@ -11,7 +11,7 @@ use super::super::{
 };
 use super::{
     ends_with_line_continuation, participates_in_inline_flow,
-    tables::{append_table_row, table_embeddings},
+    tables::{TableEmbeddingPlan, append_table_row},
 };
 
 pub(super) fn preformatted_blocks(
@@ -28,11 +28,11 @@ pub(super) fn preformatted_blocks(
         || node.children.as_slice(),
         |index| node.children[index].children.as_slice(),
     );
-    let (table_embeddings, embedded_nodes) = table_embeddings(children, context);
+    let table_plan = TableEmbeddingPlan::new(children, context);
     let mut output = Vec::new();
     let mut inline_run = Vec::new();
     for (index, child) in children.iter().enumerate() {
-        if embedded_nodes[index] {
+        if table_plan.consumes(index) {
             continue;
         }
         if child.kind == NodeKind::Table {
@@ -48,7 +48,7 @@ pub(super) fn preformatted_blocks(
                 child,
                 context,
                 indent_columns,
-                table_embeddings[index].as_ref(),
+                table_plan.embedding(index),
             );
         } else {
             inline_run.push(child);

@@ -32,7 +32,7 @@ use lists::{
 };
 use man_lists::{ManListState, append_relative_continuation};
 use preformatted::{preformatted_blocks, style_preformatted_inlines};
-use tables::{TableEmbedding, append_table_row, table_embeddings};
+use tables::{TableEmbedding, TableEmbeddingPlan, append_table_row};
 
 pub(super) fn lower_sections(root: &Node, context: &mut LoweringContext<'_>) -> Vec<Section> {
     let mut paragraph_distance = 1;
@@ -196,7 +196,7 @@ fn lower_blocks_onto(
     spacing_enabled: bool,
     output: Vec<Block>,
 ) -> Vec<Block> {
-    let (table_embeddings, embedded_nodes) = table_embeddings(nodes, context);
+    let table_plan = TableEmbeddingPlan::new(nodes, context);
     let mut lowerer = BlockLowerer::new(
         context,
         indent_columns,
@@ -205,11 +205,11 @@ fn lower_blocks_onto(
         output,
     );
     for (index, node) in nodes.iter().enumerate() {
-        if !embedded_nodes[index] && !is_inline_equation_quote_artifact(nodes, index) {
+        if !table_plan.consumes(index) && !is_inline_equation_quote_artifact(nodes, index) {
             if follows_inline_equation_punctuation(nodes, index) {
                 lowerer.state.tighten_next_boundary();
             }
-            lowerer.push(node, table_embeddings[index].as_ref());
+            lowerer.push(node, table_plan.embedding(index));
         }
     }
     lowerer.finish()
