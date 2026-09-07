@@ -1098,11 +1098,6 @@ fn append_to_last_inline_block(blocks: &mut [Block], tail: &[Inline]) -> bool {
     false
 }
 
-struct PendingTargetBatch {
-    targets: Vec<String>,
-    owner_source: Option<mant_ir::SourceSpan>,
-}
-
 struct BlockState {
     output: Vec<Block>,
     paragraph: InlineBuilder,
@@ -1112,7 +1107,7 @@ struct BlockState {
     pre_source: Option<mant_ir::SourceSpan>,
     preformatted_last_line: Option<u32>,
     preformatted_tight_boundary: bool,
-    pending_targets: Vec<PendingTargetBatch>,
+    pending_targets: targets::PendingTargets,
     indent_columns: u16,
     spacing_enabled: bool,
 }
@@ -1128,7 +1123,7 @@ impl BlockState {
             pre_source: None,
             preformatted_last_line: None,
             preformatted_tight_boundary: false,
-            pending_targets: Vec::new(),
+            pending_targets: targets::PendingTargets::new(),
             indent_columns,
             spacing_enabled,
         }
@@ -1207,21 +1202,7 @@ impl BlockState {
         targets: impl IntoIterator<Item = String>,
         owner_source: Option<mant_ir::SourceSpan>,
     ) {
-        let targets = targets
-            .into_iter()
-            .filter(|target| {
-                !self
-                    .pending_targets
-                    .iter()
-                    .any(|batch| batch.targets.contains(target))
-            })
-            .collect::<Vec<_>>();
-        if !targets.is_empty() {
-            self.pending_targets.push(PendingTargetBatch {
-                targets,
-                owner_source,
-            });
-        }
+        self.pending_targets.queue(targets, owner_source);
     }
 
     fn attach_pending_to_new_output(&mut self, output_start: usize) {
@@ -1236,17 +1217,8 @@ impl BlockState {
             return;
         }
         let mut lowered = self.output.split_off(output_start.min(self.output.len()));
-        // Each source owner keeps its own provenance. Attach in reverse batch
-        // order because every call prepends, leaving the authored order in the
-        // final inline sequence.
-        for batch in std::mem::take(&mut self.pending_targets).into_iter().rev() {
-            targets::attach_targets(
-                &mut lowered,
-                batch.targets,
-                layout(self.indent_columns),
-                batch.owner_source,
-            );
-        }
+        self.pending_targets
+            .attach_leading(&mut lowered, layout(self.indent_columns));
         self.output.append(&mut lowered);
     }
 

@@ -12,6 +12,9 @@ use mant_ir::{Block, DefinitionItem, Inline, LayoutHint, SourceSpan};
 
 use super::roff_escape::visible_text;
 
+mod owned;
+pub(super) use owned::{OwnedTarget, PendingTargets};
+
 /// Document-wide target facts that must be known before structural lowering.
 ///
 /// libmandoc moves target ownership between AST wrappers, and an argument-less
@@ -171,7 +174,7 @@ pub(super) fn section_target(node: &Node) -> Option<String> {
 /// Renderer spacing and decoration are presentation policy and cannot change
 /// the identity selected by libmandoc.
 pub(super) fn part_target(node: &Node, kind: NodeKind) -> Option<String> {
-    part_target_with_source(node, kind).map(|(target, _)| target)
+    part_target_with_source(node, kind).map(|target| target.name)
 }
 
 /// Return a direct structural part's target together with its native owner.
@@ -180,14 +183,13 @@ pub(super) fn part_target(node: &Node, kind: NodeKind) -> Option<String> {
 /// resulting anchor inside a surrounding paragraph or definition. Keeping it
 /// here prevents that container's line from being mistaken for the target's
 /// actual landing point by occurrence-aware audits and downstream consumers.
-pub(super) fn part_target_with_source(
-    node: &Node,
-    kind: NodeKind,
-) -> Option<(String, Option<SourceSpan>)> {
+pub(super) fn part_target_with_source(node: &Node, kind: NodeKind) -> Option<OwnedTarget> {
     node.children
         .iter()
         .filter(|child| child.kind == kind)
-        .find_map(|child| raw_target(child).map(|target| (target, super::source_span(child))))
+        .find_map(|child| {
+            raw_target(child).map(|target| OwnedTarget::new(target, super::source_span(child)))
+        })
 }
 
 /// Attach zero-width targets to the first addressable descendant.

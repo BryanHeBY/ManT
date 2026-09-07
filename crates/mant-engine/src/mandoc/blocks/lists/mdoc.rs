@@ -76,7 +76,11 @@ pub(in crate::mandoc::blocks) fn lower_mdoc_list(
             source: source_span(node),
         }
     };
-    for (target, source) in trailing_targets {
+    for targets::OwnedTarget {
+        name: target,
+        owner_source: source,
+    } in trailing_targets
+    {
         append_list_targets(&mut block, vec![target], layout(list_indent), source);
     }
     block
@@ -106,7 +110,11 @@ fn lower_mdoc_definition_list(
                 max_term_width,
                 item.spacing_enabled,
             );
-            for (target, source) in item.targets().into_iter().rev() {
+            for targets::OwnedTarget {
+                name: target,
+                owner_source: source,
+            } in item.targets().into_iter().rev()
+            {
                 targets::attach_definition_targets(&mut lowered, [target], source);
             }
             lowered
@@ -221,11 +229,11 @@ fn is_option_definition(item: &DefinitionItem) -> bool {
 struct MdocListItem<'a> {
     node: &'a Node,
     spacing_enabled: bool,
-    leading_targets: Vec<(String, Option<mant_ir::SourceSpan>)>,
+    leading_targets: Vec<targets::OwnedTarget>,
 }
 
 impl MdocListItem<'_> {
-    fn targets(&self) -> Vec<(String, Option<mant_ir::SourceSpan>)> {
+    fn targets(&self) -> Vec<targets::OwnedTarget> {
         let native = targets::item_targets(self.node);
         // Prefer the actual It wrapper when native validation moved ownership
         // there. Otherwise the pending Tg remains the owner, including native
@@ -233,13 +241,13 @@ impl MdocListItem<'_> {
         let mut targets = self
             .leading_targets
             .iter()
-            .filter(|(target, _)| !native.contains(target))
+            .filter(|target| !native.contains(&target.name))
             .cloned()
             .collect::<Vec<_>>();
         targets.extend(
             native
                 .into_iter()
-                .map(|target| (target, source_span(self.node))),
+                .map(|target| targets::OwnedTarget::new(target, source_span(self.node))),
         );
         targets
     }
@@ -250,14 +258,18 @@ fn attach_item_targets(
     item: &MdocListItem<'_>,
     layout: mant_ir::LayoutHint,
 ) {
-    for (target, source) in item.targets().into_iter().rev() {
+    for targets::OwnedTarget {
+        name: target,
+        owner_source: source,
+    } in item.targets().into_iter().rev()
+    {
         targets::attach_targets(blocks, [target], layout, source);
     }
 }
 
 struct MdocListItems<'a> {
     items: Vec<MdocListItem<'a>>,
-    trailing_targets: Vec<(String, Option<mant_ir::SourceSpan>)>,
+    trailing_targets: Vec<targets::OwnedTarget>,
 }
 
 /// Pair each mdoc list item with the formatter spacing state active at its
@@ -275,14 +287,12 @@ fn mdoc_list_items<'a>(
 ) -> MdocListItems<'a> {
     let mut spacing_enabled = initial_spacing;
     let mut items = Vec::new();
-    let mut pending_targets = Vec::new();
+    let mut pending_targets: Vec<targets::OwnedTarget> = Vec::new();
     for child in first_part_children(node, NodeKind::Body) {
         if let Some(target) = targets::list_stream_target(child)
-            && !pending_targets
-                .iter()
-                .any(|(pending, _)| pending == &target)
+            && !pending_targets.iter().any(|pending| pending.name == target)
         {
-            pending_targets.push((target, source_span(child)));
+            pending_targets.push(targets::OwnedTarget::new(target, source_span(child)));
         }
         if child.macro_name.as_deref() == Some("It") {
             items.push(MdocListItem {
