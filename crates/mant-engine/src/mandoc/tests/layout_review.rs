@@ -67,3 +67,32 @@ fn environment_assignment_values_are_not_alias_groups() {
         assert!(query.document.unwrap().diagnostics.iter().any(|d| d.code.as_deref() == Some("manual.semantic-entry.unclassified-definition")));
     }
 }
+
+#[test]
+fn command_alias_groups_survive_styled_names_and_argument_boundaries() {
+    for head in [
+        ".It Ic clone , Ic copy",
+        ".It clone , copy",
+        ".It Ic clone Ar PATH , Ic copy Ar PATH",
+        ".It Ic clone | Ic copy",
+    ] {
+        assert_names(
+            &format!(
+                ".Dd September 7, 2026\n.Dt PROBE 1\n.Os\n.Sh COMMANDS\n.Bl -tag -width Ds\n{head}\nClone repository.\n.El\n"
+            ),
+            &["clone", "copy"],
+            "PATH",
+        );
+    }
+    for head in [
+        ".B \"clone, copy\"",
+        ".BR clone \", \" copy",
+        ".B \"clone|copy\"",
+    ] {
+        assert_names(
+            &format!(".TH PROBE 1\n.SH COMMANDS\n.TP\n{head}\nClone repository.\n"),
+            &["clone", "copy"],
+            "PATH",
+        );
+    }
+}

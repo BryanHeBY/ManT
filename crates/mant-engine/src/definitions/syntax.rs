@@ -159,12 +159,13 @@ fn command_names(item: &DefinitionItem) -> Vec<String> {
             if let Some((name, _)) = key_binding_command_form(&text) {
                 return vec![name.to_owned()];
             }
-            if let Some(name) = leading_styled_command_name(term) {
-                return vec![name];
-            }
-            text.split([',', '|'])
-                .filter_map(command_name_from_authored_form)
-                .map(str::to_owned)
+            forms::alias_groups(term)
+                .into_iter()
+                .filter_map(|group| {
+                    leading_styled_command_name(&group).or_else(|| {
+                        command_name_from_authored_form(&plain_text(&group)).map(str::to_owned)
+                    })
+                })
                 .collect::<Vec<_>>()
         })
         .fold(Vec::new(), |mut names, name| {
