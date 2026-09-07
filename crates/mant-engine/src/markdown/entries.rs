@@ -1092,14 +1092,11 @@ fn option_entry_names(
 ) -> Result<Vec<String>, EntryRejectionReason> {
     let mut names = Vec::new();
     for alias in value.split([',', '|']).map(str::trim) {
-        if alias.starts_with('-') && alias.contains('/') {
-            let parts = alias.split('/').collect::<Vec<_>>();
-            if parts.iter().all(|part| part.starts_with('-')) {
-                for part in parts {
-                    names.push(dash_option_name(part, attached)?);
-                }
-                continue;
+        if let Some(parts) = crate::definitions::slash_option_forms(alias) {
+            for part in parts {
+                names.push(dash_option_name(part, attached)?);
             }
+            continue;
         }
         names.push(option_entry_name(alias, attached)?);
     }

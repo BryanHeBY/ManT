@@ -58,6 +58,8 @@ that crate was not published for that change.
 
 ### mant-engine 0.11.0
 
+- Retain historical `-h/--help` option aliases across Markdown and native
+  manuals without splitting argument paths or assignment values into names.
 - Preserve continuation and pending spacing across nested no-fill styling
   containers by sharing the source-line cursor and inline formatter state.
 - Extract option and styled command names per alias group without treating

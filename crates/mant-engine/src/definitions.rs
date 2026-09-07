@@ -22,6 +22,7 @@ use sha2::{Digest, Sha256};
 use syntax::{environment_names_from_terms, infer_identity};
 pub(crate) use syntax::{
     environment_variable_alias, environment_variable_body, option_names_from_terms, option_prefix,
+    slash_option_forms,
 };
 #[cfg(test)]
 use syntax::{is_value_name, option_names};
@@ -1082,6 +1083,22 @@ mod tests {
         assert_eq!(option_prefix("-ca.cert"), Some("-ca.cert"));
         assert_eq!(option_prefix("--foo.bar=VALUE"), Some("--foo.bar"));
         assert_eq!(option_prefix("--foo..bar"), None);
+    }
+
+    #[test]
+    fn slash_aliases_require_complete_option_names_before_the_separator() {
+        for form in ["-h/--help", "-h, --help", "-h|--help", "-h/--help FILE"] {
+            assert_eq!(option_names(&strong_item(form)), ["-h", "--help"], "{form}");
+        }
+        for form in [
+            "-o /-NUM",
+            "-o /tmp/--help",
+            "-o=FILE/--help",
+            "-o/path/--help",
+        ] {
+            assert_eq!(option_names(&strong_item(form)), ["-o"], "{form}");
+            assert!(super::slash_option_forms(form).is_none(), "{form}");
+        }
     }
 
     #[test]

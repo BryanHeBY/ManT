@@ -392,15 +392,38 @@ pub(crate) fn option_names_from_terms(terms: &[Vec<Inline>]) -> Vec<String> {
                     '[' | ']' | '(' | ')' | '{' | '}' | '“' | '”' | '‘' | '’'
                 )
             });
-            let Some(name) = option_prefix(token) else {
-                continue;
-            };
-            if !names.iter().any(|existing| existing == name) {
-                names.push(name.to_owned());
+            for form in slash_option_forms(token).unwrap_or_else(|| vec![token]) {
+                let Some(name) = option_prefix(form) else {
+                    continue;
+                };
+                if !names.iter().any(|existing| existing == name) {
+                    names.push(name.to_owned());
+                }
             }
         }
     }
     names
+}
+
+/// Recognize legacy slash-separated dash options, not general alias syntax.
+/// Every non-final segment must be a complete option name: a slash inside an
+/// argument path or assignment RHS must never start a new invocation. Only
+/// the final invocation may carry an argument (validated by the caller).
+pub(crate) fn slash_option_forms(value: &str) -> Option<Vec<&str>> {
+    if !value.contains('/') {
+        return None;
+    }
+    let parts: Vec<_> = value.split('/').collect();
+    let (last, preceding) = parts.split_last()?;
+    if !preceding
+        .iter()
+        .all(|part| option_prefix(part) == Some(*part))
+    {
+        return None;
+    }
+    let token = last.split_whitespace().next()?;
+    let name = option_prefix(token)?;
+    (token == name || token[name.len()..].starts_with('=')).then_some(parts)
 }
 
 pub(crate) fn option_prefix(token: &str) -> Option<&str> {
