@@ -225,3 +225,73 @@ only while their consumers migrate; they must not become a second parser or
 independently mutable body. The full migration is not complete until ordinary
 list owners participate in every consumer and the public explanation surfaces
 agree.
+
+## Acceptance record (2026-09-07)
+
+Implementation and regression baseline:
+`05d542dfb7a0de3953af02b43e28b52285d6005a`. The subsequent record-only
+documentation commit does not change the tested code. This is a development
+verification record, not a release or publication assertion.
+
+The original-item repair, closed metadata authoring, semantic Markdown export,
+independent collector, CLI/request/scope/MCP adapters, explicit relationship
+projection and independent audit counters are implemented. The old unique
+explanation helper and its prose-only failure path have been removed; strict
+navigation remains independently tested. Review documents were retained for
+external re-review, not deleted or treated as automatically approved.
+
+Completed against this baseline on Linux:
+
+```sh
+cargo run --locked -p mant --example generate_help_tldr
+bash scripts/update-protocol-schema-snapshot.sh
+cargo test --locked --workspace --all-features
+bash scripts/check.sh
+```
+
+- Full-feature workspace: 1,290 passing tests across 54 suites, six existing
+  ignored tests. The source-update tests use local loopback HTTP servers;
+  sandbox-denied binds were rerun with permission rather than called defects.
+- The complete gate passed formatting, script/audit self-checks, workspace
+  and profiler tests, optional native renderers, symbol checks, independently
+  packaged crate tests, read-only feature checks, strict rustdoc and Clippy,
+  fuzz compilation, optimized build and executable smoke tests.
+- Fixture projection, target and semantic audits each examined 37 pages:
+  all clean, zero review/hard findings. Projection included 106 excerpts;
+  semantic audit observed 10,725 entries with no ordinal, empty-entry,
+  value-domain or conversion violations. Counts are not recall proofs.
+- Independent process tests cover shared-name owners, explicit relationships,
+  strict navigation, global offset/limit/content budgets, no-evidence,
+  partially/wholly unreadable sources, and MCP character pages. Metadata tests
+  compare original parser events and preserve bindings/serde/export semantics.
+- Existing licensed GCC/Bash fixtures now also pin independent explanation
+  owners. GCC's two named help definitions both survive, while all nine classes
+  and qualifiers and the trailing examples remain under parameterized help.
+  Bash's `history` builtin and nested option value remain distinct evidence.
+
+Local installed-manual spot checks additionally covered GCC `--help`, Bash
+`bind`/`echo`/`enable`/`set`/`history`/`complete`, and Git, ls, cp and tar `--help`.
+Assertions inspect explicit `name` bases and role/body ownership, not just exit
+status or whichever record is first. These decompressed source SHA-256 values
+identify the inputs under `/usr/share/man/man1/`:
+
+```text
+gcc.1   f31a9ae03e8e20baad471d47c4e17391038d852e32719c101001da6eb52b3083
+bash.1  23f7bd155c57125864094d2cb4e1f6ec9f8c2ea002e18bebeb3ed4bcfaad1971
+git.1   2736b9d20cd9a36c7971ccdbd7ba5e71cea543960340bb9a27984369df559862
+ls.1    b38365a9b33e2fe2f6773b08e7d72f11f7706e8f91e8a78c40557cce2e862fab
+cp.1    990b23666751eb0990de858776adccbf132cb59128af616e3e3b3376541d2d0f
+tar.1   3a85ebdd1601114e7c8c1dfa35726f8394d59412887242ffc6ef49ec021017ee
+```
+
+The final `target/release/mant` (0.11.0) SHA-256 was
+`b511736c6c24f7dfe8680966545c2060d00593e447c4d0773dba02f851f47436`.
+Its GCC explanation succeeded with nine evidence owners, including two `name`
+matches at `4.2/e38` and `4.2/e40`; strict navigation still disambiguates them.
+Detailed transient logs were kept under `/tmp/mant-migration-*`; the baseline,
+commands and conclusions above do not depend on those files surviving.
+
+This run did not perform native Windows/MSVC verification or a new all-host
+45,036-page corpus sweep. Linux checks and targeted examples are not substitutes
+for those independent platform/corpus checks. No push, main synchronization,
+tag or release was performed.

@@ -65,10 +65,14 @@ python3 scripts/audit-roff-semantics.py --fixtures --recheck-recorded \
   --verify --findings-only
 ```
 
-The current fixture inventory contains 37 clean pages and 10,727 semantic
+The fixture gate at implementation/test commit `05d542df` contains 37 clean pages and 10,725 semantic
 entries. It has no punctuated ordinal definitions or entries, empty entries,
 or value-domain violations. Aliasless generic and note-like counts remain
 visible in the command summary for deliberate sampling.
+The two-count difference from the earlier recorded inventory is not an alias
+relationship count; names and explicit equivalence remain separate measures.
+See the [migration acceptance record](../../../docs/architecture/semantic-explanations.md#acceptance-record-2026-09-07)
+for the exact verification baseline and limits of this run.
 
 ## Distribution sweep
 
