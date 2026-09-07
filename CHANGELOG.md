@@ -92,8 +92,10 @@ that crate was not published for that change.
 
 - Reject local exhaustive-choice claims after partial child extraction or a
   failed child-list declaration, while preserving successful siblings and
-  visible content. Coverage follows semantic owners rather than document-wide
-  warnings; explicit and inferred open choices remain non-exhaustive.
+  visible content. Failures propagate through ordinary nested bullet and
+  ordered containers to their nearest semantic owner, without leaking past
+  recognized child entries or across unrelated document content. Explicit and
+  inferred open choices remain non-exhaustive.
 
 - Keep indented definition continuations together across explicit vertical
   spacing, including GCC help classes, qualifiers and trailing examples.

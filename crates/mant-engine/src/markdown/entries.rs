@@ -50,7 +50,7 @@ fn entry_coverage(
         };
         let child_coverage = items
             .iter_mut()
-            .map(|item| entry_coverage(&mut item.blocks, declarations, diagnostics))
+            .map(|item| item_child_coverage(item, declarations, diagnostics))
             .collect::<Vec<_>>();
         if items.is_empty() {
             continue;
@@ -100,15 +100,7 @@ fn entry_coverage(
                     continue;
                 }
             };
-            let owner_offset = item
-                .blocks
-                .first()
-                .and_then(block_source)
-                .and_then(|source| source.byte_range)
-                .map(|range| usize::try_from(range.start.get()).unwrap_or(usize::MAX));
-            let rejected_declaration = owner_offset
-                .is_some_and(|offset| declarations.incomplete_entry_children.remove(&offset));
-            let domain = owner_offset
+            let domain = item_owner_offset(item)
                 .and_then(|offset| declarations.domains.remove(&offset))
                 .and_then(DomainDeclarationState::into_unique);
             item.entry = Some(bindings::entry_facts(
@@ -121,7 +113,7 @@ fn entry_coverage(
             ));
             if let Some(declaration) = domain {
                 if matches!(declaration.value, ValueDomain::Choices { exhaustive: true })
-                    && (children.rejected || rejected_declaration)
+                    && children.rejected
                 {
                     domain_diagnostic(diagnostics, declaration.source, "exhaustive choices requires complete extraction of the direct child entries; rejected children remain visible and the declared domain was omitted".to_owned());
                 } else if matches!(declaration.value, ValueDomain::Choices { .. })
@@ -140,6 +132,29 @@ fn entry_coverage(
     coverage
 }
 
+/// Collect both kinds of child failure before deciding whether this item is a
+/// semantic owner. Ordinary bullet/ordered containers must carry declaration
+/// failures upward just like failures returned by their nested content.
+fn item_child_coverage(
+    item: &mut ListItem,
+    declarations: &mut SemanticDeclarations,
+    diagnostics: &mut Vec<Diagnostic>,
+) -> EntryCoverage {
+    let rejected_declaration = item_owner_offset(item)
+        .is_some_and(|offset| declarations.incomplete_entry_children.remove(&offset));
+    let mut coverage = entry_coverage(&mut item.blocks, declarations, diagnostics);
+    coverage.rejected |= rejected_declaration;
+    coverage
+}
+
+fn item_owner_offset(item: &ListItem) -> Option<usize> {
+    item.blocks
+        .first()
+        .and_then(block_source)
+        .and_then(|source| source.byte_range)
+        .map(|range| usize::try_from(range.start.get()).unwrap_or(usize::MAX))
+}
+
 fn normalize_nested_blocks(
     block: &mut Block,
     declarations: &mut SemanticDeclarations,
@@ -149,7 +164,7 @@ fn normalize_nested_blocks(
     match block {
         Block::List { items, .. } => {
             for item in items {
-                let children = entry_coverage(&mut item.blocks, declarations, diagnostics);
+                let children = item_child_coverage(item, declarations, diagnostics);
                 if item.entry.is_none() {
                     coverage.rejected |= children.rejected;
                 }
