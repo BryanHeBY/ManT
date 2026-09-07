@@ -15,6 +15,29 @@ use super::{
 };
 use crate::{ResolvedContent, build_outline, select_excerpt};
 
+#[test]
+fn large_entry_source_maps_keep_monotonic_exact_ownership() {
+    use std::fmt::Write;
+    let mut source = "# Tool\n\n<!-- mant:entries role=option case=sensitive -->\n".to_owned();
+    for index in 0..1000 {
+        writeln!(source, "- `--flag-{index}`: Payload{index}.").unwrap();
+    }
+    let query = crate::query_markdown_text(&source, None).unwrap();
+    let rendered = super::blocks::render_blocks_with_entries(
+        &query.document.unwrap().blocks,
+        MarkdownOptions {
+            preserve_anchors: true,
+        },
+    );
+    assert_eq!(rendered.entries.len(), 1000);
+    for (index, entry) in rendered.entries.iter().enumerate() {
+        assert!(rendered.text[entry.start..entry.end].contains(&format!("Payload{index}.")));
+        if let Some(next) = rendered.entries.get(index + 1) {
+            assert!(entry.end <= next.start);
+        }
+    }
+}
+
 fn paragraph(children: Vec<Inline>) -> Block {
     Block::Paragraph {
         children,

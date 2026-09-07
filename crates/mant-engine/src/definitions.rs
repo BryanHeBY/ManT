@@ -152,7 +152,7 @@ fn visit_manual_discovery_blocks(
                 }
             }
             Block::DefinitionList { items, source, .. } => {
-                visit_manual_definition_items(items, *source, context, report_unclassified, output)
+                visit_manual_definition_items(items, *source, context, report_unclassified, output);
             }
             Block::Table { rows, .. } => {
                 for cell in rows.iter().flat_map(|row| &row.cells) {

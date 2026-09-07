@@ -46,9 +46,13 @@ pub(super) fn render_blocks_with_entries(
                 continue;
             };
             let anchor = html_anchor(&identity.id);
-            let Some(marker) = markers.iter().find(|marker| {
-                marker.range.start >= cursor && text[marker.range.clone()] == anchor
-            }) else {
+            // Located entries follow rendered source order. Skip the consumed
+            // prefix rather than rescanning it for every entry of large pages.
+            let first = markers.partition_point(|marker| marker.range.start < cursor);
+            let Some(marker) = markers[first..]
+                .iter()
+                .find(|marker| text[marker.range.clone()] == anchor)
+            else {
                 continue;
             };
             let start = marker.range.start;
