@@ -52,7 +52,12 @@ and smoke-tests its human and JSON surfaces. The result is
 
 Unix process tests also use Python 3's standard-library PTY support to verify
 display selection, wrapped overflow, short-output pass-through, and terminal
-restoration after paging or TUI exit. Platform-neutral policy matrices and
+restoration after paging or TUI exit, including real CLI SIGINT/SIGTERM exits.
+The UI integration harness also triggers a Rust host-callback panic and a
+broken-output initialization error after raw-mode acquisition, checking exact
+termios restoration and alternate-screen cleanup. These are disposable POSIX
+children; they do not imply recovery from SIGKILL or machine failure.
+Platform-neutral policy matrices and
 redirected-process tests run on Windows as well; PTY checks do not substitute
 for Windows Terminal interactive testing.
 
@@ -202,6 +207,7 @@ scripts/publish-crates.sh    Ordered independent-version crates.io publication
 scripts/update-protocol-schema-snapshot.sh  Regenerate a deliberate protocol snapshot
 scripts/update-reader-screenshot.sh  Host-stable Linux README screenshot capture
 scripts/audit-roff-fidelity.py  Visible-content differential audit
+scripts/roff_reference.py      Bounded POSIX reference-renderer execution
 scripts/audit-roff-structure.py  Native AST-to-IR topology audit
 scripts/audit-roff-projection.py  CommonMark round-trip topology audit
 scripts/audit-roff-layout.py  Source-gated renderer layout audit
@@ -583,6 +589,23 @@ and require source-aware human judgment. The fixture ledger is
 and latest broad sweep.
 
 ### Mandoc reference replay
+
+Optional fidelity/layout reference execution uses a dedicated process group,
+the requested wall-clock timeout, a CPU limit of `ceil(timeout) + 1` seconds,
+1 GiB address space, a combined 64 MiB stdout/stderr budget and 16 MiB stdin
+budget. Output-limit and timeout failures discard partial results instead of
+comparing them. Child resource limits survive exec; output is drained while
+input is written. The reference environment fixes `LC_ALL`/`LANG=C.UTF-8`,
+`TZ=UTC`, width and pager/formatter settings, retaining only `PATH` and `TMPDIR`
+from the caller; resolved manual roots are supplied explicitly. Run on a POSIX
+audit host with that locale available. Pure profiler/ledger checks do not need
+an external renderer.
+
+This is a resource boundary, **not** a filesystem/network sandbox. A hostile
+renderer can access host files or detach descendants; use trusted corpus input
+or run the audit inside an externally restricted container/VM. Resource-limit
+checks do not certify arbitrary third-party formatters as safe. The bounded
+runner's self-tests are included in fidelity `--self-check`.
 
 The supplementary mandoc route reuses the same exact historical source
 identities rather than selecting a second sample. It is useful for native mdoc
