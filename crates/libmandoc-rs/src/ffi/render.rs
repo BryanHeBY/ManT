@@ -4,7 +4,7 @@ use super::windows_root;
 use super::{
     owned::optional_string,
     raw::{self, CDocument},
-    session::{DocumentHandle, bundle_sources, input_format_code},
+    session::{BundleSources, DocumentHandle, input_format_code},
 };
 use crate::{InputFormat, RawRender, SourceBundle};
 #[cfg(windows)]
@@ -132,7 +132,8 @@ pub(crate) fn render_bundle(
     html_fragment: bool,
     output_limit: usize,
 ) -> Result<RawRender, NativeRenderError> {
-    let (_paths, sources) = bundle_sources(bundle);
+    let storage = BundleSources::new(bundle);
+    let sources = storage.as_slice();
     let pointer = unsafe {
         raw::mant_mandoc_render_bundle(
             root.as_ptr(),

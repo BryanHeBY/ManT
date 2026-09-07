@@ -95,7 +95,8 @@ pub(crate) fn parse_bundle(
     input_format: InputFormat,
     operating_system: Option<&CStr>,
 ) -> Result<RawDocument, String> {
-    let (_paths, sources) = bundle_sources(bundle);
+    let storage = BundleSources::new(bundle);
+    let sources = storage.as_slice();
     let pointer = unsafe {
         raw::mant_mandoc_parse_bundle(
             root.as_ptr(),
@@ -108,21 +109,37 @@ pub(crate) fn parse_bundle(
     copy_document(pointer)
 }
 
-pub(super) fn bundle_sources(bundle: &SourceBundle) -> (Vec<CString>, Vec<raw::CSource>) {
-    let paths = bundle
-        .sources()
-        .map(|(path, _)| CString::new(path).expect("source bundle paths reject NUL bytes"))
-        .collect::<Vec<_>>();
-    let sources = bundle
-        .sources()
-        .zip(&paths)
-        .map(|((_, data), path)| raw::CSource {
-            path: path.as_ptr(),
-            data: data.as_ptr(),
-            length: data.len(),
-        })
-        .collect();
-    (paths, sources)
+/// Keeps both path allocations and caller-owned source bytes alive until the
+/// synchronous native call and owned transfer have completed.
+pub(super) struct BundleSources<'a> {
+    _paths: Vec<CString>,
+    _bundle: &'a SourceBundle,
+    sources: Vec<raw::CSource>,
+}
+impl<'a> BundleSources<'a> {
+    pub(super) fn new(bundle: &'a SourceBundle) -> Self {
+        let paths = bundle
+            .sources()
+            .map(|(path, _)| CString::new(path).expect("source bundle paths reject NUL bytes"))
+            .collect::<Vec<_>>();
+        let sources = bundle
+            .sources()
+            .zip(&paths)
+            .map(|((_, data), path)| raw::CSource {
+                path: path.as_ptr(),
+                data: data.as_ptr(),
+                length: data.len(),
+            })
+            .collect();
+        Self {
+            _paths: paths,
+            _bundle: bundle,
+            sources,
+        }
+    }
+    pub(super) fn as_slice(&self) -> &[raw::CSource] {
+        &self.sources
+    }
 }
 
 pub(super) const fn input_format_code(input_format: InputFormat) -> i32 {
@@ -130,5 +147,30 @@ pub(super) const fn input_format_code(input_format: InputFormat) -> i32 {
         InputFormat::Auto => 0,
         InputFormat::Man => 1,
         InputFormat::Mdoc => 2,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn bundle_arguments_keep_paths_and_source_bytes_paired_after_move() {
+        let mut bundle = SourceBundle::new();
+        bundle.insert("man1/alpha.1", b"first".to_vec()).unwrap();
+        bundle.insert("man1/beta.1", b"second".to_vec()).unwrap();
+        let storage = BundleSources::new(&bundle);
+        let moved = Box::new(storage);
+        assert_eq!(moved.as_slice().len(), 2);
+        for (argument, (path, bytes)) in moved.as_slice().iter().zip(bundle.sources()) {
+            assert_eq!(
+                unsafe { CStr::from_ptr(argument.path) }.to_bytes(),
+                path.as_bytes()
+            );
+            assert_eq!(
+                unsafe { std::slice::from_raw_parts(argument.data, argument.length) },
+                bytes
+            );
+        }
     }
 }
