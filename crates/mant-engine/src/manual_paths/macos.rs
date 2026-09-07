@@ -1,18 +1,21 @@
 //! Existing macos manual-root dialect policy; no host subprocesses.
 use super::{
-    HashMap, OsString, Path, PathBuf, deduplicate_paths, env, environment_value, fs, read_config,
+    HashMap, ManualRootDiscovery, OsString, Path, PathBuf, deduplicate_paths, env,
+    environment_value, fs, read_config,
 };
 use super::{bsd::macos_configuration_roots, read_path_list};
 pub(super) fn macos_configured_manual_roots(
     environment: &HashMap<OsString, OsString>,
-) -> Vec<PathBuf> {
+) -> ManualRootDiscovery {
+    let mut discovery = macos_configuration_roots(Path::new("/etc/man.conf"));
     let mut roots = macos_path_manual_roots(environment);
     roots.extend(macos_developer_manual_roots(environment));
     roots.extend(["/usr/share/man", "/usr/local/share/man"].map(PathBuf::from));
-    roots.extend(macos_configuration_roots(Path::new("/etc/man.conf")));
+    roots.append(&mut discovery.roots);
     roots.retain(|path| path.is_dir());
     if !roots.is_empty() {
-        return deduplicate_paths(roots);
+        discovery.roots = deduplicate_paths(roots);
+        return discovery;
     }
 
     // `path_helper` maintains these files on newer macOS installations.  They
@@ -20,14 +23,16 @@ pub(super) fn macos_configured_manual_roots(
     let mut fallback = read_path_list(Path::new("/etc/manpaths"));
     let directory = Path::new("/etc/manpaths.d");
     let Ok(entries) = fs::read_dir(directory) else {
-        return deduplicate_paths(fallback);
+        discovery.roots = deduplicate_paths(fallback);
+        return discovery;
     };
     let mut entries = entries.flatten().collect::<Vec<_>>();
     entries.sort_unstable_by_key(fs::DirEntry::file_name);
     for entry in entries {
         fallback.extend(read_path_list(&entry.path()));
     }
-    deduplicate_paths(fallback)
+    discovery.roots = deduplicate_paths(fallback);
+    discovery
 }
 
 pub(super) fn macos_path_manual_roots(environment: &HashMap<OsString, OsString>) -> Vec<PathBuf> {

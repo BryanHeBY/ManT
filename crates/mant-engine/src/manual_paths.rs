@@ -84,8 +84,8 @@ pub fn discover_manual_roots() -> Vec<PathBuf> {
 /// Inspect effective native-manual roots without mutating host state.
 ///
 /// Explicit `MANT_MANPATH` and complete `MANPATH` overrides do not read or
-/// report an inactive host configuration. Diagnostics currently describe the
-/// ManT-owned Windows `man.conf`; ordinary document queries intentionally use
+/// report an inactive host configuration. Diagnostics describe rejected or
+/// truncated BSD/mandoc and ManT-owned Windows configuration; ordinary queries use
 /// only [`discover_manual_roots`].
 #[must_use]
 pub fn inspect_manual_roots() -> ManualRootDiscovery {
@@ -175,19 +175,10 @@ struct DiscoveryContext<'a> {
 fn host_default_manual_roots(context: &DiscoveryContext<'_>) -> ManualRootDiscovery {
     let environment = context.environment;
     let mut discovery = match context.platform {
-        ManualPathPlatform::Linux => ManualRootDiscovery {
-            roots: linux_configured_manual_roots(environment),
-            diagnostics: Vec::new(),
-        },
-        ManualPathPlatform::Macos => ManualRootDiscovery {
-            roots: macos_configured_manual_roots(environment),
-            diagnostics: Vec::new(),
-        },
+        ManualPathPlatform::Linux => linux_configured_manual_roots(environment),
+        ManualPathPlatform::Macos => macos_configured_manual_roots(environment),
         ManualPathPlatform::Windows => mant_configured_manual_roots(context),
-        ManualPathPlatform::OtherUnix => ManualRootDiscovery {
-            roots: mandoc_configured_manual_roots(Path::new("/etc/man.conf")),
-            diagnostics: Vec::new(),
-        },
+        ManualPathPlatform::OtherUnix => mandoc_configured_manual_roots(Path::new("/etc/man.conf")),
     };
     if discovery.roots.is_empty() {
         discovery.roots = if context.platform == ManualPathPlatform::Windows {
@@ -448,7 +439,7 @@ mod tests {
             Some(fragments.join("*.conf"))
         );
         assert_eq!(
-            super::macos_configuration_roots(&root.join("man.conf")),
+            super::macos_configuration_roots(&root.join("man.conf")).roots,
             Vec::<PathBuf>::new()
         );
         fs::write(
@@ -461,7 +452,7 @@ mod tests {
         )
         .expect("write man.conf");
         assert_eq!(
-            super::macos_configuration_roots(&root.join("man.conf")),
+            super::macos_configuration_roots(&root.join("man.conf")).roots,
             vec![root.join("primary"), port]
         );
         fs::remove_dir_all(root).expect("remove fixture");
@@ -679,6 +670,7 @@ mod tests {
             BsdManConfig {
                 paths: vec![PathBuf::from("/usr/share/man")],
                 include_pattern: None,
+                truncated: false,
             }
         );
     }

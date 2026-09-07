@@ -98,6 +98,10 @@ that crate was not published for that change.
 
 ### mant-engine 0.11.0
 
+- Propagate bounded BSD/mandoc configuration expansion findings through native
+  root discovery to doctor, including macOS fragments and Linux mandoc fallback.
+  Truncated patterns no longer silently omit roots without an inspection finding.
+
 - Share Markdown metadata constraints between import and semantic export.
   Valid public IR exceeding alias-group, member, ID or JSON payload limits
   falls back to ordinary Markdown for the whole document, rather than emitting

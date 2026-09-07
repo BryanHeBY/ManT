@@ -154,7 +154,7 @@ fn fifo_config_probe() {
     )
     .unwrap();
     assert_eq!(
-        super::super::macos_configuration_roots(&config),
+        super::super::macos_configuration_roots(&config).roots,
         vec![primary, port]
     );
     assert!(super::super::read_config(&fragments.join("00-pipe.conf")).is_none());

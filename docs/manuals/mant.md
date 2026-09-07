@@ -305,6 +305,15 @@ file so a FIFO cannot make discovery wait for a writer, including when a path
 changes after its initial check. This does not impose a deadline on regular
 filesystem or network-mounted storage operations.
 
+BSD/mandoc configuration expansion shares a 4096-step work budget across
+directives, patterns and directory entries, including nonmatches. Incomplete
+patterns are discarded, not interpreted as partial roots. macOS additionally
+reads at most 256 one-level fragments and 8 MiB across the configuration tree
+(1 MiB per file). `mant --doctor` reports exhausted expansion and fragment
+budgets, including when no path matched; normal queries retain completed roots
+and skip later work. Complete environment overrides do not inspect inactive
+configuration or report its findings.
+
 Windows has no system `man(1)` convention. If present,
 `%APPDATA%\ManT\man.conf` is a ManT-owned portable configuration. Its
 case-insensitive path directives are:

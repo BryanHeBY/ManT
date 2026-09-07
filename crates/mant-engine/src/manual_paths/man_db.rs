@@ -1,11 +1,12 @@
 //! Existing man-db manual-root dialect policy; no host subprocesses.
 use super::{
-    HashMap, OsString, Path, PathBuf, deduplicate_paths, env, environment_value, fs, read_config,
+    HashMap, ManualRootDiscovery, OsString, Path, PathBuf, deduplicate_paths, env,
+    environment_value, fs, read_config,
 };
 use super::{bsd::mandoc_configured_manual_roots, config_directive, config_lines};
 pub(super) fn linux_configured_manual_roots(
     environment: &HashMap<OsString, OsString>,
-) -> Vec<PathBuf> {
+) -> ManualRootDiscovery {
     let user_config = environment_value(environment, "HOME")
         .map(PathBuf::from)
         .map(|home| home.join(".manpath"));
@@ -25,7 +26,10 @@ pub(super) fn linux_configured_manual_roots(
             .unwrap_or_default();
         let roots = man_db_manual_roots(environment, &config);
         if !roots.is_empty() {
-            return roots;
+            return ManualRootDiscovery {
+                roots,
+                diagnostics: Vec::new(),
+            };
         }
     }
     mandoc_configured_manual_roots(Path::new("/etc/man.conf"))
