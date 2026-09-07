@@ -7,7 +7,21 @@
 //! does not inherit pager, formatter, cache, or locale behaviour from the
 //! host implementation.
 
+mod bsd;
 mod config_file;
+mod macos;
+mod man_db;
+use bsd::mandoc_configured_manual_roots;
+#[cfg(test)]
+use bsd::{BsdManConfig, macos_configuration_roots, parse_bsd_man_config, parse_mandoc_manpaths};
+#[cfg(test)]
+use macos::developer_manual_roots;
+use macos::macos_configured_manual_roots;
+use man_db::linux_configured_manual_roots;
+#[cfg(unix)]
+use man_db::unmapped_man_db_roots;
+#[cfg(test)]
+use man_db::{ManDbConfig, expand_man_db_systems, man_db_manual_roots, parse_man_db_config};
 mod expansion;
 mod windows_config;
 use config_file::read_text as read_config_text;
@@ -312,137 +326,6 @@ fn path_derived_manual_roots(environment: &HashMap<OsString, OsString>) -> Vec<P
     roots
 }
 
-fn linux_configured_manual_roots(environment: &HashMap<OsString, OsString>) -> Vec<PathBuf> {
-    let user_config = environment_value(environment, "HOME")
-        .map(PathBuf::from)
-        .map(|home| home.join(".manpath"));
-    let system_configurations = [
-        PathBuf::from("/etc/man_db.conf"),
-        PathBuf::from("/etc/manpath.config"),
-        PathBuf::from("/usr/local/etc/man_db.conf"),
-    ];
-    let configuration = user_config.filter(|path| path.is_file()).or_else(|| {
-        system_configurations
-            .into_iter()
-            .find(|path| path.is_file())
-    });
-    if let Some(configuration) = configuration {
-        let config = read_config(&configuration)
-            .map(|text| parse_man_db_config(&text))
-            .unwrap_or_default();
-        let roots = man_db_manual_roots(environment, &config);
-        if !roots.is_empty() {
-            return roots;
-        }
-    }
-    mandoc_configured_manual_roots(Path::new("/etc/man.conf"))
-}
-
-fn macos_configured_manual_roots(environment: &HashMap<OsString, OsString>) -> Vec<PathBuf> {
-    let mut roots = macos_path_manual_roots(environment);
-    roots.extend(macos_developer_manual_roots(environment));
-    roots.extend(["/usr/share/man", "/usr/local/share/man"].map(PathBuf::from));
-    roots.extend(macos_configuration_roots(Path::new("/etc/man.conf")));
-    roots.retain(|path| path.is_dir());
-    if !roots.is_empty() {
-        return deduplicate_paths(roots);
-    }
-
-    // `path_helper` maintains these files on newer macOS installations.  They
-    // are a useful fallback when a shell has not exported MANPATH yet.
-    let mut fallback = read_path_list(Path::new("/etc/manpaths"));
-    let directory = Path::new("/etc/manpaths.d");
-    let Ok(entries) = fs::read_dir(directory) else {
-        return deduplicate_paths(fallback);
-    };
-    let mut entries = entries.flatten().collect::<Vec<_>>();
-    entries.sort_unstable_by_key(fs::DirEntry::file_name);
-    for entry in entries {
-        fallback.extend(read_path_list(&entry.path()));
-    }
-    deduplicate_paths(fallback)
-}
-
-fn macos_path_manual_roots(environment: &HashMap<OsString, OsString>) -> Vec<PathBuf> {
-    let mut roots = Vec::new();
-    let Some(path) = environment_value(environment, "PATH") else {
-        return roots;
-    };
-    for executable_dir in env::split_paths(path) {
-        let mut candidates = vec![executable_dir.join("man"), executable_dir.join("MAN")];
-        if executable_dir.file_name().is_some_and(|name| name == "bin")
-            && let Some(prefix) = executable_dir.parent()
-        {
-            candidates.extend([prefix.join("share/man"), prefix.join("man")]);
-        }
-        if let Some(manual_root) = candidates.into_iter().find(|path| path.is_dir()) {
-            roots.push(manual_root);
-        }
-    }
-    roots
-}
-
-fn macos_developer_manual_roots(environment: &HashMap<OsString, OsString>) -> Vec<PathBuf> {
-    let Some(developer) = macos_developer_directory(environment) else {
-        return Vec::new();
-    };
-    developer_manual_roots(&developer)
-}
-
-fn developer_manual_roots(developer: &Path) -> Vec<PathBuf> {
-    let mut roots = vec![developer.join("usr/share/man")];
-    let platforms = developer.join("Platforms");
-    let Ok(platforms) = fs::read_dir(platforms) else {
-        return roots;
-    };
-    let mut platforms = platforms.flatten().collect::<Vec<_>>();
-    platforms.sort_unstable_by_key(fs::DirEntry::file_name);
-    for platform in platforms {
-        let sdks = platform.path().join("Developer/SDKs");
-        let Ok(sdks) = fs::read_dir(sdks) else {
-            continue;
-        };
-        let mut sdks = sdks.flatten().collect::<Vec<_>>();
-        sdks.sort_unstable_by_key(fs::DirEntry::file_name);
-        roots.extend(sdks.into_iter().map(|sdk| sdk.path().join("usr/share/man")));
-    }
-    roots.into_iter().filter(|path| path.is_dir()).collect()
-}
-
-fn macos_developer_directory(environment: &HashMap<OsString, OsString>) -> Option<PathBuf> {
-    environment_value(environment, "DEVELOPER_DIR")
-        .filter(|path| !path.is_empty())
-        .map(PathBuf::from)
-        .or_else(|| read_selected_developer_directory(Path::new("/var/db/xcode_select_link")))
-        .or_else(|| {
-            read_selected_developer_directory(Path::new("/usr/share/xcode-select/xcode_dir_path"))
-        })
-        .or_else(|| {
-            PathBuf::from("/Applications/Xcode.app/Contents/Developer")
-                .is_dir()
-                .then(|| PathBuf::from("/Applications/Xcode.app/Contents/Developer"))
-        })
-        .or_else(|| {
-            PathBuf::from("/Library/Developer/CommandLineTools")
-                .is_dir()
-                .then(|| PathBuf::from("/Library/Developer/CommandLineTools"))
-        })
-}
-
-fn read_selected_developer_directory(path: &Path) -> Option<PathBuf> {
-    if let Ok(target) = fs::read_link(path) {
-        let target = if target.is_absolute() {
-            target
-        } else {
-            path.parent()?.join(target)
-        };
-        return target.is_dir().then_some(target);
-    }
-    read_config(path)
-        .map(|value| PathBuf::from(value.trim()))
-        .filter(|path| path.is_dir())
-}
-
 fn mant_configured_manual_roots(context: &DiscoveryContext<'_>) -> ManualRootDiscovery {
     context
         .mant_config
@@ -456,43 +339,6 @@ fn mant_configured_manual_roots(context: &DiscoveryContext<'_>) -> ManualRootDis
         .unwrap_or_default()
 }
 
-fn mandoc_configured_manual_roots(path: &Path) -> Vec<PathBuf> {
-    read_config(path)
-        .map(|text| parse_mandoc_manpaths(&text))
-        .map(deduplicate_paths)
-        .unwrap_or_default()
-}
-
-fn macos_configuration_roots(path: &Path) -> Vec<PathBuf> {
-    let Some(text) = read_config(path) else {
-        return Vec::new();
-    };
-    let mut budget = ScanBudget::new(MAX_EXPANDED_CONFIG_CANDIDATES);
-    let mut bytes = 8 * MAX_MANUAL_PATH_CONFIG_BYTES - text.len() as u64;
-    let configuration = parse_bsd_man_config_bounded(&text, &mut budget);
-    let mut roots = configuration.paths;
-    let pattern = configuration
-        .include_pattern
-        .unwrap_or_else(|| PathBuf::from("/usr/local/etc/man.d/*.conf"));
-    for included in expand_path_pattern_bounded(&pattern, &mut budget)
-        .paths
-        .into_iter()
-        .take(MAX_EXPANDED_CONFIG_PATHS)
-    {
-        if bytes == 0 || budget.remaining == 0 {
-            break;
-        }
-        let limit = bytes.min(MAX_MANUAL_PATH_CONFIG_BYTES);
-        let Ok(text) = read_config_text(&included, limit) else {
-            bytes -= limit;
-            continue;
-        };
-        bytes -= text.len() as u64;
-        roots.extend(parse_bsd_man_config_bounded(&text, &mut budget).paths);
-    }
-    deduplicate_paths(roots)
-}
-
 fn read_config(path: &Path) -> Option<String> {
     read_config_text(path, MAX_MANUAL_PATH_CONFIG_BYTES).ok()
 }
@@ -501,156 +347,6 @@ fn read_path_list(path: &Path) -> Vec<PathBuf> {
     read_config(path)
         .map(|text| parse_path_list(&text))
         .unwrap_or_default()
-}
-
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
-struct ManDbConfig {
-    mappings: Vec<(PathBuf, PathBuf)>,
-    mandatory: Vec<PathBuf>,
-}
-
-fn parse_man_db_config(text: &str) -> ManDbConfig {
-    let mut configuration = ManDbConfig::default();
-    for line in config_lines(text) {
-        let Some((directive, value)) = config_directive(line) else {
-            continue;
-        };
-        match directive {
-            "MANPATH_MAP" => {
-                let mut fields = value.split_whitespace();
-                if let Some((binary, manual)) = fields.next().zip(fields.next()) {
-                    configuration
-                        .mappings
-                        .push((PathBuf::from(binary), PathBuf::from(manual)));
-                }
-            }
-            "MANDATORY_MANPATH" => {
-                if let Some(manual) = value.split_whitespace().next() {
-                    configuration.mandatory.push(PathBuf::from(manual));
-                }
-            }
-            _ => {}
-        }
-    }
-    configuration
-}
-
-fn man_db_manual_roots(
-    environment: &HashMap<OsString, OsString>,
-    configuration: &ManDbConfig,
-) -> Vec<PathBuf> {
-    let mut roots = Vec::new();
-    if let Some(path) = environment_value(environment, "PATH") {
-        for binary in env::split_paths(path) {
-            let mapped = configuration
-                .mappings
-                .iter()
-                .filter(|(configured, _)| paths_equivalent(configured, &binary))
-                .map(|(_, manual)| manual.clone())
-                .collect::<Vec<_>>();
-            if mapped.is_empty() {
-                roots.extend(
-                    unmapped_man_db_roots(&binary)
-                        .into_iter()
-                        .filter(|candidate| candidate.is_dir()),
-                );
-            } else {
-                roots.extend(mapped);
-            }
-        }
-    }
-    roots.extend(configuration.mandatory.iter().cloned());
-    expand_man_db_systems(roots, environment)
-}
-
-fn paths_equivalent(left: &Path, right: &Path) -> bool {
-    left == right
-        || fs::canonicalize(left)
-            .ok()
-            .zip(fs::canonicalize(right).ok())
-            .is_some_and(|(left, right)| left == right)
-}
-
-fn unmapped_man_db_roots(binary: &Path) -> Vec<PathBuf> {
-    let mut roots = vec![binary.join("man"), binary.join("share/man")];
-    if let Some(prefix) = binary.parent() {
-        roots.insert(0, prefix.join("man"));
-        roots.insert(2, prefix.join("share/man"));
-    }
-    roots
-}
-
-fn expand_man_db_systems(
-    roots: Vec<PathBuf>,
-    environment: &HashMap<OsString, OsString>,
-) -> Vec<PathBuf> {
-    let Some(systems) = environment_value(environment, "SYSTEM") else {
-        return deduplicate_paths(roots);
-    };
-    let systems_value = systems.to_string_lossy();
-    let systems = systems_value
-        .split([',', ':'])
-        .filter(|system| !system.is_empty())
-        .collect::<Vec<_>>();
-    if systems.is_empty() {
-        return deduplicate_paths(roots);
-    }
-
-    let mut expanded = Vec::new();
-    for root in roots {
-        for system in &systems {
-            if *system == "man" {
-                expanded.push(root.clone());
-            } else {
-                let candidate = root.join(system);
-                if candidate.is_dir() {
-                    expanded.push(candidate);
-                }
-            }
-        }
-    }
-    deduplicate_paths(expanded)
-}
-
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
-struct BsdManConfig {
-    paths: Vec<PathBuf>,
-    include_pattern: Option<PathBuf>,
-}
-
-#[cfg(test)]
-fn parse_bsd_man_config(text: &str) -> BsdManConfig {
-    parse_bsd_man_config_bounded(text, &mut ScanBudget::new(MAX_EXPANDED_CONFIG_CANDIDATES))
-}
-
-fn parse_bsd_man_config_bounded(text: &str, budget: &mut ScanBudget) -> BsdManConfig {
-    let mut configuration = BsdManConfig::default();
-    for line in config_lines(text) {
-        if !budget.charge() {
-            break;
-        }
-        let Some((directive, value)) = config_directive(line) else {
-            continue;
-        };
-        match directive {
-            "MANPATH" | "manpath" => configuration
-                .paths
-                .extend(expand_path_pattern_bounded(Path::new(value), budget).paths),
-            "MANCONFIG" => configuration.include_pattern = Some(PathBuf::from(value)),
-            _ => {}
-        }
-    }
-    configuration
-}
-
-fn parse_mandoc_manpaths(text: &str) -> Vec<PathBuf> {
-    let mut budget = ScanBudget::new(MAX_EXPANDED_CONFIG_CANDIDATES);
-    config_lines(text)
-        .take(MAX_EXPANDED_CONFIG_CANDIDATES)
-        .filter_map(config_directive)
-        .filter_map(|(directive, value)| (directive == "manpath").then_some(value))
-        .flat_map(|path| expand_path_pattern_bounded(Path::new(path), &mut budget).paths)
-        .collect()
 }
 
 fn parse_path_list(text: &str) -> Vec<PathBuf> {
