@@ -193,50 +193,11 @@ fn owner_key(owner: EntryOwner<'_>) -> usize {
 fn block_matches(block: &Block, query: &str) -> bool {
     match block {
         Block::Paragraph { children, .. } | Block::Preformatted { children, .. } => {
-            literal(&crate::inline::plain_text(children), query)
+            super::literal::first_match(&crate::inline::plain_text(children), query).is_some()
         }
         Block::Equation { value, .. } | Block::Unsupported { text: value, .. } => {
-            literal(value, query)
+            super::literal::first_match(value, query).is_some()
         }
         _ => false,
-    }
-}
-
-/// Literal token edges preserve option punctuation and case. No fuzzy folding,
-/// stem matching or substring relationship inference is performed.
-fn literal(text: &str, query: &str) -> bool {
-    text.match_indices(query).any(|(start, found)| {
-        let end = start + found.len();
-        text[..start].chars().next_back().is_none_or(|c| !token(c)) && right_boundary(&text[end..])
-    })
-}
-fn right_boundary(tail: &str) -> bool {
-    let mut chars = tail.chars();
-    match chars.next() {
-        // Sentence punctuation is not part of a name, but dotted/path-like
-        // continuations such as -ca.cert must not become prefix evidence.
-        Some('.' | ':') => chars
-            .next()
-            .is_none_or(|c| c.is_whitespace() || matches!(c, ')' | ']' | ',' | ';')),
-        Some(c) => !token(c),
-        None => true,
-    }
-}
-fn token(c: char) -> bool {
-    c.is_alphanumeric() || matches!(c, '_' | '-' | '+' | '/' | '.' | '$' | ':' | '!')
-}
-
-#[cfg(test)]
-mod tests {
-    use super::literal;
-    #[test]
-    fn literal_boundaries_do_not_fabricate_option_matches() {
-        assert!(!literal("--all -ab dir/-a", "-a"));
-        assert!(literal("Use (-a), then -I.", "-a"));
-        assert!(literal("Use -I.", "-I"));
-        assert!(!literal("Use -ca.cert", "-ca"));
-        assert!(!literal("Use -i.", "-I"));
-        assert!(literal("日本語", "日本語"));
-        assert!(!literal("日本語", "日本"));
     }
 }

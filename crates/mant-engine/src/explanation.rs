@@ -1,5 +1,6 @@
 //! Independent bounded evidence collection over immutable content owners.
 mod collect;
+mod literal;
 mod materialize;
 mod relations;
 
