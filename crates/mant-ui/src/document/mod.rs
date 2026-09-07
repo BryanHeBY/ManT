@@ -714,20 +714,33 @@ impl DocumentBuilder {
             Block::Table { rows, layout, .. } => {
                 self.spacing(layout.spacing_before_lines);
                 let indent = base_indent + usize::from(layout.indent_columns);
-                let rows = rows
-                    .iter()
+                let grid = mant_ir::TableGrid::new(rows);
+                let rows = (0..grid.rows.len())
                     .map(|row| {
-                        row.cells
-                            .iter()
+                        grid.slots(row, 256)
+                            .unwrap_or_else(|| {
+                                grid.rows[row]
+                                    .iter()
+                                    .map(|positioned| Some(positioned.cell))
+                                    .collect()
+                            })
+                            .into_iter()
                             .map(|cell| {
                                 let mut builder = Self::new(String::new(), self.address.clone());
-                                builder.blocks(&cell.blocks, 0);
-                                LogicalTableCell::new(builder.lines, cell.alignment)
+                                if let Some(cell) = cell {
+                                    builder.blocks(&cell.blocks, 0);
+                                }
+                                LogicalTableCell::new(
+                                    builder.lines,
+                                    cell.and_then(|cell| cell.alignment),
+                                )
                             })
                             .collect::<Vec<_>>()
                     })
                     .collect::<Vec<_>>();
-                let table_layout = Arc::new(LogicalTableLayout::for_rows(&rows));
+                let mut table_layout = LogicalTableLayout::for_rows(&rows);
+                table_layout.force_stack = grid.column_count > 256;
+                let table_layout = Arc::new(table_layout);
                 for cells in rows {
                     self.push(LogicalLine::table(indent, cells, Arc::clone(&table_layout)));
                 }

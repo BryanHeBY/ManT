@@ -476,7 +476,9 @@ pub enum DefinitionRole {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct TableRow {
-    /// Logical cells in column order.
+    /// Cells in column order. Horizontal spans omit covered cells; vertical
+    /// continuations retain empty cells at their logical positions. Use
+    /// [`crate::TableGrid`] to place cells without losing horizontal spans.
     pub cells: Vec<TableCell>,
 }
 

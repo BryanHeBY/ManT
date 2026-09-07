@@ -87,6 +87,7 @@ pub(super) struct LogicalTableRow {
 #[derive(Debug)]
 pub(super) struct LogicalTableLayout {
     pub(super) preferred_widths: Vec<usize>,
+    pub(super) force_stack: bool,
 }
 
 impl LogicalTableLayout {
@@ -102,7 +103,10 @@ impl LogicalTableLayout {
                     .max(1)
             })
             .collect();
-        Self { preferred_widths }
+        Self {
+            preferred_widths,
+            force_stack: false,
+        }
     }
 
     fn preferred_width(&self) -> usize {

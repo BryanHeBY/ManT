@@ -235,15 +235,8 @@ fn join_definition_items(items: Vec<(String, Option<u16>)>, compact: bool) -> Op
 }
 
 fn render_table(rows: &[TableRow]) -> Option<String> {
-    let rows = rows
-        .iter()
-        .map(|row| {
-            row.cells
-                .iter()
-                .map(plain_cell)
-                .collect::<Vec<_>>()
-                .join(" | ")
-        })
+    let rows = super::super::table::table_rows(rows, plain_cell)
+        .into_iter()
         .filter(|row| !row.trim().is_empty())
         .collect::<Vec<_>>();
     (!rows.is_empty()).then(|| fenced_code(&rows.join("\n"), None))
@@ -291,18 +284,9 @@ fn plain_block(block: &Block) -> Option<String> {
                 .collect::<Vec<_>>()
                 .join("; "),
         ),
-        Block::Table { rows, .. } => nonempty(
-            rows.iter()
-                .map(|row| {
-                    row.cells
-                        .iter()
-                        .map(plain_cell)
-                        .collect::<Vec<_>>()
-                        .join(" | ")
-                })
-                .collect::<Vec<_>>()
-                .join("; "),
-        ),
+        Block::Table { rows, .. } => {
+            nonempty(super::super::table::table_rows(rows, plain_cell).join("; "))
+        }
         Block::Equation { value, .. } | Block::Unsupported { text: value, .. } => {
             nonempty(value.trim().to_owned())
         }

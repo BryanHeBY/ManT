@@ -1014,6 +1014,48 @@ fn adjacent_blocks_add_only_explicit_vertical_space() {
 }
 
 #[test]
+fn horizontal_spans_align_the_following_cell_with_later_rows() {
+    let mut bundle = bundle();
+    let cell = |text: &str, column_span| TableCell {
+        blocks: vec![Block::Paragraph {
+            children: vec![Inline::Text { value: text.into() }],
+            layout: LayoutHint::default(),
+            source: None,
+        }],
+        column_span,
+        row_span: 1,
+        alignment: None,
+    };
+    bundle.document.as_mut().unwrap().sections[0].blocks = vec![Block::Table {
+        rows: vec![
+            TableRow {
+                cells: vec![cell("TOPSPAN", 2), cell("RIGHT", 1)],
+            },
+            TableRow {
+                cells: vec![cell("LEFT", 1), cell("MIDDLE", 1), cell("END", 1)],
+            },
+        ],
+        layout: LayoutHint::default(),
+        source: None,
+    }];
+    for width in [40, 80] {
+        let rendered = DocumentView::new(&bundle).render(width);
+        let rows = rendered
+            .text
+            .lines
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>();
+        let top = rows.iter().find(|row| row.contains("RIGHT")).unwrap();
+        let bottom = rows.iter().find(|row| row.contains("END")).unwrap();
+        assert_eq!(top.find("RIGHT"), bottom.find("END"), "{rows:?}");
+    }
+    let rendered = DocumentView::new(&bundle).render(8);
+    assert_eq!(rendered.search("TOPSPAN").len(), 1);
+    assert_eq!(rendered.search("RIGHT").len(), 1);
+}
+
+#[test]
 fn table_cells_use_shared_content_driven_columns_and_independent_wrapping() {
     let mut bundle = bundle();
     let paragraph = |value: &str| Block::Paragraph {

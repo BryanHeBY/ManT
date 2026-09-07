@@ -261,6 +261,9 @@ fn render_table_row_with_links(
     }
     let indent = indent.min(width.saturating_sub(1));
     let available = width.saturating_sub(indent).max(1);
+    if table.layout.force_stack {
+        return stack_table_cells(indent, table, width);
+    }
     let Some(column_widths) = table_column_widths(&table.layout.preferred_widths, available) else {
         return stack_table_cells(indent, table, width);
     };

@@ -304,6 +304,8 @@ The zero-advance `\z` escape retains its complete following glyph, including nam
 
 ## Tables
 
+Text, Markdown and TUI preserve the logical column after a horizontal span; covered slots stay empty instead of shifting later cells left. Tables wider than 256 logical columns use explicit column labels in text/Markdown and stacked cells in the TUI, avoiding span-driven allocation amplification.
+
 Separate native tables remain separate IR blocks even when adjacent. A `T&` layout restart changes rows within the same table; leading rule-only rows do not hide its boundary.
 
 Rule cells retain their column positions but no printable body. Both layout rules and data rules suppress their payload; source recovery never resurrects that intentionally hidden text. Escaped literal underscores remain ordinary text.

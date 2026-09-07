@@ -10,6 +10,24 @@ fn man(body: &str) -> mant_ir::Document {
 }
 
 #[test]
+fn horizontal_spans_keep_following_cells_in_the_same_logical_column() {
+    let document = man(".TS\nl s l\nl l l.\nTOPSPAN\tRIGHT\nLEFT\tMIDDLE\tEND\n.TE");
+    let query = ResolvedContent {
+        label: "probe".into(),
+        address: None,
+        document: Some(document),
+        tldr: None,
+    };
+    for rendered in [
+        crate::render_query_text(&query),
+        crate::render_markdown(&query),
+    ] {
+        assert!(rendered.contains("TOPSPAN |  | RIGHT"), "{rendered}");
+        assert!(rendered.contains("LEFT | MIDDLE | END"), "{rendered}");
+    }
+}
+
+#[test]
 fn adjacent_tables_remain_distinct_but_layout_restarts_do_not_split() {
     for leading_rule in ["", "_\n"] {
         let document = man(&format!(

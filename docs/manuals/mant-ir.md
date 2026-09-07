@@ -65,6 +65,8 @@ The block union preserves structures that matter across renderers:
 
 Lists contain block-capable items so nested lists and displays do not flatten into prose. Definition terms contain inline trees and descriptions contain blocks. Table cells likewise contain blocks even when a source parser currently produces a single paragraph.
 
+`TableGrid` supplies shared sparse logical-column coordinates for table consumers. Horizontal spans omit covered cells; vertical continuations retain explicit empty cells in subsequent rows, while `rowSpan` remains on the content owner. Covered content is never repeated. Callers can request dense column slots with an explicit budget, so large span values need not allocate a dense grid.
+
 ## Inline Content
 
 The inline union contains:

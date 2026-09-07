@@ -3,6 +3,7 @@
 mod json;
 mod markdown;
 mod search;
+mod table;
 mod text;
 
 use mant_protocol::{EntryProjection, QueryOutline};

@@ -107,6 +107,10 @@ nested inside a descendant inline sequence.
 
 ## Stability boundary
 
+`TableGrid` places table cells in logical columns without allocating by span
+width. It is shared by CLI and TUI table projection; bounded slot expansion
+retains empty covered columns instead of shifting later cells to the left.
+
 This is a typed Rust library contract for trusted in-process components. Its
 Serde representation supports projections and tests, but serializing an IR
 type directly does not create a stable process protocol. External consumers

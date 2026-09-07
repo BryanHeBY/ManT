@@ -429,16 +429,7 @@ fn render_block(block: &Block, base_indent: usize) -> Option<String> {
             usize::from(layout.indent_columns),
         ),
         Block::Table { rows, layout, .. } => (
-            rows.iter()
-                .map(|row| {
-                    row.cells
-                        .iter()
-                        .map(cell_text)
-                        .collect::<Vec<_>>()
-                        .join(" | ")
-                })
-                .collect::<Vec<_>>()
-                .join("\n"),
+            super::table::table_rows(rows, cell_text).join("\n"),
             usize::from(layout.indent_columns),
         ),
         Block::Equation { value, layout, .. }

@@ -20,6 +20,9 @@ that crate was not published for that change.
 
 ### mant-ir 0.11.0
 
+- Add sparse `TableGrid` coordinates and bounded slot expansion for shared
+  table presentation without changing the serialized table shape.
+
 - Share direct semantic-child ownership between indexing and choice-domain
   validation. Explicit choices require nonempty value children; invalid
   producer claims make semantic projections incomplete.
@@ -54,6 +57,9 @@ that crate was not published for that change.
   broader `semanticsComplete` signal. Remove the redundant entry `targets`.
 
 ### mant-engine 0.11.0
+
+- Retain separate native table boundaries and logical columns after spans;
+  text and Markdown no longer shift the following cell left.
 
 - Preserve the complete visible glyph after `\z`, including named glyphs,
   while approximating its zero advance in renderer-neutral text.
