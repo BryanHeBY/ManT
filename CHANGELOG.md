@@ -81,6 +81,11 @@ that crate was not published for that change.
 
 ### mant-engine 0.11.0
 
+- Preserve ordinary Markdown list items while adding semantic facts, with
+  final-IR name/form bindings instead of deleting head delimiters. Explicit
+  role/case declarations support ordered lists and reject invalid items
+  independently. Nested content, numbering, tightness and links remain intact.
+
 - Share entry coordinates and original-content excerpts across ordinary list
   items and native definitions. Read, outline, search, scope traversal and TUI
   navigation now support both; Markdown authoring migration remains separate.

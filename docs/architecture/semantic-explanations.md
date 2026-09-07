@@ -23,11 +23,17 @@ placement and blank lines participate in
 Compare the same original event structure with annotation interpretation
 enabled and disabled, not two differently structured source documents.
 
-The present implementation does **not** fully satisfy this invariant. It
-converts accepted Markdown `List` items into `DefinitionItem` values and
+The reviewed baseline did **not** satisfy this invariant. It
+converted accepted Markdown `List` items into `DefinitionItem` values and
 separates their terms from descriptions. For example, visible `:` and `—`
 delimiters disappear and a form-separating `|` can render as a comma. This
-needs a content/semantic ownership change, not renderer punctuation patches.
+required a content/semantic ownership change, not renderer punctuation patches.
+
+The ordinary-owner migration now removes this conversion. Regression tests
+compare the same original parser events before and after annotation, including
+ordered/nested lists, invalid siblings, line endings and head punctuation.
+Per-entry relationship authoring and multi-evidence explain remain later
+stages; this does not claim that the entire design is implemented.
 
 The target model attaches common entry facts to both ordinary `ListItem` and
 native `DefinitionItem` owners. Keep one authoritative content tree; derive

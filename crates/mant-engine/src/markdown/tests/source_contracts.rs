@@ -2,6 +2,91 @@
 use super::*;
 
 #[test]
+fn annotations_preserve_the_original_event_tree_and_every_visible_delimiter() {
+    use mant_ir::visit::{VisitMut, walk_list_item_mut};
+    struct EraseFacts;
+    impl VisitMut for EraseFacts {
+        fn visit_list_item_mut(&mut self, item: &mut mant_ir::ListItem) {
+            item.entry = None;
+            walk_list_item_mut(self, item);
+        }
+    }
+    for newline in ["\n", "\r\n", "\r"] {
+        for body in [
+            "<!-- mant:entries role=option case=sensitive -->\n- `-h`, `--help`: Help.  \n  Next line.\n- `--color WHEN` — Color.\n",
+            "<!-- mant:entries role=command case=sensitive -->\n7. [`get`](get.md) / `fetch` | `get all`: Get **body**.\n\n8. `put`: Put.\n\n   <!-- mant:entries role=option case=sensitive -->\n   - `-f`: Child.\n",
+            "<!-- mant:entries role=command case=insensitive -->\n- `good`: Valid.\n- This remains visible prose.\n- `other`: Also valid.\n",
+        ] {
+            let source = body.replace('\n', newline);
+            let mut diagnostics = Vec::new();
+            let prepared =
+                super::super::directives::PreparedMarkdown::new(&source, &mut diagnostics);
+            let source_map = super::super::source::MarkdownSource::new(&source);
+            let raw = super::super::lower_document_structure(prepared.events, &source_map);
+            let mut annotated = raw.root_blocks.clone();
+            let mut declarations = prepared.declarations;
+            super::super::entries::normalize_entry_lists(
+                &mut annotated,
+                &mut declarations,
+                &mut diagnostics,
+            );
+            for block in &mut annotated {
+                EraseFacts.visit_block_mut(block);
+            }
+            assert_eq!(annotated, raw.root_blocks, "{source:?}");
+            let parsed = parse_markdown(&source, None).unwrap();
+            assert!(
+                mant_ir::validate_document(&parsed.document).is_empty(),
+                "{source:?}: {:?}",
+                parsed.document.diagnostics
+            );
+            let copied: mant_ir::Document =
+                serde_json::from_str(&serde_json::to_string(&parsed.document).unwrap()).unwrap();
+            assert_eq!(
+                mant_ir::SemanticIndex::build(&copied),
+                mant_ir::SemanticIndex::build(&parsed.document)
+            );
+        }
+    }
+}
+
+#[test]
+fn declared_items_fail_independently_and_bind_only_visible_name_occurrences() {
+    let parsed = parse_markdown("<!-- mant:entries role=option case=sensitive -->\n3. `-a, --all`: All.\n4. Invalid prose.\n5. `--last`: Last.\n", None).unwrap();
+    let Block::List {
+        kind, start, items, ..
+    } = &parsed.document.blocks[0]
+    else {
+        panic!("ordinary list")
+    };
+    assert_eq!((*kind, *start), (mant_ir::ListKind::Ordered, Some(3)));
+    assert!(items[1].entry.is_none());
+    assert!(items[2].entry.is_some());
+    assert!(!parsed.document.diagnostics.is_empty());
+    let facts = items[0].entry.as_ref().unwrap();
+    assert_eq!(facts.names, ["-a", "--all"]);
+    assert_eq!(facts.name_bindings.len(), 2);
+    assert!(
+        facts
+            .name_bindings
+            .iter()
+            .all(|binding| binding.occurrences.len() == 1)
+    );
+    let query = ResolvedContent {
+        address: None,
+        label: "mixed".into(),
+        document: Some(parsed.document),
+        tldr: None,
+    };
+    assert!(
+        !build_outline_with_detail(&query, OutlineDetail::Entries)
+            .unwrap()
+            .semantics_complete
+    );
+    assert!(select_explanation(&query, "--last").is_ok());
+}
+
+#[test]
 fn entry_search_sources_point_into_original_bytes_for_each_line_ending() {
     for newline in ["\n", "\r\n", "\r"] {
         let source = "# Tool\n\n## Commands\n\n`<a id=\"command-run\"></a>` OUTSIDE\n\n<!-- mant:entries role=command case=sensitive -->\n- `run`: OWNEDPAYLOAD\n".replace('\n', newline);

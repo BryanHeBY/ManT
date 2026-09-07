@@ -1,23 +1,20 @@
-//! Recognizes semantic entries in ordinary Markdown lists.
-//!
-//! Markdown has no portable definition-list syntax. `ManT` therefore treats a
-//! complete bullet list as semantic options only when every item starts with
-//! one or more code spans containing options and an explicit description
-//! delimiter, for example ``- `-h`, `--help`: Show help.``.
+//! Annotates semantic entries without changing ordinary Markdown content.
+
+mod bindings;
 
 use super::directives::{
     AttachedValuePolicy, DomainDeclarationState, SemanticDeclarations, domain_diagnostic,
     semantic_diagnostic,
 };
 use mant_ir::{
-    Block, DefinitionCase, DefinitionIdentity, DefinitionItem, DefinitionRole, Diagnostic,
-    DiagnosticLevel, Inline, LinkTarget, ListItem, ListKind, SourceSpan, ValueDomain,
+    Block, DefinitionRole, Diagnostic, DiagnosticLevel, Inline, LinkTarget, ListItem, ListKind,
+    SourceSpan, ValueDomain,
 };
 
 use crate::block::block_source;
 use crate::definitions::{environment_variable_alias, option_names_from_terms, option_prefix};
 
-/// Convert unambiguous entry lists without changing mixed or prose lists.
+/// Attach facts to each declared owner without consuming its head or delimiter.
 pub(super) fn normalize_entry_lists(
     blocks: &mut Vec<Block>,
     declarations: &mut SemanticDeclarations,
@@ -29,10 +26,8 @@ pub(super) fn normalize_entry_lists(
 
     for block in blocks {
         let Block::List {
-            kind: ListKind::Bullet,
+            kind,
             items,
-            compact,
-            layout,
             source,
             ..
         } = block
@@ -42,27 +37,22 @@ pub(super) fn normalize_entry_lists(
         if items.is_empty() {
             continue;
         }
-        // Plan every signature before taking ownership so a mixed or prose
-        // list remains untouched. Plans retain only delimiter coordinates:
-        // successful conversion can then move the original IR exactly once,
-        // including potentially large nested description blocks.
         let declaration = source.and_then(|source| declarations.entries.remove(&source.line));
+        if declaration.is_none() && *kind != ListKind::Bullet {
+            continue;
+        }
         let role = declaration.map_or(DefinitionRole::Option, |value| value.role);
-        let case = declaration.map_or(DefinitionCase::Sensitive, |value| value.case);
+        let case = declaration.map_or(mant_ir::DefinitionCase::Sensitive, |value| value.case);
         let attached = declaration.map_or(AttachedValuePolicy::Infer, |value| value.attached);
         let signatures = items
             .iter()
             .map(|item| entry_signature(item, role, declaration.is_some(), attached))
-            .collect::<Result<Vec<_>, _>>();
-        let Ok(signatures) = signatures else {
-            if let Some(declaration) = declaration {
-                for rejection in items
-                    .iter()
-                    .filter_map(|item| entry_signature(item, role, true, attached).err())
-                {
-                    rejection.emit(diagnostics, source.unwrap_or(declaration.source));
-                }
-            } else if resembles_rejected_option_list(items) {
+            .collect::<Vec<_>>();
+        // Undeclared option recognition retains its conservative whole-list
+        // admission rule. An explicit declaration instead owns each item's
+        // validation independently; one rejection cannot erase valid siblings.
+        if declaration.is_none() && signatures.iter().any(Result::is_err) {
+            if resembles_rejected_option_list(items) {
                 semantic_diagnostic(
                     diagnostics,
                     source.unwrap_or(SourceSpan {
@@ -77,39 +67,50 @@ pub(super) fn normalize_entry_lists(
                 );
             }
             continue;
-        };
-        let definitions = std::mem::take(items)
-            .into_iter()
-            .zip(signatures)
-            .map(|(item, signature)| {
-                let declaration = item
-                    .blocks
-                    .first()
-                    .and_then(block_source)
-                    .and_then(|source| source.byte_range)
-                    .and_then(|range| {
-                        declarations
-                            .domains
-                            .remove(&usize::try_from(range.start.get()).unwrap_or(usize::MAX))
-                    })
-                    .and_then(DomainDeclarationState::into_unique);
-                let mut definition = entry_definition(item, signature, role, case, None);
-                if let Some(declaration) = declaration {
-                    if matches!(declaration.value, ValueDomain::Choices { .. }) && !definition.has_value_choices() {
-                        domain_diagnostic(diagnostics, declaration.source, "choices requires nonempty direct semantic children of role=value; the declared domain was omitted".to_owned());
-                    } else {
-                        definition.identity.as_mut().expect("a declared entry has an identity").value_domain = Some(declaration.value);
-                    }
+        }
+        for (item, signature) in items.iter_mut().zip(signatures) {
+            let signature = match signature {
+                Ok(signature) => signature,
+                Err(rejection) => {
+                    rejection.emit(
+                        diagnostics,
+                        source.unwrap_or(declaration.expect("declared rejection").source),
+                    );
+                    continue;
                 }
-                definition
-            })
-            .collect();
-        *block = Block::DefinitionList {
-            items: definitions,
-            compact: *compact,
-            layout: *layout,
-            source: *source,
-        };
+            };
+            let domain = item
+                .blocks
+                .first()
+                .and_then(block_source)
+                .and_then(|source| source.byte_range)
+                .and_then(|range| {
+                    declarations
+                        .domains
+                        .remove(&usize::try_from(range.start.get()).unwrap_or(usize::MAX))
+                })
+                .and_then(DomainDeclarationState::into_unique);
+            item.entry = Some(bindings::entry_facts(
+                item,
+                &signature,
+                role,
+                case,
+                attached,
+                declaration.is_some(),
+            ));
+            if let Some(declaration) = domain {
+                if matches!(declaration.value, ValueDomain::Choices { .. })
+                    && !item.has_value_choices()
+                {
+                    domain_diagnostic(diagnostics, declaration.source, "choices requires nonempty direct semantic children of role=value; the declared domain was omitted".to_owned());
+                } else {
+                    item.entry
+                        .as_mut()
+                        .expect("an annotated entry has facts")
+                        .value_domain = Some(declaration.value);
+                }
+            }
+        }
     }
 }
 
@@ -147,7 +148,6 @@ fn normalize_nested_blocks(
 struct EntrySignature {
     inline_index: usize,
     byte_index: usize,
-    width: usize,
     names: Vec<String>,
     form_breaks: Vec<usize>,
 }
@@ -283,7 +283,7 @@ fn entry_signature(
         }
         match inline {
             Inline::Text { value } => {
-                if let Some((delimiter_byte, delimiter_width)) = delimiter_location(value) {
+                if let Some((delimiter_byte, _)) = delimiter_location(value) {
                     if names.is_empty() {
                         return Err(EntryRejection::new(
                             EntryRejectionReason::MissingLeadingCode,
@@ -304,7 +304,6 @@ fn entry_signature(
                     return Ok(EntrySignature {
                         inline_index: delimiter_inline,
                         byte_index: delimiter_byte,
-                        width: delimiter_width,
                         names,
                         form_breaks,
                     });
@@ -361,97 +360,6 @@ fn entry_term_text(inline: &Inline) -> Option<&str> {
         },
         _ => None,
     }
-}
-
-/// Move one previously validated item into its semantic definition.
-fn entry_definition(
-    item: ListItem,
-    signature: EntrySignature,
-    role: DefinitionRole,
-    case: DefinitionCase,
-    value_domain: Option<ValueDomain>,
-) -> DefinitionItem {
-    let mut blocks = item.blocks.into_iter();
-    let Some(Block::Paragraph {
-        children,
-        layout,
-        source,
-    }) = blocks.next()
-    else {
-        unreachable!("option_signature accepts only a leading paragraph");
-    };
-    let (terms, description_inlines) = apply_entry_signature(children, &signature);
-    let mut description = Vec::new();
-    if !description_inlines.is_empty() {
-        description.push(Block::Paragraph {
-            children: description_inlines,
-            layout,
-            source,
-        });
-    }
-    description.extend(blocks);
-
-    DefinitionItem {
-        identity: Some(DefinitionIdentity {
-            name_bindings: Vec::new(),
-            alias_groups: Vec::new(),
-            alias_of: None,
-            forms: Vec::new(),
-            id: String::new().into(),
-            role,
-            case,
-            names: signature.names,
-            value_domain,
-        }),
-        inline_term: false,
-        terms,
-        description,
-        spacing_before_lines: None,
-    }
-}
-
-fn apply_entry_signature(
-    children: Vec<Inline>,
-    signature: &EntrySignature,
-) -> (Vec<Vec<Inline>>, Vec<Inline>) {
-    let mut terms = vec![Vec::new()];
-    let mut form_breaks = signature.form_breaks.iter().copied().peekable();
-    let mut description = Vec::new();
-    for (index, inline) in children.into_iter().enumerate() {
-        if index < signature.inline_index {
-            if form_breaks.peek() == Some(&index) {
-                form_breaks.next();
-                terms.push(Vec::new());
-            } else {
-                terms.last_mut().expect("at least one form").push(inline);
-            }
-            continue;
-        }
-        if index > signature.inline_index {
-            description.push(inline);
-            continue;
-        }
-        let Inline::Text { value } = inline else {
-            unreachable!("option_signature records a text delimiter");
-        };
-        let after_start = signature.byte_index + signature.width;
-        let before = &value[..signature.byte_index];
-        if !before.is_empty() {
-            terms
-                .last_mut()
-                .expect("at least one form")
-                .push(Inline::Text {
-                    value: before.to_owned(),
-                });
-        }
-        let after = value[after_start..].trim_start();
-        if !after.is_empty() {
-            description.push(Inline::Text {
-                value: after.to_owned(),
-            });
-        }
-    }
-    (terms, description)
 }
 
 fn is_option_code(value: &str) -> bool {
@@ -781,7 +689,7 @@ mod tests {
     }
 
     #[test]
-    fn converts_only_complete_explicit_option_lists() {
+    fn annotates_only_complete_undeclared_option_lists() {
         let option = |name: &str, description: &str| ListItem {
             entry: None,
             blocks: vec![paragraph(vec![
@@ -807,25 +715,25 @@ mod tests {
 
         normalize_option_lists(&mut blocks);
 
-        let Block::DefinitionList { items, .. } = &blocks[0] else {
-            panic!("explicit option list should become definitions");
+        let Block::List { items, .. } = &blocks[0] else {
+            panic!("ordinary list must remain intact");
         };
         assert_eq!(items.len(), 2);
         assert!(items.iter().all(|item| {
-            item.identity.as_ref().is_some_and(|identity| {
+            item.entry.as_ref().is_some_and(|identity| {
                 identity.role == DefinitionRole::Option
                     && identity.case == DefinitionCase::Sensitive
             })
         }));
         assert!(matches!(
-            &items[0].description[0],
+            &items[0].blocks[0],
             Block::Paragraph { children, .. }
-                if matches!(&children[0], Inline::Text { value } if value == "Show help.")
+                if matches!(&children[1], Inline::Text { value } if value == ": Show help.")
         ));
     }
 
     #[test]
-    fn moves_trailing_description_blocks_into_the_definition() {
+    fn keeps_trailing_content_blocks_in_the_original_item() {
         let mut blocks = vec![Block::List {
             kind: ListKind::Bullet,
             start: None,
@@ -857,11 +765,11 @@ mod tests {
 
         normalize_option_lists(&mut blocks);
 
-        let Block::DefinitionList { items, .. } = &blocks[0] else {
-            panic!("explicit option list should become definitions");
+        let Block::List { items, .. } = &blocks[0] else {
+            panic!("ordinary list must remain intact");
         };
         assert!(matches!(
-            items[0].description.as_slice(),
+            items[0].blocks.as_slice(),
             [Block::Paragraph { .. }, Block::Preformatted { children, .. }]
                 if matches!(&children[0], Inline::Text { value } if value == "tool --config path")
         ));

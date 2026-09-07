@@ -72,10 +72,10 @@ fn ambiguous_choice_claims_leave_only_independent_open_child_inference() {
 #[test]
 fn shared_ir_validation_rejects_a_producer_choices_claim_without_values() {
     let mut document = parse_markdown("# Tool\n\n<!-- mant:entries role=option case=sensitive -->\n- `--color WHEN`: Color policy.\n", None).unwrap().document;
-    let Block::DefinitionList { items, .. } = &mut document.blocks[0] else {
+    let Block::List { items, .. } = &mut document.blocks[0] else {
         panic!("definition")
     };
-    items[0].identity.as_mut().unwrap().value_domain =
+    items[0].entry.as_mut().unwrap().value_domain =
         Some(mant_ir::ValueDomain::Choices { exhaustive: true });
     let findings = mant_ir::validate_document(&document);
     assert!(
@@ -119,7 +119,7 @@ fn declared_forms_are_separate_from_alias_groups() {
 }
 
 #[test]
-fn turns_explicit_option_lists_into_addressable_definitions() {
+fn annotates_explicit_option_lists_without_rewriting_their_heads() {
     let document = parse_document(
         "\
 # Tool
@@ -133,21 +133,22 @@ fn turns_explicit_option_lists_into_addressable_definitions() {
     );
 
     let options = &document.sections[0];
-    let Block::DefinitionList { items, .. } = &options.blocks[0] else {
-        panic!("explicit option list should become a semantic definition list");
+    let Block::List { items, .. } = &options.blocks[0] else {
+        panic!("explicit option list remains an ordinary list");
     };
     assert_eq!(
-        items[0].identity.as_ref().expect("option identity").names,
+        items[0].entry.as_ref().expect("option identity").names,
         ["-h", "--help"]
     );
     assert_eq!(
-        items[1].identity.as_ref().expect("option identity").names,
+        items[1].entry.as_ref().expect("option identity").names,
         ["--color"]
     );
-    assert!(matches!(
-        &items[0].terms[0][0],
-        Inline::Anchor { id, .. } if id == "option-h"
-    ));
+    assert_eq!(items[0].entry.as_ref().unwrap().id, "option-h");
+    assert!(
+        matches!(&items[0].blocks[0], Block::Paragraph { children, .. }
+        if matches!(&children[0], Inline::Code { value } if value == "-h"))
+    );
 
     let outline = build_outline_with_detail(
         &ResolvedContent {
@@ -180,7 +181,7 @@ fn declared_entries_cover_windows_options_commands_and_environment_variables() {
             && diagnostic.message.contains("semantic selector 'query'")
     }));
 
-    let Block::DefinitionList {
+    let Block::List {
         items: option_items,
         ..
     } = &parsed.document.sections[0].blocks[0]
@@ -189,7 +190,7 @@ fn declared_entries_cover_windows_options_commands_and_environment_variables() {
     };
     let identities = option_items
         .iter()
-        .map(|item| item.identity.as_ref().expect("semantic identity"))
+        .map(|item| item.entry.as_ref().expect("semantic identity"))
         .collect::<Vec<_>>();
     assert_eq!(identities[0].names, ["/query"]);
     assert_eq!(identities[1].id, "option-help");
@@ -266,10 +267,10 @@ fn declared_entries_expose_every_protocol_semantic_role() {
         (DefinitionRole::Term, "exit status"),
     ];
     for (section, (role, name)) in parsed.document.sections.iter().zip(expected) {
-        let [Block::DefinitionList { items, .. }] = section.blocks.as_slice() else {
+        let [Block::List { items, .. }] = section.blocks.as_slice() else {
             panic!("declared {role:?} list should become definitions");
         };
-        let identity = items[0].identity.as_ref().expect("semantic identity");
+        let identity = items[0].entry.as_ref().expect("semantic identity");
         assert_eq!(identity.role, role);
         assert_eq!(identity.names, [name]);
     }
@@ -303,11 +304,11 @@ fn declared_non_option_code_spans_are_atomic_names() {
         .iter()
         .flat_map(|section| &section.blocks)
         .filter_map(|block| match block {
-            Block::DefinitionList { items, .. } => Some(items),
+            Block::List { items, .. } => Some(items),
             _ => None,
         })
         .flatten()
-        .map(|item| item.identity.as_ref().expect("semantic identity"))
+        .map(|item| item.entry.as_ref().expect("semantic identity"))
         .collect::<Vec<_>>();
     assert_eq!(identities[0].names, ["Send, Env"]);
     assert_eq!(identities[1].names, ["A | B"]);
@@ -343,14 +344,14 @@ fn declared_dotted_dash_options_preserve_their_exact_names() {
     .expect("dotted semantic options");
     assert!(parsed.document.diagnostics.is_empty());
 
-    let Block::DefinitionList { items, .. } = &parsed.document.sections[0].blocks[0] else {
+    let Block::List { items, .. } = &parsed.document.sections[0].blocks[0] else {
         panic!("declared options should become definitions");
     };
     assert_eq!(
         items
             .iter()
             .map(|item| {
-                item.identity
+                item.entry
                     .as_ref()
                     .expect("semantic identity")
                     .names
@@ -626,14 +627,14 @@ fn declared_entry_grammar_accepts_blank_lines_delimiters_and_colon_conventions()
     )
     .expect("declared root entries");
     assert!(parsed.document.diagnostics.is_empty());
-    let Block::DefinitionList { items, .. } = &parsed.document.blocks[0] else {
+    let Block::List { items, .. } = &parsed.document.blocks[0] else {
         panic!("the next non-empty root list should become semantic entries");
     };
     assert_eq!(
         items
             .iter()
             .map(|item| {
-                item.identity
+                item.entry
                     .as_ref()
                     .expect("semantic identity")
                     .names
@@ -1249,18 +1250,13 @@ fn declared_negated_dash_options_preserve_their_executable_spelling() {
     .expect("negated dash semantic options");
     assert!(parsed.document.diagnostics.is_empty());
 
-    let Block::DefinitionList { items, .. } = &parsed.document.sections[0].blocks[0] else {
+    let Block::List { items, .. } = &parsed.document.sections[0].blocks[0] else {
         panic!("declared options should become definitions");
     };
     assert_eq!(
         items
             .iter()
-            .map(|item| item
-                .identity
-                .as_ref()
-                .expect("option identity")
-                .names
-                .clone())
+            .map(|item| item.entry.as_ref().expect("option identity").names.clone())
             .collect::<Vec<_>>(),
         [vec!["!--reloadEnvironment"], vec!["!--profile"]]
     );

@@ -165,13 +165,12 @@ fn collect_entry_declarations(
             continue;
         };
         let source_span = declaration.source;
-        let Some((Event::Start(Tag::List(None)), target_range)) = events.get(block_end_index + 1)
+        let Some((Event::Start(Tag::List(_)), target_range)) = events.get(block_end_index + 1)
         else {
             semantic_diagnostic(
                 diagnostics,
                 source_span,
-                "semantic-entry directive must immediately precede a complete bullet list"
-                    .to_owned(),
+                "semantic-entry directive must immediately precede a list".to_owned(),
             );
             continue;
         };

@@ -158,49 +158,16 @@ mod tests {
 
     #[test]
     fn ordinary_item_domains_follow_earlier_head_and_body_links() {
-        let mut query = crate::query_markdown_text(
+        let query = crate::query_markdown_text(
             "# Tools\n\n<!-- mant:entries role=command case=sensitive -->\n- [`target`](target.md): See [body](body.md).\n\n  <!-- mant:domain entries=domain.md roles=command -->\n", None,
         ).unwrap();
-        let baseline = document_references(&query);
-        let document = query.document.as_mut().unwrap();
-        let Block::DefinitionList { items, source, .. } = document
-            .blocks
-            .iter()
-            .find(|block| matches!(block, Block::DefinitionList { .. }))
-            .expect("definition list")
-        else {
-            panic!("current producer")
-        };
-        let item = &items[0];
-        let mut blocks = vec![Block::Paragraph {
-            children: item.terms.concat(),
-            layout: mant_ir::LayoutHint::default(),
-            source: *source,
-        }];
-        blocks.extend(item.description.clone());
-        document.blocks = vec![Block::List {
-            kind: mant_ir::ListKind::Ordered,
-            start: Some(3),
-            compact: false,
-            items: vec![mant_ir::ListItem {
-                entry: item.identity.clone(),
-                blocks,
-            }],
-            layout: mant_ir::LayoutHint::default(),
-            source: *source,
-        }];
+        assert!(
+            query.document.as_ref().unwrap().blocks.iter().any(
+                |block| matches!(block, Block::List { items, .. } if items[0].entry.is_some())
+            )
+        );
         let references = document_references(&query);
         assert_eq!(references.len(), 3);
-        assert_eq!(
-            references
-                .iter()
-                .map(|reference| &reference.target)
-                .collect::<Vec<_>>(),
-            baseline
-                .iter()
-                .map(|reference| &reference.target)
-                .collect::<Vec<_>>()
-        );
         for (reference, expected) in references.iter().zip(["target", "body", "domain"]) {
             assert!(
                 matches!(&reference.target, SemanticDocumentReference::Document { name, .. } if name == expected)

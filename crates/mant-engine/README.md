@@ -23,8 +23,8 @@ deterministic output without owning a terminal or command-line process.
   See the [authoring field map](https://github.com/BryanHeBY/ManT/blob/main/docs/manuals/mant-markdown.md#authoring-to-entry-field-map)
   for declared fields versus index-derived facts.
   Grouping names supplies shared selectable content, not proof of behavioral
-  equivalence. Semantic lists currently become definition lists and can change
-  presentation; the annotation-only design boundary is not fully implemented.
+  equivalence. Semantic facts bind to the original list content without
+  replacing its punctuation, paragraphs, numbering or tightness.
 - Typed local and cross-document navigation: only logical document and manual
   links become bounded scope edges; external, email, and page-local targets do
   not expand a query.

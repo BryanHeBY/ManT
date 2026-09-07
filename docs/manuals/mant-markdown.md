@@ -97,15 +97,15 @@ identical pixels across renderers or byte-identical Markdown round trips.
 Comment placement still follows CommonMark: inserting a block comment or
 blank line can itself change the parsed structure.
 
-Current limitation: accepted semantic lists are converted to definition lists.
-Their term/description delimiters and presentation can therefore change; the
-current implementation does not yet meet the annotation-only principle in
-full. The supported syntax below describes current behavior, not the proposed
+Accepted semantic items remain ordinary list items. Their code terms, `:`,
+dash and pipe delimiters, paragraphs, numbering and tightness are preserved;
+read-only form/name bindings point into that same content. The supported
+syntax below describes current behavior, not the proposed
 `mant:entry` JSON, `aliasGroups` or `aliasOf` fields, which are not implemented.
 
 ### Current declarations
 
-ManT uses definition identities to make options, markers, operands, commands, configuration keys, environment variables, variables, values, and terms directly addressable by `--explain`, outlines, the TUI, JSON, and MCP. Markdown has no portable definition-list syntax, so ManT provides an invisible directive for a complete bullet list:
+ManT attaches entry facts to make options, markers, operands, commands, configuration keys, environment variables, variables, values, and terms directly addressable by `--explain`, outlines, the TUI, JSON, and MCP. An invisible directive supplies role and case policy for an ordinary bullet or ordered list:
 
 ```markdown
 <!-- mant:entries role=option case=sensitive -->
@@ -113,7 +113,7 @@ ManT uses definition identities to make options, markers, operands, commands, co
 - `--color WHEN`: Select color output.
 ```
 
-The directive must be the only construct on its line and immediately precede a complete bullet list. `role` and `case` are required; `attached` is optional:
+The directive must be the only construct on its line and immediately precede a list. `role` and `case` are required; `attached` is optional. Each explicitly declared item is validated independently: an invalid head remains ordinary visible content and produces a diagnostic, while valid siblings retain their entries. Without a directive, conservative option recognition still requires a complete option-shaped bullet list; ordered lists are never inferred:
 
 | Field | Values | Meaning |
 | --- | --- | --- |
@@ -141,7 +141,7 @@ same entry:
 This produces aliases `-o` and `--output`, and two forms: `-o FILE, --output FILE`
 and `--output=FILE`. All aliases select the same definition and description.
 The pipe must be outside code spans and links, with a term on both sides;
-empty forms are rejected without partially indexing the list. A pipe inside a
+empty forms reject that item's annotation without changing its content or valid siblings. A pipe inside a
 code span remains part of that authored form and follows its role's name grammar.
 
 A term may instead be one document link wrapping exactly one code span:
@@ -210,8 +210,8 @@ Markdown parsing requirement.
 
 Ordinary option-shaped definition lists produced by native manuals can receive identities automatically. Markdown lists require either the explicit directive or the conservative complete-list inference described in the shipped examples; authors should use the directive when role or case policy matters.
 
-An accepted list item is currently converted into a definition item in the
-document tree and receives a source-neutral `DefinitionIdentity`. From those content
+An accepted list item stays in the document tree and receives source-neutral
+`EntryFacts` in its optional `entry` field. From those content
 facts, `SemanticIndex` derives entry kinds, selector aliases, complete authored
 forms, explicit document targets, value domains, and nested ownership. Outline, excerpt, explanation,
 TUI, and MCP projections consume that derived index rather than reparsing the

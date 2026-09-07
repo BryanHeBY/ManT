@@ -235,8 +235,7 @@ fn parse_document_with_entries(
         entry_diagnostics.push(Diagnostic {
             level: DiagnosticLevel::Warning,
             code: Some("markdown.semantic-entry-list".to_owned()),
-            message: "semantic-entry directive did not resolve to a Markdown bullet list"
-                .to_owned(),
+            message: "semantic-entry directive did not resolve to a Markdown list".to_owned(),
             source: Some(declaration.source),
         });
     }

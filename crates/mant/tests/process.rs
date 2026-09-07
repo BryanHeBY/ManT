@@ -961,7 +961,7 @@ fn direct_stdin_reads_markdown_without_extending_the_request_schema() {
     assert!(value["document"]["source"].get("path").is_none());
     assert!(value.get("tldr").is_none());
     assert_eq!(
-        value["document"]["sections"][0]["blocks"][0]["items"][0]["identity"]["names"][0],
+        value["document"]["sections"][0]["blocks"][0]["items"][0]["entry"]["names"][0],
         "--help"
     );
 }
@@ -1447,7 +1447,7 @@ fn exact_semantic_option_spellings_survive_the_cli_boundary() {
     assert!(dotted.stderr.is_empty());
     let dotted: serde_json::Value = serde_json::from_slice(&dotted.stdout).expect("dotted JSON");
     assert_eq!(
-        dotted["selections"][0]["entry"]["items"][0]["identity"]["names"][0],
+        dotted["selections"][0]["entry"]["items"][0]["entry"]["names"][0],
         "-ca.cert"
     );
 
@@ -1456,7 +1456,7 @@ fn exact_semantic_option_spellings_survive_the_cli_boundary() {
     let positional_help: serde_json::Value =
         serde_json::from_slice(&positional_help.stdout).expect("help JSON");
     assert_eq!(
-        positional_help["selections"][0]["entry"]["items"][0]["identity"]["role"],
+        positional_help["selections"][0]["entry"]["items"][0]["entry"]["role"],
         "command"
     );
 }

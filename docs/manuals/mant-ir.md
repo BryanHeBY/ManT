@@ -165,9 +165,9 @@ Ordinary `ListItem` values can carry optional `EntryFacts` through `entry`.
 definitions. `EntryForm` and `EntryContentSlice` bind forms to direct owner
 blocks or native terms, preserving styled inline ancestry and validating UTF-8
 leaf ranges. Missing, overlapping or reordered references are invalid, not
-partial forms. Markdown's current conversion to definition items remains an
-obstacle to annotation-only content
-preservation, described in [mant-markdown(7)](mant-markdown.md).
+partial forms. Markdown attaches these references without converting its
+ordinary lists to native definition items, as described in
+[mant-markdown(7)](mant-markdown.md).
 
 Navigation, excerpts, search ownership, scope links and TUI anchors support
 both owner kinds. Excerpts retain the original single-item container and its

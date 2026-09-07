@@ -5,8 +5,8 @@ use super::{
 };
 use crate::inline::plain_text;
 use mant_ir::{
-    Block, DefinitionCase, DefinitionIdentity, DefinitionItem, DefinitionRole, Inline, Section,
-    ValueDomain,
+    Block, DefinitionCase, DefinitionIdentity, DefinitionItem, DefinitionRole, EntryOwner, Inline,
+    ListItem, Section, ValueDomain,
     visit::{self, Visit},
 };
 use sha2::{Digest, Sha256};
@@ -75,6 +75,44 @@ pub(super) fn identity_plan(item: &DefinitionItem, context: DefinitionContext) -
     }
 }
 
+pub(super) fn list_identity_base(item: &ListItem) -> Option<String> {
+    let facts = item.entry.as_ref()?;
+    let name = facts.names.first().map_or("entry", String::as_str);
+    Some(format!(
+        "{}-{}",
+        role_id_prefix(facts.role),
+        role_name_slug(facts.role, name)
+    ))
+}
+
+pub(super) fn identify_list_item(
+    item: &mut ListItem,
+    used: &mut HashSet<String>,
+    reserved: &HashSet<String>,
+    retained: &mut HashSet<String>,
+    preferred_counts: &HashMap<String, usize>,
+) -> Option<DefinitionRole> {
+    let mut preferred = list_identity_base(item)?;
+    let facts = item.entry.as_ref()?;
+    if preferred_counts
+        .get(&preferred)
+        .copied()
+        .unwrap_or_default()
+        > 1
+        || reserved.contains(&preferred)
+    {
+        preferred = format!(
+            "{preferred}-{}",
+            semantic_fingerprint(EntryOwner::List(item), facts.role, facts.case, &facts.names)
+        );
+    }
+    let id = unique_id(&preferred, used, reserved);
+    retained.insert(id.clone());
+    let facts = item.entry.as_mut()?;
+    facts.id = id.into();
+    Some(facts.role)
+}
+
 pub(super) fn identify_item(
     item: &mut DefinitionItem,
     context: DefinitionContext,
@@ -124,7 +162,7 @@ pub(super) fn identify_item(
     {
         preferred = format!(
             "{preferred}-{}",
-            semantic_fingerprint(item, role, case, &names)
+            semantic_fingerprint(EntryOwner::Definition(item), role, case, &names)
         );
     }
     let id = unique_id(&preferred, used, reserved);
@@ -218,7 +256,7 @@ fn collect_anchor_ids(nodes: &[Inline], output: &mut Vec<String>) {
 }
 
 fn semantic_fingerprint(
-    item: &DefinitionItem,
+    item: EntryOwner<'_>,
     role: DefinitionRole,
     case: DefinitionCase,
     names: &[String],
@@ -292,13 +330,15 @@ fn semantic_fingerprint(
     for name in names {
         content.field(name);
     }
-    for term in &item.terms {
-        content.field("term");
-        for inline in term {
-            content.visit_inline(inline);
+    if let EntryOwner::Definition(item) = item {
+        for term in &item.terms {
+            content.field("term");
+            for inline in term {
+                content.visit_inline(inline);
+            }
         }
     }
-    for block in &item.description {
+    for block in item.blocks() {
         content.visit_block(block);
     }
     let digest = Sha256::digest(content.0);

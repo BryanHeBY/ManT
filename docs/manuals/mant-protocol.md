@@ -854,6 +854,13 @@ List item `blocks` can contain nested lists and displays. An ordered list's
 `columnSpan` and `rowSpan` default to `1`, and `alignment` can be `left`,
 `center`, or `right`.
 
+An ordinary list item may carry `entry` facts without changing those blocks.
+Its `forms` and `nameBindings` reference final-IR inline positions, rather than
+duplicating or removing its visible head. The same facts type is called
+`identity` on native definitions; see [mant-ir(7)](mant-ir.md) for binding and
+relationship validation. Both are content owners, not behavioral equivalence
+claims.
+
 ### Semantic Definitions
 
 A definition item contains rendered `terms`, block-capable `description`,

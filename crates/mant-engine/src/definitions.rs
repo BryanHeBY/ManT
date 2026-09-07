@@ -11,7 +11,10 @@ mod walk;
 use context::{DefinitionContext, child_definition_context, definition_group_context};
 pub(crate) use diagnostics::manual_discovery_diagnostics;
 pub(crate) use identity::document_id_slug;
-use identity::{document_anchor_ids, has_semantic_spelling, identify_item, identity_plan};
+use identity::{
+    document_anchor_ids, has_semantic_spelling, identify_item, identify_list_item, identity_plan,
+    list_identity_base,
+};
 use mant_ir::{Block, Section};
 use normalize::{normalize_definition_nesting, normalize_hanging_definitions};
 use std::collections::{HashMap, HashSet};
@@ -82,6 +85,9 @@ fn prepare_blocks(
         match block {
             Block::List { items, .. } => {
                 for item in items {
+                    if let Some(preferred) = list_identity_base(item) {
+                        *preferred_counts.entry(preferred).or_default() += 1;
+                    }
                     prepare_blocks(&mut item.blocks, context, preferred_counts);
                 }
             }
@@ -134,6 +140,15 @@ impl DefinitionDiscovery<'_> {
             match block {
                 Block::List { items, .. } => {
                     for item in items {
+                        let role = identify_list_item(
+                            item,
+                            &mut self.used,
+                            self.reserved,
+                            &mut self.retained,
+                            self.preferred_counts,
+                        );
+                        let context =
+                            role.map_or(context, |role| child_definition_context(role, context));
                         self.identify_blocks(&mut item.blocks, context);
                     }
                 }
