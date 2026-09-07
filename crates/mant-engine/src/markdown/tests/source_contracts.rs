@@ -57,13 +57,10 @@ fn annotations_preserve_the_original_event_tree_and_every_visible_delimiter() {
 #[test]
 fn declared_items_fail_independently_and_bind_only_visible_name_occurrences() {
     let parsed = parse_markdown("<!-- mant:entries role=option case=sensitive -->\n3. `-a, --all`: All.\n4. Invalid prose.\n5. `--last`: Last.\n", None).unwrap();
-    let Block::List {
-        kind, start, items, ..
-    } = &parsed.document.blocks[0]
-    else {
+    let Block::List { kind, items, .. } = &parsed.document.blocks[0] else {
         panic!("ordinary list")
     };
-    assert_eq!((*kind, *start), (mant_ir::ListKind::Ordered, Some(3)));
+    assert_eq!(*kind, mant_ir::ListKind::Ordered { start: Some(3) });
     assert!(items[1].entry.is_none());
     assert!(items[2].entry.is_some());
     assert!(!parsed.document.diagnostics.is_empty());

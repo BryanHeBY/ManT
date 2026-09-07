@@ -718,7 +718,7 @@ fn lowers_normalized_ordered_lists_and_literal_displays() {
     assert!(matches!(
         document.sections[0].blocks[0],
         Block::List {
-            kind: mant_ir::ListKind::Ordered,
+            kind: mant_ir::ListKind::Ordered { .. },
             compact: true,
             ..
         }
@@ -743,8 +743,7 @@ fn keeps_relative_indent_references_inside_man_ip_enumerations() {
     let notes = &document.sections[0];
     let [
         Block::List {
-            kind: ListKind::Ordered,
-            start: Some(1),
+            kind: ListKind::Ordered { start: Some(1) },
             items,
             ..
         },

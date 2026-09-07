@@ -1062,6 +1062,13 @@ layout uses the normal default; null layout and the former top-level layout
 fields are rejected. Null/missing spacing inherits, while explicit zero is
 retained. This is a shape migration, not a change in renderer geometry.
 
+Ordinary-list `kind` is `{"kind":"bullet"}`, `{"kind":"plain"}`, or
+`{"kind":"ordered","start":3}`. Only the ordered variant accepts optional
+u64 start. Missing/null means unknown and is omitted canonically; it displays
+from one. Zero and u64::MAX are valid, and excerpt numbering saturates rather
+than wrapping. Old string kinds or block-level start fields are rejected,
+including bullet/plain `start:null` and duplicate keys.
+
 Environment-variable aliases share one source-neutral grammar across native
 and Markdown documents: bare `NAME`, shell `$NAME`, PowerShell `$Env:NAME` or
 `${Env:NAME}`, Windows `%NAME%`, and one assignment `NAME=value`. Assignment

@@ -1,5 +1,5 @@
 //! Source-order semantic coordinates over unchanged native and Markdown owners.
-use mant_ir::{Block, EntryOwner, ListKind, SourceSpan};
+use mant_ir::{Block, EntryOwner, SourceSpan};
 
 /// One identified owner, retaining enough context to excerpt its original item.
 pub(crate) struct ContentEntry<'a> {
@@ -19,22 +19,12 @@ impl ContentEntry<'_> {
         match self.container {
             Block::List {
                 kind,
-                start,
                 compact,
                 items,
                 layout,
                 source,
             } => Block::List {
-                kind: *kind,
-                start: if *kind == ListKind::Ordered {
-                    Some(
-                        start
-                            .unwrap_or(1)
-                            .saturating_add(u64::try_from(self.item_index).unwrap_or(u64::MAX)),
-                    )
-                } else {
-                    *start
-                },
+                kind: kind.for_excerpt(self.item_index),
                 compact: *compact,
                 items: vec![items[self.item_index].clone()],
                 layout: *layout,

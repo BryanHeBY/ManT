@@ -117,7 +117,6 @@ mod tests {
             &["--color WHEN"],
             vec![Block::List {
                 kind: crate::ListKind::Bullet,
-                start: None,
                 compact: true,
                 items: vec![crate::ListItem {
                     source: None,

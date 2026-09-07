@@ -1,7 +1,7 @@
 //! Stable document nodes independent from their source parser.
 
 use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::{EntryFacts, NodeId};
 
@@ -287,9 +287,6 @@ pub enum Block {
     List {
         /// Marker behavior for the list.
         kind: ListKind,
-        /// First ordinal for an ordered list.
-        #[serde(skip_serializing_if = "Option::is_none")]
-        start: Option<u64>,
         /// Whether renderers should suppress extra spacing between items.
         #[serde(default, skip_serializing_if = "is_false")]
         compact: bool,
@@ -372,15 +369,67 @@ pub enum Block {
 }
 
 /// Marker behavior of an ordinary list.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "kebab-case")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, JsonSchema)]
+#[serde(tag = "kind", rename_all = "kebab-case", deny_unknown_fields)]
 pub enum ListKind {
     /// Unordered list with bullets.
     Bullet,
     /// Ordered list with ordinal markers.
-    Ordered,
+    Ordered {
+        /// First ordinal, or unknown. Renderers use one for an unknown start
+        /// without changing the source fact. Zero and `u64::MAX` are valid.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        start: Option<u64>,
+    },
     /// Marker-free list.
     Plain,
+}
+
+// Empty struct variants enforce closure even for bullet/plain during real
+// Serde decoding. Unit variants alone can discard unknown tagged fields.
+#[derive(Deserialize)]
+#[serde(tag = "kind", rename_all = "kebab-case", deny_unknown_fields)]
+enum ClosedListKind {
+    Bullet {},
+    Ordered {
+        #[serde(default)]
+        start: Option<u64>,
+    },
+    Plain {},
+}
+
+impl<'de> Deserialize<'de> for ListKind {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        Ok(match ClosedListKind::deserialize(deserializer)? {
+            ClosedListKind::Bullet {} => Self::Bullet,
+            ClosedListKind::Ordered { start } => Self::Ordered { start },
+            ClosedListKind::Plain {} => Self::Plain,
+        })
+    }
+}
+
+impl ListKind {
+    /// Displayed ordinal for a zero-based item, saturating at `u64::MAX`.
+    /// Non-ordered lists have no ordinal. Unknown starts display from one.
+    #[must_use]
+    pub fn ordinal(self, index: usize) -> Option<u64> {
+        match self {
+            Self::Ordered { start } => Some(
+                start
+                    .unwrap_or(1)
+                    .saturating_add(u64::try_from(index).unwrap_or(u64::MAX)),
+            ),
+            Self::Bullet | Self::Plain => None,
+        }
+    }
+
+    /// Kind of an excerpt starting at a zero-based original item. The returned
+    /// ordered kind records its effective ordinal; the source remains unchanged.
+    #[must_use]
+    pub fn for_excerpt(self, index: usize) -> Self {
+        self.ordinal(index)
+            .map_or(self, |start| Self::Ordered { start: Some(start) })
+    }
 }
 
 /// A list item contains blocks so nested lists and displays remain intact.

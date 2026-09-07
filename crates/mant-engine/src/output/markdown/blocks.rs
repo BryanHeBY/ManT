@@ -81,11 +81,10 @@ fn render_block(block: &Block, options: MarkdownOptions) -> Option<String> {
         } => Some(fenced_code(&flatten_inline(children), language.as_deref())),
         Block::List {
             kind,
-            start,
             compact,
             items,
             ..
-        } => render_list(*kind, *start, *compact, items, options),
+        } => render_list(*kind, *compact, items, options),
         Block::DefinitionList { items, compact, .. } => {
             render_definition_list(items, *compact, options)
         }
@@ -118,7 +117,6 @@ fn render_block(block: &Block, options: MarkdownOptions) -> Option<String> {
 
 fn render_list(
     kind: ListKind,
-    start: Option<u64>,
     compact: bool,
     items: &[ListItem],
     options: MarkdownOptions,
@@ -128,12 +126,9 @@ fn render_list(
         .enumerate()
         .filter_map(|(index, item)| {
             let marker = match kind {
-                ListKind::Ordered => format!(
-                    "{}. ",
-                    start
-                        .unwrap_or(1)
-                        .saturating_add(u64::try_from(index).unwrap_or(u64::MAX))
-                ),
+                ListKind::Ordered { .. } => {
+                    format!("{}. ", kind.ordinal(index).expect("ordered list ordinal"))
+                }
                 ListKind::Bullet | ListKind::Plain => "- ".to_owned(),
             };
             let mut content = render_blocks(&item.blocks, options).join("\n\n");

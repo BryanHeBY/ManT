@@ -459,8 +459,7 @@ mod tests {
 
     fn list(items: Vec<ListItem>) -> Block {
         Block::List {
-            kind: ListKind::Ordered,
-            start: Some(7),
+            kind: ListKind::Ordered { start: Some(7) },
             items,
             compact: false,
             layout: LayoutHint::default(),
@@ -512,7 +511,6 @@ mod tests {
         let Block::List {
             items,
             kind,
-            start,
             compact,
             ..
         } = &rebuilt.blocks[0]
@@ -520,8 +518,8 @@ mod tests {
             panic!("ordinary list");
         };
         assert_eq!(
-            (*kind, *start, *compact),
-            (ListKind::Ordered, Some(7), false)
+            (*kind, *compact),
+            (ListKind::Ordered { start: Some(7) }, false)
         );
         assert_eq!(&items[0].blocks[..1], original);
         let mut unannotated = items[0].clone();

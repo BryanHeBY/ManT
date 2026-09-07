@@ -176,7 +176,6 @@ fn bullet_lists_share_the_first_row_and_use_a_hanging_indent() {
     let mut bundle = bundle();
     bundle.document.as_mut().expect("document").sections[0].blocks = vec![Block::List {
         kind: ListKind::Bullet,
-        start: None,
         compact: true,
         items: vec![ListItem {
             source: None,
@@ -261,8 +260,9 @@ fn ordered_list_markers_saturate_instead_of_overflowing() {
         source: None,
     };
     bundle.document.as_mut().expect("document").sections[0].blocks = vec![Block::List {
-        kind: ListKind::Ordered,
-        start: Some(u64::MAX),
+        kind: ListKind::Ordered {
+            start: Some(u64::MAX),
+        },
         compact: true,
         items: vec![
             ListItem {

@@ -72,8 +72,7 @@ fn main() {}
     assert!(matches!(
         &options.blocks[1],
         Block::List {
-            kind: ListKind::Ordered,
-            start: Some(1),
+            kind: ListKind::Ordered { start: Some(1) },
             ..
         }
     ));

@@ -137,7 +137,15 @@ explicit-zero and duplicate-key tests are in `entry/wire.rs` and
 native continuation/inline-term tests and the real Arch fixture suite exercise
 the migrated consumers. GCC full text and Markdown remain byte-identical to S3.
 
-Not yet completed: S5–S6. Current successful baseline verification is recorded
+S5 moves starts into the ordered kind only and centralizes saturating ordinal
+and excerpt-offset calculation on `ListKind`. Frozen raw JSON cases now test
+tag closure, duplicate keys, null/default starts, negative/fractional/oversized
+values and legacy outer start through direct and nested decoders. Excerpt tests
+cover unknown/zero/non-one/MAX starts and multiple selected owners, while
+retaining the original source kind. GCC text/Markdown are byte-identical to S3;
+IR/protocol/UI, engine unit, Arch/Fedora and list-consumer tests pass.
+
+Not yet completed: S6. Current successful baseline verification is recorded
 in `remaining-review-verification.md`; it is not evidence for later changes.
 
 ## Local verification boundary

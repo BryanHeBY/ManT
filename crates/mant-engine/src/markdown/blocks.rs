@@ -187,11 +187,10 @@ fn parse_list(
     let whole = start_range.start..end;
     Block::List {
         kind: if start.is_some() {
-            ListKind::Ordered
+            ListKind::Ordered { start }
         } else {
             ListKind::Bullet
         },
-        start,
         compact,
         items,
         layout: LayoutHint::default(),

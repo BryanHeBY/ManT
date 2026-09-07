@@ -749,7 +749,6 @@ fn append_ip_bullet(
     };
     output.push(Block::List {
         kind: ListKind::Bullet,
-        start: None,
         compact: paragraph_distance == 0,
         items: vec![list_item],
         layout: layout_with_spacing(indent_columns, spacing_before_lines),

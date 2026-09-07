@@ -302,7 +302,6 @@ mod tests {
         };
         let mut blocks = vec![Block::List {
             kind: ListKind::Bullet,
-            start: None,
             compact: true,
             items: vec![
                 option("-h, --help", "Show help."),
@@ -338,7 +337,6 @@ mod tests {
     fn keeps_trailing_content_blocks_in_the_original_item() {
         let mut blocks = vec![Block::List {
             kind: ListKind::Bullet,
-            start: None,
             compact: false,
             items: vec![ListItem {
                 source: None,
@@ -382,7 +380,6 @@ mod tests {
     fn leaves_mixed_lists_unchanged() {
         let mut blocks = vec![Block::List {
             kind: ListKind::Bullet,
-            start: None,
             compact: true,
             items: vec![
                 ListItem {

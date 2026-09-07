@@ -695,7 +695,6 @@ mod tests {
     fn target_attachment_descends_into_nested_lists() {
         let mut blocks = vec![Block::List {
             kind: mant_ir::ListKind::Bullet,
-            start: None,
             compact: false,
             items: vec![ListItem {
                 source: None,

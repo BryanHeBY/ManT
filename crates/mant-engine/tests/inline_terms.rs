@@ -117,7 +117,7 @@ fn uniform_bullet_markers_are_normalised_to_a_bullet_list() {
                 Block::DefinitionList { .. } => "DefinitionList",
                 Block::List { kind, .. } => match kind {
                     mant_ir::ListKind::Bullet => "BulletList",
-                    mant_ir::ListKind::Ordered => "OrderedList",
+                    mant_ir::ListKind::Ordered { .. } => "OrderedList",
                     mant_ir::ListKind::Plain => "PlainList",
                 },
                 _ => "other",

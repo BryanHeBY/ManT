@@ -438,12 +438,11 @@ fn render_block(block: &Block, base_indent: usize) -> Option<String> {
         } => (inline_text(children), usize::from(layout.indent_columns)),
         Block::List {
             kind,
-            start,
             items,
             layout,
             ..
         } => (
-            render_list(*kind, *start, items, base_indent),
+            render_list(*kind, items, base_indent),
             usize::from(layout.indent_columns),
         ),
         Block::DefinitionList {
@@ -474,23 +473,15 @@ fn render_block(block: &Block, base_indent: usize) -> Option<String> {
     (!value.trim().is_empty()).then(|| indent_lines(value, base_indent + layout_indent))
 }
 
-fn render_list(
-    kind: ListKind,
-    start: Option<u64>,
-    items: &[ListItem],
-    base_indent: usize,
-) -> String {
+fn render_list(kind: ListKind, items: &[ListItem], base_indent: usize) -> String {
     items
         .iter()
         .enumerate()
         .filter_map(|(index, item)| {
             let marker = match kind {
-                ListKind::Ordered => format!(
-                    "{}. ",
-                    start
-                        .unwrap_or(1)
-                        .saturating_add(u64::try_from(index).unwrap_or(u64::MAX))
-                ),
+                ListKind::Ordered { .. } => {
+                    format!("{}. ", kind.ordinal(index).expect("ordered list ordinal"))
+                }
                 ListKind::Bullet => "- ".to_owned(),
                 ListKind::Plain => String::new(),
             };

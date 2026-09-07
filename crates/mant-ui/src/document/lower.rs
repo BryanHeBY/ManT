@@ -234,7 +234,6 @@ impl DocumentBuilder {
             }
             Block::List {
                 kind,
-                start,
                 compact,
                 items,
                 layout,
@@ -249,12 +248,9 @@ impl DocumentBuilder {
                     let item_start = self.lines.len();
                     let marker = match kind {
                         ListKind::Bullet => "• ".to_owned(),
-                        ListKind::Ordered => format!(
-                            "{}. ",
-                            start
-                                .unwrap_or(1)
-                                .saturating_add(u64::try_from(index).unwrap_or(u64::MAX))
-                        ),
+                        ListKind::Ordered { .. } => {
+                            format!("{}. ", kind.ordinal(index).expect("ordered list ordinal"))
+                        }
                         ListKind::Plain => String::new(),
                     };
                     let has_marker = !marker.is_empty();

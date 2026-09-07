@@ -39,8 +39,7 @@ fn keeps_complete_sections_and_semantic_option_outlines() {
     assert!(matches!(
         notes.blocks.as_slice(),
         [Block::List {
-            kind: ListKind::Ordered,
-            start: Some(1),
+            kind: ListKind::Ordered { start: Some(1) },
             items,
             ..
         }] if items.len() == 7

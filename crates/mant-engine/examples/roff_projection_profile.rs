@@ -296,7 +296,7 @@ fn collect_blocks(
             }),
             Block::List { kind, items, .. } => {
                 let kind = match kind {
-                    ListKind::Ordered => ProjectedListKind::Ordered,
+                    ListKind::Ordered { .. } => ProjectedListKind::Ordered,
                     ListKind::Bullet | ListKind::Plain => ProjectedListKind::Bullet,
                 };
                 for (index, item) in items

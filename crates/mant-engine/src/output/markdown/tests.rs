@@ -337,7 +337,6 @@ fn preserves_inline_lists_definitions_and_nested_headings() {
     ]);
     let list = Block::List {
         kind: ListKind::Bullet,
-        start: None,
         compact: true,
         items: vec![ListItem {
             source: None,

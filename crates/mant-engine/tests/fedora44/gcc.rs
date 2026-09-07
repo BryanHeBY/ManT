@@ -45,8 +45,7 @@ fn keeps_complete_sections_and_semantic_option_outlines() {
             .any(|block| matches!(
                 block,
                 Block::List {
-                    kind: ListKind::Ordered,
-                    start: Some(1),
+                    kind: ListKind::Ordered { start: Some(1) },
                     items,
                     ..
                 } if items.len() == 3
@@ -57,8 +56,7 @@ fn keeps_complete_sections_and_semantic_option_outlines() {
     assert!(matches!(
         footnotes.blocks.as_slice(),
         [Block::List {
-            kind: ListKind::Ordered,
-            start: Some(1),
+            kind: ListKind::Ordered { start: Some(1) },
             items,
             ..
         }] if items.len() == 1

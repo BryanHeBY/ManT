@@ -45,8 +45,7 @@ fn keeps_release_metadata_sections_and_semantic_options() {
                 .any(|block| matches!(
                     block,
                     Block::List {
-                        kind: ListKind::Ordered,
-                        start: Some(1),
+                        kind: ListKind::Ordered { start: Some(1) },
                         items,
                         ..
                     } if items.len() == length

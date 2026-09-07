@@ -75,3 +75,27 @@ fn outline_names_and_entry_kind_are_closed_at_both_projection_levels() {
     excerpt["selections"][0]["entry"]["items"][0]["identity"] = Value::Null;
     assert!(serde_json::from_value::<QueryExcerpt>(excerpt).is_err());
 }
+
+#[test]
+fn query_list_kinds_reject_legacy_or_inapplicable_start() {
+    for kind in [
+        json!({"kind":"bullet"}),
+        json!({"kind":"plain"}),
+        json!({"kind":"ordered"}),
+        json!({"kind":"ordered","start":0}),
+    ] {
+        let mut payload = document(&definition());
+        payload["blocks"] = json!([{"type":"list","kind":kind,"items":[]}]);
+        let _: DocumentResponse = serde_json::from_value(payload.clone()).unwrap();
+        payload["blocks"][0]["start"] = Value::Null;
+        assert!(serde_json::from_value::<DocumentResponse>(payload).is_err());
+    }
+    let mut payload = document(&definition());
+    payload["blocks"] = json!([{"type":"list","kind":{"kind":"bullet","start":null},"items":[]}]);
+    assert!(
+        serde_json::from_value::<QueryBundle>(
+            json!({"schema":"mant.query/v0.11","label":"test","document":payload})
+        )
+        .is_err()
+    );
+}

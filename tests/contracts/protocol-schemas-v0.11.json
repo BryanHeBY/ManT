@@ -831,15 +831,6 @@
                   }
                 ]
               },
-              "start": {
-                "description": "First ordinal for an ordered list.",
-                "type": [
-                  "integer",
-                  "null"
-                ],
-                "format": "uint64",
-                "minimum": 0
-              },
               "type": {
                 "type": "string",
                 "const": "list"
@@ -2146,18 +2137,54 @@
         "oneOf": [
           {
             "description": "Unordered list with bullets.",
-            "type": "string",
-            "const": "bullet"
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "bullet"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
           },
           {
             "description": "Ordered list with ordinal markers.",
-            "type": "string",
-            "const": "ordered"
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "ordered"
+              },
+              "start": {
+                "description": "First ordinal, or unknown. Renderers use one for an unknown start\nwithout changing the source fact. Zero and u64::MAX are valid.",
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "uint64",
+                "minimum": 0
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
           },
           {
             "description": "Marker-free list.",
-            "type": "string",
-            "const": "plain"
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "plain"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
           }
         ]
       },
@@ -3195,15 +3222,6 @@
                     "type": "null"
                   }
                 ]
-              },
-              "start": {
-                "description": "First ordinal for an ordered list.",
-                "type": [
-                  "integer",
-                  "null"
-                ],
-                "format": "uint64",
-                "minimum": 0
               },
               "type": {
                 "type": "string",
@@ -4887,18 +4905,54 @@
         "oneOf": [
           {
             "description": "Unordered list with bullets.",
-            "type": "string",
-            "const": "bullet"
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "bullet"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
           },
           {
             "description": "Ordered list with ordinal markers.",
-            "type": "string",
-            "const": "ordered"
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "ordered"
+              },
+              "start": {
+                "description": "First ordinal, or unknown. Renderers use one for an unknown start\nwithout changing the source fact. Zero and u64::MAX are valid.",
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "uint64",
+                "minimum": 0
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
           },
           {
             "description": "Marker-free list.",
-            "type": "string",
-            "const": "plain"
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "plain"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
           }
         ]
       },
@@ -6769,15 +6823,6 @@
                   }
                 ]
               },
-              "start": {
-                "description": "First ordinal for an ordered list.",
-                "type": [
-                  "integer",
-                  "null"
-                ],
-                "format": "uint64",
-                "minimum": 0
-              },
               "type": {
                 "type": "string",
                 "const": "list"
@@ -8038,18 +8083,54 @@
         "oneOf": [
           {
             "description": "Unordered list with bullets.",
-            "type": "string",
-            "const": "bullet"
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "bullet"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
           },
           {
             "description": "Ordered list with ordinal markers.",
-            "type": "string",
-            "const": "ordered"
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "ordered"
+              },
+              "start": {
+                "description": "First ordinal, or unknown. Renderers use one for an unknown start\nwithout changing the source fact. Zero and u64::MAX are valid.",
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "uint64",
+                "minimum": 0
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
           },
           {
             "description": "Marker-free list.",
-            "type": "string",
-            "const": "plain"
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "plain"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
           }
         ]
       },
@@ -9403,15 +9484,6 @@
                     "type": "null"
                   }
                 ]
-              },
-              "start": {
-                "description": "First ordinal for an ordered list.",
-                "type": [
-                  "integer",
-                  "null"
-                ],
-                "format": "uint64",
-                "minimum": 0
               },
               "type": {
                 "type": "string",
@@ -11247,18 +11319,54 @@
         "oneOf": [
           {
             "description": "Unordered list with bullets.",
-            "type": "string",
-            "const": "bullet"
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "bullet"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
           },
           {
             "description": "Ordered list with ordinal markers.",
-            "type": "string",
-            "const": "ordered"
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "ordered"
+              },
+              "start": {
+                "description": "First ordinal, or unknown. Renderers use one for an unknown start\nwithout changing the source fact. Zero and u64::MAX are valid.",
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "uint64",
+                "minimum": 0
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
           },
           {
             "description": "Marker-free list.",
-            "type": "string",
-            "const": "plain"
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "plain"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
           }
         ]
       },

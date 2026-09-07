@@ -213,7 +213,7 @@ fn collect_blocks(blocks: &[Block], path: &str, output: &mut Vec<ObservedBlock>)
         let block_path = format!("{path}/block[{index}]");
         match block {
             Block::List {
-                kind: ListKind::Ordered,
+                kind: ListKind::Ordered { .. },
                 source,
                 items,
                 ..
@@ -323,8 +323,7 @@ mod tests {
             block => panic!("expected retained definition list, got {block:?}"),
         };
         document.sections[0].blocks[0] = Block::List {
-            kind: ListKind::Ordered,
-            start: Some(1),
+            kind: ListKind::Ordered { start: Some(1) },
             compact: false,
             items: Vec::new(),
             layout: LayoutHint::default(),

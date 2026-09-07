@@ -55,8 +55,7 @@ fn item(name: &str, payload: &str, entry: bool) -> ListItem {
 fn query(annotated: bool) -> ResolvedContent {
     let mut query = query_markdown_text("# Example\n\nPlaceholder.\n", None).unwrap();
     query.document.as_mut().unwrap().blocks = vec![Block::List {
-        kind: ListKind::Ordered,
-        start: Some(7),
+        kind: ListKind::Ordered { start: Some(7) },
         compact: false,
         items: vec![
             item("intro", "FIRST", false),
@@ -97,7 +96,6 @@ fn ordinary_owner_navigation_and_excerpts_preserve_the_original_item() {
         };
         let Block::List {
             kind,
-            start,
             compact,
             items,
             layout,
@@ -107,8 +105,8 @@ fn ordinary_owner_navigation_and_excerpts_preserve_the_original_item() {
             panic!("ordinary list must not become a definition")
         };
         assert_eq!(
-            (*kind, *start, *compact, layout.indent_columns),
-            (ListKind::Ordered, Some(8), false, 2)
+            (*kind, *compact, layout.indent_columns),
+            (ListKind::Ordered { start: Some(8) }, false, 2)
         );
         assert_eq!(items, &[item("run", "SECOND", true)]);
         assert_eq!(entry.entry_owner().unwrap().facts().unwrap().names, ["run"]);
@@ -134,6 +132,41 @@ fn ordinary_owner_navigation_and_excerpts_preserve_the_original_item() {
 }
 
 #[test]
+fn excerpt_ordinals_preserve_unknown_zero_and_saturated_source_starts() {
+    for start in [None, Some(0), Some(7), Some(u64::MAX)] {
+        let mut query = query(true);
+        let Block::List { kind, items, .. } = &mut query.document.as_mut().unwrap().blocks[0]
+        else {
+            unreachable!()
+        };
+        *kind = ListKind::Ordered { start };
+        items.push(item("last", "THIRD", true));
+        let original = query.document.as_ref().unwrap().clone();
+        let excerpt = select_excerpt(&query, &["run", "last"]).unwrap();
+        for (index, selection) in excerpt.selections.iter().enumerate() {
+            let expected = start.unwrap_or(1).saturating_add(index as u64 + 1);
+            let ExcerptSelection::DocumentEntry {
+                entry: Block::List { kind, .. },
+                ..
+            } = selection
+            else {
+                panic!("original ordered owner");
+            };
+            assert_eq!(
+                *kind,
+                ListKind::Ordered {
+                    start: Some(expected)
+                }
+            );
+        }
+        let expected = start.unwrap_or(1).saturating_add(1);
+        assert!(render_excerpt_text(&excerpt).contains(&format!("{expected}. run")));
+        assert!(render_excerpt_markdown(&excerpt).contains(&format!("{expected}. `run`")));
+        assert_eq!(query.document.as_ref().unwrap(), &original);
+    }
+}
+
+#[test]
 fn nested_ordinary_owners_share_semantic_paths_without_losing_parent_content() {
     let mut query = query(true);
     let Block::List { items, .. } = &mut query.document.as_mut().unwrap().blocks[0] else {
@@ -141,7 +174,6 @@ fn nested_ordinary_owners_share_semantic_paths_without_losing_parent_content() {
     };
     items[1].blocks.push(Block::List {
         kind: ListKind::Bullet,
-        start: None,
         compact: true,
         items: vec![item("child", "CHILD", true)],
         layout: LayoutHint::default(),

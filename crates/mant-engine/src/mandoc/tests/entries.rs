@@ -499,7 +499,7 @@ fn only_tag_definition_lists_recover_ordered_procedures() {
         .expect("lower mdoc definition style");
         if style == "tag" {
             let Block::List {
-                kind: ListKind::Ordered,
+                kind: ListKind::Ordered { .. },
                 items,
                 layout,
                 ..
@@ -563,8 +563,7 @@ fn distinguishes_man_ip_enumeration_from_numeric_option_values() {
     for option in &options[..2] {
         assert!(option.description.iter().any(|block| {
             let Block::List {
-                kind: ListKind::Ordered,
-                start: Some(1),
+                kind: ListKind::Ordered { start: Some(1) },
                 items,
                 ..
             } = block
@@ -619,8 +618,7 @@ fn recognizes_one_source_proven_ip_ordinal_without_semantic_entry() {
     .expect("lower one numbered IP reference");
 
     let Block::List {
-        kind: ListKind::Ordered,
-        start: Some(9),
+        kind: ListKind::Ordered { start: Some(9) },
         compact: false,
         items,
         ..
@@ -660,8 +658,7 @@ fn recognizes_tp_enumerations_nested_below_a_definition() {
         matches!(
             block,
             Block::List {
-                kind: ListKind::Ordered,
-                start: Some(1),
+                kind: ListKind::Ordered { start: Some(1) },
                 items,
                 ..
             } if items.len() == 3

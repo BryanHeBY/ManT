@@ -24,6 +24,10 @@ that crate was not published for that change.
 
 ### mant-ir 0.11.0
 
+- Restrict ordinary-list starts to `ListKind::Ordered { start: Option<u64> }`.
+  JSON uses a tagged kind object and rejects the old string kind/outer start,
+  or any start on bullet/plain lists. Unknown, zero, non-one and u64::MAX
+  starts retain their semantics; renderers and excerpts share saturating ordinals.
 - Move definition-item `inline_term` and `spacing_before_lines` into
   `layout: DefinitionLayout` (JSON `layout`). Preserve inherited versus explicit
   zero spacing and existing inline/hanging geometry. Old top-level fields and

@@ -154,3 +154,53 @@ fn definition_layout_keeps_inherited_and_explicit_zero_spacing_distinct() {
         serde_json::from_value(json!({"terms":[],"description":[]})).unwrap();
     assert_eq!(inherited.layout, DefinitionLayout::default());
 }
+
+#[test]
+fn only_ordered_lists_accept_start_in_actual_decoders() {
+    use crate::ListKind;
+    for value in cases()["listKind"]["accept"].as_array().unwrap() {
+        let canonical = roundtrip::<ListKind>(value.clone());
+        assert!(canonical.get("start").is_none_or(|start| !start.is_null()));
+        let block = json!({"type":"list", "kind":value, "items":[]});
+        let _ = roundtrip::<Block>(block.clone());
+        let mut legacy = block;
+        legacy["start"] = Value::Null;
+        assert!(serde_json::from_value::<Block>(legacy).is_err());
+    }
+    for invalid in cases()["listKind"]["reject"].as_array().unwrap() {
+        assert!(
+            serde_json::from_value::<ListKind>(invalid.clone()).is_err(),
+            "{invalid}"
+        );
+        assert!(
+            serde_json::from_value::<Block>(json!({"type":"list","kind":invalid,"items":[]}))
+                .is_err()
+        );
+    }
+    for raw in cases()["listKind"]["rejectRaw"].as_array().unwrap() {
+        assert!(
+            serde_json::from_str::<ListKind>(raw.as_str().unwrap()).is_err(),
+            "{raw}"
+        );
+    }
+    for start in [None, Some(0), Some(7), Some(u64::MAX)] {
+        let kind = ListKind::Ordered { start };
+        for offset in [0, 1, 3, usize::MAX] {
+            let expected = start
+                .unwrap_or(1)
+                .saturating_add(u64::try_from(offset).unwrap_or(u64::MAX));
+            assert_eq!(kind.ordinal(offset), Some(expected));
+            assert_eq!(
+                kind.for_excerpt(offset),
+                ListKind::Ordered {
+                    start: Some(expected)
+                }
+            );
+            assert_eq!(kind, ListKind::Ordered { start });
+        }
+    }
+    for kind in [ListKind::Bullet, ListKind::Plain] {
+        assert_eq!(kind.ordinal(0), None);
+        assert_eq!(kind.for_excerpt(8), kind);
+    }
+}

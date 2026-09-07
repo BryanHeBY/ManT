@@ -18,8 +18,7 @@ fn ordinary_list_entry_anchors_preserve_rows_and_numbering() {
         source: None,
     };
     query.document.as_mut().unwrap().sections[0].blocks = vec![Block::List {
-        kind: ListKind::Ordered,
-        start: Some(7),
+        kind: ListKind::Ordered { start: Some(7) },
         compact: false,
         items: vec![
             mant_ir::ListItem {

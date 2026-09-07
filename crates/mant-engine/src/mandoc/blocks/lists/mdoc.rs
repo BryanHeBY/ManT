@@ -48,11 +48,10 @@ pub(in crate::mandoc::blocks) fn lower_mdoc_list(
     } else {
         Block::List {
             kind: match node.list_kind {
-                Some(NormalizedListKind::Ordered) => ListKind::Ordered,
+                Some(NormalizedListKind::Ordered) => ListKind::Ordered { start: Some(1) },
                 Some(NormalizedListKind::Plain) => ListKind::Plain,
                 _ => ListKind::Bullet,
             },
-            start: (node.list_kind == Some(NormalizedListKind::Ordered)).then_some(1),
             compact: node.compact,
             items: items
                 .into_iter()
@@ -128,8 +127,9 @@ fn lower_mdoc_definition_list(
         && let Some(first) = ordinal_sequence(&lowered_items)
     {
         return Block::List {
-            kind: ListKind::Ordered,
-            start: Some(first.value()),
+            kind: ListKind::Ordered {
+                start: Some(first.value()),
+            },
             compact: node.compact,
             items: lowered_items
                 .into_iter()

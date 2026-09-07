@@ -1018,8 +1018,7 @@ fn recovers_complete_numbered_sequences_from_mdoc_tag_lists() {
     assert!(matches!(
         document.sections[0].blocks[0],
         Block::List {
-            kind: ListKind::Ordered,
-            start: Some(1),
+            kind: ListKind::Ordered { start: Some(1) },
             ref items,
             ..
         } if items.len() == 3
@@ -1075,8 +1074,7 @@ fn keeps_man_ordinal_boundaries_explicit_without_reclassifying_numeric_terms() {
         .iter()
         .filter_map(|block| match block {
             Block::List {
-                kind: ListKind::Ordered,
-                start,
+                kind: ListKind::Ordered { start },
                 ..
             } => *start,
             _ => None,
@@ -1086,8 +1084,7 @@ fn keeps_man_ordinal_boundaries_explicit_without_reclassifying_numeric_terms() {
     assert!(matches!(
         document.sections[1].blocks.as_slice(),
         [Block::List {
-            kind: ListKind::Ordered,
-            start: Some(1),
+            kind: ListKind::Ordered { start: Some(1) },
             items,
             ..
         }] if items.len() == 2
@@ -1112,15 +1109,13 @@ fn keeps_each_adjacent_rs_scope_in_the_current_ordinal_item() {
         document.sections[0].blocks.as_slice(),
         [
             Block::List {
-                kind: ListKind::Ordered,
-                start: Some(1),
+                kind: ListKind::Ordered { start: Some(1) },
                 items: first,
                 ..
             },
             Block::Paragraph { .. },
             Block::List {
-                kind: ListKind::Ordered,
-                start: Some(2),
+                kind: ListKind::Ordered { start: Some(2) },
                 items: second,
                 ..
             }

@@ -141,7 +141,7 @@ pub(super) fn append_ordered(
             && block == output.len().saturating_sub(1) =>
         {
             let Some(Block::List {
-                kind: ListKind::Ordered,
+                kind: ListKind::Ordered { .. },
                 compact,
                 items,
                 ..
@@ -188,8 +188,9 @@ fn append_new_ordered(
 ) {
     let block = output.len();
     output.push(Block::List {
-        kind: ListKind::Ordered,
-        start: Some(marker.value),
+        kind: ListKind::Ordered {
+            start: Some(marker.value),
+        },
         compact: paragraph_distance == 0,
         items: vec![list_item_from_definition(item, indent_columns, source)],
         layout: layout_with_spacing(indent_columns, paragraph_distance),
@@ -215,7 +216,7 @@ pub(super) fn append_relative_continuation(
     match state {
         ManListState::Ordered { block, .. } => {
             let Some(Block::List {
-                kind: ListKind::Ordered,
+                kind: ListKind::Ordered { .. },
                 items,
                 ..
             }) = output.get_mut(block)
@@ -349,7 +350,7 @@ mod tests {
 
         let [
             Block::List {
-                kind: ListKind::Ordered,
+                kind: ListKind::Ordered { .. },
                 items,
                 ..
             },

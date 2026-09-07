@@ -75,6 +75,16 @@ are rejected. Canonical output omits empty layout but retains
 
 Lists contain block-capable items so nested lists and displays do not flatten into prose. Definition terms contain inline trees and descriptions contain blocks. Table cells likewise contain blocks even when a source parser currently produces a single paragraph.
 
+`ListKind` is `Bullet`, `Plain`, or `Ordered { start: Option<u64> }`. Only ordered
+lists carry a start. Its JSON is a tagged object, for example
+`"kind":{"kind":"ordered","start":0}`, not a string plus a block-level
+start. Missing/null ordered start is unknown and canonical output omits it;
+display uses one without rewriting the source. `ListKind::ordinal` and
+`for_excerpt` share saturating u64 arithmetic: a selected later item preserves
+its effective original number, including zero-based and u64::MAX lists.
+Bullet/plain with any start (even null), old string kinds, outer start, duplicate
+fields, and negative/fractional/oversized starts are rejected during decoding.
+
 Every canonical ID in `DocumentIndex` is a local navigation target, including entries attached directly to ordinary list items or native definitions. A `LinkTarget::Section` may target any such ID; its historical variant name does not restrict links to heading-backed sections. Entry targets do not need an additional inline anchor. Producers resolve exact authored fragments to canonical IDs before validation; duplicate identities and incompatible roles remain separate errors.
 
 `TableGrid` supplies shared sparse logical-column coordinates for table consumers. Horizontal spans omit covered cells; vertical continuations retain explicit empty cells in subsequent rows, while `rowSpan` remains on the content owner. Covered content is never repeated. Callers can request dense column slots with an explicit budget, so large span values need not allocate a dense grid.
