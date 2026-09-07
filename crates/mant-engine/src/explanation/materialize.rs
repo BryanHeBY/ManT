@@ -13,6 +13,7 @@ pub(super) fn response(
     candidates: Vec<Candidate<'_>>,
     candidates_truncated: bool,
     relations_truncated: bool,
+    validation: Option<mant_ir::DocumentValidation<'_>>,
 ) -> (QueryExplanation, u32) {
     let total = u32::try_from(candidates.len()).unwrap_or(u32::MAX);
     let mut budget = Budget(usize::try_from(query.options.content_bytes).unwrap_or(usize::MAX));
@@ -34,8 +35,8 @@ pub(super) fn response(
     let end = query.options.offset.saturating_add(returned);
     let document = content.document.as_ref();
     let mut diagnostics = document.map(|d| d.diagnostics.clone()).unwrap_or_default();
-    if let Some(document) = document {
-        for diagnostic in mant_ir::validate_document(document) {
+    if let Some(validation) = validation {
+        for diagnostic in validation.into_diagnostics() {
             if !diagnostics.contains(&diagnostic) {
                 diagnostics.push(diagnostic);
             }

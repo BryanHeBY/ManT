@@ -1,5 +1,5 @@
 //! Bounded explicit relationships, never inferred from prose or common forms.
-use super::{Candidate, LocatedNode, ResolvedContent, same};
+use super::{Candidate, LocatedNode, same};
 use mant_protocol::{
     EvidenceBasis, MAX_EXPLANATION_CANDIDATES, MAX_EXPLANATION_RELATION_DEPTH,
     MAX_EXPLANATION_RELATIONS,
@@ -7,20 +7,22 @@ use mant_protocol::{
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 pub(super) fn expand<'a>(
-    content: &ResolvedContent,
+    validation: Option<&mant_ir::DocumentValidation<'_>>,
     query: &str,
     located: &[LocatedNode<'a>],
     orders: &[usize],
     candidates: &mut Vec<Candidate<'a>>,
 ) -> bool {
-    let Some(document) = &content.document else {
+    let Some(validation) = validation else {
         return false;
     };
-    let invalid = mant_ir::entry_relation_issues(document)
-        .into_iter()
-        .map(|issue| issue.owner)
+    let invalid = validation
+        .relation_issues()
+        .iter()
+        .map(|issue| issue.owner.clone())
         .collect::<BTreeSet<_>>();
-    let duplicates = mant_ir::DocumentIndex::build(document)
+    let duplicates = validation
+        .index()
         .duplicates()
         .iter()
         .map(|d| d.id.clone())

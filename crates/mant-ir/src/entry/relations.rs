@@ -96,17 +96,10 @@ impl<'a> Visit<'a> for Owners<'a> {
     }
 }
 
-pub(crate) fn validate_relations(
+pub(crate) fn relation_issues(
     document: &Document,
     index: &crate::DocumentIndex,
-) -> Vec<Diagnostic> {
-    relation_issues(document, index)
-        .iter()
-        .map(EntryRelationIssue::diagnostic)
-        .collect()
-}
-
-fn relation_issues(document: &Document, index: &crate::DocumentIndex) -> Vec<EntryRelationIssue> {
+) -> Vec<EntryRelationIssue> {
     let mut owners = Owners::default();
     owners.visit_document(document);
     let mut diagnostics = Vec::new();
@@ -363,6 +356,25 @@ mod tests {
             .into_iter()
             .filter_map(|d| d.code)
             .collect()
+    }
+
+    #[test]
+    fn validation_snapshot_keeps_duplicate_and_relation_findings_together() {
+        let mut invalid = entry("duplicate", &["-a"]);
+        invalid.identity.as_mut().unwrap().alias_of = Some("missing".into());
+        let doc = document(vec![invalid, entry("duplicate", &["-b"])]);
+        let snapshot = crate::DocumentValidation::new(&doc);
+        assert!(std::ptr::eq(snapshot.document(), std::ptr::from_ref(&doc)));
+        assert_eq!(snapshot.index(), &crate::DocumentIndex::build(&doc));
+        assert_eq!(snapshot.relation_issues(), entry_relation_issues(&doc));
+        let codes = snapshot
+            .diagnostics()
+            .iter()
+            .filter_map(|d| d.code.as_deref())
+            .collect::<Vec<_>>();
+        assert!(codes.contains(&"ir.duplicate-identity"));
+        assert!(codes.contains(&"ir.invalid-entry-alias-of"));
+        assert_eq!(snapshot.diagnostics(), crate::validate_document(&doc));
     }
 
     #[test]

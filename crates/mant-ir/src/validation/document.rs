@@ -18,7 +18,14 @@ use crate::{
 /// possible, while every parser and consumer sees the same contract failures.
 #[must_use]
 pub fn validate_document(document: &Document) -> Vec<Diagnostic> {
-    let index = DocumentIndex::build(document);
+    crate::DocumentValidation::new(document).into_diagnostics()
+}
+
+pub(super) fn validate_with_index(
+    document: &Document,
+    index: &DocumentIndex,
+    relations: &[crate::EntryRelationIssue],
+) -> Vec<Diagnostic> {
     let mut diagnostics = Vec::new();
 
     for source in document
@@ -109,7 +116,7 @@ pub fn validate_document(document: &Document) -> Vec<Diagnostic> {
         }
     }
 
-    diagnostics.extend(crate::entry::validate_relations(document, &index));
+    diagnostics.extend(relations.iter().map(crate::EntryRelationIssue::diagnostic));
     diagnostics
 }
 

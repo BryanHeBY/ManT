@@ -138,6 +138,12 @@ proves complete name recall or correct knowledge of an executable's behavior.
 No evidence collector may execute examples, inspect real environment values,
 follow external URLs or enlarge the existing local source/query authority.
 
+Each explanation builds one `mant_ir::DocumentValidation` for its immutable
+document. Relationship expansion and final completeness diagnostics consume
+the same index and typed findings. The sidecar borrows the original document,
+does not accept independently supplied indexes, and never caches across calls.
+External IR producers receive the same complete checks as built-in parsers.
+
 ## Lowering rules and confirmed gaps
 
 Review probes reproduced these issues in the baseline release-profile binary:

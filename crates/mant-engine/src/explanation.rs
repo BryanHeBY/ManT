@@ -91,9 +91,18 @@ pub(crate) fn explain_with_usage(
         collect_root_entries(&document.blocks, &mut located);
         collect_sections(&document.sections, &[], &[], &mut located);
     }
+    let validation = content
+        .document
+        .as_ref()
+        .map(mant_ir::DocumentValidation::new);
     let (mut candidates, truncated, orders) = collect::collect(content, &query.entry, &located);
-    let relations_truncated =
-        relations::expand(content, &query.entry, &located, &orders, &mut candidates);
+    let relations_truncated = relations::expand(
+        validation.as_ref(),
+        &query.entry,
+        &located,
+        &orders,
+        &mut candidates,
+    );
     candidates.sort_by_key(|candidate| candidate.order);
     Ok(materialize::response(
         content,
@@ -102,6 +111,7 @@ pub(crate) fn explain_with_usage(
         candidates,
         truncated,
         relations_truncated,
+        validation,
     ))
 }
 
