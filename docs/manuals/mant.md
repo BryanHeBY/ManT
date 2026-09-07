@@ -893,7 +893,7 @@ paging of the completed text.
 - `--scope SCOPE`: Search `visible` text or generated `markdown`.
 - `--context LINES`: Include surrounding Markdown lines.
 - `--limit COUNT`: Limit returned search lines, catalog rows, or explanation owners. Explanation defaults to 50 owners and accepts 1–256; search/catalog limits remain independent.
-- `--offset COUNT`: Skip search lines, catalog rows, or explanation owners for deterministic pagination. Scope explanation uses one global cursor over document order, then source-order owners; returned `nextOffset` continues the result page. MCP character paging is independent.
+- `--offset COUNT`: Skip search lines, catalog rows, or explanation evidence for deterministic pagination. Explain uses one global cursor after evidence classification: direct entries, explicitly related entries, other-entry mentions, then ordinary mentions. Within each class it preserves document BFS order and original IR order; returned `nextOffset` continues that ordered result. Search instead remains document-BFS-first. MCP character paging is independent.
 
 `markdown` searches the generated source, not a superset of visible text:
 styling and escapes may interrupt an otherwise contiguous visible identifier.
