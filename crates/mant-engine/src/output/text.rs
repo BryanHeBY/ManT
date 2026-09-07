@@ -369,6 +369,14 @@ fn render_section(section: &Section, depth: usize) -> String {
 }
 
 fn render_blocks(blocks: &[Block], base_indent: usize) -> String {
+    render_block_sequence(blocks, base_indent, None)
+}
+
+fn render_block_sequence(
+    blocks: &[Block],
+    base_indent: usize,
+    leading_gap: Option<usize>,
+) -> String {
     // Blocks are separated by a single blank line by default. An explicit
     // vertical-space node *sets* the gap before the next block rather than
     // adding to it, so `.sp` and blank input lines are not double-counted
@@ -376,7 +384,11 @@ fn render_blocks(blocks: &[Block], base_indent: usize) -> String {
     // requested blank line into several). Leading and trailing gaps are
     // dropped so a section never opens or closes with blank lines.
     let mut output = String::new();
-    let mut has_content = false;
+    // A definition term is preceding content too. Its first body block is
+    // normally tight (Some(0)); a continuation of an inline paragraph uses
+    // the normal block gap (Some(1)). Explicit space can override either.
+    let mut has_content = leading_gap.is_some();
+    let mut default_gap = leading_gap.unwrap_or(1);
     let mut pending_blank_lines: Option<usize> = None;
     for block in blocks {
         if let Block::VerticalSpace { lines, .. } = block {
@@ -390,11 +402,12 @@ fn render_blocks(blocks: &[Block], base_indent: usize) -> String {
             continue;
         };
         if has_content {
-            let blank_lines = pending_blank_lines.unwrap_or(1);
+            let blank_lines = pending_blank_lines.unwrap_or(default_gap);
             output.push_str(&"\n".repeat(blank_lines + 1));
         }
         output.push_str(&text);
         has_content = true;
+        default_gap = 1;
         pending_blank_lines = None;
     }
     output
@@ -483,24 +496,32 @@ fn render_definitions(items: &[DefinitionItem], compact: bool, base_indent: usiz
                 .filter(|term| !term.trim().is_empty())
                 .collect::<Vec<_>>()
                 .join(", ");
-            let description = render_blocks(&item.description, base_indent);
-            let value = match (terms.is_empty(), description.is_empty()) {
-                (false, false) => {
-                    if item.inline_term {
-                        Some(format!("{terms} {}", description.trim_start()))
-                    } else {
-                        Some(format!(
-                            "{terms}\n{}",
-                            indent_lines(
-                                &description,
-                                usize::from(DefinitionItem::DESCRIPTION_INDENT_COLUMNS)
-                            )
-                        ))
-                    }
+            let body_indent = usize::from(DefinitionItem::DESCRIPTION_INDENT_COLUMNS);
+            let value = if !terms.is_empty() && item.inline_description().is_some() {
+                let head = render_blocks(&item.description[..1], base_indent);
+                // Continue the same block stream so leading .sp in the tail
+                // remains an inter-block gap, not discarded leading space.
+                let tail = render_block_sequence(&item.description[1..], base_indent, Some(1));
+                Some(format!(
+                    "{terms} {}{}",
+                    head.trim_start(),
+                    indent_lines(&tail, body_indent)
+                ))
+            } else {
+                let description = render_block_sequence(
+                    &item.description,
+                    base_indent,
+                    (!terms.is_empty()).then_some(0),
+                );
+                match (terms.is_empty(), description.is_empty()) {
+                    (false, false) => Some(format!(
+                        "{terms}{}",
+                        indent_lines(&description, body_indent)
+                    )),
+                    (false, true) => Some(terms),
+                    (true, false) => Some(description),
+                    (true, true) => None,
                 }
-                (false, true) => Some(terms),
-                (true, false) => Some(description),
-                (true, true) => None,
             }?;
             Some((value, item.spacing_before_lines))
         })
@@ -598,6 +619,31 @@ mod tests {
 
     use super::{render_excerpt_text, render_outline_text, render_query_man, render_query_text};
     use crate::{build_outline, build_outline_projection, render_outline_markdown, select_excerpt};
+
+    #[test]
+    fn explicit_spacing_overrides_the_definition_join_default_even_at_zero() {
+        for leading_gap in [0, 1] {
+            for lines in [0, 1, 3] {
+                let blocks = [
+                    Block::VerticalSpace {
+                        lines,
+                        source: None,
+                    },
+                    Block::Paragraph {
+                        children: vec![Inline::Text {
+                            value: "CONTENT".into(),
+                        }],
+                        layout: LayoutHint::default(),
+                        source: None,
+                    },
+                ];
+                assert_eq!(
+                    super::render_block_sequence(&blocks, 0, Some(leading_gap)),
+                    format!("{}CONTENT", "\n".repeat(usize::from(lines) + 1))
+                );
+            }
+        }
+    }
 
     fn query() -> ResolvedContent {
         ResolvedContent {

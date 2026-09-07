@@ -81,6 +81,11 @@ that crate was not published for that change.
 
 ### mant-engine 0.11.0
 
+- Separate inline definition first-paragraph hanging layout from standalone
+  description blocks. Continuations now retain their structural indentation
+  in text and the TUI regardless of label width; explicit leading and
+  inter-paragraph spacing survives the join. No IR wire fields were added.
+
 - Recognize local links to ordinary list-item entries as valid navigation
   targets without inserting redundant anchors into their visible content.
   Missing IDs, duplicate identities and role collisions still report errors.

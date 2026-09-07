@@ -437,11 +437,9 @@ impl DocumentBuilder {
         }
         let term_width = spans_width(&term_spans);
 
-        if let Some(Block::Paragraph {
-            children, layout, ..
-        }) = item.description.first()
-            && layout.spacing_before_lines == 0
-        {
+        let block_origin =
+            indent + usize::from(mant_ir::DefinitionItem::DESCRIPTION_INDENT_COLUMNS);
+        if let Some((children, layout)) = item.inline_description() {
             let description_indent = indent + term_width + usize::from(layout.indent_columns);
             term_spans.push(Span::raw(" ".repeat(usize::from(layout.indent_columns))));
             let mut description_lines = styled_inline_lines(
@@ -464,10 +462,10 @@ impl DocumentBuilder {
                         .with_links(line.links),
                 );
             }
-            self.blocks(&item.description[1..], description_indent);
+            self.blocks(&item.description[1..], block_origin);
         } else {
             self.push(LogicalLine::hanging(indent, indent, term_spans).with_links(term_links));
-            self.blocks(&item.description, indent + term_width);
+            self.blocks(&item.description, block_origin);
         }
     }
 

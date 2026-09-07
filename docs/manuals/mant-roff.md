@@ -98,6 +98,8 @@ required for generated references and hierarchically indented lists.
 
 When indented continuation blocks are reattached to a preceding definition, explicit vertical spacing does not by itself end ownership. A consecutive run of spacing belongs to that continuation only if the next content block remains more deeply indented. Same-level or outer content, other layout-less boundaries, and the end of a container stop collection; trailing spacing is left outside. This retains successive `RS` regions, nested definitions, and trailing examples in node excerpts without deleting blank lines or absorbing the next option or section. Hanging-definition recovery uses the same continuation boundary. Restoring content ownership does not declare those children to be an exhaustive value domain.
 
+For an inline definition, only the initial paragraph is attached to the label's line. Subsequent paragraphs, code and nested blocks retain the same structural origin as a non-inline description, independently of label width. Explicit leading vertical space is kept between the term and description rather than trimmed away to force an inline presentation.
+
 `OP` retains its optional-argument brackets, bold option name, and emphasized metavariable both inside and outside a `SY` synopsis; it does not create a separate IR variant. `AT`, `DT`, `SM`, `UC`, and other libmandoc-recognized man macros retain printable children where available but do not currently have a dedicated ManT semantic variant. For example, `SM` does not preserve point size.
 
 ## mdoc Structure

@@ -9,6 +9,50 @@ use mant_ir::Block;
 use mant_protocol::{EntryProjection, ExcerptSelection, OutlineNode};
 
 #[test]
+fn inline_definition_continuations_keep_the_structural_description_origin() {
+    let query = mant_engine::query_roff_bytes(include_bytes!(
+        "../../../tests/fixtures/roff/inline-definition-continuations.1"
+    ))
+    .unwrap();
+    let text = mant_engine::render_query_text(&query);
+    for payload in [
+        "INLINE_CONTINUATION.",
+        "CODE_CONTINUATION",
+        "SECOND_CONTINUATION.",
+    ] {
+        let line = text.lines().find(|line| line.trim() == payload).unwrap();
+        assert_eq!(line, format!("    {payload}"));
+    }
+    assert!(
+        text.contains("Initial.\n\n\n    INLINE_CONTINUATION."),
+        "{text}"
+    );
+    let excerpt = select_explanation(&query, "-a").unwrap();
+    let extracted = render_excerpt_text(&excerpt);
+    assert!(extracted.contains("    SECOND_CONTINUATION."));
+    assert!(!extracted.contains("--next-option"));
+}
+
+#[test]
+fn leading_spacing_and_code_do_not_become_an_inline_description() {
+    for label in ["-a", "--long-option"] {
+        for body in [".sp 2\nCONTENT", ".nf\nCONTENT\n.fi"] {
+            let source = format!(".TH PROBE 1\n.SH OPTIONS\n.IP \"{label}\" 4\n{body}\n");
+            let query = mant_engine::query_roff_bytes(source.as_bytes()).unwrap();
+            let text = mant_engine::render_query_text(&query);
+            assert!(text.lines().any(|line| line == label), "{text}");
+            assert!(text.lines().any(|line| line == "        CONTENT"), "{text}");
+            if body.starts_with(".sp") {
+                assert!(
+                    text.contains(&format!("{label}\n\n\n        CONTENT")),
+                    "{text}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
 fn spaced_relative_scopes_stay_with_their_definition_across_query_surfaces() {
     let doc = parse_manual_bytes(
         Path::new("definition-spaced-continuations.1"),

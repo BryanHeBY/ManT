@@ -419,11 +419,31 @@ pub struct DefinitionItem {
 }
 
 impl DefinitionItem {
-    /// Structural indentation of a non-inline description, before its blocks'
+    /// Structural indentation of standalone description blocks, before their
     /// own layout hints. Native continuation normalization and terminal/text
     /// renderers must use the same origin when moving flat blocks into an
     /// owning definition; otherwise a semantic-only move changes geometry.
     pub const DESCRIPTION_INDENT_COLUMNS: u16 = 4;
+
+    /// The first paragraph that can share the term's displayed line.
+    ///
+    /// Only this paragraph's wrapped lines hang from its first-line text.
+    /// Every later block uses [`Self::DESCRIPTION_INDENT_COLUMNS`] from the
+    /// definition container, independently of label width and inline mode.
+    /// Explicit leading spacing or a non-paragraph first block prevents the
+    /// inline presentation; it must not be consumed by joining the term.
+    #[must_use]
+    pub fn inline_description(&self) -> Option<(&[Inline], &LayoutHint)> {
+        if !self.inline_term {
+            return None;
+        }
+        match self.description.first()? {
+            Block::Paragraph {
+                children, layout, ..
+            } if layout.spacing_before_lines == 0 => Some((children, layout)),
+            _ => None,
+        }
+    }
 }
 
 /// Renderer-independent identity attached to one navigable content definition.

@@ -63,7 +63,7 @@ The block union preserves structures that matter across renderers:
 
 `LayoutHint` carries only portable presentation facts currently required for faithful terminal rendering: indentation columns and spacing rows before a block. It is not a general-purpose CSS or roff device model.
 
-A non-inline definition description adds `DefinitionItem::DESCRIPTION_INDENT_COLUMNS` (four columns) before applying its blocks' layout hints. Native continuation normalization, plain text, and the TUI share this coordinate origin; semantic nesting must not independently choose a different indentation increment. Markdown expresses the same ownership through its own block syntax rather than terminal-column geometry.
+A standalone definition description block adds `DefinitionItem::DESCRIPTION_INDENT_COLUMNS` (four columns) before applying its own layout hint, whether or not the term is inline. `DefinitionItem::inline_description()` identifies the first paragraph that may share the term's line: explicit leading spacing or a non-paragraph block prevents that presentation. Only that first paragraph hangs from the displayed label; later paragraphs, nested blocks and code use the structural four-column origin, not the label's width. Native continuation normalization, plain text, and the TUI share this distinction. Their first-line typography and paragraph wrapping remain presentation policy. Markdown expresses ownership through its own block syntax rather than terminal-column geometry.
 
 Lists contain block-capable items so nested lists and displays do not flatten into prose. Definition terms contain inline trees and descriptions contain blocks. Table cells likewise contain blocks even when a source parser currently produces a single paragraph.
 
@@ -95,7 +95,7 @@ Links use a closed `LinkTarget` union rather than stringly typed URLs:
 | `manual` | `name`, optional `manualSection` | Cross-document graph edge |
 | `section` | resolved document-local `id` | Current-document destination |
 
-`Inline::Anchor` and section IDs define destinations inside the current
+Entry identities, `Inline::Anchor` and section IDs define destinations inside the current
 document. Their `id` is always the normalized internal identity. Optional
 `fragmentAliases` preserve exact source-authored destinations such as mdoc
 `.Tg Mixed.Target`, `--option`, or a Markdown heading ID without admitting

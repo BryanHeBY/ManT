@@ -67,6 +67,40 @@ fn run_text_input(arguments: &[&str], input: &str) -> std::process::Output {
 }
 
 #[test]
+fn inline_roff_continuations_retain_indent_and_explicit_blank_lines() {
+    let output = run_text_input(
+        &[
+            "--input",
+            "-",
+            "--input-format",
+            "roff",
+            "--format",
+            "text",
+            "--display",
+            "direct",
+        ],
+        include_str!("../../../tests/fixtures/roff/inline-definition-continuations.1"),
+    );
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let text = String::from_utf8(output.stdout).unwrap();
+    assert!(
+        text.contains("-a Initial.\n\n\n    INLINE_CONTINUATION."),
+        "{text}"
+    );
+    for payload in ["CODE_CONTINUATION", "SECOND_CONTINUATION."] {
+        assert!(
+            text.lines().any(|line| line == format!("    {payload}")),
+            "{text}"
+        );
+    }
+    assert!(text.lines().any(|line| line == "--next-option"));
+}
+
+#[test]
 fn default_file_stdin_and_request_outputs_are_text() {
     let path = std::env::temp_dir().join(format!("mant-text-default-{}.md", std::process::id()));
     let source = "# Text Default\n\n## Options\n\n<!-- mant:entries role=option -->\n- `--flag`: A **strong** description.\n\n```sh\necho example\n```\n";

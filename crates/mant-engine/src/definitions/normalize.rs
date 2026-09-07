@@ -226,30 +226,42 @@ mod tests {
     #[test]
     fn moving_spaced_continuations_preserves_text_geometry_and_blank_lines() {
         for base in [0, 7] {
-            let mut blocks = vec![
-                definition(base),
-                space(1),
-                space(3),
-                paragraph("First continuation.", base + 4),
-                space(2),
-                definition(base + 8),
-                space(1),
-                paragraph("Last continuation.", base + 4),
-                space(2),
-                paragraph("Outside.", base),
-            ];
-            let before = text(blocks.clone());
-            let outside = blocks[8..].to_vec();
-            normalize_definition_nesting(&mut blocks);
-            assert_eq!(text(blocks.clone()), before, "base indent {base}");
-            assert_eq!(&blocks[1..], outside);
-            let Block::DefinitionList { items, .. } = &blocks[0] else {
-                unreachable!()
-            };
-            assert_eq!(items[0].description.len(), 8);
-            let once = blocks.clone();
-            normalize_definition_nesting(&mut blocks);
-            assert_eq!(blocks, once);
+            for inline_term in [false, true] {
+                for label in ["-a", "--long-option", "界", "e\u{301}"] {
+                    let mut owner = definition(base);
+                    let Block::DefinitionList { items, .. } = &mut owner else {
+                        unreachable!()
+                    };
+                    items[0].inline_term = inline_term;
+                    items[0].terms = vec![vec![Inline::Text {
+                        value: label.into(),
+                    }]];
+                    let mut blocks = vec![
+                        owner,
+                        space(1),
+                        space(3),
+                        paragraph("First continuation.", base + 4),
+                        space(2),
+                        definition(base + 8),
+                        space(1),
+                        paragraph("Last continuation.", base + 4),
+                        space(2),
+                        paragraph("Outside.", base),
+                    ];
+                    let before = text(blocks.clone());
+                    let outside = blocks[8..].to_vec();
+                    normalize_definition_nesting(&mut blocks);
+                    assert_eq!(text(blocks.clone()), before, "base indent {base}");
+                    assert_eq!(&blocks[1..], outside);
+                    let Block::DefinitionList { items, .. } = &blocks[0] else {
+                        unreachable!()
+                    };
+                    assert_eq!(items[0].description.len(), 8);
+                    let once = blocks.clone();
+                    normalize_definition_nesting(&mut blocks);
+                    assert_eq!(blocks, once);
+                }
+            }
         }
     }
 

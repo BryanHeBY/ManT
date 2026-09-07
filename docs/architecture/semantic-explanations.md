@@ -35,6 +35,12 @@ ordered/nested lists, invalid siblings, line endings and head punctuation.
 Per-entry relationship authoring and multi-evidence explain remain later
 stages; this does not claim that the entire design is implemented.
 
+The follow-up owner checks now distinguish partial child extraction from an
+author's exhaustive-choice claim, validate links to all indexed content owners,
+and keep inline first-paragraph hanging layout separate from later block
+coordinates. These are correctness repairs to the migrated foundation, not
+implementation of the pending relationship authoring or explanation collector.
+
 The target model attaches common entry facts to both ordinary `ListItem` and
 native `DefinitionItem` owners. Keep one authoritative content tree; derive
 the semantic index and query views from it. Do not store independently mutable

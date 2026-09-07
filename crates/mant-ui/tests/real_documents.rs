@@ -63,6 +63,30 @@ fn visible_characters(value: &str) -> String {
         .collect()
 }
 
+#[test]
+fn inline_roff_continuations_use_block_coordinates_not_the_label_width() {
+    let query = mant_engine::query_roff_bytes(include_bytes!(
+        "../../../tests/fixtures/roff/inline-definition-continuations.1"
+    ))
+    .unwrap();
+    let view = DocumentView::new(&query);
+    for width in [40, 100] {
+        let rendered = view.render(width);
+        let owner_origin = rendered.search("--next-option")[0].start_column;
+        for payload in [
+            "INLINE_CONTINUATION.",
+            "CODE_CONTINUATION",
+            "SECOND_CONTINUATION.",
+        ] {
+            let found = rendered.search(payload);
+            assert_eq!(found.len(), 1);
+            let line = rendered.text.lines[found[0].row].to_string();
+            assert_eq!(found[0].start_column, owner_origin + 4);
+            assert_eq!(line.trim(), payload);
+        }
+    }
+}
+
 /// Independently authored state-boundary cases exercise native IR through
 /// the terminal consumer; no reference executable or copied golden is needed.
 #[test]
