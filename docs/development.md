@@ -360,6 +360,16 @@ consumes `mant_ir::ResolvedContent` directly and never serializes it first.
 
 ## Native fixtures
 
+For independent behavior matrices, write minimal inputs and expected results
+from the documented semantic contract in the existing Rust tests. Assert
+aliases/forms, source ownership and exact line boundaries as appropriate, not
+only global token presence. Reuse existing licensed real fixtures; do not copy
+an external formatter's implementation, test harness or sample text into a new
+regression merely by changing names. Reference rendering stays an explicitly
+enabled local check, with output and environment details kept in its review
+bundle rather than imported as unquestioned golden output. This does not
+remove any existing attribution or license obligations.
+
 Do not replace a real distribution fixture with a hand-written approximation
 when fixing parser or lowering behavior. Add the smallest redistributable real
 source that reproduces the problem, record its origin and license under
