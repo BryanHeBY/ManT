@@ -189,6 +189,8 @@ Closing macros such as `Ed`, `Ef`, and `El` terminate libmandoc scopes and do no
 
 Literal and unfilled flows preserve physical line boundaries without resetting inline font or spacing state. `br` ends a line once; `sp N` adds vertical blank rows rather than printing its argument; `Sm` changes spacing without adding a row. A trailing `\c` joins the following source line unless an explicit break intervenes.
 
+Styling wrappers such as `Bf` are not line boundaries. Continuation and pending spacing pass through their opening and closing nodes, including a body containing only state requests. An explicit break inside a wrapper still terminates the current logical line.
+
 ## mdoc Inline Semantics
 
 The following macros receive dedicated inline treatment:

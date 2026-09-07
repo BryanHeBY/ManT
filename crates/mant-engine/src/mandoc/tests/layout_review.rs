@@ -105,6 +105,63 @@ fn literal_display_controls_preserve_physical_rows_and_continuation() {
     }
 }
 
+/// A styling container is not a logical-line boundary. These inputs are
+/// authored here from that contract, not copied from a formatter's tests.
+#[test]
+fn literal_continuations_cross_styling_containers_without_phantom_rows() {
+    for body in [
+        "FIRST\\c\n.Bf -emphasis\nSECOND\\c\n.Ef\nTHIRD",
+        "FIRST\\c\n.Bf -emphasis\n.Sm off\n.Ef\nSECOND\\c\nTHIRD",
+        ".Bf -emphasis\nFIRST\\c\n.Ef\nSECOND\\c\nTHIRD",
+        "FIRST\\c\n.Bf -symbolic\n.Bf -emphasis\nSECOND\\c\n.Ef\n.Ef\nTHIRD",
+    ] {
+        let source = format!(
+            ".Dd September 7, 2026\n.Dt FLOW 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal -offset left\n{body}\n.Ed\n"
+        );
+        let query = crate::query_roff_bytes(source.as_bytes()).unwrap();
+        let mant_ir::Block::Preformatted { children, .. } =
+            &query.document.as_ref().unwrap().sections[0].blocks[0]
+        else {
+            panic!("{query:?}")
+        };
+        assert_eq!(super::inline_text(children), "FIRSTSECONDTHIRD", "{body}");
+        assert!(crate::render_query_text(&query).contains("FIRSTSECONDTHIRD"));
+        assert!(crate::render_markdown(&query).contains("FIRSTSECONDTHIRD"));
+    }
+}
+
+#[test]
+fn styled_literal_breaks_and_eof_keep_exact_content_boundaries() {
+    for (body, expected) in [
+        (
+            "FIRST\\c\n.Bf -emphasis\n.br\nSECOND\n.Ef\nTHIRD",
+            "FIRST\nSECOND\nTHIRD",
+        ),
+        (
+            "FIRST\n.Bf -emphasis\nSECOND\n.sp 2\n.Ef\nTHIRD",
+            "FIRST\nSECOND\n\n\nTHIRD",
+        ),
+        (
+            "FIRST\n.Bf -emphasis\n.Sm off\n.Ef\nSECOND",
+            "FIRST\nSECOND",
+        ),
+        ("FIRST\n.Bf -emphasis\nSECOND\\c\n.Ef", "FIRST\nSECOND"),
+    ] {
+        let source = format!(
+            ".Dd September 7, 2026\n.Dt FLOW 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal -offset left\n{body}\n.Ed\n"
+        );
+        let query = crate::query_roff_bytes(source.as_bytes()).unwrap();
+        let mant_ir::Block::Preformatted { children, .. } =
+            &query.document.as_ref().unwrap().sections[0].blocks[0]
+        else {
+            panic!("{query:?}")
+        };
+        assert_eq!(super::inline_text(children), expected, "{body}");
+        assert!(crate::render_query_text(&query).contains(expected));
+        assert!(crate::render_markdown(&query).contains(expected));
+    }
+}
+
 #[test]
 fn option_arguments_never_become_aliases() {
     for (head, aliases, missed) in [

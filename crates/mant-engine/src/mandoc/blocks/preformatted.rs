@@ -107,112 +107,99 @@ fn push_preformatted_inline_run(
     }
 }
 
-fn preformatted_inlines(
-    nodes: &[Node],
-    context: &LoweringContext<'_>,
-    spacing_enabled: bool,
-) -> (Vec<Inline>, bool) {
-    let nodes = nodes.iter().collect::<Vec<_>>();
-    preformatted_inlines_refs(&nodes, context, spacing_enabled)
-}
-
-/// Assemble a no-fill run into visible rows.
-///
-/// libmandoc represents physical blank input lines as empty text nodes.  The
-/// terminal formatter collapses consecutive raw blank lines to one separator,
-/// while an explicit `.sp` request can ask for more.  Work from the adjacent
-/// visible source lines so the AST's empty placeholders do not create a
-/// growing stack of `LineBreak`s.
+/// Assemble a no-fill run using one physical-line cursor and inline state.
+/// Styling and transparent AST containers do not themselves consume a line.
 fn preformatted_inlines_refs(
     nodes: &[&Node],
     context: &LoweringContext<'_>,
     spacing_enabled: bool,
 ) -> (Vec<Inline>, bool) {
     let mut line = InlineBuilder::with_spacing(spacing_enabled);
-    let mut previous_visible_line = None;
-    let mut continues_line = false;
-    for node in nodes {
+    NoFillFlow::default().append(nodes.iter().copied(), &mut line, context);
+    let final_spacing = line.spacing_enabled();
+    (line.finish(), final_spacing)
+}
+
+/// Source-line policy is independent of the inline tree used for styling.
+/// Only printable leaves or materialized vertical requests advance this cursor.
+#[derive(Default)]
+struct NoFillFlow {
+    previous_line: Option<u32>,
+    continues_line: bool,
+}
+
+impl NoFillFlow {
+    fn append<'a>(
+        &mut self,
+        nodes: impl IntoIterator<Item = &'a Node>,
+        line: &mut InlineBuilder,
+        context: &LoweringContext<'_>,
+    ) {
+        for node in nodes {
+            self.push(node, line, context);
+        }
+    }
+
+    fn push(&mut self, node: &Node, line: &mut InlineBuilder, context: &LoweringContext<'_>) {
         if node.kind == NodeKind::Comment || node.flags.no_print {
-            continue;
+            return;
         }
-
-        // Do not give every empty AST placeholder its own rendered row.  Its
-        // source-line distance is accounted for when the next printable node
-        // is appended below.
         if node.kind == NodeKind::Text && node.text.as_deref().is_some_and(str::is_empty) {
-            continue;
+            return;
         }
-
-        // Control requests do not themselves occupy a source-visible row.
-        // Consume them before applying physical line boundaries, and retain
-        // one builder so font, spacing and continuation survive those boundaries.
+        // Containers carry scope, not an extra source-visible row. Recurse
+        // through the same cursor/builder so controls and continuation at the
+        // end of a nested body remain active for the next outside leaf.
+        if node.macro_name.as_deref() == Some("Bf") {
+            line.append_scope(
+                |line| self.append(first_part_children(node, NodeKind::Body), line, context),
+                |nodes| {
+                    if let Some(font) = node.font {
+                        style_preformatted_inlines(nodes, font)
+                    } else {
+                        nodes
+                    }
+                },
+            );
+            return;
+        }
+        if node.kind == NodeKind::Block
+            && matches!(node.macro_name.as_deref(), Some("Bd" | "D1" | "Dl"))
+        {
+            self.append(first_part_children(node, NodeKind::Body), line, context);
+            return;
+        }
+        if node.kind != NodeKind::Text && node.macro_name.is_none() {
+            self.append(&node.children, line, context);
+            return;
+        }
         match node.macro_name.as_deref() {
             Some("sp") => {
                 line.blank_rows(vertical_distance_lines(node).unwrap_or(0));
-                // This request has now been materialized. Do not count it
-                // again when recovering omitted source rows at the next node.
-                previous_visible_line = Some(node.line);
-                continues_line = false;
-                continue;
+                self.previous_line = Some(node.line);
+                self.continues_line = false;
+                return;
             }
             Some("br") => {
                 line.hard_break();
-                continues_line = false;
-                continue;
+                self.continues_line = false;
+                return;
             }
             Some("Sm" | "ft" | "Ns") => {
-                append_inline_node(&mut line, node, context.default_name);
-                continue;
+                append_inline_node(line, node, context.default_name);
+                return;
             }
             _ => {}
         }
-        if let Some(previous) = previous_visible_line.filter(|previous| node.line > *previous)
-            && !continues_line
+        if let Some(previous) = self.previous_line.filter(|previous| node.line > *previous)
+            && !self.continues_line
         {
-            let extra_rows = context.no_fill_blank_rows_between(Some(previous), Some(node.line));
-            line.blank_rows(extra_rows);
+            line.blank_rows(context.no_fill_blank_rows_between(Some(previous), Some(node.line)));
         }
-        if node.macro_name.as_deref() == Some("Bf") {
-            let body = first_part_children(node, NodeKind::Body)
-                .iter()
-                .collect::<Vec<_>>();
-            let (nested, final_spacing) =
-                preformatted_inlines_refs(&body, context, line.spacing_enabled());
-            line.append(if let Some(font) = node.font {
-                style_preformatted_inlines(nested, font)
-            } else {
-                nested
-            });
-            line.inherit_spacing(final_spacing);
-        } else if node.kind == NodeKind::Block
-            && matches!(node.macro_name.as_deref(), Some("Bd" | "D1" | "Dl"))
-        {
-            // Malformed but deployed mdoc sometimes opens another literal
-            // display before closing the current one.  libmandoc retains the
-            // nested container; treating it as an inline macro collapses all
-            // of its physical rows.  A preformatted parent can safely make
-            // the nested display transparent while preserving its row
-            // boundaries.
-            let body = first_part_children(node, NodeKind::Body)
-                .iter()
-                .collect::<Vec<_>>();
-            let (nested, final_spacing) =
-                preformatted_inlines_refs(&body, context, line.spacing_enabled());
-            line.append(nested);
-            line.inherit_spacing(final_spacing);
-        } else if node.kind == NodeKind::Text || node.macro_name.is_some() {
-            append_inline_node(&mut line, node, context.default_name);
-        } else {
-            let (nested, final_spacing) =
-                preformatted_inlines(&node.children, context, line.spacing_enabled());
-            line.append(nested);
-            line.inherit_spacing(final_spacing);
-        }
-        previous_visible_line = Some(node.line);
-        continues_line = ends_with_line_continuation(node);
+        append_inline_node(line, node, context.default_name);
+        self.previous_line = Some(node.line);
+        self.continues_line = ends_with_line_continuation(node);
     }
-    let final_spacing = line.spacing_enabled();
-    (line.finish(), final_spacing)
 }
 
 pub(super) fn style_preformatted_inlines(nodes: Vec<Inline>, font: NormalizedFont) -> Vec<Inline> {

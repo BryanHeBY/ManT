@@ -148,7 +148,7 @@ impl InlineBuilder {
         // content precedes the transition, retain its ordinary boundary to
         // the first following fragment, then concatenate subsequent macro
         // arguments until spacing is enabled again.
-        self.boundary = match (updated, self.nodes.is_empty(), self.boundary) {
+        self.boundary = match (updated, !self.has_printable_content, self.boundary) {
             (_, _, PendingBoundary::Tight) => PendingBoundary::Tight,
             (false, false, _) => PendingBoundary::Preserved,
             _ => PendingBoundary::Ordinary,
@@ -185,6 +185,21 @@ impl InlineBuilder {
 
     pub(super) fn append(&mut self, mut incoming: Vec<Inline>) {
         self.append_at_boundary(&mut incoming);
+    }
+
+    /// Style newly appended content without creating a new formatter state.
+    /// The transform must preserve visible characters and line boundaries.
+    /// In particular, a wrapper ending after `\\c` must not consume its
+    /// pending join merely because its content is represented as a subtree.
+    pub(super) fn append_scope(
+        &mut self,
+        append: impl FnOnce(&mut Self),
+        style: impl FnOnce(Vec<Inline>) -> Vec<Inline>,
+    ) {
+        let outer = std::mem::take(&mut self.nodes);
+        append(self);
+        let inner = std::mem::replace(&mut self.nodes, outer);
+        self.nodes.extend(style(inner));
     }
 
     /// Add physical blank rows without resetting font or spacing state.
@@ -1079,6 +1094,31 @@ fn push_text(nodes: &mut Vec<Inline>, value: String) {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn styled_scopes_preserve_pending_spacing_and_continuation() {
+        for tight in [false, true] {
+            let mut builder = super::InlineBuilder::new();
+            builder.append(super::text_node("FIRST"));
+            if tight {
+                builder.tighten_next_boundary();
+            }
+            builder.append_scope(|builder| builder.set_spacing("off"), |nodes| nodes);
+            builder.append_scope(
+                |builder| builder.append(super::text_node("SECOND")),
+                |children| vec![super::Inline::Emphasis { children }],
+            );
+            builder.append(super::text_node("THIRD"));
+            assert_eq!(
+                super::plain_text(&builder.finish()),
+                if tight {
+                    "FIRSTSECONDTHIRD"
+                } else {
+                    "FIRST SECONDTHIRD"
+                }
+            );
+        }
+    }
+
     use super::{
         FilledBoundary, Font, InlineBuilder, parse_roff_text, parse_roff_text_with_font, plain_text,
     };
