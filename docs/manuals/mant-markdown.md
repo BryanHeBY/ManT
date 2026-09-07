@@ -171,6 +171,8 @@ An entry can explicitly state whether its locally listed values are complete:
 
 `choices=exhaustive` is the author's assertion that the listed choices are the
 complete value space. `choices=open` explicitly leaves that space open.
+
+An exhaustive declaration is omitted with a source-located diagnostic if any direct child entry or child-list declaration was rejected. Successful siblings and all original content remain intact; they may still support open choices. Coverage stops at each successfully recognized child owner, so an unrelated warning or a rejection inside that child's own body does not invalidate this parent's enumeration. Open choices never assert that rejected or undiscovered values do not exist.
 Both require at least one direct semantic child and require every direct
 semantic child to have `role=value`. Ordinary descriptive paragraphs are not
 choices. The parser cannot prove exhaustiveness against an executable; it

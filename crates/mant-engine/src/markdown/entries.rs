@@ -16,14 +16,27 @@ use crate::definitions::{environment_variable_alias, option_names_from_terms, op
 
 /// Attach facts to each declared owner without consuming its head or delimiter.
 pub(super) fn normalize_entry_lists(
-    blocks: &mut Vec<Block>,
+    blocks: &mut [Block],
     declarations: &mut SemanticDeclarations,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    for block in blocks.iter_mut() {
-        normalize_nested_blocks(block, declarations, diagnostics);
-    }
+    entry_coverage(blocks, declarations, diagnostics);
+}
 
+/// Coverage of direct semantic children through transparent containers. A
+/// successfully annotated owner is a boundary: failures inside its own body
+/// cannot invalidate a sibling's or parent's enumeration of that owner.
+#[derive(Clone, Copy, Default)]
+struct EntryCoverage {
+    rejected: bool,
+}
+
+fn entry_coverage(
+    blocks: &mut [Block],
+    declarations: &mut SemanticDeclarations,
+    diagnostics: &mut Vec<Diagnostic>,
+) -> EntryCoverage {
+    let mut coverage = EntryCoverage::default();
     for block in blocks {
         let Block::List {
             kind,
@@ -32,13 +45,19 @@ pub(super) fn normalize_entry_lists(
             ..
         } = block
         else {
+            coverage.rejected |= normalize_nested_blocks(block, declarations, diagnostics).rejected;
             continue;
         };
+        let child_coverage = items
+            .iter_mut()
+            .map(|item| entry_coverage(&mut item.blocks, declarations, diagnostics))
+            .collect::<Vec<_>>();
         if items.is_empty() {
             continue;
         }
         let declaration = source.and_then(|source| declarations.entries.remove(&source.line));
         if declaration.is_none() && *kind != ListKind::Bullet {
+            coverage.rejected |= child_coverage.iter().any(|value| value.rejected);
             continue;
         }
         let role = declaration.map_or(DefinitionRole::Option, |value| value.role);
@@ -52,6 +71,7 @@ pub(super) fn normalize_entry_lists(
         // admission rule. An explicit declaration instead owns each item's
         // validation independently; one rejection cannot erase valid siblings.
         if declaration.is_none() && signatures.iter().any(Result::is_err) {
+            coverage.rejected |= child_coverage.iter().any(|value| value.rejected);
             if resembles_rejected_option_list(items) {
                 semantic_diagnostic(
                     diagnostics,
@@ -68,10 +88,11 @@ pub(super) fn normalize_entry_lists(
             }
             continue;
         }
-        for (item, signature) in items.iter_mut().zip(signatures) {
+        for ((item, signature), children) in items.iter_mut().zip(signatures).zip(child_coverage) {
             let signature = match signature {
                 Ok(signature) => signature,
                 Err(rejection) => {
+                    coverage.rejected = true;
                     rejection.emit(
                         diagnostics,
                         source.unwrap_or(declaration.expect("declared rejection").source),
@@ -79,16 +100,16 @@ pub(super) fn normalize_entry_lists(
                     continue;
                 }
             };
-            let domain = item
+            let owner_offset = item
                 .blocks
                 .first()
                 .and_then(block_source)
                 .and_then(|source| source.byte_range)
-                .and_then(|range| {
-                    declarations
-                        .domains
-                        .remove(&usize::try_from(range.start.get()).unwrap_or(usize::MAX))
-                })
+                .map(|range| usize::try_from(range.start.get()).unwrap_or(usize::MAX));
+            let rejected_declaration = owner_offset
+                .is_some_and(|offset| declarations.incomplete_entry_children.remove(&offset));
+            let domain = owner_offset
+                .and_then(|offset| declarations.domains.remove(&offset))
                 .and_then(DomainDeclarationState::into_unique);
             item.entry = Some(bindings::entry_facts(
                 item,
@@ -99,7 +120,11 @@ pub(super) fn normalize_entry_lists(
                 declaration.is_some(),
             ));
             if let Some(declaration) = domain {
-                if matches!(declaration.value, ValueDomain::Choices { .. })
+                if matches!(declaration.value, ValueDomain::Choices { exhaustive: true })
+                    && (children.rejected || rejected_declaration)
+                {
+                    domain_diagnostic(diagnostics, declaration.source, "exhaustive choices requires complete extraction of the direct child entries; rejected children remain visible and the declared domain was omitted".to_owned());
+                } else if matches!(declaration.value, ValueDomain::Choices { .. })
                     && !item.has_value_choices()
                 {
                     domain_diagnostic(diagnostics, declaration.source, "choices requires nonempty direct semantic children of role=value; the declared domain was omitted".to_owned());
@@ -112,17 +137,22 @@ pub(super) fn normalize_entry_lists(
             }
         }
     }
+    coverage
 }
 
 fn normalize_nested_blocks(
     block: &mut Block,
     declarations: &mut SemanticDeclarations,
     diagnostics: &mut Vec<Diagnostic>,
-) {
+) -> EntryCoverage {
+    let mut coverage = EntryCoverage::default();
     match block {
         Block::List { items, .. } => {
             for item in items {
-                normalize_entry_lists(&mut item.blocks, declarations, diagnostics);
+                let children = entry_coverage(&mut item.blocks, declarations, diagnostics);
+                if item.entry.is_none() {
+                    coverage.rejected |= children.rejected;
+                }
             }
         }
         Block::DefinitionList { items, .. } => {
@@ -132,7 +162,8 @@ fn normalize_nested_blocks(
         }
         Block::Table { rows, .. } => {
             for cell in rows.iter_mut().flat_map(|row| &mut row.cells) {
-                normalize_entry_lists(&mut cell.blocks, declarations, diagnostics);
+                coverage.rejected |=
+                    entry_coverage(&mut cell.blocks, declarations, diagnostics).rejected;
             }
         }
         Block::Paragraph { .. }
@@ -142,6 +173,7 @@ fn normalize_nested_blocks(
         | Block::ThematicBreak { .. }
         | Block::Unsupported { .. } => {}
     }
+    coverage
 }
 
 #[derive(Clone)]
@@ -654,7 +686,7 @@ fn resembles_rejected_option_list(items: &[ListItem]) -> bool {
 }
 
 #[cfg(test)]
-fn normalize_option_lists(blocks: &mut Vec<Block>) {
+fn normalize_option_lists(blocks: &mut [Block]) {
     normalize_entry_lists(
         blocks,
         &mut SemanticDeclarations::default(),

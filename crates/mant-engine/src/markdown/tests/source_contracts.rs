@@ -16,6 +16,7 @@ fn annotations_preserve_the_original_event_tree_and_every_visible_delimiter() {
             "<!-- mant:entries role=option case=sensitive -->\n- `-h`, `--help`: Help.  \n  Next line.\n- `--color WHEN` — Color.\n",
             "<!-- mant:entries role=command case=sensitive -->\n7. [`get`](get.md) / `fetch` | `get all`: Get **body**.\n\n8. `put`: Put.\n\n   <!-- mant:entries role=option case=sensitive -->\n   - `-f`: Child.\n",
             "<!-- mant:entries role=command case=insensitive -->\n- `good`: Valid.\n- This remains visible prose.\n- `other`: Also valid.\n",
+            "<!-- mant:entries role=option case=sensitive -->\n- `--mode MODE`: Choose.\n\n  <!-- mant:domain choices=exhaustive -->\n\n  <!-- mant:entries role=value case=sensitive -->\n  - `auto`: Automatic.\n  - `manual`\n",
         ] {
             let source = body.replace('\n', newline);
             let mut diagnostics = Vec::new();

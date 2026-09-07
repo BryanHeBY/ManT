@@ -4,7 +4,7 @@ use mant_ir::{
     SemanticDocumentReference, SourceSpan, ValueDomain,
 };
 use pulldown_cmark::{Event, Tag, TagEnd};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 /// Events and declarations always describe this exact borrowed source.
 pub(super) struct PreparedMarkdown<'a> {
@@ -35,6 +35,8 @@ pub(super) struct EntryDeclaration {
 pub(super) struct SemanticDeclarations {
     pub(super) entries: BTreeMap<u32, EntryDeclaration>,
     pub(super) domains: BTreeMap<usize, DomainDeclarationState>,
+    /// Item owners with a rejected or unattached child-list declaration.
+    pub(super) incomplete_entry_children: BTreeSet<usize>,
 }
 
 #[derive(Debug, Clone)]
@@ -137,7 +139,17 @@ fn collect_entry_declarations(
     declarations: &mut SemanticDeclarations,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
+    let mut item_offsets = Vec::new();
     for (event_index, (event, range)) in events.iter().enumerate() {
+        match event {
+            Event::Start(Tag::Item) => {
+                item_offsets.push(first_item_block_offset(events, event_index));
+            }
+            Event::End(TagEnd::Item) => {
+                item_offsets.pop();
+            }
+            _ => {}
+        }
         let Event::Html(raw) = event else {
             continue;
         };
@@ -162,11 +174,17 @@ fn collect_entry_declarations(
             masked,
             diagnostics,
         ) else {
+            declarations
+                .incomplete_entry_children
+                .extend(item_offsets.last().copied().flatten());
             continue;
         };
         let source_span = declaration.source;
         let Some((Event::Start(Tag::List(_)), target_range)) = events.get(block_end_index + 1)
         else {
+            declarations
+                .incomplete_entry_children
+                .extend(item_offsets.last().copied().flatten());
             semantic_diagnostic(
                 diagnostics,
                 source_span,
@@ -181,6 +199,9 @@ fn collect_entry_declarations(
             .insert(target_line, declaration)
             .is_some()
         {
+            declarations
+                .incomplete_entry_children
+                .extend(item_offsets.last().copied().flatten());
             semantic_diagnostic(
                 diagnostics,
                 source_span,
