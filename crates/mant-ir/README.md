@@ -37,6 +37,8 @@ The important public families are:
 | `NodeId`, `FragmentAlias`, `OutlinePath`, `TextRange` | Normalized local identities, exact source fragments, and coordinates |
 | `DocumentIndex` | Immutable lookup sidecar derived from one document |
 | `validate_document` | Shared structural invariant checks |
+| `entry_relation_issues`, `EntryRelationIssueKind` | Typed owner-specific relationship failures for producers and evidence consumers; the same policy backs document diagnostics |
+| `is_normalized_node_id` | Shared canonical ID grammar, separate from uniqueness and selector reservation |
 | `Visit`, `VisitMut` | Exhaustive read-only or mutable traversal |
 
 `DocumentMeta::manual_section` is a native manual category such as `1` or

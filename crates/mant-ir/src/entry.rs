@@ -12,6 +12,7 @@ pub use index::SemanticIndex;
 use index::entry_from_definition;
 pub use model::*;
 pub(crate) use relations::validate_relations;
+pub use relations::{EntryRelationIssue, EntryRelationIssueKind, entry_relation_issues};
 pub use walk::visit_child_entries;
 
 #[cfg(test)]

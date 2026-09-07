@@ -9,6 +9,68 @@ use crate::{
 
 #[derive(Default)]
 struct Owners<'a>(BTreeMap<&'a str, Vec<EntryOwner<'a>>>);
+
+/// One rejected relation or visible-name binding, attributed to its owner.
+/// Producers may remove the rejected field without parsing diagnostic prose;
+/// consumers must not use a rejected relation as evidence.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EntryRelationIssue {
+    /// Canonical ID of the content owner with the rejected fact.
+    pub owner: crate::NodeId,
+    /// The independent fact or relationship that failed validation.
+    pub kind: EntryRelationIssueKind,
+}
+
+/// Source-neutral entry relationship failures.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EntryRelationIssueKind {
+    /// A selectable name does not bind to its original visible head.
+    NameBinding,
+    /// A group is incomplete, overlapping, or not bound to visible names.
+    AliasGroups,
+    /// The target is absent, ambiguous, self-referential or incompatible.
+    AliasOf,
+    /// The relationship participates in a directed cycle.
+    Cycle,
+}
+
+impl EntryRelationIssue {
+    /// The same structured diagnostic emitted by document validation.
+    #[must_use]
+    pub fn diagnostic(&self) -> Diagnostic {
+        let (code, message) = match self.kind {
+            EntryRelationIssueKind::NameBinding => (
+                "ir.invalid-entry-name-binding",
+                "names must bind to matching text within authored forms",
+            ),
+            EntryRelationIssueKind::AliasGroups => (
+                "ir.invalid-entry-alias-groups",
+                "alias groups must be disjoint sets of at least two uniquely bound visible names",
+            ),
+            EntryRelationIssueKind::AliasOf => (
+                "ir.invalid-entry-alias-of",
+                "aliasOf requires a distinct, unique, same-role single-subject entry with compatible case policy",
+            ),
+            EntryRelationIssueKind::Cycle => (
+                "ir.cyclic-entry-alias",
+                "aliasOf relationships must not form a cycle",
+            ),
+        };
+        Diagnostic {
+            level: DiagnosticLevel::Warning,
+            code: Some(code.into()),
+            message: format!("entry '{}': {message}", self.owner),
+            source: None,
+        }
+    }
+}
+
+/// Check explicit relationships without changing content or deriving aliases.
+/// Forward references are resolved against this complete document snapshot.
+#[must_use]
+pub fn entry_relation_issues(document: &Document) -> Vec<EntryRelationIssue> {
+    relation_issues(document, &crate::DocumentIndex::build(document))
+}
 impl<'a> Visit<'a> for Owners<'a> {
     fn visit_definition_item(&mut self, item: &'a crate::DefinitionItem) {
         if let Some(facts) = &item.identity
@@ -38,6 +100,13 @@ pub(crate) fn validate_relations(
     document: &Document,
     index: &crate::DocumentIndex,
 ) -> Vec<Diagnostic> {
+    relation_issues(document, index)
+        .iter()
+        .map(EntryRelationIssue::diagnostic)
+        .collect()
+}
+
+fn relation_issues(document: &Document, index: &crate::DocumentIndex) -> Vec<EntryRelationIssue> {
     let mut owners = Owners::default();
     owners.visit_document(document);
     let mut diagnostics = Vec::new();
@@ -53,17 +122,19 @@ pub(crate) fn validate_relations(
             let facts = owner.facts().expect("collected fact owner");
             let bindings = valid_name_bindings(owner);
             if bindings.is_none() {
-                diagnostics.push(finding(
-                    "ir.invalid-entry-name-binding",
-                    id,
-                    "names must bind to matching text within authored forms",
-                ));
+                diagnostics.push(EntryRelationIssue {
+                    owner: id.into(),
+                    kind: EntryRelationIssueKind::NameBinding,
+                });
             }
             let valid_groups = bindings
                 .as_ref()
                 .is_some_and(|bindings| groups_are_valid(facts, bindings));
             if !facts.alias_groups.is_empty() && !valid_groups {
-                diagnostics.push(finding("ir.invalid-entry-alias-groups", id, "alias groups must be disjoint sets of at least two uniquely bound visible names"));
+                diagnostics.push(EntryRelationIssue {
+                    owner: id.into(),
+                    kind: EntryRelationIssueKind::AliasGroups,
+                });
             }
             if records.len() == 1
                 && !duplicate_ids.contains(id)
@@ -92,7 +163,10 @@ pub(crate) fn validate_relations(
                 .and_then(EntryOwner::facts)
                 .is_some_and(|other| other.role == facts.role && other.case == facts.case);
             if id == target || !eligible.contains(id) || !eligible.contains(target) || !compatible {
-                diagnostics.push(finding("ir.invalid-entry-alias-of", id, "aliasOf requires a distinct, unique, same-role single-subject entry with compatible case policy"));
+                diagnostics.push(EntryRelationIssue {
+                    owner: id.into(),
+                    kind: EntryRelationIssueKind::AliasOf,
+                });
             } else {
                 edges.insert(id, target);
             }
@@ -103,16 +177,15 @@ pub(crate) fn validate_relations(
     let mut finished = BTreeSet::new();
     for &start in edges.keys() {
         let mut positions = BTreeMap::new();
-        let mut chain = Vec::new();
+        let mut chain: Vec<&str> = Vec::new();
         let mut current = start;
         while !finished.contains(current) {
             if let Some(&cycle_start) = positions.get(current) {
                 for &id in &chain[cycle_start..] {
-                    diagnostics.push(finding(
-                        "ir.cyclic-entry-alias",
-                        id,
-                        "aliasOf relationships must not form a cycle",
-                    ));
+                    diagnostics.push(EntryRelationIssue {
+                        owner: id.into(),
+                        kind: EntryRelationIssueKind::Cycle,
+                    });
                 }
                 break;
             }
@@ -126,15 +199,6 @@ pub(crate) fn validate_relations(
         finished.extend(chain);
     }
     diagnostics
-}
-
-fn finding(code: &str, id: &str, message: &str) -> Diagnostic {
-    Diagnostic {
-        level: DiagnosticLevel::Warning,
-        code: Some(code.into()),
-        message: format!("entry '{id}': {message}"),
-        source: None,
-    }
 }
 
 fn has_relationship_facts(facts: &EntryFacts) -> bool {
@@ -299,6 +363,28 @@ mod tests {
             .into_iter()
             .filter_map(|d| d.code)
             .collect()
+    }
+
+    #[test]
+    fn typed_issues_and_document_diagnostics_share_one_relation_policy() {
+        let mut item = entry("probe", &["-a", "--all"]);
+        item.identity.as_mut().unwrap().alias_groups = vec![vec!["-a".into(), "hidden".into()]];
+        let doc = document(vec![item]);
+        let issues = entry_relation_issues(&doc);
+        assert_eq!(
+            issues,
+            vec![EntryRelationIssue {
+                owner: "probe".into(),
+                kind: EntryRelationIssueKind::AliasGroups
+            }]
+        );
+        assert_eq!(
+            issues
+                .iter()
+                .map(EntryRelationIssue::diagnostic)
+                .collect::<Vec<_>>(),
+            crate::validate_document(&doc)
+        );
     }
 
     #[test]

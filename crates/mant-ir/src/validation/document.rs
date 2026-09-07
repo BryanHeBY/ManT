@@ -142,7 +142,10 @@ pub fn is_semantic_completeness_diagnostic(code: &str) -> bool {
     )
 }
 
-fn is_normalized_node_id(id: &str) -> bool {
+/// Whether an exact authored ID satisfies the canonical identity grammar.
+/// This does not check document-local uniqueness or reserved selector names.
+#[must_use]
+pub fn is_normalized_node_id(id: &str) -> bool {
     let mut characters = id.chars();
     let Some(first) = characters.next() else {
         return false;
