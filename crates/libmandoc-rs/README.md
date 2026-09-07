@@ -410,6 +410,8 @@ libmandoc but unavailable through a public C API:
   pinned parser otherwise retains as an unexpanded identifier;
 - tbl multiline-cell and vertical-continuation flags, including both tbl(7)
   spellings of vertical continuation;
+- effective cell content/rule kinds and first-data-row table boundaries,
+  retaining native layout precedence and distinguishing `T&` from a new table;
 - structured diagnostics and explicit source/include/compression policy.
 
 These extensions never reinterpret source into `ManT`'s document IR. For

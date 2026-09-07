@@ -331,7 +331,8 @@ objects, uses an isolated target directory, and exercises in-memory parsing,
 source-relative `.so`, virtual bundles, and all reference renderers. Use
 `--rounds N` for a longer local soak. The ASan companion checks exact
 caller-owned input tails, owned-AST access after releasing the native parser,
-and output-limit boundaries in both languages. The runners support `x86_64`
+output-limit boundaries, and isolated deep-tree parse/render rejection plus
+error cleanup in both languages. The runners support `x86_64`
 and `aarch64` Linux/glibc and macOS; Windows retains ordinary concurrent and
 boundary regressions in CI but is outside these local sanitizer runners. The
 runners, patch series, and upstream checksum are repository maintenance inputs
