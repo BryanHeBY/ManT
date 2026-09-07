@@ -11,7 +11,8 @@ use super::{
     parse_manual_bytes, parse_manual_source,
 };
 
-mod layout_review;
+mod entry_forms;
+mod flow_controls;
 mod upstream_inline;
 mod upstream_tables;
 

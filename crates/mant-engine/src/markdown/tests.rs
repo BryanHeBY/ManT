@@ -16,7 +16,8 @@ use crate::{
 
 use super::{parse_document, parse_markdown};
 
-mod layout_review;
+mod entry_forms;
+mod source_contracts;
 
 #[test]
 fn declared_choice_domains_require_values_and_preserve_exhaustiveness() {
