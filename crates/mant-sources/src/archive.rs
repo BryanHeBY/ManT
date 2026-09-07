@@ -275,7 +275,7 @@ fn normalize_archive_name(name: &str) -> Result<Option<PathBuf>, String> {
         if component.is_empty() && components.peek().is_none() {
             continue;
         }
-        if component.is_empty() || component == ".." || (depth == 0 && component.ends_with(':')) {
+        if !portable_archive_component(component) {
             return Err(format!("archive entry '{name}' has an unsafe path"));
         }
         normalized.push(component);
@@ -287,6 +287,36 @@ fn normalize_archive_name(name: &str) -> Result<Option<PathBuf>, String> {
         ));
     }
     Ok((depth != 0).then_some(normalized))
+}
+
+/// Check raw components before `PathBuf::push` can interpret a Windows prefix
+/// or the filesystem can interpret a device/stream name. This policy belongs
+/// to archive members, not native configuration paths or logical selectors.
+fn portable_archive_component(component: &str) -> bool {
+    if component.is_empty()
+        || component == ".."
+        || component.ends_with(['.', ' '])
+        || component.contains([':', '<', '>', '"', '|', '?', '*'])
+    {
+        return false;
+    }
+    let stem = component
+        .split('.')
+        .next()
+        .unwrap_or_default()
+        .trim_end_matches(' ')
+        .to_ascii_uppercase();
+    !matches!(
+        stem.as_str(),
+        "CON" | "PRN" | "AUX" | "NUL" | "CONIN$" | "CONOUT$"
+    ) && !["COM", "LPT"].iter().any(|prefix| {
+        stem.strip_prefix(prefix).is_some_and(|suffix| {
+            matches!(
+                suffix,
+                "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "¹" | "²" | "³"
+            )
+        })
+    })
 }
 
 fn charge_expanded(current: u64, size: u64, path: &Path) -> Result<u64, String> {
@@ -626,6 +656,75 @@ mod tests {
         for path in ["docs\\tool.md", "docs/bad\u{1f}name.md"] {
             let error = normalize_archive_name(path).expect_err("reject non-portable archive path");
             assert!(error.contains("unsafe path"), "{error}");
+        }
+    }
+
+    #[test]
+    fn archive_components_cannot_be_reinterpreted_as_windows_paths() {
+        for name in [
+            "C:escape.md",
+            "docs/C:escape.md",
+            "docs/file.md:stream",
+            "docs/NUL.md",
+            "docs/CONIN$.md",
+            "docs/COM1.md",
+            "docs/COM¹.md",
+            "docs/LPT9/file.md",
+            "docs/name. /file.md",
+            "docs/name./file.md",
+            "docs/file?.md",
+        ] {
+            assert!(normalize_archive_name(name).is_err(), "{name}");
+        }
+        let relative = normalize_archive_name("docs/日本/COM10.md")
+            .unwrap()
+            .unwrap();
+        assert!(
+            relative
+                .components()
+                .all(|part| matches!(part, std::path::Component::Normal(_)))
+        );
+    }
+
+    #[test]
+    fn zip_and_tar_reject_nonportable_members_before_writing_documents() {
+        for (index, name) in [
+            "C:escape.md",
+            "docs/C:escape.md",
+            "docs/file.md:stream",
+            "docs/NUL.md",
+            "docs/name./file.md",
+        ]
+        .iter()
+        .enumerate()
+        {
+            // Write the raw tar header: host path normalization in a fixture
+            // builder must not remove the exact member spelling under test.
+            let mut header = Header::new_ustar();
+            header.as_mut_bytes()[..name.len()].copy_from_slice(name.as_bytes());
+            header.set_size(1);
+            header.set_mode(0o644);
+            header.set_entry_type(EntryType::Regular);
+            header.set_cksum();
+            let mut tar = Builder::new(Vec::new());
+            tar.append(&header, &b"x"[..]).unwrap();
+            for (format, bytes) in [
+                ("tar", tar.into_inner().unwrap()),
+                ("zip", zip_bytes(&[(name, b"x")])),
+            ] {
+                let root = temp(&format!("portable-member-{index}-{format}"));
+                fs::create_dir_all(&root).unwrap();
+                let archive = root.join("input.archive");
+                let destination = root.join("staging");
+                fs::write(&archive, bytes).unwrap();
+                assert!(
+                    extract_archive(&archive, &destination).is_err(),
+                    "{name}: {format}"
+                );
+                assert_eq!(fs::read_dir(&destination).unwrap().count(), 0);
+                assert_eq!(fs::read_dir(&root).unwrap().count(), 2);
+                fs::remove_dir_all(&root).unwrap();
+            }
         }
     }
 

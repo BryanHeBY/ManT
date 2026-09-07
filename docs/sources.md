@@ -195,7 +195,11 @@ blob in the depth-one snapshot, and a Unix server may ignore Git's partial-clone
 filter, so unlike the streaming archive path this cannot strictly cap transient
 Git pack traffic or storage before checkout validation. Absolute,
 parent-relative, non-UTF-8, duplicate, link, and special archive entries are
-rejected. These checks apply before activation, so malformed or hostile input
+rejected. Archive components must also be portable Windows filenames: drive
+prefixes, alternate streams, reserved devices, trailing dots/spaces and reserved
+filename punctuation are rejected on every platform before host path assembly.
+This archive-only rule does not constrain native configuration paths.
+These checks apply before activation, so malformed or hostile input
 leaves the previous source installed.
 
 An update lock prevents two native CLI updates from writing the source store

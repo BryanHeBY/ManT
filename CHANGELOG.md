@@ -14,6 +14,10 @@ that crate was not published for that change.
 
 ### mant-sources (next release)
 
+- Reject non-portable archive member components before host path assembly,
+  including drive-relative prefixes, alternate streams, reserved Windows
+  devices and trailing dots/spaces. This intentionally tightens archive
+  acceptance on Unix too; native configuration path syntax is unchanged.
 - Reject FIFO and other non-regular configuration/metadata inputs without
   blocking source discovery, doctor or updates. Preserve user configuration
   symlinks while rejecting managed metadata links at the Unix open boundary.
