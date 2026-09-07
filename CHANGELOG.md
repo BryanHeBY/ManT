@@ -55,6 +55,8 @@ that crate was not published for that change.
 
 ### mant-engine 0.11.0
 
+- Preserve one function argument per `Fo`/`Fa` operand; quoting defines
+  multi-word parameters, and controls/targets no longer consume argument slots.
 - Make tbl cell recovery transactional: unsupported mixed block/inline
   requests keep the complete native payload or complete source spelling,
   never a partial reconstruction that silently drops earlier text.

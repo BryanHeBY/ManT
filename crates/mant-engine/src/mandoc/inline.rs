@@ -648,52 +648,37 @@ fn lower_function_declaration(
     declaration.push(Inline::Strong { children: head });
     declaration.push(Inline::Text { value: "(".into() });
     let mut has_argument = false;
+    let mut arguments = InlineBuilder::with_spacing(spacing_enabled);
     for argument in body {
-        let operands = inline_children(argument);
-        if argument.macro_name.as_deref() == Some("Fa")
-            && operands.len() > 1
-            && operands.iter().any(|operand| {
-                operand
-                    .text
-                    .as_deref()
-                    .is_some_and(|text| text.chars().any(char::is_whitespace))
-            })
-        {
-            // One mdoc `Fa` invocation can declare several parameters. The
-            // formatter owns the comma between those operands just as it
-            // owns the comma between separate `Fa` invocations. Flatten the
-            // semantic operands here instead of spacing the whole `Fa` node
-            // as one argument. Quoting makes a multi-word source operand one
-            // owned text node; in contrast, traditional `.Fa const char *p`
-            // produces several single-word nodes that together describe one
-            // parameter and must retain spaces. This is also required for
-            // function-pointer declarations embedded outside SYNOPSIS, where
-            // libmandoc does not set `synopsis_pretty` but `Fo` still owns a
-            // parameter list. Validated closing delimiters remain attached to
-            // the preceding parameter and never create a phantom one.
-            for operand in operands {
+        if argument.macro_name.as_deref() == Some("Fa") && !argument.flags.no_print {
+            if let Some(anchor) = navigation_anchor(argument) {
+                arguments.append(vec![anchor]);
+            }
+            // Fo owns one parameter per Fa operand; quoting, not guessing
+            // C syntax or whitespace, determines a multi-word operand.
+            for operand in inline_children(argument) {
                 if operand.flags.delimiter_close {
-                    declaration.extend(lower_inline_node(operand, default_name, spacing_enabled));
+                    append_inline_node(&mut arguments, operand, default_name);
                     continue;
                 }
                 if has_argument {
-                    declaration.push(Inline::Text { value: ", ".into() });
+                    arguments.tighten_next_boundary();
+                    arguments.append(text_node(", "));
                 }
-                declaration.extend(wrap_emphasis(lower_inline_node(
+                arguments.append(wrap_emphasis(lower_inline_node(
                     operand,
                     default_name,
-                    spacing_enabled,
+                    arguments.spacing_enabled(),
                 )));
                 has_argument = true;
             }
         } else {
-            if has_argument && !argument.flags.delimiter_close {
-                declaration.push(Inline::Text { value: ", ".into() });
-            }
-            declaration.extend(lower_inline_node(argument, default_name, spacing_enabled));
-            has_argument |= !argument.flags.delimiter_close;
+            // Controls and zero-width targets keep their ordinary inline
+            // effects and source position, but never consume a parameter.
+            append_inline_node(&mut arguments, argument, default_name);
         }
     }
+    declaration.extend(arguments.finish());
     let synopsis_pretty = node.flags.synopsis_pretty
         || node
             .children

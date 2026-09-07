@@ -11,6 +11,8 @@ use super::{
     parse_manual_bytes, parse_manual_source,
 };
 
+mod upstream_inline;
+
 fn temporary_source(label: &str, source: &str) -> std::path::PathBuf {
     let path = std::env::temp_dir().join(format!("mant-lower-{label}-{}.1", process::id()));
     fs::write(&path, source).expect("write temporary roff fixture");
@@ -2280,8 +2282,8 @@ fn preserves_explicit_mdoc_function_and_enclosure_structure() {
 .Sh FUNCTION\n\
 .Ft int\n\
 .Fo audit_open\n\
-.Fa const char *path\n\
-.Fa int flags\n\
+.Fa \"const char *path\"\n\
+.Fa \"int flags\"\n\
 .Fc\n\
 .Sh ENCLOSURES\n\
 .Ao\nangle\n.Ac\n\
