@@ -760,7 +760,8 @@ pub(super) fn is_enclosure_macro(macro_name: Option<&str>) -> bool {
 fn enclosure_marks(name: &str) -> Option<(&'static str, &'static str)> {
     match name {
         "Op" | "Oo" | "Bq" | "Bo" => Some(("[", "]")),
-        "Dq" | "Do" | "Qq" | "Qo" => Some(("“", "”")),
+        "Dq" | "Do" => Some(("“", "”")),
+        "Qq" | "Qo" => Some(("\"", "\"")),
         "Sq" | "So" | "Ql" => Some(("‘", "’")),
         "Pq" | "Po" => Some(("(", ")")),
         "Brq" | "Bro" => Some(("{", "}")),

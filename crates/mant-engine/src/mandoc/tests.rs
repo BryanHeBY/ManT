@@ -2332,7 +2332,7 @@ fn preserves_explicit_mdoc_function_and_enclosure_structure() {
     };
     assert_eq!(
         inline_text(children),
-        "<angle> [bracket] “double” (parenthesized) “quoted” ‘single’ {braced} \
+        "<angle> [bracket] “double” (parenthesized) \"quoted\" ‘single’ {braced} \
          [optional] <<generic>> [[custom]]"
     );
     assert_eq!(document.diagnostics.len(), 2);

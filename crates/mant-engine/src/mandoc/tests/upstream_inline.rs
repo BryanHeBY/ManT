@@ -1,6 +1,34 @@
 //! Small upstream-contract examples; assert semantics as well as visible text.
 use super::*;
 
+#[test]
+fn typewriter_and_typographic_quotes_keep_distinct_delimiters() {
+    for (body, expected) in [
+        (".Qq hello", "\"hello\""),
+        (".Qo hello Qc", "\"hello\""),
+        (".Qq", "\"\""),
+        (".Qo\n.Qc", "\"\""),
+        (".Dq hello", "“hello”"),
+        (".Do hello Dc", "“hello”"),
+        (".Dq", "“”"),
+        (".Do\n.Dc", "“”"),
+        (".Qq Dq hello", "\"“hello”\""),
+        (".Dq Qq hello", "“\"hello\"”"),
+    ] {
+        for input in [body.to_owned(), format!(".TS\nl.\nT{{\n{body}\nT}}\n.TE")] {
+            let document = mdoc(&input);
+            let query = ResolvedContent {
+                label: "probe".into(),
+                address: None,
+                document: Some(document),
+                tldr: None,
+            };
+            let text = crate::render_query_text(&query);
+            assert!(text.contains(expected), "{input}: {text}");
+        }
+    }
+}
+
 fn links(document: &mant_ir::Document) -> Vec<(mant_ir::LinkTarget, String)> {
     struct Collector(Vec<(mant_ir::LinkTarget, String)>);
     impl<'ir> Visit<'ir> for Collector {
