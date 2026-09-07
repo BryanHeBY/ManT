@@ -14,6 +14,7 @@ mod parser;
 mod renderer;
 mod source_bundle;
 mod special_character;
+mod transport;
 
 pub use ast::{
     AuthorMode, DefinitionListStyle, DisplayKind, Document, MacroSet, Metadata, Node, NodeFlags,

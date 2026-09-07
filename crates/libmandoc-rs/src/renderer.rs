@@ -13,7 +13,7 @@ use std::io::Read;
 
 use crate::{
     Compression, Diagnostic, ParseError, ParseErrorKind, Parser, RawRender, SourceBundle,
-    compression, diagnostics, ffi, parser::IncludeSettings,
+    compression, diagnostics, ffi, transport::PreparedInput,
 };
 
 /// Default maximum bytes retained for one render call.
@@ -212,11 +212,9 @@ impl Renderer {
     ) -> Result<RenderReport, RenderError> {
         let path = source_path.as_ref();
         self.validate(path)?;
-        match self.parser.options().compression {
-            Compression::Auto if has_zstd_magic(source) => self.render_zstd_bytes(path, source),
-            Compression::Auto | Compression::Plain => self.render_plain_bytes(path, source),
-            Compression::Zstd => self.render_zstd_bytes(path, source),
-        }
+        let source = crate::transport::prepare_bytes(source, self.parser.options().compression)
+            .map_err(|error| decompression_error(path, &error))?;
+        self.render_plain_bytes(path, &source)
     }
 
     /// Render one root from a bounded virtual source tree.
@@ -262,12 +260,14 @@ impl Renderer {
 
     #[cfg(unix)]
     fn render_auto_file(&self, path: &Path) -> Result<RenderReport, RenderError> {
-        let c_path = native_path(path)?;
-        let includes = self.include_settings(path)?;
+        let prepared =
+            PreparedInput::new(path, &self.parser.options().includes).map_err(map_parse_error)?;
+        let c_path = &prepared.path;
+        let includes = &prepared.includes;
         Self::finish(
             path,
             ffi::render_file(
-                &c_path,
+                c_path,
                 includes.root.as_deref(),
                 includes.allow_includes,
                 self.parser.input_format(),
@@ -308,20 +308,16 @@ impl Renderer {
         self.render_plain_bytes(path, &source)
     }
 
-    fn render_zstd_bytes(&self, path: &Path, source: &[u8]) -> Result<RenderReport, RenderError> {
-        let source =
-            compression::decode_zstd(source).map_err(|error| decompression_error(path, &error))?;
-        self.render_plain_bytes(path, &source)
-    }
-
     #[cfg(unix)]
     fn render_plain_bytes(&self, path: &Path, source: &[u8]) -> Result<RenderReport, RenderError> {
-        let c_path = native_path(path)?;
-        let includes = self.include_settings(path)?;
+        let prepared =
+            PreparedInput::new(path, &self.parser.options().includes).map_err(map_parse_error)?;
+        let c_path = &prepared.path;
+        let includes = &prepared.includes;
         Self::finish(
             path,
             ffi::render_buffer(
-                &c_path,
+                c_path,
                 source,
                 includes.root.as_deref(),
                 includes.allow_includes,
@@ -337,12 +333,14 @@ impl Renderer {
 
     #[cfg(windows)]
     fn render_plain_bytes(&self, path: &Path, source: &[u8]) -> Result<RenderReport, RenderError> {
-        let c_path = native_path(path)?;
-        let includes = self.include_settings(path)?;
+        let prepared =
+            PreparedInput::new(path, &self.parser.options().includes).map_err(map_parse_error)?;
+        let c_path = &prepared.path;
+        let includes = &prepared.includes;
         Self::finish(
             path,
             ffi::render_buffer(
-                &c_path,
+                c_path,
                 source,
                 includes.root.as_deref(),
                 includes.allow_includes,
@@ -403,20 +401,10 @@ impl Renderer {
         }
         Ok(())
     }
-
-    fn include_settings(&self, source_path: &Path) -> Result<IncludeSettings, RenderError> {
-        self.parser
-            .include_settings(source_path)
-            .map_err(map_parse_error)
-    }
 }
 
 fn native_path(path: &Path) -> Result<CString, RenderError> {
-    crate::parser::path_label(path).map_err(|_| RenderError {
-        path: path.to_path_buf(),
-        kind: RenderErrorKind::InvalidPath,
-        message: "manual source path contains a NUL byte".into(),
-    })
+    crate::transport::native_path(path).map_err(map_parse_error)
 }
 
 fn map_parse_error(error: ParseError) -> RenderError {
@@ -439,10 +427,6 @@ const fn format_code(format: RenderFormat) -> i32 {
         RenderFormat::Html => 2,
         RenderFormat::Utf8 => 3,
     }
-}
-
-fn has_zstd_magic(source: &[u8]) -> bool {
-    source.starts_with(&[0x28, 0xb5, 0x2f, 0xfd])
 }
 
 fn read_error(path: &Path, error: &io::Error) -> RenderError {

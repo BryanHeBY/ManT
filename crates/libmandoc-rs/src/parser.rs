@@ -8,8 +8,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-#[cfg(unix)]
-use std::os::unix::ffi::OsStrExt;
+use crate::transport::{IncludeSettings, PreparedInput};
 
 #[cfg(windows)]
 use std::io::Read;
@@ -240,11 +239,9 @@ impl Parser {
         source: &[u8],
     ) -> Result<ParseReport, ParseError> {
         let path = source_path.as_ref();
-        match self.options.compression {
-            Compression::Auto if has_zstd_magic(source) => self.parse_zstd_bytes(path, source),
-            Compression::Auto | Compression::Plain => self.parse_plain_bytes(path, source),
-            Compression::Zstd => self.parse_zstd_bytes(path, source),
-        }
+        let source = crate::transport::prepare_bytes(source, self.options.compression)
+            .map_err(|error| decompression_error(path, &error))?;
+        self.parse_plain_bytes(path, &source)
     }
 
     /// Parse one root from a bounded, read-only virtual source tree.
@@ -316,12 +313,6 @@ impl Parser {
         }
     }
 
-    fn parse_zstd_bytes(&self, path: &Path, source: &[u8]) -> Result<ParseReport, ParseError> {
-        let source =
-            compression::decode_zstd(source).map_err(|error| decompression_error(path, &error))?;
-        self.parse_plain_bytes(path, &source)
-    }
-
     #[cfg(unix)]
     fn parse_native_file(&self, path: &Path) -> Result<ParseReport, ParseError> {
         self.finish(path, |c_path, includes| {
@@ -368,13 +359,8 @@ impl Parser {
         path: &Path,
         parse: impl FnOnce(&CString, &IncludeSettings) -> Result<RawDocument, String>,
     ) -> Result<ParseReport, ParseError> {
-        let c_path = path_label(path).map_err(|_| ParseError {
-            path: path.to_path_buf(),
-            kind: ParseErrorKind::InvalidPath,
-            message: "manual source path contains a NUL byte".into(),
-        })?;
-        let include_settings = self.include_settings(path)?;
-        let raw = parse(&c_path, &include_settings).map_err(|message| ParseError {
+        let prepared = PreparedInput::new(path, &self.options.includes)?;
+        let raw = parse(&prepared.path, &prepared.includes).map_err(|message| ParseError {
             path: path.to_path_buf(),
             kind: ParseErrorKind::Parse,
             message,
@@ -399,81 +385,6 @@ impl Parser {
             diagnostics: findings,
         })
     }
-
-    pub(crate) fn include_settings(
-        &self,
-        source_path: &Path,
-    ) -> Result<IncludeSettings, ParseError> {
-        #[cfg(unix)]
-        let _ = source_path;
-
-        match &self.options.includes {
-            IncludePolicy::Deny => Ok(IncludeSettings {
-                root: None,
-                allow_includes: false,
-            }),
-            #[cfg(unix)]
-            IncludePolicy::SourceTree => Ok(IncludeSettings {
-                root: None,
-                allow_includes: true,
-            }),
-            #[cfg(windows)]
-            IncludePolicy::SourceTree => Err(unsupported_includes(source_path.to_path_buf())),
-            IncludePolicy::Root(root) if root.as_os_str().is_empty() => Err(ParseError {
-                path: root.clone(),
-                kind: ParseErrorKind::InvalidPath,
-                message: "manual include root is empty".into(),
-            }),
-            #[cfg(unix)]
-            IncludePolicy::Root(root) => CString::new(root.as_os_str().as_bytes())
-                .map(|root| IncludeSettings {
-                    root: Some(root),
-                    allow_includes: true,
-                })
-                .map_err(|_| ParseError {
-                    path: root.clone(),
-                    kind: ParseErrorKind::InvalidPath,
-                    message: "manual include root contains a NUL byte".into(),
-                }),
-            #[cfg(windows)]
-            IncludePolicy::Root(root) => Ok(IncludeSettings {
-                root: Some(root.clone()),
-                allow_includes: true,
-            }),
-        }
-    }
-}
-
-pub(crate) struct IncludeSettings {
-    #[cfg(unix)]
-    pub(crate) root: Option<CString>,
-    #[cfg(windows)]
-    pub(crate) root: Option<PathBuf>,
-    pub(crate) allow_includes: bool,
-}
-
-#[cfg(unix)]
-pub(crate) fn path_label(path: &Path) -> Result<CString, std::ffi::NulError> {
-    CString::new(path.as_os_str().as_bytes())
-}
-
-#[cfg(windows)]
-pub(crate) fn path_label(path: &Path) -> Result<CString, std::ffi::NulError> {
-    CString::new(path.to_string_lossy().as_bytes())
-}
-
-#[cfg(windows)]
-fn unsupported_includes(path: PathBuf) -> ParseError {
-    ParseError {
-        path,
-        kind: ParseErrorKind::Unsupported,
-        message: "libmandoc-compatible source-tree inclusion is unavailable on Windows; use IncludePolicy::Root or SourceBundle"
-            .into(),
-    }
-}
-
-fn has_zstd_magic(source: &[u8]) -> bool {
-    source.starts_with(&[0x28, 0xb5, 0x2f, 0xfd])
 }
 
 fn read_error(path: &Path, error: &io::Error) -> ParseError {
