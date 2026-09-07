@@ -22,27 +22,53 @@ impl<'a> PreparedInstallation<'a> {
 }
 
 pub(super) fn replace_directory(staging: &Path, target: &Path) -> Result<(), String> {
-    recover_directory(target)?;
+    replace_with(staging, target, &mut NativeActivation)
+}
+
+// A narrow operation boundary keeps fault injection off the public API and
+// exercises the real ordering/rollback code, not a parallel transaction model.
+trait ActivationIo {
+    fn rename(&mut self, from: &Path, to: &Path) -> std::io::Result<()>;
+    fn sync_parent(&mut self, path: &Path) -> Result<(), String>;
+}
+
+struct NativeActivation;
+impl ActivationIo for NativeActivation {
+    fn rename(&mut self, from: &Path, to: &Path) -> std::io::Result<()> {
+        fs::rename(from, to)
+    }
+    fn sync_parent(&mut self, path: &Path) -> Result<(), String> {
+        sync_parent_directory(path)
+    }
+}
+
+fn replace_with(
+    staging: &Path,
+    target: &Path,
+    operations: &mut impl ActivationIo,
+) -> Result<(), String> {
+    recover_with(target, operations)?;
     let backup = target.with_extension("backup");
     let had_target = target.exists();
     if had_target {
-        fs::rename(target, &backup)
+        operations
+            .rename(target, &backup)
             .map_err(|error| format!("could not preserve previous source: {error}"))?;
-        sync_parent_directory(target)?;
+        operations.sync_parent(target)?;
     }
-    if let Err(error) = fs::rename(staging, target) {
+    if let Err(error) = operations.rename(staging, target) {
         if had_target {
             // Keep the activation failure as the primary error. Restoration
             // is best effort; if it cannot complete, the intact `.backup`
             // remains available to `recover_directory` on the next attempt.
-            let _ = fs::rename(&backup, target);
-            let _ = sync_parent_directory(target);
+            let _ = operations.rename(&backup, target);
+            let _ = operations.sync_parent(target);
         }
         return Err(format!("could not activate updated source: {error}"));
     }
-    sync_parent_directory(target)?;
+    operations.sync_parent(target)?;
     remove_internal_dir(&backup);
-    sync_parent_directory(target)?;
+    operations.sync_parent(target)?;
     Ok(())
 }
 
@@ -78,6 +104,10 @@ pub(super) fn sync_directory(path: &Path) -> Result<(), String> {
 }
 
 pub(super) fn recover_directory(target: &Path) -> Result<(), String> {
+    recover_with(target, &mut NativeActivation)
+}
+
+fn recover_with(target: &Path, operations: &mut impl ActivationIo) -> Result<(), String> {
     let backup = target.with_extension("backup");
     if !backup.exists() {
         return Ok(());
@@ -86,10 +116,14 @@ pub(super) fn recover_directory(target: &Path) -> Result<(), String> {
         remove_internal_dir(&backup);
         Ok(())
     } else {
-        fs::rename(&backup, target)
+        operations
+            .rename(&backup, target)
             .map_err(|error| format!("could not recover previous source: {error}"))
     }
 }
+
+#[cfg(test)]
+mod tests;
 
 pub(super) fn remove_internal_dir(path: &Path) {
     if path.is_dir() {

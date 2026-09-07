@@ -333,6 +333,13 @@ it.
 compression, include-policy, virtual source, diagnostics, optional `serde`,
 and optional reference-renderer tests must pass from Cargo's staged package
 directory without requiring fixtures from sibling crates.
+
+Source installation activation has deterministic fault-injection tests over
+every rename/parent-sync step, including failed rollback and recovery retries.
+They use the real transaction ordering and on-disk old/new trees. A sync failure
+after activation can leave the complete new tree installed; it is not a promise
+of rollback or durability after power loss. These tests do not simulate storage
+hardware failures or every document-writing/metadata-preparation failure.
 Its heavier concurrency check stays outside routine CI and must instrument
 both languages across the FFI boundary:
 
