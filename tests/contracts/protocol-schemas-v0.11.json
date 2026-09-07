@@ -1427,6 +1427,27 @@
         "description": "Renderer-independent identity attached to one navigable content definition.\n\n[`crate::SemanticIndex`] derives logical entries from these source facts.\nThe identity remains part of the authoritative document tree; an outline or\nanother projection may omit the entry without removing its definition.",
         "type": "object",
         "properties": {
+          "aliasGroups": {
+            "description": "Explicit same-owner equivalence groups referencing visible names.\nAn empty collection means the relationships are unknown, not unequal.",
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "aliasOf": {
+            "description": "Explicit same-document relationship to another single-subject entry.\nIt never redirects or replaces either owner's content.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/NodeId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "case": {
             "description": "Matching policy used for aliases in semantic entry lookup.",
             "$ref": "#/$defs/DefinitionCase"
@@ -1441,6 +1462,13 @@
           "id": {
             "description": "Unique within one document and shared with the term's inline anchor.",
             "$ref": "#/$defs/NodeId"
+          },
+          "nameBindings": {
+            "description": "Validated occurrences of documented names within authored forms.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/EntryNameBinding"
+            }
           },
           "names": {
             "description": "Plain normalized names used as [`crate::SemanticEntry::aliases`].",
@@ -1641,6 +1669,55 @@
             "required": [
               "kind"
             ]
+          }
+        ]
+      },
+      "EntryNameBinding": {
+        "description": "A name's occurrences in the owner's displayed forms.",
+        "type": "object",
+        "properties": {
+          "evidence": {
+            "description": "Evidence available to the producer.",
+            "$ref": "#/$defs/EntryNameEvidence"
+          },
+          "name": {
+            "description": "Zero-based index in `EntryFacts.names`, not a global identity.",
+            "type": "integer",
+            "format": "uint",
+            "minimum": 0
+          },
+          "occurrences": {
+            "description": "One or more complete occurrences, each represented by ordered slices.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/EntryForm"
+            }
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "occurrences",
+          "evidence"
+        ]
+      },
+      "EntryNameEvidence": {
+        "description": "Why a producer recognized a documented name; not a confidence score.",
+        "oneOf": [
+          {
+            "description": "An explicit source-format semantic mark.",
+            "type": "string",
+            "const": "native-markup"
+          },
+          {
+            "description": "The finite source-independent name grammar.",
+            "type": "string",
+            "const": "lexical"
+          },
+          {
+            "description": "An author's explicit semantic declaration on visible content.",
+            "type": "string",
+            "const": "declared"
           }
         ]
       },
@@ -4792,6 +4869,27 @@
         "description": "Renderer-independent identity attached to one navigable content definition.\n\n[`crate::SemanticIndex`] derives logical entries from these source facts.\nThe identity remains part of the authoritative document tree; an outline or\nanother projection may omit the entry without removing its definition.",
         "type": "object",
         "properties": {
+          "aliasGroups": {
+            "description": "Explicit same-owner equivalence groups referencing visible names.\nAn empty collection means the relationships are unknown, not unequal.",
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "aliasOf": {
+            "description": "Explicit same-document relationship to another single-subject entry.\nIt never redirects or replaces either owner's content.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/NodeId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "case": {
             "description": "Matching policy used for aliases in semantic entry lookup.",
             "$ref": "#/$defs/DefinitionCase"
@@ -4806,6 +4904,13 @@
           "id": {
             "description": "Unique within one document and shared with the term's inline anchor.",
             "$ref": "#/$defs/NodeId"
+          },
+          "nameBindings": {
+            "description": "Validated occurrences of documented names within authored forms.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/EntryNameBinding"
+            }
           },
           "names": {
             "description": "Plain normalized names used as [`crate::SemanticEntry::aliases`].",
@@ -5006,6 +5111,55 @@
             "required": [
               "kind"
             ]
+          }
+        ]
+      },
+      "EntryNameBinding": {
+        "description": "A name's occurrences in the owner's displayed forms.",
+        "type": "object",
+        "properties": {
+          "evidence": {
+            "description": "Evidence available to the producer.",
+            "$ref": "#/$defs/EntryNameEvidence"
+          },
+          "name": {
+            "description": "Zero-based index in `EntryFacts.names`, not a global identity.",
+            "type": "integer",
+            "format": "uint",
+            "minimum": 0
+          },
+          "occurrences": {
+            "description": "One or more complete occurrences, each represented by ordered slices.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/EntryForm"
+            }
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "occurrences",
+          "evidence"
+        ]
+      },
+      "EntryNameEvidence": {
+        "description": "Why a producer recognized a documented name; not a confidence score.",
+        "oneOf": [
+          {
+            "description": "An explicit source-format semantic mark.",
+            "type": "string",
+            "const": "native-markup"
+          },
+          {
+            "description": "The finite source-independent name grammar.",
+            "type": "string",
+            "const": "lexical"
+          },
+          {
+            "description": "An author's explicit semantic declaration on visible content.",
+            "type": "string",
+            "const": "declared"
           }
         ]
       },
@@ -7407,6 +7561,27 @@
         "description": "Renderer-independent identity attached to one navigable content definition.\n\n[`crate::SemanticIndex`] derives logical entries from these source facts.\nThe identity remains part of the authoritative document tree; an outline or\nanother projection may omit the entry without removing its definition.",
         "type": "object",
         "properties": {
+          "aliasGroups": {
+            "description": "Explicit same-owner equivalence groups referencing visible names.\nAn empty collection means the relationships are unknown, not unequal.",
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "aliasOf": {
+            "description": "Explicit same-document relationship to another single-subject entry.\nIt never redirects or replaces either owner's content.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/NodeId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "case": {
             "description": "Matching policy used for aliases in semantic entry lookup.",
             "$ref": "#/$defs/DefinitionCase"
@@ -7421,6 +7596,13 @@
           "id": {
             "description": "Unique within one document and shared with the term's inline anchor.",
             "$ref": "#/$defs/NodeId"
+          },
+          "nameBindings": {
+            "description": "Validated occurrences of documented names within authored forms.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/EntryNameBinding"
+            }
           },
           "names": {
             "description": "Plain normalized names used as [`crate::SemanticEntry::aliases`].",
@@ -7621,6 +7803,55 @@
             "required": [
               "kind"
             ]
+          }
+        ]
+      },
+      "EntryNameBinding": {
+        "description": "A name's occurrences in the owner's displayed forms.",
+        "type": "object",
+        "properties": {
+          "evidence": {
+            "description": "Evidence available to the producer.",
+            "$ref": "#/$defs/EntryNameEvidence"
+          },
+          "name": {
+            "description": "Zero-based index in `EntryFacts.names`, not a global identity.",
+            "type": "integer",
+            "format": "uint",
+            "minimum": 0
+          },
+          "occurrences": {
+            "description": "One or more complete occurrences, each represented by ordered slices.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/EntryForm"
+            }
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "occurrences",
+          "evidence"
+        ]
+      },
+      "EntryNameEvidence": {
+        "description": "Why a producer recognized a documented name; not a confidence score.",
+        "oneOf": [
+          {
+            "description": "An explicit source-format semantic mark.",
+            "type": "string",
+            "const": "native-markup"
+          },
+          {
+            "description": "The finite source-independent name grammar.",
+            "type": "string",
+            "const": "lexical"
+          },
+          {
+            "description": "An author's explicit semantic declaration on visible content.",
+            "type": "string",
+            "const": "declared"
           }
         ]
       },

@@ -167,6 +167,9 @@ fn excerpt_contract_can_return_one_semantic_definition() {
     let entry = DefinitionItem {
         inline_term: false,
         identity: Some(DefinitionIdentity {
+            name_bindings: Vec::new(),
+            alias_groups: Vec::new(),
+            alias_of: None,
             forms: Vec::new(),
             id: "all".to_owned().into(),
             role: DefinitionRole::Option,

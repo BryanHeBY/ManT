@@ -426,6 +426,17 @@ pub struct DefinitionItem {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct EntryFacts {
+    /// Validated occurrences of documented names within authored forms.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub name_bindings: Vec<crate::EntryNameBinding>,
+    /// Explicit same-owner equivalence groups referencing visible names.
+    /// An empty collection means the relationships are unknown, not unequal.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub alias_groups: Vec<Vec<String>>,
+    /// Explicit same-document relationship to another single-subject entry.
+    /// It never redirects or replaces either owner's content.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub alias_of: Option<NodeId>,
     /// Read-only authored-form bindings into this owner's content.
     /// Native definitions may omit these and use their complete terms.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]

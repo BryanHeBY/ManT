@@ -102,6 +102,9 @@ mod tests {
     ) -> DefinitionItem {
         DefinitionItem {
             identity: Some(DefinitionIdentity {
+                name_bindings: Vec::new(),
+                alias_groups: Vec::new(),
+                alias_of: None,
                 forms: Vec::new(),
                 id: id.into(),
                 role,
@@ -697,6 +700,9 @@ mod tests {
             .push(Block::DefinitionList {
                 items: vec![DefinitionItem {
                     identity: Some(DefinitionIdentity {
+                        name_bindings: Vec::new(),
+                        alias_groups: Vec::new(),
+                        alias_of: None,
                         forms: Vec::new(),
                         id: "3".into(),
                         role: DefinitionRole::Option,

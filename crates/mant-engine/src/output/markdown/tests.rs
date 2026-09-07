@@ -1233,6 +1233,9 @@ fn renders_selectable_outline_paths_and_excerpt_breadcrumbs() {
 fn addressable_rendering_returns_exact_semantic_node_ranges() {
     let entry = DefinitionItem {
         identity: Some(DefinitionIdentity {
+            name_bindings: Vec::new(),
+            alias_groups: Vec::new(),
+            alias_of: None,
             forms: Vec::new(),
             id: "help-entry".into(),
             role: DefinitionRole::Option,

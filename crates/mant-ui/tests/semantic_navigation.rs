@@ -31,6 +31,9 @@ fn sidebar_exposes_every_semantic_role_supported_by_the_document_contract() {
     .enumerate()
     .map(|(index, (role, name))| DefinitionItem {
         identity: Some(DefinitionIdentity {
+            name_bindings: Vec::new(),
+            alias_groups: Vec::new(),
+            alias_of: None,
             forms: Vec::new(),
             id: format!("entry-{index}").into(),
             role,
@@ -55,6 +58,9 @@ fn sidebar_exposes_every_semantic_role_supported_by_the_document_contract() {
     entries[0].description = vec![Block::DefinitionList {
         items: vec![DefinitionItem {
             identity: Some(DefinitionIdentity {
+                name_bindings: Vec::new(),
+                alias_groups: Vec::new(),
+                alias_of: None,
                 forms: Vec::new(),
                 id: "entry-help-value".into(),
                 role: DefinitionRole::Value,

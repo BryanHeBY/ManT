@@ -239,6 +239,9 @@ mod tests {
     fn semantic_id_allocation_ignores_a_prefilled_producer_id() {
         let mut option = item("--verbose");
         option.identity = Some(DefinitionIdentity {
+            name_bindings: Vec::new(),
+            alias_groups: Vec::new(),
+            alias_of: None,
             forms: Vec::new(),
             id: "producer-specific-id".into(),
             role: DefinitionRole::Option,

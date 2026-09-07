@@ -2,6 +2,7 @@
 mod content;
 mod index;
 mod model;
+mod relations;
 mod walk;
 #[cfg(test)]
 use crate::{Block, DefinitionItem, DefinitionRole, Document, Inline, LinkTarget};
@@ -10,6 +11,7 @@ pub use index::SemanticIndex;
 #[cfg(test)]
 use index::entry_from_definition;
 pub use model::*;
+pub(crate) use relations::validate_relations;
 pub use walk::visit_child_entries;
 
 #[cfg(test)]
@@ -30,6 +32,9 @@ mod tests {
     ) -> DefinitionItem {
         DefinitionItem {
             identity: Some(DefinitionIdentity {
+                name_bindings: Vec::new(),
+                alias_groups: Vec::new(),
+                alias_of: None,
                 forms: Vec::new(),
                 id: id.into(),
                 role,

@@ -112,6 +112,7 @@ pub fn validate_document(document: &Document) -> Vec<Diagnostic> {
         }
     }
 
+    diagnostics.extend(crate::entry::validate_relations(document, &index));
     diagnostics
 }
 
@@ -126,6 +127,10 @@ pub fn is_semantic_completeness_diagnostic(code: &str) -> bool {
         code,
         "ir.empty-identity"
             | "ir.invalid-entry-content"
+            | "ir.invalid-entry-name-binding"
+            | "ir.invalid-entry-alias-groups"
+            | "ir.invalid-entry-alias-of"
+            | "ir.cyclic-entry-alias"
             | "ir.invalid-identity"
             | "ir.identity-role-collision"
             | "ir.duplicate-identity"
@@ -456,6 +461,9 @@ mod tests {
             blocks: vec![Block::DefinitionList {
                 items: vec![DefinitionItem {
                     identity: Some(DefinitionIdentity {
+                        name_bindings: Vec::new(),
+                        alias_groups: Vec::new(),
+                        alias_of: None,
                         forms: Vec::new(),
                         id: shared.clone(),
                         role: DefinitionRole::Term,
@@ -684,6 +692,9 @@ mod tests {
     fn reports_invalid_cross_document_entry_domains() {
         let mut definition = DefinitionItem {
             identity: Some(DefinitionIdentity {
+                name_bindings: Vec::new(),
+                alias_groups: Vec::new(),
+                alias_of: None,
                 forms: Vec::new(),
                 id: "option-output".into(),
                 role: DefinitionRole::Option,

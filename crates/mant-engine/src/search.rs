@@ -501,6 +501,9 @@ mod tests {
                         items: vec![DefinitionItem {
                             inline_term: false,
                             identity: Some(DefinitionIdentity {
+                                name_bindings: Vec::new(),
+                                alias_groups: Vec::new(),
+                                alias_of: None,
                                 forms: Vec::new(),
                                 id: "option-acls".to_owned().into(),
                                 role: DefinitionRole::Option,

@@ -51,6 +51,30 @@ pub struct EntryForm {
     pub parts: Vec<EntryContentSlice>,
 }
 
+/// Why a producer recognized a documented name; not a confidence score.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "kebab-case")]
+pub enum EntryNameEvidence {
+    /// An explicit source-format semantic mark.
+    NativeMarkup,
+    /// The finite source-independent name grammar.
+    Lexical,
+    /// An author's explicit semantic declaration on visible content.
+    Declared,
+}
+
+/// A name's occurrences in the owner's displayed forms.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct EntryNameBinding {
+    /// Zero-based index in `EntryFacts.names`, not a global identity.
+    pub name: usize,
+    /// One or more complete occurrences, each represented by ordered slices.
+    pub occurrences: Vec<EntryForm>,
+    /// Evidence available to the producer.
+    pub evidence: EntryNameEvidence,
+}
+
 impl<'a> EntryOwner<'a> {
     /// Facts attached to this owner, if it is addressable.
     #[must_use]
@@ -164,24 +188,28 @@ impl<'a> EntryOwner<'a> {
         facts
             .forms
             .iter()
-            .map(|form| {
-                if form.parts.is_empty()
-                    || !form
-                        .parts
-                        .windows(2)
-                        .all(|pair| precedes(&pair[0], &pair[1]))
-                {
-                    return None;
-                }
-                let parts = form
-                    .parts
-                    .iter()
-                    .map(|part| self.content_slice(part))
-                    .collect::<Option<Vec<_>>>()?;
-                Some(parts.into_iter().flatten().collect())
-            })
+            .map(|form| self.form(form))
             .collect::<Option<Vec<_>>>()
             .map(std::borrow::Cow::Owned)
+    }
+
+    /// Project one ordered form without accepting a partial binding.
+    #[must_use]
+    pub fn form(self, form: &EntryForm) -> Option<Vec<Inline>> {
+        if form.parts.is_empty()
+            || !form
+                .parts
+                .windows(2)
+                .all(|pair| precedes(&pair[0], &pair[1]))
+        {
+            return None;
+        }
+        let parts = form
+            .parts
+            .iter()
+            .map(|part| self.content_slice(part))
+            .collect::<Option<Vec<_>>>()?;
+        Some(parts.into_iter().flatten().collect())
     }
 }
 
@@ -212,6 +240,9 @@ mod tests {
     fn item(id: &str, role: DefinitionRole, name: &str) -> ListItem {
         ListItem {
             entry: Some(EntryFacts {
+                name_bindings: Vec::new(),
+                alias_groups: Vec::new(),
+                alias_of: None,
                 id: id.into(),
                 role,
                 case: DefinitionCase::Sensitive,

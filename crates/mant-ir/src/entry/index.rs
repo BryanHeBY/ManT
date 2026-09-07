@@ -154,7 +154,7 @@ const fn entry_kind(role: DefinitionRole) -> EntryKind {
     }
 }
 
-fn inline_text(inlines: &[Inline]) -> String {
+pub(super) fn inline_text(inlines: &[Inline]) -> String {
     let mut output = String::new();
     for inline in inlines {
         match inline {

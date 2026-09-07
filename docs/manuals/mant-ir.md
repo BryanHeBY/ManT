@@ -178,9 +178,20 @@ addressable entry. The identity records:
 | `role` | Option, marker, operand, command, configuration key, environment variable, variable, value, or generic term |
 | `case` | Sensitive or insensitive alias matching |
 | `names` | Exact normalized names exposed to selectors; not an equivalence relation |
+| `nameBindings` | Name indices, evidence kinds and occurrences bound to final-IR authored forms |
+| `forms` | Optional ordered owner-relative content slices; native definitions may use their original terms |
+| `aliasGroups` | Explicit disjoint groups of at least two visible, uniquely bound names; absent means unknown |
+| `aliasOf` | Explicit same-document relation to a unique, compatible single-subject entry; not content redirection |
 | `valueDomain` | Optional source-declared value space |
 
 The identity is assigned during lowering, before source-specific macro information is discarded. Ordinary prose definitions remain valid definition items without an identity.
+
+Shared validation rejects name bindings into descriptions or mismatching text,
+overlapping/hidden group members, incompatible or missing relationship targets,
+self-references and cycles. Source spans are evidence, not replacements for
+owner-relative content references. These new IR fields do not yet imply
+Markdown authoring syntax or automatic relationship expansion by explain;
+those consumers are separate migration stages.
 
 For semantic definitions, the engine derives a role-qualified identity from the complete semantic name after source-specific parsing. Formatter navigation tags remain page-local anchors but do not become semantic IDs merely because their spelling is short or collides with a command. Collisions use a deterministic fingerprint of semantic identity and content rather than a source-order suffix; unrelated sibling insertion and reordering therefore cannot silently redirect an ID. Section and entry allocation are independent. These IDs identify the same logical content within one current document, but an independently updated host manual can change or remove that content, so consumers rediscover before reuse.
 

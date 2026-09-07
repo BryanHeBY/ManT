@@ -24,6 +24,12 @@ that crate was not published for that change.
 
 ### mant-ir 0.11.0
 
+- Separate documented-name occurrences from explicit `aliasGroups` and
+  same-document `aliasOf` facts. Validate visible-head binding, group disjointness,
+  exact member identity, unique compatible targets and cycles without merging
+  or rewriting content. This is IR support; Markdown declaration and explanation
+  consumers are still being migrated.
+
 - Introduce common `EntryFacts` for native definitions and ordinary list items,
   borrowed `EntryOwner` views, and validated owner-relative form references.
   `ListItem` gains an optional `entry`; Rust struct literals must initialize it.
