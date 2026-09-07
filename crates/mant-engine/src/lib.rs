@@ -17,6 +17,7 @@ mod projection;
 mod query;
 mod scope;
 mod search;
+mod selectors;
 mod source;
 mod text_safety;
 mod tldr;

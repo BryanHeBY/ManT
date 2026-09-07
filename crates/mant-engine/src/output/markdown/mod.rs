@@ -19,8 +19,9 @@ use self::{
     blocks::{RenderedBlocks, render_blocks, render_blocks_with_entries},
     inline::{code_span, escape_text},
 };
-use crate::{ResolvedContent, projection::DOCUMENT_ROOT_ID};
+use crate::ResolvedContent;
 pub(crate) use anchors::anchor_markers;
+use mant_ir::DOCUMENT_ROOT_ID;
 
 /// Markdown serialization controls that do not alter the query IR.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]

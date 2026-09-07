@@ -17,6 +17,7 @@ mod tests;
 pub use container::TldrDirectiveError;
 pub(crate) use entries::is_semantic_entry_rejection_code;
 
+use mant_ir::DOCUMENT_ROOT_ID;
 use std::{
     collections::{HashMap, HashSet},
     error::Error,
@@ -42,10 +43,7 @@ use self::{
     source::MarkdownSource,
 };
 use crate::text_safety::mask_terminal_controls;
-use crate::{
-    projection::DOCUMENT_ROOT_ID,
-    tldr::{TldrPageLocation, TldrParseError, parse_tldr_page},
-};
+use crate::tldr::{TldrPageLocation, TldrParseError, parse_tldr_page};
 
 type SpannedEvent<'a> = (Event<'a>, Range<usize>);
 
@@ -267,7 +265,7 @@ fn parse_document_with_entries(
     for target in retained_targets {
         ids.targets.insert(target.clone(), target);
     }
-    entry_diagnostics.extend(crate::projection::semantic_selector_diagnostics(
+    entry_diagnostics.extend(crate::selectors::semantic_selector_diagnostics(
         &root_blocks,
         &sections,
         "markdown",
@@ -549,12 +547,12 @@ impl SectionIds {
             .as_deref()
             .zip(normalized_explicit.as_deref())
             .filter(|(authored, normalized)| {
-                *authored == *normalized && !crate::projection::is_reserved_selector(authored)
+                *authored == *normalized && !crate::selectors::is_reserved_selector(authored)
             })
             .map_or_else(|| slug(title), |(_, normalized)| normalized.to_owned());
         let base = if base.is_empty() {
             "section".to_owned()
-        } else if crate::projection::is_reserved_selector(&base) {
+        } else if crate::selectors::is_reserved_selector(&base) {
             // Reserved selectors and bare tree paths would shadow this
             // heading in excerpt selection; keep it addressable instead.
             format!("{base}-section")

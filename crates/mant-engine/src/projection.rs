@@ -1,166 +1,25 @@
 //! Projects complete structured documents into outlines and selectable excerpts.
 
-use std::{
-    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
-    error::Error,
-    fmt,
+use crate::ResolvedContent;
+#[cfg(test)]
+use crate::selectors::semantic_selector_diagnostics;
+use crate::selectors::{
+    DOCUMENT_ROOT_TITLE, DocumentSelectorIndex, LocatedBreadcrumb, LocatedNode, TLDR_ID,
+    collect_root_entries, collect_sections,
 };
-
+pub use crate::selectors::{ProjectionError, SelectorCandidate};
 use mant_ir::{
-    Block, DefinitionCase, DefinitionIdentity, DefinitionItem, DefinitionRole, Diagnostic,
-    DiagnosticLevel, EntryKindCount, EntrySummary, OutlinePath, Section, SemanticEntry,
-    SemanticIndex, SourceSpan,
+    DOCUMENT_ROOT_ID, Diagnostic, EntryKindCount, EntrySummary, OutlinePath, Section,
+    SemanticEntry, SemanticIndex,
 };
 use mant_protocol::{
     EntryDocumentTarget, EntryProjection, EntryValueDomain, ExcerptSchema, ExcerptSelection,
     NodeSelector, OutlineDetail, OutlineNode, OutlineNodeReference, OutlineReference,
     OutlineSchema, OutlineTrail, QueryExcerpt, QueryOutline,
 };
+use std::collections::HashSet;
 
-use crate::{
-    ResolvedContent,
-    definitions::{definition_entries, environment_variable_body},
-    inline::plain_text,
-};
-
-pub(crate) const TLDR_ID: &str = "tldr";
 const TLDR_TITLE: &str = "TLDR QUICK REFERENCE";
-pub(crate) use mant_ir::DOCUMENT_ROOT_ID;
-pub(crate) const DOCUMENT_ROOT_TITLE: &str = "OVERVIEW";
-
-/// Whether an identifier belongs to the selector namespace rather than a
-/// document-defined node.
-///
-/// Section paths use dotted positive indices (`2.1`), while semantic entries
-/// append a semantic-entry index (`2.1/e3`). The parser reserves the complete grammar,
-/// not only selectors present in one particular document, so source-defined
-/// IDs can never make excerpt lookup ambiguous.
-pub(crate) fn is_reserved_selector(value: &str) -> bool {
-    matches!(value, TLDR_ID | DOCUMENT_ROOT_ID)
-        || value.parse::<OutlinePath>().is_ok()
-        || [
-            "option-",
-            "marker-",
-            "operand-",
-            "command-",
-            "configuration-",
-            "environment-",
-            "variable-",
-            "value-",
-            "term-",
-        ]
-        .iter()
-        .any(|prefix| value.starts_with(prefix))
-}
-
-/// Failure to derive an addressable view from a complete query.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ProjectionError {
-    /// Neither an authoritative document nor a quick reference is available.
-    MissingContent {
-        /// Requested document label.
-        document: String,
-    },
-    /// Excerpt projection received no selectors.
-    EmptySelection,
-    /// One selector was empty after trimming.
-    EmptySelector,
-    /// No addressable node matched a selector.
-    UnknownSelector {
-        /// Requested document label.
-        document: String,
-        /// Unresolved selector.
-        selector: String,
-    },
-    /// Explanation lookup found no semantic entry, but the same text occurs
-    /// elsewhere in the rendered document.
-    SelectorFoundOnlyInText {
-        /// Requested document label.
-        document: String,
-        /// Unresolved semantic-entry selector.
-        selector: String,
-        /// Canonical path of the nearest addressable node.
-        path: String,
-        /// Display title of the nearest addressable node.
-        title: String,
-        /// One-based rendered line containing the first occurrence.
-        line: u32,
-    },
-    /// An alias matched more than one semantic entry.
-    AmbiguousSelector {
-        /// Requested document label.
-        document: String,
-        /// Ambiguous selector.
-        selector: String,
-        /// Stable paths and IDs that disambiguate the match.
-        candidates: Vec<SelectorCandidate>,
-    },
-    /// Explanation lookup selected a non-entry node.
-    ExplanationRequiresEntry {
-        /// Requested document label.
-        document: String,
-        /// Selector naming the non-entry node.
-        selector: String,
-    },
-}
-
-/// One stable qualification offered when a semantic alias is ambiguous.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SelectorCandidate {
-    /// Canonical structural outline path.
-    pub path: String,
-    /// Stable document-local identity.
-    pub id: String,
-}
-
-impl fmt::Display for ProjectionError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::MissingContent { document } => {
-                write!(formatter, "document '{document}' has no available content")
-            }
-            Self::EmptySelection => formatter.write_str("at least one outline node is required"),
-            Self::EmptySelector => formatter.write_str("outline node must not be empty"),
-            Self::UnknownSelector { document, selector } => write!(
-                formatter,
-                "document '{document}' has no outline node '{selector}'; inspect its entries outline for available selectors and diagnostics"
-            ),
-            Self::SelectorFoundOnlyInText {
-                document,
-                selector,
-                path,
-                title,
-                line,
-            } => write!(
-                formatter,
-                "document '{document}' has no semantic entry '{selector}', but that text appears in outline node {path} ({title}) at line {line}"
-            ),
-            Self::AmbiguousSelector {
-                document,
-                selector,
-                candidates,
-            } => {
-                write!(
-                    formatter,
-                    "document '{document}' has multiple semantic entries named '{selector}': "
-                )?;
-                for (index, candidate) in candidates.iter().enumerate() {
-                    if index > 0 {
-                        formatter.write_str(", ")?;
-                    }
-                    write!(formatter, "{} ({})", candidate.path, candidate.id)?;
-                }
-                formatter.write_str("; select one by path or ID")
-            }
-            Self::ExplanationRequiresEntry { document, selector } => write!(
-                formatter,
-                "document '{document}' outline node '{selector}' is not a semantic entry; select a semantic entry instead"
-            ),
-        }
-    }
-}
-
-impl Error for ProjectionError {}
 
 /// Build a block-free, addressable outline for one complete query.
 ///
@@ -483,24 +342,6 @@ fn resolve_explanation_candidate<'a>(
         });
     }
     Ok(candidate)
-}
-
-fn ambiguous_selector(
-    document: &str,
-    selector: &str,
-    matches: Vec<&LocatedNode<'_>>,
-) -> ProjectionError {
-    ProjectionError::AmbiguousSelector {
-        document: document.to_owned(),
-        selector: selector.to_owned(),
-        candidates: matches
-            .into_iter()
-            .map(|candidate| SelectorCandidate {
-                path: candidate.path().to_string(),
-                id: candidate.id().into(),
-            })
-            .collect(),
-    }
 }
 
 fn outline_nodes(
@@ -834,75 +675,7 @@ fn projected_outline_summary(
     (!summary.is_empty()).then_some(summary)
 }
 
-enum LocatedNode<'a> {
-    Section {
-        order: usize,
-        coordinates: Vec<usize>,
-        path: OutlinePath,
-        breadcrumbs: Vec<OutlineReference>,
-        section: &'a Section,
-    },
-    Entry {
-        order: usize,
-        coordinates: Vec<usize>,
-        path: OutlinePath,
-        title: String,
-        breadcrumbs: Vec<OutlineReference>,
-        entry: &'a DefinitionItem,
-        source: Option<SourceSpan>,
-    },
-}
-
 impl LocatedNode<'_> {
-    fn order(&self) -> usize {
-        match self {
-            Self::Section { order, .. } | Self::Entry { order, .. } => *order,
-        }
-    }
-
-    fn coordinates(&self) -> &[usize] {
-        match self {
-            Self::Section { coordinates, .. } | Self::Entry { coordinates, .. } => coordinates,
-        }
-    }
-
-    fn path(&self) -> &OutlinePath {
-        match self {
-            Self::Section { path, .. } | Self::Entry { path, .. } => path,
-        }
-    }
-
-    fn id(&self) -> &str {
-        match self {
-            Self::Section { section, .. } => &section.id,
-            Self::Entry { entry, .. } => {
-                &entry
-                    .identity
-                    .as_ref()
-                    .expect("located entries have identities")
-                    .id
-            }
-        }
-    }
-
-    fn identity(&self) -> Option<&DefinitionIdentity> {
-        match self {
-            Self::Entry { entry, .. } => entry.identity.as_ref(),
-            Self::Section { .. } => None,
-        }
-    }
-
-    fn source(&self) -> Option<SourceSpan> {
-        match self {
-            Self::Entry { source, .. } => *source,
-            Self::Section { section, .. } => section.source,
-        }
-    }
-
-    const fn is_section(&self) -> bool {
-        matches!(self, Self::Section { .. })
-    }
-
     fn selection(&self) -> ExcerptSelection {
         match self {
             Self::Section {
@@ -912,7 +685,7 @@ impl LocatedNode<'_> {
                 ..
             } => ExcerptSelection::DocumentSection {
                 outline: OutlineTrail {
-                    ancestors: breadcrumbs.clone(),
+                    ancestors: project_breadcrumbs(breadcrumbs),
                     node: OutlineNodeReference::DocumentSection {
                         path: path.to_string().into(),
                         id: section.id.clone(),
@@ -929,7 +702,7 @@ impl LocatedNode<'_> {
                 ..
             } => ExcerptSelection::DocumentEntry {
                 outline: OutlineTrail {
-                    ancestors: breadcrumbs.clone(),
+                    ancestors: project_breadcrumbs(breadcrumbs),
                     node: {
                         let identity = entry
                             .identity
@@ -951,408 +724,15 @@ impl LocatedNode<'_> {
     }
 }
 
-fn semantic_name_shorthand(role: DefinitionRole, name: &str) -> Option<&str> {
-    match role {
-        DefinitionRole::Option => {
-            let shorthand = name.trim_start_matches('-');
-            (shorthand != name && !shorthand.is_empty()).then_some(shorthand)
-        }
-        DefinitionRole::EnvironmentVariable => {
-            environment_variable_body(name).filter(|body| *body != name)
-        }
-        DefinitionRole::Command
-        | DefinitionRole::ConfigurationKey
-        | DefinitionRole::Marker
-        | DefinitionRole::Operand
-        | DefinitionRole::Variable
-        | DefinitionRole::Value
-        | DefinitionRole::Term => None,
-    }
-}
-
-#[derive(Clone, Copy)]
-enum AliasMatchKind {
-    Exact,
-    Shorthand,
-}
-
-impl AliasMatchKind {
-    const fn label(self) -> &'static str {
-        match self {
-            Self::Exact => "exact alias",
-            Self::Shorthand => "normalized shorthand",
-        }
-    }
-}
-
-/// Report selectors that cannot address exactly one semantic entry.
-///
-/// The lookup policy itself remains usable through stable paths and IDs, but
-/// Markdown authors receive a source diagnostic before an agent discovers the
-/// ambiguity at query time.
-pub(crate) fn semantic_selector_diagnostics(
-    blocks: &[Block],
-    sections: &[Section],
-    source_family: &str,
-) -> Vec<Diagnostic> {
-    let mut located = Vec::new();
-    collect_root_entries(blocks, &mut located);
-    collect_sections(sections, &[], &[], &mut located);
-    let index = DocumentSelectorIndex::new(&located);
-    let mut selectors = BTreeSet::new();
-    for candidate in &located {
-        let Some(identity) = candidate.identity() else {
-            continue;
-        };
-        for name in &identity.names {
-            selectors.insert(name.clone());
-            if let Some(shorthand) = semantic_name_shorthand(identity.role, name) {
-                selectors.insert(shorthand.to_owned());
-            }
-        }
-    }
-
-    let mut diagnostics = selector_alias_diagnostics(&index, selectors, source_family);
-    diagnostics.extend(duplicate_id_diagnostics(&index.ids, source_family));
-    diagnostics
-}
-
-#[derive(Default)]
-struct AliasIndex<'a> {
-    sensitive: HashMap<&'a str, Vec<&'a LocatedNode<'a>>>,
-    insensitive: HashMap<String, Vec<&'a LocatedNode<'a>>>,
-}
-
-impl<'a> AliasIndex<'a> {
-    fn insert(&mut self, case: DefinitionCase, alias: &'a str, candidate: &'a LocatedNode<'a>) {
-        let bucket = match case {
-            DefinitionCase::Sensitive => self.sensitive.entry(alias).or_default(),
-            DefinitionCase::Insensitive => self
-                .insensitive
-                .entry(alias.to_ascii_lowercase())
-                .or_default(),
-        };
-        if bucket
-            .last()
-            .is_none_or(|existing| existing.order() != candidate.order())
-        {
-            bucket.push(candidate);
-        }
-    }
-
-    fn matches(&self, selector: &str) -> Vec<&'a LocatedNode<'a>> {
-        let mut matches = self.sensitive.get(selector).cloned().unwrap_or_default();
-        if let Some(insensitive) = self.insensitive.get(&selector.to_ascii_lowercase()) {
-            matches.extend(insensitive.iter().copied());
-        }
-        matches.sort_unstable_by_key(|candidate| candidate.order());
-        matches.dedup_by_key(|candidate| candidate.order());
-        matches
-    }
-}
-
-/// One immutable lookup policy shared by excerpts, explanations, outline-root
-/// selection, and producer diagnostics.
-///
-/// Keeping path, ID, exact-alias, and shorthand precedence in this one index
-/// prevents a diagnostic from promising a selector that a query surface
-/// resolves differently.
-struct DocumentSelectorIndex<'a> {
-    paths: HashMap<String, &'a LocatedNode<'a>>,
-    exact_aliases: AliasIndex<'a>,
-    shorthand_aliases: AliasIndex<'a>,
-    ids: BTreeMap<&'a str, Vec<&'a LocatedNode<'a>>>,
-}
-
-impl<'a> DocumentSelectorIndex<'a> {
-    fn new(located: &'a [LocatedNode<'a>]) -> Self {
-        let mut index = Self {
-            paths: HashMap::new(),
-            exact_aliases: AliasIndex::default(),
-            shorthand_aliases: AliasIndex::default(),
-            ids: BTreeMap::new(),
-        };
-        for candidate in located {
-            index.paths.insert(candidate.path().to_string(), candidate);
-            index.ids.entry(candidate.id()).or_default().push(candidate);
-            let Some(identity) = candidate.identity() else {
-                continue;
-            };
-            for name in &identity.names {
-                index.exact_aliases.insert(identity.case, name, candidate);
-                if let Some(shorthand) = semantic_name_shorthand(identity.role, name) {
-                    index
-                        .shorthand_aliases
-                        .insert(identity.case, shorthand, candidate);
-                }
-            }
-        }
-        index
-    }
-
-    fn resolve(
-        &self,
-        document: &str,
-        selector: &str,
-    ) -> Result<&'a LocatedNode<'a>, ProjectionError> {
-        if let Ok(path) = selector.parse::<OutlinePath>()
-            && let Some(candidate) = self.paths.get(&path.to_string())
-        {
-            return Ok(candidate);
-        }
-        let ids = self.ids.get(selector).cloned().unwrap_or_default();
-        match ids.as_slice() {
-            [candidate] => return Ok(candidate),
-            [] => {}
-            _ => return Err(ambiguous_selector(document, selector, ids)),
-        }
-
-        let matches = self.matching_aliases(selector).1;
-        match matches.as_slice() {
-            [] => Err(ProjectionError::UnknownSelector {
-                document: document.to_owned(),
-                selector: selector.to_owned(),
-            }),
-            [candidate] => Ok(candidate),
-            _ => Err(ambiguous_selector(document, selector, matches)),
-        }
-    }
-
-    fn matching_aliases(&self, selector: &str) -> (AliasMatchKind, Vec<&'a LocatedNode<'a>>) {
-        let exact = self.exact_aliases.matches(selector);
-        if !exact.is_empty() {
-            return (AliasMatchKind::Exact, exact);
-        }
-        (
-            AliasMatchKind::Shorthand,
-            self.shorthand_aliases.matches(selector),
-        )
-    }
-}
-
-fn selector_alias_diagnostics(
-    index: &DocumentSelectorIndex<'_>,
-    selectors: BTreeSet<String>,
-    source_family: &str,
-) -> Vec<Diagnostic> {
-    let mut reported = HashSet::new();
-    let mut diagnostics = Vec::new();
-    for selector in selectors {
-        let (kind, matches) = index.matching_aliases(&selector);
-        let exact_ids = index
-            .ids
-            .get(selector.as_str())
-            .map_or(&[][..], Vec::as_slice);
-        let shadowed_matches = matches
-            .iter()
-            .copied()
-            .filter(|candidate| {
-                !exact_ids
-                    .iter()
-                    .any(|owner| owner.path() == candidate.path())
-            })
-            .collect::<Vec<_>>();
-        if !shadowed_matches.is_empty() && !exact_ids.is_empty() {
-            let key = format!("shadowed\u{1f}{selector}");
-            if reported.insert(key) {
-                let owners = exact_ids
-                    .iter()
-                    .map(|candidate| format!("{} ({})", candidate.path(), candidate.id()))
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                let entries = shadowed_matches
-                    .iter()
-                    .map(|candidate| format!("{} ({})", candidate.path(), candidate.id()))
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                diagnostics.push(Diagnostic {
-                    level: DiagnosticLevel::Warning,
-                    code: Some(format!(
-                        "{source_family}.semantic-entry.shadowed-selector"
-                    )),
-                    message: format!(
-                        "semantic selector '{selector}' is owned by exact outline ID {owners}; matching {} entries {entries} require their path or ID",
-                        kind.label()
-                    ),
-                    source: shadowed_matches
-                        .first()
-                        .and_then(|candidate| candidate.source()),
-                });
-            }
-        }
-        if matches.len() < 2 {
-            continue;
-        }
-        let key = matches
-            .iter()
-            .map(|candidate| candidate.id())
-            .collect::<Vec<_>>()
-            .join("\u{1f}");
-        if !reported.insert(key) {
-            continue;
-        }
-        let candidates = matches
-            .iter()
-            .map(|candidate| format!("{} ({})", candidate.path(), candidate.id()))
-            .collect::<Vec<_>>()
-            .join(", ");
-        diagnostics.push(Diagnostic {
-            level: DiagnosticLevel::Warning,
-            code: Some(format!(
-                "{source_family}.semantic-entry.ambiguous-selector"
-            )),
-            message: format!(
-                "semantic selector '{selector}' has multiple {} matches: {candidates}; select by path or ID",
-                kind.label()
-            ),
-            source: matches.first().and_then(|candidate| candidate.source()),
-        });
-    }
-    diagnostics
-}
-
-fn duplicate_id_diagnostics(
-    ids: &BTreeMap<&str, Vec<&LocatedNode<'_>>>,
-    source_family: &str,
-) -> Vec<Diagnostic> {
-    let mut diagnostics = Vec::new();
-    for (id, matches) in ids {
-        if matches.len() < 2 {
-            continue;
-        }
-        let candidates = matches
-            .iter()
-            .map(|candidate| format!("{} ({})", candidate.path(), candidate.id()))
-            .collect::<Vec<_>>()
-            .join(", ");
-        diagnostics.push(Diagnostic {
-            level: DiagnosticLevel::Warning,
-            code: Some(format!("{source_family}.outline.duplicate-id")),
-            message: format!(
-                "outline ID '{id}' belongs to multiple nodes: {candidates}; select by path"
-            ),
-            source: matches.first().and_then(|candidate| candidate.source()),
-        });
-    }
-    diagnostics
-}
-
-fn collect_sections<'a>(
-    sections: &'a [Section],
-    parent_coordinates: &[usize],
-    breadcrumbs: &[OutlineReference],
-    output: &mut Vec<LocatedNode<'a>>,
-) {
-    for (index, section) in sections.iter().enumerate() {
-        let mut coordinates = parent_coordinates.to_vec();
-        coordinates.push(index + 1);
-        let path =
-            OutlinePath::section(&coordinates).expect("enumerated section paths are one-based");
-        let order = output.len();
-        output.push(LocatedNode::Section {
-            order,
-            coordinates: coordinates.clone(),
-            path: path.clone(),
-            breadcrumbs: breadcrumbs.to_vec(),
-            section,
-        });
-        let mut child_breadcrumbs = breadcrumbs.to_vec();
-        child_breadcrumbs.push(OutlineReference {
-            path: path.to_string().into(),
-            id: section.id.clone(),
-            title: section.title.clone(),
-        });
-        for located in definition_entries(&section.blocks) {
-            let entry = located.item;
-            let mut entry_breadcrumbs = child_breadcrumbs.clone();
-            append_entry_breadcrumbs(
-                &mut entry_breadcrumbs,
-                Some(&coordinates),
-                &located.indices,
-                &located.ancestors,
-            );
-            output.push(LocatedNode::Entry {
-                order: output.len(),
-                coordinates: coordinates.clone(),
-                path: OutlinePath::nested_entry(Some(&coordinates), &located.indices)
-                    .expect("enumerated entry paths are one-based"),
-                title: definition_title(entry),
-                breadcrumbs: entry_breadcrumbs,
-                entry,
-                source: located.source,
-            });
-        }
-        collect_sections(&section.children, &coordinates, &child_breadcrumbs, output);
-    }
-}
-
-fn collect_root_entries<'a>(blocks: &'a [Block], output: &mut Vec<LocatedNode<'a>>) {
-    let breadcrumbs = vec![OutlineReference {
-        path: OutlinePath::DocumentRoot.to_string().into(),
-        id: DOCUMENT_ROOT_ID.into(),
-        title: DOCUMENT_ROOT_TITLE.to_owned(),
-    }];
-    for located in definition_entries(blocks) {
-        let entry = located.item;
-        let mut entry_breadcrumbs = breadcrumbs.clone();
-        append_entry_breadcrumbs(
-            &mut entry_breadcrumbs,
-            None,
-            &located.indices,
-            &located.ancestors,
-        );
-        output.push(LocatedNode::Entry {
-            order: output.len(),
-            coordinates: Vec::new(),
-            path: OutlinePath::nested_entry(None, &located.indices)
-                .expect("enumerated entry paths are one-based"),
-            title: definition_title(entry),
-            breadcrumbs: entry_breadcrumbs,
-            entry,
-            source: located.source,
-        });
-    }
-}
-
-fn append_entry_breadcrumbs(
-    breadcrumbs: &mut Vec<OutlineReference>,
-    section: Option<&[usize]>,
-    indices: &[usize],
-    ancestors: &[&DefinitionItem],
-) {
-    for (depth, ancestor) in ancestors.iter().enumerate() {
-        let path = OutlinePath::nested_entry(section, &indices[..=depth])
-            .expect("ancestor entry paths are one-based");
-        let identity = ancestor
-            .identity
-            .as_ref()
-            .expect("semantic entry ancestors have identities");
-        breadcrumbs.push(OutlineReference {
-            path: path.to_string().into(),
-            id: identity.id.clone(),
-            title: definition_title(ancestor),
-        });
-    }
-}
-
-fn definition_title(entry: &DefinitionItem) -> String {
-    let identity = entry
-        .identity
-        .as_ref()
-        .expect("semantic entries have identities");
-    if !identity.names.is_empty() {
-        return identity.names.join(", ");
-    }
-    let forms = entry
-        .terms
+fn project_breadcrumbs(breadcrumbs: &[LocatedBreadcrumb]) -> Vec<OutlineReference> {
+    breadcrumbs
         .iter()
-        .map(|term| plain_text(term))
-        .filter(|form| !form.is_empty())
-        .collect::<Vec<_>>();
-    if !forms.is_empty() {
-        return forms.join(" | ");
-    }
-    identity.id.to_string()
+        .map(|breadcrumb| OutlineReference {
+            path: breadcrumb.path.to_string().into(),
+            id: breadcrumb.id.clone(),
+            title: breadcrumb.title.clone(),
+        })
+        .collect()
 }
 
 fn is_ancestor(ancestor: &[usize], descendant: &[usize]) -> bool {

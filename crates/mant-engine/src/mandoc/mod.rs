@@ -154,7 +154,7 @@ fn lower_mandoc_document_with_source(
         explicit_targets,
         parsed.metadata.name.as_deref(),
     ));
-    diagnostics.extend(crate::projection::semantic_selector_diagnostics(
+    diagnostics.extend(crate::selectors::semantic_selector_diagnostics(
         &root_blocks,
         &sections,
         "manual",
@@ -462,7 +462,7 @@ impl<'a> LoweringContext<'a> {
             .join("-");
         let base = if slug.is_empty() {
             "section".to_owned()
-        } else if crate::projection::is_reserved_selector(&slug) {
+        } else if crate::selectors::is_reserved_selector(&slug) {
             format!("{slug}-section")
         } else {
             slug
