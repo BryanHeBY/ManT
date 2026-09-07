@@ -51,6 +51,42 @@ fn mdoc(body: &str) -> mant_ir::Document {
 }
 
 #[test]
+fn enclosure_parts_have_one_owner_even_when_empty_or_reparented() {
+    for (body, expected) in [
+        (".Op", "[]"),
+        (".Pq", "()"),
+        (".Oo\n.Oc", "[]"),
+        (".Aq", "<>"),
+        (".Brq", "{}"),
+        (".Eo (\nhello\n.Ec )", "(hello)"),
+        (".Eo ( hello Ec )", "(hello)"),
+        (".Eo <<\nhello\n.Ec >>", "<<hello>>"),
+        (".Op Pq", "[()]"),
+        (".Pq ;", "();"),
+        (".Eo (\n.Mt first@example.com\n.Ec )", "(first@example.com)"),
+    ] {
+        let document = mdoc(body);
+        let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
+            panic!("{document:?}")
+        };
+        assert_eq!(inline_text(children), expected, "{body}");
+        if body.contains(".Mt") {
+            assert_eq!(links(&document).len(), 1);
+        }
+    }
+    for (body, expected) in [(".Op", "[]"), (".Pq", "()"), (".Oo\n.Oc", "[]")] {
+        let document = mdoc(&format!(".TS\nl.\nT{{\n{body}\nT}}\n.TE"));
+        let [Block::Table { rows, .. }] = document.sections[0].blocks.as_slice() else {
+            panic!("{document:?}")
+        };
+        let [Block::Paragraph { children, .. }] = rows[0].cells[0].blocks.as_slice() else {
+            panic!("{rows:?}")
+        };
+        assert_eq!(inline_text(children), expected);
+    }
+}
+
+#[test]
 fn fo_counts_operands_without_counting_controls_or_targets() {
     for (body, expected) in [
         (".Fa int size_t", "probe(int, size_t)"),

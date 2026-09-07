@@ -505,19 +505,7 @@ fn lower_macro_inline(
         }
         Some("Fn") => lower_function_element(node, default_name, spacing_enabled),
         Some("Fo") => lower_function_declaration(node, default_name, spacing_enabled),
-        Some("Eo") => surround_fragments(
-            lower_inline_nodes_with_spacing(
-                first_part_children(node, NodeKind::Head),
-                default_name,
-                spacing_enabled,
-            ),
-            lowered,
-            lower_inline_nodes_with_spacing(
-                first_part_children(node, NodeKind::Tail),
-                default_name,
-                spacing_enabled,
-            ),
-        ),
+        Some("Eo") => lower_authored_enclosure(node, default_name, spacing_enabled),
         Some("En") => match node.enclosure.as_ref() {
             Some(enclosure) => surround(
                 &visible_text(&enclosure.opening),
@@ -725,12 +713,35 @@ fn navigation_anchor(node: &Node) -> Option<Inline> {
 }
 
 fn inline_children(node: &Node) -> &[Node] {
-    let body = first_part_children(node, NodeKind::Body);
-    if body.is_empty() {
-        &node.children
-    } else {
-        body
+    // A present empty body still owns the content. Falling back to Head and
+    // Body wrappers would execute their enclosing macro a second time.
+    node.children
+        .iter()
+        .find(|child| child.kind == NodeKind::Body)
+        .map_or(&node.children, |body| &body.children)
+}
+
+fn lower_authored_enclosure(
+    node: &Node,
+    default_name: Option<&str>,
+    spacing_enabled: bool,
+) -> Vec<Inline> {
+    let mut result = Vec::new();
+    // Native delimiter normalization may put opening punctuation directly on
+    // the block and closing punctuation after it. Visit each direct child
+    // exactly once, unwrapping structural parts rather than invoking Eo again.
+    for child in &node.children {
+        if matches!(child.kind, NodeKind::Head | NodeKind::Body | NodeKind::Tail) {
+            result.extend(lower_inline_nodes_with_spacing(
+                &child.children,
+                default_name,
+                spacing_enabled,
+            ));
+        } else {
+            result.extend(lower_inline_node(child, default_name, spacing_enabled));
+        }
     }
+    result
 }
 
 fn lower_manual_reference(
@@ -766,11 +777,7 @@ fn lower_manual_reference(
     output
 }
 
-fn lower_link(
-    children: &[Node],
-    default_name: Option<&str>,
-    spacing_enabled: bool,
-) -> Vec<Inline> {
+fn lower_link(children: &[Node], default_name: Option<&str>, spacing_enabled: bool) -> Vec<Inline> {
     let Some(first) = children.first() else {
         return Vec::new();
     };
@@ -1037,16 +1044,6 @@ fn surround(open: &str, mut children: Vec<Inline>, close: &str) -> Vec<Inline> {
     result.append(&mut children);
     result.extend(text_node(close));
     result
-}
-
-fn surround_fragments(
-    mut opening: Vec<Inline>,
-    mut children: Vec<Inline>,
-    mut closing: Vec<Inline>,
-) -> Vec<Inline> {
-    opening.append(&mut children);
-    opening.append(&mut closing);
-    opening
 }
 
 fn text_node(value: &str) -> Vec<Inline> {
