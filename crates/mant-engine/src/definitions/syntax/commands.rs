@@ -1,0 +1,65 @@
+//! commands recognition; complete forms retain their role-specific grammar.
+use super::forms;
+use crate::definitions::context::key_binding_command_form;
+use crate::inline::plain_text;
+use mant_ir::{DefinitionItem, Inline};
+
+pub(in crate::definitions) fn command_names(item: &DefinitionItem) -> Vec<String> {
+    item.terms
+        .iter()
+        .flat_map(|term| {
+            let text = plain_text(term);
+            if let Some((name, _)) = key_binding_command_form(&text) {
+                return vec![name.to_owned()];
+            }
+            forms::alias_groups(term)
+                .into_iter()
+                .filter_map(|group| {
+                    leading_styled_command_name(&group).or_else(|| {
+                        command_name_from_authored_form(&plain_text(&group)).map(str::to_owned)
+                    })
+                })
+                .collect::<Vec<_>>()
+        })
+        .fold(Vec::new(), |mut names, name| {
+            if !names.contains(&name) {
+                names.push(name);
+            }
+            names
+        })
+}
+
+/// Extract the command token from an unstyled authored form.
+pub(in crate::definitions) fn command_name_from_authored_form(value: &str) -> Option<&str> {
+    let value = value.trim();
+    let Some((first, suffix)) = value.split_once(char::is_whitespace) else {
+        return is_command_name(value).then_some(value);
+    };
+    let suffix = suffix.trim_start();
+    (suffix.starts_with(['-', '+', '/', '[', '<', '{']) && is_command_name(first)).then_some(first)
+}
+
+/// Read a formatter-emphasized command name without adjacent placeholders.
+pub(in crate::definitions) fn leading_styled_command_name(term: &[Inline]) -> Option<String> {
+    let first = term.iter().find(|inline| match inline {
+        Inline::Anchor { .. } => false,
+        Inline::Text { value } => !value.trim().is_empty(),
+        _ => true,
+    })?;
+    let Inline::Strong { children } = first else {
+        return None;
+    };
+    let name = plain_text(children);
+    let name = name.trim();
+    is_command_name(name).then(|| name.to_owned())
+}
+
+pub(in crate::definitions) fn is_command_name(value: &str) -> bool {
+    !value.is_empty()
+        && !value.chars().any(char::is_control)
+        && !value.starts_with(['-', '+', '/'])
+        && !value
+            .chars()
+            .next()
+            .is_some_and(|character| character.is_ascii_digit())
+}
