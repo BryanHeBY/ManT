@@ -1,19 +1,24 @@
 //! Metadata durability, controlled activation and authorized recovery.
 use super::{Path, SOURCE_METADATA_FILE, SourceMetadata, fs};
-pub(in crate::update) fn activate_source(
-    staging: &Path,
-    target: &Path,
-    metadata: &SourceMetadata,
-) -> Result<(), String> {
-    let metadata_text = toml::to_string_pretty(metadata)
-        .map_err(|error| format!("could not encode source metadata: {error}"))?;
-    let metadata_path = staging.join(SOURCE_METADATA_FILE);
-    fs::write(&metadata_path, metadata_text)
-        .map_err(|error| format!("could not write source metadata: {error}"))?;
-    sync_file(&metadata_path, "source metadata")?;
-    #[cfg(unix)]
-    sync_directory(staging)?;
-    replace_directory(staging, target)
+/// Only synced documents and metadata may cross the activation boundary.
+pub(super) struct PreparedInstallation<'a> {
+    staging: &'a Path,
+}
+impl<'a> PreparedInstallation<'a> {
+    pub(super) fn prepare(staging: &'a Path, metadata: &SourceMetadata) -> Result<Self, String> {
+        let metadata_text = toml::to_string_pretty(metadata)
+            .map_err(|error| format!("could not encode source metadata: {error}"))?;
+        let metadata_path = staging.join(SOURCE_METADATA_FILE);
+        fs::write(&metadata_path, metadata_text)
+            .map_err(|error| format!("could not write source metadata: {error}"))?;
+        sync_file(&metadata_path, "source metadata")?;
+        #[cfg(unix)]
+        sync_directory(staging)?;
+        Ok(Self { staging })
+    }
+    pub(super) fn activate(self, target: &Path) -> Result<(), String> {
+        replace_directory(self.staging, target)
+    }
 }
 
 pub(super) fn replace_directory(staging: &Path, target: &Path) -> Result<(), String> {

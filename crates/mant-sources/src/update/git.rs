@@ -8,7 +8,7 @@ use std::{
 };
 
 use super::{
-    SourceMetadata, SourceUpdateContext, SourceUpdateResult, UpdateWorkspace, activate_source,
+    PreparedInstallation, SourceMetadata, SourceUpdateContext, SourceUpdateResult, UpdateWorkspace,
     install_selected_documents, source_selects_markdown_path,
 };
 
@@ -91,7 +91,7 @@ pub(super) fn update(
         &context.fingerprint,
         document_count,
     );
-    activate_source(&workspace.staging, &context.target, &metadata)?;
+    PreparedInstallation::prepare(&workspace.staging, &metadata)?.activate(&context.target)?;
     Ok(context.updated(revision, document_count))
 }
 

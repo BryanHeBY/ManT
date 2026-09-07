@@ -19,7 +19,7 @@ use selection::{install_selected_documents, source_selects_markdown_path};
 #[cfg(test)]
 use transaction::sync_file;
 use transaction::sync_parent_directory;
-use transaction::{activate_source, recover_directory};
+use transaction::{PreparedInstallation, recover_directory};
 mod workspace;
 
 use crate::limits::{
