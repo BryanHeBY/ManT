@@ -60,6 +60,8 @@ that crate was not published for that change.
 
 - Retain historical `-h/--help` option aliases across Markdown and native
   manuals without splitting argument paths or assignment values into names.
+- Ignore empty styling wrappers when locating an option invocation, so
+  emphasized metavariables after alias punctuation cannot become selectors.
 - Preserve continuation and pending spacing across nested no-fill styling
   containers by sharing the source-line cursor and inline formatter state.
 - Extract option and styled command names per alias group without treating

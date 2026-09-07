@@ -8,6 +8,27 @@ fn invocation_forms_and_aliases_agree_across_query_consumers() {
     for (section, head, form, aliases, rejected) in [
         (
             "OPTIONS",
+            ".BI \"-n, \" -NUM",
+            "-n, -NUM",
+            vec!["-n"],
+            "-NUM",
+        ),
+        (
+            "OPTIONS",
+            ".BI \"-n| \" -NUM",
+            "-n| -NUM",
+            vec!["-n"],
+            "-NUM",
+        ),
+        (
+            "OPTIONS",
+            ".B \"-n, \\fI-NUM\"",
+            "-n, -NUM",
+            vec!["-n"],
+            "-NUM",
+        ),
+        (
+            "OPTIONS",
             ".B \"-h/--help\"",
             "-h/--help",
             vec!["-h", "--help"],
