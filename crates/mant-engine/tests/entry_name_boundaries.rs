@@ -49,7 +49,8 @@ fn a_bold_invocation_fragment_is_not_a_complete_command_name() {
     .unwrap();
     let index = SemanticIndex::build(&doc);
     let commands = index.section("commands");
-    assert_eq!(commands.len(), 1);
+    assert_eq!(commands.len(), 2);
     assert_eq!(commands[0].aliases, ["launch"]);
     assert_eq!(commands[0].forms, ["launch -p [-x]"]);
+    assert_eq!(commands[1].aliases, ["["]);
 }

@@ -70,7 +70,6 @@ fn styled_command_prefix(value: &str) -> &str {
 
 pub(in crate::definitions) fn is_command_name(value: &str) -> bool {
     !value.is_empty()
-        && !value.contains(['[', ']', '<', '>', '{', '}'])
         && !value.chars().any(char::is_control)
         && !value.starts_with(['-', '+', '/'])
         && !value
@@ -90,6 +89,7 @@ mod tests {
             ("query session -v", "query session"),
             ("Send Env", "Send Env"),
             ("Send Buffer", "Send Buffer"),
+            ("[", "["),
             ("query user <NAME>", "query user"),
         ] {
             let term = [Inline::Strong {
