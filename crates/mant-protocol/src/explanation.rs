@@ -28,10 +28,10 @@ pub struct ExplanationOptions {
     #[serde(default = "default_explanation_limit")]
     #[schemars(range(min = 1, max = 256))]
     pub limit: u32,
-    /// Number of matching owners skipped in deterministic source order.
+    /// Number of owners skipped in global class-then-source order.
     #[serde(default)]
     pub offset: u32,
-    /// Aggregate UTF-8 JSON byte budget for original forms/facts and body copies.
+    /// Aggregate JSON byte budget for original facts, match previews and bodies.
     /// Oversized bodies are omitted atomically, with location retained for reads.
     #[serde(default = "default_explanation_content_bytes")]
     #[schemars(range(min = 1, max = 4_194_304))]
@@ -187,6 +187,8 @@ pub struct ExplanationEntry {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ExplanationEvidence {
+    /// Exclusive category determined before pagination or content copying.
+    pub class: EvidenceClass,
     /// Zero-based ordinal before result pagination.
     pub ordinal: u32,
     /// Real owner/containing section; prose is never assigned a synthetic entry.
@@ -199,6 +201,10 @@ pub struct ExplanationEvidence {
     pub source: Option<SourceSpan>,
     /// All retained reasons for this owner's inclusion.
     pub bases: Vec<EvidenceBasis>,
+    /// At most two representative matched blocks, in their source order.
+    pub previews: Vec<ExplanationPreview>,
+    /// A representative match window did not fit the remaining copy budget.
+    pub previews_omitted: bool,
     /// Semantic metadata, absent for prose or when its copy exceeds the budget.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub entry: Option<ExplanationEntry>,
@@ -210,6 +216,15 @@ pub struct ExplanationEvidence {
     pub details_omitted: bool,
     /// Original body was too large for the remaining copy budget.
     pub content_omitted: bool,
+}
+
+impl ExplanationEvidence {
+    /// Whether any selected facts, representative preview or complete body was
+    /// omitted by the shared copy budget (not ordinary window clipping).
+    #[must_use]
+    pub const fn has_omitted_content(&self) -> bool {
+        self.content_omitted || self.details_omitted || self.previews_omitted
+    }
 }
 
 /// Original content copied for one evidence owner, not a navigation selection.
@@ -233,6 +248,10 @@ pub enum ExplanationContent {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 #[schemars(extend("$id" = "urn:mant:explanation:v0.11"))]
 pub struct QueryExplanation {
+    /// Normative category-first ordering, before result pagination.
+    pub order: EvidenceOrder,
+    /// Per-class collected and returned owners; zero categories remain present.
+    pub counts: EvidenceCounts,
     /// Exact result family.
     pub schema: ExplanationSchema,
     /// Normalized request and applied bounds.
@@ -261,7 +280,7 @@ pub struct QueryExplanation {
     pub semantics_complete: bool,
     /// Original recoverable validation/parser findings.
     pub diagnostics: Vec<Diagnostic>,
-    /// Records in document source order, with independent owners never merged.
+    /// Records in class-then-source order, with independent owners never merged.
     pub evidence: Vec<ExplanationEvidence>,
 }
 
@@ -273,6 +292,6 @@ pub struct ExplanationTruncation {
     pub candidates: bool,
     /// Relation traversal hit its edge or depth budget.
     pub relations: bool,
-    /// Some selected body or details were omitted by the copy budget.
+    /// Some selected body, details or previews were omitted by the copy budget.
     pub content: bool,
 }

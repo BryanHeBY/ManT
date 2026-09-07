@@ -1,14 +1,16 @@
 //! One source-order walk assigns real owners and finite literal support.
 use super::{Candidate, LocatedNode, ResolvedContent, is_identity, same};
+use super::{plan::Candidates, preview::LiteralHit};
 use mant_ir::{Block, EntryOwner, Section};
-use mant_protocol::{EvidenceBasis, MAX_EXPLANATION_CANDIDATES};
+use mant_protocol::EvidenceBasis;
 use std::collections::HashMap;
 
 pub(super) fn collect<'a>(
     content: &'a ResolvedContent,
     query: &str,
     located: &[LocatedNode<'a>],
-) -> (Vec<Candidate<'a>>, bool, Vec<usize>) {
+    validation: Option<&mant_ir::DocumentValidation<'_>>,
+) -> (Candidates<'a>, Vec<usize>) {
     let mut scan = Scan {
         query,
         located,
@@ -27,17 +29,21 @@ pub(super) fn collect<'a>(
                 LocatedNode::Entry { .. } => None,
             })
             .collect(),
-        candidates: Vec::new(),
-        records: HashMap::new(),
-        truncated: false,
+        candidates: Candidates::default(),
+        invalid_names: validation
+            .into_iter()
+            .flat_map(mant_ir::DocumentValidation::relation_issues)
+            .filter(|i| i.kind == mant_ir::EntryRelationIssueKind::NameBinding)
+            .map(|i| i.owner.clone())
+            .collect(),
         next_order: 0,
         orders: vec![0; located.len()],
     };
     if let Some(document) = &content.document {
         scan.blocks(&document.blocks, None, None, "root");
-        scan.sections(&document.sections);
+        scan.sections(&document.sections, "sections");
     }
-    (scan.candidates, scan.truncated, scan.orders)
+    (scan.candidates, scan.orders)
 }
 
 struct Scan<'a, 'b> {
@@ -45,19 +51,19 @@ struct Scan<'a, 'b> {
     located: &'b [LocatedNode<'a>],
     owners: HashMap<usize, usize>,
     sections: HashMap<usize, usize>,
-    candidates: Vec<Candidate<'a>>,
-    records: HashMap<usize, usize>,
-    truncated: bool,
+    candidates: Candidates<'a>,
+    invalid_names: std::collections::BTreeSet<mant_ir::NodeId>,
     next_order: usize,
     orders: Vec<usize>,
 }
 
 impl<'a> Scan<'a, '_> {
-    fn sections(&mut self, sections: &'a [Section]) {
-        for section in sections {
+    fn sections(&mut self, sections: &'a [Section], path: &str) {
+        for (ordinal, section) in sections.iter().enumerate() {
+            let path = format!("{path}/s{ordinal}");
             let index = self.sections[&(std::ptr::from_ref(section) as usize)];
-            self.blocks(&section.blocks, None, Some(index), "blocks");
-            self.sections(&section.children);
+            self.blocks(&section.blocks, None, Some(index), &path);
+            self.sections(&section.children, &path);
         }
     }
 
@@ -69,44 +75,34 @@ impl<'a> Scan<'a, '_> {
         self.next_order += 1;
         let facts = owner.facts().expect("indexed semantic owner");
         let mut bases = Vec::new();
-        if facts
-            .names
-            .iter()
-            .any(|name| same(name, self.query, facts.case))
+        if !self.invalid_names.contains(&facts.id)
+            && facts
+                .names
+                .iter()
+                .any(|name| same(name, self.query, facts.case))
         {
             bases.push(EvidenceBasis::Name);
         }
-        if owner.forms().is_some_and(|forms| {
-            forms
-                .iter()
-                .any(|form| same(&crate::inline::plain_text(form), self.query, facts.case))
-        }) {
+        if !self.invalid_names.contains(&facts.id)
+            && owner.forms().is_some_and(|forms| {
+                forms
+                    .iter()
+                    .any(|form| same(&crate::inline::plain_text(form), self.query, facts.case))
+            })
+        {
             bases.push(EvidenceBasis::Form);
         }
         if is_identity(&self.located[index], self.query) {
             bases.push(EvidenceBasis::Identity);
         }
         if !bases.is_empty() {
-            self.add_owner(index, bases);
+            self.add_owner(index, bases, Vec::new());
         }
         Some(index)
     }
 
-    fn add_owner(&mut self, index: usize, bases: Vec<EvidenceBasis>) {
-        if let Some(&record) = self.records.get(&index) {
-            for basis in bases {
-                if !self.candidates[record].bases.contains(&basis) {
-                    self.candidates[record].bases.push(basis);
-                }
-            }
-            return;
-        }
-        if self.candidates.len() == MAX_EXPLANATION_CANDIDATES {
-            self.truncated = true;
-            return;
-        }
-        self.records.insert(index, self.candidates.len());
-        self.candidates.push(Candidate {
+    fn add_owner(&mut self, index: usize, bases: Vec<EvidenceBasis>, hits: Vec<LiteralHit<'a>>) {
+        self.candidates.insert(Candidate {
             order: self.orders[index],
             located: Some(index),
             ordinary: None,
@@ -114,6 +110,7 @@ impl<'a> Scan<'a, '_> {
             block_path: None,
             source: self.located[index].source(),
             bases,
+            hits,
         });
     }
 
@@ -160,11 +157,22 @@ impl<'a> Scan<'a, '_> {
                         }
                     }
                 }
-                _ if block_matches(block, self.query) => {
+                _ => {
+                    let Some(text) = super::literal::block_text(block) else {
+                        continue;
+                    };
+                    let Some(range) = super::literal::first_match(&text, self.query) else {
+                        continue;
+                    };
+                    let hit = LiteralHit {
+                        block,
+                        path: block_path.clone(),
+                        range,
+                    };
                     if let Some(owner) = current {
-                        self.add_owner(owner, vec![EvidenceBasis::Literal]);
-                    } else if self.candidates.len() < MAX_EXPLANATION_CANDIDATES {
-                        self.candidates.push(Candidate {
+                        self.add_owner(owner, vec![EvidenceBasis::Literal], vec![hit]);
+                    } else {
+                        self.candidates.insert(Candidate {
                             order,
                             located: None,
                             ordinary: Some(block),
@@ -172,12 +180,10 @@ impl<'a> Scan<'a, '_> {
                             block_path: Some(block_path),
                             source: crate::block::block_source(block),
                             bases: vec![EvidenceBasis::Literal],
+                            hits: vec![hit],
                         });
-                    } else {
-                        self.truncated = true;
                     }
                 }
-                _ => {}
             }
         }
     }
@@ -187,17 +193,5 @@ fn owner_key(owner: EntryOwner<'_>) -> usize {
     match owner {
         EntryOwner::List(item) => std::ptr::from_ref(item) as usize,
         EntryOwner::Definition(item) => std::ptr::from_ref(item) as usize,
-    }
-}
-
-fn block_matches(block: &Block, query: &str) -> bool {
-    match block {
-        Block::Paragraph { children, .. } | Block::Preformatted { children, .. } => {
-            super::literal::first_match(&crate::inline::plain_text(children), query).is_some()
-        }
-        Block::Equation { value, .. } | Block::Unsupported { text: value, .. } => {
-            super::literal::first_match(value, query).is_some()
-        }
-        _ => false,
     }
 }

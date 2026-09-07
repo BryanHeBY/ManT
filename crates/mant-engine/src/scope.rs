@@ -14,8 +14,8 @@ use mant_protocol::{
     MAX_SCOPE_DOCUMENT_LIMIT, MAX_SCOPE_DOCUMENTS, MAX_SEMANTIC_ENTRY_CHARS, QueryInput,
     QueryRequest, RequestSchema, ResolvedDocumentScope, ScopeQueryRequest, ScopeQueryResponse,
     ScopeQueryResult, ScopeQuerySchema, ScopeQueryView, ScopeSearch, ScopeTextError,
-    ScopedDocument, ScopedExplanation, ScopedQueryFailure, ScopedSearchDocument, SearchQuery,
-    TraversalLimit, UnresolvedDocument, validate_scope_text,
+    ScopedDocument, ScopedSearchDocument, SearchQuery, TraversalLimit, UnresolvedDocument,
+    validate_scope_text,
 };
 
 use crate::{DocumentResolver, QueryError, QueryPolicy, validate_search_query};
@@ -519,7 +519,8 @@ mod tests {
         assert!(explanation.failures.is_empty());
         assert_eq!(explanation.total, 1);
         assert_eq!(explanation.documents[0].address, address);
-        let evidence = &explanation.documents[0].explanation.evidence[0];
+        assert_eq!(explanation.evidence[0].document_index, 0);
+        let evidence = &explanation.evidence[0].evidence;
         assert_eq!(evidence.outline.path(), "1");
         assert_eq!(evidence.outline.title(), "Startup");
         assert!(evidence.entry.is_none());

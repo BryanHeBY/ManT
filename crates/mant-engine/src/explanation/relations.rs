@@ -1,9 +1,6 @@
 //! Bounded explicit relationships, never inferred from prose or common forms.
-use super::{Candidate, LocatedNode, same};
-use mant_protocol::{
-    EvidenceBasis, MAX_EXPLANATION_CANDIDATES, MAX_EXPLANATION_RELATION_DEPTH,
-    MAX_EXPLANATION_RELATIONS,
-};
+use super::{Candidate, LocatedNode, plan::Candidates, same};
+use mant_protocol::{EvidenceBasis, MAX_EXPLANATION_RELATION_DEPTH, MAX_EXPLANATION_RELATIONS};
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 pub(super) fn expand<'a>(
@@ -11,7 +8,7 @@ pub(super) fn expand<'a>(
     query: &str,
     located: &[LocatedNode<'a>],
     orders: &[usize],
-    candidates: &mut Vec<Candidate<'a>>,
+    candidates: &mut Candidates<'a>,
 ) -> bool {
     let Some(validation) = validation else {
         return false;
@@ -34,11 +31,6 @@ pub(super) fn expand<'a>(
         .map(|(i, n)| (n.id(), i))
         .collect::<BTreeMap<_, _>>();
     let (edges, mut truncated) = graph(located, &indices, &invalid, &duplicates);
-    let mut records = candidates
-        .iter()
-        .enumerate()
-        .filter_map(|(record, c)| c.located.map(|index| (index, record)))
-        .collect::<BTreeMap<_, _>>();
     let mut queue = VecDeque::new();
     let mut visited = BTreeSet::new();
     for candidate in candidates.iter_mut() {
@@ -77,9 +69,7 @@ pub(super) fn expand<'a>(
             if visited.contains(&target) {
                 continue;
             }
-            if followed == MAX_EXPLANATION_RELATIONS
-                || path.len() == MAX_EXPLANATION_RELATION_DEPTH
-                || candidates.len() == MAX_EXPLANATION_CANDIDATES
+            if followed == MAX_EXPLANATION_RELATIONS || path.len() == MAX_EXPLANATION_RELATION_DEPTH
             {
                 truncated = true;
                 continue;
@@ -92,20 +82,16 @@ pub(super) fn expand<'a>(
                 from: located[origin].id().into(),
                 declarations: path.clone(),
             };
-            if let Some(&record) = records.get(&target) {
-                candidates[record].bases.push(basis);
-            } else {
-                records.insert(target, candidates.len());
-                candidates.push(Candidate {
-                    order: orders[target],
-                    located: Some(target),
-                    ordinary: None,
-                    section: None,
-                    block_path: None,
-                    source: located[target].source(),
-                    bases: vec![basis],
-                });
-            }
+            candidates.insert(Candidate {
+                order: orders[target],
+                located: Some(target),
+                ordinary: None,
+                section: None,
+                block_path: None,
+                source: located[target].source(),
+                bases: vec![basis],
+                hits: Vec::new(),
+            });
             queue.push_back((target, origin, path));
         }
     }

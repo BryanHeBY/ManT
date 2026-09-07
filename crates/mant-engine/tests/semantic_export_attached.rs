@@ -3,6 +3,7 @@ use mant_ir::{
     Document, EntryFacts, ListItem,
     visit::{self, Visit},
 };
+use std::fmt::Write as _;
 
 fn facts(doc: &Document) -> Vec<EntryFacts> {
     struct Entries(Vec<EntryFacts>);
@@ -39,9 +40,11 @@ fn attached_policy_is_proven_for_the_whole_list() {
     ] {
         let mut source = format!("<!-- mant:entries role=option case=insensitive{policy} -->\n");
         for (index, head) in heads.lines().enumerate() {
-            source.push_str(&format!(
-                "- `{head}`: Description. <!-- mant:entry {{\"id\":\"entry-{index}\"}} -->\n"
-            ));
+            writeln!(
+                source,
+                "- `{head}`: Description. <!-- mant:entry {{\"id\":\"entry-{index}\"}} -->"
+            )
+            .unwrap();
         }
         let query = query_markdown_text(&source, None).unwrap();
         assert!(query.document.as_ref().unwrap().diagnostics.is_empty());

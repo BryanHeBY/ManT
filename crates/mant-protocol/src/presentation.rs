@@ -6,6 +6,9 @@ use mant_ir::{DocumentAddress, MarkdownOrigin};
 
 use crate::DocumentCatalog;
 
+mod evidence;
+pub use evidence::render_evidence_counts;
+
 /// Transport-neutral evidence outcome and paging/coverage labels.
 #[must_use]
 pub fn render_explanation_status(result: &crate::QueryExplanation) -> String {

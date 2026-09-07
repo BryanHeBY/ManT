@@ -49,13 +49,13 @@ fn multiple_owners_relations_and_strict_navigation_remain_independent() {
     assert_eq!(result["schema"], "mant.explanation/v0.11");
     assert_eq!(result["total"], 4);
     let evidence = result["evidence"].as_array().unwrap();
-    assert!(evidence[0].get("entry").is_none());
-    assert_eq!(evidence[0]["bases"], json!([{"kind":"literal"}]));
-    assert_eq!(evidence[1]["outline"]["node"]["id"], "brief");
-    assert_eq!(evidence[2]["outline"]["node"]["id"], "class-help");
-    assert_eq!(evidence[3]["outline"]["node"]["id"], "assist");
+    assert!(evidence[3].get("entry").is_none());
+    assert_eq!(evidence[3]["bases"], json!([{"kind":"literal"}]));
+    assert_eq!(evidence[0]["outline"]["node"]["id"], "brief");
+    assert_eq!(evidence[1]["outline"]["node"]["id"], "class-help");
+    assert_eq!(evidence[2]["outline"]["node"]["id"], "assist");
     assert!(
-        evidence[3]["bases"]
+        evidence[2]["bases"]
             .as_array()
             .unwrap()
             .iter()
@@ -103,12 +103,21 @@ fn semantic_paging_and_copy_budget_are_global_across_readable_sources() {
     assert_eq!(result["failures"], json!([]));
     let documents = result["documents"].as_array().unwrap();
     assert_eq!(documents.len(), 2);
-    for (doc, ordinal) in documents.iter().zip([3, 4]) {
-        let items = doc["explanation"]["evidence"].as_array().unwrap();
-        assert_eq!(items.len(), 1);
-        assert_eq!(items[0]["ordinal"], ordinal);
-        assert_eq!(items[0]["contentOmitted"], true);
-        assert!(items[0].get("content").is_none());
+    for doc in documents {
+        assert!(doc.get("explanation").is_none());
+        assert!(doc.get("evidence").is_none());
+        assert_eq!(doc["returned"], 1);
+    }
+    for (record, (ordinal, document_index)) in result["evidence"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .zip([(3, 1), (4, 0)])
+    {
+        assert_eq!(record["documentIndex"], document_index);
+        assert_eq!(record["evidence"]["ordinal"], ordinal);
+        assert_eq!(record["evidence"]["contentOmitted"], true);
+        assert!(record["evidence"].get("content").is_none());
     }
     let empty_page = success(&run(&root, &["first", "--explain=--help", "--offset=100"]));
     assert_eq!(empty_page["outcome"], "evidence");
@@ -147,6 +156,64 @@ fn no_evidence_partial_sources_and_invalid_requests_have_distinct_outcomes() {
             assert_eq!(output.status.code(), Some(2), "{invalid}: {output:?}");
             assert!(output.stdout.is_empty());
         }
+    }
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn request_json_and_cli_share_classification_and_original_rendering() {
+    use std::io::Write;
+    use std::process::Stdio;
+    let root = fixture("request");
+    let direct = success(&run(&root, &["first", "--explain=--help"]));
+    let mut command = Command::new(env!("CARGO_BIN_EXE_mant"));
+    support::configure_registered_documents(&mut command, &root);
+    let mut child = command
+        .args(["--request-json", "--format=json", "--compact"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let request = json!({"schema":"mant.request/v0.11","input":{"kind":"document","selector":"first"},"view":{"kind":"explain","entry":"--help"}});
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(request.to_string().as_bytes())
+        .unwrap();
+    let response = success(&child.wait_with_output().unwrap());
+    assert_eq!(response, direct);
+    assert_eq!(response["order"], "class-then-source");
+    assert_eq!(
+        response["counts"],
+        json!({"directEntry":{"total":2,"returned":2},"relatedEntry":{"total":1,"returned":1},"entryMention":{"total":0,"returned":0},"contextMention":{"total":1,"returned":1}})
+    );
+    for format in ["text", "markdown"] {
+        let mut command = Command::new(env!("CARGO_BIN_EXE_mant"));
+        support::configure_registered_documents(&mut command, &root);
+        let output = command
+            .args([
+                "first",
+                "--explain=--help",
+                "--format",
+                format,
+                "--color=never",
+                "--display=direct",
+            ])
+            .output()
+            .unwrap();
+        assert!(output.status.success(), "{output:?}");
+        let text = String::from_utf8(output.stdout).unwrap();
+        let positions = [
+            "Direct entries\n",
+            "Explicitly related entries\n",
+            "Mentions in ordinary content\n",
+        ]
+        .map(|heading| text.find(heading).unwrap());
+        assert!(positions[0] < positions[1] && positions[1] < positions[2]);
+        assert!(text.contains("Class-specific help") || text.contains("Class\\-specific help"));
+        assert!(!text.contains('\u{1b}'));
     }
     fs::remove_dir_all(root).unwrap();
 }

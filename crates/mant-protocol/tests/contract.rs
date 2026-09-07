@@ -19,8 +19,8 @@ fn independent_evidence_contract_preserves_ordinary_owners_and_omission_state() 
     let expected: Value = serde_json::from_str(EXPLANATION).unwrap();
     let result: mant_protocol::QueryExplanation = serde_json::from_value(expected.clone()).unwrap();
     assert_eq!(result.total, 2);
-    assert!(result.evidence[0].entry.is_none());
-    assert!(result.evidence[1].content_omitted);
+    assert!(result.evidence[1].entry.is_none());
+    assert!(result.evidence[0].content_omitted);
     assert_eq!(serde_json::to_value(result).unwrap(), expected);
     for invalid in [
         r#"{"kind":"literal","extra":true}"#,
@@ -30,6 +30,46 @@ fn independent_evidence_contract_preserves_ordinary_owners_and_omission_state() 
     }
     let invalid = EXPLANATION.replace("\"limit\": 50", "\"limit\": 50, \"unknown\": true");
     assert!(serde_json::from_str::<mant_protocol::QueryExplanation>(&invalid).is_err());
+}
+
+#[test]
+fn classified_explanations_have_required_closed_shapes() {
+    let expected: Value = serde_json::from_str(EXPLANATION).unwrap();
+    for field in ["class", "previews", "previewsOmitted"] {
+        let mut invalid = expected.clone();
+        invalid["evidence"][0]
+            .as_object_mut()
+            .unwrap()
+            .remove(field);
+        assert!(
+            serde_json::from_value::<mant_protocol::QueryExplanation>(invalid).is_err(),
+            "{field}"
+        );
+    }
+    for (pointer, field) in [
+        ("", "unknown"),
+        ("/counts/directEntry", "unknown"),
+        ("/evidence/0", "isDirect"),
+        ("/evidence/1/previews/0", "byteOffset"),
+    ] {
+        let mut invalid = expected.clone();
+        invalid
+            .pointer_mut(pointer)
+            .unwrap()
+            .as_object_mut()
+            .unwrap()
+            .insert(field.into(), Value::Bool(true));
+        assert!(
+            serde_json::from_value::<mant_protocol::QueryExplanation>(invalid).is_err(),
+            "{pointer}"
+        );
+    }
+    let mut invalid = expected;
+    invalid["order"] = "source-only".into();
+    assert!(serde_json::from_value::<mant_protocol::QueryExplanation>(invalid).is_err());
+    let mut scope: Value = serde_json::from_str(SCOPE_EXPLAIN).unwrap();
+    scope["result"]["explanation"]["documents"][0]["explanation"] = serde_json::json!({});
+    assert!(serde_json::from_value::<ScopeQueryResponse>(scope).is_err());
 }
 
 #[test]

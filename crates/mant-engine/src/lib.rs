@@ -28,7 +28,9 @@ pub use catalog::{
     discover_documents, list_available_documents, query_available_documents,
 };
 pub use executable::find_host_executable;
-pub use explanation::{ExplanationError, explain_query, validate_explanation_query};
+pub use explanation::{
+    ExplanationError, explain_query, resolve_explanation_block, validate_explanation_query,
+};
 pub use mandoc::{
     MAX_MANUAL_BYTES, ManualError, ManualErrorKind, lower_mandoc_document, parse_manual_bytes,
     parse_manual_page, parse_manual_source,
@@ -45,8 +47,9 @@ pub use output::{
     render_explanation_text, render_markdown, render_markdown_with_options,
     render_outline_entry_summary, render_outline_json, render_outline_markdown,
     render_outline_relationships, render_outline_text, render_query_json, render_query_man,
-    render_query_text, render_search_json, render_search_markdown, render_search_text,
-    render_search_text_with, render_update_json,
+    render_query_text, render_scope_explanation_markdown, render_scope_explanation_text,
+    render_search_json, render_search_markdown, render_search_text, render_search_text_with,
+    render_update_json,
 };
 pub use projection::{
     ProjectionError, SelectorCandidate, build_outline, build_outline_projection,

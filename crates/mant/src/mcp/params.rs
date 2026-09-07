@@ -133,17 +133,17 @@ pub(super) struct ExplainParams {
     /// Documented name, complete form, exact owner coordinate, or bounded literal.
     #[schemars(length(min = 1, max = 512))]
     pub(super) entry: String,
-    /// Maximum evidence owners, independent of Unicode presentation paging.
+    /// Maximum owners after class/BFS/source ordering, before character paging.
     #[serde(
         default = "mant_protocol::default_explanation_limit",
         deserialize_with = "deserialize_compat_scalar"
     )]
     #[schemars(range(min = 1, max = 256))]
     pub(super) max_results: u32,
-    /// Global zero-based evidence offset.
+    /// Global zero-based class-then-source evidence offset, not a document cursor.
     #[serde(default, deserialize_with = "deserialize_compat_scalar")]
     pub(super) offset: u32,
-    /// Aggregate original forms/body copy budget, in JSON payload bytes.
+    /// Shared facts, literal previews and atomic body budget in JSON payload bytes.
     #[serde(
         default = "mant_protocol::default_explanation_content_bytes",
         deserialize_with = "deserialize_compat_scalar"

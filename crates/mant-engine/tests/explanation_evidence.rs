@@ -17,15 +17,15 @@ fn independent_owners_and_literal_support_survive_without_selector_shadowing() {
     let found = explain_query(&content, &query("--help")).unwrap();
     assert_eq!(found.outcome, ExplanationOutcome::Evidence);
     assert_eq!(found.total, 4);
-    assert!(found.evidence[0].entry.is_none());
-    assert!(found.evidence[0].block_path.is_some());
+    assert!(found.evidence[3].entry.is_none());
+    assert!(found.evidence[3].block_path.is_some());
+    assert_eq!(found.evidence[0].entry.as_ref().unwrap().names, ["--help"]);
     assert_eq!(found.evidence[1].entry.as_ref().unwrap().names, ["--help"]);
     assert_eq!(found.evidence[2].entry.as_ref().unwrap().names, ["--help"]);
-    assert_eq!(found.evidence[3].entry.as_ref().unwrap().names, ["--help"]);
-    assert!(found.evidence[1].bases.contains(&EvidenceBasis::Name));
-    assert!(found.evidence[1].bases.contains(&EvidenceBasis::Form));
+    assert!(found.evidence[0].bases.contains(&EvidenceBasis::Name));
+    assert!(found.evidence[0].bases.contains(&EvidenceBasis::Form));
     assert!(mant_engine::select_excerpt(&content, &["--help"]).is_err());
-    for evidence in &found.evidence[1..] {
+    for evidence in &found.evidence[..3] {
         assert!(mant_engine::select_excerpt(&content, &[evidence.outline.path()]).is_ok());
     }
     assert_eq!(before, content);
@@ -53,9 +53,9 @@ fn explicit_relationships_add_independent_content_not_inherited_domains() {
     assert!(content.document.as_ref().unwrap().diagnostics.is_empty());
     let found = explain_query(&content, &query("--data")).unwrap();
     assert_eq!(found.total, 2);
-    assert!(found.evidence[0].bases.iter().any(|b| matches!(b, EvidenceBasis::Related { from, declarations } if from.as_str() == "data" && declarations.iter().map(mant_ir::NodeId::as_str).collect::<Vec<_>>() == ["ascii"])));
+    assert!(found.evidence[1].bases.iter().any(|b| matches!(b, EvidenceBasis::Related { from, declarations } if from.as_str() == "data" && declarations.iter().map(mant_ir::NodeId::as_str).collect::<Vec<_>>() == ["ascii"])));
     assert!(
-        found.evidence[0]
+        found.evidence[1]
             .entry
             .as_ref()
             .unwrap()
@@ -63,7 +63,7 @@ fn explicit_relationships_add_independent_content_not_inherited_domains() {
             .is_none()
     );
     assert!(
-        found.evidence[1]
+        found.evidence[0]
             .entry
             .as_ref()
             .unwrap()
@@ -71,7 +71,7 @@ fn explicit_relationships_add_independent_content_not_inherited_domains() {
             .is_some()
     );
     assert!(
-        found.evidence[1]
+        found.evidence[0]
             .bases
             .contains(&EvidenceBasis::AliasGroup {
                 members: vec!["-d".into(), "--data".into()]
@@ -153,6 +153,9 @@ fn native_and_markdown_owners_share_the_same_evidence_rules() {
     assert_eq!(found.total, 2);
     for result in &found.evidence {
         assert!(result.bases.contains(&EvidenceBasis::Name));
+        assert_eq!(result.class, mant_protocol::EvidenceClass::DirectEntry);
+        assert!(result.previews.is_empty());
+        assert!(!result.previews_omitted);
         assert!(matches!(
             result.content,
             Some(mant_protocol::ExplanationContent::Entry { .. })

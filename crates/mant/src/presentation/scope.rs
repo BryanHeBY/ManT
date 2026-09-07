@@ -1,10 +1,7 @@
 //! Scope coverage and document grouping; entry bodies use shared renderers.
 use super::{
     RenderOptions, render_json,
-    terminal::{
-        TerminalRole, render_terminal_explanation, render_terminal_search, terminal_search,
-        terminal_style,
-    },
+    terminal::{TerminalRole, render_terminal_search, terminal_search, terminal_style},
 };
 use crate::{arguments::QueryFormat, error::Failure};
 use mant_ir::DocumentMeta;
@@ -35,51 +32,18 @@ pub(crate) fn render_scope_query_result(
     let mut output = String::new();
     match &response.result {
         ScopeQueryResult::Explain { explanation } => {
-            let outcome = match explanation.outcome {
-                mant_protocol::ExplanationOutcome::Evidence => "evidence",
-                mant_protocol::ExplanationOutcome::NoEvidence => "no-evidence",
+            output = if format == QueryFormat::Markdown {
+                mant_engine::render_scope_explanation_markdown(explanation)
+            } else {
+                super::terminal::render_terminal_scope_explanation(explanation, color)
             };
             let _ = write!(
                 output,
-                "Explanation {:?}: {outcome}; owners={}, returned={}, offset={}",
-                sanitize_terminal_text(&explanation.query.entry),
-                explanation.total,
-                explanation.returned,
-                explanation.query.options.offset
-            );
-            if let Some(next) = explanation.next_offset {
-                let _ = write!(output, "; nextOffset={next}");
-            }
-            let _ = write!(
-                output,
-                "\nCoverage: loaded={}, unresolved={}, frontier={}; truncated: candidates={}, relations={}, content={}",
+                "\nCoverage: loaded={}, unresolved={}, frontier={}",
                 explanation.documents.len(),
                 response.scope.unresolved.len(),
-                response.scope.frontier.len(),
-                explanation.truncation.candidates,
-                explanation.truncation.relations,
-                explanation.truncation.content
+                response.scope.frontier.len()
             );
-            for found in &explanation.documents {
-                if found.explanation.evidence.is_empty() {
-                    continue;
-                }
-                output.push_str("\n\n");
-                write_scope_heading(
-                    &mut output,
-                    &found.address.catalog_path(),
-                    format,
-                    color,
-                    output_terminal,
-                );
-                output.push('\n');
-                let rendered = if format == QueryFormat::Markdown {
-                    mant_engine::render_explanation_markdown(&found.explanation)
-                } else {
-                    render_terminal_explanation(&found.explanation, color)
-                };
-                output.push_str(&rendered);
-            }
             write_scope_failures(
                 &mut output,
                 &explanation.failures,

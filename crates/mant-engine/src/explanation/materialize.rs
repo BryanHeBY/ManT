@@ -1,5 +1,5 @@
-//! Budget before copying bodies: omitted content remains directly addressable.
-use super::{Candidate, ExplanationQuery, LocatedNode, ResolvedContent};
+//! Materialize only the selected page: facts, previews, then atomic original body.
+use super::{Candidate, ExplanationQuery, LocatedNode, plan::CollectionPlan};
 use mant_ir::{DOCUMENT_ROOT_ID, EntryOwner};
 use mant_protocol::{
     ExplanationContent, ExplanationEntry, ExplanationEvidence, ExplanationOutcome,
@@ -7,76 +7,78 @@ use mant_protocol::{
 };
 
 pub(super) fn response(
-    content: &ResolvedContent,
-    query: ExplanationQuery,
-    located: &[LocatedNode<'_>],
-    candidates: Vec<Candidate<'_>>,
-    candidates_truncated: bool,
-    relations_truncated: bool,
-    validation: Option<mant_ir::DocumentValidation<'_>>,
+    plan: CollectionPlan<'_>,
+    query: &ExplanationQuery,
 ) -> (QueryExplanation, u32) {
-    let total = u32::try_from(candidates.len()).unwrap_or(u32::MAX);
-    let mut budget = Budget(usize::try_from(query.options.content_bytes).unwrap_or(usize::MAX));
-    let evidence = candidates
-        .into_iter()
-        .enumerate()
-        .skip(query.options.offset as usize)
-        .take(query.options.limit as usize)
-        .map(|(ordinal, candidate)| {
-            materialize(
-                u32::try_from(ordinal).unwrap_or(u32::MAX),
+    let query = ExplanationQuery {
+        entry: query.entry.trim().to_owned(),
+        options: query.options,
+    };
+    let total = u32::try_from(plan.candidates.len()).expect("bounded candidates");
+    let mut counts = mant_protocol::EvidenceCounts::default();
+    let mut budget = Budget(query.options.content_bytes as usize);
+    let mut evidence = Vec::new();
+    for (ordinal, candidate) in plan.candidates.iter().enumerate() {
+        let selected = ordinal >= query.options.offset as usize
+            && evidence.len() < query.options.limit as usize;
+        counts.record(candidate.class(), selected);
+        if selected {
+            evidence.push(materialize(
+                u32::try_from(ordinal).expect("bounded candidates"),
                 candidate,
-                located,
+                &plan.located,
                 &mut budget,
-            )
-        })
-        .collect::<Vec<_>>();
-    let returned = u32::try_from(evidence.len()).unwrap_or(u32::MAX);
-    let end = query.options.offset.saturating_add(returned);
-    let document = content.document.as_ref();
-    let mut diagnostics = document.map(|d| d.diagnostics.clone()).unwrap_or_default();
-    if let Some(validation) = validation {
-        for diagnostic in validation.into_diagnostics() {
-            if !diagnostics.contains(&diagnostic) {
-                diagnostics.push(diagnostic);
-            }
+            ));
         }
     }
+    let returned = u32::try_from(evidence.len()).expect("bounded result page");
+    let end = query.options.offset.saturating_add(returned);
+    let mut truncation = plan.truncation;
+    truncation.content = evidence.iter().any(omitted);
     let used = query
         .options
         .content_bytes
-        .saturating_sub(u32::try_from(budget.0).unwrap_or(u32::MAX));
-    let response = QueryExplanation {
-        schema: ExplanationSchema::V0Dot11,
-        label: content.label.clone(),
-        address: content.address.clone(),
-        producer: document.map(mant_protocol::Producer::for_document),
-        query,
-        outcome: if total == 0 {
-            ExplanationOutcome::NoEvidence
-        } else {
-            ExplanationOutcome::Evidence
+        .saturating_sub(u32::try_from(budget.0).expect("bounded copy budget"));
+    (
+        QueryExplanation {
+            schema: ExplanationSchema::V0Dot11,
+            order: mant_protocol::EvidenceOrder::ClassThenSource,
+            counts,
+            label: plan.content.label.clone(),
+            address: plan.content.address.clone(),
+            producer: plan
+                .content
+                .document
+                .as_ref()
+                .map(mant_protocol::Producer::for_document),
+            query,
+            outcome: outcome(total),
+            total,
+            returned,
+            next_offset: (end < total).then_some(end),
+            truncation,
+            semantics_complete: crate::projection::semantics_complete(&plan.diagnostics),
+            diagnostics: plan.diagnostics,
+            evidence,
         },
-        total,
-        returned,
-        next_offset: (end < total).then_some(end),
-        truncation: mant_protocol::ExplanationTruncation {
-            candidates: candidates_truncated,
-            relations: relations_truncated,
-            content: evidence
-                .iter()
-                .any(|e| e.content_omitted || e.details_omitted),
-        },
-        semantics_complete: crate::projection::semantics_complete(&diagnostics),
-        diagnostics,
-        evidence,
-    };
-    (response, used)
+        used,
+    )
 }
 
-fn materialize(
+pub(super) fn outcome(total: u32) -> ExplanationOutcome {
+    if total == 0 {
+        ExplanationOutcome::NoEvidence
+    } else {
+        ExplanationOutcome::Evidence
+    }
+}
+pub(super) fn omitted(evidence: &ExplanationEvidence) -> bool {
+    evidence.has_omitted_content()
+}
+
+pub(super) fn materialize(
     ordinal: u32,
-    candidate: Candidate<'_>,
+    candidate: &Candidate<'_>,
     located: &[LocatedNode<'_>],
     budget: &mut Budget,
 ) -> ExplanationEvidence {
@@ -84,12 +86,9 @@ fn materialize(
     let outline = node.map_or_else(root_trail, trail);
     let mut entry = None;
     let mut details_omitted = false;
-    let content = if let Some(index) = candidate.located {
-        let node = &located[index];
-        let owner = super::owner(node).expect("entry location");
+    if let Some(index) = candidate.located {
+        let owner = super::owner(&located[index]).expect("entry location");
         let facts = owner.facts().expect("entry facts");
-        // Forms are bounded by the source input and never include nested bodies.
-        // They are materialized one owner at a time, not cached for all candidates.
         let details = ExplanationEntry {
             role: facts.role,
             case: facts.case,
@@ -104,6 +103,20 @@ fn materialize(
         } else {
             details_omitted = true;
         }
+    }
+    let mut previews = Vec::new();
+    let mut previews_omitted = false;
+    for hit in &candidate.hits {
+        let preview = hit.preview();
+        if budget.take(&preview) {
+            previews.push(preview);
+        } else {
+            previews_omitted = true;
+        }
+    }
+    let content = if let Some(index) = candidate.located {
+        let node = &located[index];
+        let owner = super::owner(node).expect("entry location");
         let fits = match owner {
             EntryOwner::List(item) => budget.take(item),
             EntryOwner::Definition(item) => budget.take(item),
@@ -123,18 +136,20 @@ fn materialize(
             })
     };
     ExplanationEvidence {
+        class: candidate.class(),
         ordinal,
         outline,
-        block_path: candidate.block_path,
+        block_path: candidate.block_path.clone(),
         source: candidate.source,
-        bases: candidate.bases,
+        bases: candidate.bases.clone(),
         entry,
+        previews,
+        previews_omitted,
         details_omitted,
         content_omitted: content.is_none(),
         content,
     }
 }
-
 fn trail(node: &LocatedNode<'_>) -> OutlineTrail {
     let (breadcrumbs, reference) = match node {
         LocatedNode::Section {
@@ -187,9 +202,9 @@ fn root_trail() -> OutlineTrail {
     }
 }
 
-struct Budget(usize);
+pub(super) struct Budget(pub usize);
 impl Budget {
-    fn take(&mut self, value: &impl serde::Serialize) -> bool {
+    pub(super) fn take(&mut self, value: &impl serde::Serialize) -> bool {
         struct Count {
             remaining: usize,
         }

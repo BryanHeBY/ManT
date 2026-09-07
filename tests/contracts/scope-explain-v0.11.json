@@ -2,14 +2,26 @@
   "schema": "mant.scope-query/v0.11",
   "scope": {
     "query": {
-      "documents": [{ "selector": "git" }],
-      "traversal": { "followLinks": false }
+      "documents": [
+        {
+          "selector": "git"
+        }
+      ],
+      "traversal": {
+        "followLinks": false
+      }
     },
     "documents": [
       {
-        "address": { "kind": "manual", "name": "git", "manualSection": "1" },
+        "address": {
+          "kind": "manual",
+          "name": "git",
+          "manualSection": "1"
+        },
         "depth": 0,
-        "rootIndices": [0]
+        "rootIndices": [
+          0
+        ]
       }
     ],
     "edges": []
@@ -17,22 +29,82 @@
   "result": {
     "kind": "explain",
     "explanation": {
-      "query": { "entry": "--help", "options": { "limit": 50, "offset": 0, "contentBytes": 1048576 } },
-      "outcome": "no-evidence", "total": 0, "returned": 0,
-      "truncation": { "candidates": false, "relations": false, "content": false },
-      "documents": [{
-        "address": { "kind": "manual", "name": "git", "manualSection": "1" },
-        "depth": 0,
-        "explanation": {
-          "schema": "mant.explanation/v0.11",
-          "query": { "entry": "--help", "options": { "limit": 50, "offset": 0, "contentBytes": 1048576 } },
-          "label": "git",
-          "address": { "kind": "manual", "name": "git", "manualSection": "1" },
-          "outcome": "no-evidence", "total": 0, "returned": 0,
-          "truncation": { "candidates": false, "relations": false, "content": false },
-          "semanticsComplete": true, "diagnostics": [], "evidence": []
+      "query": {
+        "entry": "--help",
+        "options": {
+          "limit": 50,
+          "offset": 0,
+          "contentBytes": 1048576
         }
-      }], "failures": []
+      },
+      "outcome": "no-evidence",
+      "total": 0,
+      "returned": 0,
+      "truncation": {
+        "candidates": false,
+        "relations": false,
+        "content": false
+      },
+      "documents": [
+        {
+          "address": {
+            "kind": "manual",
+            "name": "git",
+            "manualSection": "1"
+          },
+          "depth": 0,
+          "label": "git",
+          "diagnostics": [],
+          "semanticsComplete": true,
+          "outcome": "no-evidence",
+          "total": 0,
+          "returned": 0,
+          "counts": {
+            "directEntry": {
+              "total": 0,
+              "returned": 0
+            },
+            "relatedEntry": {
+              "total": 0,
+              "returned": 0
+            },
+            "entryMention": {
+              "total": 0,
+              "returned": 0
+            },
+            "contextMention": {
+              "total": 0,
+              "returned": 0
+            }
+          },
+          "truncation": {
+            "candidates": false,
+            "relations": false,
+            "content": false
+          }
+        }
+      ],
+      "failures": [],
+      "order": "class-then-source",
+      "counts": {
+        "directEntry": {
+          "total": 0,
+          "returned": 0
+        },
+        "relatedEntry": {
+          "total": 0,
+          "returned": 0
+        },
+        "entryMention": {
+          "total": 0,
+          "returned": 0
+        },
+        "contextMention": {
+          "total": 0,
+          "returned": 0
+        }
+      },
+      "evidence": []
     }
   }
 }

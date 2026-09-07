@@ -376,14 +376,41 @@ pub struct ScopeSearch {
 
 /// One readable document's contribution to the evidence result.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ScopedExplanation {
     /// Stable logical document identity.
     pub address: DocumentAddress,
     /// Distance retained from the resolved scope.
     pub depth: u16,
-    /// Local collection totals and records; evidence ordinals are global in a scope.
-    pub explanation: crate::QueryExplanation,
+    /// Selected source label, independent of catalog identity.
+    pub label: String,
+    /// Parser and process provenance when available.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub producer: Option<crate::Producer>,
+    /// Recoverable producer and shared invariant findings.
+    pub diagnostics: Vec<mant_ir::Diagnostic>,
+    /// Semantic validation, not evidence recall.
+    pub semantics_complete: bool,
+    /// Normal local evidence/no-evidence outcome before global pagination.
+    pub outcome: crate::ExplanationOutcome,
+    /// Local collected owners.
+    pub total: u32,
+    /// Local owners selected on the one global page.
+    pub returned: u32,
+    /// Local contributions to each global evidence category.
+    pub counts: crate::EvidenceCounts,
+    /// Local collection and copy truncation.
+    pub truncation: crate::ExplanationTruncation,
+}
+
+/// One global evidence record with an explicit source-report reference.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ScopedExplanationEvidence {
+    /// Zero-based index into this explanation's documents, not the scope graph.
+    pub document_index: usize,
+    /// The unique record; bodies are never duplicated in the document reports.
+    pub evidence: crate::ExplanationEvidence,
 }
 
 /// One per-document projection failure that does not invalidate other results.
@@ -421,6 +448,10 @@ pub enum ScopeQueryResult {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ScopeExplanation {
+    /// Normative global category/BFS/source ordering.
+    pub order: crate::EvidenceOrder,
+    /// Global per-class totals and page counts.
+    pub counts: crate::EvidenceCounts,
     /// Original global pagination/content request.
     pub query: crate::ExplanationQuery,
     /// Evidence/no-evidence before pagination, never uniqueness or recall proof.
@@ -436,6 +467,8 @@ pub struct ScopeExplanation {
     pub truncation: crate::ExplanationTruncation,
     /// Readable documents, including normal zero-evidence contributions.
     pub documents: Vec<ScopedExplanation>,
+    /// The only materialized evidence list, in global classification order.
+    pub evidence: Vec<ScopedExplanationEvidence>,
     /// Unexpected unreadable loaded content, never normal multiple/zero hits.
     pub failures: Vec<ScopedQueryFailure>,
 }

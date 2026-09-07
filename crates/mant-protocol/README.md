@@ -109,9 +109,24 @@ derive a continuation cursor from an individual document group.
 Explanation is a separate `QueryExplanation` contract, not an excerpt wrapper.
 `ExplanationQuery` supplies a literal and bounded `ExplanationOptions` (50
 owners by default, at most 256; zero-based offset; 1 MiB default / 4 MiB maximum
-forms/facts/body copy budget). Each owner retains original content and explicit
-match bases. `ScopeExplanation` shares one cursor and copy budget across its
-ordered documents. Normal multiple results and no-evidence are not failures;
+forms/facts/previews/body copy budget). `EvidenceClass` distinguishes direct
+entries, explicitly related entries, entry mentions and context mentions.
+One owner retains all match bases but only one class, independent of omitted
+details or empty names. `order` is always `class-then-source`; the four fixed
+`counts` totals/returned sum to the response counts, including zero categories.
+`ScopeExplanation` has one globally ordered `evidence` page, one cursor and
+one copy budget. Its BFS `documents` are source reports without nested bodies
+or cursors; each record's `documentIndex` refers to those reports, not the
+outer scope graph. Class priority precedes document order even at limit 1.
+
+Every record has `previews` and `previewsOmitted`. Literal matches may retain
+two distinct matched blocks in source order, each a window of at most 1024
+Unicode scalars preserving a complete match. Ranges are half-open scalar
+positions after control masking; `source` and absolute final-IR `blockPath`
+identify the actual block. Paths start at `root` or `sections/sN[/sN...]`, with
+`bN`, `iN`, `dN` and `rN/cN` components. Facts, windows and complete body use the
+same budget, in that order. Clipping is not omission; an omitted window sets
+`previewsOmitted` and content truncation, never replaces atomic `content`. Normal multiple results and no-evidence are not failures;
 check `outcome`, source coverage, truncation and diagnostics separately.
 `semanticsComplete` is validation coverage, not exhaustive recall.
 

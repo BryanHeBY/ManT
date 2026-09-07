@@ -2974,6 +2974,10 @@
           }
         ]
       },
+      "counts": {
+        "description": "Per-class collected and returned owners; zero categories remain present.",
+        "$ref": "#/$defs/EvidenceCounts"
+      },
       "diagnostics": {
         "description": "Original recoverable validation/parser findings.",
         "type": "array",
@@ -2982,7 +2986,7 @@
         }
       },
       "evidence": {
-        "description": "Records in document source order, with independent owners never merged.",
+        "description": "Records in class-then-source order, with independent owners never merged.",
         "type": "array",
         "items": {
           "$ref": "#/$defs/ExplanationEvidence"
@@ -3000,6 +3004,10 @@
         ],
         "format": "uint32",
         "minimum": 0
+      },
+      "order": {
+        "description": "Normative category-first ordering, before result pagination.",
+        "$ref": "#/$defs/EvidenceOrder"
       },
       "outcome": {
         "description": "Evidence versus no-evidence before page slicing.",
@@ -3047,6 +3055,8 @@
     },
     "additionalProperties": false,
     "required": [
+      "order",
+      "counts",
       "schema",
       "query",
       "label",
@@ -4096,6 +4106,93 @@
           }
         ]
       },
+      "EvidenceClass": {
+        "description": "Mutually exclusive owner category, in normative presentation/page order.\nThis is a source-evidence distinction, not a confidence or relevance score.",
+        "oneOf": [
+          {
+            "description": "A semantic owner with an exact name, complete form or identity match.",
+            "type": "string",
+            "const": "direct-entry"
+          },
+          {
+            "description": "An independent owner reached through a validated explicit relationship.",
+            "type": "string",
+            "const": "related-entry"
+          },
+          {
+            "description": "An owner included only because its original content mentions the query.",
+            "type": "string",
+            "const": "entry-mention"
+          },
+          {
+            "description": "An ordinary block, without a semantic owner, mentioning the query.",
+            "type": "string",
+            "const": "context-mention"
+          }
+        ]
+      },
+      "EvidenceCount": {
+        "description": "Collected lower-bound total and the count returned on the current page.",
+        "type": "object",
+        "properties": {
+          "returned": {
+            "description": "Owners included on the current page.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          },
+          "total": {
+            "description": "Collected owners before pagination (not exhaustive recall).",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "total",
+          "returned"
+        ]
+      },
+      "EvidenceCounts": {
+        "description": "Fixed four-class counts. Each column sums to the response total/returned.",
+        "type": "object",
+        "properties": {
+          "contextMention": {
+            "description": "Ordinary content blocks with literal mentions.",
+            "$ref": "#/$defs/EvidenceCount"
+          },
+          "directEntry": {
+            "description": "Direct semantic matches.",
+            "$ref": "#/$defs/EvidenceCount"
+          },
+          "entryMention": {
+            "description": "Other semantic owners with literal mentions.",
+            "$ref": "#/$defs/EvidenceCount"
+          },
+          "relatedEntry": {
+            "description": "Explicitly related semantic owners.",
+            "$ref": "#/$defs/EvidenceCount"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "directEntry",
+          "relatedEntry",
+          "entryMention",
+          "contextMention"
+        ]
+      },
+      "EvidenceOrder": {
+        "description": "Fixed explanation ordering; no legacy/source-only ordering mode exists.",
+        "oneOf": [
+          {
+            "description": "Class, resolved-document BFS position, then original IR owner/block order.",
+            "type": "string",
+            "const": "class-then-source"
+          }
+        ]
+      },
       "ExplanationContent": {
         "description": "Original content copied for one evidence owner, not a navigation selection.",
         "oneOf": [
@@ -4228,6 +4325,10 @@
               "null"
             ]
           },
+          "class": {
+            "description": "Exclusive category determined before pagination or content copying.",
+            "$ref": "#/$defs/EvidenceClass"
+          },
           "content": {
             "description": "Original owner body, omitted atomically rather than silently clipped.\nProse retains only its matched block, never an invented section/entry.",
             "anyOf": [
@@ -4268,6 +4369,17 @@
             "description": "Real owner/containing section; prose is never assigned a synthetic entry.",
             "$ref": "#/$defs/OutlineTrail"
           },
+          "previews": {
+            "description": "At most two representative matched blocks, in their source order.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/ExplanationPreview"
+            }
+          },
+          "previewsOmitted": {
+            "description": "A representative match window did not fit the remaining copy budget.",
+            "type": "boolean"
+          },
           "source": {
             "description": "Original source coordinates, when known.",
             "anyOf": [
@@ -4282,9 +4394,12 @@
         },
         "additionalProperties": false,
         "required": [
+          "class",
           "ordinal",
           "outline",
           "bases",
+          "previews",
+          "previewsOmitted",
           "detailsOmitted",
           "contentOmitted"
         ]
@@ -4294,7 +4409,7 @@
         "type": "object",
         "properties": {
           "contentBytes": {
-            "description": "Aggregate UTF-8 JSON byte budget for original forms/facts and body copies.\nOversized bodies are omitted atomically, with location retained for reads.",
+            "description": "Aggregate JSON byte budget for original facts, match previews and bodies.\nOversized bodies are omitted atomically, with location retained for reads.",
             "type": "integer",
             "format": "uint32",
             "default": 1048576,
@@ -4310,7 +4425,7 @@
             "minimum": 1
           },
           "offset": {
-            "description": "Number of matching owners skipped in deterministic source order.",
+            "description": "Number of owners skipped in global class-then-source order.",
             "type": "integer",
             "format": "uint32",
             "default": 0,
@@ -4337,6 +4452,60 @@
             "type": "string",
             "const": "no-evidence"
           }
+        ]
+      },
+      "ExplanationPreview": {
+        "description": "One representative literal window, not a replacement IR block or a summary.",
+        "type": "object",
+        "properties": {
+          "blockPath": {
+            "description": "Final IR coordinate rooted at \"root\" or \"sections/sN[/sN...]\";\nbN selects a block, iN/dN a list/definition item, and rN/cN a table cell.\nAll indices are zero-based; this is not a source/Markdown byte offset.",
+            "type": "string"
+          },
+          "clippedAfter": {
+            "description": "The representative window excludes following block text.",
+            "type": "boolean"
+          },
+          "clippedBefore": {
+            "description": "The representative window excludes preceding block text.",
+            "type": "boolean"
+          },
+          "matchEndChar": {
+            "description": "Exclusive end of the complete match in text, in Unicode scalars.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          },
+          "matchStartChar": {
+            "description": "Start of the complete match in text, in zero-based Unicode scalars.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          },
+          "source": {
+            "description": "Matched block source position, when known (never a substituted entry span).",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/SourceSpan"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "text": {
+            "description": "Safely projected original text, at most 1024 Unicode scalar values.",
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "blockPath",
+          "text",
+          "matchStartChar",
+          "matchEndChar",
+          "clippedBefore",
+          "clippedAfter"
         ]
       },
       "ExplanationQuery": {
@@ -4384,7 +4553,7 @@
             "type": "boolean"
           },
           "content": {
-            "description": "Some selected body or details were omitted by the copy budget.",
+            "description": "Some selected body, details or previews were omitted by the copy budget.",
             "type": "boolean"
           },
           "relations": {
@@ -8701,7 +8870,7 @@
         "type": "object",
         "properties": {
           "contentBytes": {
-            "description": "Aggregate UTF-8 JSON byte budget for original forms/facts and body copies.\nOversized bodies are omitted atomically, with location retained for reads.",
+            "description": "Aggregate JSON byte budget for original facts, match previews and bodies.\nOversized bodies are omitted atomically, with location retained for reads.",
             "type": "integer",
             "format": "uint32",
             "default": 1048576,
@@ -8717,7 +8886,7 @@
             "minimum": 1
           },
           "offset": {
-            "description": "Number of matching owners skipped in deterministic source order.",
+            "description": "Number of owners skipped in global class-then-source order.",
             "type": "integer",
             "format": "uint32",
             "default": 0,
@@ -10296,6 +10465,93 @@
           }
         ]
       },
+      "EvidenceClass": {
+        "description": "Mutually exclusive owner category, in normative presentation/page order.\nThis is a source-evidence distinction, not a confidence or relevance score.",
+        "oneOf": [
+          {
+            "description": "A semantic owner with an exact name, complete form or identity match.",
+            "type": "string",
+            "const": "direct-entry"
+          },
+          {
+            "description": "An independent owner reached through a validated explicit relationship.",
+            "type": "string",
+            "const": "related-entry"
+          },
+          {
+            "description": "An owner included only because its original content mentions the query.",
+            "type": "string",
+            "const": "entry-mention"
+          },
+          {
+            "description": "An ordinary block, without a semantic owner, mentioning the query.",
+            "type": "string",
+            "const": "context-mention"
+          }
+        ]
+      },
+      "EvidenceCount": {
+        "description": "Collected lower-bound total and the count returned on the current page.",
+        "type": "object",
+        "properties": {
+          "returned": {
+            "description": "Owners included on the current page.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          },
+          "total": {
+            "description": "Collected owners before pagination (not exhaustive recall).",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "total",
+          "returned"
+        ]
+      },
+      "EvidenceCounts": {
+        "description": "Fixed four-class counts. Each column sums to the response total/returned.",
+        "type": "object",
+        "properties": {
+          "contextMention": {
+            "description": "Ordinary content blocks with literal mentions.",
+            "$ref": "#/$defs/EvidenceCount"
+          },
+          "directEntry": {
+            "description": "Direct semantic matches.",
+            "$ref": "#/$defs/EvidenceCount"
+          },
+          "entryMention": {
+            "description": "Other semantic owners with literal mentions.",
+            "$ref": "#/$defs/EvidenceCount"
+          },
+          "relatedEntry": {
+            "description": "Explicitly related semantic owners.",
+            "$ref": "#/$defs/EvidenceCount"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "directEntry",
+          "relatedEntry",
+          "entryMention",
+          "contextMention"
+        ]
+      },
+      "EvidenceOrder": {
+        "description": "Fixed explanation ordering; no legacy/source-only ordering mode exists.",
+        "oneOf": [
+          {
+            "description": "Class, resolved-document BFS position, then original IR owner/block order.",
+            "type": "string",
+            "const": "class-then-source"
+          }
+        ]
+      },
       "ExplanationContent": {
         "description": "Original content copied for one evidence owner, not a navigation selection.",
         "oneOf": [
@@ -10428,6 +10684,10 @@
               "null"
             ]
           },
+          "class": {
+            "description": "Exclusive category determined before pagination or content copying.",
+            "$ref": "#/$defs/EvidenceClass"
+          },
           "content": {
             "description": "Original owner body, omitted atomically rather than silently clipped.\nProse retains only its matched block, never an invented section/entry.",
             "anyOf": [
@@ -10468,6 +10728,17 @@
             "description": "Real owner/containing section; prose is never assigned a synthetic entry.",
             "$ref": "#/$defs/OutlineTrail"
           },
+          "previews": {
+            "description": "At most two representative matched blocks, in their source order.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/ExplanationPreview"
+            }
+          },
+          "previewsOmitted": {
+            "description": "A representative match window did not fit the remaining copy budget.",
+            "type": "boolean"
+          },
           "source": {
             "description": "Original source coordinates, when known.",
             "anyOf": [
@@ -10482,9 +10753,12 @@
         },
         "additionalProperties": false,
         "required": [
+          "class",
           "ordinal",
           "outline",
           "bases",
+          "previews",
+          "previewsOmitted",
           "detailsOmitted",
           "contentOmitted"
         ]
@@ -10494,7 +10768,7 @@
         "type": "object",
         "properties": {
           "contentBytes": {
-            "description": "Aggregate UTF-8 JSON byte budget for original forms/facts and body copies.\nOversized bodies are omitted atomically, with location retained for reads.",
+            "description": "Aggregate JSON byte budget for original facts, match previews and bodies.\nOversized bodies are omitted atomically, with location retained for reads.",
             "type": "integer",
             "format": "uint32",
             "default": 1048576,
@@ -10510,7 +10784,7 @@
             "minimum": 1
           },
           "offset": {
-            "description": "Number of matching owners skipped in deterministic source order.",
+            "description": "Number of owners skipped in global class-then-source order.",
             "type": "integer",
             "format": "uint32",
             "default": 0,
@@ -10539,6 +10813,60 @@
           }
         ]
       },
+      "ExplanationPreview": {
+        "description": "One representative literal window, not a replacement IR block or a summary.",
+        "type": "object",
+        "properties": {
+          "blockPath": {
+            "description": "Final IR coordinate rooted at \"root\" or \"sections/sN[/sN...]\";\nbN selects a block, iN/dN a list/definition item, and rN/cN a table cell.\nAll indices are zero-based; this is not a source/Markdown byte offset.",
+            "type": "string"
+          },
+          "clippedAfter": {
+            "description": "The representative window excludes following block text.",
+            "type": "boolean"
+          },
+          "clippedBefore": {
+            "description": "The representative window excludes preceding block text.",
+            "type": "boolean"
+          },
+          "matchEndChar": {
+            "description": "Exclusive end of the complete match in text, in Unicode scalars.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          },
+          "matchStartChar": {
+            "description": "Start of the complete match in text, in zero-based Unicode scalars.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          },
+          "source": {
+            "description": "Matched block source position, when known (never a substituted entry span).",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/SourceSpan"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "text": {
+            "description": "Safely projected original text, at most 1024 Unicode scalar values.",
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "blockPath",
+          "text",
+          "matchStartChar",
+          "matchEndChar",
+          "clippedBefore",
+          "clippedAfter"
+        ]
+      },
       "ExplanationQuery": {
         "description": "A literal evidence request, not executable syntax or a unique selector.",
         "type": "object",
@@ -10565,16 +10893,6 @@
           "options"
         ]
       },
-      "ExplanationSchema": {
-        "description": "Exact marker for the independent explanation result contract.",
-        "oneOf": [
-          {
-            "description": "Unreleased v0.11 explanation family.",
-            "type": "string",
-            "const": "mant.explanation/v0.11"
-          }
-        ]
-      },
       "ExplanationTruncation": {
         "description": "Independent reasons that a bounded explanation may omit material.",
         "type": "object",
@@ -10584,7 +10902,7 @@
             "type": "boolean"
           },
           "content": {
-            "description": "Some selected body or details were omitted by the copy budget.",
+            "description": "Some selected body, details or previews were omitted by the copy budget.",
             "type": "boolean"
           },
           "relations": {
@@ -11225,107 +11543,6 @@
           "version"
         ]
       },
-      "QueryExplanation": {
-        "$id": "urn:mant:explanation:v0.11",
-        "description": "One readable document's independently collected explanation evidence.",
-        "type": "object",
-        "properties": {
-          "address": {
-            "description": "Logical identity, absent for explicit local input.",
-            "anyOf": [
-              {
-                "$ref": "#/$defs/DocumentAddress"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "diagnostics": {
-            "description": "Original recoverable validation/parser findings.",
-            "type": "array",
-            "items": {
-              "$ref": "#/$defs/Diagnostic"
-            }
-          },
-          "evidence": {
-            "description": "Records in document source order, with independent owners never merged.",
-            "type": "array",
-            "items": {
-              "$ref": "#/$defs/ExplanationEvidence"
-            }
-          },
-          "label": {
-            "description": "Selected document label.",
-            "type": "string"
-          },
-          "nextOffset": {
-            "description": "More already-collected owners remain after this page.",
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "uint32",
-            "minimum": 0
-          },
-          "outcome": {
-            "description": "Evidence versus no-evidence before page slicing.",
-            "$ref": "#/$defs/ExplanationOutcome"
-          },
-          "producer": {
-            "description": "Parser/process provenance, when available.",
-            "anyOf": [
-              {
-                "$ref": "#/$defs/Producer"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "query": {
-            "description": "Normalized request and applied bounds.",
-            "$ref": "#/$defs/ExplanationQuery"
-          },
-          "returned": {
-            "description": "Matching owners returned on this page.",
-            "type": "integer",
-            "format": "uint32",
-            "minimum": 0
-          },
-          "schema": {
-            "description": "Exact result family.",
-            "$ref": "#/$defs/ExplanationSchema"
-          },
-          "semanticsComplete": {
-            "description": "Semantic validation coverage, never a recall-completeness claim.",
-            "type": "boolean"
-          },
-          "total": {
-            "description": "Number of collected matching owners before pagination; a lower bound\nwhen candidate or relationship traversal is truncated.",
-            "type": "integer",
-            "format": "uint32",
-            "minimum": 0
-          },
-          "truncation": {
-            "description": "Independent collection, relation traversal and body-copy bounds.",
-            "$ref": "#/$defs/ExplanationTruncation"
-          }
-        },
-        "additionalProperties": false,
-        "required": [
-          "schema",
-          "query",
-          "label",
-          "outcome",
-          "total",
-          "returned",
-          "truncation",
-          "semanticsComplete",
-          "diagnostics",
-          "evidence"
-        ]
-      },
       "Range_of_uint": {
         "type": "object",
         "properties": {
@@ -11392,11 +11609,22 @@
         "description": "Global evidence page over a resolved scope. Source loading failures/frontier\nremain in `ScopeQueryResponse.scope`, independently of this normal outcome.",
         "type": "object",
         "properties": {
+          "counts": {
+            "description": "Global per-class totals and page counts.",
+            "$ref": "#/$defs/EvidenceCounts"
+          },
           "documents": {
             "description": "Readable documents, including normal zero-evidence contributions.",
             "type": "array",
             "items": {
               "$ref": "#/$defs/ScopedExplanation"
+            }
+          },
+          "evidence": {
+            "description": "The only materialized evidence list, in global classification order.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/ScopedExplanationEvidence"
             }
           },
           "failures": {
@@ -11414,6 +11642,10 @@
             ],
             "format": "uint32",
             "minimum": 0
+          },
+          "order": {
+            "description": "Normative global category/BFS/source ordering.",
+            "$ref": "#/$defs/EvidenceOrder"
           },
           "outcome": {
             "description": "Evidence/no-evidence before pagination, never uniqueness or recall proof.",
@@ -11442,12 +11674,15 @@
         },
         "additionalProperties": false,
         "required": [
+          "order",
+          "counts",
           "query",
           "outcome",
           "total",
           "returned",
           "truncation",
           "documents",
+          "evidence",
           "failures"
         ]
       },
@@ -11604,6 +11839,10 @@
             "description": "Stable logical document identity.",
             "$ref": "#/$defs/DocumentAddress"
           },
+          "counts": {
+            "description": "Local contributions to each global evidence category.",
+            "$ref": "#/$defs/EvidenceCounts"
+          },
           "depth": {
             "description": "Distance retained from the resolved scope.",
             "type": "integer",
@@ -11611,15 +11850,86 @@
             "maximum": 65535,
             "minimum": 0
           },
-          "explanation": {
-            "description": "Local collection totals and records; evidence ordinals are global in a scope.",
-            "$ref": "#/$defs/QueryExplanation"
+          "diagnostics": {
+            "description": "Recoverable producer and shared invariant findings.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/Diagnostic"
+            }
+          },
+          "label": {
+            "description": "Selected source label, independent of catalog identity.",
+            "type": "string"
+          },
+          "outcome": {
+            "description": "Normal local evidence/no-evidence outcome before global pagination.",
+            "$ref": "#/$defs/ExplanationOutcome"
+          },
+          "producer": {
+            "description": "Parser and process provenance when available.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/Producer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "returned": {
+            "description": "Local owners selected on the one global page.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          },
+          "semanticsComplete": {
+            "description": "Semantic validation, not evidence recall.",
+            "type": "boolean"
+          },
+          "total": {
+            "description": "Local collected owners.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          },
+          "truncation": {
+            "description": "Local collection and copy truncation.",
+            "$ref": "#/$defs/ExplanationTruncation"
           }
         },
+        "additionalProperties": false,
         "required": [
           "address",
           "depth",
-          "explanation"
+          "label",
+          "diagnostics",
+          "semanticsComplete",
+          "outcome",
+          "total",
+          "returned",
+          "counts",
+          "truncation"
+        ]
+      },
+      "ScopedExplanationEvidence": {
+        "description": "One global evidence record with an explicit source-report reference.",
+        "type": "object",
+        "properties": {
+          "documentIndex": {
+            "description": "Zero-based index into this explanation's documents, not the scope graph.",
+            "type": "integer",
+            "format": "uint",
+            "minimum": 0
+          },
+          "evidence": {
+            "description": "The unique record; bodies are never duplicated in the document reports.",
+            "$ref": "#/$defs/ExplanationEvidence"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "documentIndex",
+          "evidence"
         ]
       },
       "ScopedQueryFailure": {
@@ -12500,7 +12810,7 @@
         "type": "object",
         "properties": {
           "contentBytes": {
-            "description": "Aggregate UTF-8 JSON byte budget for original forms/facts and body copies.\nOversized bodies are omitted atomically, with location retained for reads.",
+            "description": "Aggregate JSON byte budget for original facts, match previews and bodies.\nOversized bodies are omitted atomically, with location retained for reads.",
             "type": "integer",
             "format": "uint32",
             "default": 1048576,
@@ -12516,7 +12826,7 @@
             "minimum": 1
           },
           "offset": {
-            "description": "Number of matching owners skipped in deterministic source order.",
+            "description": "Number of owners skipped in global class-then-source order.",
             "type": "integer",
             "format": "uint32",
             "default": 0,

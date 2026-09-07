@@ -114,11 +114,21 @@ than reimplementing scope traversal.
 
 `explain_query` returns `QueryExplanation`, not a unique excerpt. Its options
 bound returned owners (default 50, maximum 256), a zero-based offset, and copied
-forms/facts/body payload (default 1 MiB, maximum 4 MiB). Scope requests share
-those limits across readable documents. `select_explanation` uses the defaults;
+forms/facts/previews/body payload (default 1 MiB, maximum 4 MiB). A borrowed
+collection plan orders direct entries, explicit relations, entry mentions and
+context mentions before global pagination. Within each class, scope preserves
+BFS document and original IR order, sharing one budget across selected records.
+A bounded priority pool prevents early mentions from excluding later direct
+entries, reporting any discarded candidates. Scope has one flat evidence page
+and source reports, never duplicate nested bodies. `select_explanation` uses the defaults;
 `select_excerpt` is the strict navigation API. Check `outcome`, scope coverage
 and `truncation` separately; `semanticsComplete` describes semantic validation,
-not exhaustive recall. No evidence query performs I/O or executes examples.
+not exhaustive recall. Literal previews retain up to two original matched
+blocks, each a maximum 1024 Unicode scalars with exact match ranges and actual
+source positions. `resolve_explanation_block` resolves preview paths in final
+IR. Compact rendering shows those windows for mentions instead of unrelated
+full owner content. Clipping, omitted previews, and atomic body omission are
+distinct. No evidence query performs I/O or executes examples.
 
 ```rust
 let query = mant_engine::query_markdown_text("# Demo\n\n- `--help`: Usage.\n", None)?;

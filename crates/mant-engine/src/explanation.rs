@@ -1,8 +1,14 @@
 //! Independent bounded evidence collection over immutable content owners.
 mod collect;
 mod literal;
+mod location;
+pub use location::resolve_explanation_block;
 mod materialize;
+mod plan;
+mod preview;
 mod relations;
+mod scoped;
+pub(crate) use scoped::explain as explain_scope;
 
 use crate::selectors::{LocatedNode, collect_root_entries, collect_sections};
 use mant_ir::{Block, DefinitionCase, EntryOwner, OutlinePath, ResolvedContent, SourceSpan};
@@ -80,13 +86,17 @@ pub(crate) fn explain_with_usage(
     query: &ExplanationQuery,
 ) -> Result<(QueryExplanation, u32), ExplanationError> {
     validate_explanation_query(query)?;
+    let plan = collection_plan(content, query.entry.trim())?;
+    Ok(materialize::response(plan, query))
+}
+
+fn collection_plan<'a>(
+    content: &'a ResolvedContent,
+    entry: &str,
+) -> Result<plan::CollectionPlan<'a>, ExplanationError> {
     if content.document.is_none() && content.tldr.is_none() {
         return Err(ExplanationError::MissingContent);
     }
-    let query = ExplanationQuery {
-        entry: query.entry.trim().to_owned(),
-        options: query.options,
-    };
     let mut located = Vec::new();
     if let Some(document) = &content.document {
         collect_root_entries(&document.blocks, &mut located);
@@ -96,24 +106,38 @@ pub(crate) fn explain_with_usage(
         .document
         .as_ref()
         .map(mant_ir::DocumentValidation::new);
-    let (mut candidates, truncated, orders) = collect::collect(content, &query.entry, &located);
-    let relations_truncated = relations::expand(
+    let (mut candidates, orders) = collect::collect(content, entry, &located, validation.as_ref());
+    let relations = relations::expand(
         validation.as_ref(),
-        &query.entry,
+        entry,
         &located,
         &orders,
         &mut candidates,
     );
-    candidates.sort_by_key(|candidate| candidate.order);
-    Ok(materialize::response(
+    let (candidates, truncated) = candidates.finish();
+    let mut diagnostics = content
+        .document
+        .as_ref()
+        .map(|d| d.diagnostics.clone())
+        .unwrap_or_default();
+    if let Some(validation) = validation {
+        for diagnostic in validation.into_diagnostics() {
+            if !diagnostics.contains(&diagnostic) {
+                diagnostics.push(diagnostic);
+            }
+        }
+    }
+    Ok(plan::CollectionPlan {
         content,
-        query,
-        &located,
+        located,
         candidates,
-        truncated,
-        relations_truncated,
-        validation,
-    ))
+        diagnostics,
+        truncation: mant_protocol::ExplanationTruncation {
+            candidates: truncated,
+            relations,
+            content: false,
+        },
+    })
 }
 
 /// Collect semantic evidence with the documented default page/copy budgets.
@@ -143,6 +167,7 @@ struct Candidate<'a> {
     block_path: Option<String>,
     source: Option<SourceSpan>,
     bases: Vec<EvidenceBasis>,
+    hits: Vec<preview::LiteralHit<'a>>,
 }
 
 fn same(left: &str, right: &str, case: DefinitionCase) -> bool {

@@ -116,11 +116,32 @@ fn render_scope_explain(
              with the same documents and pattern={entry} for a broader literal search."
         );
     }
-    if explanation.truncation.content {
-        text.push_str("\nUse mant_read(document=DOCUMENT, selectors=[RETURNED_PATH]) for omitted original content, or increase contentBytes.");
+    for record in &explanation.evidence {
+        let evidence = &record.evidence;
+        if evidence.has_omitted_content()
+            || matches!(
+                evidence.class,
+                mant_protocol::EvidenceClass::EntryMention
+                    | mant_protocol::EvidenceClass::ContextMention
+            )
+        {
+            let document = &explanation.documents[record.document_index].address;
+            text.push('\n');
+            text.push_str(&read_hint(document, evidence.outline.path()));
+        }
     }
     append_scope_status(&mut text, response);
     Ok(page_text(&text, page))
+}
+
+/// JSON-quoted arguments inside a delimiter that cannot be closed by source text.
+fn read_hint(address: &mant_ir::DocumentAddress, path: &str) -> String {
+    let document = serde_json::to_string(&address.catalog_path()).expect("String serialization");
+    let selector = serde_json::to_string(path).expect("String serialization");
+    let call = format!("mant_read(document={document}, selectors=[{selector}])");
+    let longest = call.split(|c| c != '`').map(str::len).max().unwrap_or(0);
+    let delimiter = "`".repeat(longest + 1);
+    format!("Read original: call {delimiter}{call}{delimiter}.")
 }
 
 fn render_scope_search(
@@ -305,7 +326,7 @@ fn prepare_scope(response: &mut ScopeQueryResponse) {
     match &mut response.result {
         ScopeQueryResult::Explain { explanation } => {
             for found in &mut explanation.documents {
-                found.explanation.diagnostics.clear();
+                found.diagnostics.clear();
             }
             for failure in &mut explanation.failures {
                 "document could not be projected".clone_into(&mut failure.reason);
@@ -436,6 +457,18 @@ mod tests {
     }
 
     #[test]
+    fn original_read_hint_cannot_close_its_code_span() {
+        let address = mant_ir::DocumentAddress::Markdown {
+            path: "odd`[label]".into(),
+            origin: mant_ir::MarkdownOrigin::Documents,
+        };
+        assert_eq!(
+            super::read_hint(&address, "1/e2"),
+            "Read original: call ``mant_read(document=\"documents/odd`[label]\", selectors=[\"1/e2\"])``."
+        );
+    }
+
+    #[test]
     fn model_visible_pages_mask_terminal_controls_before_counting() {
         let page = page_text(
             "manual/1\u{1b}[31m/tool",
@@ -470,6 +503,9 @@ mod tests {
             },
             result: ScopeQueryResult::Explain {
                 explanation: mant_protocol::ScopeExplanation {
+                    order: mant_protocol::EvidenceOrder::ClassThenSource,
+                    counts: mant_protocol::EvidenceCounts::default(),
+                    evidence: Vec::new(),
                     query: mant_protocol::ExplanationQuery {
                         entry: "-f".to_owned(),
                         options: mant_protocol::ExplanationOptions::default(),

@@ -182,6 +182,28 @@ pub(super) fn render_terminal_explanation(
     style_content_text(&plain, &headings, terms)
 }
 
+pub(super) fn render_terminal_scope_explanation(
+    explanation: &mant_protocol::ScopeExplanation,
+    color: bool,
+) -> String {
+    let plain = mant_engine::render_scope_explanation_text(explanation);
+    if !color {
+        return plain;
+    }
+    let headings = explanation
+        .evidence
+        .iter()
+        .map(|e| mant_protocol::render_evidence_heading(&e.evidence))
+        .collect::<Vec<_>>();
+    let terms = explanation
+        .evidence
+        .iter()
+        .filter_map(|e| e.evidence.entry.as_ref())
+        .flat_map(|e| e.names.iter().cloned().map(|name| (name, e.role)))
+        .collect();
+    style_content_text(&plain, &headings, terms)
+}
+
 /// Add presentation styling without changing the text renderer's layout.
 fn style_content_text(
     plain: &str,

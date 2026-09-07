@@ -1,6 +1,27 @@
 //! Finite literal boundaries, not an executable argv grammar or fuzzy matcher.
 use std::ops::Range;
 
+pub(super) fn block_text(block: &mant_ir::Block) -> Option<String> {
+    let raw = match block {
+        mant_ir::Block::Paragraph { children, .. }
+        | mant_ir::Block::Preformatted { children, .. } => crate::inline::plain_text(children),
+        mant_ir::Block::Equation { value, .. }
+        | mant_ir::Block::Unsupported { text: value, .. } => value.clone(),
+        _ => return None,
+    };
+    Some(
+        raw.chars()
+            .map(|c| {
+                if c.is_control() && !matches!(c, '\n' | '\t') {
+                    '\u{fffd}'
+                } else {
+                    c
+                }
+            })
+            .collect(),
+    )
+}
+
 pub(super) fn first_match(text: &str, query: &str) -> Option<Range<usize>> {
     text.match_indices(query).find_map(|(start, found)| {
         let end = start + found.len();

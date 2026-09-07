@@ -455,7 +455,7 @@ struct Cli {
     )]
     node: Vec<String>,
 
-    /// Collect semantic evidence by name, full form, owner coordinate, or literal.
+    /// Collect definitions, declared relations, then literal mentions; use --node for full content.
     #[arg(
         long,
         value_name = "ENTRY",
@@ -466,7 +466,7 @@ struct Cli {
     )]
     explain: Option<String>,
 
-    /// Bound copied explanation forms/body bytes (default 1 MiB, maximum 4 MiB).
+    /// Bound copied facts/previews/body bytes (default 1 MiB, maximum 4 MiB).
     #[arg(
         long,
         value_name = "BYTES",

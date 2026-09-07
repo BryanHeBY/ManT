@@ -122,6 +122,7 @@ fn stdio_mode_exposes_compact_text_first_document_tools() {
         .collect::<Vec<_>>();
     assert_tool_replies(&replies);
     assert_explanation_paging(&replies);
+    assert_classified_page_concatenation(&mut input, &mut lines);
 
     assert_silent_shutdown(child, input, diagnostics, fixture_root);
 }
@@ -181,6 +182,40 @@ fn invalid_request_lines_return_bounded_errors_and_the_session_recovers() {
         diagnostics.is_empty(),
         "unexpected MCP stderr: {diagnostics:?}"
     );
+}
+
+fn assert_classified_page_concatenation(
+    input: &mut impl Write,
+    lines: &mut impl Iterator<Item = std::io::Result<String>>,
+) {
+    let mut params =
+        json!({"documents":["documents/mcp-registered"],"entry":"/f","maxChars":32768});
+    call_tool(input, 100, "mant_explain", &params);
+    input.flush().unwrap();
+    let complete = parse_reply(lines.next().unwrap());
+    let text = successful_text(&complete);
+    let canonical = text.split_once("\n\n").unwrap().1;
+    assert!(canonical.contains("Direct entries: total=2, returned=2"));
+    let total = canonical.chars().count();
+    assert!(total < 32768);
+    let mut restored = String::new();
+    let mut start = 0;
+    let mut id = 101;
+    while start < total {
+        params["startChar"] = json!(start);
+        params["maxChars"] = json!(233);
+        call_tool(input, id, "mant_explain", &params);
+        input.flush().unwrap();
+        let reply = parse_reply(lines.next().unwrap());
+        let text = successful_text(&reply);
+        let (header, body) = text.split_once("\n\n").unwrap();
+        assert!(header.contains(&format!("totalChars={total}")));
+        assert_eq!(body.chars().count(), (total - start).min(233));
+        restored.push_str(body);
+        start += body.chars().count();
+        id += 1;
+    }
+    assert_eq!(restored, canonical);
 }
 
 fn request_document_tools(input: &mut impl Write) {
@@ -439,23 +474,7 @@ fn assert_tool_replies(replies: &[Value]) {
     assert!(outline.contains("[environment-path] PATH, $env:PATH"));
     assert!(!outline.contains("mant.outline/v0.11"));
 
-    let explain = successful_text(reply(replies, 7));
-    assert_page_header(explain);
-    assert!(explain.contains("Query registry data."));
-    assert!(
-        explain.contains("evidence; owners=1, returned=1")
-            && explain.contains("Coverage: loaded=2, unresolved=0"),
-        "{explain}"
-    );
-
-    let ambiguity = successful_text(reply(replies, 8));
-    assert!(ambiguity.contains("option-f"), "{ambiguity}");
-    assert!(ambiguity.matches("option-f-").count() >= 2, "{ambiguity}");
-
-    let probe = successful_text(reply(replies, 15));
-    assert!(probe.contains("VISUAL"), "{probe}");
-    assert!(probe.contains("Query (blocks/b0) — literal"), "{probe}");
-    assert!(probe.contains("evidence; owners=1, returned=1"), "{probe}");
+    assert_classified_explanations(replies);
 
     assert_empty_outline(replies);
     assert_missing_explain_guidance(replies);
@@ -534,7 +553,7 @@ fn assert_missing_explain_guidance(replies: &[Value]) {
     );
     assert!(!missing.contains("--format json"), "{missing}");
     assert!(
-        missing.contains("no-evidence; owners=0, returned=0"),
+        missing.contains("no\\-evidence; owners=0, returned=0"),
         "{missing}"
     );
 }
@@ -546,7 +565,12 @@ fn assert_explanation_paging(replies: &[Value]) {
         "{complete}"
     );
     assert!(complete.contains("bodyOmitted=true"), "{complete}");
-    assert!(complete.contains("Use mant_read"), "{complete}");
+    assert!(
+        complete.contains(
+            "call `mant_read(document=\"documents/mcp-registered\", selectors=[\"5/e1\"])"
+        ),
+        "{complete}"
+    );
     assert!(!complete.contains("--offset"), "{complete}");
     let body = complete.split_once("\n\n").unwrap().1;
     let page = successful_text(reply(replies, 19));
@@ -698,4 +722,38 @@ fn registered_document_fixture() -> PathBuf {
 fn parse_reply(line: Result<String, std::io::Error>) -> Value {
     let line = line.expect("MCP reply line");
     serde_json::from_str(&line).unwrap_or_else(|error| panic!("invalid MCP JSON {line:?}: {error}"))
+}
+
+fn assert_classified_explanations(replies: &[Value]) {
+    let explain = successful_text(reply(replies, 7));
+    assert_page_header(explain);
+    assert!(explain.contains("Query registry data."));
+    assert!(
+        explain.contains("evidence; owners=1, returned=1")
+            && explain.contains("Coverage: loaded=2, unresolved=0"),
+        "{explain}"
+    );
+
+    let ambiguity = successful_text(reply(replies, 8));
+    assert!(ambiguity.contains("option\\-f"), "{ambiguity}");
+    assert!(
+        ambiguity.matches("option\\-f\\-").count() >= 2,
+        "{ambiguity}"
+    );
+
+    let probe = successful_text(reply(replies, 15));
+    assert!(probe.contains("VISUAL"), "{probe}");
+    assert!(
+        probe.contains("Query \\(sections/s0/b0\\) — literal"),
+        "{probe}"
+    );
+    assert!(
+        probe.contains("Mentions in ordinary content: total=1, returned=1"),
+        "{probe}"
+    );
+    assert!(
+        probe.contains("mant_read(document=\"documents/mcp-registered\", selectors=[\"1\"])"),
+        "{probe}"
+    );
+    assert!(probe.contains("evidence; owners=1, returned=1"), "{probe}");
 }

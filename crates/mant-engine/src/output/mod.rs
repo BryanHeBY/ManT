@@ -2,7 +2,10 @@
 
 mod explanation;
 mod json;
-pub use explanation::{render_explanation_markdown, render_explanation_text};
+pub use explanation::{
+    render_explanation_markdown, render_explanation_text, render_scope_explanation_markdown,
+    render_scope_explanation_text,
+};
 mod markdown;
 mod search;
 mod table;
