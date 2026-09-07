@@ -56,7 +56,7 @@ pub(super) fn native_name_bindings(
                             || text[end..]
                                 .chars()
                                 .next()
-                                .is_none_or(|c| separator(c) || matches!(c, '=' | ':' | '['));
+                                .is_none_or(|c| separator(c) || matches!(c, '=' | ':' | '[' | '<'));
                         if !begins || !ends {
                             continue;
                         }

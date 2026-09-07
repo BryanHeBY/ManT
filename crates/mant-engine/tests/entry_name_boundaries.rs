@@ -85,3 +85,38 @@ fn plus_signs_inside_executable_options_are_not_argument_boundaries() {
         }
     }
 }
+
+#[test]
+fn recognized_option_prefixes_bind_before_angle_delimited_arguments() {
+    for (form, name) in [
+        ("-D<macroname>=<value>", "-D"),
+        ("-U<macroname>", "-U"),
+        ("-I<directory>", "-I"),
+        ("-F<directory>", "-F"),
+        ("-fno-builtin-<function>", "-fno-builtin-"),
+        ("-fno-builtin-std-<function>", "-fno-builtin-std-"),
+    ] {
+        let source = format!(".TH CLANG 1 2026-09-08\n.SH OPTIONS\n.TP\n.B {form}\nDescription.\n");
+        let query = mant_engine::query_roff_bytes(source.as_bytes()).unwrap();
+        let doc = query.document.as_ref().unwrap();
+        assert!(doc.diagnostics.is_empty(), "{form}: {:?}", doc.diagnostics);
+        let index = SemanticIndex::build(doc);
+        assert_eq!(index.section("options")[0].names, [name]);
+        assert_eq!(index.section("options")[0].forms, [form]);
+        assert!(mant_engine::select_excerpt(&query, &[name]).is_ok());
+    }
+    // Existing licensed real inputs must not silently lose those names.
+    for fixture in ["archlinux/clang.1.gz", "fedora44/clang.1.zst"] {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/roff/real")
+            .join(fixture);
+        let doc = mant_engine::parse_manual_source(&path).unwrap();
+        assert!(
+            !doc.diagnostics
+                .iter()
+                .any(|d| d.code.as_deref() == Some("ir.invalid-entry-name-binding")),
+            "{fixture}: {:?}",
+            doc.diagnostics
+        );
+    }
+}
