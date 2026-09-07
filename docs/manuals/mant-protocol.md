@@ -982,8 +982,8 @@ documented name was discovered, every relationship is known or every behavior
 was modeled correctly. It is distinct from result limits and source coverage;
 an omitted or true value does not establish complete semantic recall.
 
-Definitions remain the content model. The semantic index is a rebuildable
-projection that groups definitions into content records. `aliases` are exact
+Ordinary list items and native definitions remain the content owners. The semantic index is a rebuildable
+projection that groups these owners into content records. `aliases` are exact
 selectors, while `forms` preserve complete authored syntax such as several
 accepted `ssh -L` argument layouts or `[+-]O [shopt_option]`. `entryKind`
 distinguishes commands; option, marker, and operand parameters; configuration
@@ -999,7 +999,7 @@ linked-term `label`. Plain-text outlines render a differing label as
 `label → logical-target`, retain an authored `#fragment` after a resolved
 Markdown address, and list multiple aliases even when they share one target.
 The entry's own `id`, not a separate target array, selects its authoritative
-content definition.
+content owner.
 
 This is a projection boundary rather than a second semantic model. The
 content-attached `DefinitionIdentity`, derived `SemanticEntry`, and selected
@@ -1111,7 +1111,16 @@ Selection kinds are:
 - `tldr`, containing one complete `TldrDocument`;
 - `document-root`, containing root `blocks`;
 - `document-section`, containing a complete section subtree;
-- `document-entry`, containing one complete definition item.
+- `document-entry`, whose `entry` is a single-item `list` or `definition-list`
+  block containing the original owner and its complete descendants. Preserve
+  the block's layout and compactness; an ordered list starts at the selected
+  item's original ordinal, including when earlier siblings are omitted.
+
+The unreleased v0.11 entry payload is a block, not the former standalone
+definition item. Read shared facts from its sole list item's `entry` or native
+definition's `identity`. In-process consumers can use `Block::entry_owner()`;
+renderers consume the original block instead of converting ordinary items into
+term-and-description content.
 
 Selections retain source-neutral IR: an entry-set `valueDomain` carries its
 authored reference and source span, not a catalog lookup result. Outline uses

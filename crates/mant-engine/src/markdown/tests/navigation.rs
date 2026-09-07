@@ -21,11 +21,10 @@ fn section_ids_that_shadow_entry_aliases_are_reported() {
 fn unrelated_semantic_looking_sections_do_not_perturb_entry_ids() {
     let entry_id = |source: &str| {
         let parsed = parse_markdown(source, None).expect("semantic ID fixture");
-        let entries = crate::definitions::definition_entries(&parsed.document.sections[1].blocks);
+        let entries = crate::definitions::content_entries(&parsed.document.sections[1].blocks);
         entries[0]
             .item
-            .identity
-            .as_ref()
+            .facts()
             .expect("option identity")
             .id
             .to_string()

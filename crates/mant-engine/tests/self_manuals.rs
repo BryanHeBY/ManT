@@ -140,7 +140,11 @@ fn shipped_manual_options_are_addressable_for_agents_and_the_tui() {
         panic!("one search definition")
     };
     assert_eq!(
-        entry.identity.as_ref().unwrap().names,
+        entry
+            .entry_owner()
+            .and_then(mant_ir::EntryOwner::facts)
+            .unwrap()
+            .names,
         ["--search", "--grep"]
     );
 }

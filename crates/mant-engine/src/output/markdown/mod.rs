@@ -7,8 +7,8 @@ mod inline;
 use std::ops::Range;
 
 use mant_ir::{
-    Block, DefinitionCase, DefinitionRole, DocumentMeta, DocumentSource, LayoutHint, NodeId,
-    OutlinePath, Section, SourceFormat, SourceSpan, TldrCommandPart, TldrDocument, TldrOrigin,
+    DefinitionCase, DefinitionRole, DocumentMeta, DocumentSource, NodeId, OutlinePath, Section,
+    SourceFormat, SourceSpan, TldrCommandPart, TldrDocument, TldrOrigin,
 };
 use mant_protocol::{ExcerptSelection, OutlineNode, OutlineReference, QueryExcerpt, QueryOutline};
 
@@ -380,15 +380,7 @@ pub fn render_excerpt_markdown_with_options(
                 render_sections(&mut output, std::slice::from_ref(section), 2, options);
             }
             ExcerptSelection::DocumentEntry { entry, .. } => {
-                output.extend(render_blocks(
-                    &[Block::DefinitionList {
-                        items: vec![entry.clone()],
-                        compact: true,
-                        layout: LayoutHint::default(),
-                        source: None,
-                    }],
-                    options,
-                ));
+                output.extend(render_blocks(std::slice::from_ref(entry), options));
             }
         }
     }

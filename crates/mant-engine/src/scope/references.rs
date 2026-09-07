@@ -59,6 +59,21 @@ pub(super) fn document_references(bundle: &ResolvedContent) -> Vec<DocumentRefer
         sequence: usize,
     }
     impl Collector {
+        fn entry_domain(&mut self, owner: mant_ir::EntryOwner<'_>) {
+            if let Some(ValueDomain::EntrySet {
+                reference, source, ..
+            }) = owner.facts().and_then(|facts| facts.value_domain.as_ref())
+            {
+                self.push(
+                    reference.clone(),
+                    reference_edge_kind(reference),
+                    source
+                        .and_then(|source| source.byte_range)
+                        .map(|range| range.start.get()),
+                );
+            }
+        }
+
         fn push(
             &mut self,
             target: SemanticDocumentReference,
@@ -104,22 +119,13 @@ pub(super) fn document_references(bundle: &ResolvedContent) -> Vec<DocumentRefer
                 .map(|range| range.start.get())
                 .or(previous);
             walk_definition_item(self, item);
-            if let Some(ValueDomain::EntrySet {
-                reference, source, ..
-            }) = item
-                .identity
-                .as_ref()
-                .and_then(|identity| identity.value_domain.as_ref())
-            {
-                self.push(
-                    reference.clone(),
-                    reference_edge_kind(reference),
-                    source
-                        .and_then(|source| source.byte_range)
-                        .map(|range| range.start.get()),
-                );
-            }
+            self.entry_domain(mant_ir::EntryOwner::Definition(item));
             self.source_offset = previous;
+        }
+
+        fn visit_list_item(&mut self, item: &'ir mant_ir::ListItem) {
+            mant_ir::visit::walk_list_item(self, item);
+            self.entry_domain(mant_ir::EntryOwner::List(item));
         }
     }
     let mut collector = Collector {
@@ -143,5 +149,62 @@ const fn reference_edge_kind(reference: &SemanticDocumentReference) -> DocumentE
     match reference {
         SemanticDocumentReference::Document { .. } => DocumentEdgeKind::Document,
         SemanticDocumentReference::Manual { .. } => DocumentEdgeKind::Manual,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ordinary_item_domains_follow_earlier_head_and_body_links() {
+        let mut query = crate::query_markdown_text(
+            "# Tools\n\n<!-- mant:entries role=command case=sensitive -->\n- [`target`](target.md): See [body](body.md).\n\n  <!-- mant:domain entries=domain.md roles=command -->\n", None,
+        ).unwrap();
+        let baseline = document_references(&query);
+        let document = query.document.as_mut().unwrap();
+        let Block::DefinitionList { items, source, .. } = document
+            .blocks
+            .iter()
+            .find(|block| matches!(block, Block::DefinitionList { .. }))
+            .expect("definition list")
+        else {
+            panic!("current producer")
+        };
+        let item = &items[0];
+        let mut blocks = vec![Block::Paragraph {
+            children: item.terms.concat(),
+            layout: mant_ir::LayoutHint::default(),
+            source: *source,
+        }];
+        blocks.extend(item.description.clone());
+        document.blocks = vec![Block::List {
+            kind: mant_ir::ListKind::Ordered,
+            start: Some(3),
+            compact: false,
+            items: vec![mant_ir::ListItem {
+                entry: item.identity.clone(),
+                blocks,
+            }],
+            layout: mant_ir::LayoutHint::default(),
+            source: *source,
+        }];
+        let references = document_references(&query);
+        assert_eq!(references.len(), 3);
+        assert_eq!(
+            references
+                .iter()
+                .map(|reference| &reference.target)
+                .collect::<Vec<_>>(),
+            baseline
+                .iter()
+                .map(|reference| &reference.target)
+                .collect::<Vec<_>>()
+        );
+        for (reference, expected) in references.iter().zip(["target", "body", "domain"]) {
+            assert!(
+                matches!(&reference.target, SemanticDocumentReference::Document { name, .. } if name == expected)
+            );
+        }
     }
 }

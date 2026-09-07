@@ -65,6 +65,10 @@ that crate was not published for that change.
 
 ### mant-protocol 0.11.0
 
+- Change the unreleased excerpt `document-entry.entry` to a single-item IR
+  block, preserving ordinary list content, numbering and layout instead of
+  requiring every owner to be a standalone native definition.
+
 - Carry document-wide `semanticsComplete` and the logical source `address` in
   excerpts, including nested explain responses; compact content retains an
   incomplete-semantics notice even when parser findings are hidden.
@@ -76,6 +80,10 @@ that crate was not published for that change.
   broader `semanticsComplete` signal. Remove the redundant entry `targets`.
 
 ### mant-engine 0.11.0
+
+- Share entry coordinates and original-content excerpts across ordinary list
+  items and native definitions. Read, outline, search, scope traversal and TUI
+  navigation now support both; Markdown authoring migration remains separate.
 
 - Retain every visible name inside linked native definition heads and stop
   name extraction at adjacent styled parameters (`-L` plus italic `dir`).

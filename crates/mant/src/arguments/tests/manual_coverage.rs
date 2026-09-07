@@ -84,7 +84,10 @@ fn check_manual(command: &mut clap::Command, manual: &str) -> Result<(), String>
             else {
                 return Err(format!("{name} did not select one entry"));
             };
-            let identity = entry.identity.as_ref().ok_or("entry without identity")?;
+            let identity = entry
+                .entry_owner()
+                .and_then(mant_ir::EntryOwner::facts)
+                .ok_or("entry without identity")?;
             if identity.role != DefinitionRole::Option || identity.case != DefinitionCase::Sensitive
             {
                 return Err(format!("{name} must be a case-sensitive option"));

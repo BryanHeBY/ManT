@@ -21,7 +21,7 @@ pub(crate) use syntax::{
 };
 #[cfg(test)]
 use syntax::{is_value_name, option_names};
-pub(crate) use walk::definition_entries;
+pub(crate) use walk::{ContentEntry, content_entries};
 
 /// Annotate reliably recognizable command-line options and return every
 /// inline anchor that the navigation resolver must retain.

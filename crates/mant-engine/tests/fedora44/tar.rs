@@ -60,7 +60,7 @@ fn options_are_addressable_in_v0_11_outlines_and_excerpts() {
     assert!(matches!(
         excerpt.selections.as_slice(),
         [ExcerptSelection::DocumentEntry { entry, .. }]
-            if entry.identity.as_ref().is_some_and(|value| value.id == identity.id)
+            if entry.entry_owner().and_then(mant_ir::EntryOwner::facts).is_some_and(|value| value.id == identity.id)
     ));
 }
 
@@ -104,7 +104,7 @@ fn search_maps_long_options_to_markdown_lines_and_selectable_nodes() {
     assert!(matches!(
         excerpt.selections.as_slice(),
         [ExcerptSelection::DocumentEntry { entry, .. }]
-            if entry.identity.as_ref().is_some_and(|identity| identity.names.iter().any(|name| name == "--acls"))
+            if entry.entry_owner().and_then(mant_ir::EntryOwner::facts).is_some_and(|identity| identity.names.iter().any(|name| name == "--acls"))
     ));
 }
 

@@ -9,7 +9,7 @@ use super::inline::{
     code_span, escape_text, fenced_code, flatten_inline, html_anchor, protect_block_prefix,
     render_inline,
 };
-use crate::definitions::definition_entries;
+use crate::definitions::content_entries;
 
 pub(super) struct RenderedBlocks {
     pub(super) text: String,
@@ -40,9 +40,9 @@ pub(super) fn render_blocks_with_entries(
     if options.preserve_anchors {
         let markers = super::anchor_markers(&text);
         let mut cursor = 0;
-        for located in definition_entries(blocks) {
+        for located in content_entries(blocks) {
             let entry = located.item;
-            let Some(identity) = &entry.identity else {
+            let Some(identity) = entry.facts() else {
                 continue;
             };
             let anchor = html_anchor(&identity.id);
@@ -133,7 +133,13 @@ fn render_list(
                 ),
                 ListKind::Bullet | ListKind::Plain => "- ".to_owned(),
             };
-            prefix_item(&render_blocks(&item.blocks, options).join("\n\n"), &marker)
+            let mut content = render_blocks(&item.blocks, options).join("\n\n");
+            if options.preserve_anchors
+                && let Some(facts) = &item.entry
+            {
+                content.insert_str(0, &html_anchor(&facts.id));
+            }
+            prefix_item(&content, &marker)
         })
         .collect::<Vec<_>>();
     (!rendered.is_empty()).then(|| rendered.join(if compact { "\n" } else { "\n\n" }))

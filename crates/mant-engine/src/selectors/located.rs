@@ -1,8 +1,11 @@
 //! Borrowed semantic locations and source-order breadcrumbs, without DTOs.
 use super::DOCUMENT_ROOT_TITLE;
-use crate::{definitions::definition_entries, inline::plain_text};
+use crate::{
+    definitions::{ContentEntry, content_entries},
+    inline::plain_text,
+};
 use mant_ir::{
-    Block, DOCUMENT_ROOT_ID, DefinitionIdentity, DefinitionItem, NodeId, OutlinePath, Section,
+    Block, DOCUMENT_ROOT_ID, DefinitionIdentity, EntryOwner, NodeId, OutlinePath, Section,
     SourceSpan,
 };
 #[derive(Clone)]
@@ -26,7 +29,7 @@ pub(crate) enum LocatedNode<'a> {
         path: OutlinePath,
         title: String,
         breadcrumbs: Vec<LocatedBreadcrumb>,
-        entry: &'a DefinitionItem,
+        entry: ContentEntry<'a>,
         source: Option<SourceSpan>,
     },
 }
@@ -55,8 +58,8 @@ impl LocatedNode<'_> {
             Self::Section { section, .. } => &section.id,
             Self::Entry { entry, .. } => {
                 &entry
-                    .identity
-                    .as_ref()
+                    .item
+                    .facts()
                     .expect("located entries have identities")
                     .id
             }
@@ -65,7 +68,7 @@ impl LocatedNode<'_> {
 
     pub(crate) fn identity(&self) -> Option<&DefinitionIdentity> {
         match self {
-            Self::Entry { entry, .. } => entry.identity.as_ref(),
+            Self::Entry { entry, .. } => entry.item.facts(),
             Self::Section { .. } => None,
         }
     }
@@ -107,7 +110,7 @@ pub(crate) fn collect_sections<'a>(
             id: section.id.clone(),
             title: section.title.clone(),
         });
-        for located in definition_entries(&section.blocks) {
+        for located in content_entries(&section.blocks) {
             let entry = located.item;
             let mut entry_breadcrumbs = child_breadcrumbs.clone();
             append_entry_breadcrumbs(
@@ -123,8 +126,8 @@ pub(crate) fn collect_sections<'a>(
                     .expect("enumerated entry paths are one-based"),
                 title: definition_title(entry),
                 breadcrumbs: entry_breadcrumbs,
-                entry,
                 source: located.source,
+                entry: located,
             });
         }
         collect_sections(&section.children, &coordinates, &child_breadcrumbs, output);
@@ -137,7 +140,7 @@ pub(crate) fn collect_root_entries<'a>(blocks: &'a [Block], output: &mut Vec<Loc
         id: DOCUMENT_ROOT_ID.into(),
         title: DOCUMENT_ROOT_TITLE.to_owned(),
     }];
-    for located in definition_entries(blocks) {
+    for located in content_entries(blocks) {
         let entry = located.item;
         let mut entry_breadcrumbs = breadcrumbs.clone();
         append_entry_breadcrumbs(
@@ -153,8 +156,8 @@ pub(crate) fn collect_root_entries<'a>(blocks: &'a [Block], output: &mut Vec<Loc
                 .expect("enumerated entry paths are one-based"),
             title: definition_title(entry),
             breadcrumbs: entry_breadcrumbs,
-            entry,
             source: located.source,
+            entry: located,
         });
     }
 }
@@ -163,33 +166,30 @@ fn append_entry_breadcrumbs(
     breadcrumbs: &mut Vec<LocatedBreadcrumb>,
     section: Option<&[usize]>,
     indices: &[usize],
-    ancestors: &[&DefinitionItem],
+    ancestors: &[EntryOwner<'_>],
 ) {
     for (depth, ancestor) in ancestors.iter().enumerate() {
         let path = OutlinePath::nested_entry(section, &indices[..=depth])
             .expect("ancestor entry paths are one-based");
         let identity = ancestor
-            .identity
-            .as_ref()
+            .facts()
             .expect("semantic entry ancestors have identities");
         breadcrumbs.push(LocatedBreadcrumb {
             path: path.clone(),
             id: identity.id.clone(),
-            title: definition_title(ancestor),
+            title: definition_title(*ancestor),
         });
     }
 }
 
-fn definition_title(entry: &DefinitionItem) -> String {
-    let identity = entry
-        .identity
-        .as_ref()
-        .expect("semantic entries have identities");
+fn definition_title(entry: EntryOwner<'_>) -> String {
+    let identity = entry.facts().expect("semantic entries have identities");
     if !identity.names.is_empty() {
         return identity.names.join(", ");
     }
     let forms = entry
-        .terms
+        .forms()
+        .unwrap_or_default()
         .iter()
         .map(|term| plain_text(term))
         .filter(|form| !form.is_empty())

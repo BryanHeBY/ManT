@@ -1807,12 +1807,12 @@
             ]
           },
           {
-            "description": "One addressable semantic definition and its complete description.",
+            "description": "One addressable owner with its complete, original content.",
             "type": "object",
             "properties": {
               "entry": {
-                "description": "Complete semantic definition.",
-                "$ref": "#/$defs/DefinitionItem"
+                "description": "A single-item list or definition list, retaining original layout and\nnumbering. Its sole item owns the entry facts; no body is rewritten.",
+                "$ref": "#/$defs/Block"
               },
               "kind": {
                 "type": "string",
@@ -7941,12 +7941,12 @@
             ]
           },
           {
-            "description": "One addressable semantic definition and its complete description.",
+            "description": "One addressable owner with its complete, original content.",
             "type": "object",
             "properties": {
               "entry": {
-                "description": "Complete semantic definition.",
-                "$ref": "#/$defs/DefinitionItem"
+                "description": "A single-item list or definition list, retaining original layout and\nnumbering. Its sole item owns the entry facts; no body is rewritten.",
+                "$ref": "#/$defs/Block"
               },
               "kind": {
                 "type": "string",

@@ -2,6 +2,74 @@
 use super::*;
 
 #[test]
+fn ordinary_list_entry_anchors_preserve_rows_and_numbering() {
+    let mut query = bundle();
+    let paragraph = |name: &str| Block::Paragraph {
+        children: vec![
+            Inline::Code { value: name.into() },
+            Inline::Text {
+                value: ": visible | body".into(),
+            },
+        ],
+        layout: LayoutHint {
+            spacing_before_lines: 2,
+            ..LayoutHint::default()
+        },
+        source: None,
+    };
+    query.document.as_mut().unwrap().sections[0].blocks = vec![Block::List {
+        kind: ListKind::Ordered,
+        start: Some(7),
+        compact: false,
+        items: vec![
+            mant_ir::ListItem {
+                entry: None,
+                blocks: vec![paragraph("intro")],
+            },
+            mant_ir::ListItem {
+                entry: Some(mant_ir::EntryFacts {
+                    id: "run".into(),
+                    names: vec!["run".into()],
+                    role: mant_ir::DefinitionRole::Command,
+                    case: mant_ir::DefinitionCase::Sensitive,
+                    value_domain: None,
+                    name_bindings: Vec::new(),
+                    alias_groups: Vec::new(),
+                    alias_of: None,
+                    forms: vec![mant_ir::EntryForm {
+                        parts: vec![mant_ir::EntryContentSlice {
+                            root: mant_ir::EntryInlineRoot::Block { index: 0 },
+                            path: vec![0],
+                            bytes: None,
+                        }],
+                    }],
+                }),
+                blocks: vec![paragraph("run")],
+            },
+        ],
+        layout: LayoutHint::default(),
+        source: None,
+    }];
+    let annotated = DocumentView::new(&query);
+    let Block::List { items, .. } = &mut query.document.as_mut().unwrap().sections[0].blocks[0]
+    else {
+        unreachable!()
+    };
+    items[1].entry = None;
+    let ordinary = DocumentView::new(&query);
+    for width in [12, 40, 80] {
+        let rendered = annotated.render(width);
+        assert_eq!(rendered.text, ordinary.render(width).text);
+        let row = rendered.anchor_row("run").expect("semantic landing row");
+        let line = rendered.text.lines[row].to_string();
+        assert!(
+            line.trim_start().starts_with("8. run"),
+            "landing row {row}: {line:?}"
+        );
+    }
+}
+
+#[test]
 fn unsafe_tldr_more_information_remains_visible_but_inert() {
     let mut bundle = geometry_bundle();
     bundle.tldr.as_mut().expect("tldr").more_information = Some("file:///etc/passwd".to_owned());

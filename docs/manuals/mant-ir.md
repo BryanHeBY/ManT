@@ -169,6 +169,11 @@ partial forms. Markdown's current conversion to definition items remains an
 obstacle to annotation-only content
 preservation, described in [mant-markdown(7)](mant-markdown.md).
 
+Navigation, excerpts, search ownership, scope links and TUI anchors support
+both owner kinds. Excerpts retain the original single-item container and its
+numbering/layout, not a synthesized definition. `Block::entry_owner()` borrows
+the facts and content from such a selected block without copying its body.
+
 A definition-list item may carry `DefinitionIdentity` when ManT can identify an
 addressable entry. The identity records:
 

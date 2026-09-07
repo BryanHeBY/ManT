@@ -13,6 +13,24 @@ pub enum EntryOwner<'a> {
     List(&'a ListItem),
 }
 
+impl Block {
+    /// Return the sole addressable owner of a single-item content excerpt.
+    ///
+    /// Multi-item lists and unannotated items are not entry excerpts. The original
+    /// list kind, numbering, layout and content remain on this block.
+    #[must_use]
+    pub fn entry_owner(&self) -> Option<EntryOwner<'_>> {
+        let owner = match self {
+            Self::List { items, .. } if items.len() == 1 => EntryOwner::List(&items[0]),
+            Self::DefinitionList { items, .. } if items.len() == 1 => {
+                EntryOwner::Definition(&items[0])
+            }
+            _ => return None,
+        };
+        owner.facts().map(|_| owner)
+    }
+}
+
 /// A direct inline container within an entry owner.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "kind", rename_all = "kebab-case", deny_unknown_fields)]

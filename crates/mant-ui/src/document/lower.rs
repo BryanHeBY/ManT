@@ -246,6 +246,7 @@ impl DocumentBuilder {
                     if index > 0 && !compact {
                         self.spacing(1);
                     }
+                    let item_start = self.lines.len();
                     let marker = match kind {
                         ListKind::Bullet => "• ".to_owned(),
                         ListKind::Ordered => format!(
@@ -299,6 +300,14 @@ impl DocumentBuilder {
                             ));
                         }
                         self.blocks(&item.blocks, indent + usize::from(has_marker) * 2);
+                    }
+                    if let Some(facts) = &item.entry {
+                        // Leading spacing is presentation, not the semantic landing row.
+                        let first_content = self.lines[item_start..]
+                            .iter()
+                            .position(|line| !line.spans.is_empty() || line.table_row.is_some())
+                            .map_or(item_start, |offset| item_start + offset);
+                        self.anchors.insert(facts.id.to_string(), first_content);
                     }
                 }
             }

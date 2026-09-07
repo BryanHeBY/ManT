@@ -167,7 +167,7 @@ fn identifies_git_environment_variables_from_hanging_definitions() {
         explanation.selections.as_slice(),
         [ExcerptSelection::DocumentEntry { outline, entry }]
             if outline.ancestors.iter().any(|ancestor| ancestor.title == "ENVIRONMENT VARIABLES")
-                && entry.identity.as_ref().is_some_and(|identity| {
+                && entry.entry_owner().and_then(mant_ir::EntryOwner::facts).is_some_and(|identity| {
                     identity.role == mant_ir::DefinitionRole::EnvironmentVariable
                         && identity.names == ["GIT_DIR"]
                 })

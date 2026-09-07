@@ -210,7 +210,7 @@ fn declared_entries_cover_windows_options_commands_and_environment_variables() {
     assert!(matches!(
         explanation.selections.as_slice(),
         [ExcerptSelection::DocumentEntry { entry, .. }]
-            if entry.identity.as_ref().is_some_and(|identity| identity.names == ["/query"])
+            if entry.entry_owner().and_then(mant_ir::EntryOwner::facts).is_some_and(|identity| identity.names == ["/query"])
     ));
     assert!(matches!(
         select_explanation(&query, "query"),
@@ -221,7 +221,7 @@ fn declared_entries_cover_windows_options_commands_and_environment_variables() {
     assert!(matches!(
         command.selections.as_slice(),
         [ExcerptSelection::DocumentEntry { entry, .. }]
-            if entry.identity.as_ref().is_some_and(|identity| identity.role == DefinitionRole::Command)
+            if entry.entry_owner().and_then(mant_ir::EntryOwner::facts).is_some_and(|identity| identity.role == DefinitionRole::Command)
     ));
     for selector in ["3", "environment"] {
         assert!(matches!(
@@ -233,7 +233,7 @@ fn declared_entries_cover_windows_options_commands_and_environment_variables() {
     assert!(matches!(
         environment.selections.as_slice(),
         [ExcerptSelection::DocumentEntry { entry, .. }]
-            if entry.identity.as_ref().is_some_and(|identity| identity.role == DefinitionRole::EnvironmentVariable)
+            if entry.entry_owner().and_then(mant_ir::EntryOwner::facts).is_some_and(|identity| identity.role == DefinitionRole::EnvironmentVariable)
     ));
     for selector in [
         "ProgramFiles(x86)",
@@ -383,7 +383,7 @@ fn declared_dotted_dash_options_preserve_their_exact_names() {
         assert!(matches!(
             explanation.selections.as_slice(),
             [ExcerptSelection::DocumentEntry { entry, .. }]
-                if entry.identity.as_ref().is_some_and(|identity| identity.names == [selector])
+                if entry.entry_owner().and_then(mant_ir::EntryOwner::facts).is_some_and(|identity| identity.names == [selector])
         ));
     }
 }
@@ -445,7 +445,7 @@ fn declared_variables_keep_shell_and_powershell_automatic_names() {
         assert!(matches!(
             explanation.selections.as_slice(),
             [ExcerptSelection::DocumentEntry { entry, .. }]
-                if entry.identity.as_ref().is_some_and(|identity| identity.role == DefinitionRole::Variable)
+                if entry.entry_owner().and_then(mant_ir::EntryOwner::facts).is_some_and(|identity| identity.role == DefinitionRole::Variable)
         ));
     }
     assert!(matches!(
@@ -454,7 +454,7 @@ fn declared_variables_keep_shell_and_powershell_automatic_names() {
             .selections
             .as_slice(),
         [ExcerptSelection::DocumentEntry { entry, .. }]
-            if entry.identity.as_ref().is_some_and(|identity| identity.role == DefinitionRole::EnvironmentVariable)
+            if entry.entry_owner().and_then(mant_ir::EntryOwner::facts).is_some_and(|identity| identity.role == DefinitionRole::EnvironmentVariable)
     ));
     assert!(matches!(
         select_explanation(&query, "$PATH")
@@ -462,7 +462,7 @@ fn declared_variables_keep_shell_and_powershell_automatic_names() {
             .selections
             .as_slice(),
         [ExcerptSelection::DocumentEntry { entry, .. }]
-            if entry.identity.as_ref().is_some_and(|identity| identity.role == DefinitionRole::Variable)
+            if entry.entry_owner().and_then(mant_ir::EntryOwner::facts).is_some_and(|identity| identity.role == DefinitionRole::Variable)
     ));
 }
 
@@ -500,7 +500,7 @@ fn exact_aliases_win_before_normalized_option_shorthands() {
     assert!(matches!(
         command.selections.as_slice(),
         [ExcerptSelection::DocumentEntry { entry, .. }]
-            if entry.identity.as_ref().is_some_and(|identity| {
+            if entry.entry_owner().and_then(mant_ir::EntryOwner::facts).is_some_and(|identity| {
                 identity.role == DefinitionRole::Command && identity.names == ["?"]
             })
     ));
@@ -508,7 +508,7 @@ fn exact_aliases_win_before_normalized_option_shorthands() {
     assert!(matches!(
         command_node.selections.as_slice(),
         [ExcerptSelection::DocumentEntry { entry, .. }]
-            if entry.identity.as_ref().is_some_and(|identity| {
+            if entry.entry_owner().and_then(mant_ir::EntryOwner::facts).is_some_and(|identity| {
                 identity.role == DefinitionRole::Command && identity.names == ["?"]
             })
     ));
@@ -517,7 +517,7 @@ fn exact_aliases_win_before_normalized_option_shorthands() {
         assert!(matches!(
             option.selections.as_slice(),
             [ExcerptSelection::DocumentEntry { entry, .. }]
-                if entry.identity.as_ref().is_some_and(|identity| {
+                if entry.entry_owner().and_then(mant_ir::EntryOwner::facts).is_some_and(|identity| {
                     identity.role == DefinitionRole::Option
                         && identity.names == ["/?", "-?"]
                 })
@@ -570,7 +570,7 @@ fn exact_entry_id_takes_precedence_over_another_entry_alias() {
     assert!(matches!(
         explanation.selections.as_slice(),
         [ExcerptSelection::DocumentEntry { entry, .. }]
-            if entry.identity.as_ref().is_some_and(|identity| {
+            if entry.entry_owner().and_then(mant_ir::EntryOwner::facts).is_some_and(|identity| {
                 identity.id == "command-query" && identity.names == ["query"]
             })
     ));
@@ -595,7 +595,7 @@ fn declared_case_policy_preserves_distinct_sensitive_aliases() {
         assert!(matches!(
             explanation.selections.as_slice(),
             [ExcerptSelection::DocumentEntry { entry, .. }]
-                if entry.identity.as_ref().is_some_and(|identity| identity.names == [expected])
+                if entry.entry_owner().and_then(mant_ir::EntryOwner::facts).is_some_and(|identity| identity.names == [expected])
         ));
     }
 }
@@ -709,14 +709,14 @@ fn declared_option_entries_cover_windows_native_token_families() {
     assert!(matches!(
         option.selections.as_slice(),
         [ExcerptSelection::DocumentEntry { entry, .. }]
-            if entry.identity.as_ref().is_some_and(|identity| {
+            if entry.entry_owner().and_then(mant_ir::EntryOwner::facts).is_some_and(|identity| {
                 identity.id == "option-start" && identity.role == DefinitionRole::Option
             })
     ));
     assert!(matches!(
         command.selections.as_slice(),
         [ExcerptSelection::DocumentEntry { entry, .. }]
-            if entry.identity.as_ref().is_some_and(|identity| {
+            if entry.entry_owner().and_then(mant_ir::EntryOwner::facts).is_some_and(|identity| {
                 identity.id == "command-start" && identity.role == DefinitionRole::Command
             })
     ));

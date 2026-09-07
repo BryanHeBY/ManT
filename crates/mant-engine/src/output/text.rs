@@ -294,10 +294,9 @@ fn render_selection(selection: &ExcerptSelection) -> String {
         ExcerptSelection::DocumentSection { section, .. } => {
             join_parts(vec![context, render_section(section, 0)])
         }
-        ExcerptSelection::DocumentEntry { entry, .. } => join_parts(vec![
-            context,
-            render_definitions(std::slice::from_ref(entry), true, 0),
-        ]),
+        ExcerptSelection::DocumentEntry { entry, .. } => {
+            join_parts(vec![context, render_blocks(std::slice::from_ref(entry), 0)])
+        }
     }
 }
 

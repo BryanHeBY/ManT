@@ -242,10 +242,7 @@ impl LocatedNode<'_> {
                 outline: OutlineTrail {
                     ancestors: project_breadcrumbs(breadcrumbs),
                     node: {
-                        let identity = entry
-                            .identity
-                            .as_ref()
-                            .expect("located entries have identities");
+                        let identity = entry.item.facts().expect("located entries have identities");
                         OutlineNodeReference::DocumentEntry {
                             path: path.to_string().into(),
                             id: identity.id.clone(),
@@ -256,7 +253,7 @@ impl LocatedNode<'_> {
                         }
                     },
                 },
-                entry: (*entry).clone(),
+                entry: entry.content(),
             },
         }
     }

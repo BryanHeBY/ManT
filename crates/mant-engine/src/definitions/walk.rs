@@ -1,90 +1,131 @@
-//! Definition walk policy; coordinated by the parent discovery passes.
-use mant_ir::{Block, DefinitionItem, SourceSpan};
+//! Source-order semantic coordinates over unchanged native and Markdown owners.
+use mant_ir::{Block, EntryOwner, ListKind, SourceSpan};
 
-/// One identified definition together with its semantic coordinates.
-///
-/// `indices` contains the one-based position at every entry nesting level.
-/// Keeping these coordinates beside the borrowed item gives outline,
-/// excerpt, and addressable-Markdown projections one topology instead of
-/// independently flattening definition descriptions.
-pub(crate) struct DefinitionEntry<'a> {
-    pub(crate) item: &'a DefinitionItem,
+/// One identified owner, retaining enough context to excerpt its original item.
+pub(crate) struct ContentEntry<'a> {
+    pub(crate) item: EntryOwner<'a>,
     pub(crate) source: Option<SourceSpan>,
     pub(crate) indices: Vec<usize>,
-    pub(crate) ancestors: Vec<&'a DefinitionItem>,
+    pub(crate) ancestors: Vec<EntryOwner<'a>>,
+    container: &'a Block,
+    item_index: usize,
 }
 
-/// Return identified definition items in semantic pre-order.
-///
-/// Definitions nested inside lists or table cells remain direct entries of
-/// the surrounding scope. Definitions inside an entry description become
-/// children of that entry, matching [`mant_ir::SemanticIndex`].
-pub(crate) fn definition_entries(blocks: &[Block]) -> Vec<DefinitionEntry<'_>> {
+impl ContentEntry<'_> {
+    /// Copy only the selected owner, not its siblings or a synthetic definition.
+    pub(crate) fn content(&self) -> Block {
+        match self.container {
+            Block::List {
+                kind,
+                start,
+                compact,
+                items,
+                layout,
+                source,
+            } => Block::List {
+                kind: *kind,
+                start: if *kind == ListKind::Ordered {
+                    Some(
+                        start
+                            .unwrap_or(1)
+                            .saturating_add(u64::try_from(self.item_index).unwrap_or(u64::MAX)),
+                    )
+                } else {
+                    *start
+                },
+                compact: *compact,
+                items: vec![items[self.item_index].clone()],
+                layout: *layout,
+                source: *source,
+            },
+            Block::DefinitionList {
+                items,
+                compact,
+                layout,
+                source,
+            } => Block::DefinitionList {
+                items: vec![items[self.item_index].clone()],
+                compact: *compact,
+                layout: *layout,
+                source: *source,
+            },
+            _ => unreachable!("entry containers are lists"),
+        }
+    }
+}
+
+/// Same semantic pre-order as `SemanticIndex`, with source presentation retained.
+pub(crate) fn content_entries(blocks: &[Block]) -> Vec<ContentEntry<'_>> {
     let mut entries = Vec::new();
-    collect_definition_scope(blocks, &[], &mut Vec::new(), &mut entries);
+    collect_scope(blocks, &[], &mut Vec::new(), &mut entries);
     entries
 }
 
-fn collect_definition_scope<'a>(
+fn collect_scope<'a>(
     blocks: &'a [Block],
     parent_indices: &[usize],
-    ancestors: &mut Vec<&'a DefinitionItem>,
-    output: &mut Vec<DefinitionEntry<'a>>,
+    ancestors: &mut Vec<EntryOwner<'a>>,
+    output: &mut Vec<ContentEntry<'a>>,
 ) {
-    let mut direct_index = 0;
-    collect_direct_definitions(blocks, parent_indices, ancestors, &mut direct_index, output);
+    collect_direct(blocks, parent_indices, ancestors, &mut 0, output);
 }
 
-fn collect_direct_definitions<'a>(
+fn collect_direct<'a>(
     blocks: &'a [Block],
     parent_indices: &[usize],
-    ancestors: &mut Vec<&'a DefinitionItem>,
+    ancestors: &mut Vec<EntryOwner<'a>>,
     direct_index: &mut usize,
-    output: &mut Vec<DefinitionEntry<'a>>,
+    output: &mut Vec<ContentEntry<'a>>,
 ) {
     for block in blocks {
         match block {
             Block::List { items, .. } => {
-                for item in items {
-                    collect_direct_definitions(
-                        &item.blocks,
-                        parent_indices,
-                        ancestors,
-                        direct_index,
-                        output,
-                    );
-                }
-            }
-            Block::DefinitionList { items, source, .. } => {
-                for item in items {
-                    if item.identity.is_none() {
-                        continue;
-                    }
-                    *direct_index += 1;
-                    let mut indices = parent_indices.to_vec();
-                    indices.push(*direct_index);
-                    output.push(DefinitionEntry {
-                        item,
-                        source: *source,
-                        indices: indices.clone(),
-                        ancestors: ancestors.clone(),
-                    });
-                    ancestors.push(item);
-                    collect_definition_scope(&item.description, &indices, ancestors, output);
-                    ancestors.pop();
-                }
-            }
-            Block::Table { rows, .. } => {
-                for row in rows {
-                    for cell in &row.cells {
-                        collect_direct_definitions(
-                            &cell.blocks,
+                for (index, item) in items.iter().enumerate() {
+                    if item.entry.is_some() {
+                        collect_owner(
+                            block,
+                            index,
+                            EntryOwner::List(item),
+                            parent_indices,
+                            ancestors,
+                            direct_index,
+                            output,
+                        );
+                    } else {
+                        collect_direct(
+                            &item.blocks,
                             parent_indices,
                             ancestors,
                             direct_index,
                             output,
                         );
                     }
+                }
+            }
+            Block::DefinitionList { items, .. } => {
+                for (index, item) in items.iter().enumerate() {
+                    if item.identity.is_some() {
+                        collect_owner(
+                            block,
+                            index,
+                            EntryOwner::Definition(item),
+                            parent_indices,
+                            ancestors,
+                            direct_index,
+                            output,
+                        );
+                    }
+                }
+            }
+            Block::Table { rows, .. } => {
+                for cell in rows.iter().flat_map(|row| &row.cells) {
+                    collect_direct(
+                        &cell.blocks,
+                        parent_indices,
+                        ancestors,
+                        direct_index,
+                        output,
+                    );
                 }
             }
             Block::Paragraph { .. }
@@ -95,4 +136,36 @@ fn collect_direct_definitions<'a>(
             | Block::Unsupported { .. } => {}
         }
     }
+}
+
+fn collect_owner<'a>(
+    container: &'a Block,
+    item_index: usize,
+    item: EntryOwner<'a>,
+    parent_indices: &[usize],
+    ancestors: &mut Vec<EntryOwner<'a>>,
+    direct_index: &mut usize,
+    output: &mut Vec<ContentEntry<'a>>,
+) {
+    *direct_index += 1;
+    let mut indices = parent_indices.to_vec();
+    indices.push(*direct_index);
+    output.push(ContentEntry {
+        item,
+        source: match item {
+            EntryOwner::Definition(_) => crate::block::block_source(container),
+            EntryOwner::List(_) => item
+                .blocks()
+                .first()
+                .and_then(crate::block::block_source)
+                .or_else(|| crate::block::block_source(container)),
+        },
+        indices: indices.clone(),
+        ancestors: ancestors.clone(),
+        container,
+        item_index,
+    });
+    ancestors.push(item);
+    collect_scope(item.blocks(), &indices, ancestors, output);
+    ancestors.pop();
 }

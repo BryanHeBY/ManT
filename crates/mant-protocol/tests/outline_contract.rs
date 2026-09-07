@@ -202,14 +202,19 @@ fn excerpt_contract_can_return_one_semantic_definition() {
                     names: vec!["-a".to_owned(), "--all".to_owned()],
                 },
             },
-            entry,
+            entry: Block::DefinitionList {
+                items: vec![entry],
+                compact: true,
+                layout: LayoutHint::default(),
+                source: None,
+            },
         }],
     };
 
     let value = serde_json::to_value(excerpt).expect("entry excerpt JSON");
     assert_eq!(value["selections"][0]["kind"], "document-entry");
     assert_eq!(
-        value["selections"][0]["entry"]["identity"]["role"],
+        value["selections"][0]["entry"]["items"][0]["identity"]["role"],
         "option"
     );
 }

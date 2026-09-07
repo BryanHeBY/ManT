@@ -919,7 +919,7 @@ fn semantic_entry_selectors_work_through_cli_and_request_json() {
     let excerpt: serde_json::Value = serde_json::from_str(&output).expect("excerpt JSON");
     assert_eq!(excerpt["selections"][0]["kind"], "document-entry");
     assert_eq!(
-        excerpt["selections"][0]["entry"]["identity"]["role"],
+        excerpt["selections"][0]["entry"]["items"][0]["identity"]["role"],
         "command"
     );
 
@@ -942,7 +942,10 @@ fn semantic_entry_selectors_work_through_cli_and_request_json() {
         );
         assert_eq!(status, 0);
         let excerpt: serde_json::Value = serde_json::from_str(&output).expect("role explanation");
-        assert_eq!(excerpt["selections"][0]["entry"]["identity"]["role"], role);
+        assert_eq!(
+            excerpt["selections"][0]["entry"]["items"][0]["identity"]["role"],
+            role
+        );
         assert!(diagnostics.is_empty());
     }
 
@@ -954,7 +957,7 @@ fn semantic_entry_selectors_work_through_cli_and_request_json() {
     assert_eq!(status, 0);
     let excerpt: serde_json::Value = serde_json::from_str(&output).expect("request excerpt");
     assert_eq!(
-        excerpt["selections"][0]["entry"]["identity"]["role"],
+        excerpt["selections"][0]["entry"]["items"][0]["identity"]["role"],
         "command"
     );
     assert!(diagnostics.is_empty());
@@ -996,7 +999,7 @@ fn semantic_entry_selectors_work_through_cli_and_request_json() {
     assert_eq!(status, 0);
     let excerpt: serde_json::Value = serde_json::from_str(&output).expect("qualified entry");
     assert_eq!(
-        excerpt["selections"][0]["entry"]["identity"]["id"],
+        excerpt["selections"][0]["entry"]["items"][0]["identity"]["id"],
         qualified_id
     );
     assert!(diagnostics.is_empty());

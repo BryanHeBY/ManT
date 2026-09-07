@@ -1447,7 +1447,7 @@ fn exact_semantic_option_spellings_survive_the_cli_boundary() {
     assert!(dotted.stderr.is_empty());
     let dotted: serde_json::Value = serde_json::from_slice(&dotted.stdout).expect("dotted JSON");
     assert_eq!(
-        dotted["selections"][0]["entry"]["identity"]["names"][0],
+        dotted["selections"][0]["entry"]["items"][0]["identity"]["names"][0],
         "-ca.cert"
     );
 
@@ -1456,7 +1456,7 @@ fn exact_semantic_option_spellings_survive_the_cli_boundary() {
     let positional_help: serde_json::Value =
         serde_json::from_slice(&positional_help.stdout).expect("help JSON");
     assert_eq!(
-        positional_help["selections"][0]["entry"]["identity"]["role"],
+        positional_help["selections"][0]["entry"]["items"][0]["identity"]["role"],
         "command"
     );
 }

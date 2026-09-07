@@ -288,7 +288,9 @@ fn collect_excerpt_semantics(
         ExcerptSelection::DocumentSection { section, .. } => {
             collect_section_semantics(section, headings, terms);
         }
-        ExcerptSelection::DocumentEntry { entry, .. } => collect_definition(entry, terms),
+        ExcerptSelection::DocumentEntry { entry, .. } => {
+            collect_block_semantics(std::slice::from_ref(entry), terms);
+        }
     }
 }
 
@@ -309,12 +311,13 @@ fn collect_block_semantics(blocks: &[Block], terms: &mut Vec<(String, Definition
         match block {
             Block::DefinitionList { items, .. } => {
                 for item in items {
-                    collect_definition(item, terms);
+                    collect_entry(mant_ir::EntryOwner::Definition(item), terms);
                     collect_block_semantics(&item.description, terms);
                 }
             }
             Block::List { items, .. } => {
                 for item in items {
+                    collect_entry(mant_ir::EntryOwner::List(item), terms);
                     collect_block_semantics(&item.blocks, terms);
                 }
             }
@@ -333,12 +336,13 @@ fn collect_block_semantics(blocks: &[Block], terms: &mut Vec<(String, Definition
     }
 }
 
-fn collect_definition(item: &mant_ir::DefinitionItem, terms: &mut Vec<(String, DefinitionRole)>) {
-    let Some(identity) = &item.identity else {
+fn collect_entry(item: mant_ir::EntryOwner<'_>, terms: &mut Vec<(String, DefinitionRole)>) {
+    let Some(identity) = item.facts() else {
         return;
     };
     terms.extend(
-        item.terms
+        item.forms()
+            .unwrap_or_default()
             .iter()
             .map(|term| (inline_text(term), identity.role)),
     );

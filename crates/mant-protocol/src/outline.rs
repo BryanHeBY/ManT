@@ -4,9 +4,9 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Deserializer, Serialize};
 
 use mant_ir::{
-    Block, DefinitionCase, DefinitionItem, DefinitionRole, Diagnostic, DocumentAddress,
-    DocumentMeta, DocumentSource, EntryKind, EntrySummary, NodeId, Section,
-    SemanticDocumentReference, TldrDocument,
+    Block, DefinitionCase, DefinitionRole, Diagnostic, DocumentAddress, DocumentMeta,
+    DocumentSource, EntryKind, EntrySummary, NodeId, Section, SemanticDocumentReference,
+    TldrDocument,
 };
 
 use crate::{NodePath, NodeSelector, Producer};
@@ -380,12 +380,13 @@ pub enum ExcerptSelection {
         /// Complete selected section including descendants.
         section: Section,
     },
-    /// One addressable semantic definition and its complete description.
+    /// One addressable owner with its complete, original content.
     DocumentEntry {
         /// Complete logical location in the document outline.
         outline: OutlineTrail,
-        /// Complete semantic definition.
-        entry: DefinitionItem,
+        /// A single-item list or definition list, retaining original layout and
+        /// numbering. Its sole item owns the entry facts; no body is rewritten.
+        entry: Block,
     },
 }
 
