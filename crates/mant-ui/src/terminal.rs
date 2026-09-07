@@ -17,7 +17,7 @@ use ratatui::{Terminal, backend::CrosstermBackend};
 use crate::{App, CopyRequest, UpdateOutcome};
 
 #[cfg(unix)]
-mod signals;
+pub(crate) mod signals;
 #[cfg(unix)]
 use signals::TerminationSignals;
 

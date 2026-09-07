@@ -19,14 +19,14 @@ const TERMINATION_SIGNALS: &[i32] = &[SIGHUP, SIGINT, SIGQUIT, SIGTERM];
 ///
 /// Signal handlers only touch lock-free atomics. Terminal restoration and
 /// default signal emulation therefore happen outside signal context.
-pub(super) struct TerminationSignals {
+pub(crate) struct TerminationSignals {
     pending: Arc<AtomicUsize>,
     terminating: Arc<AtomicBool>,
     registrations: Vec<SigId>,
 }
 
 impl TerminationSignals {
-    pub(super) fn install() -> io::Result<Self> {
+    pub(crate) fn install() -> io::Result<Self> {
         Self::install_for(TERMINATION_SIGNALS)
     }
 
@@ -54,7 +54,7 @@ impl TerminationSignals {
         })
     }
 
-    pub(super) fn take(&self) -> Option<i32> {
+    pub(crate) fn take(&self) -> Option<i32> {
         let signal = self.pending.swap(0, Ordering::SeqCst);
         if signal == 0 {
             return None;
@@ -63,7 +63,7 @@ impl TerminationSignals {
         i32::try_from(signal).ok()
     }
 
-    pub(super) fn terminate(mut self, signal: i32) -> io::Result<()> {
+    pub(crate) fn terminate(mut self, signal: i32) -> io::Result<()> {
         self.unregister();
         signal_hook::low_level::emulate_default_handler(signal)
     }

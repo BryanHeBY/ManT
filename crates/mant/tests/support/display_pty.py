@@ -87,7 +87,7 @@ def check(arguments, expected_interactive, env, stdin=None):
 
 
 def check_in_session(arguments, expected_interactive, env, stdin=None,
-                     action=None, returncodes=(0,), diagnostic=None):
+                     action=None, returncodes=(0,), diagnostic=None, wait_for_raw=False):
     master, slave = pty.openpty()
     fcntl.ioctl(slave, termios.TIOCSCTTY, 0)
     fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 16, 70, 0, 0))
@@ -118,7 +118,8 @@ def check_in_session(arguments, expected_interactive, env, stdin=None,
                     eof = True
                 elif chunk is not None:
                     result.extend(chunk)
-            if b"\x1b[?1049h" in result and not quit_sent:
+            raw = not (termios.tcgetattr(slave)[3] & termios.ICANON)
+            if b"\x1b[?1049h" in result and not quit_sent and (not wait_for_raw or raw):
                 # The queued key is consumed after initial drawing completes.
                 if action is None:
                     os.write(master, b"q")
@@ -141,7 +142,8 @@ def check_in_session(arguments, expected_interactive, env, stdin=None,
             assert diagnostic in diagnostics, (arguments, diagnostics)
         interactive = b"\x1b[?1049h" in result
         assert interactive == expected_interactive, (arguments, result[:500])
-        assert termios.tcgetattr(slave) == original, (arguments, "terminal mode leaked")
+        actual = termios.tcgetattr(slave)
+        assert actual == original, (arguments, "terminal mode leaked", original, actual)
         if interactive:
             assert b"\x1b[?1049l" in result, (arguments, "alternate screen not restored")
         return bytes(result)
@@ -183,11 +185,13 @@ def run_cases(root):
     check(["--input", "-", "--input-format", "markdown"], False, environment, b"# Stdin\n\nBody.\n")
     check(["--help"], False, environment)
     for termination in [signal.SIGINT, signal.SIGTERM]:
-        in_session(lambda: check_in_session(
-            [sys.argv[1], "--input", str(long)], True, environment,
-            action=lambda process, _master: process.send_signal(termination),
-            returncodes=(-termination, 128 + termination),
-        ))
+        for wait_for_raw in [False, True]:
+            in_session(lambda: check_in_session(
+                [sys.argv[1], "--input", str(long)], True, environment,
+                action=lambda process, _master: process.send_signal(termination),
+                returncodes=(-termination, 128 + termination),
+                wait_for_raw=wait_for_raw,
+            ))
         print("ManT signal restoration", termination, "passed", flush=True)
 
 
