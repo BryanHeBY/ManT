@@ -7,30 +7,29 @@
 use std::{error::Error, fmt, ops::Range};
 
 use grep_matcher::Matcher;
-use grep_regex::RegexMatcherBuilder;
 use mant_protocol::{
-    MAX_SEARCH_PATTERN_CHARS, MarkdownSchema, QuerySearch, SearchCase, SearchContextLine,
-    SearchHit, SearchLineRange, SearchMarkdownRange, SearchOccurrence, SearchQuery, SearchRender,
-    SearchRenderFormat, SearchRenderScope, SearchSchema, SearchSyntax,
+    MAX_SEARCH_PATTERN_CHARS, MarkdownSchema, QuerySearch, SearchContextLine, SearchHit,
+    SearchLineRange, SearchMarkdownRange, SearchOccurrence, SearchQuery, SearchRender,
+    SearchRenderFormat, SearchRenderScope, SearchSchema,
 };
-use regex_syntax::ParserBuilder;
 
 use crate::{ResolvedContent, output::render_addressable_markdown};
 
 mod mapping;
 mod owners;
+mod plan;
 #[cfg(test)]
 use mapping::display_markdown_line;
 use mapping::{LineIndex, SearchableText};
+pub(crate) use plan::SearchPlan;
+pub use plan::validate_search_query;
+use plan::{
+    MAX_CONTEXT_LINES, MAX_SEARCH_LIMIT, empty_match_error, matcher_error, non_utf8_pattern_error,
+};
 
 use owners::{Owner, OwnerIndex};
 
-const MAX_CONTEXT_LINES: u16 = 100;
-const MAX_SEARCH_LIMIT: u32 = 10_000;
 const MAX_OCCURRENCES_PER_MATCH: usize = 256;
-const MAX_REGEX_COMPILED_BYTES: usize = 4 * 1024 * 1024;
-const MAX_REGEX_DFA_CACHE_BYTES: usize = 8 * 1024 * 1024;
-
 /// Invalid search input or matcher construction.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SearchError {
@@ -79,18 +78,24 @@ pub fn search_query(
     query: &ResolvedContent,
     request: &SearchQuery,
 ) -> Result<QuerySearch, SearchError> {
-    validate_request(request)?;
+    SearchPlan::new(request)?.execute(query, request.offset, request.limit)
+}
+
+fn search_with_matcher(
+    query: &ResolvedContent,
+    request: &SearchQuery,
+    matcher: &grep_regex::RegexMatcher,
+) -> Result<QuerySearch, SearchError> {
     let artifact = render_addressable_markdown(query);
     let markdown = &artifact.text;
     let lines = LineIndex::with_anchors(markdown, artifact.anchor_ranges().to_vec());
     let owners = OwnerIndex::new(&artifact);
     let searchable = SearchableText::new(markdown, request.scope);
-    let matcher = build_matcher(request)?;
     let offset = usize::try_from(request.offset).unwrap_or(usize::MAX);
     let limit = usize::try_from(request.limit).unwrap_or(usize::MAX);
     let mut collector = SearchCollector::new(markdown, &lines, offset, limit);
     collect_occurrences(
-        &matcher,
+        matcher,
         &searchable,
         markdown,
         &lines,
@@ -204,104 +209,6 @@ fn collect_occurrences(
         Err(empty_match_error())
     } else {
         Ok(())
-    }
-}
-
-/// Validate search limits and compile its matcher without loading a manual.
-///
-/// # Errors
-///
-/// Returns the same [`SearchError`] variants as [`search_query`].
-pub fn validate_search_query(request: &SearchQuery) -> Result<(), SearchError> {
-    validate_request(request)?;
-    build_matcher(request).map(|_| ())
-}
-
-fn validate_request(request: &SearchQuery) -> Result<(), SearchError> {
-    if request.pattern.is_empty() {
-        return Err(SearchError::EmptyPattern);
-    }
-    if request.pattern.chars().count() > MAX_SEARCH_PATTERN_CHARS {
-        return Err(SearchError::PatternTooLong);
-    }
-    if request.limit == 0 || request.limit > MAX_SEARCH_LIMIT {
-        return Err(SearchError::InvalidLimit);
-    }
-    if request.context_lines > MAX_CONTEXT_LINES {
-        return Err(SearchError::ContextTooLarge);
-    }
-    Ok(())
-}
-
-fn build_matcher(request: &SearchQuery) -> Result<grep_regex::RegexMatcher, SearchError> {
-    validate_pattern_semantics(request)?;
-    let mut builder = RegexMatcherBuilder::new();
-    builder
-        .fixed_strings(request.syntax == SearchSyntax::Literal)
-        .multi_line(true)
-        .size_limit(MAX_REGEX_COMPILED_BYTES)
-        .dfa_size_limit(MAX_REGEX_DFA_CACHE_BYTES)
-        .word(request.word);
-    match request.case {
-        SearchCase::Insensitive => {
-            builder.case_insensitive(true);
-        }
-        SearchCase::Sensitive => {
-            builder.case_insensitive(false);
-        }
-        SearchCase::Smart => {
-            builder.case_smart(true);
-        }
-    }
-    let matcher = builder.build(&request.pattern).map_err(matcher_error)?;
-    if matcher.is_match(b"").map_err(matcher_error)? {
-        return Err(empty_match_error());
-    }
-    Ok(matcher)
-}
-
-fn validate_pattern_semantics(request: &SearchQuery) -> Result<(), SearchError> {
-    if request.syntax == SearchSyntax::Literal {
-        return Ok(());
-    }
-    let hir = ParserBuilder::new()
-        .utf8(true)
-        .unicode(true)
-        .build()
-        .parse(&request.pattern)
-        .map_err(|error| {
-            let message = error.to_string();
-            if message.contains("pattern can match invalid UTF-8") {
-                non_utf8_pattern_error()
-            } else {
-                SearchError::InvalidPattern(message)
-            }
-        })?;
-    if hir.properties().minimum_len() == Some(0) {
-        return Err(empty_match_error());
-    }
-    Ok(())
-}
-
-fn empty_match_error() -> SearchError {
-    SearchError::InvalidPattern("pattern must not match empty text".to_owned())
-}
-
-fn non_utf8_pattern_error() -> SearchError {
-    SearchError::InvalidPattern(
-        "regular expressions must preserve UTF-8 character boundaries; Unicode mode cannot be disabled"
-            .to_owned(),
-    )
-}
-
-fn matcher_error(error: impl fmt::Display) -> SearchError {
-    let message = error.to_string();
-    if message.contains("compiled regex exceeds size limit") {
-        SearchError::InvalidPattern(
-            "regular expression exceeds ManT's compiled-size limit".to_owned(),
-        )
-    } else {
-        SearchError::InvalidPattern(message)
     }
 }
 
