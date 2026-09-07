@@ -85,7 +85,7 @@ pub struct DocumentSourcesUpdate {
     pub schema: DocumentSourcesUpdateSchema,
     /// Platform-native path of the configuration used by this run.
     pub config: String,
-    /// Per-source results in configured precedence order.
+    /// Per-source results in source-name order, independently of lookup priority.
     pub sources: Vec<SourceUpdateResult>,
     /// Updater-owned directories no longer present in configuration.
     pub orphaned: Vec<OrphanedSource>,
@@ -118,11 +118,7 @@ pub fn update_document_sources() -> Result<DocumentSourcesUpdate, SourceConfigEr
     })?;
     let _lock = UpdateLock::acquire(&paths.sources)?;
 
-    let sources = config
-        .sources()
-        .iter()
-        .map(|(name, source)| update_one_source(&paths, name, source))
-        .collect();
+    let sources = update_configured_sources(&paths, config.sources());
     let orphaned = discover_orphaned_sources(&paths, &config)?;
     Ok(DocumentSourcesUpdate {
         schema: DocumentSourcesUpdateSchema::V2,
@@ -130,6 +126,16 @@ pub fn update_document_sources() -> Result<DocumentSourcesUpdate, SourceConfigEr
         sources,
         orphaned,
     })
+}
+
+fn update_configured_sources(
+    paths: &DocumentPaths,
+    sources: &std::collections::BTreeMap<String, ConfiguredSource>,
+) -> Vec<SourceUpdateResult> {
+    sources
+        .iter()
+        .map(|(name, source)| update_one_source(paths, name, source))
+        .collect()
 }
 
 fn update_one_source(
@@ -608,6 +614,35 @@ mod tests {
 
     fn temp(label: &str) -> std::path::PathBuf {
         std::env::temp_dir().join(format!("mant-sources-{label}-{}", std::process::id()))
+    }
+
+    #[test]
+    fn update_reports_keep_name_order_and_continue_after_each_failure() {
+        let root = temp("report-order");
+        let paths = paths(&root);
+        fs::create_dir_all(&paths.sources).unwrap();
+        let mut configured = std::collections::BTreeMap::new();
+        for (name, priority) in [("zulu", 10), ("alpha", -10)] {
+            let mut entry = source("docs");
+            entry.priority = priority;
+            configured.insert(name.to_owned(), entry);
+            // Fail before acquisition; no network or Git subprocess is needed.
+            fs::write(paths.sources.join(name), "not an installed directory").unwrap();
+        }
+        let reports = super::update_configured_sources(&paths, &configured);
+        assert_eq!(
+            reports
+                .iter()
+                .map(|report| report.source.as_str())
+                .collect::<Vec<_>>(),
+            ["alpha", "zulu"]
+        );
+        assert!(
+            reports
+                .iter()
+                .all(|report| report.action == SourceUpdateAction::Failed)
+        );
+        fs::remove_dir_all(root).unwrap();
     }
 
     fn source(path: &str) -> ConfiguredSource {
