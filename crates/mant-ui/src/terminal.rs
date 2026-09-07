@@ -21,6 +21,11 @@ mod signals;
 #[cfg(unix)]
 use signals::TerminationSignals;
 
+mod host;
+mod session;
+#[cfg(test)]
+use host::discover_catalog_pages;
+
 const TERMINATION_POLL_INTERVAL: Duration = Duration::from_millis(50);
 
 #[cfg(not(unix))]
@@ -141,10 +146,10 @@ pub fn run_with_catalog_and_scope_and_copy<D, F, E, C>(
     bundle: &ResolvedContent,
     catalog: DocumentCatalog,
     scope: &[ResolvedContent],
-    mut discover_documents: D,
-    mut open_document: F,
-    mut open_external: E,
-    mut copy_to_clipboard: C,
+    discover_documents: D,
+    open_document: F,
+    open_external: E,
+    copy_to_clipboard: C,
 ) -> io::Result<()>
 where
     D: FnMut(&CatalogQuery) -> Result<DocumentCatalog, String>,
@@ -152,186 +157,15 @@ where
     E: FnMut(&crate::ExternalUri) -> Result<(), String>,
     C: FnMut(CopyRequest) -> Result<(), String>,
 {
-    let termination = TerminationSignals::install()?;
-    let mut stdout = io::stdout();
-    enable_raw_mode()?;
-    let mut guard = TerminalGuard { active: true };
-    // Install the restoration guard before either terminal command can fail.
-    // Otherwise an unsupported mouse/alternate-screen sequence could leave the
-    // caller in raw mode without ever entering the event loop.
-    execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
-    let backend = CrosstermBackend::new(stdout);
-    let mut terminal = Terminal::new(backend)?;
-    let mut app = App::with_catalog_and_scope(bundle, catalog, scope);
-
-    let result = panic::catch_unwind(panic::AssertUnwindSafe(|| -> io::Result<Option<i32>> {
-        let mut redraw = true;
-        loop {
-            if let Some(signal) = termination.take() {
-                return Ok(Some(signal));
-            }
-            if app.should_quit() {
-                return Ok(None);
-            }
-            let now = Instant::now();
-            redraw |= app.tick(now).needs_redraw();
-            if redraw {
-                terminal.draw(|frame| app.draw(frame))?;
-                redraw = false;
-            }
-            let timeout = app
-                .next_wakeup(Instant::now())
-                .map_or(TERMINATION_POLL_INTERVAL, |timeout| {
-                    timeout.min(TERMINATION_POLL_INTERVAL)
-                });
-            if !event::poll(timeout)? {
-                continue;
-            }
-            redraw |= route_event(&mut app, &event::read()?).needs_redraw();
-            redraw |= service_discovery_request(&mut app, &mut discover_documents);
-            redraw |= service_open_request(&mut app, &mut open_document);
-            redraw |= service_external_request(&mut app, &mut open_external);
-            redraw |= service_copy_request(&mut app, &mut copy_to_clipboard);
-        }
-    }));
-
-    let restore_result = guard.restore();
-    match result {
-        Ok(Ok(Some(signal))) => {
-            let signal_result = termination.terminate(signal);
-            restore_result.and(signal_result)
-        }
-        Ok(Ok(None)) => restore_result,
-        Ok(Err(error)) => Err(error),
-        Err(payload) => {
-            let _ = restore_result;
-            panic::resume_unwind(payload);
-        }
-    }
-}
-
-fn service_copy_request<C>(app: &mut App, copy_to_clipboard: &mut C) -> bool
-where
-    C: FnMut(CopyRequest) -> Result<(), String>,
-{
-    let Some(request) = app.take_copy_request() else {
-        return false;
-    };
-    let label = request.label();
-    match copy_to_clipboard(request) {
-        Ok(()) => app.report_copy_success(format!("Copied {label}")),
-        Err(message) => app.report_notice(message),
-    }
-    true
-}
-
-fn service_external_request<E>(app: &mut App, open_external: &mut E) -> bool
-where
-    E: FnMut(&crate::ExternalUri) -> Result<(), String>,
-{
-    let Some(uri) = app.take_external_request() else {
-        return false;
-    };
-    match open_external(&uri) {
-        Ok(()) => app.report_notice(format!("Sent {} to the system opener", uri.as_str())),
-        Err(message) => app.report_open_error(message),
-    }
-    true
-}
-
-fn service_discovery_request<D>(app: &mut App, discover_documents: &mut D) -> bool
-where
-    D: FnMut(&CatalogQuery) -> Result<DocumentCatalog, String>,
-{
-    let Some(query) = app.take_discovery_request() else {
-        return false;
-    };
-    match discover_catalog_pages(&query, discover_documents) {
-        Ok(catalog) => app.complete_discovery(catalog),
-        Err(message) => app.report_discovery_error(message),
-    }
-    true
-}
-
-fn discover_catalog_pages<D>(
-    query: &CatalogQuery,
-    discover_documents: &mut D,
-) -> Result<DocumentCatalog, String>
-where
-    D: FnMut(&CatalogQuery) -> Result<DocumentCatalog, String>,
-{
-    let mut catalog = discover_documents(query)?;
-    if query.pattern.is_some() {
-        return Ok(catalog);
-    }
-    let mut previous_offset = query.offset;
-    while let Some(next_offset) = catalog.next_offset {
-        if next_offset <= previous_offset {
-            return Err("document discovery returned a non-advancing page".to_owned());
-        }
-        let mut next_query = query.clone();
-        next_query.offset = next_offset;
-        let page = discover_documents(&next_query)?;
-        if page.offset != next_offset
-            || page.schema != catalog.schema
-            || page.total != catalog.total
-        {
-            return Err("document discovery returned inconsistent catalog pages".to_owned());
-        }
-        catalog.documents.extend(page.documents);
-        catalog.returned = u32::try_from(catalog.documents.len()).unwrap_or(u32::MAX);
-        catalog.truncated = page.truncated;
-        catalog.next_offset = page.next_offset;
-        previous_offset = next_offset;
-    }
-    Ok(catalog)
-}
-
-fn service_open_request<F>(app: &mut App, open_document: &mut F) -> bool
-where
-    F: FnMut(&DocumentAddress) -> Result<ResolvedContent, String>,
-{
-    let Some(address) = app.take_open_request() else {
-        return false;
-    };
-    match open_document(address.address()) {
-        Ok(bundle) => app.complete_open(&bundle, address),
-        Err(message) => app.report_open_error(message),
-    }
-    true
-}
-
-fn route_event(app: &mut App, event: &Event) -> UpdateOutcome {
-    match event {
-        Event::Key(key) if key.is_press() => app.handle_key(*key),
-        Event::Mouse(mouse) => app.handle_mouse(*mouse),
-        Event::Resize(_, _) => UpdateOutcome::Redraw,
-        Event::FocusGained | Event::FocusLost | Event::Paste(_) | Event::Key(_) => {
-            UpdateOutcome::Unchanged
-        }
-    }
-}
-
-struct TerminalGuard {
-    active: bool,
-}
-
-impl TerminalGuard {
-    fn restore(&mut self) -> io::Result<()> {
-        disable_raw_mode()?;
-        execute!(io::stdout(), LeaveAlternateScreen, DisableMouseCapture)?;
-        self.active = false;
-        Ok(())
-    }
-}
-
-impl Drop for TerminalGuard {
-    fn drop(&mut self) {
-        if self.active {
-            let _ = disable_raw_mode();
-            let _ = execute!(io::stdout(), LeaveAlternateScreen, DisableMouseCapture);
-        }
-    }
+    session::run(
+        bundle,
+        catalog,
+        scope,
+        discover_documents,
+        open_document,
+        open_external,
+        copy_to_clipboard,
+    )
 }
 
 #[cfg(test)]
