@@ -9,7 +9,7 @@ use super::super::{
 };
 use crate::block::block_layout_mut;
 
-pub(super) const MAN_DEFINITION_BODY_INDENT: u16 = 4;
+pub(super) const MAN_DEFINITION_BODY_INDENT: u16 = DefinitionItem::DESCRIPTION_INDENT_COLUMNS;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) struct DefinitionLocation {

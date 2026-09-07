@@ -418,6 +418,14 @@ pub struct DefinitionItem {
     pub spacing_before_lines: Option<u16>,
 }
 
+impl DefinitionItem {
+    /// Structural indentation of a non-inline description, before its blocks'
+    /// own layout hints. Native continuation normalization and terminal/text
+    /// renderers must use the same origin when moving flat blocks into an
+    /// owning definition; otherwise a semantic-only move changes geometry.
+    pub const DESCRIPTION_INDENT_COLUMNS: u16 = 4;
+}
+
 /// Renderer-independent identity attached to one navigable content definition.
 ///
 /// [`crate::SemanticIndex`] derives logical entries from these source facts.

@@ -63,6 +63,8 @@ The block union preserves structures that matter across renderers:
 
 `LayoutHint` carries only portable presentation facts currently required for faithful terminal rendering: indentation columns and spacing rows before a block. It is not a general-purpose CSS or roff device model.
 
+A non-inline definition description adds `DefinitionItem::DESCRIPTION_INDENT_COLUMNS` (four columns) before applying its blocks' layout hints. Native continuation normalization, plain text, and the TUI share this coordinate origin; semantic nesting must not independently choose a different indentation increment. Markdown expresses the same ownership through its own block syntax rather than terminal-column geometry.
+
 Lists contain block-capable items so nested lists and displays do not flatten into prose. Definition terms contain inline trees and descriptions contain blocks. Table cells likewise contain blocks even when a source parser currently produces a single paragraph.
 
 `TableGrid` supplies shared sparse logical-column coordinates for table consumers. Horizontal spans omit covered cells; vertical continuations retain explicit empty cells in subsequent rows, while `rowSpan` remains on the content owner. Covered content is never repeated. Callers can request dense column slots with an explicit budget, so large span values need not allocate a dense grid.

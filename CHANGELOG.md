@@ -81,6 +81,11 @@ that crate was not published for that change.
 
 ### mant-engine 0.11.0
 
+- Align plain-text non-inline definition indentation with the IR/TUI's
+  four-column description origin (previously two columns in plain text).
+  This prevents a continuation's layout from drifting when its semantic
+  ownership is restored. TUI indentation is unchanged.
+
 - Preserve ordinary Markdown list items while adding semantic facts, with
   final-IR name/form bindings instead of deleting head delimiters. Explicit
   role/case declarations support ordered lists and reject invalid items

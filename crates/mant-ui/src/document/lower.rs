@@ -338,7 +338,11 @@ impl DocumentBuilder {
                                 Style::default().fg(theme::SUBTEXT_BRIGHT),
                             );
                         }
-                        self.blocks(&item.description, indent + 4);
+                        self.blocks(
+                            &item.description,
+                            indent
+                                + usize::from(mant_ir::DefinitionItem::DESCRIPTION_INDENT_COLUMNS),
+                        );
                     }
                 }
             }

@@ -2,6 +2,53 @@
 use super::*;
 
 #[test]
+fn definition_continuations_keep_rows_when_reparented_across_spacing() {
+    let mut document = bundle();
+    let mut continuation = paragraph("Continuation.");
+    let Block::Paragraph { layout, .. } = &mut continuation else {
+        unreachable!()
+    };
+    layout.indent_columns = DefinitionItem::DESCRIPTION_INDENT_COLUMNS;
+    let space = Block::VerticalSpace {
+        lines: 2,
+        source: None,
+    };
+    let definition = Block::DefinitionList {
+        items: vec![DefinitionItem {
+            identity: None,
+            terms: vec![vec![Inline::Text {
+                value: "--owner".into(),
+            }]],
+            description: vec![paragraph("Initial description.")],
+            inline_term: false,
+            spacing_before_lines: None,
+        }],
+        compact: false,
+        layout: LayoutHint::default(),
+        source: None,
+    };
+    document.document.as_mut().unwrap().sections[0].blocks = vec![
+        definition,
+        space.clone(),
+        continuation.clone(),
+        paragraph("Outside."),
+    ];
+    let before = DocumentView::new(&document).render(100).text.to_string();
+    let blocks = &mut document.document.as_mut().unwrap().sections[0].blocks;
+    blocks.drain(1..3);
+    let Block::DefinitionList { items, .. } = &mut blocks[0] else {
+        unreachable!()
+    };
+    let Block::Paragraph { layout, .. } = &mut continuation else {
+        unreachable!()
+    };
+    layout.indent_columns = 0;
+    items[0].description.extend([space, continuation]);
+    let after = DocumentView::new(&document).render(100).text.to_string();
+    assert_eq!(before, after);
+}
+
+#[test]
 fn preformatted_rows_share_one_full_width_surface() {
     let mut builder = DocumentBuilder::new("demo".to_owned(), None);
     builder.inline_lines_with_surface(

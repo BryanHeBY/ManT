@@ -489,7 +489,13 @@ fn render_definitions(items: &[DefinitionItem], compact: bool, base_indent: usiz
                     if item.inline_term {
                         Some(format!("{terms} {}", description.trim_start()))
                     } else {
-                        Some(format!("{terms}\n{}", indent_lines(&description, 2)))
+                        Some(format!(
+                            "{terms}\n{}",
+                            indent_lines(
+                                &description,
+                                usize::from(DefinitionItem::DESCRIPTION_INDENT_COLUMNS)
+                            )
+                        ))
                     }
                 }
                 (false, true) => Some(terms),
@@ -1010,7 +1016,7 @@ mod tests {
         assert!(man.contains("&& Logical AND."), "got: {man:?}");
         // inline_term=false in --format man: term on its own line.
         assert!(
-            man.contains("--long-option-name\n  A lengthy flag."),
+            man.contains("--long-option-name\n    A lengthy flag."),
             "got: {man:?}"
         );
     }
