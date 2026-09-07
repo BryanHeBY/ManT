@@ -3,6 +3,39 @@ use mant_ir::Inline;
 
 use crate::inline::plain_text;
 
+/// Borrowed authored syntax. Candidate generation never rewrites its complete
+/// form; only the temporary selector candidates are split.
+pub(super) struct AuthoredForm<'a> {
+    inlines: &'a [Inline],
+}
+
+impl<'a> AuthoredForm<'a> {
+    pub(super) const fn new(inlines: &'a [Inline]) -> Self {
+        Self { inlines }
+    }
+
+    pub(super) fn option_candidates(&self) -> impl Iterator<Item = FormCandidate> {
+        option_alias_groups(self.inlines)
+            .into_iter()
+            .map(|inlines| FormCandidate { inlines })
+    }
+}
+
+/// Own the styled candidate until the parameter decision is complete. Callers
+/// receive a lexical token only through that decision, not a flattenable tree.
+pub(super) struct FormCandidate {
+    inlines: Vec<Inline>,
+}
+
+impl FormCandidate {
+    pub(super) fn invocation_token(&self) -> Option<String> {
+        if starts_with_parameter(&self.inlines) {
+            return None;
+        }
+        Some(invocation_token(&plain_text(&self.inlines)).to_owned())
+    }
+}
+
 /// Split explicit alias separators without flattening argument spans. A generic
 /// strong/code run can contain several names, whereas punctuation inside an
 /// emphasized argument is not evidence for another alias.
@@ -13,7 +46,7 @@ pub(super) fn alias_groups(term: &[Inline]) -> Vec<Vec<Inline>> {
 /// Slashes only separate the invocation token after its option grammar has
 /// been validated. Keep candidate trees intact so each candidate still passes
 /// the parameter check; never split argument paths later in the form.
-pub(super) fn option_alias_groups(term: &[Inline]) -> Vec<Vec<Inline>> {
+fn option_alias_groups(term: &[Inline]) -> Vec<Vec<Inline>> {
     alias_groups(term)
         .into_iter()
         .flat_map(|group| {
@@ -32,7 +65,7 @@ pub(super) fn option_alias_groups(term: &[Inline]) -> Vec<Vec<Inline>> {
         .collect()
 }
 
-pub(super) fn invocation_token(text: &str) -> &str {
+fn invocation_token(text: &str) -> &str {
     text.split_whitespace()
         .next()
         .unwrap_or_default()
@@ -99,7 +132,7 @@ fn take_separator(character: char, separators: &[char], remaining: &mut Option<u
     eligible && separators.contains(&character)
 }
 
-pub(super) fn starts_with_parameter(term: &[Inline]) -> bool {
+fn starts_with_parameter(term: &[Inline]) -> bool {
     first_content_is_parameter(term).unwrap_or(false)
 }
 

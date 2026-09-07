@@ -380,13 +380,11 @@ pub(super) fn option_names(item: &DefinitionItem) -> Vec<String> {
 pub(crate) fn option_names_from_terms(terms: &[Vec<Inline>]) -> Vec<String> {
     let mut names = Vec::new();
     for term in terms {
-        for group in forms::option_alias_groups(term) {
-            if forms::starts_with_parameter(&group) {
+        for candidate in forms::AuthoredForm::new(term).option_candidates() {
+            let Some(token) = candidate.invocation_token() else {
                 continue;
-            }
-            let text = plain_text(&group);
-            let token = forms::invocation_token(&text);
-            let Some(name) = option_prefix(token) else {
+            };
+            let Some(name) = option_prefix(&token) else {
                 continue;
             };
             if !names.iter().any(|existing| existing == name) {
