@@ -19,6 +19,7 @@ fn assert_compact_and_complete_entry_labels(view: &DocumentView) {
 }
 
 #[test]
+#[allow(clippy::too_many_lines)] // Keep the cross-role navigation fixture and expectations together.
 fn sidebar_exposes_every_semantic_role_supported_by_the_document_contract() {
     let mut entries = [
         (DefinitionRole::Option, "--help"),
@@ -30,6 +31,7 @@ fn sidebar_exposes_every_semantic_role_supported_by_the_document_contract() {
     .enumerate()
     .map(|(index, (role, name))| DefinitionItem {
         identity: Some(DefinitionIdentity {
+            forms: Vec::new(),
             id: format!("entry-{index}").into(),
             role,
             case: DefinitionCase::Sensitive,
@@ -53,6 +55,7 @@ fn sidebar_exposes_every_semantic_role_supported_by_the_document_contract() {
     entries[0].description = vec![Block::DefinitionList {
         items: vec![DefinitionItem {
             identity: Some(DefinitionIdentity {
+                forms: Vec::new(),
                 id: "entry-help-value".into(),
                 role: DefinitionRole::Value,
                 case: DefinitionCase::Sensitive,

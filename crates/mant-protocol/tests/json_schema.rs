@@ -68,7 +68,8 @@ fn response_schemas_follow_the_serialized_wire_shapes() {
     assert!(!fields.contains(&"document"));
     assert!(!fields.contains(&"tldr"));
     assert!(encoded_query.contains("mant.document/v0.11"));
-    assert!(encoded_query.contains("DefinitionIdentity"));
+    assert!(encoded_query.contains("EntryFacts"));
+    assert!(encoded_query.contains("EntryContentSlice"));
     assert!(encoded_query.contains("LinkTarget"));
     assert!(encoded_query.contains("byteRange"));
     assert!(!encoded_query.contains("external-link"));

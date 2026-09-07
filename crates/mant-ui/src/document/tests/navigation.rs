@@ -220,6 +220,7 @@ fn inline_definitions_hang_the_description_and_expose_their_anchor() {
     bundle.document.as_mut().expect("document").sections[0].blocks = vec![Block::DefinitionList {
         items: vec![DefinitionItem {
             identity: Some(DefinitionIdentity {
+                forms: Vec::new(),
                 id: "help-option".to_owned().into(),
                 role: DefinitionRole::Option,
                 case: DefinitionCase::Sensitive,

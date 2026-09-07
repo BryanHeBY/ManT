@@ -698,6 +698,7 @@ mod tests {
             start: None,
             compact: false,
             items: vec![ListItem {
+                entry: None,
                 blocks: vec![Block::Preformatted {
                     children: vec![Inline::Text {
                         value: "body".to_owned(),

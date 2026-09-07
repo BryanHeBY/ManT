@@ -338,6 +338,7 @@ fn preserves_inline_lists_definitions_and_nested_headings() {
         start: None,
         compact: true,
         items: vec![ListItem {
+            entry: None,
             blocks: vec![paragraph(vec![Inline::Text {
                 value: "first item".to_owned(),
             }])],
@@ -1232,6 +1233,7 @@ fn renders_selectable_outline_paths_and_excerpt_breadcrumbs() {
 fn addressable_rendering_returns_exact_semantic_node_ranges() {
     let entry = DefinitionItem {
         identity: Some(DefinitionIdentity {
+            forms: Vec::new(),
             id: "help-entry".into(),
             role: DefinitionRole::Option,
             case: DefinitionCase::Sensitive,

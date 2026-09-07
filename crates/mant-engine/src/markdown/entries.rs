@@ -393,6 +393,7 @@ fn entry_definition(
 
     DefinitionItem {
         identity: Some(DefinitionIdentity {
+            forms: Vec::new(),
             id: String::new().into(),
             role,
             case,
@@ -779,6 +780,7 @@ mod tests {
     #[test]
     fn converts_only_complete_explicit_option_lists() {
         let option = |name: &str, description: &str| ListItem {
+            entry: None,
             blocks: vec![paragraph(vec![
                 Inline::Code {
                     value: name.to_owned(),
@@ -826,6 +828,7 @@ mod tests {
             start: None,
             compact: false,
             items: vec![ListItem {
+                entry: None,
                 blocks: vec![
                     paragraph(vec![
                         Inline::Code {
@@ -869,6 +872,7 @@ mod tests {
             compact: true,
             items: vec![
                 ListItem {
+                    entry: None,
                     blocks: vec![paragraph(vec![
                         Inline::Code {
                             value: "--color".to_owned(),
@@ -879,6 +883,7 @@ mod tests {
                     ])],
                 },
                 ListItem {
+                    entry: None,
                     blocks: vec![paragraph(vec![Inline::Text {
                         value: "ordinary prose".to_owned(),
                     }])],

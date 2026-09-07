@@ -1,13 +1,16 @@
 //! Source-neutral semantic entry model and rebuildable indexes.
+mod content;
 mod index;
 mod model;
 mod walk;
 #[cfg(test)]
 use crate::{Block, DefinitionItem, DefinitionRole, Document, Inline, LinkTarget};
+pub use content::*;
 pub use index::SemanticIndex;
 #[cfg(test)]
 use index::entry_from_definition;
 pub use model::*;
+pub use walk::visit_child_entries;
 
 #[cfg(test)]
 mod tests {
@@ -27,6 +30,7 @@ mod tests {
     ) -> DefinitionItem {
         DefinitionItem {
             identity: Some(DefinitionIdentity {
+                forms: Vec::new(),
                 id: id.into(),
                 role,
                 case: DefinitionCase::Sensitive,
@@ -80,6 +84,7 @@ mod tests {
                 start: None,
                 compact: true,
                 items: vec![crate::ListItem {
+                    entry: None,
                     blocks: vec![list(value)],
                 }],
                 layout: LayoutHint::default(),

@@ -501,6 +501,7 @@ mod tests {
                         items: vec![DefinitionItem {
                             inline_term: false,
                             identity: Some(DefinitionIdentity {
+                                forms: Vec::new(),
                                 id: "option-acls".to_owned().into(),
                                 role: DefinitionRole::Option,
                                 case: DefinitionCase::Sensitive,

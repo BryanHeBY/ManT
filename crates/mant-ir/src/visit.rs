@@ -24,6 +24,11 @@ pub trait Visit<'ir> {
         walk_definition_item(self, item);
     }
 
+    /// Visit an ordinary list owner, including any attached semantic facts.
+    fn visit_list_item(&mut self, item: &'ir ListItem) {
+        walk_list_item(self, item);
+    }
+
     /// Visit an inline node, descending into styled/link children by default.
     fn visit_inline(&mut self, inline: &'ir Inline) {
         walk_inline(self, inline);
@@ -62,8 +67,8 @@ where
             walk_inlines(visitor, children);
         }
         Block::List { items, .. } => {
-            for ListItem { blocks } in items {
-                walk_blocks(visitor, blocks);
+            for item in items {
+                visitor.visit_list_item(item);
             }
         }
         Block::DefinitionList { items, .. } => {
@@ -83,6 +88,14 @@ where
         | Block::ThematicBreak { .. }
         | Block::Unsupported { .. } => {}
     }
+}
+
+/// Apply the default immutable traversal for an ordinary list item.
+pub fn walk_list_item<'ir, V>(visitor: &mut V, item: &'ir ListItem)
+where
+    V: Visit<'ir> + ?Sized,
+{
+    walk_blocks(visitor, &item.blocks);
 }
 
 /// Apply the default immutable traversal for a definition item.
@@ -149,6 +162,11 @@ pub trait VisitMut {
         walk_definition_item_mut(self, item);
     }
 
+    /// Visit an ordinary item and its attached semantic facts mutably.
+    fn visit_list_item_mut(&mut self, item: &mut ListItem) {
+        walk_list_item_mut(self, item);
+    }
+
     /// Visit an inline node mutably, descending into styled/link children by default.
     fn visit_inline_mut(&mut self, inline: &mut Inline) {
         walk_inline_mut(self, inline);
@@ -187,8 +205,8 @@ where
             walk_inlines_mut(visitor, children);
         }
         Block::List { items, .. } => {
-            for ListItem { blocks } in items {
-                walk_blocks_mut(visitor, blocks);
+            for item in items {
+                visitor.visit_list_item_mut(item);
             }
         }
         Block::DefinitionList { items, .. } => {
@@ -208,6 +226,14 @@ where
         | Block::ThematicBreak { .. }
         | Block::Unsupported { .. } => {}
     }
+}
+
+/// Apply the default mutable traversal for an ordinary list item.
+pub fn walk_list_item_mut<V>(visitor: &mut V, item: &mut ListItem)
+where
+    V: VisitMut + ?Sized,
+{
+    walk_blocks_mut(visitor, &mut item.blocks);
 }
 
 /// Apply the default mutable traversal for a definition item.

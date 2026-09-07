@@ -166,6 +166,12 @@ impl IndexBuilder {
 }
 
 impl<'ir> Visit<'ir> for IndexBuilder {
+    fn visit_list_item(&mut self, item: &'ir crate::ListItem) {
+        if let Some(facts) = &item.entry {
+            self.register(&facts.id, IndexedRole::Entry);
+        }
+        visit::walk_list_item(self, item);
+    }
     fn visit_section(&mut self, section: &'ir Section) {
         self.register(&section.id, IndexedRole::Section);
         for alias in &section.fragment_aliases {
@@ -223,6 +229,7 @@ mod tests {
             blocks: vec![crate::Block::DefinitionList {
                 items: vec![DefinitionItem {
                     identity: Some(DefinitionIdentity {
+                        forms: Vec::new(),
                         id: id.clone(),
                         role: DefinitionRole::Option,
                         case: DefinitionCase::Sensitive,

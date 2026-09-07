@@ -30,7 +30,8 @@ The important public families are:
 | API | Purpose |
 | --- | --- |
 | `Document`, `Section`, `Block`, `Inline` | Source-neutral content tree |
-| `DefinitionIdentity` | Addressable content definition and exact aliases |
+| `EntryFacts`, `DefinitionIdentity` | Common facts attached to ordinary list items or native definitions; the latter name is a transitional alias |
+| `EntryOwner`, `EntryForm`, `EntryContentSlice` | Borrowed content owners and validated final-IR form references, without duplicate bodies |
 | `SemanticIndex`, `SemanticEntry`, `EntrySummary` | Rebuildable role-aware hierarchy, authored forms, and compact coverage |
 | `DocumentAddress`, `MarkdownOrigin` | Exact identity in `ManT`'s catalog rather than a physical path |
 | `NodeId`, `FragmentAlias`, `OutlinePath`, `TextRange` | Normalized local identities, exact source fragments, and coordinates |

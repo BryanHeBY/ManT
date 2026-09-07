@@ -69,7 +69,10 @@ pub(in crate::mandoc::blocks) fn lower_mdoc_list(
                         ),
                     );
                     attach_item_targets(&mut blocks, &item, layout(list_indent));
-                    ListItem { blocks }
+                    ListItem {
+                        entry: None,
+                        blocks,
+                    }
                 })
                 .collect(),
             layout: layout(indent_columns),
@@ -173,6 +176,7 @@ fn mdoc_list_item_from_definition(
     }
     targets::attach_targets(&mut description, anchors, layout(list_indent), owner_source);
     ListItem {
+        entry: None,
         blocks: description,
     }
 }
@@ -382,7 +386,10 @@ fn append_list_targets(
     match block {
         Block::List { items, .. } => {
             if items.is_empty() {
-                items.push(ListItem { blocks: Vec::new() });
+                items.push(ListItem {
+                    entry: None,
+                    blocks: Vec::new(),
+                });
             }
             targets::append_targets(
                 &mut items.last_mut().expect("list item inserted").blocks,

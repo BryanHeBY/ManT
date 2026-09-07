@@ -597,6 +597,7 @@ fn explainable_manual() -> Document {
         items: vec![DefinitionItem {
             inline_term: false,
             identity: Some(DefinitionIdentity {
+                forms: Vec::new(),
                 id: "exclude".to_owned().into(),
                 role: DefinitionRole::Option,
                 case: DefinitionCase::Sensitive,

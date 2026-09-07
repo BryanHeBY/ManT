@@ -386,6 +386,9 @@ pub enum ListKind {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ListItem {
+    /// Optional semantic facts; these never replace or render the item body.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub entry: Option<EntryFacts>,
     /// Arbitrary item content in source order.
     pub blocks: Vec<Block>,
 }
@@ -422,7 +425,11 @@ pub struct DefinitionItem {
 /// another projection may omit the entry without removing its definition.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
-pub struct DefinitionIdentity {
+pub struct EntryFacts {
+    /// Read-only authored-form bindings into this owner's content.
+    /// Native definitions may omit these and use their complete terms.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub forms: Vec<crate::EntryForm>,
     /// Unique within one document and shared with the term's inline anchor.
     pub id: NodeId,
     /// Semantic category used by lookup and presentation.
@@ -435,6 +442,10 @@ pub struct DefinitionIdentity {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub value_domain: Option<crate::ValueDomain>,
 }
+
+/// Transitional Rust name for facts attached to a native definition owner.
+/// Ordinary list items carry the same [`EntryFacts`] without changing content.
+pub type DefinitionIdentity = EntryFacts;
 
 /// Case policy used when matching one semantic entry's names.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]

@@ -123,6 +123,7 @@ fn bullet_lists_share_the_first_row_and_use_a_hanging_indent() {
         start: None,
         compact: true,
         items: vec![ListItem {
+            entry: None,
             blocks: vec![Block::Paragraph {
                 children: vec![Inline::Text {
                     value: "alpha beta gamma".to_owned(),
@@ -208,9 +209,11 @@ fn ordered_list_markers_saturate_instead_of_overflowing() {
         compact: true,
         items: vec![
             ListItem {
+                entry: None,
                 blocks: vec![paragraph("first")],
             },
             ListItem {
+                entry: None,
                 blocks: vec![paragraph("second")],
             },
         ],

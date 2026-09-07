@@ -104,6 +104,7 @@ fn navigation_bundle() -> ResolvedContent {
                 blocks: vec![AstBlock::DefinitionList {
                     items: vec![DefinitionItem {
                         identity: Some(DefinitionIdentity {
+                            forms: Vec::new(),
                             id: "help-option".to_owned().into(),
                             role: DefinitionRole::Option,
                             case: DefinitionCase::Sensitive,

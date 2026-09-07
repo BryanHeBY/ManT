@@ -160,8 +160,13 @@ description while referring to different options or subjects. In the current
 model, `names` and projected `aliases` provide selectable spellings, not a
 verified alias relationship or a complete command grammar. Indexes must not
 invent hidden names or regenerate the authoritative body from these fields.
-Ordinary `ListItem` values do not yet carry entry identities; Markdown's current
-conversion to definition items is a known obstacle to annotation-only content
+Ordinary `ListItem` values can carry optional `EntryFacts` through `entry`.
+`DefinitionIdentity` is a transitional name for the same facts on native
+definitions. `EntryForm` and `EntryContentSlice` bind forms to direct owner
+blocks or native terms, preserving styled inline ancestry and validating UTF-8
+leaf ranges. Missing, overlapping or reordered references are invalid, not
+partial forms. Markdown's current conversion to definition items remains an
+obstacle to annotation-only content
 preservation, described in [mant-markdown(7)](mant-markdown.md).
 
 A definition-list item may carry `DefinitionIdentity` when ManT can identify an

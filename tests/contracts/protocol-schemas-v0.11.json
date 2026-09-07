@@ -1074,50 +1074,8 @@
           }
         ]
       },
-      "DefinitionIdentity": {
-        "description": "Renderer-independent identity attached to one navigable content definition.\n\n[`crate::SemanticIndex`] derives logical entries from these source facts.\nThe identity remains part of the authoritative document tree; an outline or\nanother projection may omit the entry without removing its definition.",
-        "type": "object",
-        "properties": {
-          "case": {
-            "description": "Matching policy used for aliases in semantic entry lookup.",
-            "$ref": "#/$defs/DefinitionCase"
-          },
-          "id": {
-            "description": "Unique within one document and shared with the term's inline anchor.",
-            "$ref": "#/$defs/NodeId"
-          },
-          "names": {
-            "description": "Plain normalized names used as [`crate::SemanticEntry::aliases`].",
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "role": {
-            "description": "Semantic category used by lookup and presentation.",
-            "$ref": "#/$defs/DefinitionRole"
-          },
-          "valueDomain": {
-            "description": "Optional value space explicitly declared by the source producer.",
-            "anyOf": [
-              {
-                "$ref": "#/$defs/ValueDomain"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "required": [
-          "id",
-          "role",
-          "case",
-          "names"
-        ]
-      },
       "DefinitionItem": {
-        "description": "A term may have aliases and its description may contain arbitrary blocks.",
+        "description": "Displayed terms share a description containing arbitrary blocks.\nSharing that content does not establish behavioral equivalence of the terms.",
         "type": "object",
         "properties": {
           "description": {
@@ -1131,7 +1089,7 @@
             "description": "Present when the native lowering pass can identify this definition as\na stable semantic entry, such as a command-line option.",
             "anyOf": [
               {
-                "$ref": "#/$defs/DefinitionIdentity"
+                "$ref": "#/$defs/EntryFacts"
               },
               {
                 "type": "null"
@@ -1153,7 +1111,7 @@
             "minimum": 0
           },
           "terms": {
-            "description": "One or more equivalent displayed terms.",
+            "description": "One or more displayed terms sharing this description, not necessarily\nequivalent names or interchangeable invocation forms.",
             "type": "array",
             "items": {
               "type": "array",
@@ -1428,6 +1386,154 @@
         "required": [
           "name",
           "version"
+        ]
+      },
+      "EntryContentSlice": {
+        "description": "A checked slice of the final IR, never an offset into original source bytes.",
+        "type": "object",
+        "properties": {
+          "bytes": {
+            "description": "Optional half-open UTF-8 byte range, allowed only on Text/Code leaves.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/Range_of_uint"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "path": {
+            "description": "Zero-based inline indices, descending through styled/link children.\nAn empty path addresses the entire root inline container.",
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint",
+              "minimum": 0
+            }
+          },
+          "root": {
+            "description": "Direct owner container.",
+            "$ref": "#/$defs/EntryInlineRoot"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "root",
+          "path"
+        ]
+      },
+      "EntryFacts": {
+        "description": "Renderer-independent identity attached to one navigable content definition.\n\n[`crate::SemanticIndex`] derives logical entries from these source facts.\nThe identity remains part of the authoritative document tree; an outline or\nanother projection may omit the entry without removing its definition.",
+        "type": "object",
+        "properties": {
+          "case": {
+            "description": "Matching policy used for aliases in semantic entry lookup.",
+            "$ref": "#/$defs/DefinitionCase"
+          },
+          "forms": {
+            "description": "Read-only authored-form bindings into this owner's content.\nNative definitions may omit these and use their complete terms.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/EntryForm"
+            }
+          },
+          "id": {
+            "description": "Unique within one document and shared with the term's inline anchor.",
+            "$ref": "#/$defs/NodeId"
+          },
+          "names": {
+            "description": "Plain normalized names used as [`crate::SemanticEntry::aliases`].",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "role": {
+            "description": "Semantic category used by lookup and presentation.",
+            "$ref": "#/$defs/DefinitionRole"
+          },
+          "valueDomain": {
+            "description": "Optional value space explicitly declared by the source producer.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/ValueDomain"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "role",
+          "case",
+          "names"
+        ]
+      },
+      "EntryForm": {
+        "description": "An authored form projected from ordered content slices rather than a template.",
+        "type": "object",
+        "properties": {
+          "parts": {
+            "description": "Source-order pieces of this form; empty or invalid forms are rejected.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/EntryContentSlice"
+            }
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "parts"
+        ]
+      },
+      "EntryInlineRoot": {
+        "description": "A direct inline container within an entry owner.",
+        "oneOf": [
+          {
+            "description": "One native definition term (zero-based).",
+            "type": "object",
+            "properties": {
+              "index": {
+                "description": "Zero-based index in the definition's terms.",
+                "type": "integer",
+                "format": "uint",
+                "minimum": 0
+              },
+              "kind": {
+                "type": "string",
+                "const": "term"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "index"
+            ]
+          },
+          {
+            "description": "One direct paragraph or preformatted block (zero-based).",
+            "type": "object",
+            "properties": {
+              "index": {
+                "description": "Zero-based index in the owner's direct blocks.",
+                "type": "integer",
+                "format": "uint",
+                "minimum": 0
+              },
+              "kind": {
+                "type": "string",
+                "const": "block"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "index"
+            ]
+          }
         ]
       },
       "EntryKind": {
@@ -1956,6 +2062,17 @@
             "items": {
               "$ref": "#/$defs/Block"
             }
+          },
+          "entry": {
+            "description": "Optional semantic facts; these never replace or render the item body.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/EntryFacts"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -2253,6 +2370,25 @@
           "version"
         ]
       },
+      "Range_of_uint": {
+        "type": "object",
+        "properties": {
+          "end": {
+            "type": "integer",
+            "format": "uint",
+            "minimum": 0
+          },
+          "start": {
+            "type": "integer",
+            "format": "uint",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "start",
+          "end"
+        ]
+      },
       "Section": {
         "description": "Source-neutral document section headed by Markdown, man, or mdoc content.\n\nThis is a content subtree, not the native manual category stored in\n[`DocumentMeta::manual_section`]. Depth is derived from tree position.",
         "type": "object",
@@ -2508,7 +2644,7 @@
         "type": "object",
         "properties": {
           "cells": {
-            "description": "Logical cells in column order.",
+            "description": "Cells in column order. Horizontal spans omit covered cells; vertical\ncontinuations retain empty cells at their logical positions. Use\n[`crate::TableGrid`] to place cells without losing horizontal spans.",
             "type": "array",
             "items": {
               "$ref": "#/$defs/TableCell"
@@ -4236,50 +4372,8 @@
           }
         ]
       },
-      "DefinitionIdentity": {
-        "description": "Renderer-independent identity attached to one navigable content definition.\n\n[`crate::SemanticIndex`] derives logical entries from these source facts.\nThe identity remains part of the authoritative document tree; an outline or\nanother projection may omit the entry without removing its definition.",
-        "type": "object",
-        "properties": {
-          "case": {
-            "description": "Matching policy used for aliases in semantic entry lookup.",
-            "$ref": "#/$defs/DefinitionCase"
-          },
-          "id": {
-            "description": "Unique within one document and shared with the term's inline anchor.",
-            "$ref": "#/$defs/NodeId"
-          },
-          "names": {
-            "description": "Plain normalized names used as [`crate::SemanticEntry::aliases`].",
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "role": {
-            "description": "Semantic category used by lookup and presentation.",
-            "$ref": "#/$defs/DefinitionRole"
-          },
-          "valueDomain": {
-            "description": "Optional value space explicitly declared by the source producer.",
-            "anyOf": [
-              {
-                "$ref": "#/$defs/ValueDomain"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "required": [
-          "id",
-          "role",
-          "case",
-          "names"
-        ]
-      },
       "DefinitionItem": {
-        "description": "A term may have aliases and its description may contain arbitrary blocks.",
+        "description": "Displayed terms share a description containing arbitrary blocks.\nSharing that content does not establish behavioral equivalence of the terms.",
         "type": "object",
         "properties": {
           "description": {
@@ -4293,7 +4387,7 @@
             "description": "Present when the native lowering pass can identify this definition as\na stable semantic entry, such as a command-line option.",
             "anyOf": [
               {
-                "$ref": "#/$defs/DefinitionIdentity"
+                "$ref": "#/$defs/EntryFacts"
               },
               {
                 "type": "null"
@@ -4315,7 +4409,7 @@
             "minimum": 0
           },
           "terms": {
-            "description": "One or more equivalent displayed terms.",
+            "description": "One or more displayed terms sharing this description, not necessarily\nequivalent names or interchangeable invocation forms.",
             "type": "array",
             "items": {
               "type": "array",
@@ -4657,6 +4751,154 @@
         "required": [
           "name",
           "version"
+        ]
+      },
+      "EntryContentSlice": {
+        "description": "A checked slice of the final IR, never an offset into original source bytes.",
+        "type": "object",
+        "properties": {
+          "bytes": {
+            "description": "Optional half-open UTF-8 byte range, allowed only on Text/Code leaves.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/Range_of_uint"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "path": {
+            "description": "Zero-based inline indices, descending through styled/link children.\nAn empty path addresses the entire root inline container.",
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint",
+              "minimum": 0
+            }
+          },
+          "root": {
+            "description": "Direct owner container.",
+            "$ref": "#/$defs/EntryInlineRoot"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "root",
+          "path"
+        ]
+      },
+      "EntryFacts": {
+        "description": "Renderer-independent identity attached to one navigable content definition.\n\n[`crate::SemanticIndex`] derives logical entries from these source facts.\nThe identity remains part of the authoritative document tree; an outline or\nanother projection may omit the entry without removing its definition.",
+        "type": "object",
+        "properties": {
+          "case": {
+            "description": "Matching policy used for aliases in semantic entry lookup.",
+            "$ref": "#/$defs/DefinitionCase"
+          },
+          "forms": {
+            "description": "Read-only authored-form bindings into this owner's content.\nNative definitions may omit these and use their complete terms.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/EntryForm"
+            }
+          },
+          "id": {
+            "description": "Unique within one document and shared with the term's inline anchor.",
+            "$ref": "#/$defs/NodeId"
+          },
+          "names": {
+            "description": "Plain normalized names used as [`crate::SemanticEntry::aliases`].",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "role": {
+            "description": "Semantic category used by lookup and presentation.",
+            "$ref": "#/$defs/DefinitionRole"
+          },
+          "valueDomain": {
+            "description": "Optional value space explicitly declared by the source producer.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/ValueDomain"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "role",
+          "case",
+          "names"
+        ]
+      },
+      "EntryForm": {
+        "description": "An authored form projected from ordered content slices rather than a template.",
+        "type": "object",
+        "properties": {
+          "parts": {
+            "description": "Source-order pieces of this form; empty or invalid forms are rejected.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/EntryContentSlice"
+            }
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "parts"
+        ]
+      },
+      "EntryInlineRoot": {
+        "description": "A direct inline container within an entry owner.",
+        "oneOf": [
+          {
+            "description": "One native definition term (zero-based).",
+            "type": "object",
+            "properties": {
+              "index": {
+                "description": "Zero-based index in the definition's terms.",
+                "type": "integer",
+                "format": "uint",
+                "minimum": 0
+              },
+              "kind": {
+                "type": "string",
+                "const": "term"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "index"
+            ]
+          },
+          {
+            "description": "One direct paragraph or preformatted block (zero-based).",
+            "type": "object",
+            "properties": {
+              "index": {
+                "description": "Zero-based index in the owner's direct blocks.",
+                "type": "integer",
+                "format": "uint",
+                "minimum": 0
+              },
+              "kind": {
+                "type": "string",
+                "const": "block"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "index"
+            ]
+          }
         ]
       },
       "EntryKind": {
@@ -5075,6 +5317,17 @@
             "items": {
               "$ref": "#/$defs/Block"
             }
+          },
+          "entry": {
+            "description": "Optional semantic facts; these never replace or render the item body.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/EntryFacts"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -5198,6 +5451,25 @@
             "type": "string",
             "const": "mant.query/v0.11"
           }
+        ]
+      },
+      "Range_of_uint": {
+        "type": "object",
+        "properties": {
+          "end": {
+            "type": "integer",
+            "format": "uint",
+            "minimum": 0
+          },
+          "start": {
+            "type": "integer",
+            "format": "uint",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "start",
+          "end"
         ]
       },
       "Section": {
@@ -5455,7 +5727,7 @@
         "type": "object",
         "properties": {
           "cells": {
-            "description": "Logical cells in column order.",
+            "description": "Cells in column order. Horizontal spans omit covered cells; vertical\ncontinuations retain empty cells at their logical positions. Use\n[`crate::TableGrid`] to place cells without losing horizontal spans.",
             "type": "array",
             "items": {
               "$ref": "#/$defs/TableCell"
@@ -6620,50 +6892,8 @@
           }
         ]
       },
-      "DefinitionIdentity": {
-        "description": "Renderer-independent identity attached to one navigable content definition.\n\n[`crate::SemanticIndex`] derives logical entries from these source facts.\nThe identity remains part of the authoritative document tree; an outline or\nanother projection may omit the entry without removing its definition.",
-        "type": "object",
-        "properties": {
-          "case": {
-            "description": "Matching policy used for aliases in semantic entry lookup.",
-            "$ref": "#/$defs/DefinitionCase"
-          },
-          "id": {
-            "description": "Unique within one document and shared with the term's inline anchor.",
-            "$ref": "#/$defs/NodeId"
-          },
-          "names": {
-            "description": "Plain normalized names used as [`crate::SemanticEntry::aliases`].",
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "role": {
-            "description": "Semantic category used by lookup and presentation.",
-            "$ref": "#/$defs/DefinitionRole"
-          },
-          "valueDomain": {
-            "description": "Optional value space explicitly declared by the source producer.",
-            "anyOf": [
-              {
-                "$ref": "#/$defs/ValueDomain"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "required": [
-          "id",
-          "role",
-          "case",
-          "names"
-        ]
-      },
       "DefinitionItem": {
-        "description": "A term may have aliases and its description may contain arbitrary blocks.",
+        "description": "Displayed terms share a description containing arbitrary blocks.\nSharing that content does not establish behavioral equivalence of the terms.",
         "type": "object",
         "properties": {
           "description": {
@@ -6677,7 +6907,7 @@
             "description": "Present when the native lowering pass can identify this definition as\na stable semantic entry, such as a command-line option.",
             "anyOf": [
               {
-                "$ref": "#/$defs/DefinitionIdentity"
+                "$ref": "#/$defs/EntryFacts"
               },
               {
                 "type": "null"
@@ -6699,7 +6929,7 @@
             "minimum": 0
           },
           "terms": {
-            "description": "One or more equivalent displayed terms.",
+            "description": "One or more displayed terms sharing this description, not necessarily\nequivalent names or interchangeable invocation forms.",
             "type": "array",
             "items": {
               "type": "array",
@@ -7136,6 +7366,154 @@
         "required": [
           "name",
           "version"
+        ]
+      },
+      "EntryContentSlice": {
+        "description": "A checked slice of the final IR, never an offset into original source bytes.",
+        "type": "object",
+        "properties": {
+          "bytes": {
+            "description": "Optional half-open UTF-8 byte range, allowed only on Text/Code leaves.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/Range_of_uint"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "path": {
+            "description": "Zero-based inline indices, descending through styled/link children.\nAn empty path addresses the entire root inline container.",
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint",
+              "minimum": 0
+            }
+          },
+          "root": {
+            "description": "Direct owner container.",
+            "$ref": "#/$defs/EntryInlineRoot"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "root",
+          "path"
+        ]
+      },
+      "EntryFacts": {
+        "description": "Renderer-independent identity attached to one navigable content definition.\n\n[`crate::SemanticIndex`] derives logical entries from these source facts.\nThe identity remains part of the authoritative document tree; an outline or\nanother projection may omit the entry without removing its definition.",
+        "type": "object",
+        "properties": {
+          "case": {
+            "description": "Matching policy used for aliases in semantic entry lookup.",
+            "$ref": "#/$defs/DefinitionCase"
+          },
+          "forms": {
+            "description": "Read-only authored-form bindings into this owner's content.\nNative definitions may omit these and use their complete terms.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/EntryForm"
+            }
+          },
+          "id": {
+            "description": "Unique within one document and shared with the term's inline anchor.",
+            "$ref": "#/$defs/NodeId"
+          },
+          "names": {
+            "description": "Plain normalized names used as [`crate::SemanticEntry::aliases`].",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "role": {
+            "description": "Semantic category used by lookup and presentation.",
+            "$ref": "#/$defs/DefinitionRole"
+          },
+          "valueDomain": {
+            "description": "Optional value space explicitly declared by the source producer.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/ValueDomain"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "role",
+          "case",
+          "names"
+        ]
+      },
+      "EntryForm": {
+        "description": "An authored form projected from ordered content slices rather than a template.",
+        "type": "object",
+        "properties": {
+          "parts": {
+            "description": "Source-order pieces of this form; empty or invalid forms are rejected.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/EntryContentSlice"
+            }
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "parts"
+        ]
+      },
+      "EntryInlineRoot": {
+        "description": "A direct inline container within an entry owner.",
+        "oneOf": [
+          {
+            "description": "One native definition term (zero-based).",
+            "type": "object",
+            "properties": {
+              "index": {
+                "description": "Zero-based index in the definition's terms.",
+                "type": "integer",
+                "format": "uint",
+                "minimum": 0
+              },
+              "kind": {
+                "type": "string",
+                "const": "term"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "index"
+            ]
+          },
+          {
+            "description": "One direct paragraph or preformatted block (zero-based).",
+            "type": "object",
+            "properties": {
+              "index": {
+                "description": "Zero-based index in the owner's direct blocks.",
+                "type": "integer",
+                "format": "uint",
+                "minimum": 0
+              },
+              "kind": {
+                "type": "string",
+                "const": "block"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "index"
+            ]
+          }
         ]
       },
       "EntryKind": {
@@ -7664,6 +8042,17 @@
             "items": {
               "$ref": "#/$defs/Block"
             }
+          },
+          "entry": {
+            "description": "Optional semantic facts; these never replace or render the item body.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/EntryFacts"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -8051,6 +8440,25 @@
           "schema",
           "label",
           "selections"
+        ]
+      },
+      "Range_of_uint": {
+        "type": "object",
+        "properties": {
+          "end": {
+            "type": "integer",
+            "format": "uint",
+            "minimum": 0
+          },
+          "start": {
+            "type": "integer",
+            "format": "uint",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "start",
+          "end"
         ]
       },
       "ResolvedDocumentScope": {
@@ -8974,7 +9382,7 @@
         "type": "object",
         "properties": {
           "cells": {
-            "description": "Logical cells in column order.",
+            "description": "Cells in column order. Horizontal spans omit covered cells; vertical\ncontinuations retain empty cells at their logical positions. Use\n[`crate::TableGrid`] to place cells without losing horizontal spans.",
             "type": "array",
             "items": {
               "$ref": "#/$defs/TableCell"

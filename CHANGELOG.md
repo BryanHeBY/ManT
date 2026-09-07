@@ -24,6 +24,15 @@ that crate was not published for that change.
 
 ### mant-ir 0.11.0
 
+- Introduce common `EntryFacts` for native definitions and ordinary list items,
+  borrowed `EntryOwner` views, and validated owner-relative form references.
+  `ListItem` gains an optional `entry`; Rust struct literals must initialize it.
+  The old `DefinitionIdentity` name temporarily aliases the common facts type;
+  facts gain a `forms` field. Ordinary content remains authoritative and is not
+  reconstructed from these references. This deliberately revises the unreleased
+  v0.11 document schema; Markdown production and query consumers migrate in
+  subsequent stages.
+
 - Add sparse `TableGrid` coordinates and bounded slot expansion for shared
   table presentation without changing the serialized table shape.
 

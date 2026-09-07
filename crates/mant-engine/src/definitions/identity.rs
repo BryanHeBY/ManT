@@ -135,6 +135,7 @@ pub(super) fn identify_item(
     }
     retained.insert(id.clone());
     item.identity = Some(DefinitionIdentity {
+        forms: Vec::new(),
         id: id.into(),
         role,
         case,

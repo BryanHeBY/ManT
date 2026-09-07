@@ -162,12 +162,16 @@ fn parse_list(
                 let (blocks, item_end) =
                     parse_blocks_until(cursor, source, diagnostics, TagEnd::Item);
                 end = item_end;
-                items.push(ListItem { blocks });
+                items.push(ListItem {
+                    entry: None,
+                    blocks,
+                });
             }
             Event::End(TagEnd::List(_)) => break,
             Event::Start(tag) => {
                 let whole = cursor.consume_balanced(range);
                 items.push(ListItem {
+                    entry: None,
                     blocks: vec![source.unsupported_block(
                         unsupported_block_name(&tag),
                         whole,

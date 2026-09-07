@@ -4,9 +4,9 @@ use super::{
         EntryKind, EntrySummary, ParameterKind, SemanticDocumentReference, SemanticDocumentTarget,
         SemanticEntry, ValueDomain,
     },
-    walk::visit_child_definitions,
+    walk::visit_child_entries,
 };
-use crate::{Block, DefinitionItem, DefinitionRole, Document, Inline, NodeId};
+use crate::{Block, DefinitionRole, Document, EntryOwner, Inline, NodeId};
 use std::collections::BTreeMap;
 
 /// Rebuildable semantic index for the document root and every section.
@@ -67,17 +67,23 @@ fn collect_section_entries(
 
 fn entries_in_blocks(blocks: &[Block]) -> Vec<SemanticEntry> {
     let mut entries = Vec::new();
-    visit_child_definitions(blocks, &mut |item| {
-        if let Some(entry) = entry_from_definition(item) {
+    visit_child_entries(blocks, &mut |item| {
+        if let Some(entry) = entry_from_owner(item) {
             entries.push(entry);
         }
     });
     entries
 }
 
-pub(super) fn entry_from_definition(item: &DefinitionItem) -> Option<SemanticEntry> {
-    let identity = item.identity.as_ref()?;
-    let children = entries_in_blocks(&item.description);
+#[cfg(test)]
+pub(super) fn entry_from_definition(item: &crate::DefinitionItem) -> Option<SemanticEntry> {
+    entry_from_owner(EntryOwner::Definition(item))
+}
+
+fn entry_from_owner(item: EntryOwner<'_>) -> Option<SemanticEntry> {
+    let identity = item.facts()?;
+    let forms = item.forms()?;
+    let children = entries_in_blocks(item.blocks());
     let value_domain = identity.value_domain.clone().or_else(|| {
         (!children.is_empty() && children.iter().all(|child| child.kind == EntryKind::Value))
             .then_some(ValueDomain::Choices { exhaustive: false })
@@ -87,8 +93,8 @@ pub(super) fn entry_from_definition(item: &DefinitionItem) -> Option<SemanticEnt
         kind: entry_kind(identity.role),
         aliases: identity.names.clone(),
         case: identity.case,
-        forms: item.terms.iter().map(|term| inline_text(term)).collect(),
-        document_targets: document_targets(&item.terms),
+        forms: forms.iter().map(|term| inline_text(term)).collect(),
+        document_targets: document_targets(&forms),
         children,
         value_domain,
     })

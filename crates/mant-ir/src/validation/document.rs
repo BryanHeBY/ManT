@@ -125,6 +125,7 @@ pub fn is_semantic_completeness_diagnostic(code: &str) -> bool {
     matches!(
         code,
         "ir.empty-identity"
+            | "ir.invalid-entry-content"
             | "ir.invalid-identity"
             | "ir.identity-role-collision"
             | "ir.duplicate-identity"
@@ -179,6 +180,59 @@ struct InvariantCollector {
     diagnostics: Vec<Diagnostic>,
 }
 
+impl InvariantCollector {
+    fn validate_entry(&mut self, item: crate::EntryOwner<'_>) {
+        if item.facts().is_some() && item.forms().is_none() {
+            self.diagnostics.push(invariant(
+                "ir.invalid-entry-content",
+                "entry form references must address valid owner content".to_owned(),
+            ));
+        }
+        if matches!(
+            item.facts()
+                .and_then(|identity| identity.value_domain.as_ref()),
+            Some(ValueDomain::Choices { .. })
+        ) && !item.has_value_choices()
+        {
+            self.diagnostics.push(invariant(
+                "ir.invalid-entry-choices",
+                "a choices domain requires nonempty direct semantic children of kind value"
+                    .to_owned(),
+            ));
+        }
+        if let Some(ValueDomain::EntrySet {
+            reference,
+            entry_kinds,
+            source,
+        }) = item
+            .facts()
+            .and_then(|identity| identity.value_domain.as_ref())
+        {
+            validate_semantic_document_reference(&mut self.diagnostics, reference);
+            if let Some(source) = source {
+                validate_source_span(&mut self.diagnostics, *source);
+            }
+            if entry_kinds.is_empty() {
+                self.diagnostics.push(invariant(
+                    "ir.empty-entry-value-domain",
+                    "cross-document entry value domain must select at least one entry kind"
+                        .to_owned(),
+                ));
+            }
+            if entry_kinds
+                .iter()
+                .enumerate()
+                .any(|(index, kind)| entry_kinds[..index].contains(kind))
+            {
+                self.diagnostics.push(invariant(
+                    "ir.duplicate-entry-value-kind",
+                    "cross-document entry value domain must not repeat entry kinds".to_owned(),
+                ));
+            }
+        }
+    }
+}
+
 impl<'ir> Visit<'ir> for InvariantCollector {
     fn visit_section(&mut self, section: &'ir Section) {
         if let Some(source) = section.source {
@@ -216,51 +270,13 @@ impl<'ir> Visit<'ir> for InvariantCollector {
     }
 
     fn visit_definition_item(&mut self, item: &'ir DefinitionItem) {
-        if matches!(
-            item.identity
-                .as_ref()
-                .and_then(|identity| identity.value_domain.as_ref()),
-            Some(ValueDomain::Choices { .. })
-        ) && !item.has_value_choices()
-        {
-            self.diagnostics.push(invariant(
-                "ir.invalid-entry-choices",
-                "a choices domain requires nonempty direct semantic children of kind value"
-                    .to_owned(),
-            ));
-        }
-        if let Some(ValueDomain::EntrySet {
-            reference,
-            entry_kinds,
-            source,
-        }) = item
-            .identity
-            .as_ref()
-            .and_then(|identity| identity.value_domain.as_ref())
-        {
-            validate_semantic_document_reference(&mut self.diagnostics, reference);
-            if let Some(source) = source {
-                validate_source_span(&mut self.diagnostics, *source);
-            }
-            if entry_kinds.is_empty() {
-                self.diagnostics.push(invariant(
-                    "ir.empty-entry-value-domain",
-                    "cross-document entry value domain must select at least one entry kind"
-                        .to_owned(),
-                ));
-            }
-            if entry_kinds
-                .iter()
-                .enumerate()
-                .any(|(index, kind)| entry_kinds[..index].contains(kind))
-            {
-                self.diagnostics.push(invariant(
-                    "ir.duplicate-entry-value-kind",
-                    "cross-document entry value domain must not repeat entry kinds".to_owned(),
-                ));
-            }
-        }
+        self.validate_entry(crate::EntryOwner::Definition(item));
         visit::walk_definition_item(self, item);
+    }
+
+    fn visit_list_item(&mut self, item: &'ir crate::ListItem) {
+        self.validate_entry(crate::EntryOwner::List(item));
+        visit::walk_list_item(self, item);
     }
 
     fn visit_inline(&mut self, inline: &'ir Inline) {
@@ -440,6 +456,7 @@ mod tests {
             blocks: vec![Block::DefinitionList {
                 items: vec![DefinitionItem {
                     identity: Some(DefinitionIdentity {
+                        forms: Vec::new(),
                         id: shared.clone(),
                         role: DefinitionRole::Term,
                         case: DefinitionCase::Sensitive,
@@ -667,6 +684,7 @@ mod tests {
     fn reports_invalid_cross_document_entry_domains() {
         let mut definition = DefinitionItem {
             identity: Some(DefinitionIdentity {
+                forms: Vec::new(),
                 id: "option-output".into(),
                 role: DefinitionRole::Option,
                 case: DefinitionCase::Sensitive,

@@ -266,6 +266,7 @@ pub(super) fn list_item_from_definition(
     }
     targets::attach_targets(&mut description, anchors, layout(0), source);
     ListItem {
+        entry: None,
         blocks: description,
     }
 }
