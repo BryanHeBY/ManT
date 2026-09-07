@@ -146,7 +146,7 @@ A semantic entry passes through three deliberately separate representations:
 ```text
 DefinitionItem + DefinitionIdentity   source fact attached to document content
                   │
-                  └─> SemanticIndex   rebuildable hierarchy of logical concepts
+                  └─> SemanticIndex   rebuildable hierarchy of content entries
                            │
                            └─> outline/query projection   selected external view
 ```
@@ -154,6 +154,15 @@ DefinitionItem + DefinitionIdentity   source fact attached to document content
 This separation keeps the document tree authoritative. An index can be rebuilt
 without reparsing, and an outline can omit entries or include only summaries
 without deleting their definitions from the document.
+
+Content ownership is not behavioral equivalence: several names can share one
+description while referring to different options or subjects. In the current
+model, `names` and projected `aliases` provide selectable spellings, not a
+verified alias relationship or a complete command grammar. Indexes must not
+invent hidden names or regenerate the authoritative body from these fields.
+Ordinary `ListItem` values do not yet carry entry identities; Markdown's current
+conversion to definition items is a known obstacle to annotation-only content
+preservation, described in [mant-markdown(7)](mant-markdown.md).
 
 A definition-list item may carry `DefinitionIdentity` when ManT can identify an
 addressable entry. The identity records:
@@ -163,7 +172,7 @@ addressable entry. The identity records:
 | `id` | Document-local entry and anchor ID |
 | `role` | Option, marker, operand, command, configuration key, environment variable, variable, value, or generic term |
 | `case` | Sensitive or insensitive alias matching |
-| `names` | Exact normalized aliases exposed to selectors |
+| `names` | Exact normalized names exposed to selectors; not an equivalence relation |
 | `valueDomain` | Optional source-declared value space |
 
 The identity is assigned during lowering, before source-specific macro information is discarded. Ordinary prose definitions remain valid definition items without an identity.
@@ -171,7 +180,7 @@ The identity is assigned during lowering, before source-specific macro informati
 For semantic definitions, the engine derives a role-qualified identity from the complete semantic name after source-specific parsing. Formatter navigation tags remain page-local anchors but do not become semantic IDs merely because their spelling is short or collides with a command. Collisions use a deterministic fingerprint of semantic identity and content rather than a source-order suffix; unrelated sibling insertion and reordering therefore cannot silently redirect an ID. Section and entry allocation are independent. These IDs identify the same logical content within one current document, but an independently updated host manual can change or remove that content, so consumers rediscover before reuse.
 
 `SemanticIndex` is a rebuildable sidecar over these content definitions. It
-groups definitions into `SemanticEntry` concepts and retains nested ownership
+groups definitions into `SemanticEntry` records and retains nested ownership
 such as command → option → value. The source role becomes an index kind as
 follows:
 
@@ -188,7 +197,7 @@ follows:
 | `term` | `term` |
 
 `DefinitionRole` describes what a producer recognized in one content node.
-`EntryKind` describes the logical concept exposed by the derived index; option,
+`EntryKind` describes the content category exposed by the derived index; option,
 marker, and operand are parameter families at this layer.
 
 Each `SemanticEntry` contains:
@@ -204,7 +213,7 @@ Each `SemanticEntry` contains:
 | `children` | Entries semantically owned by this entry |
 | `valueDomain` | Optional value-space evidence |
 
-The entry `id` is also the document-local address of its authoritative definition. Aliases answer “how can this concept be selected?”, forms answer “how did the source say it can be used?”, and document targets answer “which other document did an explicitly linked term name?”. Consumers must not reconstruct one field from another. In
+The entry `id` is also the document-local address of its authoritative definition. Aliases answer “how can this content be selected?”, forms answer “what usage did the source display?”, and document targets answer “which other document did an explicitly linked term name?”. Consumers must not reconstruct one field from another. In
 particular, a complete form such as `[+-]O [shopt_option]` is not necessarily a
 safe selector. Description links remain ordinary content links rather than entry destinations.
 

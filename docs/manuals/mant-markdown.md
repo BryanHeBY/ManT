@@ -87,6 +87,24 @@ Wiki links are not part of the supported link contract.
 
 ## Semantic Entry Lists
 
+### Content and annotation boundary
+
+The design principle is that ordinary Markdown supplies the visible content
+and ManT semantic comments add facts about it. An annotation must not invent
+visible names, reorder items, or change punctuation, paragraph boundaries,
+list nesting or hard-break semantics. This concerns content structure, not
+identical pixels across renderers or byte-identical Markdown round trips.
+Comment placement still follows CommonMark: inserting a block comment or
+blank line can itself change the parsed structure.
+
+Current limitation: accepted semantic lists are converted to definition lists.
+Their term/description delimiters and presentation can therefore change; the
+current implementation does not yet meet the annotation-only principle in
+full. The supported syntax below describes current behavior, not the proposed
+`mant:entry` JSON, `aliasGroups` or `aliasOf` fields, which are not implemented.
+
+### Current declarations
+
 ManT uses definition identities to make options, markers, operands, commands, configuration keys, environment variables, variables, values, and terms directly addressable by `--explain`, outlines, the TUI, JSON, and MCP. Markdown has no portable definition-list syntax, so ManT provides an invisible directive for a complete bullet list:
 
 ```markdown
@@ -111,7 +129,7 @@ Environment-variable declarations use one cross-platform name grammar shared wit
 
 Each list item must begin with one or more code spans containing names and then an explicit description delimiter. Ambiguous, malformed, mixed-purpose, or colliding declarations remain ordinary lists and produce author-facing diagnostics instead of silently losing selectors.
 
-Separate equivalent aliases within one displayed form with commas. Use a
+Separate selectable names within one displayed form with commas. Use a
 standalone `|` between code terms to separate complete invocation forms of the
 same entry:
 
@@ -192,8 +210,8 @@ Markdown parsing requirement.
 
 Ordinary option-shaped definition lists produced by native manuals can receive identities automatically. Markdown lists require either the explicit directive or the conservative complete-list inference described in the shipped examples; authors should use the directive when role or case policy matters.
 
-An accepted list item remains a normal definition item in the document tree;
-the directive adds its source-neutral `DefinitionIdentity`. From those content
+An accepted list item is currently converted into a definition item in the
+document tree and receives a source-neutral `DefinitionIdentity`. From those content
 facts, `SemanticIndex` derives entry kinds, selector aliases, complete authored
 forms, explicit document targets, value domains, and nested ownership. Outline, excerpt, explanation,
 TUI, and MCP projections consume that derived index rather than reparsing the
@@ -207,7 +225,7 @@ definitions and indexed concepts.
 | `id` | Generated from the semantic identity; no entry-level `id=` directive exists. Heading `{#id}` attributes address headings, not entries. |
 | `kind` | `role=` on the owning list; option, marker, and operand map to parameter kinds. |
 | `case` | Required `case=` on the owning list. |
-| `aliases` | Selectable names extracted from the visible code terms, including linked code; comma-grouped terms are equivalent aliases, not separate entries. |
+| `aliases` | Selectable names extracted from the visible code terms, including linked code; grouped terms select shared content, not necessarily equivalent behavior. |
 | `forms` | Complete leading terms, including placeholders; an outside-code `\|` splits independent forms without creating another entry. |
 | `documentTargets` | Typed document links wrapping a code term; links in the description remain ordinary references. |
 | `children` | Structurally nested semantic lists with their own role and case declarations. |
@@ -220,6 +238,11 @@ one command with two selectable aliases. Likewise ManT's own manual groups
 `` `--search PATTERN`, `--grep PATTERN` `` into one option entry; explaining
 either alias returns the same full description. Place genuinely different
 commands in separate items even when their descriptions happen to be similar.
+
+The current `aliases` field describes lookup, not a verified equivalence
+relation. A common description alone does not prove that two options are
+interchangeable or accept the same argument syntax. ManT does not infer that
+claim from commas, shared prose or the number of forms.
 
 Links follow the same source-to-IR boundary: a fragment becomes a local section
 target, a relative Markdown path becomes a same-source document edge, and web
@@ -300,8 +323,9 @@ mant --input ./tool.md --search warning --word --context 1 --format markdown
 
 The first command exposes the addressable outline and any diagnostics in one
 machine-readable result. The second verifies how a reader sees a specific term
-with its surrounding context. An empty `diagnostics` array confirms that the
-document stayed inside the supported semantic subset.
+with its surrounding context. An empty `diagnostics` array means no findings
+were reported by the implemented checks; it does not prove that all names
+were discovered or that the executable's behavior was fully modeled.
 
 ## See Also
 

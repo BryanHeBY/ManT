@@ -390,7 +390,8 @@ pub struct ListItem {
     pub blocks: Vec<Block>,
 }
 
-/// A term may have aliases and its description may contain arbitrary blocks.
+/// Displayed terms share a description containing arbitrary blocks.
+/// Sharing that content does not establish behavioral equivalence of the terms.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct DefinitionItem {
@@ -398,7 +399,8 @@ pub struct DefinitionItem {
     /// a stable semantic entry, such as a command-line option.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub identity: Option<DefinitionIdentity>,
-    /// One or more equivalent displayed terms.
+    /// One or more displayed terms sharing this description, not necessarily
+    /// equivalent names or interchangeable invocation forms.
     pub terms: Vec<Vec<Inline>>,
     /// Block content describing the terms.
     pub description: Vec<Block>,

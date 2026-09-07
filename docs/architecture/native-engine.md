@@ -13,6 +13,13 @@ The architecture follows four constraints:
   keep agent presentation compact and bounded;
 - keep ordinary reading local, bounded, and independent from host manual tools.
 
+The [semantic explanation design](semantic-explanations.md) records the next
+content/annotation boundary: ordinary content owns presentation, names do not
+imply alias equivalence, and evidence collection is distinct from exact node
+navigation. It explicitly separates current gaps from proposed APIs; the
+current implementation and user manuals below remain authoritative until
+that migration is implemented.
+
 ## Layer model
 
 ```text

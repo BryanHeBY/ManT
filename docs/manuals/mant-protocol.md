@@ -977,12 +977,19 @@ hierarchy. Empty summaries are omitted. A missing `semanticsComplete` field mean
 `true`; the exceptional `false` value distinguishes a genuinely empty index
 from one made incomplete by rejected source declarations.
 
+This is a diagnostic-derived validation signal, not proof that every
+documented name was discovered, every relationship is known or every behavior
+was modeled correctly. It is distinct from result limits and source coverage;
+an omitted or true value does not establish complete semantic recall.
+
 Definitions remain the content model. The semantic index is a rebuildable
-projection that groups definitions into concepts. `aliases` are exact
+projection that groups definitions into content records. `aliases` are exact
 selectors, while `forms` preserve complete authored syntax such as several
 accepted `ssh -L` argument layouts or `[+-]O [shopt_option]`. `entryKind`
 distinguishes commands; option, marker, and operand parameters; configuration
 keys; environment variables; variables; values; and unclassified terms.
+Sharing one record does not prove that its names are behaviorally equivalent
+or that its forms completely specify a command grammar.
 Nested values can declare a `choices` value domain. Cross-document `entry-set`
 domains are available only when a producer has explicit evidence; ManT does not infer them from prose. An entry-set carries the authored `reference`, an exact `address` when namespace-only resolution is possible, and the accepted `entryKinds`. An unqualified manual reference or direct-file input can therefore retain its source reference without claiming an exact address.
 

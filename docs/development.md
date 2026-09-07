@@ -78,6 +78,16 @@ omit repository manuals; the coverage checker's synthetic regressions still
 run against packaged sources. Add or change the authoritative entry whenever
 the public CLI changes, rather than extending a separate option allowlist.
 
+For semantic-entry changes, follow the
+[content and explanation design constraints](architecture/semantic-explanations.md).
+Preserve independent expected names and source content; neither more entries
+nor more successful explain calls proves correctness. Annotation-only Markdown
+work needs original-event comparisons of visible punctuation, lists, paragraphs,
+links and hard breaks, plus IR binding/serde tests. These are acceptance
+requirements for the planned migration, not checks already satisfied by the
+current list-to-definition conversion. Keep current unique-explain assertions
+until the public query contract itself changes.
+
 CI uses `--build-profile debug` for the final smoke test because its test and
 Clippy steps have already populated that profile. Local checks keep `release`
 as the default, and tagged publication performs a separate optimized build.

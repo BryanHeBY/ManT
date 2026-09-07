@@ -18,10 +18,13 @@ deterministic output without owning a terminal or command-line process.
   retaining symlinks to regular configuration files and bounded UTF-8 reads.
 - Semantic outlines with compact scope summaries, role filters, nested entry
   paths, authored forms, value domains, and optional section/entry roots.
-- Markdown entry authoring with visible alias groups, independent invocation
+- Markdown entry authoring with grouped visible names, independent invocation
   forms, linked code terms, and explicitly open or exhaustive local choices.
   See the [authoring field map](https://github.com/BryanHeBY/ManT/blob/main/docs/manuals/mant-markdown.md#authoring-to-entry-field-map)
   for declared fields versus index-derived facts.
+  Grouping names supplies shared selectable content, not proof of behavioral
+  equivalence. Semantic lists currently become definition lists and can change
+  presentation; the annotation-only design boundary is not fully implemented.
 - Typed local and cross-document navigation: only logical document and manual
   links become bounded scope edges; external, email, and page-local targets do
   not expand a query.

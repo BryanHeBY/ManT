@@ -227,7 +227,7 @@ pub struct SemanticDocumentTarget {
     pub reference: SemanticDocumentReference,
 }
 
-/// One indexed semantic concept backed by one or more document definitions.
+/// One indexed content record backed by one or more document definitions.
 ///
 /// This value is derived from [`DefinitionIdentity`](crate::DefinitionIdentity)
 /// facts in the document tree. It groups selection, presentation, and content
@@ -239,7 +239,8 @@ pub struct SemanticEntry {
     pub id: NodeId,
     /// Semantic category used by outline filters and presentation.
     pub kind: EntryKind,
-    /// Exact selectable spellings in source order.
+    /// Exact selectable spellings in source order, not proof of behavioral
+    /// equivalence between the named subjects.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub aliases: Vec<String>,
     /// Alias case-matching policy.
@@ -249,7 +250,7 @@ pub struct SemanticEntry {
     /// Explicit cross-document destinations carried by linked terms.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub document_targets: Vec<SemanticDocumentTarget>,
-    /// Nested semantic entries owned by this concept.
+    /// Nested semantic entries owned by this content record.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub children: Vec<SemanticEntry>,
     /// Optional finite or cross-document value space.
