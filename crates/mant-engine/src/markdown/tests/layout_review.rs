@@ -63,6 +63,49 @@ fn environment_assignments_retain_punctuation_in_values() {
 }
 
 #[test]
+fn decoded_fragments_are_exact_and_not_normalized_a_second_time() {
+    use mant_ir::visit::{Visit, walk_inline};
+    struct Targets(Vec<String>);
+    impl<'a> Visit<'a> for Targets {
+        fn visit_inline(&mut self, inline: &'a Inline) {
+            if let Inline::Link {
+                target: mant_ir::LinkTarget::Section { id },
+                ..
+            } = inline
+            {
+                self.0.push(id.to_string());
+            }
+            walk_inline(self, inline);
+        }
+    }
+    let source = "# Tool\n\n## First {#foo}\n\nFIRST\n\n## Second {##foo}\n\nSECOND\n\n## Third {###foo}\n\nTHIRD\n\n## Percent {#%23foo}\n\n[one](#foo) [two](#%23foo) [direct](##foo) [three](#%23%23foo) [percent](#%2523foo)\n";
+    let parsed = parse_markdown(source, None).unwrap();
+    assert!(
+        parsed.document.diagnostics.is_empty(),
+        "{:?}",
+        parsed.document.diagnostics
+    );
+    let mut targets = Targets(Vec::new());
+    targets.visit_document(&parsed.document);
+    assert_eq!(targets.0, ["foo", "second", "second", "third", "percent"]);
+    for fragment in ["%20foo", "foo%20", "FOO", "missing"] {
+        let parsed = parse_markdown(
+            &format!("# Tool\n\n## First {{#foo}}\n\n[bad](#{fragment})\n"),
+            None,
+        )
+        .unwrap();
+        assert!(
+            parsed
+                .document
+                .diagnostics
+                .iter()
+                .any(|d| d.code.as_deref() == Some("ir.dangling-section-link")),
+            "{fragment}"
+        );
+    }
+}
+
+#[test]
 fn removing_directives_never_merges_independent_lists_or_roles() {
     for newline in ["\n", "\r\n"] {
         for first in [

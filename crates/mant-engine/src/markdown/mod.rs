@@ -646,12 +646,10 @@ impl VisitMut for LocalLinkResolver<'_> {
             ..
         } = inline
         {
-            let lookup = id.trim().trim_start_matches('#');
-            if let Some(resolved) = self
-                .targets
-                .get(lookup)
-                .or_else(|| self.targets.get(&slug(lookup)))
-            {
+            // URI syntax and percent decoding were consumed by link_target.
+            // The remaining fragment is an exact identity, not another URI
+            // or a heading title to trim/slug into a different destination.
+            if let Some(resolved) = self.targets.get(id.as_str()) {
                 *id = resolved.as_str().into();
             }
         }
