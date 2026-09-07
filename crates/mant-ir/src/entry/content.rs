@@ -688,4 +688,24 @@ mod tests {
                 .any(|d| d.code.as_deref() == Some("ir.invalid-entry-name-binding"))
         );
     }
+
+    #[test]
+    fn empty_group_projection_never_bypasses_name_or_nonempty_group_validation() {
+        for valid_names in [false, true] {
+            for groups in [Vec::new(), vec![vec!["run".into(), "unbound".into()]]] {
+                let mut owner = item("run", EntryKind::Command, "run");
+                let facts = owner.entry.as_mut().unwrap();
+                facts.alias_groups = groups;
+                if !valid_names {
+                    facts.name_bindings.clear();
+                }
+                let doc = document(vec![list(vec![owner])]);
+                let projected = SemanticIndex::build(&doc);
+                assert_eq!(projected.root()[0].id, "run");
+                assert_eq!(projected.root()[0].forms, ["run"]);
+                assert_eq!(projected.root()[0].names.is_empty(), !valid_names);
+                assert!(projected.root()[0].alias_groups.is_empty());
+            }
+        }
+    }
 }

@@ -131,7 +131,13 @@ fn entry_from_owner(item: EntryOwner<'_>) -> Option<SemanticEntry> {
         id: identity.id.clone(),
         kind: identity.kind,
         names: item.validated_names().unwrap_or_default().to_vec(),
-        alias_groups: item.validated_alias_groups().unwrap_or_default().to_vec(),
+        // An absent relationship has nothing to project. Native manuals usually
+        // have no authored groups: do not revalidate all names a second time.
+        alias_groups: if identity.alias_groups.is_empty() {
+            Vec::new()
+        } else {
+            item.validated_alias_groups().unwrap_or_default().to_vec()
+        },
         alias_of: identity.alias_of.clone(),
         case: identity.case,
         forms: forms.iter().map(inline_text).collect(),

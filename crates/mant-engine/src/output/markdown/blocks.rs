@@ -54,7 +54,9 @@ pub(super) fn render_blocks_with_entries(
             let end = range.end;
             let mut identity = identity.clone();
             identity.names = located.names.to_vec();
-            identity.alias_groups = entry.validated_alias_groups().unwrap_or_default().to_vec();
+            if !identity.alias_groups.is_empty() {
+                identity.alias_groups = entry.validated_alias_groups().unwrap_or_default().to_vec();
+            }
             entries.push(RenderedEntry {
                 indices: located.indices,
                 start,
