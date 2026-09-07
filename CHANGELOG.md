@@ -126,6 +126,9 @@ that crate was not published for that change.
 
 ### libmandoc-rs 0.10.0
 
+- Reject excessive native syntax nesting before validation and syntax/equation
+  nesting before reference rendering; release both trees iteratively so depth
+  errors and truncated ownership transfers remain safe to clean up.
 - Close incomplete root font-macro scopes at EOF without dispatching the
   synthetic root token as a macro; malformed `.I`, `.B`, `.R`, `.SM`, and
   `.SB` inputs now report recoverable findings instead of aborting the process.

@@ -859,6 +859,7 @@ roff_state_reset(struct roff_man *man)
 	man->flags = 0;
 	man->macro_depth = 0;
 	man->macro_depth_reported = 0;
+	man->tree_depth_exceeded = 0;
 	man->lastsec = man->lastnamed = SEC_NONE;
 	man->next = ROFF_NEXT_CHILD;
 	roff_setreg(man->roff, "nS", 0, '=');
@@ -935,6 +936,8 @@ roff_node_alloc(struct roff_man *man, int line, int pos,
 void
 roff_node_append(struct roff_man *man, struct roff_node *n)
 {
+	struct roff_node *ancestor;
+	unsigned int depth;
 
 	switch (man->next) {
 	case ROFF_NEXT_SIBLING:
@@ -960,6 +963,15 @@ roff_node_append(struct roff_man *man, struct roff_node *n)
 		abort();
 	}
 	man->last = n;
+	/* Finish this bounded macro dispatch, then stop parsing before any
+	 * endparse/validation/render traversal. Walk actual parents because
+	 * normalization can reparent nodes; a cached depth can become stale. */
+	for (ancestor = n, depth = 0; ancestor != NULL;
+	    ancestor = ancestor->parent)
+		if (++depth > 512) {
+			man->tree_depth_exceeded = 1;
+			break;
+		}
 
 	switch (n->type) {
 	case ROFFT_HEAD:
@@ -1135,11 +1147,24 @@ roff_node_free(struct roff_node *n)
 void
 roff_node_delete(struct roff_man *man, struct roff_node *n)
 {
+	struct roff_node *root, *parent;
 
-	while (n->child != NULL)
-		roff_node_delete(man, n->child);
-	roff_node_unlink(man, n);
-	roff_node_free(n);
+	/* Cleanup must not require stack proportional to a rejected tree. */
+	root = n;
+	for (;;) {
+		if (n->child != NULL) {
+			n = n->child;
+			continue;
+		}
+		parent = n->parent;
+		roff_node_unlink(man, n);
+		if (n == root) {
+			roff_node_free(n);
+			break;
+		}
+		roff_node_free(n);
+		n = parent;
+	}
 }
 
 int

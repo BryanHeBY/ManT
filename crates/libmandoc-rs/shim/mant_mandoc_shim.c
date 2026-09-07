@@ -317,6 +317,11 @@ parse_input(const char *path, const unsigned char *buffer, size_t length,
 		mparse_readmem(parser, buffer, length, path);
 #endif
 	meta = mparse_result(parser);
+	if (meta == NULL) {
+		document->error = copy_string(
+		    "native syntax tree exceeds the 512-level nesting limit");
+		goto cleanup;
+	}
 #ifdef MANT_MANDOC_RENDER
 	if (render_format != 0)
 		document->ok = render_document(document, meta, render_format,
@@ -343,9 +348,7 @@ parse_input(const char *path, const unsigned char *buffer, size_t length,
 		}
 	}
 
-#ifndef MANDOC_MEMORY_ONLY
 cleanup:
-#endif
 	mandoc_msg_setinfilename(NULL);
 	mandoc_msg_setoutfile(stderr);
 	document->diagnostics = read_diagnostics(messages);
@@ -430,6 +433,29 @@ mant_mandoc_render_bundle(const char *root,
 }
 
 static int
+render_equation_within_limit(const struct eqn_box *box, unsigned int depth)
+{
+	for (; box != NULL; box = box->next) {
+		if (depth >= 256 ||
+		    !render_equation_within_limit(box->first, depth + 1))
+			return 0;
+	}
+	return 1;
+}
+
+static int
+render_tree_within_limit(const struct roff_node *node, unsigned int depth)
+{
+	for (; node != NULL; node = node->next) {
+		if (depth >= 256 ||
+		    !render_tree_within_limit(node->child, depth + 1) ||
+		    !render_equation_within_limit(node->eqn, 0))
+			return 0;
+	}
+	return 1;
+}
+
+static int
 render_document(struct mant_mandoc_document *document,
     const struct roff_meta *meta, int format, size_t width,
     int html_fragment, size_t output_limit)
@@ -438,6 +464,13 @@ render_document(struct mant_mandoc_document *document,
 	void		*renderer;
 	int		 status;
 
+	/* A bounded preflight precedes every recursive native renderer; the
+	 * owned Rust snapshot and output byte budget do not guard this path. */
+	if (!render_tree_within_limit(meta->first, 0)) {
+		document->error = copy_string(
+		    "native rendering exceeds the 256-level nesting limit");
+		return 0;
+	}
 	document->output = mant_mandoc_output_alloc(output_limit);
 	if (document->output == NULL ||
 	    !mant_mandoc_output_begin(document->output)) {

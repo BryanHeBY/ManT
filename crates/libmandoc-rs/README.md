@@ -170,6 +170,13 @@ libmandoc findings retain their severity and message but do not invent a
 machine code. The additive method keeps the existing public diagnostic fields
 and optional Serde shape unchanged for compatible patch upgrades.
 
+A separate native construction guard stops input dispatch after a syntax
+node exceeds 512 parent levels, before end-of-document validation. Such input
+returns a parse/render error, not a partial report. Native reference rendering
+rejects syntax or equation trees beyond 256 levels before entering a formatter;
+its output byte budget is independent of this stack budget. Syntax and equation
+cleanup use iterative traversal, including rejected and truncated inputs.
+
 Enable the optional `serde` feature to derive `Serialize` and `Deserialize`
 for the public AST, parser configuration, reports, diagnostics, and errors.
 
@@ -281,6 +288,10 @@ or changing the patch stack.
 
 The checked-in vendor tree differs from the official 1.14.6 snapshot only by
 the ordered patches in `patches/series`:
+
+- `0031-bound-native-tree-lifecycle.patch` stops excessively nested input
+  before finalization/validation and frees syntax and equation trees
+  iteratively. The shim separately checks both tree depths before rendering.
 
 - `0001-memory-only-input.patch` adds the buffer-only entry point used on
   Windows and makes `.so` requests without an explicit bundle or strict root

@@ -1563,9 +1563,9 @@ fn deeply_nested_callable_mdoc_macros_are_bounded_in_the_native_parser() {
 
 #[test]
 fn deeply_nested_input_is_bounded_instead_of_overflowing_the_stack() {
-    // Far more nesting than the copy cap; the parse must return a finite
-    // tree rather than recursing without limit while copying it out.
-    let depth = 5_000;
+    // Exceed the copy cap while remaining below the separate native
+    // construction budget (each RS contributes both a block and a body).
+    let depth = 180;
     let mut source = String::from(".TH DEEP 1\n.SH BODY\n");
     for _ in 0..depth {
         source.push_str(".RS\n");

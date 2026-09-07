@@ -298,6 +298,8 @@ mparse_buf_r(struct mparse *curp, struct buf blk, size_t i, int start)
 
 		of = 0;
 rerun:
+		if (curp->man->tree_depth_exceeded)
+			goto out;
 		line_result = roff_parseln(curp->roff, curp->line,
 		    &ln, &of, start && spos == 0 ? pos : 0);
 
@@ -608,6 +610,8 @@ read_whole_file(struct mparse *curp, int fd, struct buf *fb, int *with_mmap)
 static void
 mparse_end(struct mparse *curp)
 {
+	if (curp->man->tree_depth_exceeded)
+		return;
 	if (curp->man->meta.macroset == MACROSET_NONE)
 		curp->man->meta.macroset = MACROSET_MAN;
 	if (curp->man->meta.macroset == MACROSET_MDOC)
@@ -846,6 +850,8 @@ mparse_free(struct mparse *curp)
 struct roff_meta *
 mparse_result(struct mparse *curp)
 {
+	if (curp->man->tree_depth_exceeded)
+		return NULL;
 	roff_state_reset(curp->man);
 	if (curp->options & MPARSE_VALIDATE) {
 		if (curp->man->meta.macroset == MACROSET_MDOC)

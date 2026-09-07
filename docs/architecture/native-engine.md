@@ -244,6 +244,9 @@ required. Recursive re-entry on one thread is not supported, and the Rust
 node transfer and native equation expansion stop after 256 levels so hostile
 nesting cannot carry an unbounded C tree into recursive Rust consumers. A
 finite truncated tree remains successful and carries a typed parser finding;
+native construction beyond 512 parent levels instead fails before finalization
+or validation. Reference renderers preflight both syntax and equation depth
+at 256 levels, and native cleanup is iterative. For truncated successful reports,
 the engine projects those findings as `manual.syntax-depth-truncated` and
 `manual.equation-depth-truncated`. A
 mixed Rust/C ThreadSanitizer runner guards this boundary locally because

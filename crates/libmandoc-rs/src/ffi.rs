@@ -852,11 +852,11 @@ emphasis
         );
 
         let mut nested = String::from(".TH DEEP 1\n");
-        for _ in 0..300 {
+        for _ in 0..180 {
             nested.push_str(".RS\n");
         }
         nested.push_str("bounded\n");
-        for _ in 0..300 {
+        for _ in 0..180 {
             nested.push_str(".RE\n");
         }
         assert_owned_transfer("deep.1", nested.as_bytes());

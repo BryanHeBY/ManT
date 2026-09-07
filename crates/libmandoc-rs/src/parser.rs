@@ -133,6 +133,8 @@ impl std::error::Error for ParseError {}
 /// support recursive re-entry on one OS thread. Owned node and equation copies
 /// stop after 256 levels, omit deeper descendants from pathological input, and
 /// report either truncation through [`ParseReport::diagnostics`].
+/// Native construction exceeding 512 parent levels instead returns an error
+/// before finalization or validation; cleanup does not recurse over that tree.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct Parser {
     options: ParseOptions,

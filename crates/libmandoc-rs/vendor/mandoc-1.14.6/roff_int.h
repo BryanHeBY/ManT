@@ -41,6 +41,7 @@ struct	roff_man {
 	int		  flags;   /* Parse flags. */
 	int		  macro_depth; /* Nested mdoc macro calls. */
 	int		  macro_depth_reported;
+	int		  tree_depth_exceeded; /* Stop before another input dispatch. */
 #define	ROFF_NOFILL	 (1 << 1)  /* Fill mode switched off. */
 #define	MDOC_PBODY	 (1 << 2)  /* In the document body. */
 #define	MDOC_NEWLINE	 (1 << 3)  /* First macro/text in a line. */

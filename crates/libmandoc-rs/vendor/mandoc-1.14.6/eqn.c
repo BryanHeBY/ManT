@@ -484,20 +484,27 @@ eqn_next(struct eqn_node *ep, enum parse_mode mode)
 void
 eqn_box_free(struct eqn_box *bp)
 {
-	if (bp == NULL)
-		return;
+	struct eqn_box *next, *tail;
 
-	if (bp->first)
-		eqn_box_free(bp->first);
-	if (bp->next)
-		eqn_box_free(bp->next);
-
-	free(bp->text);
-	free(bp->left);
-	free(bp->right);
-	free(bp->top);
-	free(bp->bottom);
-	free(bp);
+	/* Flatten the owned child/sibling forest while freeing it. Neither
+	 * equation depth nor a very wide sibling list consumes call stack. */
+	while (bp != NULL) {
+		next = bp->next;
+		if (bp->first != NULL) {
+			for (tail = bp->first; tail->next != NULL;
+			    tail = tail->next)
+				continue;
+			tail->next = next;
+			next = bp->first;
+		}
+		free(bp->text);
+		free(bp->left);
+		free(bp->right);
+		free(bp->top);
+		free(bp->bottom);
+		free(bp);
+		bp = next;
+	}
 }
 
 struct eqn_box *
