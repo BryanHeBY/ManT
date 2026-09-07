@@ -86,7 +86,12 @@ impl DocumentIndex {
         self.nodes.get(id)
     }
 
-    /// Test whether any semantic node uses `id`.
+    /// Test whether a canonical local navigation target uses `id`.
+    ///
+    /// Sections, entries and inline anchors are all addressable content.
+    /// Entry-backed targets do not require a second inline anchor in their
+    /// visible content. This lookup does not resolve authored fragment aliases
+    /// or suppress independent duplicate/role-collision diagnostics.
     #[must_use]
     pub fn contains(&self, id: &str) -> bool {
         self.nodes.contains_key(id)

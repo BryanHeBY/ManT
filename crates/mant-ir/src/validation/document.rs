@@ -101,10 +101,7 @@ pub fn validate_document(document: &Document) -> Vec<Diagnostic> {
     collector.visit_document(document);
     diagnostics.extend(collector.diagnostics);
     for id in collector.section_targets {
-        let resolved = index.get(id.as_str()).is_some_and(|node| {
-            node.has_role(IndexedRole::Section) || node.has_role(IndexedRole::Anchor)
-        });
-        if !resolved {
+        if !index.contains(id.as_str()) {
             diagnostics.push(invariant(
                 "ir.dangling-section-link",
                 format!("section link target '{id}' does not exist"),

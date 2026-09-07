@@ -81,6 +81,10 @@ that crate was not published for that change.
 
 ### mant-engine 0.11.0
 
+- Recognize local links to ordinary list-item entries as valid navigation
+  targets without inserting redundant anchors into their visible content.
+  Missing IDs, duplicate identities and role collisions still report errors.
+
 - Reject local exhaustive-choice claims after partial child extraction or a
   failed child-list declaration, while preserving successful siblings and
   visible content. Coverage follows semantic owners rather than document-wide

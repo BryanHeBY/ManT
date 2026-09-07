@@ -684,13 +684,13 @@ pub enum LinkTarget {
         #[serde(skip_serializing_if = "Option::is_none")]
         manual_section: Option<String>,
     },
-    /// A reference to a section in this document, normally originating at
-    /// mdoc `Sx`.
+    /// A reference to addressable content in this document, including a
+    /// section, entry-backed owner, or inline anchor (such as mdoc `Sx`).
     ///
-    /// `target` is the document-local [`Section::id`] rather than a rendered
-    /// heading slug. This keeps navigation stable across output formats.
+    /// The target is a canonical document-local identity in [`crate::DocumentIndex`],
+    /// not a rendered heading slug or unresolved authored fragment.
     Section {
-        /// Target section identity in the current document.
+        /// Canonical target identity in the current document.
         id: NodeId,
     },
 }

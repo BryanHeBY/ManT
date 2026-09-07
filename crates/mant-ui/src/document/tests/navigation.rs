@@ -50,6 +50,23 @@ fn ordinary_list_entry_anchors_preserve_rows_and_numbering() {
         layout: LayoutHint::default(),
         source: None,
     }];
+    query
+        .document
+        .as_mut()
+        .unwrap()
+        .blocks
+        .push(Block::Paragraph {
+            children: vec![Inline::Link {
+                target: mant_ir::LinkTarget::Section { id: "run".into() },
+                title: None,
+                children: vec![Inline::Text {
+                    value: "Jump to run".into(),
+                }],
+            }],
+            layout: LayoutHint::default(),
+            source: None,
+        });
+    assert!(mant_ir::validate_document(query.document.as_ref().unwrap()).is_empty());
     let annotated = DocumentView::new(&query);
     let Block::List { items, .. } = &mut query.document.as_mut().unwrap().sections[0].blocks[0]
     else {
@@ -61,6 +78,12 @@ fn ordinary_list_entry_anchors_preserve_rows_and_numbering() {
         let rendered = annotated.render(width);
         assert_eq!(rendered.text, ordinary.render(width).text);
         let row = rendered.anchor_row("run").expect("semantic landing row");
+        assert!(
+            rendered
+                .links
+                .iter()
+                .any(|link| link.target == LinkTarget::Section("run".into()))
+        );
         let line = rendered.text.lines[row].to_string();
         assert!(
             line.trim_start().starts_with("8. run"),
