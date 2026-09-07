@@ -144,6 +144,9 @@ the same index and typed findings. The sidecar borrows the original document,
 does not accept independently supplied indexes, and never caches across calls.
 External IR producers receive the same complete checks as built-in parsers.
 
+The subsequent internal refactor and its exact-output checks are recorded in
+[semantic refactor verification](semantic-refactor-verification.md).
+
 ## Lowering rules and confirmed gaps
 
 Review probes reproduced these issues in the baseline release-profile binary:
