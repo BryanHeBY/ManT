@@ -1,8 +1,8 @@
 //! Contract-focused tests for Markdown lowering and source preservation.
 
 use mant_ir::{
-    Block, DefinitionCase, DefinitionRole, DocumentAddress, EntryKind, Inline, ListKind,
-    MarkdownOrigin, SourceFormat, TableAlignment, TldrOrigin,
+    Block, DocumentAddress, EntryKind, Inline, ListKind, MarkdownOrigin, NameCase, SourceFormat,
+    TableAlignment, TldrOrigin,
 };
 use mant_protocol::{
     EntryProjection, ExcerptSelection, OutlineDetail, OutlineNode, OutlineNodeReference,
@@ -516,10 +516,10 @@ fn declared_fixed_attached_values_keep_their_official_identity() {
     assert!(matches!(
         children.as_slice(),
         [
-            OutlineNode::DocumentEntry { id: first_id, title: first_title, aliases: first_names, .. },
-            OutlineNode::DocumentEntry { id: fixed_id, title: fixed_title, aliases: fixed_names, .. },
-            OutlineNode::DocumentEntry { aliases: placeholder_names, .. },
-            OutlineNode::DocumentEntry { id: equals_id, title: equals_title, aliases: equals_names, .. },
+            OutlineNode::DocumentEntry { id: first_id, title: first_title, names: first_names, .. },
+            OutlineNode::DocumentEntry { id: fixed_id, title: fixed_title, names: fixed_names, .. },
+            OutlineNode::DocumentEntry { names: placeholder_names, .. },
+            OutlineNode::DocumentEntry { id: equals_id, title: equals_title, names: equals_names, .. },
         ] if first_id == "option-f"
             && first_title == "/F"
             && first_names == &["/F"]

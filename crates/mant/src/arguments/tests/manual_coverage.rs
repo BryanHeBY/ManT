@@ -4,7 +4,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use clap::CommandFactory;
 use mant_engine::{build_outline_with_detail, query_markdown_text, select_explanation};
-use mant_ir::{DefinitionCase, DefinitionRole, EntryKind, ParameterKind};
+use mant_ir::{EntryKind, NameCase, ParameterKind};
 use mant_protocol::{EvidenceBasis, OutlineDetail, OutlineNode};
 
 fn public_flags(command: &mut clap::Command) -> Vec<BTreeSet<String>> {
@@ -32,22 +32,22 @@ fn public_flags(command: &mut clap::Command) -> Vec<BTreeSet<String>> {
         .collect()
 }
 
-fn collect_option_aliases(nodes: &[OutlineNode], aliases: &mut BTreeMap<String, usize>) {
+fn collect_option_aliases(nodes: &[OutlineNode], observed: &mut BTreeMap<String, usize>) {
     for node in nodes {
         if let OutlineNode::DocumentEntry {
             entry_kind:
                 EntryKind::Parameter {
                     parameter_kind: ParameterKind::Option,
                 },
-            aliases: names,
+            names,
             ..
         } = node
         {
             for name in names {
-                *aliases.entry(name.clone()).or_default() += 1;
+                *observed.entry(name.clone()).or_default() += 1;
             }
         }
-        collect_option_aliases(node.children(), aliases);
+        collect_option_aliases(node.children(), observed);
     }
 }
 
@@ -93,14 +93,18 @@ fn check_manual(command: &mut clap::Command, manual: &str) -> Result<(), String>
                 ));
             };
             let identity = evidence.entry.as_ref().ok_or("entry without identity")?;
-            if identity.role != DefinitionRole::Option || identity.case != DefinitionCase::Sensitive
+            if identity.kind
+                != (EntryKind::Parameter {
+                    parameter_kind: mant_ir::ParameterKind::Option,
+                })
+                || identity.case != NameCase::Sensitive
             {
                 return Err(format!("{name} must be a case-sensitive option"));
             }
-            let aliases: BTreeSet<_> = identity.names.iter().cloned().collect();
-            if aliases != names {
+            let observed_names: BTreeSet<_> = identity.names.iter().cloned().collect();
+            if observed_names != names {
                 return Err(format!(
-                    "{name} alias grouping differs: expected {names:?}, observed {aliases:?}"
+                    "{name} name grouping differs: expected {names:?}, observed {observed_names:?}"
                 ));
             }
             if names.len() > 1

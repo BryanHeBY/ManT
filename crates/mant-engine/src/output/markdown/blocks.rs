@@ -1,7 +1,7 @@
 //! Maps native block nodes to portable `CommonMark` block constructs.
 
 use mant_ir::{
-    Block, DefinitionIdentity, DefinitionItem, ListItem, ListKind, SourceSpan, TableCell, TableRow,
+    Block, DefinitionItem, EntryFacts, ListItem, ListKind, SourceSpan, TableCell, TableRow,
 };
 
 use super::MarkdownOptions;
@@ -20,7 +20,7 @@ pub(super) struct RenderedEntry {
     pub(super) indices: Vec<usize>,
     pub(super) start: usize,
     pub(super) end: usize,
-    pub(super) identity: DefinitionIdentity,
+    pub(super) entry: EntryFacts,
     pub(super) source: Option<SourceSpan>,
 }
 
@@ -64,7 +64,7 @@ pub(super) fn render_blocks_with_entries(
                 indices: located.indices,
                 start,
                 end,
-                identity,
+                entry: identity,
                 source: located.source,
             });
             cursor = start.saturating_add(anchor.len());

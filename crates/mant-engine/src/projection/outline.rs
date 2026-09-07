@@ -261,7 +261,7 @@ fn project_entries(
             }
             let title = (!entry.forms.is_empty())
                 .then(|| entry.forms.join(" | "))
-                .or_else(|| entry.aliases.first().cloned())
+                .or_else(|| entry.names.first().cloned())
                 .unwrap_or_else(|| entry.id.to_string());
             Some(OutlineNode::DocumentEntry {
                 path: OutlinePath::nested_entry(section, &coordinates)?
@@ -271,7 +271,7 @@ fn project_entries(
                 title,
                 entry_kind: entry.kind,
                 case: entry.case,
-                aliases: entry.aliases.clone(),
+                names: entry.names.clone(),
                 alias_groups: entry.alias_groups.clone(),
                 alias_of: entry.alias_of.clone(),
                 forms: entry.forms.clone(),

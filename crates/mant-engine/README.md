@@ -60,7 +60,7 @@ DocumentResolver ──> Markdown parser or libmandoc lowering
               │
               v
       mant_ir::ResolvedContent
-         ├─> DefinitionIdentity ─> SemanticIndex ─> outline / excerpt
+         ├─> ListItem / DefinitionItem.entry ─> SemanticIndex ─> outline / excerpt
          ├─> typed document graph ─> bounded scope search / explain
          ├─> Markdown / text / man-style renderers
          └─> versioned mant-protocol responses

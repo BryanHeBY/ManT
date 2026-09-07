@@ -11,7 +11,10 @@ agent-visible semantic index.
 The development-only `roff_semantic_profile` example parses and lowers each
 page once, builds the final `SemanticIndex`, and records each entry's ID, kind,
 selectable names (the legacy `aliases` field), explicit `aliasGroups` / `aliasOf`, visible forms, targets, containing section, nested depth, and
-value-domain origin. Profile schema `mant.roff-semantic-profile/v2` also walks
+value-domain origin. Profile schema `mant.roff-semantic-profile/v3` names the
+selectable spellings `names`, aligned with the IR and outline rather than
+implying alias equivalence. Historical v1/v2 ledger rows remain readable; a new
+scan records v3 explicitly. Like v2, the profiler also walks
 the IR definition lists independently so an ordinal that failed to become a
 list cannot hide merely because semantic discovery declined it. Independently,
 it derives every punctuated ordinal candidate from the original owned mdoc AST,

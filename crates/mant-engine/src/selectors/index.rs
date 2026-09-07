@@ -1,6 +1,6 @@
 //! Shared exact path, ID, alias and shorthand resolution.
 use super::{LocatedNode, ProjectionError, ambiguous_selector, semantic_name_shorthand};
-use mant_ir::{DefinitionCase, OutlinePath};
+use mant_ir::{NameCase, OutlinePath};
 use std::collections::{BTreeMap, HashMap};
 
 #[derive(Clone, Copy)]
@@ -25,10 +25,10 @@ struct AliasIndex<'a> {
 }
 
 impl<'a> AliasIndex<'a> {
-    fn insert(&mut self, case: DefinitionCase, alias: &'a str, candidate: &'a LocatedNode<'a>) {
+    fn insert(&mut self, case: NameCase, alias: &'a str, candidate: &'a LocatedNode<'a>) {
         let bucket = match case {
-            DefinitionCase::Sensitive => self.sensitive.entry(alias).or_default(),
-            DefinitionCase::Insensitive => self
+            NameCase::Sensitive => self.sensitive.entry(alias).or_default(),
+            NameCase::Insensitive => self
                 .insensitive
                 .entry(alias.to_ascii_lowercase())
                 .or_default(),
@@ -76,7 +76,7 @@ impl<'a> DocumentSelectorIndex<'a> {
         for candidate in located {
             index.paths.insert(candidate.path().to_string(), candidate);
             index.ids.entry(candidate.id()).or_default().push(candidate);
-            let Some(identity) = candidate.identity() else {
+            let Some(identity) = candidate.facts() else {
                 continue;
             };
             let LocatedNode::Entry { entry, .. } = candidate else {
@@ -84,7 +84,7 @@ impl<'a> DocumentSelectorIndex<'a> {
             };
             for name in entry.names {
                 index.exact_aliases.insert(identity.case, name, candidate);
-                if let Some(shorthand) = semantic_name_shorthand(identity.role, name) {
+                if let Some(shorthand) = semantic_name_shorthand(identity.kind, name) {
                     index
                         .shorthand_aliases
                         .insert(identity.case, shorthand, candidate);

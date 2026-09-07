@@ -4,8 +4,8 @@ use mant_engine::{
     render_markdown, render_query_text, select_excerpt,
 };
 use mant_ir::{
-    Block, DefinitionCase, DefinitionRole, EntryContentSlice, EntryFacts, EntryForm,
-    EntryInlineRoot, Inline, LayoutHint, ListItem, ListKind, ResolvedContent,
+    Block, EntryContentSlice, EntryFacts, EntryForm, EntryInlineRoot, EntryKind, Inline,
+    LayoutHint, ListItem, ListKind, NameCase, ResolvedContent,
 };
 use mant_protocol::{EntryProjection, ExcerptSelection, OutlineNode};
 
@@ -14,8 +14,8 @@ fn item(name: &str, payload: &str, entry: bool) -> ListItem {
         source: None,
         entry: entry.then(|| EntryFacts {
             id: name.into(),
-            role: DefinitionRole::Command,
-            case: DefinitionCase::Sensitive,
+            kind: EntryKind::Command,
+            case: NameCase::Sensitive,
             names: vec![name.into()],
             value_domain: None,
             alias_groups: Vec::new(),

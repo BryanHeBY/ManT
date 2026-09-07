@@ -1,7 +1,6 @@
 use mant_ir::{
-    DefinitionCase, DefinitionIdentity, DefinitionItem, DefinitionRole, Document, DocumentMeta,
-    DocumentSource, LayoutHint, ListItem, SourceFormat, TableCell, TableRow, TldrDocument,
-    TldrExample,
+    DefinitionItem, Document, DocumentMeta, DocumentSource, EntryFacts, EntryKind, LayoutHint,
+    ListItem, NameCase, SourceFormat, TableCell, TableRow, TldrDocument, TldrExample,
 };
 use unicode_width::UnicodeWidthStr;
 

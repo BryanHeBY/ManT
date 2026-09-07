@@ -19,7 +19,7 @@ fn definition_continuations_keep_rows_when_reparented_across_spacing() {
                 let definition = Block::DefinitionList {
                     items: vec![DefinitionItem {
                         source: None,
-                        identity: None,
+                        entry: None,
                         terms: vec![vec![Inline::Text {
                             value: label.into(),
                         }]],

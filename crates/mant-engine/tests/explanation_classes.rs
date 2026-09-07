@@ -107,7 +107,7 @@ fn empty_names_still_have_a_real_owner_and_invalid_bindings_never_match_names() 
     struct NoNames;
     impl VisitMut for NoNames {
         fn visit_definition_item_mut(&mut self, item: &mut mant_ir::DefinitionItem) {
-            if let Some(facts) = &mut item.identity {
+            if let Some(facts) = &mut item.entry {
                 facts.names.clear();
                 facts.name_bindings.clear();
             }

@@ -148,11 +148,11 @@ clickable. Consumers must not recover navigation semantics from rendered text.
 A semantic entry passes through three deliberately separate representations:
 
 ```text
-DefinitionItem + DefinitionIdentity   source fact attached to document content
-                  │
-                  └─> SemanticIndex   rebuildable hierarchy of content entries
-                           │
-                           └─> outline/query projection   selected external view
+ListItem.entry / DefinitionItem.entry   optional EntryFacts on original content
+                         │
+                         └─> EntryOwner   borrowed facts and content view
+                                └─> SemanticIndex   rebuildable entry hierarchy
+                                       └─> outline/query projection
 ```
 
 This separation keeps the document tree authoritative. An index can be rebuilt
@@ -161,12 +161,12 @@ without deleting their definitions from the document.
 
 Content ownership is not behavioral equivalence: several names can share one
 description while referring to different options or subjects. In the current
-model, `names` and projected `aliases` provide selectable spellings, not a
+model, `names` in both facts and projections provides selectable spellings, not a
 verified alias relationship or a complete command grammar. Indexes must not
 invent hidden names or regenerate the authoritative body from these fields.
-Ordinary `ListItem` values can carry optional `EntryFacts` through `entry`.
-`DefinitionIdentity` is a transitional name for the same facts on native
-definitions. `EntryForm` and `EntryContentSlice` bind forms to direct owner
+Ordinary `ListItem` and `DefinitionItem` values both carry optional `EntryFacts`
+through `entry`; neither shape is a compatibility wrapper. `EntryForm` and
+`EntryContentSlice` bind forms to direct owner
 blocks or native terms, preserving styled inline ancestry and validating UTF-8
 leaf ranges. Out-of-bounds, overlapping or reordered pieces are invalid, not
 partial forms; an empty forms collection instead means unrecorded. Markdown attaches these references without converting its
@@ -178,14 +178,14 @@ both owner kinds. Excerpts retain the original single-item container and its
 numbering/layout, not a synthesized definition. `Block::entry_owner()` borrows
 the facts and content from such a selected block without copying its body.
 
-A definition-list item may carry `DefinitionIdentity` when ManT can identify an
-addressable entry. The identity records:
+Either content shape may carry `EntryFacts` when ManT can identify an
+addressable entry. The facts record:
 
 | Field | Meaning |
 | --- | --- |
-| `id` | Document-local entry and anchor ID |
-| `role` | Option, marker, operand, command, configuration key, environment variable, variable, value, or generic term |
-| `case` | Sensitive or insensitive alias matching |
+| `id` | Document-local owner ID; no additional inline anchor required |
+| `kind` | Shared structured `EntryKind`; parameter variants contain `ParameterKind` |
+| `case` | `NameCase`, exact spelling or ASCII-insensitive name lookup |
 | `names` | Exact normalized names exposed to selectors; not an equivalence relation |
 | `nameBindings` | Name indices, evidence kinds and occurrences bound to final-IR authored forms |
 | `forms` | Explicit ordered owner-relative content slices; empty means unrecorded, never implicit terms |
@@ -193,7 +193,7 @@ addressable entry. The identity records:
 | `aliasOf` | Explicit same-document relation to a unique, compatible single-subject entry; not content redirection |
 | `valueDomain` | Optional source-declared value space |
 
-The identity is assigned during lowering, before source-specific macro information is discarded. Ordinary prose definitions remain valid definition items without an identity.
+The facts are assigned during lowering, before source-specific macro information is discarded. Ordinary content remains a valid list or definition item without `entry`. Unannotated items and table cells are transparent to direct semantic-child discovery. An annotated child establishes a new owner boundary, even if its forms or names are invalid; its grandchildren are not siblings of that child. Full scope-link traversal still visits all content in source order.
 
 Both item types carry their own optional `source` span. It refers to the original
 item, not the first remaining paragraph after annotation comments are consumed.
@@ -225,11 +225,11 @@ validator; explanation collection is a separate consumer of validated facts.
 For semantic definitions, the engine derives a role-qualified identity from the complete semantic name after source-specific parsing. Formatter navigation tags remain page-local anchors but do not become semantic IDs merely because their spelling is short or collides with a command. Collisions use a deterministic fingerprint of semantic identity and content rather than a source-order suffix; unrelated sibling insertion and reordering therefore cannot silently redirect an ID. Section and entry allocation are independent. These IDs identify the same logical content within one current document, but an independently updated host manual can change or remove that content, so consumers rediscover before reuse.
 
 `SemanticIndex` is a rebuildable sidecar over these content definitions. It
-groups definitions into `SemanticEntry` records and retains nested ownership
-such as command → option → value. The source role becomes an index kind as
-follows:
+maps each owner to one `SemanticEntry` and retains nested ownership such as
+command → option → value. The same `EntryKind` is used by facts and projections;
+Markdown `role=` remains an authoring spelling, not a second public IR enum:
 
-| `DefinitionRole` | `EntryKind` |
+| Markdown `role=` | `EntryKind` |
 | --- | --- |
 | `option` | `parameter { parameterKind: option }` |
 | `marker` | `parameter { parameterKind: marker }` |
@@ -241,9 +241,7 @@ follows:
 | `value` | `value` |
 | `term` | `term` |
 
-`DefinitionRole` describes what a producer recognized in one content node.
-`EntryKind` describes the content category exposed by the derived index; option,
-marker, and operand are parameter families at this layer.
+Option, marker, and operand are parameter families at every IR layer.
 
 Each `SemanticEntry` contains:
 
@@ -251,7 +249,7 @@ Each `SemanticEntry` contains:
 | --- | --- |
 | `id` | Current-document semantic identity |
 | `kind` | Role-aware index category shown above |
-| `aliases` | Exact selectable spellings, derived from identity `names` |
+| `names` | Exact selectable spellings derived from validated facts |
 | `aliasGroups` | Explicit owner-local equivalence groups, copied from facts; shared names imply none |
 | `aliasOf` | Explicit same-document relationship to another independent entry; no inherited content, children or domain |
 | `case` | Alias matching policy |

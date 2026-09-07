@@ -1467,15 +1467,9 @@ fn exact_semantic_option_spellings_survive_the_cli_boundary() {
     assert!(outline.stderr.is_empty());
     let outline: serde_json::Value = serde_json::from_slice(&outline.stdout).expect("outline JSON");
     assert!(outline.get("semanticsComplete").is_none());
-    assert_eq!(outline["nodes"][0]["children"][0]["aliases"][0], "-ca.cert");
-    assert_eq!(
-        outline["nodes"][0]["children"][1]["aliases"][0],
-        "-ca.chain"
-    );
-    assert_eq!(
-        outline["nodes"][0]["children"][2]["aliases"][0],
-        "--foo.bar"
-    );
+    assert_eq!(outline["nodes"][0]["children"][0]["names"][0], "-ca.cert");
+    assert_eq!(outline["nodes"][0]["children"][1]["names"][0], "-ca.chain");
+    assert_eq!(outline["nodes"][0]["children"][2]["names"][0], "--foo.bar");
 
     assert!(dotted.status.success(), "{dotted:?}");
     assert!(dotted.stderr.is_empty());
@@ -1486,7 +1480,10 @@ fn exact_semantic_option_spellings_survive_the_cli_boundary() {
     assert!(positional_help.stderr.is_empty());
     let positional_help: serde_json::Value =
         serde_json::from_slice(&positional_help.stdout).expect("help JSON");
-    assert_eq!(positional_help["evidence"][0]["entry"]["role"], "command");
+    assert_eq!(
+        positional_help["evidence"][0]["entry"]["kind"]["kind"],
+        "command"
+    );
 }
 
 #[test]

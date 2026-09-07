@@ -518,7 +518,7 @@ fn definition_item(
     let terms = split_definition_terms(term);
     DefinitionItem {
         source: source_span(node),
-        identity: None,
+        entry: None,
         inline_term: terms_fit_inline(&terms, max_term_width),
         terms,
         description: lower_blocks_with_spacing(
@@ -775,7 +775,7 @@ mod tests {
     fn definition(term: &str, description: &str) -> DefinitionItem {
         DefinitionItem {
             source: None,
-            identity: None,
+            entry: None,
             inline_term: false,
             terms: vec![text(term)],
             description: vec![Block::Paragraph {

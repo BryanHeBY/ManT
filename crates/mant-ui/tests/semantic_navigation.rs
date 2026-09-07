@@ -1,7 +1,6 @@
 use mant_ir::{
-    Block, DefinitionCase, DefinitionIdentity, DefinitionItem, DefinitionRole, Document,
-    DocumentMeta, DocumentSource, EntryKind, Inline, LayoutHint, ParameterKind, ResolvedContent,
-    Section, SourceFormat,
+    Block, DefinitionItem, Document, DocumentMeta, DocumentSource, EntryFacts, EntryKind, Inline,
+    LayoutHint, NameCase, ParameterKind, ResolvedContent, Section, SourceFormat,
 };
 use mant_ui::{DocumentView, NavKind};
 
@@ -22,16 +21,21 @@ fn assert_compact_and_complete_entry_labels(view: &DocumentView) {
 #[allow(clippy::too_many_lines)] // Keep the cross-role navigation fixture and expectations together.
 fn sidebar_exposes_every_semantic_role_supported_by_the_document_contract() {
     let mut entries = [
-        (DefinitionRole::Option, "--help"),
-        (DefinitionRole::Command, "build"),
-        (DefinitionRole::EnvironmentVariable, "MANT_HOME"),
-        (DefinitionRole::Variable, "$LASTEXITCODE"),
+        (
+            EntryKind::Parameter {
+                parameter_kind: mant_ir::ParameterKind::Option,
+            },
+            "--help",
+        ),
+        (EntryKind::Command, "build"),
+        (EntryKind::EnvironmentVariable, "MANT_HOME"),
+        (EntryKind::Variable, "$LASTEXITCODE"),
     ]
     .into_iter()
     .enumerate()
     .map(|(index, (role, name))| DefinitionItem {
         source: None,
-        identity: Some(DefinitionIdentity {
+        entry: Some(EntryFacts {
             name_bindings: vec![mant_ir::EntryNameBinding {
                 name: 0,
                 evidence: mant_ir::EntryNameEvidence::Declared,
@@ -41,8 +45,8 @@ fn sidebar_exposes_every_semantic_role_supported_by_the_document_contract() {
             alias_of: None,
             forms: vec![mant_ir::EntryForm::term(0)],
             id: format!("entry-{index}").into(),
-            role,
-            case: DefinitionCase::Sensitive,
+            kind: role,
+            case: NameCase::Sensitive,
             names: vec![name.to_owned()],
             value_domain: None,
         }),
@@ -62,7 +66,7 @@ fn sidebar_exposes_every_semantic_role_supported_by_the_document_contract() {
             value: "-h".to_owned(),
         }],
     ];
-    let facts = entries[0].identity.as_mut().unwrap();
+    let facts = entries[0].entry.as_mut().unwrap();
     facts.forms = vec![mant_ir::EntryForm::term(0), mant_ir::EntryForm::term(1)];
     facts.name_bindings[0].occurrences = vec![mant_ir::EntryForm {
         parts: vec![mant_ir::EntryContentSlice {
@@ -74,7 +78,7 @@ fn sidebar_exposes_every_semantic_role_supported_by_the_document_contract() {
     entries[0].description = vec![Block::DefinitionList {
         items: vec![DefinitionItem {
             source: None,
-            identity: Some(DefinitionIdentity {
+            entry: Some(EntryFacts {
                 name_bindings: vec![mant_ir::EntryNameBinding {
                     name: 0,
                     evidence: mant_ir::EntryNameEvidence::Declared,
@@ -84,8 +88,8 @@ fn sidebar_exposes_every_semantic_role_supported_by_the_document_contract() {
                 alias_of: None,
                 forms: vec![mant_ir::EntryForm::term(0)],
                 id: "entry-help-value".into(),
-                role: DefinitionRole::Value,
-                case: DefinitionCase::Sensitive,
+                kind: EntryKind::Value,
+                case: NameCase::Sensitive,
                 names: vec!["brief".to_owned()],
                 value_domain: None,
             }),

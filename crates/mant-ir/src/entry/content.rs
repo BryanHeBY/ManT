@@ -8,9 +8,9 @@ use crate::{Block, DefinitionItem, EntryFacts, Inline, ListItem};
 /// The content owner of one semantic entry; no body is copied into the index.
 #[derive(Debug, Clone, Copy)]
 pub enum EntryOwner<'a> {
-    /// Native definition terms and their description.
+    /// Displayed definition terms and their description, from any producer.
     Definition(&'a DefinitionItem),
-    /// An ordinary item whose Markdown content remains unchanged.
+    /// An ordinary item whose original block content remains unchanged.
     List(&'a ListItem),
 }
 
@@ -212,7 +212,7 @@ impl<'a> EntryOwner<'a> {
     #[must_use]
     pub const fn facts(self) -> Option<&'a EntryFacts> {
         match self {
-            Self::Definition(item) => item.identity.as_ref(),
+            Self::Definition(item) => item.entry.as_ref(),
             Self::List(item) => item.entry.as_ref(),
         }
     }
@@ -410,11 +410,11 @@ fn precedes(left: &EntryContentSlice, right: &EntryContentSlice) -> bool {
 mod tests {
     use super::*;
     use crate::{
-        DefinitionCase, DefinitionRole, Document, DocumentIndex, DocumentMeta, DocumentSource,
-        LayoutHint, ListKind, SemanticIndex, SourceFormat, ValueDomain,
+        Document, DocumentIndex, DocumentMeta, DocumentSource, EntryKind, LayoutHint, ListKind,
+        NameCase, SemanticIndex, SourceFormat, ValueDomain,
     };
 
-    fn item(id: &str, role: DefinitionRole, name: &str) -> ListItem {
+    fn item(id: &str, kind: EntryKind, name: &str) -> ListItem {
         ListItem {
             source: None,
             entry: Some(EntryFacts {
@@ -432,8 +432,8 @@ mod tests {
                 alias_groups: Vec::new(),
                 alias_of: None,
                 id: id.into(),
-                role,
-                case: DefinitionCase::Sensitive,
+                kind,
+                case: NameCase::Sensitive,
                 names: vec![name.into()],
                 value_domain: None,
                 forms: vec![EntryForm {
@@ -485,13 +485,17 @@ mod tests {
 
     #[test]
     fn ordinary_owners_rebuild_indexes_and_choices_without_rewriting_content() {
-        let mut parent = item("option-color", DefinitionRole::Option, "--color");
+        let mut parent = item(
+            "option-color",
+            EntryKind::Parameter {
+                parameter_kind: crate::ParameterKind::Option,
+            },
+            "--color",
+        );
         let original = parent.blocks.clone();
-        parent.blocks.push(list(vec![item(
-            "value-auto",
-            DefinitionRole::Value,
-            "auto",
-        )]));
+        parent
+            .blocks
+            .push(list(vec![item("value-auto", EntryKind::Value, "auto")]));
         parent.entry.as_mut().unwrap().value_domain =
             Some(ValueDomain::Choices { exhaustive: true });
         assert!(parent.has_value_choices());
@@ -503,7 +507,7 @@ mod tests {
         let index = SemanticIndex::build(&rebuilt);
         assert_eq!(index.root().len(), 1);
         assert_eq!(index.root()[0].forms, ["--color"]);
-        assert_eq!(index.root()[0].children[0].aliases, ["auto"]);
+        assert_eq!(index.root()[0].children[0].names, ["auto"]);
         assert!(DocumentIndex::build(&rebuilt).contains("value-auto"));
         let Block::List {
             items,
@@ -527,7 +531,7 @@ mod tests {
 
     #[test]
     fn form_slices_preserve_link_style_and_reject_invalid_utf8_and_owner_paths() {
-        let mut item = item("term-name", DefinitionRole::Term, "é名");
+        let mut item = item("term-name", EntryKind::Term, "é名");
         let Block::Paragraph { children, .. } = &mut item.blocks[0] else {
             panic!("paragraph");
         };
@@ -583,7 +587,13 @@ mod tests {
     #[test]
     fn invalid_form_bindings_are_diagnostics_not_partial_index_facts() {
         for parts in [vec![], vec![0, 0], vec![1, 0], vec![0, 9]] {
-            let mut entry = item("option-probe", DefinitionRole::Option, "--probe");
+            let mut entry = item(
+                "option-probe",
+                EntryKind::Parameter {
+                    parameter_kind: crate::ParameterKind::Option,
+                },
+                "--probe",
+            );
             entry.entry.as_mut().unwrap().forms[0].parts = parts
                 .into_iter()
                 .map(|index| EntryContentSlice {
@@ -601,7 +611,7 @@ mod tests {
             let index = SemanticIndex::build(&doc);
             assert_eq!(index.root().len(), 1);
             assert!(index.root()[0].forms.is_empty());
-            assert!(index.root()[0].aliases.is_empty());
+            assert!(index.root()[0].names.is_empty());
         }
         assert!(crate::is_semantic_completeness_diagnostic(
             "ir.invalid-entry-content"
@@ -610,10 +620,10 @@ mod tests {
 
     #[test]
     fn explicit_terms_borrow_and_unrecorded_forms_do_not_remove_owners() {
-        let list_item = item("parent", DefinitionRole::Term, "one");
+        let list_item = item("parent", EntryKind::Term, "one");
         let mut native = DefinitionItem {
             source: None,
-            identity: list_item.entry,
+            entry: list_item.entry,
             terms: vec![
                 vec![Inline::Code {
                     value: "one".into(),
@@ -622,11 +632,11 @@ mod tests {
                     value: "two".into(),
                 }],
             ],
-            description: vec![list(vec![item("child", DefinitionRole::Value, "auto")])],
+            description: vec![list(vec![item("child", EntryKind::Value, "auto")])],
             inline_term: false,
             spacing_before_lines: None,
         };
-        let facts = native.identity.as_mut().unwrap();
+        let facts = native.entry.as_mut().unwrap();
         facts.names.clear();
         facts.name_bindings.clear();
         facts.forms = vec![EntryForm::term(0), EntryForm::term(1)];
@@ -638,12 +648,12 @@ mod tests {
         assert!(
             matches!(owner.form(&EntryForm::term(1)), Some(Cow::Borrowed(term)) if std::ptr::eq(term, native.terms[1].as_slice()))
         );
-        native.identity.as_mut().unwrap().forms = vec![EntryForm::term(1), EntryForm::term(0)];
+        native.entry.as_mut().unwrap().forms = vec![EntryForm::term(1), EntryForm::term(0)];
         let Some(EntryForms::Projected(forms)) = EntryOwner::Definition(&native).forms() else {
             panic!("separate borrowed forms")
         };
         assert!(forms.iter().all(|form| matches!(form, Cow::Borrowed(_))));
-        native.identity.as_mut().unwrap().forms.clear();
+        native.entry.as_mut().unwrap().forms.clear();
         assert!(matches!(
             EntryOwner::Definition(&native).forms(),
             Some(EntryForms::Unrecorded)
@@ -662,14 +672,14 @@ mod tests {
 
     #[test]
     fn invalid_names_leave_valid_forms_and_children_intact() {
-        let mut parent = item("parent", DefinitionRole::Command, "run");
+        let mut parent = item("parent", EntryKind::Command, "run");
         parent.entry.as_mut().unwrap().name_bindings.clear();
         parent
             .blocks
-            .push(list(vec![item("child", DefinitionRole::Value, "auto")]));
+            .push(list(vec![item("child", EntryKind::Value, "auto")]));
         let doc = document(vec![list(vec![parent])]);
         let index = SemanticIndex::build(&doc);
-        assert!(index.root()[0].aliases.is_empty());
+        assert!(index.root()[0].names.is_empty());
         assert_eq!(index.root()[0].forms, ["run"]);
         assert_eq!(index.root()[0].children.len(), 1);
         assert!(

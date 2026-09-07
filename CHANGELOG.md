@@ -24,6 +24,11 @@ that crate was not published for that change.
 
 ### mant-ir 0.11.0
 
+- Converge both item shapes on `entry: Option<EntryFacts>`, with structured
+  `EntryKind`, `NameCase` and derived `names`. Remove `DefinitionIdentity`,
+  `DefinitionRole`, `DefinitionCase` and semantic `aliases`; migrate Rust
+  consumers and unreleased v0.11 JSON together. Old/unknown fields are rejected,
+  not ignored. Explicit `aliasGroups`, `aliasOf` and fragment aliases are unchanged.
 - Require explicit form references for both content-owner kinds; empty forms
   mean unknown and never fall back to native terms. Invalid forms or names do
   not erase owners/children. Every selectable name needs an exact binding;

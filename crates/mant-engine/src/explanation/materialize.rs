@@ -92,7 +92,7 @@ pub(super) fn materialize(
         let owner = super::owner(&located[index]).expect("entry location");
         let facts = owner.facts().expect("entry facts");
         let details = ExplanationEntry {
-            role: facts.role,
+            kind: facts.kind,
             case: facts.case,
             names: owner.validated_names().unwrap_or_default().to_vec(),
             forms: owner.forms().unwrap_or_default().into_owned(),
@@ -184,7 +184,7 @@ fn trail(node: &LocatedNode<'_>) -> OutlineTrail {
                     path: path.to_string().into(),
                     id: facts.id.clone(),
                     title: title.clone(),
-                    role: facts.role,
+                    entry_kind: facts.kind,
                     case: facts.case,
                     names: entry.names.to_vec(),
                 },

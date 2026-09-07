@@ -4,9 +4,8 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Deserializer, Serialize};
 
 use mant_ir::{
-    Block, DefinitionCase, DefinitionRole, Diagnostic, DocumentAddress, DocumentMeta,
-    DocumentSource, EntryKind, EntrySummary, NodeId, Section, SemanticDocumentReference,
-    TldrDocument,
+    Block, Diagnostic, DocumentAddress, DocumentMeta, DocumentSource, EntryKind, EntrySummary,
+    NameCase, NodeId, Section, SemanticDocumentReference, TldrDocument,
 };
 
 use crate::{NodePath, NodeSelector, Producer};
@@ -96,7 +95,7 @@ impl From<OutlineDetail> for EntryProjection {
 
 /// A block-free tree used to discover selectable query content.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 #[schemars(extend("$id" = "urn:mant:outline:v0.11"))]
 pub struct QueryOutline {
     /// Exact response schema discriminator.
@@ -132,7 +131,7 @@ pub struct QueryOutline {
 
 /// One exact cross-document destination declared by a semantic entry term.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct EntryDocumentTarget {
     /// Visible term text associated with this destination.
     #[schemars(length(min = 1))]
@@ -152,7 +151,8 @@ pub struct EntryDocumentTarget {
 #[serde(
     tag = "kind",
     rename_all = "kebab-case",
-    rename_all_fields = "camelCase"
+    rename_all_fields = "camelCase",
+    deny_unknown_fields
 )]
 pub enum EntryValueDomain {
     /// Values represented by nested entry nodes.
@@ -188,7 +188,8 @@ const fn is_true(value: &bool) -> bool {
 #[serde(
     tag = "kind",
     rename_all = "kebab-case",
-    rename_all_fields = "camelCase"
+    rename_all_fields = "camelCase",
+    deny_unknown_fields
 )]
 pub enum OutlineNode {
     /// Optional quick-reference node.
@@ -240,9 +241,9 @@ pub enum OutlineNode {
         /// Semantic category of the entry.
         entry_kind: EntryKind,
         /// Alias case-matching policy.
-        case: DefinitionCase,
+        case: NameCase,
         /// Exact selectable names, not proof of behavioral equivalence.
-        aliases: Vec<String>,
+        names: Vec<String>,
         /// Explicit owner-local equivalence groups; no default canonical member.
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         alias_groups: Vec<Vec<String>>,
@@ -327,7 +328,7 @@ impl ExcerptSchema {
 
 /// One or more independently selected nodes from a complete query.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 #[schemars(extend("$id" = "urn:mant:excerpt:v0.11"))]
 pub struct QueryExcerpt {
     /// Exact response schema discriminator.
@@ -362,7 +363,8 @@ pub struct QueryExcerpt {
 #[serde(
     tag = "kind",
     rename_all = "kebab-case",
-    rename_all_fields = "camelCase"
+    rename_all_fields = "camelCase",
+    deny_unknown_fields
 )]
 pub enum ExcerptSelection {
     /// Optional quick-reference content preceding the primary document.
@@ -411,7 +413,7 @@ impl ExcerptSelection {
 
 /// Complete logical location of one addressable document node.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct OutlineTrail {
     /// Ordered ancestors from the document root to the direct parent.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -436,7 +438,7 @@ impl OutlineTrail {
 
 /// Compact ancestor identity attached to an excerpt selection.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct OutlineReference {
     /// Canonical structural outline path.
     pub path: NodePath,
@@ -451,7 +453,8 @@ pub struct OutlineReference {
 #[serde(
     tag = "kind",
     rename_all = "kebab-case",
-    rename_all_fields = "camelCase"
+    rename_all_fields = "camelCase",
+    deny_unknown_fields
 )]
 pub enum OutlineNodeReference {
     /// Optional quick-reference node.
@@ -490,10 +493,10 @@ pub enum OutlineNodeReference {
         /// Primary display term.
         title: String,
         /// Semantic category of the definition.
-        role: DefinitionRole,
+        entry_kind: EntryKind,
         /// Alias case-matching policy.
-        case: DefinitionCase,
-        /// Normalized selectable aliases.
+        case: NameCase,
+        /// Validated selectable names, not an equivalence assertion.
         names: Vec<String>,
     },
 }

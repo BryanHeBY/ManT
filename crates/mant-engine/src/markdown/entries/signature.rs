@@ -5,7 +5,7 @@ use super::{
     names::entry_names,
 };
 use crate::block::block_source;
-use mant_ir::{Block, DefinitionRole, Inline, LinkTarget, ListItem};
+use mant_ir::{Block, EntryKind, Inline, LinkTarget, ListItem};
 #[derive(Clone)]
 pub(super) struct EntrySignature {
     pub(super) inline_index: usize,
@@ -17,7 +17,7 @@ pub(super) struct EntrySignature {
 /// Validate the unchanged leading paragraph and record its name/form boundaries.
 pub(super) fn entry_signature(
     item: &ListItem,
-    role: DefinitionRole,
+    role: EntryKind,
     explicitly_declared: bool,
     attached: AttachedValuePolicy,
 ) -> Result<EntrySignature, EntryRejection> {

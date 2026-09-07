@@ -1,7 +1,7 @@
 //! Conservative semantic export: never infer relationships from shared heads.
 use mant_ir::{
-    Block, DefinitionCase, DefinitionItem, DefinitionRole, Document, EntryFacts, EntryKind,
-    EntryNameEvidence, ParameterKind, SemanticDocumentReference, ValueDomain,
+    Block, DefinitionItem, Document, EntryFacts, EntryKind, EntryNameEvidence, NameCase,
+    ParameterKind, SemanticDocumentReference, ValueDomain,
     visit::{self, Visit},
 };
 
@@ -9,7 +9,7 @@ pub(super) fn supported(document: &Document) -> bool {
     struct Check(bool);
     impl<'a> Visit<'a> for Check {
         fn visit_definition_item(&mut self, item: &'a DefinitionItem) {
-            self.0 &= item.identity.is_none();
+            self.0 &= item.entry.is_none();
             visit::walk_definition_item(self, item);
         }
         fn visit_block(&mut self, block: &'a Block) {
@@ -19,7 +19,7 @@ pub(super) fn supported(document: &Document) -> bool {
                 self.0 &= crate::markdown::export_attached_policy(items).is_some()
                     && items.iter().all(|item| {
                         item.entry.as_ref().is_some_and(|facts| {
-                            facts.role == first.role
+                            facts.kind == first.kind
                                 && facts.case == first.case
                                 && !facts.name_bindings.is_empty()
                                 && facts
@@ -49,10 +49,10 @@ pub(super) fn supported(document: &Document) -> bool {
 pub(super) fn declaration(facts: &EntryFacts, items: &[mant_ir::ListItem]) -> String {
     format!(
         "<!-- mant:entries role={} case={}{} -->",
-        role(facts.role),
+        role(facts.kind),
         match facts.case {
-            DefinitionCase::Sensitive => "sensitive",
-            DefinitionCase::Insensitive => "insensitive",
+            NameCase::Sensitive => "sensitive",
+            NameCase::Insensitive => "insensitive",
         },
         crate::markdown::export_attached_policy(items).expect("supported semantic export list")
     )
@@ -113,16 +113,22 @@ pub(super) fn domain(value: &ValueDomain) -> Option<String> {
     Some(format!("<!-- mant:domain {fields} -->"))
 }
 
-fn role(role: DefinitionRole) -> &'static str {
+fn role(role: EntryKind) -> &'static str {
     match role {
-        DefinitionRole::Option => "option",
-        DefinitionRole::Command => "command",
-        DefinitionRole::Variable => "variable",
-        DefinitionRole::EnvironmentVariable => "environment-variable",
-        DefinitionRole::ConfigurationKey => "configuration-key",
-        DefinitionRole::Marker => "marker",
-        DefinitionRole::Operand => "operand",
-        DefinitionRole::Value => "value",
-        DefinitionRole::Term => "term",
+        EntryKind::Parameter {
+            parameter_kind: mant_ir::ParameterKind::Option,
+        } => "option",
+        EntryKind::Command => "command",
+        EntryKind::Variable => "variable",
+        EntryKind::EnvironmentVariable => "environment-variable",
+        EntryKind::ConfigurationKey => "configuration-key",
+        EntryKind::Parameter {
+            parameter_kind: mant_ir::ParameterKind::Marker,
+        } => "marker",
+        EntryKind::Parameter {
+            parameter_kind: mant_ir::ParameterKind::Operand,
+        } => "operand",
+        EntryKind::Value => "value",
+        EntryKind::Term => "term",
     }
 }

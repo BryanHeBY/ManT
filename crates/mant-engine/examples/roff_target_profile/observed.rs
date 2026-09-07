@@ -188,7 +188,7 @@ fn collect_blocks(
             Block::DefinitionList { items, .. } => {
                 for (item_index, item) in items.iter().enumerate() {
                     let item_path = format!("{path}/definition[{item_index}]");
-                    if let Some(identity) = &item.identity {
+                    if let Some(identity) = &item.entry {
                         record_observed(
                             observed,
                             identity.id.as_str(),

@@ -706,6 +706,7 @@
         ]
       }
     },
+    "additionalProperties": false,
     "required": [
       "schema",
       "label",
@@ -746,6 +747,7 @@
                 "const": "paragraph"
               }
             },
+            "additionalProperties": false,
             "required": [
               "type",
               "children"
@@ -789,6 +791,7 @@
                 "const": "preformatted"
               }
             },
+            "additionalProperties": false,
             "required": [
               "type",
               "children"
@@ -842,6 +845,7 @@
                 "const": "list"
               }
             },
+            "additionalProperties": false,
             "required": [
               "type",
               "kind",
@@ -883,6 +887,7 @@
                 "const": "definition-list"
               }
             },
+            "additionalProperties": false,
             "required": [
               "type",
               "items"
@@ -919,6 +924,7 @@
                 "const": "table"
               }
             },
+            "additionalProperties": false,
             "required": [
               "type",
               "rows"
@@ -956,6 +962,7 @@
                 "type": "string"
               }
             },
+            "additionalProperties": false,
             "required": [
               "type",
               "value"
@@ -988,6 +995,7 @@
                 "const": "vertical-space"
               }
             },
+            "additionalProperties": false,
             "required": [
               "type",
               "lines"
@@ -1013,6 +1021,7 @@
                 "const": "thematic-break"
               }
             },
+            "additionalProperties": false,
             "required": [
               "type"
             ]
@@ -1052,25 +1061,11 @@
                 "const": "unsupported"
               }
             },
+            "additionalProperties": false,
             "required": [
               "type",
               "text"
             ]
-          }
-        ]
-      },
-      "DefinitionCase": {
-        "description": "Case policy used when matching one semantic entry's names.",
-        "oneOf": [
-          {
-            "description": "Names must match with the same Unicode scalar values and case.",
-            "type": "string",
-            "const": "sensitive"
-          },
-          {
-            "description": "Names match without ASCII case distinctions.",
-            "type": "string",
-            "const": "insensitive"
           }
         ]
       },
@@ -1085,8 +1080,8 @@
               "$ref": "#/$defs/Block"
             }
           },
-          "identity": {
-            "description": "Present when the native lowering pass can identify this definition as\na stable semantic entry, such as a command-line option.",
+          "entry": {
+            "description": "Optional source-neutral semantic facts. The original terms and\ndescription remain authoritative regardless of fact validity.",
             "anyOf": [
               {
                 "$ref": "#/$defs/EntryFacts"
@@ -1132,59 +1127,10 @@
             }
           }
         },
+        "additionalProperties": false,
         "required": [
           "terms",
           "description"
-        ]
-      },
-      "DefinitionRole": {
-        "description": "Semantic role assigned before source-specific details leave the parser.\n\n[`crate::SemanticIndex`] maps option, marker, and operand roles to\n[`crate::EntryKind::Parameter`] and maps the remaining roles directly to\ntheir corresponding entry categories.",
-        "oneOf": [
-          {
-            "description": "Command-line option or switch.",
-            "type": "string",
-            "const": "option"
-          },
-          {
-            "description": "End-of-options or parser-control marker such as `--` or `--%`.",
-            "type": "string",
-            "const": "marker"
-          },
-          {
-            "description": "Positional or special operand documented as a definition.",
-            "type": "string",
-            "const": "operand"
-          },
-          {
-            "description": "Executable subcommand or verb.",
-            "type": "string",
-            "const": "command"
-          },
-          {
-            "description": "Named key accepted by a configuration language or command option.",
-            "type": "string",
-            "const": "configuration-key"
-          },
-          {
-            "description": "Process environment variable.",
-            "type": "string",
-            "const": "environment-variable"
-          },
-          {
-            "description": "Other named configuration or language variable.",
-            "type": "string",
-            "const": "variable"
-          },
-          {
-            "description": "One documented value accepted by a parent entry.",
-            "type": "string",
-            "const": "value"
-          },
-          {
-            "description": "Addressable definition without a more specific reliable role.",
-            "type": "string",
-            "const": "term"
-          }
         ]
       },
       "Diagnostic": {
@@ -1435,11 +1381,11 @@
         ]
       },
       "EntryFacts": {
-        "description": "Renderer-independent identity attached to one navigable content definition.\n\n[`crate::SemanticIndex`] derives logical entries from these source facts.\nThe identity remains part of the authoritative document tree; an outline or\nanother projection may omit the entry without removing its definition.",
+        "description": "Facts attached to one ordinary or term-and-description item.\n\nFacts never replace content. Indexes validate their references against that\nowner and can omit rejected fields without deleting or reparenting it.",
         "type": "object",
         "properties": {
           "aliasGroups": {
-            "description": "Explicit same-owner equivalence groups referencing visible names.\nAn empty collection means the relationships are unknown, not unequal.",
+            "description": "Explicit disjoint equivalence groups. Empty means unknown equivalence.",
             "type": "array",
             "items": {
               "type": "array",
@@ -1449,7 +1395,7 @@
             }
           },
           "aliasOf": {
-            "description": "Explicit same-document relationship to another single-subject entry.\nIt never redirects or replaces either owner's content.",
+            "description": "A declared same-document relationship, never inherited content.",
             "anyOf": [
               {
                 "$ref": "#/$defs/NodeId"
@@ -1460,40 +1406,40 @@
             ]
           },
           "case": {
-            "description": "Matching policy used for aliases in semantic entry lookup.",
-            "$ref": "#/$defs/DefinitionCase"
+            "description": "Lookup policy; binding validation still requires exact visible spelling.",
+            "$ref": "#/$defs/NameCase"
           },
           "forms": {
-            "description": "Read-only authored-form bindings into this owner's content.\nEmpty means unknown; producers reference known terms explicitly.",
+            "description": "Ordered owner-relative references; empty means unrecorded, not fallback.",
             "type": "array",
             "items": {
               "$ref": "#/$defs/EntryForm"
             }
           },
           "id": {
-            "description": "Unique within one document and shared with the term's inline anchor.",
+            "description": "Unique document-local owner identity. No extra inline anchor is required.",
             "$ref": "#/$defs/NodeId"
           },
+          "kind": {
+            "description": "Source-neutral category, including parameter syntax families.",
+            "$ref": "#/$defs/EntryKind"
+          },
           "nameBindings": {
-            "description": "Validated occurrences of documented names within authored forms.",
+            "description": "Exact name occurrences within explicit displayed forms.",
             "type": "array",
             "items": {
               "$ref": "#/$defs/EntryNameBinding"
             }
           },
           "names": {
-            "description": "Plain normalized names used as [`crate::SemanticEntry::aliases`].",
+            "description": "Documented names. Derived selectors use only the validated complete set.",
             "type": "array",
             "items": {
               "type": "string"
             }
           },
-          "role": {
-            "description": "Semantic category used by lookup and presentation.",
-            "$ref": "#/$defs/DefinitionRole"
-          },
           "valueDomain": {
-            "description": "Optional value space explicitly declared by the source producer.",
+            "description": "Explicit local or cross-document value space; never copied into content.",
             "anyOf": [
               {
                 "$ref": "#/$defs/ValueDomain"
@@ -1504,9 +1450,10 @@
             ]
           }
         },
+        "additionalProperties": false,
         "required": [
           "id",
-          "role",
+          "kind",
           "case",
           "names"
         ]
@@ -1762,6 +1709,7 @@
                 "$ref": "#/$defs/OutlineTrail"
               }
             },
+            "additionalProperties": false,
             "required": [
               "kind",
               "outline",
@@ -1788,6 +1736,7 @@
                 "$ref": "#/$defs/OutlineTrail"
               }
             },
+            "additionalProperties": false,
             "required": [
               "kind",
               "outline",
@@ -1811,6 +1760,7 @@
                 "$ref": "#/$defs/Section"
               }
             },
+            "additionalProperties": false,
             "required": [
               "kind",
               "outline",
@@ -1834,6 +1784,7 @@
                 "$ref": "#/$defs/OutlineTrail"
               }
             },
+            "additionalProperties": false,
             "required": [
               "kind",
               "outline",
@@ -2174,6 +2125,7 @@
             ]
           }
         },
+        "additionalProperties": false,
         "required": [
           "blocks"
         ]
@@ -2234,6 +2186,21 @@
           }
         ]
       },
+      "NameCase": {
+        "description": "Matching policy for semantic names, independent of document provenance.",
+        "oneOf": [
+          {
+            "description": "Exact Unicode scalar spelling.",
+            "type": "string",
+            "const": "sensitive"
+          },
+          {
+            "description": "Ignore ASCII case distinctions only.",
+            "type": "string",
+            "const": "insensitive"
+          }
+        ]
+      },
       "NodeId": {
         "description": "Document-local identity shared by sections, anchors, and entries.\n\nLowering layers normalize these values; [`crate::validate_document`] reports\nany invalid value introduced through deserialization or custom producers.",
         "type": "string"
@@ -2266,6 +2233,7 @@
                 "type": "string"
               }
             },
+            "additionalProperties": false,
             "required": [
               "kind",
               "path",
@@ -2294,6 +2262,7 @@
                 "type": "string"
               }
             },
+            "additionalProperties": false,
             "required": [
               "kind",
               "path",
@@ -2322,6 +2291,7 @@
                 "type": "string"
               }
             },
+            "additionalProperties": false,
             "required": [
               "kind",
               "path",
@@ -2335,7 +2305,11 @@
             "properties": {
               "case": {
                 "description": "Alias case-matching policy.",
-                "$ref": "#/$defs/DefinitionCase"
+                "$ref": "#/$defs/NameCase"
+              },
+              "entryKind": {
+                "description": "Semantic category of the definition.",
+                "$ref": "#/$defs/EntryKind"
               },
               "id": {
                 "description": "Stable document-local identity.",
@@ -2346,7 +2320,7 @@
                 "const": "document-entry"
               },
               "names": {
-                "description": "Normalized selectable aliases.",
+                "description": "Validated selectable names, not an equivalence assertion.",
                 "type": "array",
                 "items": {
                   "type": "string"
@@ -2356,21 +2330,18 @@
                 "description": "Canonical structural outline path.",
                 "$ref": "#/$defs/NodePath"
               },
-              "role": {
-                "description": "Semantic category of the definition.",
-                "$ref": "#/$defs/DefinitionRole"
-              },
               "title": {
                 "description": "Primary display term.",
                 "type": "string"
               }
             },
+            "additionalProperties": false,
             "required": [
               "kind",
               "path",
               "id",
               "title",
-              "role",
+              "entryKind",
               "case",
               "names"
             ]
@@ -2394,6 +2365,7 @@
             "type": "string"
           }
         },
+        "additionalProperties": false,
         "required": [
           "path",
           "id",
@@ -2416,6 +2388,7 @@
             "$ref": "#/$defs/OutlineNodeReference"
           }
         },
+        "additionalProperties": false,
         "required": [
           "node"
         ]
@@ -2540,6 +2513,7 @@
             "type": "string"
           }
         },
+        "additionalProperties": false,
         "required": [
           "id",
           "title",
@@ -2734,6 +2708,7 @@
             "minimum": 0
           }
         },
+        "additionalProperties": false,
         "required": [
           "blocks"
         ]
@@ -2750,6 +2725,7 @@
             }
           }
         },
+        "additionalProperties": false,
         "required": [
           "cells"
         ]
@@ -3125,6 +3101,7 @@
                 "const": "paragraph"
               }
             },
+            "additionalProperties": false,
             "required": [
               "type",
               "children"
@@ -3168,6 +3145,7 @@
                 "const": "preformatted"
               }
             },
+            "additionalProperties": false,
             "required": [
               "type",
               "children"
@@ -3221,6 +3199,7 @@
                 "const": "list"
               }
             },
+            "additionalProperties": false,
             "required": [
               "type",
               "kind",
@@ -3262,6 +3241,7 @@
                 "const": "definition-list"
               }
             },
+            "additionalProperties": false,
             "required": [
               "type",
               "items"
@@ -3298,6 +3278,7 @@
                 "const": "table"
               }
             },
+            "additionalProperties": false,
             "required": [
               "type",
               "rows"
@@ -3335,6 +3316,7 @@
                 "type": "string"
               }
             },
+            "additionalProperties": false,
             "required": [
               "type",
               "value"
@@ -3367,6 +3349,7 @@
                 "const": "vertical-space"
               }
             },
+            "additionalProperties": false,
             "required": [
               "type",
               "lines"
@@ -3392,6 +3375,7 @@
                 "const": "thematic-break"
               }
             },
+            "additionalProperties": false,
             "required": [
               "type"
             ]
@@ -3431,25 +3415,11 @@
                 "const": "unsupported"
               }
             },
+            "additionalProperties": false,
             "required": [
               "type",
               "text"
             ]
-          }
-        ]
-      },
-      "DefinitionCase": {
-        "description": "Case policy used when matching one semantic entry's names.",
-        "oneOf": [
-          {
-            "description": "Names must match with the same Unicode scalar values and case.",
-            "type": "string",
-            "const": "sensitive"
-          },
-          {
-            "description": "Names match without ASCII case distinctions.",
-            "type": "string",
-            "const": "insensitive"
           }
         ]
       },
@@ -3464,8 +3434,8 @@
               "$ref": "#/$defs/Block"
             }
           },
-          "identity": {
-            "description": "Present when the native lowering pass can identify this definition as\na stable semantic entry, such as a command-line option.",
+          "entry": {
+            "description": "Optional source-neutral semantic facts. The original terms and\ndescription remain authoritative regardless of fact validity.",
             "anyOf": [
               {
                 "$ref": "#/$defs/EntryFacts"
@@ -3511,59 +3481,10 @@
             }
           }
         },
+        "additionalProperties": false,
         "required": [
           "terms",
           "description"
-        ]
-      },
-      "DefinitionRole": {
-        "description": "Semantic role assigned before source-specific details leave the parser.\n\n[`crate::SemanticIndex`] maps option, marker, and operand roles to\n[`crate::EntryKind::Parameter`] and maps the remaining roles directly to\ntheir corresponding entry categories.",
-        "oneOf": [
-          {
-            "description": "Command-line option or switch.",
-            "type": "string",
-            "const": "option"
-          },
-          {
-            "description": "End-of-options or parser-control marker such as `--` or `--%`.",
-            "type": "string",
-            "const": "marker"
-          },
-          {
-            "description": "Positional or special operand documented as a definition.",
-            "type": "string",
-            "const": "operand"
-          },
-          {
-            "description": "Executable subcommand or verb.",
-            "type": "string",
-            "const": "command"
-          },
-          {
-            "description": "Named key accepted by a configuration language or command option.",
-            "type": "string",
-            "const": "configuration-key"
-          },
-          {
-            "description": "Process environment variable.",
-            "type": "string",
-            "const": "environment-variable"
-          },
-          {
-            "description": "Other named configuration or language variable.",
-            "type": "string",
-            "const": "variable"
-          },
-          {
-            "description": "One documented value accepted by a parent entry.",
-            "type": "string",
-            "const": "value"
-          },
-          {
-            "description": "Addressable definition without a more specific reliable role.",
-            "type": "string",
-            "const": "term"
-          }
         ]
       },
       "Diagnostic": {
@@ -3732,11 +3653,11 @@
         ]
       },
       "EntryFacts": {
-        "description": "Renderer-independent identity attached to one navigable content definition.\n\n[`crate::SemanticIndex`] derives logical entries from these source facts.\nThe identity remains part of the authoritative document tree; an outline or\nanother projection may omit the entry without removing its definition.",
+        "description": "Facts attached to one ordinary or term-and-description item.\n\nFacts never replace content. Indexes validate their references against that\nowner and can omit rejected fields without deleting or reparenting it.",
         "type": "object",
         "properties": {
           "aliasGroups": {
-            "description": "Explicit same-owner equivalence groups referencing visible names.\nAn empty collection means the relationships are unknown, not unequal.",
+            "description": "Explicit disjoint equivalence groups. Empty means unknown equivalence.",
             "type": "array",
             "items": {
               "type": "array",
@@ -3746,7 +3667,7 @@
             }
           },
           "aliasOf": {
-            "description": "Explicit same-document relationship to another single-subject entry.\nIt never redirects or replaces either owner's content.",
+            "description": "A declared same-document relationship, never inherited content.",
             "anyOf": [
               {
                 "$ref": "#/$defs/NodeId"
@@ -3757,40 +3678,40 @@
             ]
           },
           "case": {
-            "description": "Matching policy used for aliases in semantic entry lookup.",
-            "$ref": "#/$defs/DefinitionCase"
+            "description": "Lookup policy; binding validation still requires exact visible spelling.",
+            "$ref": "#/$defs/NameCase"
           },
           "forms": {
-            "description": "Read-only authored-form bindings into this owner's content.\nEmpty means unknown; producers reference known terms explicitly.",
+            "description": "Ordered owner-relative references; empty means unrecorded, not fallback.",
             "type": "array",
             "items": {
               "$ref": "#/$defs/EntryForm"
             }
           },
           "id": {
-            "description": "Unique within one document and shared with the term's inline anchor.",
+            "description": "Unique document-local owner identity. No extra inline anchor is required.",
             "$ref": "#/$defs/NodeId"
           },
+          "kind": {
+            "description": "Source-neutral category, including parameter syntax families.",
+            "$ref": "#/$defs/EntryKind"
+          },
           "nameBindings": {
-            "description": "Validated occurrences of documented names within authored forms.",
+            "description": "Exact name occurrences within explicit displayed forms.",
             "type": "array",
             "items": {
               "$ref": "#/$defs/EntryNameBinding"
             }
           },
           "names": {
-            "description": "Plain normalized names used as [`crate::SemanticEntry::aliases`].",
+            "description": "Documented names. Derived selectors use only the validated complete set.",
             "type": "array",
             "items": {
               "type": "string"
             }
           },
-          "role": {
-            "description": "Semantic category used by lookup and presentation.",
-            "$ref": "#/$defs/DefinitionRole"
-          },
           "valueDomain": {
-            "description": "Optional value space explicitly declared by the source producer.",
+            "description": "Explicit local or cross-document value space; never copied into content.",
             "anyOf": [
               {
                 "$ref": "#/$defs/ValueDomain"
@@ -3801,9 +3722,10 @@
             ]
           }
         },
+        "additionalProperties": false,
         "required": [
           "id",
-          "role",
+          "kind",
           "case",
           "names"
         ]
@@ -4296,7 +4218,7 @@
           },
           "case": {
             "description": "Matching policy for documented names/forms.",
-            "$ref": "#/$defs/DefinitionCase"
+            "$ref": "#/$defs/NameCase"
           },
           "forms": {
             "description": "Original visible forms projected through validated content bindings.",
@@ -4308,16 +4230,16 @@
               }
             }
           },
+          "kind": {
+            "description": "Source-neutral role.",
+            "$ref": "#/$defs/EntryKind"
+          },
           "names": {
             "description": "Documented selectable names, not implicit equivalence groups.",
             "type": "array",
             "items": {
               "type": "string"
             }
-          },
-          "role": {
-            "description": "Source-neutral role.",
-            "$ref": "#/$defs/DefinitionRole"
           },
           "valueDomain": {
             "description": "Local choices or remote entry set; never implicitly inherited/resolved.",
@@ -4333,7 +4255,7 @@
         },
         "additionalProperties": false,
         "required": [
-          "role",
+          "kind",
           "case",
           "names",
           "forms",
@@ -4933,6 +4855,7 @@
             ]
           }
         },
+        "additionalProperties": false,
         "required": [
           "blocks"
         ]
@@ -4993,6 +4916,21 @@
           }
         ]
       },
+      "NameCase": {
+        "description": "Matching policy for semantic names, independent of document provenance.",
+        "oneOf": [
+          {
+            "description": "Exact Unicode scalar spelling.",
+            "type": "string",
+            "const": "sensitive"
+          },
+          {
+            "description": "Ignore ASCII case distinctions only.",
+            "type": "string",
+            "const": "insensitive"
+          }
+        ]
+      },
       "NodeId": {
         "description": "Document-local identity shared by sections, anchors, and entries.\n\nLowering layers normalize these values; [`crate::validate_document`] reports\nany invalid value introduced through deserialization or custom producers.",
         "type": "string"
@@ -5025,6 +4963,7 @@
                 "type": "string"
               }
             },
+            "additionalProperties": false,
             "required": [
               "kind",
               "path",
@@ -5053,6 +4992,7 @@
                 "type": "string"
               }
             },
+            "additionalProperties": false,
             "required": [
               "kind",
               "path",
@@ -5081,6 +5021,7 @@
                 "type": "string"
               }
             },
+            "additionalProperties": false,
             "required": [
               "kind",
               "path",
@@ -5094,7 +5035,11 @@
             "properties": {
               "case": {
                 "description": "Alias case-matching policy.",
-                "$ref": "#/$defs/DefinitionCase"
+                "$ref": "#/$defs/NameCase"
+              },
+              "entryKind": {
+                "description": "Semantic category of the definition.",
+                "$ref": "#/$defs/EntryKind"
               },
               "id": {
                 "description": "Stable document-local identity.",
@@ -5105,7 +5050,7 @@
                 "const": "document-entry"
               },
               "names": {
-                "description": "Normalized selectable aliases.",
+                "description": "Validated selectable names, not an equivalence assertion.",
                 "type": "array",
                 "items": {
                   "type": "string"
@@ -5115,21 +5060,18 @@
                 "description": "Canonical structural outline path.",
                 "$ref": "#/$defs/NodePath"
               },
-              "role": {
-                "description": "Semantic category of the definition.",
-                "$ref": "#/$defs/DefinitionRole"
-              },
               "title": {
                 "description": "Primary display term.",
                 "type": "string"
               }
             },
+            "additionalProperties": false,
             "required": [
               "kind",
               "path",
               "id",
               "title",
-              "role",
+              "entryKind",
               "case",
               "names"
             ]
@@ -5153,6 +5095,7 @@
             "type": "string"
           }
         },
+        "additionalProperties": false,
         "required": [
           "path",
           "id",
@@ -5175,6 +5118,7 @@
             "$ref": "#/$defs/OutlineNodeReference"
           }
         },
+        "additionalProperties": false,
         "required": [
           "node"
         ]
@@ -5414,6 +5358,7 @@
             "minimum": 0
           }
         },
+        "additionalProperties": false,
         "required": [
           "blocks"
         ]
@@ -5430,6 +5375,7 @@
             }
           }
         },
+        "additionalProperties": false,
         "required": [
           "cells"
         ]
@@ -5604,6 +5550,7 @@
         ]
       }
     },
+    "additionalProperties": false,
     "required": [
       "schema",
       "entries",
@@ -5611,21 +5558,6 @@
       "nodes"
     ],
     "$defs": {
-      "DefinitionCase": {
-        "description": "Case policy used when matching one semantic entry's names.",
-        "oneOf": [
-          {
-            "description": "Names must match with the same Unicode scalar values and case.",
-            "type": "string",
-            "const": "sensitive"
-          },
-          {
-            "description": "Names match without ASCII case distinctions.",
-            "type": "string",
-            "const": "insensitive"
-          }
-        ]
-      },
       "Diagnostic": {
         "description": "Recoverable parser or IR validation finding attached to the document.",
         "type": "object",
@@ -5845,6 +5777,7 @@
             "$ref": "#/$defs/SemanticDocumentReference"
           }
         },
+        "additionalProperties": false,
         "required": [
           "label",
           "reference"
@@ -6101,6 +6034,7 @@
                 "const": "choices"
               }
             },
+            "additionalProperties": false,
             "required": [
               "kind",
               "exhaustive"
@@ -6139,6 +6073,7 @@
                 "$ref": "#/$defs/SemanticDocumentReference"
               }
             },
+            "additionalProperties": false,
             "required": [
               "kind",
               "reference",
@@ -6183,6 +6118,21 @@
           }
         ]
       },
+      "NameCase": {
+        "description": "Matching policy for semantic names, independent of document provenance.",
+        "oneOf": [
+          {
+            "description": "Exact Unicode scalar spelling.",
+            "type": "string",
+            "const": "sensitive"
+          },
+          {
+            "description": "Ignore ASCII case distinctions only.",
+            "type": "string",
+            "const": "insensitive"
+          }
+        ]
+      },
       "NodeId": {
         "description": "Document-local identity shared by sections, anchors, and entries.\n\nLowering layers normalize these values; [`crate::validate_document`] reports\nany invalid value introduced through deserialization or custom producers.",
         "type": "string"
@@ -6221,6 +6171,7 @@
                 "type": "string"
               }
             },
+            "additionalProperties": false,
             "required": [
               "kind",
               "path",
@@ -6267,6 +6218,7 @@
                 "type": "string"
               }
             },
+            "additionalProperties": false,
             "required": [
               "kind",
               "path",
@@ -6313,6 +6265,7 @@
                 "type": "string"
               }
             },
+            "additionalProperties": false,
             "required": [
               "kind",
               "path",
@@ -6346,16 +6299,9 @@
                   }
                 ]
               },
-              "aliases": {
-                "description": "Exact selectable names, not proof of behavioral equivalence.",
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              },
               "case": {
                 "description": "Alias case-matching policy.",
-                "$ref": "#/$defs/DefinitionCase"
+                "$ref": "#/$defs/NameCase"
               },
               "children": {
                 "description": "Nested entry nodes.",
@@ -6401,6 +6347,13 @@
                 "type": "string",
                 "const": "document-entry"
               },
+              "names": {
+                "description": "Exact selectable names, not proof of behavioral equivalence.",
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
               "path": {
                 "description": "Canonical structural outline path.",
                 "$ref": "#/$defs/NodePath"
@@ -6421,6 +6374,7 @@
                 ]
               }
             },
+            "additionalProperties": false,
             "required": [
               "kind",
               "path",
@@ -6428,7 +6382,7 @@
               "title",
               "entryKind",
               "case",
-              "aliases",
+              "names",
               "forms"
             ]
           }
@@ -6669,6 +6623,7 @@
         ]
       }
     },
+    "additionalProperties": false,
     "required": [
       "schema",
       "label"
@@ -6708,6 +6663,7 @@
                 "const": "paragraph"
               }
             },
+            "additionalProperties": false,
             "required": [
               "type",
               "children"
@@ -6751,6 +6707,7 @@
                 "const": "preformatted"
               }
             },
+            "additionalProperties": false,
             "required": [
               "type",
               "children"
@@ -6804,6 +6761,7 @@
                 "const": "list"
               }
             },
+            "additionalProperties": false,
             "required": [
               "type",
               "kind",
@@ -6845,6 +6803,7 @@
                 "const": "definition-list"
               }
             },
+            "additionalProperties": false,
             "required": [
               "type",
               "items"
@@ -6881,6 +6840,7 @@
                 "const": "table"
               }
             },
+            "additionalProperties": false,
             "required": [
               "type",
               "rows"
@@ -6918,6 +6878,7 @@
                 "type": "string"
               }
             },
+            "additionalProperties": false,
             "required": [
               "type",
               "value"
@@ -6950,6 +6911,7 @@
                 "const": "vertical-space"
               }
             },
+            "additionalProperties": false,
             "required": [
               "type",
               "lines"
@@ -6975,6 +6937,7 @@
                 "const": "thematic-break"
               }
             },
+            "additionalProperties": false,
             "required": [
               "type"
             ]
@@ -7014,25 +6977,11 @@
                 "const": "unsupported"
               }
             },
+            "additionalProperties": false,
             "required": [
               "type",
               "text"
             ]
-          }
-        ]
-      },
-      "DefinitionCase": {
-        "description": "Case policy used when matching one semantic entry's names.",
-        "oneOf": [
-          {
-            "description": "Names must match with the same Unicode scalar values and case.",
-            "type": "string",
-            "const": "sensitive"
-          },
-          {
-            "description": "Names match without ASCII case distinctions.",
-            "type": "string",
-            "const": "insensitive"
           }
         ]
       },
@@ -7047,8 +6996,8 @@
               "$ref": "#/$defs/Block"
             }
           },
-          "identity": {
-            "description": "Present when the native lowering pass can identify this definition as\na stable semantic entry, such as a command-line option.",
+          "entry": {
+            "description": "Optional source-neutral semantic facts. The original terms and\ndescription remain authoritative regardless of fact validity.",
             "anyOf": [
               {
                 "$ref": "#/$defs/EntryFacts"
@@ -7094,59 +7043,10 @@
             }
           }
         },
+        "additionalProperties": false,
         "required": [
           "terms",
           "description"
-        ]
-      },
-      "DefinitionRole": {
-        "description": "Semantic role assigned before source-specific details leave the parser.\n\n[`crate::SemanticIndex`] maps option, marker, and operand roles to\n[`crate::EntryKind::Parameter`] and maps the remaining roles directly to\ntheir corresponding entry categories.",
-        "oneOf": [
-          {
-            "description": "Command-line option or switch.",
-            "type": "string",
-            "const": "option"
-          },
-          {
-            "description": "End-of-options or parser-control marker such as `--` or `--%`.",
-            "type": "string",
-            "const": "marker"
-          },
-          {
-            "description": "Positional or special operand documented as a definition.",
-            "type": "string",
-            "const": "operand"
-          },
-          {
-            "description": "Executable subcommand or verb.",
-            "type": "string",
-            "const": "command"
-          },
-          {
-            "description": "Named key accepted by a configuration language or command option.",
-            "type": "string",
-            "const": "configuration-key"
-          },
-          {
-            "description": "Process environment variable.",
-            "type": "string",
-            "const": "environment-variable"
-          },
-          {
-            "description": "Other named configuration or language variable.",
-            "type": "string",
-            "const": "variable"
-          },
-          {
-            "description": "One documented value accepted by a parent entry.",
-            "type": "string",
-            "const": "value"
-          },
-          {
-            "description": "Addressable definition without a more specific reliable role.",
-            "type": "string",
-            "const": "term"
-          }
         ]
       },
       "Diagnostic": {
@@ -7372,6 +7272,7 @@
             "$ref": "#/$defs/DocumentSource"
           }
         },
+        "additionalProperties": false,
         "required": [
           "schema",
           "producer",
@@ -7464,11 +7365,11 @@
         ]
       },
       "EntryFacts": {
-        "description": "Renderer-independent identity attached to one navigable content definition.\n\n[`crate::SemanticIndex`] derives logical entries from these source facts.\nThe identity remains part of the authoritative document tree; an outline or\nanother projection may omit the entry without removing its definition.",
+        "description": "Facts attached to one ordinary or term-and-description item.\n\nFacts never replace content. Indexes validate their references against that\nowner and can omit rejected fields without deleting or reparenting it.",
         "type": "object",
         "properties": {
           "aliasGroups": {
-            "description": "Explicit same-owner equivalence groups referencing visible names.\nAn empty collection means the relationships are unknown, not unequal.",
+            "description": "Explicit disjoint equivalence groups. Empty means unknown equivalence.",
             "type": "array",
             "items": {
               "type": "array",
@@ -7478,7 +7379,7 @@
             }
           },
           "aliasOf": {
-            "description": "Explicit same-document relationship to another single-subject entry.\nIt never redirects or replaces either owner's content.",
+            "description": "A declared same-document relationship, never inherited content.",
             "anyOf": [
               {
                 "$ref": "#/$defs/NodeId"
@@ -7489,40 +7390,40 @@
             ]
           },
           "case": {
-            "description": "Matching policy used for aliases in semantic entry lookup.",
-            "$ref": "#/$defs/DefinitionCase"
+            "description": "Lookup policy; binding validation still requires exact visible spelling.",
+            "$ref": "#/$defs/NameCase"
           },
           "forms": {
-            "description": "Read-only authored-form bindings into this owner's content.\nEmpty means unknown; producers reference known terms explicitly.",
+            "description": "Ordered owner-relative references; empty means unrecorded, not fallback.",
             "type": "array",
             "items": {
               "$ref": "#/$defs/EntryForm"
             }
           },
           "id": {
-            "description": "Unique within one document and shared with the term's inline anchor.",
+            "description": "Unique document-local owner identity. No extra inline anchor is required.",
             "$ref": "#/$defs/NodeId"
           },
+          "kind": {
+            "description": "Source-neutral category, including parameter syntax families.",
+            "$ref": "#/$defs/EntryKind"
+          },
           "nameBindings": {
-            "description": "Validated occurrences of documented names within authored forms.",
+            "description": "Exact name occurrences within explicit displayed forms.",
             "type": "array",
             "items": {
               "$ref": "#/$defs/EntryNameBinding"
             }
           },
           "names": {
-            "description": "Plain normalized names used as [`crate::SemanticEntry::aliases`].",
+            "description": "Documented names. Derived selectors use only the validated complete set.",
             "type": "array",
             "items": {
               "type": "string"
             }
           },
-          "role": {
-            "description": "Semantic category used by lookup and presentation.",
-            "$ref": "#/$defs/DefinitionRole"
-          },
           "valueDomain": {
-            "description": "Optional value space explicitly declared by the source producer.",
+            "description": "Explicit local or cross-document value space; never copied into content.",
             "anyOf": [
               {
                 "$ref": "#/$defs/ValueDomain"
@@ -7533,9 +7434,10 @@
             ]
           }
         },
+        "additionalProperties": false,
         "required": [
           "id",
-          "role",
+          "kind",
           "case",
           "names"
         ]
@@ -8093,6 +7995,7 @@
             ]
           }
         },
+        "additionalProperties": false,
         "required": [
           "blocks"
         ]
@@ -8150,6 +8053,21 @@
               "kind",
               "name"
             ]
+          }
+        ]
+      },
+      "NameCase": {
+        "description": "Matching policy for semantic names, independent of document provenance.",
+        "oneOf": [
+          {
+            "description": "Exact Unicode scalar spelling.",
+            "type": "string",
+            "const": "sensitive"
+          },
+          {
+            "description": "Ignore ASCII case distinctions only.",
+            "type": "string",
+            "const": "insensitive"
           }
         ]
       },
@@ -8287,6 +8205,7 @@
             "type": "string"
           }
         },
+        "additionalProperties": false,
         "required": [
           "id",
           "title",
@@ -8481,6 +8400,7 @@
             "minimum": 0
           }
         },
+        "additionalProperties": false,
         "required": [
           "blocks"
         ]
@@ -8497,6 +8417,7 @@
             }
           }
         },
+        "additionalProperties": false,
         "required": [
           "cells"
         ]
@@ -9366,6 +9287,7 @@
                 "const": "paragraph"
               }
             },
+            "additionalProperties": false,
             "required": [
               "type",
               "children"
@@ -9409,6 +9331,7 @@
                 "const": "preformatted"
               }
             },
+            "additionalProperties": false,
             "required": [
               "type",
               "children"
@@ -9462,6 +9385,7 @@
                 "const": "list"
               }
             },
+            "additionalProperties": false,
             "required": [
               "type",
               "kind",
@@ -9503,6 +9427,7 @@
                 "const": "definition-list"
               }
             },
+            "additionalProperties": false,
             "required": [
               "type",
               "items"
@@ -9539,6 +9464,7 @@
                 "const": "table"
               }
             },
+            "additionalProperties": false,
             "required": [
               "type",
               "rows"
@@ -9576,6 +9502,7 @@
                 "type": "string"
               }
             },
+            "additionalProperties": false,
             "required": [
               "type",
               "value"
@@ -9608,6 +9535,7 @@
                 "const": "vertical-space"
               }
             },
+            "additionalProperties": false,
             "required": [
               "type",
               "lines"
@@ -9633,6 +9561,7 @@
                 "const": "thematic-break"
               }
             },
+            "additionalProperties": false,
             "required": [
               "type"
             ]
@@ -9672,25 +9601,11 @@
                 "const": "unsupported"
               }
             },
+            "additionalProperties": false,
             "required": [
               "type",
               "text"
             ]
-          }
-        ]
-      },
-      "DefinitionCase": {
-        "description": "Case policy used when matching one semantic entry's names.",
-        "oneOf": [
-          {
-            "description": "Names must match with the same Unicode scalar values and case.",
-            "type": "string",
-            "const": "sensitive"
-          },
-          {
-            "description": "Names match without ASCII case distinctions.",
-            "type": "string",
-            "const": "insensitive"
           }
         ]
       },
@@ -9705,8 +9620,8 @@
               "$ref": "#/$defs/Block"
             }
           },
-          "identity": {
-            "description": "Present when the native lowering pass can identify this definition as\na stable semantic entry, such as a command-line option.",
+          "entry": {
+            "description": "Optional source-neutral semantic facts. The original terms and\ndescription remain authoritative regardless of fact validity.",
             "anyOf": [
               {
                 "$ref": "#/$defs/EntryFacts"
@@ -9752,59 +9667,10 @@
             }
           }
         },
+        "additionalProperties": false,
         "required": [
           "terms",
           "description"
-        ]
-      },
-      "DefinitionRole": {
-        "description": "Semantic role assigned before source-specific details leave the parser.\n\n[`crate::SemanticIndex`] maps option, marker, and operand roles to\n[`crate::EntryKind::Parameter`] and maps the remaining roles directly to\ntheir corresponding entry categories.",
-        "oneOf": [
-          {
-            "description": "Command-line option or switch.",
-            "type": "string",
-            "const": "option"
-          },
-          {
-            "description": "End-of-options or parser-control marker such as `--` or `--%`.",
-            "type": "string",
-            "const": "marker"
-          },
-          {
-            "description": "Positional or special operand documented as a definition.",
-            "type": "string",
-            "const": "operand"
-          },
-          {
-            "description": "Executable subcommand or verb.",
-            "type": "string",
-            "const": "command"
-          },
-          {
-            "description": "Named key accepted by a configuration language or command option.",
-            "type": "string",
-            "const": "configuration-key"
-          },
-          {
-            "description": "Process environment variable.",
-            "type": "string",
-            "const": "environment-variable"
-          },
-          {
-            "description": "Other named configuration or language variable.",
-            "type": "string",
-            "const": "variable"
-          },
-          {
-            "description": "One documented value accepted by a parent entry.",
-            "type": "string",
-            "const": "value"
-          },
-          {
-            "description": "Addressable definition without a more specific reliable role.",
-            "type": "string",
-            "const": "term"
-          }
         ]
       },
       "Diagnostic": {
@@ -10135,11 +10001,11 @@
         ]
       },
       "EntryFacts": {
-        "description": "Renderer-independent identity attached to one navigable content definition.\n\n[`crate::SemanticIndex`] derives logical entries from these source facts.\nThe identity remains part of the authoritative document tree; an outline or\nanother projection may omit the entry without removing its definition.",
+        "description": "Facts attached to one ordinary or term-and-description item.\n\nFacts never replace content. Indexes validate their references against that\nowner and can omit rejected fields without deleting or reparenting it.",
         "type": "object",
         "properties": {
           "aliasGroups": {
-            "description": "Explicit same-owner equivalence groups referencing visible names.\nAn empty collection means the relationships are unknown, not unequal.",
+            "description": "Explicit disjoint equivalence groups. Empty means unknown equivalence.",
             "type": "array",
             "items": {
               "type": "array",
@@ -10149,7 +10015,7 @@
             }
           },
           "aliasOf": {
-            "description": "Explicit same-document relationship to another single-subject entry.\nIt never redirects or replaces either owner's content.",
+            "description": "A declared same-document relationship, never inherited content.",
             "anyOf": [
               {
                 "$ref": "#/$defs/NodeId"
@@ -10160,40 +10026,40 @@
             ]
           },
           "case": {
-            "description": "Matching policy used for aliases in semantic entry lookup.",
-            "$ref": "#/$defs/DefinitionCase"
+            "description": "Lookup policy; binding validation still requires exact visible spelling.",
+            "$ref": "#/$defs/NameCase"
           },
           "forms": {
-            "description": "Read-only authored-form bindings into this owner's content.\nEmpty means unknown; producers reference known terms explicitly.",
+            "description": "Ordered owner-relative references; empty means unrecorded, not fallback.",
             "type": "array",
             "items": {
               "$ref": "#/$defs/EntryForm"
             }
           },
           "id": {
-            "description": "Unique within one document and shared with the term's inline anchor.",
+            "description": "Unique document-local owner identity. No extra inline anchor is required.",
             "$ref": "#/$defs/NodeId"
           },
+          "kind": {
+            "description": "Source-neutral category, including parameter syntax families.",
+            "$ref": "#/$defs/EntryKind"
+          },
           "nameBindings": {
-            "description": "Validated occurrences of documented names within authored forms.",
+            "description": "Exact name occurrences within explicit displayed forms.",
             "type": "array",
             "items": {
               "$ref": "#/$defs/EntryNameBinding"
             }
           },
           "names": {
-            "description": "Plain normalized names used as [`crate::SemanticEntry::aliases`].",
+            "description": "Documented names. Derived selectors use only the validated complete set.",
             "type": "array",
             "items": {
               "type": "string"
             }
           },
-          "role": {
-            "description": "Semantic category used by lookup and presentation.",
-            "$ref": "#/$defs/DefinitionRole"
-          },
           "valueDomain": {
-            "description": "Optional value space explicitly declared by the source producer.",
+            "description": "Explicit local or cross-document value space; never copied into content.",
             "anyOf": [
               {
                 "$ref": "#/$defs/ValueDomain"
@@ -10204,9 +10070,10 @@
             ]
           }
         },
+        "additionalProperties": false,
         "required": [
           "id",
-          "role",
+          "kind",
           "case",
           "names"
         ]
@@ -10699,7 +10566,7 @@
           },
           "case": {
             "description": "Matching policy for documented names/forms.",
-            "$ref": "#/$defs/DefinitionCase"
+            "$ref": "#/$defs/NameCase"
           },
           "forms": {
             "description": "Original visible forms projected through validated content bindings.",
@@ -10711,16 +10578,16 @@
               }
             }
           },
+          "kind": {
+            "description": "Source-neutral role.",
+            "$ref": "#/$defs/EntryKind"
+          },
           "names": {
             "description": "Documented selectable names, not implicit equivalence groups.",
             "type": "array",
             "items": {
               "type": "string"
             }
-          },
-          "role": {
-            "description": "Source-neutral role.",
-            "$ref": "#/$defs/DefinitionRole"
           },
           "valueDomain": {
             "description": "Local choices or remote entry set; never implicitly inherited/resolved.",
@@ -10736,7 +10603,7 @@
         },
         "additionalProperties": false,
         "required": [
-          "role",
+          "kind",
           "case",
           "names",
           "forms",
@@ -11326,6 +11193,7 @@
             ]
           }
         },
+        "additionalProperties": false,
         "required": [
           "blocks"
         ]
@@ -11396,6 +11264,21 @@
           }
         ]
       },
+      "NameCase": {
+        "description": "Matching policy for semantic names, independent of document provenance.",
+        "oneOf": [
+          {
+            "description": "Exact Unicode scalar spelling.",
+            "type": "string",
+            "const": "sensitive"
+          },
+          {
+            "description": "Ignore ASCII case distinctions only.",
+            "type": "string",
+            "const": "insensitive"
+          }
+        ]
+      },
       "NodeId": {
         "description": "Document-local identity shared by sections, anchors, and entries.\n\nLowering layers normalize these values; [`crate::validate_document`] reports\nany invalid value introduced through deserialization or custom producers.",
         "type": "string"
@@ -11428,6 +11311,7 @@
                 "type": "string"
               }
             },
+            "additionalProperties": false,
             "required": [
               "kind",
               "path",
@@ -11456,6 +11340,7 @@
                 "type": "string"
               }
             },
+            "additionalProperties": false,
             "required": [
               "kind",
               "path",
@@ -11484,6 +11369,7 @@
                 "type": "string"
               }
             },
+            "additionalProperties": false,
             "required": [
               "kind",
               "path",
@@ -11497,7 +11383,11 @@
             "properties": {
               "case": {
                 "description": "Alias case-matching policy.",
-                "$ref": "#/$defs/DefinitionCase"
+                "$ref": "#/$defs/NameCase"
+              },
+              "entryKind": {
+                "description": "Semantic category of the definition.",
+                "$ref": "#/$defs/EntryKind"
               },
               "id": {
                 "description": "Stable document-local identity.",
@@ -11508,7 +11398,7 @@
                 "const": "document-entry"
               },
               "names": {
-                "description": "Normalized selectable aliases.",
+                "description": "Validated selectable names, not an equivalence assertion.",
                 "type": "array",
                 "items": {
                   "type": "string"
@@ -11518,21 +11408,18 @@
                 "description": "Canonical structural outline path.",
                 "$ref": "#/$defs/NodePath"
               },
-              "role": {
-                "description": "Semantic category of the definition.",
-                "$ref": "#/$defs/DefinitionRole"
-              },
               "title": {
                 "description": "Primary display term.",
                 "type": "string"
               }
             },
+            "additionalProperties": false,
             "required": [
               "kind",
               "path",
               "id",
               "title",
-              "role",
+              "entryKind",
               "case",
               "names"
             ]
@@ -11556,6 +11443,7 @@
             "type": "string"
           }
         },
+        "additionalProperties": false,
         "required": [
           "path",
           "id",
@@ -11578,6 +11466,7 @@
             "$ref": "#/$defs/OutlineNodeReference"
           }
         },
+        "additionalProperties": false,
         "required": [
           "node"
         ]
@@ -12617,6 +12506,7 @@
             "minimum": 0
           }
         },
+        "additionalProperties": false,
         "required": [
           "blocks"
         ]
@@ -12633,6 +12523,7 @@
             }
           }
         },
+        "additionalProperties": false,
         "required": [
           "cells"
         ]
@@ -13180,71 +13071,6 @@
       "matches"
     ],
     "$defs": {
-      "DefinitionCase": {
-        "description": "Case policy used when matching one semantic entry's names.",
-        "oneOf": [
-          {
-            "description": "Names must match with the same Unicode scalar values and case.",
-            "type": "string",
-            "const": "sensitive"
-          },
-          {
-            "description": "Names match without ASCII case distinctions.",
-            "type": "string",
-            "const": "insensitive"
-          }
-        ]
-      },
-      "DefinitionRole": {
-        "description": "Semantic role assigned before source-specific details leave the parser.\n\n[`crate::SemanticIndex`] maps option, marker, and operand roles to\n[`crate::EntryKind::Parameter`] and maps the remaining roles directly to\ntheir corresponding entry categories.",
-        "oneOf": [
-          {
-            "description": "Command-line option or switch.",
-            "type": "string",
-            "const": "option"
-          },
-          {
-            "description": "End-of-options or parser-control marker such as `--` or `--%`.",
-            "type": "string",
-            "const": "marker"
-          },
-          {
-            "description": "Positional or special operand documented as a definition.",
-            "type": "string",
-            "const": "operand"
-          },
-          {
-            "description": "Executable subcommand or verb.",
-            "type": "string",
-            "const": "command"
-          },
-          {
-            "description": "Named key accepted by a configuration language or command option.",
-            "type": "string",
-            "const": "configuration-key"
-          },
-          {
-            "description": "Process environment variable.",
-            "type": "string",
-            "const": "environment-variable"
-          },
-          {
-            "description": "Other named configuration or language variable.",
-            "type": "string",
-            "const": "variable"
-          },
-          {
-            "description": "One documented value accepted by a parent entry.",
-            "type": "string",
-            "const": "value"
-          },
-          {
-            "description": "Addressable definition without a more specific reliable role.",
-            "type": "string",
-            "const": "term"
-          }
-        ]
-      },
       "DocumentMeta": {
         "description": "Metadata normalized from TH, Dt, and the validated libmandoc result.",
         "type": "object",
@@ -13327,6 +13153,114 @@
           "format"
         ]
       },
+      "EntryKind": {
+        "description": "Semantic category used for outline filtering and nested presentation.",
+        "oneOf": [
+          {
+            "description": "Executable command, builtin, subcommand, or verb.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "command"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "description": "Command input whose exact behavior is described by [`ParameterKind`].",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "parameter"
+              },
+              "parameterKind": {
+                "description": "Parameter syntax family.",
+                "$ref": "#/$defs/ParameterKind"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "parameterKind"
+            ]
+          },
+          {
+            "description": "Named key accepted by a configuration language or parameter.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "configuration-key"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "description": "Process environment variable.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "environment-variable"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "description": "Shell, language, or application variable.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "variable"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "description": "One value accepted by a parent entry.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "value"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "description": "Addressable definition without a more specific reliable category.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "term"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
+          }
+        ]
+      },
       "MarkdownSchema": {
         "description": "Markdown contract used as the coordinate space for every search format.",
         "oneOf": [
@@ -13334,6 +13268,21 @@
             "description": "Version 1 of `ManT`'s deterministic Markdown rendering contract.",
             "type": "string",
             "const": "mant.markdown/v1"
+          }
+        ]
+      },
+      "NameCase": {
+        "description": "Matching policy for semantic names, independent of document provenance.",
+        "oneOf": [
+          {
+            "description": "Exact Unicode scalar spelling.",
+            "type": "string",
+            "const": "sensitive"
+          },
+          {
+            "description": "Ignore ASCII case distinctions only.",
+            "type": "string",
+            "const": "insensitive"
           }
         ]
       },
@@ -13369,6 +13318,7 @@
                 "type": "string"
               }
             },
+            "additionalProperties": false,
             "required": [
               "kind",
               "path",
@@ -13397,6 +13347,7 @@
                 "type": "string"
               }
             },
+            "additionalProperties": false,
             "required": [
               "kind",
               "path",
@@ -13425,6 +13376,7 @@
                 "type": "string"
               }
             },
+            "additionalProperties": false,
             "required": [
               "kind",
               "path",
@@ -13438,7 +13390,11 @@
             "properties": {
               "case": {
                 "description": "Alias case-matching policy.",
-                "$ref": "#/$defs/DefinitionCase"
+                "$ref": "#/$defs/NameCase"
+              },
+              "entryKind": {
+                "description": "Semantic category of the definition.",
+                "$ref": "#/$defs/EntryKind"
               },
               "id": {
                 "description": "Stable document-local identity.",
@@ -13449,7 +13405,7 @@
                 "const": "document-entry"
               },
               "names": {
-                "description": "Normalized selectable aliases.",
+                "description": "Validated selectable names, not an equivalence assertion.",
                 "type": "array",
                 "items": {
                   "type": "string"
@@ -13459,21 +13415,18 @@
                 "description": "Canonical structural outline path.",
                 "$ref": "#/$defs/NodePath"
               },
-              "role": {
-                "description": "Semantic category of the definition.",
-                "$ref": "#/$defs/DefinitionRole"
-              },
               "title": {
                 "description": "Primary display term.",
                 "type": "string"
               }
             },
+            "additionalProperties": false,
             "required": [
               "kind",
               "path",
               "id",
               "title",
-              "role",
+              "entryKind",
               "case",
               "names"
             ]
@@ -13497,6 +13450,7 @@
             "type": "string"
           }
         },
+        "additionalProperties": false,
         "required": [
           "path",
           "id",
@@ -13519,8 +13473,29 @@
             "$ref": "#/$defs/OutlineNodeReference"
           }
         },
+        "additionalProperties": false,
         "required": [
           "node"
+        ]
+      },
+      "ParameterKind": {
+        "description": "Semantic behavior of one command parameter.",
+        "oneOf": [
+          {
+            "description": "Named option or switch such as `-L`, `/?`, or `+r`.",
+            "type": "string",
+            "const": "option"
+          },
+          {
+            "description": "Parser-control marker such as `--` or PowerShell's `--%`.",
+            "type": "string",
+            "const": "marker"
+          },
+          {
+            "description": "Positional or special operand such as a documented stdin `-`.",
+            "type": "string",
+            "const": "operand"
+          }
         ]
       },
       "SearchCase": {

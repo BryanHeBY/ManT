@@ -1,12 +1,16 @@
 //! Source-neutral semantic entry model and rebuildable indexes.
 mod content;
+mod facts;
 mod index;
 mod model;
 mod relations;
 mod walk;
 #[cfg(test)]
-use crate::{Block, DefinitionItem, DefinitionRole, Document, Inline, LinkTarget};
+mod wire;
+#[cfg(test)]
+use crate::{Block, DefinitionItem, Document, Inline, LinkTarget};
 pub use content::*;
+pub use facts::*;
 pub use index::SemanticIndex;
 #[cfg(test)]
 use index::entry_from_definition;
@@ -18,41 +22,22 @@ pub use walk::visit_child_entries;
 #[cfg(test)]
 mod tests {
     use crate::{
-        DefinitionCase, DefinitionIdentity, DocumentMeta, DocumentSource, LayoutHint, Section,
-        SourceFormat,
+        DocumentMeta, DocumentSource, EntryFacts, LayoutHint, NameCase, Section, SourceFormat,
     };
 
     use super::*;
 
-    #[test]
-    fn convergence_records_pre_migration_wire_behavior() {
-        // A measurement of the old decoder, not its desired final contract.
-        // Replace these assertions in the first field-migration commit.
-        let cases: serde_json::Value = serde_json::from_str(include_str!(
-            "../../../tests/fixtures/ir/convergence-wire.json"
-        ))
-        .unwrap();
-        let old: DefinitionItem =
-            serde_json::from_value(cases["definition"]["old"].clone()).unwrap();
-        assert_eq!(old.identity.unwrap().role, DefinitionRole::Option);
-        assert!(
-            serde_json::from_value::<DefinitionItem>(cases["definition"]["new"].clone()).is_ok()
-        );
-        assert!(serde_json::from_str::<crate::ListItem>(r#"{"blocks":[],"unknown":true}"#).is_ok());
-        assert!(serde_json::from_str::<crate::ListKind>(r#""ordered""#).is_ok());
-    }
-
     fn definition(
         id: &str,
-        role: DefinitionRole,
-        aliases: &[&str],
+        kind: EntryKind,
+        names: &[&str],
         forms: &[&str],
         description: Vec<Block>,
     ) -> DefinitionItem {
         DefinitionItem {
             source: None,
-            identity: Some(DefinitionIdentity {
-                name_bindings: aliases
+            entry: Some(EntryFacts {
+                name_bindings: names
                     .iter()
                     .enumerate()
                     .map(|(name, spelling)| crate::EntryNameBinding {
@@ -77,9 +62,9 @@ mod tests {
                 alias_of: None,
                 forms: (0..forms.len()).map(crate::EntryForm::term).collect(),
                 id: id.into(),
-                role,
-                case: DefinitionCase::Sensitive,
-                names: aliases.iter().map(|alias| (*alias).to_owned()).collect(),
+                kind,
+                case: NameCase::Sensitive,
+                names: names.iter().map(|alias| (*alias).to_owned()).collect(),
                 value_domain: None,
             }),
             terms: forms
@@ -106,25 +91,26 @@ mod tests {
         };
         let grandchild = definition(
             "command-child",
-            DefinitionRole::Command,
+            EntryKind::Command,
             &["child"],
             &["child"],
             Vec::new(),
         );
         let value = definition(
             "value-auto",
-            DefinitionRole::Value,
+            EntryKind::Value,
             &["auto"],
             &["auto"],
             vec![list(grandchild)],
         );
         assert!(!value.has_value_choices());
-        let mut transparent =
-            definition("unused", DefinitionRole::Term, &[], &[], vec![list(value)]);
-        transparent.identity = None;
+        let mut transparent = definition("unused", EntryKind::Term, &[], &[], vec![list(value)]);
+        transparent.entry = None;
         let parent = definition(
             "option-color",
-            DefinitionRole::Option,
+            EntryKind::Parameter {
+                parameter_kind: crate::ParameterKind::Option,
+            },
             &["--color"],
             &["--color WHEN"],
             vec![Block::List {
@@ -153,14 +139,16 @@ mod tests {
     fn preserves_definition_nesting_and_counts_forms_separately() {
         let option = definition(
             "option-local-forward",
-            DefinitionRole::Option,
+            EntryKind::Parameter {
+                parameter_kind: crate::ParameterKind::Option,
+            },
             &["-L"],
             &["-L port:host:hostport", "-L socket:remote_socket"],
             Vec::new(),
         );
         let command = definition(
             "command-ssh",
-            DefinitionRole::Command,
+            EntryKind::Command,
             &["ssh"],
             &["ssh destination"],
             vec![Block::DefinitionList {
@@ -201,7 +189,7 @@ mod tests {
         assert_eq!(entries.len(), 1);
         assert_eq!(entries[0].kind, EntryKind::Command);
         assert_eq!(entries[0].children.len(), 1);
-        assert_eq!(entries[0].children[0].aliases, ["-L"]);
+        assert_eq!(entries[0].children[0].names, ["-L"]);
         assert_eq!(entries[0].children[0].forms.len(), 2);
         assert_eq!(entries[0].subtree_len(), 2);
 
@@ -231,7 +219,7 @@ mod tests {
     fn derives_document_targets_only_from_linked_terms() {
         let mut item = definition(
             "command-winget",
-            DefinitionRole::Command,
+            EntryKind::Command,
             &["winget.exe"],
             &[],
             vec![Block::Paragraph {
@@ -266,7 +254,7 @@ mod tests {
                 .document_targets
                 .is_empty()
         );
-        item.identity.as_mut().unwrap().forms = vec![crate::EntryForm::term(0)];
+        item.entry.as_mut().unwrap().forms = vec![crate::EntryForm::term(0)];
 
         let entry = entry_from_definition(&item).expect("entry");
         assert_eq!(
@@ -285,12 +273,14 @@ mod tests {
     fn explicit_cross_document_domain_survives_index_derivation() {
         let mut item = definition(
             "option-config",
-            DefinitionRole::Option,
+            EntryKind::Parameter {
+                parameter_kind: crate::ParameterKind::Option,
+            },
             &["-o"],
             &["-o option"],
             Vec::new(),
         );
-        item.identity.as_mut().expect("identity").value_domain = Some(ValueDomain::EntrySet {
+        item.entry.as_mut().expect("identity").value_domain = Some(ValueDomain::EntrySet {
             reference: SemanticDocumentReference::Manual {
                 name: "ssh_config".to_owned(),
                 manual_section: Some("5".to_owned()),

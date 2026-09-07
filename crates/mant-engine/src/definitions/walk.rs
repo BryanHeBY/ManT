@@ -106,7 +106,7 @@ fn collect_direct<'a>(
             }
             Block::DefinitionList { items, .. } => {
                 for (index, item) in items.iter().enumerate() {
-                    if item.identity.is_some() {
+                    if item.entry.is_some() {
                         collect_owner(
                             block,
                             index,

@@ -90,9 +90,34 @@ missing bindings, independent Form/Name evidence and LF/CRLF/CR original item
 positions after removed leading comments. Existing native consumer source tests
 now assert the `.It` line, not its containing `.Bl`. UI test fixtures explicitly
 record their displayed forms instead of relying on the removed fallback.
-S2 performance and final verification remain pending until recorded below.
+S2 verification: workspace/all-features and strict workspace Clippy passed;
+the real GCC fixture exposed 18 truncated names containing `+`, fixed separately
+in `c2635af4` with man/mdoc regressions. This changes 16 affected/colliding IDs,
+not the field migration's ID allocator. All 3,836 owners remain, with text and
+Markdown byte-identical to baseline. Repeated validated-name work in selectors
+was removed in `67792609`, retaining only snapshot-local borrowed names.
 
-Not yet completed: S2 verification, S3–S6. Current successful baseline verification is recorded
+Final S2 comparison uses producer `c5391365`, default-feature release binaries,
+and seven alternating old/new rounds recorded in
+`target/ir-convergence/s2-cached/measurements.json`:
+
+| Mode | Baseline / S2 median ms | Baseline / S2 peak KiB |
+| --- | --- | --- |
+| full JSON process | 214.49 / 234.27 | 80,744 / 90,584 |
+| outline process | 165.77 / 175.04 | 64,216 / 67,092 |
+| explain process | 188.43 / 197.32 | 64,476 / 67,236 |
+| native harness (eight loads) | 1,143.30 / 1,194.61 | 60,224 / 63,272 |
+
+The 49 individual timed native loads have median 135.10 / 140.56 ms and ranges
+123.68–166.15 / 131.98–194.36 ms. Process times above are not pure parsing.
+No final time increase crosses both investigation thresholds. Full JSON peak
+memory does: explicit forms/bindings/source metadata expands output from
+19,493,365 to 26,809,501 bytes; materialization/serialization requires additional
+space. It is not claimed memory-equivalent. Native and non-full-JSON memory
+remain below the 5 MiB threshold. No complete body copies or global caches were
+introduced into the borrowed forms path.
+
+Not yet completed: S3–S6. Current successful baseline verification is recorded
 in `remaining-review-verification.md`; it is not evidence for later changes.
 
 ## Local verification boundary

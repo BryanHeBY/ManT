@@ -1,6 +1,6 @@
 //! Definition context policy; coordinated by the parent discovery passes.
 use crate::inline::plain_text;
-use mant_ir::{DefinitionItem, DefinitionRole};
+use mant_ir::{DefinitionItem, EntryKind};
 
 /// Only semantic topology changes inherited context; visual indentation does not.
 pub(super) fn definition_group_context(
@@ -15,19 +15,22 @@ pub(super) fn definition_group_context(
 }
 
 pub(super) fn child_definition_context(
-    role: DefinitionRole,
+    role: EntryKind,
     item_context: DefinitionContext,
 ) -> DefinitionContext {
     match role {
-        DefinitionRole::Command => DefinitionContext::Parameters,
-        DefinitionRole::Option
-        | DefinitionRole::Marker
-        | DefinitionRole::Operand
-        | DefinitionRole::ConfigurationKey => DefinitionContext::Values,
-        DefinitionRole::EnvironmentVariable
-        | DefinitionRole::Variable
-        | DefinitionRole::Value
-        | DefinitionRole::Term => item_context,
+        EntryKind::Command => DefinitionContext::Parameters,
+        EntryKind::Parameter {
+            parameter_kind:
+                mant_ir::ParameterKind::Option
+                | mant_ir::ParameterKind::Marker
+                | mant_ir::ParameterKind::Operand,
+        }
+        | EntryKind::ConfigurationKey => DefinitionContext::Values,
+        EntryKind::EnvironmentVariable
+        | EntryKind::Variable
+        | EntryKind::Value
+        | EntryKind::Term => item_context,
     }
 }
 

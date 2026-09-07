@@ -1,6 +1,6 @@
 //! Presents structure-aware search results for terminals and language models.
 
-use mant_ir::DefinitionRole;
+use mant_ir::EntryKind;
 use std::{collections::BTreeMap, ops::Range};
 
 use mant_protocol::{OutlineNodeReference, OutlineTrail, QuerySearch, SearchHit, SearchScope};
@@ -23,7 +23,7 @@ pub enum SearchTextRole {
     /// A document, section, or tldr node title.
     Heading,
     /// A semantic entry title.
-    Definition(DefinitionRole),
+    Definition(EntryKind),
     /// Text that matched the search query.
     Match,
     /// Secondary guides and context markers.
@@ -469,7 +469,9 @@ where
 
 const fn search_node_role(node: &OutlineNodeReference) -> SearchTextRole {
     match node {
-        OutlineNodeReference::DocumentEntry { role, .. } => SearchTextRole::Definition(*role),
+        OutlineNodeReference::DocumentEntry { entry_kind, .. } => {
+            SearchTextRole::Definition(*entry_kind)
+        }
         OutlineNodeReference::Tldr { .. }
         | OutlineNodeReference::DocumentRoot { .. }
         | OutlineNodeReference::DocumentSection { .. } => SearchTextRole::Heading,
@@ -625,8 +627,10 @@ mod tests {
                         path: "5.3/e17".to_owned().into(),
                         id: "acls-option".to_owned().into(),
                         title: "--acls".to_owned(),
-                        role: mant_ir::DefinitionRole::Option,
-                        case: mant_ir::DefinitionCase::Sensitive,
+                        entry_kind: mant_ir::EntryKind::Parameter {
+                            parameter_kind: mant_ir::ParameterKind::Option,
+                        },
+                        case: mant_ir::NameCase::Sensitive,
                         names: vec!["--acls".to_owned()],
                     },
                 },

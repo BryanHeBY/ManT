@@ -1,8 +1,8 @@
-//! Native entry forms, aliases and ownership across query consumers.
+//! Native entry forms, names and ownership across query consumers.
 
 #[test]
 fn invocation_forms_and_aliases_agree_across_query_consumers() {
-    for (section, head, form, aliases, rejected) in [
+    for (section, head, form, names, rejected) in [
         (
             "OPTIONS",
             ".BI \"-n, \" -NUM",
@@ -56,7 +56,7 @@ fn invocation_forms_and_aliases_agree_across_query_consumers() {
         assert_invocation_consumers(
             &format!(".TH NAMES 1\n.SH {section}\n.TP\n{head}\nOWNEDPAYLOAD.\n"),
             form,
-            &aliases,
+            &names,
             rejected,
             3,
         );
@@ -66,7 +66,7 @@ fn invocation_forms_and_aliases_agree_across_query_consumers() {
 fn assert_invocation_consumers(
     source: &str,
     form: &str,
-    aliases: &[&str],
+    names: &[&str],
     rejected: &str,
     source_line: u32,
 ) {
@@ -76,7 +76,7 @@ fn assert_invocation_consumers(
     let query = crate::query_roff_bytes(source.as_bytes()).unwrap();
     let index = mant_ir::SemanticIndex::build(query.document.as_ref().unwrap());
     let indexed = &index.section(&query.document.as_ref().unwrap().sections[0].id)[0];
-    assert_eq!(indexed.aliases, aliases);
+    assert_eq!(indexed.names, names);
     assert_eq!(indexed.forms, [form]);
     let outline = crate::build_outline_projection(&query, EntryProjection::All, None).unwrap();
     let OutlineNode::DocumentSection { children, .. } = &outline.nodes[0] else {
@@ -85,17 +85,17 @@ fn assert_invocation_consumers(
     let OutlineNode::DocumentEntry {
         id,
         path,
-        aliases: projected,
+        names: projected,
         forms,
         ..
     } = &children[0]
     else {
         panic!("{children:?}")
     };
-    assert_eq!(projected, aliases);
+    assert_eq!(projected, names);
     assert_eq!(forms, &[form]);
     let direct = crate::select_excerpt(&query, &[path.as_str()]).unwrap();
-    for alias in aliases {
+    for alias in names {
         let explained = crate::select_excerpt(&query, &[alias]).unwrap();
         assert_eq!(explained.selections, direct.selections);
         assert!(crate::render_excerpt_text(&explained).contains("OWNEDPAYLOAD"));
@@ -128,7 +128,7 @@ fn assert_invocation_consumers(
 
 #[test]
 fn slash_alias_candidates_retain_parameter_styles_across_native_dialects() {
-    for (mdoc, man, form, aliases, rejected) in [
+    for (mdoc, man, form, names, rejected) in [
         (
             "Fl n Ns / Ns Ar -NUM",
             ".BI \"-n/\" -NUM",
@@ -163,14 +163,14 @@ fn slash_alias_candidates_retain_parameter_styles_across_native_dialects() {
                 ".Dd September 7, 2026\n.Dt NAMES 1\n.Os\n.Sh OPTIONS\n.Bl -tag -width Ds\n.It {mdoc}\nOWNEDPAYLOAD.\n.El\n"
             ),
             form,
-            &aliases,
+            &names,
             rejected,
             6,
         );
         assert_invocation_consumers(
             &format!(".TH NAMES 1\n.SH OPTIONS\n.TP\n{man}\nOWNEDPAYLOAD.\n"),
             form,
-            &aliases,
+            &names,
             rejected,
             3,
         );
@@ -222,9 +222,7 @@ fn variable_subscripts_must_be_complete_authored_forms() {
         let document = query.document.as_ref().unwrap();
         let index = mant_ir::SemanticIndex::build(document);
         assert!(
-            index.section(&document.sections[0].id)[0]
-                .aliases
-                .is_empty(),
+            index.section(&document.sections[0].id)[0].names.is_empty(),
             "{name}"
         );
         assert!(document.diagnostics.iter().any(|d| d.code.as_deref() == Some("manual.semantic-entry.unclassified-definition")), "{name}: {:?}", document.diagnostics);
@@ -234,7 +232,7 @@ fn variable_subscripts_must_be_complete_authored_forms() {
 
 #[test]
 fn option_arguments_never_become_aliases() {
-    for (head, aliases, missed) in [
+    for (head, names, missed) in [
         (".It Fl n Ar -NUM", vec!["-n"], "-NUM"),
         (".It Fl x Ar -1 | 1", vec!["-x"], "-1"),
         (
@@ -247,7 +245,7 @@ fn option_arguments_never_become_aliases() {
         let source = format!(
             ".Dd September 7, 2026\n.Dt PROBE 1\n.Os\n.Sh OPTIONS\n.Bl -tag -width Ds\n{head}\nDescription.\n.El\n"
         );
-        assert_names(&source, &aliases, missed);
+        assert_names(&source, &names, missed);
     }
     for head in [".BI \"-n \" -NUM", ".B -n\n.I -NUM", ".B \"-n -NUM\""] {
         assert_names(
@@ -262,7 +260,7 @@ fn assert_names(source: &str, names: &[&str], missed: &str) {
     let query = crate::query_roff_bytes(source.as_bytes()).unwrap();
     let index = mant_ir::SemanticIndex::build(query.document.as_ref().unwrap());
     let entries = index.section(&query.document.as_ref().unwrap().sections[0].id);
-    assert_eq!(entries[0].aliases, names, "{source}");
+    assert_eq!(entries[0].names, names, "{source}");
     for name in names {
         assert!(
             crate::select_excerpt(&query, &[name]).is_ok(),

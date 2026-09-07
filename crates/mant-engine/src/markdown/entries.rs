@@ -14,11 +14,11 @@ pub(crate) fn export_attached_policy(items: &[ListItem]) -> Option<&'static str>
                 let Some(facts) = &item.entry else {
                     return false;
                 };
-                let Ok(signature) = entry_signature(item, facts.role, true, *policy) else {
+                let Ok(signature) = entry_signature(item, facts.kind, true, *policy) else {
                     return false;
                 };
                 let rebuilt =
-                    bindings::entry_facts(item, &signature, facts.role, facts.case, *policy, true);
+                    bindings::entry_facts(item, &signature, facts.kind, facts.case, *policy, true);
                 rebuilt.names == facts.names
                     && rebuilt.forms == facts.forms
                     && rebuilt.name_bindings == facts.name_bindings
@@ -38,9 +38,7 @@ use super::directives::{
     AttachedValuePolicy, DomainDeclaration, DomainDeclarationState, SemanticDeclarations,
     domain_diagnostic, semantic_diagnostic,
 };
-use mant_ir::{
-    Block, DefinitionRole, Diagnostic, Inline, ListItem, ListKind, SourceSpan, ValueDomain,
-};
+use mant_ir::{Block, Diagnostic, EntryKind, Inline, ListItem, ListKind, SourceSpan, ValueDomain};
 
 /// Attach facts to each declared owner without consuming its head or delimiter.
 pub(super) fn normalize_entry_lists(
@@ -98,8 +96,13 @@ fn entry_coverage(
             coverage.rejected |= child_coverage.iter().any(|value| value.rejected);
             continue;
         }
-        let role = declaration.map_or(DefinitionRole::Option, |value| value.role);
-        let case = declaration.map_or(mant_ir::DefinitionCase::Sensitive, |value| value.case);
+        let role = declaration.map_or(
+            EntryKind::Parameter {
+                parameter_kind: mant_ir::ParameterKind::Option,
+            },
+            |value| value.role,
+        );
+        let case = declaration.map_or(mant_ir::NameCase::Sensitive, |value| value.case);
         let attached = declaration.map_or(AttachedValuePolicy::Infer, |value| value.attached);
         let signatures = items
             .iter()
@@ -110,20 +113,7 @@ fn entry_coverage(
         // validation independently; one rejection cannot erase valid siblings.
         if declaration.is_none() && signatures.iter().any(Result::is_err) {
             coverage.rejected |= child_coverage.iter().any(|value| value.rejected);
-            if resembles_rejected_option_list(items) {
-                semantic_diagnostic(
-                    diagnostics,
-                    source.unwrap_or(SourceSpan {
-                        byte_range: None,
-                        line: 1,
-                        column: 1,
-                        end_line: None,
-                        end_column: None,
-                    }),
-                    "option-like list is not complete; every item needs code terms and a ':' or dash description delimiter"
-                        .to_owned(),
-                );
-            }
+            warn_incomplete_option_list(items, *source, diagnostics);
             continue;
         }
         for (item_index, ((item, signature), children)) in items
@@ -166,6 +156,27 @@ fn entry_coverage(
         }
     }
     coverage
+}
+
+fn warn_incomplete_option_list(
+    items: &[ListItem],
+    source: Option<SourceSpan>,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    if resembles_rejected_option_list(items) {
+        semantic_diagnostic(
+            diagnostics,
+            source.unwrap_or(SourceSpan {
+                byte_range: None,
+                line: 1,
+                column: 1,
+                end_line: None,
+                end_column: None,
+            }),
+            "option-like list is not complete; every item needs code terms and a ':' or dash description delimiter"
+                .to_owned(),
+        );
+    }
 }
 
 fn attach_domain(
@@ -263,7 +274,7 @@ fn normalize_option_lists(blocks: &mut [Block]) {
 
 #[cfg(test)]
 mod tests {
-    use mant_ir::{Block, DefinitionCase, DefinitionRole, Inline, LayoutHint, ListItem, ListKind};
+    use mant_ir::{Block, EntryKind, Inline, LayoutHint, ListItem, ListKind, NameCase};
 
     use super::normalize_option_lists;
 
@@ -309,8 +320,11 @@ mod tests {
         assert_eq!(items.len(), 2);
         assert!(items.iter().all(|item| {
             item.entry.as_ref().is_some_and(|identity| {
-                identity.role == DefinitionRole::Option
-                    && identity.case == DefinitionCase::Sensitive
+                identity.kind
+                    == EntryKind::Parameter {
+                        parameter_kind: mant_ir::ParameterKind::Option,
+                    }
+                    && identity.case == NameCase::Sensitive
             })
         }));
         assert!(matches!(

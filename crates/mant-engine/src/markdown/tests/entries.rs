@@ -98,7 +98,7 @@ fn declared_forms_are_separate_from_alias_groups() {
     );
     let index = mant_ir::SemanticIndex::build(&parsed.document);
     let entry = &index.root()[0];
-    assert_eq!(entry.aliases, ["-o", "--output"]);
+    assert_eq!(entry.names, ["-o", "--output"]);
     assert_eq!(entry.forms, ["-o FILE, --output FILE", "--output=FILE"]);
     for term in [
         "`-o` | : Empty.",
@@ -165,7 +165,7 @@ fn annotates_explicit_option_lists_without_rewriting_their_heads() {
     };
     assert!(matches!(
         &children[0],
-        OutlineNode::DocumentEntry { aliases, .. } if aliases == &["-h", "--help"]
+        OutlineNode::DocumentEntry { names, .. } if names == &["-h", "--help"]
     ));
 }
 
@@ -198,7 +198,11 @@ fn declared_entries_cover_windows_options_commands_and_environment_variables() {
     assert_eq!(identities[3].names, ["/server"]);
     assert_eq!(identities[4].names, ["/reg:32", "/reg:64"]);
     assert!(identities.iter().all(|identity| {
-        identity.role == DefinitionRole::Option && identity.case == DefinitionCase::Insensitive
+        identity.kind
+            == EntryKind::Parameter {
+                parameter_kind: mant_ir::ParameterKind::Option,
+            }
+            && identity.case == NameCase::Insensitive
     }));
 
     let query = ResolvedContent {
@@ -225,7 +229,7 @@ fn declared_entries_cover_windows_options_commands_and_environment_variables() {
     assert!(matches!(
         command.selections.as_slice(),
         [ExcerptSelection::DocumentEntry { entry, .. }]
-            if entry.entry_owner().and_then(mant_ir::EntryOwner::facts).is_some_and(|identity| identity.role == DefinitionRole::Command)
+            if entry.entry_owner().and_then(mant_ir::EntryOwner::facts).is_some_and(|identity| identity.kind == EntryKind::Command)
     ));
     for selector in ["3", "environment"] {
         assert!(matches!(
@@ -240,7 +244,7 @@ fn declared_entries_cover_windows_options_commands_and_environment_variables() {
     assert!(matches!(
         environment.selections.as_slice(),
         [ExcerptSelection::DocumentEntry { entry, .. }]
-            if entry.entry_owner().and_then(mant_ir::EntryOwner::facts).is_some_and(|identity| identity.role == DefinitionRole::EnvironmentVariable)
+            if entry.entry_owner().and_then(mant_ir::EntryOwner::facts).is_some_and(|identity| identity.kind == EntryKind::EnvironmentVariable)
     ));
     for selector in [
         "ProgramFiles(x86)",
@@ -266,18 +270,28 @@ fn declared_entries_expose_every_protocol_semantic_role() {
     assert!(parsed.document.diagnostics.is_empty());
 
     let expected = [
-        (DefinitionRole::Marker, "--"),
-        (DefinitionRole::Operand, "FILE"),
-        (DefinitionRole::ConfigurationKey, "AuthorizedKeysFile"),
-        (DefinitionRole::Value, "always"),
-        (DefinitionRole::Term, "exit status"),
+        (
+            EntryKind::Parameter {
+                parameter_kind: mant_ir::ParameterKind::Marker,
+            },
+            "--",
+        ),
+        (
+            EntryKind::Parameter {
+                parameter_kind: mant_ir::ParameterKind::Operand,
+            },
+            "FILE",
+        ),
+        (EntryKind::ConfigurationKey, "AuthorizedKeysFile"),
+        (EntryKind::Value, "always"),
+        (EntryKind::Term, "exit status"),
     ];
     for (section, (role, name)) in parsed.document.sections.iter().zip(expected) {
         let [Block::List { items, .. }] = section.blocks.as_slice() else {
             panic!("declared {role:?} list should become definitions");
         };
         let identity = items[0].entry.as_ref().expect("semantic identity");
-        assert_eq!(identity.role, role);
+        assert_eq!(identity.kind, role);
         assert_eq!(identity.names, [name]);
     }
 
@@ -298,7 +312,7 @@ fn declared_entries_expose_every_protocol_semantic_role() {
 #[test]
 fn declared_non_option_code_spans_are_atomic_names() {
     let parsed = parse_markdown(
-        "# tool\n\n## Terms\n\n<!-- mant:entries role=term case=sensitive -->\n- `Send, Env`: Preserve punctuation.\n- `A | B`: Preserve a grammar expression.\n\n## Commands\n\n<!-- mant:entries role=command case=sensitive -->\n- `alpha|beta`: Preserve a literal command.\n- `cd`, `chdir`: Expose explicit aliases.\n",
+        "# tool\n\n## Terms\n\n<!-- mant:entries role=term case=sensitive -->\n- `Send, Env`: Preserve punctuation.\n- `A | B`: Preserve a grammar expression.\n\n## Commands\n\n<!-- mant:entries role=command case=sensitive -->\n- `alpha|beta`: Preserve a literal command.\n- `cd`, `chdir`: Expose explicit names.\n",
         Some("atomic.md".to_owned()),
     )
     .expect("atomic semantic entry names");
@@ -444,15 +458,15 @@ fn declared_variables_keep_shell_and_powershell_automatic_names() {
     )));
     assert!(matches!(
         &children[0],
-        OutlineNode::DocumentEntry { id, aliases, .. }
-            if id == "variable-question-mark" && aliases == &["$?"]
+        OutlineNode::DocumentEntry { id, names, .. }
+            if id == "variable-question-mark" && names == &["$?"]
     ));
     for selector in ["$?", "$$", "$^", "$_", "$lastexitcode", "$PSVersionTable"] {
         let explanation = select_excerpt(&query, &[selector]).expect("variable selector");
         assert!(matches!(
             explanation.selections.as_slice(),
             [ExcerptSelection::DocumentEntry { entry, .. }]
-                if entry.entry_owner().and_then(mant_ir::EntryOwner::facts).is_some_and(|identity| identity.role == DefinitionRole::Variable)
+                if entry.entry_owner().and_then(mant_ir::EntryOwner::facts).is_some_and(|identity| identity.kind == EntryKind::Variable)
         ));
     }
     assert!(matches!(
@@ -461,7 +475,7 @@ fn declared_variables_keep_shell_and_powershell_automatic_names() {
             .selections
             .as_slice(),
         [ExcerptSelection::DocumentEntry { entry, .. }]
-            if entry.entry_owner().and_then(mant_ir::EntryOwner::facts).is_some_and(|identity| identity.role == DefinitionRole::EnvironmentVariable)
+            if entry.entry_owner().and_then(mant_ir::EntryOwner::facts).is_some_and(|identity| identity.kind == EntryKind::EnvironmentVariable)
     ));
     assert!(matches!(
         select_excerpt(&query, &["$PATH"])
@@ -469,7 +483,7 @@ fn declared_variables_keep_shell_and_powershell_automatic_names() {
             .selections
             .as_slice(),
         [ExcerptSelection::DocumentEntry { entry, .. }]
-            if entry.entry_owner().and_then(mant_ir::EntryOwner::facts).is_some_and(|identity| identity.role == DefinitionRole::Variable)
+            if entry.entry_owner().and_then(mant_ir::EntryOwner::facts).is_some_and(|identity| identity.kind == EntryKind::Variable)
     ));
 }
 
@@ -508,7 +522,7 @@ fn exact_aliases_win_before_normalized_option_shorthands() {
         command.selections.as_slice(),
         [ExcerptSelection::DocumentEntry { entry, .. }]
             if entry.entry_owner().and_then(mant_ir::EntryOwner::facts).is_some_and(|identity| {
-                identity.role == DefinitionRole::Command && identity.names == ["?"]
+                identity.kind == EntryKind::Command && identity.names == ["?"]
             })
     ));
     let command_node = select_excerpt(&query, &["?".to_owned()]).expect("exact command node");
@@ -516,7 +530,7 @@ fn exact_aliases_win_before_normalized_option_shorthands() {
         command_node.selections.as_slice(),
         [ExcerptSelection::DocumentEntry { entry, .. }]
             if entry.entry_owner().and_then(mant_ir::EntryOwner::facts).is_some_and(|identity| {
-                identity.role == DefinitionRole::Command && identity.names == ["?"]
+                identity.kind == EntryKind::Command && identity.names == ["?"]
             })
     ));
     for selector in ["/?", "-?"] {
@@ -525,7 +539,7 @@ fn exact_aliases_win_before_normalized_option_shorthands() {
             option.selections.as_slice(),
             [ExcerptSelection::DocumentEntry { entry, .. }]
                 if entry.entry_owner().and_then(mant_ir::EntryOwner::facts).is_some_and(|identity| {
-                    identity.role == DefinitionRole::Option
+                    identity.kind == EntryKind::Parameter { parameter_kind: mant_ir::ParameterKind::Option }
                         && identity.names == ["/?", "-?"]
                 })
         ));
@@ -662,8 +676,7 @@ fn declared_option_entries_cover_windows_native_token_families() {
         for node in nodes {
             match node {
                 OutlineNode::DocumentEntry {
-                    aliases: entry_names,
-                    ..
+                    names: entry_names, ..
                 } => output.extend(entry_names.iter().cloned()),
                 OutlineNode::DocumentRoot { children, .. }
                 | OutlineNode::DocumentSection { children, .. } => collect_names(children, output),
@@ -717,14 +730,14 @@ fn declared_option_entries_cover_windows_native_token_families() {
         option.selections.as_slice(),
         [ExcerptSelection::DocumentEntry { entry, .. }]
             if entry.entry_owner().and_then(mant_ir::EntryOwner::facts).is_some_and(|identity| {
-                identity.id == "option-start" && identity.role == DefinitionRole::Option
+                identity.id == "option-start" && identity.kind == EntryKind::Parameter { parameter_kind: mant_ir::ParameterKind::Option }
             })
     ));
     assert!(matches!(
         command.selections.as_slice(),
         [ExcerptSelection::DocumentEntry { entry, .. }]
             if entry.entry_owner().and_then(mant_ir::EntryOwner::facts).is_some_and(|identity| {
-                identity.id == "command-start" && identity.role == DefinitionRole::Command
+                identity.id == "command-start" && identity.kind == EntryKind::Command
             })
     ));
 }
@@ -825,7 +838,7 @@ fn declared_entries_preserve_roles_at_arbitrary_list_depth() {
     };
     let OutlineNode::DocumentEntry {
         entry_kind: EntryKind::Command,
-        case: DefinitionCase::Insensitive,
+        case: NameCase::Insensitive,
         children,
         ..
     } = &children[0]
@@ -852,9 +865,9 @@ fn declared_entries_preserve_roles_at_arbitrary_list_depth() {
         children.as_slice(),
         [OutlineNode::DocumentEntry {
             entry_kind: EntryKind::Value,
-            aliases,
+            names,
             ..
-        }] if aliases == &["local"]
+        }] if names == &["local"]
     ));
 }
 
@@ -873,7 +886,7 @@ fn semantic_directives_are_independent_of_markdown_line_endings() {
         let [entry] = semantic_index.root() else {
             panic!("{newline:?}: one semantic entry expected");
         };
-        assert_eq!(entry.aliases, ["MANT_MANPATH"]);
+        assert_eq!(entry.names, ["MANT_MANPATH"]);
         assert!(matches!(
             entry.value_domain,
             Some(mant_ir::ValueDomain::EntrySet {
@@ -1171,7 +1184,7 @@ fn linked_code_terms_define_entry_document_destinations() {
     let index = mant_ir::SemanticIndex::build(&parsed.document);
     let entries = index.root();
     assert_eq!(entries.len(), 2);
-    assert_eq!(entries[0].aliases, ["winget", "w"]);
+    assert_eq!(entries[0].names, ["winget", "w"]);
     assert!(matches!(
         entries[0].document_targets.as_slice(),
         [mant_ir::SemanticDocumentTarget {

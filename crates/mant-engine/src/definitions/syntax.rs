@@ -4,7 +4,7 @@
 //! context decides which grammar to try; this module only decides whether a
 //! spelling is trustworthy enough to expose as an addressable entry.
 
-use mant_ir::{DefinitionCase, DefinitionItem, DefinitionRole};
+use mant_ir::{DefinitionItem, EntryKind, NameCase};
 
 use crate::inline::plain_text;
 
@@ -27,7 +27,7 @@ pub(crate) use options::{option_names_from_terms, option_prefix, slash_option_fo
 pub(super) fn infer_identity(
     item: &DefinitionItem,
     context: DefinitionContext,
-) -> (DefinitionRole, DefinitionCase, Vec<String>) {
+) -> (EntryKind, NameCase, Vec<String>) {
     let first = item
         .terms
         .first()
@@ -42,44 +42,44 @@ pub(super) fn infer_identity(
         DefinitionContext::Commands => {
             let names = command_names(item);
             if names.is_empty() {
-                (DefinitionRole::Term, DefinitionCase::Sensitive, Vec::new())
+                (EntryKind::Term, NameCase::Sensitive, Vec::new())
             } else {
-                (DefinitionRole::Command, DefinitionCase::Sensitive, names)
+                (EntryKind::Command, NameCase::Sensitive, names)
             }
         }
         DefinitionContext::EnvironmentVariables => named_identity(
-            DefinitionRole::EnvironmentVariable,
-            DefinitionCase::Sensitive,
+            EntryKind::EnvironmentVariable,
+            NameCase::Sensitive,
             environment_names(item),
         ),
         DefinitionContext::Variables => named_identity(
-            DefinitionRole::Variable,
-            DefinitionCase::Sensitive,
+            EntryKind::Variable,
+            NameCase::Sensitive,
             named_term(item, is_variable_term),
         ),
         DefinitionContext::ConfigurationKeys => named_identity(
-            DefinitionRole::ConfigurationKey,
-            DefinitionCase::Insensitive,
+            EntryKind::ConfigurationKey,
+            NameCase::Insensitive,
             named_term(item, is_configuration_key),
         ),
         DefinitionContext::Values => named_identity(
-            DefinitionRole::Value,
-            DefinitionCase::Sensitive,
+            EntryKind::Value,
+            NameCase::Sensitive,
             named_term(item, is_value_name),
         ),
         DefinitionContext::Parameters => parameter_identity(item, trimmed),
         DefinitionContext::Generic if trimmed.starts_with('-') => parameter_identity(item, trimmed),
-        DefinitionContext::Generic => (DefinitionRole::Term, DefinitionCase::Sensitive, Vec::new()),
+        DefinitionContext::Generic => (EntryKind::Term, NameCase::Sensitive, Vec::new()),
     }
 }
 
 fn named_identity(
-    role: DefinitionRole,
-    case: DefinitionCase,
+    role: EntryKind,
+    case: NameCase,
     names: Vec<String>,
-) -> (DefinitionRole, DefinitionCase, Vec<String>) {
+) -> (EntryKind, NameCase, Vec<String>) {
     if names.is_empty() {
-        (DefinitionRole::Term, DefinitionCase::Sensitive, names)
+        (EntryKind::Term, NameCase::Sensitive, names)
     } else {
         (role, case, names)
     }

@@ -21,10 +21,10 @@ fn composite_environment_options_do_not_promote_shell_labels() {
         panic!("definitions");
     };
     assert_eq!(
-        items[0].identity.as_ref().expect("term").role,
-        mant_ir::DefinitionRole::Term
+        items[0].entry.as_ref().expect("term").kind,
+        mant_ir::EntryKind::Term
     );
-    assert_eq!(items[1].identity.as_ref().expect("option").names, ["-q"]);
+    assert_eq!(items[1].entry.as_ref().expect("option").names, ["-q"]);
     assert!(document.diagnostics.iter().any(|diagnostic| {
         diagnostic.code.as_deref() == Some("manual.semantic-entry.unclassified-definition")
             && diagnostic.message.contains("Unix Bourne shell:")
@@ -69,7 +69,7 @@ fn separates_definition_layout_arguments_from_visible_terms() {
             Inline::Strong { .. },
             Inline::Emphasis { .. }
         ]
-            if items[0].identity.as_ref().is_some_and(|identity| &identity.id == id)
+            if items[0].entry.as_ref().is_some_and(|identity| &identity.id == id)
     ));
     assert!(
         items
@@ -399,7 +399,7 @@ fn tq_terms_share_one_semantic_option_identity() {
         ["--alpha", "-a", "--ALPHA"]
     );
     assert_eq!(
-        items[0].identity.as_ref().expect("option identity").names,
+        items[0].entry.as_ref().expect("option identity").names,
         ["--alpha", "-a", "--ALPHA"]
     );
 }
@@ -603,7 +603,7 @@ fn distinguishes_man_ip_enumeration_from_numeric_option_values() {
         entries[2]
             .children
             .iter()
-            .flat_map(|entry| &entry.aliases)
+            .flat_map(|entry| &entry.names)
             .collect::<Vec<_>>(),
         ["0", "1"]
     );
@@ -745,7 +745,7 @@ fn keeps_command_names_in_extended_mdoc_synopsis_terms() {
     assert!(matches!(
         items[0].terms[0].as_slice(),
         [Inline::Anchor { id, .. }, Inline::Strong { .. }]
-            if items[0].identity.as_ref().is_some_and(|identity| &identity.id == id)
+            if items[0].entry.as_ref().is_some_and(|identity| &identity.id == id)
     ));
     assert!(
         items[1].terms[0]
@@ -803,7 +803,7 @@ Forward a local socket.\n.El\n",
             "-L local_socket:remote_socket",
         ]
     );
-    assert_eq!(items[0].identity.as_ref().unwrap().names, ["-L"]);
+    assert_eq!(items[0].entry.as_ref().unwrap().names, ["-L"]);
     assert!(document.sections[0].blocks.iter().any(|block| {
         matches!(block, Block::DefinitionList { items, .. }
         if items[0].description.iter().any(|description| {
@@ -838,7 +838,7 @@ Convert filenames from the specified encoding.\n\
             .collect::<Vec<_>>(),
         ["-I encoding", "-O encoding"]
     );
-    assert_eq!(items[0].identity.as_ref().unwrap().names, ["-I", "-O"]);
+    assert_eq!(items[0].entry.as_ref().unwrap().names, ["-I", "-O"]);
     assert!(items[0].description.iter().any(|description| {
         matches!(description, Block::Paragraph { children, .. }
             if inline_text(children) == "Convert filenames from the specified encoding.")
@@ -862,7 +862,7 @@ Select the archive mode without losing this description.\n\
     };
     assert_eq!(items.len(), 1);
     assert_eq!(inline_text(&items[0].terms[0]), "-Z mode");
-    assert_eq!(items[0].identity.as_ref().unwrap().names, ["-Z"]);
+    assert_eq!(items[0].entry.as_ref().unwrap().names, ["-Z"]);
     assert!(items[0].description.iter().any(|description| {
         matches!(description, Block::Paragraph { children, .. }
             if inline_text(children)

@@ -1,5 +1,5 @@
 //! Visit semantic children through transparent structural containers.
-use crate::{Block, DefinitionItem, DefinitionRole, EntryOwner, ListItem};
+use crate::{Block, DefinitionItem, EntryKind, EntryOwner, ListItem};
 
 /// Visit direct semantic children through transparent structural containers.
 /// An entry's description belongs to that child, not to the current parent.
@@ -68,7 +68,7 @@ fn has_value_choices(blocks: &[Block]) -> bool {
         found = true;
         only_values &= item
             .facts()
-            .is_some_and(|identity| identity.role == DefinitionRole::Value);
+            .is_some_and(|identity| identity.kind == EntryKind::Value);
     });
     found && only_values
 }

@@ -4,8 +4,7 @@ use super::{
     semantic_diagnostic,
 };
 use mant_ir::{
-    DefinitionCase, DefinitionRole, Diagnostic, EntryKind, SemanticDocumentReference, SourceSpan,
-    ValueDomain,
+    Diagnostic, EntryKind, NameCase, SemanticDocumentReference, SourceSpan, ValueDomain,
 };
 pub(super) fn is_semantic_directive(raw: &str, name: &str) -> bool {
     raw.trim()
@@ -269,22 +268,28 @@ fn parse_declaration(value: &str, source: SourceSpan) -> Result<EntryDeclaration
         match key {
             "role" if role.is_none() => {
                 role = Some(match value {
-                    "option" => DefinitionRole::Option,
-                    "marker" => DefinitionRole::Marker,
-                    "operand" => DefinitionRole::Operand,
-                    "command" => DefinitionRole::Command,
-                    "configuration-key" => DefinitionRole::ConfigurationKey,
-                    "environment-variable" => DefinitionRole::EnvironmentVariable,
-                    "variable" => DefinitionRole::Variable,
-                    "value" => DefinitionRole::Value,
-                    "term" => DefinitionRole::Term,
+                    "option" => EntryKind::Parameter {
+                        parameter_kind: mant_ir::ParameterKind::Option,
+                    },
+                    "marker" => EntryKind::Parameter {
+                        parameter_kind: mant_ir::ParameterKind::Marker,
+                    },
+                    "operand" => EntryKind::Parameter {
+                        parameter_kind: mant_ir::ParameterKind::Operand,
+                    },
+                    "command" => EntryKind::Command,
+                    "configuration-key" => EntryKind::ConfigurationKey,
+                    "environment-variable" => EntryKind::EnvironmentVariable,
+                    "variable" => EntryKind::Variable,
+                    "value" => EntryKind::Value,
+                    "term" => EntryKind::Term,
                     _ => return Err(format!("unknown semantic-entry role '{value}'")),
                 });
             }
             "case" if case.is_none() => {
                 case = Some(match value {
-                    "sensitive" => DefinitionCase::Sensitive,
-                    "insensitive" => DefinitionCase::Insensitive,
+                    "sensitive" => NameCase::Sensitive,
+                    "insensitive" => NameCase::Insensitive,
                     _ => return Err(format!("unknown semantic-entry case policy '{value}'")),
                 });
             }
@@ -306,7 +311,12 @@ fn parse_declaration(value: &str, source: SourceSpan) -> Result<EntryDeclaration
         }
     }
     let role = role.ok_or_else(|| "semantic-entry directive requires role=...".to_owned())?;
-    if attached.is_some() && role != DefinitionRole::Option {
+    if attached.is_some()
+        && role
+            != (EntryKind::Parameter {
+                parameter_kind: mant_ir::ParameterKind::Option,
+            })
+    {
         return Err("semantic-entry field 'attached' applies only to role=option".to_owned());
     }
     Ok(EntryDeclaration {

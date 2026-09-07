@@ -1042,7 +1042,7 @@ fn recovers_complete_numbered_sequences_from_mdoc_tag_lists() {
         SemanticIndex::build(&document)
             .section("examples")
             .iter()
-            .all(|entry| entry.aliases.iter().all(|alias| alias != "2."))
+            .all(|entry| entry.names.iter().all(|alias| alias != "2."))
     );
     assert!(
         mant_ir::DocumentIndex::build(&document)

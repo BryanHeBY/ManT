@@ -27,9 +27,9 @@ pub fn semantics_complete(diagnostics: &[Diagnostic]) -> bool {
 mod tests {
     use crate::ResolvedContent;
     use mant_ir::{
-        Block, DefinitionCase, DefinitionIdentity, DefinitionItem, DefinitionRole, Diagnostic,
-        DiagnosticLevel, Document, DocumentMeta, DocumentSource, EntryKind, Inline, LayoutHint,
-        ParameterKind, Section, SourceFormat, TldrDocument, TldrOrigin,
+        Block, DefinitionItem, Diagnostic, DiagnosticLevel, Document, DocumentMeta, DocumentSource,
+        EntryFacts, EntryKind, Inline, LayoutHint, NameCase, ParameterKind, Section, SourceFormat,
+        TldrDocument, TldrOrigin,
     };
     use mant_protocol::{EntryProjection, ExcerptSelection, NodeSelector, OutlineNode};
 
@@ -99,15 +99,15 @@ mod tests {
 
     fn definition(
         id: &str,
-        role: DefinitionRole,
-        aliases: &[&str],
+        role: EntryKind,
+        names: &[&str],
         forms: &[&str],
         description: Vec<Block>,
     ) -> DefinitionItem {
         DefinitionItem {
             source: None,
-            identity: Some(DefinitionIdentity {
-                name_bindings: aliases
+            entry: Some(EntryFacts {
+                name_bindings: names
                     .iter()
                     .enumerate()
                     .map(|(name, spelling)| mant_ir::EntryNameBinding {
@@ -132,9 +132,9 @@ mod tests {
                 alias_of: None,
                 forms: (0..forms.len()).map(mant_ir::EntryForm::term).collect(),
                 id: id.into(),
-                role,
-                case: DefinitionCase::Sensitive,
-                names: aliases.iter().map(|alias| (*alias).to_owned()).collect(),
+                kind: role,
+                case: NameCase::Sensitive,
+                names: names.iter().map(|alias| (*alias).to_owned()).collect(),
                 value_domain: None,
             }),
             terms: forms
@@ -154,14 +154,16 @@ mod tests {
     fn query_with_semantic_entries() -> ResolvedContent {
         let value = definition(
             "value-yes",
-            DefinitionRole::Value,
+            EntryKind::Value,
             &["yes"],
             &["yes"],
             Vec::new(),
         );
         let local_forward = definition(
             "option-local-forward",
-            DefinitionRole::Option,
+            EntryKind::Parameter {
+                parameter_kind: mant_ir::ParameterKind::Option,
+            },
             &["-L"],
             &["-L port:host:hostport", "-L socket:remote_socket"],
             vec![Block::DefinitionList {
@@ -173,7 +175,9 @@ mod tests {
         );
         let marker = definition(
             "marker-end-options",
-            DefinitionRole::Marker,
+            EntryKind::Parameter {
+                parameter_kind: mant_ir::ParameterKind::Marker,
+            },
             &["--"],
             &["--"],
             Vec::new(),
@@ -194,19 +198,19 @@ mod tests {
     fn indexed_selector_diagnostics_preserve_case_policy_and_deduplicate_aliases() {
         let sensitive = definition(
             "command-sensitive-mode",
-            DefinitionRole::Command,
+            EntryKind::Command,
             &["Mode"],
             &["Mode"],
             Vec::new(),
         );
         let mut insensitive = definition(
             "command-insensitive-mode",
-            DefinitionRole::Command,
+            EntryKind::Command,
             &["MODE", "mode"],
             &["MODE", "mode"],
             Vec::new(),
         );
-        insensitive.identity.as_mut().expect("identity").case = DefinitionCase::Insensitive;
+        insensitive.entry.as_mut().expect("identity").case = NameCase::Insensitive;
         let blocks = vec![Block::DefinitionList {
             items: vec![sensitive, insensitive],
             compact: true,
@@ -377,7 +381,7 @@ mod tests {
             .push(Block::DefinitionList {
                 items: vec![definition(
                     "generic-readline-term",
-                    DefinitionRole::Term,
+                    EntryKind::Term,
                     &[],
                     &["operate-and-get-next (C-o)"],
                     vec![Block::Paragraph {
@@ -466,7 +470,9 @@ mod tests {
             .push(Block::DefinitionList {
                 items: vec![definition(
                     "option-other-local-forward",
-                    DefinitionRole::Option,
+                    EntryKind::Parameter {
+                        parameter_kind: mant_ir::ParameterKind::Option,
+                    },
                     &["-L"],
                     &["-L path"],
                     Vec::new(),
@@ -477,7 +483,7 @@ mod tests {
             });
         let error =
             build_outline_projection(&query, EntryProjection::All, Some(NodeSelector::new("-L")))
-                .expect_err("ambiguous aliases must require qualification");
+                .expect_err("ambiguous names must require qualification");
         let ProjectionError::AmbiguousSelector { candidates, .. } = error else {
             panic!("expected ambiguous selector");
         };
@@ -503,7 +509,7 @@ mod tests {
             .push(Block::DefinitionList {
                 items: vec![definition(
                     "command-force",
-                    DefinitionRole::Command,
+                    EntryKind::Command,
                     &["force"],
                     &["force"],
                     Vec::new(),
@@ -727,14 +733,16 @@ mod tests {
             .push(Block::DefinitionList {
                 items: vec![DefinitionItem {
                     source: None,
-                    identity: Some(DefinitionIdentity {
+                    entry: Some(EntryFacts {
                         name_bindings: Vec::new(),
                         alias_groups: Vec::new(),
                         alias_of: None,
                         forms: Vec::new(),
                         id: "3".into(),
-                        role: DefinitionRole::Option,
-                        case: DefinitionCase::Sensitive,
+                        kind: EntryKind::Parameter {
+                            parameter_kind: mant_ir::ParameterKind::Option,
+                        },
+                        case: NameCase::Sensitive,
                         names: vec!["-3".to_owned()],
                         value_domain: None,
                     }),

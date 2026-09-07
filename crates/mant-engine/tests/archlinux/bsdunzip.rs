@@ -1,7 +1,7 @@
 //! Regressions from Arch Linux libarchive's `bsdunzip(1)` page.
 
 use mant_engine::{render_excerpt_markdown, select_excerpt};
-use mant_ir::{Block, DefinitionRole};
+use mant_ir::{Block, EntryKind};
 
 use crate::{
     common::{collect_sections, inline_text},
@@ -28,8 +28,11 @@ fn distinct_option_heads_share_the_following_mdoc_description() {
     let encoding = items
         .iter()
         .find(|item| {
-            item.identity.as_ref().is_some_and(|identity| {
-                identity.role == DefinitionRole::Option
+            item.entry.as_ref().is_some_and(|identity| {
+                identity.kind
+                    == EntryKind::Parameter {
+                        parameter_kind: mant_ir::ParameterKind::Option,
+                    }
                     && identity.names == ["-I".to_owned(), "-O".to_owned()]
             })
         })

@@ -65,7 +65,7 @@ fn ordinary_declared_entries_reimport_names_groups_relations_and_domains() {
             assert_eq!(a.names, b.names);
             assert_eq!(a.alias_groups, b.alias_groups);
             assert_eq!(a.alias_of, b.alias_of);
-            assert_eq!(a.role, b.role);
+            assert_eq!(a.kind, b.kind);
             assert_eq!(a.case, b.case);
             // Relationship source spans belong to the new source, not the exporter.
             match (&a.value_domain, &b.value_domain) {

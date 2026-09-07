@@ -101,11 +101,16 @@
             "type": "definition-list",
             "items": [
               {
-                "identity": {
+                "entry": {
                   "id": "almost-all-option",
-                  "role": "option",
+                  "kind": {"kind":"parameter","parameterKind":"option"},
                   "case": "sensitive",
-                  "names": ["-A", "--almost-all"]
+                  "names": ["-A", "--almost-all"],
+                  "forms": [{"parts":[{"root":{"kind":"term","index":0},"path":[]}]}],
+                  "nameBindings": [
+                    {"name":0,"evidence":"declared","occurrences":[{"parts":[{"root":{"kind":"term","index":0},"path":[1,0],"bytes":{"start":0,"end":2}}]}]},
+                    {"name":1,"evidence":"declared","occurrences":[{"parts":[{"root":{"kind":"term","index":0},"path":[1,0],"bytes":{"start":4,"end":16}}]}]}
+                  ]
                 },
                 "terms": [
                   [

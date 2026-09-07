@@ -45,7 +45,7 @@ pub(super) fn expand<'a>(
         }) {
             continue;
         }
-        let facts = located[index].identity().expect("entry candidate");
+        let facts = located[index].facts().expect("entry candidate");
         if invalid.contains(&facts.id) || duplicates.contains(&facts.id) {
             continue;
         }
@@ -108,7 +108,7 @@ fn graph(
     let mut edges = Edges::new();
     let mut count = 0;
     for (index, node) in located.iter().enumerate() {
-        let Some(facts) = node.identity() else {
+        let Some(facts) = node.facts() else {
             continue;
         };
         if invalid.contains(&facts.id) || duplicates.contains(&facts.id) {

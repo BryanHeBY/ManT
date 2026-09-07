@@ -42,7 +42,7 @@ that evidence once and emits the same source-neutral facts used by Markdown:
 | --- | --- |
 | `SH`/`SS`, `Sh`/`Ss` | Recursive `Section` nodes |
 | `TP`/`TQ`/qualified `IP`, definition-form `It` | `DefinitionItem` content |
-| Reliable option, command, variable, or value context | Optional `DefinitionIdentity` on that content |
+| Reliable option, command, variable, or value context | Optional `EntryFacts` on that content |
 | `Tg` and resolvable `Sx` | Zero-width anchor or local section destination |
 | `Xr`, `MR`, conservative structured manual reference | Typed `Manual` graph edge |
 | `UR`/`UE`, `MT`/`ME`, `Lk`, `Mt` | External or email host-action target |

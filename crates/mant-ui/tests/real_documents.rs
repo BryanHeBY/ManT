@@ -458,7 +458,7 @@ fn collect_inlines(inlines: &[Inline], output: &mut Vec<ExpectedFragment>, indep
     }
 }
 
-fn section_definitions(section: &mant_ir::Section) -> Vec<&mant_ir::DefinitionIdentity> {
+fn section_definitions(section: &mant_ir::Section) -> Vec<&mant_ir::EntryFacts> {
     let mut definitions = Vec::new();
     collect_block_definitions(&section.blocks, &mut definitions);
     for child in &section.children {
@@ -469,13 +469,13 @@ fn section_definitions(section: &mant_ir::Section) -> Vec<&mant_ir::DefinitionId
 
 fn collect_block_definitions<'a>(
     blocks: &'a [mant_ir::Block],
-    definitions: &mut Vec<&'a mant_ir::DefinitionIdentity>,
+    definitions: &mut Vec<&'a mant_ir::EntryFacts>,
 ) {
     for block in blocks {
         match block {
             mant_ir::Block::DefinitionList { items, .. } => {
                 for item in items {
-                    if let Some(identity) = &item.identity {
+                    if let Some(identity) = &item.entry {
                         definitions.push(identity);
                     }
                     collect_block_definitions(&item.description, definitions);

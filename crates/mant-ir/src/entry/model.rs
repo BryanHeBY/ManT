@@ -3,7 +3,7 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Deserializer, Serialize};
 
-use crate::{DefinitionCase, LinkTarget, NodeId};
+use crate::{LinkTarget, NameCase, NodeId};
 
 /// Semantic category used for outline filtering and nested presentation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, JsonSchema)]
@@ -219,7 +219,7 @@ impl SemanticDocumentReference {
 /// link in the entry description remains ordinary reference material and does
 /// not change where the semantic entry itself leads.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SemanticDocumentTarget {
     /// Visible term text associated with this destination.
     pub label: String,
@@ -227,13 +227,13 @@ pub struct SemanticDocumentTarget {
     pub reference: SemanticDocumentReference,
 }
 
-/// One indexed content record backed by one or more document definitions.
+/// One indexed content record backed by exactly one annotated content owner.
 ///
-/// This value is derived from [`DefinitionIdentity`](crate::DefinitionIdentity)
+/// This value is derived from [`EntryFacts`](crate::EntryFacts)
 /// facts in the document tree. It groups selection, presentation, and content
-/// ownership metadata without replacing those authoritative definitions.
+/// ownership metadata without replacing or merging authoritative content.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SemanticEntry {
     /// Stable document-local semantic identity.
     pub id: NodeId,
@@ -242,16 +242,16 @@ pub struct SemanticEntry {
     /// Exact selectable spellings in source order, not proof of behavioral
     /// equivalence between the named subjects.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub aliases: Vec<String>,
+    pub names: Vec<String>,
     /// Explicit equivalence groups; shared selectable names alone imply none.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub alias_groups: Vec<Vec<String>>,
     /// Explicit same-document relationship, never inherited content or children.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub alias_of: Option<NodeId>,
-    /// Alias case-matching policy.
-    pub case: DefinitionCase,
-    /// Complete author-written input forms, distinct from selectable aliases.
+    /// Name case-matching policy.
+    pub case: NameCase,
+    /// Complete author-written input forms, distinct from selectable names.
     pub forms: Vec<String>,
     /// Explicit cross-document destinations carried by linked terms.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]

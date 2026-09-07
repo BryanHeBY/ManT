@@ -953,7 +953,7 @@ mod tests {
                         items: vec![
                             DefinitionItem {
                                 source: None,
-                                identity: None,
+                                entry: None,
                                 inline_term: true,
                                 terms: vec![vec![Inline::Text {
                                     value: "* / %".to_owned(),
@@ -969,7 +969,7 @@ mod tests {
                             },
                             DefinitionItem {
                                 source: None,
-                                identity: None,
+                                entry: None,
                                 inline_term: true,
                                 terms: vec![vec![Inline::Text {
                                     value: "space".to_owned(),
@@ -1037,7 +1037,7 @@ mod tests {
                         items: vec![
                             DefinitionItem {
                                 source: None,
-                                identity: None,
+                                entry: None,
                                 inline_term: true,
                                 terms: vec![vec![Inline::Text {
                                     value: "&&".to_owned(),
@@ -1053,7 +1053,7 @@ mod tests {
                             },
                             DefinitionItem {
                                 source: None,
-                                identity: None,
+                                entry: None,
                                 inline_term: false,
                                 terms: vec![vec![Inline::Text {
                                     value: "--long-option-name".to_owned(),

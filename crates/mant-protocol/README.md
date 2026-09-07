@@ -131,7 +131,7 @@ check `outcome`, source coverage, truncation and diagnostics separately.
 `semanticsComplete` is validation coverage, not exhaustive recall.
 
 `mant-protocol` deliberately reuses the semantic `Block`, `Section`, `Inline`,
-`DefinitionIdentity`, `DocumentAddress`, source, metadata, diagnostic, and tldr
+`EntryFacts`, `DocumentAddress`, source, metadata, diagnostic, and tldr
 types from `mant-ir`. Those types form the wire-bearing semantic subset: a
 Serde change to any of them is also a protocol change. CI compares every
 generated structural schema with the checked-in v0.11 snapshot, so an accidental
@@ -148,7 +148,7 @@ Outline requests use `EntryProjection`: `Summary` is the compact default,
 `None` emits section topology only, `All` emits the complete nested semantic
 index, and `Kinds` retains selected roles plus their required ancestors. An
 optional root selector can focus any projection on one section or entry.
-Outline entries keep exact selector names (`aliases`) separate from authored
+Outline entries keep exact selector `names` separate from authored
 forms, explicit `aliasGroups` / `aliasOf`, and evidence-backed value domains.
 
 Definitions remain authoritative content in `mant-ir`; `SemanticEntry` is a

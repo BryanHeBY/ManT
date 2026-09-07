@@ -8,8 +8,8 @@ mod semantic;
 use std::ops::Range;
 
 use mant_ir::{
-    DefinitionCase, DefinitionRole, DocumentMeta, DocumentSource, NodeId, OutlinePath, Section,
-    SourceFormat, SourceSpan, TldrCommandPart, TldrDocument, TldrOrigin,
+    DocumentMeta, DocumentSource, EntryKind, NameCase, NodeId, OutlinePath, Section, SourceFormat,
+    SourceSpan, TldrCommandPart, TldrDocument, TldrOrigin,
 };
 use mant_protocol::{ExcerptSelection, OutlineNode, OutlineReference, QueryExcerpt, QueryOutline};
 
@@ -116,8 +116,8 @@ pub(crate) enum MarkdownNode {
         path: OutlinePath,
         id: NodeId,
         title: String,
-        role: DefinitionRole,
-        case: DefinitionCase,
+        role: EntryKind,
+        case: NameCase,
         names: Vec<String>,
         section: Option<MarkdownSection>,
         source: Option<SourceSpan>,
@@ -244,11 +244,11 @@ impl ArtifactBuilder {
                 range: block.start + entry.start..block.start + entry.end,
                 node: MarkdownNode::DocumentEntry {
                     path,
-                    id: entry.identity.id,
-                    title: entry.identity.names.join(", "),
-                    role: entry.identity.role,
-                    case: entry.identity.case,
-                    names: entry.identity.names,
+                    id: entry.entry.id,
+                    title: entry.entry.names.join(", "),
+                    role: entry.entry.kind,
+                    case: entry.entry.case,
+                    names: entry.entry.names,
                     section: section.cloned(),
                     source: entry.source,
                 },

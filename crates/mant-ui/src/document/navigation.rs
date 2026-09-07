@@ -44,10 +44,10 @@ impl DocumentBuilder {
         for (index, entry) in entries.iter().enumerate() {
             let full_title = (!entry.forms.is_empty())
                 .then(|| entry.forms.join(" | "))
-                .or_else(|| (!entry.aliases.is_empty()).then(|| entry.aliases.join(" | ")))
+                .or_else(|| (!entry.names.is_empty()).then(|| entry.names.join(" | ")))
                 .unwrap_or_else(|| entry.id.to_string());
-            let title = (!entry.aliases.is_empty())
-                .then(|| entry.aliases.join(" | "))
+            let title = (!entry.names.is_empty())
+                .then(|| entry.names.join(" | "))
                 .or_else(|| entry.forms.first().cloned())
                 .unwrap_or_else(|| entry.id.to_string());
             self.navigation(NavNode {

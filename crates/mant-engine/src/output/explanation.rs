@@ -299,7 +299,7 @@ fn entry_details(output: &mut String, evidence: &ExplanationEvidence, markdown: 
         write!(
             output,
             "\n{}",
-            display(&format!("Kind: {:?}; forms: {forms}", entry.role), markdown)
+            display(&format!("Kind: {:?}; forms: {forms}", entry.kind), markdown)
         )
         .expect("String writer");
         if !entry.alias_groups.is_empty() {

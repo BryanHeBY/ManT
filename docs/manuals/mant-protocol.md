@@ -1015,7 +1015,7 @@ was modeled correctly. It is distinct from result limits and source coverage;
 an omitted or true value does not establish complete semantic recall.
 
 Ordinary list items and native definitions remain the content owners. The semantic index is a rebuildable
-projection that groups these owners into content records. `aliases` are exact
+projection that groups these owners into content records. `names` are exact
 selectors, while `forms` preserve complete authored syntax such as several
 accepted `ssh -L` argument layouts or `[+-]O [shopt_option]`. `entryKind`
 distinguishes commands; option, marker, and operand parameters; configuration
@@ -1034,10 +1034,27 @@ The entry's own `id`, not a separate target array, selects its authoritative
 content owner.
 
 This is a projection boundary rather than a second semantic model. The
-content-attached `DefinitionIdentity`, derived `SemanticEntry`, and selected
+content-attached `EntryFacts`, derived `SemanticEntry`, and selected
 outline node have distinct responsibilities described in
 [mant-ir(7)](mant-ir.md). Clients use the versioned fields shown here; they
 must not serialize an in-process IR type as a substitute for this contract.
+
+The unreleased v0.11 content shape uses `entry` on both ordinary-list and
+definition-list items. Facts contain structured `kind`, for example
+`"kind":{"kind":"parameter","parameterKind":"option"}`, and `case`
+(`sensitive` or ASCII `insensitive`). Full outlines and compact trail references
+use `entryKind` for the same structured category; explanation entry metadata
+uses `kind`. Every derived selectable-name collection is `names`.
+`identity`, flat `role`, and semantic `aliases` are rejected, including when
+mixed with valid new fields. Explicit `aliasGroups`, `aliasOf`, and exact
+`fragmentAliases` are unchanged. These content/entry carriers reject unknown
+and duplicate fields in actual decoding, not only in the schema.
+
+Missing or null `entry`/item `source` means absent and is omitted in canonical
+output. Missing or empty facts `forms` means unrecorded; null forms are invalid
+JSON shape. A shape-valid but out-of-bounds reference instead remains in the
+content tree and produces a semantic validation diagnostic. It cannot cause
+that item's body to be attributed to its parent.
 
 Environment-variable aliases share one source-neutral grammar across native
 and Markdown documents: bare `NAME`, shell `$NAME`, PowerShell `$Env:NAME` or

@@ -38,7 +38,7 @@ fn rebuilds_builtin_parameter_hierarchy_from_relative_indentation() {
         .iter()
         .flat_map(|section| index.section(&section.id))
         .find(|entry| {
-            entry.kind == EntryKind::Command && entry.aliases.iter().any(|alias| alias == "set")
+            entry.kind == EntryKind::Command && entry.names.iter().any(|alias| alias == "set")
         })
         .expect("the set builtin is a semantic command");
 
@@ -48,7 +48,7 @@ fn rebuilds_builtin_parameter_hierarchy_from_relative_indentation() {
     let named_option = set
         .children
         .iter()
-        .find(|entry| entry.aliases.iter().any(|alias| alias == "-o"))
+        .find(|entry| entry.names.iter().any(|alias| alias == "-o"))
         .expect("set -o parameter");
     assert!(matches!(
         named_option.value_domain,
@@ -69,8 +69,8 @@ fn rebuilds_builtin_parameter_hierarchy_from_relative_indentation() {
                     == (EntryKind::Parameter {
                         parameter_kind: ParameterKind::Option,
                     })
-                    && entry.aliases.iter().any(|alias| alias == "-O")
-                    && entry.aliases.iter().any(|alias| alias == "+O")
+                    && entry.names.iter().any(|alias| alias == "-O")
+                    && entry.names.iter().any(|alias| alias == "+O")
             })
     );
 }
@@ -91,7 +91,7 @@ fn preserves_complete_readline_command_names_as_selectable_aliases() {
         })
         .flat_map(|section| all_entries(index.section(&section.id)))
         .filter(|entry| entry.kind == EntryKind::Command)
-        .flat_map(|entry| entry.aliases.iter().map(String::as_str))
+        .flat_map(|entry| entry.names.iter().map(String::as_str))
         .collect::<Vec<_>>();
 
     for name in [
@@ -117,7 +117,7 @@ fn preserves_complete_readline_command_names_as_selectable_aliases() {
     let set_mark = sections
         .iter()
         .flat_map(|section| all_entries(index.section(&section.id)))
-        .find(|entry| entry.aliases.iter().any(|alias| alias == "set-mark"))
+        .find(|entry| entry.names.iter().any(|alias| alias == "set-mark"))
         .expect("set-mark Readline command");
     assert_eq!(set_mark.id.as_str(), "command-set-mark");
     assert!(
@@ -145,7 +145,7 @@ fn discovers_styled_builtin_names_without_promoting_argument_prose() {
     for name in ["let", "test", "getopts", "builtin"] {
         assert!(
             entries.iter().any(|entry| {
-                entry.kind == EntryKind::Command && entry.aliases.iter().any(|alias| alias == name)
+                entry.kind == EntryKind::Command && entry.names.iter().any(|alias| alias == name)
             }),
             "missing styled shell builtin {name}"
         );
@@ -153,7 +153,7 @@ fn discovers_styled_builtin_names_without_promoting_argument_prose() {
     assert!(
         entries
             .iter()
-            .all(|entry| entry.aliases.iter().all(|alias| alias != "0 arguments")),
+            .all(|entry| entry.names.iter().all(|alias| alias != "0 arguments")),
         "descriptive prose below the command section must remain unclassified"
     );
 
@@ -204,7 +204,7 @@ fn preserves_complete_readline_variable_names_without_shadowing_builtins() {
         assert!(
             variables
                 .iter()
-                .any(|entry| entry.aliases.iter().any(|alias| alias == name)),
+                .any(|entry| entry.names.iter().any(|alias| alias == name)),
             "missing complete Readline variable {name}"
         );
     }
@@ -212,7 +212,7 @@ fn preserves_complete_readline_variable_names_without_shadowing_builtins() {
         assert!(
             variables
                 .iter()
-                .all(|entry| entry.aliases.iter().all(|alias| alias != prefix)),
+                .all(|entry| entry.names.iter().all(|alias| alias != prefix)),
             "Readline variables must not expose the short prefix {prefix}"
         );
     }
@@ -258,17 +258,16 @@ fn preserves_compact_invocation_aliases_and_their_shared_description() {
         sections
             .iter()
             .flat_map(|section| all_entries(index.section(&section.id)))
-            .find(|entry| entry.aliases.iter().any(|candidate| candidate == alias))
+            .find(|entry| entry.names.iter().any(|candidate| candidate == alias))
             .unwrap_or_else(|| panic!("missing invocation option {alias}"))
     });
 
     assert_eq!(entries[0].id, entries[1].id);
-    assert!(aliases.iter().all(|alias| {
-        entries[0]
-            .aliases
+    assert!(
+        aliases
             .iter()
-            .any(|candidate| candidate == alias)
-    }));
+            .all(|alias| { entries[0].names.iter().any(|candidate| candidate == alias) })
+    );
 
     let query = common::query_for_document("sh", document);
     for alias in aliases {
@@ -300,15 +299,12 @@ fn explanation_preserves_history_builtin_and_nested_value_as_independent_evidenc
         .iter()
         .filter(|evidence| evidence.bases.contains(&mant_protocol::EvidenceBasis::Name))
         .collect::<Vec<_>>();
-    for role in [
-        mant_ir::DefinitionRole::Command,
-        mant_ir::DefinitionRole::Value,
-    ] {
+    for role in [mant_ir::EntryKind::Command, mant_ir::EntryKind::Value] {
         assert!(
             named.iter().any(|evidence| evidence
                 .entry
                 .as_ref()
-                .is_some_and(|entry| entry.role == role && entry.names == ["history"])),
+                .is_some_and(|entry| entry.kind == role && entry.names == ["history"])),
             "missing {role:?}"
         );
     }
@@ -326,7 +322,7 @@ fn explanation_preserves_history_builtin_and_nested_value_as_independent_evidenc
 fn has_parameter(entry: &SemanticEntry, parameter_kind: ParameterKind, alias: &str) -> bool {
     entry.children.iter().any(|child| {
         child.kind == EntryKind::Parameter { parameter_kind }
-            && child.aliases.iter().any(|candidate| candidate == alias)
+            && child.names.iter().any(|candidate| candidate == alias)
     })
 }
 

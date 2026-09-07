@@ -2,9 +2,7 @@
 use super::RenderOptions;
 use crate::{arguments::QueryFormat, error::Failure};
 use anstyle::{AnsiColor, Style};
-use mant_ir::{
-    Block, DefinitionRole, DocumentMeta, EntryKind, Inline, ResolvedContent, Section, SourceFormat,
-};
+use mant_ir::{Block, DocumentMeta, EntryKind, Inline, ResolvedContent, Section, SourceFormat};
 use mant_protocol::{
     ExcerptSelection, OutlineNode, QueryExcerpt, QueryOutline, QuerySearch, sanitize_terminal_text,
 };
@@ -177,7 +175,7 @@ pub(super) fn render_terminal_explanation(
         .evidence
         .iter()
         .filter_map(|evidence| evidence.entry.as_ref())
-        .flat_map(|entry| entry.names.iter().map(|name| (name.clone(), entry.role)))
+        .flat_map(|entry| entry.names.iter().map(|name| (name.clone(), entry.kind)))
         .collect();
     style_content_text(&plain, &headings, terms)
 }
@@ -199,7 +197,7 @@ pub(super) fn render_terminal_scope_explanation(
         .evidence
         .iter()
         .filter_map(|e| e.evidence.entry.as_ref())
-        .flat_map(|e| e.names.iter().cloned().map(|name| (name, e.role)))
+        .flat_map(|e| e.names.iter().cloned().map(|name| (name, e.kind)))
         .collect();
     style_content_text(&plain, &headings, terms)
 }
@@ -208,7 +206,7 @@ pub(super) fn render_terminal_scope_explanation(
 fn style_content_text(
     plain: &str,
     headings: &[String],
-    mut terms: Vec<(String, DefinitionRole)>,
+    mut terms: Vec<(String, EntryKind)>,
 ) -> String {
     terms.sort_by_key(|term| std::cmp::Reverse(term.0.len()));
 
@@ -234,7 +232,7 @@ pub(super) fn render_terminal_search(search: &QuerySearch, color: bool) -> Strin
             mant_engine::SearchTextRole::Coordinate => TerminalRole::Coordinate,
             mant_engine::SearchTextRole::Path => TerminalRole::Path,
             mant_engine::SearchTextRole::Heading => TerminalRole::Heading,
-            mant_engine::SearchTextRole::Definition(role) => definition_role(role),
+            mant_engine::SearchTextRole::Definition(kind) => entry_kind_role(kind),
             mant_engine::SearchTextRole::Match => TerminalRole::Match,
             mant_engine::SearchTextRole::Muted => TerminalRole::Muted,
         };
@@ -247,7 +245,7 @@ fn render_excerpt_line(
     line: &str,
     document_line: bool,
     headings: &[String],
-    terms: &[(String, DefinitionRole)],
+    terms: &[(String, EntryKind)],
     output: &mut TerminalText,
 ) {
     if document_line {
@@ -285,7 +283,7 @@ fn render_excerpt_line(
         .find(|(term, _)| !term.is_empty() && trimmed.starts_with(term))
     {
         output.plain(&line[..indent]);
-        output.styled(definition_role(*role), term);
+        output.styled(entry_kind_role(*role), term);
         output.plain(&trimmed[term.len()..]);
         return;
     }
@@ -295,7 +293,7 @@ fn render_excerpt_line(
 fn collect_excerpt_semantics(
     selection: &ExcerptSelection,
     headings: &mut Vec<String>,
-    terms: &mut Vec<(String, DefinitionRole)>,
+    terms: &mut Vec<(String, EntryKind)>,
 ) {
     match selection {
         ExcerptSelection::Tldr { .. } | ExcerptSelection::DocumentRoot { .. } => {}
@@ -311,7 +309,7 @@ fn collect_excerpt_semantics(
 fn collect_section_semantics(
     section: &Section,
     headings: &mut Vec<String>,
-    terms: &mut Vec<(String, DefinitionRole)>,
+    terms: &mut Vec<(String, EntryKind)>,
 ) {
     headings.push(section.title.clone());
     collect_block_semantics(&section.blocks, terms);
@@ -320,7 +318,7 @@ fn collect_section_semantics(
     }
 }
 
-fn collect_block_semantics(blocks: &[Block], terms: &mut Vec<(String, DefinitionRole)>) {
+fn collect_block_semantics(blocks: &[Block], terms: &mut Vec<(String, EntryKind)>) {
     for block in blocks {
         match block {
             Block::DefinitionList { items, .. } => {
@@ -350,7 +348,7 @@ fn collect_block_semantics(blocks: &[Block], terms: &mut Vec<(String, Definition
     }
 }
 
-fn collect_entry(item: mant_ir::EntryOwner<'_>, terms: &mut Vec<(String, DefinitionRole)>) {
+fn collect_entry(item: mant_ir::EntryOwner<'_>, terms: &mut Vec<(String, EntryKind)>) {
     let Some(identity) = item.facts() else {
         return;
     };
@@ -358,7 +356,7 @@ fn collect_entry(item: mant_ir::EntryOwner<'_>, terms: &mut Vec<(String, Definit
         item.forms()
             .unwrap_or_default()
             .iter()
-            .map(|term| (inline_text(term), identity.role)),
+            .map(|term| (inline_text(term), identity.kind)),
     );
 }
 
@@ -393,18 +391,6 @@ const fn entry_kind_role(kind: EntryKind) -> TerminalRole {
         EntryKind::EnvironmentVariable => TerminalRole::Environment,
         EntryKind::Variable | EntryKind::ConfigurationKey => TerminalRole::Variable,
         EntryKind::Value | EntryKind::Term => TerminalRole::Muted,
-    }
-}
-
-const fn definition_role(role: DefinitionRole) -> TerminalRole {
-    match role {
-        DefinitionRole::Option | DefinitionRole::Marker | DefinitionRole::Operand => {
-            TerminalRole::Option
-        }
-        DefinitionRole::Command => TerminalRole::Command,
-        DefinitionRole::EnvironmentVariable => TerminalRole::Environment,
-        DefinitionRole::ConfigurationKey | DefinitionRole::Variable => TerminalRole::Variable,
-        DefinitionRole::Value | DefinitionRole::Term => TerminalRole::Muted,
     }
 }
 

@@ -63,7 +63,7 @@ fn keeps_nested_sections_examples_and_inline_grouping() {
     let help = common::nested_definition_items(common::section(document, "OPTIONS"))
         .into_iter()
         .find(|item| {
-            item.identity
+            item.entry
                 .as_ref()
                 .is_some_and(|identity| identity.names.iter().any(|name| name == "--help"))
         })
@@ -121,7 +121,7 @@ fn assert_git_option_descriptions_follow_terms(document: &mant_ir::Document) {
         let item = common::nested_definition_items(options)
             .into_iter()
             .find(|item| {
-                item.identity
+                item.entry
                     .as_ref()
                     .is_some_and(|identity| identity.names.iter().any(|name| name == option))
             })
@@ -167,7 +167,7 @@ fn identifies_git_environment_variables_from_hanging_definitions() {
         [ExcerptSelection::DocumentEntry { outline, entry }]
             if outline.ancestors.iter().any(|ancestor| ancestor.title == "ENVIRONMENT VARIABLES")
                 && entry.entry_owner().and_then(mant_ir::EntryOwner::facts).is_some_and(|identity| {
-                    identity.role == mant_ir::DefinitionRole::EnvironmentVariable
+                    identity.kind == mant_ir::EntryKind::EnvironmentVariable
                         && identity.names == ["GIT_DIR"]
                 })
     ));

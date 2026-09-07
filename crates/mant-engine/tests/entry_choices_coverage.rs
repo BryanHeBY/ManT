@@ -195,8 +195,8 @@ fn rejected_declarations_flow_through_ordinary_containers_to_the_semantic_owner(
                     control.document.as_ref().unwrap().diagnostics
                 );
                 assert_eq!(index.root()[0].children.len(), 2);
-                assert_eq!(index.root()[0].children[0].aliases, ["auto"]);
-                assert_eq!(index.root()[0].children[1].aliases, ["manual"]);
+                assert_eq!(index.root()[0].children[0].names, ["auto"]);
+                assert_eq!(index.root()[0].children[1].names, ["manual"]);
                 assert_eq!(
                     index.root()[0].value_domain,
                     Some(ValueDomain::Choices { exhaustive: true })
@@ -226,7 +226,7 @@ fn rejected_declarations_flow_through_ordinary_containers_to_the_semantic_owner(
                     assert_eq!(&copied, doc);
                     let index = SemanticIndex::build(&copied);
                     assert_eq!(index.root()[0].children.len(), 1);
-                    assert_eq!(index.root()[0].children[0].aliases, ["auto"]);
+                    assert_eq!(index.root()[0].children[0].names, ["auto"]);
                     assert_eq!(
                         index.root()[0].value_domain,
                         Some(ValueDomain::Choices { exhaustive: false })

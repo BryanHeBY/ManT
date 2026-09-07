@@ -32,8 +32,8 @@ fn ordinary_list_entry_anchors_preserve_rows_and_numbering() {
                 entry: Some(mant_ir::EntryFacts {
                     id: "run".into(),
                     names: vec!["run".into()],
-                    role: mant_ir::DefinitionRole::Command,
-                    case: mant_ir::DefinitionCase::Sensitive,
+                    kind: mant_ir::EntryKind::Command,
+                    case: mant_ir::NameCase::Sensitive,
                     value_domain: None,
                     name_bindings: vec![mant_ir::EntryNameBinding {
                         name: 0,
@@ -323,14 +323,16 @@ fn inline_definitions_hang_the_description_and_expose_their_anchor() {
     bundle.document.as_mut().expect("document").sections[0].blocks = vec![Block::DefinitionList {
         items: vec![DefinitionItem {
             source: None,
-            identity: Some(DefinitionIdentity {
+            entry: Some(EntryFacts {
                 name_bindings: Vec::new(),
                 alias_groups: Vec::new(),
                 alias_of: None,
                 forms: Vec::new(),
                 id: "help-option".to_owned().into(),
-                role: DefinitionRole::Option,
-                case: DefinitionCase::Sensitive,
+                kind: EntryKind::Parameter {
+                    parameter_kind: mant_ir::ParameterKind::Option,
+                },
+                case: NameCase::Sensitive,
                 names: vec!["-h".to_owned()],
                 value_domain: None,
             }),

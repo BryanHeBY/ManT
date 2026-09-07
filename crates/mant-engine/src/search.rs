@@ -463,8 +463,8 @@ fn presented_matched_text(occurrence: &RawOccurrence, markdown: &str, lines: &Li
 mod tests {
     use crate::ResolvedContent;
     use mant_ir::{
-        Block, DefinitionCase, DefinitionIdentity, DefinitionItem, DefinitionRole, Document,
-        DocumentMeta, DocumentSource, Inline, LayoutHint, Section, SourceFormat,
+        Block, DefinitionItem, Document, DocumentMeta, DocumentSource, EntryFacts, EntryKind,
+        Inline, LayoutHint, NameCase, Section, SourceFormat,
     };
     use mant_protocol::{
         MAX_SEARCH_PATTERN_CHARS, SearchCase, SearchQuery, SearchScope, SearchSyntax,
@@ -501,14 +501,16 @@ mod tests {
                         items: vec![DefinitionItem {
                             source: None,
                             inline_term: false,
-                            identity: Some(DefinitionIdentity {
+                            entry: Some(EntryFacts {
                                 name_bindings: Vec::new(),
                                 alias_groups: Vec::new(),
                                 alias_of: None,
                                 forms: Vec::new(),
                                 id: "option-acls".to_owned().into(),
-                                role: DefinitionRole::Option,
-                                case: DefinitionCase::Sensitive,
+                                kind: EntryKind::Parameter {
+                                    parameter_kind: mant_ir::ParameterKind::Option,
+                                },
+                                case: NameCase::Sensitive,
                                 names: vec!["--acls".to_owned()],
                                 value_domain: None,
                             }),

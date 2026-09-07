@@ -9,8 +9,8 @@ use std::{collections::BTreeMap, path::PathBuf};
 use libmandoc_rs::{Compression, IncludePolicy, Node, ParseOptions, Parser};
 use mant_engine::lower_mandoc_document;
 use mant_ir::{
-    Block, DefinitionRole, Document, EntryKind, Inline, ParameterKind, Section, SemanticEntry,
-    SemanticIndex, ValueDomain,
+    Block, Document, EntryKind, Inline, ParameterKind, Section, SemanticEntry, SemanticIndex,
+    ValueDomain,
 };
 use serde::Serialize;
 use serde_json::{Value, json};
@@ -23,7 +23,7 @@ use conversions::{conversion_violations, ordinal_conversions};
 #[path = "support/profile_io.rs"]
 mod profile_io;
 
-const PROFILE_SCHEMA: &str = "mant.roff-semantic-profile/v2";
+const PROFILE_SCHEMA: &str = "mant.roff-semantic-profile/v3";
 const SAMPLE_LIMIT: usize = 32;
 
 #[derive(Clone, Serialize)]
@@ -31,7 +31,7 @@ const SAMPLE_LIMIT: usize = 32;
 struct EntryRecord {
     id: String,
     kind: &'static str,
-    aliases: Vec<String>,
+    names: Vec<String>,
     /// Explicit relationships, never inferred from a shared definition head.
     alias_groups: Vec<Vec<String>>,
     alias_of: Option<String>,
@@ -107,7 +107,7 @@ fn profile_document(
     let empty_entries = entries
         .iter()
         .filter(|entry| {
-            entry.aliases.is_empty() && entry.forms.iter().all(|form| form.trim().is_empty())
+            entry.names.is_empty() && entry.forms.iter().all(|form| form.trim().is_empty())
         })
         .collect::<Vec<_>>();
     let ordinal_definitions = ordinal_definition_candidates(document);
@@ -116,7 +116,7 @@ fn profile_document(
     let ordinal_conversion_violations = conversion_violations(&ordinal_conversions);
     let aliasless_generic_terms = entries
         .iter()
-        .filter(|entry| entry.kind == "term" && entry.aliases.is_empty())
+        .filter(|entry| entry.kind == "term" && entry.names.is_empty())
         .collect::<Vec<_>>();
     let note_like_entries = entries
         .iter()
@@ -256,7 +256,7 @@ fn collect_entries(
         output.push(EntryRecord {
             id: entry.id.to_string(),
             kind: entry_kind(entry.kind),
-            aliases: entry.aliases.clone(),
+            names: entry.names.clone(),
             alias_groups: entry.alias_groups.clone(),
             alias_of: entry.alias_of.as_ref().map(ToString::to_string),
             forms: entry.forms.clone(),
@@ -280,7 +280,7 @@ fn collect_entries(
 
 fn relationship_counts(entries: &[EntryRecord]) -> Value {
     json!({
-        "names": entries.iter().map(|entry| entry.aliases.len()).sum::<usize>(),
+        "names": entries.iter().map(|entry| entry.names.len()).sum::<usize>(),
         "aliasGroups": entries.iter().map(|entry| entry.alias_groups.len()).sum::<usize>(),
         "aliasGroupMembers": entries.iter().flat_map(|entry| &entry.alias_groups).map(Vec::len).sum::<usize>(),
         "aliasOf": entries.iter().filter(|entry| entry.alias_of.is_some()).count(),
@@ -351,13 +351,13 @@ fn collect_definition_candidates(
                             output.push(DefinitionCandidate {
                                 form,
                                 identity: item
-                                    .identity
+                                    .entry
                                     .as_ref()
                                     .map(|identity| identity.id.to_string()),
                                 role: item
-                                    .identity
+                                    .entry
                                     .as_ref()
-                                    .map(|identity| definition_role(identity.role)),
+                                    .map(|identity| entry_kind(identity.kind)),
                                 containing_section: section.map(str::to_owned),
                                 containing_section_title: section_title.map(str::to_owned),
                                 containing_section_source_line: section_source_line,
@@ -408,20 +408,6 @@ fn collect_definition_candidates(
             | Block::ThematicBreak { .. }
             | Block::Unsupported { .. } => {}
         }
-    }
-}
-
-const fn definition_role(role: DefinitionRole) -> &'static str {
-    match role {
-        DefinitionRole::Option => "option",
-        DefinitionRole::Marker => "marker",
-        DefinitionRole::Operand => "operand",
-        DefinitionRole::Command => "command",
-        DefinitionRole::ConfigurationKey => "configuration-key",
-        DefinitionRole::EnvironmentVariable => "environment-variable",
-        DefinitionRole::Variable => "variable",
-        DefinitionRole::Value => "value",
-        DefinitionRole::Term => "term",
     }
 }
 

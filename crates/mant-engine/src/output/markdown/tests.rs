@@ -1,9 +1,9 @@
 //! Contract-oriented tests for `CommonMark` structure and escaping.
 
 use mant_ir::{
-    Block, DefinitionCase, DefinitionIdentity, DefinitionItem, DefinitionRole, Document,
-    DocumentMeta, DocumentSource, Inline, LayoutHint, ListItem, ListKind, Section, SourceFormat,
-    TableCell, TableRow, TldrCommandPart, TldrDocument, TldrExample, TldrOrigin,
+    Block, DefinitionItem, Document, DocumentMeta, DocumentSource, EntryFacts, EntryKind, Inline,
+    LayoutHint, ListItem, ListKind, NameCase, Section, SourceFormat, TableCell, TableRow,
+    TldrCommandPart, TldrDocument, TldrExample, TldrOrigin,
     visit::{Visit, walk_inline},
 };
 use mant_protocol::QueryBundle;
@@ -352,7 +352,7 @@ fn preserves_inline_lists_definitions_and_nested_headings() {
     let definitions = Block::DefinitionList {
         items: vec![DefinitionItem {
             source: None,
-            identity: None,
+            entry: None,
             inline_term: false,
             terms: vec![
                 vec![Inline::Strong {
@@ -402,7 +402,7 @@ fn keeps_adjacent_bold_and_italic_runs_unambiguous_in_commonmark() {
     let definitions = Block::DefinitionList {
         items: vec![DefinitionItem {
             source: None,
-            identity: None,
+            entry: None,
             inline_term: false,
             terms: vec![vec![
                 Inline::Strong {
@@ -1061,7 +1061,7 @@ fn protects_hanging_definition_terms_from_becoming_nested_lists() {
             vec![Block::DefinitionList {
                 items: vec![DefinitionItem {
                     source: None,
-                    identity: None,
+                    entry: None,
                     terms: vec![vec![Inline::Text {
                         value: "1.".to_owned(),
                     }]],
@@ -1093,7 +1093,7 @@ fn keeps_block_definition_descriptions_on_their_own_commonmark_line() {
     let definitions = Block::DefinitionList {
         items: vec![DefinitionItem {
             source: None,
-            identity: None,
+            entry: None,
             inline_term: true,
             terms: vec![vec![Inline::Text {
                 value: "plain".to_owned(),
@@ -1240,14 +1240,16 @@ fn renders_selectable_outline_paths_and_excerpt_breadcrumbs() {
 fn addressable_rendering_returns_exact_semantic_node_ranges() {
     let entry = DefinitionItem {
         source: None,
-        identity: Some(DefinitionIdentity {
+        entry: Some(EntryFacts {
             name_bindings: Vec::new(),
             alias_groups: Vec::new(),
             alias_of: None,
             forms: Vec::new(),
             id: "help-entry".into(),
-            role: DefinitionRole::Option,
-            case: DefinitionCase::Sensitive,
+            kind: EntryKind::Parameter {
+                parameter_kind: mant_ir::ParameterKind::Option,
+            },
+            case: NameCase::Sensitive,
             names: vec!["--help".to_owned()],
             value_domain: None,
         }),

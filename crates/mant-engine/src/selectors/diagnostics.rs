@@ -22,12 +22,12 @@ pub(crate) fn semantic_selector_diagnostics(
     let index = DocumentSelectorIndex::new(&located);
     let mut selectors = BTreeSet::new();
     for candidate in &located {
-        let Some(identity) = candidate.identity() else {
+        let Some(identity) = candidate.facts() else {
             continue;
         };
         for name in &identity.names {
             selectors.insert(name.clone());
-            if let Some(shorthand) = semantic_name_shorthand(identity.role, name) {
+            if let Some(shorthand) = semantic_name_shorthand(identity.kind, name) {
                 selectors.insert(shorthand.to_owned());
             }
         }

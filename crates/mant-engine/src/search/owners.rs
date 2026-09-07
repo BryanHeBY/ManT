@@ -151,7 +151,7 @@ fn owner_from_range(key: usize, mapped: &MarkdownNodeRange) -> Owner {
                     path: path.to_string().into(),
                     id: id.clone(),
                     title: title.clone(),
-                    role: *role,
+                    entry_kind: *role,
                     case: *case,
                     names: names.clone(),
                 },

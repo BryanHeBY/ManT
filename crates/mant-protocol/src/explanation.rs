@@ -3,8 +3,7 @@ mod classification;
 use crate::{OutlineTrail, Producer};
 pub use classification::*;
 use mant_ir::{
-    DefinitionCase, DefinitionRole, Diagnostic, DocumentAddress, Inline, NodeId, SourceSpan,
-    ValueDomain,
+    Diagnostic, DocumentAddress, EntryKind, Inline, NameCase, NodeId, SourceSpan, ValueDomain,
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -166,9 +165,9 @@ impl<'de> Deserialize<'de> for EvidenceBasis {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ExplanationEntry {
     /// Source-neutral role.
-    pub role: DefinitionRole,
+    pub kind: EntryKind,
     /// Matching policy for documented names/forms.
-    pub case: DefinitionCase,
+    pub case: NameCase,
     /// Documented selectable names, not implicit equivalence groups.
     pub names: Vec<String>,
     /// Original visible forms projected through validated content bindings.

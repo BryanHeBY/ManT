@@ -357,9 +357,8 @@ fn validate_semantic_document_reference(
 #[cfg(test)]
 mod tests {
     use crate::{
-        Block, DefinitionCase, DefinitionIdentity, DefinitionItem, DefinitionRole, DocumentMeta,
-        DocumentSource, LayoutHint, Section, SourceFormat, TableCell, TableRow, TextRange,
-        TextSize,
+        Block, DefinitionItem, DocumentMeta, DocumentSource, EntryFacts, EntryKind, LayoutHint,
+        NameCase, Section, SourceFormat, TableCell, TableRow, TextRange, TextSize,
     };
 
     use super::*;
@@ -471,14 +470,14 @@ mod tests {
             blocks: vec![Block::DefinitionList {
                 items: vec![DefinitionItem {
                     source: None,
-                    identity: Some(DefinitionIdentity {
+                    entry: Some(EntryFacts {
                         name_bindings: Vec::new(),
                         alias_groups: Vec::new(),
                         alias_of: None,
                         forms: Vec::new(),
                         id: shared.clone(),
-                        role: DefinitionRole::Term,
-                        case: DefinitionCase::Sensitive,
+                        kind: EntryKind::Term,
+                        case: NameCase::Sensitive,
                         names: vec!["term".to_owned()],
                         value_domain: None,
                     }),
@@ -703,14 +702,16 @@ mod tests {
     fn reports_invalid_cross_document_entry_domains() {
         let mut definition = DefinitionItem {
             source: None,
-            identity: Some(DefinitionIdentity {
+            entry: Some(EntryFacts {
                 name_bindings: Vec::new(),
                 alias_groups: Vec::new(),
                 alias_of: None,
                 forms: Vec::new(),
                 id: "option-output".into(),
-                role: DefinitionRole::Option,
-                case: DefinitionCase::Sensitive,
+                kind: EntryKind::Parameter {
+                    parameter_kind: crate::ParameterKind::Option,
+                },
+                case: NameCase::Sensitive,
                 names: vec!["--output".to_owned()],
                 value_domain: Some(crate::ValueDomain::EntrySet {
                     reference: crate::SemanticDocumentReference::Manual {
@@ -740,7 +741,7 @@ mod tests {
         assert!(codes.contains(&"ir.empty-semantic-document-reference"));
         assert!(codes.contains(&"ir.empty-entry-value-domain"));
 
-        definition.identity.as_mut().expect("identity").value_domain =
+        definition.entry.as_mut().expect("identity").value_domain =
             Some(crate::ValueDomain::EntrySet {
                 reference: crate::SemanticDocumentReference::Manual {
                     name: "ssh_config".to_owned(),

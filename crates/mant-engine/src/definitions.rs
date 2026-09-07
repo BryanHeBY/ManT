@@ -99,7 +99,7 @@ fn prepare_blocks(
                     if has_semantic_spelling(item, &plan) {
                         *preferred_counts.entry(plan.preferred).or_default() += 1;
                     }
-                    let child_context = child_definition_context(plan.role, item_context);
+                    let child_context = child_definition_context(plan.kind, item_context);
                     prepare_blocks(&mut item.description, child_context, preferred_counts);
                 }
             }
@@ -191,8 +191,7 @@ mod tests {
     use std::collections::{HashMap, HashSet};
 
     use mant_ir::{
-        Block, DefinitionCase, DefinitionIdentity, DefinitionItem, DefinitionRole, Inline,
-        LayoutHint, Section,
+        Block, DefinitionItem, EntryFacts, EntryKind, Inline, LayoutHint, NameCase, Section,
     };
 
     use super::{environment_variable_alias, identify_definitions, option_names, option_prefix};
@@ -200,7 +199,7 @@ mod tests {
     fn item(value: &str) -> DefinitionItem {
         DefinitionItem {
             source: None,
-            identity: None,
+            entry: None,
             inline_term: false,
             terms: vec![vec![Inline::Text {
                 value: value.into(),
@@ -213,7 +212,7 @@ mod tests {
     fn strong_item(value: &str) -> DefinitionItem {
         DefinitionItem {
             source: None,
-            identity: None,
+            entry: None,
             inline_term: false,
             terms: vec![vec![Inline::Strong {
                 children: vec![Inline::Text {
@@ -256,14 +255,16 @@ mod tests {
     #[test]
     fn semantic_id_allocation_ignores_a_prefilled_producer_id() {
         let mut option = item("--verbose");
-        option.identity = Some(DefinitionIdentity {
+        option.entry = Some(EntryFacts {
             name_bindings: Vec::new(),
             alias_groups: Vec::new(),
             alias_of: None,
             forms: Vec::new(),
             id: "producer-specific-id".into(),
-            role: DefinitionRole::Option,
-            case: DefinitionCase::Sensitive,
+            kind: EntryKind::Parameter {
+                parameter_kind: mant_ir::ParameterKind::Option,
+            },
+            case: NameCase::Sensitive,
             names: vec!["--verbose".to_owned()],
             value_domain: None,
         });
@@ -288,7 +289,7 @@ mod tests {
             panic!("option list");
         };
         assert_eq!(
-            items[0].identity.as_ref().expect("identity").id.as_str(),
+            items[0].entry.as_ref().expect("identity").id.as_str(),
             "option-verbose"
         );
     }
@@ -297,7 +298,7 @@ mod tests {
     fn target_only_definitions_retain_anchors_without_becoming_entries() {
         let target_only = DefinitionItem {
             source: None,
-            identity: None,
+            entry: None,
             inline_term: true,
             terms: vec![vec![Inline::anchor("native-target")]],
             description: Vec::new(),
@@ -323,7 +324,7 @@ mod tests {
         let Block::DefinitionList { items, .. } = &sections[0].blocks[0] else {
             panic!("definition list");
         };
-        assert!(items[0].identity.is_none());
+        assert!(items[0].entry.is_none());
         assert!(retained.contains("native-target"));
     }
 
@@ -371,13 +372,12 @@ mod tests {
         let Block::DefinitionList { items, .. } = &sections[0].blocks[0] else {
             panic!("definition list");
         };
+        assert_eq!(items[0].entry.as_ref().expect("term").kind, EntryKind::Term);
         assert_eq!(
-            items[0].identity.as_ref().expect("term").role,
-            DefinitionRole::Term
-        );
-        assert_eq!(
-            items[1].identity.as_ref().expect("option").role,
-            DefinitionRole::Option
+            items[1].entry.as_ref().expect("option").kind,
+            EntryKind::Parameter {
+                parameter_kind: mant_ir::ParameterKind::Option
+            }
         );
     }
 
@@ -429,28 +429,28 @@ mod tests {
             panic!("commands");
         };
         assert_eq!(
-            commands[0].identity.as_ref().expect("command").names,
+            commands[0].entry.as_ref().expect("command").names,
             ["Send Env"]
         );
         assert!(
             commands[1]
-                .identity
+                .entry
                 .as_ref()
                 .expect("unstyled prose")
                 .names
                 .is_empty()
         );
         assert_eq!(
-            commands[2].identity.as_ref().expect("command form").names,
+            commands[2].entry.as_ref().expect("command form").names,
             ["bind"]
         );
         assert_eq!(
-            commands[3].identity.as_ref().expect("command form").names,
+            commands[3].entry.as_ref().expect("command form").names,
             ["set"]
         );
         assert!(
             commands[4]
-                .identity
+                .entry
                 .as_ref()
                 .expect("numeric prose")
                 .names
@@ -463,18 +463,18 @@ mod tests {
             panic!("variables");
         };
         assert_eq!(
-            variables[0].identity.as_ref().expect("variable").names,
+            variables[0].entry.as_ref().expect("variable").names,
             ["real-name"]
         );
         assert!(
             variables[1]
-                .identity
+                .entry
                 .as_ref()
                 .is_some_and(|identity| identity.names == ["bind-tty-special-chars"])
         );
         assert!(
             variables[2]
-                .identity
+                .entry
                 .as_ref()
                 .expect("unclassified term")
                 .names
@@ -520,7 +520,7 @@ mod tests {
             items
                 .iter()
                 .map(|item| {
-                    let identity = item.identity.as_ref().expect("identity");
+                    let identity = item.entry.as_ref().expect("identity");
                     (identity.names[0].clone(), identity.id.to_string())
                 })
                 .collect()
@@ -570,7 +570,7 @@ mod tests {
         };
         assert_eq!(layout.indent_columns, 0);
         assert_eq!(
-            items[0].identity.as_ref().expect("option identity").names,
+            items[0].entry.as_ref().expect("option identity").names,
             ["-v", "--version"]
         );
         assert!(matches!(
@@ -583,7 +583,7 @@ mod tests {
             panic!("second option should remain independently addressable");
         };
         assert_eq!(
-            items[0].identity.as_ref().expect("option identity").names,
+            items[0].entry.as_ref().expect("option identity").names,
             ["-C"]
         );
     }
@@ -626,14 +626,14 @@ mod tests {
                 let Block::DefinitionList { items, .. } = block else {
                     panic!("hanging environment entry should become a definition list");
                 };
-                items[0].identity.as_ref().expect("environment identity")
+                items[0].entry.as_ref().expect("environment identity")
             })
             .collect::<Vec<_>>();
         assert_eq!(identities.len(), 3);
         assert!(
             identities
                 .iter()
-                .all(|identity| identity.role == DefinitionRole::EnvironmentVariable)
+                .all(|identity| identity.kind == EntryKind::EnvironmentVariable)
         );
         assert_eq!(identities[0].names, ["HOME"]);
         assert_eq!(identities[1].names, ["$Env:Path"]);
@@ -665,7 +665,7 @@ mod tests {
         let Block::DefinitionList { items, .. } = &sections[0].blocks[0] else {
             panic!("command definition list");
         };
-        let identity = items[0].identity.as_ref().expect("command identity");
+        let identity = items[0].entry.as_ref().expect("command identity");
         assert_eq!(identity.id.as_str(), "command-set-mark");
         assert_eq!(identity.names, ["set-mark"]);
         assert!(retained.contains("set"));
@@ -693,7 +693,7 @@ mod tests {
         let Block::DefinitionList { items, .. } = &sections[0].blocks[0] else {
             panic!("term definition list");
         };
-        let identity = items[0].identity.as_ref().expect("term identity");
+        let identity = items[0].entry.as_ref().expect("term identity");
         assert_eq!(identity.id.as_str(), "term-widget");
         assert!(matches!(
             items[0].terms[0].first(),
@@ -704,13 +704,13 @@ mod tests {
 
     #[test]
     fn classifies_environment_configuration_and_nested_parameter_semantics() {
-        fn identities(section: &Section) -> Vec<&mant_ir::DefinitionIdentity> {
+        fn identities(section: &Section) -> Vec<&mant_ir::EntryFacts> {
             let Block::DefinitionList { items, .. } = &section.blocks[0] else {
                 panic!("expected definition list");
             };
             items
                 .iter()
-                .map(|item| item.identity.as_ref().expect("semantic identity"))
+                .map(|item| item.entry.as_ref().expect("semantic identity"))
                 .collect()
         }
 
@@ -746,17 +746,32 @@ mod tests {
         identify_definitions(&mut Vec::new(), &mut sections, &HashSet::new(), None);
 
         assert_eq!(
-            identities(&sections[0])[0].role,
-            DefinitionRole::EnvironmentVariable
+            identities(&sections[0])[0].kind,
+            EntryKind::EnvironmentVariable
         );
         assert_eq!(
-            identities(&sections[1])[0].role,
-            DefinitionRole::ConfigurationKey
+            identities(&sections[1])[0].kind,
+            EntryKind::ConfigurationKey
         );
         let parameters = identities(&sections[2]);
-        assert_eq!(parameters[0].role, DefinitionRole::Marker);
-        assert_eq!(parameters[1].role, DefinitionRole::Operand);
-        assert_eq!(parameters[2].role, DefinitionRole::Option);
+        assert_eq!(
+            parameters[0].kind,
+            EntryKind::Parameter {
+                parameter_kind: mant_ir::ParameterKind::Marker
+            }
+        );
+        assert_eq!(
+            parameters[1].kind,
+            EntryKind::Parameter {
+                parameter_kind: mant_ir::ParameterKind::Operand
+            }
+        );
+        assert_eq!(
+            parameters[2].kind,
+            EntryKind::Parameter {
+                parameter_kind: mant_ir::ParameterKind::Option
+            }
+        );
         let Block::DefinitionList { items, .. } = &sections[2].blocks[0] else {
             panic!("expected option definitions");
         };
@@ -765,9 +780,9 @@ mod tests {
         };
         assert!(values.iter().all(|value| {
             value
-                .identity
+                .entry
                 .as_ref()
-                .is_some_and(|identity| identity.role == DefinitionRole::Value)
+                .is_some_and(|identity| identity.kind == EntryKind::Value)
         }));
     }
 

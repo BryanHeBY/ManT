@@ -303,7 +303,7 @@ fn removing_directives_never_merges_independent_lists_or_roles() {
                 let index = mant_ir::SemanticIndex::build(&parsed.document);
                 let entries = index.root();
                 assert_eq!(entries.last().unwrap().kind, EntryKind::Value);
-                assert_eq!(entries.last().unwrap().aliases, ["auto"]);
+                assert_eq!(entries.last().unwrap().names, ["auto"]);
             }
         }
         let source = "# Tool\n\n<!-- mant:entries role=option case=sensitive -->\n- `--color WHEN`: Color.\n\n  <!-- mant:domain choices=exhaustive -->\n\n  <!-- mant:entries role=value case=sensitive -->\n  - `auto`: Automatic.\n\n  <!-- mant:entries role=command case=sensitive -->\n  - `run`: A command.\n".replace('\n', newline);

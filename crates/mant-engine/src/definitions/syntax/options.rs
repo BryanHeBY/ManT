@@ -1,31 +1,41 @@
 //! options recognition; complete forms retain their role-specific grammar.
 use super::forms;
 use crate::inline::plain_text;
-use mant_ir::{DefinitionCase, DefinitionItem, DefinitionRole, Inline};
+use mant_ir::{DefinitionItem, EntryKind, Inline, NameCase};
 
 pub(in crate::definitions) fn parameter_identity(
     item: &DefinitionItem,
     first_term: &str,
-) -> (DefinitionRole, DefinitionCase, Vec<String>) {
+) -> (EntryKind, NameCase, Vec<String>) {
     if first_term == "--" || first_term == "--%" {
         return (
-            DefinitionRole::Marker,
-            DefinitionCase::Sensitive,
+            EntryKind::Parameter {
+                parameter_kind: mant_ir::ParameterKind::Marker,
+            },
+            NameCase::Sensitive,
             vec![first_term.to_owned()],
         );
     }
     if first_term == "-" {
         return (
-            DefinitionRole::Operand,
-            DefinitionCase::Sensitive,
+            EntryKind::Parameter {
+                parameter_kind: mant_ir::ParameterKind::Operand,
+            },
+            NameCase::Sensitive,
             vec![first_term.to_owned()],
         );
     }
     let names = parameter_names(item);
     if names.is_empty() {
-        (DefinitionRole::Term, DefinitionCase::Sensitive, Vec::new())
+        (EntryKind::Term, NameCase::Sensitive, Vec::new())
     } else {
-        (DefinitionRole::Option, DefinitionCase::Sensitive, names)
+        (
+            EntryKind::Parameter {
+                parameter_kind: mant_ir::ParameterKind::Option,
+            },
+            NameCase::Sensitive,
+            names,
+        )
     }
 }
 

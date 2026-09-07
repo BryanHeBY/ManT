@@ -8,9 +8,9 @@ use std::{
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use mant_ir::{
-    Block as AstBlock, DefinitionCase, DefinitionIdentity, DefinitionItem, DefinitionRole,
-    Document, DocumentMeta, DocumentSource, Inline, LayoutHint, ResolvedContent, Section,
-    SourceFormat, TldrDocument, TldrOrigin,
+    Block as AstBlock, DefinitionItem, Document, DocumentMeta, DocumentSource, EntryFacts,
+    EntryKind, Inline, LayoutHint, NameCase, ResolvedContent, Section, SourceFormat, TldrDocument,
+    TldrOrigin,
 };
 use mant_protocol::{
     CatalogSchema, DocumentAddress, DocumentCatalog, DocumentSummary, MarkdownOrigin,
@@ -104,14 +104,16 @@ fn navigation_bundle() -> ResolvedContent {
                 blocks: vec![AstBlock::DefinitionList {
                     items: vec![DefinitionItem {
                         source: None,
-                        identity: Some(DefinitionIdentity {
+                        entry: Some(EntryFacts {
                             name_bindings: Vec::new(),
                             alias_groups: Vec::new(),
                             alias_of: None,
                             forms: Vec::new(),
                             id: "help-option".to_owned().into(),
-                            role: DefinitionRole::Option,
-                            case: DefinitionCase::Sensitive,
+                            kind: EntryKind::Parameter {
+                                parameter_kind: mant_ir::ParameterKind::Option,
+                            },
+                            case: NameCase::Sensitive,
                             names: vec!["-h".to_owned(), "--help".to_owned()],
                             value_domain: None,
                         }),

@@ -408,7 +408,7 @@ fn append_list_targets(
             } else {
                 items.push(DefinitionItem {
                     source: None,
-                    identity: None,
+                    entry: None,
                     terms: vec![
                         targets
                             .into_iter()

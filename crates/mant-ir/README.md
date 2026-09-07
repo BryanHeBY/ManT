@@ -20,8 +20,9 @@ ResolvedContent
 │   ├── blocks                      content before the first heading
 │   ├── sections[]                  recursive heading-backed content
 │   │   └── blocks[]                paragraphs, lists, definitions, tables, …
-│   └── DefinitionIdentity?         semantic fact attached to a definition
-│       └─> SemanticIndex           rebuildable entry hierarchy
+│   └── ListItem / DefinitionItem   actual owners inside those blocks
+│       └── entry: EntryFacts?      optional facts, never replacement content
+│           └─> SemanticIndex       rebuildable entry hierarchy
 └── tldr: TldrDocument?             distinct quick-reference channel
 ```
 
@@ -30,7 +31,8 @@ The important public families are:
 | API | Purpose |
 | --- | --- |
 | `Document`, `Section`, `Block`, `Inline` | Source-neutral content tree |
-| `EntryFacts`, `DefinitionIdentity` | Common facts attached to ordinary list items or native definitions; the latter name is a transitional alias |
+| `ListItem`, `DefinitionItem`, `ListKind` | Distinct content shapes, independent of optional semantic annotation |
+| `EntryFacts`, `EntryKind`, `NameCase` | Common facts and classification attached through either item's `entry` field |
 | `EntryOwner`, `EntryForm`, `EntryContentSlice` | Borrowed content owners and validated final-IR form references, without duplicate bodies |
 | `SemanticIndex`, `SemanticEntry`, `EntrySummary` | Rebuildable role-aware hierarchy, authored forms, and compact coverage |
 | `DocumentAddress`, `MarkdownOrigin` | Exact identity in `ManT`'s catalog rather than a physical path |
@@ -50,11 +52,13 @@ within-document navigation.
 ## Content and semantic indexes
 
 `DocumentIndex` addresses content nodes. `SemanticIndex` separately groups
-identified definitions into commands, parameter families, configuration keys,
-variables, values, and terms. A semantic entry keeps exact selector aliases,
+identified content owners into commands, parameter families, configuration keys,
+variables, values, and terms. A semantic entry keeps exact selectable names,
 complete authored forms, explicit alias groups and same-document alias relations,
 linked-document destinations, and nested ownership; it does not
-replace the definitions in the document tree.
+replace or merge their original content. Unannotated list and definition items,
+including those in table cells, are transparent to direct-child discovery;
+annotated owners establish a boundary even when their forms or names are invalid.
 
 Build both indexes and run shared validation after obtaining a document from
 `mant-engine` or another trusted producer:
@@ -68,7 +72,7 @@ fn inspect(document: &Document) {
     println!("{} addressable identities", content.iter().count());
 
     for entry in semantics.root() {
-        println!("{}: {:?}", entry.id, entry.aliases);
+        println!("{}: {:?}", entry.id, entry.names);
         assert!(content.get(&entry.id).is_some());
         for target in &entry.document_targets {
             println!("  linked document: {:?}", target.reference);

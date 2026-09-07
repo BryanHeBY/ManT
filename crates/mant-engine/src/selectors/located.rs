@@ -5,8 +5,7 @@ use crate::{
     inline::plain_text,
 };
 use mant_ir::{
-    Block, DOCUMENT_ROOT_ID, DefinitionIdentity, EntryOwner, NodeId, OutlinePath, Section,
-    SourceSpan,
+    Block, DOCUMENT_ROOT_ID, EntryFacts, EntryOwner, NodeId, OutlinePath, Section, SourceSpan,
 };
 #[derive(Clone)]
 pub(crate) struct LocatedBreadcrumb {
@@ -66,7 +65,7 @@ impl LocatedNode<'_> {
         }
     }
 
-    pub(crate) fn identity(&self) -> Option<&DefinitionIdentity> {
+    pub(crate) fn facts(&self) -> Option<&EntryFacts> {
         match self {
             Self::Entry { entry, .. } => entry.item.facts(),
             Self::Section { .. } => None,

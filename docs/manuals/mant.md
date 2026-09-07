@@ -77,7 +77,7 @@ and shows the same manual hints; it does not automatically read the full manual.
 
 ManT preserves source meaning before presentation. Markdown and native manuals
 both become a content tree of sections, blocks, inline nodes, and definition
-items. An addressable definition carries a `DefinitionIdentity`; the
+items. An addressable definition carries a `EntryFacts`; the
 rebuildable semantic index groups those facts into commands, parameter
 families, configuration keys, variables, values, and generic terms. Each entry
 keeps exact selector aliases separate from complete authored forms and points

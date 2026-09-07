@@ -25,7 +25,7 @@ fn keeps_complete_sections_and_semantic_option_outlines() {
     let version = common::nested_definition_items(common::section(document, "OPTIONS"))
         .into_iter()
         .find(|item| {
-            item.identity
+            item.entry
                 .as_ref()
                 .is_some_and(|identity| identity.names.iter().any(|name| name == "--version"))
         })

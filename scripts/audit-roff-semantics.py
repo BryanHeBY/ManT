@@ -35,8 +35,8 @@ ROOT = Path(__file__).resolve().parents[1]
 FIXTURE_ROOT = ROOT / "tests/fixtures/roff/real"
 DEFAULT_PROFILER = ROOT / "target/debug/examples/roff_semantic_profile"
 DEFAULT_AUDIT_DB = ROOT / "tests/fixtures/roff/SEMANTIC_AUDIT.csv"
-PROFILE_SCHEMA = "mant.roff-semantic-profile/v2"
-SUPPORTED_PROFILE_SCHEMAS = {"mant.roff-semantic-profile/v1", PROFILE_SCHEMA}
+PROFILE_SCHEMA = "mant.roff-semantic-profile/v3"
+SUPPORTED_PROFILE_SCHEMAS = {"mant.roff-semantic-profile/v1", "mant.roff-semantic-profile/v2", PROFILE_SCHEMA}
 DATABASE_FIELDS = [
     "corpus",
     "path",
@@ -190,7 +190,7 @@ def valid_entry(value: object) -> bool:
         and all(
             isinstance(value.get(field), list)
             and all(isinstance(item, str) for item in value[field])
-            for field in ("aliases", "forms", "targets")
+            for field in ("names", "forms", "targets")
         )
         and (value.get("containingSection") is None or isinstance(value.get("containingSection"), str))
         and (
@@ -379,7 +379,7 @@ def self_check() -> None:
         {
             "id": "option-help",
             "kind": "option",
-            "aliases": ["--help"],
+            "names": ["--help"],
             "forms": ["--help"],
             "targets": ["option-help"],
             "containingSection": "options",

@@ -168,7 +168,7 @@ pub struct QueryRequest {
 
 /// Versioned full-query result emitted at CLI and request JSON boundaries.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 #[schemars(extend("$id" = "urn:mant:query:v0.11"))]
 pub struct QueryBundle {
     /// Exact response schema discriminator.

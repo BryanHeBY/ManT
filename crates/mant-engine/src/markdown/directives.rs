@@ -1,9 +1,7 @@
 //! Collect declarations from original events without reparsing masked Markdown.
 use super::bindings::{ItemBindings, OriginalItemId, OriginalListId};
 mod syntax;
-use mant_ir::{
-    DefinitionCase, DefinitionRole, Diagnostic, DiagnosticLevel, SourceSpan, ValueDomain,
-};
+use mant_ir::{Diagnostic, DiagnosticLevel, EntryKind, NameCase, SourceSpan, ValueDomain};
 use pulldown_cmark::{Event, Tag, TagEnd};
 use std::collections::BTreeMap;
 use syntax::{
@@ -33,8 +31,8 @@ impl<'a> PreparedMarkdown<'a> {
 
 #[derive(Debug, Clone, Copy)]
 pub(super) struct EntryDeclaration {
-    pub(super) role: DefinitionRole,
-    pub(super) case: DefinitionCase,
+    pub(super) role: EntryKind,
+    pub(super) case: NameCase,
     pub(super) attached: AttachedValuePolicy,
     pub(super) source: SourceSpan,
 }

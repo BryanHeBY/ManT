@@ -1,7 +1,7 @@
 //! Explicit Markdown name grammar, distinct from native inference policy.
 use super::{AttachedValuePolicy, diagnostics::EntryRejectionReason};
 use crate::definitions::{environment_variable_alias, option_names_from_terms, option_prefix};
-use mant_ir::{DefinitionRole, Inline};
+use mant_ir::{EntryKind, Inline};
 pub(super) fn is_option_code(value: &str) -> bool {
     let terms = vec![vec![Inline::Code {
         value: value.to_owned(),
@@ -11,13 +11,17 @@ pub(super) fn is_option_code(value: &str) -> bool {
 
 pub(super) fn entry_names(
     value: &str,
-    role: DefinitionRole,
+    role: EntryKind,
     explicitly_declared: bool,
     attached: AttachedValuePolicy,
 ) -> Result<Vec<String>, EntryRejectionReason> {
     match role {
-        DefinitionRole::Option if explicitly_declared => option_entry_names(value, attached),
-        DefinitionRole::Option => value
+        EntryKind::Parameter {
+            parameter_kind: mant_ir::ParameterKind::Option,
+        } if explicitly_declared => option_entry_names(value, attached),
+        EntryKind::Parameter {
+            parameter_kind: mant_ir::ParameterKind::Option,
+        } => value
             .trim_start()
             .starts_with('-')
             .then(|| {
@@ -28,16 +32,17 @@ pub(super) fn entry_names(
             })
             .filter(|names| !names.is_empty())
             .ok_or(EntryRejectionReason::InvalidOptionName),
-        DefinitionRole::Command => plain_entry_name(value, is_command_name),
-        DefinitionRole::EnvironmentVariable => environment_variable_alias(value)
+        EntryKind::Command => plain_entry_name(value, is_command_name),
+        EntryKind::EnvironmentVariable => environment_variable_alias(value)
             .map(|name| vec![name])
             .ok_or(EntryRejectionReason::InvalidEntryName),
-        DefinitionRole::Variable => plain_entry_name(value, is_variable_name),
-        DefinitionRole::Marker
-        | DefinitionRole::Operand
-        | DefinitionRole::ConfigurationKey
-        | DefinitionRole::Value
-        | DefinitionRole::Term => plain_entry_name(value, |name| {
+        EntryKind::Variable => plain_entry_name(value, is_variable_name),
+        EntryKind::Parameter {
+            parameter_kind: mant_ir::ParameterKind::Marker | mant_ir::ParameterKind::Operand,
+        }
+        | EntryKind::ConfigurationKey
+        | EntryKind::Value
+        | EntryKind::Term => plain_entry_name(value, |name| {
             !name.is_empty() && !name.contains(['\r', '\n'])
         }),
     }

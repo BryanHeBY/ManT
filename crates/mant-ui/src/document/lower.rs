@@ -324,7 +324,7 @@ impl DocumentBuilder {
                         .spacing_before_lines
                         .unwrap_or(u16::from(index > 0 && !compact));
                     self.spacing(spacing);
-                    if let Some(identity) = &item.identity {
+                    if let Some(identity) = &item.entry {
                         self.anchors
                             .insert(identity.id.to_string(), self.lines.len());
                     }

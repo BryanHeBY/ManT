@@ -11,7 +11,7 @@ mod scoped;
 pub(crate) use scoped::explain as explain_scope;
 
 use crate::selectors::{LocatedNode, collect_root_entries, collect_sections};
-use mant_ir::{Block, DefinitionCase, EntryOwner, OutlinePath, ResolvedContent, SourceSpan};
+use mant_ir::{Block, EntryOwner, NameCase, OutlinePath, ResolvedContent, SourceSpan};
 use mant_protocol::{EvidenceBasis, ExplanationQuery, QueryExplanation};
 
 /// Invalid explanation request or missing readable source.
@@ -183,10 +183,10 @@ struct Candidate<'a> {
     hits: Vec<preview::LiteralHit<'a>>,
 }
 
-fn same(left: &str, right: &str, case: DefinitionCase) -> bool {
+fn same(left: &str, right: &str, case: NameCase) -> bool {
     match case {
-        DefinitionCase::Sensitive => left == right,
-        DefinitionCase::Insensitive => left.eq_ignore_ascii_case(right),
+        NameCase::Sensitive => left == right,
+        NameCase::Insensitive => left.eq_ignore_ascii_case(right),
     }
 }
 

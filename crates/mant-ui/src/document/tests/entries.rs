@@ -95,7 +95,7 @@ fn tldr_commands_use_terminal_soft_wrapping_instead_of_prose_reflow() {
 fn definition_lists_honour_compact_and_per_item_spacing() {
     let definition = |term: &str, description: &str, spacing_before_lines| DefinitionItem {
         source: None,
-        identity: None,
+        entry: None,
         terms: vec![vec![Inline::Text {
             value: term.to_owned(),
         }]],

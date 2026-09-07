@@ -8,9 +8,8 @@ use mant_sources::{
 };
 
 use mant_ir::{
-    Block, DefinitionCase, DefinitionIdentity, DefinitionItem, DefinitionRole, Document,
-    DocumentMeta, DocumentSource, Inline, LayoutHint, Section, SourceFormat, TldrDocument,
-    TldrOrigin,
+    Block, DefinitionItem, Document, DocumentMeta, DocumentSource, EntryFacts, EntryKind, Inline,
+    LayoutHint, NameCase, Section, SourceFormat, TldrDocument, TldrOrigin,
 };
 use mant_protocol::{
     CatalogSchema, DoctorCheck, DoctorCheckStatus, DoctorEnvironment, DoctorReport,
@@ -597,7 +596,7 @@ fn explainable_manual() -> Document {
         items: vec![DefinitionItem {
             source: None,
             inline_term: false,
-            identity: Some(DefinitionIdentity {
+            entry: Some(EntryFacts {
                 name_bindings: vec![mant_ir::EntryNameBinding {
                     name: 0,
                     evidence: mant_ir::EntryNameEvidence::Declared,
@@ -613,8 +612,10 @@ fn explainable_manual() -> Document {
                 alias_of: None,
                 forms: vec![mant_ir::EntryForm::term(0)],
                 id: "exclude".to_owned().into(),
-                role: DefinitionRole::Option,
-                case: DefinitionCase::Sensitive,
+                kind: EntryKind::Parameter {
+                    parameter_kind: mant_ir::ParameterKind::Option,
+                },
+                case: NameCase::Sensitive,
                 names: vec!["--exclude".to_owned()],
                 value_domain: None,
             }),
@@ -916,7 +917,7 @@ fn semantic_entry_selectors_work_through_cli_and_request_json() {
     assert_eq!(status, 0);
     let evidence: serde_json::Value = serde_json::from_str(&output).unwrap();
     assert!(evidence["evidence"].as_array().unwrap().iter().any(|item| {
-        item["entry"]["role"] == "command"
+        item["entry"]["kind"]["kind"] == "command"
             && item["bases"]
                 .as_array()
                 .unwrap()
@@ -938,7 +939,7 @@ fn semantic_entry_selectors_work_through_cli_and_request_json() {
     );
     assert_eq!(status, 0);
     let excerpt: serde_json::Value = serde_json::from_str(&output).expect("excerpt JSON");
-    assert_eq!(excerpt["evidence"][0]["entry"]["role"], "command");
+    assert_eq!(excerpt["evidence"][0]["entry"]["kind"]["kind"], "command");
 
     let (status, output, _) = invoke(
         &["demo", "--node=query", "--format", "json", "--compact"],
@@ -959,7 +960,13 @@ fn semantic_entry_selectors_work_through_cli_and_request_json() {
         );
         assert_eq!(status, 0);
         let excerpt: serde_json::Value = serde_json::from_str(&output).expect("role explanation");
-        assert_eq!(excerpt["evidence"][0]["entry"]["role"], role);
+        let kind = &excerpt["evidence"][0]["entry"]["kind"];
+        if role == "option" {
+            assert_eq!(kind["kind"], "parameter");
+            assert_eq!(kind["parameterKind"], "option");
+        } else {
+            assert_eq!(kind["kind"], role);
+        }
         assert!(diagnostics.is_empty());
     }
 
@@ -970,7 +977,7 @@ fn semantic_entry_selectors_work_through_cli_and_request_json() {
     );
     assert_eq!(status, 0);
     let excerpt: serde_json::Value = serde_json::from_str(&output).expect("request excerpt");
-    assert_eq!(excerpt["evidence"][0]["entry"]["role"], "command");
+    assert_eq!(excerpt["evidence"][0]["entry"]["kind"]["kind"], "command");
     assert!(diagnostics.is_empty());
 }
 

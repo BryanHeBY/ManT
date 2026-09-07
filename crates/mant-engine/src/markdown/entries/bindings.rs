@@ -1,15 +1,15 @@
 //! Read-only semantic references into an unchanged ordinary list item.
 use super::{AttachedValuePolicy, EntrySignature, entry_names, entry_term_text};
 use mant_ir::{
-    Block, DefinitionCase, DefinitionRole, EntryContentSlice, EntryFacts, EntryForm,
-    EntryInlineRoot, EntryNameBinding, EntryNameEvidence, Inline, ListItem,
+    Block, EntryContentSlice, EntryFacts, EntryForm, EntryInlineRoot, EntryKind, EntryNameBinding,
+    EntryNameEvidence, Inline, ListItem, NameCase,
 };
 
 pub(super) fn entry_facts(
     item: &ListItem,
     signature: &EntrySignature,
-    role: DefinitionRole,
-    case: DefinitionCase,
+    role: EntryKind,
+    case: NameCase,
     attached: AttachedValuePolicy,
     declared: bool,
 ) -> EntryFacts {
@@ -106,7 +106,7 @@ pub(super) fn entry_facts(
     bindings.retain(|binding| !binding.occurrences.is_empty());
     EntryFacts {
         id: "".into(),
-        role,
+        kind: role,
         case,
         names: signature.names.clone(),
         forms,

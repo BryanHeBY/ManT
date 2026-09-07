@@ -280,7 +280,7 @@ mod tests {
     fn definition(term: &str, description: &str) -> DefinitionItem {
         DefinitionItem {
             source: None,
-            identity: None,
+            entry: None,
             inline_term: false,
             terms: vec![vec![Inline::Text {
                 value: term.to_owned(),

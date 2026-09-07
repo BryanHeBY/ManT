@@ -8,7 +8,7 @@ pub(crate) use diagnostics::semantic_selector_diagnostics;
 pub use error::{ProjectionError, SelectorCandidate};
 pub(crate) use index::DocumentSelectorIndex;
 pub(crate) use located::{LocatedBreadcrumb, LocatedNode, collect_root_entries, collect_sections};
-use mant_ir::{DOCUMENT_ROOT_ID, DefinitionRole, OutlinePath};
+use mant_ir::{DOCUMENT_ROOT_ID, EntryKind, OutlinePath};
 pub(crate) const TLDR_ID: &str = "tldr";
 pub(crate) const DOCUMENT_ROOT_TITLE: &str = "OVERVIEW";
 
@@ -37,22 +37,25 @@ pub(crate) fn is_reserved_selector(value: &str) -> bool {
         .any(|prefix| value.starts_with(prefix))
 }
 
-fn semantic_name_shorthand(role: DefinitionRole, name: &str) -> Option<&str> {
+fn semantic_name_shorthand(role: EntryKind, name: &str) -> Option<&str> {
     match role {
-        DefinitionRole::Option => {
+        EntryKind::Parameter {
+            parameter_kind: mant_ir::ParameterKind::Option,
+        } => {
             let shorthand = name.trim_start_matches('-');
             (shorthand != name && !shorthand.is_empty()).then_some(shorthand)
         }
-        DefinitionRole::EnvironmentVariable => {
+        EntryKind::EnvironmentVariable => {
             environment_variable_body(name).filter(|body| *body != name)
         }
-        DefinitionRole::Command
-        | DefinitionRole::ConfigurationKey
-        | DefinitionRole::Marker
-        | DefinitionRole::Operand
-        | DefinitionRole::Variable
-        | DefinitionRole::Value
-        | DefinitionRole::Term => None,
+        EntryKind::Command
+        | EntryKind::ConfigurationKey
+        | EntryKind::Parameter {
+            parameter_kind: mant_ir::ParameterKind::Marker | mant_ir::ParameterKind::Operand,
+        }
+        | EntryKind::Variable
+        | EntryKind::Value
+        | EntryKind::Term => None,
     }
 }
 

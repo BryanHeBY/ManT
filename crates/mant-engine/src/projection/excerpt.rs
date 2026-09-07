@@ -185,7 +185,7 @@ impl LocatedNode<'_> {
                             path: path.to_string().into(),
                             id: identity.id.clone(),
                             title: title.clone(),
-                            role: identity.role,
+                            entry_kind: identity.kind,
                             case: identity.case,
                             names: entry.names.to_vec(),
                         }

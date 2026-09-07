@@ -28,7 +28,7 @@
           "path": "root/e1",
           "id": "help",
           "title": "--help",
-          "role": "option",
+          "entryKind": {"kind":"parameter","parameterKind":"option"},
           "case": "sensitive",
           "names": [
             "--help"
@@ -44,7 +44,7 @@
         }
       ],
       "entry": {
-        "role": "option",
+        "kind": {"kind":"parameter","parameterKind":"option"},
         "case": "sensitive",
         "names": [
           "--help"

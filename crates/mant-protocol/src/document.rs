@@ -44,7 +44,7 @@ pub struct Engine {
 
 /// Serializable v0.11 envelope around `ManT`'s protocol-independent document IR.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct DocumentResponse {
     /// Exact response schema discriminator.
     pub schema: DocumentSchema,

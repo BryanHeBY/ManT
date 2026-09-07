@@ -5,8 +5,8 @@ use super::{
 };
 use crate::inline::plain_text;
 use mant_ir::{
-    Block, DefinitionCase, DefinitionIdentity, DefinitionItem, DefinitionRole, EntryOwner, Inline,
-    ListItem, Section, ValueDomain,
+    Block, DefinitionItem, EntryFacts, EntryKind, EntryOwner, Inline, ListItem, NameCase, Section,
+    ValueDomain,
     visit::{self, Visit},
 };
 use sha2::{Digest, Sha256};
@@ -38,22 +38,22 @@ pub(super) fn document_anchor_ids(blocks: &[Block], sections: &[Section]) -> Has
 }
 
 pub(super) struct IdentityPlan {
-    pub(super) role: DefinitionRole,
-    pub(super) case: DefinitionCase,
+    pub(super) kind: EntryKind,
+    pub(super) case: NameCase,
     pub(super) names: Vec<String>,
     pub(super) value_domain: Option<ValueDomain>,
     pub(super) preferred: String,
 }
 
 pub(super) fn identity_plan(item: &DefinitionItem, context: DefinitionContext) -> IdentityPlan {
-    let (role, case, names, value_domain) = item.identity.as_ref().map_or_else(
+    let (kind, case, names, value_domain) = item.entry.as_ref().map_or_else(
         || {
-            let (role, case, names) = infer_identity(item, context);
-            (role, case, names, None)
+            let (kind, case, names) = infer_identity(item, context);
+            (kind, case, names, None)
         },
         |identity| {
             (
-                identity.role,
+                identity.kind,
                 identity.case,
                 identity.names.clone(),
                 identity.value_domain.clone(),
@@ -65,9 +65,9 @@ pub(super) fn identity_plan(item: &DefinitionItem, context: DefinitionContext) -
             .first()
             .map_or_else(|| "entry".to_owned(), |term| plain_text(term))
     });
-    let preferred = format!("{}-{}", role_id_prefix(role), role_name_slug(role, &name));
+    let preferred = format!("{}-{}", role_id_prefix(kind), role_name_slug(kind, &name));
     IdentityPlan {
-        role,
+        kind,
         case,
         names,
         value_domain,
@@ -80,8 +80,8 @@ pub(super) fn list_identity_base(item: &ListItem) -> Option<String> {
     let name = facts.names.first().map_or("entry", String::as_str);
     Some(format!(
         "{}-{}",
-        role_id_prefix(facts.role),
-        role_name_slug(facts.role, name)
+        role_id_prefix(facts.kind),
+        role_name_slug(facts.kind, name)
     ))
 }
 
@@ -91,7 +91,7 @@ pub(super) fn identify_list_item(
     reserved: &HashSet<String>,
     retained: &mut HashSet<String>,
     preferred_counts: &HashMap<String, usize>,
-) -> Option<DefinitionRole> {
+) -> Option<EntryKind> {
     let mut preferred = list_identity_base(item)?;
     let facts = item.entry.as_ref()?;
     if preferred_counts
@@ -103,14 +103,14 @@ pub(super) fn identify_list_item(
     {
         preferred = format!(
             "{preferred}-{}",
-            semantic_fingerprint(EntryOwner::List(item), facts.role, facts.case, &facts.names)
+            semantic_fingerprint(EntryOwner::List(item), facts.kind, facts.case, &facts.names)
         );
     }
     let id = unique_id(&preferred, used, reserved);
     retained.insert(id.clone());
     let facts = item.entry.as_mut()?;
     facts.id = id.into();
-    Some(facts.role)
+    Some(facts.kind)
 }
 
 pub(super) fn identify_item(
@@ -120,14 +120,14 @@ pub(super) fn identify_item(
     reserved: &HashSet<String>,
     retained: &mut HashSet<String>,
     preferred_counts: &HashMap<String, usize>,
-) -> DefinitionRole {
+) -> EntryKind {
     // Native parser anchors are navigation destinations whose formatter tags
     // may contain only the first word of a term. Keep those anchors
     // addressable, but never reuse them as semantic entry IDs: doing so turns
     // `set-mark` into the misleading semantic ID `set`. Markdown producers
-    // likewise provide role/name evidence and leave allocation to this pass.
+    // likewise provide kind/name evidence and leave allocation to this pass.
     let IdentityPlan {
-        role,
+        kind,
         case,
         names,
         value_domain,
@@ -149,8 +149,8 @@ pub(super) fn identify_item(
             .iter()
             .any(|term| !plain_text(term).trim().is_empty())
     {
-        item.identity = None;
-        return DefinitionRole::Term;
+        item.entry = None;
+        return EntryKind::Term;
     }
 
     if preferred_counts
@@ -162,7 +162,7 @@ pub(super) fn identify_item(
     {
         preferred = format!(
             "{preferred}-{}",
-            semantic_fingerprint(EntryOwner::Definition(item), role, case, &names)
+            semantic_fingerprint(EntryOwner::Definition(item), kind, case, &names)
         );
     }
     let id = unique_id(&preferred, used, reserved);
@@ -172,7 +172,7 @@ pub(super) fn identify_item(
         term.insert(0, Inline::anchor(id.clone()));
     }
     retained.insert(id.clone());
-    item.identity = Some(DefinitionIdentity {
+    item.entry = Some(EntryFacts {
         name_bindings: super::binding::native_name_bindings(item, &names),
         alias_groups: Vec::new(),
         alias_of: None,
@@ -180,12 +180,12 @@ pub(super) fn identify_item(
             .map(mant_ir::EntryForm::term)
             .collect(),
         id: id.into(),
-        role,
+        kind,
         case,
         names,
         value_domain,
     });
-    role
+    kind
 }
 
 pub(super) fn has_semantic_spelling(item: &DefinitionItem, plan: &IdentityPlan) -> bool {
@@ -196,14 +196,29 @@ pub(super) fn has_semantic_spelling(item: &DefinitionItem, plan: &IdentityPlan) 
             .any(|term| !plain_text(term).trim().is_empty())
 }
 
-fn role_name_slug(role: DefinitionRole, name: &str) -> String {
-    match (role, name) {
-        (DefinitionRole::Marker, "--") => return "end-of-options".to_owned(),
-        (DefinitionRole::Marker, "--%") => return "stop-parsing".to_owned(),
-        (DefinitionRole::Operand, "-") => return "dash".to_owned(),
+fn role_name_slug(kind: EntryKind, name: &str) -> String {
+    match (kind, name) {
+        (
+            EntryKind::Parameter {
+                parameter_kind: mant_ir::ParameterKind::Marker,
+            },
+            "--",
+        ) => return "end-of-options".to_owned(),
+        (
+            EntryKind::Parameter {
+                parameter_kind: mant_ir::ParameterKind::Marker,
+            },
+            "--%",
+        ) => return "stop-parsing".to_owned(),
+        (
+            EntryKind::Parameter {
+                parameter_kind: mant_ir::ParameterKind::Operand,
+            },
+            "-",
+        ) => return "dash".to_owned(),
         _ => {}
     }
-    if role == DefinitionRole::Variable {
+    if kind == EntryKind::Variable {
         match name {
             "$?" => return "question-mark".to_owned(),
             "$$" => return "dollar-dollar".to_owned(),
@@ -212,7 +227,7 @@ fn role_name_slug(role: DefinitionRole, name: &str) -> String {
             _ => {}
         }
     }
-    if role == DefinitionRole::EnvironmentVariable
+    if kind == EntryKind::EnvironmentVariable
         && let Some(body) = environment_variable_body(name)
     {
         return document_id_slug(body);
@@ -225,17 +240,23 @@ fn role_name_slug(role: DefinitionRole, name: &str) -> String {
     }
 }
 
-const fn role_id_prefix(role: DefinitionRole) -> &'static str {
-    match role {
-        DefinitionRole::Option => "option",
-        DefinitionRole::Marker => "marker",
-        DefinitionRole::Operand => "operand",
-        DefinitionRole::Command => "command",
-        DefinitionRole::ConfigurationKey => "configuration",
-        DefinitionRole::EnvironmentVariable => "environment",
-        DefinitionRole::Variable => "variable",
-        DefinitionRole::Value => "value",
-        DefinitionRole::Term => "term",
+const fn role_id_prefix(kind: EntryKind) -> &'static str {
+    match kind {
+        EntryKind::Parameter {
+            parameter_kind: mant_ir::ParameterKind::Option,
+        } => "option",
+        EntryKind::Parameter {
+            parameter_kind: mant_ir::ParameterKind::Marker,
+        } => "marker",
+        EntryKind::Parameter {
+            parameter_kind: mant_ir::ParameterKind::Operand,
+        } => "operand",
+        EntryKind::Command => "command",
+        EntryKind::ConfigurationKey => "configuration",
+        EntryKind::EnvironmentVariable => "environment",
+        EntryKind::Variable => "variable",
+        EntryKind::Value => "value",
+        EntryKind::Term => "term",
     }
 }
 
@@ -259,8 +280,8 @@ fn collect_anchor_ids(nodes: &[Inline], output: &mut Vec<String>) {
 
 fn semantic_fingerprint(
     item: EntryOwner<'_>,
-    role: DefinitionRole,
-    case: DefinitionCase,
+    kind: EntryKind,
+    case: NameCase,
     names: &[String],
 ) -> String {
     struct VisibleFingerprint(Vec<u8>);
@@ -324,10 +345,10 @@ fn semantic_fingerprint(
     }
 
     let mut content = VisibleFingerprint(Vec::new());
-    content.field(role_id_prefix(role));
+    content.field(role_id_prefix(kind));
     content.field(match case {
-        DefinitionCase::Sensitive => "sensitive",
-        DefinitionCase::Insensitive => "insensitive",
+        NameCase::Sensitive => "sensitive",
+        NameCase::Insensitive => "insensitive",
     });
     for name in names {
         content.field(name);

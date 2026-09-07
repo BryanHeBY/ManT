@@ -3,11 +3,11 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use crate::NodeId;
+use crate::{EntryFacts, NodeId};
 
 /// A normalized document ready for interactive or textual rendering.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Document {
     /// Parser provenance retained independently from process-protocol metadata.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -216,7 +216,7 @@ pub struct SourceSpan {
 /// This is a content subtree, not the native manual category stored in
 /// [`DocumentMeta::manual_section`]. Depth is derived from tree position.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Section {
     /// Unique within one document; consumers must not treat it as a global ID.
     pub id: NodeId,
@@ -254,7 +254,8 @@ pub struct LayoutHint {
 #[serde(
     tag = "type",
     rename_all = "kebab-case",
-    rename_all_fields = "camelCase"
+    rename_all_fields = "camelCase",
+    deny_unknown_fields
 )]
 pub enum Block {
     /// Reflowable prose.
@@ -384,7 +385,7 @@ pub enum ListKind {
 
 /// A list item contains blocks so nested lists and displays remain intact.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ListItem {
     /// Original item span, independent of any removed declaration or first
     /// visible block. Unknown for synthetic content; never an identity key.
@@ -400,15 +401,15 @@ pub struct ListItem {
 /// Displayed terms share a description containing arbitrary blocks.
 /// Sharing that content does not establish behavioral equivalence of the terms.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct DefinitionItem {
     /// Original term-and-description owner span, not its containing list.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source: Option<SourceSpan>,
-    /// Present when the native lowering pass can identify this definition as
-    /// a stable semantic entry, such as a command-line option.
+    /// Optional source-neutral semantic facts. The original terms and
+    /// description remain authoritative regardless of fact validity.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub identity: Option<DefinitionIdentity>,
+    pub entry: Option<EntryFacts>,
     /// One or more displayed terms sharing this description, not necessarily
     /// equivalent names or interchangeable invocation forms.
     pub terms: Vec<Vec<Inline>>,
@@ -453,87 +454,9 @@ impl DefinitionItem {
     }
 }
 
-/// Renderer-independent identity attached to one navigable content definition.
-///
-/// [`crate::SemanticIndex`] derives logical entries from these source facts.
-/// The identity remains part of the authoritative document tree; an outline or
-/// another projection may omit the entry without removing its definition.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct EntryFacts {
-    /// Validated occurrences of documented names within authored forms.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub name_bindings: Vec<crate::EntryNameBinding>,
-    /// Explicit same-owner equivalence groups referencing visible names.
-    /// An empty collection means the relationships are unknown, not unequal.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub alias_groups: Vec<Vec<String>>,
-    /// Explicit same-document relationship to another single-subject entry.
-    /// It never redirects or replaces either owner's content.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub alias_of: Option<NodeId>,
-    /// Read-only authored-form bindings into this owner's content.
-    /// Empty means unknown; producers reference known terms explicitly.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub forms: Vec<crate::EntryForm>,
-    /// Unique within one document and shared with the term's inline anchor.
-    pub id: NodeId,
-    /// Semantic category used by lookup and presentation.
-    pub role: DefinitionRole,
-    /// Matching policy used for aliases in semantic entry lookup.
-    pub case: DefinitionCase,
-    /// Plain normalized names used as [`crate::SemanticEntry::aliases`].
-    pub names: Vec<String>,
-    /// Optional value space explicitly declared by the source producer.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub value_domain: Option<crate::ValueDomain>,
-}
-
-/// Transitional Rust name for facts attached to a native definition owner.
-/// Ordinary list items carry the same [`EntryFacts`] without changing content.
-pub type DefinitionIdentity = EntryFacts;
-
-/// Case policy used when matching one semantic entry's names.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "kebab-case")]
-pub enum DefinitionCase {
-    /// Names must match with the same Unicode scalar values and case.
-    Sensitive,
-    /// Names match without ASCII case distinctions.
-    Insensitive,
-}
-
-/// Semantic role assigned before source-specific details leave the parser.
-///
-/// [`crate::SemanticIndex`] maps option, marker, and operand roles to
-/// [`crate::EntryKind::Parameter`] and maps the remaining roles directly to
-/// their corresponding entry categories.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "kebab-case")]
-pub enum DefinitionRole {
-    /// Command-line option or switch.
-    Option,
-    /// End-of-options or parser-control marker such as `--` or `--%`.
-    Marker,
-    /// Positional or special operand documented as a definition.
-    Operand,
-    /// Executable subcommand or verb.
-    Command,
-    /// Named key accepted by a configuration language or command option.
-    ConfigurationKey,
-    /// Process environment variable.
-    EnvironmentVariable,
-    /// Other named configuration or language variable.
-    Variable,
-    /// One documented value accepted by a parent entry.
-    Value,
-    /// Addressable definition without a more specific reliable role.
-    Term,
-}
-
 /// One logical table row.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct TableRow {
     /// Cells in column order. Horizontal spans omit covered cells; vertical
     /// continuations retain empty cells at their logical positions. Use
@@ -543,7 +466,7 @@ pub struct TableRow {
 
 /// Block-capable table cell with optional layout information.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct TableCell {
     /// Block content contained in the cell.
     pub blocks: Vec<Block>,

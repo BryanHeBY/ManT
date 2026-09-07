@@ -385,7 +385,7 @@ fn contains_entry(nodes: &[OutlineNode], name: &str) -> bool {
     nodes.iter().any(|node| {
         matches!(
             node,
-            OutlineNode::DocumentEntry { aliases, .. }
+            OutlineNode::DocumentEntry { names: aliases, .. }
                 if aliases.iter().any(|candidate| candidate == name)
         ) || contains_entry(node.children(), name)
     })

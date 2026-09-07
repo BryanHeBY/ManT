@@ -2,8 +2,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{
-    DefinitionCase, Diagnostic, DiagnosticLevel, Document, EntryContentSlice, EntryFacts,
-    EntryOwner,
+    Diagnostic, DiagnosticLevel, Document, EntryContentSlice, EntryFacts, EntryOwner, NameCase,
     visit::{self, Visit},
 };
 
@@ -73,7 +72,7 @@ pub fn entry_relation_issues(document: &Document) -> Vec<EntryRelationIssue> {
 }
 impl<'a> Visit<'a> for Owners<'a> {
     fn visit_definition_item(&mut self, item: &'a crate::DefinitionItem) {
-        if let Some(facts) = &item.identity
+        if let Some(facts) = &item.entry
             && has_relationship_facts(facts)
         {
             self.0
@@ -154,7 +153,7 @@ pub(crate) fn relation_issues(
                 .get(target)
                 .and_then(|records| (records.len() == 1).then_some(records[0]))
                 .and_then(EntryOwner::facts)
-                .is_some_and(|other| other.role == facts.role && other.case == facts.case);
+                .is_some_and(|other| other.kind == facts.kind && other.case == facts.case);
             if id == target || !eligible.contains(id) || !eligible.contains(target) || !compatible {
                 diagnostics.push(EntryRelationIssue {
                     owner: id.into(),
@@ -270,8 +269,8 @@ fn groups_are_valid(facts: &EntryFacts, bound: &BTreeSet<usize>) -> bool {
                     .iter()
                     .enumerate()
                     .filter(|(_, candidate)| match facts.case {
-                        DefinitionCase::Sensitive => *candidate == name,
-                        DefinitionCase::Insensitive => candidate.eq_ignore_ascii_case(name),
+                        NameCase::Sensitive => *candidate == name,
+                        NameCase::Insensitive => candidate.eq_ignore_ascii_case(name),
                     });
             let Some((index, exact)) = matches.next() else {
                 return false;
@@ -297,17 +296,19 @@ fn single_subject(facts: &EntryFacts) -> bool {
 mod tests {
     use super::*;
     use crate::{
-        Block, DefinitionItem, DefinitionRole, DocumentMeta, DocumentSource, EntryForm,
-        EntryInlineRoot, EntryNameBinding, EntryNameEvidence, Inline, LayoutHint, SourceFormat,
+        Block, DefinitionItem, DocumentMeta, DocumentSource, EntryForm, EntryInlineRoot, EntryKind,
+        EntryNameBinding, EntryNameEvidence, Inline, LayoutHint, SourceFormat,
     };
 
     fn entry(id: &str, names: &[&str]) -> DefinitionItem {
         DefinitionItem {
             source: None,
-            identity: Some(EntryFacts {
+            entry: Some(EntryFacts {
                 id: id.into(),
-                role: DefinitionRole::Option,
-                case: DefinitionCase::Sensitive,
+                kind: EntryKind::Parameter {
+                    parameter_kind: crate::ParameterKind::Option,
+                },
+                case: NameCase::Sensitive,
                 names: names.iter().map(|name| (*name).into()).collect(),
                 value_domain: None,
                 forms: (0..names.len()).map(EntryForm::term).collect(),
@@ -379,7 +380,7 @@ mod tests {
     #[test]
     fn validation_snapshot_keeps_duplicate_and_relation_findings_together() {
         let mut invalid = entry("duplicate", &["-a"]);
-        invalid.identity.as_mut().unwrap().alias_of = Some("missing".into());
+        invalid.entry.as_mut().unwrap().alias_of = Some("missing".into());
         let doc = document(vec![invalid, entry("duplicate", &["-b"])]);
         let snapshot = crate::DocumentValidation::new(&doc);
         assert!(std::ptr::eq(snapshot.document(), std::ptr::from_ref(&doc)));
@@ -398,7 +399,7 @@ mod tests {
     #[test]
     fn typed_issues_and_document_diagnostics_share_one_relation_policy() {
         let mut item = entry("probe", &["-a", "--all"]);
-        item.identity.as_mut().unwrap().alias_groups = vec![vec!["-a".into(), "hidden".into()]];
+        item.entry.as_mut().unwrap().alias_groups = vec![vec!["-a".into(), "hidden".into()]];
         let doc = document(vec![item]);
         let issues = entry_relation_issues(&doc);
         assert_eq!(
@@ -421,7 +422,7 @@ mod tests {
     fn explicit_groups_preserve_shared_body_without_merging_subjects() {
         let mut item = entry("time-bounds", &["-S", "--since", "-U", "--until"]);
         let body = item.description.clone();
-        item.identity.as_mut().unwrap().alias_groups = vec![
+        item.entry.as_mut().unwrap().alias_groups = vec![
             vec!["-S".into(), "--since".into()],
             vec!["-U".into(), "--until".into()],
         ];
@@ -434,9 +435,9 @@ mod tests {
             panic!("definitions");
         };
         assert_eq!(items[0].description, body);
-        assert_eq!(items[0].identity.as_ref().unwrap().alias_groups.len(), 2);
+        assert_eq!(items[0].entry.as_ref().unwrap().alias_groups.len(), 2);
         let mut related = entry("related", &["--time"]);
-        related.identity.as_mut().unwrap().alias_of = Some("time-bounds".into());
+        related.entry.as_mut().unwrap().alias_of = Some("time-bounds".into());
         assert!(
             codes(vec![items[0].clone(), related]).contains(&"ir.invalid-entry-alias-of".into())
         );
@@ -451,15 +452,15 @@ mod tests {
             vec![vec!["-S", "--since"], vec!["--since", "-S"]],
         ] {
             let mut item = entry("since", &["-S", "--since"]);
-            item.identity.as_mut().unwrap().alias_groups = groups
+            item.entry.as_mut().unwrap().alias_groups = groups
                 .into_iter()
                 .map(|g| g.into_iter().map(str::to_owned).collect())
                 .collect();
             assert!(codes(vec![item]).contains(&"ir.invalid-entry-alias-groups".into()));
         }
         let mut item = entry("case", &["-s", "-S"]);
-        let facts = item.identity.as_mut().unwrap();
-        facts.case = DefinitionCase::Insensitive;
+        let facts = item.entry.as_mut().unwrap();
+        facts.case = NameCase::Insensitive;
         facts.alias_groups = vec![vec!["-s".into(), "-S".into()]];
         assert!(codes(vec![item]).contains(&"ir.invalid-entry-alias-groups".into()));
     }
@@ -467,18 +468,18 @@ mod tests {
     #[test]
     fn name_bindings_cannot_address_body_or_claim_different_text() {
         let mut item = entry("since", &["--since"]);
-        item.identity.as_mut().unwrap().name_bindings[0].occurrences[0].parts[0].root =
+        item.entry.as_mut().unwrap().name_bindings[0].occurrences[0].parts[0].root =
             EntryInlineRoot::Block { index: 0 };
         assert!(codes(vec![item]).contains(&"ir.invalid-entry-name-binding".into()));
         let mut item = entry("since", &["--since"]);
-        item.identity.as_mut().unwrap().names[0] = "--hidden".into();
+        item.entry.as_mut().unwrap().names[0] = "--hidden".into();
         assert!(codes(vec![item]).contains(&"ir.invalid-entry-name-binding".into()));
     }
 
     #[test]
     fn forward_relationships_require_unique_compatible_targets_and_no_cycles() {
         let mut first = entry("first", &["--first"]);
-        first.identity.as_mut().unwrap().alias_of = Some("second".into());
+        first.entry.as_mut().unwrap().alias_of = Some("second".into());
         let second = entry("second", &["--second"]);
         assert!(codes(vec![first.clone(), second.clone()]).is_empty());
         assert!(codes(vec![first.clone()]).contains(&"ir.invalid-entry-alias-of".into()));
@@ -487,12 +488,12 @@ mod tests {
                 .contains(&"ir.invalid-entry-alias-of".into())
         );
         let mut incompatible = second.clone();
-        incompatible.identity.as_mut().unwrap().role = DefinitionRole::Command;
+        incompatible.entry.as_mut().unwrap().kind = EntryKind::Command;
         assert!(
             codes(vec![first.clone(), incompatible]).contains(&"ir.invalid-entry-alias-of".into())
         );
         let mut cyclic = second;
-        cyclic.identity.as_mut().unwrap().alias_of = Some("first".into());
+        cyclic.entry.as_mut().unwrap().alias_of = Some("first".into());
         assert_eq!(
             codes(vec![first, cyclic])
                 .iter()
@@ -501,7 +502,7 @@ mod tests {
             2
         );
         let mut item = entry("self", &["--self"]);
-        item.identity.as_mut().unwrap().alias_of = Some("self".into());
+        item.entry.as_mut().unwrap().alias_of = Some("self".into());
         assert!(codes(vec![item]).contains(&"ir.invalid-entry-alias-of".into()));
     }
 }

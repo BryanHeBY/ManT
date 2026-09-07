@@ -1,7 +1,7 @@
 //! Definition diagnostics policy; coordinated by the parent discovery passes.
 use super::context::{DefinitionContext, child_definition_context, definition_group_context};
 use crate::inline::plain_text;
-use mant_ir::{Block, DefinitionItem, DefinitionRole, Section, SourceSpan};
+use mant_ir::{Block, DefinitionItem, EntryKind, Section, SourceSpan};
 
 /// Report definition-shaped native content that a semantic section could not
 /// classify without guessing.
@@ -73,11 +73,11 @@ fn visit_manual_definition_items(
 ) {
     let item_context = definition_group_context(items, context);
     for item in items {
-        let identity = item.identity.as_ref();
-        let role = identity.map_or(DefinitionRole::Term, |identity| identity.role);
+        let identity = item.entry.as_ref();
+        let role = identity.map_or(EntryKind::Term, |identity| identity.kind);
         if report_unclassified
             && item_context != DefinitionContext::Generic
-            && role == DefinitionRole::Term
+            && role == EntryKind::Term
             && identity.is_some_and(|identity| identity.names.is_empty())
         {
             report_unclassified_definition(item, item_context, source, output);

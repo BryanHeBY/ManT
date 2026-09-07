@@ -43,12 +43,12 @@ fn options_are_addressable_in_v0_11_outlines_and_excerpts() {
     let acls = semantic_definition_items(document)
         .into_iter()
         .find(|item| {
-            item.identity
+            item.entry
                 .as_ref()
                 .is_some_and(|identity| identity.names.iter().any(|name| name == "--acls"))
         })
         .expect("tar --acls semantic option");
-    let identity = acls.identity.as_ref().expect("option identity");
+    let identity = acls.entry.as_ref().expect("option identity");
     assert!(!identity.id.is_empty());
 
     let outline =

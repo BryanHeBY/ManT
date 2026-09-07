@@ -126,7 +126,7 @@ Semantic discovery is a derived path through that shared model:
 
 ```text
 source syntax
-    └─> DefinitionItem + DefinitionIdentity     authoritative content fact
+    └─> ListItem / DefinitionItem + entry: EntryFacts   authoritative owner facts
             └─> SemanticIndex + SemanticEntry   rebuildable concept hierarchy
                     └─> outline/excerpt          selective protocol projection
                             └─> CLI / TUI / MCP   shared selection and content
@@ -142,7 +142,7 @@ Typed inline navigation forms a second, orthogonal graph:
 
 ```text
 navigation identities
-├─ Section NodeId / Inline::Anchor        normalized current-document destinations
+├─ Section / entry NodeId / Inline::Anchor  normalized current-document destinations
 │  └─ FragmentAlias[]                     exact source-authored deep links
 └─ Inline::Link target
    ├─ Section                              current-document reference

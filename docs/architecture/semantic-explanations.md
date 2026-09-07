@@ -67,7 +67,7 @@ are interpreted by every ordinary Markdown viewer.
 
 A content entry may describe several subjects. Its names identify that
 content; sharing a description does not establish behavioral equivalence.
-Current `names` / projected `aliases` fields expose selector spellings, not
+Facts and projected `names` fields expose selector spellings, not
 proof that the corresponding options can be substituted for one another.
 Complete forms preserve documented usage, not an executable argv grammar.
 

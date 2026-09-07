@@ -1,17 +1,17 @@
 //! Rebuild an operation-local semantic index from finalized identities.
 use super::{
     model::{
-        EntryKind, EntrySummary, ParameterKind, SemanticDocumentReference, SemanticDocumentTarget,
-        SemanticEntry, ValueDomain,
+        EntryKind, EntrySummary, SemanticDocumentReference, SemanticDocumentTarget, SemanticEntry,
+        ValueDomain,
     },
     walk::visit_child_entries,
 };
-use crate::{Block, DefinitionRole, Document, EntryOwner, Inline, NodeId};
+use crate::{Block, Document, EntryOwner, Inline, NodeId};
 use std::collections::BTreeMap;
 
 /// Rebuildable semantic index for the document root and every section.
 ///
-/// The index is a derived navigation sidecar. Definitions and their identities
+/// The index is a derived navigation sidecar. Both item shapes and their facts
 /// remain in the [`Document`] content tree, so callers may rebuild this value
 /// after a trusted document transformation.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -21,7 +21,7 @@ pub struct SemanticIndex {
 }
 
 impl SemanticIndex {
-    /// Build the semantic index from finalized definition identities.
+    /// Build the semantic index from finalized facts on either content shape.
     #[must_use]
     pub fn build(document: &Document) -> Self {
         let root = entries_in_blocks(&document.blocks);
@@ -129,8 +129,8 @@ fn entry_from_owner(item: EntryOwner<'_>) -> Option<SemanticEntry> {
     });
     Some(SemanticEntry {
         id: identity.id.clone(),
-        kind: entry_kind(identity.role),
-        aliases: item.validated_names().unwrap_or_default().to_vec(),
+        kind: identity.kind,
+        names: item.validated_names().unwrap_or_default().to_vec(),
         alias_groups: item.validated_alias_groups().unwrap_or_default().to_vec(),
         alias_of: identity.alias_of.clone(),
         case: identity.case,
@@ -172,26 +172,6 @@ fn collect_document_targets(inlines: &[Inline], output: &mut Vec<SemanticDocumen
             | Inline::Anchor { .. }
             | Inline::LineBreak => {}
         }
-    }
-}
-
-const fn entry_kind(role: DefinitionRole) -> EntryKind {
-    match role {
-        DefinitionRole::Option => EntryKind::Parameter {
-            parameter_kind: ParameterKind::Option,
-        },
-        DefinitionRole::Marker => EntryKind::Parameter {
-            parameter_kind: ParameterKind::Marker,
-        },
-        DefinitionRole::Operand => EntryKind::Parameter {
-            parameter_kind: ParameterKind::Operand,
-        },
-        DefinitionRole::Command => EntryKind::Command,
-        DefinitionRole::ConfigurationKey => EntryKind::ConfigurationKey,
-        DefinitionRole::EnvironmentVariable => EntryKind::EnvironmentVariable,
-        DefinitionRole::Variable => EntryKind::Variable,
-        DefinitionRole::Value => EntryKind::Value,
-        DefinitionRole::Term => EntryKind::Term,
     }
 }
 

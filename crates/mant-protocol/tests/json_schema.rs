@@ -91,7 +91,7 @@ fn response_schemas_follow_the_serialized_wire_shapes() {
         "id",
         "entryKind",
         "case",
-        "aliases",
+        "names",
         "forms",
         "documentTargets",
         "valueDomain",
@@ -104,7 +104,7 @@ fn response_schemas_follow_the_serialized_wire_shapes() {
 
     let excerpt = serde_json::to_string(&query_excerpt_json_schema()).expect("excerpt schema JSON");
     assert!(excerpt.contains("document-entry"));
-    assert!(excerpt.contains("DefinitionCase"));
+    assert!(excerpt.contains("NameCase"));
 
     let search = serde_json::to_string(&query_search_json_schema()).expect("search schema JSON");
     assert!(search.contains("startLine"));

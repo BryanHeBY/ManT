@@ -188,7 +188,7 @@ impl<'ir> Visit<'ir> for IndexBuilder {
     }
 
     fn visit_definition_item(&mut self, item: &'ir DefinitionItem) {
-        if let Some(identity) = &item.identity {
+        if let Some(identity) = &item.entry {
             self.register(&identity.id, IndexedRole::Entry);
         }
         visit::walk_definition_item(self, item);
@@ -212,10 +212,7 @@ impl<'ir> Visit<'ir> for IndexBuilder {
 
 #[cfg(test)]
 mod tests {
-    use crate::{
-        DefinitionCase, DefinitionIdentity, DefinitionRole, DocumentMeta, DocumentSource,
-        SourceFormat,
-    };
+    use crate::{DocumentMeta, DocumentSource, EntryFacts, EntryKind, NameCase, SourceFormat};
 
     use super::*;
 
@@ -234,14 +231,16 @@ mod tests {
             blocks: vec![crate::Block::DefinitionList {
                 items: vec![DefinitionItem {
                     source: None,
-                    identity: Some(DefinitionIdentity {
+                    entry: Some(EntryFacts {
                         name_bindings: Vec::new(),
                         alias_groups: Vec::new(),
                         alias_of: None,
                         forms: Vec::new(),
                         id: id.clone(),
-                        role: DefinitionRole::Option,
-                        case: DefinitionCase::Sensitive,
+                        kind: EntryKind::Parameter {
+                            parameter_kind: crate::ParameterKind::Option,
+                        },
+                        case: NameCase::Sensitive,
                         names: vec!["--help".to_owned()],
                         value_domain: None,
                     }),

@@ -22,7 +22,7 @@
           "title": "--help",
           "entryKind": { "kind": "parameter", "parameterKind": "option" },
           "case": "sensitive",
-          "aliases": ["--help"],
+          "names": ["--help"],
           "forms": ["--help"]
         }
       ]

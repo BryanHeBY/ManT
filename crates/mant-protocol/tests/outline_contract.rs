@@ -1,9 +1,9 @@
 //! Locks the public JSON shapes used for outline discovery and excerpts.
 
 use mant_ir::{
-    Block, DefinitionCase, DefinitionIdentity, DefinitionItem, DefinitionRole, DocumentAddress,
-    DocumentMeta, DocumentSource, EntryKind, EntrySummary, Inline, LayoutHint, ParameterKind,
-    Section, SemanticDocumentReference, SourceFormat, TldrDocument, TldrOrigin,
+    Block, DefinitionItem, DocumentAddress, DocumentMeta, DocumentSource, EntryFacts, EntryKind,
+    EntrySummary, Inline, LayoutHint, NameCase, ParameterKind, Section, SemanticDocumentReference,
+    SourceFormat, TldrDocument, TldrOrigin,
 };
 use mant_protocol::{
     EntryDocumentTarget, EntryProjection, EntryValueDomain, ExcerptSchema, ExcerptSelection,
@@ -45,8 +45,8 @@ fn outline_contract_exposes_both_human_paths_and_document_ids() {
                 entry_kind: EntryKind::Parameter {
                     parameter_kind: ParameterKind::Option,
                 },
-                case: DefinitionCase::Sensitive,
-                aliases: vec!["-a".to_owned(), "--all".to_owned()],
+                case: NameCase::Sensitive,
+                names: vec!["-a".to_owned(), "--all".to_owned()],
                 alias_groups: vec![vec!["-a".to_owned(), "--all".to_owned()]],
                 alias_of: None,
                 forms: vec!["-a, --all".to_owned()],
@@ -84,7 +84,7 @@ fn outline_contract_exposes_both_human_paths_and_document_ids() {
             .get("parameter_kind")
             .is_none()
     );
-    assert_eq!(value["nodes"][0]["children"][0]["aliases"][1], "--all");
+    assert_eq!(value["nodes"][0]["children"][0]["names"][1], "--all");
     assert_eq!(
         value["nodes"][0]["children"][0]["documentTargets"][0]["address"]["name"],
         "help"
@@ -169,14 +169,16 @@ fn excerpt_contract_can_return_one_semantic_definition() {
     let entry = DefinitionItem {
         source: None,
         inline_term: false,
-        identity: Some(DefinitionIdentity {
+        entry: Some(EntryFacts {
             name_bindings: Vec::new(),
             alias_groups: Vec::new(),
             alias_of: None,
             forms: Vec::new(),
             id: "all".to_owned().into(),
-            role: DefinitionRole::Option,
-            case: DefinitionCase::Sensitive,
+            kind: EntryKind::Parameter {
+                parameter_kind: mant_ir::ParameterKind::Option,
+            },
+            case: NameCase::Sensitive,
             names: vec!["-a".to_owned(), "--all".to_owned()],
             value_domain: None,
         }),
@@ -200,8 +202,10 @@ fn excerpt_contract_can_return_one_semantic_definition() {
                     path: "2/e1".to_owned().into(),
                     id: "all".to_owned().into(),
                     title: "-a, --all".to_owned(),
-                    role: DefinitionRole::Option,
-                    case: DefinitionCase::Sensitive,
+                    entry_kind: EntryKind::Parameter {
+                        parameter_kind: mant_ir::ParameterKind::Option,
+                    },
+                    case: NameCase::Sensitive,
                     names: vec!["-a".to_owned(), "--all".to_owned()],
                 },
             },
@@ -217,7 +221,7 @@ fn excerpt_contract_can_return_one_semantic_definition() {
     let value = serde_json::to_value(excerpt).expect("entry excerpt JSON");
     assert_eq!(value["selections"][0]["kind"], "document-entry");
     assert_eq!(
-        value["selections"][0]["entry"]["items"][0]["identity"]["role"],
+        value["selections"][0]["entry"]["items"][0]["entry"]["kind"]["parameterKind"],
         "option"
     );
 }
