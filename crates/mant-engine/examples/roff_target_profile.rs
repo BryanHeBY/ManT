@@ -8,17 +8,16 @@
 //! section and inline identities in the lowered `ManT` IR. Unlike visible text
 //! and layout audits, zero-width anchors are the primary evidence here.
 
-use std::{
-    collections::BTreeSet,
-    io::{self, BufRead, BufWriter, Write},
-    path::PathBuf,
-};
+use std::{collections::BTreeSet, path::PathBuf};
 
 use libmandoc_rs::{Compression, IncludePolicy, ParseOptions, Parser};
 use mant_engine::lower_mandoc_document;
 use mant_ir::Document;
 use serde::Serialize;
 use serde_json::{Value, json};
+
+#[path = "support/profile_io.rs"]
+mod profile_io;
 
 const PROFILE_SCHEMA: &str = "mant.roff-target-profile/v4";
 
@@ -188,34 +187,7 @@ fn main() {
 }
 
 fn run() -> Result<(), String> {
-    let stdin = io::stdin();
-    let mut stdout = BufWriter::new(io::stdout().lock());
-    for (index, line) in stdin.lock().lines().enumerate() {
-        let line = line.map_err(|error| format!("read request {}: {error}", index + 1))?;
-        if line.trim().is_empty() {
-            continue;
-        }
-        let response = profile_request(&line).unwrap_or_else(|error| {
-            json!({
-                "schema": PROFILE_SCHEMA,
-                "id": request_id(&line),
-                "error": error,
-            })
-        });
-        serde_json::to_writer(&mut stdout, &response)
-            .map_err(|error| format!("encode response {}: {error}", index + 1))?;
-        stdout
-            .write_all(b"\n")
-            .map_err(|error| format!("write response {}: {error}", index + 1))?;
-    }
-    stdout.flush().map_err(|error| error.to_string())
-}
-
-fn request_id(line: &str) -> Value {
-    serde_json::from_str::<Value>(line)
-        .ok()
-        .and_then(|request| request.get("id").cloned())
-        .unwrap_or(Value::Null)
+    profile_io::run(PROFILE_SCHEMA, profile_request, false)
 }
 
 fn profile_request(line: &str) -> Result<Value, String> {

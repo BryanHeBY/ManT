@@ -7,11 +7,7 @@
 //! first/middle/last section sample also exercises the public node-excerpt
 //! renderer so full-document success cannot hide a broken `--node` path.
 
-use std::{
-    collections::BTreeMap,
-    io::{self, BufRead, BufWriter, Write},
-    path::PathBuf,
-};
+use std::{collections::BTreeMap, path::PathBuf};
 
 use mant_engine::{
     ManualPage, parse_manual_page, parse_markdown, render_excerpt_markdown, render_markdown,
@@ -21,6 +17,9 @@ use mant_ir::{Block, Document, Inline, ListKind, ResolvedContent, Section};
 use pulldown_cmark::{Event, Parser};
 use serde::Serialize;
 use serde_json::{Value, json};
+
+#[path = "support/profile_io.rs"]
+mod profile_io;
 
 const PROFILE_SCHEMA: &str = "mant.roff-projection-profile/v3";
 
@@ -81,34 +80,7 @@ fn main() {
 }
 
 fn run() -> Result<(), String> {
-    let stdin = io::stdin();
-    let mut stdout = BufWriter::new(io::stdout().lock());
-    for (index, line) in stdin.lock().lines().enumerate() {
-        let line = line.map_err(|error| format!("read request {}: {error}", index + 1))?;
-        if line.trim().is_empty() {
-            continue;
-        }
-        let response = profile_request(&line).unwrap_or_else(|error| {
-            json!({
-                "schema": PROFILE_SCHEMA,
-                "id": request_id(&line),
-                "error": error,
-            })
-        });
-        serde_json::to_writer(&mut stdout, &response)
-            .map_err(|error| format!("encode response {}: {error}", index + 1))?;
-        stdout
-            .write_all(b"\n")
-            .map_err(|error| format!("write response {}: {error}", index + 1))?;
-    }
-    stdout.flush().map_err(|error| error.to_string())
-}
-
-fn request_id(line: &str) -> Value {
-    serde_json::from_str::<Value>(line)
-        .ok()
-        .and_then(|request| request.get("id").cloned())
-        .unwrap_or(Value::Null)
+    profile_io::run(PROFILE_SCHEMA, profile_request, false)
 }
 
 fn profile_request(line: &str) -> Result<Value, String> {
