@@ -1,10 +1,15 @@
 # Semantic entries and explanation design
 
 Status: implemented content ownership, Markdown relationship authoring and
-multi-evidence explanation contract for the unreleased v0.11 family. This
+classified multi-evidence explanation with global paging and match previews
+for the unreleased v0.11 family. This
 document records design decisions; the normative syntax lives in
 [mant-markdown(7)](../manuals/mant-markdown.md); current query behavior lives in
 [mant-protocol(5)](../manuals/mant-protocol.md).
+
+The classified-query implementation and current acceptance evidence are recorded
+in [classified explanation verification](classified-explanation-verification.md).
+Older verification sections below retain their original producer scope.
 
 ## Content is authoritative; annotations add facts
 
@@ -110,13 +115,19 @@ sources failing is a source error; invalid requests fail before loading.
 
 The request is a literal of at most 512 Unicode scalars (no controls), plus
 `ExplanationOptions`: 1–256 records (default 50), a zero-based offset, and
-1 byte–4 MiB of copied forms/facts/body payload (default 1 MiB). The collector
+1 byte–4 MiB of copied forms/facts/previews/body payload (default 1 MiB). The collector
 indexes at most 10,000 matching owners per document, follows at most 4,096 explicit edges per document
 and retains chains of at most 32 edges. These bounds report independent
 `truncation` fields. Oversized owner bodies are omitted atomically, with real
 outline positions retained for strict reads; they are never partial valid IR.
-Scope requests share one result offset, limit and content-copy budget over
-breadth-first document order, then each document's IR order. These are payload
+Single-document and scope requests share the same `class-then-source` contract:
+direct entries, explicitly related entries, mentions in other entries, then
+ordinary content mentions. Within a class, scope uses document BFS order and
+then original IR owner/block order. A borrowed collection plan completes
+classification and global ordering before applying the one offset/limit and
+copy budget. Its bounded priority pool replaces lower-priority mentions when
+later direct/related owners would otherwise be lost, reporting candidate
+truncation on every discard. No body is cloned merely to sort or skip it. These are payload
 copy limits, not a bound on serialized envelopes and metadata. MCP character
 paging slices the completed canonical presentation independently.
 
@@ -124,13 +135,30 @@ Direct name and complete-form evidence follow the owner's case policy;
 ordinary paragraph, preformatted, equation and preserved-source support uses
 case-sensitive literal token boundaries. It does not expand names, shorten
 options or infer relationships from punctuation/prose. Root/section support
-has a block/item/cell coordinate, not a manufactured entry ID. Evidence follows
-IR source order; a parent and its matching child remain separate. Explicit
+has a final-IR block/item/cell coordinate, not a manufactured entry ID. One
+owner has one exclusive class and all retained bases, even when its copied
+metadata is omitted or it has no names; parent and child remain separate. Explicit
 aliasOf edges may be traversed in either direction to collect independent
 owners, with declaration IDs recorded. This neither changes relation direction
 in the IR nor inherits the remote owner's value domain. Quick-reference-only
 content currently has no full-document semantic evidence; no-evidence is not a
 claim that its command examples contain no useful information.
+
+`ScopeExplanation.documents` contains BFS source reports without nested
+queries, cursors or bodies. Its unique flat `evidence` page references those
+reports using `documentIndex`. Counts retain all four classes, including zeros;
+each total/returned column sums to the response and the source contributions.
+
+Literal collection retains the actual matched block and range. Materialization
+copies at most two representative windows, at most 1024 Unicode scalars each,
+preserving a complete query match. `resolve_explanation_block` resolves their
+absolute final-IR paths; source spans belong to the matched block, not the
+whole entry. Safe text projection precedes scalar-range calculation. Facts,
+windows and atomic original body consume the same budget, in that order;
+window clipping and budget omission remain independent. Text/Markdown/MCP
+render full direct/related content but only preview windows for mentions.
+For example, GCC's `-Q` can mention `--help` without becoming its alias or
+another direct definition. This does not mutate the full document renderer.
 
 Validation findings, available source coverage, result truncation and unknown
 fields are separate dimensions. Neither `semanticsComplete` nor a clean audit

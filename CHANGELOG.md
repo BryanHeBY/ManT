@@ -65,10 +65,17 @@ that crate was not published for that change.
 
 ### mant-protocol 0.11.0
 
+- Classify explanation owners as direct-entry, related-entry, entry-mention
+  or context-mention before global paging. Add fixed four-class `counts`,
+  `order: class-then-source`, Unicode match previews and omission flags.
+  Scope uses one flat evidence page with `documentIndex` references into BFS
+  source reports; remove nested per-document query/body/cursor copies. Global
+  ordinals now follow class, document, then IR order, not source order alone.
+
 - Introduce `mant.explanation/v0.11` and `ExplanationOptions`. Explain requests
   return independent name/form/literal/explicit-relationship evidence, not a
   unique excerpt. Scope results move from `matches`/`missed` to
-  `result.explanation` with global paging, per-source evidence, outcome,
+  `result.explanation` with global paging, per-source reports, outcome,
   coverage and independent truncation. Consumers must inspect `outcome`, not
   assume one record or infer no-evidence from an empty later page.
 - Expose explicit `aliasGroups` and `aliasOf` separately from selectable
@@ -90,6 +97,18 @@ that crate was not published for that change.
   broader `semanticsComplete` signal. Remove the redundant entry `targets`.
 
 ### mant-engine 0.11.0
+
+- Keep executable punctuation in literal matching: `-#` no longer matches
+  `-###`, nor `--` the longer `--%` marker; sentence boundaries and parameter
+  forms remain usable evidence. Semantic Markdown export now proves one
+  infer/fixed attached-value policy for the whole list, preserving fixed names
+  and relationships or falling back to ordinary Markdown for the document.
+- Retain bounded borrowed explanation plans before globally selecting a page;
+  later direct/related entries can displace lower-priority mentions at the
+  candidate cap. Preserve real matched-block coordinates and complete-query
+  preview windows. Compact rendering distinguishes definitions from mentions
+  without rewriting IR or including unrelated full mention bodies. Add
+  `resolve_explanation_block` for snapshot-local preview coordinates.
 
 - Introduce an independent bounded `explain_query` evidence collector and
   `mant.explanation/v0.11` result: preserve independent same-name owners,
