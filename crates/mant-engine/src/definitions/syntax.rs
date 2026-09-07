@@ -380,25 +380,17 @@ pub(super) fn option_names(item: &DefinitionItem) -> Vec<String> {
 pub(crate) fn option_names_from_terms(terms: &[Vec<Inline>]) -> Vec<String> {
     let mut names = Vec::new();
     for term in terms {
-        for group in forms::alias_groups(term) {
+        for group in forms::option_alias_groups(term) {
             if forms::starts_with_parameter(&group) {
                 continue;
             }
             let text = plain_text(&group);
-            let token = text.split_whitespace().next().unwrap_or_default();
-            let token = token.trim_matches(|character: char| {
-                matches!(
-                    character,
-                    '[' | ']' | '(' | ')' | '{' | '}' | '“' | '”' | '‘' | '’'
-                )
-            });
-            for form in slash_option_forms(token).unwrap_or_else(|| vec![token]) {
-                let Some(name) = option_prefix(form) else {
-                    continue;
-                };
-                if !names.iter().any(|existing| existing == name) {
-                    names.push(name.to_owned());
-                }
+            let token = forms::invocation_token(&text);
+            let Some(name) = option_prefix(token) else {
+                continue;
+            };
+            if !names.iter().any(|existing| existing == name) {
+                names.push(name.to_owned());
             }
         }
     }

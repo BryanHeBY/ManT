@@ -100,7 +100,7 @@ required for generated references and hierarchically indented lists.
 
 ## mdoc Structure
 
-Option aliases come from invocation names separated by explicit alias punctuation, not arbitrary later dash-prefixed argument tokens. Emphasized argument spans retain their spelling in forms but cannot introduce another alias.
+Option aliases come from invocation names separated by explicit alias punctuation, not arbitrary later dash-prefixed argument tokens. Emphasized argument spans retain their spelling in forms but cannot introduce another alias. This applies to historical slash notation as well: `Fl n Ns / Ns Ar -NUM` retains the form `-n/-NUM`, but only `-n` is addressable; `Fl n Ns / Ns Fl -number` exposes both `-n` and `--number`. Slashes inside argument spans or paths are not alias separators.
 
 Styled command aliases are likewise grouped before separating each command name from its arguments. A single environment assignment retains its complete value, including commas and pipes, but only its variable name becomes a selector. Mixed assignments with unprovable name/value boundaries remain unclassified rather than introducing guessed aliases. Variable subscripts must be completely closed, with no trailing text or repeated brackets.
 

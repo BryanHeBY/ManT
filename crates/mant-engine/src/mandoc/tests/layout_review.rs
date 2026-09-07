@@ -53,24 +53,27 @@ fn invocation_forms_and_aliases_agree_across_query_consumers() {
             "blue",
         ),
     ] {
-        assert_invocation_consumers(section, head, form, &aliases, rejected);
+        assert_invocation_consumers(
+            &format!(".TH NAMES 1\n.SH {section}\n.TP\n{head}\nOWNEDPAYLOAD.\n"),
+            form,
+            &aliases,
+            rejected,
+            3,
+        );
     }
 }
 
 fn assert_invocation_consumers(
-    section: &str,
-    head: &str,
+    source: &str,
     form: &str,
     aliases: &[&str],
     rejected: &str,
+    source_line: u32,
 ) {
     use mant_protocol::{
         EntryProjection, OutlineNode, SearchCase, SearchQuery, SearchScope, SearchSyntax,
     };
-    let query = crate::query_roff_bytes(
-        format!(".TH NAMES 1\n.SH {section}\n.TP\n{head}\nOWNEDPAYLOAD.\n").as_bytes(),
-    )
-    .unwrap();
+    let query = crate::query_roff_bytes(source.as_bytes()).unwrap();
     let index = mant_ir::SemanticIndex::build(query.document.as_ref().unwrap());
     let indexed = &index.section(&query.document.as_ref().unwrap().sections[0].id)[0];
     assert_eq!(indexed.aliases, aliases);
@@ -118,8 +121,59 @@ fn assert_invocation_consumers(
         assert!(
             matches!(&hit.outline.node, mant_protocol::OutlineNodeReference::DocumentEntry { id: found_id, path: found_path, .. } if found_id == id && found_path == path)
         );
-        assert_eq!(hit.node_source.unwrap().line, 3);
+        assert_eq!(hit.node_source.unwrap().line, source_line);
         assert_eq!(hit.occurrences[0].matched_text, "OWNEDPAYLOAD");
+    }
+}
+
+#[test]
+fn slash_alias_candidates_retain_parameter_styles_across_native_dialects() {
+    for (mdoc, man, form, aliases, rejected) in [
+        (
+            "Fl n Ns / Ns Ar -NUM",
+            ".BI \"-n/\" -NUM",
+            "-n/-NUM",
+            vec!["-n"],
+            "-NUM",
+        ),
+        (
+            "Fl n Ns Ar /-NUM",
+            ".BI -n /-NUM",
+            "-n/-NUM",
+            vec!["-n"],
+            "-NUM",
+        ),
+        (
+            "Fl n Ns / Ns Fl -number",
+            ".B \"-n/--number\"",
+            "-n/--number",
+            vec!["-n", "--number"],
+            "-NUM",
+        ),
+        (
+            "Fl n Ns / Ns Ar -NUM",
+            ".B \"-n/\\fI-NUM\"",
+            "-n/-NUM",
+            vec!["-n"],
+            "-NUM",
+        ),
+    ] {
+        assert_invocation_consumers(
+            &format!(
+                ".Dd September 7, 2026\n.Dt NAMES 1\n.Os\n.Sh OPTIONS\n.Bl -tag -width Ds\n.It {mdoc}\nOWNEDPAYLOAD.\n.El\n"
+            ),
+            form,
+            &aliases,
+            rejected,
+            5,
+        );
+        assert_invocation_consumers(
+            &format!(".TH NAMES 1\n.SH OPTIONS\n.TP\n{man}\nOWNEDPAYLOAD.\n"),
+            form,
+            &aliases,
+            rejected,
+            3,
+        );
     }
 }
 

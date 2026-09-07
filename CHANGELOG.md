@@ -60,6 +60,8 @@ that crate was not published for that change.
 
 - Retain historical `-h/--help` option aliases across Markdown and native
   manuals without splitting argument paths or assignment values into names.
+  Slash candidates retain inline styling until parameter exclusion, including
+  adjacent mdoc `Ar` and man alternating-font arguments.
 - Ignore empty styling wrappers when locating an option invocation, so
   emphasized metavariables after alias punctuation cannot become selectors.
 - Preserve continuation and pending spacing across nested no-fill styling
