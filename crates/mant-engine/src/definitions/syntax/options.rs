@@ -1,5 +1,6 @@
 //! options recognition; complete forms retain their role-specific grammar.
 use super::forms;
+use crate::definitions::RecognizedName;
 use crate::inline::plain_text;
 use mant_ir::{DefinitionItem, EntryKind, Inline, NameCase};
 
@@ -41,25 +42,9 @@ pub(in crate::definitions) fn parameter_identity(
 
 pub(in crate::definitions) fn parameter_names(item: &DefinitionItem) -> Vec<String> {
     let mut names = option_names(item);
-    for term in &item.terms {
-        let text = plain_text(term);
-        let token = text.split_whitespace().next().unwrap_or_default();
-        if let Some(body) = token.strip_prefix("[-+]")
-            && is_option_name_body(body)
-        {
-            for prefix in ['-', '+'] {
-                let name = format!("{prefix}{body}");
-                if !names.contains(&name) {
-                    names.push(name);
-                }
-            }
-        } else if let Some(body) = token.strip_prefix('+')
-            && is_option_name_body(body)
-        {
-            let name = format!("+{body}");
-            if !names.contains(&name) {
-                names.push(name);
-            }
+    for found in parameter_occurrences(&item.terms).into_iter().flatten() {
+        if !names.contains(&found.name) {
+            names.push(found.name);
         }
     }
     names
@@ -71,20 +56,58 @@ pub(in crate::definitions) fn option_names(item: &DefinitionItem) -> Vec<String>
 
 pub(crate) fn option_names_from_terms(terms: &[Vec<Inline>]) -> Vec<String> {
     let mut names = Vec::new();
-    for term in terms {
-        for candidate in forms::AuthoredForm::new(term).option_candidates() {
-            let Some(token) = candidate.invocation_token() else {
-                continue;
-            };
-            let Some(name) = option_prefix(&token) else {
-                continue;
-            };
-            if !names.iter().any(|existing| existing == name) {
-                names.push(name.to_owned());
-            }
+    for found in option_occurrences_from_terms(terms).into_iter().flatten() {
+        if !names.contains(&found.name) {
+            names.push(found.name);
         }
     }
     names
+}
+
+pub(crate) fn option_occurrences_from_terms(terms: &[Vec<Inline>]) -> Vec<Vec<RecognizedName>> {
+    terms
+        .iter()
+        .map(|term| {
+            forms::AuthoredForm::new(term)
+                .option_candidates()
+                .filter_map(|candidate| {
+                    let (token, start) = candidate.invocation_token()?;
+                    Some(RecognizedName::contiguous(option_prefix(&token)?, start))
+                })
+                .collect()
+        })
+        .collect()
+}
+
+pub(in crate::definitions) fn parameter_occurrences(
+    terms: &[Vec<Inline>],
+) -> Vec<Vec<RecognizedName>> {
+    let mut found = option_occurrences_from_terms(terms);
+    for (term, names) in terms.iter().zip(&mut found) {
+        let text = plain_text(term);
+        let Some(token) = text.split_whitespace().next() else {
+            continue;
+        };
+        let start = token.as_ptr() as usize - text.as_ptr() as usize;
+        if let Some(body) = token.strip_prefix("[-+]")
+            && is_option_name_body(body)
+        {
+            for (sign, offset) in [('-', 1), ('+', 2)] {
+                names.push(RecognizedName {
+                    name: format!("{sign}{body}"),
+                    parts: vec![
+                        start + offset..start + offset + 1,
+                        start + 4..start + token.len(),
+                    ],
+                });
+            }
+        } else if token.strip_prefix('+').is_some_and(is_option_name_body)
+            || matches!(token, "--" | "--%" | "-")
+        {
+            names.push(RecognizedName::contiguous(token, start));
+        }
+    }
+    found
 }
 
 /// Recognize legacy slash-separated dash options, not general alias syntax.

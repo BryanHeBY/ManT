@@ -6,6 +6,7 @@ mod context;
 mod diagnostics;
 mod identity;
 mod normalize;
+mod recognized;
 mod syntax;
 mod walk;
 
@@ -18,10 +19,11 @@ use identity::{
 };
 use mant_ir::{Block, Section};
 use normalize::{normalize_definition_nesting, normalize_hanging_definitions};
+pub(crate) use recognized::RecognizedName;
 use std::collections::{HashMap, HashSet};
 pub(crate) use syntax::{
-    environment_variable_alias, environment_variable_body, option_names_from_terms, option_prefix,
-    slash_option_forms,
+    environment_variable_alias, environment_variable_body, option_names_from_terms,
+    option_occurrences_from_terms, option_prefix, slash_option_forms,
 };
 #[cfg(test)]
 use syntax::{is_value_name, option_names};

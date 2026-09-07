@@ -17,7 +17,13 @@ impl<'a> AuthoredForm<'a> {
     pub(super) fn option_candidates(&self) -> impl Iterator<Item = FormCandidate> {
         option_alias_groups(self.inlines)
             .into_iter()
-            .map(|inlines| FormCandidate { inlines })
+            .scan(0, |offset, inlines| {
+                let start = *offset;
+                // All removed separators are one ASCII byte. Opaque argument
+                // runs were not split, and remain part of this visible length.
+                *offset += plain_text(&inlines).len() + 1;
+                Some(FormCandidate { inlines, start })
+            })
     }
 }
 
@@ -25,17 +31,24 @@ impl<'a> AuthoredForm<'a> {
 /// receive a lexical token only through that decision, not a flattenable tree.
 pub(super) struct FormCandidate {
     inlines: Vec<Inline>,
+    start: usize,
 }
 
 impl FormCandidate {
-    pub(super) fn invocation_token(&self) -> Option<String> {
+    pub(super) fn invocation_token(&self) -> Option<(String, usize)> {
         if starts_with_parameter(&self.inlines) {
             return None;
         }
         let mut prefix = String::new();
         append_name_prefix(&self.inlines, &mut prefix);
         let token = invocation_token(&prefix);
-        (!token.is_empty()).then(|| token.to_owned())
+        if token.is_empty() {
+            return None;
+        }
+        // `token` is the exact subslice selected by the grammar, including
+        // removal of whitespace and authored enclosing punctuation.
+        let offset = token.as_ptr() as usize - prefix.as_ptr() as usize;
+        Some((token.to_owned(), self.start + offset))
     }
 }
 

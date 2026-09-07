@@ -1,5 +1,5 @@
 //! Read-only semantic references into an unchanged ordinary list item.
-use super::{AttachedValuePolicy, EntrySignature, entry_names, entry_term_text};
+use super::{AttachedValuePolicy, EntrySignature};
 use mant_ir::{
     Block, EntryContentSlice, EntryFacts, EntryForm, EntryInlineRoot, EntryKind, EntryNameBinding,
     EntryNameEvidence, Inline, ListItem, NameCase,
@@ -10,7 +10,7 @@ pub(super) fn entry_facts(
     signature: &EntrySignature,
     role: EntryKind,
     case: NameCase,
-    attached: AttachedValuePolicy,
+    _attached: AttachedValuePolicy,
     declared: bool,
 ) -> EntryFacts {
     let Block::Paragraph { children, .. } = &item.blocks[0] else {
@@ -62,46 +62,23 @@ pub(super) fn entry_facts(
             },
         })
         .collect::<Vec<_>>();
-    for (index, inline) in children[..signature.inline_index].iter().enumerate() {
-        let Some(value) = entry_term_text(inline) else {
-            continue;
-        };
-        // Parse each visible span once. A same-spelled substring of another
-        // name or assignment value is not an additional name occurrence.
-        let Ok(names) = entry_names(value, role, declared, attached) else {
-            continue;
-        };
-        for spelling in names {
-            let Some(&name) = name_indices.get(spelling.as_str()) else {
-                continue;
-            };
-            for (start, _) in value.match_indices(spelling.as_str()) {
-                let end = start + spelling.len();
-                if !value[..start]
-                    .chars()
-                    .next_back()
-                    .is_none_or(name_separator)
-                    || !(spelling.ends_with(['=', ':'])
-                        || value[end..]
-                            .chars()
-                            .next()
-                            .is_none_or(|ch| name_separator(ch) || matches!(ch, '=' | ':')))
-                {
-                    continue;
-                }
-                let mut path = vec![index];
-                if matches!(inline, Inline::Link { .. }) {
-                    path.push(0);
-                }
-                bindings[name].occurrences.push(EntryForm {
-                    parts: vec![EntryContentSlice {
-                        root: EntryInlineRoot::Block { index: 0 },
-                        path,
-                        bytes: Some(start..end),
-                    }],
-                });
-            }
+    for (index, found) in &signature.name_occurrences {
+        let name = name_indices[found.name.as_str()];
+        let mut path = vec![*index];
+        if matches!(&children[*index], Inline::Link { .. }) {
+            path.push(0);
         }
+        bindings[name].occurrences.push(EntryForm {
+            parts: found
+                .parts
+                .iter()
+                .map(|range| EntryContentSlice {
+                    root: EntryInlineRoot::Block { index: 0 },
+                    path: path.clone(),
+                    bytes: Some(range.clone()),
+                })
+                .collect(),
+        });
     }
     bindings.retain(|binding| !binding.occurrences.is_empty());
     EntryFacts {
@@ -115,8 +92,4 @@ pub(super) fn entry_facts(
         alias_groups: Vec::new(),
         alias_of: None,
     }
-}
-
-fn name_separator(ch: char) -> bool {
-    ch.is_whitespace() || matches!(ch, ',' | '/' | '|')
 }

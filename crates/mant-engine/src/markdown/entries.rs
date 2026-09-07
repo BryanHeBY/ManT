@@ -31,8 +31,8 @@ pub(crate) fn export_attached_policy(items: &[ListItem]) -> Option<&'static str>
 }
 use super::bindings::{OriginalItemId, OriginalListId};
 pub(crate) use diagnostics::is_semantic_entry_rejection_code;
-use names::{entry_names, is_option_code};
-use signature::{EntrySignature, entry_signature, entry_term_text};
+use names::is_option_code;
+use signature::{EntrySignature, entry_signature};
 
 use super::directives::{
     AttachedValuePolicy, DomainDeclaration, DomainDeclarationState, SemanticDeclarations,

@@ -41,6 +41,7 @@ pub(super) struct IdentityPlan {
     pub(super) kind: EntryKind,
     pub(super) case: NameCase,
     pub(super) names: Vec<String>,
+    occurrences: Vec<Vec<super::RecognizedName>>,
     pub(super) value_domain: Option<ValueDomain>,
     pub(super) preferred: String,
 }
@@ -69,6 +70,7 @@ pub(super) fn identity_plan(item: &DefinitionItem, context: DefinitionContext) -
     IdentityPlan {
         kind,
         case,
+        occurrences: super::syntax::name_occurrences(item, kind),
         names,
         value_domain,
         preferred,
@@ -130,6 +132,7 @@ pub(super) fn identify_item(
         kind,
         case,
         names,
+        occurrences,
         value_domain,
         mut preferred,
     } = identity_plan(item, context);
@@ -173,7 +176,7 @@ pub(super) fn identify_item(
     }
     retained.insert(id.clone());
     item.entry = Some(EntryFacts {
-        name_bindings: super::binding::native_name_bindings(item, &names),
+        name_bindings: super::binding::native_name_bindings(item, &names, &occurrences),
         alias_groups: Vec::new(),
         alias_of: None,
         forms: (0..item.terms.len())

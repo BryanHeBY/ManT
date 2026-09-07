@@ -1,5 +1,6 @@
 //! Explicit Markdown name grammar, distinct from native inference policy.
 use super::{AttachedValuePolicy, diagnostics::EntryRejectionReason};
+use crate::definitions::RecognizedName;
 use crate::definitions::{environment_variable_alias, option_names_from_terms, option_prefix};
 use mant_ir::{EntryKind, Inline};
 pub(super) fn is_option_code(value: &str) -> bool {
@@ -14,24 +15,28 @@ pub(super) fn entry_names(
     role: EntryKind,
     explicitly_declared: bool,
     attached: AttachedValuePolicy,
-) -> Result<Vec<String>, EntryRejectionReason> {
-    match role {
+) -> Result<Vec<RecognizedName>, EntryRejectionReason> {
+    let names = match role {
         EntryKind::Parameter {
             parameter_kind: mant_ir::ParameterKind::Option,
-        } if explicitly_declared => option_entry_names(value, attached),
+        } if explicitly_declared => return option_entry_names(value, attached),
         EntryKind::Parameter {
             parameter_kind: mant_ir::ParameterKind::Option,
-        } => value
-            .trim_start()
-            .starts_with('-')
-            .then(|| {
-                let terms = vec![vec![Inline::Code {
-                    value: value.to_owned(),
-                }]];
-                option_names_from_terms(&terms)
-            })
-            .filter(|names| !names.is_empty())
-            .ok_or(EntryRejectionReason::InvalidOptionName),
+        } => {
+            return value
+                .trim_start()
+                .starts_with('-')
+                .then(|| {
+                    let terms = vec![vec![Inline::Code {
+                        value: value.to_owned(),
+                    }]];
+                    crate::definitions::option_occurrences_from_terms(&terms)
+                        .pop()
+                        .unwrap_or_default()
+                })
+                .filter(|names| !names.is_empty())
+                .ok_or(EntryRejectionReason::InvalidOptionName);
+        }
         EntryKind::Command => plain_entry_name(value, is_command_name),
         EntryKind::EnvironmentVariable => environment_variable_alias(value)
             .map(|name| vec![name])
@@ -45,7 +50,12 @@ pub(super) fn entry_names(
         | EntryKind::Term => plain_entry_name(value, |name| {
             !name.is_empty() && !name.contains(['\r', '\n'])
         }),
-    }
+    }?;
+    let start = value.len() - value.trim_start().len();
+    Ok(names
+        .into_iter()
+        .map(|name| RecognizedName::contiguous(&name, start))
+        .collect())
 }
 
 fn plain_entry_name(
@@ -82,16 +92,24 @@ fn is_variable_name(value: &str) -> bool {
 fn option_entry_names(
     value: &str,
     attached: AttachedValuePolicy,
-) -> Result<Vec<String>, EntryRejectionReason> {
+) -> Result<Vec<RecognizedName>, EntryRejectionReason> {
     let mut names = Vec::new();
     for alias in value.split([',', '|']).map(str::trim) {
         if let Some(parts) = crate::definitions::slash_option_forms(alias) {
             for part in parts {
-                names.push(dash_option_name(part, attached)?);
+                let name = dash_option_name(part, attached)?;
+                names.push(RecognizedName::contiguous(
+                    &name,
+                    part.as_ptr() as usize - value.as_ptr() as usize,
+                ));
             }
             continue;
         }
-        names.push(option_entry_name(alias, attached)?);
+        let name = option_entry_name(alias, attached)?;
+        names.push(RecognizedName::contiguous(
+            &name,
+            alias.as_ptr() as usize - value.as_ptr() as usize,
+        ));
     }
     (!names.is_empty())
         .then_some(names)

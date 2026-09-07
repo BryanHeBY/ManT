@@ -4,6 +4,126 @@ use std::path::Path;
 use mant_engine::parse_manual_bytes;
 use mant_ir::SemanticIndex;
 
+fn inline_text(inlines: &[mant_ir::Inline]) -> String {
+    inlines
+        .iter()
+        .map(|inline| match inline {
+            mant_ir::Inline::Text { value } | mant_ir::Inline::Code { value } => value.clone(),
+            mant_ir::Inline::Strong { children }
+            | mant_ir::Inline::Emphasis { children }
+            | mant_ir::Inline::Link { children, .. } => inline_text(children),
+            mant_ir::Inline::Anchor { .. } => String::new(),
+            mant_ir::Inline::LineBreak => "\n".into(),
+        })
+        .collect()
+}
+
+fn assert_direct_names(query: &mant_ir::ResolvedContent, names: &[&str], form: &str) {
+    use mant_protocol::{EvidenceBasis, EvidenceClass, ExplanationQuery};
+    let document = query.document.as_ref().unwrap();
+    assert!(
+        mant_ir::validate_document(document).is_empty(),
+        "{:?}",
+        document.diagnostics
+    );
+    assert!(
+        !document
+            .diagnostics
+            .iter()
+            .any(|d| d.code.as_deref() == Some("ir.invalid-entry-name-binding")),
+        "{:?}",
+        document.diagnostics
+    );
+    for name in names {
+        let explained = mant_engine::explain_query(
+            query,
+            &ExplanationQuery {
+                entry: (*name).into(),
+                options: mant_protocol::ExplanationOptions::default(),
+            },
+        )
+        .unwrap();
+        let direct = explained
+            .evidence
+            .iter()
+            .find(|e| e.class == EvidenceClass::DirectEntry)
+            .unwrap_or_else(|| panic!("{name}: {explained:?}"));
+        assert!(direct.bases.contains(&EvidenceBasis::Name));
+        let entry = direct.entry.as_ref().unwrap();
+        assert_eq!(entry.names, names);
+        assert_eq!(
+            entry
+                .forms
+                .iter()
+                .map(|f| inline_text(f))
+                .collect::<Vec<_>>(),
+            [form]
+        );
+        let excerpt = mant_engine::select_excerpt(query, &[direct.outline.path()]).unwrap();
+        assert!(mant_engine::render_excerpt_text(&excerpt).contains("PAYLOAD"));
+    }
+    mant_ir::visit::Visit::visit_document(&mut Bindings, document);
+}
+
+struct Bindings;
+impl<'a> mant_ir::visit::Visit<'a> for Bindings {
+    fn visit_list_item(&mut self, item: &'a mant_ir::ListItem) {
+        check_bindings(mant_ir::EntryOwner::List(item));
+        mant_ir::visit::walk_list_item(self, item);
+    }
+    fn visit_definition_item(&mut self, item: &'a mant_ir::DefinitionItem) {
+        check_bindings(mant_ir::EntryOwner::Definition(item));
+        mant_ir::visit::walk_definition_item(self, item);
+    }
+}
+fn check_bindings(owner: mant_ir::EntryOwner<'_>) {
+    if let Some(facts) = owner.facts() {
+        for binding in &facts.name_bindings {
+            assert!(!binding.occurrences.is_empty());
+            for occurrence in &binding.occurrences {
+                assert_eq!(
+                    inline_text(&owner.form(occurrence).unwrap()),
+                    facts.names[binding.name]
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn grammar_selected_ranges_survive_wrappers_arguments_and_styles() {
+    for (head, names, form) in [
+        ("\\-w{number}", vec!["-w"], "-w{number}"),
+        (".B {--foo}", vec!["--foo"], "{--foo}"),
+        (".B “--foo”", vec!["--foo"], "“--foo”"),
+        (".B \" [-+]O\"", vec!["-O", "+O"], " [-+]O"),
+        (".BR \" [\" - + ] O", vec!["-O", "+O"], " [-+]O"),
+        (".BR “ -- foo ”", vec!["--foo"], "“--foo”"),
+        (".B --color[=WHEN]", vec!["--color"], "--color[=WHEN]"),
+        (".B -D<NAME>", vec!["-D"], "-D<NAME>"),
+        (".BI \"{-n/\" -NUM", vec!["-n"], "{-n/-NUM"),
+    ] {
+        let source = format!(".TH PROBE 1\n.SH OPTIONS\n.TP\n{head}\nPAYLOAD.\n");
+        let query = mant_engine::query_roff_bytes(source.as_bytes()).unwrap();
+        assert_direct_names(&query, &names, form);
+    }
+}
+
+#[test]
+fn inferred_markdown_uses_its_recognizer_evidence_not_declaration_boundaries() {
+    for (form, names) in [
+        ("--color[=WHEN]", vec!["--color"]),
+        ("-D<NAME>", vec!["-D"]),
+        ("-w{number}", vec!["-w"]),
+        ("-a/--all", vec!["-a", "--all"]),
+    ] {
+        let query =
+            mant_engine::query_markdown_text(&format!("# Options\n\n- `{form}`: PAYLOAD.\n"), None)
+                .unwrap();
+        assert_direct_names(&query, &names, form);
+    }
+}
+
 #[test]
 fn linked_names_and_adjacent_parameters_retain_independent_facts_and_forms() {
     let doc = parse_manual_bytes(
