@@ -696,6 +696,22 @@ impl<'a> EventCursor<'a> {
         self.events.get(self.position)
     }
 
+    /// The parser wraps direct item paragraphs only in loose lists. Nested
+    /// containers have their own tightness and must not influence this list.
+    pub(super) fn item_has_direct_paragraph(&self) -> bool {
+        let mut depth = 0usize;
+        for (event, _) in &self.events[self.position..] {
+            match event {
+                Event::Start(Tag::Paragraph) if depth == 0 => return true,
+                Event::Start(_) => depth += 1,
+                Event::End(_) if depth == 0 => break,
+                Event::End(_) => depth -= 1,
+                _ => {}
+            }
+        }
+        false
+    }
+
     pub(super) fn next(&mut self) -> Option<SpannedEvent<'a>> {
         let event = self.events.get(self.position)?.clone();
         self.position += 1;

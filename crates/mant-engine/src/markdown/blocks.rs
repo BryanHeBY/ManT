@@ -152,11 +152,13 @@ fn parse_list(
     start_range: Range<usize>,
 ) -> Block {
     let mut items = Vec::new();
+    let mut compact = true;
     let mut end = start_range.end;
     while let Some((event, range)) = cursor.next() {
         end = range.end;
         match event {
             Event::Start(Tag::Item) => {
+                compact &= !cursor.item_has_direct_paragraph();
                 let (blocks, item_end) =
                     parse_blocks_until(cursor, source, diagnostics, TagEnd::Item);
                 end = item_end;
@@ -184,7 +186,7 @@ fn parse_list(
             ListKind::Bullet
         },
         start,
-        compact: !source.raw(&whole).contains("\n\n"),
+        compact,
         items,
         layout: LayoutHint::default(),
         source: Some(source.span(&whole)),

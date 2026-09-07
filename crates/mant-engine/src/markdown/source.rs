@@ -4,6 +4,49 @@ use std::ops::Range;
 
 use mant_ir::{Block, Diagnostic, DiagnosticLevel, LayoutHint, SourceSpan, TextRange, TextSize};
 
+/// Physical `CommonMark` lines, retaining LF, CRLF or CR terminators exactly.
+pub(super) fn physical_lines(mut text: &str) -> impl Iterator<Item = &str> {
+    std::iter::from_fn(move || {
+        if text.is_empty() {
+            return None;
+        }
+        let end = text.find(['\r', '\n']).map_or(text.len(), |offset| {
+            offset
+                + if text[offset..].starts_with("\r\n") {
+                    2
+                } else {
+                    1
+                }
+        });
+        let (line, rest) = text.split_at(end);
+        text = rest;
+        Some(line)
+    })
+}
+
+/// Feed the parser equivalent single-byte line endings without changing any
+/// source offsets. Its HTML block scanner does not consistently end comments
+/// at a bare CR even though CR is a `CommonMark` line ending.
+pub(super) fn parser_events(source: &str) -> Vec<super::SpannedEvent<'_>> {
+    use pulldown_cmark::Parser;
+    if physical_lines(source).any(|line| line.ends_with('\r')) {
+        let normalized = physical_lines(source)
+            .map(|line| {
+                line.strip_suffix('\r')
+                    .map_or_else(|| line.to_owned(), |body| format!("{body}\n"))
+            })
+            .collect::<String>();
+        Parser::new_ext(&normalized, super::markdown_options())
+            .into_offset_iter()
+            .map(|(event, range)| (event.into_static(), range))
+            .collect()
+    } else {
+        Parser::new_ext(source, super::markdown_options())
+            .into_offset_iter()
+            .collect()
+    }
+}
+
 /// Original Markdown together with a compact byte-to-line index.
 pub(super) struct MarkdownSource<'a> {
     text: &'a str,
@@ -13,10 +56,13 @@ pub(super) struct MarkdownSource<'a> {
 impl<'a> MarkdownSource<'a> {
     pub(super) fn new(text: &'a str) -> Self {
         let mut line_starts = vec![0];
-        line_starts.extend(
-            text.match_indices('\n')
-                .map(|(offset, _)| offset.saturating_add(1)),
-        );
+        let mut offset = 0;
+        for line in physical_lines(text) {
+            offset += line.len();
+            if line.ends_with(['\r', '\n']) {
+                line_starts.push(offset);
+            }
+        }
         Self { text, line_starts }
     }
 
@@ -66,12 +112,19 @@ impl<'a> MarkdownSource<'a> {
             boundary_start -= 1;
         }
         let boundary_end = current_start.max(previous_end).min(self.text.len());
-        self.text
-            .get(boundary_start..boundary_end)
-            .unwrap_or_default()
-            .replace("\r\n", "\n")
-            .replace('\r', "\n")
-            .contains("\n\n")
+        physical_lines(
+            self.text
+                .get(boundary_start..boundary_end)
+                .unwrap_or_default(),
+        )
+        .skip(1)
+        .any(|line| {
+            line.ends_with(['\r', '\n'])
+                && line
+                    .trim_end_matches(['\r', '\n'])
+                    .bytes()
+                    .all(|byte| matches!(byte, b' ' | b'\t'))
+        })
     }
 
     pub(super) fn unsupported_block(

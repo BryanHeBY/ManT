@@ -2,6 +2,73 @@
 use super::*;
 
 #[test]
+fn list_tightness_comes_from_direct_parser_items_not_source_substrings() {
+    use mant_ir::visit::{Visit, walk_block};
+    struct Lists(Vec<bool>);
+    impl<'a> Visit<'a> for Lists {
+        fn visit_block(&mut self, block: &'a Block) {
+            if let Block::List { compact, .. } | Block::DefinitionList { compact, .. } = block {
+                self.0.push(*compact);
+            }
+            walk_block(self, block);
+        }
+    }
+    for newline in ["\n", "\r\n", "\r"] {
+        for blank in ["", "  ", "\t"] {
+            for (body, expected) in [
+                ("- first\n- second".into(), vec![true]),
+                (format!("- first\n{blank}\n- second"), vec![false]),
+                (format!("1. first\n{blank}\n2. second"), vec![false]),
+                (
+                    format!(
+                        "<!-- mant:entries role=command case=sensitive -->\n- `first`: First.\n{blank}\n- `second`: Second."
+                    ),
+                    vec![false],
+                ),
+                (
+                    format!(
+                        "- outer\n  - nested first\n{blank}\n  - nested second\n- outer second"
+                    ),
+                    vec![true, false],
+                ),
+                (
+                    format!(
+                        "- outer\n  - nested first\n  - nested second\n{blank}\n- outer second"
+                    ),
+                    vec![false, true],
+                ),
+            ] {
+                let source = format!("# Tool\n\n{body}\n").replace('\n', newline);
+                let parsed = parse_markdown(&source, None).unwrap();
+                assert!(
+                    parsed.document.diagnostics.is_empty(),
+                    "{source:?}: {:?}",
+                    parsed.document.diagnostics
+                );
+                let mut lists = Lists(Vec::new());
+                lists.visit_document(&parsed.document);
+                assert_eq!(lists.0, expected, "{source:?}");
+            }
+            let source = format!("# Tool\n\nfirst\n{blank}\nsecond\n").replace('\n', newline);
+            let parsed = parse_markdown(&source, None).unwrap();
+            let [
+                _,
+                Block::Paragraph {
+                    layout,
+                    source: Some(span),
+                    ..
+                },
+            ] = parsed.document.blocks.as_slice()
+            else {
+                panic!("{:?}", parsed.document)
+            };
+            assert_eq!(span.line, 5, "{source:?}");
+            assert!(layout.spacing_before_lines > 0, "{source:?}: {layout:?}");
+        }
+    }
+}
+
+#[test]
 fn literal_anchor_code_is_searchable_and_cannot_steal_entry_ownership() {
     for heading in ["", "## Section\n\n"] {
         for literal in [

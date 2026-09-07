@@ -12,7 +12,7 @@ use mant_ir::{
     DiagnosticLevel, EntryKind, Inline, LinkTarget, ListItem, ListKind, SemanticDocumentReference,
     SourceSpan, ValueDomain,
 };
-use pulldown_cmark::{Event, Parser, Tag, TagEnd};
+use pulldown_cmark::{Event, Tag, TagEnd};
 
 use crate::block::block_source;
 use crate::definitions::{environment_variable_alias, option_names_from_terms, option_prefix};
@@ -67,7 +67,7 @@ pub(super) fn extract_semantic_directives<'a>(
 ) -> (Vec<super::SpannedEvent<'a>>, SemanticDeclarations) {
     let mut masked = source.as_bytes().to_vec();
     let mut declarations = SemanticDeclarations::default();
-    let lines = source.split_inclusive('\n').collect::<Vec<_>>();
+    let lines = super::source::physical_lines(source).collect::<Vec<_>>();
     let line_starts = lines
         .iter()
         .scan(0usize, |offset, line| {
@@ -76,9 +76,7 @@ pub(super) fn extract_semantic_directives<'a>(
             Some(start)
         })
         .collect::<Vec<_>>();
-    let events = Parser::new_ext(source, super::markdown_options())
-        .into_offset_iter()
-        .collect::<Vec<_>>();
+    let events = super::source::parser_events(source);
 
     collect_entry_declarations(
         &events,
