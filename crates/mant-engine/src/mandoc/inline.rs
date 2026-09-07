@@ -187,6 +187,15 @@ impl InlineBuilder {
         self.append_at_boundary(&mut incoming);
     }
 
+    /// Add physical blank rows without resetting font or spacing state.
+    pub(super) fn blank_rows(&mut self, rows: u16) {
+        self.hard_break();
+        if self.has_printable_content {
+            self.nodes
+                .extend(std::iter::repeat_n(Inline::LineBreak, usize::from(rows)));
+        }
+    }
+
     /// Append content using the formatter-level boundary selected by the
     /// block lowering pass.
     pub(super) fn append_filled(&mut self, incoming: Vec<Inline>, boundary: FilledBoundary) {

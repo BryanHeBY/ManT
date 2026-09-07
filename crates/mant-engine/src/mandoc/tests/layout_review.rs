@@ -1,6 +1,45 @@
 //! End-to-end name, ownership and layout regression matrices.
 
 #[test]
+fn literal_display_controls_preserve_physical_rows_and_continuation() {
+    for display in ["literal", "unfilled"] {
+        for (body, expected) in [
+            ("BEFORE\n.sp 2\nAFTER", "BEFORE\n\n\nAFTER"),
+            ("BEFORE\n.sp 1\nAFTER", "BEFORE\n\nAFTER"),
+            ("BEFORE\n.sp 0\nAFTER", "BEFORE\nAFTER"),
+            ("BEFORE\n.br\nAFTER", "BEFORE\nAFTER"),
+            ("BEFORE\n.Sm off\nAFTER", "BEFORE\nAFTER"),
+            ("BEFORE\\c\nAFTER", "BEFOREAFTER"),
+            ("BEFORE\\c\n.Sm off\nAFTER", "BEFOREAFTER"),
+            ("BEFORE\n\nAFTER", "BEFORE\n\nAFTER"),
+            ("BEFORE\n.sp 1\n.sp 1\nAFTER", "BEFORE\n\n\nAFTER"),
+            ("BEFORE\\c\n.br\nAFTER", "BEFORE\nAFTER"),
+            ("\\fBBEFORE\nAFTER\\fR", "BEFORE\nAFTER"),
+            (
+                ".Bf -emphasis\nBEFORE\n.sp 2\nAFTER\n.Ef",
+                "BEFORE\n\n\nAFTER",
+            ),
+        ] {
+            let source = format!(
+                ".Dd September 7, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.Bd -{display} -offset left\n{body}\n.Ed\n"
+            );
+            let query = crate::query_roff_bytes(source.as_bytes()).unwrap();
+            let document = query.document.as_ref().unwrap();
+            let mant_ir::Block::Preformatted { children, .. } = &document.sections[0].blocks[0]
+            else {
+                panic!("{document:?}")
+            };
+            assert_eq!(super::inline_text(children), expected, "{source}");
+            assert!(
+                crate::render_query_text(&query).contains(expected),
+                "{source}: {}",
+                crate::render_query_text(&query)
+            );
+        }
+    }
+}
+
+#[test]
 fn option_arguments_never_become_aliases() {
     for (head, aliases, missed) in [
         (".It Fl n Ar -NUM", vec!["-n"], "-NUM"),

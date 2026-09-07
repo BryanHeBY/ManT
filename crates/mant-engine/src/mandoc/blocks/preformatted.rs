@@ -6,11 +6,11 @@ use mant_ir::{Block, Inline};
 use super::super::{
     LoweringContext, first_part_children,
     inline::{InlineBuilder, append_inline_node, lower_inline_nodes, plain_text},
-    layout::layout,
+    layout::{layout, vertical_distance_lines},
     source_span,
 };
 use super::{
-    participates_in_inline_flow,
+    ends_with_line_continuation, participates_in_inline_flow,
     tables::{append_table_row, table_embeddings},
 };
 
@@ -128,9 +128,9 @@ fn preformatted_inlines_refs(
     context: &LoweringContext<'_>,
     spacing_enabled: bool,
 ) -> (Vec<Inline>, bool) {
-    let mut output = Vec::new();
     let mut line = InlineBuilder::with_spacing(spacing_enabled);
     let mut previous_visible_line = None;
+    let mut continues_line = false;
     for node in nodes {
         if node.kind == NodeKind::Comment || node.flags.no_print {
             continue;
@@ -143,21 +143,34 @@ fn preformatted_inlines_refs(
             continue;
         }
 
-        if previous_visible_line.is_some_and(|previous| node.line > previous) {
-            let spacing_enabled = line.spacing_enabled();
-            output.extend(
-                std::mem::replace(&mut line, InlineBuilder::with_spacing(spacing_enabled)).finish(),
-            );
+        // Control requests do not themselves occupy a source-visible row.
+        // Consume them before applying physical line boundaries, and retain
+        // one builder so font, spacing and continuation survive those boundaries.
+        match node.macro_name.as_deref() {
+            Some("sp") => {
+                line.blank_rows(vertical_distance_lines(node).unwrap_or(0));
+                // This request has now been materialized. Do not count it
+                // again when recovering omitted source rows at the next node.
+                previous_visible_line = Some(node.line);
+                continues_line = false;
+                continue;
+            }
+            Some("br") => {
+                line.hard_break();
+                continues_line = false;
+                continue;
+            }
+            Some("Sm" | "ft" | "Ns") => {
+                append_inline_node(&mut line, node, context.default_name);
+                continue;
+            }
+            _ => {}
         }
         if let Some(previous) = previous_visible_line.filter(|previous| node.line > *previous)
-            && !output.is_empty()
+            && !continues_line
         {
-            output.push(Inline::LineBreak);
             let extra_rows = context.no_fill_blank_rows_between(Some(previous), Some(node.line));
-            output.extend(std::iter::repeat_n(
-                Inline::LineBreak,
-                usize::from(extra_rows),
-            ));
+            line.blank_rows(extra_rows);
         }
         if node.macro_name.as_deref() == Some("Bf") {
             let body = first_part_children(node, NodeKind::Body)
@@ -196,10 +209,10 @@ fn preformatted_inlines_refs(
             line.inherit_spacing(final_spacing);
         }
         previous_visible_line = Some(node.line);
+        continues_line = ends_with_line_continuation(node);
     }
     let final_spacing = line.spacing_enabled();
-    output.extend(line.finish());
-    (output, final_spacing)
+    (line.finish(), final_spacing)
 }
 
 pub(super) fn style_preformatted_inlines(nodes: Vec<Inline>, font: NormalizedFont) -> Vec<Inline> {
