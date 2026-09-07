@@ -16,6 +16,21 @@ import traceback
 from pathlib import Path
 
 
+def terminal_mode(attributes, platform=sys.platform):
+    """Compare configuration, excluding only Darwin's pending-input state.
+
+    XNU ttioctl sets PENDIN when ICANON is restored with TCSANOW, then ORs it
+    into the requested flags. It is not an un-restored user mode. Do not clear
+    it on the terminal (which could discard pending input), or ignore any of
+    the actual raw-mode flags, control characters or speeds.
+    https://github.com/apple-oss-distributions/xnu/blob/main/bsd/kern/tty.c
+    """
+    mode = list(attributes)
+    if platform == "darwin":
+        mode[3] &= ~termios.PENDIN
+    return mode
+
+
 def read_chunk(fd):
     """Nonblocking PTYs signal closure with EOF on macOS or EIO on Linux."""
     try:
@@ -143,7 +158,9 @@ def check_in_session(arguments, expected_interactive, env, stdin=None,
         interactive = b"\x1b[?1049h" in result
         assert interactive == expected_interactive, (arguments, result[:500])
         actual = termios.tcgetattr(slave)
-        assert actual == original, (arguments, "terminal mode leaked", original, actual)
+        assert terminal_mode(actual) == terminal_mode(original), (
+            arguments, "terminal mode leaked", original, actual
+        )
         if interactive:
             assert b"\x1b[?1049l" in result, (arguments, "alternate screen not restored")
         return bytes(result)
@@ -184,15 +201,17 @@ def run_cases(root):
     check(["--input", str(long)], False, dict(environment, TERM="dumb"))
     check(["--input", "-", "--input-format", "markdown"], False, environment, b"# Stdin\n\nBody.\n")
     check(["--help"], False, environment)
-    for termination in [signal.SIGINT, signal.SIGTERM]:
-        for wait_for_raw in [False, True]:
-            in_session(lambda: check_in_session(
-                [sys.argv[1], "--input", str(long)], True, environment,
-                action=lambda process, _master: process.send_signal(termination),
-                returncodes=(-termination, 128 + termination),
-                wait_for_raw=wait_for_raw,
-            ))
-        print("ManT signal restoration", termination, "passed", flush=True)
+    for display in ["tui", "pager"]:
+        for termination in [signal.SIGINT, signal.SIGTERM]:
+            for wait_for_raw in [False, True]:
+                in_session(lambda: check_in_session(
+                    [sys.argv[1], "--input", str(long), "--display", display],
+                    True, environment,
+                    action=lambda process, _master: process.send_signal(termination),
+                    returncodes=(-termination, 128 + termination),
+                    wait_for_raw=wait_for_raw,
+                ))
+            print("ManT", display, "signal restoration", termination, "passed", flush=True)
 
 
 def test_drain_boundaries():
@@ -250,10 +269,42 @@ def test_session_lifecycle():
 
     in_session(final_output)
     in_session(leaked_mode)
+    # No ManT code involved: prove that an ordinary raw/cooked round trip is
+    # accepted on the host kernel, including Darwin's automatic PENDIN bit.
+    in_session(lambda: check_in_session(
+        [sys.executable, "-c", (
+            "import termios, tty; original = termios.tcgetattr(0); "
+            "tty.setraw(0, termios.TCSANOW); "
+            "termios.tcsetattr(0, termios.TCSANOW, original)"
+        )], False, os.environ
+    ))
     print("session lifetime and restoration-negative checks passed", flush=True)
 
 
+def test_terminal_mode_comparison():
+    # Exercise the Darwin exception on every Unix runner. No other flag or
+    # attribute difference may disappear, and Linux retains exact comparison.
+    original = [0, 0, 0, termios.ICANON | termios.ECHO, 9600, 9600, [b"\x03"]]
+    pending = list(original)
+    pending[3] |= termios.PENDIN
+    assert terminal_mode(original, "darwin") == terminal_mode(pending, "darwin")
+    assert terminal_mode(original, "linux") != terminal_mode(pending, "linux")
+    assert pending[3] & termios.PENDIN, "comparison mutated its input"
+    for index, difference in [
+        (0, termios.ICRNL), (1, termios.OPOST), (2, termios.CLOCAL),
+        (3, termios.ICANON), (3, termios.ECHO), (3, termios.ISIG),
+        (3, termios.IEXTEN), (4, 1), (5, 1),
+    ]:
+        changed = list(pending)
+        changed[index] ^= difference
+        assert terminal_mode(changed, "darwin") != terminal_mode(original, "darwin")
+    changed = list(pending)
+    changed[6] = [b"\x04"]
+    assert terminal_mode(changed, "darwin") != terminal_mode(original, "darwin")
+
+
 if __name__ == "__main__":
+    test_terminal_mode_comparison()
     test_drain_boundaries()
     test_session_lifecycle()
     with tempfile.TemporaryDirectory(prefix="mant-display-pty-") as root:
