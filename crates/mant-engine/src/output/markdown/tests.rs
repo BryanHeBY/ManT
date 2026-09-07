@@ -1312,3 +1312,15 @@ fn serializes_a_large_source_lowered_document() {
     assert!(markdown.contains("## DESCRIPTION"));
     assert!(!markdown.contains("<pre"));
 }
+#[test]
+fn final_artifact_owns_only_real_anchor_ranges() {
+    let mut builder = super::ArtifactBuilder::default();
+    builder.push("<a id=\"real\"></a>\n`<a id=\"literal\"></a>`\n\n ");
+    let artifact = builder.finish();
+    assert!(artifact.anchors.get().is_none());
+    let ranges = artifact.anchor_ranges();
+    assert_eq!(ranges, &[0.."<a id=\"real\"></a>".len()]);
+    assert_eq!(&artifact.text[ranges[0].clone()], "<a id=\"real\"></a>");
+    assert!(std::ptr::eq(ranges, artifact.anchor_ranges()));
+    assert!(artifact.text.ends_with('`'));
+}

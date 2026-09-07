@@ -12,9 +12,10 @@ pub use json::{
     render_excerpt_json, render_outline_json, render_query_json, render_search_json,
     render_update_json,
 };
+#[cfg(test)]
+pub(crate) use markdown::anchor_markers;
 pub(crate) use markdown::{
-    MarkdownArtifact, MarkdownNode, MarkdownNodeRange, MarkdownSection, anchor_markers,
-    render_addressable_markdown,
+    MarkdownArtifact, MarkdownNode, MarkdownNodeRange, MarkdownSection, render_addressable_markdown,
 };
 pub use markdown::{
     MarkdownOptions, render_excerpt_markdown, render_excerpt_markdown_with_options,

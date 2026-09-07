@@ -82,7 +82,7 @@ pub fn search_query(
     validate_request(request)?;
     let artifact = render_addressable_markdown(query);
     let markdown = &artifact.text;
-    let lines = LineIndex::new(markdown);
+    let lines = LineIndex::with_anchors(markdown, artifact.anchor_ranges().to_vec());
     let owners = OwnerIndex::new(&artifact);
     let searchable = SearchableText::new(markdown, request.scope);
     let matcher = build_matcher(request)?;

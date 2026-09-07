@@ -76,20 +76,25 @@ pub(super) struct LineIndex {
 }
 
 impl LineIndex {
+    #[cfg(test)]
     pub(super) fn new(text: &str) -> Self {
+        Self::with_anchors(
+            text,
+            crate::output::anchor_markers(text)
+                .into_iter()
+                .map(|marker| marker.range)
+                .collect(),
+        )
+    }
+
+    pub(super) fn with_anchors(text: &str, anchors: Vec<Range<usize>>) -> Self {
         let mut starts = vec![0];
         starts.extend(
             text.bytes()
                 .enumerate()
                 .filter_map(|(index, byte)| (byte == b'\n').then_some(index + 1)),
         );
-        Self {
-            starts,
-            anchors: crate::output::anchor_markers(text)
-                .into_iter()
-                .map(|marker| marker.range)
-                .collect(),
-        }
+        Self { starts, anchors }
     }
 
     pub(super) fn presented_line(&self, text: &str, index: usize) -> AnchorStrippedLine {

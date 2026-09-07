@@ -52,6 +52,21 @@ pub fn render_markdown_with_options(query: &ResolvedContent, options: MarkdownOp
 pub(crate) struct MarkdownArtifact {
     pub(crate) text: String,
     pub(crate) nodes: Vec<MarkdownNodeRange>,
+    anchors: std::sync::OnceLock<Vec<Range<usize>>>,
+}
+
+impl MarkdownArtifact {
+    /// Internal markers are indexed against final bytes, on demand. The
+    /// operation-local artifact owns the map; presentation-only rendering
+    /// does not pay for a second `CommonMark` parse.
+    pub(crate) fn anchor_ranges(&self) -> &[Range<usize>] {
+        self.anchors.get_or_init(|| {
+            anchor_markers(&self.text)
+                .into_iter()
+                .map(|marker| marker.range)
+                .collect()
+        })
+    }
 }
 
 #[derive(Clone)]
@@ -244,6 +259,7 @@ impl ArtifactBuilder {
         MarkdownArtifact {
             text: self.text,
             nodes: self.nodes,
+            anchors: std::sync::OnceLock::new(),
         }
     }
 }
