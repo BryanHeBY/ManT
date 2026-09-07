@@ -856,7 +856,7 @@ Every block is tagged by `type`:
 | --- | --- | --- |
 | `paragraph` | `children` | Filled prose |
 | `preformatted` | `children`, optional `language` | Literal/code display |
-| `list` | `kind`, `items`, optional `start`, `compact` | Bullet, ordered, or plain list |
+| `list` | structured `kind`, `items`, `compact` | Bullet, ordered, or plain list |
 | `definition-list` | `items`, `compact` | Terms with block-capable descriptions |
 | `table` | `rows` | Block-capable cells, spans, and alignment |
 | `equation` | `value`, `display` | Preserved equation source |
@@ -874,48 +874,95 @@ An omitted layout is equivalent to zero indentation and zero leading rows.
 Renderers should consume these normalized hints rather than reconstruct roff
 spacing.
 
-List item `blocks` can contain nested lists and displays. An ordered list's
-`start` is omitted when unavailable. Table cells contain `blocks`;
+List item `blocks` can contain nested lists and displays. List `kind` is
+`{"kind":"bullet"}`, `{"kind":"plain"}`, or `{"kind":"ordered","start":3}`.
+Only the ordered variant accepts optional u64 `start`. Missing/null means
+unknown, is omitted canonically, and displays from one. Zero and u64::MAX are
+valid; excerpt numbering saturates rather than wrapping. Old string kinds,
+block-level `start`, and bullet/plain `start:null` are rejected.
+Table cells contain `blocks`;
 `columnSpan` and `rowSpan` default to `1`, and `alignment` can be `left`,
 `center`, or `right`.
 
-An ordinary list item may carry `entry` facts without changing those blocks.
-Its `forms` and `nameBindings` reference final-IR inline positions, rather than
-duplicating or removing its visible head. The same facts type is called
-`identity` on native definitions; see [mant-ir(7)](mant-ir.md) for binding and
-relationship validation. Both are content owners, not behavioral equivalence
-claims.
+Both ordinary-list and definition-list items may carry the same `entry` facts.
+Their `forms` and `nameBindings` reference final-IR inline positions rather than
+duplicating or removing the visible head. See [mant-ir(7)](mant-ir.md) for
+binding and relationship validation. Both are authoritative content owners,
+not behavioral equivalence claims.
 
 ### Semantic Definitions
 
 A definition item contains rendered `terms`, block-capable `description`,
-optional `inlineTerm`, optional `spacingBeforeLines`, and an optional
-`identity`.
+optional `layout`, optional original `source`, and optional `entry` facts.
+An ordinary list item contains `blocks`, optional original `source`, and
+optional `entry` facts. Missing/null `entry` and item `source` mean absent and
+are omitted canonically.
 
-An identity makes one definition addressable:
+Facts use structured `kind`: `{"kind":"parameter","parameterKind":"option"}`
+(also `marker` or `operand`), or `{"kind":"command"}` (also
+`configuration-key`, `environment-variable`, `variable`, `value`, `term`).
+`case` is `sensitive` or ASCII `insensitive`, without changing executable spelling.
+`names` is the validated selectable-name collection; it does not imply that
+the names are equivalent. Only explicit `aliasGroups` and `aliasOf` record
+those relationships. Consumers must not rebuild visible content from names.
+
+Definition-owner example:
 
 ```json
 {
-  "id": "option-exclude",
-  "role": "option",
-  "case": "sensitive",
-  "names": [
-    "--exclude"
+  "type": "definition-list",
+  "items": [
+    {
+      "terms": [[{"type":"code","value":"--exclude PATTERN"}]],
+      "description": [{"type":"paragraph","children":[{"type":"text","value":"Skip matching paths."}]}],
+      "layout": {"inlineTerm":true,"spacingBeforeLines":0},
+      "entry": {
+        "id":"option-exclude",
+        "kind":{"kind":"parameter","parameterKind":"option"},
+        "case":"sensitive",
+        "names":["--exclude"],
+        "forms":[{"parts":[{"root":{"kind":"term","index":0},"path":[]}]}],
+        "nameBindings":[{"name":0,"evidence":"lexical","occurrences":[{"parts":[{"root":{"kind":"term","index":0},"path":[0],"bytes":{"start":0,"end":9}}]}]}]
+      }
+    }
   ]
 }
 ```
 
-Roles are `option`, `marker`, `operand`, `command`, `configuration-key`,
-`environment-variable`, `variable`, `value`, and `term`. `case` is `sensitive`
-or `insensitive` and controls alias matching without changing
-canonical spelling. `names` contains
-normalized aliases suitable for `--node`, `--explain`, outline navigation,
-and MCP tools. The complete styled term remains in `terms`; consumers should
-not rebuild visible text from `names`.
+Ordinary-list-owner example:
 
-`inlineTerm` is a lowering decision indicating that the term and the first
-description line fit the same row. `spacingBeforeLines = null` or an omitted
-field inherits the containing list's compactness policy.
+```json
+{
+  "type":"list",
+  "kind":{"kind":"ordered","start":3},
+  "items":[{
+    "blocks":[{"type":"paragraph","children":[{"type":"code","value":"--exclude PATTERN"},{"type":"text","value":": Skip matching paths."}]}],
+    "entry":{
+      "id":"option-exclude",
+      "kind":{"kind":"parameter","parameterKind":"option"},
+      "case":"sensitive",
+      "names":["--exclude"],
+      "forms":[{"parts":[{"root":{"kind":"block","index":0},"path":[0]}]}],
+      "nameBindings":[{"name":0,"evidence":"declared","occurrences":[{"parts":[{"root":{"kind":"block","index":0},"path":[0],"bytes":{"start":0,"end":9}}]}]}]
+    }
+  }]
+}
+```
+
+Missing/empty facts `forms` means unrecorded; null forms are invalid shape.
+Shape-valid but out-of-bounds references stay in the tree with semantic
+validation diagnostics. They never transfer a child's content to its parent.
+
+Definition `layout.inlineTerm` indicates that the term and first description
+line fit the same row. Missing/empty layout uses the default; null layout is
+rejected. `layout.spacingBeforeLines` missing/null inherits list compactness;
+explicit zero is retained. The item-level hints are distinct from block-level
+indentation and spacing.
+
+Rejected pre-convergence shapes: item `identity`, facts' flat `role` or semantic
+`aliases`, and item-level `inlineTerm` / `spacingBeforeLines`. They are rejected
+even when mixed with valid fields. These carriers reject unknown and duplicate
+fields in actual decoding, not only in the generated schema.
 
 ### Inline Variants
 
@@ -1039,35 +1086,11 @@ outline node have distinct responsibilities described in
 [mant-ir(7)](mant-ir.md). Clients use the versioned fields shown here; they
 must not serialize an in-process IR type as a substitute for this contract.
 
-The unreleased v0.11 content shape uses `entry` on both ordinary-list and
-definition-list items. Facts contain structured `kind`, for example
-`"kind":{"kind":"parameter","parameterKind":"option"}`, and `case`
-(`sensitive` or ASCII `insensitive`). Full outlines and compact trail references
-use `entryKind` for the same structured category; explanation entry metadata
-uses `kind`. Every derived selectable-name collection is `names`.
-`identity`, flat `role`, and semantic `aliases` are rejected, including when
-mixed with valid new fields. Explicit `aliasGroups`, `aliasOf`, and exact
-`fragmentAliases` are unchanged. These content/entry carriers reject unknown
-and duplicate fields in actual decoding, not only in the schema.
-
-Missing or null `entry`/item `source` means absent and is omitted in canonical
-output. Missing or empty facts `forms` means unrecorded; null forms are invalid
-JSON shape. A shape-valid but out-of-bounds reference instead remains in the
-content tree and produces a semantic validation diagnostic. It cannot cause
-that item's body to be attributed to its parent.
-
-Definition-item presentation is nested under `layout`, for example
-`"layout":{"inlineTerm":true,"spacingBeforeLines":0}`. Missing or empty
-layout uses the normal default; null layout and the former top-level layout
-fields are rejected. Null/missing spacing inherits, while explicit zero is
-retained. This is a shape migration, not a change in renderer geometry.
-
-Ordinary-list `kind` is `{"kind":"bullet"}`, `{"kind":"plain"}`, or
-`{"kind":"ordered","start":3}`. Only the ordered variant accepts optional
-u64 start. Missing/null means unknown and is omitted canonically; it displays
-from one. Zero and u64::MAX are valid, and excerpt numbering saturates rather
-than wrapping. Old string kinds or block-level start fields are rejected,
-including bullet/plain `start:null` and duplicate keys.
+The content shape is specified once under Semantic Definitions above. Full
+outlines and compact trail references use `entryKind` for its structured category;
+explanation entry metadata uses `kind`. Every selectable-name collection is
+`names`; explicit `aliasGroups`, `aliasOf`, and exact `fragmentAliases` retain
+their separate meanings.
 
 Environment-variable aliases share one source-neutral grammar across native
 and Markdown documents: bare `NAME`, shell `$NAME`, PowerShell `$Env:NAME` or
@@ -1180,7 +1203,7 @@ Selection kinds are:
 
 The unreleased v0.11 entry payload is a block, not the former standalone
 definition item. Read shared facts from its sole list item's `entry` or native
-definition's `identity`. In-process consumers can use `Block::entry_owner()`;
+definition's `entry`. In-process consumers can use `Block::entry_owner()`;
 renderers consume the original block instead of converting ordinary items into
 term-and-description content.
 

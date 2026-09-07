@@ -15,6 +15,62 @@ const MARKDOWN_MANUAL: &str = include_str!("../../../docs/manuals/mant-markdown.
 const ROFF_MANUAL: &str = include_str!("../../../docs/manuals/mant-roff.md");
 
 #[test]
+fn protocol_owner_examples_are_decodable_valid_ir_not_parallel_test_copies() {
+    let manual = PROTOCOL_REFERENCE.replace("\r\n", "\n");
+    for label in ["Definition-owner example:", "Ordinary-list-owner example:"] {
+        let json = manual
+            .split_once(label)
+            .unwrap()
+            .1
+            .split_once("```json\n")
+            .unwrap()
+            .1
+            .split_once("\n```")
+            .unwrap()
+            .0;
+        let value: serde_json::Value = serde_json::from_str(json).unwrap();
+        let block: mant_ir::Block = serde_json::from_value(value.clone()).unwrap();
+        let mut document = query_markdown_text("Body.", None)
+            .unwrap()
+            .document
+            .unwrap();
+        document.blocks = vec![block.clone()];
+        assert!(mant_ir::validate_document(&document).is_empty(), "{label}");
+        let roundtrip: mant_ir::Block =
+            serde_json::from_str(&serde_json::to_string(&block).unwrap()).unwrap();
+        assert_eq!(block, roundtrip);
+        let owner = block.entry_owner().unwrap();
+        assert_eq!(owner.forms().unwrap().iter().count(), 1);
+        assert_eq!(owner.facts().unwrap().names, ["--exclude"]);
+        let envelope = serde_json::json!({
+            "schema":"mant.document/v0.11", "producer":{"name":"test","version":"0"},
+            "source":{"format":"markdown"}, "meta":{}, "sections":[], "blocks":[value.clone()]
+        });
+        let response: mant_protocol::DocumentResponse = serde_json::from_value(envelope).unwrap();
+        assert_eq!(response.blocks, [block]);
+
+        for field in ["identity", "inlineTerm", "spacingBeforeLines"] {
+            let mut invalid = value.clone();
+            invalid["items"][0][field] = serde_json::Value::Null;
+            assert!(
+                serde_json::from_value::<mant_ir::Block>(invalid).is_err(),
+                "{label}: {field}"
+            );
+        }
+        for field in ["role", "aliases"] {
+            let mut invalid = value.clone();
+            invalid["items"][0]["entry"][field] = serde_json::Value::Null;
+            assert!(serde_json::from_value::<mant_ir::Block>(invalid).is_err());
+        }
+        if value["type"] == "list" {
+            let mut invalid = value;
+            invalid["start"] = serde_json::Value::Null;
+            assert!(serde_json::from_value::<mant_ir::Block>(invalid).is_err());
+        }
+    }
+}
+
+#[test]
 fn shipped_manual_parses_without_lossy_fallbacks() {
     let name = "mant.md";
     let query = query_markdown_text(MANT_MANUAL, Some(format!("docs/manuals/{name}")))
