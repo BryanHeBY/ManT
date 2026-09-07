@@ -1,26 +1,23 @@
 //! Resolve metadata only after all ordinary content owners have final IDs.
 use std::collections::{BTreeMap, BTreeSet};
 
-use super::{MetadataDeclaration, MetadataDeclarations, diagnostic};
+use super::super::bindings::{ItemBindings, OriginalItemId};
+use super::{MetadataDeclaration, diagnostic};
 use mant_ir::{
     Block, Document, EntryRelationIssueKind, ListItem, SourceSpan,
     visit::{self, VisitMut},
 };
 
-pub(crate) fn apply(
-    document: &mut Document,
-    mut declarations: MetadataDeclarations,
-    list_items: &BTreeMap<usize, Vec<usize>>,
-    declared_items: &BTreeSet<usize>,
-) -> Vec<(String, String)> {
+pub(crate) fn apply(document: &mut Document, mut bindings: ItemBindings) -> Vec<(String, String)> {
+    let mut declarations = std::mem::take(&mut bindings.metadata);
     let mut plans = BTreeMap::new();
     let mut diagnostics = Vec::new();
-    visit_items(document, list_items, &mut |offset, item| {
+    visit_items(document, &bindings, &mut |offset, item| {
         let Some(declaration) = offset.and_then(|offset| declarations.remove(&offset)) else {
             return;
         };
         if let Some(facts) = &item.entry
-            && offset.is_some_and(|offset| declared_items.contains(&offset))
+            && offset.is_some_and(|offset| bindings.declared_items.contains(&offset))
         {
             plans.insert(facts.id.to_string(), declaration);
         } else {
@@ -52,7 +49,7 @@ pub(crate) fn apply(
         .collect::<BTreeSet<_>>();
     let mut sources = BTreeMap::new();
     let mut renamed = Vec::new();
-    visit_items(document, list_items, &mut |_, item| {
+    visit_items(document, &bindings, &mut |_, item| {
         let Some(facts) = &mut item.entry else {
             return;
         };
@@ -96,8 +93,8 @@ pub(crate) fn apply(
     });
     // Reject groups atomically before validating subject eligibility for
     // aliasOf. The same source-neutral checker guards every IR producer.
-    reject_relations(document, list_items, &sources, true, &mut diagnostics);
-    reject_relations(document, list_items, &sources, false, &mut diagnostics);
+    reject_relations(document, &bindings, &sources, true, &mut diagnostics);
+    reject_relations(document, &bindings, &sources, false, &mut diagnostics);
     document.diagnostics.extend(diagnostics);
     renamed
 }
@@ -113,7 +110,7 @@ fn valid_id(id: &str) -> bool {
 
 fn reject_relations(
     document: &mut Document,
-    list_items: &BTreeMap<usize, Vec<usize>>,
+    bindings: &ItemBindings,
     sources: &BTreeMap<String, SourceSpan>,
     groups: bool,
     diagnostics: &mut Vec<mant_ir::Diagnostic>,
@@ -141,7 +138,7 @@ fn reject_relations(
         finding.source = sources.get(issue.owner.as_str()).copied();
         diagnostics.push(finding);
     }
-    visit_items(document, list_items, &mut |_, item| {
+    visit_items(document, bindings, &mut |_, item| {
         if let Some(facts) = &mut item.entry
             && rejected.contains(facts.id.as_str())
         {
@@ -156,22 +153,19 @@ fn reject_relations(
 
 fn visit_items(
     document: &mut Document,
-    positions: &BTreeMap<usize, Vec<usize>>,
-    visitor: &mut impl FnMut(Option<usize>, &mut ListItem),
+    positions: &ItemBindings,
+    visitor: &mut impl FnMut(Option<OriginalItemId>, &mut ListItem),
 ) {
     struct Items<'a, F> {
-        positions: &'a BTreeMap<usize, Vec<usize>>,
+        positions: &'a ItemBindings,
         visitor: &'a mut F,
     }
-    impl<F: FnMut(Option<usize>, &mut ListItem)> VisitMut for Items<'_, F> {
+    impl<F: FnMut(Option<OriginalItemId>, &mut ListItem)> VisitMut for Items<'_, F> {
         fn visit_block_mut(&mut self, block: &mut Block) {
             if let Block::List { source, items, .. } = block {
-                let positions = source
-                    .and_then(|s| s.byte_range)
-                    .and_then(|r| usize::try_from(r.start.get()).ok())
-                    .and_then(|offset| self.positions.get(&offset));
+                let positions = self.positions.items(*source);
                 for (index, item) in items.iter_mut().enumerate() {
-                    (self.visitor)(positions.and_then(|items| items.get(index)).copied(), item);
+                    (self.visitor)(positions.get(index).copied(), item);
                 }
             }
             visit::walk_block_mut(self, block);

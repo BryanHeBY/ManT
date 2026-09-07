@@ -1,6 +1,7 @@
 //! Annotates semantic entries without changing ordinary Markdown content.
 
 mod bindings;
+use super::bindings::{OriginalItemId, OriginalListId};
 
 use super::directives::{
     AttachedValuePolicy, DomainDeclaration, DomainDeclarationState, SemanticDeclarations,
@@ -48,7 +49,7 @@ fn entry_coverage(
             coverage.rejected |= normalize_nested_blocks(block, declarations, diagnostics).rejected;
             continue;
         };
-        let owner_offsets = declarations.item_positions(*source);
+        let owner_offsets = declarations.bindings.items(*source).to_vec();
         let child_coverage = items
             .iter_mut()
             .enumerate()
@@ -64,7 +65,8 @@ fn entry_coverage(
         if items.is_empty() {
             continue;
         }
-        let declaration = source.and_then(|source| declarations.entries.remove(&source.line));
+        let declaration =
+            OriginalListId::from_source(*source).and_then(|id| declarations.entries.remove(&id));
         if declaration.is_none() && *kind != ListKind::Bullet {
             coverage.rejected |= child_coverage.iter().any(|value| value.rejected);
             continue;
@@ -116,7 +118,7 @@ fn entry_coverage(
             };
             let domain = owner_offsets
                 .get(item_index)
-                .and_then(|offset| declarations.domains.remove(offset))
+                .and_then(|offset| declarations.bindings.domains.remove(offset))
                 .and_then(DomainDeclarationState::into_unique);
             item.entry = Some(bindings::entry_facts(
                 item,
@@ -129,7 +131,7 @@ fn entry_coverage(
             if declaration.is_some()
                 && let Some(offset) = owner_offsets.get(item_index)
             {
-                declarations.declared_items.insert(*offset);
+                declarations.bindings.declared_items.insert(*offset);
             }
             if let Some(declaration) = domain {
                 attach_domain(item, declaration, children, diagnostics);
@@ -163,12 +165,16 @@ fn attach_domain(
 /// failures upward just like failures returned by their nested content.
 fn item_child_coverage(
     item: &mut ListItem,
-    owner_offset: Option<usize>,
+    owner_offset: Option<OriginalItemId>,
     declarations: &mut SemanticDeclarations,
     diagnostics: &mut Vec<Diagnostic>,
 ) -> EntryCoverage {
-    let rejected_declaration =
-        owner_offset.is_some_and(|offset| declarations.incomplete_entry_children.remove(&offset));
+    let rejected_declaration = owner_offset.is_some_and(|offset| {
+        declarations
+            .bindings
+            .incomplete_entry_children
+            .remove(&offset)
+    });
     let mut coverage = entry_coverage(&mut item.blocks, declarations, diagnostics);
     coverage.rejected |= rejected_declaration;
     coverage

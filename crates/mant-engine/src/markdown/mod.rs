@@ -3,6 +3,7 @@
 //! Supported syntax becomes semantic IR nodes. Recognized extensions outside
 //! the subset remain visible as exact source text with an attached diagnostic.
 
+mod bindings;
 mod blocks;
 mod container;
 mod directives;
@@ -266,12 +267,7 @@ fn parse_document_with_entries(
         blocks: root_blocks,
         sections,
     };
-    for (old, new) in metadata::apply(
-        &mut document,
-        declarations.metadata,
-        &declarations.list_items,
-        &declarations.declared_items,
-    ) {
+    for (old, new) in metadata::apply(&mut document, declarations.bindings) {
         ids.targets.retain(|_, target| *target != old);
         ids.targets.insert(new.clone(), new);
     }

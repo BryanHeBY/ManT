@@ -5,6 +5,7 @@ use mant_ir::{Diagnostic, DiagnosticLevel, SourceSpan};
 use pulldown_cmark::{Event, Tag, TagEnd};
 use serde::Deserialize;
 
+use super::bindings::OriginalItemId;
 use super::{SpannedEvent, source::MarkdownSource};
 
 mod apply;
@@ -39,7 +40,7 @@ pub(super) struct MetadataDeclaration {
     pub(super) source: SourceSpan,
 }
 
-pub(super) type MetadataDeclarations = BTreeMap<usize, MetadataDeclaration>;
+pub(super) type MetadataDeclarations = BTreeMap<OriginalItemId, MetadataDeclaration>;
 
 /// Unlike valid syntax recognition, masking also accepts an unclosed comment.
 /// It remains one original parser event, never joined to a later event.
@@ -99,6 +100,7 @@ pub(super) fn collect(
                     );
                     continue;
                 };
+                let owner = OriginalItemId(owner);
                 if let Some(previous) = declarations.get_mut(&owner) {
                     if previous.value.take().is_some() {
                         diagnostic(
@@ -110,7 +112,7 @@ pub(super) fn collect(
                     continue;
                 }
                 let inline_end = !matches!(event, Event::InlineHtml(_))
-                    || (!completed_head.contains(&owner) && head_ends_after(events, index));
+                    || (!completed_head.contains(&owner.0) && head_ends_after(events, index));
                 let value = if inline_end {
                     read(raw, span, diagnostics)
                 } else {

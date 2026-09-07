@@ -1,10 +1,11 @@
 //! Collect declarations from original events without reparsing masked Markdown.
+use super::bindings::{ItemBindings, OriginalItemId, OriginalListId};
 use mant_ir::{
     DefinitionCase, DefinitionRole, Diagnostic, DiagnosticLevel, EntryKind,
     SemanticDocumentReference, SourceSpan, ValueDomain,
 };
 use pulldown_cmark::{Event, Tag, TagEnd};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 
 /// Events and declarations always describe this exact borrowed source.
 pub(super) struct PreparedMarkdown<'a> {
@@ -36,26 +37,11 @@ pub(super) struct EntryDeclaration {
 
 #[derive(Debug, Clone, Default)]
 pub(super) struct SemanticDeclarations {
-    /// Original list start -> original item starts, in parser order. These
-    /// identities survive removal of any leading semantic comment blocks.
-    pub(super) list_items: BTreeMap<usize, Vec<usize>>,
-    pub(super) entries: BTreeMap<u32, EntryDeclaration>,
-    pub(super) domains: BTreeMap<usize, DomainDeclarationState>,
-    /// Item owners with a rejected or unattached child-list declaration.
-    pub(super) incomplete_entry_children: BTreeSet<usize>,
-    pub(super) metadata: super::metadata::MetadataDeclarations,
-    pub(super) declared_items: BTreeSet<usize>,
+    pub(super) entries: BTreeMap<OriginalListId, EntryDeclaration>,
+    pub(super) bindings: ItemBindings,
 }
 
 impl SemanticDeclarations {
-    pub(super) fn item_positions(&self, source: Option<SourceSpan>) -> Vec<usize> {
-        source
-            .and_then(|span| span.byte_range)
-            .and_then(|range| usize::try_from(range.start.get()).ok())
-            .and_then(|start| self.list_items.get(&start).cloned())
-            .unwrap_or_default()
-    }
-
     /// Close collection only after every root and section has been normalized.
     pub(super) fn report_unattached(&mut self, diagnostics: &mut Vec<Diagnostic>) {
         for declaration in std::mem::take(&mut self.entries).into_values() {
@@ -65,7 +51,7 @@ impl SemanticDeclarations {
                 "semantic-entry directive did not resolve to a Markdown list".into(),
             );
         }
-        for declaration in std::mem::take(&mut self.domains)
+        for declaration in std::mem::take(&mut self.bindings.domains)
             .into_values()
             .filter_map(DomainDeclarationState::into_unique)
         {
@@ -124,26 +110,9 @@ fn extract_semantic_directives<'a>(
         })
         .collect::<Vec<_>>();
     let events = super::source::parser_events(source);
-    declarations.metadata = super::metadata::collect(&events, source, &mut masked, diagnostics);
-    let mut lists = Vec::new();
-    for (event, range) in &events {
-        match event {
-            Event::Start(Tag::List(_)) => lists.push(range.start),
-            Event::End(TagEnd::List(_)) => {
-                lists.pop();
-            }
-            Event::Start(Tag::Item) => {
-                if let Some(list) = lists.last() {
-                    declarations
-                        .list_items
-                        .entry(*list)
-                        .or_default()
-                        .push(range.start);
-                }
-            }
-            _ => {}
-        }
-    }
+    declarations.bindings = ItemBindings::collect(&events);
+    declarations.bindings.metadata =
+        super::metadata::collect(&events, source, &mut masked, diagnostics);
 
     collect_entry_declarations(
         &events,
@@ -211,7 +180,7 @@ fn collect_entry_declarations(
     for (event_index, (event, range)) in events.iter().enumerate() {
         match event {
             Event::Start(Tag::Item) => {
-                item_offsets.push(range.start);
+                item_offsets.push(OriginalItemId(range.start));
             }
             Event::End(TagEnd::Item) => {
                 item_offsets.pop();
@@ -243,6 +212,7 @@ fn collect_entry_declarations(
             diagnostics,
         ) else {
             declarations
+                .bindings
                 .incomplete_entry_children
                 .extend(item_offsets.last().copied());
             continue;
@@ -251,6 +221,7 @@ fn collect_entry_declarations(
         let Some((Event::Start(Tag::List(_)), target_range)) = events.get(block_end_index + 1)
         else {
             declarations
+                .bindings
                 .incomplete_entry_children
                 .extend(item_offsets.last().copied());
             semantic_diagnostic(
@@ -260,14 +231,13 @@ fn collect_entry_declarations(
             );
             continue;
         };
-        let target_line = u32::try_from(source_line_index(line_starts, target_range.start) + 1)
-            .unwrap_or(u32::MAX);
         if declarations
             .entries
-            .insert(target_line, declaration)
+            .insert(OriginalListId(target_range.start), declaration)
             .is_some()
         {
             declarations
+                .bindings
                 .incomplete_entry_children
                 .extend(item_offsets.last().copied());
             semantic_diagnostic(
@@ -291,7 +261,7 @@ fn collect_domain_declarations(
     for (event, range) in events {
         match event {
             Event::Start(Tag::Item) => {
-                item_offsets.push(range.start);
+                item_offsets.push(OriginalItemId(range.start));
             }
             Event::End(TagEnd::Item) => {
                 item_offsets.pop();
@@ -320,7 +290,7 @@ fn collect_domain_declarations(
                     continue;
                 };
                 let source_span = declaration.source;
-                let duplicate = match declarations.domains.entry(item_offset) {
+                let duplicate = match declarations.bindings.domains.entry(item_offset) {
                     std::collections::btree_map::Entry::Vacant(entry) => {
                         entry.insert(DomainDeclarationState::Unique(declaration));
                         false
