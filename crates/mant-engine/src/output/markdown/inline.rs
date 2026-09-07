@@ -523,9 +523,16 @@ fn escape_plain_text(value: &str) -> String {
 }
 
 pub(super) fn protect_block_prefix(line: &str) -> String {
+    block_prefix_escape_position(line).map_or_else(
+        || line.to_owned(),
+        |width| format!("{}\\{}", &line[..width], &line[width..]),
+    )
+}
+
+pub(super) fn block_prefix_escape_position(line: &str) -> Option<usize> {
     let bytes = line.as_bytes();
     let hashes = bytes.iter().take_while(|byte| **byte == b'#').count();
-    let insertion = if (hashes > 0 && bytes.get(hashes).is_none_or(u8::is_ascii_whitespace))
+    if (hashes > 0 && bytes.get(hashes).is_none_or(u8::is_ascii_whitespace))
         || bytes.starts_with(b">")
         || bytes.starts_with(b"- ")
         || bytes.starts_with(b"+ ")
@@ -544,11 +551,7 @@ pub(super) fn protect_block_prefix(line: &str) -> String {
                 .get(digits..digits.saturating_add(2))
                 .is_some_and(|suffix| matches!(suffix, b". " | b") ")))
         .then_some(digits)
-    };
-    insertion.map_or_else(
-        || line.to_owned(),
-        |width| format!("{}\\{}", &line[..width], &line[width..]),
-    )
+    }
 }
 
 fn find_angle_url(value: &str) -> Option<(usize, usize)> {

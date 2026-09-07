@@ -250,11 +250,6 @@ fn transparent_definition_and_table_preserve_entry_paths_and_nearest_owner() {
         .unwrap();
         assert_eq!(explained.total, 1);
         assert_eq!(explained.evidence[0].outline.path(), "root/e1");
-        // Table search currently uses a flattened fenced-code projection without
-        // owner offsets; tracked separately in the convergence verification log.
-        if table {
-            continue;
-        }
         let search = mant_engine::search_query(
             &query,
             &mant_protocol::SearchQuery {
@@ -271,5 +266,104 @@ fn transparent_definition_and_table_preserve_entry_paths_and_nearest_owner() {
         .unwrap();
         assert_eq!(search.matches.len(), 1);
         assert_eq!(search.matches[0].outline.path(), "root/e1");
+    }
+}
+
+#[test]
+fn table_search_tracks_independent_and_nested_owners_without_changing_text() {
+    use mant_ir::visit::{VisitMut, walk_definition_item_mut, walk_list_item_mut};
+    struct StripFacts;
+    impl VisitMut for StripFacts {
+        fn visit_list_item_mut(&mut self, item: &mut ListItem) {
+            item.entry = None;
+            walk_list_item_mut(self, item);
+        }
+        fn visit_definition_item_mut(&mut self, item: &mut mant_ir::DefinitionItem) {
+            item.entry = None;
+            walk_definition_item_mut(self, item);
+        }
+    }
+    for wrapped in [false, true] {
+        let mut parent = item("parent", "BEFORE", true);
+        parent.blocks.push(Block::List {
+            kind: ListKind::Bullet,
+            compact: false,
+            items: vec![item("child", "日本PAYLOAD", true)],
+            layout: LayoutHint::default(),
+            source: None,
+        });
+        parent.blocks.extend(item("tail", "AFTER", false).blocks);
+        let ordinary = Block::List {
+            kind: ListKind::Plain,
+            compact: false,
+            items: vec![parent],
+            layout: LayoutHint::default(),
+            source: None,
+        };
+        let table: Block = serde_json::from_value(serde_json::json!({
+            "type": "table", "rows": [{"cells": [
+                {"blocks": [ordinary]},
+                {"blocks": [{"type": "definition-list", "items": [{
+                    "terms": [[{"type": "code", "value": "sibling"}]],
+                    "description": item("text", "NEIGHBOR", false).blocks,
+                    "entry": {"id": "sibling", "kind": {"kind": "term"},
+                        "case": "sensitive", "names": []}
+                }]}]}
+            ]}]
+        }))
+        .unwrap();
+        let mut query = query(false);
+        query.document.as_mut().unwrap().blocks = if wrapped {
+            vec![Block::List {
+                kind: ListKind::Bullet,
+                compact: false,
+                items: vec![ListItem {
+                    source: None,
+                    entry: None,
+                    blocks: vec![table],
+                }],
+                layout: LayoutHint::default(),
+                source: None,
+            }]
+        } else {
+            vec![table]
+        };
+        let text = render_query_text(&query);
+        let markdown = render_markdown(&query);
+        for (pattern, path) in [
+            ("BEFORE", "root/e1"),
+            ("日本PAYLOAD", "root/e1/e1"),
+            ("AFTER", "root/e1"),
+            ("NEIGHBOR", "root/e2"),
+        ] {
+            for scope in [
+                mant_protocol::SearchScope::Visible,
+                mant_protocol::SearchScope::Markdown,
+            ] {
+                let result = mant_engine::search_query(
+                    &query,
+                    &mant_protocol::SearchQuery {
+                        pattern: pattern.into(),
+                        syntax: mant_protocol::SearchSyntax::default(),
+                        case: mant_protocol::SearchCase::default(),
+                        scope,
+                        word: false,
+                        context_lines: 0,
+                        limit: 10,
+                        offset: 0,
+                    },
+                )
+                .unwrap();
+                assert_eq!(result.matches.len(), 1, "{pattern}: {scope:?}");
+                assert_eq!(
+                    result.matches[0].outline.path(),
+                    path,
+                    "{pattern}: {scope:?}"
+                );
+            }
+        }
+        StripFacts.visit_document_mut(query.document.as_mut().unwrap());
+        assert_eq!(text, render_query_text(&query));
+        assert_eq!(markdown, render_markdown(&query));
     }
 }

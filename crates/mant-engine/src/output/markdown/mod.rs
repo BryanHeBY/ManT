@@ -2,7 +2,9 @@
 
 mod anchors;
 pub(super) mod blocks;
+mod flat;
 mod inline;
+mod mapped;
 mod semantic;
 
 use std::ops::Range;

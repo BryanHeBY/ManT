@@ -122,6 +122,11 @@ that crate was not published for that change.
 
 ### mant-engine 0.11.0
 
+- Preserve nearest semantic ownership when table cells flatten into portable
+  Markdown. Compose byte ranges alongside rendered content, instead of deriving
+  item boundaries from HTML anchor markers; text and Markdown presentation stay
+  unchanged, including nested ordinary/definition owners and sparse tables.
+
 - Strict binding exposed native option-name truncation at internal `+` signs.
   Preserve complete spellings such as `-nostdinc++` and `-Wc++11-compat`;
   previously truncated selectors no longer address those definitions. IDs for
