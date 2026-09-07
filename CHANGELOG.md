@@ -81,6 +81,11 @@ that crate was not published for that change.
 
 ### mant-engine 0.11.0
 
+- Introduce an independent bounded `explain_query` evidence collector and
+  `mant.explanation/v0.11` result: preserve independent same-name owners,
+  distinguish names/forms/literal support/explicit relations, and report
+  semantic result paging separately from body and relationship bounds.
+
 - Add opt-in semantic Markdown export for homogeneous explicitly declared
   ordinary-list owners, including IDs, explicit aliases and value domains.
   Unsupported documents retain portable content without claiming a lossless

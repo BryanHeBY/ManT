@@ -1,5 +1,5 @@
 //! Project documents through shared selector policy into outline and excerpt DTOs.
-mod excerpt;
+pub(crate) mod excerpt;
 mod outline;
 #[cfg(test)]
 use crate::selectors::semantic_selector_diagnostics;

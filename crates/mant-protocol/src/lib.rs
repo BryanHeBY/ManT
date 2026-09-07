@@ -4,6 +4,7 @@
 mod catalog;
 mod doctor;
 mod document;
+mod explanation;
 mod outline;
 mod presentation;
 mod query;
@@ -16,6 +17,7 @@ mod update;
 pub use catalog::*;
 pub use doctor::*;
 pub use document::*;
+pub use explanation::*;
 pub use outline::*;
 pub use presentation::*;
 pub use query::*;

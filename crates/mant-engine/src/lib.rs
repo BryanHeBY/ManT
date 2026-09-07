@@ -6,6 +6,7 @@ mod bounded;
 mod catalog;
 mod definitions;
 mod executable;
+mod explanation;
 mod inline;
 mod mandoc;
 mod manual;
@@ -27,6 +28,7 @@ pub use catalog::{
     discover_documents, list_available_documents, query_available_documents,
 };
 pub use executable::find_host_executable;
+pub use explanation::{ExplanationError, explain_query, validate_explanation_query};
 pub use mandoc::{
     MAX_MANUAL_BYTES, ManualError, ManualErrorKind, lower_mandoc_document, parse_manual_bytes,
     parse_manual_page, parse_manual_source,

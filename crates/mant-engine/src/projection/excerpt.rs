@@ -214,7 +214,7 @@ fn resolve_explanation_candidate<'a>(
 }
 
 impl LocatedNode<'_> {
-    fn selection(&self) -> ExcerptSelection {
+    pub(crate) fn selection(&self) -> ExcerptSelection {
         match self {
             Self::Section {
                 path,
@@ -259,7 +259,7 @@ impl LocatedNode<'_> {
     }
 }
 
-fn project_breadcrumbs(breadcrumbs: &[LocatedBreadcrumb]) -> Vec<OutlineReference> {
+pub(crate) fn project_breadcrumbs(breadcrumbs: &[LocatedBreadcrumb]) -> Vec<OutlineReference> {
     breadcrumbs
         .iter()
         .map(|breadcrumb| OutlineReference {

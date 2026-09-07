@@ -84,11 +84,11 @@ concepts with their existing authority boundaries.
 
 ## Explanation is evidence collection, not navigation
 
-Current explain deliberately selects one semantic entry and reports selector
-ambiguity. Returning several supporting records is a product/API change, not
-a correction to that existing documented resolver contract.
+The independent Rust `explain_query` collector is implemented. CLI/request/MCP
+adapters are being migrated separately from the old unique-selection entrypoint;
+until that switch lands their current help remains authoritative.
 
-The proposed explanation collector returns relevant evidence from an immutable
+The explanation collector returns relevant evidence from an immutable
 document snapshot: documented names, authored forms, related IR content and
 validated explicit relationships. Each result retains its location, context
 and matching basis. Multiple independent or complementary records are normal;
@@ -107,6 +107,26 @@ a unique excerpt. The proposed normal no-evidence response, partial-source
 failures and multi-result success need explicit outcomes and a coordinated
 CLI/JSON/MCP migration, including exit codes. Until that migration lands,
 current help, error behavior and client examples remain authoritative.
+
+The request is a literal of at most 512 Unicode scalars (no controls), plus
+`ExplanationOptions`: 1–256 records (default 50), a zero-based offset, and
+1 byte–4 MiB of copied forms/facts/body payload (default 1 MiB). The collector
+indexes at most 10,000 matching owners, follows at most 4,096 explicit edges
+and retains chains of at most 32 edges. These bounds report independent
+`truncation` fields. Oversized owner bodies are omitted atomically, with real
+outline positions retained for strict reads; they are never partial valid IR.
+
+Direct name and complete-form evidence follow the owner's case policy;
+ordinary paragraph, preformatted, equation and preserved-source support uses
+case-sensitive literal token boundaries. It does not expand names, shorten
+options or infer relationships from punctuation/prose. Root/section support
+has a block/item/cell coordinate, not a manufactured entry ID. Evidence follows
+IR source order; a parent and its matching child remain separate. Explicit
+aliasOf edges may be traversed in either direction to collect independent
+owners, with declaration IDs recorded. This neither changes relation direction
+in the IR nor inherits the remote owner's value domain. Quick-reference-only
+content currently has no full-document semantic evidence; no-evidence is not a
+claim that its command examples contain no useful information.
 
 Validation findings, available source coverage, result truncation and unknown
 fields are separate dimensions. Neither `semanticsComplete` nor a clean audit

@@ -73,6 +73,7 @@ DocumentResolver ──> Markdown parser or libmandoc lowering
 | Parse in-memory Markdown without discovery | `parse_markdown` or `query_markdown_text` |
 | Parse in-memory roff without discovery | `parse_manual_bytes` or `query_roff_bytes` |
 | Build a focused result from existing content | `build_outline_projection`, `select_excerpt`, `search_query` |
+| Collect bounded independent semantic evidence | `explain_query`, `validate_explanation_query` |
 | Produce human or JSON output | The `render_*` functions |
 
 ## Basic use
