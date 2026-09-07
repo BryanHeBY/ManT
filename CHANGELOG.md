@@ -55,6 +55,8 @@ that crate was not published for that change.
 
 ### mant-engine 0.11.0
 
+- Lower every mdoc `Mt` operand as its own email link, retaining multiple
+  addresses and trailing punctuation in prose and recovered table cells.
 - Preserve one function argument per `Fo`/`Fa` operand; quoting defines
   multi-word parameters, and controls/targets no longer consume argument slots.
 - Make tbl cell recovery transactional: unsupported mixed block/inline

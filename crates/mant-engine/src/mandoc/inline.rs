@@ -481,8 +481,8 @@ fn lower_macro_inline(
             ),
         }],
         Some("Xr" | "MR") => lower_manual_reference(children, default_name, spacing_enabled),
-        Some("Lk") => lower_link(children, default_name, false, spacing_enabled),
-        Some("Mt") => lower_link(children, default_name, true, spacing_enabled),
+        Some("Lk") => lower_link(children, default_name, spacing_enabled),
+        Some("Mt") => lower_mail_addresses(children, default_name, spacing_enabled),
         Some("Bx") => lower_bsd_reference(node, lowered),
         // Keep the heading text as a private unresolved target until the
         // complete section tree is available. The document post-pass replaces
@@ -769,7 +769,6 @@ fn lower_manual_reference(
 fn lower_link(
     children: &[Node],
     default_name: Option<&str>,
-    email: bool,
     spacing_enabled: bool,
 ) -> Vec<Inline> {
     let Some(first) = children.first() else {
@@ -780,12 +779,32 @@ fn lower_link(
         return Vec::new();
     }
     let label = lower_inline_nodes_with_spacing(&children[1..], default_name, spacing_enabled);
-    lower_external_link(address, label, email)
+    lower_external_link(address, label, false)
+}
+
+/// Unlike Lk, Mt owns a sequence of addresses, not an address and a label.
+fn lower_mail_addresses(
+    children: &[Node],
+    default_name: Option<&str>,
+    spacing_enabled: bool,
+) -> Vec<Inline> {
+    let mut builder = InlineBuilder::with_spacing(spacing_enabled);
+    for child in children {
+        if child.flags.delimiter_close || child.flags.delimiter_open {
+            append_inline_node(&mut builder, child, default_name);
+            continue;
+        }
+        let address = plain_text(&lower_inline_node(child, default_name, spacing_enabled));
+        if !address.is_empty() {
+            builder.append(lower_external_link(address, Vec::new(), true));
+        }
+    }
+    builder.finish()
 }
 
 /// Build an mdoc external link without allowing punctuation to hide its target.
 ///
-/// `Lk` and `Mt` accept ordinary trailing sentence punctuation as an argument.
+/// `Lk` accepts ordinary trailing sentence punctuation as an argument.
 /// It is not a descriptive label: a source spelling such as `.Lk URL .` must
 /// render `URL.` rather than an otherwise invisible link whose only child is
 /// `.`. The same policy is shared with the source fallback below.
