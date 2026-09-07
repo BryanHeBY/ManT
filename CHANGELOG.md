@@ -64,6 +64,8 @@ that crate was not published for that change.
   emphasized metavariables after alias punctuation cannot become selectors.
 - Preserve continuation and pending spacing across nested no-fill styling
   containers by sharing the source-line cursor and inline formatter state.
+  Explicit breaks and spacing requests remain visible to that state while
+  entering a font scope, avoiding an extra blank row at styling boundaries.
 - Extract option and styled command names per alias group without treating
   argument tokens or environment-assignment values as additional aliases.
   Command context follows semantic ancestry, not visual indentation; malformed

@@ -298,6 +298,86 @@ fn styled_literal_breaks_and_eof_keep_exact_content_boundaries() {
 }
 
 #[test]
+fn explicit_literal_breaks_are_not_repeated_at_styling_boundaries() {
+    fn line_breaks(nodes: &[mant_ir::Inline]) -> usize {
+        nodes
+            .iter()
+            .map(|node| match node {
+                mant_ir::Inline::LineBreak => 1,
+                mant_ir::Inline::Strong { children }
+                | mant_ir::Inline::Emphasis { children }
+                | mant_ir::Inline::Link { children, .. } => line_breaks(children),
+                _ => 0,
+            })
+            .sum()
+    }
+    for (control, gap) in [
+        (".br", "\n"),
+        (".sp 0", "\n"),
+        (".sp 1", "\n\n"),
+        (".sp 2", "\n\n\n"),
+    ] {
+        for font in ["emphasis", "literal", "symbolic"] {
+            for first in ["FIRST", "FIRST\\c"] {
+                for (body, expected) in [
+                    (
+                        format!("{first}\n{control}\n.Bf -{font}\nSECOND\n.Ef\nTHIRD"),
+                        format!("FIRST{gap}SECOND\nTHIRD"),
+                    ),
+                    (
+                        format!("{first}\n.Bf -{font}\n{control}\nSECOND\n.Ef\nTHIRD"),
+                        format!("FIRST{gap}SECOND\nTHIRD"),
+                    ),
+                    (
+                        format!(
+                            "{first}\n{control}\n.Bf -symbolic\n.Bf -{font}\nSECOND\n.Ef\n.Ef\nTHIRD"
+                        ),
+                        format!("FIRST{gap}SECOND\nTHIRD"),
+                    ),
+                    (
+                        format!("{first}\n{control}\n.Bf -{font}\n.Ef\nSECOND\nTHIRD"),
+                        format!("FIRST{gap}SECOND\nTHIRD"),
+                    ),
+                    (
+                        format!("{first}\n{control}\n.Bf -{font}\nSECOND\\c\n.Ef"),
+                        format!("FIRST{gap}SECOND"),
+                    ),
+                    (
+                        format!("FIRST\n.Bf -{font}\nSECOND\n{control}\n.Ef\nTHIRD"),
+                        format!("FIRST\nSECOND{gap}THIRD"),
+                    ),
+                    (
+                        format!("FIRST\n.Bf -{font}\nSECOND\n.Ef\n{control}\nTHIRD"),
+                        format!("FIRST\nSECOND{gap}THIRD"),
+                    ),
+                ] {
+                    let source = format!(
+                        ".Dd September 7, 2026\n.Dt FLOW 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal -offset left\n{body}\n.Ed\n"
+                    );
+                    let query = crate::query_roff_bytes(source.as_bytes()).unwrap();
+                    let mant_ir::Block::Preformatted { children, .. } =
+                        &query.document.as_ref().unwrap().sections[0].blocks[0]
+                    else {
+                        panic!("{query:?}")
+                    };
+                    assert_eq!(super::inline_text(children), expected, "{body}");
+                    assert_eq!(
+                        line_breaks(children),
+                        expected.matches('\n').count(),
+                        "{body}"
+                    );
+                    assert!(
+                        crate::render_query_text(&query).contains(&expected),
+                        "{body}"
+                    );
+                    assert!(crate::render_markdown(&query).contains(&expected), "{body}");
+                }
+            }
+        }
+    }
+}
+
+#[test]
 fn option_arguments_never_become_aliases() {
     for (head, aliases, missed) in [
         (".It Fl n Ar -NUM", vec!["-n"], "-NUM"),

@@ -196,9 +196,11 @@ impl InlineBuilder {
         append: impl FnOnce(&mut Self),
         style: impl FnOnce(Vec<Inline>) -> Vec<Inline>,
     ) {
-        let outer = std::mem::take(&mut self.nodes);
+        // Appending must still see the prefix, especially a preceding hard
+        // break used for deduplication. Style only the new suffix afterwards.
+        let start = self.nodes.len();
         append(self);
-        let inner = std::mem::replace(&mut self.nodes, outer);
+        let inner = self.nodes.split_off(start);
         self.nodes.extend(style(inner));
     }
 
