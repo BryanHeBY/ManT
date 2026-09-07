@@ -99,6 +99,7 @@ a second parser, selector resolver, or audit oracle.
 | Owner | Handoff and invariant |
 | --- | --- |
 | Engine definitions and selectors | Styled form candidates retain parameter evidence; topology/context preparation precedes identity allocation, then one selector policy serves projections and producer diagnostics. |
+| Engine explanation | An independent collector visits immutable IR owners and explicit relationships, preserving name/form/literal/relationship bases. Global scope pagination and content budgets do not alter strict navigation or source authority. |
 | Engine lowering | Prepared Markdown pairs original events with source declarations. Roff flow state, target provenance, and table recovery plans preserve their distinct physical-line and owner policies. |
 | Engine search and discovery | A validated matcher is reused within one scope request. Markdown artifacts own final anchor ranges; source-coordinate mapping remains separate from result collection. Discovery captures environment/configuration inputs at the host boundary. |
 | CLI and MCP | Native request decoding is separate from execution; rendered CLI data travels with its business status. Owned MCP presentations perform preparation before rendering, sanitization and character paging. |

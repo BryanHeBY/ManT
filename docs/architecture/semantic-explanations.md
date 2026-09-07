@@ -1,8 +1,8 @@
 # Semantic entries and explanation design
 
-Status: design direction and implementation constraints, recorded on 2026-09-07
-against `7b7ad00944902142cafb37b1e64102ef2dd53406`. This is not an implemented
-API or authoring reference. Current syntax lives in
+Status: implemented content ownership, Markdown relationship authoring and
+multi-evidence explanation contract for the unreleased v0.11 family. This
+document records design decisions; the normative syntax lives in
 [mant-markdown(7)](../manuals/mant-markdown.md); current query behavior lives in
 [mant-protocol(5)](../manuals/mant-protocol.md).
 
@@ -33,14 +33,14 @@ The ordinary-owner migration now removes this conversion. Regression tests
 compare the same original parser events before and after annotation, including
 ordered/nested lists, invalid siblings, line endings and head punctuation.
 Per-entry relationship authoring now uses original list-item identities across
-comment removal. Multi-evidence explain remains a later stage; this does not
-claim that the entire design is implemented.
+comment removal. All public explanation adapters now use the independent
+collector rather than strict navigation.
 
 The follow-up owner checks now distinguish partial child extraction from an
 author's exhaustive-choice claim, validate links to all indexed content owners,
 and keep inline first-paragraph hanging layout separate from later block
-coordinates. These are correctness repairs to the migrated foundation, not
-implementation of the pending explanation collector.
+coordinates. These correctness repairs remain independently tested alongside
+the explanation collector.
 
 The target model attaches common entry facts to both ordinary `ListItem` and
 native `DefinitionItem` owners. Keep one authoritative content tree; derive
@@ -84,9 +84,9 @@ concepts with their existing authority boundaries.
 
 ## Explanation is evidence collection, not navigation
 
-The independent Rust `explain_query` collector is implemented. CLI/request/MCP
-adapters are being migrated separately from the old unique-selection entrypoint;
-until that switch lands their current help remains authoritative.
+The independent Rust `explain_query` collector serves CLI, request JSON and
+MCP. `select_explanation` is a default-budget convenience returning the same
+`QueryExplanation`; `select_excerpt` retains strict navigation.
 
 The explanation collector returns relevant evidence from an immutable
 document snapshot: documented names, authored forms, related IR content and
@@ -103,18 +103,22 @@ content budgets before implementing fallback retrieval; do not silently turn
 explain into fuzzy search or arbitrary shell/natural-language interpretation.
 
 Use a dedicated explanation result rather than disguising multiple records as
-a unique excerpt. The proposed normal no-evidence response, partial-source
-failures and multi-result success need explicit outcomes and a coordinated
-CLI/JSON/MCP migration, including exit codes. Until that migration lands,
-current help, error behavior and client examples remain authoritative.
+a unique excerpt. Valid readable queries with one, many or zero owners succeed
+(CLI exit 0); `outcome` distinguishes evidence from no-evidence before paging.
+Partial source failures retain available evidence and scope coverage. All
+sources failing is a source error; invalid requests fail before loading.
 
 The request is a literal of at most 512 Unicode scalars (no controls), plus
 `ExplanationOptions`: 1–256 records (default 50), a zero-based offset, and
 1 byte–4 MiB of copied forms/facts/body payload (default 1 MiB). The collector
-indexes at most 10,000 matching owners, follows at most 4,096 explicit edges
+indexes at most 10,000 matching owners per document, follows at most 4,096 explicit edges per document
 and retains chains of at most 32 edges. These bounds report independent
 `truncation` fields. Oversized owner bodies are omitted atomically, with real
 outline positions retained for strict reads; they are never partial valid IR.
+Scope requests share one result offset, limit and content-copy budget over
+breadth-first document order, then each document's IR order. These are payload
+copy limits, not a bound on serialized envelopes and metadata. MCP character
+paging slices the completed canonical presentation independently.
 
 Direct name and complete-form evidence follow the owner's case policy;
 ordinary paragraph, preformatted, equation and preserved-source support uses

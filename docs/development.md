@@ -71,8 +71,10 @@ need neither the repository manual nor a generator to build or display help.
 
 The repository's CLI manual-coverage test also compares clap's public option
 metadata (including generated help/version flags and visible aliases) with
-the self-manual's semantic entries. Every spelling must uniquely explain the
-same case-sensitive option as its aliases, and obsolete options must not remain
+the self-manual's semantic entries. Every spelling must identify one actual
+case-sensitive option definition, and clap aliases must belong to its explicitly
+declared alias group. Other explanation evidence is allowed; the complete
+response is not required to contain only that owner. Obsolete options must not remain
 in the manual. This is a checkout-only corpus check because published crates
 omit repository manuals; the coverage checker's synthetic regressions still
 run against packaged sources. Add or change the authoritative entry whenever
@@ -84,9 +86,13 @@ Preserve independent expected names and source content; neither more entries
 nor more successful explain calls proves correctness. Annotation-only Markdown
 work needs original-event comparisons of visible punctuation, lists, paragraphs,
 links and hard breaks, plus IR binding/serde tests. These are acceptance
-requirements for the planned migration, not checks already satisfied by the
-current list-to-definition conversion. Keep current unique-explain assertions
-until the public query contract itself changes.
+requirements enforced by the ordinary-owner and metadata regressions, not a
+reason to remove comments and reparse a differently structured document.
+Keep unique-navigation assertions on `select_excerpt`; explain has an independent
+name/form/content/relationship oracle, bounded pagination, no-evidence and
+partial-source tests. Semantic profilers count selectable names separately from
+explicit alias groups/relations. Zero diagnostics or candidate counts alone do
+not establish complete recall.
 
 CI uses `--build-profile debug` for the final smoke test because its test and
 Clippy steps have already populated that profile. Local checks keep `release`
