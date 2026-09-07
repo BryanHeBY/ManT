@@ -151,19 +151,9 @@ fn visit_manual_discovery_blocks(
                     );
                 }
             }
-            Block::DefinitionList {
-                items,
-                layout,
-                source,
-                ..
-            } => visit_manual_definition_items(
-                items,
-                *layout,
-                *source,
-                context,
-                report_unclassified,
-                output,
-            ),
+            Block::DefinitionList { items, source, .. } => {
+                visit_manual_definition_items(items, *source, context, report_unclassified, output)
+            }
             Block::Table { rows, .. } => {
                 for cell in rows.iter().flat_map(|row| &row.cells) {
                     visit_manual_discovery_blocks(
@@ -184,26 +174,26 @@ fn visit_manual_discovery_blocks(
     }
 }
 
+/// Only semantic topology changes inherited context; visual indentation does not.
+fn definition_group_context(
+    items: &[DefinitionItem],
+    context: DefinitionContext,
+) -> DefinitionContext {
+    if context == DefinitionContext::Generic && is_key_binding_command_group(items) {
+        DefinitionContext::Commands
+    } else {
+        context
+    }
+}
+
 fn visit_manual_definition_items(
     items: &[DefinitionItem],
-    layout: LayoutHint,
     source: Option<SourceSpan>,
     context: DefinitionContext,
     report_unclassified: bool,
     output: &mut Vec<mant_ir::Diagnostic>,
 ) {
-    let inferred_context =
-        if context == DefinitionContext::Generic && is_key_binding_command_group(items) {
-            DefinitionContext::Commands
-        } else {
-            context
-        };
-    let item_context =
-        if inferred_context == DefinitionContext::Commands && layout.indent_columns > 0 {
-            DefinitionContext::Parameters
-        } else {
-            inferred_context
-        };
+    let item_context = definition_group_context(items, context);
     for item in items {
         let identity = item.identity.as_ref();
         let role = identity.map_or(DefinitionRole::Term, |identity| identity.role);
@@ -346,21 +336,8 @@ fn prepare_blocks(
                     prepare_blocks(&mut item.blocks, context, preferred_counts);
                 }
             }
-            Block::DefinitionList { items, layout, .. } => {
-                let inferred_context = if context == DefinitionContext::Generic
-                    && is_key_binding_command_group(items)
-                {
-                    DefinitionContext::Commands
-                } else {
-                    context
-                };
-                let item_context = if inferred_context == DefinitionContext::Commands
-                    && layout.indent_columns > 0
-                {
-                    DefinitionContext::Parameters
-                } else {
-                    inferred_context
-                };
+            Block::DefinitionList { items, .. } => {
+                let item_context = definition_group_context(items, context);
                 for item in items {
                     let plan = identity_plan(item, item_context);
                     if has_semantic_spelling(item, &plan) {
@@ -428,21 +405,8 @@ impl DefinitionDiscovery<'_> {
                         self.identify_blocks(&mut item.blocks, context);
                     }
                 }
-                Block::DefinitionList { items, layout, .. } => {
-                    let inferred_context = if context == DefinitionContext::Generic
-                        && is_key_binding_command_group(items)
-                    {
-                        DefinitionContext::Commands
-                    } else {
-                        context
-                    };
-                    let item_context = if inferred_context == DefinitionContext::Commands
-                        && layout.indent_columns > 0
-                    {
-                        DefinitionContext::Parameters
-                    } else {
-                        inferred_context
-                    };
+                Block::DefinitionList { items, .. } => {
+                    let item_context = definition_group_context(items, context);
                     for item in items {
                         let role = identify_item(
                             item,

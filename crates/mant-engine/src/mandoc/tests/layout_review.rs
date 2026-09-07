@@ -96,3 +96,33 @@ fn command_alias_groups_survive_styled_names_and_argument_boundaries() {
         );
     }
 }
+
+#[test]
+fn visual_indentation_does_not_change_a_top_level_command_role() {
+    for (open, close) in [
+        ("", ""),
+        (".RS 4\n", ".RE\n"),
+        (".RS 0\n.RS 8\n", ".RE\n.RE\n"),
+    ] {
+        assert_names(
+            &format!(
+                ".TH PROBE 1\n.SH COMMANDS\n{open}.TP\n.B clone\nClone a repository.\n{close}"
+            ),
+            &["clone"],
+            "missing",
+        );
+    }
+    for (open, close) in [
+        ("", ""),
+        (".Bd -ragged -offset 4n\n", ".Ed\n"),
+        (".Bl -bullet\n.It\n", ".El\n"),
+    ] {
+        assert_names(
+            &format!(
+                ".Dd September 7, 2026\n.Dt PROBE 1\n.Os\n.Sh COMMANDS\n{open}.Bl -tag -width Ds\n.It Ic clone\nClone a repository.\n.El\n{close}"
+            ),
+            &["clone"],
+            "missing",
+        );
+    }
+}
