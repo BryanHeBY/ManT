@@ -5,12 +5,12 @@ use mant_ir::{Block, Inline};
 
 use super::super::{
     LoweringContext, first_part_children,
-    inline::{InlineBuilder, append_inline_node_with_next, lower_inline_nodes},
+    inline::{InlineBuilder, append_inline_node_with_next},
     layout::{layout, vertical_distance_lines},
     source_span,
 };
 use super::{
-    ends_with_line_continuation, participates_in_inline_flow,
+    ends_with_line_continuation,
     tables::{TableEmbeddingPlan, append_table_row},
 };
 
@@ -18,112 +18,135 @@ pub(super) fn preformatted_blocks(
     node: &Node,
     context: &LoweringContext<'_>,
     indent_columns: u16,
-    mut spacing_enabled: bool,
+    spacing_enabled: bool,
 ) -> Vec<Block> {
+    let mut flow = DisplayFlow {
+        output: Vec::new(),
+        line: InlineBuilder::with_spacing(spacing_enabled),
+        cursor: NoFillFlow::default(),
+        source: None,
+        context,
+        indent_columns,
+    };
+    if context.macro_set == MacroSet::Mdoc {
+        flow.line.font = context.mdoc_font.get();
+    }
     let body_index = node
         .children
         .iter()
         .position(|child| child.kind == NodeKind::Body);
-    let children = body_index.map_or_else(
-        || node.children.as_slice(),
-        |index| node.children[index].children.as_slice(),
-    );
-    let table_plan = TableEmbeddingPlan::new(children, context);
-    let mut output = Vec::new();
-    let mut inline_run = Vec::new();
-    for (index, child) in children.iter().enumerate() {
-        if table_plan.consumes(index) {
-            continue;
-        }
-        if child.kind == NodeKind::Table {
-            push_preformatted_inline_run(
-                &mut output,
-                &mut inline_run,
-                context,
-                indent_columns,
-                &mut spacing_enabled,
-            );
-            append_table_row(
-                &mut output,
-                child,
-                context,
-                indent_columns,
-                table_plan.embedding(index),
-            );
-        } else {
-            inline_run.push(child);
-        }
-    }
-    let (mut inlines, _) = preformatted_inlines_refs(&inline_run, context, spacing_enabled);
-
-    // mdoc validation can move a closing delimiter out of the display body
-    // while leaving it as a direct child of the display block.  It still
-    // belongs to the same rendered line (`.Dl return [ exitstatus ]`).
+    let children = body_index.map_or(node.children.as_slice(), |index| {
+        node.children[index].children.as_slice()
+    });
+    flow.append_nodes(children);
     if let Some(body_index) = body_index {
-        let tail = &node.children[body_index + 1..];
-        let tail_len = tail
+        for child in node.children[body_index + 1..]
             .iter()
-            .take_while(|child| child.line == node.line && participates_in_inline_flow(child))
-            .count();
-        if tail
-            .first()
-            .is_some_and(|child| child.flags.delimiter_close)
+            .take_while(|child| child.line == node.line && child.flags.delimiter_close)
         {
-            inlines.extend(lower_inline_nodes(&tail[..tail_len], context.default_name));
+            flow.append_inline(child, None);
         }
     }
-    if !inlines.is_empty() {
-        output.push(Block::Preformatted {
-            children: inlines,
-            language: None,
-            layout: layout(indent_columns),
-            source: source_span(node),
-        });
+    flow.flush();
+    if context.macro_set == MacroSet::Mdoc {
+        context.mdoc_font.set(flow.line.font);
     }
-    output
+    flow.output
 }
 
-fn push_preformatted_inline_run(
-    output: &mut Vec<Block>,
-    nodes: &mut Vec<&Node>,
-    context: &LoweringContext<'_>,
+/// No-fill controls line geometry, not which AST payloads are reachable.
+/// Transparent font scopes retain the same cursor; tables/lists re-enter the
+/// structural lowerer after flushing the current inline run.
+struct DisplayFlow<'a, 'source> {
+    output: Vec<Block>,
+    line: InlineBuilder,
+    cursor: NoFillFlow,
+    source: Option<mant_ir::SourceSpan>,
+    context: &'a LoweringContext<'source>,
     indent_columns: u16,
-    spacing_enabled: &mut bool,
-) {
-    if nodes.is_empty() {
-        return;
-    }
-    let (children, final_spacing) = preformatted_inlines_refs(nodes, context, *spacing_enabled);
-    *spacing_enabled = final_spacing;
-    let source = nodes.first().and_then(|node| source_span(node));
-    nodes.clear();
-    if !children.is_empty() {
-        output.push(Block::Preformatted {
-            children,
-            language: None,
-            layout: layout(indent_columns),
-            source,
-        });
-    }
 }
 
-/// Assemble a no-fill run using one physical-line cursor and inline state.
-/// Styling and transparent AST containers do not themselves consume a line.
-fn preformatted_inlines_refs(
-    nodes: &[&Node],
-    context: &LoweringContext<'_>,
-    spacing_enabled: bool,
-) -> (Vec<Inline>, bool) {
-    let mut line = InlineBuilder::with_spacing(spacing_enabled);
-    if context.macro_set == MacroSet::Mdoc {
-        line.font = context.mdoc_font.get();
+impl DisplayFlow<'_, '_> {
+    fn flush(&mut self) {
+        let mut next = InlineBuilder::with_spacing(self.line.spacing_enabled());
+        next.font = self.line.font;
+        let children = std::mem::replace(&mut self.line, next).finish();
+        if !children.is_empty() {
+            self.output.push(Block::Preformatted {
+                children,
+                language: None,
+                layout: layout(self.indent_columns),
+                source: self.source.take(),
+            });
+        }
     }
-    NoFillFlow::default().append(nodes.iter().copied(), &mut line, context);
-    if context.macro_set == MacroSet::Mdoc {
-        context.mdoc_font.set(line.font);
+
+    fn append_inline(&mut self, node: &Node, next: Option<&Node>) {
+        if self.source.is_none() {
+            self.source = source_span(node);
+        }
+        self.cursor.push(node, next, &mut self.line, self.context);
     }
-    let final_spacing = line.spacing_enabled();
-    (line.finish(), final_spacing)
+
+    fn append_nodes(&mut self, nodes: &[Node]) {
+        let plan = TableEmbeddingPlan::new(nodes, self.context);
+        for (index, node) in nodes.iter().enumerate() {
+            if plan.consumes(index) {
+                continue;
+            }
+            if node.macro_name.as_deref() == Some("Bf") {
+                for target in super::targets::structural_targets(node) {
+                    self.line
+                        .append(vec![Inline::anchor_at(target, source_span(node))]);
+                }
+                let saved = node.font.map(|font| self.line.font.push_scope(font.into()));
+                self.append_nodes(first_part_children(node, NodeKind::Body));
+                if let Some(saved) = saved {
+                    self.line.font.pop_scope(saved);
+                }
+            } else if node.kind == NodeKind::Block
+                && matches!(node.macro_name.as_deref(), Some("Bd" | "D1" | "Dl"))
+            {
+                for target in super::targets::structural_targets(node) {
+                    self.line
+                        .append(vec![Inline::anchor_at(target, source_span(node))]);
+                }
+                self.append_nodes(first_part_children(node, NodeKind::Body));
+            } else if node.kind == NodeKind::Table
+                || (node.kind == NodeKind::Block
+                    && matches!(node.macro_name.as_deref(), Some("Bl" | "Rs")))
+            {
+                self.flush();
+                self.context.mdoc_font.set(self.line.font);
+                if node.kind == NodeKind::Table {
+                    append_table_row(
+                        &mut self.output,
+                        node,
+                        self.context,
+                        self.indent_columns,
+                        plan.embedding(index),
+                    );
+                } else {
+                    self.output.extend(super::lower_blocks_with_spacing(
+                        std::slice::from_ref(node),
+                        self.context,
+                        self.indent_columns,
+                        &mut 1,
+                        self.line.spacing_enabled(),
+                    ));
+                }
+                if self.context.macro_set == MacroSet::Mdoc {
+                    self.line.font = self.context.mdoc_font.get();
+                }
+                self.cursor = NoFillFlow::default();
+                self.source = None;
+            } else if node.kind != NodeKind::Text && node.macro_name.is_none() {
+                self.append_nodes(&node.children);
+            } else {
+                self.append_inline(node, nodes.get(index + 1));
+            }
+        }
+    }
 }
 
 /// Source-line policy is independent of the inline tree used for styling.
@@ -154,6 +177,10 @@ impl NoFillFlow {
         line: &mut InlineBuilder,
         context: &LoweringContext<'_>,
     ) {
+        if node.macro_name.as_deref() == Some("Tg") {
+            append_inline_node_with_next(line, node, next, context.default_name);
+            return;
+        }
         if node.kind == NodeKind::Comment || node.flags.no_print {
             return;
         }

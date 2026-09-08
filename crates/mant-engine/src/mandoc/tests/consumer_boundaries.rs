@@ -2,6 +2,37 @@
 use super::inline_boundaries::{assert_flow, query, variants};
 
 #[test]
+fn literal_containers_preserve_nested_structural_payloads_and_targets() {
+    for display in ["literal", "unfilled"] {
+        for inner in [
+            ".TS\nl l.\nWORD\tNEXT\n.TE",
+            ".Bl -tag -width Ds\n.Tg Exact.Target\n.It Fl WORD\nNEXT\n.El",
+            ".Bl -column Ds Ds\n.It WORD Ta NEXT\n.El",
+            ".Bl -bullet\n.Tg Exact.Target\n.It\nWORD NEXT\n.El",
+            ".Bl -enum\n.It\nWORD NEXT\n.El",
+        ] {
+            for wrap in [false, true] {
+                let inner = if wrap {
+                    format!(".Bf -emphasis\n.Bf -symbolic\n{inner}\n.Ef\n.Ef")
+                } else {
+                    inner.into()
+                };
+                let query = query(&format!(".Bd -{display}\nBEFORE\n{inner}\nAFTER\n.Ed"));
+                let text = crate::render_query_text(&query);
+                for word in ["BEFORE", "WORD", "NEXT", "AFTER"] {
+                    assert!(text.contains(word), "{inner}: missing {word}: {text}");
+                }
+                let doc = query.document.as_ref().unwrap();
+                assert!(mant_ir::validate_document(doc).is_empty());
+                if inner.contains("Exact.Target") {
+                    assert!(anchor_ids(doc).contains(&"exact-target".into()));
+                }
+            }
+        }
+    }
+}
+
+#[test]
 fn zero_width_words_consume_boundaries_without_fabricating_names() {
     for operand in [r"\&", "\"\"", r"\fB"] {
         for body in [

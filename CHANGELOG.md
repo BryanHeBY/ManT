@@ -122,6 +122,9 @@ that crate was not published for that change.
 
 ### mant-engine 0.11.0
 
+- Preserve tables, list terms, every column cell and navigation targets inside
+  literal/unfilled displays, including nested font scopes. No-fill line layout
+  no longer flattens structural payloads into an incomplete inline sequence.
 - Treat zero-width text as a word event, separately from anchors and hidden
   nodes, so consumed no-space controls cannot fabricate joined option names.
   Preserve real inter-word boundaries without exporting trailing padding.
