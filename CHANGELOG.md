@@ -31,6 +31,9 @@ that crate was not published for that change.
   lines. Man `HP` preserves this geometry and updates the prevailing tag width;
   `in` executes bounded literal positions with CVS HEAD's macro-base restore
   semantics rather than groff's previous-position swap. mdoc ignores `in`.
+  Literal-mode boundaries consume the hanging first line, including empty
+  transitions. Entering `HP` while already in no-fill mode preserves its first
+  physical line separately; continued lines and literal blank rows remain intact.
 - Definition layout now carries resolved signed `bodyIndentColumns` and
   `minTermGapColumns`; native man tag widths, relative-indent scopes and mdoc
   list/display styles retain their actual geometry. Source distances are

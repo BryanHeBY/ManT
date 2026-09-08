@@ -38,6 +38,17 @@ impl BlockState {
             self.indent_columns = origin;
         }
     }
+
+    pub(super) fn literal_mode_boundary(&mut self) {
+        // The mode switch has a geometric effect only while the temporary
+        // HP first line is pending. Otherwise retain the existing coalescing
+        // of adjacent, geometrically equivalent no-fill regions.
+        if self.hanging_origin.is_some() {
+            self.flush_preformatted();
+            self.flush_paragraph();
+            self.consume_hanging_first_line();
+        }
+    }
     pub(super) const fn with_output(
         indent_columns: crate::mandoc::layout::SourceIndent,
         spacing_enabled: bool,
@@ -200,15 +211,31 @@ impl BlockState {
             return;
         }
         if !self.preformatted.is_empty() && !self.preformatted_tight_boundary {
-            self.preformatted.push(Inline::LineBreak);
             let blank_rows = context.no_fill_blank_rows_between(
                 self.preformatted_last_line,
                 source.map(|span| span.line),
             );
-            self.preformatted.extend(std::iter::repeat_n(
-                Inline::LineBreak,
-                usize::from(blank_rows),
-            ));
+            if self.hanging_origin.is_some() {
+                // An HP entered while already in no-fill mode still has one
+                // first line at the macro origin. Materialize that line
+                // before adopting the permanent hanging origin. A continued
+                // source line (\c) does not reach this boundary.
+                self.flush_preformatted();
+                if blank_rows > 0 {
+                    // The hard-line separator is now the block boundary;
+                    // additional blank rows remain an explicit flow gap.
+                    self.output.push(Block::VerticalSpace {
+                        lines: blank_rows,
+                        source: None,
+                    });
+                }
+            } else {
+                self.preformatted.push(Inline::LineBreak);
+                self.preformatted.extend(std::iter::repeat_n(
+                    Inline::LineBreak,
+                    usize::from(blank_rows),
+                ));
+            }
         }
         self.preformatted.extend(nodes);
         self.preformatted_tight_boundary = continues_line;
@@ -249,6 +276,9 @@ impl BlockState {
             &mut self.pre_source,
             self.indent_columns,
         );
+        if self.output.len() > output_start {
+            self.consume_hanging_first_line();
+        }
         self.attach_pending_to_new_output(output_start);
         self.preformatted_last_line = None;
         self.preformatted_tight_boundary = false;

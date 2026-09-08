@@ -471,6 +471,12 @@ fn consume_block_control(
 ) -> bool {
     match node.macro_name.as_deref() {
         Some("PD") => update_paragraph_distance(node, paragraph_distance),
+        Some("nf" | "fi" | "EX" | "EE") if context.macro_set == libmandoc_rs::MacroSet::Man => {
+            // roff_term_pre_br and man pre_literal end the current line and
+            // switch HP from its temporary first-line origin to its permanent
+            // body origin, including when no text preceded the request.
+            state.literal_mode_boundary();
+        }
         Some("An") => match node.author_mode {
             Some(AuthorMode::Split) => *split_authors = true,
             Some(AuthorMode::NoSplit) => *split_authors = false,
