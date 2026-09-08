@@ -19,6 +19,7 @@ use super::{is_inline_equation, is_inline_equation_quote_artifact, lower_blocks_
 use crate::block::block_layout_mut;
 
 mod definition;
+mod evidence;
 pub(super) mod man;
 mod mdoc;
 #[cfg(test)]

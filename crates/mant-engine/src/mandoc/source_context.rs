@@ -8,6 +8,7 @@ type NoFillRows = std::sync::Arc<[(u32, u16)]>;
 
 pub(super) struct LoweringContext<'a> {
     pub(super) macro_set: MacroSet,
+    pub(super) native_heads: RefCell<crate::definitions::NativeHeadEvidence>,
     // Immutable source services. Formatter execution is passed separately;
     // the RefCells below are memoization and diagnostic collection only.
     pub(super) default_name: Option<&'a str>,
@@ -38,6 +39,7 @@ impl<'a> LoweringContext<'a> {
     pub(super) fn new(default_name: Option<&'a str>, source: Option<&'a str>) -> Self {
         Self {
             macro_set: MacroSet::None,
+            native_heads: RefCell::default(),
             default_name,
             source_lines: source.map(SourceLineIndex::new),
             no_fill_rows: RefCell::new(None),

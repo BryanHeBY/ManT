@@ -31,6 +31,10 @@ that crate was not published for that change.
   Environment groups no longer salvage isolated names from rejected prose,
   and ordinary option explanations cannot claim later indented examples as
   new definitions. Explicit diagnostic/term definitions remain intact.
+- Native mdoc heads now retain `Fl`/`Ev` role evidence through definition
+  normalization, including punctuation flags and environment placeholders.
+  `Ic`/`Cm` can supply names without forcing a Command classification. These
+  private witnesses do not create entries from body mentions or add wire fields.
 
 ### Explanation match locations (unreleased v0.11)
 

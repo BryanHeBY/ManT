@@ -157,11 +157,12 @@ fn lower_mandoc_document_with_source(
     navigation::normalize_generated_anchors(&mut root_blocks, &mut sections, explicit_targets);
     let mut retained_targets = navigation::native_anchor_ids(&root_blocks, &sections);
     retained_targets.extend(explicit_targets.iter().cloned());
-    retained_targets.extend(crate::definitions::identify_definitions(
+    retained_targets.extend(crate::definitions::identify_definitions_with_evidence(
         &mut root_blocks,
         &mut sections,
         explicit_targets,
         parsed.metadata.name.as_deref(),
+        &context.native_heads.borrow(),
     ));
     diagnostics.extend(crate::selectors::semantic_selector_diagnostics(
         &root_blocks,

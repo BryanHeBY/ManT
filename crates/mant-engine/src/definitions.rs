@@ -4,6 +4,7 @@
 mod binding;
 mod context;
 mod diagnostics;
+mod evidence;
 mod identity;
 mod normalize;
 mod recognized;
@@ -12,6 +13,7 @@ mod walk;
 
 use context::{DefinitionContext, child_definition_context, definition_group_context};
 pub(crate) use diagnostics::manual_discovery_diagnostics;
+pub(crate) use evidence::{NativeHeadEvidence, NativeHeadRole};
 pub(crate) use identity::document_id_slug;
 use identity::{
     document_anchor_ids, has_semantic_spelling, identify_item, identify_list_item, identity_plan,
@@ -37,6 +39,22 @@ pub(crate) fn identify_definitions(
     reserved_targets: &HashSet<String>,
     document_name: Option<&str>,
 ) -> HashSet<String> {
+    identify_definitions_with_evidence(
+        blocks,
+        sections,
+        reserved_targets,
+        document_name,
+        &NativeHeadEvidence::default(),
+    )
+}
+
+pub(crate) fn identify_definitions_with_evidence(
+    blocks: &mut Vec<Block>,
+    sections: &mut [Section],
+    reserved_targets: &HashSet<String>,
+    document_name: Option<&str>,
+    evidence: &NativeHeadEvidence,
+) -> HashSet<String> {
     let mut preferred_counts = HashMap::new();
     let root_context = document_name.map_or(DefinitionContext::Generic, |name| {
         let name = name.to_ascii_lowercase();
@@ -46,8 +64,8 @@ pub(crate) fn identify_definitions(
             DefinitionContext::Generic
         }
     });
-    prepare_blocks(blocks, root_context, &mut preferred_counts);
-    prepare_sections(sections, root_context, &mut preferred_counts);
+    prepare_blocks(blocks, root_context, &mut preferred_counts, evidence);
+    prepare_sections(sections, root_context, &mut preferred_counts, evidence);
 
     let used = document_anchor_ids(blocks, sections);
     let mut discovery = DefinitionDiscovery {
@@ -55,6 +73,7 @@ pub(crate) fn identify_definitions(
         used,
         reserved: reserved_targets,
         preferred_counts: &preferred_counts,
+        evidence,
     };
     discovery.identify_blocks(blocks, root_context);
     for section in sections {
@@ -69,11 +88,12 @@ fn prepare_sections(
     sections: &mut [Section],
     parent_context: DefinitionContext,
     preferred_counts: &mut HashMap<String, usize>,
+    evidence: &NativeHeadEvidence,
 ) {
     for section in sections {
         let context = DefinitionContext::for_section(&section.title, parent_context);
-        prepare_blocks(&mut section.blocks, context, preferred_counts);
-        prepare_sections(&mut section.children, context, preferred_counts);
+        prepare_blocks(&mut section.blocks, context, preferred_counts, evidence);
+        prepare_sections(&mut section.children, context, preferred_counts, evidence);
     }
 }
 
@@ -81,6 +101,7 @@ fn prepare_blocks(
     blocks: &mut Vec<Block>,
     context: DefinitionContext,
     preferred_counts: &mut HashMap<String, usize>,
+    evidence: &NativeHeadEvidence,
 ) {
     normalize_definition_nesting(blocks);
     normalize_hanging_definitions(blocks, context);
@@ -91,24 +112,29 @@ fn prepare_blocks(
                     if let Some(preferred) = list_identity_base(item) {
                         *preferred_counts.entry(preferred).or_default() += 1;
                     }
-                    prepare_blocks(&mut item.blocks, context, preferred_counts);
+                    prepare_blocks(&mut item.blocks, context, preferred_counts, evidence);
                 }
             }
             Block::DefinitionList { items, .. } => {
                 let item_context = definition_group_context(items, context);
                 for item in items {
-                    let plan = identity_plan(item, item_context);
+                    let plan = identity_plan(item, item_context, evidence.role(item));
                     if has_semantic_spelling(item, &plan) {
                         *preferred_counts.entry(plan.preferred).or_default() += 1;
                     }
                     let child_context = child_definition_context(plan.kind, item_context);
-                    prepare_blocks(&mut item.description, child_context, preferred_counts);
+                    prepare_blocks(
+                        &mut item.description,
+                        child_context,
+                        preferred_counts,
+                        evidence,
+                    );
                 }
             }
             Block::Table { rows, .. } => {
                 for row in rows {
                     for cell in &mut row.cells {
-                        prepare_blocks(&mut cell.blocks, context, preferred_counts);
+                        prepare_blocks(&mut cell.blocks, context, preferred_counts, evidence);
                     }
                 }
             }
@@ -123,6 +149,7 @@ fn prepare_blocks(
 }
 
 struct DefinitionDiscovery<'a> {
+    evidence: &'a NativeHeadEvidence,
     used: HashSet<String>,
     reserved: &'a HashSet<String>,
     retained: HashSet<String>,
@@ -161,6 +188,7 @@ impl DefinitionDiscovery<'_> {
                         let role = identify_item(
                             item,
                             item_context,
+                            self.evidence.role(item),
                             &mut self.used,
                             self.reserved,
                             &mut self.retained,

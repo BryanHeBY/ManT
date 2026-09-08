@@ -112,6 +112,8 @@ Declaration grouping preserves bracket nesting and parameter styling across inli
 
 Layout-inferred paragraph heads must pass a complete declaration check before an indented following block becomes their description. Finding one valid comma-separated word inside prose is insufficient: an environment declaration group is accepted or rejected as a whole. Option heads may contain bounded argument syntax and styled placeholders, but ordinary explanatory suffixes do not establish a new owner. Explicit `TP`/`IP`/definition `It` labels keep their authored boundary even when the label remains an unclassified Term.
 
+An mdoc definition headed by `Fl` or `Ev` retains that option or environment-variable evidence independently of its section heading. This includes punctuation flags such as `-@`, `-%`, and `-,`, and an environment name followed by an `Ar` placeholder. `Ic` and `Cm` preserve literal naming evidence but do not alone prove that a definition is a command; a named Term is valid when context is inconclusive. Unsupported name syntax does not erase a proved native role. The same macros in ordinary body text remain inline mentions, not new definitions.
+
 The required mdoc prologue and structural macros are normalized as follows:
 
 | Macros | ManT result |

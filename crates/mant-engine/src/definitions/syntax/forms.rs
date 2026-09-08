@@ -79,6 +79,12 @@ fn append_name_prefix(nodes: &[Inline], output: &mut String) -> bool {
     true
 }
 
+pub(super) fn literal_prefix(inlines: &[Inline]) -> String {
+    let mut prefix = String::new();
+    append_name_prefix(inlines, &mut prefix);
+    prefix
+}
+
 /// Split complete declarations without flattening parameter spans. Bracket
 /// nesting and local argument phases survive strong/link wrapper boundaries;
 /// punctuation inside an argument is not a fresh declaration.

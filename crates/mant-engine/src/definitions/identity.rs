@@ -46,10 +46,14 @@ pub(super) struct IdentityPlan {
     pub(super) preferred: String,
 }
 
-pub(super) fn identity_plan(item: &DefinitionItem, context: DefinitionContext) -> IdentityPlan {
+pub(super) fn identity_plan(
+    item: &DefinitionItem,
+    context: DefinitionContext,
+    hint: Option<super::NativeHeadRole>,
+) -> IdentityPlan {
     let (kind, case, names, occurrences, value_domain) = item.entry.as_ref().map_or_else(
         || {
-            let inferred = infer_identity(item, context);
+            let inferred = infer_identity(item, context, hint);
             (
                 inferred.kind,
                 inferred.case,
@@ -125,6 +129,7 @@ pub(super) fn identify_list_item(
 pub(super) fn identify_item(
     item: &mut DefinitionItem,
     context: DefinitionContext,
+    hint: Option<super::NativeHeadRole>,
     used: &mut HashSet<String>,
     reserved: &HashSet<String>,
     retained: &mut HashSet<String>,
@@ -142,7 +147,7 @@ pub(super) fn identify_item(
         occurrences,
         value_domain,
         mut preferred,
-    } = identity_plan(item, context);
+    } = identity_plan(item, context, hint);
 
     let mut anchors = Vec::new();
     for term in &item.terms {

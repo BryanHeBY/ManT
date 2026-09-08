@@ -36,6 +36,33 @@ pub(crate) fn option_occurrences_from_terms(terms: &[Vec<Inline>]) -> Vec<Vec<Re
         .collect()
 }
 
+/// A validated native Fl head proves punctuation is invocation spelling.
+/// Read it before generic separator grouping can treat the comma in `-,` as
+/// alias punctuation; styled arguments still stop the literal prefix.
+pub(super) fn native_option_occurrences(terms: &[Vec<Inline>]) -> Vec<Vec<RecognizedName>> {
+    let mut result = option_occurrences_from_terms(terms);
+    for (term, names) in terms.iter().zip(&mut result) {
+        let prefix = forms::literal_prefix(term);
+        let Some(token) = prefix.split_whitespace().next() else {
+            continue;
+        };
+        if token.starts_with('-')
+            && token.chars().count() == 2
+            && token
+                .chars()
+                .nth(1)
+                .is_some_and(|c| !c.is_whitespace() && !c.is_control())
+            && !names.iter().any(|found| found.name == token)
+        {
+            names.insert(
+                0,
+                RecognizedName::contiguous(token, prefix.len() - prefix.trim_start().len()),
+            );
+        }
+    }
+    result
+}
+
 pub(in crate::definitions) fn parameter_occurrences(
     terms: &[Vec<Inline>],
 ) -> Vec<Vec<RecognizedName>> {

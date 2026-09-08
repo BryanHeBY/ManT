@@ -235,6 +235,20 @@ inline mention in prose does not itself define an entry. Do not infer alias
 relations from English phrases such as “same as”. Unknown evidence stays
 unknown while the source remains readable.
 
+Native definition lowering records an operation-local head witness before
+discarding the macro wrapper: `Fl` proves an option role, `Ev` an environment
+role, while `Ic`/`Cm` only prove literal naming evidence. The latter remain
+context-dependent and may produce a named Term. A proved role is not erased
+merely because its template or argument syntax has no supported name binding.
+
+Witness lookup uses the complete source coordinate and exact styled head,
+including argument ancestry and link structure; line/column is only a bucket
+index. Zero-width navigation anchors are ignored because target allocation
+changes them without changing the head. Owner moves and body nesting preserve
+this evidence, while changed/split heads and conflicting witnesses invalidate
+it. No temporary role, synthetic semantic ID or separate evidence index enters
+the public IR. Body macros are not registered as definition witnesses.
+
 Separate fidelity normalization from semantic inference before removing
 heuristics. Existing target, continuation, indentation, table and line-flow
 repairs remain required. Do not erase a normalization module or all section

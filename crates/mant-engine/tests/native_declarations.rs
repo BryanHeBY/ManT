@@ -250,3 +250,94 @@ fn explicit_diagnostic_labels_remain_definitions_without_prose_fragment_names() 
     assert!(entry.names.is_empty());
     assert!(mant_engine::render_query_text(&query).contains("Permission denied, otherwise"));
 }
+
+#[test]
+fn native_head_evidence_survives_nesting_without_promoting_body_macros() {
+    let source = b".Dd September 8, 2026\n.Dt PROBE 1\n.Os\n.Sh COMMANDS\n.Bl -tag -width Ds\n.It Ic launch\nLAUNCH_BODY\n.Bl -tag -width Ds\n.It Ev NATIVE_PATH\nENVIRONMENT_BODY\n.It Fl @\nAT_BODY\n.It Fl %\nPERCENT_BODY\n.It Fl ,\nCOMMA_BODY\n.It Ic local-key\nKEY_BODY\n.El\n.It Ic NATIVE_PATH\nLITERAL_BODY\n.Pp\n.Ev BODY_ONLY\nis only mentioned here.\n.El\n";
+    let query = mant_engine::query_roff_bytes(source).unwrap();
+    let document = query.document.as_ref().unwrap();
+    assert!(
+        mant_ir::validate_document(document).is_empty(),
+        "{:?}",
+        document.diagnostics
+    );
+    let items = definitions(document);
+    for (name, kind, body) in [
+        ("launch", mant_ir::EntryKind::Command, "LAUNCH_BODY"),
+        (
+            "NATIVE_PATH",
+            mant_ir::EntryKind::EnvironmentVariable,
+            "ENVIRONMENT_BODY",
+        ),
+        (
+            "-@",
+            mant_ir::EntryKind::Parameter {
+                parameter_kind: mant_ir::ParameterKind::Option,
+            },
+            "AT_BODY",
+        ),
+        (
+            "-%",
+            mant_ir::EntryKind::Parameter {
+                parameter_kind: mant_ir::ParameterKind::Option,
+            },
+            "PERCENT_BODY",
+        ),
+        (
+            "-,",
+            mant_ir::EntryKind::Parameter {
+                parameter_kind: mant_ir::ParameterKind::Option,
+            },
+            "COMMA_BODY",
+        ),
+        ("local-key", mant_ir::EntryKind::Term, "KEY_BODY"),
+    ] {
+        let item = items
+            .iter()
+            .find(|item| {
+                item.entry.as_ref().is_some_and(|entry| {
+                    entry.kind == kind && entry.names.iter().any(|candidate| candidate == name)
+                })
+            })
+            .unwrap_or_else(|| panic!("missing {name} {kind:?}: {items:?}"));
+        assert!(
+            serde_json::to_string(&item.description)
+                .unwrap()
+                .contains(body)
+        );
+        assert!(!item.entry.as_ref().unwrap().name_bindings.is_empty());
+    }
+    let literals: Vec<_> = items
+        .iter()
+        .filter_map(|item| item.entry.as_ref())
+        .filter(|entry| entry.names == ["NATIVE_PATH"])
+        .collect();
+    assert_eq!(literals.len(), 2);
+    assert!(
+        literals
+            .iter()
+            .any(|entry| entry.kind == mant_ir::EntryKind::Command)
+    );
+    assert!(
+        items
+            .iter()
+            .filter_map(|item| item.entry.as_ref())
+            .all(|entry| !entry.names.iter().any(|name| name == "BODY_ONLY"))
+    );
+}
+
+#[test]
+fn native_environment_role_and_names_are_independent_of_placeholder_support() {
+    let source = b".Dd September 8, 2026\n.Dt PROBE 1\n.Os\n.Sh TOPIC\n.Bl -tag -width Ds\n.It Ev DEMO_HOME Ar directory\nHOME_BODY\n.It Ev [protocol]_PROXY\nTEMPLATE_BODY\n.El\n";
+    let query = mant_engine::query_roff_bytes(source).unwrap();
+    let items = definitions(query.document.as_ref().unwrap());
+    assert_eq!(items.len(), 2);
+    assert!(
+        items.iter().all(
+            |item| item.entry.as_ref().unwrap().kind == mant_ir::EntryKind::EnvironmentVariable
+        )
+    );
+    assert_eq!(items[0].entry.as_ref().unwrap().names, ["DEMO_HOME"]);
+    assert!(items[1].entry.as_ref().unwrap().names.is_empty());
+    assert!(mant_ir::validate_document(query.document.as_ref().unwrap()).is_empty());
+}

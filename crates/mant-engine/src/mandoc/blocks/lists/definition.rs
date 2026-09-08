@@ -31,7 +31,7 @@ pub(super) fn definition_item(
         term.insert(0, Inline::anchor_at(id, source_span(node)));
     }
     let terms = split_definition_terms(term);
-    DefinitionItem {
+    let item = DefinitionItem {
         source: source_span(node),
         entry: None,
         layout: mant_ir::DefinitionLayout {
@@ -47,7 +47,13 @@ pub(super) fn definition_item(
             formatter.spacing,
             formatter,
         ),
+    };
+    if context.macro_set == libmandoc_rs::MacroSet::Mdoc
+        && let Some(role) = super::evidence::leading_role(head)
+    {
+        context.native_heads.borrow_mut().record(&item, role);
     }
+    item
 }
 
 /// Recover inline eqn arguments that libmandoc moved from a man macro head to

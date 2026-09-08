@@ -31,6 +31,7 @@ pub(super) struct InferredIdentity {
 pub(super) fn infer_identity(
     item: &DefinitionItem,
     context: DefinitionContext,
+    hint: Option<super::NativeHeadRole>,
 ) -> InferredIdentity {
     let first = item
         .terms
@@ -44,7 +45,7 @@ pub(super) fn infer_identity(
             _ => ParameterKind::Option,
         },
     };
-    let (kind, case) = match context {
+    let (mut kind, mut case) = match context {
         DefinitionContext::Commands
             if trimmed.starts_with(['-', '+']) || trimmed.starts_with("[-+]") =>
         {
@@ -65,7 +66,36 @@ pub(super) fn infer_identity(
         }
         DefinitionContext::Generic => (EntryKind::Term, NameCase::Sensitive),
     };
-    let occurrences = name_occurrences(item, kind);
+    match hint {
+        Some(super::NativeHeadRole::Option) => {
+            kind = EntryKind::Parameter {
+                parameter_kind: ParameterKind::Option,
+            };
+            case = NameCase::Sensitive;
+        }
+        Some(super::NativeHeadRole::Environment) => {
+            kind = EntryKind::EnvironmentVariable;
+            case = NameCase::Sensitive;
+        }
+        Some(super::NativeHeadRole::Literal) | None => {}
+    }
+    let mut occurrences = if hint == Some(super::NativeHeadRole::Option) {
+        options::native_option_occurrences(&item.terms)
+    } else if hint == Some(super::NativeHeadRole::Environment) {
+        item.terms
+            .iter()
+            .map(|term| {
+                named::environment_occurrences(&forms::literal_prefix(term)).unwrap_or_default()
+            })
+            .collect()
+    } else {
+        name_occurrences(item, kind)
+    };
+    if hint == Some(super::NativeHeadRole::Literal) && occurrences.iter().all(Vec::is_empty) {
+        occurrences = name_occurrences(item, EntryKind::Command);
+        kind = EntryKind::Term;
+        case = NameCase::Sensitive;
+    }
     let mut names = Vec::new();
     let all = || occurrences.iter().flatten();
     // Preserve the established native order: ordinary dash options first,
@@ -82,7 +112,11 @@ pub(super) fn infer_identity(
             names.push(found.name.clone());
         }
     }
-    let (kind, case) = if names.is_empty() {
+    let (kind, case) = if names.is_empty()
+        && !matches!(
+            hint,
+            Some(super::NativeHeadRole::Option | super::NativeHeadRole::Environment)
+        ) {
         (EntryKind::Term, NameCase::Sensitive)
     } else {
         (kind, case)
