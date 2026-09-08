@@ -15,9 +15,12 @@ pub(in crate::definitions) fn is_inferred_head(
 ) -> bool {
     // Candidate syntax precedes final role: a complete flag declaration does
     // not stop being a candidate under a configuration/value heading.
-    if forms::declaration_groups(inlines)
-        .iter()
-        .all(|group| is_option_head(group))
+    let groups = forms::declaration_groups(inlines);
+    if !groups.is_empty()
+        && groups.iter().enumerate().all(|(index, group)| {
+            is_option_head(group)
+                || (index > 0 && index + 1 == groups.len() && plain_text(group).trim() == "...")
+        })
     {
         return true;
     }
@@ -75,6 +78,18 @@ fn is_option_head(inlines: &[Inline]) -> bool {
     let Some(first) = tokens.next() else {
         return false;
     };
+    if matches!(first, "\0" | "-\0")
+        && plain_text(inlines)
+            .trim()
+            .strip_prefix("-<")
+            .and_then(|value| value.strip_suffix('>'))
+            .is_some_and(named::is_variable_term)
+    {
+        return true;
+    }
+    if first.starts_with("-<") && first.ends_with('>') {
+        return arguments(std::iter::once(&first[1..]).chain(tokens));
+    }
     let Some(name) = options::option_prefix(first).or_else(|| {
         // Complete punctuation flags can establish a head even when another
         // spelling in the group supplies its currently recognized name.
@@ -87,7 +102,10 @@ fn is_option_head(inlines: &[Inline]) -> bool {
         return false;
     };
     let attached = &first[name.len()..];
-    if !attached.is_empty() && !attached.starts_with(['=', '[', '{', '<', '(']) {
+    let supported_attachment = attached.is_empty()
+        || attached.starts_with(['=', '[', '{', '<', '(', '\0'])
+        || (attached.starts_with(':') && attached.contains(['\0', '<']));
+    if !supported_attachment {
         return false;
     }
     arguments(
@@ -126,6 +144,13 @@ fn arguments<'a>(tokens: impl Iterator<Item = &'a str>) -> bool {
         if token == "\u{0}" || token == "..." {
             continue;
         }
+        if token.contains('\0')
+            && token
+                .chars()
+                .all(|ch| ch == '\0' || ",:/=._-+[]{}()".contains(ch))
+        {
+            continue;
+        }
         if token.chars().any(char::is_uppercase)
             && token
                 .chars()
@@ -135,10 +160,18 @@ fn arguments<'a>(tokens: impl Iterator<Item = &'a str>) -> bool {
         }
         // An unstyled lower-case metavariable is common in generated man
         // pages. It must be a single whole token, not a prose suffix.
-        if token
-            .chars()
-            .all(|c| c.is_alphanumeric() || matches!(c, '_' | '-'))
-            && !token.starts_with('-')
+        if token.starts_with('/')
+            || token
+                .split_once('=')
+                .is_some_and(|(name, value)| named::is_variable_term(name) && !value.is_empty())
+            || (token.contains(':')
+                && token
+                    .split(':')
+                    .all(|part| part == "\0" || named::is_variable_term(part)))
+            || token
+                .chars()
+                .all(|c| c.is_alphanumeric() || matches!(c, '_' | '-'))
+                && !token.starts_with('-')
         {
             bare_arguments += 1;
         } else {
@@ -163,7 +196,7 @@ fn append_syntax(inlines: &[Inline], output: &mut String) {
                 if value.trim().is_empty() {
                     output.push_str(&value);
                 } else {
-                    output.push_str(" \0 ");
+                    output.push('\0');
                 }
             }
             Inline::LineBreak => output.push('\n'),

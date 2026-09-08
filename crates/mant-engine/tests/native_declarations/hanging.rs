@@ -200,3 +200,97 @@ fn unstyled_dotted_keys_italic_settings_and_repeated_arguments_keep_owners() {
         0
     );
 }
+#[test]
+fn compact_parameter_grammar_and_opaque_environment_templates_remain_declarations() {
+    let source = br".TH HEADS 1
+.SH OPTIONS
+.PP
+\fB-L\fR\fI<start>\fR,\fI<end>\fR:\fI<file>\fR, \fB-L\fR:\fI<funcname>\fR:\fI<file>\fR
+.RS 4
+RANGE_BODY
+.RE
+.PP
+\fI-<number>\fR, \fB-n\fR \fI<number>\fR, \fB--max-count\fR=\fI<number>\fR
+.RS 4
+COUNT_BODY
+.RE
+.PP
+.B --color-moved-ws=<mode>,...
+.RS 4
+COLOR_BODY
+.RE
+.PP
+\fB--map-groups, --map-users\fR \fIinner\fR:_outer_:\fIcount\fR
+.RS 4
+MAP_BODY
+.RE
+.PP
+.B --map-users /proc/PID/ns/user
+.RS 4
+PATH_BODY
+.RE
+.PP
+.B --sd-param name=value
+.RS 4
+ASSIGNMENT_BODY
+.RE
+.SH ENVIRONMENT
+.PP
+.B GIT_CONFIG_COUNT, GIT_CONFIG_KEY_<n>, GIT_CONFIG_VALUE_<n>
+.RS 4
+ENV_BODY
+.RE
+.PP
+.B GIT_CONFIG_COUNT, words are not declarations
+.RS 4
+PROSE_BODY
+.RE
+";
+    let content = mant_engine::query_roff_bytes(source).unwrap();
+    for (query, total, body) in [
+        ("-L", 1, "RANGE_BODY"),
+        ("--max-count", 1, "COUNT_BODY"),
+        ("--color-moved-ws", 1, "COLOR_BODY"),
+        ("--map-users", 2, "MAP_BODY"),
+        ("--sd-param", 1, "ASSIGNMENT_BODY"),
+        ("GIT_CONFIG_COUNT", 1, "ENV_BODY"),
+    ] {
+        let result = mant_engine::select_explanation(&content, query).unwrap();
+        assert_eq!(
+            result.counts.direct_entry.total, total,
+            "{query}: {result:?}"
+        );
+        assert!(mant_engine::render_explanation_text(&result).contains(body));
+    }
+    for query in [
+        "GIT_CONFIG_KEY_",
+        "GIT_CONFIG_KEY_1",
+        "n",
+        "words",
+        "name",
+        "value",
+        "funcname",
+    ] {
+        assert_eq!(
+            mant_engine::select_explanation(&content, query)
+                .unwrap()
+                .counts
+                .direct_entry
+                .total,
+            0,
+            "{query}"
+        );
+    }
+    let env = mant_engine::select_explanation(&content, "GIT_CONFIG_COUNT").unwrap();
+    let direct = env
+        .evidence
+        .iter()
+        .find(|e| e.class == mant_protocol::EvidenceClass::DirectEntry)
+        .unwrap();
+    assert_eq!(direct.entry.as_ref().unwrap().names, ["GIT_CONFIG_COUNT"]);
+    assert_eq!(
+        direct.entry.as_ref().unwrap().kind,
+        mant_ir::EntryKind::EnvironmentVariable
+    );
+    assert!(direct.entry.as_ref().unwrap().alias_groups.is_empty());
+}

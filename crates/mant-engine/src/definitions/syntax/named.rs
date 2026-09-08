@@ -180,20 +180,61 @@ pub(super) fn environment_occurrences(text: &str) -> Option<Vec<RecognizedName>>
     } else {
         named_groups(text)?
     };
-    parts
-        .into_iter()
-        .map(|part| {
-            let name = environment_variable_alias(part).or_else(|| {
-                let (name, suffix) = part.trim().split_once(char::is_whitespace)?;
-                annotations(suffix)
-                    .then(|| environment_variable_alias(name))
-                    .flatten()
-            })?;
-            let start = part.as_ptr() as usize - text.as_ptr() as usize + part.len()
-                - part.trim_start().len();
-            Some(RecognizedName::contiguous(&name, start))
-        })
-        .collect()
+    let mut names = Vec::new();
+    for part in parts {
+        let name = environment_variable_alias(part).or_else(|| {
+            let (name, suffix) = part.trim().split_once(char::is_whitespace)?;
+            annotations(suffix)
+                .then(|| environment_variable_alias(name))
+                .flatten()
+        });
+        let Some(name) = name else {
+            if environment_template(part.trim()) {
+                continue;
+            }
+            return None;
+        };
+        let start =
+            part.as_ptr() as usize - text.as_ptr() as usize + part.len() - part.trim_start().len();
+        names.push(RecognizedName::contiguous(&name, start));
+    }
+    Some(names)
+}
+
+// A bounded literal/placeholder environment head is a declaration, but not
+// an exact environment-variable name. Keep it opaque alongside concrete names;
+// do not salvage words from prose or expand template instances.
+fn environment_template(value: &str) -> bool {
+    if value.len() > 512 || value.chars().any(char::is_whitespace) {
+        return false;
+    }
+    let mut rest = value;
+    let mut literal = String::new();
+    let mut templates = 0;
+    while let Some((prefix, tail)) = rest.split_once('<') {
+        if templates == 0 && prefix.is_empty() {
+            return false;
+        }
+        let Some((parameter, suffix)) = tail.split_once('>') else {
+            return false;
+        };
+        if !is_variable_term(parameter) {
+            return false;
+        }
+        literal.push_str(prefix);
+        literal.push('X');
+        templates += 1;
+        if templates > 16 {
+            return false;
+        }
+        rest = suffix;
+    }
+    literal.push_str(rest);
+    templates > 0
+        && literal
+            .chars()
+            .all(|ch| ch.is_ascii_uppercase() || ch.is_ascii_digit() || ch == '_')
+        && environment_variable_alias(&literal).is_some()
 }
 
 /// Return one exact environment-variable spelling without an authored value.

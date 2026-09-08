@@ -39,6 +39,11 @@ that crate was not published for that change.
   configuration keys and single assignment names. Genuine Terms can retain
   names without being reclassified as commands/options. Templates and prose
   remain unexpanded; complete forms, default values and case are preserved.
+- Preserve compact styled parameter syntax and repetition markers when checking
+  hanging heads. Mixed environment groups retain concrete names beside opaque
+  templates without expanding them or accepting prose. This protects Git range
+  options, repeated parameters and generated environment declarations while
+  retaining the complete-head exclusion for ordinary explanations.
 - Recover complete hanging command/configuration/variable declarations and
   retain explicit spacing before their indented bodies. Complete local flags
   override inherited value/configuration categories. Finite short/long pairs

@@ -273,6 +273,16 @@ promote body references or classify arbitrary filenames as configuration keys.
 Uncertain classifications must be reviewed with their query/owner evidence;
 they must not be hidden by dropping Terms or manufacturing value domains.
 
+Whole-head acceptance keeps styled arguments opaque without inserting new
+whitespace: adjacency and separators in `-L<start>,<end>:<file>` still belong
+to the invocation. A bounded template such as `-<number>` can occur beside a
+concrete flag, and a terminal `,...` is repetition rather than another name.
+Environment groups may contain literal/placeholder templates such as
+`GIT_CONFIG_KEY_<n>` alongside concrete names. Templates preserve the declaration
+and form but produce no prefix name or invented expansion; rejected prose still
+invalidates the group. Path, assignment and colon-delimited metavariables do not
+license general prose suffixes as heads.
+
 Separate fidelity normalization from semantic inference before removing
 heuristics. Existing target, continuation, indentation, table and line-flow
 repairs remain required. Do not erase a normalization module or all section
