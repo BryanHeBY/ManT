@@ -301,6 +301,7 @@ mod tests {
             kind: ListKind::Plain,
             compact: true,
             items: vec![ListItem {
+                layout: mant_ir::ListItemLayout::default(),
                 blocks,
                 source: None,
                 entry: None,

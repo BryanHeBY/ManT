@@ -77,6 +77,8 @@ unknown fields, and the former top-level `inlineTerm`/`spacingBeforeLines` field
 are rejected. Canonical output omits empty layout but retains
 `"layout":{"spacingBeforeLines":0}`. Semantic annotation never changes layout.
 
+`ListItem.layout: ListItemLayout` has optional `spacingBeforeLines` with the same inheritance and closed-object rules. An explicit value precedes the entire marker and body, including a display or nested list as the first block; it is not extra spacing inside the body. This preserves per-item native paragraph distance without splitting a list or changing its entry paths.
+
 Lists contain block-capable items so nested lists and displays do not flatten into prose. Definition terms contain inline trees and descriptions contain blocks. Table cells likewise contain blocks even when a source parser currently produces a single paragraph.
 
 ### Consecutive declaration context

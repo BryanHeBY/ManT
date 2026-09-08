@@ -416,6 +416,7 @@ mod tests {
 
     fn item(id: &str, kind: EntryKind, name: &str) -> ListItem {
         ListItem {
+            layout: crate::ListItemLayout::default(),
             source: None,
             entry: Some(EntryFacts {
                 name_bindings: vec![EntryNameBinding {

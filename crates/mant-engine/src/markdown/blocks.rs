@@ -163,6 +163,7 @@ fn parse_list(
                     parse_blocks_until(cursor, source, diagnostics, TagEnd::Item);
                 end = item_end;
                 items.push(ListItem {
+                    layout: mant_ir::ListItemLayout::default(),
                     source: Some(source.span(&(range.start..item_end))),
                     entry: None,
                     blocks,
@@ -172,6 +173,7 @@ fn parse_list(
             Event::Start(tag) => {
                 let whole = cursor.consume_balanced(range);
                 items.push(ListItem {
+                    layout: mant_ir::ListItemLayout::default(),
                     source: None,
                     entry: None,
                     blocks: vec![source.unsupported_block(

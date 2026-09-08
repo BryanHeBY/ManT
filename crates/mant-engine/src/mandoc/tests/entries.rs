@@ -648,13 +648,13 @@ fn recognizes_one_source_proven_ip_ordinal_without_semantic_entry() {
 
     let Block::List {
         kind: ListKind::Ordered { start: Some(9) },
-        compact: false,
         items,
         ..
     } = &document.sections[0].blocks[0]
     else {
         panic!("one source-proven ordinal is an ordered list");
     };
+    assert_eq!(items[0].layout.spacing_before_lines, Some(0));
     assert!(matches!(
         items[0].blocks.as_slice(),
         [

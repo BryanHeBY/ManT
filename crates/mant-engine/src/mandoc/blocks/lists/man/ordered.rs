@@ -160,10 +160,11 @@ pub(in crate::mandoc::blocks) fn append_ordered(
                 return;
             };
             *compact = *compact && paragraph_distance == 0;
-            items.push(list_item_from_definition(
+            items.push(spaced_man_list_item(
                 item,
                 ordinal_width(marker.value),
                 source,
+                paragraph_distance,
             ));
             *state = ManListState::Ordered { block, marker };
         }
@@ -196,12 +197,13 @@ fn append_new_ordered(
             start: Some(marker.value),
         },
         compact: paragraph_distance == 0,
-        items: vec![list_item_from_definition(
+        items: vec![spaced_man_list_item(
             item,
             ordinal_width(marker.value),
             source,
+            paragraph_distance,
         )],
-        layout: layout_with_spacing(indent_columns, paragraph_distance),
+        layout: layout_with_spacing(indent_columns, 0),
         source,
     });
     *state = ManListState::Ordered { block, marker };
@@ -248,6 +250,19 @@ fn ordinal_width(value: u64) -> i32 {
     mant_protocol::geometry::coordinate(mant_protocol::geometry::text_width(&format!("{value}. ")))
 }
 
+/// The tagged paragraph's leading boundary precedes its marker, not its
+/// first body block. Store it once on the item, regardless of list grouping.
+pub(in crate::mandoc::blocks) fn spaced_man_list_item(
+    item: DefinitionItem,
+    marker_width: i32,
+    source: Option<SourceSpan>,
+    paragraph_distance: u16,
+) -> ListItem {
+    let mut item = list_item_from_definition(item, marker_width, source);
+    item.layout.spacing_before_lines = Some(paragraph_distance);
+    item
+}
+
 /// Remove an `.IP`/`.TP` mark from visible content while conserving any target
 /// it owned and making item indentation relative to the new list container.
 pub(in crate::mandoc::blocks) fn list_item_from_definition(
@@ -280,6 +295,7 @@ pub(in crate::mandoc::blocks) fn list_item_from_definition(
         source,
     );
     ListItem {
+        layout: mant_ir::ListItemLayout::default(),
         source: item_source,
         entry: None,
         blocks: description,

@@ -11,9 +11,11 @@ use mant_protocol::geometry::{compose_origin, coordinate, marker_run_in_gap, pad
 impl DocumentBuilder<'_> {
     pub(super) fn list(&mut self, kind: ListKind, compact: bool, items: &[ListItem], indent: i32) {
         for (index, item) in items.iter().enumerate() {
-            if index > 0 && !compact {
-                self.spacing(1);
-            }
+            self.spacing(
+                item.layout
+                    .spacing_before_lines
+                    .unwrap_or(u16::from(index > 0 && !compact)),
+            );
             let item_start = self.lines.len();
             let marker = match kind {
                 ListKind::Bullet => "• ".to_owned(),

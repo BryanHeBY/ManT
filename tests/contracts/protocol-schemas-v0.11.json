@@ -2161,6 +2161,10 @@
               }
             ]
           },
+          "layout": {
+            "description": "Item boundary geometry, independent of content and semantic facts.",
+            "$ref": "#/$defs/ListItemLayout"
+          },
           "source": {
             "description": "Original item span, independent of any removed declaration or first\nvisible block. Unknown for synthetic content; never an identity key.",
             "anyOf": [
@@ -2177,6 +2181,23 @@
         "required": [
           "blocks"
         ]
+      },
+      "ListItemLayout": {
+        "description": "Resolved list-item boundary. Absent spacing inherits list compactness;\nexplicit zero is tight, while larger requests precede the whole marker and\nbody, including items beginning with displays or other non-paragraph blocks.",
+        "type": "object",
+        "properties": {
+          "spacingBeforeLines": {
+            "description": "Blank rows before this item; missing/null inherits list compactness.",
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint16",
+            "maximum": 65535,
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false
       },
       "ListKind": {
         "description": "Marker behavior of an ordinary list.",
@@ -5558,6 +5579,10 @@
               }
             ]
           },
+          "layout": {
+            "description": "Item boundary geometry, independent of content and semantic facts.",
+            "$ref": "#/$defs/ListItemLayout"
+          },
           "source": {
             "description": "Original item span, independent of any removed declaration or first\nvisible block. Unknown for synthetic content; never an identity key.",
             "anyOf": [
@@ -5574,6 +5599,23 @@
         "required": [
           "blocks"
         ]
+      },
+      "ListItemLayout": {
+        "description": "Resolved list-item boundary. Absent spacing inherits list compactness;\nexplicit zero is tight, while larger requests precede the whole marker and\nbody, including items beginning with displays or other non-paragraph blocks.",
+        "type": "object",
+        "properties": {
+          "spacingBeforeLines": {
+            "description": "Blank rows before this item; missing/null inherits list compactness.",
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint16",
+            "maximum": 65535,
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false
       },
       "ListKind": {
         "description": "Marker behavior of an ordinary list.",
@@ -8782,6 +8824,10 @@
               }
             ]
           },
+          "layout": {
+            "description": "Item boundary geometry, independent of content and semantic facts.",
+            "$ref": "#/$defs/ListItemLayout"
+          },
           "source": {
             "description": "Original item span, independent of any removed declaration or first\nvisible block. Unknown for synthetic content; never an identity key.",
             "anyOf": [
@@ -8798,6 +8844,23 @@
         "required": [
           "blocks"
         ]
+      },
+      "ListItemLayout": {
+        "description": "Resolved list-item boundary. Absent spacing inherits list compactness;\nexplicit zero is tight, while larger requests precede the whole marker and\nbody, including items beginning with displays or other non-paragraph blocks.",
+        "type": "object",
+        "properties": {
+          "spacingBeforeLines": {
+            "description": "Blank rows before this item; missing/null inherits list compactness.",
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint16",
+            "maximum": 65535,
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false
       },
       "ListKind": {
         "description": "Marker behavior of an ordinary list.",
@@ -12639,6 +12702,10 @@
               }
             ]
           },
+          "layout": {
+            "description": "Item boundary geometry, independent of content and semantic facts.",
+            "$ref": "#/$defs/ListItemLayout"
+          },
           "source": {
             "description": "Original item span, independent of any removed declaration or first\nvisible block. Unknown for synthetic content; never an identity key.",
             "anyOf": [
@@ -12655,6 +12722,23 @@
         "required": [
           "blocks"
         ]
+      },
+      "ListItemLayout": {
+        "description": "Resolved list-item boundary. Absent spacing inherits list compactness;\nexplicit zero is tight, while larger requests precede the whole marker and\nbody, including items beginning with displays or other non-paragraph blocks.",
+        "type": "object",
+        "properties": {
+          "spacingBeforeLines": {
+            "description": "Blank rows before this item; missing/null inherits list compactness.",
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint16",
+            "maximum": 65535,
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false
       },
       "ListKind": {
         "description": "Marker behavior of an ordinary list.",

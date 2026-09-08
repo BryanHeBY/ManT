@@ -1,9 +1,9 @@
 //! Man tagged paragraphs: independent owners and explicit TQ head continuation.
 use super::super::{
     Block, DefinitionItem, DefinitionLocation, ListKind, LoweringContext, ManListState, Node,
-    NodeKind, append_ordered, block_indent, block_layout_mut, definition_item, first_part_children,
-    layout_with_spacing, list_item_from_definition, ordinal_marker, paragraph_distance_lines,
-    plain_text, prepend_definition_heads, source_span, terms_fit_inline,
+    NodeKind, append_ordered, block_indent, definition_item, first_part_children,
+    layout_with_spacing, ordinal_marker, paragraph_distance_lines, plain_text,
+    prepend_definition_heads, source_span, terms_fit_inline,
 };
 
 fn is_bullet_glyph(text: &str) -> bool {
@@ -29,6 +29,7 @@ pub(in crate::mandoc::blocks) fn lower_man_definition(
         output,
         definition_hanging_width,
         list_state,
+        has_predecessor,
     } = state;
     let LoweredManItem {
         mut item,
@@ -43,6 +44,8 @@ pub(in crate::mandoc::blocks) fn lower_man_definition(
         spacing_enabled,
         formatter,
     );
+    let spacing_before =
+        crate::mandoc::layout::man_paragraph_spacing(spacing_before, has_predecessor);
     let macro_name = node.macro_name.as_deref();
     let bullet = (macro_name == Some("IP") && is_ip_bullet_item(&item))
         || (macro_name == Some("TP") && is_explicit_tp_bullet(node, &item));
@@ -221,6 +224,7 @@ pub(in crate::mandoc::blocks) struct ManDefinitionState<'a> {
     pub(in crate::mandoc::blocks) output: &'a mut Vec<Block>,
     pub(in crate::mandoc::blocks) definition_hanging_width: &'a mut crate::mandoc::layout::Distance,
     pub(in crate::mandoc::blocks) list_state: &'a mut ManListState,
+    pub(in crate::mandoc::blocks) has_predecessor: bool,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -310,8 +314,11 @@ fn append_ip_continuation(
     else {
         return false;
     };
-    if let Some(layout) = item.description.first_mut().and_then(block_layout_mut) {
-        layout.spacing_before_lines = layout.spacing_before_lines.max(paragraph_distance);
+    if let Some(first) = item.description.first_mut() {
+        // The headless IP paragraph and its first body request are independent
+        // source boundaries. Preserve both, including when the body begins
+        // with an explicit VerticalSpace rather than a layout-bearing block.
+        crate::mandoc::layout::set_block_spacing(first, paragraph_distance);
     }
     crate::block::rebase_roots(
         &mut item.description,
@@ -371,16 +378,11 @@ fn append_definition(
         }
     } else {
         item.layout.spacing_before_lines = Some(0);
-        let spacing_before_lines = if output.is_empty() {
-            0
-        } else {
-            paragraph_distance
-        };
         output.push(Block::DefinitionList {
             declaration_groups: Vec::new(),
             items: vec![item],
             compact: paragraph_distance == 0,
-            layout: layout_with_spacing(indent_columns, spacing_before_lines),
+            layout: layout_with_spacing(indent_columns, paragraph_distance),
             source,
         });
         DefinitionLocation {
@@ -428,7 +430,7 @@ fn append_ip_bullet(
     paragraph_distance: u16,
     source: Option<mant_ir::SourceSpan>,
 ) {
-    let list_item = list_item_from_definition(item, 2, source);
+    let list_item = super::ordered::spaced_man_list_item(item, 2, source, paragraph_distance);
     if let Some(Block::List {
         kind: ListKind::Bullet,
         compact,
@@ -443,16 +445,11 @@ fn append_ip_bullet(
         return;
     }
 
-    let spacing_before_lines = if output.is_empty() {
-        0
-    } else {
-        paragraph_distance
-    };
     output.push(Block::List {
         kind: ListKind::Bullet,
         compact: paragraph_distance == 0,
         items: vec![list_item],
-        layout: layout_with_spacing(indent_columns, spacing_before_lines),
+        layout: layout_with_spacing(indent_columns, 0),
         source,
     });
 }

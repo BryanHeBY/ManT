@@ -14,9 +14,11 @@ impl BlockRenderer<'_> {
     ) -> Flow {
         let mut output = Flow::default();
         for (index, item) in items.iter().enumerate() {
-            if index > 0 && !compact {
-                output.gap(1);
-            }
+            output.gap(
+                item.layout
+                    .spacing_before_lines
+                    .unwrap_or(u16::from(index > 0 && !compact)),
+            );
             let marker = match kind {
                 ListKind::Ordered { .. } => {
                     format!("{}. ", kind.ordinal(index).expect("ordered list ordinal"))

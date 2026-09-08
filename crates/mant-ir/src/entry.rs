@@ -121,6 +121,7 @@ mod tests {
                 kind: crate::ListKind::Bullet,
                 compact: true,
                 items: vec![crate::ListItem {
+                    layout: crate::ListItemLayout::default(),
                     source: None,
                     entry: None,
                     blocks: vec![list(transparent)],

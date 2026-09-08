@@ -66,7 +66,7 @@ The following `man(7)` macros have dedicated lowering behavior:
 | `HP` | Hanging paragraph first/continuation origins; width inherited by later tagged paragraphs |
 | `RS`, `RE` | Nested indentation boundary |
 | `IP`, `TP`, `TQ` | Bullet, ordered-list, or definition-list items, explicit multi-tag heads, hanging layout, and widths |
-| `PD` | Paragraph, definition-item, and heading spacing |
+| `PD` | Paragraph, list-item, definition-item, and heading spacing |
 | `B`, `SB` | Strong inline content |
 | `I` | Emphasized inline content |
 | `BI`, `BR`, `IB`, `IR`, `RB`, `RI` | Alternating inline font runs without inserted spaces |
@@ -353,6 +353,8 @@ Requests with direct lowering behavior are:
 `ce`, `rj`, `ll`, `mc`, `po`, and `ti` can be represented by libmandoc nodes but ManT does not promise their device-specific alignment or page geometry. Printable descendants remain visible where the upstream AST provides them.
 
 Man's `.in` state is applied by lowering, not assumed to have been executed by parsing. Following mandoc CVS HEAD, repeated argument-less `.in` requests restore the same current macro base (including an enclosing `RS`); they do not swap previous requested positions as groff does. Ordinary paragraph and structural macro boundaries restore their own geometry. `HP` records a distinct continuation displacement and updates the prevailing tag width. ManT retains explicit source hard breaks as well as that hanging displacement: it does not reproduce the character renderer's `HP` short-line flush artifact that can place text after `br` on the same row. Soft wrapping remains a view concern, and the deterministic unbounded text renderer does not invent soft breaks.
+
+Man paragraph distance depends on source predecessors, including predecessors outside an enclosing `RS`; the first item in a newly created IR container is not necessarily the first source paragraph. Recovered ordered and bullet lists retain each item's resolved distance, including changes between zero and two rows, without splitting the list or changing entry ownership. Its gap precedes the entire marker and body and remains independent of explicit `sp` requests. A headless `IP` continuation likewise retains both its paragraph distance and any following explicit space. An invisible or empty tag does not itself become an additional content row: ManT does not reproduce a terminal formatter's empty-label flush artifact.
 
 Man `nf`/`fi` and `EX`/`EE` boundaries consume a pending `HP` first line even before text is emitted. If `HP` starts inside an existing no-fill region, its first physical line keeps the first-line origin and later lines use the hanging origin; `\c` continuations do not consume that boundary. This preserves significant literal rows without splitting ordinary adjacent no-fill regions unnecessarily.
 

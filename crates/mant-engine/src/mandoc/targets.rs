@@ -698,6 +698,7 @@ mod tests {
             kind: mant_ir::ListKind::Bullet,
             compact: false,
             items: vec![ListItem {
+                layout: mant_ir::ListItemLayout::default(),
                 source: None,
                 entry: None,
                 blocks: vec![Block::Preformatted {

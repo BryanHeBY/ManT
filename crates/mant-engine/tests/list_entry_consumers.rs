@@ -11,6 +11,7 @@ use mant_protocol::{EntryProjection, ExcerptSelection, OutlineNode};
 
 fn item(name: &str, payload: &str, entry: bool) -> ListItem {
     ListItem {
+        layout: mant_ir::ListItemLayout::default(),
         source: None,
         entry: entry.then(|| EntryFacts {
             id: name.into(),
@@ -318,6 +319,7 @@ fn table_search_tracks_independent_and_nested_owners_without_changing_text() {
                 kind: ListKind::Bullet,
                 compact: false,
                 items: vec![ListItem {
+                    layout: mant_ir::ListItemLayout::default(),
                     source: None,
                     entry: None,
                     blocks: vec![table],

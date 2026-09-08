@@ -75,7 +75,7 @@ moved root, preserving the descendants' coordinates and source text.
 
 Block spacing is resolved before IR: zero is tight. Independent explicit gaps
 add across transparent containers; repeated projections of one request belong
-at only one consumption point. Definition-item absent spacing instead inherits
+at only one consumption point. List-item and definition-item absent spacing instead inherits
 compactness. Frontends cap a resolved boundary at 4096 rows, without merging
 literal blank lines. Visual wrapping never changes source lines or entry facts.
 
@@ -149,6 +149,7 @@ fn paragraph(children: Vec<Inline>) -> Block {
 
 // 1. Ordinary content is useful on its own, with no semantic owner.
 let ordinary = ListItem {
+    layout: mant_ir::ListItemLayout::default(),
     source: None, entry: None,
     blocks: vec![paragraph(vec![
         Inline::Code { value: "run".into() },

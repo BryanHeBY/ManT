@@ -5,6 +5,21 @@ use mant_ir::Block;
 use super::first_text;
 use crate::block::block_layout_mut;
 
+/// Resolve man(7)'s `print_bvspace` prerequisite before materializing IR.
+/// Transparent RS scopes may carry a predecessor outside a detached output
+/// buffer. Conversely a first tagged paragraph has none, even when it will
+/// become an ordered list. Rendered container emptiness cannot decide this.
+pub(in crate::mandoc) const fn man_paragraph_spacing(
+    paragraph_distance: u16,
+    has_predecessor: bool,
+) -> u16 {
+    if has_predecessor {
+        paragraph_distance
+    } else {
+        0
+    }
+}
+
 impl crate::mandoc::LoweringContext<'_> {
     pub(in crate::mandoc) fn check_gap_bounds(&self, blocks: &[Block]) {
         if mant_protocol::geometry::has_bounded_gap(blocks) {

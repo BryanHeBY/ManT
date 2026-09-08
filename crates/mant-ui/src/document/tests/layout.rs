@@ -10,6 +10,7 @@ fn resolved_gaps_precede_whole_items_and_share_transparent_container_budgets() {
                 kind: ListKind::Bullet,
                 compact: true,
                 items: vec![ListItem {
+                    layout: mant_ir::ListItemLayout::default(),
                     source: None,
                     entry: None,
                     blocks: vec![Block::Paragraph {
@@ -47,6 +48,7 @@ fn resolved_gaps_precede_whole_items_and_share_transparent_container_budgets() {
             },
             source: None,
             items: vec![ListItem {
+                layout: mant_ir::ListItemLayout::default(),
                 source: None,
                 entry: None,
                 blocks: vec![
@@ -129,6 +131,7 @@ fn anchors_follow_hard_lines_in_terms_and_run_in_bodies() {
             kind: ListKind::Bullet,
             compact: true,
             items: vec![ListItem {
+                layout: mant_ir::ListItemLayout::default(),
                 source: None,
                 entry: None,
                 blocks: vec![Block::Paragraph {
@@ -217,6 +220,7 @@ fn container_translation_and_nonparagraph_marker_width_are_preserved() {
             kind: ListKind::Ordered { start: Some(start) },
             compact: true,
             items: vec![ListItem {
+                layout: mant_ir::ListItemLayout::default(),
                 source: None,
                 entry: None,
                 blocks: vec![Block::Preformatted {
@@ -262,6 +266,7 @@ fn container_translation_and_nonparagraph_marker_width_are_preserved() {
             kind: ListKind::Plain,
             compact: true,
             items: vec![ListItem {
+                layout: mant_ir::ListItemLayout::default(),
                 source: None,
                 entry: None,
                 blocks: vec![child],
@@ -288,6 +293,7 @@ fn outdented_list_paragraph_keeps_links_on_the_visible_body() {
             kind: ListKind::Bullet,
             compact: true,
             items: vec![ListItem {
+                layout: mant_ir::ListItemLayout::default(),
                 source: None,
                 entry: None,
                 blocks: vec![Block::Paragraph {
@@ -593,6 +599,7 @@ fn bullet_lists_share_the_first_row_and_use_a_hanging_indent() {
         kind: ListKind::Bullet,
         compact: true,
         items: vec![ListItem {
+            layout: mant_ir::ListItemLayout::default(),
             source: None,
             entry: None,
             blocks: vec![Block::Paragraph {
@@ -681,11 +688,13 @@ fn ordered_list_markers_saturate_instead_of_overflowing() {
         compact: true,
         items: vec![
             ListItem {
+                layout: mant_ir::ListItemLayout::default(),
                 source: None,
                 entry: None,
                 blocks: vec![paragraph("first")],
             },
             ListItem {
+                layout: mant_ir::ListItemLayout::default(),
                 source: None,
                 entry: None,
                 blocks: vec![paragraph("second")],

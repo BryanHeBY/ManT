@@ -164,6 +164,7 @@ mod tests {
                 kind,
                 compact: true,
                 items: vec![mant_ir::ListItem {
+                    layout: mant_ir::ListItemLayout::default(),
                     blocks: vec![paragraph(0, 0)],
                     entry: None,
                     source: None,

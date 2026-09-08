@@ -289,6 +289,7 @@ mod tests {
     #[test]
     fn annotates_only_complete_undeclared_option_lists() {
         let option = |name: &str, description: &str| ListItem {
+            layout: mant_ir::ListItemLayout::default(),
             source: None,
             entry: None,
             blocks: vec![paragraph(vec![
@@ -339,6 +340,7 @@ mod tests {
             kind: ListKind::Bullet,
             compact: false,
             items: vec![ListItem {
+                layout: mant_ir::ListItemLayout::default(),
                 source: None,
                 entry: None,
                 blocks: vec![
@@ -383,6 +385,7 @@ mod tests {
             compact: true,
             items: vec![
                 ListItem {
+                    layout: mant_ir::ListItemLayout::default(),
                     source: None,
                     entry: None,
                     blocks: vec![paragraph(vec![
@@ -395,6 +398,7 @@ mod tests {
                     ])],
                 },
                 ListItem {
+                    layout: mant_ir::ListItemLayout::default(),
                     source: None,
                     entry: None,
                     blocks: vec![paragraph(vec![Inline::Text {

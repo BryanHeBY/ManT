@@ -21,7 +21,12 @@ pub(super) struct StructuralLowerer<'a, 'source, 'state> {
 }
 
 impl StructuralLowerer<'_, '_, '_> {
+    fn has_paragraph_predecessor(&self) -> bool {
+        self.paragraph_predecessor || !self.output.is_empty()
+    }
+
     fn lower_man_definition(&mut self, node: &Node) {
+        let has_predecessor = self.has_paragraph_predecessor();
         lower_man_definition_block(
             node,
             self.context,
@@ -31,6 +36,7 @@ impl StructuralLowerer<'_, '_, '_> {
                 output: self.output,
                 definition_hanging_width: self.definition_hanging_width,
                 list_state: self.man_list_state,
+                has_predecessor,
             },
             self.spacing_enabled,
             self.formatter,
@@ -145,11 +151,10 @@ impl StructuralLowerer<'_, '_, '_> {
                 self.context
                     .distance_or(node, argument, *self.definition_hanging_width);
         }
-        let spacing = if self.output.is_empty() && !self.paragraph_predecessor {
-            0
-        } else {
-            *self.paragraph_distance
-        };
+        let spacing = crate::mandoc::layout::man_paragraph_spacing(
+            *self.paragraph_distance,
+            self.has_paragraph_predecessor(),
+        );
         let mut lowerer = super::BlockLowerer::new(
             self.context,
             self.indent_columns,
@@ -195,7 +200,7 @@ impl StructuralLowerer<'_, '_, '_> {
                 // find a predecessor. A detached item-continuation buffer
                 // must not erase that source fact: RS itself adds no gap,
                 // while its first PP still applies the current PD distance.
-                let paragraph_predecessor = self.paragraph_predecessor || !self.output.is_empty();
+                let paragraph_predecessor = self.has_paragraph_predecessor();
                 let continues_item = self.man_list_state.is_active();
                 let output = if continues_item {
                     Vec::new()

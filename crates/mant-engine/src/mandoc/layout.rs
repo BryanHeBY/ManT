@@ -18,8 +18,8 @@ pub(super) use definition::{DefinitionGeometry, TermPlacement};
 pub(super) use distance::Distance;
 pub(super) use source_indent::SourceIndent;
 pub(super) use spacing::{
-    add_leading_spacing, paragraph_distance_lines, section_spacing, set_block_spacing,
-    update_paragraph_distance, vertical_distance_lines,
+    add_leading_spacing, man_paragraph_spacing, paragraph_distance_lines, section_spacing,
+    set_block_spacing, update_paragraph_distance, vertical_distance_lines,
 };
 
 pub(super) fn first_part_argument(node: &Node) -> Option<&str> {

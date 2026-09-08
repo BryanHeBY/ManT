@@ -157,6 +157,7 @@ fn lower_mdoc_plain_list(
                 attach_item_targets(&mut blocks, &item, layout(body_origin));
                 crate::block::rebase_roots(&mut blocks, body_columns, marker_width);
                 ListItem {
+                    layout: mant_ir::ListItemLayout::default(),
                     source: source_span(item.node),
                     entry: None,
                     blocks,
@@ -305,6 +306,7 @@ fn mdoc_list_item_from_definition(
         owner_source,
     );
     ListItem {
+        layout: mant_ir::ListItemLayout::default(),
         source: item_source,
         entry: None,
         blocks: description,
@@ -474,6 +476,7 @@ fn append_list_targets(
         Block::List { items, .. } => {
             if items.is_empty() {
                 items.push(ListItem {
+                    layout: mant_ir::ListItemLayout::default(),
                     source: None,
                     entry: None,
                     blocks: Vec::new(),

@@ -444,6 +444,7 @@ fn case_folding_maps_expanding_unicode_back_to_the_source_character() {
 }
 
 mod entries;
+mod item_spacing;
 mod layout;
 mod navigation;
 mod search;

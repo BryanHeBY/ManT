@@ -22,11 +22,13 @@ fn ordinary_list_entry_anchors_preserve_rows_and_numbering() {
         compact: false,
         items: vec![
             mant_ir::ListItem {
+                layout: mant_ir::ListItemLayout::default(),
                 source: None,
                 entry: None,
                 blocks: vec![paragraph("intro")],
             },
             mant_ir::ListItem {
+                layout: mant_ir::ListItemLayout::default(),
                 source: None,
                 entry: Some(mant_ir::EntryFacts {
                     id: "run".into(),

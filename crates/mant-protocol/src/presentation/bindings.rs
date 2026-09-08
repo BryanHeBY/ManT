@@ -217,6 +217,7 @@ mod tests {
 
     fn item() -> ListItem {
         ListItem {
+            layout: mant_ir::ListItemLayout::default(),
             source: None,
             blocks: vec![Block::Paragraph {
                 children: vec![

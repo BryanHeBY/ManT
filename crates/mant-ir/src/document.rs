@@ -449,6 +449,9 @@ impl ListKind {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ListItem {
+    /// Item boundary geometry, independent of content and semantic facts.
+    #[serde(default, skip_serializing_if = "ListItemLayout::is_empty")]
+    pub layout: ListItemLayout,
     /// Original item span, independent of any removed declaration or first
     /// visible block. Unknown for synthetic content; never an identity key.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -458,6 +461,25 @@ pub struct ListItem {
     pub entry: Option<EntryFacts>,
     /// Arbitrary item content in source order.
     pub blocks: Vec<Block>,
+}
+
+/// Resolved list-item boundary. Absent spacing inherits list compactness;
+/// explicit zero is tight, while larger requests precede the whole marker and
+/// body, including items beginning with displays or other non-paragraph blocks.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ListItemLayout {
+    /// Blank rows before this item; missing/null inherits list compactness.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub spacing_before_lines: Option<u16>,
+}
+
+impl ListItemLayout {
+    /// Whether the layout only inherits the containing list's defaults.
+    #[must_use]
+    pub const fn is_empty(&self) -> bool {
+        self.spacing_before_lines.is_none()
+    }
 }
 
 /// Displayed terms share a description containing arbitrary blocks.

@@ -192,10 +192,11 @@ fn render_list(
             content
                 .with_owner(EntryOwner::List(item), options.preserve_anchors)
                 .prefix(&marker)
+                .map(|content| (content, item.layout.spacing_before_lines))
         })
         .collect::<Vec<_>>();
     (!rendered.is_empty()).then(|| {
-        let mut content = MappedText::join(rendered, if compact { "\n" } else { "\n\n" });
+        let mut content = join_definition_items(rendered, compact).expect("nonempty list items");
         if options.preserve_semantics
             && let Some(facts) = items.first().and_then(|i| i.entry.as_ref())
         {

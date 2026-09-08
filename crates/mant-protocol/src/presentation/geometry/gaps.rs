@@ -50,7 +50,12 @@ fn walk(blocks: &[Block], gap: &mut GapPlan, depth: usize, origin: i32) -> bool 
             } => {
                 let origin = compose_origin(origin, layout.indent_columns);
                 for (index, item) in items.iter().enumerate() {
-                    if add(gap, u16::from(index > 0 && !compact)) {
+                    if add(
+                        gap,
+                        item.layout
+                            .spacing_before_lines
+                            .unwrap_or(u16::from(index > 0 && !compact)),
+                    ) {
                         return true;
                     }
                     let mut blocks = item.blocks.as_slice();
@@ -178,6 +183,7 @@ mod tests {
             kind: ListKind::Bullet,
             compact: true,
             items: vec![ListItem {
+                layout: mant_ir::ListItemLayout::default(),
                 blocks,
                 entry: None,
                 source: None,
