@@ -22,6 +22,7 @@ pub(super) struct RenderedEntry {
     pub(super) start: usize,
     pub(super) end: usize,
     pub(super) entry: EntryFacts,
+    pub(super) title: String,
     pub(super) source: Option<SourceSpan>,
 }
 
@@ -58,6 +59,11 @@ pub(super) fn render_blocks_with_entries(
                 identity.alias_groups = entry.validated_alias_groups().unwrap_or_default().to_vec();
             }
             entries.push(RenderedEntry {
+                title: crate::entry_presentation::owner_label(
+                    entry,
+                    &identity.names,
+                    mant_protocol::EntryLabelMode::Compact,
+                ),
                 indices: located.indices,
                 start,
                 end,

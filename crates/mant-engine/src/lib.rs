@@ -5,6 +5,7 @@ mod block;
 mod bounded;
 mod catalog;
 mod definitions;
+mod entry_presentation;
 mod executable;
 mod explanation;
 mod inline;

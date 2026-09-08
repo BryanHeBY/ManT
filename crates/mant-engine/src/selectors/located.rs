@@ -1,9 +1,6 @@
 //! Borrowed semantic locations and source-order breadcrumbs, without DTOs.
 use super::DOCUMENT_ROOT_TITLE;
-use crate::{
-    definitions::{ContentEntry, content_entries},
-    inline::plain_text,
-};
+use crate::definitions::{ContentEntry, content_entries};
 use mant_ir::{
     Block, DOCUMENT_ROOT_ID, EntryFacts, EntryOwner, NodeId, OutlinePath, Section, SourceSpan,
 };
@@ -182,19 +179,5 @@ fn append_entry_breadcrumbs(
 }
 
 fn definition_title(entry: EntryOwner<'_>, names: &[String]) -> String {
-    let identity = entry.facts().expect("semantic entries have identities");
-    if !names.is_empty() {
-        return names.join(", ");
-    }
-    let forms = entry
-        .forms()
-        .unwrap_or_default()
-        .iter()
-        .map(plain_text)
-        .filter(|form| !form.is_empty())
-        .collect::<Vec<_>>();
-    if !forms.is_empty() {
-        return forms.join(" | ");
-    }
-    identity.id.to_string()
+    crate::entry_presentation::owner_label(entry, names, mant_protocol::EntryLabelMode::Compact)
 }

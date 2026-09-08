@@ -247,7 +247,7 @@ impl ArtifactBuilder {
                 node: MarkdownNode::DocumentEntry {
                     path,
                     id: entry.entry.id,
-                    title: entry.entry.names.join(", "),
+                    title: entry.title,
                     role: entry.entry.kind,
                     case: entry.entry.case,
                     names: entry.entry.names,

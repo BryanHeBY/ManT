@@ -259,10 +259,12 @@ fn project_entries(
             if !selected && children.is_empty() {
                 return None;
             }
-            let title = (!entry.forms.is_empty())
-                .then(|| entry.forms.join(" | "))
-                .or_else(|| entry.names.first().cloned())
-                .unwrap_or_else(|| entry.id.to_string());
+            let title = mant_protocol::entry_label(
+                mant_protocol::EntryLabelMode::Forms,
+                &entry.id,
+                &entry.names,
+                &entry.forms,
+            );
             Some(OutlineNode::DocumentEntry {
                 path: OutlinePath::nested_entry(section, &coordinates)?
                     .to_string()

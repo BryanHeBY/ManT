@@ -122,6 +122,9 @@ that crate was not published for that change.
 
 ### mant-engine 0.11.0
 
+- Keep a nonempty form/identity fallback in search entry titles without
+  inventing selectable names. Search and strict navigation share the compact
+  label policy; outlines explicitly prefer complete forms.
 - Preserve structural tables/lists through nested mdoc enclosures and font
   scopes, and carry font and spacing state out of every structural consumer.
   Literal source lines follow macro descendants; ordinary filled text keeps
