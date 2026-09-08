@@ -8,9 +8,10 @@ use mant_ir::{DefinitionItem, EntryKind, NameCase, ParameterKind};
 mod commands;
 mod declaration;
 mod forms;
+mod head;
 mod named;
 mod options;
-pub(super) use named::environment_names_from_terms;
+pub(super) use head::is_inferred_head;
 pub(super) use named::is_value_name;
 pub(crate) use named::{environment_variable_alias, environment_variable_body};
 use named::{is_configuration_key, is_variable_term};
@@ -142,17 +143,7 @@ pub(super) fn name_occurrences(
             };
             match kind {
                 EntryKind::EnvironmentVariable => {
-                    let parts = if text.contains('=') {
-                        vec![text.as_str()]
-                    } else {
-                        text.split([',', '|']).collect()
-                    };
-                    parts
-                        .into_iter()
-                        .filter_map(|part| {
-                            environment_variable_alias(part).map(|name| locate(part, &name))
-                        })
-                        .collect()
+                    named::environment_occurrences(&text).unwrap_or_default()
                 }
                 EntryKind::Variable | EntryKind::ConfigurationKey | EntryKind::Value => {
                     let validate = match kind {

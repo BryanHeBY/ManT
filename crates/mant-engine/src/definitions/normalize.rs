@@ -1,11 +1,8 @@
 //! Definition normalize policy; coordinated by the parent discovery passes.
-use super::{
-    context::DefinitionContext,
-    syntax::{environment_names_from_terms, option_names_from_terms},
-};
+use super::{context::DefinitionContext, syntax::is_inferred_head};
 use crate::{
     block::{block_layout, block_layout_mut},
-    inline::{DEFAULT_INLINE_TERM_MAX_WIDTH, plain_text, terms_fit_inline},
+    inline::{DEFAULT_INLINE_TERM_MAX_WIDTH, terms_fit_inline},
 };
 use mant_ir::{Block, DefinitionItem, LayoutHint};
 use std::{collections::VecDeque, mem};
@@ -154,20 +151,7 @@ fn hanging_term_indent(block: &Block, context: DefinitionContext) -> Option<u16>
     else {
         return None;
     };
-    let recognized = match context {
-        DefinitionContext::EnvironmentVariables => {
-            !environment_names_from_terms(std::slice::from_ref(children)).is_empty()
-        }
-        DefinitionContext::Generic | DefinitionContext::Parameters => {
-            let text = plain_text(children);
-            text.trim_start().starts_with('-')
-                && !option_names_from_terms(std::slice::from_ref(children)).is_empty()
-        }
-        DefinitionContext::Commands
-        | DefinitionContext::Variables
-        | DefinitionContext::ConfigurationKeys
-        | DefinitionContext::Values => false,
-    };
+    let recognized = is_inferred_head(children, context);
     recognized.then_some(layout.indent_columns)
 }
 

@@ -110,6 +110,8 @@ Styled command aliases are likewise grouped before separating each command name 
 
 Declaration grouping preserves bracket nesting and parameter styling across inline wrappers. Commas and pipes inside `[a|b]`, `{+|-}`, or a styled parameter do not create names. A subsequent explicit declaration can resume at a literal separator, such as `-L` followed by an emphasized `dir,--FAKE` and literal `, --library`; only `-L` and `--library` are names. Unclosed or excessively nested syntax is kept as a complete form without guessing additional declarations. Literal shell commands such as `[` remain valid names.
 
+Layout-inferred paragraph heads must pass a complete declaration check before an indented following block becomes their description. Finding one valid comma-separated word inside prose is insufficient: an environment declaration group is accepted or rejected as a whole. Option heads may contain bounded argument syntax and styled placeholders, but ordinary explanatory suffixes do not establish a new owner. Explicit `TP`/`IP`/definition `It` labels keep their authored boundary even when the label remains an unclassified Term.
+
 The required mdoc prologue and structural macros are normalized as follows:
 
 | Macros | ManT result |

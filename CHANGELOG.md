@@ -27,6 +27,10 @@ that crate was not published for that change.
   boundaries across inline wrappers. Argument alternatives no longer introduce
   spurious command names; explicit subsequent declarations and literal shell
   operator names remain supported, without rewriting their original forms.
+- Hanging paragraph recovery now requires a complete declaration head.
+  Environment groups no longer salvage isolated names from rejected prose,
+  and ordinary option explanations cannot claim later indented examples as
+  new definitions. Explicit diagnostic/term definitions remain intact.
 
 ### Explanation match locations (unreleased v0.11)
 

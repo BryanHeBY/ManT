@@ -183,3 +183,70 @@ fn parameter_alternations_never_become_declared_command_names() {
         }
     }
 }
+
+#[test]
+fn inferred_heads_require_whole_declarations_not_words_inside_prose() {
+    for source in [
+        ".TH PROBE 1\n.SH ENVIRONMENT\n.PP\nThe application chooses a mode, otherwise, it uses a default.\n.RS 4\nprogram --mode fast\n.RE\n",
+        ".TH PROBE 1\n.SH ENVIRONMENT\n.PP\nThe line number is reported, as\n.RS 4\nprogram --line 1\n.RE\n",
+        ".Dd September 8, 2026\n.Dt PROBE 1\n.Os\n.Sh OPTIONS\n.Pp\n.Fl T\nselects a terminal type for the next client.\n.Bd -literal -offset indent\nprogram -T EXAMPLE\n.Ed\n",
+    ] {
+        let query = mant_engine::query_roff_bytes(source.as_bytes()).unwrap();
+        assert!(
+            definitions(query.document.as_ref().unwrap()).is_empty(),
+            "{source}"
+        );
+        let text = mant_engine::render_query_text(&query);
+        assert!(text.contains("program"));
+        assert!(mant_ir::validate_document(query.document.as_ref().unwrap()).is_empty());
+        for name in ["otherwise", "as", "-T"] {
+            let result = mant_engine::explain_query(
+                &query,
+                &ExplanationQuery {
+                    entry: name.into(),
+                    options: ExplanationOptions::default(),
+                },
+            )
+            .unwrap();
+            assert!(
+                result
+                    .evidence
+                    .iter()
+                    .all(|e| e.class != EvidenceClass::DirectEntry)
+            );
+        }
+    }
+    for (section, head, expected) in [
+        ("ENVIRONMENT", "FIRST, SECOND", vec!["FIRST", "SECOND"]),
+        ("ENVIRONMENT", "PATH=/one:/two", vec!["PATH"]),
+        ("OPTIONS", ".B --type\n.I TYPE", vec!["--type"]),
+        ("OPTIONS", ".B --name\nname", vec!["--name"]),
+        ("OPTIONS", "--exec-path[=<path>]", vec!["--exec-path"]),
+        ("OPTIONS", ".B -., --hidden", vec!["--hidden"]),
+        (
+            "OPTIONS",
+            ".B --first, --second",
+            vec!["--first", "--second"],
+        ),
+    ] {
+        let source =
+            format!(".TH PROBE 1\n.SH {section}\n.PP\n{head}\n.RS 4\nDESCRIPTION_BODY\n.RE\n");
+        let query = mant_engine::query_roff_bytes(source.as_bytes()).unwrap();
+        let items = definitions(query.document.as_ref().unwrap());
+        assert_eq!(items.len(), 1, "{source}");
+        assert_eq!(items[0].entry.as_ref().unwrap().names, expected);
+        assert!(mant_engine::render_query_text(&query).contains("DESCRIPTION_BODY"));
+    }
+}
+
+#[test]
+fn explicit_diagnostic_labels_remain_definitions_without_prose_fragment_names() {
+    let source = b".TH PROBE 1\n.SH ENVIRONMENT\n.TP\nPermission denied, otherwise\nBODY\n";
+    let query = mant_engine::query_roff_bytes(source).unwrap();
+    let items = definitions(query.document.as_ref().unwrap());
+    assert_eq!(items.len(), 1);
+    let entry = items[0].entry.as_ref().unwrap();
+    assert_eq!(entry.kind, mant_ir::EntryKind::Term);
+    assert!(entry.names.is_empty());
+    assert!(mant_engine::render_query_text(&query).contains("Permission denied, otherwise"));
+}

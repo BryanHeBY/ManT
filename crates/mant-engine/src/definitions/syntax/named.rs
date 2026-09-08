@@ -1,6 +1,5 @@
 //! named recognition; complete forms retain their role-specific grammar.
-use crate::inline::plain_text;
-use mant_ir::Inline;
+use crate::definitions::RecognizedName;
 
 pub(in crate::definitions) fn is_value_name(value: &str) -> bool {
     !value.is_empty()
@@ -41,28 +40,23 @@ pub(in crate::definitions) fn named_term_name(
     (annotation.ends_with(')') && validate(name)).then_some(name)
 }
 
-pub(in crate::definitions) fn environment_names_from_terms(terms: &[Vec<Inline>]) -> Vec<String> {
-    terms
-        .iter()
-        .flat_map(|term| {
-            let text = plain_text(term);
-            // Assignment values may contain alias punctuation. Recognize the
-            // complete assignment before considering any alias separators.
-            if text.contains('=') {
-                return environment_variable_alias(&text)
-                    .into_iter()
-                    .collect::<Vec<_>>();
-            }
-            text.split([',', '|'])
-                .filter_map(environment_variable_alias)
-                .collect::<Vec<_>>()
+/// A declaration group is atomic: accepting a word after rejected prose does
+/// not prove that either the paragraph or that word declares a variable.
+pub(super) fn environment_occurrences(text: &str) -> Option<Vec<RecognizedName>> {
+    let parts = if text.contains('=') {
+        vec![text]
+    } else {
+        text.split([',', '|']).collect()
+    };
+    parts
+        .into_iter()
+        .map(|part| {
+            let name = environment_variable_alias(part)?;
+            let start = part.as_ptr() as usize - text.as_ptr() as usize + part.len()
+                - part.trim_start().len();
+            Some(RecognizedName::contiguous(&name, start))
         })
-        .fold(Vec::new(), |mut names, name| {
-            if !names.contains(&name) {
-                names.push(name);
-            }
-            names
-        })
+        .collect()
 }
 
 /// Return one exact environment-variable spelling without an authored value.
