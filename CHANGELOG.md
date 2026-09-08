@@ -126,6 +126,15 @@ that crate was not published for that change.
   scopes, and carry font and spacing state out of every structural consumer.
   Literal source lines follow macro descendants; ordinary filled text keeps
   word boundaries under `Sm off` while macro operands still obey that mode.
+- Execute mdoc link labels before URI font controls and preserve the distinct
+  scopes of `Lk`, multi-address `Mt`, `In` and `Xr`. Compact links retain typed
+  targets even when the URI is not repeated as visible text. Function commas
+  now use the next logical operand, respecting authored punctuation and
+  intervening prose without replaying controls.
+- Accept table recovery output, formatter state and diagnostics atomically;
+  rejected candidates cannot leak state, while successful control-only cells
+  still apply their effects. These lowering corrections, including the filled
+  text and literal-line boundary changes above, do not change the wire schema.
 - Preserve generated function/reference font and spacing effects, including
   nested `Sm`, and keep ordinary `Fo` declarations in their surrounding prose.
   SYNOPSIS declarations retain their independent boundaries. Empty `Eo`/`Ec`

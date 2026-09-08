@@ -76,6 +76,29 @@ and relationships without erasing owners or their children. Derived selectors
 reuse a single immutable location snapshot, and search composes byte ownership
 with rendered text even when table cells flatten for portable Markdown.
 
+### Native lowering ownership
+
+Native lowering is private implementation, not a second public document API.
+The following boundaries keep source interpretation shared across prose,
+literal displays, lists and table recovery:
+
+| Responsibility | Owner and lifetime |
+| --- | --- |
+| Stage composition | `mandoc/mod.rs` resolves the parsed document and runs lowering, navigation and validation. |
+| Source lookup | `source_context.rs`, `ast.rs` and `equations.rs` provide source/AST services and bounded operation-local memoization; diagnostics use their own collector. They do not store a hidden formatter register. |
+| Formatter state | `FormatterState` carries current font, previous font and spacing explicitly between consumers. A normal font-scope exit restores current font but retains previous-font effects. |
+| Container routing | `containers.rs` streams borrowed children and scope boundaries; structural payloads remain tables/lists. Logical punctuation adjacency is a separate, non-executing classification in `adjacency.rs`. |
+| Inline and physical lines | `InlineBuilder` executes word/control events; `source_cursor.rs` places source-visible events on physical lines. No-fill changes layout, not macro interpretation. |
+| Structural layout | Block drivers own pending paragraphs and list state; section, synopsis, man no-fill and dialect-specific list consumers remain separate. Shared definition helpers do not own formatter state. |
+| Speculative recovery | Table-cell candidates retain output, final formatter state and diagnostics until ownership acceptance. Rejection rolls back all three, unlike a normal font-scope exit. |
+
+Complete corpus regressions live in the repository integration tests, outside
+the published `src/**` source set. Packaged unit tests remain self-contained.
+Target and topology audits complement these exact text/font/line assertions;
+a clean target ledger alone does not establish rendering fidelity.
+
+### Public entry points
+
 | Need | Preferred API |
 | --- | --- |
 | Reuse one stable discovery snapshot | `DocumentResolver` |
