@@ -49,6 +49,32 @@ export function adapted(name, input) {
     text = text.replace(end, '    };\n    let enumerated_rows = crate::pager::sgr::independent_rows(wrapped_rows).into_iter().enumerate();');
   }
   if (name === 'core/utils/display/tests.rs') text = text.replace('let res = Vec::new();', 'let res: Vec<u8> = Vec::new();').replace('res.contains("minus")', 'res.contains("mant_ui")');
+  return applySearchPatch(name, text);
+}
+
+// Exact-context local behavioral patch. Fail closed on upstream drift; this
+// includes the corrected upstream test expectations as well as production code.
+function applySearchPatch(name, text) {
+  const patch = fs.readFileSync(path.join(root, 'crates/mant-ui/src/pager/patches/0001-visible-search.patch'), 'utf8');
+  let selected = false, before = [], after = [];
+  function flush() {
+    if (!before.length && !after.length) return;
+    const old = before.join('\n') + '\n', replacement = after.join('\n') + '\n';
+    const at = text.indexOf(old);
+    if (at < 0 || text.indexOf(old, at + 1) >= 0) throw new Error(`ambiguous/missing patch context: ${name}`);
+    text = text.slice(0, at) + replacement + text.slice(at + old.length);
+    before = []; after = [];
+  }
+  for (const line of patch.trimEnd().split('\n')) {
+    if (line.startsWith('--- ')) { flush(); selected = line.slice(4) === name; }
+    else if (line.startsWith('+++ ')) continue;
+    else if (line.startsWith('@@')) flush();
+    else if (selected) {
+      if (line.startsWith(' ') || line.startsWith('-')) before.push(line.slice(1));
+      if (line.startsWith(' ') || line.startsWith('+')) after.push(line.slice(1));
+    }
+  }
+  flush();
   return text;
 }
 

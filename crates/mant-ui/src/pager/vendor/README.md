@@ -22,10 +22,13 @@ Unused public APIs
 and upstream stylistic lints are allowed only at this private vendor boundary;
 ManT's SGR adapter is outside that allowance and receives normal strict checks.
 
-Behavioral delta is confined to `screen/mod.rs`: logical lines propagate SGR,
-and wrapped physical rows call the adjacent ManT SGR adapter before search and
-independent redraw. Original logical text, width calculation, search, selection,
-terminal lifecycle and resize mechanisms remain upstream-owned. No initial-width
+Logical lines propagate SGR, and wrapped physical rows call the adjacent ManT
+SGR adapter before independent redraw. The replayed `../patches/0001-visible-search.patch`
+also makes search/index/highlight use visible physical rows, tolerates empty
+search results, and replaces escape relocation with the adjacent search-overlay
+adapter. Original escapes stay at their glyph positions; match reverse-video is
+reapplied across resets and removed without destroying source type colors.
+Width calculation, selection, terminal lifecycle and resize remain upstream-owned. No initial-width
 hard wrapping or document/IR modification is performed. Native selection tests
 remain enabled, including selection across soft wraps.
 

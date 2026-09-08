@@ -11,7 +11,7 @@ impl SgrState {
         self.scan(line);
         prefix.map_or(Cow::Borrowed(line), |prefix| Cow::Owned(prefix + line))
     }
-    fn scan(&mut self, text: &str) {
+    pub(super) fn scan(&mut self, text: &str) {
         let bytes = text.as_bytes();
         let mut offset = 0;
         while offset + 2 < bytes.len() {
@@ -28,6 +28,10 @@ impl SgrState {
             }
             offset += 1;
         }
+    }
+
+    pub(super) fn reversed(&self) -> bool {
+        self.0.contains_key(&7)
     }
 
     fn apply(&mut self, sequence: &str) {

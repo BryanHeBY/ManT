@@ -277,6 +277,21 @@ def check_pager_rows(path, environment, width):
             read_output()
         os.write(master, b"n")
         read_output()
+        # Validate actual glyph colors while matching wrapped name rows, not
+        # merely the presence of a green escape somewhere in the output.
+        os.write(master, b"/")
+        read_output()
+        os.write(master, b"z+\r")
+        read_output()  # includes uncolored query-prompt echo
+        searched = 0
+        for key in [b"n", b"N", b"n"]:
+            os.write(master, key)
+            searched += check_colors(read_output())
+        assert searched > 0, (width, all_output)
+        for columns in [20, 80, width]:
+            fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 3, columns, 0, 0))
+            process.send_signal(signal.SIGWINCH)
+            check_colors(read_output())
         # A missing visible query is normal, including ANSI parameter digits.
         # This drives the actual FetchSearchQuery event path (formerly unwrap()).
         for query in (b"NEVER_PRESENT", b"92"):

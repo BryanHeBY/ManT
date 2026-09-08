@@ -9,6 +9,7 @@ use std::io;
 #[rustfmt::skip]
 #[allow(dead_code, unused_imports, missing_docs, clippy::all, clippy::pedantic, clippy::nursery)]
 mod native;
+mod search_overlay;
 mod sgr;
 use minus::{Pager, hooks::Hook};
 use native as minus;
