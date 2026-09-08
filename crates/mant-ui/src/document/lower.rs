@@ -1,14 +1,15 @@
 //! IR to logical terminal content and anchors.
-use super::StyledInlineLine;
-use super::inline::{styled_bound_inline_lines, styled_display_inline_lines};
+use super::inline::styled_display_inline_lines;
 use super::{
-    Arc, Block, DocumentAddress, ExternalUri, HashMap, Inline, LineSurface, LinkTarget, ListKind,
-    LogicalLine, LogicalLinkRange, LogicalTableCell, LogicalTableLayout, Modifier, NavKind,
-    NavNode, Section, SemanticIndex, Span, Style, TLDR_ID, TLDR_VERTICAL_PADDING_ROWS,
-    TldrDocument, UnicodeWidthStr, WrapMode, inline_anchor_rows, shifted_links, spans_width, theme,
-    tldr_style,
+    Arc, Block, DocumentAddress, ExternalUri, HashMap, Inline, LineSurface, LinkTarget,
+    LogicalLine, LogicalLinkRange, Modifier, NavKind, NavNode, Section, SemanticIndex, Span, Style,
+    TLDR_ID, TLDR_VERTICAL_PADDING_ROWS, TldrDocument, UnicodeWidthStr, WrapMode,
+    inline_anchor_rows, theme, tldr_style,
 };
-use mant_protocol::geometry::{compose_origin, coordinate, marker_run_in_gap, padding};
+use mant_protocol::geometry::{compose_origin, coordinate, padding};
+
+mod lists;
+mod table;
 pub(super) struct DocumentBuilder<'a> {
     pub(super) entry_styles: Arc<mant_protocol::EntryStyleMap<'a>>,
     pub(super) label: String,
@@ -226,7 +227,6 @@ impl DocumentBuilder<'_> {
         self.spacing(gap.rows(0));
     }
 
-    #[allow(clippy::too_many_lines)]
     pub(super) fn block(&mut self, block: &Block, base_indent: i32) {
         match block {
             Block::Paragraph {
@@ -266,98 +266,12 @@ impl DocumentBuilder<'_> {
                 layout,
                 ..
             } => {
-                let indent = compose_origin(base_indent, layout.indent_columns);
-                for (index, item) in items.iter().enumerate() {
-                    if index > 0 && !compact {
-                        self.spacing(1);
-                    }
-                    let item_start = self.lines.len();
-                    let marker = match kind {
-                        ListKind::Bullet => "• ".to_owned(),
-                        ListKind::Ordered { .. } => {
-                            format!("{}. ", kind.ordinal(index).expect("ordered list ordinal"))
-                        }
-                        ListKind::Plain => String::new(),
-                    };
-                    let has_marker = !marker.is_empty();
-                    let marker_width = mant_protocol::geometry::text_width(&marker);
-                    if has_marker
-                        && let Some(Block::Paragraph {
-                            children, layout, ..
-                        }) = item.blocks.first()
-                        && let Some(gap) =
-                            marker_run_in_gap(indent, marker_width, layout.indent_columns)
-                    {
-                        self.spacing(layout.spacing_before_lines);
-                        for (id, row) in inline_anchor_rows(children) {
-                            self.anchors.entry(id).or_insert(self.lines.len() + row);
-                        }
-                        let content_indent = compose_origin(
-                            compose_origin(indent, coordinate(marker_width)),
-                            layout.indent_columns,
-                        );
-                        let continuation_indent =
-                            compose_origin(content_indent, layout.continuation_indent_columns);
-                        let mut inline_lines = styled_bound_inline_lines(
-                            children,
-                            Style::default().fg(theme::TEXT),
-                            self.address.as_ref(),
-                            self.entry_styles.ranges(children),
-                        );
-                        let first = inline_lines
-                            .first_mut()
-                            .map_or_else(StyledInlineLine::default, std::mem::take);
-                        let mut spans =
-                            vec![Span::styled(marker, Style::default().fg(theme::HEADING))];
-                        spans.push(Span::raw(" ".repeat(gap)));
-                        spans.extend(first.spans);
-                        self.push(
-                            LogicalLine::hanging(
-                                padding(indent),
-                                padding(continuation_indent),
-                                spans,
-                            )
-                            .with_links(shifted_links(
-                                first.links,
-                                marker_width.saturating_add(gap),
-                            )),
-                        );
-                        for line in inline_lines.into_iter().skip(1) {
-                            self.push(
-                                LogicalLine::hanging(
-                                    padding(continuation_indent),
-                                    padding(continuation_indent),
-                                    line.spans,
-                                )
-                                .with_links(line.links),
-                            );
-                        }
-                        self.blocks(
-                            &item.blocks[1..],
-                            compose_origin(indent, coordinate(marker_width)),
-                        );
-                    } else {
-                        if has_marker {
-                            self.push(LogicalLine::plain(
-                                padding(indent),
-                                marker,
-                                Style::default().fg(theme::HEADING),
-                            ));
-                        }
-                        self.blocks(
-                            &item.blocks,
-                            compose_origin(indent, coordinate(marker_width)),
-                        );
-                    }
-                    if let Some(facts) = &item.entry {
-                        // Leading spacing is presentation, not the semantic landing row.
-                        let first_content = self.lines[item_start..]
-                            .iter()
-                            .position(|line| !line.spans.is_empty() || line.table_row.is_some())
-                            .map_or(item_start, |offset| item_start + offset);
-                        self.anchors.insert(facts.id.to_string(), first_content);
-                    }
-                }
+                self.list(
+                    *kind,
+                    *compact,
+                    items,
+                    compose_origin(base_indent, layout.indent_columns),
+                );
             }
             Block::DefinitionList {
                 items,
@@ -365,76 +279,14 @@ impl DocumentBuilder<'_> {
                 layout,
                 ..
             } => {
-                let indent = compose_origin(base_indent, layout.indent_columns);
-                for (index, item) in items.iter().enumerate() {
-                    let spacing = item
-                        .layout
-                        .spacing_before_lines
-                        .unwrap_or(u16::from(index > 0 && !compact));
-                    self.spacing(spacing);
-                    if let Some(identity) = &item.entry {
-                        self.anchors
-                            .insert(identity.id.to_string(), self.lines.len());
-                    }
-                    if item.layout.inline_term {
-                        self.inline_definition(item, indent);
-                    } else {
-                        for term in &item.terms {
-                            self.inline_lines(term, indent, Style::default().fg(theme::TEXT));
-                        }
-                        self.blocks(
-                            &item.description,
-                            compose_origin(indent, item.layout.body_indent_columns),
-                        );
-                    }
-                }
+                self.definitions(
+                    items,
+                    *compact,
+                    compose_origin(base_indent, layout.indent_columns),
+                );
             }
             Block::Table { rows, layout, .. } => {
-                let indent = compose_origin(base_indent, layout.indent_columns);
-                if mant_protocol::geometry::table_requires_origin_preserving_stack(rows, indent) {
-                    for cell in rows.iter().flat_map(|row| &row.cells) {
-                        self.blocks(&cell.blocks, indent);
-                    }
-                    return;
-                }
-                let grid = mant_ir::TableGrid::new(rows);
-                let rows = (0..grid.rows.len())
-                    .map(|row| {
-                        grid.slots(row, 256)
-                            .unwrap_or_else(|| {
-                                grid.rows[row]
-                                    .iter()
-                                    .map(|positioned| Some(positioned.cell))
-                                    .collect()
-                            })
-                            .into_iter()
-                            .map(|cell| {
-                                let mut builder = Self::new(String::new(), self.address.clone());
-                                builder.entry_styles = Arc::clone(&self.entry_styles);
-                                if let Some(cell) = cell {
-                                    builder.blocks(&cell.blocks, 0);
-                                }
-                                let content = builder.finish().content;
-                                let mut rendered = LogicalTableCell::new(
-                                    content.lines,
-                                    cell.and_then(|cell| cell.alignment),
-                                );
-                                rendered.anchors = content.anchors;
-                                rendered
-                            })
-                            .collect::<Vec<_>>()
-                    })
-                    .collect::<Vec<_>>();
-                let mut table_layout = LogicalTableLayout::for_rows(&rows);
-                table_layout.force_stack = grid.column_count > 256;
-                let table_layout = Arc::new(table_layout);
-                for cells in rows {
-                    self.push(LogicalLine::table(
-                        padding(indent),
-                        cells,
-                        Arc::clone(&table_layout),
-                    ));
-                }
+                self.table(rows, compose_origin(base_indent, layout.indent_columns));
             }
             Block::Equation { value, layout, .. } => {
                 self.push(
@@ -463,102 +315,6 @@ impl DocumentBuilder<'_> {
         self.pending_gap.append_resolved(lines);
         for _ in before..self.pending_gap.rows(0) {
             self.lines.push(LogicalLine::empty());
-        }
-    }
-
-    pub(super) fn inline_definition(&mut self, item: &mant_ir::DefinitionItem, indent: i32) {
-        let mut head_lines = Vec::new();
-        let mut head_targets = Vec::new();
-        for term in &item.terms {
-            for (id, row) in inline_anchor_rows(term) {
-                head_targets.push((id, head_lines.len() + row));
-            }
-            let lines = styled_bound_inline_lines(
-                term,
-                Style::default().fg(theme::TEXT),
-                self.address.as_ref(),
-                self.entry_styles.ranges(term),
-            );
-            if lines.len() != 1 || !lines[0].spans.is_empty() {
-                head_lines.extend(lines);
-            }
-        }
-        // A trailing zero-width root shares the last head/body row when that
-        // row runs in. Its provisional slot is not a new visible line.
-        let last_target_row = if item.inline_description().is_some() {
-            head_lines.len().saturating_sub(1)
-        } else {
-            head_lines.len()
-        };
-        for (id, row) in head_targets {
-            self.anchors
-                .entry(id)
-                .or_insert(self.lines.len() + row.min(last_target_row));
-        }
-        let block_origin = compose_origin(indent, item.layout.body_indent_columns);
-        let last = head_lines.pop().unwrap_or_default();
-        for line in head_lines {
-            self.push(
-                LogicalLine::hanging(padding(indent), padding(indent), line.spans)
-                    .with_links(line.links),
-            );
-        }
-        let mut term_spans = last.spans;
-        let mut term_links = last.links;
-        let term_width = spans_width(&term_spans);
-        if let Some((children, layout)) = item.inline_description() {
-            for (id, row) in inline_anchor_rows(children) {
-                self.anchors.entry(id).or_insert(self.lines.len() + row);
-            }
-            let first_indent = compose_origin(block_origin, layout.indent_columns);
-            let continuation_indent =
-                compose_origin(first_indent, layout.continuation_indent_columns);
-            let description_indent = first_indent.max(compose_origin(
-                indent,
-                coordinate(
-                    term_width.saturating_add(usize::from(item.layout.min_term_gap_columns)),
-                ),
-            ));
-            term_spans.push(Span::raw(
-                " ".repeat(
-                    padding(description_indent)
-                        .saturating_sub(padding(indent).saturating_add(term_width))
-                        .max(usize::from(item.layout.min_term_gap_columns)),
-                ),
-            ));
-            let mut description_lines = styled_bound_inline_lines(
-                children,
-                Style::default().fg(theme::TEXT),
-                self.address.as_ref(),
-                self.entry_styles.ranges(children),
-            );
-            let first = description_lines
-                .first_mut()
-                .map_or_else(StyledInlineLine::default, std::mem::take);
-            let description_offset = spans_width(&term_spans);
-            term_links.extend(shifted_links(first.links, description_offset));
-            term_spans.extend(first.spans);
-            self.push(
-                LogicalLine::hanging(padding(indent), padding(continuation_indent), term_spans)
-                    .with_links(term_links),
-            );
-            for line in description_lines.into_iter().skip(1) {
-                self.push(
-                    LogicalLine::hanging(
-                        padding(continuation_indent),
-                        padding(continuation_indent),
-                        line.spans,
-                    )
-                    .with_links(line.links),
-                );
-            }
-            self.blocks(&item.description[1..], block_origin);
-        } else {
-            self.push(
-                LogicalLine::hanging(padding(indent), padding(indent), term_spans)
-                    .with_links(term_links),
-            );
-            self.blocks(&item.description, block_origin);
         }
     }
 
