@@ -35,8 +35,8 @@ ROOT = Path(__file__).resolve().parents[1]
 FIXTURE_ROOT = ROOT / "tests/fixtures/roff/real"
 DEFAULT_PROFILER = ROOT / "target/debug/examples/roff_semantic_profile"
 DEFAULT_AUDIT_DB = ROOT / "tests/fixtures/roff/SEMANTIC_AUDIT.csv"
-PROFILE_SCHEMA = "mant.roff-semantic-profile/v3"
-SUPPORTED_PROFILE_SCHEMAS = {"mant.roff-semantic-profile/v1", "mant.roff-semantic-profile/v2", PROFILE_SCHEMA}
+PROFILE_SCHEMA = "mant.roff-semantic-profile/v4"
+SUPPORTED_PROFILE_SCHEMAS = {"mant.roff-semantic-profile/v1", "mant.roff-semantic-profile/v2", "mant.roff-semantic-profile/v3", PROFILE_SCHEMA}
 DATABASE_FIELDS = [
     "corpus",
     "path",
@@ -96,6 +96,7 @@ class Finding:
     value_domain_violations: list[str] | None = None
     ordinal_conversions: list[dict[str, object]] | None = None
     ordinal_conversion_violations: list[str] | None = None
+    declaration_groups: dict | None = None
 
 
 def parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
@@ -322,6 +323,8 @@ def profile_findings(
                 and isinstance(violations, list)
                 and all(isinstance(item, str) for item in violations)
                 and valid_violation_summary(response)
+                and isinstance(response.get("declarationGroups"), dict)
+                and isinstance(response.get("declarationGroupViolations"), list)
             )
             if not valid:
                 yield Finding(label, "hard-failure", [], "invalid profiler response")
@@ -340,6 +343,7 @@ def profile_findings(
                 value_domain_violations=value_domain_violations,
                 ordinal_conversions=ordinal_conversions,
                 ordinal_conversion_violations=ordinal_conversion_violations,
+                declaration_groups=response["declarationGroups"],
             )
 
 
@@ -365,6 +369,7 @@ def valid_violation_summary(response: dict[str, object]) -> bool:
             response.get(field) for field in (
                 "ordinalEntries", "ordinalDefinitions", "emptyEntries",
                 "valueDomainViolations", "ordinalConversionViolations", "semanticViolations",
+                "declarationGroupViolations",
             )
         )
     )

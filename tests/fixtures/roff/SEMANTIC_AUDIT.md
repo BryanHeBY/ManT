@@ -8,12 +8,17 @@ agent-visible semantic index.
 
 ## Oracle and scope
 
-The separate [query gold](ENTRY_QUERY_GOLD.json) fixes 160 manually inspected
-queries over 120 source paths (119 decompressed identities, 93 topics). It
+The separate [query gold](ENTRY_QUERY_GOLD.json) preserves the original 160
+manually inspected queries and adds declaration-context coverage (199 queries
+over 125 source paths). It
 records raw source coordinates, complete returned forms, exact names/kinds,
 bounded opening-body witnesses and all expected direct owners. Extra direct
 owners fail too; supplementary mention evidence is allowed. Empty independent
-declarations must stay empty, not borrow the next description. These are
+declarations must stay empty, not borrow the next description. `expectedSupports`
+separately checks exact member sources/forms, the final description's head,
+middle and tail witnesses, required table/code/link structure and absence of
+invented alias relationships. A `declaration-member` response is resolved back
+to its physical owner before applying the unchanged original body assertions. These are
 selected witnesses, not whole-page golden renderings or a precision/recall
 estimate for all entries. Per-query notes distinguish exact common declarations
 from accepted conservative classifications and local macro/format syntax.
@@ -112,10 +117,10 @@ and macOS execution was not available in this Linux acceptance run.
 The development-only `roff_semantic_profile` example parses and lowers each
 page once, builds the final `SemanticIndex`, and records each entry's ID, kind,
 selectable names (the legacy `aliases` field), explicit `aliasGroups` / `aliasOf`, visible forms, targets, containing section, nested depth, and
-value-domain origin. Profile schema `mant.roff-semantic-profile/v3` names the
+value-domain origin. Profile schema `mant.roff-semantic-profile/v4` names the
 selectable spellings `names`, aligned with the IR and outline rather than
-implying alias equivalence. Historical v1/v2 ledger rows remain readable; a new
-scan records v3 explicitly. Like v2, the profiler also walks
+implying alias equivalence. Historical v1/v2/v3 ledger rows remain readable; a new
+scan records v4 explicitly. Like v2, the profiler also walks
 the IR definition lists independently so an ordinal that failed to become a
 list cannot hide merely because semantic discovery declined it. Independently,
 it derives every punctuated ordinal candidate from the original owned mdoc AST,
@@ -124,6 +129,19 @@ and complete term sequence, then matches that candidate to the final IR block
 at the same source line. This source-side conversion ledger detects both a
 qualifying `-tag` sequence that was not recovered and a non-tag definition
 whose terms were incorrectly deleted by over-conversion.
+
+Version 4 adds independent bidirectional declaration-run accounting. Every
+candidate run records native AST paths, source coordinates, retained/rejected
+status and a reason; every observed IR group must match one source run. A
+recognized but unexplained run, invalid group or unbacked group is review
+evidence. Missing groups and relocated owners have adversarial profiler tests.
+Nameless/template and non-definition candidates retain their rejection reasons
+for inspection rather than becoming newly inferred names. This is not a full
+syntax oracle: a reasoned rejection does not prove the author's intent, and
+native ASTs can omit source-only whitespace requests. The query gold's original
+source witnesses and explicit-boundary product tests are independent checks.
+Gold result reports include per-source run counts and decision histograms, so
+retained-group counts alone cannot stand in for explanation completeness.
 
 The following are high-confidence review findings:
 

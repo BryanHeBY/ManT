@@ -1,8 +1,8 @@
 {
   "schema": "mant.roff-query-gold/v1",
   "reviewed": "2026-09-08",
-  "producer": "cedbd7cd",
-  "scope": "160 selected queries across 120 fixed input paths / 119 unique decompressed sources / 93 topics. Head, source owner, bounded body witnesses, kind/names/forms and forbidden direct records; not full-document fidelity or exhaustive recall.",
+  "producer": "751dc3d4",
+  "scope": "Original 160 reviewed physical-owner queries plus declaration-support positives and independent controls. Support gold records exact members/provider, head/middle/tail body witnesses and required structures. Not exhaustive whole-document recall or fidelity.",
   "roots": {
     "host": "/usr/share/man",
     "corpus": "../../../../tmp/mantdoc-real-corpus",
@@ -70,6 +70,31 @@
               }
             }
           ]
+        },
+        {
+          "query": "--save",
+          "review": "Physical head/provider windows cross-checked against the SG review panel and original man/mdoc. Independent body assertions remain separate from group context. Head/middle/tail witnesses include final notes.",
+          "expected": [
+            {
+              "source": {
+                "line": 164,
+                "column": 2
+              },
+              "kind": "option",
+              "names": [
+                "--save"
+              ],
+              "forms": [
+                "--save"
+              ],
+              "emptyDescription": false,
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "df096628202d648cdbc4068a956f6c192f110d2c1514d47e4dfc8848e8f1c897"
+              }
+            }
+          ],
+          "expectedSupports": []
         }
       ]
     },
@@ -134,6 +159,31 @@
               }
             }
           ]
+        },
+        {
+          "query": "attach-session",
+          "review": "Physical head/provider windows cross-checked against the SG review panel and original man/mdoc. Independent body assertions remain separate from group context. Head/middle/tail witnesses include final notes.",
+          "expected": [
+            {
+              "source": {
+                "line": 1073,
+                "column": 2
+              },
+              "kind": "command",
+              "names": [
+                "attach-session"
+              ],
+              "forms": [
+                "attach-session [-dErx] [-c working-directory] [-f flags] [-t target-session]"
+              ],
+              "emptyDescription": false,
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "c93d81a6dbc0b67e99a55f0555d86d5ab76edb3c451523f18267761bf73e488b"
+              }
+            }
+          ],
+          "expectedSupports": []
         }
       ]
     },
@@ -1201,6 +1251,404 @@
               }
             }
           ]
+        },
+        {
+          "query": "-x",
+          "review": "Physical head/provider windows cross-checked against the SG review panel and original man/mdoc. Independent body assertions remain separate from group context. Head/middle/tail witnesses include final notes.",
+          "expected": [
+            {
+              "source": {
+                "line": 1720,
+                "column": 2
+              },
+              "kind": "option",
+              "names": [
+                "-x"
+              ],
+              "forms": [
+                "-x language"
+              ],
+              "emptyDescription": true
+            },
+            {
+              "source": {
+                "line": 1755,
+                "column": 2
+              },
+              "kind": "option",
+              "names": [
+                "-x"
+              ],
+              "forms": [
+                "-x none"
+              ],
+              "emptyDescription": false,
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "d82a168758d121cbefa6403309c89c6fa7d4ac9e9626808a187a658c665d6093"
+              }
+            }
+          ],
+          "expectedSupports": [
+            {
+              "memberSources": [
+                {
+                  "line": 1720,
+                  "column": 2
+                },
+                {
+                  "line": 1723,
+                  "column": 2
+                },
+                {
+                  "line": 1725,
+                  "column": 2
+                }
+              ],
+              "memberForms": [
+                [
+                  "-x language"
+                ],
+                [
+                  "--language=language"
+                ],
+                [
+                  "--language language"
+                ]
+              ],
+              "bodyWitnesses": [
+                {
+                  "startWord": 0,
+                  "words": 8,
+                  "sha256": "33d9b8351897571191d53d090301c049443edb485966f0febe790f6ba1d8e755"
+                },
+                {
+                  "startWord": 45,
+                  "words": 8,
+                  "sha256": "ccd62b43b7fbecf8875b4b6bd60bf73042d0b4ba9e6ed7f193e91b5e1800b713"
+                },
+                {
+                  "startWord": 90,
+                  "words": 8,
+                  "sha256": "f8421d8199891c146cdea9006b4e33776e0571c5364a6904c1775b8f511b009f"
+                }
+              ],
+              "requiredTypes": [
+                "preformatted"
+              ],
+              "bodyIncludes": [
+                "Specify explicitly the language",
+                "-std=legacy"
+              ]
+            }
+          ]
+        },
+        {
+          "query": "-c",
+          "review": "Physical head/provider windows cross-checked against the SG review panel and original man/mdoc. Independent body assertions remain separate from group context. Head/middle/tail witnesses include final notes.",
+          "expected": [
+            {
+              "source": {
+                "line": 1766,
+                "column": 2
+              },
+              "kind": "option",
+              "names": [
+                "-c"
+              ],
+              "forms": [
+                "-c"
+              ],
+              "emptyDescription": true
+            },
+            {
+              "source": {
+                "line": 17364,
+                "column": 2
+              },
+              "kind": "option",
+              "names": [
+                "-c"
+              ],
+              "forms": [
+                "-c"
+              ],
+              "emptyDescription": true
+            }
+          ],
+          "expectedSupports": [
+            {
+              "memberSources": [
+                {
+                  "line": 1766,
+                  "column": 2
+                },
+                {
+                  "line": 1769,
+                  "column": 2
+                }
+              ],
+              "memberForms": [
+                [
+                  "-c"
+                ],
+                [
+                  "--compile"
+                ]
+              ],
+              "bodyWitnesses": [
+                {
+                  "startWord": 0,
+                  "words": 8,
+                  "sha256": "94d6b41c82825169d875b34b2d398bb1af1f7377aefdaee6d5614c139f543496"
+                },
+                {
+                  "startWord": 28,
+                  "words": 8,
+                  "sha256": "2fb6fcb15258b9f6fe3b4b8cb387d6709b647bd4e9f1e512e8805f77f7639b99"
+                },
+                {
+                  "startWord": 56,
+                  "words": 8,
+                  "sha256": "291c202c7eaf4262eae8b79b7cd46ede86c3510fc9d0877739e3864de68b5ee1"
+                }
+              ],
+              "requiredTypes": []
+            },
+            {
+              "memberSources": [
+                {
+                  "line": 17364,
+                  "column": 2
+                },
+                {
+                  "line": 17367,
+                  "column": 2
+                },
+                {
+                  "line": 17369,
+                  "column": 2
+                }
+              ],
+              "memberForms": [
+                [
+                  "-c"
+                ],
+                [
+                  "-S"
+                ],
+                [
+                  "-E"
+                ]
+              ],
+              "bodyWitnesses": [
+                {
+                  "startWord": 0,
+                  "words": 8,
+                  "sha256": "f130d8f6ac0eaa00470be107b5850cd37a860d50a043aa3dba7d0ffda1c7f462"
+                },
+                {
+                  "startWord": 7,
+                  "words": 8,
+                  "sha256": "296f7c13750cbca0210cb78a8231400695ab7a108480b8d4b96869a1572e03d1"
+                },
+                {
+                  "startWord": 15,
+                  "words": 8,
+                  "sha256": "6d93fa8eab58c263d340c05ac01abec207b23c9ddbefab5c3ffe3d56ebad95ab"
+                }
+              ],
+              "requiredTypes": []
+            }
+          ]
+        },
+        {
+          "query": "-S",
+          "review": "Physical head/provider windows cross-checked against the SG review panel and original man/mdoc. Independent body assertions remain separate from group context. Head/middle/tail witnesses include final notes.",
+          "expected": [
+            {
+              "source": {
+                "line": 1781,
+                "column": 2
+              },
+              "kind": "option",
+              "names": [
+                "-S"
+              ],
+              "forms": [
+                "-S"
+              ],
+              "emptyDescription": true
+            },
+            {
+              "source": {
+                "line": 17367,
+                "column": 2
+              },
+              "kind": "option",
+              "names": [
+                "-S"
+              ],
+              "forms": [
+                "-S"
+              ],
+              "emptyDescription": true
+            }
+          ],
+          "expectedSupports": [
+            {
+              "memberSources": [
+                {
+                  "line": 1781,
+                  "column": 2
+                },
+                {
+                  "line": 1784,
+                  "column": 2
+                }
+              ],
+              "memberForms": [
+                [
+                  "-S"
+                ],
+                [
+                  "--assemble"
+                ]
+              ],
+              "bodyWitnesses": [
+                {
+                  "startWord": 0,
+                  "words": 8,
+                  "sha256": "4cd0cb5a653a65e39ce2e6d52d57028a4cdc7220ba184782f92fc172dbf4a051"
+                },
+                {
+                  "startWord": 24,
+                  "words": 8,
+                  "sha256": "99b03bd0b7678c7bb7e0b05ed4c9e6b8cd5c2f2e842dbaf6ea6b2dbeef4bfd93"
+                },
+                {
+                  "startWord": 48,
+                  "words": 8,
+                  "sha256": "23167f8dcbf6524337ee5dfe92127d4efbde70bdfd0b32954c37d03594d3f053"
+                }
+              ],
+              "requiredTypes": []
+            },
+            {
+              "memberSources": [
+                {
+                  "line": 17364,
+                  "column": 2
+                },
+                {
+                  "line": 17367,
+                  "column": 2
+                },
+                {
+                  "line": 17369,
+                  "column": 2
+                }
+              ],
+              "memberForms": [
+                [
+                  "-c"
+                ],
+                [
+                  "-S"
+                ],
+                [
+                  "-E"
+                ]
+              ],
+              "bodyWitnesses": [
+                {
+                  "startWord": 0,
+                  "words": 8,
+                  "sha256": "f130d8f6ac0eaa00470be107b5850cd37a860d50a043aa3dba7d0ffda1c7f462"
+                },
+                {
+                  "startWord": 7,
+                  "words": 8,
+                  "sha256": "296f7c13750cbca0210cb78a8231400695ab7a108480b8d4b96869a1572e03d1"
+                },
+                {
+                  "startWord": 15,
+                  "words": 8,
+                  "sha256": "6d93fa8eab58c263d340c05ac01abec207b23c9ddbefab5c3ffe3d56ebad95ab"
+                }
+              ],
+              "requiredTypes": []
+            }
+          ]
+        },
+        {
+          "query": "-o",
+          "review": "Physical head/provider windows cross-checked against the SG review panel and original man/mdoc. Independent body assertions remain separate from group context. Head/middle/tail witnesses include final notes.",
+          "expected": [
+            {
+              "source": {
+                "line": 1806,
+                "column": 2
+              },
+              "kind": "option",
+              "names": [
+                "-o"
+              ],
+              "forms": [
+                "-o file"
+              ],
+              "emptyDescription": true
+            }
+          ],
+          "expectedSupports": [
+            {
+              "memberSources": [
+                {
+                  "line": 1806,
+                  "column": 2
+                },
+                {
+                  "line": 1809,
+                  "column": 2
+                },
+                {
+                  "line": 1811,
+                  "column": 2
+                }
+              ],
+              "memberForms": [
+                [
+                  "-o file"
+                ],
+                [
+                  "--output=file"
+                ],
+                [
+                  "--output file"
+                ]
+              ],
+              "bodyWitnesses": [
+                {
+                  "startWord": 0,
+                  "words": 8,
+                  "sha256": "ed0a3d134050abd8b918dcdaa45f3db26bbcee0bcfcd1d6a10a59f025699a0e6"
+                },
+                {
+                  "startWord": 179,
+                  "words": 8,
+                  "sha256": "f5e8c3676fca6c0ed2b513cd1049ed273898e413db245f479f28d23f109b91be"
+                },
+                {
+                  "startWord": 359,
+                  "words": 8,
+                  "sha256": "33ec1308fea571d78c16f7dea03a02c092f33861337d3b3a814eb81311df5c01"
+                }
+              ],
+              "requiredTypes": [
+                "preformatted"
+              ]
+            }
+          ]
         }
       ]
     },
@@ -1371,6 +1819,58 @@
               }
             }
           ]
+        },
+        {
+          "query": "--fast",
+          "review": "Physical head/provider windows cross-checked against the SG review panel and original man/mdoc. Independent body assertions remain separate from group context. Head/middle/tail witnesses include final notes.",
+          "expected": [
+            {
+              "source": {
+                "line": 345,
+                "column": 2
+              },
+              "kind": "option",
+              "names": [
+                "--fast",
+                "--best"
+              ],
+              "forms": [
+                "-# --fast --best"
+              ],
+              "emptyDescription": false,
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "39d585bfe16d8a1fe261bb5c0a4133c07622d56cf81cc5b1ecdea19428e731fe"
+              }
+            }
+          ],
+          "expectedSupports": []
+        },
+        {
+          "query": "--best",
+          "review": "Physical head/provider windows cross-checked against the SG review panel and original man/mdoc. Independent body assertions remain separate from group context. Head/middle/tail witnesses include final notes.",
+          "expected": [
+            {
+              "source": {
+                "line": 345,
+                "column": 2
+              },
+              "kind": "option",
+              "names": [
+                "--fast",
+                "--best"
+              ],
+              "forms": [
+                "-# --fast --best"
+              ],
+              "emptyDescription": false,
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "39d585bfe16d8a1fe261bb5c0a4133c07622d56cf81cc5b1ecdea19428e731fe"
+              }
+            }
+          ],
+          "expectedSupports": []
         }
       ]
     },
@@ -1405,6 +1905,36 @@
                 "-a"
               ],
               "emptyDescription": true
+            }
+          ],
+          "expectedSupports": [
+            {
+              "memberSources": [
+                {
+                  "line": 526,
+                  "column": 2
+                },
+                {
+                  "line": 529,
+                  "column": 2
+                }
+              ],
+              "memberForms": [
+                [
+                  "-a"
+                ],
+                [
+                  "--ascii"
+                ]
+              ],
+              "bodyWitnesses": [
+                {
+                  "startWord": 0,
+                  "words": 8,
+                  "sha256": "9b23f25e2372c0da8b8ae1478cf2c7f18561160ee2a674f998330b0992581c74"
+                }
+              ],
+              "requiredTypes": []
             }
           ]
         },
@@ -1588,6 +2118,31 @@
               }
             }
           ]
+        },
+        {
+          "query": "--global",
+          "review": "Physical head/provider windows cross-checked against the SG review panel and original man/mdoc. Independent body assertions remain separate from group context. Head/middle/tail witnesses include final notes.",
+          "expected": [
+            {
+              "source": {
+                "line": 236,
+                "column": 1
+              },
+              "kind": "option",
+              "names": [
+                "--global"
+              ],
+              "forms": [
+                "--global"
+              ],
+              "emptyDescription": false,
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "9bd5832009892dce19f09963eedffcbcc422c25103a3789d4a159903337196ca"
+              }
+            }
+          ],
+          "expectedSupports": []
         }
       ]
     },
@@ -2053,6 +2608,311 @@
               }
             }
           ]
+        },
+        {
+          "query": "--init-file",
+          "review": "Physical head/provider windows cross-checked against the SG review panel and original man/mdoc. Independent body assertions remain separate from group context. Head/middle/tail witnesses include final notes.",
+          "expected": [
+            {
+              "source": {
+                "line": 221,
+                "column": 2
+              },
+              "kind": "option",
+              "names": [
+                "--init-file"
+              ],
+              "forms": [
+                "--init-file file"
+              ],
+              "emptyDescription": true
+            }
+          ],
+          "expectedSupports": [
+            {
+              "memberSources": [
+                {
+                  "line": 221,
+                  "column": 2
+                },
+                {
+                  "line": 224,
+                  "column": 2
+                }
+              ],
+              "memberForms": [
+                [
+                  "--init-file file"
+                ],
+                [
+                  "--rcfile file"
+                ]
+              ],
+              "bodyWitnesses": [
+                {
+                  "startWord": 0,
+                  "words": 8,
+                  "sha256": "3106ad934d77a65e8234910328b70ba4c1341bc28ab30233b1b72f4c35128657"
+                },
+                {
+                  "startWord": 6,
+                  "words": 8,
+                  "sha256": "d86d3a757d5dd9844b949d32020f799f456fb72048d3788229a9e98721e131eb"
+                },
+                {
+                  "startWord": 12,
+                  "words": 8,
+                  "sha256": "af6384272d6cd9dab1458ca36a49f6f8475324c2adddd07e975c538bf119f89c"
+                }
+              ],
+              "requiredTypes": []
+            }
+          ]
+        },
+        {
+          "query": "declare",
+          "review": "Physical head/provider windows cross-checked against the SG review panel and original man/mdoc. Independent body assertions remain separate from group context. Head/middle/tail witnesses include final notes.",
+          "expected": [
+            {
+              "source": {
+                "line": 9738,
+                "column": 2
+              },
+              "kind": "command",
+              "names": [
+                "declare"
+              ],
+              "forms": [
+                "declare [-aAfFgiIlnrtux] [-p] [name[=value] ...]"
+              ],
+              "emptyDescription": true
+            }
+          ],
+          "expectedSupports": [
+            {
+              "memberSources": [
+                {
+                  "line": 9738,
+                  "column": 2
+                },
+                {
+                  "line": 9742,
+                  "column": 2
+                }
+              ],
+              "memberForms": [
+                [
+                  "declare [-aAfFgiIlnrtux] [-p] [name[=value] ...]"
+                ],
+                [
+                  "typeset [-aAfFgiIlnrtux] [-p] [name[=value] ...]"
+                ]
+              ],
+              "bodyWitnesses": [
+                {
+                  "startWord": 0,
+                  "words": 8,
+                  "sha256": "fd6cd8352241c4cb938f93c6820767e88adcd6b8c548e0eab068062dc4563c67"
+                },
+                {
+                  "startWord": 317,
+                  "words": 8,
+                  "sha256": "40da8035d0afa3659f076f04a2b3b6a659f107251f2e4d1825c3fe603e925cd6"
+                },
+                {
+                  "startWord": 635,
+                  "words": 8,
+                  "sha256": "4fc571435474734a9c1ea9844bd6d5f3cbd20523cdb287ee20c61dfa98597bc8"
+                }
+              ],
+              "requiredTypes": []
+            }
+          ]
+        },
+        {
+          "query": "mapfile",
+          "review": "Physical head/provider windows cross-checked against the SG review panel and original man/mdoc. Independent body assertions remain separate from group context. Head/middle/tail witnesses include final notes.",
+          "expected": [
+            {
+              "source": {
+                "line": 10821,
+                "column": 2
+              },
+              "kind": "command",
+              "names": [
+                "mapfile"
+              ],
+              "forms": [
+                "mapfile [-d delim] [-n count] [-O origin] [-s count] [-t] [-u fd] [-C callback] [-c quantum] [array]"
+              ],
+              "emptyDescription": true
+            }
+          ],
+          "expectedSupports": [
+            {
+              "memberSources": [
+                {
+                  "line": 10821,
+                  "column": 2
+                },
+                {
+                  "line": 10824,
+                  "column": 2
+                }
+              ],
+              "memberForms": [
+                [
+                  "mapfile [-d delim] [-n count] [-O origin] [-s count] [-t] [-u fd] [-C callback] [-c quantum] [array]"
+                ],
+                [
+                  "readarray [-d delim] [-n count] [-O origin] [-s count] [-t] [-u fd] [-C callback] [-c quantum] [array]"
+                ]
+              ],
+              "bodyWitnesses": [
+                {
+                  "startWord": 0,
+                  "words": 8,
+                  "sha256": "732d9242181706ca535d60ec7cb0046ef84ecde72fab99440f534c48a8118df3"
+                },
+                {
+                  "startWord": 115,
+                  "words": 8,
+                  "sha256": "5784ec533fa68ae7ead8dfdb16b0baedb331b42408e4dbba32b9c34832bcd1ed"
+                },
+                {
+                  "startWord": 230,
+                  "words": 8,
+                  "sha256": "b3e53c5693f8b7f400479a52ed1bf0fce6fa8c37bba32a1b147d78d53369eaa6"
+                }
+              ],
+              "requiredTypes": [],
+              "bodyIncludes": [
+                "the default quantum is 5000",
+                "mapfile will clear array",
+                "mapfile returns zero"
+              ]
+            }
+          ]
+        },
+        {
+          "query": "test",
+          "review": "Physical head/provider windows cross-checked against the SG review panel and original man/mdoc. Independent body assertions remain separate from group context. Head/middle/tail witnesses include final notes.",
+          "expected": [
+            {
+              "source": {
+                "line": 12350,
+                "column": 2
+              },
+              "kind": "command",
+              "names": [
+                "test"
+              ],
+              "forms": [
+                "test expr"
+              ],
+              "emptyDescription": true
+            }
+          ],
+          "expectedSupports": [
+            {
+              "memberSources": [
+                {
+                  "line": 12350,
+                  "column": 2
+                },
+                {
+                  "line": 12353,
+                  "column": 2
+                }
+              ],
+              "memberForms": [
+                [
+                  "test expr"
+                ],
+                [
+                  "[ expr ]"
+                ]
+              ],
+              "bodyWitnesses": [
+                {
+                  "startWord": 0,
+                  "words": 8,
+                  "sha256": "f24d837bd904c25ee60acec6a08686c492584ce51aa819194969f93ff0863ab6"
+                },
+                {
+                  "startWord": 269,
+                  "words": 8,
+                  "sha256": "dc038fbd620bb2938fba5d364fccc8a3304423ec12cb975d6733e48fd292ba2c"
+                },
+                {
+                  "startWord": 539,
+                  "words": 8,
+                  "sha256": "4dd116dd2bdf982a908fa856b4b22ae793f15c7cbe755a690931582308ac4e54"
+                }
+              ],
+              "requiredTypes": []
+            }
+          ]
+        },
+        {
+          "query": ".",
+          "review": "Physical head/provider windows cross-checked against the SG review panel and original man/mdoc. Independent body assertions remain separate from group context. Head/middle/tail witnesses include final notes.",
+          "expected": [
+            {
+              "source": {
+                "line": 8977,
+                "column": 2
+              },
+              "kind": "command",
+              "names": [
+                "."
+              ],
+              "forms": [
+                ". [-p path] filename [arguments]"
+              ],
+              "emptyDescription": true
+            }
+          ],
+          "expectedSupports": [
+            {
+              "memberSources": [
+                {
+                  "line": 8977,
+                  "column": 2
+                },
+                {
+                  "line": 8980,
+                  "column": 2
+                }
+              ],
+              "memberForms": [
+                [
+                  ". [-p path] filename [arguments]"
+                ],
+                [
+                  "source [-p path] filename [arguments]"
+                ]
+              ],
+              "bodyWitnesses": [
+                {
+                  "startWord": 0,
+                  "words": 8,
+                  "sha256": "ea35faa1dcdeabf3353e53d197b02c26b22f7e5f80aa6346c010afadddc6841b"
+                },
+                {
+                  "startWord": 112,
+                  "words": 8,
+                  "sha256": "13b10c4cb956f969d50cf462fa38261b7ef30fab588282c3ed0fc7048ddee932"
+                },
+                {
+                  "startWord": 225,
+                  "words": 8,
+                  "sha256": "624dcc55f33ceef29065e1486f3bf9473296fa5908cf5819edaf2b61894e4c68"
+                }
+              ],
+              "requiredTypes": []
+            }
+          ]
         }
       ]
     },
@@ -2500,6 +3360,255 @@
                 "words": 8,
                 "sha256": "a25402040989a582c42f15e9bfb45e6e53923f67a8b522e1ee2a18d2e15e32d4"
               }
+            }
+          ]
+        },
+        {
+          "query": "-c",
+          "review": "Physical head/provider windows cross-checked against the SG review panel and original man/mdoc. Independent body assertions remain separate from group context. Head/middle/tail witnesses include final notes.",
+          "expected": [
+            {
+              "source": {
+                "line": 1391,
+                "column": 2
+              },
+              "kind": "option",
+              "names": [
+                "-c"
+              ],
+              "forms": [
+                "-c[:stream_specifier] codec (input/output,per-stream)"
+              ],
+              "emptyDescription": true
+            }
+          ],
+          "expectedSupports": [
+            {
+              "memberSources": [
+                {
+                  "line": 1391,
+                  "column": 2
+                },
+                {
+                  "line": 1394,
+                  "column": 2
+                }
+              ],
+              "memberForms": [
+                [
+                  "-c[:stream_specifier] codec (input/output,per-stream)"
+                ],
+                [
+                  "-codec[:stream_specifier] codec (input/output,per-stream)"
+                ]
+              ],
+              "bodyWitnesses": [
+                {
+                  "startWord": 0,
+                  "words": 8,
+                  "sha256": "06cb707b39e5cf565bac2d68c77dd349c916a72113acac7e178d6bdb0789818e"
+                },
+                {
+                  "startWord": 55,
+                  "words": 8,
+                  "sha256": "33cf25df0a624a3fc3afac05763a708c9890bb228204bb95356ff18b77c3c716"
+                },
+                {
+                  "startWord": 110,
+                  "words": 8,
+                  "sha256": "1a57ecf65c70e9c0da17516b5fdd86fff91b82043b0511b0b04ccb0cf028abd9"
+                }
+              ],
+              "requiredTypes": [
+                "preformatted"
+              ]
+            }
+          ]
+        },
+        {
+          "query": "-q",
+          "review": "Physical head/provider windows cross-checked against the SG review panel and original man/mdoc. Independent body assertions remain separate from group context. Head/middle/tail witnesses include final notes.",
+          "expected": [
+            {
+              "source": {
+                "line": 2004,
+                "column": 2
+              },
+              "kind": "option",
+              "names": [
+                "-q"
+              ],
+              "forms": [
+                "-q[:stream_specifier] q (output,per-stream)"
+              ],
+              "emptyDescription": true
+            }
+          ],
+          "expectedSupports": [
+            {
+              "memberSources": [
+                {
+                  "line": 2004,
+                  "column": 2
+                },
+                {
+                  "line": 2007,
+                  "column": 2
+                }
+              ],
+              "memberForms": [
+                [
+                  "-q[:stream_specifier] q (output,per-stream)"
+                ],
+                [
+                  "-qscale[:stream_specifier] q (output,per-stream)"
+                ]
+              ],
+              "bodyWitnesses": [
+                {
+                  "startWord": 0,
+                  "words": 8,
+                  "sha256": "18ad22b37df0406831a05edd849889c4264eaec6d6bbc5f6e97bc9db329ad02c"
+                },
+                {
+                  "startWord": 27,
+                  "words": 8,
+                  "sha256": "3e58d05e3945ce99656440f9f62cd731120cb52665937af779d36d8e400f0dd5"
+                },
+                {
+                  "startWord": 54,
+                  "words": 8,
+                  "sha256": "1f3684c077f302f2f320ae56c12a48c6f02800ca3b062c4998776ef503763261"
+                }
+              ],
+              "requiredTypes": []
+            }
+          ]
+        },
+        {
+          "query": "-stats_enc_pre",
+          "review": "Physical head/provider windows cross-checked against the SG review panel and original man/mdoc. Independent body assertions remain separate from group context. Head/middle/tail witnesses include final notes.",
+          "expected": [
+            {
+              "source": {
+                "line": 3627,
+                "column": 2
+              },
+              "kind": "option",
+              "names": [
+                "-stats_enc_pre"
+              ],
+              "forms": [
+                "-stats_enc_pre[:stream_specifier] path (output,per-stream)"
+              ],
+              "emptyDescription": true
+            }
+          ],
+          "expectedSupports": [
+            {
+              "memberSources": [
+                {
+                  "line": 3627,
+                  "column": 2
+                },
+                {
+                  "line": 3630,
+                  "column": 2
+                },
+                {
+                  "line": 3632,
+                  "column": 2
+                }
+              ],
+              "memberForms": [
+                [
+                  "-stats_enc_pre[:stream_specifier] path (output,per-stream)"
+                ],
+                [
+                  "-stats_enc_post[:stream_specifier] path (output,per-stream)"
+                ],
+                [
+                  "-stats_mux_pre[:stream_specifier] path (output,per-stream)"
+                ]
+              ],
+              "bodyWitnesses": [
+                {
+                  "startWord": 0,
+                  "words": 8,
+                  "sha256": "808dd4de34c8084462e147145cd471129e72d08672cbc145f442fdba46da98b7"
+                },
+                {
+                  "startWord": 61,
+                  "words": 8,
+                  "sha256": "d6b660fcbe164152509df25beda7b1510329420e7d7cbdb7d1566f0100448063"
+                },
+                {
+                  "startWord": 122,
+                  "words": 8,
+                  "sha256": "bae34e842592428eba372a0ee112cd3197828cfcd59faf4768f0890729078e69"
+                }
+              ],
+              "requiredTypes": []
+            }
+          ]
+        },
+        {
+          "query": "output_gain",
+          "review": "Physical head/provider windows cross-checked against the SG review panel and original man/mdoc. Independent body assertions remain separate from group context. Head/middle/tail witnesses include final notes.",
+          "expected": [
+            {
+              "source": {
+                "line": 1665,
+                "column": 2
+              },
+              "kind": "value",
+              "names": [
+                "output_gain"
+              ],
+              "forms": [
+                "output_gain"
+              ],
+              "emptyDescription": true
+            }
+          ],
+          "expectedSupports": [
+            {
+              "memberSources": [
+                {
+                  "line": 1665,
+                  "column": 2
+                },
+                {
+                  "line": 1668,
+                  "column": 2
+                }
+              ],
+              "memberForms": [
+                [
+                  "output_gain"
+                ],
+                [
+                  "output_gain_flags"
+                ]
+              ],
+              "bodyWitnesses": [
+                {
+                  "startWord": 0,
+                  "words": 8,
+                  "sha256": "5ce04c71b3391e9dce95e3e1d34f136f4b260330d5f15abba2b8652a8f1eaccb"
+                },
+                {
+                  "startWord": 1,
+                  "words": 8,
+                  "sha256": "85881b8fc4266a27be1fcdb1b278a1a5a8588090663d18cb1c780ed32d539f99"
+                },
+                {
+                  "startWord": 3,
+                  "words": 8,
+                  "sha256": "17b8f57166664adcf418c45d3c124be1dc2b2e46d0ad292f3a834281c60ead84"
+                }
+              ],
+              "requiredTypes": []
             }
           ]
         }
@@ -3212,6 +4321,138 @@
               }
             }
           ]
+        },
+        {
+          "query": "-provider",
+          "review": "Physical head/provider windows cross-checked against the SG review panel and original man/mdoc. Independent body assertions remain separate from group context. Head/middle/tail witnesses include final notes.",
+          "expected": [
+            {
+              "source": {
+                "line": 821,
+                "column": 2
+              },
+              "kind": "option",
+              "names": [
+                "-provider"
+              ],
+              "forms": [
+                "-provider name"
+              ],
+              "emptyDescription": true
+            }
+          ],
+          "expectedSupports": [
+            {
+              "memberSources": [
+                {
+                  "line": 821,
+                  "column": 2
+                },
+                {
+                  "line": 824,
+                  "column": 2
+                },
+                {
+                  "line": 826,
+                  "column": 2
+                },
+                {
+                  "line": 828,
+                  "column": 2
+                }
+              ],
+              "memberForms": [
+                [
+                  "-provider name"
+                ],
+                [
+                  "-provider-path path"
+                ],
+                [
+                  "-provparam [name:]key=value"
+                ],
+                [
+                  "-propquery propq"
+                ]
+              ],
+              "bodyWitnesses": [
+                {
+                  "startWord": 0,
+                  "words": 8,
+                  "sha256": "76e95bbaefba1f45bf0cc28abbc9b1f6e56ba2845cfdd47bb539fbc7298666be"
+                }
+              ],
+              "requiredTypes": [
+                "link"
+              ]
+            }
+          ]
+        },
+        {
+          "query": "-provider-path",
+          "review": "Physical head/provider windows cross-checked against the SG review panel and original man/mdoc. Independent body assertions remain separate from group context. Head/middle/tail witnesses include final notes.",
+          "expected": [
+            {
+              "source": {
+                "line": 824,
+                "column": 2
+              },
+              "kind": "option",
+              "names": [
+                "-provider-path"
+              ],
+              "forms": [
+                "-provider-path path"
+              ],
+              "emptyDescription": true
+            }
+          ],
+          "expectedSupports": [
+            {
+              "memberSources": [
+                {
+                  "line": 821,
+                  "column": 2
+                },
+                {
+                  "line": 824,
+                  "column": 2
+                },
+                {
+                  "line": 826,
+                  "column": 2
+                },
+                {
+                  "line": 828,
+                  "column": 2
+                }
+              ],
+              "memberForms": [
+                [
+                  "-provider name"
+                ],
+                [
+                  "-provider-path path"
+                ],
+                [
+                  "-provparam [name:]key=value"
+                ],
+                [
+                  "-propquery propq"
+                ]
+              ],
+              "bodyWitnesses": [
+                {
+                  "startWord": 0,
+                  "words": 8,
+                  "sha256": "76e95bbaefba1f45bf0cc28abbc9b1f6e56ba2845cfdd47bb539fbc7298666be"
+                }
+              ],
+              "requiredTypes": [
+                "link"
+              ]
+            }
+          ]
         }
       ]
     },
@@ -3389,6 +4630,118 @@
                 "-provider name"
               ],
               "emptyDescription": true
+            }
+          ],
+          "expectedSupports": [
+            {
+              "memberSources": [
+                {
+                  "line": 609,
+                  "column": 2
+                },
+                {
+                  "line": 612,
+                  "column": 2
+                },
+                {
+                  "line": 614,
+                  "column": 2
+                },
+                {
+                  "line": 616,
+                  "column": 2
+                }
+              ],
+              "memberForms": [
+                [
+                  "-provider name"
+                ],
+                [
+                  "-provider-path path"
+                ],
+                [
+                  "-provparam [name:]key=value"
+                ],
+                [
+                  "-propquery propq"
+                ]
+              ],
+              "bodyWitnesses": [
+                {
+                  "startWord": 0,
+                  "words": 8,
+                  "sha256": "76e95bbaefba1f45bf0cc28abbc9b1f6e56ba2845cfdd47bb539fbc7298666be"
+                }
+              ],
+              "requiredTypes": [
+                "link"
+              ]
+            }
+          ]
+        },
+        {
+          "query": "-provider-path",
+          "review": "Physical head/provider windows cross-checked against the SG review panel and original man/mdoc. Independent body assertions remain separate from group context. Head/middle/tail witnesses include final notes.",
+          "expected": [
+            {
+              "source": {
+                "line": 612,
+                "column": 2
+              },
+              "kind": "option",
+              "names": [
+                "-provider-path"
+              ],
+              "forms": [
+                "-provider-path path"
+              ],
+              "emptyDescription": true
+            }
+          ],
+          "expectedSupports": [
+            {
+              "memberSources": [
+                {
+                  "line": 609,
+                  "column": 2
+                },
+                {
+                  "line": 612,
+                  "column": 2
+                },
+                {
+                  "line": 614,
+                  "column": 2
+                },
+                {
+                  "line": 616,
+                  "column": 2
+                }
+              ],
+              "memberForms": [
+                [
+                  "-provider name"
+                ],
+                [
+                  "-provider-path path"
+                ],
+                [
+                  "-provparam [name:]key=value"
+                ],
+                [
+                  "-propquery propq"
+                ]
+              ],
+              "bodyWitnesses": [
+                {
+                  "startWord": 0,
+                  "words": 8,
+                  "sha256": "76e95bbaefba1f45bf0cc28abbc9b1f6e56ba2845cfdd47bb539fbc7298666be"
+                }
+              ],
+              "requiredTypes": [
+                "link"
+              ]
             }
           ]
         }
@@ -3718,6 +5071,216 @@
                 "words": 8,
                 "sha256": "771414ef299e3ee3662602791b8d05ee77257d970e5105a8b115bcbb164c0c82"
               }
+            }
+          ]
+        },
+        {
+          "query": "-x",
+          "review": "Physical head/provider windows cross-checked against the SG review panel and original man/mdoc. Independent body assertions remain separate from group context. Head/middle/tail witnesses include final notes.",
+          "expected": [
+            {
+              "source": {
+                "line": 1719,
+                "column": 2
+              },
+              "kind": "option",
+              "names": [
+                "-x"
+              ],
+              "forms": [
+                "-x language"
+              ],
+              "emptyDescription": true
+            },
+            {
+              "source": {
+                "line": 1754,
+                "column": 2
+              },
+              "kind": "option",
+              "names": [
+                "-x"
+              ],
+              "forms": [
+                "-x none"
+              ],
+              "emptyDescription": false,
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "d82a168758d121cbefa6403309c89c6fa7d4ac9e9626808a187a658c665d6093"
+              }
+            }
+          ],
+          "expectedSupports": [
+            {
+              "memberSources": [
+                {
+                  "line": 1719,
+                  "column": 2
+                },
+                {
+                  "line": 1722,
+                  "column": 2
+                },
+                {
+                  "line": 1724,
+                  "column": 2
+                }
+              ],
+              "memberForms": [
+                [
+                  "-x language"
+                ],
+                [
+                  "--language=language"
+                ],
+                [
+                  "--language language"
+                ]
+              ],
+              "bodyWitnesses": [
+                {
+                  "startWord": 0,
+                  "words": 8,
+                  "sha256": "33d9b8351897571191d53d090301c049443edb485966f0febe790f6ba1d8e755"
+                },
+                {
+                  "startWord": 45,
+                  "words": 8,
+                  "sha256": "ccd62b43b7fbecf8875b4b6bd60bf73042d0b4ba9e6ed7f193e91b5e1800b713"
+                },
+                {
+                  "startWord": 90,
+                  "words": 8,
+                  "sha256": "f8421d8199891c146cdea9006b4e33776e0571c5364a6904c1775b8f511b009f"
+                }
+              ],
+              "requiredTypes": [
+                "preformatted"
+              ],
+              "bodyIncludes": [
+                "Specify explicitly the language",
+                "-std=legacy"
+              ]
+            }
+          ]
+        },
+        {
+          "query": "-c",
+          "review": "Physical head/provider windows cross-checked against the SG review panel and original man/mdoc. Independent body assertions remain separate from group context. Head/middle/tail witnesses include final notes.",
+          "expected": [
+            {
+              "source": {
+                "line": 1765,
+                "column": 2
+              },
+              "kind": "option",
+              "names": [
+                "-c"
+              ],
+              "forms": [
+                "-c"
+              ],
+              "emptyDescription": true
+            },
+            {
+              "source": {
+                "line": 17341,
+                "column": 2
+              },
+              "kind": "option",
+              "names": [
+                "-c"
+              ],
+              "forms": [
+                "-c"
+              ],
+              "emptyDescription": true
+            }
+          ],
+          "expectedSupports": [
+            {
+              "memberSources": [
+                {
+                  "line": 1765,
+                  "column": 2
+                },
+                {
+                  "line": 1768,
+                  "column": 2
+                }
+              ],
+              "memberForms": [
+                [
+                  "-c"
+                ],
+                [
+                  "--compile"
+                ]
+              ],
+              "bodyWitnesses": [
+                {
+                  "startWord": 0,
+                  "words": 8,
+                  "sha256": "94d6b41c82825169d875b34b2d398bb1af1f7377aefdaee6d5614c139f543496"
+                },
+                {
+                  "startWord": 28,
+                  "words": 8,
+                  "sha256": "2fb6fcb15258b9f6fe3b4b8cb387d6709b647bd4e9f1e512e8805f77f7639b99"
+                },
+                {
+                  "startWord": 56,
+                  "words": 8,
+                  "sha256": "291c202c7eaf4262eae8b79b7cd46ede86c3510fc9d0877739e3864de68b5ee1"
+                }
+              ],
+              "requiredTypes": []
+            },
+            {
+              "memberSources": [
+                {
+                  "line": 17341,
+                  "column": 2
+                },
+                {
+                  "line": 17344,
+                  "column": 2
+                },
+                {
+                  "line": 17346,
+                  "column": 2
+                }
+              ],
+              "memberForms": [
+                [
+                  "-c"
+                ],
+                [
+                  "-S"
+                ],
+                [
+                  "-E"
+                ]
+              ],
+              "bodyWitnesses": [
+                {
+                  "startWord": 0,
+                  "words": 8,
+                  "sha256": "f130d8f6ac0eaa00470be107b5850cd37a860d50a043aa3dba7d0ffda1c7f462"
+                },
+                {
+                  "startWord": 7,
+                  "words": 8,
+                  "sha256": "296f7c13750cbca0210cb78a8231400695ab7a108480b8d4b96869a1572e03d1"
+                },
+                {
+                  "startWord": 15,
+                  "words": 8,
+                  "sha256": "6d93fa8eab58c263d340c05ac01abec207b23c9ddbefab5c3ffe3d56ebad95ab"
+                }
+              ],
+              "requiredTypes": []
             }
           ]
         }
@@ -4441,6 +6004,147 @@
               "emptyDescription": true
             }
           ]
+        },
+        {
+          "query": "-1",
+          "review": "Physical head/provider windows cross-checked against the SG review panel and original man/mdoc. Independent body assertions remain separate from group context. Head/middle/tail witnesses include final notes.",
+          "expected": [
+            {
+              "source": {
+                "line": 117,
+                "column": 2
+              },
+              "kind": "option",
+              "names": [
+                "-1",
+                "--fast"
+              ],
+              "forms": [
+                "-1, --fast"
+              ],
+              "emptyDescription": true
+            }
+          ],
+          "expectedSupports": [
+            {
+              "memberSources": [
+                {
+                  "line": 117,
+                  "column": 2
+                },
+                {
+                  "line": 118,
+                  "column": 2
+                },
+                {
+                  "line": 119,
+                  "column": 2
+                }
+              ],
+              "memberForms": [
+                [
+                  "-1, --fast"
+                ],
+                [
+                  "-2, -3, -4, -5, -6, -7, -8"
+                ],
+                [
+                  "-9, --best"
+                ]
+              ],
+              "bodyWitnesses": [
+                {
+                  "startWord": 0,
+                  "words": 8,
+                  "sha256": "c9beb3f1c88ac4aedf87f6fc4c2edb8e91bdff5b6a644b7cb83378fd26fd9895"
+                },
+                {
+                  "startWord": 12,
+                  "words": 8,
+                  "sha256": "b70d37e387d3e16eb50cf4dbb2329d32e4deec1461c4eb94ef3eb7838994caff"
+                },
+                {
+                  "startWord": 25,
+                  "words": 8,
+                  "sha256": "1627bd43bd2c72d09450a95573918e082b2683fa77cf3304d0b4fdb79a407879"
+                }
+              ],
+              "requiredTypes": []
+            }
+          ]
+        },
+        {
+          "query": "-2",
+          "review": "Physical head/provider windows cross-checked against the SG review panel and original man/mdoc. Independent body assertions remain separate from group context. Head/middle/tail witnesses include final notes.",
+          "expected": [
+            {
+              "source": {
+                "line": 118,
+                "column": 2
+              },
+              "kind": "option",
+              "names": [
+                "-2",
+                "-3",
+                "-4",
+                "-5",
+                "-6",
+                "-7",
+                "-8"
+              ],
+              "forms": [
+                "-2, -3, -4, -5, -6, -7, -8"
+              ],
+              "emptyDescription": true
+            }
+          ],
+          "expectedSupports": [
+            {
+              "memberSources": [
+                {
+                  "line": 117,
+                  "column": 2
+                },
+                {
+                  "line": 118,
+                  "column": 2
+                },
+                {
+                  "line": 119,
+                  "column": 2
+                }
+              ],
+              "memberForms": [
+                [
+                  "-1, --fast"
+                ],
+                [
+                  "-2, -3, -4, -5, -6, -7, -8"
+                ],
+                [
+                  "-9, --best"
+                ]
+              ],
+              "bodyWitnesses": [
+                {
+                  "startWord": 0,
+                  "words": 8,
+                  "sha256": "c9beb3f1c88ac4aedf87f6fc4c2edb8e91bdff5b6a644b7cb83378fd26fd9895"
+                },
+                {
+                  "startWord": 12,
+                  "words": 8,
+                  "sha256": "b70d37e387d3e16eb50cf4dbb2329d32e4deec1461c4eb94ef3eb7838994caff"
+                },
+                {
+                  "startWord": 25,
+                  "words": 8,
+                  "sha256": "1627bd43bd2c72d09450a95573918e082b2683fa77cf3304d0b4fdb79a407879"
+                }
+              ],
+              "requiredTypes": []
+            }
+          ]
         }
       ]
     },
@@ -4683,6 +6387,116 @@
               }
             }
           ]
+        },
+        {
+          "query": "-1",
+          "review": "Physical head/provider windows cross-checked against the SG review panel and original man/mdoc. Independent body assertions remain separate from group context. Head/middle/tail witnesses include final notes.",
+          "expected": [
+            {
+              "source": {
+                "line": 102,
+                "column": 2
+              },
+              "kind": "option",
+              "names": [
+                "-1",
+                "--fast"
+              ],
+              "forms": [
+                "-1, --fast"
+              ],
+              "emptyDescription": true
+            }
+          ],
+          "expectedSupports": [
+            {
+              "memberSources": [
+                {
+                  "line": 102,
+                  "column": 2
+                },
+                {
+                  "line": 103,
+                  "column": 2
+                },
+                {
+                  "line": 104,
+                  "column": 2
+                },
+                {
+                  "line": 105,
+                  "column": 2
+                },
+                {
+                  "line": 106,
+                  "column": 2
+                },
+                {
+                  "line": 107,
+                  "column": 2
+                },
+                {
+                  "line": 108,
+                  "column": 2
+                },
+                {
+                  "line": 109,
+                  "column": 2
+                },
+                {
+                  "line": 110,
+                  "column": 2
+                }
+              ],
+              "memberForms": [
+                [
+                  "-1, --fast"
+                ],
+                [
+                  "-2"
+                ],
+                [
+                  "-3"
+                ],
+                [
+                  "-4"
+                ],
+                [
+                  "-5"
+                ],
+                [
+                  "-6"
+                ],
+                [
+                  "-7"
+                ],
+                [
+                  "-8"
+                ],
+                [
+                  "-9, --best"
+                ]
+              ],
+              "bodyWitnesses": [
+                {
+                  "startWord": 0,
+                  "words": 8,
+                  "sha256": "c9beb3f1c88ac4aedf87f6fc4c2edb8e91bdff5b6a644b7cb83378fd26fd9895"
+                },
+                {
+                  "startWord": 12,
+                  "words": 8,
+                  "sha256": "b70d37e387d3e16eb50cf4dbb2329d32e4deec1461c4eb94ef3eb7838994caff"
+                },
+                {
+                  "startWord": 25,
+                  "words": 8,
+                  "sha256": "1627bd43bd2c72d09450a95573918e082b2683fa77cf3304d0b4fdb79a407879"
+                }
+              ],
+              "requiredTypes": []
+            }
+          ]
         }
       ]
     },
@@ -4877,6 +6691,106 @@
                 "-help"
               ],
               "emptyDescription": true
+            }
+          ]
+        },
+        {
+          "query": "-symbols",
+          "review": "Physical head/provider windows cross-checked against the SG review panel and original man/mdoc. Independent body assertions remain separate from group context. Head/middle/tail witnesses include final notes.",
+          "expected": [
+            {
+              "source": {
+                "line": 219,
+                "column": 2
+              },
+              "kind": "option",
+              "names": [
+                "-symbols"
+              ],
+              "forms": [
+                "-symbols=file"
+              ],
+              "emptyDescription": true
+            }
+          ],
+          "expectedSupports": [
+            {
+              "memberSources": [
+                {
+                  "line": 219,
+                  "column": 2
+                },
+                {
+                  "line": 221,
+                  "column": 2
+                }
+              ],
+              "memberForms": [
+                [
+                  "-symbols=file"
+                ],
+                [
+                  "-s file"
+                ]
+              ],
+              "bodyWitnesses": [
+                {
+                  "startWord": 0,
+                  "words": 8,
+                  "sha256": "08ee783a2b11aaa72b39b95c5d25040a28b6a5e11fcf97772cd2f28b289ae652"
+                }
+              ],
+              "requiredTypes": []
+            }
+          ]
+        },
+        {
+          "query": "-command",
+          "review": "Physical head/provider windows cross-checked against the SG review panel and original man/mdoc. Independent body assertions remain separate from group context. Head/middle/tail witnesses include final notes.",
+          "expected": [
+            {
+              "source": {
+                "line": 260,
+                "column": 2
+              },
+              "kind": "option",
+              "names": [
+                "-command"
+              ],
+              "forms": [
+                "-command=file"
+              ],
+              "emptyDescription": true
+            }
+          ],
+          "expectedSupports": [
+            {
+              "memberSources": [
+                {
+                  "line": 260,
+                  "column": 2
+                },
+                {
+                  "line": 262,
+                  "column": 2
+                }
+              ],
+              "memberForms": [
+                [
+                  "-command=file"
+                ],
+                [
+                  "-x file"
+                ]
+              ],
+              "bodyWitnesses": [
+                {
+                  "startWord": 0,
+                  "words": 8,
+                  "sha256": "bcb5b2d66a51c6c3cff22608468ae53fa62aec65197d2e8c36a48938472c37e7"
+                }
+              ],
+              "requiredTypes": []
             }
           ]
         }
@@ -5501,6 +7415,116 @@
                 "-1, --fast"
               ],
               "emptyDescription": true
+            }
+          ]
+        },
+        {
+          "query": "-1",
+          "review": "Physical head/provider windows cross-checked against the SG review panel and original man/mdoc. Independent body assertions remain separate from group context. Head/middle/tail witnesses include final notes.",
+          "expected": [
+            {
+              "source": {
+                "line": 105,
+                "column": 2
+              },
+              "kind": "option",
+              "names": [
+                "-1",
+                "--fast"
+              ],
+              "forms": [
+                "-1, --fast"
+              ],
+              "emptyDescription": true
+            }
+          ],
+          "expectedSupports": [
+            {
+              "memberSources": [
+                {
+                  "line": 105,
+                  "column": 2
+                },
+                {
+                  "line": 106,
+                  "column": 2
+                },
+                {
+                  "line": 107,
+                  "column": 2
+                },
+                {
+                  "line": 108,
+                  "column": 2
+                },
+                {
+                  "line": 109,
+                  "column": 2
+                },
+                {
+                  "line": 110,
+                  "column": 2
+                },
+                {
+                  "line": 111,
+                  "column": 2
+                },
+                {
+                  "line": 112,
+                  "column": 2
+                },
+                {
+                  "line": 113,
+                  "column": 2
+                }
+              ],
+              "memberForms": [
+                [
+                  "-1, --fast"
+                ],
+                [
+                  "-2"
+                ],
+                [
+                  "-3"
+                ],
+                [
+                  "-4"
+                ],
+                [
+                  "-5"
+                ],
+                [
+                  "-6"
+                ],
+                [
+                  "-7"
+                ],
+                [
+                  "-8"
+                ],
+                [
+                  "-9, --best"
+                ]
+              ],
+              "bodyWitnesses": [
+                {
+                  "startWord": 0,
+                  "words": 8,
+                  "sha256": "c9beb3f1c88ac4aedf87f6fc4c2edb8e91bdff5b6a644b7cb83378fd26fd9895"
+                },
+                {
+                  "startWord": 12,
+                  "words": 8,
+                  "sha256": "b70d37e387d3e16eb50cf4dbb2329d32e4deec1461c4eb94ef3eb7838994caff"
+                },
+                {
+                  "startWord": 25,
+                  "words": 8,
+                  "sha256": "1627bd43bd2c72d09450a95573918e082b2683fa77cf3304d0b4fdb79a407879"
+                }
+              ],
+              "requiredTypes": []
             }
           ]
         }
@@ -6955,6 +8979,781 @@
               }
             }
           ]
+        }
+      ]
+    },
+    {
+      "id": "P121",
+      "root": "checkout",
+      "path": "tests/fixtures/roff/real/archlinux/gcc.1.gz",
+      "sha256": "a86bd1d671aa2afff558eb3b7c8b6e2a8bbaf55cb9fb2a6549b7538dd56e0f0f",
+      "sourceGroup": "licensed-fixture",
+      "topic": "gcc",
+      "selectionReason": "Reviewed declaration contexts and independent controls; existing licensed fixture.",
+      "queries": [
+        {
+          "query": "-x",
+          "review": "Physical head/provider windows cross-checked against the SG review panel and original man/mdoc. Independent body assertions remain separate from group context. Head/middle/tail witnesses include final notes.",
+          "expected": [
+            {
+              "source": {
+                "line": 1720,
+                "column": 2
+              },
+              "kind": "option",
+              "names": [
+                "-x"
+              ],
+              "forms": [
+                "-x language"
+              ],
+              "emptyDescription": true
+            },
+            {
+              "source": {
+                "line": 1755,
+                "column": 2
+              },
+              "kind": "option",
+              "names": [
+                "-x"
+              ],
+              "forms": [
+                "-x none"
+              ],
+              "emptyDescription": false,
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "d82a168758d121cbefa6403309c89c6fa7d4ac9e9626808a187a658c665d6093"
+              }
+            }
+          ],
+          "expectedSupports": [
+            {
+              "memberSources": [
+                {
+                  "line": 1720,
+                  "column": 2
+                },
+                {
+                  "line": 1723,
+                  "column": 2
+                },
+                {
+                  "line": 1725,
+                  "column": 2
+                }
+              ],
+              "memberForms": [
+                [
+                  "-x language"
+                ],
+                [
+                  "--language=language"
+                ],
+                [
+                  "--language language"
+                ]
+              ],
+              "bodyWitnesses": [
+                {
+                  "startWord": 0,
+                  "words": 8,
+                  "sha256": "33d9b8351897571191d53d090301c049443edb485966f0febe790f6ba1d8e755"
+                },
+                {
+                  "startWord": 45,
+                  "words": 8,
+                  "sha256": "ccd62b43b7fbecf8875b4b6bd60bf73042d0b4ba9e6ed7f193e91b5e1800b713"
+                },
+                {
+                  "startWord": 90,
+                  "words": 8,
+                  "sha256": "f8421d8199891c146cdea9006b4e33776e0571c5364a6904c1775b8f511b009f"
+                }
+              ],
+              "requiredTypes": [
+                "preformatted"
+              ],
+              "bodyIncludes": [
+                "Specify explicitly the language",
+                "-std=legacy"
+              ]
+            }
+          ]
+        },
+        {
+          "query": "-c",
+          "review": "Physical head/provider windows cross-checked against the SG review panel and original man/mdoc. Independent body assertions remain separate from group context. Head/middle/tail witnesses include final notes.",
+          "expected": [
+            {
+              "source": {
+                "line": 1766,
+                "column": 2
+              },
+              "kind": "option",
+              "names": [
+                "-c"
+              ],
+              "forms": [
+                "-c"
+              ],
+              "emptyDescription": true
+            },
+            {
+              "source": {
+                "line": 17363,
+                "column": 2
+              },
+              "kind": "option",
+              "names": [
+                "-c"
+              ],
+              "forms": [
+                "-c"
+              ],
+              "emptyDescription": true
+            }
+          ],
+          "expectedSupports": [
+            {
+              "memberSources": [
+                {
+                  "line": 1766,
+                  "column": 2
+                },
+                {
+                  "line": 1769,
+                  "column": 2
+                }
+              ],
+              "memberForms": [
+                [
+                  "-c"
+                ],
+                [
+                  "--compile"
+                ]
+              ],
+              "bodyWitnesses": [
+                {
+                  "startWord": 0,
+                  "words": 8,
+                  "sha256": "94d6b41c82825169d875b34b2d398bb1af1f7377aefdaee6d5614c139f543496"
+                },
+                {
+                  "startWord": 28,
+                  "words": 8,
+                  "sha256": "2fb6fcb15258b9f6fe3b4b8cb387d6709b647bd4e9f1e512e8805f77f7639b99"
+                },
+                {
+                  "startWord": 56,
+                  "words": 8,
+                  "sha256": "291c202c7eaf4262eae8b79b7cd46ede86c3510fc9d0877739e3864de68b5ee1"
+                }
+              ],
+              "requiredTypes": []
+            },
+            {
+              "memberSources": [
+                {
+                  "line": 17363,
+                  "column": 2
+                },
+                {
+                  "line": 17366,
+                  "column": 2
+                },
+                {
+                  "line": 17368,
+                  "column": 2
+                }
+              ],
+              "memberForms": [
+                [
+                  "-c"
+                ],
+                [
+                  "-S"
+                ],
+                [
+                  "-E"
+                ]
+              ],
+              "bodyWitnesses": [
+                {
+                  "startWord": 0,
+                  "words": 8,
+                  "sha256": "f130d8f6ac0eaa00470be107b5850cd37a860d50a043aa3dba7d0ffda1c7f462"
+                },
+                {
+                  "startWord": 7,
+                  "words": 8,
+                  "sha256": "296f7c13750cbca0210cb78a8231400695ab7a108480b8d4b96869a1572e03d1"
+                },
+                {
+                  "startWord": 15,
+                  "words": 8,
+                  "sha256": "6d93fa8eab58c263d340c05ac01abec207b23c9ddbefab5c3ffe3d56ebad95ab"
+                }
+              ],
+              "requiredTypes": []
+            }
+          ]
+        },
+        {
+          "query": "-o",
+          "review": "Physical head/provider windows cross-checked against the SG review panel and original man/mdoc. Independent body assertions remain separate from group context. Head/middle/tail witnesses include final notes.",
+          "expected": [
+            {
+              "source": {
+                "line": 1806,
+                "column": 2
+              },
+              "kind": "option",
+              "names": [
+                "-o"
+              ],
+              "forms": [
+                "-o file"
+              ],
+              "emptyDescription": true
+            }
+          ],
+          "expectedSupports": [
+            {
+              "memberSources": [
+                {
+                  "line": 1806,
+                  "column": 2
+                },
+                {
+                  "line": 1809,
+                  "column": 2
+                },
+                {
+                  "line": 1811,
+                  "column": 2
+                }
+              ],
+              "memberForms": [
+                [
+                  "-o file"
+                ],
+                [
+                  "--output=file"
+                ],
+                [
+                  "--output file"
+                ]
+              ],
+              "bodyWitnesses": [
+                {
+                  "startWord": 0,
+                  "words": 8,
+                  "sha256": "ed0a3d134050abd8b918dcdaa45f3db26bbcee0bcfcd1d6a10a59f025699a0e6"
+                },
+                {
+                  "startWord": 179,
+                  "words": 8,
+                  "sha256": "f5e8c3676fca6c0ed2b513cd1049ed273898e413db245f479f28d23f109b91be"
+                },
+                {
+                  "startWord": 359,
+                  "words": 8,
+                  "sha256": "33ec1308fea571d78c16f7dea03a02c092f33861337d3b3a814eb81311df5c01"
+                }
+              ],
+              "requiredTypes": [
+                "preformatted"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "P122",
+      "root": "checkout",
+      "path": "tests/fixtures/roff/real/fedora44/gcc.1.zst",
+      "sha256": "531ca21b660c1fbd294218e921d834adfaccd61c6f400a2a5d844759f40fc034",
+      "sourceGroup": "licensed-fixture",
+      "topic": "gcc",
+      "selectionReason": "Reviewed declaration contexts and independent controls; existing licensed fixture.",
+      "queries": [
+        {
+          "query": "-x",
+          "review": "Physical head/provider windows cross-checked against the SG review panel and original man/mdoc. Independent body assertions remain separate from group context. Head/middle/tail witnesses include final notes.",
+          "expected": [
+            {
+              "source": {
+                "line": 1719,
+                "column": 2
+              },
+              "kind": "option",
+              "names": [
+                "-x"
+              ],
+              "forms": [
+                "-x language"
+              ],
+              "emptyDescription": true
+            },
+            {
+              "source": {
+                "line": 1754,
+                "column": 2
+              },
+              "kind": "option",
+              "names": [
+                "-x"
+              ],
+              "forms": [
+                "-x none"
+              ],
+              "emptyDescription": false,
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "d82a168758d121cbefa6403309c89c6fa7d4ac9e9626808a187a658c665d6093"
+              }
+            }
+          ],
+          "expectedSupports": [
+            {
+              "memberSources": [
+                {
+                  "line": 1719,
+                  "column": 2
+                },
+                {
+                  "line": 1722,
+                  "column": 2
+                },
+                {
+                  "line": 1724,
+                  "column": 2
+                }
+              ],
+              "memberForms": [
+                [
+                  "-x language"
+                ],
+                [
+                  "--language=language"
+                ],
+                [
+                  "--language language"
+                ]
+              ],
+              "bodyWitnesses": [
+                {
+                  "startWord": 0,
+                  "words": 8,
+                  "sha256": "33d9b8351897571191d53d090301c049443edb485966f0febe790f6ba1d8e755"
+                },
+                {
+                  "startWord": 45,
+                  "words": 8,
+                  "sha256": "ccd62b43b7fbecf8875b4b6bd60bf73042d0b4ba9e6ed7f193e91b5e1800b713"
+                },
+                {
+                  "startWord": 90,
+                  "words": 8,
+                  "sha256": "f8421d8199891c146cdea9006b4e33776e0571c5364a6904c1775b8f511b009f"
+                }
+              ],
+              "requiredTypes": [
+                "preformatted"
+              ],
+              "bodyIncludes": [
+                "Specify explicitly the language",
+                "-std=legacy"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "P123",
+      "root": "checkout",
+      "path": "tests/fixtures/roff/real/fedora44/sh.1.zst",
+      "sha256": "a3de526eb64c1f066d50899fa6ba2a7e63eb77b977aa881c67599d89978debf1",
+      "sourceGroup": "licensed-fixture",
+      "topic": "sh",
+      "selectionReason": "Reviewed declaration contexts and independent controls; existing licensed fixture.",
+      "queries": [
+        {
+          "query": "--init-file",
+          "review": "Physical head/provider windows cross-checked against the SG review panel and original man/mdoc. Independent body assertions remain separate from group context. Head/middle/tail witnesses include final notes.",
+          "expected": [
+            {
+              "source": {
+                "line": 221,
+                "column": 2
+              },
+              "kind": "option",
+              "names": [
+                "--init-file"
+              ],
+              "forms": [
+                "--init-file file"
+              ],
+              "emptyDescription": true
+            }
+          ],
+          "expectedSupports": [
+            {
+              "memberSources": [
+                {
+                  "line": 221,
+                  "column": 2
+                },
+                {
+                  "line": 224,
+                  "column": 2
+                }
+              ],
+              "memberForms": [
+                [
+                  "--init-file file"
+                ],
+                [
+                  "--rcfile file"
+                ]
+              ],
+              "bodyWitnesses": [
+                {
+                  "startWord": 0,
+                  "words": 8,
+                  "sha256": "3106ad934d77a65e8234910328b70ba4c1341bc28ab30233b1b72f4c35128657"
+                },
+                {
+                  "startWord": 6,
+                  "words": 8,
+                  "sha256": "d86d3a757d5dd9844b949d32020f799f456fb72048d3788229a9e98721e131eb"
+                },
+                {
+                  "startWord": 12,
+                  "words": 8,
+                  "sha256": "af6384272d6cd9dab1458ca36a49f6f8475324c2adddd07e975c538bf119f89c"
+                }
+              ],
+              "requiredTypes": []
+            }
+          ]
+        },
+        {
+          "query": "declare",
+          "review": "Physical head/provider windows cross-checked against the SG review panel and original man/mdoc. Independent body assertions remain separate from group context. Head/middle/tail witnesses include final notes.",
+          "expected": [
+            {
+              "source": {
+                "line": 9745,
+                "column": 2
+              },
+              "kind": "command",
+              "names": [
+                "declare"
+              ],
+              "forms": [
+                "declare [-aAfFgiIlnrtux] [-p] [name[=value] ...]"
+              ],
+              "emptyDescription": true
+            }
+          ],
+          "expectedSupports": [
+            {
+              "memberSources": [
+                {
+                  "line": 9745,
+                  "column": 2
+                },
+                {
+                  "line": 9749,
+                  "column": 2
+                }
+              ],
+              "memberForms": [
+                [
+                  "declare [-aAfFgiIlnrtux] [-p] [name[=value] ...]"
+                ],
+                [
+                  "typeset [-aAfFgiIlnrtux] [-p] [name[=value] ...]"
+                ]
+              ],
+              "bodyWitnesses": [
+                {
+                  "startWord": 0,
+                  "words": 8,
+                  "sha256": "fd6cd8352241c4cb938f93c6820767e88adcd6b8c548e0eab068062dc4563c67"
+                },
+                {
+                  "startWord": 317,
+                  "words": 8,
+                  "sha256": "40da8035d0afa3659f076f04a2b3b6a659f107251f2e4d1825c3fe603e925cd6"
+                },
+                {
+                  "startWord": 635,
+                  "words": 8,
+                  "sha256": "4fc571435474734a9c1ea9844bd6d5f3cbd20523cdb287ee20c61dfa98597bc8"
+                }
+              ],
+              "requiredTypes": []
+            }
+          ]
+        },
+        {
+          "query": "mapfile",
+          "review": "Physical head/provider windows cross-checked against the SG review panel and original man/mdoc. Independent body assertions remain separate from group context. Head/middle/tail witnesses include final notes.",
+          "expected": [
+            {
+              "source": {
+                "line": 10828,
+                "column": 2
+              },
+              "kind": "command",
+              "names": [
+                "mapfile"
+              ],
+              "forms": [
+                "mapfile [-d delim] [-n count] [-O origin] [-s count] [-t] [-u fd] [-C callback] [-c quantum] [array]"
+              ],
+              "emptyDescription": true
+            }
+          ],
+          "expectedSupports": [
+            {
+              "memberSources": [
+                {
+                  "line": 10828,
+                  "column": 2
+                },
+                {
+                  "line": 10831,
+                  "column": 2
+                }
+              ],
+              "memberForms": [
+                [
+                  "mapfile [-d delim] [-n count] [-O origin] [-s count] [-t] [-u fd] [-C callback] [-c quantum] [array]"
+                ],
+                [
+                  "readarray [-d delim] [-n count] [-O origin] [-s count] [-t] [-u fd] [-C callback] [-c quantum] [array]"
+                ]
+              ],
+              "bodyWitnesses": [
+                {
+                  "startWord": 0,
+                  "words": 8,
+                  "sha256": "732d9242181706ca535d60ec7cb0046ef84ecde72fab99440f534c48a8118df3"
+                },
+                {
+                  "startWord": 115,
+                  "words": 8,
+                  "sha256": "5784ec533fa68ae7ead8dfdb16b0baedb331b42408e4dbba32b9c34832bcd1ed"
+                },
+                {
+                  "startWord": 230,
+                  "words": 8,
+                  "sha256": "b3e53c5693f8b7f400479a52ed1bf0fce6fa8c37bba32a1b147d78d53369eaa6"
+                }
+              ],
+              "requiredTypes": [],
+              "bodyIncludes": [
+                "the default quantum is 5000",
+                "mapfile will clear array",
+                "mapfile returns zero"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "P124",
+      "root": "checkout",
+      "path": "tests/fixtures/roff/real/archlinux/bsdunzip.1",
+      "sha256": "a271c9471543684df90d1a3f0d988628588ed8ec4f49bb2f7e402fc752ff4a83",
+      "sourceGroup": "licensed-fixture",
+      "topic": "bsdunzip",
+      "selectionReason": "Reviewed declaration contexts and independent controls; existing licensed fixture.",
+      "queries": [
+        {
+          "query": "-I",
+          "review": "Physical head/provider windows cross-checked against the SG review panel and original man/mdoc. Independent body assertions remain separate from group context. Head/middle/tail witnesses include final notes.",
+          "expected": [
+            {
+              "source": {
+                "line": 45,
+                "column": 2
+              },
+              "kind": "option",
+              "names": [
+                "-I"
+              ],
+              "forms": [
+                "-I encoding"
+              ],
+              "emptyDescription": true
+            }
+          ],
+          "expectedSupports": [
+            {
+              "memberSources": [
+                {
+                  "line": 45,
+                  "column": 2
+                },
+                {
+                  "line": 46,
+                  "column": 2
+                }
+              ],
+              "memberForms": [
+                [
+                  "-I encoding"
+                ],
+                [
+                  "-O encoding"
+                ]
+              ],
+              "bodyWitnesses": [
+                {
+                  "startWord": 0,
+                  "words": 8,
+                  "sha256": "2d447e143c17adda6a8801c1796c918cbdbfd54bec0095722e8774e99f24fc3a"
+                }
+              ],
+              "requiredTypes": []
+            }
+          ]
+        },
+        {
+          "query": "-O",
+          "review": "Physical head/provider windows cross-checked against the SG review panel and original man/mdoc. Independent body assertions remain separate from group context. Head/middle/tail witnesses include final notes.",
+          "expected": [
+            {
+              "source": {
+                "line": 46,
+                "column": 2
+              },
+              "kind": "option",
+              "names": [
+                "-O"
+              ],
+              "forms": [
+                "-O encoding"
+              ],
+              "emptyDescription": false,
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "2d447e143c17adda6a8801c1796c918cbdbfd54bec0095722e8774e99f24fc3a"
+              }
+            }
+          ],
+          "expectedSupports": [
+            {
+              "memberSources": [
+                {
+                  "line": 45,
+                  "column": 2
+                },
+                {
+                  "line": 46,
+                  "column": 2
+                }
+              ],
+              "memberForms": [
+                [
+                  "-I encoding"
+                ],
+                [
+                  "-O encoding"
+                ]
+              ],
+              "bodyWitnesses": [
+                {
+                  "startWord": 0,
+                  "words": 8,
+                  "sha256": "2d447e143c17adda6a8801c1796c918cbdbfd54bec0095722e8774e99f24fc3a"
+                }
+              ],
+              "requiredTypes": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "P125",
+      "root": "checkout",
+      "path": "tests/fixtures/roff/real/debian/sh.1.gz",
+      "sha256": "0f6252ae51279e02e6b6f461f5ab17099f477ccc2f0086d3ab455f837356a1a1",
+      "sourceGroup": "licensed-fixture",
+      "topic": "sh",
+      "selectionReason": "Reviewed declaration contexts and independent controls; existing licensed fixture.",
+      "queries": [
+        {
+          "query": "-c",
+          "review": "Physical head/provider windows cross-checked against the SG review panel and original man/mdoc. Independent body assertions remain separate from group context. Head/middle/tail witnesses include final notes.",
+          "expected": [
+            {
+              "source": {
+                "line": 190,
+                "column": 2
+              },
+              "kind": "option",
+              "names": [
+                "-c"
+              ],
+              "forms": [
+                "-c"
+              ],
+              "emptyDescription": false,
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "6553de10cdcca66b64d834b1c3f759613d0b4f0c6ed3cd42ec48e1fc73bc4052"
+              }
+            },
+            {
+              "source": {
+                "line": 1909,
+                "column": 2
+              },
+              "kind": "option",
+              "names": [
+                "-c"
+              ],
+              "forms": [
+                "-c file"
+              ],
+              "emptyDescription": false,
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "b7c95f855b80134f692e85d447293a3f67ee2549d862472de2598193fba4f586"
+              }
+            },
+            {
+              "source": {
+                "line": 2235,
+                "column": 2
+              },
+              "kind": "option",
+              "names": [
+                "-c"
+              ],
+              "forms": [
+                "-c"
+              ],
+              "emptyDescription": false,
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "c0326c3d8a2bb02662efc36308f7ee964c78220683b057a1932085561f27f974"
+              }
+            }
+          ],
+          "expectedSupports": []
         }
       ]
     }

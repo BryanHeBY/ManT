@@ -9,6 +9,8 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+import re
+from collections import Counter
 from pathlib import Path
 
 from roff_audit_common import manual_hierarchy_root, run_jsonl_profile_batch, source_digest
@@ -35,10 +37,18 @@ def compact(value: object) -> str:
     return " ".join(visible(value).split())
 
 
-def owner_record(evidence: dict) -> dict:
+def owner_record(evidence: dict, supports: list | None = None) -> dict:
     entry = evidence.get("entry") or {}
     block = (evidence.get("content") or {}).get("block") or {}
     items = block.get("items", [])
+    content = evidence.get("content") or {}
+    if content.get("kind") == "declaration-member":
+        pool = supports or []
+        index, member = content.get("support", -1), content.get("itemIndex", -1)
+        if 0 <= index < len(pool):
+            group_items = pool[index].get("block", {}).get("items", [])
+            if 0 <= member < len(group_items):
+                items = [group_items[member]]
     body = items[0].get("description", items[0].get("blocks", [])) if len(items) == 1 else []
     kind = entry.get("kind", {})
     return {
@@ -60,7 +70,8 @@ def owner_record(evidence: dict) -> dict:
 
 def compare(probe: dict, response: dict) -> tuple[str, list[str], list[dict]]:
     explanation = response.get("explanation") or {}
-    actual = [owner_record(e) for e in explanation.get("evidence", [])
+    supports = explanation.get("supports", [])
+    actual = [owner_record(e, supports) for e in explanation.get("evidence", [])
               if e.get("class") == "direct-entry"]
     if "expected" not in probe:
         return "unresolved", ["probe has no reviewed gold"], actual
@@ -100,7 +111,48 @@ def compare(probe: dict, response: dict) -> tuple[str, list[str], list[dict]]:
     for got in actual:
         if forbidden.intersection(got["names"]):
             errors.append(f"forbidden direct name at {got['source']}")
+    if "expectedSupports" in probe:
+        expected_supports = probe["expectedSupports"]
+        if len(supports) != len(expected_supports):
+            errors.append(f"support count: {len(supports)} != {len(expected_supports)}")
+        for want in expected_supports:
+            matches = [s for s in supports if [item.get("source") for item in s.get("block", {}).get("items", [])] == want["memberSources"]]
+            if len(matches) != 1:
+                errors.append(f"support member sources: expected one match for {want['memberSources']}")
+                continue
+            support = matches[0]
+            items = support["block"]["items"]
+            if [[compact(term) for term in item["terms"]] for item in items] != want["memberForms"]:
+                errors.append("support original heads differ")
+            body = compact(items[-1].get("description", []))
+            for witness in want.get("bodyIncludes", []):
+                if witness not in body: errors.append(f"support missing body witness {witness!r}")
+            for witness in want.get("bodyWitnesses", []):
+                words = body.split()
+                at = witness["startWord"]
+                sample = " ".join(words[at:at + witness["words"]])
+                if hashlib.sha256(sample.encode()).hexdigest() != witness["sha256"]:
+                    errors.append(f"support body witness differs at word {at}")
+            for witness in want.get("bodyExcludes", []):
+                if witness in body: errors.append(f"support crossed boundary: {witness!r}")
+            for block_type in want.get("requiredTypes", []):
+                if not contains_type(items[-1].get("description", []), block_type):
+                    errors.append(f"support missing original {block_type}")
+            for item in items:
+                entry = item.get("entry") or {}
+                if entry.get("aliasGroups") or entry.get("aliasOf"):
+                    errors.append("support invented alias relationship")
+        if any(e.get("supportOmitted") for e in explanation.get("evidence", [])):
+            errors.append("required group context was omitted")
     return ("failure" if errors else "passed"), errors, actual
+
+
+def contains_type(value: object, kind: str) -> bool:
+    if isinstance(value, list):
+        return any(contains_type(item, kind) for item in value)
+    if isinstance(value, dict):
+        return value.get("type") == kind or any(contains_type(item, kind) for item in value.values())
+    return False
 
 
 def run(manifest: Path, profiler: Path, timeout: int, root_overrides: list[str] | None = None,
@@ -137,6 +189,12 @@ def run(manifest: Path, profiler: Path, timeout: int, root_overrides: list[str] 
                 continue
             if not probe.get("review") or not isinstance(probe["expected"], list):
                 raise ValueError(f"gold requires a review note and owner array: {key}")
+            for support in probe.get("expectedSupports", []):
+                if not (support.get("bodyIncludes") or support.get("bodyWitnesses")) or len(support.get("memberSources", [])) < 2 or len(support["memberSources"]) != len(support.get("memberForms", [])):
+                    raise ValueError(f"support gold requires source members, complete heads and body witnesses: {key}")
+                for witness in support.get("bodyWitnesses", []):
+                    if not 1 <= witness.get("words", 0) <= 32 or witness.get("startWord", -1) < 0 or not re.fullmatch(r"[0-9a-f]{64}", witness.get("sha256", "")):
+                        raise ValueError(f"invalid support body witness: {key}")
             for owner in probe["expected"]:
                 if not all(field in owner for field in
                            ("source", "forms", "kind", "names", "emptyDescription")):
@@ -154,8 +212,17 @@ def run(manifest: Path, profiler: Path, timeout: int, root_overrides: list[str] 
     if not sources:
         raise ValueError("query gold selection is empty")
     responses = run_jsonl_profile_batch(profiler, requests, timeout, "semantic query")
+    declaration_profiles = []
     for key, request in requests.items():
         response = responses[key]
+        if group_profile := response.get("declarationGroups"):
+            declaration_profiles.append({"id": key, "sourceSha256": sources[key]["sha256"],
+                "observedGroups": len(group_profile["observedGroups"]),
+                "sourceRuns": len(group_profile["sourceRuns"]),
+                "decisions": dict(Counter(row["reason"] for row in group_profile["sourceRuns"])),
+                "unexpectedGroups": group_profile["unexpectedGroups"],
+                "invalidGroups": group_profile["invalidGroups"],
+                "unresolvedRuns": group_profile["unresolvedRuns"]})
         rows = response.get("queryProfiles", [])
         if response.get("error") or len(rows) != len(request["queries"]):
             results.append({"id": key, "status": "unresolved", "reason": response.get("error", "incomplete probe response")})
@@ -169,6 +236,7 @@ def run(manifest: Path, profiler: Path, timeout: int, root_overrides: list[str] 
                             "nativeSourceWitnesses": row.get("nativeSourceWitnesses", [])})
     return {"schema": "mant.roff-query-gold-result/v1", "manifest": str(manifest),
             "sourceCount": len(sources), "uniqueSourceCount": len({s["sha256"] for s in sources.values()}),
+            "declarationProfiles": declaration_profiles,
             "results": results, "limitations": "Only reviewed queries are gold; AST coordinates identify candidates, not an automatic proof of ownership."}
 
 
@@ -184,6 +252,24 @@ def self_check() -> None:
     probe = {"query": "x", "expected": [want]}
     response = {"explanation": {"counts": {"directEntry": {"total": 1}}, "evidence": [evidence]}}
     assert compare(probe, response)[0] == "passed"
+    support = {"kind": "declaration-group", "block": {"items": [
+        {"source": {"line": 2, "column": 2}, "terms": [[{"type": "text", "value": "y ARG"}]], "description": []},
+        {"source": want["source"], "terms": evidence["entry"]["forms"], "description": [body]},
+    ]}}
+    supported = copy.deepcopy(response)
+    supported["explanation"]["supports"] = [support]
+    supported["explanation"]["evidence"][0]["content"] = {"kind": "declaration-member", "support": 0, "itemIndex": 1}
+    support_gold = {**probe, "expectedSupports": [{"memberSources": [i["source"] for i in support["block"]["items"]], "memberForms": [["y ARG"], ["x ARG"]], "bodyIncludes": ["BODY"], "requiredTypes": ["paragraph"]}]}
+    assert compare(support_gold, supported)[0] == "passed"
+    for changed in ("missing", "tail", "owner", "duplicate", "alias"):
+        wrong = copy.deepcopy(supported)
+        pool = wrong["explanation"]["supports"]
+        if changed == "missing": pool.clear()
+        elif changed == "tail": pool[0]["block"]["items"][1]["description"] = []
+        elif changed == "owner": pool[0]["block"]["items"][1]["source"]["line"] = 99
+        elif changed == "duplicate": pool.append(copy.deepcopy(pool[0]))
+        else: pool[0]["block"]["items"][0]["entry"] = {"aliasGroups": [["x", "y"]]}
+        assert compare(support_gold, wrong)[0] == "failure", changed
     assert compare({"query": "x"}, response)[0] == "unresolved"
     for field, value in [("source", {"line": 8, "column": 2}), ("contentOmitted", True),
                          ("class", "entry-mention"), ("entry", {"kind": {"kind": "term"}})]:

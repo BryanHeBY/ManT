@@ -17,6 +17,8 @@ use serde_json::{Value, json};
 
 #[path = "roff_semantic_profile/conversions.rs"]
 mod conversions;
+#[path = "roff_semantic_profile/declarations.rs"]
+mod declarations;
 #[path = "roff_semantic_profile/queries.rs"]
 mod queries;
 
@@ -25,7 +27,7 @@ use conversions::{conversion_violations, ordinal_conversions};
 #[path = "support/profile_io.rs"]
 mod profile_io;
 
-const PROFILE_SCHEMA: &str = "mant.roff-semantic-profile/v3";
+const PROFILE_SCHEMA: &str = "mant.roff-semantic-profile/v4";
 const SAMPLE_LIMIT: usize = 32;
 
 #[derive(Clone, Serialize)]
@@ -144,6 +146,8 @@ fn profile_document(
     let value_domain_violations = value_domain_violations(document);
     let ordinal_conversions = ordinal_conversions(native_root, document);
     let ordinal_conversion_violations = conversion_violations(&ordinal_conversions);
+    let declaration_groups = declarations::profile(native_root, document);
+    let declaration_group_violations = declarations::violations(&declaration_groups);
     let aliasless_generic_terms = entries
         .iter()
         .filter(|entry| entry.kind == "term" && entry.names.is_empty())
@@ -189,6 +193,7 @@ fn profile_document(
     }));
     violations.extend(value_domain_violations.iter().cloned());
     violations.extend(ordinal_conversion_violations.iter().cloned());
+    violations.extend(declaration_group_violations.iter().cloned());
     let semantic_diagnostics = mant_ir::validate_document(document)
         .into_iter()
         .filter(|diagnostic| !mant_engine::semantics_complete(std::slice::from_ref(diagnostic)))
@@ -214,6 +219,8 @@ fn profile_document(
         "valueDomainViolations": value_domain_violations,
         "ordinalConversions": ordinal_conversions,
         "ordinalConversionViolations": ordinal_conversion_violations,
+        "declarationGroups": declaration_groups,
+        "declarationGroupViolations": declaration_group_violations,
         "diagnostics": {
             "parser": parser_diagnostics,
             "ir": document.diagnostics.len(),
