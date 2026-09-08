@@ -7,6 +7,7 @@ Unreviewed probes and missing/drifted inputs remain unresolved, never clean.
 from __future__ import annotations
 
 import copy
+import hashlib
 import json
 from pathlib import Path
 
@@ -85,6 +86,10 @@ def compare(probe: dict, response: dict) -> tuple[str, list[str], list[dict]]:
         for text in want.get("bodyIncludes", []):
             if text not in got["body"]:
                 errors.append(f"{want['source']}: missing body witness {text!r}")
+        if witness := want.get("bodyWitness"):
+            prefix = " ".join(got["body"].split()[:witness["words"]])
+            if hashlib.sha256(prefix.encode()).hexdigest() != witness["sha256"]:
+                errors.append(f"{want['source']}: opening-body witness hash differs")
         for text in want.get("bodyExcludes", []):
             if text in got["body"]:
                 errors.append(f"{want['source']}: wrong-owner body {text!r}")
@@ -136,8 +141,11 @@ def run(manifest: Path, profiler: Path, timeout: int, root_overrides: list[str] 
                 if not all(field in owner for field in
                            ("source", "forms", "kind", "names", "emptyDescription")):
                     raise ValueError(f"incomplete gold owner: {key}")
-                if not owner["emptyDescription"] and not owner.get("bodyIncludes"):
+                if not owner["emptyDescription"] and not (owner.get("bodyIncludes") or owner.get("bodyWitness")):
                     raise ValueError(f"nonempty gold owner requires a body witness: {key}")
+                if witness := owner.get("bodyWitness"):
+                    if not 1 <= witness.get("words", 0) <= 32 or len(witness.get("sha256", "")) != 64:
+                        raise ValueError(f"invalid body witness: {key}")
         # A caller-selected corpus root is identity discovery, not permission
         # for arbitrary includes. Keep each parser within its manual hierarchy.
         parent = path.parent.parent if path.parent.name.startswith("man") else path.parent
@@ -186,5 +194,9 @@ def self_check() -> None:
     assert compare({**probe, "expected": []}, response)[0] == "failure"
     assert compare({**probe, "forbiddenNames": ["x"]}, response)[0] == "failure"
     assert compare({**probe, "expected": [{**want, "bodyIncludes": ["OTHER"]}]}, response)[0] == "failure"
+    hashed = {**want, "bodyIncludes": [], "bodyWitness": {"words": 8, "sha256": hashlib.sha256(b"BODY").hexdigest()}}
+    assert compare({**probe, "expected": [hashed]}, response)[0] == "passed"
+    hashed["bodyWitness"]["sha256"] = "0" * 64
+    assert compare({**probe, "expected": [hashed]}, response)[0] == "failure"
     # Matching metadata is not matching visible body.
     assert compact({"id": "BODY", "sourcePath": "BODY"}) == ""

@@ -2,7 +2,7 @@
   "schema": "mant.roff-query-gold/v1",
   "reviewed": "2026-09-08",
   "producer": "1047d2a4",
-  "scope": "159 selected queries across 120 fixed input paths / 119 unique decompressed sources / 93 topics. Head, source owner, bounded body witnesses, kind/names/forms and forbidden direct records; not full-document fidelity or exhaustive recall.",
+  "scope": "160 selected queries across 120 fixed input paths / 119 unique decompressed sources / 93 topics. Head, source owner, bounded body witnesses, kind/names/forms and forbidden direct records; not full-document fidelity or exhaustive recall.",
   "roots": {
     "host": "/usr/share/man",
     "corpus": "../../../../tmp/mantdoc-real-corpus",
@@ -40,9 +40,10 @@
                 "--builddir <dir>"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Directory to use for Building AUR Packages. This"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "24b3659b979015f6a9663a81796f1db9ea5147e0e946ed1a5d64fbc1e891e661"
+              }
             }
           ]
         },
@@ -63,9 +64,10 @@
                 "--sudoloop"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Loop sudo calls in the background to prevent"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "e125ed0f65937e4754e7ad777a7cf2127f8c832545778bce6341e8ce2c5ad7ba"
+              }
             }
           ]
         }
@@ -102,9 +104,10 @@
                 "new-session [-AdDEPX] [-c start-directory] [-e environment] [-f flags] [-F format] [-n window-name] [-s session-name] [-t group-name] [-x width] [-y height] [shell-command [argument ...]]"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "(alias: new) Create a new session with name"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "982e93a3f082098e134a70501f827cc406c696b7b43d1187471a658a50914273"
+              }
             }
           ]
         },
@@ -125,9 +128,10 @@
                 "VISUAL"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "If the command specified in this variable contains"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "c763e7af2de1dfb030f65c978f7472cdf8adf48bf68c0d8a6a3e9a8039d0d5c3"
+              }
             }
           ]
         }
@@ -164,9 +168,10 @@
                 "-c"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Take the first argument as a command to"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "77fe30eecba4c45dca0251640422d43629544c9425e54c132b6a07e1d77e4701"
+              }
             }
           ]
         }
@@ -207,12 +212,7 @@
               "forms": [
                 "set [ {+|-}options | {+|-}o [ option_name ] ] ... [ {+|-}A [ name ] ]"
               ],
-              "emptyDescription": true,
-              "bodyIncludes": [],
-              "bodyExcludes": [
-                "Display current readline",
-                "Translate file to ASCII"
-              ]
+              "emptyDescription": true
             }
           ]
         }
@@ -249,9 +249,10 @@
                 "AUTO_CD (-J)"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "If a command is issued that can't be"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "e9dd5c59b4d4ddf7f273f32a919ccdab790c8a5ff3cd92fb5a123343edc320b3"
+              }
             }
           ]
         },
@@ -272,9 +273,10 @@
                 "APPEND_HISTORY <D>"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "If this is set, zsh sessions will append"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "85fd380722c2f6033888f9376d7b5cf62d59e6975594667300f0ebf7776111e6"
+              }
             }
           ]
         }
@@ -311,9 +313,10 @@
                 "fpath <S> <Z> (FPATH <S>)"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "An array (colon separated list) of directories specifying"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "c99b3010776fa944a8325db714f2972acb01238e8db7b5af9072ed2d0a98b07d"
+              }
             }
           ]
         }
@@ -350,9 +353,10 @@
                 "-array-value-"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "The right hand side of an array-assignment (`name=(...)')"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "f3188657938e07ed79c3ae0dd28147e0982a03eb5e6c576b7e3ccb7012a7d147"
+              }
             }
           ]
         }
@@ -388,12 +392,7 @@
               "forms": [
                 "zle"
               ],
-              "emptyDescription": true,
-              "bodyIncludes": [],
-              "bodyExcludes": [
-                "Display current readline",
-                "Translate file to ASCII"
-              ]
+              "emptyDescription": true
             }
           ]
         }
@@ -430,9 +429,10 @@
                 "-Wplacement-new=n"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Warn about placement new expressions with undefined behavior,"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "a920ea5e4678aac25490fb3caadf6e031c5291102c703d7add13700110490049"
+              }
             },
             {
               "source": {
@@ -447,9 +447,10 @@
                 "-Wplacement-new=1"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "This is the default warning level of -Wplacement-new."
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "269beb770d8cafd1af7f26df9d9dda8c55d732951ac7b62f7b77c6ac8276845c"
+              }
             },
             {
               "source": {
@@ -464,9 +465,10 @@
                 "-Wplacement-new=2"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "At this level, in addition to diagnosing all"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "240e71b781154694e826e1f83715ae77a68f671fcf3f52b15c71d56385d3f200"
+              }
             }
           ]
         },
@@ -487,9 +489,10 @@
                 "-fsanitize=address"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Enable AddressSanitizer, a fast memory error detector. Memory"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "c25ee0cceca7dcae5d5ea94909a62617fb6156c3bf9b9c26a556efdd0def76ae"
+              }
             },
             {
               "source": {
@@ -504,9 +507,10 @@
                 "-fsanitize=kernel-address"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Enable AddressSanitizer for Linux kernel. See <https://github.com/google/kernel-sanitizers> for"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "32f959416f0a89480b84fdd4a2a529b6c135b17016385ba4b420e61cc4f40260"
+              }
             },
             {
               "source": {
@@ -521,9 +525,10 @@
                 "-fsanitize=hwaddress"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Enable Hardware-assisted AddressSanitizer, which uses a hardware ability"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "d4193ed0d4a8798fe3e6c503fa93e4007a3561f8169653d1e8b4ae8f77aaf401"
+              }
             },
             {
               "source": {
@@ -538,9 +543,10 @@
                 "-fsanitize=kernel-hwaddress"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Enable Hardware-assisted AddressSanitizer for compilation of the Linux"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "d2e22df158a8aa48156b4b5a0df9d56fa06cbb50e8688900a95f652e1f0e7c3f"
+              }
             },
             {
               "source": {
@@ -555,9 +561,10 @@
                 "-fsanitize=memtag-stack"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Use Memory Tagging Extension instructions instead of instrumentation"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "08195b4e6e8c9605b8c76ec3f1c4a2e2e349599cdca2181e5da6892a97a41538"
+              }
             },
             {
               "source": {
@@ -572,9 +579,10 @@
                 "-fsanitize=pointer-compare"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Instrument comparison operation (<, <=, >, >=) with"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "c3195d8811cf89316b64106a6c5dba66b3a473cc0fbe0f0e75ea145638fc0ec4"
+              }
             },
             {
               "source": {
@@ -589,9 +597,10 @@
                 "-fsanitize=pointer-subtract"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Instrument subtraction with pointer operands. The option must"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "19bc26067c155cfb293a673687d88e215ee0ee58560e80624c7b2d316404d8aa"
+              }
             },
             {
               "source": {
@@ -606,9 +615,10 @@
                 "-fsanitize=shadow-call-stack"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Enable ShadowCallStack, a security enhancement mechanism used to"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "ecd44f0d8074818f9bedc40d1e5354c067fc5fc554a647de25912314bcea18a7"
+              }
             },
             {
               "source": {
@@ -623,9 +633,10 @@
                 "-fsanitize=thread"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Enable ThreadSanitizer, a fast data race detector. Memory"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "6f8871ca70222b313c351a139f95c07b86ab92d1768f6f0ba0a13ac32f53eba9"
+              }
             },
             {
               "source": {
@@ -640,9 +651,10 @@
                 "-fsanitize=leak"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Enable LeakSanitizer, a memory leak detector. This option"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "f40e981ed586a0983d98fd8f99f395397b1fab92cfa6302d059624e36b34446a"
+              }
             },
             {
               "source": {
@@ -657,9 +669,10 @@
                 "-fsanitize=undefined"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Enable UndefinedBehaviorSanitizer, a fast undefined behavior detector. Various"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "f0ab6634169d8f60a88f054296bb3b163b73dcb4003daec54de5cd2e016442d0"
+              }
             },
             {
               "source": {
@@ -674,9 +687,10 @@
                 "-fsanitize=shift"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "This option enables checking that the result of"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "a0e73678b9856a98ea050530e750d91378582110a93cef3f8f23157e57552f76"
+              }
             },
             {
               "source": {
@@ -691,9 +705,10 @@
                 "-fsanitize=shift-exponent"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "This option enables checking that the second argument"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "52d51511ca27012623291fc25da01696a5d2e2a4abaf4bfaab3fdf6a8517c4ab"
+              }
             },
             {
               "source": {
@@ -708,9 +723,10 @@
                 "-fsanitize=shift-base"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "If the second argument of a shift operation"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "1fcee53bc3d9db901d4289598fd57649fd79840ccae4bc0dba254f0d5696371c"
+              }
             },
             {
               "source": {
@@ -725,9 +741,10 @@
                 "-fsanitize=integer-divide-by-zero"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Detect integer division by zero."
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "ea31f3741622b74a36481767d2b6cc99b283c69a1fa0934979cf9fd6ddfb29fd"
+              }
             },
             {
               "source": {
@@ -742,9 +759,10 @@
                 "-fsanitize=unreachable"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "With this option, the compiler turns the \"__builtin_unreachable\""
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "8730c0c745f41099d96ef9677bdbc1241c90bf9d8150abbb7eb7166ab7482e9c"
+              }
             },
             {
               "source": {
@@ -759,9 +777,10 @@
                 "-fsanitize=vla-bound"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "This option instructs the compiler to check that"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "d3970aee9563647486ecc7b44f40f18f0fc6511647bef83c751f9e706214a892"
+              }
             },
             {
               "source": {
@@ -776,9 +795,10 @@
                 "-fsanitize=null"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "This option enables pointer checking. Particularly, the application"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "d37a006b7b6cbbfba8345c6b3c7a544ea3941f3bc572e69605b4c5853eac4521"
+              }
             },
             {
               "source": {
@@ -793,9 +813,10 @@
                 "-fsanitize=return"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "This option enables return statement checking. Programs built"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "17e5352ae6927701c069fcd68f975605a06c9b616c86d85bb9afddfb5c80feb2"
+              }
             },
             {
               "source": {
@@ -810,9 +831,10 @@
                 "-fsanitize=signed-integer-overflow"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "This option enables signed integer overflow checking. We"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "bb1c9ab21eceaaa43c64b50ada8088eafcf18694717e2fc8f79a53ff8dd509f3"
+              }
             },
             {
               "source": {
@@ -827,9 +849,10 @@
                 "-fsanitize=bounds"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "This option enables instrumentation of array bounds. Various"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "3a81d2eba20c42825b213df106a6cdb21dc8bcdf0d4e3b0c0989376d0053a144"
+              }
             },
             {
               "source": {
@@ -844,9 +867,10 @@
                 "-fsanitize=bounds-strict"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "This option enables strict instrumentation of array bounds."
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "7472631912699d956c11177f821ca2eabbf3026b6047d4b37f3e8522241fdbba"
+              }
             },
             {
               "source": {
@@ -861,9 +885,10 @@
                 "-fsanitize=alignment"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "This option enables checking of alignment of pointers"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "5e43fee8a115787a176cf041520345e05f8705c57f705b435e9309ef50dfc279"
+              }
             },
             {
               "source": {
@@ -878,9 +903,10 @@
                 "-fsanitize=object-size"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "This option enables instrumentation of memory references using"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "221e0e960e3aff082a2e65d3fa6f198040f1806dec820e88840411a4799c0e70"
+              }
             },
             {
               "source": {
@@ -895,9 +921,10 @@
                 "-fsanitize=float-divide-by-zero"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Detect floating-point division by zero. Unlike other similar"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "49374df378b5721169b779aa61f67ece63a34e26d850b4f16e17852b3f681b96"
+              }
             },
             {
               "source": {
@@ -912,9 +939,10 @@
                 "-fsanitize=float-cast-overflow"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "This option enables floating-point type to integer conversion"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "d0efe58c3b29467ca9fdae846c186cf44cf3b72d1a23be84a255c980501ae191"
+              }
             },
             {
               "source": {
@@ -929,9 +957,10 @@
                 "-fsanitize=nonnull-attribute"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "This option enables instrumentation of calls, checking whether"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "a8d8dcf6c3c55d13b748cd3d41167147be08338dddd37bf4d2ae0ef5db10a41e"
+              }
             },
             {
               "source": {
@@ -946,9 +975,10 @@
                 "-fsanitize=returns-nonnull-attribute"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "This option enables instrumentation of return statements in"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "12de9efb72e3b21fd13396b37d1e82481c5df0ffba60184a6db8d34fbd55a9ad"
+              }
             },
             {
               "source": {
@@ -963,9 +993,10 @@
                 "-fsanitize=bool"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "This option enables instrumentation of loads from bool."
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "81289964253f6f62baf8c7f41854e5b10c40da8e7bd65457f8a684596709a431"
+              }
             },
             {
               "source": {
@@ -980,9 +1011,10 @@
                 "-fsanitize=enum"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "This option enables instrumentation of loads from an"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "0e4f34269305c54bbbfd7bb9772e4038c57c1c150ac313c72e526b665b50b723"
+              }
             },
             {
               "source": {
@@ -997,9 +1029,10 @@
                 "-fsanitize=vptr"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "This option enables instrumentation of C++ member function"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "f61d2ac36be882a94f051193ef0eca3988700a96cf1a0ad6cecb39cc8e25819a"
+              }
             },
             {
               "source": {
@@ -1014,9 +1047,10 @@
                 "-fsanitize=pointer-overflow"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "This option enables instrumentation of pointer arithmetics. If"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "267e8d93c92769181c95c46dfb19b267cd5cb58da10f1dabcf89da2f1d2117ed"
+              }
             },
             {
               "source": {
@@ -1031,9 +1065,10 @@
                 "-fsanitize=builtin"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "This option enables instrumentation of arguments to selected"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "8c3152e82c2f5630541307e77e3de6aca33cfba968aa1de267536a09e7b49b68"
+              }
             }
           ]
         },
@@ -1053,12 +1088,7 @@
               "forms": [
                 "-Wformat"
               ],
-              "emptyDescription": true,
-              "bodyIncludes": [],
-              "bodyExcludes": [
-                "Display current readline",
-                "Translate file to ASCII"
-              ]
+              "emptyDescription": true
             },
             {
               "source": {
@@ -1073,9 +1103,10 @@
                 "-Wformat=n"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Check calls to \"printf\" and \"scanf\", etc., to"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "0157c86e568305febb21c73ef507f76576fd481f27ab45da5c463c97a21bc67a"
+              }
             },
             {
               "source": {
@@ -1089,12 +1120,7 @@
               "forms": [
                 "-Wformat=1"
               ],
-              "emptyDescription": true,
-              "bodyIncludes": [],
-              "bodyExcludes": [
-                "Display current readline",
-                "Translate file to ASCII"
-              ]
+              "emptyDescription": true
             },
             {
               "source": {
@@ -1109,9 +1135,10 @@
                 "-Wformat"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Option -Wformat is equivalent to -Wformat=1, and -Wno-format"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "a704dbd7a6ffb314de97866651c53bb1e16e37e759ffea8ecbacbf59974127a4"
+              }
             },
             {
               "source": {
@@ -1126,9 +1153,10 @@
                 "-Wformat=2"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Enable -Wformat plus additional format checks. Currently equivalent"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "d13abc05bc32fb9b85418caacd994d052c8d92316c5f45b96596d3063dae334f"
+              }
             }
           ]
         },
@@ -1149,9 +1177,10 @@
                 "file=FILENAME"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Specify the filename to write the SARIF output"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "fab4acbf4e66c646d460fdfd4d3f70c9b569f528900cf939f5f3378af2dc38dd"
+              }
             },
             {
               "source": {
@@ -1166,9 +1195,10 @@
                 "file=FILENAME"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Specify the filename to write the HTML output"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "771414ef299e3ee3662602791b8d05ee77257d970e5105a8b115bcbb164c0c82"
+              }
             }
           ]
         }
@@ -1205,9 +1235,10 @@
                 "snapshot [-r] [-i <qgroupid>] <source> <dest>|[<dest>/]<name>"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Create a snapshot of the subvolume source with"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "bb21cfd4d4c9b87898a8cf60831a36b89816d6591453409c0165447929a0f9c6"
+              }
             }
           ]
         }
@@ -1244,9 +1275,10 @@
                 "resize [options] [<devid>:][+/-]<size>[kKmMgGtTpPeE]|[<devid>:]max <path>"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Resize a mounted filesystem identified by path. A"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "bbccbd2fb197b369d81f6d1baec2d3d7b95f9199e26fc459190351fc02141fc5"
+              }
             }
           ]
         },
@@ -1267,9 +1299,10 @@
                 "show [options] [<path>|<uuid>|<device>|<label>]"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Show the btrfs filesystem with some additional info"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "afb9c1862988af21f0a15c9fd1b75456f52d1fd59f0795d96796a775f8099ed9"
+              }
             }
           ]
         }
@@ -1307,9 +1340,10 @@
                 "-a --ascii"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Ascii text mode: convert end-of-lines using local conventions."
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "1843dfc63ac5eba48e34812e12561e718d3530c9bb55bf01747977805274141f"
+              }
             }
           ]
         },
@@ -1331,9 +1365,10 @@
                 "-N --name"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "When compressing, always save the original file name,"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "09ce2cce5616595f67cf661b0c72e5e9920f5b1b8df3ac90bd7366871849e6a6"
+              }
             }
           ]
         }
@@ -1369,12 +1404,7 @@
               "forms": [
                 "-a"
               ],
-              "emptyDescription": true,
-              "bodyIncludes": [],
-              "bodyExcludes": [
-                "Display current readline",
-                "Translate file to ASCII"
-              ]
+              "emptyDescription": true
             }
           ]
         },
@@ -1395,9 +1425,10 @@
                 "--ascii"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "[Systems using EBCDIC] Translate file to ASCII format."
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "9b23f25e2372c0da8b8ae1478cf2c7f18561160ee2a674f998330b0992581c74"
+              }
             }
           ]
         }
@@ -1434,9 +1465,10 @@
                 "CURL_HOME <directory>"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "If set, is the first variable curl checks"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "a3903476d97ff764ee1656445338f6a10d0454291ab7ece42ebdd5fc1f790cf6"
+              }
             }
           ]
         },
@@ -1457,9 +1489,10 @@
                 "SSLKEYLOGFILE <path>"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "If you set this environment variable to a"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "7fb34e78d990482062a61902dc29a0e5b8da1e7666af22c48be66968cb8682d2"
+              }
             }
           ]
         }
@@ -1496,9 +1529,10 @@
                 "core.editor"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Commands such as commit and tag that let"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "d40ab72e43d83b14541b22c7674b08ce1bf1064ab5930a94cc1d46c70c1cd96b"
+              }
             }
           ]
         },
@@ -1524,9 +1558,10 @@
                 "user.name, user.email, author.name, author.email, committer.name, committer.email"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "The user.name and user.email variables determine what ends"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "a997e86e7ef74b4152d04ac9cccf39f7eb524f24eb760a0aa6e531dfc6a1382a"
+              }
             }
           ]
         },
@@ -1547,9 +1582,10 @@
                 "GIT_CONFIG_COUNT, GIT_CONFIG_KEY_<n>, GIT_CONFIG_VALUE_<n>"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "If GIT_CONFIG_COUNT is set to a positive number,"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "41e37b9c545a672616a7436ff50f12c8716c09a6239fa48c503a3860d9fae70d"
+              }
             }
           ]
         }
@@ -1586,9 +1622,10 @@
                 "show-environment"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Dump the systemd manager environment block. This is"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "12327f487455f9a136bc8a8c16cc91f2b7a8f806a9fa82f4958f49078519fda7"
+              }
             }
           ]
         }
@@ -1625,9 +1662,10 @@
                 "Environment="
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Sets environment variables for executed processes. Each line"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "0b76c0634e9d5cbe34694b78de148efab5bf8fff1943c0b92cc3c9b5987a002b"
+              }
             }
           ]
         },
@@ -1648,9 +1686,10 @@
                 "WorkingDirectory="
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Takes a directory path relative to the service's"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "6ef5aeb33fe67063543dd2c0208ab5e8c0400d097df453ed8be499495881976f"
+              }
             }
           ]
         }
@@ -1687,9 +1726,10 @@
                 "Host"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Restricts the following declarations (up to the next"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "140522d0b205bbd8be63f8a7bd6f06c396565d322b021b117c4a48fbfc3a07db"
+              }
             }
           ]
         }
@@ -1726,9 +1766,10 @@
                 "if=FILE"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "read from FILE instead of standard input"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "6b03a5b262232a6240a57060d8e4e466e3ffa7cb0456931c9f931b4f0539cee8"
+              }
             }
           ]
         },
@@ -1749,9 +1790,10 @@
                 "bs=BYTES"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "read and write up to BYTES bytes at"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "e0168f1c7e5e10e4d96be39bcd20d1a0517b76cd29401fc1aa4afb15a6dd6761"
+              }
             }
           ]
         }
@@ -1788,9 +1830,10 @@
                 "-exec command ;"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Execute command; true if 0 status is returned."
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "ce02534cf045405e606d23bea872fad283dc11b36f3fb8006eb29baa8185ead5"
+              }
             },
             {
               "source": {
@@ -1805,9 +1848,10 @@
                 "-exec command {} +"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "This variant of the -exec action runs the"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "6c8672e381b7fdc2c3587be2a5fb9e2b76aacbaffff9e2b8803d602449758d32"
+              }
             }
           ]
         }
@@ -1843,12 +1887,7 @@
               "forms": [
                 "bind [-m keymap] [-lsvSVX]"
               ],
-              "emptyDescription": true,
-              "bodyIncludes": [],
-              "bodyExcludes": [
-                "Display current readline",
-                "Translate file to ASCII"
-              ]
+              "emptyDescription": true
             },
             {
               "source": {
@@ -1862,12 +1901,7 @@
               "forms": [
                 "bind [-m keymap] [-q function] [-u function] [-r keyseq]"
               ],
-              "emptyDescription": true,
-              "bodyIncludes": [],
-              "bodyExcludes": [
-                "Display current readline",
-                "Translate file to ASCII"
-              ]
+              "emptyDescription": true
             },
             {
               "source": {
@@ -1881,12 +1915,7 @@
               "forms": [
                 "bind [-m keymap] -f filename"
               ],
-              "emptyDescription": true,
-              "bodyIncludes": [],
-              "bodyExcludes": [
-                "Display current readline",
-                "Translate file to ASCII"
-              ]
+              "emptyDescription": true
             },
             {
               "source": {
@@ -1900,12 +1929,7 @@
               "forms": [
                 "bind [-m keymap] -x keyseq[:] shell-command"
               ],
-              "emptyDescription": true,
-              "bodyIncludes": [],
-              "bodyExcludes": [
-                "Display current readline",
-                "Translate file to ASCII"
-              ]
+              "emptyDescription": true
             },
             {
               "source": {
@@ -1919,12 +1943,7 @@
               "forms": [
                 "bind [-m keymap] keyseq:function-name"
               ],
-              "emptyDescription": true,
-              "bodyIncludes": [],
-              "bodyExcludes": [
-                "Display current readline",
-                "Translate file to ASCII"
-              ]
+              "emptyDescription": true
             },
             {
               "source": {
@@ -1938,12 +1957,7 @@
               "forms": [
                 "bind [-m keymap] -p|-P [readline-command]"
               ],
-              "emptyDescription": true,
-              "bodyIncludes": [],
-              "bodyExcludes": [
-                "Display current readline",
-                "Translate file to ASCII"
-              ]
+              "emptyDescription": true
             },
             {
               "source": {
@@ -1957,12 +1971,7 @@
               "forms": [
                 "bind [-m keymap] keyseq:readline-command"
               ],
-              "emptyDescription": true,
-              "bodyIncludes": [],
-              "bodyExcludes": [
-                "Display current readline",
-                "Translate file to ASCII"
-              ]
+              "emptyDescription": true
             },
             {
               "source": {
@@ -1977,9 +1986,10 @@
                 "bind readline-command-line"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Display current readline key and function bindings, bind"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "190e605161a4bb497dd7709358b8ccd0824efff70ebba4363af6e7ad2100d07e"
+              }
             }
           ]
         },
@@ -2001,9 +2011,10 @@
                 "[-+]O [shopt_option]"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "shopt_option is one of the shell options accepted"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "2433b1213ac9bb2727617e984533852105f21cd16676c43e7621a443afa4bef5"
+              }
             },
             {
               "source": {
@@ -2018,9 +2029,10 @@
                 "-O file"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "True if file exists and is owned by"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "26b13506bd09a99e691f878d968aa7b32ba69e04c2aebe05a37bfae228f91060"
+              }
             },
             {
               "source": {
@@ -2035,9 +2047,10 @@
                 "-O"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Begin assigning to array at index origin. The"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "2377968790d310203e3be6159f1e25c36d12b9afbf961cfeca5f9ef0cdcbccae"
+              }
             }
           ]
         }
@@ -2074,9 +2087,10 @@
                 "copy oldpath newpath"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Copy remote file from oldpath to newpath. Note"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "4ff1e110149447709cefbeaf22fc1147b88bf56c9ae28a5c942816112bc02276"
+              }
             }
           ]
         }
@@ -2113,9 +2127,10 @@
                 "UV_THREADPOOL_SIZE size"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Set the number of threads used in libuv's"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "6f02f1e47b1a279190dada1d94ec6f17d778851736ffe73d045909beab2af23b"
+              }
             }
           ]
         }
@@ -2152,9 +2167,10 @@
                 "-X option"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Set implementation-specific option. The following options are available:"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "d9b23be44285678b2c223fb94643cde1366f461c4cbe5658cacbeff530046c8f"
+              }
             },
             {
               "source": {
@@ -2169,9 +2185,10 @@
                 "-X cpu_count=N"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Override the return value of os.cpu_count(). -X cpu_count=default"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "48e83a5e43faa2162a14a3c30dab9d9a2f5d222dc6b942fe40f0667cd73eca80"
+              }
             },
             {
               "source": {
@@ -2186,9 +2203,10 @@
                 "-X dev"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Enable CPython's \"development mode\", introducing additional runtime checks"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "2ecd2b7a95942265fd53c0515f41bf099e84374e977a80c658c63064bd509a52"
+              }
             },
             {
               "source": {
@@ -2203,9 +2221,10 @@
                 "-X importtime"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Show how long each import takes. It shows"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "b45a54a8debd2ab88182d31e23ae0a2fb54109d0143b38bc90fae843ee840720"
+              }
             },
             {
               "source": {
@@ -2220,9 +2239,10 @@
                 "-X faulthandler"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Enable faulthandler."
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "6354b2a02320c7b932b31dddfc57dfdb1f536cd3e44bb4feea913c7927973255"
+              }
             },
             {
               "source": {
@@ -2237,9 +2257,10 @@
                 "-X frozen_modules=[on|off]"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Whether or not frozen modules should be used."
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "1c7784e66296156bc6790fa88fede5b0f7f2d84c0fb6af66e399d02e4c70eb0f"
+              }
             },
             {
               "source": {
@@ -2254,9 +2275,10 @@
                 "-X gil=[0|1]"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Enable (1) or disable (0) the GIL. See"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "57a50a084136507019ddb2af6d288674f2ec961b6ec6811c38f49bd06eddf021"
+              }
             },
             {
               "source": {
@@ -2271,9 +2293,10 @@
                 "-X int_max_str_digits=number"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Limit the size of int<->str conversions. This helps"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "f6d47804d88416e11618f67721e624152dd49d6412c929f0227177b6dcdce50b"
+              }
             },
             {
               "source": {
@@ -2288,9 +2311,10 @@
                 "-X no_debug_ranges"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Disable the inclusion of the tables mapping extra"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "4695a4eff90e6431a1f102569242e1d4a45a14e7ffe063cd4a73e582b3d47129"
+              }
             },
             {
               "source": {
@@ -2305,9 +2329,10 @@
                 "-X perf"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Support the Linux \"perf\" profiler. See also PYTHONPERFSUPPORT=1."
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "3ac9dcf02d5305f45b5a4c2ca89e972e9d6af4e1ee0764e66e4b121469100e60"
+              }
             },
             {
               "source": {
@@ -2322,9 +2347,10 @@
                 "-X perf_jit"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Support the Linux \"perf\" profiler with DWARF support."
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "dbf737340cea95c87cfd4eaf4649bc76b574a6582b0d7edc75fe570f4eb8ba94"
+              }
             },
             {
               "source": {
@@ -2339,9 +2365,10 @@
                 "-X presite=MOD"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Import this module before site. See also PYTHON_PRESITE."
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "c0cfd1fd0905b6620e70d226880ed203309a4ba2a0cac8fc932b17a60307153a"
+              }
             },
             {
               "source": {
@@ -2356,9 +2383,10 @@
                 "-X pycache_prefix=PATH"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Enable writing .pyc files to a parallel tree"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "7c5f5452eb8ad481fbb8eeceb2d182315b5068050608d0fb1b24552794ed63da"
+              }
             },
             {
               "source": {
@@ -2373,9 +2401,10 @@
                 "-X showrefcount"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Output the total reference count and number of"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "3b6adb8a4c5aa29d11d8d556010f9b3c5935401027484b9286fd28e9452eef8b"
+              }
             },
             {
               "source": {
@@ -2390,9 +2419,10 @@
                 "-X tracemalloc"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Start tracing Python memory allocations using the tracemalloc"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "c4389c7aa6d811aeb1af7348dcaeed00e2a5ef2ee8ca5a22e3333280240e60d3"
+              }
             },
             {
               "source": {
@@ -2407,9 +2437,10 @@
                 "-X utf8"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Enable UTF-8 mode for operating system interfaces, overriding"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "f099dc36157efaee59f6c90b56807cc1fffa72f7a99265f5804d9b43cbe4df30"
+              }
             },
             {
               "source": {
@@ -2424,9 +2455,10 @@
                 "-X warn_default_encoding"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Enable opt-in EncodingWarning for 'encoding=None'."
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "5fbecdfeca9ef4c109bcd8047f0624df06aa943432e6d0d929d2dcd836c9eac1"
+              }
             }
           ]
         }
@@ -2464,9 +2496,10 @@
                 "-L, -license"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Show license."
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "a25402040989a582c42f15e9bfb45e6e53923f67a8b522e1ee2a18d2e15e32d4"
+              }
             }
           ]
         }
@@ -2503,9 +2536,10 @@
                 "-A"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Select all processes. Identical to -e."
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "2c89d59db30dd87c112555fed88ae05cb508058d71030aa3d3791da07da3a5b4"
+              }
             }
           ]
         }
@@ -2543,9 +2577,10 @@
                 "-a or --search-skip-screen"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "By default, forward searches start at the top"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "47a23c16de5a1f53e944e332829beaf69281880b95480bdc7f9c5d89e67d88a7"
+              }
             }
           ]
         },
@@ -2566,9 +2601,10 @@
                 "-Ps"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "followed by a string changes the default (short)"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "38cd1ee8a453decd07e4d10c5a66eec4c10efc2731d6a883ef2291593d7eb28c"
+              }
             }
           ]
         }
@@ -2605,9 +2641,10 @@
                 "error_recovery=bool"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "The error_recovery argument can be used to control"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "fdabba747572ee47c070599fad9a5257394486aab6c8428eecf87a6dbca7d2f1"
+              }
             }
           ]
         }
@@ -2644,9 +2681,10 @@
                 "--ignoregroup <group>"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Directs pacman to ignore upgrades of all packages"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "c054e3472c2e53afd80b828bbe23abcd0b101229bbd69e9214aaf75f5b3d57c0"
+              }
             }
           ]
         }
@@ -2684,9 +2722,10 @@
                 "-n, -netns <NETNS>"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "switches ip to the specified network namespace NETNS."
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "8330d4d0401a846bac4cf8fc690e514bd259d4ea65c67b8cdc959d752a0b9965"
+              }
             }
           ]
         }
@@ -2725,9 +2764,10 @@
                 "-o file, --old-file=file, --assume-old=file"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Do not remake the file file even if"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "5cebecc283af88b19a64f8b809b6f0cee2714ae4402d67a12c2f20bc58a89ebe"
+              }
             }
           ]
         }
@@ -2764,9 +2804,10 @@
                 "--follow"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Continue listing the history of a file beyond"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "5b3fe7021cc677c098e39783b4bf7877c6f2730f63a414c8c70a4297b53c1ca2"
+              }
             }
           ]
         },
@@ -2787,9 +2828,10 @@
                 "-L<start>,<end>:<file>, -L:<funcname>:<file>"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Trace the evolution of the line range given"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "06e333c0f0497a37619932e16fb036b8c6c046d98de8bde99ebd410791fca18f"
+              }
             }
           ]
         },
@@ -2811,9 +2853,10 @@
                 "-<number>, -n <number>, --max-count=<number>"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Limit the output to the first <number> commits"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "b779d415710fb934375e30945da96e9c28860d5d20694043af55eeee9958fd11"
+              }
             }
           ]
         },
@@ -2834,9 +2877,10 @@
                 "--color-moved-ws=<mode>,..."
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "This configures how whitespace is ignored when performing"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "a8c99abd527834516f2f06937c9641d7880198d14b2b87b43fc1c71c31f9598b"
+              }
             }
           ]
         }
@@ -2871,9 +2915,10 @@
                 "%q"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "ARGUMENT is printed in a format that can"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "0f5d519e374595dbbe7c3d346dd7b98ab90653cca1fc16a649e6c620ce5acc04"
+              }
             }
           ]
         }
@@ -2910,9 +2955,10 @@
                 "TAR_ARCHIVE"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "The name of the archive tar is processing."
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "b042feadeb88d5cf5cc8595f23027daa98e1bd7f1309b6a628245dabe8da0bb0"
+              }
             },
             {
               "source": {
@@ -2927,9 +2973,10 @@
                 "TAR_ARCHIVE"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "The name of the archive tar is processing."
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "b042feadeb88d5cf5cc8595f23027daa98e1bd7f1309b6a628245dabe8da0bb0"
+              }
             }
           ]
         },
@@ -2950,9 +2997,10 @@
                 "-o"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "When creating, same as --old-archive. When extracting, same"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "fe892349279bbca5fcd3803fefa40536001aca67f46568e9886da2e5884f0442"
+              }
             }
           ]
         }
@@ -2990,9 +3038,10 @@
                 "-b, --sector-size sectorsize"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Specify the sector size of the disk. Valid"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "5992ee059dbb56a0f9d17b4603e04157e320936fd73da988c336105f1aac85fb"
+              }
             }
           ]
         },
@@ -3034,9 +3083,10 @@
                 "--options-source source"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Source of default options. source is a comma-separated"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "a2e0ab2b6f0852383f7867d4711cd3309803b047f13cfa1897bc416bf5cc4811"
+              }
             }
           ]
         },
@@ -3058,9 +3108,10 @@
                 "--map-groups, --map-users inner:_outer_:_count_"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Add the specified user/group mapping to an X-mount.idmap"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "c9f4e571cd124031d04c3b8f8e012fbec6b2860fe394612ed4b5e6e08f88c65d"
+              }
             },
             {
               "source": {
@@ -3075,9 +3126,10 @@
                 "--map-users /proc/PID/ns/user"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Use the specified user namespace for user and"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "7763a6b5b85a5a4d1a6bb61d0dd594737fb0b57d2911e7e1983c933c0d3861dc"
+              }
             }
           ]
         }
@@ -3114,9 +3166,10 @@
                 "acpid"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "acpid [-df] [-c CONFDIR] [-l LOGFILE] [-a ACTIONFILE]"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "e231ca5fa8980681ffc2f566b63f97104f1bae74706db9a1318ed2dbbb648727"
+              }
             }
           ]
         }
@@ -3153,9 +3206,10 @@
                 "-help"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Print out a usage message."
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "014be746507117b497e887448f0d37ba9e61e730b04ab9dbfe0be6ae356b132d"
+              }
             }
           ]
         }
@@ -3214,9 +3268,10 @@
                 "-c, --cache-file cachefile"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Read from cachefile instead of reading from the"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "14ce4cb8e354d2b219e19588ae552ed6c3e1fee8bbef510022733f747d82e0f8"
+              }
             }
           ]
         }
@@ -3253,9 +3308,10 @@
                 "LSBLK_COLUMNS="
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "specifies a comma-separated list of output columns to"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "d2aa6af9825dae4a61cffb4e303dbb5ff39ccec2c4d9c98687ac257f434c37df"
+              }
             }
           ]
         }
@@ -3293,9 +3349,10 @@
                 "-O, --test-opts option..."
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Unmount only the filesystems that have the specified"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "db63ca28d8415b96c16744151799169e6976f7e2ae9a5b64c1aff7369c2abd92"
+              }
             }
           ]
         }
@@ -3331,12 +3388,7 @@
               "forms": [
                 "-provider name"
               ],
-              "emptyDescription": true,
-              "bodyIncludes": [],
-              "bodyExcludes": [
-                "Display current readline",
-                "Translate file to ASCII"
-              ]
+              "emptyDescription": true
             }
           ]
         }
@@ -3374,9 +3426,10 @@
                 "-d, --udp"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Use datagrams (UDP) only. By default the connection"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "90ccc10aa115e13ba26c1b8a9711ded5b732d0c2a10e0262967da35f2c237f56"
+              }
             }
           ]
         },
@@ -3397,9 +3450,34 @@
                 "--sd-param name=value"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Specifies a structured data element parameter, a name"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "00a52081b59b858831baa1f226fcc0802d3c744edd28b152a82ebf3f275d1e14"
+              }
+            }
+          ]
+        },
+        {
+          "query": "--sd-id",
+          "review": "Source head and independent owner checked against the returned form, kind/name and opening body witness; multiple direct owners are intentional.",
+          "expected": [
+            {
+              "source": {
+                "column": 1,
+                "line": 176
+              },
+              "kind": "option",
+              "names": [
+                "--sd-id"
+              ],
+              "forms": [
+                "--sd-id name[@digits]"
+              ],
+              "emptyDescription": false,
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "682d93802963f59e25ca6f7dfee14bfed8e33d02b062cdc3c19a15f30732149d"
+              }
             }
           ]
         }
@@ -3436,9 +3514,10 @@
                 "core.editor"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Commands such as commit and tag that let"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "d40ab72e43d83b14541b22c7674b08ce1bf1064ab5930a94cc1d46c70c1cd96b"
+              }
             }
           ]
         },
@@ -3459,9 +3538,10 @@
                 "GIT_CONFIG_COUNT, GIT_CONFIG_KEY_<n>, GIT_CONFIG_VALUE_<n>"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "If GIT_CONFIG_COUNT is set to a positive number,"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "41e37b9c545a672616a7436ff50f12c8716c09a6239fa48c503a3860d9fae70d"
+              }
             }
           ]
         }
@@ -3498,9 +3578,10 @@
                 "TAR_ARCHIVE"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "The name of the archive tar is processing."
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "b042feadeb88d5cf5cc8595f23027daa98e1bd7f1309b6a628245dabe8da0bb0"
+              }
             },
             {
               "source": {
@@ -3515,9 +3596,10 @@
                 "TAR_ARCHIVE"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "The name of the archive tar is processing."
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "b042feadeb88d5cf5cc8595f23027daa98e1bd7f1309b6a628245dabe8da0bb0"
+              }
             }
           ]
         }
@@ -3554,9 +3636,10 @@
                 "-Wplacement-new=n"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Warn about placement new expressions with undefined behavior,"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "a920ea5e4678aac25490fb3caadf6e031c5291102c703d7add13700110490049"
+              }
             },
             {
               "source": {
@@ -3571,9 +3654,10 @@
                 "-Wplacement-new=1"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "This is the default warning level of -Wplacement-new."
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "269beb770d8cafd1af7f26df9d9dda8c55d732951ac7b62f7b77c6ac8276845c"
+              }
             },
             {
               "source": {
@@ -3588,9 +3672,10 @@
                 "-Wplacement-new=2"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "At this level, in addition to diagnosing all"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "240e71b781154694e826e1f83715ae77a68f671fcf3f52b15c71d56385d3f200"
+              }
             }
           ]
         },
@@ -3611,9 +3696,10 @@
                 "file=FILENAME"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Specify the filename to write the SARIF output"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "fab4acbf4e66c646d460fdfd4d3f70c9b569f528900cf939f5f3378af2dc38dd"
+              }
             },
             {
               "source": {
@@ -3628,9 +3714,10 @@
                 "file=FILENAME"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Specify the filename to write the HTML output"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "771414ef299e3ee3662602791b8d05ee77257d970e5105a8b115bcbb164c0c82"
+              }
             }
           ]
         }
@@ -3667,9 +3754,10 @@
                 "git-add(1)"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Add file contents to the index."
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "6d42376471522f76c23401d71eec5b55e0bce01214e064b256a6492e7ac73b91"
+              }
             }
           ]
         },
@@ -3690,9 +3778,10 @@
                 "GIT_ADVICE"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "If set to 0, then disable all advice"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "56e8324fc805afccbb55a8b8dde45d9ca0c1d78eacc2f42d95c1ceb07af4eb5d"
+              }
             }
           ]
         }
@@ -3729,9 +3818,10 @@
                 "--binary"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "In addition to --full-index, output a binary diff"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "ac40990f1add9edae5b65fe59a49e5d98aaa0d51f7ec7c01c9035f34badbbae2"
+              }
             }
           ]
         },
@@ -3752,9 +3842,10 @@
                 "--color-moved-ws=<mode>,..."
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "This configures how whitespace is ignored when performing"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "a8c99abd527834516f2f06937c9641d7880198d14b2b87b43fc1c71c31f9598b"
+              }
             }
           ]
         }
@@ -3791,9 +3882,10 @@
                 "--continue"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Restart the rebasing process after having resolved a"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "8745868fa5896754430f7c3a8ef0c40a26566ab1fd58910e1be3668a52671534"
+              }
             }
           ]
         }
@@ -3830,9 +3922,10 @@
                 "--follow"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Continue listing the history of a file beyond"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "5b3fe7021cc677c098e39783b4bf7877c6f2730f63a414c8c70a4297b53c1ca2"
+              }
             }
           ]
         },
@@ -3853,9 +3946,10 @@
                 "-L<start>,<end>:<file>, -L:<funcname>:<file>"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Trace the evolution of the line range given"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "06e333c0f0497a37619932e16fb036b8c6c046d98de8bde99ebd410791fca18f"
+              }
             }
           ]
         },
@@ -3877,9 +3971,10 @@
                 "-<number>, -n <number>, --max-count=<number>"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Limit the output to <number> commits."
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "1b9f9d24d5fc245e0def47a8b206fbfede2fca73e07857df163bb4c28b0432bc"
+              }
             }
           ]
         },
@@ -3900,9 +3995,10 @@
                 "--color-moved-ws=<mode>,..."
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "This configures how whitespace is ignored when performing"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "a8c99abd527834516f2f06937c9641d7880198d14b2b87b43fc1c71c31f9598b"
+              }
             }
           ]
         }
@@ -3925,7 +4021,26 @@
         {
           "query": "--trailer",
           "review": "Source head and independent owner checked against the returned form, kind/name and opening body witness; multiple direct owners are intentional.",
-          "expected": []
+          "expected": [
+            {
+              "source": {
+                "column": 1,
+                "line": 401
+              },
+              "kind": "option",
+              "names": [
+                "--trailer"
+              ],
+              "forms": [
+                "--trailer <token>[(=|:)<value>]"
+              ],
+              "emptyDescription": false,
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "ccab7f4eb3087e00651d7bde3f79a807a0d9f15f766f39bb038efefeab08019d"
+              }
+            }
+          ]
         }
       ]
     },
@@ -3960,9 +4075,10 @@
                 ". file"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "The commands in the specified file are read"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "5d95b8cbf126bd13395f249768edfb2485f75ecd0e2c73a66b0476f8688996e0"
+              }
             }
           ]
         }
@@ -4000,9 +4116,10 @@
                 "-o, --create"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Copy-out. Read a list of file names from"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "50348b6ba3e0d3d7c4202acac1a84a3a2968728e73555fb17c27e4d04e8bf3ae"
+              }
             }
           ]
         }
@@ -4039,9 +4156,10 @@
                 "-d"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Include debug information as comments within the PDF."
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "044c6bc880d1a446980bd7554aa62718bd454495d2f1afb0a5974b778ffbcb6f"
+              }
             }
           ]
         },
@@ -4065,12 +4183,7 @@
                 "BLOCKS",
                 "BLOCKE"
               ],
-              "emptyDescription": true,
-              "bodyIncludes": [],
-              "bodyExcludes": [
-                "Display current readline",
-                "Translate file to ASCII"
-              ]
+              "emptyDescription": true
             }
           ]
         },
@@ -4094,12 +4207,7 @@
                 "BLOCKS",
                 "BLOCKE"
               ],
-              "emptyDescription": true,
-              "bodyIncludes": [],
-              "bodyExcludes": [
-                "Display current readline",
-                "Translate file to ASCII"
-              ]
+              "emptyDescription": true
             }
           ]
         }
@@ -4136,9 +4244,10 @@
                 "-compact"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Suppress insertion of vertical space before begin of"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "c61b4c896f0b9e68eefa7153dd5421f173c91bb161ccb6af33ede8c8a8be9df8"
+              }
             },
             {
               "source": {
@@ -4153,9 +4262,10 @@
                 "-compact"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Suppress insertion of vertical space before the list"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "2abde600787ca1cfae3660b9db075123fbc45b67c009e58787103835a2636437"
+              }
             }
           ]
         }
@@ -4192,9 +4302,10 @@
                 "bind [-aeklrsv] [key [command]]"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "List or alter key bindings for the line"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "6175f7ef19a0d96e6872b471097feb897ac35aeac0a50b9fe4365f6e3953aec7"
+              }
             }
           ]
         }
@@ -4229,9 +4340,10 @@
                 ".SYSPATH"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "The space-separated list of directories that make searches"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "19cd8ddb2c8038af2abe7fd10a9fd3f5936d51ad9bfff5248df8b9ea67ff1e2f"
+              }
             },
             {
               "source": {
@@ -4246,9 +4358,10 @@
                 ".SYSPATH"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "The sources are directories which are to be"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "a79f7c04515ca6584d13642e855b9c01479eea44b6d581942f28efbb43ffd632"
+              }
             }
           ]
         }
@@ -4285,9 +4398,10 @@
                 "-name pattern"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "True if the last component of the pathname"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "8c0667b4c97bdc89047260c290d9b60dae5b4debda98383d94d78440f63840e4"
+              }
             }
           ]
         }
@@ -4324,12 +4438,7 @@
               "forms": [
                 "-1, --fast"
               ],
-              "emptyDescription": true,
-              "bodyIncludes": [],
-              "bodyExcludes": [
-                "Display current readline",
-                "Translate file to ASCII"
-              ]
+              "emptyDescription": true
             }
           ]
         }
@@ -4366,9 +4475,10 @@
                 "IgnoreUnknown"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Specifies a pattern-list of unknown options to be"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "cb6b9d28221a9e14b28a6bc849ead71bfc3c7ce7a24052e2752c80f75fa637bd"
+              }
             }
           ]
         }
@@ -4405,9 +4515,10 @@
                 "buffer=value"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Controls the maximum buffer size for a single"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "273d5f42dfca6113891fa4b2812fbdef7ff0f0665e3b05301b4b93fbec35d345"
+              }
             }
           ]
         }
@@ -4445,9 +4556,10 @@
                 "-c bytes, --bytes=bytes"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Print bytes of each of the specified files."
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "7ce927629d4d4d6b4bca5d5be65c77b2a9f8835d33f44d34bf0bd250bbca1eb3"
+              }
             }
           ]
         }
@@ -4484,9 +4596,10 @@
                 "Variable"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Description"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "526e0087cc3f254d9f86f6c7d8e23d954c4dfda2b312efc29194ae8a860106ba"
+              }
             }
           ]
         }
@@ -4523,9 +4636,10 @@
                 "-mmin [-|+]n"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "True if the difference between the file last"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "ffa2388a4541d28b76d475c56d5a360757b941824c638da04f7f26712a65a02e"
+              }
             }
           ]
         }
@@ -4563,9 +4677,10 @@
                 "-f, --force"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "This option turns on force mode. This allows"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "167390be3a0d5ff965375cc037f3c8c3e0b0ffa49d818bb33fb443ec32050041"
+              }
             }
           ]
         }
@@ -4602,9 +4717,10 @@
                 "TZ"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "The timezone to use when displaying dates. See"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "3cd487399712dc5018421a5656734cb82012f3ceaa7a716632c9f651ed8fa988"
+              }
             }
           ]
         }
@@ -4641,9 +4757,10 @@
                 "AcceptEnv"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Specifies what environment variables sent by the client"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "4eca0057a03934d0b7961cd71df69b00ec6cf3ad517fb5e33064a053364154fd"
+              }
             }
           ]
         }
@@ -4680,9 +4797,10 @@
                 "-i extension"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Edit files in-place similarly to -I, but treat"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "8e314d413f042b9a07c540441d86d871f6c75339ec8bff975de58ec55aa9bb23"
+              }
             }
           ]
         }
@@ -4719,9 +4837,10 @@
                 "bind [-aeklrsv] [key [command]]"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "List or alter key bindings for the line"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "6175f7ef19a0d96e6872b471097feb897ac35aeac0a50b9fe4365f6e3953aec7"
+              }
             }
           ]
         }
@@ -4757,12 +4876,7 @@
               "forms": [
                 "-help"
               ],
-              "emptyDescription": true,
-              "bodyIncludes": [],
-              "bodyExcludes": [
-                "Display current readline",
-                "Translate file to ASCII"
-              ]
+              "emptyDescription": true
             }
           ]
         }
@@ -4797,9 +4911,10 @@
                 "-"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "a minus sign will not cause any special"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "7eee4605bb0ca643695a974b514ee8b879b77158df72617d63e77dfd74d84c99"
+              }
             }
           ]
         }
@@ -4841,9 +4956,10 @@
                 "NETBSD_SHELL"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Unlike the variables previously mentioned, this variable is"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "1b950d4459182a7b14348e2978e1705b798bf5070b0fa00674fb2055eddf0510"
+              }
             }
           ]
         }
@@ -4885,9 +5001,10 @@
                 "-e"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Set the erase character to ch."
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "013110ac6f09b7c04ae3be0f6fee9d6f487c95447b2802c2e52ad9e40a5e8081"
+              }
             }
           ]
         }
@@ -4924,9 +5041,10 @@
                 "new-session [-AdDEPX] [-c start-directory] [-e environment] [-f flags] [-F format] [-n window-name] [-s session-name] [-t group-name] [-x width] [-y height] [shell-command]"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "(alias: new) Create a new session with name"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "982e93a3f082098e134a70501f827cc406c696b7b43d1187471a658a50914273"
+              }
             }
           ]
         }
@@ -4963,9 +5081,10 @@
                 "zfs get [-r|-d depth] [-Hp] [-o all | field[,field]...] [-t type[,type]...] [-s source[,source]...] all | property[,property]... filesystem|volume|snapshot..."
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Displays properties for the given datasets. If no"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "1ae83fcdd70f6bb2e2a3fffbdf513d38339c3698ae07e6f6e1b6880481c0dfb3"
+              }
             }
           ]
         }
@@ -5023,9 +5142,10 @@
                 "bs=n"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Set both input and output block size, superseding"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "277fd8372e3661e4f139bcdea0fa73188660a48e7f4c31625fa398f720dc47e6"
+              }
             }
           ]
         }
@@ -5060,9 +5180,10 @@
                 ".SUFFIXES"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "The list of known suffixes. It is read-only."
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "a3b584fbcc9552645453ad7b02e2e9ae0bdf58742ccc89974635db13e3043dad"
+              }
             },
             {
               "source": {
@@ -5077,9 +5198,10 @@
                 ".SUFFIXES"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Each source specifies a suffix to make. If"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "badc0366bbad36c5b40e96e57a72350cd053e8ffef6be2ef984062171e4b7833"
+              }
             }
           ]
         }
@@ -5137,9 +5259,10 @@
                 "cp oldpath newpath"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Alias to copy command."
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "7398064986691a6c606d6997c6c39580740421bb245e5875b7f1082a3a412ac2"
+              }
             }
           ]
         }
@@ -5176,9 +5299,10 @@
                 "new-session [-AdDEPX] [-c start-directory] [-e environment] [-f flags] [-F format] [-n window-name] [-s session-name] [-t group-name] [-x width] [-y height] [shell-command [argument ...]]"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "(alias: new) Create a new session with name"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "982e93a3f082098e134a70501f827cc406c696b7b43d1187471a658a50914273"
+              }
             }
           ]
         }
@@ -5215,9 +5339,10 @@
                 "PermitListen"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Specifies the addresses/ports on which a remote TCP"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "6ee95f6c918402b3a8930f2a8e5be8d5dd14b0b3bab216eed8a9325545e1884a"
+              }
             }
           ]
         }
@@ -5254,9 +5379,10 @@
                 "-A"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Mark package as installed automatically, as dependency of"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "b8435683d465896e7eb63ffb9dea3d35d3cb6adcbf99153c32438e7856fb2dde"
+              }
             }
           ]
         }
@@ -5293,9 +5419,10 @@
                 "-L"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Show the files within each package. This is"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "500b679128e58796566ae4508ad0af9bdcd2860491bea28a725b1006d3aac07e"
+              }
             }
           ]
         }
@@ -5333,9 +5460,10 @@
                 "-A NUM, --after-context=NUM"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Print NUM lines of trailing context after matching"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "314c0a9450c97583efe76f2e59a233f620ca2e8d61b5d7ee35b9df53d5675751"
+              }
             }
           ]
         }
@@ -5372,12 +5500,7 @@
               "forms": [
                 "-1, --fast"
               ],
-              "emptyDescription": true,
-              "bodyIncludes": [],
-              "bodyExcludes": [
-                "Display current readline",
-                "Translate file to ASCII"
-              ]
+              "emptyDescription": true
             }
           ]
         }
@@ -5414,9 +5537,10 @@
                 "-b file"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "True if file exists and is a block"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "9c7f888c45e952560fcc975e9b9a15a350a28452f93805788a5658954df4f2c7"
+              }
             }
           ]
         }
@@ -5453,9 +5577,10 @@
                 "wgpsk presharedkey"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Set a unique key pre-shared with the peer."
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "c5f6a6a3e2b723f07cfcc8337d1e72e6b6cd5c85e5af015a95897b98bcf7be5a"
+              }
             }
           ]
         }
@@ -5492,9 +5617,10 @@
                 "chroot directory"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Set the chroot(2) directory. If not specified, it"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "202480ba41e12913e3e336cfbdc78b1cf675fe865372d5400301b1c097218bb0"
+              }
             }
           ]
         }
@@ -5531,9 +5657,10 @@
                 "new-session [-AdDEPX] [-c start-directory] [-e environment] [-f flags] [-F format] [-n window-name] [-s session-name] [-t group-name] [-x width] [-y height] [shell-command [argument ...]]"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "(alias: new) Create a new session with name"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "982e93a3f082098e134a70501f827cc406c696b7b43d1187471a658a50914273"
+              }
             }
           ]
         }
@@ -5570,9 +5697,10 @@
                 "whence [-pv] [name ...]"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "For each name, the type of command is"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "0ffbb533af470fc11412c44a552afde822f6d8e692aac55351d960b6d1cf813c"
+              }
             }
           ]
         }
@@ -5609,9 +5737,10 @@
                 "PWD"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "The absolute pathname to the current working directory."
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "8119c4ff56297cbab6ea0abc84fc1bb93b10388be89a733b1cdffcf05c7001c0"
+              }
             }
           ]
         }
@@ -5648,9 +5777,10 @@
                 "block"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "The packet is blocked. There are a number"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "7964ec61963527b9b273fbacd9ed4467f9f22507e16a0f1f17f258c031327593"
+              }
             }
           ]
         }
@@ -5687,9 +5817,10 @@
                 "USER"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Synonym of LOGNAME for backwards compatibility."
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "7ced9ce34450af665d5f1845d705cf696ee5880ad89204bfcaad004c6a330f85"
+              }
             }
           ]
         },
@@ -5710,9 +5841,10 @@
                 "LOGNAME"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "The login name of the user."
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "db8d2dd6c5a5693f9d1f8c799536806085dbdc27b37628f784f9c3b9025f5a91"
+              }
             }
           ]
         }
@@ -5749,9 +5881,10 @@
                 "-"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Specifies the left adjustment of the output in"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "1f7eb04bef60537d51033b380af5812514f681b90e140bf8f4fc94fdd02bfd27"
+              }
             }
           ]
         }
@@ -5788,9 +5921,10 @@
                 "bind [-aeklrsv] [key [command]]"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "List or alter key bindings for the line"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "6175f7ef19a0d96e6872b471097feb897ac35aeac0a50b9fe4365f6e3953aec7"
+              }
             }
           ]
         }
@@ -5827,9 +5961,10 @@
                 "-@"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Display extended attribute keys and sizes in long"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "591c7507ead23b9284dd244c225991b9b02fcf764c691a84154890de234d9edf"
+              }
             }
           ]
         },
@@ -5850,9 +5985,10 @@
                 "-%"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Distinguish dataless files and directories with a '%'"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "4499acf7493f2026ce8262446d0cbb3a2291682177390ea5fff5a83390f7bfde"
+              }
             }
           ]
         },
@@ -5873,9 +6009,10 @@
                 "-,"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "(Comma) When the -l option is set, print"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "4d678f92b7d1186e0b3a3f26d270c7e9326cbc2f8f9dc18baf96f82885318748"
+              }
             }
           ]
         }
@@ -5912,9 +6049,10 @@
                 "-maxdepth n"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Always true; descend at most n directory levels"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "2c8f92638a8706b7c8904733adbaa0e8e21c2fe4e26baed243e87afdf309560b"
+              }
             }
           ]
         }
@@ -5951,9 +6089,10 @@
                 "-F"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "As in ls(1), display a slash (‘/’) immediately"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "3e883713e05d78102035de372d8775e7eb2895731a3779dda039f4e910ddbad6"
+              }
             }
           ]
         }
@@ -5990,9 +6129,10 @@
                 "-A"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Equivalent to -o -a (for compatibility)."
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "e7e736517f809cdb0db836caec6049397531f18811f9bba88c53bb8726c62b04"
+              }
             }
           ]
         }
@@ -6029,9 +6169,10 @@
                 "-r seconds"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Print the date and time represented by seconds,"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "72be03af9b63a1a6d3d12956d651f37c1e7ffefa0472cc783d303391864e2ee5"
+              }
             },
             {
               "source": {
@@ -6046,9 +6187,10 @@
                 "-r filename"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Print the date and time of the last"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "4c2aee3183b5d62f7c35f4e0934e57641b7d3d54e3347954f0e26797665d551c"
+              }
             }
           ]
         }
@@ -6085,9 +6227,10 @@
                 "nameserver"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Internet address (in dot notation) of a name"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "2221ed1dfef834d9fc5c626270140dd759b9382e2b509fe2ae26954cc38d7833"
+              }
             }
           ]
         }
@@ -6124,9 +6267,10 @@
                 "BLOCKSIZE"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "The size of the block units used by"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "8a6378aa10879b06d7f7200fb71ac3ad2e16a22c8020cc2901e9eba3d8305ccc"
+              }
             }
           ]
         },
@@ -6147,9 +6291,10 @@
                 "USER"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Deprecated synonym of LOGNAME (for backwards compatibility)."
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "e19efc14c22ae5c6d34f9e19552c6252871b1c48a76322ad4da90fe41c5a8e22"
+              }
             }
           ]
         }
@@ -6186,9 +6331,10 @@
                 "zfs get [-r|-d depth] [-Hp] [-o field[,field]...] [-s source[,source]...] [-t type[,type]...] all | property[,property]... filesystem|volume|snapshot|bookmark..."
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Displays properties for the given datasets. If no"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "1ae83fcdd70f6bb2e2a3fffbdf513d38339c3698ae07e6f6e1b6880481c0dfb3"
+              }
             }
           ]
         }
@@ -6225,9 +6371,10 @@
                 "{ list;}"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "list is simply executed. Unlike the metacharacters, ("
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "ddeb97b15f02b4680431d3633cc40bc7cfe71c478bbd2c69c56fd6aa52817b99"
+              }
             }
           ]
         }
@@ -6264,9 +6411,10 @@
                 "PERSISTENT"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "A set of single character flags showing what"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "cfce184efcdf8d0ddb91f602683b0fc911751573b218ae92c2eb11acd8b1ceb4"
+              }
             },
             {
               "source": {
@@ -6281,9 +6429,10 @@
                 "PERSISTENT"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "The persistent value of the property."
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "e32dbeb2ecc2da07fe8cabdf1600a02a0a65c4d136ba8d2e1411771d1267c36c"
+              }
             },
             {
               "source": {
@@ -6298,9 +6447,10 @@
                 "PERSISTENT"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "A set of single character flags showing the"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "8d01526206dbbf6d3bb74b3e275bcda61d56887133dfd7433462a45bdf504ffe"
+              }
             },
             {
               "source": {
@@ -6315,9 +6465,10 @@
                 "PERSISTENT"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "The persistent value of the property."
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "e32dbeb2ecc2da07fe8cabdf1600a02a0a65c4d136ba8d2e1411771d1267c36c"
+              }
             },
             {
               "source": {
@@ -6332,9 +6483,10 @@
                 "PERSISTENT"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "The persistent value of the property."
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "e32dbeb2ecc2da07fe8cabdf1600a02a0a65c4d136ba8d2e1411771d1267c36c"
+              }
             }
           ]
         }
@@ -6371,9 +6523,10 @@
                 "-a arch"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Specify the architecture of the package as arch."
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "4cfa09dc17dfe178c809f8ab8c020eae61930658277e79a33d7b614d8debd12a"
+              }
             }
           ]
         }
@@ -6411,9 +6564,10 @@
                 "-a --all"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Lists all entries, including those that begin with"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "0024e185ddc00bd26ac27a80920ce956c9af517d4c42a98bcb8bc125af2a133c"
+              }
             }
           ]
         }
@@ -6451,9 +6605,10 @@
                 "-f, --flag"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "cmd flag"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "94b9c594b4a9aaa0c0bc8261680bf314b7ebf109a2547018742f3dd4132484a3"
+              }
             }
           ]
         }
@@ -6490,9 +6645,10 @@
                 "--choice"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Possible values: bash fish zsh"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "b245a135a38b4dfd133ca101aa2bd35ea53033d8c197ca5b7e9baaf5587aa179"
+              }
             }
           ]
         }
@@ -6530,9 +6686,10 @@
                 "-f, --fragment"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Generate output in HTML format but only the"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "25888d4ad8d5e98ccf7e6b4bd91b1d2feacb405fa3ce755495d53d5e596f0375"
+              }
             }
           ]
         }
@@ -6632,9 +6789,10 @@
                 "--context-separator=SEPARATOR"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "The string used to separate non-contiguous context lines"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "efe983b128288b25ad375fcebe830786519e7be5b67210b9bb8c801f204ff049"
+              }
             }
           ]
         }
@@ -6671,9 +6829,10 @@
                 "--status-bugs"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Set exit status to 1 if it found"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "4ca13da051ca8be91892a9319b8db2ab89ee2eeada4b22b9c0c1d77a33bfac22"
+              }
             }
           ]
         }
@@ -6710,9 +6869,10 @@
                 "--locked"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Asserts that the exact same dependencies and versions"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "c22592ebb987e81477c0cc880a14f95c03c37c8b9a61b69ff5502fed6f012fe6"
+              }
             }
           ]
         }
@@ -6749,9 +6909,10 @@
                 "--target TARGET"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Target tuple for which the code is compiled."
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "85575c6a008908b51b159cc3f34ff233575bdd052c4a51af351f7bba29a79ea5"
+              }
             }
           ]
         }
@@ -6788,9 +6949,10 @@
                 "CMAKE_C_FLAGS <#variable:CMAKE_<LANG>_FLAGS>"
               ],
               "emptyDescription": false,
-              "bodyIncludes": [
-                "Set to the -isa= or -cpu= flag the"
-              ]
+              "bodyWitness": {
+                "words": 8,
+                "sha256": "3c60449acf633d9ec69e7b7a05d120216df8598c99ab32f422930d5315087ba2"
+              }
             }
           ]
         }

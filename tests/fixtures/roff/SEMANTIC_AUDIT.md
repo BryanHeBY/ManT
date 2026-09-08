@@ -8,7 +8,7 @@ agent-visible semantic index.
 
 ## Oracle and scope
 
-The separate [query gold](ENTRY_QUERY_GOLD.json) fixes 159 manually inspected
+The separate [query gold](ENTRY_QUERY_GOLD.json) fixes 160 manually inspected
 queries over 120 source paths (119 decompressed identities, 93 topics). It
 records raw source coordinates, complete returned forms, exact names/kinds,
 bounded opening-body witnesses and all expected direct owners. Extra direct
@@ -18,7 +18,10 @@ selected witnesses, not whole-page golden renderings or a precision/recall
 estimate for all entries. Per-query notes distinguish exact common declarations
 from accepted conservative classifications and local macro/format syntax.
 Source-group, member path, SHA and original sampling reasons remain in the
-manifest; raw third-party pages are not redistributed by it.
+manifest. Opening-body witnesses are normalized eight-word hashes, not copied
+manual prose; inspect the original source and local result when adjudicating a
+failure. These hashes guard the reviewed witness, not the entire body. Raw
+third-party pages are not redistributed by the manifest.
 
 `audit-roff-semantics.py --query-gold ENTRY_QUERY_GOLD.json` uses the existing
 collector via optional profiler probes. The `--fixtures` subset selects only
