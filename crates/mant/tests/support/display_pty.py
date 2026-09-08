@@ -277,6 +277,17 @@ def check_pager_rows(path, environment, width):
             read_output()
         os.write(master, b"n")
         read_output()
+        # A missing visible query is normal, including ANSI parameter digits.
+        # This drives the actual FetchSearchQuery event path (formerly unwrap()).
+        for query in (b"NEVER_PRESENT", b"92"):
+            os.write(master, b"/")
+            read_output()
+            os.write(master, query + b"\r")
+            read_output()
+            assert process.poll() is None, (query, process.returncode, all_output)
+            os.write(master, b"n")
+            read_output()
+            assert process.poll() is None
         os.write(master, b"q")
         try:
             process.wait(timeout=5)

@@ -76,8 +76,8 @@ use std::collections::hash_map::RandomState;
 static INVERT: LazyLock<String> = LazyLock::new(|| Attribute::Reverse.to_string());
 static NORMAL: LazyLock<String> = LazyLock::new(|| Attribute::NoReverse.to_string());
 static ANSI_REGEX: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new("[\\u001b\\u009b]\\[[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><]")
-        .unwrap()
+    // CSI parameter/intermediate/final classes also cover colon-form SGR.
+    Regex::new("(?:\\u001b\\[|\\u009b)[0-?]*[ -/]*[@-~]").unwrap()
 });
 
 static WORD: LazyLock<Regex> = LazyLock::new(|| {
@@ -242,7 +242,7 @@ impl FetchInputResult {
     }
 }
 
-fn line_matches_query(line: &str, query: &Regex) -> bool {
+pub(crate) fn line_matches_query(line: &str, query: &Regex) -> bool {
     let stripped = ANSI_REGEX.replace_all(line, "");
     query.is_match(stripped.as_ref())
 }
@@ -742,8 +742,7 @@ pub(crate) fn highlight_matches_args<'a, 'b>(
     query: &'b Regex,
     accurate: bool,
 ) -> HighlightMatchesArgs<'a, 'b> {
-    let stripped_str = ANSI_REGEX.replace_all(line, "");
-    let is_match = query.is_match(&stripped_str);
+    let is_match = line_matches_query(line, query);
     HighlightMatchesArgs {
         line,
         query,

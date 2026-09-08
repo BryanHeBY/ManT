@@ -162,6 +162,33 @@ pub(super) fn independent_rows(rows: Vec<Cow<'_, str>>) -> Vec<Cow<'_, str>> {
 mod tests {
     use super::*;
     #[test]
+    fn search_indexes_visible_physical_rows_not_sgr_parameters() {
+        use super::super::native::{
+            LineNumbers,
+            screen::{format_line, format_search_rows},
+        };
+        for width in [20, 40, 80] {
+            let original = format!("\x1b[92m{}\x1b[0m", "z".repeat(160));
+            for (pattern, expected) in [("92", false), ("^z+$", true), ("NEVER_PRESENT", false)] {
+                let query = regex::Regex::new(pattern).unwrap();
+                let rows = format_line(&original, 1, 0, LineNumbers::Disabled, width, true);
+                for (_, found) in format_search_rows(rows, Some(&query)) {
+                    assert_eq!(found, expected, "{pattern} at {width}");
+                }
+            }
+        }
+        let digits = regex::Regex::new("92").unwrap();
+        let body = regex::Regex::new("^BODY$").unwrap();
+        for styled in ["\x1b[38:2::92:0:0mBODY\x1b[0m", "\x1b[92mBODY\x1b[0m"] {
+            assert!(!super::super::native::search::line_matches_query(
+                styled, &digits
+            ));
+            assert!(super::super::native::search::line_matches_query(
+                styled, &body
+            ));
+        }
+    }
+    #[test]
     fn continuation_restores_attributes_colors_and_selective_resets() {
         let rows = independent_rows(vec![
             Cow::Borrowed("\x1b[1;3;4;92;48;2;1;2;3mfirst"),

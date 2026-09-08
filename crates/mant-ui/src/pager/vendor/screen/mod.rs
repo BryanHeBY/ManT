@@ -597,7 +597,7 @@ pub(crate) fn format_search_rows<'a>(
     search_term: Option<&'a Regex>,
 ) -> impl Iterator<Item = (SearchFormattedRow<'a, 'a>, bool)> + 'a {
     rows.map(move |row| {
-        let is_match = search_term.is_some_and(|st| st.is_match(row.raw_row()));
+        let is_match = search_term.is_some_and(|st| search::line_matches_query(row.raw_row(), st));
         (
             SearchFormattedRow {
                 row,

@@ -427,12 +427,14 @@ pub fn handle_io_command(
             };
 
             p.reformat_display();
-            p.upper_mark = *p
+            if let Some(&row) = p
                 .search_state
                 .search_idx
                 .iter()
                 .nth(p.search_state.search_mark)
-                .unwrap();
+            {
+                p.upper_mark = row;
+            }
             command_queue.push_back(Command::Io(IoCommand::RedrawDisplay));
             command_queue.push_back(Command::Io(IoCommand::RedrawPrompt));
         }

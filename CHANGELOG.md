@@ -12,6 +12,10 @@ that crate was not published for that change.
 
 ## Unreleased
 
+- Pager search indexes visible physical rows rather than ANSI escape bytes,
+  including colon-form colors. A query with no matches preserves the viewport
+  instead of panicking; wrapped-row regex anchors retain physical-row semantics.
+
 ### Recovered declaration context (unreleased v0.11)
 
 - Preserve consecutive native declaration groups as optional definition-list
