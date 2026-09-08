@@ -85,9 +85,20 @@ fn ordinary_list_entry_anchors_preserve_rows_and_numbering() {
     };
     items[1].entry = None;
     let ordinary = DocumentView::new(&query);
+    assert_entry_layout_is_unchanged(&annotated, &ordinary);
+}
+
+fn assert_entry_layout_is_unchanged(annotated: &DocumentView, ordinary: &DocumentView) {
     for width in [12, 40, 80] {
         let rendered = annotated.render(width);
-        assert_eq!(rendered.text, ordinary.render(width).text);
+        let unannotated = ordinary.render(width);
+        // An annotation may add a validated name color, never change geometry.
+        assert_eq!(rendered.text.to_string(), unannotated.text.to_string());
+        assert_eq!(
+            rendered.search("visible | body"),
+            unannotated.search("visible | body")
+        );
+        assert_eq!(rendered.links, unannotated.links);
         let row = rendered.anchor_row("run").expect("semantic landing row");
         assert!(
             rendered

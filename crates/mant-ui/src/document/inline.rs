@@ -43,13 +43,33 @@ pub(super) fn inline_anchor_ids(nodes: &[Inline]) -> Vec<String> {
     ids
 }
 
+#[cfg(test)]
 pub(super) fn styled_inline_lines(
     nodes: &[Inline],
     style: Style,
     current_address: Option<&DocumentAddress>,
 ) -> Vec<StyledInlineLine> {
+    styled_bound_inline_lines(nodes, style, current_address, &[])
+}
+
+pub(super) fn styled_bound_inline_lines(
+    nodes: &[Inline],
+    style: Style,
+    current_address: Option<&DocumentAddress>,
+    names: &[mant_protocol::InlineNameRange],
+) -> Vec<StyledInlineLine> {
+    styled_display_inline_lines(nodes, style, current_address, names, false)
+}
+
+pub(super) fn styled_display_inline_lines(
+    nodes: &[Inline],
+    style: Style,
+    current_address: Option<&DocumentAddress>,
+    names: &[mant_protocol::InlineNameRange],
+    code: bool,
+) -> Vec<StyledInlineLine> {
     let mut lines = vec![StyledInlineLine::default()];
-    append_inline(nodes, style, current_address, &mut lines);
+    append_inline(nodes, style, current_address, names, code, &mut lines);
     lines
 }
 
@@ -82,147 +102,91 @@ fn append_inline(
     nodes: &[Inline],
     style: Style,
     current_address: Option<&DocumentAddress>,
+    names: &[mant_protocol::InlineNameRange],
+    code: bool,
     lines: &mut Vec<StyledInlineLine>,
 ) {
-    for node in nodes {
-        match node {
-            Inline::Text { value } => append_text(value, style, lines),
-            Inline::Strong { children } => {
-                append_inline(
-                    children,
-                    style.fg(theme::STRONG).add_modifier(Modifier::BOLD),
-                    current_address,
+    mant_protocol::visit_inline_text(nodes, names, |source, target, text| {
+        let first_line = lines.len() - 1;
+        let first_column = spans_width(&lines[first_line].spans);
+        if code {
+            // Lexical code accents are weaker than authored markup and names.
+            for span in crate::code::highlight(vec![Span::styled(text.to_owned(), style)]) {
+                append_text(
+                    &span.content,
+                    source_style(span.style, source, target),
                     lines,
                 );
             }
-            Inline::Emphasis { children } => {
-                append_inline(
-                    children,
-                    style.fg(theme::SUBTEXT).add_modifier(Modifier::ITALIC),
-                    current_address,
-                    lines,
-                );
-            }
-            Inline::Code { value } => {
-                append_text(value, Style::default().fg(theme::HEADING), lines);
-            }
-            Inline::Link {
-                target, children, ..
-            } => match target {
-                mant_ir::LinkTarget::External { uri } => {
-                    append_external_link(uri, children, current_address, lines);
-                }
-                mant_ir::LinkTarget::Email { address } => {
-                    append_email_link(address, children, current_address, lines);
-                }
-                mant_ir::LinkTarget::Document { name, fragment } => {
-                    let target = markdown_reference_address(current_address, name).map(|address| {
-                        LinkTarget::Document {
-                            address,
-                            fragment: fragment.clone(),
-                        }
-                    });
-                    append_addressable_inline(
-                        children,
-                        Style::default()
-                            .fg(theme::LINK)
-                            .add_modifier(Modifier::UNDERLINED),
-                        current_address,
-                        lines,
-                        target.as_ref(),
-                    );
-                }
-                mant_ir::LinkTarget::Manual {
-                    name,
-                    manual_section,
-                } => {
-                    let target =
-                        manual_section
-                            .as_ref()
-                            .map(|manual_section| LinkTarget::Document {
-                                address: DocumentAddress::Manual {
-                                    name: name.clone(),
-                                    manual_section: manual_section.clone(),
-                                },
-                                fragment: None,
-                            });
-                    append_addressable_inline(
-                        children,
-                        Style::default()
-                            .fg(theme::LINK)
-                            .add_modifier(Modifier::UNDERLINED),
-                        current_address,
-                        lines,
-                        target.as_ref(),
-                    );
-                }
-                mant_ir::LinkTarget::Section { id } => append_addressable_inline(
-                    children,
-                    Style::default()
-                        .fg(theme::LINK)
-                        .add_modifier(Modifier::UNDERLINED),
-                    current_address,
-                    lines,
-                    Some(&LinkTarget::Section(id.to_string())),
-                ),
-            },
-            Inline::Anchor { .. } => {}
-            Inline::LineBreak => lines.push(StyledInlineLine::default()),
+        } else {
+            append_text(text, source_style(style, source, target), lines);
         }
+        if let Some(target) = target.and_then(|target| local_link_target(target, current_address)) {
+            record_link(lines, first_line, first_column, &target);
+        }
+    });
+}
+
+/// Layer source markup, then the more specific validated semantic name color.
+/// No layer discards inherited modifiers. Link affordance survives Code.
+fn source_style(
+    mut style: Style,
+    source: mant_protocol::InlinePresentation,
+    target: Option<&mant_ir::LinkTarget>,
+) -> Style {
+    if source.strong {
+        style = style.fg(theme::STRONG).add_modifier(Modifier::BOLD);
     }
+    if source.emphasis {
+        style = style.add_modifier(Modifier::ITALIC);
+    }
+    if source.code {
+        style = style.fg(theme::HEADING);
+    }
+    if source.link {
+        let color = match target {
+            Some(mant_ir::LinkTarget::External { .. } | mant_ir::LinkTarget::Email { .. }) => {
+                theme::BLUE
+            }
+            _ => theme::LINK,
+        };
+        style = style.fg(color).add_modifier(Modifier::UNDERLINED);
+    }
+    if let Some(kind) = source.entry_kind {
+        style = style.fg(theme::entry_color(kind));
+    }
+    style
 }
 
-fn append_external_link(
-    uri: &str,
-    children: &[Inline],
-    current_address: Option<&DocumentAddress>,
-    lines: &mut Vec<StyledInlineLine>,
-) {
-    let target = ExternalUri::parse(uri).map(LinkTarget::External);
-    append_addressable_inline(
-        children,
-        Style::default()
-            .fg(theme::BLUE)
-            .add_modifier(Modifier::UNDERLINED),
-        current_address,
-        lines,
-        target.as_ref(),
-    );
-}
-
-fn append_email_link(
-    address: &str,
-    children: &[Inline],
-    current_address: Option<&DocumentAddress>,
-    lines: &mut Vec<StyledInlineLine>,
-) {
-    let target = mant_ir::mailto_uri_for_email_address(address)
-        .as_deref()
-        .and_then(ExternalUri::parse)
-        .map(LinkTarget::External);
-    append_addressable_inline(
-        children,
-        Style::default()
-            .fg(theme::BLUE)
-            .add_modifier(Modifier::UNDERLINED),
-        current_address,
-        lines,
-        target.as_ref(),
-    );
-}
-
-fn append_addressable_inline(
-    children: &[Inline],
-    style: Style,
-    current_address: Option<&DocumentAddress>,
-    lines: &mut Vec<StyledInlineLine>,
-    target: Option<&LinkTarget>,
-) {
-    let first_line = lines.len() - 1;
-    let first_column = spans_width(&lines[first_line].spans);
-    append_inline(children, style, current_address, lines);
-    if let Some(target) = target {
-        record_link(lines, first_line, first_column, target);
+fn local_link_target(
+    target: &mant_ir::LinkTarget,
+    current: Option<&DocumentAddress>,
+) -> Option<LinkTarget> {
+    match target {
+        mant_ir::LinkTarget::External { uri } => ExternalUri::parse(uri).map(LinkTarget::External),
+        mant_ir::LinkTarget::Email { address } => mant_ir::mailto_uri_for_email_address(address)
+            .as_deref()
+            .and_then(ExternalUri::parse)
+            .map(LinkTarget::External),
+        mant_ir::LinkTarget::Document { name, fragment } => {
+            markdown_reference_address(current, name).map(|address| LinkTarget::Document {
+                address,
+                fragment: fragment.clone(),
+            })
+        }
+        mant_ir::LinkTarget::Manual {
+            name,
+            manual_section,
+        } => manual_section
+            .as_ref()
+            .map(|manual_section| LinkTarget::Document {
+                address: DocumentAddress::Manual {
+                    name: name.clone(),
+                    manual_section: manual_section.clone(),
+                },
+                fragment: None,
+            }),
+        mant_ir::LinkTarget::Section { id } => Some(LinkTarget::Section(id.to_string())),
     }
 }
 

@@ -14,6 +14,11 @@ that crate was not published for that change.
 
 ### Shared entry presentation
 
+- TUI body colors now follow validated owner-local name bindings instead of
+  treating every code span alike. Nested code and links preserve source bold
+  and italic styling; emphasis remains primary text, and link affordances
+  survive semantic and code accents. Layout, search and copy text are unchanged.
+
 - Keep generic Term titles and names in the primary foreground instead of
   treating them as muted metadata. CLI and TUI share semantic palette families
   and stable kind labels, with Value distinct from Term and Match distinct from

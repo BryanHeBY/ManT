@@ -2,6 +2,173 @@
 use super::*;
 
 #[test]
+fn nested_code_links_preserve_emphasis_and_restore_the_following_style() {
+    let nodes = [
+        Inline::Strong {
+            children: vec![Inline::Code {
+                value: "bold-code".into(),
+            }],
+        },
+        Inline::Text {
+            value: " ordinary ".into(),
+        },
+        Inline::Emphasis {
+            children: vec![Inline::Link {
+                target: mant_ir::LinkTarget::External {
+                    uri: "https://example.test".into(),
+                },
+                title: None,
+                children: vec![Inline::Code {
+                    value: "linked-code".into(),
+                }],
+            }],
+        },
+        Inline::Text {
+            value: " after".into(),
+        },
+    ];
+    let lines = styled_inline_lines(&nodes, Style::default().fg(theme::TEXT), None);
+    let spans = &lines[0].spans;
+    assert!(spans[0].style.add_modifier.contains(Modifier::BOLD));
+    assert!(
+        spans[2]
+            .style
+            .add_modifier
+            .contains(Modifier::ITALIC | Modifier::UNDERLINED)
+    );
+    for index in [1, 3] {
+        assert_eq!(spans[index].style, Style::default().fg(theme::TEXT));
+    }
+    assert_eq!(lines[0].links[0].start_column, 19);
+    assert_eq!(lines[0].links[0].end_column, 30);
+}
+
+#[test]
+fn all_entry_roles_color_only_bound_source_text_not_markers_or_body_mentions() {
+    for (role, name, color) in [
+        ("option", "--help", theme::GREEN),
+        ("marker", "--", theme::GREEN),
+        ("operand", "-", theme::GREEN),
+        ("command", "Launch", theme::PEACH),
+        ("environment-variable", "$Env:HOME", theme::LINK),
+        ("configuration-key", "ServerAliveInterval", theme::YELLOW),
+        ("variable", "$local_name", theme::PINK),
+        ("value", "automatic", theme::BLUE),
+        ("term", "alpha", theme::TEXT),
+    ] {
+        let source = format!(
+            "# Probe\n\n## Entries\n\n<!-- mant:entries role={role} case=sensitive -->\n- `{name}`: Body mentions {name} without a binding.\n\n## Prose\n\nalphabet and -xylophone remain ordinary.\n"
+        );
+        let content = mant_engine::query_markdown_text(&source, None).unwrap();
+        assert!(
+            content.document.as_ref().unwrap().diagnostics.is_empty(),
+            "{role}"
+        );
+        let view = DocumentView::new(&content);
+        let rendered = view.render(120);
+        let line = rendered
+            .text
+            .lines
+            .iter()
+            .find(|line| line.to_string().contains("Body mentions"))
+            .unwrap();
+        assert!(
+            line.spans
+                .iter()
+                .any(|span| span.content.starts_with(name) && span.style.fg == Some(color)),
+            "{role}: {line:?}"
+        );
+        assert!(
+            line.spans
+                .iter()
+                .filter(|span| span.content.contains("Body mentions"))
+                .all(|span| span.style.fg == Some(theme::TEXT))
+        );
+        assert!(
+            line.spans
+                .iter()
+                .filter(|span| span.content.contains('•'))
+                .all(|span| span.style.fg == Some(theme::HEADING))
+        );
+        // No semantic-color mutation is written into the original IR or cached view.
+        for width in [12, 40, 120, 12] {
+            let current = view.render(width);
+            assert!(!current.search(name).is_empty());
+            assert_eq!(current.text, view.render(width).text);
+        }
+    }
+}
+
+#[test]
+fn bound_link_name_keeps_type_and_modifiers_through_code_surface_and_wrapping() {
+    let mut content = bundle();
+    content.address = Some(DocumentAddress::Markdown {
+        path: "probe".into(),
+        origin: mant_ir::MarkdownOrigin::Documents,
+    });
+    let source = "# Probe\n\n## Options\n\n<!-- mant:entries role=option case=sensitive -->\n- [`--help`](other.md): description\n";
+    let parsed = mant_engine::query_markdown_text(source, None).unwrap();
+    assert!(
+        parsed.document.as_ref().unwrap().diagnostics.is_empty(),
+        "{:?}",
+        parsed.document.as_ref().unwrap().diagnostics
+    );
+    let mut blocks = parsed.document.unwrap().sections.remove(0).blocks;
+    let Block::List { items, .. } = &mut blocks[0] else {
+        panic!("list")
+    };
+    let item = &mut items[0];
+    let Block::Paragraph {
+        children,
+        layout,
+        source,
+    } = item.blocks.remove(0)
+    else {
+        panic!("paragraph")
+    };
+    // The preformatted root uses the same validated references and coordinates.
+    item.blocks.push(Block::Preformatted {
+        language: None,
+        children,
+        layout,
+        source,
+    });
+    content.document.as_mut().unwrap().sections[0].blocks = blocks;
+    assert!(mant_ir::validate_document(content.document.as_ref().unwrap()).is_empty());
+    let view = DocumentView::new(&content);
+    for width in [12, 40, 120] {
+        let rendered = view.render(width);
+        let hit = rendered.search("--help");
+        assert_eq!(hit.len(), 1);
+        let bound = rendered
+            .text
+            .lines
+            .iter()
+            .flat_map(|line| &line.spans)
+            .filter(|span| span.style.fg == Some(theme::GREEN))
+            .collect::<Vec<_>>();
+        assert_eq!(
+            bound
+                .iter()
+                .map(|span| span.content.as_ref())
+                .collect::<String>(),
+            "--help"
+        );
+        assert!(
+            bound
+                .iter()
+                .all(|span| span.style.add_modifier.contains(Modifier::UNDERLINED))
+        );
+        assert!(
+            rendered
+                .links
+                .iter()
+                .any(|link| matches!(&link.target, LinkTarget::Document { .. }))
+        );
+    }
+}
+
+#[test]
 fn inline_styles_preserve_the_renderer_neutral_ir_semantics() {
     let lines = styled_inline_lines(
         &[
@@ -45,7 +212,7 @@ fn inline_styles_preserve_the_renderer_neutral_ir_semantics() {
     assert!(spans[0].style.add_modifier.contains(Modifier::BOLD));
     assert_eq!(spans[0].style.fg, Some(theme::STRONG));
     assert!(spans[2].style.add_modifier.contains(Modifier::ITALIC));
-    assert_eq!(spans[2].style.fg, Some(theme::SUBTEXT));
+    assert_eq!(spans[2].style.fg, Some(theme::TEXT));
     assert_eq!(spans[4].style.fg, Some(theme::HEADING));
     assert_eq!(spans[6].style.fg, Some(theme::BLUE));
     assert!(spans[6].style.add_modifier.contains(Modifier::UNDERLINED));

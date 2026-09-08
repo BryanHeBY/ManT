@@ -11,7 +11,7 @@ catalog, search, and cross-document interactions without serializing the IR.
 - A hierarchy-aware, collapsible Outline tree whose complete group labels
   summarize direct entries, descendants, and forms, then expand into commands, parameters,
   configuration keys, variables, values, and generic terms. Compact entry
-  aliases preserve browsing density while an optional full-label mode wraps
+  names preserve browsing density while an optional full-label mode wraps
   every authored form. Row-topology changes retain the selected node's viewport
   position whenever terminal bounds permit.
 - Settled-scroll navigation following and selectable Markdown/mdoc page-local
@@ -38,6 +38,17 @@ catalog, search, and cross-document interactions without serializing the IR.
 
 Command-line parsing and document loading deliberately remain outside this
 crate.
+
+Entry title colors reflect source-neutral roles, not importance, confidence or
+alias equivalence. Generic terms remain primary text. The body applies type
+color only at validated name bindings; identical prose and list markers do not
+inherit it. Source bold/italic/code styling and link underlines compose with
+that color. Code-token accents do not overwrite semantic name roles.
+
+`DocumentView` prepares a borrowed binding map during construction and stores
+the resulting immutable styled lines. Resizing only reflows those lines;
+search and selection overlay their own state without rewriting the base styles,
+link targets, source coordinates or copied text.
 
 ## Host boundary
 

@@ -32,9 +32,9 @@ use unicode_width::UnicodeWidthChar;
 use unicode_width::UnicodeWidthStr;
 
 use crate::theme;
-use inline::{
-    count_sections, inline_anchor_ids, shifted_links, spans_width, styled_inline_lines, tldr_style,
-};
+#[cfg(test)]
+use inline::styled_inline_lines;
+use inline::{count_sections, inline_anchor_ids, shifted_links, spans_width, tldr_style};
 pub use model::ExternalUri;
 pub(crate) use model::LinkTarget;
 use model::{
@@ -173,6 +173,7 @@ impl DocumentView {
 
         if let Some(document) = &bundle.document {
             let semantic_index = SemanticIndex::build(document);
+            builder.entry_styles = Arc::new(mant_protocol::EntryStyleMap::for_document(document));
             if !document.blocks.is_empty() || !document.fragment_aliases.is_empty() {
                 let entries = semantic_index.root();
                 builder.anchor(NavNode {

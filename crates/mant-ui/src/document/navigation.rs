@@ -1,6 +1,6 @@
 //! Sidebar projection of the source-neutral semantic index.
 use super::{DocumentBuilder, NavKind, NavNode, SemanticEntry};
-impl DocumentBuilder {
+impl DocumentBuilder<'_> {
     pub(super) fn entry_group(
         &mut self,
         owner_id: &str,
