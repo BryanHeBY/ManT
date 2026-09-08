@@ -447,4 +447,5 @@ mod entries;
 mod layout;
 mod navigation;
 mod search;
+mod source_geometry;
 mod tables;

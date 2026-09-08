@@ -25,6 +25,21 @@ do not rebuild historical trees in temporary directories on a space-constrained
 host. Use the repository's existing build directory and leave isolated package
 compilation to CI when local constraints prohibit it.
 
+For document geometry work, the local layout probe separates native parsing,
+index construction, immutable view construction and resize at 40/80/120 cells:
+
+```sh
+cargo run --locked --release -p mant-ui --example layout_profile -- /path/to/manual.1.gz 'label to locate'
+```
+
+It reports source-token columns when a token fits on one row; a wrapped/absent
+token is not a failed search. Reuse one `DocumentView` for width changes, record
+the input hash and producer commit, and compare source-relative columns after
+removing page/UI margins. Deterministic source probes in the engine and UI tests
+pin rules independently of the installed host corpus. Native layout research
+uses the explicitly recorded mandoc CVS revisions and a groff cross-check;
+this does not upgrade the vendored 1.14.6 parser or import upstream test licenses.
+
 ## Prerequisites
 
 - Linux with glibc, macOS, or Windows

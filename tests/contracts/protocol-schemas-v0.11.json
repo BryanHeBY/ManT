@@ -2021,7 +2021,7 @@
             "format": "int32"
           },
           "spacingBeforeLines": {
-            "description": "Terminal rows requested before this block.",
+            "description": "Resolved blank rows owned by this block's leading boundary. Zero means\ntight spacing, not inheritance. Producers resolve source/Markdown\ndefaults and assign each request exactly one consumption point.",
             "type": "integer",
             "format": "uint16",
             "maximum": 65535,
@@ -5418,7 +5418,7 @@
             "format": "int32"
           },
           "spacingBeforeLines": {
-            "description": "Terminal rows requested before this block.",
+            "description": "Resolved blank rows owned by this block's leading boundary. Zero means\ntight spacing, not inheritance. Producers resolve source/Markdown\ndefaults and assign each request exactly one consumption point.",
             "type": "integer",
             "format": "uint16",
             "maximum": 65535,
@@ -8642,7 +8642,7 @@
             "format": "int32"
           },
           "spacingBeforeLines": {
-            "description": "Terminal rows requested before this block.",
+            "description": "Resolved blank rows owned by this block's leading boundary. Zero means\ntight spacing, not inheritance. Producers resolve source/Markdown\ndefaults and assign each request exactly one consumption point.",
             "type": "integer",
             "format": "uint16",
             "maximum": 65535,
@@ -12499,7 +12499,7 @@
             "format": "int32"
           },
           "spacingBeforeLines": {
-            "description": "Terminal rows requested before this block.",
+            "description": "Resolved blank rows owned by this block's leading boundary. Zero means\ntight spacing, not inheritance. Producers resolve source/Markdown\ndefaults and assign each request exactly one consumption point.",
             "type": "integer",
             "format": "uint16",
             "maximum": 65535,
