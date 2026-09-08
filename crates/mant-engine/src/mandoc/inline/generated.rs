@@ -52,13 +52,15 @@ pub(super) fn function(builder: &mut InlineBuilder, node: &Node, name: Option<&s
                 });
                 // Emit punctuation before intervening controls, so Sm off
                 // preserves the boundary following an already written comma.
-                if operands[operand_index + 1..]
-                    .iter()
-                    .any(|node| !node.flags.delimiter_close)
-                    || body[index + 1..].iter().any(|node| {
-                        !node.flags.no_print && (!block || node.macro_name.as_deref() == Some("Fa"))
-                    })
-                {
+                let next_operand = crate::mandoc::adjacency::next(&operands[operand_index + 1..]);
+                let comma = next_operand.map_or_else(
+                    || {
+                        crate::mandoc::adjacency::next(&body[index + 1..])
+                            .is_some_and(|node| !block || node.macro_name.as_deref() == Some("Fa"))
+                    },
+                    |node| !node.flags.delimiter_close,
+                );
+                if comma {
                     builder.tighten_next_boundary();
                     builder.append_text(",");
                 }

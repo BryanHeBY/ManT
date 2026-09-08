@@ -157,7 +157,6 @@ fn display_final_spacing() {
 }
 
 #[test]
-#[ignore = "R04: fixed HEAD scope policy; enable with macro state fix"]
 fn link_and_include_font_state() {
     for (name, tail, resumed) in [
         ("lk-label-state", 0, 2),
@@ -176,10 +175,21 @@ fn link_and_include_font_state() {
 }
 
 #[test]
-#[ignore = "R05: fixed logical adjacency policy; enable with punctuation fix"]
 fn function_logical_adjacency() {
     assert_eq!(description(&fixture("fa-delimiter")).trim(), "WORD(x, y)");
     assert_eq!(description(&fixture("fa-prose")).trim(), "WORD(x NEXT y)");
+    for (middle, expected) in [
+        (".Sm off", "WORD(x, y)"),
+        (".Tg position", "WORD(x, y)"),
+        (".Bf -emphasis\n.No NEXT\n.Ef", "WORD(x NEXT y)"),
+        (".Bk -words\n.No NEXT\n.Ek", "WORD(x NEXT y)"),
+    ] {
+        let source = format!(
+            ".Dd September 8, 2026\n.Dt FUNCTION 1\n.Os\n.Sh DESCRIPTION\n.Fo WORD\n.Fa x\n{middle}\n.Fa y\n.Fc\n"
+        );
+        let query = mant_engine::query_roff_bytes(source.as_bytes()).unwrap();
+        assert_eq!(description(&query).trim(), expected, "{middle}");
+    }
 }
 
 #[test]

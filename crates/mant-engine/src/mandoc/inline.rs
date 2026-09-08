@@ -264,8 +264,17 @@ fn lower_atomic_node(
     let children = inline_children(node);
     let mut output = match node.macro_name.as_deref() {
         Some("In") => {
+            let saved = font.push_scope(if node.flags.synopsis_pretty && node.flags.line_start {
+                Font::Strong
+            } else {
+                Font::Emphasis
+            });
             let lowered =
                 lower_inline_nodes_with_font_state(children, default_name, spacing_enabled, font);
+            if node.flags.synopsis_pretty {
+                font.select(Font::Strong);
+            }
+            font.pop_scope(saved);
             if lowered.is_empty() {
                 Vec::new()
             } else {
@@ -345,14 +354,39 @@ fn lower_link(
     let Some(first) = children.first() else {
         return Vec::new();
     };
-    let address_nodes = lower_inline_node(first, default_name, spacing_enabled, font);
-    let address = plain_text(&address_nodes);
+    // Identity extraction is pure. The formatter executes the label before
+    // the URI, even when compact presentation hides the latter's glyphs.
+    let address = visible_text(first.text.as_deref().unwrap_or_default());
     if address.is_empty() {
         return Vec::new();
     }
-    let label =
-        lower_inline_nodes_with_font_state(&children[1..], default_name, spacing_enabled, font);
-    lower_external_link(address, address_nodes, label, false)
+    let label_end = children
+        .iter()
+        .rposition(|child| !child.flags.delimiter_close)
+        .map_or(1, |index| index + 1)
+        .max(1);
+    let label = if label_end > 1 {
+        let saved = font.push_scope(Font::Emphasis);
+        let label = lower_inline_nodes_with_font_state(
+            &children[1..label_end],
+            default_name,
+            spacing_enabled,
+            font,
+        );
+        font.pop_scope(saved);
+        label
+    } else {
+        Vec::new()
+    };
+    let address_nodes = lower_inline_node(first, default_name, spacing_enabled, font);
+    let mut output = lower_external_link(address, address_nodes, label, false);
+    output.extend(lower_inline_nodes_with_font_state(
+        &children[label_end..],
+        default_name,
+        spacing_enabled,
+        font,
+    ));
+    output
 }
 
 /// Unlike Lk, Mt owns a sequence of addresses, not an address and a label.
@@ -364,14 +398,15 @@ fn lower_mail_addresses(
 ) -> Vec<Inline> {
     let mut builder = InlineBuilder::with_spacing(spacing_enabled);
     builder.font = *font;
+    let saved = builder.font.push_scope(Font::Emphasis);
     for child in children {
         if child.flags.delimiter_close || child.flags.delimiter_open {
             append_inline_node(&mut builder, child, default_name);
             continue;
         }
+        let address = visible_text(child.text.as_deref().unwrap_or_default());
         let address_nodes =
             lower_inline_node(child, default_name, spacing_enabled, &mut builder.font);
-        let address = plain_text(&address_nodes);
         if !address.is_empty() {
             builder.append(lower_external_link(
                 address,
@@ -381,6 +416,7 @@ fn lower_mail_addresses(
             ));
         }
     }
+    builder.font.pop_scope(saved);
     *font = builder.font;
     builder.finish()
 }
