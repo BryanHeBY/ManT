@@ -14,6 +14,187 @@ fn explained(source: &str, name: &str) -> mant_protocol::QueryExplanation {
 }
 
 #[test]
+fn group_highlights_only_the_matched_member_in_offline_presentation() {
+    let original = explained(
+        ".Dd September 8, 2026\n.Dt PROBE 1\n.Os\n.Sh OPTIONS\n.Bl -tag -width Ds\n.It Fl a\n.It Fl b\nUnicode café 日本.\n.Lk https://example.org More\n.Pp\nTrailing paragraph.\n.El\n",
+        "-a",
+    );
+    let response: mant_protocol::QueryExplanation =
+        serde_json::from_str(&serde_json::to_string(&original).unwrap()).unwrap();
+    let runs = std::cell::RefCell::new(Vec::new());
+    let text = mant_engine::render_explanation_text_with(&response, |style, text| {
+        runs.borrow_mut().push((style, text.to_owned()));
+        text.to_owned()
+    });
+    assert_eq!(text, mant_engine::render_explanation_text(&original));
+    assert!(text.contains("café 日本") && text.contains("Trailing paragraph"));
+    let runs = runs.into_inner();
+    let matched: String = runs
+        .iter()
+        .filter(|(s, _)| s.matched)
+        .map(|(_, t)| t.as_str())
+        .collect();
+    assert_eq!(matched, "-a");
+    let other: String = runs
+        .iter()
+        .filter(|(s, _)| !s.matched && s.inline.entry_kind.is_some())
+        .map(|(_, t)| t.as_str())
+        .collect();
+    assert_eq!(other, "-b");
+    assert!(
+        runs.iter()
+            .any(|(s, t)| s.inline.link && !s.matched && t == "More")
+    );
+}
+
+#[test]
+fn invalid_group_heads_and_overlapping_ranges_are_not_semantically_complete() {
+    let source = ".TH PROBE 1\n.SH OPTIONS\n.TP\n.B --first\n.TP\n.B --last\nBody.\n";
+    for empty_head in [false, true] {
+        let mut content = query_roff_bytes(source.as_bytes()).unwrap();
+        let document = content.document.as_mut().unwrap();
+        let mant_ir::Block::DefinitionList {
+            items,
+            declaration_groups,
+            ..
+        } = &mut document.sections[0].blocks[0]
+        else {
+            panic!("definition list")
+        };
+        if empty_head {
+            items[0].terms = vec![vec![mant_ir::Inline::anchor("only-anchor")]];
+        } else {
+            declaration_groups.push(declaration_groups[0]);
+        }
+        let response = explain_query(
+            &content,
+            &ExplanationQuery {
+                entry: "--first".into(),
+                options: ExplanationOptions::default(),
+            },
+        )
+        .unwrap();
+        assert!(!response.semantics_complete);
+        assert!(
+            response
+                .diagnostics
+                .iter()
+                .any(|d| d.code.as_deref() == Some("ir.invalid-declaration-group"))
+        );
+    }
+}
+
+#[test]
+fn large_context_is_omitted_atomically_without_retrying_each_match() {
+    use std::fmt::Write;
+    let mut source = String::from(".TH PROBE 1\n.SH OPTIONS\n");
+    for index in 0..300 {
+        writeln!(source, ".TP\n.B --mode={index}").unwrap();
+    }
+    source.push_str(&"Large original context.\n".repeat(4000));
+    let content = query_roff_bytes(source.as_bytes()).unwrap();
+    for bytes in [1, 1024, 4_194_304] {
+        let result = explain_query(
+            &content,
+            &ExplanationQuery {
+                entry: "--mode".into(),
+                options: ExplanationOptions {
+                    limit: 256,
+                    content_bytes: bytes,
+                    ..Default::default()
+                },
+            },
+        )
+        .unwrap();
+        assert_eq!(result.counts.direct_entry.returned, 256);
+        assert!(
+            result.supports.is_empty(),
+            "group member bound is independent of bytes"
+        );
+        assert!(result.evidence.iter().all(|e| e.support_omitted));
+        assert!(result.truncation.content);
+        assert!(
+            !serde_json::to_string(&result)
+                .unwrap()
+                .contains("Large original context")
+        );
+        result.validate_references().unwrap();
+    }
+}
+
+#[test]
+fn scope_supports_are_document_local_even_when_node_ids_coincide() {
+    use mant_protocol::{ScopeExplanation, ScopedExplanation, ScopedExplanationEvidence};
+    let first = explained(
+        ".TH FIRST 1\n.SH OPTIONS\n.TP\n.B -a\n.TP\n.B -b\nFirst context.\n",
+        "-a",
+    );
+    let second = explained(
+        ".TH SECOND 1\n.SH OPTIONS\n.TP\n.B -a\n.TP\n.B -c\nSecond context.\n",
+        "-a",
+    );
+    assert_eq!(
+        first.evidence[0].outline.node.id(),
+        second.evidence[0].outline.node.id()
+    );
+    let documents = [&first, &second]
+        .into_iter()
+        .enumerate()
+        .map(|(i, r)| ScopedExplanation {
+            supports: r.supports.clone(),
+            address: mant_ir::DocumentAddress::Manual {
+                name: format!("probe-{i}"),
+                manual_section: "1".into(),
+            },
+            depth: 0,
+            label: r.label.clone(),
+            producer: None,
+            diagnostics: r.diagnostics.clone(),
+            semantics_complete: r.semantics_complete,
+            outcome: r.outcome,
+            total: r.total,
+            returned: r.returned,
+            counts: r.counts.clone(),
+            truncation: r.truncation,
+        })
+        .collect();
+    let mut counts = first.counts.clone();
+    counts.direct_entry.total = 2;
+    counts.direct_entry.returned = 2;
+    let result = ScopeExplanation {
+        order: first.order,
+        counts,
+        query: first.query.clone(),
+        outcome: first.outcome,
+        total: 2,
+        returned: 2,
+        next_offset: None,
+        truncation: first.truncation,
+        documents,
+        evidence: vec![
+            ScopedExplanationEvidence {
+                document_index: 0,
+                evidence: first.evidence[0].clone(),
+            },
+            ScopedExplanationEvidence {
+                document_index: 1,
+                evidence: second.evidence[0].clone(),
+            },
+        ],
+        failures: Vec::new(),
+    };
+    let wire = serde_json::to_value(&result).unwrap();
+    let decoded: ScopeExplanation = serde_json::from_value(wire.clone()).unwrap();
+    let rendered = mant_engine::render_scope_explanation_text(&decoded);
+    assert_eq!(rendered.matches("First context").count(), 1);
+    assert_eq!(rendered.matches("Second context").count(), 1);
+    // Another document's pool cannot satisfy a dangling reference in this one.
+    let mut invalid = wire;
+    invalid["documents"][1]["supports"] = serde_json::json!([]);
+    assert!(serde_json::from_value::<ScopeExplanation>(invalid).is_err());
+}
+
+#[test]
 fn native_boundaries_stop_context_and_unclosed_heads_stay_independent() {
     for barrier in [
         ".PP\n",

@@ -54,33 +54,34 @@ pub(super) fn highlight(line: &str, query: &Regex, escapes: &Regex) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    fn states(text: &str, escapes: &Regex, state: &mut SgrState) -> Vec<(char, String)> {
+        let mut offset = 0;
+        let mut out = Vec::new();
+        for escape in escapes.find_iter(text) {
+            for c in text[offset..escape.start()].chars() {
+                out.push((c, state.logical_line("").into_owned()));
+            }
+            state.scan(escape.as_str());
+            offset = escape.end();
+        }
+        for c in text[offset..].chars() {
+            out.push((c, state.logical_line("").into_owned()));
+        }
+        out
+    }
     #[test]
     fn role_color_stays_before_unicode_glyphs_and_resets_do_not_end_matches() {
         let escapes = Regex::new(r"\x1b\[[0-?]*[ -/]*[@-~]").unwrap();
+        let query = Regex::new("日本z+").unwrap();
         for source in [
             "\x1b[92m日本zz\x1b[0m",
             "\x1b[92m日\x1b[0m本zz",
             "日\x1b[34m本zz",
         ] {
-            let result = highlight(source, &Regex::new("日本z+").unwrap(), &escapes);
+            let result = highlight(source, &query, &escapes);
             assert_eq!(escapes.replace_all(&result, ""), "日本zz");
             let mut original_state = SgrState::default();
             let mut result_state = SgrState::default();
-            fn states(text: &str, escapes: &Regex, state: &mut SgrState) -> Vec<(char, String)> {
-                let mut offset = 0;
-                let mut out = Vec::new();
-                for escape in escapes.find_iter(text) {
-                    for c in text[offset..escape.start()].chars() {
-                        out.push((c, state.logical_line("").into_owned()));
-                    }
-                    state.scan(escape.as_str());
-                    offset = escape.end();
-                }
-                for c in text[offset..].chars() {
-                    out.push((c, state.logical_line("").into_owned()));
-                }
-                out
-            }
             let before = states(source, &escapes, &mut original_state);
             let after = states(&result, &escapes, &mut result_state);
             for ((a, expected), (b, actual)) in before.iter().zip(after) {

@@ -30,7 +30,10 @@ impl DeclarationGroup {
         }
         let members = items.get(self.start_item..self.end_item)?;
         let (tail, heads) = members.split_last()?;
-        (blocks_have_readable_content(&tail.description)
+        (members
+            .iter()
+            .all(|item| item.terms.iter().flatten().any(readable_inline))
+            && blocks_have_readable_content(&tail.description)
             && heads
                 .iter()
                 .all(|head| !blocks_have_readable_content(&head.description)))
@@ -47,6 +50,16 @@ impl DeclarationGroup {
                 end_item: self.end_item - start,
             },
         )
+    }
+}
+
+fn readable_inline(inline: &Inline) -> bool {
+    match inline {
+        Inline::Text { value } | Inline::Code { value } => !value.trim().is_empty(),
+        Inline::Strong { children }
+        | Inline::Emphasis { children }
+        | Inline::Link { children, .. } => children.iter().any(readable_inline),
+        Inline::LineBreak | Inline::Anchor { .. } => false,
     }
 }
 

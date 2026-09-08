@@ -114,7 +114,7 @@ impl Report<'_> {
                     self.line(
                         output,
                         TextRole::Metadata,
-                        "Declaration-group context (recovered from consecutive declarations):",
+                        &format!("Declaration-group context [support {}] (recovered from consecutive declarations):", e.support.expect("resolved reference")),
                     );
                     let locations = spans::LocatedStyles::for_support(
                         block,
