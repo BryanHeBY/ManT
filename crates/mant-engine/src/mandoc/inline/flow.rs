@@ -136,7 +136,7 @@ impl InlineBuilder {
         self.boundary = PendingBoundary::Tight;
     }
 
-    pub(super) fn release_next_boundary(&mut self) {
+    pub(in crate::mandoc) fn release_next_boundary(&mut self) {
         self.boundary = PendingBoundary::Ordinary;
     }
 
@@ -215,7 +215,7 @@ impl InlineBuilder {
 
     /// A native text node is a word event even if decoding yields no glyphs.
     /// Unlike a target/control-only append, it consumes the pending boundary.
-    pub(super) fn append_word(&mut self, mut incoming: Vec<Inline>) {
+    pub(in crate::mandoc) fn append_word(&mut self, mut incoming: Vec<Inline>) {
         self.append_at_boundary(&mut incoming, true);
     }
 

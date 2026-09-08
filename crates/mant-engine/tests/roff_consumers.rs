@@ -58,7 +58,6 @@ fn style(query: &mant_engine::ResolvedContent, word: &str, expected: u8) {
 }
 
 #[test]
-#[ignore = "R01: baseline structural consumer defect; enable with routing fix"]
 fn nested_wrapper_payloads() {
     for name in ["bk-table", "enclosure-table"] {
         let query = fixture(name);
@@ -80,11 +79,57 @@ fn nested_wrapper_payloads() {
 }
 
 #[test]
-#[ignore = "R02: baseline Bf scope defect; enable with routing fix"]
 fn enclosure_font_scope() {
     let query = fixture("enclosure-font");
     style(&query, "WORD", 2);
     style(&query, "TAIL", 0);
+    for (mode, expected) in [("emphasis", 2), ("symbolic", 1), ("literal", 4)] {
+        let source = format!(
+            ".Dd September 8, 2026\n.Dt FONT 1\n.Os\n.Sh DESCRIPTION\n.Oo\n.Bk -words\n.Bf -{mode}\nWORD\n.No PLAIN\n.Em EMPH\n.Ef\n.Ek\n.Oc\nTAIL\n"
+        );
+        let query = mant_engine::query_roff_bytes(source.as_bytes()).unwrap();
+        style(&query, "WORD", expected);
+        style(&query, "PLAIN", 0);
+        style(&query, "EMPH", 2);
+        style(&query, "TAIL", 0);
+    }
+}
+
+#[test]
+fn two_level_containers_preserve_each_structural_payload() {
+    for display in [None, Some("-literal"), Some("-unfilled")] {
+        for (payload, table) in [
+            (".TS\nl l.\nWORD\tCELLTWO\n.TE", true),
+            (".Bl -bullet\n.It\nWORD CELLTWO\n.El", false),
+            (".Bl -tag -width Ds\n.It WORD\nCELLTWO\n.El", false),
+            (".Bl -column one two\n.It WORD Ta CELLTWO\n.El", true),
+        ] {
+            let mut source =
+                String::from(".Dd September 8, 2026\n.Dt PAYLOAD 1\n.Os\n.Sh DESCRIPTION\n");
+            if let Some(mode) = display {
+                source.push_str(&format!(".Bd {mode}\n"));
+            }
+            source.push_str(&format!(".Eo [\n.Bk -words\n{payload}\n.Ek\n.Ec ]\n"));
+            if display.is_some() {
+                source.push_str(".Ed\n");
+            }
+            let query = mant_engine::query_roff_bytes(source.as_bytes()).unwrap();
+            let text = description(&query);
+            for word in ["WORD", "CELLTWO", "[", "]"] {
+                assert_eq!(text.matches(word).count(), 1, "{source}: {text}");
+            }
+            let blocks = common::document_blocks(query.document.as_ref().unwrap());
+            if table {
+                assert_eq!(
+                    blocks
+                        .iter()
+                        .filter(|block| matches!(block, mant_ir::Block::Table { .. }))
+                        .count(),
+                    1
+                );
+            }
+        }
+    }
 }
 
 #[test]

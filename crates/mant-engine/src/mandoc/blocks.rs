@@ -301,7 +301,7 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
             );
             return;
         }
-        if self.push_font_scope(node) || self.consume_control_or_empty_block(node) {
+        if self.push_container(node) || self.consume_control_or_empty_block(node) {
             return;
         }
         let structural_targets = targets::structural_targets(node);
@@ -376,18 +376,48 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
         }
     }
 
-    fn push_font_scope(&mut self, node: &Node) -> bool {
-        if node.macro_name.as_deref() != Some("Bf") {
+    fn push_container(&mut self, node: &Node) -> bool {
+        if !super::containers::is_container(node) {
             return false;
         }
-        self.state
-            .queue_targets(targets::structural_targets(node), source_span(node));
-        let saved = node
-            .font
-            .map(|font| self.formatter.font.push_scope(font.into()));
-        self.push_nodes(first_part_children(node, NodeKind::Body));
-        if let Some(saved) = saved {
-            self.formatter.font.pop_scope(saved);
+        if node.macro_name.as_deref() != Some("Bf")
+            && !super::containers::has_structural_payload(node)
+        {
+            return false;
+        }
+        let mut saved_font = None;
+        let mut started = false;
+        let handled = super::containers::walk(node, |event| {
+            use super::containers::Event;
+            if !started {
+                self.state
+                    .queue_targets(targets::structural_targets(node), source_span(node));
+                started = true;
+            }
+            match event {
+                Event::Children(nodes) => self.push_nodes(nodes),
+                Event::EnterFont(font) => saved_font = Some(self.formatter.font.push_scope(font)),
+                Event::ExitFont => {
+                    if let Some(saved) = saved_font.take() {
+                        self.formatter.font.pop_scope(saved);
+                    }
+                }
+                event => self
+                    .state
+                    .push_inline_with(source_span(node), false, false, |builder| {
+                        builder.font = self.formatter.font;
+                        match event {
+                            Event::Glyph(value) => builder.append_text(&value),
+                            Event::Tight => builder.tighten_next_boundary(),
+                            Event::Release => builder.release_next_boundary(),
+                            Event::EmptyWord => builder.append_word(Vec::new()),
+                            _ => unreachable!("container children and font scopes handled above"),
+                        }
+                    }),
+            }
+        });
+        if !handled {
+            return false;
         }
         true
     }

@@ -96,6 +96,7 @@ pub(super) fn lower_missing_table_cell(
 }
 
 /// A cell's position is needed to interpret row-local tbl layout controls.
+#[derive(Clone, Copy)]
 pub(super) struct CellPosition<'a> {
     pub(super) index: usize,
     pub(super) row: &'a [libmandoc_rs::TableCell],

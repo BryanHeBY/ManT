@@ -1,6 +1,7 @@
 //! Lowers the owned libmandoc syntax tree into `ManT`'s stable document model.
 
 mod blocks;
+mod containers;
 mod diagnostics;
 mod error;
 mod formatter;

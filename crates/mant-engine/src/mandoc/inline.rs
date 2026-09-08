@@ -322,7 +322,7 @@ pub(super) fn is_enclosure_macro(macro_name: Option<&str>) -> bool {
         || matches!(macro_name, Some("Eo" | "En"))
 }
 
-fn enclosure_marks(name: &str) -> Option<(&'static str, &'static str)> {
+pub(super) fn enclosure_marks(name: &str) -> Option<(&'static str, &'static str)> {
     match name {
         "Op" | "Oo" | "Bq" | "Bo" => Some(("[", "]")),
         "Dq" | "Do" => Some(("“", "”")),

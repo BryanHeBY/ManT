@@ -67,6 +67,34 @@ struct DisplayFlow<'a, 'source> {
 }
 
 impl DisplayFlow<'_, '_> {
+    fn append_container(&mut self, node: &Node) -> bool {
+        let mut saved_font = None;
+        let mut started = false;
+        crate::mandoc::containers::walk(node, |event| {
+            use crate::mandoc::containers::Event;
+            if !started {
+                for target in super::targets::structural_targets(node) {
+                    self.line
+                        .append(vec![Inline::anchor_at(target, source_span(node))]);
+                }
+                started = true;
+            }
+            match event {
+                Event::Children(nodes) => self.append_nodes(nodes),
+                Event::Glyph(value) => self.line.append_text(&value),
+                Event::Tight => self.line.tighten_next_boundary(),
+                Event::Release => self.line.release_next_boundary(),
+                Event::EmptyWord => self.line.append_word(Vec::new()),
+                Event::EnterFont(font) => saved_font = Some(self.line.font.push_scope(font)),
+                Event::ExitFont => {
+                    if let Some(saved) = saved_font.take() {
+                        self.line.font.pop_scope(saved);
+                    }
+                }
+            }
+        })
+    }
+
     fn flush(&mut self) {
         let mut next = InlineBuilder::with_spacing(self.line.spacing_enabled());
         next.font = self.line.font;
@@ -94,17 +122,10 @@ impl DisplayFlow<'_, '_> {
             if plan.consumes(index) {
                 continue;
             }
-            if node.macro_name.as_deref() == Some("Bf") {
-                for target in super::targets::structural_targets(node) {
-                    self.line
-                        .append(vec![Inline::anchor_at(target, source_span(node))]);
-                }
-                let saved = node.font.map(|font| self.line.font.push_scope(font.into()));
-                self.append_nodes(first_part_children(node, NodeKind::Body));
-                if let Some(saved) = saved {
-                    self.line.font.pop_scope(saved);
-                }
-            } else if node.kind == NodeKind::Block
+            if self.append_container(node) {
+                continue;
+            }
+            if node.kind == NodeKind::Block
                 && matches!(node.macro_name.as_deref(), Some("Bd" | "D1" | "Dl"))
             {
                 for target in super::targets::structural_targets(node) {
