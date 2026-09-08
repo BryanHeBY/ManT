@@ -416,8 +416,12 @@ mod tests {
             let explanation = super::select_explanation(&query, &path).unwrap_or_else(|error| {
                 panic!("explain must accept projected path {path}: {error}")
             });
-            assert!(explanation.evidence.iter().any(|e| e.outline.path() == path
-                && e.bases.contains(&mant_protocol::EvidenceBasis::Identity)));
+            assert!(explanation.evidence.iter().any(|e| {
+                e.outline.path() == path
+                    && e.bases
+                        .iter()
+                        .any(|basis| matches!(basis, mant_protocol::EvidenceBasis::Identity { .. }))
+            }));
         }
     }
 
@@ -527,13 +531,12 @@ mod tests {
             [ExcerptSelection::DocumentSection { outline, .. }] if outline.path() == "1"
         ));
         let explanation = super::select_explanation(&query, "force").unwrap();
-        assert!(
-            explanation
-                .evidence
-                .iter()
-                .any(|e| e.outline.node.id() == "command-force"
-                    && e.bases.contains(&mant_protocol::EvidenceBasis::Name))
-        );
+        assert!(explanation.evidence.iter().any(|e| {
+            e.outline.node.id() == "command-force"
+                && e.bases
+                    .iter()
+                    .any(|basis| matches!(basis, mant_protocol::EvidenceBasis::Name { .. }))
+        }));
         let outline = build_outline_projection(
             &query,
             EntryProjection::All,
@@ -768,11 +771,15 @@ mod tests {
             [ExcerptSelection::DocumentSection { outline, .. }] if outline.path() == "3"
         ));
         let explanation = super::select_explanation(&query, "3").unwrap();
-        assert!(explanation.evidence.iter().all(|e| !matches!(
-            e.outline.node,
-            mant_protocol::OutlineNodeReference::DocumentSection { .. }
-        )
-            || !e.bases.contains(&mant_protocol::EvidenceBasis::Identity)));
+        assert!(explanation.evidence.iter().all(|e| {
+            !matches!(
+                e.outline.node,
+                mant_protocol::OutlineNodeReference::DocumentSection { .. }
+            ) || !e
+                .bases
+                .iter()
+                .any(|basis| matches!(basis, mant_protocol::EvidenceBasis::Identity { .. }))
+        }));
     }
 
     #[test]

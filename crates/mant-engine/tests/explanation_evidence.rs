@@ -22,8 +22,18 @@ fn independent_owners_and_literal_support_survive_without_selector_shadowing() {
     assert_eq!(found.evidence[0].entry.as_ref().unwrap().names, ["--help"]);
     assert_eq!(found.evidence[1].entry.as_ref().unwrap().names, ["--help"]);
     assert_eq!(found.evidence[2].entry.as_ref().unwrap().names, ["--help"]);
-    assert!(found.evidence[0].bases.contains(&EvidenceBasis::Name));
-    assert!(found.evidence[0].bases.contains(&EvidenceBasis::Form));
+    assert!(
+        found.evidence[0]
+            .bases
+            .iter()
+            .any(|basis| matches!(basis, EvidenceBasis::Name { .. }))
+    );
+    assert!(
+        found.evidence[0]
+            .bases
+            .iter()
+            .any(|basis| matches!(basis, EvidenceBasis::Form { .. }))
+    );
     assert!(mant_engine::select_excerpt(&content, &["--help"]).is_err());
     for evidence in &found.evidence[..3] {
         assert!(mant_engine::select_excerpt(&content, &[evidence.outline.path()]).is_ok());
@@ -98,8 +108,18 @@ fn form_case_literal_and_no_evidence_are_distinct() {
         lower.evidence[0].outline.node.id()
     );
     let form = explain_query(&content, &query("-I DIR")).unwrap();
-    assert!(form.evidence[0].bases.contains(&EvidenceBasis::Form));
-    assert!(!form.evidence[0].bases.contains(&EvidenceBasis::Name));
+    assert!(
+        form.evidence[0]
+            .bases
+            .iter()
+            .any(|basis| matches!(basis, EvidenceBasis::Form { .. }))
+    );
+    assert!(
+        !form.evidence[0]
+            .bases
+            .iter()
+            .any(|basis| matches!(basis, EvidenceBasis::Name { .. }))
+    );
     let missing = explain_query(&content, &query("-a")).unwrap();
     assert_eq!(missing.outcome, ExplanationOutcome::NoEvidence);
     assert_eq!(missing.total, 0);
@@ -152,7 +172,12 @@ fn native_and_markdown_owners_share_the_same_evidence_rules() {
     let found = explain_query(&content, &query("--help")).unwrap();
     assert_eq!(found.total, 2);
     for result in &found.evidence {
-        assert!(result.bases.contains(&EvidenceBasis::Name));
+        assert!(
+            result
+                .bases
+                .iter()
+                .any(|basis| matches!(basis, EvidenceBasis::Name { .. }))
+        );
         assert_eq!(result.class, mant_protocol::EvidenceClass::DirectEntry);
         assert!(result.previews.is_empty());
         assert!(!result.previews_omitted);

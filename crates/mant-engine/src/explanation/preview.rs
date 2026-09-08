@@ -23,6 +23,7 @@ impl LiteralHit<'_> {
             match_start_char: u32::try_from(match_start - start).expect("bounded preview"),
             match_end_char: u32::try_from(match_start - start + match_len)
                 .expect("bounded preview"),
+            content_ranges: Vec::new(),
             clipped_before: start > 0,
             clipped_after: end < total,
         }

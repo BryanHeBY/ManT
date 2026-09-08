@@ -48,7 +48,12 @@ fn assert_direct_names(query: &mant_ir::ResolvedContent, names: &[&str], form: &
             .iter()
             .find(|e| e.class == EvidenceClass::DirectEntry)
             .unwrap_or_else(|| panic!("{name}: {explained:?}"));
-        assert!(direct.bases.contains(&EvidenceBasis::Name));
+        assert!(
+            direct
+                .bases
+                .iter()
+                .any(|basis| matches!(basis, EvidenceBasis::Name { .. }))
+        );
         let entry = direct.entry.as_ref().unwrap();
         assert_eq!(entry.names, names);
         assert_eq!(

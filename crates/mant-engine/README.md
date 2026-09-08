@@ -170,7 +170,7 @@ distinct. No evidence query performs I/O or executes examples.
 let query = mant_engine::query_markdown_text("# Demo\n\n- `--help`: Usage.\n", None)?;
 let evidence = mant_engine::select_explanation(&query, "--help")?;
 assert_eq!(evidence.outcome, mant_protocol::ExplanationOutcome::Evidence);
-assert!(evidence.evidence.iter().any(|owner| owner.bases.contains(&mant_protocol::EvidenceBasis::Name)));
+assert!(evidence.evidence.iter().any(|owner| owner.bases.iter().any(|basis| matches!(basis, mant_protocol::EvidenceBasis::Name { .. }))));
 # Ok::<(), Box<dyn std::error::Error>>(())
 ```
 

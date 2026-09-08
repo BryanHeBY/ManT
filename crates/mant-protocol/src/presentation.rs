@@ -56,10 +56,10 @@ pub fn render_evidence_heading(evidence: &crate::ExplanationEvidence) -> String 
         .bases
         .iter()
         .map(|basis| match basis {
-            crate::EvidenceBasis::Name => "name".to_owned(),
-            crate::EvidenceBasis::Form => "form".to_owned(),
+            crate::EvidenceBasis::Name { .. } => "name".to_owned(),
+            crate::EvidenceBasis::Form { .. } => "form".to_owned(),
             crate::EvidenceBasis::Literal => "literal".to_owned(),
-            crate::EvidenceBasis::Identity => "identity".to_owned(),
+            crate::EvidenceBasis::Identity { .. } => "identity".to_owned(),
             crate::EvidenceBasis::AliasGroup { members } => format!(
                 "explicit alias group: {}",
                 members

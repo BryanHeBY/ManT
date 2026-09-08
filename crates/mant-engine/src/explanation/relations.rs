@@ -40,7 +40,9 @@ pub(super) fn expand<'a>(
         if !candidate.bases.iter().any(|b| {
             matches!(
                 b,
-                EvidenceBasis::Name | EvidenceBasis::Form | EvidenceBasis::Identity
+                EvidenceBasis::Name { .. }
+                    | EvidenceBasis::Form { .. }
+                    | EvidenceBasis::Identity { .. }
             )
         }) {
             continue;
@@ -90,6 +92,7 @@ pub(super) fn expand<'a>(
                 block_path: None,
                 source: located[target].source(),
                 bases: vec![basis],
+                matched: super::matches::MatchPlan::default(),
                 hits: Vec::new(),
             });
             queue.push_back((target, origin, path));

@@ -165,6 +165,60 @@ the same index and typed findings. The sidecar borrows the original document,
 does not accept independently supplied indexes, and never caches across calls.
 External IR producers receive the same complete checks as built-in parsers.
 
+## Explanation match positions
+
+The unreleased v0.11 migration uses the following closed fields. Matching
+decisions remain in collection; materialization projects recorded source
+bindings, and renderers consume only the response. Ordinary name coloring and
+actual query matches are independent dimensions.
+
+| Object | Fields and meaning |
+| --- | --- |
+| Name basis | `kind: "name"`, `matches: [{name, occurrences}]`: actual authored names, not the query's spelling or all names of the owner |
+| Form basis | `kind: "form"`, `matches: [{sourceFormIndex, text, occurrences}]`: actual complete forms, with their original owner ordinal |
+| Identity basis | `kind: "identity"`, `fields: ["id", "path"]` (matched subset): values refer to the evidence's outline fields |
+| Ordinary binding | `entry.nameBindings: [{nameIndex, occurrences}]`: validated names indexed in this returned entry, independent of the query |
+| Occurrence | `{sourceOccurrenceIndex, forms: [FormRange], content: [ContentRange]}`: each domain preserves a complete ordered occurrence or omits it atomically; the source ordinal identifies a binding occurrence (zero for complete-form evidence), not its index in a filtered response array |
+| FormRange | `{formIndex, startChar, endChar}` relative to returned `entry.forms[formIndex]`, not the original form ordinal |
+| ContentRange | `{kind: "block-text", path, startChar, endChar}` or `{kind: "definition-term", path, itemIndex, termIndex, startChar, endChar}` |
+| Content path | Starts at this response's `content.block`; typed `list-item`/`definition-item` (index) or `table-cell` (row, column) steps select a block array, followed by a `block` (index) step |
+| Literal preview | Existing window/scalar coordinates plus `contentRanges`, referring to its reported match in the returned body, never the window offset reused as a full-body offset |
+
+All text ranges are half-open Unicode scalar offsets in safe visible text.
+Inline wrappers/anchors add no text, source LineBreak adds one scalar; unsafe
+controls are replaced one-for-one while legitimate tabs/newlines remain.
+Definition terms are independent roots, not synthetic paragraphs. When an
+original item N becomes a single-item excerpt, its response index is zero.
+Original `blockPath` and source spans remain provenance, not response paths.
+
+`matchDetailsOmitted` reports omitted Name/Form records or positions applicable
+to returned targets. `nameBindingsOmitted` independently reports omitted
+ordinary bindings. Both participate in overall content truncation. If an
+entire entry/body is absent, its existing details/content omission flag explains
+unavailable targets; locations must not reference absent payloads. Actual
+matched spellings can still be returned without entry metadata.
+
+Per evidence, Name/Form records jointly cap at 32; ordinary bindings separately
+cap at 32 names; each record has at most 32 occurrences; each occurrence has
+at most 32 fragments per target domain. All retained match and ordinary
+positions, including preview-to-body mappings, jointly cap at 1,024 fragments.
+These limits never truncate the original entry's names/forms or affect owner
+classification, counting, ordering or pagination.
+
+Copy retention order is self-contained match facts, entry metadata with bounded
+optional bindings, previews, then the atomic body. Position objects, paths and
+arrays consume the same serialized-byte budget; duplicate serialized positions
+are charged separately. Positions and their target payload are accepted
+together, without retries that reorder material. One incomplete multi-slice
+occurrence must never be displayed as a complete name match. Invalid external
+positions are conservatively left unhighlighted, not re-guessed from text.
+
+Human projection follows the shared [entry presentation](entry-presentation.md)
+roles. It distinguishes generated metadata from original body/forms/previews;
+report framing is not inserted into document IR. A serialized-and-decoded
+response must render offline without loading the original document, consulting
+hidden maps or rerunning any business matching.
+
 ## Lowering boundaries
 
 | Source evidence | Required interpretation |

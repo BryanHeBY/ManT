@@ -78,7 +78,10 @@ fn transformed_native_owners_keep_the_first_head_for_explain_and_search() {
                 .evidence
                 .iter()
                 .find(|e| {
-                    e.class == EvidenceClass::DirectEntry && e.bases.contains(&EvidenceBasis::Name)
+                    e.class == EvidenceClass::DirectEntry
+                        && e.bases
+                            .iter()
+                            .any(|basis| matches!(basis, EvidenceBasis::Name { .. }))
                 })
                 .unwrap();
             assert_eq!(direct.source, Some(original), "{name}");

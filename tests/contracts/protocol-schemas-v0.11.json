@@ -4001,11 +4001,19 @@
               "kind": {
                 "type": "string",
                 "const": "name"
+              },
+              "matches": {
+                "description": "Exact matched spellings and their available projected occurrences.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/ExplanationNameMatch"
+                }
               }
             },
             "additionalProperties": false,
             "required": [
-              "kind"
+              "kind",
+              "matches"
             ]
           },
           {
@@ -4015,11 +4023,19 @@
               "kind": {
                 "type": "string",
                 "const": "form"
+              },
+              "matches": {
+                "description": "Exact complete forms accepted by the collector, not frontend guesses.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/ExplanationFormMatch"
+                }
               }
             },
             "additionalProperties": false,
             "required": [
-              "kind"
+              "kind",
+              "matches"
             ]
           },
           {
@@ -4040,6 +4056,13 @@
             "description": "Exact entry ID or structural coordinate (no alias/shorthand resolver).",
             "type": "object",
             "properties": {
+              "fields": {
+                "description": "Matched outline fields; values are carried by the same evidence.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/ExplanationIdentityField"
+                }
+              },
               "kind": {
                 "type": "string",
                 "const": "identity"
@@ -4047,7 +4070,8 @@
             },
             "additionalProperties": false,
             "required": [
-              "kind"
+              "kind",
+              "fields"
             ]
           },
           {
@@ -4188,6 +4212,102 @@
           }
         ]
       },
+      "ExplanationBlockStep": {
+        "description": "A typed path step relative to the single returned `content.block`.\nItem/cell steps select an array and must be followed by a block step.",
+        "oneOf": [
+          {
+            "description": "One ordinary list item's block array.",
+            "type": "object",
+            "properties": {
+              "index": {
+                "description": "Zero-based item index.",
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 0
+              },
+              "kind": {
+                "type": "string",
+                "const": "list-item"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "index"
+            ]
+          },
+          {
+            "description": "One definition's description block array.",
+            "type": "object",
+            "properties": {
+              "index": {
+                "description": "Zero-based item index.",
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 0
+              },
+              "kind": {
+                "type": "string",
+                "const": "definition-item"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "index"
+            ]
+          },
+          {
+            "description": "One table cell's block array.",
+            "type": "object",
+            "properties": {
+              "column": {
+                "description": "Zero-based original cell index (not its spanned screen column).",
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 0
+              },
+              "kind": {
+                "type": "string",
+                "const": "table-cell"
+              },
+              "row": {
+                "description": "Zero-based original row index (not a laid-out row).",
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 0
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "row",
+              "column"
+            ]
+          },
+          {
+            "description": "One block in the array selected by the preceding item/cell step.",
+            "type": "object",
+            "properties": {
+              "index": {
+                "description": "Zero-based block index.",
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 0
+              },
+              "kind": {
+                "type": "string",
+                "const": "block"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "index"
+            ]
+          }
+        ]
+      },
       "ExplanationContent": {
         "description": "Original content copied for one evidence owner, not a navigation selection.",
         "oneOf": [
@@ -4227,6 +4347,97 @@
             "required": [
               "kind",
               "block"
+            ]
+          }
+        ]
+      },
+      "ExplanationContentRange": {
+        "description": "Half-open Unicode scalar offsets rooted in this response's original body.\nThe path does not reference the full source document or a preview window.",
+        "oneOf": [
+          {
+            "description": "Safe visible text of a paragraph, preformatted, equation or unsupported leaf.",
+            "type": "object",
+            "properties": {
+              "endChar": {
+                "description": "Exclusive end scalar in the same leaf.",
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 0
+              },
+              "kind": {
+                "type": "string",
+                "const": "block-text"
+              },
+              "path": {
+                "description": "Typed path to that leaf, starting at `content.block`.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/ExplanationBlockStep"
+                }
+              },
+              "startChar": {
+                "description": "First matched scalar in the leaf text.",
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 0
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "path",
+              "startChar",
+              "endChar"
+            ]
+          },
+          {
+            "description": "Safe visible inline text of exactly one original definition term.",
+            "type": "object",
+            "properties": {
+              "endChar": {
+                "description": "Exclusive end scalar in the same term.",
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 0
+              },
+              "itemIndex": {
+                "description": "Item in that returned list; an excerpted owner is item zero.",
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 0
+              },
+              "kind": {
+                "type": "string",
+                "const": "definition-term"
+              },
+              "path": {
+                "description": "Typed path to a definition-list block.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/ExplanationBlockStep"
+                }
+              },
+              "startChar": {
+                "description": "First matched scalar in this term.",
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 0
+              },
+              "termIndex": {
+                "description": "Index in that item's terms, independent of form indices.",
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 0
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "path",
+              "itemIndex",
+              "termIndex",
+              "startChar",
+              "endChar"
             ]
           }
         ]
@@ -4274,6 +4485,13 @@
             "description": "Source-neutral role.",
             "$ref": "#/$defs/EntryKind"
           },
+          "nameBindings": {
+            "description": "Ordinary validated name locations, independent of the actual query match.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/ExplanationNameBinding"
+            }
+          },
           "names": {
             "description": "Documented selectable names, not implicit equivalence groups.",
             "type": "array",
@@ -4299,6 +4517,7 @@
           "case",
           "names",
           "forms",
+          "nameBindings",
           "aliasGroups"
         ]
       },
@@ -4354,6 +4573,14 @@
               }
             ]
           },
+          "matchDetailsOmitted": {
+            "description": "Some actual Name/Form records or applicable matched positions were omitted.",
+            "type": "boolean"
+          },
+          "nameBindingsOmitted": {
+            "description": "Some ordinary display bindings applicable to returned targets were omitted.",
+            "type": "boolean"
+          },
           "ordinal": {
             "description": "Zero-based ordinal before result pagination.",
             "type": "integer",
@@ -4396,7 +4623,161 @@
           "previews",
           "previewsOmitted",
           "detailsOmitted",
+          "matchDetailsOmitted",
+          "nameBindingsOmitted",
           "contentOmitted"
+        ]
+      },
+      "ExplanationFormMatch": {
+        "description": "One complete authored form that actually matched during collection.",
+        "type": "object",
+        "properties": {
+          "occurrences": {
+            "description": "Complete positions in available returned targets.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/ExplanationOccurrence"
+            }
+          },
+          "sourceFormIndex": {
+            "description": "Snapshot-local ordinal in the original owner's forms, not a durable ID\nor an index into an omitted/filtered response payload.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          },
+          "text": {
+            "description": "Complete authored visible text, with original spelling.",
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "sourceFormIndex",
+          "text",
+          "occurrences"
+        ]
+      },
+      "ExplanationFormRange": {
+        "description": "Half-open Unicode scalar offsets in returned `entry.forms[formIndex]`.",
+        "type": "object",
+        "properties": {
+          "endChar": {
+            "description": "Exclusive end in the same text root.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          },
+          "formIndex": {
+            "description": "Index into the forms actually returned in this entry's metadata.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          },
+          "startChar": {
+            "description": "Start in safe visible text, excluding renderer-added framing.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "formIndex",
+          "startChar",
+          "endChar"
+        ]
+      },
+      "ExplanationIdentityField": {
+        "description": "An actual identity match, referencing this evidence's outline fields.",
+        "oneOf": [
+          {
+            "description": "The exact outline node ID matched.",
+            "type": "string",
+            "const": "id"
+          },
+          {
+            "description": "The structural outline path matched.",
+            "type": "string",
+            "const": "path"
+          }
+        ]
+      },
+      "ExplanationNameBinding": {
+        "description": "One ordinary name binding, independent of whether that name matched a query.",
+        "type": "object",
+        "properties": {
+          "nameIndex": {
+            "description": "Index into this response's `entry.names` (never an absent entry).",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          },
+          "occurrences": {
+            "description": "Validated source occurrences projected into the returned payload.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/ExplanationOccurrence"
+            }
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "nameIndex",
+          "occurrences"
+        ]
+      },
+      "ExplanationNameMatch": {
+        "description": "One documented name that actually matched under the owner's case policy.",
+        "type": "object",
+        "properties": {
+          "name": {
+            "description": "Exact authored spelling, usable even when entry metadata is absent.",
+            "type": "string"
+          },
+          "occurrences": {
+            "description": "Complete occurrences in available response targets, not implicit aliases.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/ExplanationOccurrence"
+            }
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "occurrences"
+        ]
+      },
+      "ExplanationOccurrence": {
+        "description": "One whole occurrence, with independent complete projections per target domain.\nAn unavailable or omitted domain is empty; a partial name is never retained.",
+        "type": "object",
+        "properties": {
+          "content": {
+            "description": "Ordered fragments within the returned original body.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/ExplanationContentRange"
+            }
+          },
+          "forms": {
+            "description": "Ordered fragments within returned forms.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/ExplanationFormRange"
+            }
+          },
+          "sourceOccurrenceIndex": {
+            "description": "Original binding-occurrence ordinal (zero for a complete form match).\nA snapshot coordinate, not a durable identity or returned-array index.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "sourceOccurrenceIndex",
+          "forms",
+          "content"
         ]
       },
       "ExplanationOptions": {
@@ -4465,6 +4846,13 @@
             "description": "The representative window excludes preceding block text.",
             "type": "boolean"
           },
+          "contentRanges": {
+            "description": "Positions of this reported match in an available returned body, not\noffsets in this clipped window. Empty when the body is unavailable.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/ExplanationContentRange"
+            }
+          },
           "matchEndChar": {
             "description": "Exclusive end of the complete match in text, in Unicode scalars.",
             "type": "integer",
@@ -4499,6 +4887,7 @@
           "text",
           "matchStartChar",
           "matchEndChar",
+          "contentRanges",
           "clippedBefore",
           "clippedAfter"
         ]
@@ -10425,11 +10814,19 @@
               "kind": {
                 "type": "string",
                 "const": "name"
+              },
+              "matches": {
+                "description": "Exact matched spellings and their available projected occurrences.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/ExplanationNameMatch"
+                }
               }
             },
             "additionalProperties": false,
             "required": [
-              "kind"
+              "kind",
+              "matches"
             ]
           },
           {
@@ -10439,11 +10836,19 @@
               "kind": {
                 "type": "string",
                 "const": "form"
+              },
+              "matches": {
+                "description": "Exact complete forms accepted by the collector, not frontend guesses.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/ExplanationFormMatch"
+                }
               }
             },
             "additionalProperties": false,
             "required": [
-              "kind"
+              "kind",
+              "matches"
             ]
           },
           {
@@ -10464,6 +10869,13 @@
             "description": "Exact entry ID or structural coordinate (no alias/shorthand resolver).",
             "type": "object",
             "properties": {
+              "fields": {
+                "description": "Matched outline fields; values are carried by the same evidence.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/ExplanationIdentityField"
+                }
+              },
               "kind": {
                 "type": "string",
                 "const": "identity"
@@ -10471,7 +10883,8 @@
             },
             "additionalProperties": false,
             "required": [
-              "kind"
+              "kind",
+              "fields"
             ]
           },
           {
@@ -10612,6 +11025,102 @@
           }
         ]
       },
+      "ExplanationBlockStep": {
+        "description": "A typed path step relative to the single returned `content.block`.\nItem/cell steps select an array and must be followed by a block step.",
+        "oneOf": [
+          {
+            "description": "One ordinary list item's block array.",
+            "type": "object",
+            "properties": {
+              "index": {
+                "description": "Zero-based item index.",
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 0
+              },
+              "kind": {
+                "type": "string",
+                "const": "list-item"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "index"
+            ]
+          },
+          {
+            "description": "One definition's description block array.",
+            "type": "object",
+            "properties": {
+              "index": {
+                "description": "Zero-based item index.",
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 0
+              },
+              "kind": {
+                "type": "string",
+                "const": "definition-item"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "index"
+            ]
+          },
+          {
+            "description": "One table cell's block array.",
+            "type": "object",
+            "properties": {
+              "column": {
+                "description": "Zero-based original cell index (not its spanned screen column).",
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 0
+              },
+              "kind": {
+                "type": "string",
+                "const": "table-cell"
+              },
+              "row": {
+                "description": "Zero-based original row index (not a laid-out row).",
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 0
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "row",
+              "column"
+            ]
+          },
+          {
+            "description": "One block in the array selected by the preceding item/cell step.",
+            "type": "object",
+            "properties": {
+              "index": {
+                "description": "Zero-based block index.",
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 0
+              },
+              "kind": {
+                "type": "string",
+                "const": "block"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "index"
+            ]
+          }
+        ]
+      },
       "ExplanationContent": {
         "description": "Original content copied for one evidence owner, not a navigation selection.",
         "oneOf": [
@@ -10651,6 +11160,97 @@
             "required": [
               "kind",
               "block"
+            ]
+          }
+        ]
+      },
+      "ExplanationContentRange": {
+        "description": "Half-open Unicode scalar offsets rooted in this response's original body.\nThe path does not reference the full source document or a preview window.",
+        "oneOf": [
+          {
+            "description": "Safe visible text of a paragraph, preformatted, equation or unsupported leaf.",
+            "type": "object",
+            "properties": {
+              "endChar": {
+                "description": "Exclusive end scalar in the same leaf.",
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 0
+              },
+              "kind": {
+                "type": "string",
+                "const": "block-text"
+              },
+              "path": {
+                "description": "Typed path to that leaf, starting at `content.block`.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/ExplanationBlockStep"
+                }
+              },
+              "startChar": {
+                "description": "First matched scalar in the leaf text.",
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 0
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "path",
+              "startChar",
+              "endChar"
+            ]
+          },
+          {
+            "description": "Safe visible inline text of exactly one original definition term.",
+            "type": "object",
+            "properties": {
+              "endChar": {
+                "description": "Exclusive end scalar in the same term.",
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 0
+              },
+              "itemIndex": {
+                "description": "Item in that returned list; an excerpted owner is item zero.",
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 0
+              },
+              "kind": {
+                "type": "string",
+                "const": "definition-term"
+              },
+              "path": {
+                "description": "Typed path to a definition-list block.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/ExplanationBlockStep"
+                }
+              },
+              "startChar": {
+                "description": "First matched scalar in this term.",
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 0
+              },
+              "termIndex": {
+                "description": "Index in that item's terms, independent of form indices.",
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 0
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "path",
+              "itemIndex",
+              "termIndex",
+              "startChar",
+              "endChar"
             ]
           }
         ]
@@ -10698,6 +11298,13 @@
             "description": "Source-neutral role.",
             "$ref": "#/$defs/EntryKind"
           },
+          "nameBindings": {
+            "description": "Ordinary validated name locations, independent of the actual query match.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/ExplanationNameBinding"
+            }
+          },
           "names": {
             "description": "Documented selectable names, not implicit equivalence groups.",
             "type": "array",
@@ -10723,6 +11330,7 @@
           "case",
           "names",
           "forms",
+          "nameBindings",
           "aliasGroups"
         ]
       },
@@ -10778,6 +11386,14 @@
               }
             ]
           },
+          "matchDetailsOmitted": {
+            "description": "Some actual Name/Form records or applicable matched positions were omitted.",
+            "type": "boolean"
+          },
+          "nameBindingsOmitted": {
+            "description": "Some ordinary display bindings applicable to returned targets were omitted.",
+            "type": "boolean"
+          },
           "ordinal": {
             "description": "Zero-based ordinal before result pagination.",
             "type": "integer",
@@ -10820,7 +11436,161 @@
           "previews",
           "previewsOmitted",
           "detailsOmitted",
+          "matchDetailsOmitted",
+          "nameBindingsOmitted",
           "contentOmitted"
+        ]
+      },
+      "ExplanationFormMatch": {
+        "description": "One complete authored form that actually matched during collection.",
+        "type": "object",
+        "properties": {
+          "occurrences": {
+            "description": "Complete positions in available returned targets.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/ExplanationOccurrence"
+            }
+          },
+          "sourceFormIndex": {
+            "description": "Snapshot-local ordinal in the original owner's forms, not a durable ID\nor an index into an omitted/filtered response payload.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          },
+          "text": {
+            "description": "Complete authored visible text, with original spelling.",
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "sourceFormIndex",
+          "text",
+          "occurrences"
+        ]
+      },
+      "ExplanationFormRange": {
+        "description": "Half-open Unicode scalar offsets in returned `entry.forms[formIndex]`.",
+        "type": "object",
+        "properties": {
+          "endChar": {
+            "description": "Exclusive end in the same text root.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          },
+          "formIndex": {
+            "description": "Index into the forms actually returned in this entry's metadata.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          },
+          "startChar": {
+            "description": "Start in safe visible text, excluding renderer-added framing.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "formIndex",
+          "startChar",
+          "endChar"
+        ]
+      },
+      "ExplanationIdentityField": {
+        "description": "An actual identity match, referencing this evidence's outline fields.",
+        "oneOf": [
+          {
+            "description": "The exact outline node ID matched.",
+            "type": "string",
+            "const": "id"
+          },
+          {
+            "description": "The structural outline path matched.",
+            "type": "string",
+            "const": "path"
+          }
+        ]
+      },
+      "ExplanationNameBinding": {
+        "description": "One ordinary name binding, independent of whether that name matched a query.",
+        "type": "object",
+        "properties": {
+          "nameIndex": {
+            "description": "Index into this response's `entry.names` (never an absent entry).",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          },
+          "occurrences": {
+            "description": "Validated source occurrences projected into the returned payload.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/ExplanationOccurrence"
+            }
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "nameIndex",
+          "occurrences"
+        ]
+      },
+      "ExplanationNameMatch": {
+        "description": "One documented name that actually matched under the owner's case policy.",
+        "type": "object",
+        "properties": {
+          "name": {
+            "description": "Exact authored spelling, usable even when entry metadata is absent.",
+            "type": "string"
+          },
+          "occurrences": {
+            "description": "Complete occurrences in available response targets, not implicit aliases.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/ExplanationOccurrence"
+            }
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "occurrences"
+        ]
+      },
+      "ExplanationOccurrence": {
+        "description": "One whole occurrence, with independent complete projections per target domain.\nAn unavailable or omitted domain is empty; a partial name is never retained.",
+        "type": "object",
+        "properties": {
+          "content": {
+            "description": "Ordered fragments within the returned original body.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/ExplanationContentRange"
+            }
+          },
+          "forms": {
+            "description": "Ordered fragments within returned forms.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/ExplanationFormRange"
+            }
+          },
+          "sourceOccurrenceIndex": {
+            "description": "Original binding-occurrence ordinal (zero for a complete form match).\nA snapshot coordinate, not a durable identity or returned-array index.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "sourceOccurrenceIndex",
+          "forms",
+          "content"
         ]
       },
       "ExplanationOptions": {
@@ -10889,6 +11659,13 @@
             "description": "The representative window excludes preceding block text.",
             "type": "boolean"
           },
+          "contentRanges": {
+            "description": "Positions of this reported match in an available returned body, not\noffsets in this clipped window. Empty when the body is unavailable.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/ExplanationContentRange"
+            }
+          },
           "matchEndChar": {
             "description": "Exclusive end of the complete match in text, in Unicode scalars.",
             "type": "integer",
@@ -10923,6 +11700,7 @@
           "text",
           "matchStartChar",
           "matchEndChar",
+          "contentRanges",
           "clippedBefore",
           "clippedAfter"
         ]

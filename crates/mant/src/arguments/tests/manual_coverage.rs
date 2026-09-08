@@ -85,7 +85,11 @@ fn check_manual(command: &mut clap::Command, manual: &str) -> Result<(), String>
             let direct = result
                 .evidence
                 .iter()
-                .filter(|e| e.bases.contains(&EvidenceBasis::Name))
+                .filter(|e| {
+                    e.bases
+                        .iter()
+                        .any(|basis| matches!(basis, EvidenceBasis::Name { .. }))
+                })
                 .collect::<Vec<_>>();
             let [evidence] = direct.as_slice() else {
                 return Err(format!(

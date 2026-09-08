@@ -297,7 +297,12 @@ fn explanation_preserves_history_builtin_and_nested_value_as_independent_evidenc
     let named = result
         .evidence
         .iter()
-        .filter(|evidence| evidence.bases.contains(&mant_protocol::EvidenceBasis::Name))
+        .filter(|evidence| {
+            evidence
+                .bases
+                .iter()
+                .any(|basis| matches!(basis, mant_protocol::EvidenceBasis::Name { .. }))
+        })
         .collect::<Vec<_>>();
     for role in [mant_ir::EntryKind::Command, mant_ir::EntryKind::Value] {
         assert!(

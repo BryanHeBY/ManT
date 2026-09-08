@@ -3,8 +3,11 @@ mod collect;
 mod literal;
 mod location;
 pub use location::resolve_explanation_block;
+mod details;
+mod matches;
 mod materialize;
 mod plan;
+mod positions;
 mod preview;
 mod relations;
 mod scoped;
@@ -180,6 +183,7 @@ struct Candidate<'a> {
     block_path: Option<String>,
     source: Option<SourceSpan>,
     bases: Vec<EvidenceBasis>,
+    matched: matches::MatchPlan,
     hits: Vec<preview::LiteralHit<'a>>,
 }
 

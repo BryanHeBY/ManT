@@ -46,6 +46,53 @@ impl ContentEntry<'_> {
     }
 }
 
+/// Borrowed serialization of exactly the same single-owner block as `content()`.
+/// Copy-budget checks can measure it without first cloning a large description.
+impl serde::Serialize for ContentEntry<'_> {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeMap as _;
+        let mut output = serializer.serialize_map(None)?;
+        let (layout, source) = match self.container {
+            Block::List {
+                kind,
+                compact,
+                items,
+                layout,
+                source,
+            } => {
+                output.serialize_entry("type", "list")?;
+                output.serialize_entry("kind", &kind.for_excerpt(self.item_index))?;
+                if *compact {
+                    output.serialize_entry("compact", compact)?;
+                }
+                output.serialize_entry("items", std::slice::from_ref(&items[self.item_index]))?;
+                (layout, source)
+            }
+            Block::DefinitionList {
+                items,
+                compact,
+                layout,
+                source,
+            } => {
+                output.serialize_entry("type", "definition-list")?;
+                output.serialize_entry("items", std::slice::from_ref(&items[self.item_index]))?;
+                if *compact {
+                    output.serialize_entry("compact", compact)?;
+                }
+                (layout, source)
+            }
+            _ => unreachable!("entry containers are lists"),
+        };
+        if !layout.is_empty() {
+            output.serialize_entry("layout", layout)?;
+        }
+        if let Some(source) = source {
+            output.serialize_entry("source", source)?;
+        }
+        output.end()
+    }
+}
+
 /// Same semantic pre-order as `SemanticIndex`, with source presentation retained.
 pub(crate) fn content_entries(blocks: &[Block]) -> Vec<ContentEntry<'_>> {
     let mut entries = Vec::new();
@@ -162,4 +209,26 @@ fn collect_owner<'a>(
     ancestors.push(item);
     collect_scope(item.blocks(), &indices, ancestors, output);
     ancestors.pop();
+}
+
+#[cfg(test)]
+mod budget_tests {
+    #[test]
+    fn borrowed_budget_shape_equals_the_owned_original_excerpt() {
+        let content =
+            crate::query_roff_bytes(include_bytes!("../../tests/fixtures/entry-presentation.1"))
+                .unwrap();
+        let document = content.document.unwrap();
+        let mut checked = 0;
+        for section in &document.sections {
+            for entry in super::content_entries(&section.blocks) {
+                assert_eq!(
+                    serde_json::to_value(&entry).unwrap(),
+                    serde_json::to_value(entry.content()).unwrap()
+                );
+                checked += 1;
+            }
+        }
+        assert!(checked >= 2);
+    }
 }

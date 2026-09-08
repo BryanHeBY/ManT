@@ -130,6 +130,19 @@ same budget, in that order. Clipping is not omission; an omitted window sets
 check `outcome`, source coverage, truncation and diagnostics separately.
 `semanticsComplete` is validation coverage, not exhaustive recall.
 
+Name/Form bases retain bounded matched spellings and occurrences, not just a
+unit discriminator; Identity bases identify the matched outline fields.
+`ExplanationEntry::name_bindings` is the independent, owner-local ordinary-name
+projection. Form and content locations use half-open safe-text Unicode scalars,
+with typed definition-term roots and response-relative paths. Consumers can
+resolve them using `ExplanationContentRange::resolve` and
+`ExplanationFormRange::resolve` after deserialization, without the source document.
+Invalid locations are ignored rather than rediscovered by text searching.
+The separate `match_details_omitted` and `name_bindings_omitted` flags report
+bounded detail loss, independently of complete body/metadata omission. Limits
+are 32 match records, 32 ordinary bindings, 32 occurrences, 32 fragments per
+occurrence/domain and 1,024 fragments per owner, all within the copy budget.
+
 `mant-protocol` deliberately reuses the semantic `Block`, `Section`, `Inline`,
 `EntryFacts`, `DocumentAddress`, source, metadata, diagnostic, and tldr
 types from `mant-ir`. Those types form the wire-bearing semantic subset: a

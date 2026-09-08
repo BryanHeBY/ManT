@@ -12,6 +12,18 @@ that crate was not published for that change.
 
 ## Unreleased
 
+### Explanation match locations (unreleased v0.11)
+
+- Name/Form evidence now carries actual matched spellings and bounded source
+  occurrences; Identity evidence names its matched fields. Ordinary name bindings
+  are independent of query matches. Typed scalar locations resolve against the
+  returned forms/body, including definition terms and remapped single-item excerpts.
+- New required detail-omission flags, preview content locations and bounded
+  metadata replace unit Name/Form/Identity payloads in the unpublished v0.11
+  family. Clients must regenerate against that schema; no legacy shapes are accepted.
+  Optional details count toward the existing copy budget and can make body
+  omission happen earlier without changing classification or owner pagination.
+
 ### Shared entry presentation
 
 - Full/node CLI text now styles source-bound spans through the shared block

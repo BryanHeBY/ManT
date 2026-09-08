@@ -23,6 +23,11 @@ fn independent_evidence_contract_preserves_ordinary_owners_and_omission_state() 
     assert!(result.evidence[0].content_omitted);
     assert_eq!(serde_json::to_value(result).unwrap(), expected);
     for invalid in [
+        r#"{"kind":"name"}"#,
+        r#"{"kind":"form"}"#,
+        r#"{"kind":"identity"}"#,
+        r#"{"kind":"name","matches":[],"extra":true}"#,
+        r#"{"kind":"identity","fields":["title"]}"#,
         r#"{"kind":"literal","extra":true}"#,
         r#"{"kind":"related","from":"a","declarations":["b"],"extra":true}"#,
     ] {
@@ -35,7 +40,13 @@ fn independent_evidence_contract_preserves_ordinary_owners_and_omission_state() 
 #[test]
 fn classified_explanations_have_required_closed_shapes() {
     let expected: Value = serde_json::from_str(EXPLANATION).unwrap();
-    for field in ["class", "previews", "previewsOmitted"] {
+    for field in [
+        "class",
+        "previews",
+        "previewsOmitted",
+        "matchDetailsOmitted",
+        "nameBindingsOmitted",
+    ] {
         let mut invalid = expected.clone();
         invalid["evidence"][0]
             .as_object_mut()

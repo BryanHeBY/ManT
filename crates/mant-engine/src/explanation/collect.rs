@@ -1,5 +1,5 @@
 //! One source-order walk assigns real owners and finite literal support.
-use super::{Candidate, LocatedNode, ResolvedContent, is_identity, same};
+use super::{Candidate, LocatedNode, ResolvedContent, is_identity};
 use super::{plan::Candidates, preview::LiteralHit};
 use mant_ir::{Block, EntryOwner, Section};
 use mant_protocol::EvidenceBasis;
@@ -66,35 +66,38 @@ impl<'a> Scan<'a, '_> {
         };
         self.orders[index] = self.next_order;
         self.next_order += 1;
-        let facts = owner.facts().expect("indexed semantic owner");
-        let mut bases = Vec::new();
         let LocatedNode::Entry { entry, .. } = &self.located[index] else {
             unreachable!("owner location")
         };
-        if entry
-            .names
-            .iter()
-            .any(|name| same(name, self.query, facts.case))
-        {
-            bases.push(EvidenceBasis::Name);
-        }
-        if owner.forms().is_some_and(|forms| {
-            forms
-                .iter()
-                .any(|form| same(&crate::inline::plain_text(form), self.query, facts.case))
-        }) {
-            bases.push(EvidenceBasis::Form);
-        }
+        let (matched, mut bases) =
+            super::matches::MatchPlan::collect(owner, entry.names, self.query);
         if is_identity(&self.located[index], self.query) {
-            bases.push(EvidenceBasis::Identity);
+            let mut fields = Vec::new();
+            if self.located[index].id() == self.query {
+                fields.push(mant_protocol::ExplanationIdentityField::Id);
+            }
+            if self
+                .query
+                .parse::<mant_ir::OutlinePath>()
+                .is_ok_and(|path| &path == self.located[index].path())
+            {
+                fields.push(mant_protocol::ExplanationIdentityField::Path);
+            }
+            bases.push(EvidenceBasis::Identity { fields });
         }
         if !bases.is_empty() {
-            self.add_owner(index, bases, Vec::new());
+            self.add_owner(index, bases, Vec::new(), matched);
         }
         Some(index)
     }
 
-    fn add_owner(&mut self, index: usize, bases: Vec<EvidenceBasis>, hits: Vec<LiteralHit<'a>>) {
+    fn add_owner(
+        &mut self,
+        index: usize,
+        bases: Vec<EvidenceBasis>,
+        hits: Vec<LiteralHit<'a>>,
+        matched: super::matches::MatchPlan,
+    ) {
         self.candidates.insert(Candidate {
             order: self.orders[index],
             located: Some(index),
@@ -103,6 +106,7 @@ impl<'a> Scan<'a, '_> {
             block_path: None,
             source: self.located[index].source(),
             bases,
+            matched,
             hits,
         });
     }
@@ -163,7 +167,12 @@ impl<'a> Scan<'a, '_> {
                         range,
                     };
                     if let Some(owner) = current {
-                        self.add_owner(owner, vec![EvidenceBasis::Literal], vec![hit]);
+                        self.add_owner(
+                            owner,
+                            vec![EvidenceBasis::Literal],
+                            vec![hit],
+                            super::matches::MatchPlan::default(),
+                        );
                     } else {
                         self.candidates.insert(Candidate {
                             order,
@@ -173,6 +182,7 @@ impl<'a> Scan<'a, '_> {
                             block_path: Some(block_path),
                             source: crate::block::block_source(block),
                             bases: vec![EvidenceBasis::Literal],
+                            matched: super::matches::MatchPlan::default(),
                             hits: vec![hit],
                         });
                     }

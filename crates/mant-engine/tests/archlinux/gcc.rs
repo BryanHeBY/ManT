@@ -12,7 +12,12 @@ fn explanation_retains_both_help_definitions_and_the_qualified_tail() {
     let named = result
         .evidence
         .iter()
-        .filter(|evidence| evidence.bases.contains(&mant_protocol::EvidenceBasis::Name))
+        .filter(|evidence| {
+            evidence
+                .bases
+                .iter()
+                .any(|basis| matches!(basis, mant_protocol::EvidenceBasis::Name { .. }))
+        })
         .collect::<Vec<_>>();
     assert_eq!(
         named.len(),

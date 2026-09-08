@@ -1,9 +1,9 @@
 //! Materialize only the selected page: facts, previews, then atomic original body.
 use super::{Candidate, ExplanationQuery, LocatedNode, plan::CollectionPlan};
-use mant_ir::{DOCUMENT_ROOT_ID, EntryOwner};
+use mant_ir::DOCUMENT_ROOT_ID;
 use mant_protocol::{
-    ExplanationContent, ExplanationEntry, ExplanationEvidence, ExplanationOutcome,
-    ExplanationSchema, OutlineNodeReference, OutlineTrail, QueryExplanation,
+    ExplanationContent, ExplanationEvidence, ExplanationOutcome, ExplanationSchema,
+    OutlineNodeReference, OutlineTrail, QueryExplanation,
 };
 
 pub(super) fn response(
@@ -86,28 +86,26 @@ pub(super) fn materialize(
 ) -> ExplanationEvidence {
     let node = candidate.located.or(candidate.section).map(|i| &located[i]);
     let outline = node.map_or_else(root_trail, trail);
-    let mut entry = None;
-    let mut details_omitted = false;
-    if let Some(index) = candidate.located {
-        let owner = super::owner(&located[index]).expect("entry location");
-        let facts = owner.facts().expect("entry facts");
-        let details = ExplanationEntry {
-            kind: facts.kind,
-            case: facts.case,
-            names: owner.validated_names().unwrap_or_default().to_vec(),
-            forms: owner.forms().unwrap_or_default().into_owned(),
-            alias_groups: owner.validated_alias_groups().unwrap_or_default().to_vec(),
-            alias_of: facts
-                .alias_of
-                .clone()
-                .filter(|_| !rejected_aliases.contains(&facts.id)),
-            value_domain: facts.value_domain.clone(),
-        };
-        if budget.take(&details) {
-            entry = Some(details);
-        } else {
-            details_omitted = true;
-        }
+    let owner = candidate
+        .located
+        .and_then(|index| super::owner(&located[index]));
+    let (mut bases, mut match_details_omitted) = super::details::matched(candidate, owner, budget);
+    let mut entry = owner.and_then(|owner| super::details::entry(owner, rejected_aliases, budget));
+    let details_omitted = owner.is_some() && entry.is_none();
+    let mut name_bindings_omitted = false;
+    let mut positions = super::positions::PositionBudget::default();
+    if let (Some(owner), Some(entry)) = (owner, entry.as_mut()) {
+        name_bindings_omitted = super::positions::ordinary(owner, entry, budget);
+        let (matched, names) = super::positions::attach(
+            owner,
+            &mut bases,
+            Some(entry),
+            super::positions::Domain::Forms,
+            budget,
+            &mut positions,
+        );
+        match_details_omitted |= matched;
+        name_bindings_omitted |= names;
     }
     let mut previews = Vec::new();
     let mut previews_omitted = false;
@@ -119,40 +117,95 @@ pub(super) fn materialize(
             previews_omitted = true;
         }
     }
-    let content = if let Some(index) = candidate.located {
-        let node = &located[index];
-        let owner = super::owner(node).expect("entry location");
-        let fits = match owner {
-            EntryOwner::List(item) => budget.take(item),
-            EntryOwner::Definition(item) => budget.take(item),
-        };
-        fits.then(|| match node {
-            LocatedNode::Entry { entry, .. } => ExplanationContent::Entry {
-                block: entry.content(),
-            },
-            LocatedNode::Section { .. } => unreachable!("indexed entry"),
-        })
-    } else {
-        candidate
-            .ordinary
-            .filter(|block| budget.take(*block))
-            .map(|block| ExplanationContent::Block {
-                block: block.clone(),
-            })
-    };
+    let content = copy_body(candidate, located, budget);
+    // Reserve and accept the complete body before committing any reference to
+    // it. Optional complete location domains consume only the remaining budget;
+    // no rollback/retry can leave a reference to a body that was later dropped.
+    if content.is_some() {
+        if let Some(owner) = owner {
+            let (matched, names) = super::positions::attach(
+                owner,
+                &mut bases,
+                entry.as_mut(),
+                super::positions::Domain::Content,
+                budget,
+                &mut positions,
+            );
+            match_details_omitted |= matched;
+            name_bindings_omitted |= names;
+        }
+        for preview in &mut previews {
+            let hit = candidate
+                .hits
+                .iter()
+                .find(|hit| hit.path == preview.block_path)
+                .expect("retained representative hit");
+            if let Some(range) = super::positions::preview_range(owner, hit) {
+                let ranges = vec![range];
+                if positions.remaining() > 0 && budget.take_growth(&preview.content_ranges, &ranges)
+                {
+                    preview.content_ranges = ranges;
+                    positions.charge(1);
+                } else {
+                    match_details_omitted = true;
+                }
+            } else {
+                match_details_omitted = true;
+            }
+        }
+    }
     ExplanationEvidence {
         class: candidate.class(),
         ordinal,
         outline,
         block_path: candidate.block_path.clone(),
         source: candidate.source,
-        bases: candidate.bases.clone(),
+        bases,
         entry,
         previews,
         previews_omitted,
         details_omitted,
+        match_details_omitted,
+        name_bindings_omitted,
         content_omitted: content.is_none(),
         content,
+    }
+}
+
+fn copy_body(
+    candidate: &Candidate<'_>,
+    located: &[LocatedNode<'_>],
+    budget: &mut Budget,
+) -> Option<ExplanationContent> {
+    #[derive(serde::Serialize)]
+    struct Body<'a, T: serde::Serialize> {
+        kind: &'static str,
+        block: &'a T,
+    }
+    if let Some(index) = candidate.located {
+        match &located[index] {
+            LocatedNode::Entry { entry, .. } => budget
+                .take(&Body {
+                    kind: "entry",
+                    block: entry,
+                })
+                .then(|| ExplanationContent::Entry {
+                    block: entry.content(),
+                }),
+            LocatedNode::Section { .. } => unreachable!("indexed entry"),
+        }
+    } else {
+        candidate
+            .ordinary
+            .filter(|block| {
+                budget.take(&Body {
+                    kind: "block",
+                    block: *block,
+                })
+            })
+            .map(|block| ExplanationContent::Block {
+                block: block.clone(),
+            })
     }
 }
 fn trail(node: &LocatedNode<'_>) -> OutlineTrail {
@@ -209,7 +262,30 @@ fn root_trail() -> OutlineTrail {
 
 pub(super) struct Budget(pub usize);
 impl Budget {
+    pub(super) fn take_growth(
+        &mut self,
+        old: &impl serde::Serialize,
+        new: &impl serde::Serialize,
+    ) -> bool {
+        let Some(old_size) = Self::size(old, usize::MAX) else {
+            return false;
+        };
+        let Some(new_size) = Self::size(new, old_size.saturating_add(self.0)) else {
+            return false;
+        };
+        self.0 = self.0.saturating_sub(new_size.saturating_sub(old_size));
+        true
+    }
+
     pub(super) fn take(&mut self, value: &impl serde::Serialize) -> bool {
+        let Some(size) = Self::size(value, self.0) else {
+            return false;
+        };
+        self.0 -= size;
+        true
+    }
+
+    fn size(value: &impl serde::Serialize, limit: usize) -> Option<usize> {
         struct Count {
             remaining: usize,
         }
@@ -225,11 +301,10 @@ impl Budget {
                 Ok(())
             }
         }
-        let mut counter = Count { remaining: self.0 };
+        let mut counter = Count { remaining: limit };
         if serde_json::to_writer(&mut counter, value).is_err() {
-            return false;
+            return None;
         }
-        self.0 = counter.remaining;
-        true
+        Some(limit - counter.remaining)
     }
 }

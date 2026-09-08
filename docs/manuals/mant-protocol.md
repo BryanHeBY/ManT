@@ -1314,6 +1314,37 @@ Empty categories have no headings, but their summary counts remain; direct
 entries outside this page are explicitly distinguished from zero collected
 direct entries. Neither case proves that a command lacks the queried option.
 
+Name bases carry `matches` with actual authored `name` spellings; Form bases
+carry `matches` with `sourceFormIndex` and complete `text`. Identity bases carry
+`fields` (`id`, `path`), whose values are in `outline`. Empty match details with
+`matchDetailsOmitted: true` still mean the basis matched, not no evidence.
+`entry.nameBindings` independently projects ordinary names by `nameIndex`;
+it never declares an unqueried name to be a match.
+
+Name/Form matches and ordinary bindings carry ordered `occurrences`, each with
+a snapshot `sourceOccurrenceIndex` and independent `forms`/`content` arrays.
+Form ranges address returned `entry.forms[formIndex]`. Content ranges use
+`kind: block-text` or `definition-term`, relative to returned `content.block`.
+Typed list-item/definition-item/table-cell steps followed by block steps locate
+leaves; definition terms separately specify `itemIndex` and `termIndex`.
+All `startChar`/`endChar` ranges are half-open safe-text Unicode scalars before
+layout or escaping. A single-item excerpt remaps the original item to index 0.
+Preview `contentRanges` supplement the original absolute provenance coordinates.
+No reference targets a body or metadata omitted from the response.
+
+Per evidence, Name/Form details share a 32-record limit; ordinary name bindings
+have a separate 32-record limit. Each record retains at most 32 occurrences,
+each occurrence at most 32 fragments per domain; all retained location fragments
+including preview mappings share a 1,024-fragment limit. A multi-fragment
+occurrence is retained or omitted whole within each domain. `matchDetailsOmitted`
+and `nameBindingsOmitted` independently report limits on applicable facts and
+locations; both contribute to content truncation. Returned names/forms themselves
+are never shortened by these optional binding limits. Self-contained match facts
+precede entry metadata/bindings, previews and the atomic body in the shared copy
+budget. Body references are committed only after the whole body is accepted.
+For complete field definitions and coordinate examples see the
+[explanation architecture](../architecture/semantic-explanations.md).
+
 Match bases are `name` (exact documented spelling), `form` (complete authored
 form), `identity` (exact entry ID/path), `literal` (ordinary IR text),
 `alias-group` (validated local group members), and `related` (starting owner

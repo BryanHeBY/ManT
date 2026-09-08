@@ -113,6 +113,9 @@ pub struct ExplanationPreview {
     pub match_start_char: u32,
     /// Exclusive end of the complete match in text, in Unicode scalars.
     pub match_end_char: u32,
+    /// Positions of this reported match in an available returned body, not
+    /// offsets in this clipped window. Empty when the body is unavailable.
+    pub content_ranges: Vec<super::ExplanationContentRange>,
     /// The representative window excludes preceding block text.
     pub clipped_before: bool,
     /// The representative window excludes following block text.

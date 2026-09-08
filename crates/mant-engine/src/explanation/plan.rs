@@ -22,7 +22,9 @@ impl Candidate<'_> {
         if self.bases.iter().any(|b| {
             matches!(
                 b,
-                EvidenceBasis::Name | EvidenceBasis::Form | EvidenceBasis::Identity
+                EvidenceBasis::Name { .. }
+                    | EvidenceBasis::Form { .. }
+                    | EvidenceBasis::Identity { .. }
             )
         }) {
             EvidenceClass::DirectEntry

@@ -1,10 +1,14 @@
 //! Bounded semantic evidence, deliberately separate from strict navigation.
 mod classification;
+mod locations;
+mod matches;
 use crate::{OutlineTrail, Producer};
 pub use classification::*;
+pub use locations::ExplanationTextRoot;
 use mant_ir::{
     Diagnostic, DocumentAddress, EntryKind, Inline, NameCase, NodeId, SourceSpan, ValueDomain,
 };
+pub use matches::*;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -100,13 +104,22 @@ pub enum ExplanationOutcome {
 )]
 pub enum EvidenceBasis {
     /// Exact documented name under the owner's declared case policy.
-    Name,
+    Name {
+        /// Exact matched spellings and their available projected occurrences.
+        matches: Vec<ExplanationNameMatch>,
+    },
     /// Complete authored form under the owner's declared case policy.
-    Form,
+    Form {
+        /// Exact complete forms accepted by the collector, not frontend guesses.
+        matches: Vec<ExplanationFormMatch>,
+    },
     /// Literal visible content with finite token boundaries, always case-sensitive.
     Literal,
     /// Exact entry ID or structural coordinate (no alias/shorthand resolver).
-    Identity,
+    Identity {
+        /// Matched outline fields; values are carried by the same evidence.
+        fields: Vec<ExplanationIdentityField>,
+    },
     /// A directly matched name participates in a validated explicit alias group.
     AliasGroup {
         /// Exact member spellings; there is no canonical first member.
@@ -123,7 +136,8 @@ pub enum EvidenceBasis {
 
 // Serde's internally tagged unit variants ignore extra fields, even with
 // deny_unknown_fields. Empty struct variants close the deserialization boundary
-// while retaining the convenient public unit-variant API and serialized shape.
+// for Literal. Name/Form/Identity require their new payloads; the old unit
+// shapes are not accepted as apparently complete match records.
 #[derive(Deserialize)]
 #[serde(
     tag = "kind",
@@ -132,10 +146,16 @@ pub enum EvidenceBasis {
     deny_unknown_fields
 )]
 enum ClosedEvidenceBasis {
-    Name {},
-    Form {},
+    Name {
+        matches: Vec<ExplanationNameMatch>,
+    },
+    Form {
+        matches: Vec<ExplanationFormMatch>,
+    },
     Literal {},
-    Identity {},
+    Identity {
+        fields: Vec<ExplanationIdentityField>,
+    },
     AliasGroup {
         members: Vec<String>,
     },
@@ -148,10 +168,10 @@ enum ClosedEvidenceBasis {
 impl<'de> Deserialize<'de> for EvidenceBasis {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         Ok(match ClosedEvidenceBasis::deserialize(deserializer)? {
-            ClosedEvidenceBasis::Name {} => Self::Name,
-            ClosedEvidenceBasis::Form {} => Self::Form,
+            ClosedEvidenceBasis::Name { matches } => Self::Name { matches },
+            ClosedEvidenceBasis::Form { matches } => Self::Form { matches },
             ClosedEvidenceBasis::Literal {} => Self::Literal,
-            ClosedEvidenceBasis::Identity {} => Self::Identity,
+            ClosedEvidenceBasis::Identity { fields } => Self::Identity { fields },
             ClosedEvidenceBasis::AliasGroup { members } => Self::AliasGroup { members },
             ClosedEvidenceBasis::Related { from, declarations } => {
                 Self::Related { from, declarations }
@@ -172,6 +192,8 @@ pub struct ExplanationEntry {
     pub names: Vec<String>,
     /// Original visible forms projected through validated content bindings.
     pub forms: Vec<Vec<Inline>>,
+    /// Ordinary validated name locations, independent of the actual query match.
+    pub name_bindings: Vec<ExplanationNameBinding>,
     /// Explicit same-owner equivalence groups.
     pub alias_groups: Vec<Vec<String>>,
     /// Explicit independent same-document subject relation.
@@ -184,6 +206,8 @@ pub struct ExplanationEntry {
 
 /// One independently addressable evidence owner.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+// Independent payload omissions can coexist; they are not exclusive states.
+#[allow(clippy::struct_excessive_bools)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ExplanationEvidence {
     /// Exclusive category determined before pagination or content copying.
@@ -213,6 +237,10 @@ pub struct ExplanationEvidence {
     pub content: Option<ExplanationContent>,
     /// Original forms/facts were too large for the remaining copy budget.
     pub details_omitted: bool,
+    /// Some actual Name/Form records or applicable matched positions were omitted.
+    pub match_details_omitted: bool,
+    /// Some ordinary display bindings applicable to returned targets were omitted.
+    pub name_bindings_omitted: bool,
     /// Original body was too large for the remaining copy budget.
     pub content_omitted: bool,
 }
@@ -222,7 +250,11 @@ impl ExplanationEvidence {
     /// omitted by the shared copy budget (not ordinary window clipping).
     #[must_use]
     pub const fn has_omitted_content(&self) -> bool {
-        self.content_omitted || self.details_omitted || self.previews_omitted
+        self.content_omitted
+            || self.details_omitted
+            || self.previews_omitted
+            || self.match_details_omitted
+            || self.name_bindings_omitted
     }
 }
 

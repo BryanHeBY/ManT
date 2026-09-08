@@ -37,10 +37,12 @@
       },
       "bases": [
         {
-          "kind": "name"
+          "kind": "name",
+          "matches": [{"name":"--help","occurrences":[{"sourceOccurrenceIndex":0,"forms":[{"formIndex":0,"startChar":0,"endChar":6}],"content":[]}]}]
         },
         {
-          "kind": "form"
+          "kind": "form",
+          "matches": [{"sourceFormIndex":0,"text":"--help","occurrences":[{"sourceOccurrenceIndex":0,"forms":[{"formIndex":0,"startChar":0,"endChar":6}],"content":[]}]}]
         }
       ],
       "entry": {
@@ -57,9 +59,12 @@
             }
           ]
         ],
-        "aliasGroups": []
+        "aliasGroups": [],
+        "nameBindings": [{"nameIndex":0,"occurrences":[{"sourceOccurrenceIndex":0,"forms":[{"formIndex":0,"startChar":0,"endChar":6}],"content":[]}]}]
       },
       "detailsOmitted": false,
+      "matchDetailsOmitted": false,
+      "nameBindingsOmitted": false,
       "contentOmitted": true,
       "class": "direct-entry",
       "previews": [],
@@ -94,6 +99,8 @@
         }
       },
       "detailsOmitted": false,
+      "matchDetailsOmitted": false,
+      "nameBindingsOmitted": false,
       "contentOmitted": false,
       "class": "context-mention",
       "previews": [
@@ -103,7 +110,8 @@
           "matchStartChar": 4,
           "matchEndChar": 10,
           "clippedBefore": false,
-          "clippedAfter": false
+          "clippedAfter": false,
+          "contentRanges": [{"kind":"block-text","path":[],"startChar":4,"endChar":10}]
         }
       ],
       "previewsOmitted": false

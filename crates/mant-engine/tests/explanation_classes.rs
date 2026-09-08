@@ -123,9 +123,9 @@ fn empty_names_still_have_a_real_owner_and_invalid_bindings_never_match_names() 
     let result = explain_query(&content, &query()).unwrap();
     assert!(!result.semantics_complete);
     assert_eq!(result.evidence[0].class, EvidenceClass::DirectEntry);
-    assert_eq!(
-        result.evidence[0].bases,
-        [EvidenceBasis::Form, EvidenceBasis::Literal]
+    assert!(
+        matches!(&result.evidence[0].bases[..], [EvidenceBasis::Form { matches }, EvidenceBasis::Literal]
+        if matches.len() == 1 && matches[0].text == "--help")
     );
     assert!(result.evidence[0].entry.as_ref().unwrap().names.is_empty());
     let mut content = mant_engine::query_roff_bytes(
