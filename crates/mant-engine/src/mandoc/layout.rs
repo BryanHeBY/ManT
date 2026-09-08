@@ -9,15 +9,19 @@ use mant_ir::{Block, LayoutHint};
 
 use crate::block::{block_layout, block_layout_mut};
 
+mod distance;
+use distance::Distance;
+
 const MAX_INDENT_COLUMNS: u16 = 4096;
 
 impl super::LoweringContext<'_> {
     pub(super) fn nested_indent(&self, node: &Node, parent: u16, extra: u16) -> u16 {
-        let sum = parent.saturating_add(extra);
-        if sum > MAX_INDENT_COLUMNS {
+        let (sum, bounded) =
+            Distance::cells(i32::from(parent)).add(Distance::cells(i32::from(extra)));
+        if bounded || parent > MAX_INDENT_COLUMNS || extra > MAX_INDENT_COLUMNS {
             self.warn_indent(node);
         }
-        sum.min(MAX_INDENT_COLUMNS)
+        u16::try_from(sum.columns()).unwrap_or(MAX_INDENT_COLUMNS)
     }
 
     pub(super) fn display_offset(&self, node: &Node) -> u16 {
@@ -190,36 +194,7 @@ pub(super) fn horizontal_distance_columns(argument: &str) -> Option<usize> {
     if argument.starts_with(['+', '-']) {
         return None;
     }
-    let number_end = argument
-        .find(|character: char| character.is_ascii_alphabetic())
-        .unwrap_or(argument.len());
-    let scale = argument[..number_end].parse::<f64>().ok()?;
-    if !scale.is_finite() || scale < 0.0 {
-        return None;
-    }
-    let unit = argument[number_end..].trim();
-    let columns = match unit {
-        "u" => scale / 24.0,
-        "c" => scale * 10.0 / 2.54,
-        "f" => scale * 65_536.0 / 24.0,
-        "i" => scale * 10.0,
-        "M" => scale / 100.0,
-        "P" | "v" => scale * 5.0 / 3.0,
-        "p" => scale * 5.0 / 36.0,
-        // Bare man(7) widths default to ens. Character terminals give both
-        // ems and ens one display column.
-        "" | "m" | "n" => scale,
-        _ => return None,
-    };
-    // Real tag widths are tiny. Bounding the conversion also mirrors
-    // libmandoc's refusal of values that cannot fit its signed margin state,
-    // while avoiding architecture-dependent float-to-integer casts.
-    for rounded in 0_u16..=MAX_INDENT_COLUMNS {
-        if columns < f64::from(rounded) + 0.5 {
-            return Some(usize::from(rounded));
-        }
-    }
-    None
+    usize::try_from(Distance::parse(argument)?.columns()).ok()
 }
 
 /// Construct a zero-spacing layout at a semantic indentation level.
