@@ -147,7 +147,7 @@ fn arguments<'a>(tokens: impl Iterator<Item = &'a str>) -> bool {
         if token.contains('\0')
             && token
                 .chars()
-                .all(|ch| ch == '\0' || ",:/=._-+[]{}()".contains(ch))
+                .all(|ch| ch == '\0' || ch.is_ascii_punctuation())
         {
             continue;
         }

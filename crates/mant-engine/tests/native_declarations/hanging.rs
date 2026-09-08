@@ -234,6 +234,16 @@ PATH_BODY
 .RS 4
 ASSIGNMENT_BODY
 .RE
+.PP
+\fB--sd-id\fR \fIname\fR[\fB@\fR\fIdigits\fR]
+.RS 4
+IDENTIFIER_BODY
+.RE
+.PP
+\fB--trailer\fR \fI<token>\fR[(\fB=\fR|\fB:\fR)\fI<value>\fR]
+.RS 4
+TRAILER_BODY
+.RE
 .SH ENVIRONMENT
 .PP
 .B GIT_CONFIG_COUNT, GIT_CONFIG_KEY_<n>, GIT_CONFIG_VALUE_<n>
@@ -254,6 +264,8 @@ PROSE_BODY
         ("--map-users", 2, "MAP_BODY"),
         ("--sd-param", 1, "ASSIGNMENT_BODY"),
         ("GIT_CONFIG_COUNT", 1, "ENV_BODY"),
+        ("--sd-id", 1, "IDENTIFIER_BODY"),
+        ("--trailer", 1, "TRAILER_BODY"),
     ] {
         let result = mant_engine::select_explanation(&content, query).unwrap();
         assert_eq!(
