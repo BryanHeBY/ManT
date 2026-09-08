@@ -1,0 +1,655 @@
+{
+  "recordVersion": 1,
+  "producerCommit": "4d7fc0edba3ca25ef856d940aa56a532284fe974",
+  "recordedAt": "2026-09-08T17:28:25.894Z",
+  "scope": "Explain R07-R10 followed by source geometry H0-H5 / A01-A18. Local Linux/WSL verification, not a cross-platform or 45,036-page sweep.",
+  "sources": {
+    "mandoc": {
+      "reference": "CVS HEAD snapshot",
+      "url": "https://cvsweb.bsd.lv/mandoc/",
+      "files": [
+        {
+          "path": "man_term.c",
+          "revision": "1.250",
+          "sha256": "2b3e57e7052e9a1346715a8228595b2ddb2309fe52545b684ed50f8fe87dd197"
+        },
+        {
+          "path": "mdoc_term.c",
+          "revision": "1.388",
+          "sha256": "dcea0f8b2eaad6d8bc1661693d3b9940f8dbc37cf31d1004706f8164eb6df89b"
+        },
+        {
+          "path": "term.c",
+          "revision": "1.295",
+          "sha256": "9517a9c29c2693dc75f13a071e09b80d009d04c232dd99f20e2757e7539ee595"
+        },
+        {
+          "path": "roff_term.c",
+          "revision": "1.27",
+          "sha256": "3b05b226f57780ff91ed07d8db29c2d2d99ca7a8494c8e71255fed9452bd6129"
+        }
+      ],
+      "inspectedMechanisms": [
+        "print_bvspace predecessor traversal through RS",
+        "mt->offset and prevailing tag width",
+        "pre/post IP/TP and empty-head flush",
+        "HP first-line/literal transitions",
+        "mdoc term/body/offset policy",
+        "term_hspan basic-unit quantization"
+      ]
+    },
+    "groff": {
+      "version": "1.24.1",
+      "role": "Independent behavior/source comparison, not an absolute formatting oracle"
+    },
+    "hostManuals": [
+      {
+        "name": "gcc(1)",
+        "compressedSha256": "df3b6a9da8c70559bb4df49050137faa0022fecae965674326ce4fe65d5488e8",
+        "sourceSha256": "f31a9ae03e8e20baad471d47c4e17391038d852e32719c101001da6eb52b3083"
+      },
+      {
+        "name": "btrfs-subvolume(8)",
+        "compressedSha256": "c00ade46fa983503b4fe2f0457f719142d00c2e4a09a9d69054538a2032d7a78",
+        "sourceSha256": "7aad0096c8fa69c22b8487f45ace7e38f820d4b7dc1a5877b2e95ebd9a28ae96"
+      }
+    ]
+  },
+  "verification": {
+    "completeLocalGate": {
+      "command": "bash scripts/check.sh",
+      "result": "passed"
+    },
+    "allFeatures": {
+      "command": "cargo test --locked --workspace --all-features --no-fail-fast --quiet",
+      "result": "passed"
+    },
+    "sourceBoundQueries": {
+      "command": "python3 scripts/audit-roff-semantics.py --profiler target/debug/examples/roff_semantic_profile --query-gold tests/fixtures/roff/ENTRY_QUERY_GOLD.json --verify",
+      "passed": 199,
+      "sourcePaths": 125,
+      "uniqueSourceIdentities": 122
+    },
+    "fixtures": {
+      "pages": 51,
+      "projection": {
+        "clean": 51,
+        "excerpts": 134
+      },
+      "targets": {
+        "clean": 51
+      },
+      "semantics": {
+        "clean": 51
+      },
+      "structure": {
+        "clean": 51
+      },
+      "layout": {
+        "clean": 49,
+        "review": 1,
+        "referenceFailure": 1
+      },
+      "fidelity": {
+        "clean": 46,
+        "review": 4,
+        "referenceFailure": 1
+      },
+      "ledgerComparison": "Layout, fidelity and structure CSVs are byte-identical to the checked-in reviewed ledgers; no new candidates. Macro-recursion intentionally exceeds groff's recursion limit."
+    },
+    "uiTests": 270,
+    "exclusions": [
+      "No native Windows/macOS run in this phase.",
+      "No new full-host or 45,036-source canonical sweep.",
+      "Formatter wrapping, justification, page furniture and documented source-preserving differences are not output equality assertions."
+    ]
+  },
+  "performance": {
+    "measurement": "Release builds in repository target; one source/view profile and three CLI runs, not an alternating baseline benchmark. RSS samples are recorded without dropping the btrfs outlier; 0.00 seconds is timer resolution, not zero cost.",
+    "gcc": {
+      "stagesMs": {
+        "parse_ms": 274.304,
+        "indexes_ms": 18.181,
+        "logical_view_ms": 34.58
+      },
+      "resize": [
+        {
+          "width": 40,
+          "rows": 60566,
+          "milliseconds": 62.843
+        },
+        {
+          "width": 80,
+          "rows": 32117,
+          "milliseconds": 44.672
+        },
+        {
+          "width": 120,
+          "rows": 25753,
+          "milliseconds": 50.959
+        }
+      ],
+      "tokens": []
+    },
+    "btrfs": {
+      "stagesMs": {
+        "parse_ms": 3.075,
+        "indexes_ms": 0.214,
+        "logical_view_ms": 0.269
+      },
+      "resize": [
+        {
+          "width": 40,
+          "rows": 857,
+          "milliseconds": 0.925
+        },
+        {
+          "width": 80,
+          "rows": 495,
+          "milliseconds": 0.58
+        },
+        {
+          "width": 120,
+          "rows": 405,
+          "milliseconds": 0.535
+        }
+      ],
+      "tokens": [
+        {
+          "width": 40,
+          "row": 430,
+          "column": 3,
+          "text": "create [options]"
+        },
+        {
+          "width": 40,
+          "row": 432,
+          "column": 10,
+          "text": "Create subvolume(s)"
+        },
+        {
+          "width": 40,
+          "row": 452,
+          "column": 10,
+          "text": "Options"
+        },
+        {
+          "width": 40,
+          "row": 454,
+          "column": 10,
+          "text": "-i <qgroupid>"
+        },
+        {
+          "width": 40,
+          "row": 455,
+          "column": 17,
+          "text": "Add the newly"
+        },
+        {
+          "width": 40,
+          "row": 466,
+          "column": 3,
+          "text": "delete [options]"
+        },
+        {
+          "width": 80,
+          "row": 245,
+          "column": 3,
+          "text": "create [options]"
+        },
+        {
+          "width": 80,
+          "row": 246,
+          "column": 10,
+          "text": "Create subvolume(s)"
+        },
+        {
+          "width": 80,
+          "row": 258,
+          "column": 10,
+          "text": "Options"
+        },
+        {
+          "width": 80,
+          "row": 260,
+          "column": 10,
+          "text": "-i <qgroupid>"
+        },
+        {
+          "width": 80,
+          "row": 261,
+          "column": 17,
+          "text": "Add the newly"
+        },
+        {
+          "width": 80,
+          "row": 268,
+          "column": 3,
+          "text": "delete [options]"
+        },
+        {
+          "width": 120,
+          "row": 196,
+          "column": 3,
+          "text": "create [options]"
+        },
+        {
+          "width": 120,
+          "row": 197,
+          "column": 10,
+          "text": "Create subvolume(s)"
+        },
+        {
+          "width": 120,
+          "row": 206,
+          "column": 10,
+          "text": "Options"
+        },
+        {
+          "width": 120,
+          "row": 208,
+          "column": 10,
+          "text": "-i <qgroupid>"
+        },
+        {
+          "width": 120,
+          "row": 209,
+          "column": 17,
+          "text": "Add the newly"
+        },
+        {
+          "width": 120,
+          "row": 214,
+          "column": 3,
+          "text": "delete [options]"
+        }
+      ]
+    },
+    "cli": [
+      {
+        "operation": "gcc-outline",
+        "seconds": 0.28,
+        "peakRssKiB": 77936
+      },
+      {
+        "operation": "gcc-explain",
+        "seconds": 0.31,
+        "peakRssKiB": 77900
+      },
+      {
+        "operation": "btrfs-outline",
+        "seconds": 0,
+        "peakRssKiB": 9984
+      },
+      {
+        "operation": "btrfs-explain",
+        "seconds": 0,
+        "peakRssKiB": 10516
+      },
+      {
+        "operation": "gcc-outline",
+        "seconds": 0.29,
+        "peakRssKiB": 77968
+      },
+      {
+        "operation": "gcc-explain",
+        "seconds": 0.32,
+        "peakRssKiB": 77928
+      },
+      {
+        "operation": "btrfs-outline",
+        "seconds": 0,
+        "peakRssKiB": 10116
+      },
+      {
+        "operation": "btrfs-explain",
+        "seconds": 0,
+        "peakRssKiB": 10376
+      },
+      {
+        "operation": "gcc-outline",
+        "seconds": 0.29,
+        "peakRssKiB": 77972
+      },
+      {
+        "operation": "gcc-explain",
+        "seconds": 0.32,
+        "peakRssKiB": 77992
+      },
+      {
+        "operation": "btrfs-outline",
+        "seconds": 0,
+        "peakRssKiB": 10068
+      },
+      {
+        "operation": "btrfs-explain",
+        "seconds": 0,
+        "peakRssKiB": 121112
+      }
+    ]
+  },
+  "artifacts": {
+    "target/layout-query-gold-final.json": "eb0c09e0f6909869379e30feca6bf925b5610410f3f8e83e6928a24d564a090f",
+    "target/release/mant": "ce3eb3dabeeff022dbbf5c016796bb966ce5ff4b04dec2be602fe022738ec9f5",
+    "target/debug/mant": "f55736665bf370dc1a396152e3ab822a19557ece5cc7be3b20cfdbe36eb30417",
+    "target/debug/examples/roff_semantic_profile": "a25528c949966676b0edbbcb2d60525740b99d788628b98d4771ffe9f91814ec",
+    "target/release/examples/layout_profile": "8697a319d036f88715d007e17a0d589652cab9db1f99b54791c24a27dfb43440",
+    "target/layout-final-check.log": "27706cee601961285debba66c25c5fa405c8586b048f69751f1efa9555c841d6",
+    "target/layout-allfeatures-final.log": "5334b9c9faf6468fa62f6de88d0b7a7e75356f2bc506adc8222c874214fc2f83",
+    "target/layout-final-upstream-matrix-verified.json": "96bca74d06dc4109b726236ac59fb715aad751e1a85213d37006ab0f0928fe84",
+    "target/layout-acceptance-layout.json": "192f923e70a2a3c9e78bfcbd1d238edeee55cdba2d6882c40131ac8b62b1e7f2",
+    "target/layout-acceptance-fidelity.json": "99ce39e412f222d6d1c61ae513bf5fa92c4014c60f1e997b761e813109cfee91",
+    "target/layout-acceptance-structure.json": "4f6738efe9d4ea62a04ed8288c532f047188bba1aa6f7cfde2a509547e369d6e",
+    "tests/fixtures/roff/ENTRY_QUERY_GOLD.json": "5a53a655940d08fa78081a74d29b50245a7f9104161b391b082216729471b55f"
+  },
+  "probes": {
+    "license": "Original reduced regression inputs, Apache-2.0, not copied host manuals.",
+    "commands": {
+      "mant": [
+        "mant",
+        "--input",
+        "-",
+        "--input-format",
+        "roff",
+        "--display",
+        "direct",
+        "--color",
+        "never"
+      ],
+      "mandoc": [
+        "mandoc",
+        "-Tutf8",
+        "-O",
+        "width=80"
+      ],
+      "groff": [
+        "groff",
+        "-k",
+        "-Tutf8",
+        "-man",
+        "-rLL=80n",
+        "-rLT=80n"
+      ],
+      "groffMdoc": "Append -mdoc for names beginning with mdoc; GROFF_NO_SGR=1. Feed source on stdin and clean output through col -b -x."
+    },
+    "review": "All 46 inputs completed in each renderer. Compare relative source columns and explicit gaps, excluding native page margin/footer and soft wrapping. No unexplained content or geometry discrepancy in this matrix; fixed-width invariants are covered by the Rust tests.",
+    "cases": [
+      {
+        "name": "rs_0",
+        "source": ".TH PROBE 1 \"2026-09-08\"\n.SH SUBCOMMAND\nBASE\n.RS 0\n.RB RS0\n.RE\n.PP\nEND\n",
+        "sourceSha256": "f11f7ac6ea5c2e0bb5081e20eee7091734de23da585b27ae9718085b1dda80f5",
+        "review": "Reviewed source origins, content order and paragraph boundaries; native page furniture and soft wrapping are excluded."
+      },
+      {
+        "name": "rs_2",
+        "source": ".TH PROBE 1 \"2026-09-08\"\n.SH SUBCOMMAND\nBASE\n.RS 2\n.RB RS2\n.RE\n.PP\nEND\n",
+        "sourceSha256": "eb0060b881ef6954b57a8097638c2a7812d146801503918d3c67f48811e82f5d",
+        "review": "Reviewed source origins, content order and paragraph boundaries; native page furniture and soft wrapping are excluded."
+      },
+      {
+        "name": "rs_7",
+        "source": ".TH PROBE 1 \"2026-09-08\"\n.SH SUBCOMMAND\nBASE\n.RS 7\n.RB RS7\n.RE\n.PP\nEND\n",
+        "sourceSha256": "10ac5c59522db6abaf08582c86bd2d91943cf645e9d0e7fdb88cd0c1307745c5",
+        "review": "Reviewed source origins, content order and paragraph boundaries; native page furniture and soft wrapping are excluded."
+      },
+      {
+        "name": "rs_12",
+        "source": ".TH PROBE 1 \"2026-09-08\"\n.SH SUBCOMMAND\nBASE\n.RS 12\n.RB RS12\n.RE\n.PP\nEND\n",
+        "sourceSha256": "3476a7364cc0377329178f26071dc264625a2cc09f0fc370fb6934f1a28d0ad2",
+        "review": "Reviewed source origins, content order and paragraph boundaries; native page furniture and soft wrapping are excluded."
+      },
+      {
+        "name": "rs_-2",
+        "source": ".TH PROBE 1 \"2026-09-08\"\n.SH SUBCOMMAND\nBASE\n.RS -2\n.RB RS-2\n.RE\n.PP\nEND\n",
+        "sourceSha256": "883a57c8ed0866bb0dfdc3d20961d1575ac0e198acd1870c4204195ce50e0ac3",
+        "review": "Signed IR preserves the outdent; a zero-origin plain-text leaf clamps final padding, unlike the native five-cell page margin."
+      },
+      {
+        "name": "rs_0.4",
+        "source": ".TH PROBE 1 \"2026-09-08\"\n.SH SUBCOMMAND\nBASE\n.RS 0.4\n.RB RS0.4\n.RE\n.PP\nEND\n",
+        "sourceSha256": "410c9cb5096334615a0fb1afceeff8739ad1488d29a3174383dfeb776fc28fdd",
+        "review": "Reviewed source origins, content order and paragraph boundaries; native page furniture and soft wrapping are excluded."
+      },
+      {
+        "name": "rs_0.6",
+        "source": ".TH PROBE 1 \"2026-09-08\"\n.SH SUBCOMMAND\nBASE\n.RS 0.6\n.RB RS0.6\n.RE\n.PP\nEND\n",
+        "sourceSha256": "b9cafd909ea7ecc540841850c5f7d647be8c8880cc10a23179ba4dfbcc7e88f0",
+        "review": "Reviewed source origins, content order and paragraph boundaries; native page furniture and soft wrapping are excluded."
+      },
+      {
+        "name": "rs_default",
+        "source": ".TH PROBE 1 \"2026-09-08\"\n.SH SUBCOMMAND\nBASE\n.RS \n.RB RSdefault\n.RE\n.PP\nEND\n",
+        "sourceSha256": "3c765723878e6791cdc74bed634da141a84d37d9555d2ab313ef3a364da16fe6",
+        "review": "Reviewed source origins, content order and paragraph boundaries; native page furniture and soft wrapping are excluded."
+      },
+      {
+        "name": "rs_nested",
+        "source": ".TH PROBE 1 \"2026-09-08\"\n.SH SUBCOMMAND\nBASE\n.RS 0.4\nA\n.RS 0.4\nB\n.RS 0.4\nC\n.RE\n.RE\n.RE\n.PP\nEND\n",
+        "sourceSha256": "9fd3cc9615762fddf9d6aeefbd38987d94b9803af92d09596ce141751622f66a",
+        "review": "Reviewed source origins, content order and paragraph boundaries; native page furniture and soft wrapping are excluded."
+      },
+      {
+        "name": "btrfs_min",
+        "source": ".TH PROBE 1 \"2026-09-08\"\n.SH SUBCOMMAND\n.RS 0\n.TP\n.B create [options] destination\nCreate description.\n.sp\nOptions\n.RS 7\n.TP\n.B -i QGROUP\nInner description.\n.RE\n.TP\n.B delete [options] destination\nDelete description.\n.RE\n",
+        "sourceSha256": "37eea83784dc3ad6f131e1ab2f0755d6771a371cb0ceeb69a135ec9920df51a5",
+        "review": "Reviewed source origins, content order and paragraph boundaries; native page furniture and soft wrapping are excluded."
+      },
+      {
+        "name": "tp_2",
+        "source": ".TH PROBE 1 \"2026-09-08\"\n.SH SUBCOMMAND\n.TP 2\n.B -x\nBODY one two three four five six seven eight nine ten eleven twelve.\n.br\nSECOND explicit line.\n.TP\n.B --long\nNEXT description.\n",
+        "sourceSha256": "ba9d8b47eea48246ebb496f039e87271178d64acce0ef98aa656e13c5cea2c2e",
+        "review": "Reviewed source origins, content order and paragraph boundaries; native page furniture and soft wrapping are excluded."
+      },
+      {
+        "name": "tp_7",
+        "source": ".TH PROBE 1 \"2026-09-08\"\n.SH SUBCOMMAND\n.TP 7\n.B -x\nBODY one two three four five six seven eight nine ten eleven twelve.\n.br\nSECOND explicit line.\n.TP\n.B --long\nNEXT description.\n",
+        "sourceSha256": "93a3839614cc7ed91099391baffd20838e2a0797c119b3a0f975fb3ba82c6509",
+        "review": "Exact-fit tag policy follows mandoc; groff may place the longest term on a separate row."
+      },
+      {
+        "name": "tp_20",
+        "source": ".TH PROBE 1 \"2026-09-08\"\n.SH SUBCOMMAND\n.TP 20\n.B -x\nBODY one two three four five six seven eight nine ten eleven twelve.\n.br\nSECOND explicit line.\n.TP\n.B --long\nNEXT description.\n",
+        "sourceSha256": "b7e7104b9bf745d873905db7dcbcc4ea6102a1ff8c362c305b32295c1ea19e19",
+        "review": "CLI text is unbounded; continuation columns survive soft wrapping in the TUI."
+      },
+      {
+        "name": "tp_width_state",
+        "source": ".TH PROBE 1 \"2026-09-08\"\n.SH SUBCOMMAND\n.TP 20\n.B -a\nA\n.RS\n.PP\nINSIDE\n.RE\n.TP\n.B -b\nB\n.PP\nRESET\n.TP\n.B -c\nC\n",
+        "sourceSha256": "ebfafbde7cd22d02d20e89b3c2f2b70b9f5425050dab144718c0283e706c1ef4",
+        "review": "Reviewed source origins, content order and paragraph boundaries; native page furniture and soft wrapping are excluded."
+      },
+      {
+        "name": "hp",
+        "source": ".TH PROBE 1 \"2026-09-08\"\n.SH SUBCOMMAND\n.HP 12\nFIRST one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen twenty.\n.TP\n.B --long\nBODY\n",
+        "sourceSha256": "afef2104e84c0618eb9223bb151d785ee8038b18e24d6c6e94d1758e0eb77de7",
+        "review": "CLI text is unbounded; hanging continuation geometry is tested separately in fixed-width views."
+      },
+      {
+        "name": "in",
+        "source": ".TH PROBE 1 \"2026-09-08\"\n.SH SUBCOMMAND\nBASE\n.br\n.in +5n\nSHIFT\n.br\n.in -3n\nBACK\n.PP\nRESET\n",
+        "sourceSha256": "6132285198808dbba727a1cb25cfcaa009cc7bd62ab27792c087b5298450b831",
+        "review": "Reviewed source origins, content order and paragraph boundaries; native page furniture and soft wrapping are excluded."
+      },
+      {
+        "name": "ti",
+        "source": ".TH PROBE 1 \"2026-09-08\"\n.SH SUBCOMMAND\n.ti +6n\nFIRST one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen twenty.\n",
+        "sourceSha256": "8bfcd1300e8fe62daf9ad9601956a22746df8e99026ae85aaa8eb8a245c9ff33",
+        "review": "Explicitly unsupported device-specific temporary indentation; printable content is retained."
+      },
+      {
+        "name": "rs_pp",
+        "source": ".TH PROBE 1 \"2026-09-08\"\n.SH SUBCOMMAND\nBEFORE\n.RS 0\n.PP\nFIRST\n.RE\n.RS 0\n.PP\nSECOND\n.RE\n",
+        "sourceSha256": "89c3ee05a0ae36f4f998638406577eed8fb60ed4d6861f4a8b733172d21ed4c6",
+        "review": "Reviewed source origins, content order and paragraph boundaries; native page furniture and soft wrapping are excluded."
+      },
+      {
+        "name": "rs_pp_start",
+        "source": ".TH PROBE 1 \"2026-09-08\"\n.SH SUBCOMMAND\n.RS 0\n.PP\nFIRST\n.RE\n.RS 0\n.PP\nSECOND\n.RE\n",
+        "sourceSha256": "219289b7366c840a24cd1512407206829ef04544be74f19bc6b07c3a3cbc4a3c",
+        "review": "Reviewed source origins, content order and paragraph boundaries; native page furniture and soft wrapping are excluded."
+      },
+      {
+        "name": "tq",
+        "source": ".TH PROBE 1 \"2026-09-08\"\n.SH SUBCOMMAND\n.TP 12\n.B -a\n.TQ\n.B --all\nBODY\n",
+        "sourceSha256": "7c5da78a1d694c2f8167a8db9a4a44281462b77438e2fbf215d57b053995ff44",
+        "review": "Reviewed source origins, content order and paragraph boundaries; native page furniture and soft wrapping are excluded."
+      },
+      {
+        "name": "nofill",
+        "source": ".TH PROBE 1 \"2026-09-08\"\n.SH SUBCOMMAND\n.nf\nFIRST literal line that is intentionally longer than eighty columns and has a terminal end marker END.\n  SECOND indented\n.fi\n",
+        "sourceSha256": "3d5c9ed579ac11fa3114eda4c1fe09a0039c0c2763b3fc0b78a681275fb0f1c3",
+        "review": "Reviewed source origins, content order and paragraph boundaries; native page furniture and soft wrapping are excluded."
+      },
+      {
+        "name": "ip_empty",
+        "source": ".TH PROBE 1 \"2026-09-08\"\n.SH SUBCOMMAND\nBASE\n.IP \"\" 12\nBODY\n.PP\nRESET\n",
+        "sourceSha256": "58926f491c87470171cb501f8357325389766220b0b0099af82a7efe5e7f782a",
+        "review": "No synthetic content row for a zero-width label; native empty-label flush artifacts are not independent source spacing."
+      },
+      {
+        "name": "ip_bullet",
+        "source": ".TH PROBE 1 \"2026-09-08\"\n.SH SUBCOMMAND\n.IP \\(bu 12\nFIRST\n.IP \\(bu\nSECOND\n",
+        "sourceSha256": "75e39fb0b1c732f88f51e5134816a356ceb49bb9fb02e44f3eb4773c2f7f0474",
+        "review": "Reviewed source origins, content order and paragraph boundaries; native page furniture and soft wrapping are excluded."
+      },
+      {
+        "name": "mdoc_tag",
+        "source": ".Dd September 8, 2026\n.Dt PROBE 1\n.Os\n.Sh SUBCOMMAND\n.Bl -tag -width 12n -offset 3n\n.It Fl x\nBODY one two three four five six seven eight nine ten eleven twelve thirteen fourteen.\n.It Fl longname\nNEXT\n.El\n",
+        "sourceSha256": "c16c585c23d1a4fe46fedc62dcbb24144936d5f8bf592893f0d8c2baa0693a8e",
+        "review": "Reviewed source origins, content order and paragraph boundaries; native page furniture and soft wrapping are excluded."
+      },
+      {
+        "name": "mdoc_hang",
+        "source": ".Dd September 8, 2026\n.Dt PROBE 1\n.Os\n.Sh SUBCOMMAND\n.Bl -hang -width 12n -offset 3n\n.It Fl x\nBODY one two three four five six seven eight nine ten eleven twelve thirteen fourteen.\n.It Fl longname\nNEXT\n.El\n",
+        "sourceSha256": "3bcbad6c9b1eb7f6e030c37b2c41b81a14173994724e70d5a6d712669b3acb56",
+        "review": "Reviewed source origins, content order and paragraph boundaries; native page furniture and soft wrapping are excluded."
+      },
+      {
+        "name": "mdoc_ohang",
+        "source": ".Dd September 8, 2026\n.Dt PROBE 1\n.Os\n.Sh SUBCOMMAND\n.Bl -ohang -width 12n -offset 3n\n.It Fl x\nBODY one two three four five six seven eight nine ten eleven twelve thirteen fourteen.\n.It Fl longname\nNEXT\n.El\n",
+        "sourceSha256": "e16651f50210e6315b01024e76c517f94e2c8cfe32b634508473e03fdb0b0fd9",
+        "review": "Reviewed source origins, content order and paragraph boundaries; native page furniture and soft wrapping are excluded."
+      },
+      {
+        "name": "mdoc_inset",
+        "source": ".Dd September 8, 2026\n.Dt PROBE 1\n.Os\n.Sh SUBCOMMAND\n.Bl -inset -width 12n -offset 3n\n.It Fl x\nBODY one two three four five six seven eight nine ten eleven twelve thirteen fourteen.\n.It Fl longname\nNEXT\n.El\n",
+        "sourceSha256": "10b406f0720b7e7d4593caa807576adba315125d903efcf8b5c82b93bce731fd",
+        "review": "Normalize nonbreaking presentation spaces to visible plain spaces; keep the resolved run-in/body origins."
+      },
+      {
+        "name": "mdoc_diag",
+        "source": ".Dd September 8, 2026\n.Dt PROBE 1\n.Os\n.Sh SUBCOMMAND\n.Bl -diag -width 12n -offset 3n\n.It Fl x\nBODY one two three four five six seven eight nine ten eleven twelve thirteen fourteen.\n.It Fl longname\nNEXT\n.El\n",
+        "sourceSha256": "eff301a67c02305fd96efb2797f42ffc9a3ba0b3ff0dc9102230a2b8502b1bd3",
+        "review": "Keep two-cell diagnostic term separation; native justification and NBSP spelling are not byte-level output contracts."
+      },
+      {
+        "name": "mdoc_nested",
+        "source": ".Dd September 8, 2026\n.Dt PROBE 1\n.Os\n.Sh SUBCOMMAND\n.Bl -tag -width 12n -offset 3n\n.It Fl parent\nPARENT\n.Bl -tag -width 8n -offset 2n\n.It Fl child\nCHILD\n.El\n.El\n",
+        "sourceSha256": "8e1d7520c4c8422306d3308dc9370d644ade7bce0bf332be57fa1ba49fb22dc8",
+        "review": "Reviewed source origins, content order and paragraph boundaries; native page furniture and soft wrapping are excluded."
+      },
+      {
+        "name": "mdoc_bullet",
+        "source": ".Dd September 8, 2026\n.Dt PROBE 1\n.Os\n.Sh SUBCOMMAND\n.Bd -ragged -offset 5n\n.Bl -bullet -offset 3n\n.It\nFIRST\n.It\nSECOND\n.El\n.Ed\n",
+        "sourceSha256": "608ca09c01609e057c84578834c9c7cdf55b99d27ed792efa00b8d3c5fbbab12",
+        "review": "Reviewed source origins, content order and paragraph boundaries; native page furniture and soft wrapping are excluded."
+      },
+      {
+        "name": "mdoc_spacing",
+        "source": ".Dd September 8, 2026\n.Dt PROBE 1\n.Os\n.Sh SUBCOMMAND\n.Bl -bullet\n.It\nFIRST\n.It\nSECOND\n.El\n",
+        "sourceSha256": "4be608d3261e93db07d5f717f1b310dc273e481fbdc9099d67b8df83ba0e9b3e",
+        "review": "Reviewed source origins, content order and paragraph boundaries; native page furniture and soft wrapping are excluded."
+      },
+      {
+        "name": "mdoc_hardterm",
+        "source": ".Dd September 8, 2026\n.Dt PROBE 1\n.Os\n.Sh SUBCOMMAND\n.Bl -tag -width 20n\n.It Xo\n.Fl a\n.br\n.Fl b\n.Xc\nBODY\n.El\n",
+        "sourceSha256": "3732f9f82cd1008bfaf940611714ba9f671ae7b0b0c504ee65b2687ef14ad5cd",
+        "review": "Preserve explicit source hard breaks in the term stream instead of native head flattening."
+      },
+      {
+        "name": "pd",
+        "source": ".TH PROBE 1 \"2026-09-08\"\n.SH SUBCOMMAND\nBASE\n.PD 0\n.PP\nZERO\n.PD 2\n.PP\nTWO\n.PD\n.PP\nONE\n",
+        "sourceSha256": "f412aae021f71e34499a7917482d0909ec7b7c91774b283a1de024033ac805c0",
+        "review": "Reviewed source origins, content order and paragraph boundaries; native page furniture and soft wrapping are excluded."
+      },
+      {
+        "name": "br_sp",
+        "source": ".TH PROBE 1 \"2026-09-08\"\n.SH SUBCOMMAND\nBASE\n.br\nBR\n.sp 0\nZERO\n.sp 2\nTWO\n.PP\nONE\n",
+        "sourceSha256": "6586345ee670a40e976df43e484eab22b13b6700cb38c09b936a035e614a137c",
+        "review": "Reviewed source origins, content order and paragraph boundaries; native page furniture and soft wrapping are excluded."
+      },
+      {
+        "name": "tq_long",
+        "source": ".TH PROBE 1 \"2026-09-08\"\n.SH SUBCOMMAND\n.TP 7\n.B --first-long\n.TQ\n.B --second-long\nBODY\n",
+        "sourceSha256": "1fb647bdefe22893d7ac7726443f87d70a237bbd1b762bffb5979b427cebe5df",
+        "review": "Reviewed source origins, content order and paragraph boundaries; native page furniture and soft wrapping are excluded."
+      },
+      {
+        "name": "mdoc_nooffset",
+        "source": ".Dd September 8, 2026\n.Dt PROBE 1\n.Os\n.Sh SUBCOMMAND\n.Bl -tag -width 12n\n.It Fl x\nBODY\n.El\n",
+        "sourceSha256": "4fb780345022f7e55624096575afbc41eafbdcefad119710d3506bb057ff2b44",
+        "review": "Reviewed source origins, content order and paragraph boundaries; native page furniture and soft wrapping are excluded."
+      },
+      {
+        "name": "mdoc_widthlabel",
+        "source": ".Dd September 8, 2026\n.Dt PROBE 1\n.Os\n.Sh SUBCOMMAND\n.Bl -tag -width abcdefghijklmnop\n.It Fl x\nBODY\n.El\n",
+        "sourceSha256": "4e2dc9056831bf3be696c15ac93d9122cae5885e3318f58c82c6b9f9e8f2d7b4",
+        "review": "Reviewed source origins, content order and paragraph boundaries; native page furniture and soft wrapping are excluded."
+      },
+      {
+        "name": "mdoc_offsetonly",
+        "source": ".Dd September 8, 2026\n.Dt PROBE 1\n.Os\n.Sh SUBCOMMAND\n.Bl -ohang -offset 3n\n.It Fl x\nBODY\n.El\n",
+        "sourceSha256": "4afa3f8d6e9631657caf45ea1803cedb310f1990221640b0fce25ca7e3d68cbc",
+        "review": "Reviewed source origins, content order and paragraph boundaries; native page furniture and soft wrapping are excluded."
+      },
+      {
+        "name": "mdoc_nobullet",
+        "source": ".Dd September 8, 2026\n.Dt PROBE 1\n.Os\n.Sh SUBCOMMAND\n.Bl -item\n.It\nFIRST\n.It\nSECOND\n.El\n",
+        "sourceSha256": "2c93448235a33d937a2aefd993d064821fce1e9aaeb1235872a8d6a71dafff9b",
+        "review": "Reviewed source origins, content order and paragraph boundaries; native page furniture and soft wrapping are excluded."
+      },
+      {
+        "name": "mdocalong",
+        "source": ".Dd September 8, 2026\n.Dt PROBE 1\n.Os\n.Sh SUBCOMMAND\n.Bl -hang -width 3n\n.It LONG-LABEL\nBODY one two three four five six seven eight nine ten eleven twelve thirteen fourteen.\n.El\n",
+        "sourceSha256": "ed11fe4b9b98cf90d65ca1535c9ca3635e00f2355509e1899a26f30db68e7da6",
+        "review": "Run-in labels may exceed the body origin; wrapped continuation returns to the structural body column."
+      },
+      {
+        "name": "unicode",
+        "source": ".TH PROBE 1 \"2026-09-08\"\n.SH SUBCOMMAND\n.TP 7\n.B 中中中中\nBODY\n.TP 5\n.B ééé\nNEXT\n",
+        "sourceSha256": "94d3239657e1c6499b45f0ac319c63efc2910a4e563f35ff4d6613a5a5b47215",
+        "review": "Display-cell width and mandoc's exact-fit policy, not UTF-8 bytes or groff's tag threshold."
+      },
+      {
+        "name": "mdoc_unicode",
+        "source": ".Dd September 8, 2026\n.Dt PROBE 1\n.Os\n.Sh SUBCOMMAND\n.Bl -tag -width 3n -offset 0\n.It 中中中\nBODY\n.El\n",
+        "sourceSha256": "4c743ab4911b8143a3727ef324d7e4d14bf19c2b0463009e54fa7c34b84df3aa",
+        "review": "Fractional offsets follow mandoc's retained basic units and final rounding; groff differs."
+      },
+      {
+        "name": "mdoc_fraction",
+        "source": ".Dd September 8, 2026\n.Dt PROBE 1\n.Os\n.Sh SUBCOMMAND\n.Bd -ragged -offset 0.4n\nA\n.Bd -ragged -offset 0.4n\nB\n.Bd -ragged -offset 0.4n\nC\n.Ed\n.Ed\n.Ed\n",
+        "sourceSha256": "fef7a494759e2a43cef068f3b3d5f59f0f6e449a499d4f3181eac88598417965",
+        "review": "Accumulate basic units before rounding, following mandoc rather than groff's per-scope rounding."
+      },
+      {
+        "name": "in_abs",
+        "source": ".TH PROBE 1 \"2026-09-08\"\n.SH SUBCOMMAND\nBASE\n.br\n.in 10n\nABS\n.br\n.in\nPREVIOUS\n.PP\nRESET\n",
+        "sourceSha256": "f49ce8d56104b5b0154b1ff1e252df406ec156fd44eec0c25bb7b03db870ba1d",
+        "review": "Reviewed source origins, content order and paragraph boundaries; native page furniture and soft wrapping are excluded."
+      },
+      {
+        "name": "re_level",
+        "source": ".TH PROBE 1 \"2026-09-08\"\n.SH SUBCOMMAND\nBASE\n.RS 2\nONE\n.RS 3\nTWO\n.RE 1\n.PP\nEND\n",
+        "sourceSha256": "430d6aa2021a64f6eedc7de467d58745f73f4d9cf9f524851b423089ccc3698b",
+        "review": "Reviewed source origins, content order and paragraph boundaries; native page furniture and soft wrapping are excluded."
+      },
+      {
+        "name": "pd_zero_defs",
+        "source": ".TH PROBE 1 \"2026-09-08\"\n.SH SUBCOMMAND\n.TP\n.B --parent\nPARENT\n.PD 0\n.RS 7\n.TP\n.B --child\nCHILD\n.RE\n",
+        "sourceSha256": "81ab30b26b3bac5a0a154d1d857255bb3c0feb06a0fd30fae4a15efd6bbcc961",
+        "review": "Reviewed source origins, content order and paragraph boundaries; native page furniture and soft wrapping are excluded."
+      }
+    ]
+  }
+}

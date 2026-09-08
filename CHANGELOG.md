@@ -28,6 +28,14 @@ that crate was not published for that change.
   Transparent containers share the 4096-row gap budget instead of multiplying
   it. Native overflow is diagnosed. First list-paragraph gaps precede the whole
   marked item; first paragraphs in relative scopes retain source predecessors.
+- `ListItem.layout: ListItemLayout` preserves exact per-item paragraph distance,
+  including changes within one recovered man list. Missing spacing inherits
+  compactness; explicit zero suppresses it. Rust producers must initialize the
+  new field (usually `ListItemLayout::default()`); the unpublished v0.11 schema
+  includes the closed object. Headless continuations retain independent `sp`.
+- TUI zero-width targets no longer manufacture rows, reset pending gaps or add
+  a synthetic term gap to body-only definitions. They resolve at the next
+  visible row, or the document-end sentinel when no content follows.
 - Tables with signed outdents use source-order stacked cells at the actual
   parent origin, preserving links and exact anchors instead of prematurely
   clipping cell-local positions. Ordinary nonnegative tables retain columns.
