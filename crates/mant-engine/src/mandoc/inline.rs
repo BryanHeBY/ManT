@@ -135,7 +135,7 @@ pub(super) fn append_inline_node_with_next(
             &mut builder.font,
             !node.flags.no_fill,
         );
-        builder.append(inlines);
+        builder.append_word(inlines);
         if node.flags.delimiter_open || node.flags.line_continuation {
             builder.tighten_next_boundary();
         }

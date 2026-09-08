@@ -9,6 +9,8 @@ pub(in crate::mandoc) struct InlineBuilder {
     spacing: SpacingMode,
     last_visible_character: Option<char>,
     has_printable_content: bool,
+    empty_word: bool,
+    pending_word_spaces: usize,
     pub(in crate::mandoc) font: FontState,
 }
 
@@ -111,6 +113,8 @@ impl InlineBuilder {
             spacing: SpacingMode::Enabled,
             last_visible_character: None,
             has_printable_content: false,
+            empty_word: false,
+            pending_word_spaces: 0,
             font: FontState::new(),
         }
     }
@@ -122,6 +126,8 @@ impl InlineBuilder {
             spacing: SpacingMode::from_enabled(spacing_enabled),
             last_visible_character: None,
             has_printable_content: false,
+            empty_word: false,
+            pending_word_spaces: 0,
             font: FontState::new(),
         }
     }
@@ -191,6 +197,8 @@ impl InlineBuilder {
     /// leading, repeated, or trailing rows around the paragraph.
     pub(in crate::mandoc) fn hard_break(&mut self) {
         self.boundary = PendingBoundary::Ordinary;
+        self.empty_word = false;
+        self.pending_word_spaces = 0;
         if self.has_printable_content && !matches!(self.nodes.last(), Some(Inline::LineBreak)) {
             self.nodes.push(Inline::LineBreak);
             self.last_visible_character = Some('\n');
@@ -198,7 +206,13 @@ impl InlineBuilder {
     }
 
     pub(in crate::mandoc) fn append(&mut self, mut incoming: Vec<Inline>) {
-        self.append_at_boundary(&mut incoming);
+        self.append_at_boundary(&mut incoming, false);
+    }
+
+    /// A native text node is a word event even if decoding yields no glyphs.
+    /// Unlike a target/control-only append, it consumes the pending boundary.
+    pub(super) fn append_word(&mut self, mut incoming: Vec<Inline>) {
+        self.append_at_boundary(&mut incoming, true);
     }
 
     /// Generated glyphs use the effective font just like authored text, but
@@ -259,7 +273,7 @@ impl InlineBuilder {
             FilledBoundary::SameLine => self.append(incoming),
             FilledBoundary::Word => {
                 let mut incoming = incoming;
-                self.append_at_boundary(&mut incoming);
+                self.append_at_boundary(&mut incoming, false);
             }
             FilledBoundary::LineBreak => {
                 self.hard_break();
@@ -268,32 +282,48 @@ impl InlineBuilder {
         }
     }
 
-    fn append_at_boundary(&mut self, incoming: &mut Vec<Inline>) {
-        if incoming.is_empty() {
+    fn append_at_boundary(&mut self, incoming: &mut Vec<Inline>, word: bool) {
+        if incoming.is_empty() && !word {
             return;
         }
         let incoming_first = first_visible_character(incoming);
         let incoming_last = last_visible_character(incoming);
         let incoming_has_printable = has_printable_character(incoming);
-        if incoming_first.is_none() && !incoming_has_printable {
+        if incoming_first.is_none() && !incoming_has_printable && !word {
             self.nodes.append(incoming);
             return;
         }
-        let add_space = needs_boundary_space(self.last_visible_character, incoming_first);
+        let empty_word = word && incoming_first.is_none() && !incoming_has_printable;
+        let add_space = if empty_word || self.empty_word {
+            self.has_printable_content
+        } else {
+            needs_boundary_space(self.last_visible_character, incoming_first)
+        };
         let boundary = std::mem::replace(&mut self.boundary, PendingBoundary::Ordinary);
+        if !empty_word && self.pending_word_spaces > 0 {
+            push_text(&mut self.nodes, " ".repeat(self.pending_word_spaces));
+            self.pending_word_spaces = 0;
+        }
         if (self.spacing.enabled() || matches!(boundary, PendingBoundary::Preserved))
             && !boundary.is_tight()
             && add_space
         {
-            push_text(&mut self.nodes, " ".to_owned());
-            self.last_visible_character = Some(' ');
-            self.has_printable_content = true;
+            if empty_word {
+                // A word boundary is real, but trailing formatter padding
+                // is not authored term content. Materialize at the next glyph.
+                self.pending_word_spaces = self.pending_word_spaces.saturating_add(1);
+            } else {
+                push_text(&mut self.nodes, " ".to_owned());
+                self.last_visible_character = Some(' ');
+                self.has_printable_content = true;
+            }
         }
         self.nodes.append(incoming);
         if incoming_last.is_some() {
             self.last_visible_character = incoming_last;
         }
         self.has_printable_content |= incoming_has_printable;
+        self.empty_word = empty_word;
     }
 
     pub(in crate::mandoc) fn finish(mut self) -> Vec<Inline> {

@@ -1,5 +1,39 @@
 //! Independent source probes for word events and structural consumers.
-use super::inline_boundaries::{assert_flow, variants};
+use super::inline_boundaries::{assert_flow, query, variants};
+
+#[test]
+fn zero_width_words_consume_boundaries_without_fabricating_names() {
+    for operand in [r"\&", "\"\"", r"\fB"] {
+        for body in [
+            format!(".No a Ns No {operand} No b"),
+            format!(".No a Pf {operand} No b"),
+        ] {
+            // Pf explicitly requests a following join after its operand.
+            for input in variants(&body) {
+                assert_flow(&input, "a b");
+            }
+        }
+    }
+    assert_flow(r".Op \& No b", "[ b]");
+    assert_flow(r".No a No \& No b", "a  b");
+    let body = ".Bl -tag -width Ds\n.It Fl a Ns No \\& Fl b\nBODY\n.El";
+    assert_flow(body, "-a -b");
+    let query = query(body);
+    let explained = crate::explain_query(
+        &query,
+        &mant_protocol::ExplanationQuery {
+            entry: "-a-b".into(),
+            options: mant_protocol::ExplanationOptions::default(),
+        },
+    )
+    .unwrap();
+    assert!(
+        !explained
+            .evidence
+            .iter()
+            .any(|e| e.class == mant_protocol::EvidenceClass::DirectEntry)
+    );
+}
 use super::*;
 
 #[test]

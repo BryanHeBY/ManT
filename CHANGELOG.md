@@ -122,6 +122,10 @@ that crate was not published for that change.
 
 ### mant-engine 0.11.0
 
+- Treat zero-width text as a word event, separately from anchors and hidden
+  nodes, so consumed no-space controls cannot fabricate joined option names.
+  Preserve real inter-word boundaries without exporting trailing padding.
+
 - Preserve decoded literal font spellings such as `\efB` in all styles;
   never reinterpret visible text as another round of roff controls. A real
   `groff_man_style(7)` fixture guards the complete four-font definition term.
