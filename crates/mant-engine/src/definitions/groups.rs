@@ -8,6 +8,7 @@ struct Witness {
     source: SourceSpan,
     head: Vec<Vec<Inline>>,
     key: usize,
+    last_key: usize,
 }
 
 #[derive(Default)]
@@ -29,9 +30,35 @@ impl GroupEvidence {
                 source,
                 head: head_content(&item.terms),
                 key,
+                last_key: key,
             });
     }
-    fn key(&self, item: &DefinitionItem) -> Option<usize> {
+    /// TQ extends one physical owner. Rebind the exact merged head to the
+    /// original first node and final continuation, not its new array position.
+    pub(crate) fn continued(&mut self, item: &DefinitionItem, last_key: usize) {
+        let Some(source) = item.source else { return };
+        let head = head_content(&item.terms);
+        let Some(bucket) = self.items.get_mut(&(source.line, source.column)) else {
+            return;
+        };
+        let candidates = bucket
+            .iter()
+            .filter(|w| w.source == source && head.starts_with(&w.head));
+        let Some(key) = candidates
+            .map(|w| w.key)
+            .reduce(|a, b| if a == b { a } else { 0 })
+            .filter(|&key| key != 0)
+        else {
+            return;
+        };
+        bucket.push(Witness {
+            source,
+            head,
+            key,
+            last_key,
+        });
+    }
+    fn key(&self, item: &DefinitionItem) -> Option<(usize, usize)> {
         let source = item.source?;
         let head = head_content(&item.terms);
         let mut witnesses = self
@@ -39,8 +66,9 @@ impl GroupEvidence {
             .get(&(source.line, source.column))?
             .iter()
             .filter(|w| w.source == source && w.head == head);
-        let key = witnesses.next()?.key;
-        witnesses.all(|w| w.key == key).then_some(key)
+        let first = witnesses.next()?;
+        let key = (first.key, first.last_key);
+        witnesses.all(|w| (w.key, w.last_key) == key).then_some(key)
     }
     /// One linear pass over final owners; recognizability comes from the same
     /// preparation plan that will allocate their names, never another parser.
@@ -60,7 +88,7 @@ impl GroupEvidence {
                 continue;
             }
             if !previous
-                .zip(key)
+                .zip(key.map(|(first, _)| first))
                 .is_some_and(|edge| self.edges.contains(&edge))
             {
                 pending = None;
@@ -75,7 +103,7 @@ impl GroupEvidence {
             } else {
                 pending.get_or_insert(index);
             }
-            previous = key;
+            previous = key.map(|(_, last)| last);
         }
         result
     }

@@ -8,6 +8,7 @@ mod evidence;
 mod groups;
 mod identity;
 mod normalize;
+pub(crate) use normalize::normalize_definition_nesting;
 mod preparation;
 mod recognized;
 mod syntax;

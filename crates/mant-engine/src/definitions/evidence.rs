@@ -23,6 +23,9 @@ struct HeadWitness {
 #[derive(Default)]
 pub(crate) struct NativeHeadEvidence {
     pub(crate) groups: super::groups::GroupEvidence,
+    /// Explicit headless IP continuations already assigned to their source
+    /// owner. Later indentation recovery cannot move them into its last child.
+    pub(crate) continuations: std::collections::HashSet<(u32, u32)>,
     witnesses: HashMap<(u32, u32), Vec<HeadWitness>>,
 }
 

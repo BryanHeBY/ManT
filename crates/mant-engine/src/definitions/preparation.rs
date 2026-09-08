@@ -9,7 +9,7 @@ use super::{
     context::{DefinitionContext, child_definition_context, definition_group_context},
     evidence::head_content,
     identity::{IdentityPlan, has_semantic_spelling, identity_plan, list_identity_base},
-    normalize::{normalize_definition_nesting, normalize_hanging_definitions},
+    normalize::{normalize_definition_nesting_with_boundaries, normalize_hanging_definitions},
 };
 
 pub(super) struct PreparedDefinitions {
@@ -71,7 +71,7 @@ impl PreparedDefinitions {
         context: DefinitionContext,
         evidence: &NativeHeadEvidence,
     ) {
-        normalize_definition_nesting(blocks);
+        normalize_definition_nesting_with_boundaries(blocks, &evidence.continuations);
         normalize_hanging_definitions(blocks, context);
         for block in blocks {
             match block {
@@ -95,7 +95,7 @@ impl PreparedDefinitions {
                     let mut heads = Vec::with_capacity(items.len());
                     for item in items.iter_mut() {
                         let identity = identity_plan(item, item_context, evidence.role(item));
-                        heads.push(!identity.names.is_empty());
+                        heads.push(identity.group_head);
                         if has_semantic_spelling(item, &identity) {
                             *self
                                 .preferred_counts

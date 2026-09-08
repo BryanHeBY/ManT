@@ -217,3 +217,111 @@ fn support_omission_is_explicit_and_each_page_carries_its_context() {
         }
     }
 }
+
+#[test]
+fn explicit_tq_is_one_owner_inside_a_reading_group() {
+    let response = explained(
+        ".TH PROBE 1\n.SH OPTIONS\n.TP\n.B --first\n.TP\n.B --second\n.TQ\n.B --third\nFinal explanation.\n",
+        "--first",
+    );
+    assert_eq!(response.supports.len(), 1);
+    let items = response.supports[0].items().unwrap();
+    assert_eq!(items.len(), 2);
+    assert_eq!(items[1].terms.len(), 2);
+    assert_eq!(response.counts.direct_entry.total, 1);
+    assert_eq!(response.counts.related_entry.total, 0);
+}
+
+#[test]
+fn empty_ip_after_nested_options_keeps_tail_notes_in_the_provider() {
+    let source = ".TH PROBE 1\n.SH COMMANDS\n.TP\n.B first\n.TP\n.B second\nOpening description.\n.RS\n.TP\n.B -c\nNested callback option.\n.RE\n.IP\nCallback timing note.\n.IP\nReturn status note.\n.TP\n.B next\nIndependent next command.\n";
+    let response = explained(source, "first");
+    let text = mant_engine::render_explanation_text(&response);
+    for witness in [
+        "Opening description",
+        "Nested callback option",
+        "Callback timing note",
+        "Return status note",
+    ] {
+        assert!(text.contains(witness), "missing {witness}: {text}");
+    }
+    assert!(!text.contains("Independent next command"));
+    let provider = response.supports[0].items().unwrap().last().unwrap();
+    assert_eq!(
+        provider.description.len(),
+        4,
+        "{}",
+        serde_json::to_string(&provider.description).unwrap()
+    );
+}
+
+#[test]
+fn prose_bullets_and_independent_markdown_items_do_not_gain_context() {
+    for source in [
+        ".TH PROBE 1\n.SH DESCRIPTION\n.TP\nThis is a complete prose sentence.\n.TP\nAnother ordinary sentence.\nBody.\n",
+        ".TH PROBE 1\n.SH DESCRIPTION\n.IP \\(bu\n.IP \\(bu\nBody.\n",
+    ] {
+        let content = query_roff_bytes(source.as_bytes()).unwrap();
+        assert!(
+            !serde_json::to_string(content.document.as_ref().unwrap())
+                .unwrap()
+                .contains("declarationGroups")
+        );
+    }
+    let content = mant_engine::query_markdown_text("# Probe\n## Options\n<!-- mant:entries role=option -->\n- `--first`\n- `--second`: Second body.\n", None).unwrap();
+    assert!(
+        !serde_json::to_string(content.document.as_ref().unwrap())
+            .unwrap()
+            .contains("declarationGroups")
+    );
+}
+
+#[test]
+fn template_heads_keep_group_context_without_a_prefix_name() {
+    let source = ".Dd September 8, 2026\n.Dt PROBE 1\n.Os\n.Sh ENVIRONMENT\n.Bl -tag -width Ds\n.It Ev DEMO_ Ns Ar NAME\n.It Ev DEMO_HOME\nEnvironment family explanation.\n.El\n";
+    let response = explained(source, "DEMO_NAME");
+    assert_eq!(response.supports.len(), 1);
+    assert!(
+        response.evidence[0]
+            .entry
+            .as_ref()
+            .unwrap()
+            .names
+            .is_empty()
+    );
+    assert!(
+        response.evidence[0]
+            .bases
+            .iter()
+            .any(|b| matches!(b, mant_protocol::EvidenceBasis::Form { .. }))
+    );
+    assert!(
+        !response.evidence[0]
+            .bases
+            .iter()
+            .any(|b| matches!(b, mant_protocol::EvidenceBasis::Name { .. }))
+    );
+}
+
+#[test]
+fn provider_tables_code_links_and_tail_are_not_preview_clipped() {
+    let source = ".TH PROBE 1\n.SH OPTIONS\n.TP\n.B --first\n.TP\n.B --second\nOpening body.\n.TS\nl l.\nCELL_A\tCELL_B\n.TE\n.IP\n.nf\nexample --unrelated\n.fi\n.IP\nSee\n.MR printf 3\nfor the final note.\n.TP\n.B --next\nIndependent body.\n";
+    let response = explained(source, "--first");
+    let support = &response.supports[0];
+    let body = serde_json::to_value(support).unwrap();
+    let encoded = body.to_string();
+    for witness in [
+        "CELL_A",
+        "CELL_B",
+        "example --unrelated",
+        "final note",
+        "table",
+        "preformatted",
+        "link",
+    ] {
+        assert!(encoded.contains(witness), "missing {witness}: {encoded}");
+    }
+    assert!(!encoded.contains("Independent body"));
+    assert_eq!(response.counts.direct_entry.total, 1);
+    response.validate_references().unwrap();
+}

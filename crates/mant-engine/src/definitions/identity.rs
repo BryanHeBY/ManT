@@ -38,6 +38,7 @@ pub(super) fn document_anchor_ids(blocks: &[Block], sections: &[Section]) -> Has
 }
 
 pub(super) struct IdentityPlan {
+    pub(super) group_head: bool,
     pub(super) kind: EntryKind,
     pub(super) case: NameCase,
     pub(super) names: Vec<String>,
@@ -78,7 +79,22 @@ pub(super) fn identity_plan(
             .map_or_else(|| "entry".to_owned(), |term| plain_text(term))
     });
     let preferred = format!("{}-{}", role_id_prefix(kind), role_name_slug(kind, &name));
+    // Whole template declarations can lack exact names. Reuse the bounded
+    // declaration grammar once in this plan; group recovery does not scan or
+    // invent another set of names later.
+    let head_context = if hint == Some(super::NativeHeadRole::Environment) {
+        DefinitionContext::EnvironmentVariables
+    } else {
+        context
+    };
+    let group_head = !names.is_empty()
+        || !item.terms.is_empty()
+            && item
+                .terms
+                .iter()
+                .all(|term| super::syntax::is_inferred_head(term, head_context));
     IdentityPlan {
+        group_head,
         kind,
         case,
         names,
@@ -140,6 +156,7 @@ pub(super) fn identify_item(
     // `set-mark` into the misleading semantic ID `set`. Markdown producers
     // likewise provide kind/name evidence and leave allocation to this pass.
     let IdentityPlan {
+        group_head: _,
         kind,
         case,
         names,

@@ -63,10 +63,21 @@ pub(in crate::mandoc::blocks) fn lower_man_definition(
     } else {
         DefinitionMerge::None
     };
+    let continuation_sources = item
+        .description
+        .iter()
+        .filter_map(crate::block::block_source)
+        .map(|s| (s.line, s.column))
+        .collect::<Vec<_>>();
     if node.macro_name.as_deref() == Some("IP")
         && item.terms.is_empty()
         && append_ip_continuation(output, &mut item, indent_columns, spacing_before)
     {
+        context
+            .native_heads
+            .borrow_mut()
+            .continuations
+            .extend(continuation_sources);
         return;
     }
     emit_man_definition(
@@ -83,6 +94,16 @@ pub(in crate::mandoc::blocks) fn lower_man_definition(
             bullet,
         },
     );
+    if macro_name == Some("TQ")
+        && let Some(Block::DefinitionList { items, .. }) = output.last()
+        && let Some(item) = items.last()
+    {
+        context
+            .native_heads
+            .borrow_mut()
+            .groups
+            .continued(item, std::ptr::from_ref(node) as usize);
+    }
 }
 
 struct ManDefinitionEmission {
@@ -235,13 +256,35 @@ fn leading_paragraph_distance(nodes: &[Node]) -> Option<u16> {
 /// block remains explicit so malformed or intentionally unlabelled input is
 /// never discarded.
 fn append_ip_continuation(
-    output: &mut [Block],
+    output: &mut Vec<Block>,
     item: &mut DefinitionItem,
     indent_columns: u16,
     paragraph_distance: u16,
 ) -> bool {
     if item.description.is_empty() {
         return false;
+    }
+    // An explicit empty IP continues the preceding tagged paragraph. Fold
+    // already completed indented runs first: an intervening RS/RE is not a
+    // different declaration, and its later IP notes must follow its contents.
+    // The same idempotent topology pass runs at final normalization.
+    let Some(start) = output.iter().rposition(|block| match block_indent(block) {
+        Some(indent) => indent <= indent_columns,
+        None => !matches!(block, Block::VerticalSpace { .. }),
+    }) else {
+        return false;
+    };
+    if !matches!(&output[start], Block::DefinitionList { .. })
+        || block_indent(&output[start]) != Some(indent_columns)
+    {
+        return false;
+    }
+    if start + 1 < output.len() {
+        // Only the new suffix is considered; repeated IP continuations never
+        // rescan all earlier definitions or an already-normalized description.
+        let mut suffix = output.split_off(start);
+        crate::definitions::normalize_definition_nesting(&mut suffix);
+        output.append(&mut suffix);
     }
     let Some(Block::DefinitionList { items, compact, .. }) = output
         .last_mut()

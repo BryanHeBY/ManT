@@ -15,7 +15,14 @@ use std::{collections::VecDeque, mem};
 /// command → parameter → value relationship needed by semantic navigation.
 /// Move the run under the last definition and translate its layout to the
 /// description's relative coordinate system so rendering is unchanged.
-pub(super) fn normalize_definition_nesting(blocks: &mut Vec<Block>) {
+pub(crate) fn normalize_definition_nesting(blocks: &mut Vec<Block>) {
+    normalize_definition_nesting_with_boundaries(blocks, &std::collections::HashSet::new());
+}
+
+pub(super) fn normalize_definition_nesting_with_boundaries(
+    blocks: &mut Vec<Block>,
+    boundaries: &std::collections::HashSet<(u32, u32)>,
+) {
     let mut pending: VecDeque<Block> = mem::take(blocks).into();
     let mut normalized = Vec::with_capacity(pending.len());
 
@@ -31,6 +38,12 @@ pub(super) fn normalize_definition_nesting(blocks: &mut Vec<Block>) {
         let description_origin =
             base_indent.saturating_add(DefinitionItem::DESCRIPTION_INDENT_COLUMNS);
         while let Some(length) = indented_continuation_len(&pending, base_indent) {
+            if pending.iter().take(length).any(|block| {
+                crate::block::block_source(block)
+                    .is_some_and(|s| boundaries.contains(&(s.line, s.column)))
+            }) {
+                break;
+            }
             for mut nested in pending.drain(..length) {
                 shift_block_indent(&mut nested, description_origin);
                 last_item.description.push(nested);
