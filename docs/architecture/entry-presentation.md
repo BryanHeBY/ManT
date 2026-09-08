@@ -25,6 +25,12 @@ labels prefer complete visible forms before the Compact fallback. A display
 separator between names does not declare equivalence. Empty names remain empty
 in the semantic model, even when a form supplies the display title.
 
+CLI outline puts path and full title first, with complete `ID:`, `Entries:` and
+`Relationships:` hanging lines underneath. It never truncates to a fixed terminal
+width. Plain and ANSI share that tree projection and keep continuation guides.
+TUI compact labels use Compact; expanded labels use Forms. This difference is
+intentional and does not imply different names or semantic identities.
+
 Terms are primary content, not muted metadata. Values use the blue family;
 parameters green; commands warm; environment variables cyan; configuration
 keys yellow; variables purple/pink. The complete EntryKind, including marker

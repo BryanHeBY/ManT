@@ -759,10 +759,10 @@ fn direct_queries_render_outlines_and_selected_nodes_in_requested_formats() {
     let host = FakeHost::with_manual_and_tldr();
     let (status, output, diagnostics) = invoke(&["demo", "--outline"], b"", &host);
     assert_eq!(status, 0);
-    assert!(output.contains("├─ 0 [tldr] TLDR QUICK REFERENCE"));
-    assert!(output.contains("├─ 1 [name-1] NAME"));
-    assert!(output.contains("└─ 2 [options-2] OPTIONS"));
-    assert!(output.contains("└─ 2.1 [common-3] Common options"));
+    assert!(output.contains("├─ 0 TLDR QUICK REFERENCE\n│    ID: tldr"));
+    assert!(output.contains("├─ 1 NAME\n│    ID: name-1"));
+    assert!(output.contains("└─ 2 OPTIONS\n     ID: options-2"));
+    assert!(output.contains("└─ 2.1 Common options\n       ID: common-3"));
     assert!(diagnostics.is_empty());
 
     let (status, output, diagnostics) = invoke(
@@ -1036,7 +1036,7 @@ fn manual_option_reaches_the_resolution_policy_without_stderr_noise() {
     let (status, output, diagnostics) = invoke(&["demo", "--outline", "--manual"], b"", &host);
 
     assert_eq!(status, 0);
-    assert!(output.contains("[name-1] NAME"));
+    assert!(output.contains("1 NAME\n│    ID: name-1"));
     assert!(diagnostics.is_empty());
     assert_eq!(host.last_policy.get(), QueryPolicy::ManualOnly);
 }

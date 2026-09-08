@@ -469,9 +469,14 @@ fn assert_tool_replies(replies: &[Value]) {
 
     let outline = successful_text(reply(replies, 6));
     assert_page_header(outline);
-    assert!(outline.contains("[command-query] query"));
-    assert!(outline.contains("[option-s] /S"));
-    assert!(outline.contains("[environment-path] PATH, $env:PATH"));
+    for (id, title) in [
+        ("command-query", "query"),
+        ("option-s", "/S"),
+        ("environment-path", "PATH, $env:PATH"),
+    ] {
+        assert!(outline.contains(&format!("ID: {id}")), "{outline}");
+        assert!(outline.contains(title), "{outline}");
+    }
     assert!(!outline.contains("mant.outline/v0.11"));
 
     assert_classified_explanations(replies);

@@ -26,6 +26,11 @@ that crate was not published for that change.
 
 ### Shared entry presentation
 
+- Outline text keeps the path and full title on the primary line, with IDs,
+  summaries and relationships in labeled hanging lines. Plain/ANSI now share one
+  tree renderer. TUI compact/expanded labels use the same explicit label modes,
+  including complete-form fallback when no validated name exists.
+
 - Explain reports separate title, matched basis, kind and original content;
   source lines are quoted and class/owner boundaries remain visible without
   color. ANSI uses response-local match ranges and ordinary name bindings,

@@ -8,9 +8,11 @@ pub use explanation::{
     render_scope_explanation_text_with,
 };
 mod markdown;
+mod outline;
 mod search;
 mod table;
 mod text;
+pub use outline::{render_outline_text, render_outline_text_with};
 
 use mant_protocol::{EntryProjection, QueryOutline};
 
@@ -32,8 +34,7 @@ pub use search::{
 };
 pub use text::{
     render_excerpt_text, render_excerpt_text_with, render_outline_entry_summary,
-    render_outline_relationships, render_outline_text, render_query_man, render_query_text,
-    render_query_text_with,
+    render_outline_relationships, render_query_man, render_query_text, render_query_text_with,
 };
 
 fn outline_empty_message(outline: &QueryOutline) -> Option<String> {

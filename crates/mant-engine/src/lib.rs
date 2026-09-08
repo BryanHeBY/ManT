@@ -48,10 +48,10 @@ pub use output::{
     render_explanation_markdown, render_explanation_text, render_explanation_text_with,
     render_markdown, render_markdown_with_options, render_outline_entry_summary,
     render_outline_json, render_outline_markdown, render_outline_relationships,
-    render_outline_text, render_query_json, render_query_man, render_query_text,
-    render_query_text_with, render_scope_explanation_markdown, render_scope_explanation_text,
-    render_scope_explanation_text_with, render_search_json, render_search_markdown,
-    render_search_text, render_search_text_with, render_update_json,
+    render_outline_text, render_outline_text_with, render_query_json, render_query_man,
+    render_query_text, render_query_text_with, render_scope_explanation_markdown,
+    render_scope_explanation_text, render_scope_explanation_text_with, render_search_json,
+    render_search_markdown, render_search_text, render_search_text_with, render_update_json,
 };
 pub use projection::{
     ProjectionError, SelectorCandidate, build_outline, build_outline_projection,

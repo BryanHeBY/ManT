@@ -897,6 +897,13 @@ without changing text or layout; a matching prefix never colors a longer word.
 Name/Form match details and ordinary `nameBindings` are separate JSON facts.
 Their independent omission flags report budget limits, not missing evidence.
 
+Text outlines put each node's path and full title first. Complete `ID:`,
+`Entries:` summaries and `Relationships:` follow on hanging tree lines;
+long identities no longer precede and obscure the title. TUI compact labels
+prefer documented names, while expanded labels prefer full forms. Both fall
+back to visible forms when names are absent, and to the existing ID only when
+neither is available. Display fallbacks do not create aliases or new entries.
+
 ## Search {#search-section}
 
 <!-- mant:entries role=option case=sensitive -->

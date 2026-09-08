@@ -188,7 +188,7 @@ fn terminal_outline_reports_an_empty_kind_projection() {
     )
     .expect("terminal outline");
     assert_eq!(
-        rendered,
+        strip_ansi(&rendered),
         "stdin\n0 matching semantic entries for: environment variables"
     );
 }

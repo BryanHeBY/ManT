@@ -3,7 +3,7 @@ use super::RenderOptions;
 use crate::{arguments::QueryFormat, error::Failure};
 use anstyle::{AnsiColor, Style};
 use mant_ir::{DocumentMeta, EntryKind, ResolvedContent, SourceFormat};
-use mant_protocol::{OutlineNode, QueryExcerpt, QueryOutline, QuerySearch, sanitize_terminal_text};
+use mant_protocol::{QueryExcerpt, QueryOutline, QuerySearch, sanitize_terminal_text};
 use std::fmt::Write as _;
 /// Keep protocol-owned catalog text intact while applying optional CLI styling.
 pub(crate) fn render_catalog_output(
@@ -39,103 +39,10 @@ pub(super) enum TerminalRole {
     Muted,
 }
 
-struct TerminalText {
-    value: String,
-    color: bool,
-}
-
-impl TerminalText {
-    fn new(color: bool) -> Self {
-        Self {
-            value: String::new(),
-            color,
-        }
-    }
-
-    fn plain(&mut self, value: &str) {
-        self.value.push_str(&sanitize_terminal_text(value));
-    }
-
-    fn styled(&mut self, role: TerminalRole, value: &str) {
-        let value = sanitize_terminal_text(value);
-        if !self.color || value.is_empty() {
-            self.plain(&value);
-            return;
-        }
-        let style = terminal_style(role);
-        let _ = write!(self.value, "{style}{value}{style:#}");
-    }
-
-    fn line(&mut self) {
-        self.value.push('\n');
-    }
-
-    fn finish(self) -> String {
-        self.value.trim_end().to_owned()
-    }
-}
-
 pub(super) fn render_terminal_outline(outline: &QueryOutline, color: bool) -> String {
-    if outline.nodes.is_empty() {
-        return mant_engine::render_outline_text(outline);
-    }
-    let mut output = TerminalText::new(color);
-    output.styled(
-        TerminalRole::Document,
-        &document_label(
-            &outline.label,
-            outline
-                .meta
-                .as_ref()
-                .and_then(|meta| meta.manual_section.as_deref()),
-        ),
-    );
-    if !outline.nodes.is_empty() {
-        output.line();
-        render_outline_nodes(&outline.nodes, "", &mut output);
-    }
-    output.finish()
-}
-
-fn render_outline_nodes(nodes: &[OutlineNode], prefix: &str, output: &mut TerminalText) {
-    for (index, node) in nodes.iter().enumerate() {
-        let last = index + 1 == nodes.len();
-        output.styled(TerminalRole::TreeGuide, prefix);
-        output.styled(TerminalRole::TreeGuide, if last { "└─" } else { "├─" });
-        output.plain(" ");
-        output.styled(TerminalRole::Path, node.path());
-        output.styled(TerminalRole::TreeGuide, " [");
-        output.styled(TerminalRole::Coordinate, node.id());
-        output.styled(TerminalRole::TreeGuide, "] ");
-        output.styled(outline_node_role(node), node.title());
-        if let Some(summary) = outline_node_summary(node) {
-            output.styled(
-                TerminalRole::Muted,
-                &mant_engine::render_outline_entry_summary(summary),
-            );
-        }
-        output.styled(
-            TerminalRole::Muted,
-            &mant_engine::render_outline_relationships(node),
-        );
-        if index + 1 < nodes.len() || !node.children().is_empty() {
-            output.line();
-        }
-        let child_prefix = format!("{prefix}{}", if last { "  " } else { "│ " });
-        render_outline_nodes(node.children(), &child_prefix, output);
-        if !node.children().is_empty() && index + 1 < nodes.len() {
-            output.line();
-        }
-    }
-}
-
-fn outline_node_summary(node: &OutlineNode) -> Option<&mant_ir::EntrySummary> {
-    match node {
-        OutlineNode::DocumentRoot { entry_summary, .. }
-        | OutlineNode::DocumentSection { entry_summary, .. }
-        | OutlineNode::DocumentEntry { entry_summary, .. } => entry_summary.as_ref(),
-        OutlineNode::Tldr { .. } => None,
-    }
+    mant_engine::render_outline_text_with(outline, |style, text| {
+        super::content::decorate(style, text, color)
+    })
 }
 
 pub(super) fn render_terminal_excerpt(excerpt: &QueryExcerpt, color: bool) -> String {
@@ -183,15 +90,6 @@ pub(super) fn render_terminal_search(search: &QuerySearch, color: bool) -> Strin
     })
 }
 
-const fn outline_node_role(node: &OutlineNode) -> TerminalRole {
-    match node {
-        OutlineNode::DocumentEntry { entry_kind, .. } => entry_kind_role(*entry_kind),
-        OutlineNode::Tldr { .. }
-        | OutlineNode::DocumentRoot { .. }
-        | OutlineNode::DocumentSection { .. } => TerminalRole::Heading,
-    }
-}
-
 const fn entry_kind_role(kind: EntryKind) -> TerminalRole {
     TerminalRole::Entry(kind)
 }
@@ -215,13 +113,6 @@ pub(super) const fn terminal_style(role: TerminalRole) -> Style {
             AnsiColor::BrightBlack.on_default()
         }
     }
-}
-
-fn document_label(document: &str, section: Option<&str>) -> String {
-    section.map_or_else(
-        || document.to_owned(),
-        |section| format!("{document}({section})"),
-    )
 }
 
 /// Copy a complete document with its terminal-visible identity made safe.

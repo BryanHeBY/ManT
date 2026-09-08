@@ -5,7 +5,7 @@ use mant_ir::{
 };
 use mant_protocol::{
     EntryDocumentTarget, EntryStyleMap, EntryValueDomain, ExcerptSelection, OutlineNode,
-    QueryExcerpt, QueryOutline, TextPresentation, TextRole,
+    QueryExcerpt, TextPresentation, TextRole,
 };
 pub(super) mod blocks;
 
@@ -88,24 +88,6 @@ fn render_query_body_with(
     join_parts(parts)
 }
 
-/// Render a complete query outline as a copyable Unicode tree.
-#[must_use]
-pub fn render_outline_text(outline: &QueryOutline) -> String {
-    let mut lines = vec![document_label(
-        &outline.label,
-        outline
-            .meta
-            .as_ref()
-            .and_then(|meta| meta.manual_section.as_deref()),
-    )];
-    if let Some(message) = super::outline_empty_message(outline) {
-        lines.push(message);
-    } else {
-        render_outline_nodes(&outline.nodes, "", &mut lines);
-    }
-    lines.join("\n").trim_end().to_owned()
-}
-
 /// Render selected query nodes as unstyled text with outline context.
 #[must_use]
 pub fn render_excerpt_text(excerpt: &QueryExcerpt) -> String {
@@ -144,23 +126,6 @@ fn render_excerpt_with(
         parts.push(render_selection(selection, decorate, styled));
     }
     join_parts(parts)
-}
-
-fn render_outline_nodes(nodes: &[OutlineNode], prefix: &str, output: &mut Vec<String>) {
-    for (index, node) in nodes.iter().enumerate() {
-        let last = index + 1 == nodes.len();
-        let connector = if last { "└─" } else { "├─" };
-        let summary = outline_summary(node).map_or_else(String::new, render_outline_entry_summary);
-        let relationships = render_outline_relationships(node);
-        output.push(format!(
-            "{prefix}{connector} {} [{}] {}{summary}{relationships}",
-            node.path(),
-            node.id(),
-            node.title()
-        ));
-        let child_prefix = format!("{prefix}{}", if last { "  " } else { "│ " });
-        render_outline_nodes(node.children(), &child_prefix, output);
-    }
 }
 
 /// Render the semantic-relationship suffix for one outline node.
@@ -267,7 +232,7 @@ fn semantic_reference_label(reference: &mant_ir::SemanticDocumentReference) -> S
     }
 }
 
-fn outline_summary(node: &OutlineNode) -> Option<&EntrySummary> {
+pub(super) fn outline_summary(node: &OutlineNode) -> Option<&EntrySummary> {
     match node {
         OutlineNode::DocumentRoot { entry_summary, .. }
         | OutlineNode::DocumentSection { entry_summary, .. }
@@ -485,7 +450,7 @@ fn indent_lines(value: &str, columns: usize) -> String {
         .join("\n")
 }
 
-fn document_label(document: &str, section: Option<&str>) -> String {
+pub(super) fn document_label(document: &str, section: Option<&str>) -> String {
     section.map_or_else(
         || document.to_owned(),
         |section| format!("{document}({section})"),
@@ -511,7 +476,8 @@ mod tests {
     };
     use mant_protocol::EntryProjection;
 
-    use super::{render_excerpt_text, render_outline_text, render_query_man, render_query_text};
+    use super::{render_excerpt_text, render_query_man, render_query_text};
+    use crate::render_outline_text;
     use crate::{build_outline, build_outline_projection, render_outline_markdown, select_excerpt};
 
     #[test]
@@ -609,7 +575,7 @@ mod tests {
         let outline = build_outline(&query).expect("outline");
         assert_eq!(
             render_outline_text(&outline),
-            "demo(1)\n└─ 1 [options-1] OPTIONS\n  └─ 1.1 [common-2] Common options"
+            "demo(1)\n└─ 1 OPTIONS\n     ID: options-1\n  └─ 1.1 Common options\n       ID: common-2"
         );
 
         let excerpt = select_excerpt(&query, &["1.1".to_owned()]).expect("excerpt");
@@ -655,8 +621,8 @@ mod tests {
         });
 
         let outline = render_outline_text(&build_outline(&query).expect("combined outline"));
-        assert!(outline.contains("├─ 0 [tldr] TLDR QUICK REFERENCE"));
-        assert!(outline.contains("└─ 1 [options-1] OPTIONS"));
+        assert!(outline.contains("├─ 0 TLDR QUICK REFERENCE\n│    ID: tldr"));
+        assert!(outline.contains("└─ 1 OPTIONS\n     ID: options-1"));
 
         let excerpt = select_excerpt(&query, &["tldr".to_owned()]).expect("tldr excerpt");
         assert_eq!(

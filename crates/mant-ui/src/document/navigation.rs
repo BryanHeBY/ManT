@@ -42,14 +42,18 @@ impl DocumentBuilder<'_> {
         parent_id: &str,
     ) {
         for (index, entry) in entries.iter().enumerate() {
-            let full_title = (!entry.forms.is_empty())
-                .then(|| entry.forms.join(" | "))
-                .or_else(|| (!entry.names.is_empty()).then(|| entry.names.join(" | ")))
-                .unwrap_or_else(|| entry.id.to_string());
-            let title = (!entry.names.is_empty())
-                .then(|| entry.names.join(" | "))
-                .or_else(|| entry.forms.first().cloned())
-                .unwrap_or_else(|| entry.id.to_string());
+            let full_title = mant_protocol::entry_label(
+                mant_protocol::EntryLabelMode::Forms,
+                &entry.id,
+                &entry.names,
+                &entry.forms,
+            );
+            let title = mant_protocol::entry_label(
+                mant_protocol::EntryLabelMode::Compact,
+                &entry.id,
+                &entry.names,
+                &entry.forms,
+            );
             self.navigation(NavNode {
                 id: entry.id.to_string(),
                 target_id: entry.id.to_string(),
@@ -63,5 +67,22 @@ impl DocumentBuilder<'_> {
             });
             self.semantic_entries(&entry.children, depth + 1, &entry.id);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn sidebar_modes_use_shared_names_and_complete_form_fallbacks() {
+        let query = mant_engine::query_roff_bytes(b".TH PROBE 1\n.SH OPTIONS\n.TP\n.B -x, --language=LANG\nSelect language.\n.SH TERMS\n.TP\n.B find-new <subvolume> <last_gen>\nFind new files.\n").unwrap();
+        let view = crate::DocumentView::new(&query);
+        let nodes = view.navigation();
+        let option = nodes.iter().find(|n| n.title == "-x, --language").unwrap();
+        assert!(option.full_title.as_ref().unwrap().contains("LANG"));
+        let term = nodes
+            .iter()
+            .find(|n| n.title == "find-new <subvolume> <last_gen>")
+            .unwrap();
+        assert!(term.full_title.is_none());
     }
 }
