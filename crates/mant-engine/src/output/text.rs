@@ -7,9 +7,22 @@ use mant_protocol::{
     EntryDocumentTarget, EntryStyleMap, EntryValueDomain, ExcerptSelection, OutlineNode,
     QueryExcerpt, QueryOutline, TextPresentation, TextRole,
 };
-mod blocks;
+pub(super) mod blocks;
 
 use crate::ResolvedContent;
+
+pub(super) fn render_located_blocks<'a>(
+    blocks: &'a [Block],
+    locations: &'a super::explanation::spans::LocatedStyles<'a>,
+    decorate: &'a dyn Fn(TextPresentation, &str) -> String,
+) -> String {
+    blocks::BlockRenderer {
+        names: None,
+        locations: Some(locations),
+        decorate,
+    }
+    .render_blocks(blocks, 0)
+}
 
 /// Render a complete query without Markdown or terminal escape sequences.
 #[must_use]
@@ -67,6 +80,7 @@ fn render_query_body_with(
         let renderer = blocks::BlockRenderer {
             names: styled.then(|| EntryStyleMap::for_document(document)),
             decorate,
+            locations: None,
         };
         parts.push(renderer.render_blocks(&document.blocks, 0));
         parts.push(renderer.render_sections(&document.sections, 0));
@@ -362,7 +376,11 @@ fn render_selection(
         }
         ExcerptSelection::Tldr { .. } => EntryStyleMap::default(),
     });
-    let renderer = blocks::BlockRenderer { names, decorate };
+    let renderer = blocks::BlockRenderer {
+        names,
+        decorate,
+        locations: None,
+    };
     match selection {
         ExcerptSelection::Tldr { document, .. } => {
             join_parts(vec![context, render_tldr_text(document)])
@@ -425,12 +443,10 @@ fn render_tldr_text(tldr: &TldrDocument) -> String {
     lines.join("\n\n")
 }
 
-pub(super) fn render_blocks(blocks: &[Block], base_indent: usize) -> String {
-    plain_renderer().render_blocks(blocks, base_indent)
-}
-
+#[cfg(test)]
 fn plain_renderer() -> blocks::BlockRenderer<'static> {
     blocks::BlockRenderer {
+        locations: None,
         names: None,
         decorate: &|_, text| text.to_owned(),
     }

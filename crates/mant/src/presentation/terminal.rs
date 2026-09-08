@@ -148,62 +148,18 @@ pub(super) fn render_terminal_explanation(
     explanation: &mant_protocol::QueryExplanation,
     color: bool,
 ) -> String {
-    let plain = mant_engine::render_explanation_text(explanation);
-    if !color {
-        return plain;
-    }
-    let headings = explanation
-        .evidence
-        .iter()
-        .map(mant_protocol::render_evidence_heading)
-        .collect::<Vec<_>>();
-    let terms = explanation
-        .evidence
-        .iter()
-        .filter_map(|evidence| evidence.entry.as_ref())
-        .flat_map(|entry| entry.names.iter().map(|name| (name.clone(), entry.kind)))
-        .collect();
-    style_content_text(&plain, &headings, terms)
+    mant_engine::render_explanation_text_with(explanation, |style, text| {
+        super::content::decorate(style, text, color)
+    })
 }
 
 pub(super) fn render_terminal_scope_explanation(
     explanation: &mant_protocol::ScopeExplanation,
     color: bool,
 ) -> String {
-    let plain = mant_engine::render_scope_explanation_text(explanation);
-    if !color {
-        return plain;
-    }
-    let headings = explanation
-        .evidence
-        .iter()
-        .map(|e| mant_protocol::render_evidence_heading(&e.evidence))
-        .collect::<Vec<_>>();
-    let terms = explanation
-        .evidence
-        .iter()
-        .filter_map(|e| e.evidence.entry.as_ref())
-        .flat_map(|e| e.names.iter().cloned().map(|name| (name, e.kind)))
-        .collect();
-    style_content_text(&plain, &headings, terms)
-}
-
-/// Add presentation styling without changing the text renderer's layout.
-fn style_content_text(
-    plain: &str,
-    headings: &[String],
-    mut terms: Vec<(String, EntryKind)>,
-) -> String {
-    terms.sort_by_key(|term| std::cmp::Reverse(term.0.len()));
-
-    let mut output = TerminalText::new(true);
-    for (index, line) in plain.split('\n').enumerate() {
-        if index > 0 {
-            output.line();
-        }
-        render_excerpt_line(line, index == 0, headings, &terms, &mut output);
-    }
-    output.finish()
+    mant_engine::render_scope_explanation_text_with(explanation, |style, text| {
+        super::content::decorate(style, text, color)
+    })
 }
 
 pub(super) fn render_terminal_search(search: &QuerySearch, color: bool) -> String {
@@ -225,55 +181,6 @@ pub(super) fn render_terminal_search(search: &QuerySearch, color: bool) -> Strin
         let style = terminal_style(role);
         format!("{style}{value}{style:#}")
     })
-}
-
-fn render_excerpt_line(
-    line: &str,
-    document_line: bool,
-    headings: &[String],
-    terms: &[(String, EntryKind)],
-    output: &mut TerminalText,
-) {
-    if document_line {
-        output.styled(TerminalRole::Document, line);
-        return;
-    }
-    if line == "TLDR" {
-        output.styled(TerminalRole::Heading, line);
-        return;
-    }
-    if let Some(rest) = line.strip_prefix("Outline ")
-        && let Some((path, breadcrumb)) = rest.split_once(": ")
-    {
-        output.styled(TerminalRole::Muted, "Outline ");
-        output.styled(TerminalRole::Path, path);
-        output.styled(TerminalRole::Muted, ": ");
-        for (index, title) in breadcrumb.split(" > ").enumerate() {
-            if index > 0 {
-                output.styled(TerminalRole::TreeGuide, " > ");
-            }
-            output.styled(TerminalRole::Heading, title);
-        }
-        return;
-    }
-
-    let trimmed = line.trim_start();
-    let indent = line.len().saturating_sub(trimmed.len());
-    if headings.iter().any(|heading| heading == trimmed) {
-        output.plain(&line[..indent]);
-        output.styled(TerminalRole::Heading, trimmed);
-        return;
-    }
-    if let Some((term, role)) = terms
-        .iter()
-        .find(|(term, _)| !term.is_empty() && trimmed.starts_with(term))
-    {
-        output.plain(&line[..indent]);
-        output.styled(entry_kind_role(*role), term);
-        output.plain(&trimmed[term.len()..]);
-        return;
-    }
-    output.plain(line);
 }
 
 const fn outline_node_role(node: &OutlineNode) -> TerminalRole {

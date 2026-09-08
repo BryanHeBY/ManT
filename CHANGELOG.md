@@ -26,6 +26,12 @@ that crate was not published for that change.
 
 ### Shared entry presentation
 
+- Explain reports separate title, matched basis, kind and original content;
+  source lines are quoted and class/owner boundaries remain visible without
+  color. ANSI uses response-local match ranges and ordinary name bindings,
+  not prefix guessing. Single/scope and decoded JSON share the same renderer;
+  CommonMark retains source wrappers and verbatim fenced code.
+
 - Full/node CLI text now styles source-bound spans through the shared block
   renderer. A documented name no longer colors an unrelated longer word,
   placeholder or list marker. Rendering no longer clones the full document

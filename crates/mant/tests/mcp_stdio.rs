@@ -744,7 +744,7 @@ fn assert_classified_explanations(replies: &[Value]) {
     let probe = successful_text(reply(replies, 15));
     assert!(probe.contains("VISUAL"), "{probe}");
     assert!(
-        probe.contains("Query \\(sections/s0/b0\\) — literal"),
+        probe.contains("Query\nSource block: sections/s0/b0\nMatched by: text mention"),
         "{probe}"
     );
     assert!(

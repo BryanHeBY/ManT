@@ -833,7 +833,7 @@ fn explains_semantic_evidence_without_turning_sections_into_entries() {
 
     assert_eq!(status, 0);
     assert!(
-        output.contains("2/e1 [exclude] OPTIONS > --exclude"),
+        output.contains("2/e1 [exclude]\nOPTIONS > --exclude\nKind: option\nMatched by:"),
         "{output}"
     );
     assert!(output.contains("--exclude=PATTERN"));
@@ -1142,7 +1142,7 @@ fn explain_reports_ordinary_support_without_inventing_a_definition() {
     assert_eq!(status, 0);
     assert!(output.contains("2.1"), "{output}");
     assert!(output.contains("Common options"), "{output}");
-    assert!(output.contains("literal"), "{output}");
+    assert!(output.contains("Matched by: text mention"), "{output}");
     assert!(diagnostics.is_empty());
 }
 

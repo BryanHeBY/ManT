@@ -31,6 +31,34 @@ The selected color is visible in terminal output.
 ";
 
 #[test]
+fn explanation_ansi_uses_the_exact_same_framed_report_as_plain_text() {
+    let source = include_bytes!("../../../mant-engine/tests/fixtures/entry-presentation.1");
+    let content = mant_engine::query_roff_bytes(source).unwrap();
+    let result = mant_engine::explain_query(
+        &content,
+        &mant_protocol::ExplanationQuery {
+            entry: "-x".into(),
+            options: mant_protocol::ExplanationOptions::default(),
+        },
+    )
+    .unwrap();
+    let plain = super::terminal::render_terminal_explanation(&result, false);
+    let colored = super::terminal::render_terminal_explanation(&result, true);
+    assert_eq!(strip_ansi(&colored), plain);
+    assert!(plain.contains("\nForms:\n| "));
+    assert!(plain.contains("\nDefinition:\n| "));
+    let colors = visible_colors(&colored);
+    for (offset, _) in plain.match_indices("-xylophone") {
+        assert_ne!(colors[plain[..offset].chars().count()].1, Some(92));
+    }
+    let decoded = serde_json::from_slice(&serde_json::to_vec(&result).unwrap()).unwrap();
+    assert_eq!(
+        super::terminal::render_terminal_explanation(&decoded, true),
+        colored
+    );
+}
+
+#[test]
 fn full_and_node_color_validated_names_without_prefix_guessing() {
     let source = b".TH PROBE 1\n.SH OPTIONS\n.TP\n.B -x, --language=LANG\nSelect language.\n.SH NOTES\n-xylophone is not an option.\n";
     for view in [

@@ -124,7 +124,7 @@ fn markdown_metadata_is_escaped_and_mentions_are_not_definitions() {
     .unwrap();
     assert_eq!(found.counts.direct_entry.total, 0);
     let markdown = mant_engine::render_explanation_markdown(&found);
-    assert!(markdown.contains("\\[TOKEN\\]\\(evil\\)"), "{markdown}");
+    assert!(markdown.contains("\\[**TOKEN**\\]\\(evil\\)"), "{markdown}");
     assert!(!markdown.contains("PRIVATE_UNRELATED_TEXT"));
     assert!(!markdown.contains("## Direct entries"));
     assert!(markdown.contains("not proof that an option is absent"));

@@ -6,7 +6,7 @@ use mant_ir::{Inline, LinkTarget};
 
 use super::MarkdownOptions;
 
-pub(super) fn render_inline(children: &[Inline], options: MarkdownOptions) -> String {
+pub(crate) fn render_inline(children: &[Inline], options: MarkdownOptions) -> String {
     let lines = render_inline_raw(children, options)
         .split('\n')
         .map(|line| line.trim_matches([' ', '\t']))

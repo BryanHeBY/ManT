@@ -206,11 +206,18 @@ fn request_json_and_cli_share_classification_and_original_rendering() {
         assert!(output.status.success(), "{output:?}");
         let text = String::from_utf8(output.stdout).unwrap();
         let positions = [
-            "Direct entries\n",
-            "Explicitly related entries\n",
-            "Mentions in ordinary content\n",
+            "Direct entries",
+            "Explicitly related entries",
+            "Mentions in ordinary content",
         ]
-        .map(|heading| text.find(heading).unwrap());
+        .map(|heading| {
+            text.find(&if format == "markdown" {
+                format!("## {heading}\n")
+            } else {
+                format!("========== {heading} ==========")
+            })
+            .unwrap()
+        });
         assert!(positions[0] < positions[1] && positions[1] < positions[2]);
         assert!(text.contains("Class-specific help") || text.contains("Class\\-specific help"));
         assert!(!text.contains('\u{1b}'));

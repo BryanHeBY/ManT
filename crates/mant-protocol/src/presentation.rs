@@ -49,37 +49,9 @@ pub fn render_explanation_status(result: &crate::QueryExplanation) -> String {
     text
 }
 
-/// Original owner position and independently declared match bases.
+/// Original owner coordinates and breadcrumb, without conflating match reasons.
 #[must_use]
 pub fn render_evidence_heading(evidence: &crate::ExplanationEvidence) -> String {
-    let bases = evidence
-        .bases
-        .iter()
-        .map(|basis| match basis {
-            crate::EvidenceBasis::Name { .. } => "name".to_owned(),
-            crate::EvidenceBasis::Form { .. } => "form".to_owned(),
-            crate::EvidenceBasis::Literal => "literal".to_owned(),
-            crate::EvidenceBasis::Identity { .. } => "identity".to_owned(),
-            crate::EvidenceBasis::AliasGroup { members } => format!(
-                "explicit alias group: {}",
-                members
-                    .iter()
-                    .map(|v| sanitize_terminal_text(v))
-                    .collect::<Vec<_>>()
-                    .join(" = ")
-            ),
-            crate::EvidenceBasis::Related { from, declarations } => format!(
-                "related from {} via {}",
-                sanitize_terminal_text(from),
-                declarations
-                    .iter()
-                    .map(|v| sanitize_terminal_text(v))
-                    .collect::<Vec<_>>()
-                    .join(" → ")
-            ),
-        })
-        .collect::<Vec<_>>()
-        .join("; ");
     let context = evidence
         .outline
         .ancestors
@@ -91,7 +63,7 @@ pub fn render_evidence_heading(evidence: &crate::ExplanationEvidence) -> String 
         .collect::<Vec<_>>()
         .join(" > ");
     format!(
-        "{} [{}] {context}{} — {bases}",
+        "{} [{}] {context}{}",
         sanitize_terminal_text(evidence.outline.path()),
         sanitize_terminal_text(evidence.outline.node.id()),
         evidence

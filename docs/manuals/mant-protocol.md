@@ -1314,6 +1314,13 @@ Empty categories have no headings, but their summary counts remain; direct
 entries outside this page are explicitly distinguished from zero collected
 direct entries. Neither case proves that a command lacks the queried option.
 
+Report headings keep coordinates and the original title separate from `Matched by`.
+Every forms/body/preview line stays inside a text `| ` or CommonMark `> ` frame,
+including source blank lines and fences. Metadata is single-line sanitized and
+Markdown-escaped; source text retains its own newlines. Exact available ranges
+compose with original inline styles; fenced CommonMark displays remain verbatim.
+Plain and ANSI reports use the same layout and class/owner boundaries.
+
 Name bases carry `matches` with actual authored `name` spellings; Form bases
 carry `matches` with `sourceFormIndex` and complete `text`. Identity bases carry
 `fields` (`id`, `path`), whose values are in `outline`. Empty match details with

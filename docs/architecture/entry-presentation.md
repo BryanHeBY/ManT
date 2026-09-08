@@ -67,5 +67,29 @@ list continuation remain identical. Dynamic metadata is sanitized as a
 single line; original body text retains legitimate newlines and tabs.
 
 Ordinary full documents and TUI text never acquire explain report prefixes.
+
+## Explanation reports
+
+Single-document and scope reports traverse the same returned DTO, with one
+class-first record stream. Headings contain the original title and coordinates;
+`Matched by` is a separate field using collected spellings and identity fields.
+All four category counts remain visible, including zero and off-page counts.
+Class boundaries and owner boundaries are distinct even without ANSI.
+
+Every source line in forms, direct/related bodies and mention previews is quoted
+(`| ` in text, `> ` in CommonMark), including blank lines and code fences.
+Generated field labels are outside that boundary. Dynamic metadata is single-line
+sanitized before decoration/escaping; source roots retain their original newlines.
+Ordinary full/node output is not quoted this way.
+
+An operation-local location map borrows only the returned forms/body. It validates
+each occurrence domain atomically, normalizes bounded overlaps once, and layers
+ordinary type bindings with precise query emphasis. It never searches for query
+strings or falls back to whole-line highlighting. Malformed ranges lose decoration,
+not content. Text/ANSI share the existing block layout; ANSI maps the resulting
+roles to styles. CommonMark emphasizes exact inline matches before escaping while
+retaining original wrappers. Fenced displays stay verbatim: Markdown markers inside
+a fence would change code rather than highlight it. Their match coordinates remain
+available in the DTO and text/ANSI output.
 Plain/ANSI equality is necessary but not sufficient: tests also assert the
 actual styled positions and absence of style on misleading prefix matches.

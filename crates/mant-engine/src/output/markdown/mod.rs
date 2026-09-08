@@ -3,7 +3,7 @@
 mod anchors;
 pub(super) mod blocks;
 mod flat;
-mod inline;
+pub(super) mod inline;
 mod mapped;
 mod semantic;
 

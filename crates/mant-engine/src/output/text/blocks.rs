@@ -7,6 +7,7 @@ use mant_protocol::{EntryStyleMap, TextPresentation, TextRole, visit_inline_text
 pub(super) struct BlockRenderer<'a> {
     pub(super) names: Option<EntryStyleMap<'a>>,
     pub(super) decorate: &'a dyn Fn(TextPresentation, &str) -> String,
+    pub(super) locations: Option<&'a super::super::explanation::spans::LocatedStyles<'a>>,
 }
 
 impl BlockRenderer<'_> {
@@ -15,6 +16,9 @@ impl BlockRenderer<'_> {
     }
 
     fn inline_text(&self, children: &[Inline], role: TextRole) -> String {
+        if let Some(locations) = self.locations {
+            return locations.inline(children, role, self.decorate);
+        }
         let mut text = String::new();
         let names = self
             .names
@@ -144,7 +148,10 @@ impl BlockRenderer<'_> {
                 layout,
                 ..
             } => (
-                self.paint(TextRole::Body, value),
+                self.locations.map_or_else(
+                    || self.paint(TextRole::Body, value),
+                    |locations| locations.text(value, self.decorate),
+                ),
                 usize::from(layout.indent_columns),
             ),
             // Vertical space is handled as an inter-block separator in

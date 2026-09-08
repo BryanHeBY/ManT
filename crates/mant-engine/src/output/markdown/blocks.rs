@@ -11,6 +11,7 @@ use super::inline::{
 };
 use super::mapped::MappedText;
 use crate::definitions::content_entries;
+use crate::output::explanation::spans::LocatedStyles;
 
 pub(super) struct RenderedBlocks {
     pub(super) text: String,
@@ -27,9 +28,16 @@ pub(super) struct RenderedEntry {
 }
 
 pub(crate) fn render_blocks(blocks: &[Block], options: MarkdownOptions) -> Vec<String> {
+    render_located_blocks(blocks, options, None)
+}
+pub(crate) fn render_located_blocks(
+    blocks: &[Block],
+    options: MarkdownOptions,
+    locations: Option<&LocatedStyles<'_>>,
+) -> Vec<String> {
     blocks
         .iter()
-        .filter_map(|block| render_block(block, options))
+        .filter_map(|block| render_block(block, options, locations))
         .map(|block| block.text)
         .collect()
 }
@@ -38,7 +46,7 @@ pub(super) fn render_blocks_with_entries(
     blocks: &[Block],
     options: MarkdownOptions,
 ) -> RenderedBlocks {
-    let rendered = mapped_blocks(blocks, options);
+    let rendered = mapped_blocks(blocks, options, None);
     let ranges = rendered.owner_ranges();
     let text = rendered.text;
     let mut entries = Vec::new();
@@ -75,18 +83,26 @@ pub(super) fn render_blocks_with_entries(
     RenderedBlocks { text, entries }
 }
 
-fn mapped_blocks(blocks: &[Block], options: MarkdownOptions) -> MappedText {
+fn mapped_blocks(
+    blocks: &[Block],
+    options: MarkdownOptions,
+    locations: Option<&LocatedStyles<'_>>,
+) -> MappedText {
     MappedText::join(
         blocks
             .iter()
-            .filter_map(|block| render_block(block, options)),
+            .filter_map(|block| render_block(block, options, locations)),
         "\n\n",
     )
 }
 
-fn render_block(block: &Block, options: MarkdownOptions) -> Option<MappedText> {
+fn render_block(
+    block: &Block,
+    options: MarkdownOptions,
+    locations: Option<&LocatedStyles<'_>>,
+) -> Option<MappedText> {
     match block {
-        Block::Paragraph { children, .. } => nonempty(render_inline(children, options)),
+        Block::Paragraph { children, .. } => nonempty(inline(children, options, locations)),
         Block::Preformatted {
             children, language, ..
         } => Some(fenced_code(&flatten_inline(children), language.as_deref()).into()),
@@ -95,9 +111,9 @@ fn render_block(block: &Block, options: MarkdownOptions) -> Option<MappedText> {
             compact,
             items,
             ..
-        } => render_list(*kind, *compact, items, options),
+        } => render_list(*kind, *compact, items, options, locations),
         Block::DefinitionList { items, compact, .. } => {
-            render_definition_list(items, *compact, options)
+            render_definition_list(items, *compact, options, locations)
         }
         Block::Table { rows, .. } => render_table(rows, options.preserve_anchors),
         Block::Equation { value, display, .. } => {
@@ -135,6 +151,7 @@ fn render_list(
     compact: bool,
     items: &[ListItem],
     options: MarkdownOptions,
+    locations: Option<&LocatedStyles<'_>>,
 ) -> Option<MappedText> {
     let rendered = items
         .iter()
@@ -149,7 +166,7 @@ fn render_list(
             let mut blocks = item
                 .blocks
                 .iter()
-                .filter_map(|block| render_block(block, options))
+                .filter_map(|block| render_block(block, options, locations))
                 .collect::<Vec<_>>();
             if options.preserve_semantics
                 && let Some(facts) = &item.entry
@@ -195,6 +212,7 @@ fn render_definition_list(
     items: &[DefinitionItem],
     compact: bool,
     options: MarkdownOptions,
+    locations: Option<&LocatedStyles<'_>>,
 ) -> Option<MappedText> {
     let rendered = items
         .iter()
@@ -202,11 +220,11 @@ fn render_definition_list(
             let terms = item
                 .terms
                 .iter()
-                .map(|term| render_inline(term, options))
+                .map(|term| inline(term, options, locations))
                 .filter(|term| !term.is_empty())
                 .collect::<Vec<_>>()
                 .join(", ");
-            let description = mapped_blocks(&item.description, options);
+            let description = mapped_blocks(&item.description, options, locations);
             let has_terms = !terms.is_empty();
             let mut content = match (terms.is_empty(), description.text.is_empty()) {
                 (false, false) => {
@@ -282,4 +300,15 @@ fn render_table(rows: &[TableRow], track: bool) -> Option<MappedText> {
 
 fn nonempty(value: String) -> Option<MappedText> {
     MappedText::from(value).nonempty()
+}
+
+fn inline(
+    nodes: &[mant_ir::Inline],
+    options: MarkdownOptions,
+    locations: Option<&LocatedStyles<'_>>,
+) -> String {
+    locations.map_or_else(
+        || render_inline(nodes, options),
+        |map| map.markdown_inline(nodes, options),
+    )
 }
