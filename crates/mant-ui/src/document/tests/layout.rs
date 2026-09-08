@@ -197,11 +197,15 @@ fn hanging_paragraph_preserves_hard_and_soft_continuation_origins() {
         ),
         (12, 12)
     );
-    for width in [20, 40, 80] {
+    for (width, first, continuation) in [(20, 3, 10), (40, 5, 12), (80, 5, 12)] {
         let rows = wrap_line(&builder.lines[0], width);
-        assert!(rows[0].to_string().starts_with("     FIRST"));
+        assert!(
+            rows[0]
+                .to_string()
+                .starts_with(&format!("{}FIRST", " ".repeat(first)))
+        );
         for row in rows.iter().skip(1) {
-            assert!(row.to_string().starts_with("            "));
+            assert!(row.to_string().starts_with(&" ".repeat(continuation)));
         }
     }
 }

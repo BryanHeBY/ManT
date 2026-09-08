@@ -26,6 +26,25 @@ use cells::{
 };
 use table::render_table_row_with_links;
 
+/// Keep a useful reading area without changing the logical source origins.
+/// Reduce both origins by the same displacement whenever indentation would
+/// leave less than 16 cells (half the available width on a narrow viewport).
+/// The one/two-cell fallback necessarily reserves the entire content area.
+fn readable_origins(first: usize, continuation: usize, available: usize) -> (usize, usize) {
+    let content = if available <= 2 {
+        available
+    } else {
+        (available / 2).min(16)
+    };
+    let reduction = first
+        .max(continuation)
+        .saturating_sub(available.saturating_sub(content));
+    (
+        first.saturating_sub(reduction),
+        continuation.saturating_sub(reduction),
+    )
+}
+
 pub(super) struct WrappedLine {
     pub(super) anchors: Vec<String>,
     pub(super) line: Line<'static>,
@@ -90,7 +109,7 @@ pub(super) fn wrap_line_with_links(line: &LogicalLine, width: usize) -> Vec<Wrap
             }];
         }
         LineSurface::Rule => {
-            let indent = line.indent.min(width.saturating_sub(1));
+            let indent = readable_origins(line.indent, line.indent, width).0;
             return vec![WrappedLine {
                 anchors: Vec::new(),
                 line: Line::from(vec![
@@ -108,16 +127,15 @@ pub(super) fn wrap_line_with_links(line: &LogicalLine, width: usize) -> Vec<Wrap
     }
 
     let decoration_width = tldr_decoration_width(line, width);
+    let (first_indent, continuation_indent) = readable_origins(
+        line.indent,
+        line.continuation_indent,
+        width.saturating_sub(decoration_width),
+    );
     let mut cells = styled_cells(line);
 
     if cells.is_empty() {
-        return vec![wrapped_cells_to_line(
-            line,
-            width,
-            line.indent.min(width.saturating_sub(1)),
-            &[],
-            false,
-        )];
+        return vec![wrapped_cells_to_line(line, width, first_indent, &[], false)];
     }
 
     let mut result = Vec::new();
@@ -125,11 +143,10 @@ pub(super) fn wrap_line_with_links(line: &LogicalLine, width: usize) -> Vec<Wrap
     let mut join_with_space = false;
     while !cells.is_empty() {
         let indent = if first_row {
-            line.indent
+            first_indent
         } else {
-            line.continuation_indent
-        }
-        .min(width.saturating_sub(1));
+            continuation_indent
+        };
         let available = width
             .saturating_sub(indent)
             .saturating_sub(decoration_width)

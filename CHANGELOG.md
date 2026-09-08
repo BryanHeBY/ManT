@@ -18,6 +18,11 @@ that crate was not published for that change.
 
 ### Parent-relative document geometry (unreleased v0.11)
 
+- TUI narrow views reduce excessive first/continuation indentation together
+  to preserve a readable content area. Resize does not rebuild semantic
+  indexes or alter source positions; links, search and visual-cell selection
+  use the same wrapped cell map, including one/two-column fallbacks.
+
 - Resolve source paragraph gaps before presentation; preserve independent
   consecutive spacing requests, explicit zero and Markdown rule boundaries.
   Transparent containers share the 4096-row gap budget instead of multiplying

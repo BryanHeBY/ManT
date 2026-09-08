@@ -2,6 +2,69 @@
 use super::*;
 
 #[test]
+fn narrow_view_reduces_only_presentation_indent_and_keeps_link_search_copy_cells() {
+    let mut bundle = bundle();
+    let target = LinkTarget::Section("options".into());
+    bundle.document.as_mut().unwrap().sections[0].blocks = vec![Block::Paragraph {
+        children: vec![Inline::Link {
+            target: mant_ir::LinkTarget::Section {
+                id: "options".into(),
+            },
+            title: None,
+            children: vec![Inline::Text {
+                value: "abcdefghijklmnopqrstuvwx".into(),
+            }],
+        }],
+        layout: LayoutHint {
+            indent_columns: 4096,
+            continuation_indent_columns: 4,
+            ..Default::default()
+        },
+        source: None,
+    }];
+    let before = bundle.clone();
+    let view = DocumentView::new(&bundle);
+    for width in [1, 2, 40, 80, 120] {
+        let rendered = view.render(width);
+        let hits = rendered.search("abcdefghijklmnopqrstuvwx");
+        assert_eq!(hits.len(), 1, "width={width}");
+        let hit = &hits[0];
+        if width >= 40 {
+            assert!(
+                hit.additional_fragments.len() <= 1,
+                "readable area collapsed: width={width}"
+            );
+        }
+        let (end_row, end_column) = hit
+            .additional_fragments
+            .last()
+            .map_or((hit.row, hit.end_column), |f| (f.row, f.end_column));
+        let selected = rendered.selected_text(crate::document::RenderedSelection {
+            anchor: crate::document::TextPosition {
+                row: hit.row,
+                column: hit.start_column,
+            },
+            focus: crate::document::TextPosition {
+                row: end_row,
+                column: end_column - 1,
+            },
+        });
+        // Selection is explicitly visual-cell copying: continuation padding
+        // and visual newlines are retained, not claimed to be source export.
+        assert_eq!(
+            selected.lines().map(str::trim_start).collect::<String>(),
+            "abcdefghijklmnopqrstuvwx"
+        );
+        assert_eq!(
+            rendered.link_target_at(hit.row, hit.start_column),
+            Some(&target)
+        );
+        assert_eq!(view.render(width).text, rendered.text);
+    }
+    assert_eq!(bundle, before, "resize must not alter logical IR");
+}
+
+#[test]
 fn rendered_search_finds_literal_options_and_decorates_every_match() {
     let mut bundle = bundle();
     bundle.document.as_mut().expect("document").sections[0].blocks = vec![Block::Paragraph {

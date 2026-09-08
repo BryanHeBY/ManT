@@ -17,7 +17,7 @@ pub(super) fn render_table_row_with_links(
             search_cells: Vec::new(),
         }];
     }
-    let indent = indent.min(width.saturating_sub(1));
+    let indent = super::readable_origins(indent, indent, width).0;
     let available = width.saturating_sub(indent).max(1);
     if table.layout.force_stack {
         return stack_table_cells(indent, table, width);

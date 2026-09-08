@@ -54,12 +54,20 @@ that color. Code-token accents do not overwrite semantic name roles.
 `DocumentView` prepares a borrowed binding map during construction and stores
 the resulting immutable styled lines. Resizing only reflows those lines;
 search and selection overlay their own state without rewriting the base styles,
-link targets, source coordinates or copied text.
+link targets or source coordinates.
 Block indentation is a signed displacement from its parent's content origin.
 The UI shares cell measurement, origin composition and marker collision rules
 with the plain-text frontend through `mant-protocol`; only visible leaves are
 bounded for padding. Source term roots keep their hard lines and zero-width
 targets do not manufacture blank rows.
+
+Width reduction is a view policy, not source layout. When indentation would
+leave fewer than 16 content cells (half the width on narrow views), both first
+and continuation origins are reduced by one common displacement, bounded at
+the left edge. One/two-column views reserve their whole width for content;
+a glyph that cannot fit uses a bounded display replacement while preserving
+its search identity. This avoids one-character columns at ordinary widths.
+Soft wrapping, link hit regions and search highlights share the same cell map.
 See the shared [entry presentation contract](https://github.com/BryanHeBY/ManT/blob/main/docs/architecture/entry-presentation.md)
 for label modes, source binding coordinates and style precedence.
 
@@ -129,6 +137,11 @@ extends the active selection until release or the document limit. Like a text
 editor, Shift-modified clicks and drags retain the original mouse-down anchor
 and move the active endpoint, while keyboard and Edit-menu actions can copy the
 retained selection again.
+
+Selection copies visual cells, including visual line breaks and continuation
+padding; it is not a source-format export. Use document export to retain source
+logical lines independently of viewport width. Literal text is never rewritten
+in IR by a resize, and its significant spaces remain selectable.
 
 ## Platform behavior
 
