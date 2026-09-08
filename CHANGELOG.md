@@ -122,6 +122,12 @@ that crate was not published for that change.
 
 ### mant-engine 0.11.0
 
+- Preserve mdoc inline boundary effects across prose and styled siblings:
+  apostrophes attach on both sides, generated enclosure closers consume internal
+  joins, and `Ns`/`Pf` honor native source-line and successor conditions.
+  Definition forms, literal displays and supported tbl recovery share the same
+  output-order composition without changing stored IR or schema contracts.
+
 - Match Windows `MANCONFIG` wildcard components without ASCII case
   distinctions, including configuration filenames and wildcard directories.
   Preserve actual path spelling, shared scan limits and fragment deduplication;
