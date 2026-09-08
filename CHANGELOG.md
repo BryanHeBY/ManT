@@ -44,6 +44,12 @@ that crate was not published for that change.
   override inherited value/configuration categories. Finite short/long pairs
   separated by whitespace or `or` bind both names without inventing aliases;
   argument/prose suffixes remain guarded by whole-head validation.
+- Role selection now treats inherited categories as defaults: nested setting
+  assignments and variable-like names are not blindly accepted Values, and
+  mixed-case configuration assignments do not become environment variables.
+  Environment Commands and Command Descriptions retain their command family.
+  This exposes 136 real command descriptions in the existing Git fixture,
+  preserves native literal `Cm -` as a Term, and does not imply runtime domains.
 
 ### Explanation match locations (unreleased v0.11)
 

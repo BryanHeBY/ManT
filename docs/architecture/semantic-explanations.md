@@ -259,6 +259,15 @@ must run before preparation or rebuild the affected plans and counts, not
 reuse stale ranges. Temporary validation copies contain heads, never bodies
 or a second full document, and are dropped during allocation.
 
+Role selection is a small precedence decision, not a probability score:
+proved native role, complete local declaration, then inherited context.
+Names are retained independently when the appropriate result is Term. A
+parent option does not prove that every nested definition is an accepted
+value, nor does assignment syntax alone prove an environment variable.
+Native literal `Cm -` is not automatically a standard-input operand.
+Uncertain classifications must be reviewed with their query/owner evidence;
+they must not be hidden by dropping Terms or manufacturing value domains.
+
 Separate fidelity normalization from semantic inference before removing
 heuristics. Existing target, continuation, indentation, table and line-flow
 repairs remain required. Do not erase a normalization module or all section

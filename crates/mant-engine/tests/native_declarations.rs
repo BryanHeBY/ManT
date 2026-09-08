@@ -7,6 +7,8 @@ use mant_protocol::{EvidenceClass, ExplanationOptions, ExplanationQuery};
 
 #[path = "native_declarations/hanging.rs"]
 mod hanging;
+#[path = "native_declarations/roles.rs"]
+mod roles;
 
 fn definitions(document: &Document) -> Vec<&DefinitionItem> {
     struct Items<'a>(Vec<&'a DefinitionItem>);

@@ -120,6 +120,8 @@ Complete command, configuration-key and variable heads can use the same paragrap
 
 A complete short/long pair such as `-a --ascii` or `-a or --ascii` exposes both names without implying an alias relationship. This is a bounded declaration convention, not general argv parsing: an arbitrary third literal token or later dash-prefixed argument does not restart name recognition, and parameter paths/alternatives remain part of their original form.
 
+Inherited section/parent categories are defaults, not accepted-value guarantees. Local option spellings and proved `Fl`/`Ev` roles take precedence. A setting assignment inside an option description can be a ConfigurationKey (`color=[yes|no]`); a mixed-case setting such as `Environment=` is not automatically an environment variable because its heading contains “Environment”. Uppercase underscore names nested under an option remain named Terms without separate environment evidence. Negative numbers and regex forms are not promoted by the local flag rule. These are bounded, best-effort category rules, not runtime validation or exhaustive value-domain declarations.
+
 The required mdoc prologue and structural macros are normalized as follows:
 
 | Macros | ManT result |

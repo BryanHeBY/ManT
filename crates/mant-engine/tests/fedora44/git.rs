@@ -18,7 +18,7 @@ fn keeps_complete_sections_and_semantic_option_outlines() {
     let query = query_for_document("git", document);
     let outline = build_outline_with_detail(&query, OutlineDetail::Entries)
         .unwrap_or_else(|error| panic!("build git option outline: {error}"));
-    assert_eq!(count_outline_entries(&outline.nodes), 95);
+    assert_eq!(count_outline_entries(&outline.nodes), 231);
     assert!(find_outline_entry(&outline.nodes, "--help").is_some());
     assert!(find_outline_entry(&outline.nodes, "GIT_DIR").is_some());
     let deprecated =
@@ -40,6 +40,33 @@ fn keeps_complete_sections_and_semantic_option_outlines() {
             .unwrap()
             .contains("deprecated")
     );
+
+    let commands: Vec<_> = common::semantic_definition_items(document)
+        .into_iter()
+        .filter(|item| item.entry.as_ref().unwrap().kind == mant_ir::EntryKind::Command)
+        .collect();
+    assert_eq!(commands.len(), 136);
+    let add = commands
+        .iter()
+        .find(|item| item.entry.as_ref().unwrap().names == ["git-add"])
+        .unwrap();
+    assert_eq!(add.source.unwrap().line, 351);
+    assert!(
+        serde_json::to_string(&add.terms)
+            .unwrap()
+            .contains("git-add(1)")
+    );
+    assert!(
+        serde_json::to_string(&add.description)
+            .unwrap()
+            .contains("Add file contents to the index.")
+    );
+    assert!(
+        commands
+            .iter()
+            .any(|item| item.entry.as_ref().unwrap().names == ["scalar"])
+    );
+    assert!(commands.iter().all(|item| !item.description.is_empty()));
 
     let version = common::nested_definition_items(common::section(document, "OPTIONS"))
         .into_iter()

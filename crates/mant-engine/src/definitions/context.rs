@@ -143,6 +143,13 @@ impl DefinitionContext {
         {
             return Self::Parameters;
         }
+        // The final family word disambiguates "Environment Commands" from
+        // "Command Environment" without matching every mention of command.
+        if matches!(words.last(), Some(&"COMMANDS"))
+            || matches!(words.as_slice(), ["COMMAND", "DESCRIPTIONS"])
+        {
+            return Self::Commands;
+        }
         if words.contains(&"ENVIRONMENT") || words.contains(&"ENVIRONMENTS") {
             return Self::EnvironmentVariables;
         }

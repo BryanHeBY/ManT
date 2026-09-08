@@ -6,6 +6,7 @@ use crate::inline::plain_text;
 use mant_ir::{DefinitionItem, EntryKind, NameCase, ParameterKind};
 
 mod commands;
+mod decision;
 mod declaration;
 mod forms;
 mod head;
@@ -38,26 +39,7 @@ pub(super) fn infer_identity(
         .first()
         .map_or_else(String::new, |term| plain_text(term));
     let trimmed = first.trim();
-    let (mut kind, mut case) = inherited_kind(trimmed, context);
-    if local_option_spelling(trimmed) {
-        kind = EntryKind::Parameter {
-            parameter_kind: ParameterKind::Option,
-        };
-        case = NameCase::Sensitive;
-    }
-    match hint {
-        Some(super::NativeHeadRole::Option) => {
-            kind = EntryKind::Parameter {
-                parameter_kind: ParameterKind::Option,
-            };
-            case = NameCase::Sensitive;
-        }
-        Some(super::NativeHeadRole::Environment) => {
-            kind = EntryKind::EnvironmentVariable;
-            case = NameCase::Sensitive;
-        }
-        Some(super::NativeHeadRole::Literal) | None => {}
-    }
+    let (mut kind, mut case) = decision::select_kind(trimmed, context, hint);
     let mut occurrences = if hint == Some(super::NativeHeadRole::Option) {
         options::native_option_occurrences(&item.terms)
     } else if hint == Some(super::NativeHeadRole::Environment) {
@@ -72,6 +54,24 @@ pub(super) fn infer_identity(
     };
     if hint == Some(super::NativeHeadRole::Literal) && occurrences.iter().all(Vec::is_empty) {
         occurrences = name_occurrences(item, EntryKind::Command);
+        if occurrences.iter().all(Vec::is_empty) {
+            occurrences = item
+                .terms
+                .iter()
+                .map(|term| {
+                    let prefix = forms::literal_prefix(term);
+                    let name = prefix.trim();
+                    if matches!(name, "-" | "--") {
+                        vec![RecognizedName::contiguous(
+                            name,
+                            prefix.len() - prefix.trim_start().len(),
+                        )]
+                    } else {
+                        Vec::new()
+                    }
+                })
+                .collect();
+        }
         kind = EntryKind::Term;
         case = NameCase::Sensitive;
     }
@@ -116,53 +116,6 @@ pub(super) fn infer_identity(
         names,
         occurrences,
     }
-}
-
-/// A section/parent default is only a hint; native evidence can override it.
-fn inherited_kind(trimmed: &str, context: DefinitionContext) -> (EntryKind, NameCase) {
-    let parameter = || EntryKind::Parameter {
-        parameter_kind: match trimmed {
-            "--" | "--%" => ParameterKind::Marker,
-            "-" => ParameterKind::Operand,
-            _ => ParameterKind::Option,
-        },
-    };
-    match context {
-        DefinitionContext::Commands
-            if trimmed.starts_with(['-', '+']) || trimmed.starts_with("[-+]") =>
-        {
-            (parameter(), NameCase::Sensitive)
-        }
-        DefinitionContext::Commands => (EntryKind::Command, NameCase::Sensitive),
-        DefinitionContext::EnvironmentVariables => {
-            (EntryKind::EnvironmentVariable, NameCase::Sensitive)
-        }
-        DefinitionContext::Variables => (EntryKind::Variable, NameCase::Sensitive),
-        DefinitionContext::ConfigurationKeys => {
-            (EntryKind::ConfigurationKey, NameCase::Insensitive)
-        }
-        DefinitionContext::Values => (EntryKind::Value, NameCase::Sensitive),
-        DefinitionContext::Parameters => (parameter(), NameCase::Sensitive),
-        DefinitionContext::Generic if trimmed.starts_with('-') => {
-            (parameter(), NameCase::Sensitive)
-        }
-        DefinitionContext::Generic => (EntryKind::Term, NameCase::Sensitive),
-    }
-}
-
-/// Local complete dash spelling overrides a weak inherited category. A
-/// negative number is not a flag, and an arbitrary dash in prose is not a head.
-fn local_option_spelling(text: &str) -> bool {
-    let Some(token) = text.split_whitespace().next() else {
-        return false;
-    };
-    if token.starts_with('-')
-        && !token.starts_with("--")
-        && token.chars().nth(1).is_some_and(|c| c.is_ascii_digit())
-    {
-        return false;
-    }
-    option_prefix(token).is_some()
 }
 
 /// The same role-specific grammars produce both names and their lexical
