@@ -233,8 +233,9 @@ positions, including preview-to-body mappings, jointly cap at 1,024 fragments.
 These limits never truncate the original entry's names/forms or affect owner
 classification, counting, ordering or pagination.
 
-Copy retention order is self-contained match facts, entry metadata with bounded
-optional bindings, previews, then the atomic body. Position objects, paths and
+Copy retention order reserves page direct-match facts, then direct atomic
+bodies/contexts, then optional metadata/bindings/windows and weaker evidence.
+Position objects, paths and
 arrays consume the same serialized-byte budget; duplicate serialized positions
 are charged separately. Positions and their target payload are accepted
 together, without retries that reorder material. One incomplete multi-slice

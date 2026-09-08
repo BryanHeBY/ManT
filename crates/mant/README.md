@@ -3,7 +3,9 @@
 Explanation reports retain separate owners, readable kinds and source coordinates.
 Plain output leaves original lines unframed; Markdown quotes them. Complete
 displayed definitions suppress duplicate Forms per record, while omitted bodies
-keep Forms and empty independent declarations have a distinct notice. Reports
+keep Forms and truly isolated empty declarations have a distinct notice.
+Consecutive native heads can instead carry explicitly recovered group context,
+with the original description provider and no inferred alias equivalence. Reports
 are for reading; JSON supplies the machine boundary. Environment names use a
 separate color family from headings and ordinary variables, without making color
 a semantic guarantee. The static pager restores styles on actual soft-wrap rows
@@ -122,7 +124,10 @@ Compact explanation output shows full direct/related definitions and bounded
 match windows for mentions. For example, GCC's `-Q` mentioning `--help` remains
 a mention, not an alias. All four category counts distinguish collected totals
 from this page; use the read coordinate with `--node` for complete original
-content. Preview clipping and budget omission are reported separately.
+content. Group context is returned/displayed once on the same page, even when
+the strict original node has only its own head. Preview clipping, body omission
+and support omission are reported separately. Consumers of structured explain
+must resolve `declaration-member` content through the source-local support pool.
 
 Explanation pages default to 50 owners (`--limit`, maximum 256). `--offset`
 continues the result set; `--explain-content-bytes` bounds copied facts/forms, previews

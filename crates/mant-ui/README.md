@@ -127,6 +127,16 @@ retained selection again.
 
 ## Platform behavior
 
+The static pager consumes already projected text rather than querying the
+engine during resize or search. Search uses visible physical rows (excluding
+ANSI control bytes), so regex anchors refer to the current wrapped rows.
+No-result searches preserve a valid viewport and permit forward/backward search
+without an index entry. Match overlays retain source foreground/font state at
+the original glyphs; clearing search restores that base presentation. Native
+pager regressions and the CLI's Unix PTY test verify search, resize and colors.
+Declaration-group context belongs to the protocol projection, not a second
+adjacency inference in the UI; full-document TUI layout ignores that metadata.
+
 The frontend is portable across Linux, macOS, and Windows and does not inspect
 the original document source. Callers on every supported platform can provide
 normalized man, mdoc, or Markdown queries.

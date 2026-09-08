@@ -1285,11 +1285,25 @@ Counts sum to response total/returned and, in scope, to source report counts.
 Independent same-name owners remain distinct, even across documents with the
 same NodeId. `AliasGroup` supplements matched names, not a separate owner/class.
 `entry` is present only for a real semantic owner and may itself be omitted. `content` contains its
-original single-item block or the ordinary supporting block. It can be omitted
+original single-item block, an ordinary supporting block, or a `declaration-member`
+reference into the returned document-local `supports` pool. It can be omitted
 atomically when it exceeds the copy budget (`contentOmitted`); oversized
 facts/forms set `detailsOmitted`. Read the returned node to retrieve original
 content independently. Metadata and protocol envelope bytes are outside this
-payload-copy budget.
+payload-copy budget. Copied support metadata, members, bodies and references
+are inside that budget.
+
+A `declaration-group` support contains the original `blockPath`, half-open
+`group` range, original member outline/source trails and one complete
+definition-list `block`. The last member provides the description; earlier
+members retain their empty physical descriptions. This is recovered reading
+context, not alias evidence or proof that every sentence applies to every
+member. It neither adds candidates nor inherits children or value domains.
+Groups and pools each have at most 256 members/items. An unavailable context
+sets `supportOmitted` and content truncation rather than claiming no explanation.
+Only owner records are paginated: even a one-owner page carries its necessary
+support, and multiple direct records share one copy. Scoped pools belong to
+their source document, never to a global node-ID namespace.
 
 Every record includes `previews` and `previewsOmitted`. Without Literal support
 they are `[]` and `false`. Otherwise at most two distinct matched blocks are
@@ -1303,8 +1317,9 @@ definition descriptions, or `rN/cN` table cells; it resolves in the exact final
 IR using `mant_engine::resolve_explanation_block`, not in exported Markdown.
 These are snapshot-local locations, not durable NodeIds.
 
-Copies consume the one `contentBytes` budget in record order, facts first,
-previews second, full body last. A window that does not fit is omitted whole
+The one `contentBytes` budget first reserves direct-match facts for the page,
+then direct bodies and necessary group context, then optional details/windows
+and weaker evidence in class/source order. A window that does not fit is omitted whole
 and sets `previewsOmitted`, also setting content truncation. Choosing two
 representative blocks and clipping context are not budget failures. `content`
 never contains a snippet disguised as complete IR. Compact text/Markdown/MCP
@@ -1325,7 +1340,9 @@ Plain and ANSI reports use the same layout and class/owner boundaries.
 An individual direct/related record suppresses Forms only when its displayed body
 already contains the complete matching owner and forms. Mentions and records with
 omitted or incomplete bodies retain Forms. An empty independent definition gets
-a no-independent-description notice, distinct from a body-copy budget omission.
+a no-independent-description notice only when no group context is available;
+this is distinct from a body/support budget omission. Shared contexts are
+displayed once with a numbered reference and the actual description provider.
 These presentation choices do not remove facts or forms from the response DTO.
 
 Name bases carry `matches` with actual authored `name` spellings; Form bases
@@ -1344,7 +1361,11 @@ leaves; definition terms separately specify `itemIndex` and `termIndex`.
 All `startChar`/`endChar` ranges are half-open safe-text Unicode scalars before
 layout or escaping. A single-item excerpt remaps the original item to index 0.
 Preview `contentRanges` supplement the original absolute provenance coordinates.
-No reference targets a body or metadata omitted from the response.
+For `declaration-member`, `support` and `itemIndex` select the returned group
+member. Content ranges remain owner-local (outer item zero); use
+`ExplanationContent::resolve_range` to map them to the shared body. No reference
+targets a body or metadata omitted from the response. Strict response decoding
+rejects dangling, wrong-owner and out-of-bounds content/position references.
 
 Per evidence, Name/Form details share a 32-record limit; ordinary name bindings
 have a separate 32-record limit. Each record retains at most 32 occurrences,
@@ -1354,8 +1375,9 @@ occurrence is retained or omitted whole within each domain. `matchDetailsOmitted
 and `nameBindingsOmitted` independently report limits on applicable facts and
 locations; both contribute to content truncation. Returned names/forms themselves
 are never shortened by these optional binding limits. Self-contained match facts
-precede entry metadata/bindings, previews and the atomic body in the shared copy
-budget. Body references are committed only after the whole body is accepted.
+precede direct bodies/context; optional entry metadata/bindings and previews
+follow in the shared copy budget. Body references are committed only after the
+whole body is accepted.
 For complete field definitions and coordinate examples see the
 [explanation architecture](../architecture/semantic-explanations.md).
 

@@ -1,4 +1,5 @@
-//! Materialize only the selected page: facts, previews, then atomic original body.
+//! Materialize only the selected page, reserving direct facts and bodies/context
+//! before optional previews and weaker evidence.
 use super::{Candidate, ExplanationQuery, LocatedNode, plan::CollectionPlan};
 use mant_ir::DOCUMENT_ROOT_ID;
 use mant_protocol::{

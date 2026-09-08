@@ -894,8 +894,14 @@ content. Plain text does not add a `| ` prefix; source-authored bars remain.
 Markdown/MCP uses block quotes. Plain labels are reading aids, not authenticated
 boundaries; consumers requiring machine boundaries use JSON. Forms are hidden
 only for a record whose displayed body includes the complete matching owner and
-forms. Missing bodies retain Forms; a genuinely empty independent declaration
-gets a separate no-independent-description notice and its reading coordinates.
+forms. Missing bodies retain Forms. Native consecutive declarations may carry
+a separately labelled group context with all heads and the original description
+provider. This is neither an alias nor proof that every sentence applies to
+every member. A one-owner page still includes that context; multiple matches
+share it once. Only a genuinely isolated empty declaration gets a
+no-independent-description notice. `supportOmitted` instead means the known
+context exceeded the budget. In JSON, `declaration-member` content references
+the document-local support pool; the original `--node` remains the physical owner.
 ANSI adds name-type colors and exact match emphasis
 without changing text or layout; a matching prefix never colors a longer word.
 Name/Form match details and ordinary `nameBindings` are separate JSON facts.

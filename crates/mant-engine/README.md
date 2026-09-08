@@ -175,8 +175,10 @@ spans. Their callbacks preserve visible text and boundary whitespace. Exact
 matches and ordinary name styling resolve only against returned forms/content;
 deserialized responses need no original document or query-side table. The
 plain report does not prefix original lines. Complete displayed declaration
-owners suppress duplicate Forms per record; absent bodies and empty definitions
-have distinct notices. This does not change the DTO. The
+owners suppress duplicate Forms per record. Recovered group context is displayed
+once with its provider; only truly isolated empty definitions get an empty-body
+notice, distinct from copy/support omission. Shared body references map positions
+back to each actual member. This does not change the DTO. The
 corresponding Markdown renderers quote source lines, escape metadata, and retain
 verbatim fenced code. Outline text likewise has one plain/decorated tree through
 `render_outline_text_with`, with complete IDs on hanging metadata lines.

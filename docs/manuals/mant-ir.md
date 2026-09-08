@@ -75,6 +75,26 @@ are rejected. Canonical output omits empty layout but retains
 
 Lists contain block-capable items so nested lists and displays do not flatten into prose. Definition terms contain inline trees and descriptions contain blocks. Table cells likewise contain blocks even when a source parser currently produces a single paragraph.
 
+### Consecutive declaration context
+
+`Block::DefinitionList.declarationGroups` is optional reading metadata, not a
+change to physical content. Each `DeclarationGroup { startItem, endItem }`
+addresses a half-open range of at least two items in that exact list. Every
+member has a readable head; earlier members have no readable description and
+the last supplies the context. `resolve()` checks these bounds and content
+conditions; document validation additionally rejects overlapping ranges with
+`ir.invalid-declaration-group`. Anchors and spacing alone are not readable text.
+
+Items keep their own identities, source spans, forms, descriptions and children.
+A group has no permanent ID, does not prove alias equivalence or complete value
+choices, and never copies the final description into earlier items. It survives
+IR serialization without native parser pointers. Excerpts retain/rebase only
+whole groups; a single-owner excerpt may therefore remain empty while explain
+separately returns useful group context. Renderers ignore the annotation for
+full-document layout. Native producers supply bounded source evidence; ordinary
+Markdown lists are not automatically grouped. IR validation checks structure,
+not roff syntax or the applicability of each sentence to each member.
+
 `ListKind` is `Bullet`, `Plain`, or `Ordered { start: Option<u64> }`. Only ordered
 lists carry a start. Its JSON is a tagged object, for example
 `"kind":{"kind":"ordered","start":0}`, not a string plus a block-level

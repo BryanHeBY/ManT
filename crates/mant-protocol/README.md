@@ -139,8 +139,9 @@ two distinct matched blocks in source order, each a window of at most 1024
 Unicode scalars preserving a complete match. Ranges are half-open scalar
 positions after control masking; `source` and absolute final-IR `blockPath`
 identify the actual block. Paths start at `root` or `sections/sN[/sN...]`, with
-`bN`, `iN`, `dN` and `rN/cN` components. Facts, windows and complete body use the
-same budget, in that order. Clipping is not omission; an omitted window sets
+`bN`, `iN`, `dN` and `rN/cN` components. Page direct-match facts, direct bodies
+and necessary contexts precede optional details/windows and weaker evidence
+in the shared budget. Clipping is not omission; an omitted window sets
 `previewsOmitted` and content truncation, never replaces atomic `content`. Normal multiple results and no-evidence are not failures;
 check `outcome`, source coverage, truncation and diagnostics separately.
 `semanticsComplete` is validation coverage, not exhaustive recall.

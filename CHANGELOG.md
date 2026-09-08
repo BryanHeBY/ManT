@@ -26,6 +26,16 @@ that crate was not published for that change.
 - Extend the unpublished IR and explanation schemas together. Consumers must
   check support references and `supportOmitted` as well as the owner's content;
   an empty independent description no longer means no explanation is available.
+- Copy and display each context once, validate owner-local position references,
+  and reserve direct bodies/context before optional mention previews. Preserve
+  headless `IP` continuations after nested definitions, including Bash mapfile's
+  callback, clearing and return-status notes.
+- Reject ordinary command argument alternatives and adjacent environment
+  template slots as executable names while retaining complete forms. Recover
+  independently bounded long options after a pattern head, including GNU gzip's
+  `--fast` and `--best`, without expanding the pattern.
+- Keep base foreground/font state at its original visible position during pager
+  search; matching overlays no longer move wrapped-row colors past the glyphs.
 
 ### Independent native definition ownership
 

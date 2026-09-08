@@ -158,9 +158,12 @@ several such tags retain their source order under one owner. Multiple names or
 forms do not imply an explicit alias relationship.
 
 This conservative boundary means that a short declaration in a compact manual
-may have no independent explanation. Its names, complete form and source remain
-addressable; read the containing section for context. ManT does not borrow the
-next item's body or treat the lack of a description as budget truncation.
+may have no independent body. Its names, complete form and source remain
+addressable; explain can additionally supply a bounded declaration group's
+original context, with its actual provider identified. ManT does not borrow the
+next item's physical body or treat the lack of an independent description as
+budget truncation. Truly isolated heads retain their containing-section reading
+coordinates instead of silently taking unrelated later prose.
 
 A `TP` whose complete tag is the named roff bullet `\(bu` or `\[bu]`
 (including leading escaped spacing) becomes a regular bullet item, not a
@@ -205,6 +208,13 @@ Parsing does not consult the installed manual index, so the same roff bytes prod
 Consecutive mdoc `It` heads remain independent, even when they name the same option or only the final item has a body. Multiple forms inside a single `It`/`Xo` retain that authored owner. Empty items, their targets and source locations are not moved to the next described item.
 
 Independence does not discard useful reading context. A bounded run of complete native declaration heads with no readable body, followed by a described declaration, can carry a `declarationGroups` annotation. Explain returns the group's original heads and final description as explicitly recovered context, not as aliases or inherited children/value domains. Source paragraph/container boundaries stop grouping; arbitrary later prose is never a fallback explanation. Ordinary Markdown items are not automatically grouped, and the annotation does not change full-document rendering.
+
+The same rule covers man `IP`/`TP` (including suppressed-newline heads) and
+mdoc definition-style `It`; an explicit `TQ` multi-label owner remains one
+member. Complete parameterized heads can supply Form evidence without invented
+template names. Headless `IP` continuations after an item's `RS` region return
+to the original definition, not to the last nested term: callback notes, examples
+and return-status paragraphs remain available in that owner's explanation.
 
 Some deployed mdoc pages use `Bl -tag` for numbered procedures instead of the
 standard `Bl -enum`. ManT recovers ordered-list semantics only when the entire
