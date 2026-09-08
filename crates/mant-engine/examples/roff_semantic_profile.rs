@@ -17,6 +17,8 @@ use serde_json::{Value, json};
 
 #[path = "roff_semantic_profile/conversions.rs"]
 mod conversions;
+#[path = "roff_semantic_profile/queries.rs"]
+mod queries;
 
 use conversions::{conversion_violations, ordinal_conversions};
 
@@ -73,6 +75,18 @@ fn profile_request(line: &str) -> Result<Value, String> {
         .get("id")
         .and_then(Value::as_str)
         .ok_or_else(|| "request.id must be a string".to_owned())?;
+    if let Some(snapshot) = request.get("snapshot") {
+        let bundle: mant_protocol::QueryBundle =
+            serde_json::from_value(snapshot.clone()).map_err(|error| error.to_string())?;
+        let content = mant_ir::ResolvedContent::from(bundle);
+        let queries = request
+            .get("queries")
+            .and_then(Value::as_array)
+            .ok_or("snapshot replay requires a queries array")?;
+        return Ok(json!({"id": id, "schema": PROFILE_SCHEMA,
+            "mode": "snapshot-replay-with-current-query-engine",
+            "queryProfiles": queries::profile(None, &content, queries)?}));
+    }
     let path = path_field(&request, "path")?;
     let root = path_field(&request, "root")?;
     let report = Parser::new(ParseOptions {
@@ -82,12 +96,28 @@ fn profile_request(line: &str) -> Result<Value, String> {
     .parse_file(&path)
     .map_err(|error| error.to_string())?;
     let document = lower_mandoc_document(&path, &report);
-    Ok(profile_document(
+    let mut profile = profile_document(
         id,
         &report.document.root,
         &document,
         report.diagnostics.len(),
-    ))
+    );
+    if let Some(queries) = request.get("queries") {
+        let queries = queries.as_array().ok_or("queries must be an array")?;
+        let content = mant_ir::ResolvedContent {
+            label: id.into(),
+            address: None,
+            document: Some(document),
+            tldr: None,
+        };
+        profile["queryProfiles"] = serde_json::to_value(queries::profile(
+            Some(&report.document.root),
+            &content,
+            queries,
+        )?)
+        .map_err(|error| error.to_string())?;
+    }
+    Ok(profile)
 }
 
 fn profile_document(

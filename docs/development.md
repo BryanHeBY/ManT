@@ -235,6 +235,7 @@ scripts/audit-roff-projection.py  CommonMark round-trip topology audit
 scripts/audit-roff-layout.py  Source-gated renderer layout audit
 scripts/audit-roff-targets.py  Native zero-width target-conservation audit
 scripts/audit-roff-semantics.py  Semantic-entry precision audit
+scripts/roff_query_gold.py      Source-bound explanation gold comparisons
 scripts/check-roff-audit-coverage.py  Cross-ledger corpus coverage verification
 scripts/roff_audit_common.py  Shared roff audit identities and helpers
 crates/mant-engine/examples/support/  Shared profiler framing, not semantic oracles
@@ -609,6 +610,35 @@ and require source-aware human judgment. The fixture ledger is
 [`SEMANTIC_AUDIT.csv`](../tests/fixtures/roff/SEMANTIC_AUDIT.csv); its
 [guide](../tests/fixtures/roff/SEMANTIC_AUDIT.md) records the exact contract
 and latest broad sweep.
+
+The same profiler accepts an optional `queries` array (at most 16 literals)
+and calls the production explanation collector. It adds `queryProfiles` without
+changing the ordinary census. Native AST paths at the returned source coordinates
+are candidates for human inspection, not proof that the head/body belongs to that
+owner. Reviewed query gold additionally fixes source SHA, full head, source
+coordinates, exact kind/names, body witnesses, independent empty owners and
+forbidden direct evidence. Counts alone are not a correctness oracle.
+
+```sh
+# Network-free checked-in sources only; part of scripts/check.sh.
+python3 scripts/audit-roff-semantics.py --fixtures \
+  --query-gold tests/fixtures/roff/ENTRY_QUERY_GOLD.json
+# Optional local panel; missing/drifted sources remain unresolved, never clean.
+python3 scripts/audit-roff-semantics.py \
+  --query-gold tests/fixtures/roff/ENTRY_QUERY_GOLD.json \
+  --query-root corpus=/path/to/fixed-manual-corpus \
+  --json target/entry-query-audit.json
+```
+
+The manifest contains selection/provenance notes, not third-party manual bodies.
+An expectation may describe a reviewed conservative Term without claiming a
+runtime grammar or complete value domain. Do not mechanically bless new output
+as gold: review source, AST candidates and the specific direct body first. An
+unreviewed query or omitted evidence is not a pass. A developer-only profiler
+request with `snapshot` (a saved `QueryBundle`) and `queries` can replay old IR
+through the current collector; label this separately from running an old binary.
+It has no native AST witnesses and cannot establish historical timing or parser
+behavior. Keep large raw snapshots and run logs outside `docs/`.
 
 ### Mandoc reference replay
 

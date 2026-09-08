@@ -120,6 +120,8 @@ def parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
     parser.add_argument("--findings-only", action="store_true")
     parser.add_argument("--verify", action="store_true")
     parser.add_argument("--json", type=Path, metavar="FILE")
+    parser.add_argument("--query-gold", type=Path, help="check a source-bound, human-reviewed explanation manifest")
+    parser.add_argument("--query-root", action="append", metavar="ROOT=PATH", help="relocate a declared query-gold corpus root")
     parser.add_argument("--self-check", action="store_true", help=argparse.SUPPRESS)
     return parser.parse_args(argv)
 
@@ -377,6 +379,8 @@ def file_digest(path: Path) -> str:
 
 
 def self_check() -> None:
+    from roff_query_gold import self_check as check_query_gold
+    check_query_gold()
     semantic_only = {
         "semanticViolations": ["name is not bound"],
         "semanticsComplete": False, "violations": ["name is not bound"],
@@ -453,6 +457,15 @@ def main(argv: Sequence[str]) -> int:
                 "semantic profiler not found; run `cargo build -p mant-engine "
                 "--example roff_semantic_profile`"
             )
+        if arguments.query_gold:
+            from roff_query_gold import run as run_query_gold
+            result = run_query_gold(arguments.query_gold, arguments.profiler, arguments.timeout,
+                                    arguments.query_root, arguments.fixtures)
+            if arguments.json:
+                arguments.json.write_text(json.dumps(result, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+            counts = Counter(row["status"] for row in result["results"])
+            print("semantic query gold: " + json.dumps(counts, sort_keys=True))
+            return int(bool(counts["failure"] or counts["unresolved"]))
         roots = (
             [path.resolve() for path in arguments.manpath]
             if arguments.manpath

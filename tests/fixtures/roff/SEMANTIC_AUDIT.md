@@ -8,6 +8,27 @@ agent-visible semantic index.
 
 ## Oracle and scope
 
+The separate [query gold](ENTRY_QUERY_GOLD.json) fixes 159 manually inspected
+queries over 120 source paths (119 decompressed identities, 93 topics). It
+records raw source coordinates, complete returned forms, exact names/kinds,
+bounded opening-body witnesses and all expected direct owners. Extra direct
+owners fail too; supplementary mention evidence is allowed. Empty independent
+declarations must stay empty, not borrow the next description. These are
+selected witnesses, not whole-page golden renderings or a precision/recall
+estimate for all entries. Per-query notes distinguish exact common declarations
+from accepted conservative classifications and local macro/format syntax.
+Source-group, member path, SHA and original sampling reasons remain in the
+manifest; raw third-party pages are not redistributed by it.
+
+`audit-roff-semantics.py --query-gold ENTRY_QUERY_GOLD.json` uses the existing
+collector via optional profiler probes. The `--fixtures` subset selects only
+the checked-in source root and is included in `scripts/check.sh`. Relocate the
+external corpus with `--query-root corpus=/path/to/corpus`. Native AST matches
+are coordinate candidates for a reviewer to inspect, not another classifier or
+proof of owner equality. The comparator combines source coordinates with exact
+forms, names, kinds and body witnesses; it refuses incomplete/omitted evidence.
+Unreviewed or missing-input probes remain unresolved rather than silently clean.
+
 The development-only `roff_semantic_profile` example parses and lowers each
 page once, builds the final `SemanticIndex`, and records each entry's ID, kind,
 selectable names (the legacy `aliases` field), explicit `aliasGroups` / `aliasOf`, visible forms, targets, containing section, nested depth, and

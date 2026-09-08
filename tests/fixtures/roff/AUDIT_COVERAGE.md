@@ -37,6 +37,17 @@ identity, and review queue are part of the cross-ledger CI contract.
 entries and retained definition structure. Its broad sweeps need not mirror
 the visible-fidelity sample, while every checked-in fixture must have a current
 schema row and no unresolved review result.
+
+`ENTRY_QUERY_GOLD.json` adds a different, source-bound contract: selected
+explanation queries must return the reviewed independent owners, forms, names,
+kinds and body witnesses, and no extra direct owners. Its `checkout` subset runs
+without host manuals/network in the normal Unix gate. The wider fixed panel is
+local-only; missing/drifted sources and unreviewed queries are unresolved. A
+source-lexical signal or a valid binding alone never proves declaration
+eligibility. Explicit TP bullet eligibility, styled parameter separators,
+prose false-head exclusions and private native-witness lifecycle remain covered
+by the synthetic native-declaration regressions; Term counts are not failures.
+
 `REFERENCE_RENDERER_DEVIATIONS.csv` is a curated conclusion index, not a
 coverage route. Even so, rows naming the current mandoc renderer are validated
 against the matching mandoc-fidelity source hash, section, renderer command,

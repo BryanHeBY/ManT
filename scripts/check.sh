@@ -70,6 +70,9 @@ run "gate roff fixtures through target conservation" \
 run "gate roff fixtures through semantic-entry precision" \
   python3 scripts/audit-roff-semantics.py --fixtures --recheck-recorded \
   --verify --findings-only
+run "gate source-bound fixture explanation queries" \
+  python3 scripts/audit-roff-semantics.py --fixtures \
+  --query-gold tests/fixtures/roff/ENTRY_QUERY_GOLD.json
 run "check read-only engine feature boundary" \
   cargo check --locked --package mant-engine --no-default-features
 run "build docs.rs documentation" \
