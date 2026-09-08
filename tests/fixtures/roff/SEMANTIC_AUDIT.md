@@ -114,6 +114,60 @@ refactor. The same GCC source now contains 4,918 independent owners instead of
 cause. Runs used a warm machine, not controlled cold caches. Native Windows
 and macOS execution was not available in this Linux acceptance run.
 
+### Declaration-context acceptance: 2026-09-08
+
+[ENTRY_CONTEXT_AUDIT.json](ENTRY_CONTEXT_AUDIT.json) records producer
+`27027ed3`, profiler producer/hash, exact commands, source identities, per-source
+run decisions, log hashes and performance samples. The original 160
+physical-owner expectations remain byte-for-byte equivalent as JSON values;
+the current 199 queries across 125 paths all pass, including 17 checked-in
+fixture queries. New support assertions cover GCC, Bash, FFmpeg, OpenSSL,
+GDB, three BSD gzip sources, zip and bsdunzip; independent-body controls remain.
+No new third-party source file was imported for this expansion.
+
+The source panel records 4,113 candidate runs and 3,471 observed groups, with
+zero unresolved runs, invalid groups or unbacked groups. Fixed fixtures record
+1,847 candidate runs and 1,641 groups across 51 pages (13,203 entries), all clean.
+The new bidirectional check caught an audit segmentation omission around zsh's
+styled parameter-only continuation; its source-correlated barrier and a forged
+crossing-group negative are now tested. Counts include the recorded source paths,
+not a claim of unique-document precision or complete author-intent inference.
+
+The complete `scripts/check.sh` passed, including packaged sources, fixture
+projection/target/semantic gates, rustdoc, strict Clippy, fuzz compilation and
+release smoke. Workspace all-features passed 1,581 tests with 35 ignored.
+Fourteen declaration-context integration tests cover serialization, boundaries,
+TQ, complete provider blocks, budgeting, overlap, colors and source-local scope;
+eleven semantic-profiler tests include both directions of group accounting.
+CLI process tests verify one-owner pages in text/CommonMark/JSON. Real Unix PTY
+tests cover no-result `n/N`, search clearing, 20/40/80/120 columns, resize and
+actual glyph colors. The private minus replay still verifies 25 files; schema
+regeneration has no remaining diff.
+
+Structure, projection, target and semantic fixture gates are clean. Fresh groff
+and mandoc fidelity/layout results retain exactly the reference-review counts
+listed above, including groff's intentional recursive-input failure; the durable
+record includes their existing per-source decisions rather than relabeling them.
+
+Seven sequential warm-machine release samples use the fixed Arch GCC fixture:
+
+| Operation | Median | Peak process RSS |
+| --- | --- | --- |
+| Native load | 198.7 ms | 73,576 KiB |
+| Semantic index after load | 2.9 ms | 71,904 KiB |
+| Outline projection after load | 4.4 ms | 71,876 KiB |
+| Explain collection after load | 38.3 ms | 71,848 KiB |
+| CLI outline JSON, including load | 227.9 ms | 77,172 KiB |
+| CLI explain JSON, including load | 260.8 ms | 77,280 KiB |
+| CLI explain ANSI, including load | 269.5 ms | 77,208 KiB |
+
+Post-load timing excludes initial parsing; process RSS still includes it.
+Generated 64/128/256/512/1,024-head runs with a large final body and one-byte
+copy budget took 9.3/10.4/12.2/16.2/23.9 ms and at most 19,076 KiB. This sample
+does not exhibit quadratic growth, but is not a complexity proof or a zero-cost
+claim. Native Windows/macOS and the historical 45,036-page corpus were not rerun.
+Large build/output artifacts stay under local `target/`, not in `docs/`.
+
 The development-only `roff_semantic_profile` example parses and lowers each
 page once, builds the final `SemanticIndex`, and records each entry's ID, kind,
 selectable names (the legacy `aliases` field), explicit `aliasGroups` / `aliasOf`, visible forms, targets, containing section, nested depth, and

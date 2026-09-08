@@ -1,0 +1,2201 @@
+{
+  "schema": "mant.roff-declaration-context-acceptance/v1",
+  "producerCommit": "27027ed3ba31766ff4f467aacbfa30315a13eaa6",
+  "profileProducerCommit": "8c076d4ef312e3e985c23bec10b18b83b7cf5f0a",
+  "profileBinarySha256": "e51c6cdca6a3f2672f9f405e808850716a742cd27e6c704527ffd7743a3fd40f",
+  "scannedAt": "2026-09-08T14:18:42.695757+00:00",
+  "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)",
+  "manifest": "ENTRY_QUERY_GOLD.json",
+  "manifestSha256": "5a53a655940d08fa78081a74d29b50245a7f9104161b391b082216729471b55f",
+  "physicalOwnerGold": {
+    "baselineCommit": "751dc3d4",
+    "unchangedQueries": 160
+  },
+  "queryGold": {
+    "passed": 199,
+    "unresolved": 0,
+    "sourcePaths": 125,
+    "uniqueSourceIdentities": 122,
+    "reportSha256": "44799eb9b3e1c32d1e7ea8c45b1a302e949288c96be1faf46c4f3e8bdea39425"
+  },
+  "sourceGroupAudit": {
+    "sourceRuns": 4113,
+    "observedGroups": 3471,
+    "sources": [
+      {
+        "id": "P001",
+        "sourceSha256": "7f5115d15c9647b77bbc4aa838dff90818a20f03763f1557e1a0e36292ab614e",
+        "observedGroups": 0,
+        "sourceRuns": 0,
+        "decisions": {},
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P002",
+        "sourceSha256": "cbedf24cf75128a6794a24a4c380307f73515047945b6736933d313af4623ae7",
+        "observedGroups": 4,
+        "sourceRuns": 6,
+        "decisions": {
+          "parameter-only-head": 1,
+          "source-run-retained": 4,
+          "no-exact-name-review-template-or-non-declaration": 1
+        },
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P003",
+        "sourceSha256": "fee817f32be2ca893147affc5b9f82dce17ad8f44d77fcb40839450ea94dd15d",
+        "observedGroups": 0,
+        "sourceRuns": 3,
+        "decisions": {
+          "unclosed-head-run": 2,
+          "source-container-or-content-boundary": 1
+        },
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P004",
+        "sourceSha256": "9d485cfd9bc5200abd465929b8e8e933b1bbb77cf600eae3deaba4b0981110b0",
+        "observedGroups": 16,
+        "sourceRuns": 31,
+        "decisions": {
+          "no-exact-name-review-template-or-non-declaration": 10,
+          "source-run-retained": 16,
+          "parameter-only-head-boundary": 2,
+          "parameter-only-head": 3
+        },
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P005",
+        "sourceSha256": "2104e25313a4eb3dbd3597764d4eb04893eb474b63ce0071138c93e8d069cac1",
+        "observedGroups": 0,
+        "sourceRuns": 1,
+        "decisions": {
+          "source-container-or-content-boundary": 1
+        },
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P006",
+        "sourceSha256": "2e51b010c53b31757c559695c915acb414bc01eda32abe0f3871698cabd78c63",
+        "observedGroups": 6,
+        "sourceRuns": 6,
+        "decisions": {
+          "source-run-retained": 6
+        },
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P007",
+        "sourceSha256": "ebf3201731dae4e106d29f8ab94ac56ba6dfd13a726e8fb0f2c8493eae65229a",
+        "observedGroups": 0,
+        "sourceRuns": 17,
+        "decisions": {
+          "no-exact-name-review-template-or-non-declaration": 11,
+          "parameter-only-head-boundary": 3,
+          "parameter-only-head": 3
+        },
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P008",
+        "sourceSha256": "c2396033efd69bc5db1f31d6555fa0e3e0e4c8ce83aac2b3b93747a31f8f19de",
+        "observedGroups": 9,
+        "sourceRuns": 16,
+        "decisions": {
+          "no-exact-name-review-template-or-non-declaration": 2,
+          "parameter-only-head": 4,
+          "parameter-only-head-boundary": 1,
+          "source-run-retained": 9
+        },
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P009",
+        "sourceSha256": "f31a9ae03e8e20baad471d47c4e17391038d852e32719c101001da6eb52b3083",
+        "observedGroups": 805,
+        "sourceRuns": 854,
+        "decisions": {
+          "no-exact-name-review-template-or-non-declaration": 23,
+          "source-run-retained": 805,
+          "unclosed-head-run": 11,
+          "source-container-or-content-boundary": 15
+        },
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P010",
+        "sourceSha256": "7aad0096c8fa69c22b8487f45ace7e38f820d4b7dc1a5877b2e95ebd9a28ae96",
+        "observedGroups": 0,
+        "sourceRuns": 0,
+        "decisions": {},
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P011",
+        "sourceSha256": "24973f6ab55783d25e1c5e5fe1be90fbcaa5331ae5813a0c0976ef3b87dbcde3",
+        "observedGroups": 0,
+        "sourceRuns": 0,
+        "decisions": {},
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P012",
+        "sourceSha256": "107c35463c2fb970318b34ccca09db100e1b99bfab793196eab68ef91d350b78",
+        "observedGroups": 0,
+        "sourceRuns": 0,
+        "decisions": {},
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P013",
+        "sourceSha256": "b8cd4f0980a6a3abd243c00a146bf336564b2bf6c270d1101f541da4d9796623",
+        "observedGroups": 89,
+        "sourceRuns": 90,
+        "decisions": {
+          "source-run-retained": 89,
+          "parameter-only-head": 1
+        },
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P014",
+        "sourceSha256": "aa172ef0f613c7366c72dc4d683937c4dab919af6cb94ed9c7442afbda9f8c76",
+        "observedGroups": 0,
+        "sourceRuns": 1,
+        "decisions": {
+          "parameter-only-head": 1
+        },
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P015",
+        "sourceSha256": "ddf0aeebe698e5fb25bae35d1d84b025f7a78873ac3a4e5049b066b48ee62251",
+        "observedGroups": 0,
+        "sourceRuns": 0,
+        "decisions": {},
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P016",
+        "sourceSha256": "e12692ed363dffeb86248489cbe3333e399e2da4a8435dddfd0146b0c3e2e314",
+        "observedGroups": 0,
+        "sourceRuns": 0,
+        "decisions": {},
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P017",
+        "sourceSha256": "a169108ad497a9d66fdfc28b3fc4bb21341482847209d21da8422cde8170e1a3",
+        "observedGroups": 0,
+        "sourceRuns": 0,
+        "decisions": {},
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P018",
+        "sourceSha256": "ef82039414564d6812eeec370bc78c43bc053447e3b6a67bd6597103e20af3cb",
+        "observedGroups": 0,
+        "sourceRuns": 0,
+        "decisions": {},
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P019",
+        "sourceSha256": "3021a4bc914a7b24ba0e51bdf2d974b95f5ac4734972296d0c09de1a98069954",
+        "observedGroups": 0,
+        "sourceRuns": 0,
+        "decisions": {},
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P020",
+        "sourceSha256": "7b136f9c7e0156f4029495e7549846f9653dcee1d711a36db7d85e903c6e2ed5",
+        "observedGroups": 1,
+        "sourceRuns": 2,
+        "decisions": {
+          "not-a-final-definition-owner": 1,
+          "source-run-retained": 1
+        },
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P021",
+        "sourceSha256": "23f7bd155c57125864094d2cb4e1f6ec9f8c2ea002e18bebeb3ed4bcfaad1971",
+        "observedGroups": 19,
+        "sourceRuns": 44,
+        "decisions": {
+          "source-run-retained": 19,
+          "parameter-only-head": 2,
+          "no-exact-name-review-template-or-non-declaration": 11,
+          "source-container-or-content-boundary": 11,
+          "unclosed-head-run": 1
+        },
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P022",
+        "sourceSha256": "29301db4c4c016483fc4d3c42652f678cc99bcfaec16cbb2490151fc172a15f7",
+        "observedGroups": 0,
+        "sourceRuns": 1,
+        "decisions": {
+          "unclosed-head-run": 1
+        },
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P023",
+        "sourceSha256": "254d06fba007c3fe6e01c79233be156cd98a743e1746f481efd68cc065d4d4aa",
+        "observedGroups": 0,
+        "sourceRuns": 0,
+        "decisions": {},
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P024",
+        "sourceSha256": "fd9e77b243df05ee43b4315b72b5ee5d4e0c2ef6f28a38222d059728cddced88",
+        "observedGroups": 0,
+        "sourceRuns": 0,
+        "decisions": {},
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P025",
+        "sourceSha256": "60a3db3df56c9f7edf21d226cd5c041d2def107c0c0d4ee1d48da63a43c3d94d",
+        "observedGroups": 6,
+        "sourceRuns": 22,
+        "decisions": {
+          "unclosed-head-run": 10,
+          "source-container-or-content-boundary": 6,
+          "source-run-retained": 6
+        },
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P026",
+        "sourceSha256": "ecfb6fc44d2ed89d15126d616db3e0481addc141cb200df80291321300006669",
+        "observedGroups": 0,
+        "sourceRuns": 0,
+        "decisions": {},
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P027",
+        "sourceSha256": "33cba6afb24873e00d4d4796e29dd12e9babaf305c44c87621abe5e7fcf1e0fe",
+        "observedGroups": 0,
+        "sourceRuns": 3,
+        "decisions": {
+          "source-container-or-content-boundary": 3
+        },
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P028",
+        "sourceSha256": "da9f57e800f6d441f15502699f713a8b9db10f874473962e93694f710f24e1b6",
+        "observedGroups": 0,
+        "sourceRuns": 2,
+        "decisions": {
+          "parameter-only-head": 2
+        },
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P029",
+        "sourceSha256": "c905464c8bd894805b5befd2cd497171e30e45732ce6e9ee0e36de70235bf4fc",
+        "observedGroups": 0,
+        "sourceRuns": 0,
+        "decisions": {},
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P030",
+        "sourceSha256": "60739e1a91d6383dea073037c1d90b72c7ef9666bc96e44fa873414f91367d36",
+        "observedGroups": 0,
+        "sourceRuns": 0,
+        "decisions": {},
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P031",
+        "sourceSha256": "6cfb2259badbd3c770e1943e9a9950742fd6e9405596d69aadee325faf83726d",
+        "observedGroups": 0,
+        "sourceRuns": 0,
+        "decisions": {},
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P032",
+        "sourceSha256": "7f3a513ba0e0a5141906e83109050ec37a293e0fcb7b293d2ffadd597faa755f",
+        "observedGroups": 0,
+        "sourceRuns": 0,
+        "decisions": {},
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P033",
+        "sourceSha256": "bc21793e07f9aa4438faf93889ceb99ede2904ac67570c9ef3f35076a74c8cf3",
+        "observedGroups": 0,
+        "sourceRuns": 0,
+        "decisions": {},
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P034",
+        "sourceSha256": "3a85ebdd1601114e7c8c1dfa35726f8394d59412887242ffc6ef49ec021017ee",
+        "observedGroups": 0,
+        "sourceRuns": 0,
+        "decisions": {},
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P035",
+        "sourceSha256": "3aac999f695f48491ceaccc16be1c88deeadc36a2e46e785d37b8fc2b7dbb3ae",
+        "observedGroups": 0,
+        "sourceRuns": 0,
+        "decisions": {},
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P036",
+        "sourceSha256": "16b67cdb2faf38cbd5501cf3134ef00f8ad3d2c0d888754c225d0884cf267ca9",
+        "observedGroups": 0,
+        "sourceRuns": 0,
+        "decisions": {},
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P037",
+        "sourceSha256": "983e50d0a3cb005e15b2b388a27c1dca7811f87b35a91e4100bcaec528bb2225",
+        "observedGroups": 0,
+        "sourceRuns": 0,
+        "decisions": {},
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P038",
+        "sourceSha256": "972d02783f80881b47c5a717025a730b9d2737aecba61c76d74dc2c2bfc3607d",
+        "observedGroups": 1,
+        "sourceRuns": 1,
+        "decisions": {
+          "source-run-retained": 1
+        },
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P039",
+        "sourceSha256": "2ded3ceb9855e43713e0ccb6fd82a0781d7cbfc4df46b6da40c5b63bece19c86",
+        "observedGroups": 0,
+        "sourceRuns": 0,
+        "decisions": {},
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P040",
+        "sourceSha256": "35e63e95c5f9f32895f8f90b44b12151d77b8d38192ed85ec4dd84d64122506c",
+        "observedGroups": 0,
+        "sourceRuns": 0,
+        "decisions": {},
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P041",
+        "sourceSha256": "1fd575f736c31a9a81791a64dfd9d67ded8dd199767ac43eee2da4571b61969b",
+        "observedGroups": 0,
+        "sourceRuns": 0,
+        "decisions": {},
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P042",
+        "sourceSha256": "eb299c2cfc6e004c531937a63c19d757b8033089c25d0f19a41eae6893ff987c",
+        "observedGroups": 0,
+        "sourceRuns": 0,
+        "decisions": {},
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P043",
+        "sourceSha256": "9529c69e157b9a1983f4757c99e5f52b2b946a931e9a4faf9b61e93f3dfbe2a3",
+        "observedGroups": 1,
+        "sourceRuns": 1,
+        "decisions": {
+          "source-run-retained": 1
+        },
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P044",
+        "sourceSha256": "b0f4c066c80c825d57e6e1f4b6e11cd21d050f2289d367e95a3ac218d92634af",
+        "observedGroups": 0,
+        "sourceRuns": 0,
+        "decisions": {},
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P045",
+        "sourceSha256": "9f22b48869c3202c2d4add538b246fcd0cf6ee2e1c5f42f9f4bb28238b0796cc",
+        "observedGroups": 0,
+        "sourceRuns": 0,
+        "decisions": {},
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P046",
+        "sourceSha256": "3a85ebdd1601114e7c8c1dfa35726f8394d59412887242ffc6ef49ec021017ee",
+        "observedGroups": 0,
+        "sourceRuns": 0,
+        "decisions": {},
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P047",
+        "sourceSha256": "531ca21b660c1fbd294218e921d834adfaccd61c6f400a2a5d844759f40fc034",
+        "observedGroups": 803,
+        "sourceRuns": 852,
+        "decisions": {
+          "no-exact-name-review-template-or-non-declaration": 23,
+          "source-run-retained": 803,
+          "unclosed-head-run": 11,
+          "source-container-or-content-boundary": 15
+        },
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P048",
+        "sourceSha256": "2ee1c5dd84a69dfc91d84840e943e7df0ee06b86bf27eb4bb9369c415f3351c1",
+        "observedGroups": 0,
+        "sourceRuns": 0,
+        "decisions": {},
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P049",
+        "sourceSha256": "60b65fb826d4f9b0de0d01f484e4080a5ccf1ad41a3aa5fd850b706dc7748fec",
+        "observedGroups": 0,
+        "sourceRuns": 0,
+        "decisions": {},
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P050",
+        "sourceSha256": "15c5484880936b3fcb259c66a3615d43529d29995b8a1a373156613c1f374ab7",
+        "observedGroups": 0,
+        "sourceRuns": 0,
+        "decisions": {},
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P051",
+        "sourceSha256": "fedc66648fcf262298293689c6e1a8dda946c6f940f8ea033928f9bf1bd5829c",
+        "observedGroups": 0,
+        "sourceRuns": 0,
+        "decisions": {},
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P052",
+        "sourceSha256": "a4e84763f83e5a2eb9aa4572545bbe518e502f21880c63a06d9e56961e8b61ba",
+        "observedGroups": 0,
+        "sourceRuns": 0,
+        "decisions": {},
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P053",
+        "sourceSha256": "0f6252ae51279e02e6b6f461f5ab17099f477ccc2f0086d3ab455f837356a1a1",
+        "observedGroups": 5,
+        "sourceRuns": 19,
+        "decisions": {
+          "parameter-only-head": 11,
+          "source-run-retained": 5,
+          "no-exact-name-review-template-or-non-declaration": 2,
+          "parameter-only-head-boundary": 1
+        },
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P054",
+        "sourceSha256": "97b7194312c177ed26e32d45b833dbd6903fd72c8238144e6aff31fb1f9da65a",
+        "observedGroups": 0,
+        "sourceRuns": 0,
+        "decisions": {},
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P055",
+        "sourceSha256": "cee6f49c6949f33fbc2471bf1a9050051e42291dd67956f296eb449dcdb85f14",
+        "observedGroups": 0,
+        "sourceRuns": 13,
+        "decisions": {
+          "single-physical-owner": 10,
+          "unclosed-head-run": 1,
+          "source-container-or-content-boundary": 1,
+          "not-a-final-definition-owner": 1
+        },
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P056",
+        "sourceSha256": "d1d70ad837ee15a6b0ed2081ab629ae91e3762486b3424407b816a63735e9618",
+        "observedGroups": 0,
+        "sourceRuns": 14,
+        "decisions": {
+          "unclosed-head-run": 7,
+          "no-exact-name-review-template-or-non-declaration": 7
+        },
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P057",
+        "sourceSha256": "93616c4dfc29e4fd7336c21e9d5f86690a6443d9bbffb39c6cbf6a9cf772c473",
+        "observedGroups": 6,
+        "sourceRuns": 16,
+        "decisions": {
+          "parameter-only-head": 10,
+          "source-run-retained": 6
+        },
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P058",
+        "sourceSha256": "0c10a0eb02ca7153401d9865e376d70f81553f8471e25c97567c61769460ab0c",
+        "observedGroups": 0,
+        "sourceRuns": 1,
+        "decisions": {
+          "unclosed-head-run": 1
+        },
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P059",
+        "sourceSha256": "e037d991f8eb695f43ce5196dd1ada25fe603621645652a4a2ab53776ac3bc2b",
+        "observedGroups": 1,
+        "sourceRuns": 2,
+        "decisions": {
+          "source-run-retained": 1,
+          "no-exact-name-review-template-or-non-declaration": 1
+        },
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P060",
+        "sourceSha256": "b9c1e393e985a4f40263f2b9ee6d7c0dc78b2501d0408faba842ed09aa5bdaeb",
+        "observedGroups": 1,
+        "sourceRuns": 1,
+        "decisions": {
+          "source-run-retained": 1
+        },
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P061",
+        "sourceSha256": "078df94670ddd4f9d72edb1bfbda9d54ba8c48e1369215298085fdcaea537f93",
+        "observedGroups": 0,
+        "sourceRuns": 0,
+        "decisions": {},
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P062",
+        "sourceSha256": "004dc5af3d727bf14bd36f8b6d7a112d209a1437d98e2325d224651899617f06",
+        "observedGroups": 0,
+        "sourceRuns": 1,
+        "decisions": {
+          "unclosed-head-run": 1
+        },
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P063",
+        "sourceSha256": "5f2ec8b3d0495a3dfad76bdbcb614b8631995d2afdc6ace4a846a60655c59efe",
+        "observedGroups": 0,
+        "sourceRuns": 0,
+        "decisions": {},
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P064",
+        "sourceSha256": "348b67ad3c9e4cb4e7603ee23b8d23958498f85e70b1ff94c025aff87ae6d5a1",
+        "observedGroups": 0,
+        "sourceRuns": 0,
+        "decisions": {},
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P065",
+        "sourceSha256": "fbef0624ae8abda144ef8c4ab61bdd2f4e2e8b306653be9655a294c74ace54c1",
+        "observedGroups": 1,
+        "sourceRuns": 2,
+        "decisions": {
+          "source-run-retained": 1,
+          "no-exact-name-review-template-or-non-declaration": 1
+        },
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P066",
+        "sourceSha256": "ea097734274a84abb874309f2a3501c2c6276ee1a689f0f82c13f8d387a7a12b",
+        "observedGroups": 1,
+        "sourceRuns": 1,
+        "decisions": {
+          "source-run-retained": 1
+        },
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P067",
+        "sourceSha256": "829b130cae16ff1f6e998f632d47112c0fcf03af2af249291e0658aac689f6da",
+        "observedGroups": 0,
+        "sourceRuns": 0,
+        "decisions": {},
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P068",
+        "sourceSha256": "8830d7d2139c2927f5465a8e41ede7de9071444149cb3fb76f1d953d7e321edb",
+        "observedGroups": 0,
+        "sourceRuns": 0,
+        "decisions": {},
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P069",
+        "sourceSha256": "e5e0d346bf00d7c41280d618c5b37fedb7c7016caff78f6c600ee25f8efac421",
+        "observedGroups": 0,
+        "sourceRuns": 29,
+        "decisions": {
+          "parameter-only-head": 29
+        },
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P070",
+        "sourceSha256": "6339a161e8b9827303b9204d1252e39cbf2f2d1e6e014fc7fcd5ccb4c06491b2",
+        "observedGroups": 6,
+        "sourceRuns": 16,
+        "decisions": {
+          "parameter-only-head": 10,
+          "source-run-retained": 6
+        },
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P071",
+        "sourceSha256": "249b232d42ce6091c61bf1ab85e0e32e9aeb1c30ab73f9ba0d8ef943a55200d2",
+        "observedGroups": 9,
+        "sourceRuns": 9,
+        "decisions": {
+          "source-run-retained": 9
+        },
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P072",
+        "sourceSha256": "7d7d0817c869c1439d4e183f3d77d0194884c1360f8c9a7e4cd1a6c44f4b3429",
+        "observedGroups": 0,
+        "sourceRuns": 0,
+        "decisions": {},
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P073",
+        "sourceSha256": "43d5f0a72186a3072e5c8eae22689538e487a7d97ef70021d6e651c986e995f0",
+        "observedGroups": 7,
+        "sourceRuns": 18,
+        "decisions": {
+          "parameter-only-head": 10,
+          "source-run-retained": 7,
+          "no-exact-name-review-template-or-non-declaration": 1
+        },
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P074",
+        "sourceSha256": "27ba05c9c4e73005dc0df00a59d0f939c11a4a74493ae3fa28fb0d1fbac88b4c",
+        "observedGroups": 0,
+        "sourceRuns": 0,
+        "decisions": {},
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P075",
+        "sourceSha256": "788f769ec797645a5fb2786a77af143e34561ad5a633237870bc5a38e6594a4a",
+        "observedGroups": 4,
+        "sourceRuns": 5,
+        "decisions": {
+          "parameter-only-head": 1,
+          "source-run-retained": 4
+        },
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P076",
+        "sourceSha256": "297ef5d7f8749697189c7330d872457d4a6ab8a355c8d7e3ad0748677d101959",
+        "observedGroups": 4,
+        "sourceRuns": 5,
+        "decisions": {
+          "source-run-retained": 4,
+          "unclosed-head-run": 1
+        },
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P077",
+        "sourceSha256": "4173b892ae66b6c891617c7423bc78f0cfc7120d552f0d7a00a5eda3e8783d24",
+        "observedGroups": 3,
+        "sourceRuns": 5,
+        "decisions": {
+          "no-exact-name-review-template-or-non-declaration": 1,
+          "source-run-retained": 3,
+          "unclosed-head-run": 1
+        },
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P078",
+        "sourceSha256": "fac720cec57d1fcc4d4c7e5c3af4f68c2d66caf5cd3c09e40bfa4a7736b54554",
+        "observedGroups": 0,
+        "sourceRuns": 0,
+        "decisions": {},
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P079",
+        "sourceSha256": "2cc46f8ba8fae696f92932f87a265bb2604fa8afbe5520d40714b11b165ce053",
+        "observedGroups": 0,
+        "sourceRuns": 1,
+        "decisions": {
+          "unclosed-head-run": 1
+        },
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P080",
+        "sourceSha256": "9d236780c58a47f1fc87bd37ca77d2e874a8fcca3ffe7ad3d5bf4c655f17ece6",
+        "observedGroups": 0,
+        "sourceRuns": 0,
+        "decisions": {},
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P081",
+        "sourceSha256": "a4806bc7be32ead0e963772188a43b8f7630c82e05623f2ba24f28db43d47ef9",
+        "observedGroups": 0,
+        "sourceRuns": 1,
+        "decisions": {
+          "unclosed-head-run": 1
+        },
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P082",
+        "sourceSha256": "28f55872fe8aeb4e88e4848f7e6e1d875f38d84cb27eb7e6945f6d47211662c9",
+        "observedGroups": 4,
+        "sourceRuns": 6,
+        "decisions": {
+          "parameter-only-head": 1,
+          "source-run-retained": 4,
+          "no-exact-name-review-template-or-non-declaration": 1
+        },
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P083",
+        "sourceSha256": "47bc5f14da1ba0db2859f8faba377df8473ae36081b7e0c8f7306115e40a8598",
+        "observedGroups": 0,
+        "sourceRuns": 0,
+        "decisions": {},
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P084",
+        "sourceSha256": "8a091512f85e019d01ff839fda30932810c9e630cda192c6cb5215c7c96e2a0f",
+        "observedGroups": 0,
+        "sourceRuns": 0,
+        "decisions": {},
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P085",
+        "sourceSha256": "6a94a0a121a46574e32576214740460601e0116a1a23c47a68ce23a9845e59aa",
+        "observedGroups": 0,
+        "sourceRuns": 0,
+        "decisions": {},
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P086",
+        "sourceSha256": "76a80bbe71403412f9ab12baf1f40579a3cbee239978a70eade95cf63393de7b",
+        "observedGroups": 0,
+        "sourceRuns": 0,
+        "decisions": {},
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P087",
+        "sourceSha256": "c4f3ea39c9c937dd13db8e4ff93fa5c9d178edfbeb421a699a0edbce6647db33",
+        "observedGroups": 1,
+        "sourceRuns": 1,
+        "decisions": {
+          "source-run-retained": 1
+        },
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P088",
+        "sourceSha256": "1057746f50ef8f555b1784cb49cd5d1cb917ff6aa2a99404ff0a7539df822487",
+        "observedGroups": 0,
+        "sourceRuns": 0,
+        "decisions": {},
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P089",
+        "sourceSha256": "2326e93e2c6564962b0c912cb5054edbcdb4bafab560898d4775c31f8ba45dd7",
+        "observedGroups": 0,
+        "sourceRuns": 0,
+        "decisions": {},
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P090",
+        "sourceSha256": "e24244e08c5fdfc96dfb2215f485266772a50bfd6ae84ca75f75cb471b35ba4f",
+        "observedGroups": 0,
+        "sourceRuns": 10,
+        "decisions": {
+          "parameter-only-head": 10
+        },
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P091",
+        "sourceSha256": "6d774ba0cc564a0622f936a1446c471d0da33a367a456c356bd20dda4de237fb",
+        "observedGroups": 4,
+        "sourceRuns": 5,
+        "decisions": {
+          "parameter-only-head": 1,
+          "source-run-retained": 4
+        },
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P092",
+        "sourceSha256": "b121bd3bc53876205a5c0f37666e6a5234d899ad0632fdd429fb5d3f598a3fbe",
+        "observedGroups": 2,
+        "sourceRuns": 51,
+        "decisions": {
+          "parameter-only-head": 46,
+          "no-exact-name-review-template-or-non-declaration": 3,
+          "source-run-retained": 2
+        },
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P093",
+        "sourceSha256": "08152a1ed1b01df59c898320600c8c4a32e39f7c1412596d5e65082fe65f2d81",
+        "observedGroups": 0,
+        "sourceRuns": 46,
+        "decisions": {
+          "parameter-only-head": 46
+        },
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P094",
+        "sourceSha256": "d97e13a13f1535c49c5191575db1bde5255e3f89a2332cda46d0bc7529c94f58",
+        "observedGroups": 2,
+        "sourceRuns": 5,
+        "decisions": {
+          "source-run-retained": 2,
+          "parameter-only-head": 2,
+          "unclosed-head-run": 1
+        },
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P095",
+        "sourceSha256": "988410b1ab80051e018d13ba76fb81c81a8a948d6e977c809529d5799f355af3",
+        "observedGroups": 0,
+        "sourceRuns": 20,
+        "decisions": {
+          "parameter-only-head": 20
+        },
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P096",
+        "sourceSha256": "8d75a1628d868fef74ca216a4034f4e4df44490f58a1d17616a672c215e5f8eb",
+        "observedGroups": 0,
+        "sourceRuns": 0,
+        "decisions": {},
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P097",
+        "sourceSha256": "fdb9fbe8d2c5fd4453d72e6423e2b9f640f05e3c41243194091a1df772dbe9a5",
+        "observedGroups": 6,
+        "sourceRuns": 16,
+        "decisions": {
+          "parameter-only-head": 10,
+          "source-run-retained": 6
+        },
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P098",
+        "sourceSha256": "831758775fe2fdaa3d5acf913dfd5024a608fd3538281e0d1cab857ce66faa95",
+        "observedGroups": 0,
+        "sourceRuns": 0,
+        "decisions": {},
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P099",
+        "sourceSha256": "72de98371bbac79f8dc59b50e4d506c23fc82add3da9c5bd60a36f8bacc0cf25",
+        "observedGroups": 1,
+        "sourceRuns": 2,
+        "decisions": {
+          "source-run-retained": 1,
+          "no-exact-name-review-template-or-non-declaration": 1
+        },
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P100",
+        "sourceSha256": "96f1e91c9a56b877886c2d07d655255a795547e6d20cfd144df4e7739963ee27",
+        "observedGroups": 0,
+        "sourceRuns": 0,
+        "decisions": {},
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P101",
+        "sourceSha256": "8d78e06342d7cf032e8dd0982349aa8a6d443b27d8e1d1305fe9ae1f5be8b72f",
+        "observedGroups": 0,
+        "sourceRuns": 0,
+        "decisions": {},
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P102",
+        "sourceSha256": "08e040b088db321a06eb4094a077d65f1634472a79886558839f555b50e726c6",
+        "observedGroups": 0,
+        "sourceRuns": 0,
+        "decisions": {},
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P103",
+        "sourceSha256": "238902087fc9b5d7e1cd34bf0d703e9dd83e1a586dc34c69249a1a876767f85e",
+        "observedGroups": 0,
+        "sourceRuns": 0,
+        "decisions": {},
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P104",
+        "sourceSha256": "bb19ad89850afdee8efb7e8e9332e2a52d410c4065af3b69b0e701888f99fdd6",
+        "observedGroups": 0,
+        "sourceRuns": 0,
+        "decisions": {},
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P105",
+        "sourceSha256": "4196bf0af923ae345f03f4b379d7e277da1754a6f4cdf025ac38981ada5957e7",
+        "observedGroups": 4,
+        "sourceRuns": 4,
+        "decisions": {
+          "source-run-retained": 4
+        },
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P106",
+        "sourceSha256": "65c02f17ab03acc8d821d917c50ce22c967616d5783dec58bb1fcc28e3184ed8",
+        "observedGroups": 5,
+        "sourceRuns": 54,
+        "decisions": {
+          "source-run-retained": 5,
+          "parameter-only-head": 42,
+          "no-exact-name-review-template-or-non-declaration": 6,
+          "unclosed-head-run": 1
+        },
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P107",
+        "sourceSha256": "689e9f7717eda500beffcbcdf7f1255a0840ff9910ffbf072e331a025dbd53ce",
+        "observedGroups": 2,
+        "sourceRuns": 2,
+        "decisions": {
+          "source-run-retained": 2
+        },
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P108",
+        "sourceSha256": "98c9cb4b916037a49e1d97f4baaae0cb71d5e8b85a6cdb4ff3e12590fe2660a3",
+        "observedGroups": 0,
+        "sourceRuns": 0,
+        "decisions": {},
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P109",
+        "sourceSha256": "21b595496e6dd69833a4b0e60de6c3e5ec05371537e88b80f116e943457c0bfd",
+        "observedGroups": 0,
+        "sourceRuns": 0,
+        "decisions": {},
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P110",
+        "sourceSha256": "fbdf81c5000af686d765b19a18f75e52b0460b866690299b715093db7e04312e",
+        "observedGroups": 0,
+        "sourceRuns": 1,
+        "decisions": {
+          "parameter-only-head": 1
+        },
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P111",
+        "sourceSha256": "6bfba32f6501b797e45feed845521bfa26122cb79006198cc62e1d89eee9646c",
+        "observedGroups": 0,
+        "sourceRuns": 1,
+        "decisions": {
+          "parameter-only-head": 1
+        },
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P112",
+        "sourceSha256": "f8be9675b0e64e75f2ebffd28a6e5295219669390a77c67b604cb4ff7c32cb60",
+        "observedGroups": 0,
+        "sourceRuns": 7,
+        "decisions": {
+          "source-container-or-content-boundary": 6,
+          "unclosed-head-run": 1
+        },
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P113",
+        "sourceSha256": "396abc2d13342adf2dd1d4dba7a3d443fc743aa33db2e83680b27d3c83d4dfc9",
+        "observedGroups": 0,
+        "sourceRuns": 0,
+        "decisions": {},
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P114",
+        "sourceSha256": "34557de7f44cfdaf1bccdc05621bae7108df3bf58c49d24b1688292b82cff158",
+        "observedGroups": 0,
+        "sourceRuns": 0,
+        "decisions": {},
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P115",
+        "sourceSha256": "f35de3b3008f684a7db141a7626db68b08c46e5b3d45c97726bc6d97eebade4e",
+        "observedGroups": 0,
+        "sourceRuns": 0,
+        "decisions": {},
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P116",
+        "sourceSha256": "e83d82c28bb2683cf71500e5fb8d9746a162bb24b08a6396a15ab2ed1d96cb45",
+        "observedGroups": 0,
+        "sourceRuns": 0,
+        "decisions": {},
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P117",
+        "sourceSha256": "d0e7de01eb61dd787cf8162f00ab60f68d8b271a084c0f2cbc0652797a01d4b9",
+        "observedGroups": 0,
+        "sourceRuns": 0,
+        "decisions": {},
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P118",
+        "sourceSha256": "c483b800c9aceb307fb15ea4138783838cb379b6f4e306a8dabe84af8fd4b01d",
+        "observedGroups": 0,
+        "sourceRuns": 0,
+        "decisions": {},
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P119",
+        "sourceSha256": "03a056a5b5041454e837f12027e3002ceee1e452530d17a5c55edf14183b9afb",
+        "observedGroups": 0,
+        "sourceRuns": 0,
+        "decisions": {},
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P120",
+        "sourceSha256": "4f5e1946154896899d6471c4e5b0bf902394429641231074dcacc71bbc5dd20b",
+        "observedGroups": 0,
+        "sourceRuns": 0,
+        "decisions": {},
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P121",
+        "sourceSha256": "a86bd1d671aa2afff558eb3b7c8b6e2a8bbaf55cb9fb2a6549b7538dd56e0f0f",
+        "observedGroups": 804,
+        "sourceRuns": 853,
+        "decisions": {
+          "no-exact-name-review-template-or-non-declaration": 23,
+          "source-run-retained": 804,
+          "unclosed-head-run": 11,
+          "source-container-or-content-boundary": 15
+        },
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P122",
+        "sourceSha256": "531ca21b660c1fbd294218e921d834adfaccd61c6f400a2a5d844759f40fc034",
+        "observedGroups": 803,
+        "sourceRuns": 852,
+        "decisions": {
+          "no-exact-name-review-template-or-non-declaration": 23,
+          "source-run-retained": 803,
+          "unclosed-head-run": 11,
+          "source-container-or-content-boundary": 15
+        },
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P123",
+        "sourceSha256": "a3de526eb64c1f066d50899fa6ba2a7e63eb77b977aa881c67599d89978debf1",
+        "observedGroups": 19,
+        "sourceRuns": 44,
+        "decisions": {
+          "source-run-retained": 19,
+          "parameter-only-head": 2,
+          "no-exact-name-review-template-or-non-declaration": 11,
+          "source-container-or-content-boundary": 11,
+          "unclosed-head-run": 1
+        },
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P124",
+        "sourceSha256": "a271c9471543684df90d1a3f0d988628588ed8ec4f49bb2f7e402fc752ff4a83",
+        "observedGroups": 1,
+        "sourceRuns": 2,
+        "decisions": {
+          "source-run-retained": 1,
+          "parameter-only-head": 1
+        },
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      },
+      {
+        "id": "P125",
+        "sourceSha256": "0f6252ae51279e02e6b6f461f5ab17099f477ccc2f0086d3ab455f837356a1a1",
+        "observedGroups": 5,
+        "sourceRuns": 19,
+        "decisions": {
+          "parameter-only-head": 11,
+          "source-run-retained": 5,
+          "no-exact-name-review-template-or-non-declaration": 2,
+          "parameter-only-head-boundary": 1
+        },
+        "unexpectedGroups": [],
+        "invalidGroups": 0,
+        "unresolvedRuns": 0
+      }
+    ]
+  },
+  "fixtures": {
+    "pages": 51,
+    "entries": 13203,
+    "sourceRuns": 1847,
+    "observedGroups": 1641,
+    "summary": {
+      "clean": 51
+    },
+    "reportSha256": "8c91856ffbac3a27ab9077ec006dfd0c971c39d96491809f68caa475d4c1a1da",
+    "fixtureQueries": 17
+  },
+  "verification": {
+    "checkSh": "passed",
+    "workspaceAllFeatures": {
+      "passed": 1581,
+      "failed": 0,
+      "ignored": 35
+    },
+    "realUnixPty": "passed, including 20/40/80/120 columns, zero-match n/N, clearing, resize, glyph colors and restoration",
+    "schemaSnapshot": "regenerated with no diff",
+    "minusVendorReplay": "25 source files verified",
+    "logs": {
+      "target/explain-check-final.log": "b644fda9fd0116228543821a0e36b87c494e397207bdbd6fd89f6661c6d2e5b1",
+      "target/explain-workspace-final.log": "feca4be6cfc8486321a12137f142e5629b470f71c14479fc1322ba3dcf809acf",
+      "target/explain-pty-final.log": "437f37ec3bcb6d9067e8fefe1a9db79ab50ec6be96eca18ad0793d84d9ab7471",
+      "target/explain-query-gold-final.log": "08c6b55d0eeaab00268d61fb47c4a236de042f19b607555b4ba2c0d090eaff02",
+      "target/explain-semantic-final.log": "7a72a37e0f4349d815a5d079395c59113d874171b23d1fdba1f39e2c344a8e11",
+      "target/explain-structure-final.log": "ecd67e2ad2df334b93ee12b72bb61abefbde9194a314c1458c8ef6a9232d2e83",
+      "target/explain-clippy-final.log": "9497b011bc6fb19e94b57ab46212b3ca43f4d56c272516b18c52e560df5f736b",
+      "target/explain-schema-final.log": "029ce7c3f7f0fa4cdb9113ce0fdfc1dbcf91170d356a1a27a2e1c852f308bcc3"
+    }
+  },
+  "referenceAudits": {
+    "fidelity": {
+      "summary": {
+        "examined": 51,
+        "clean": 46,
+        "review": 4,
+        "hard_failures": 1,
+        "skipped": 0
+      },
+      "reviewedFindings": [
+        {
+          "path": "real/bsd-closure/netbsd-drm.4",
+          "status": "review",
+          "recordedDecisions": [
+            {
+              "corpus": "fixtures",
+              "path": "real/bsd-closure/netbsd-drm.4",
+              "section": "4",
+              "source_sha256": "de68d037313c80fce7ecdb72da76e09e6009aafba7ad6673d1a6e7df7c6ed9a3",
+              "scan_status": "review",
+              "review_status": "confirmed-fixed",
+              "note": "The named-character fix now preserves the source-authored name Jaromír Doleček while the terminal reference drops the \\[vc] caron."
+            }
+          ]
+        },
+        {
+          "path": "real/mant-audit/equation-contexts.7",
+          "status": "review",
+          "recordedDecisions": [
+            {
+              "corpus": "fixtures",
+              "path": "real/mant-audit/equation-contexts.7",
+              "section": "7",
+              "source_sha256": "61b65f6ac3608d549fb47dd5a8e0e298561dcc9bf8569998a9ca12bdf8f124d0",
+              "scan_status": "review",
+              "review_status": "false-positive",
+              "note": "The reference exposes eqn control spellings while ManT retains the same operands and operators as source-neutral semantic text."
+            }
+          ]
+        },
+        {
+          "path": "real/mant-audit/lowering-fa-prose.1",
+          "status": "review",
+          "recordedDecisions": [
+            {
+              "corpus": "fixtures",
+              "path": "real/mant-audit/lowering-fa-prose.1",
+              "section": "1",
+              "source_sha256": "9abfc4c793c91982924de2320e3e50a3773b2b0edf3b527bb5ed66fbb477f39e",
+              "scan_status": "review",
+              "review_status": "false-positive",
+              "note": "GNU groff joins xNEXT and inserts a comma across No while the source has separate Fa x / No NEXT / Fa y. ManT and mandoc 1.14.6 retain WORD(x NEXT y); the source-consumer regression fixes the deliberate macro boundary."
+            }
+          ]
+        },
+        {
+          "path": "real/mant-audit/macro-recursion.7",
+          "status": "hard-failure",
+          "recordedDecisions": [
+            {
+              "corpus": "fixtures",
+              "path": "real/mant-audit/macro-recursion.7",
+              "section": "7",
+              "source_sha256": "ab9675337c6de80df24e8e998c73ef2c2793e7ad0ad43dbbce67d58bda5d5e7a",
+              "scan_status": "hard-failure",
+              "review_status": "false-positive",
+              "note": "The hostile fixture intentionally exceeds GNU groff's input stack while ManT bounds recursion and preserves the finite document tail."
+            }
+          ]
+        },
+        {
+          "path": "real/windows-releases/rclone.1.zst",
+          "status": "review",
+          "recordedDecisions": [
+            {
+              "corpus": "fixtures",
+              "path": "real/windows-releases/rclone.1.zst",
+              "section": "1",
+              "source_sha256": "f35de3b3008f684a7db141a7626db68b08c46e5b3d45c97726bc6d97eebade4e",
+              "scan_status": "review",
+              "review_status": "false-positive",
+              "note": "Residual candidates are table traversal and fixed-width reference fragments with all source content retained."
+            }
+          ]
+        }
+      ],
+      "reportSha256": "9d481f006dda06e916d6e167772a98d478c99de492985c955784b43040866c09"
+    },
+    "layout": {
+      "summary": {
+        "clean": 49,
+        "hard-failure": 1,
+        "review": 1
+      },
+      "reviewedFindings": [
+        {
+          "path": "real/mant-audit/macro-recursion.7",
+          "status": "hard-failure",
+          "recordedDecisions": [
+            {
+              "corpus": "fixtures",
+              "path": "real/mant-audit/macro-recursion.7",
+              "section": "7",
+              "source_sha256": "ab9675337c6de80df24e8e998c73ef2c2793e7ad0ad43dbbce67d58bda5d5e7a",
+              "layout_schema": "mant.roff-layout-audit/v3",
+              "scan_status": "hard-failure",
+              "review_status": "false-positive",
+              "note": "GNU groff intentionally has no comparable rendered layout after hitting its recursion limit while ManT retains the finite tail."
+            }
+          ]
+        },
+        {
+          "path": "real/windows-releases/rclone.1.zst",
+          "status": "review",
+          "recordedDecisions": [
+            {
+              "corpus": "fixtures",
+              "path": "real/windows-releases/rclone.1.zst",
+              "section": "1",
+              "source_sha256": "f35de3b3008f684a7db141a7626db68b08c46e5b3d45c97726bc6d97eebade4e",
+              "layout_schema": "mant.roff-layout-audit/v3",
+              "scan_status": "review",
+              "review_status": "false-positive",
+              "note": "The short-line pairs occur in table and wrapped prose traversal with every visible line preserved."
+            }
+          ]
+        }
+      ],
+      "reportSha256": "f05fa476cfbd533e66cac5a80a81846985077d29036fd5fb192dfc902c0af50a"
+    },
+    "mandoc-fidelity": {
+      "summary": {
+        "examined": 51,
+        "clean": 45,
+        "review": 6,
+        "hard_failures": 0,
+        "skipped": 0
+      },
+      "reviewedFindings": [
+        {
+          "path": "real/bsd-closure/netbsd-drm.4",
+          "status": "review",
+          "recordedDecisions": [
+            {
+              "reference_kind": "mandoc",
+              "reference_id": "mandoc-1.14.6-1",
+              "corpus": "fixtures",
+              "path": "real/bsd-closure/netbsd-drm.4",
+              "section": "4",
+              "source_sha256": "de68d037313c80fce7ecdb72da76e09e6009aafba7ad6673d1a6e7df7c6ed9a3",
+              "scan_status": "review",
+              "review_status": "confirmed-fixed",
+              "note": "The named-character fix now preserves the source-authored name Jaromír Doleček while mandoc drops the \\[vc] caron."
+            }
+          ]
+        },
+        {
+          "path": "real/fedora44/sh.1.zst",
+          "status": "review",
+          "recordedDecisions": [
+            {
+              "reference_kind": "mandoc",
+              "reference_id": "mandoc-1.14.6-1",
+              "corpus": "fixtures",
+              "path": "real/fedora44/sh.1.zst",
+              "section": "1",
+              "source_sha256": "a3de526eb64c1f066d50899fa6ba2a7e63eb77b977aa881c67599d89978debf1",
+              "scan_status": "review",
+              "review_status": "false-positive",
+              "note": "mandoc honors the width-conditioned break after the source line continuation while ManT retains the complete PATH on one valid line"
+            }
+          ]
+        },
+        {
+          "path": "real/mant-audit/equation-contexts.7",
+          "status": "review",
+          "recordedDecisions": [
+            {
+              "reference_kind": "mandoc",
+              "reference_id": "mandoc-1.14.6-1",
+              "corpus": "fixtures",
+              "path": "real/mant-audit/equation-contexts.7",
+              "section": "7",
+              "source_sha256": "61b65f6ac3608d549fb47dd5a8e0e298561dcc9bf8569998a9ca12bdf8f124d0",
+              "scan_status": "review",
+              "review_status": "false-positive",
+              "note": "mandoc uses compact eqn spellings while ManT exposes the same operands and operators with source-neutral spacing and Unicode ellipsis"
+            }
+          ]
+        },
+        {
+          "path": "real/mant-audit/lowering-lk-label-state.1",
+          "status": "review",
+          "recordedDecisions": [
+            {
+              "reference_kind": "mandoc",
+              "reference_id": "mandoc-1.14.6-1",
+              "corpus": "fixtures",
+              "path": "real/mant-audit/lowering-lk-label-state.1",
+              "section": "1",
+              "source_sha256": "c1c5eb6560c944e86420e478482326a858ec804f179e6169a025c364118ded7e",
+              "scan_status": "review",
+              "review_status": "false-positive",
+              "note": "ManT displays the authored WORD label and retains https://example.org as its typed External target and Markdown destination; mandoc additionally prints the URI. Exact label and successor font registers are covered by roff_consumers."
+            }
+          ]
+        },
+        {
+          "path": "real/mant-audit/lowering-lk-order.1",
+          "status": "review",
+          "recordedDecisions": [
+            {
+              "reference_kind": "mandoc",
+              "reference_id": "mandoc-1.14.6-1",
+              "corpus": "fixtures",
+              "path": "real/mant-audit/lowering-lk-order.1",
+              "section": "1",
+              "source_sha256": "25aaaf5726dd5c9a87a2ec75fd88ccf7336f6414fcfce716955c40ffa520e002",
+              "scan_status": "review",
+              "review_status": "false-positive",
+              "note": "ManT displays the authored NEXT label and retains https://example.org/WORD as its typed External target and Markdown destination; hidden URI font escapes still execute after the label. mandoc prints both label and URI; not content loss in the document model."
+            }
+          ]
+        },
+        {
+          "path": "real/windows-releases/rclone.1.zst",
+          "status": "review",
+          "recordedDecisions": [
+            {
+              "reference_kind": "mandoc",
+              "reference_id": "mandoc-1.14.6-1",
+              "corpus": "fixtures",
+              "path": "real/windows-releases/rclone.1.zst",
+              "section": "1",
+              "source_sha256": "f35de3b3008f684a7db141a7626db68b08c46e5b3d45c97726bc6d97eebade4e",
+              "scan_status": "review",
+              "review_status": "confirmed-fixed",
+              "note": "mandoc exposed a shifted tbl text-block column fixed by 98db676; remaining phrase signals are table traversal and wrapping differences with all source tokens retained"
+            }
+          ]
+        }
+      ],
+      "reportSha256": "2cd27f999974bd1caf1c6aecd9ca1ab32675488930387b1967ee620325d1de32"
+    },
+    "mandoc-layout": {
+      "summary": {
+        "clean": 50,
+        "review": 1
+      },
+      "reviewedFindings": [
+        {
+          "path": "real/windows-releases/rclone.1.zst",
+          "status": "review",
+          "recordedDecisions": [
+            {
+              "reference_kind": "mandoc",
+              "reference_id": "mandoc-1.14.6-1",
+              "corpus": "fixtures",
+              "path": "real/windows-releases/rclone.1.zst",
+              "section": "1",
+              "source_sha256": "f35de3b3008f684a7db141a7626db68b08c46e5b3d45c97726bc6d97eebade4e",
+              "layout_schema": "mant.roff-layout-audit/v3",
+              "scan_status": "review",
+              "review_status": "false-positive",
+              "note": "the repeated sentence occurs in both filled prose and no-fill examples; reviewed no-fill instances keep their authored boundary while the ambiguous filled instance is correctly joined"
+            }
+          ]
+        }
+      ],
+      "reportSha256": "a1797dd8574b74ff2290745ab5e507163678df6adcb175feb4b3d26f5e271f87"
+    }
+  },
+  "performance": {
+    "producerCommit": "27027ed3ba31766ff4f467aacbfa30315a13eaa6",
+    "binarySha256": "dc00dea13d76ccb46d1190b2652af1f4b110782ea48113efd179023a0bcc6d97",
+    "sourceSha256": "8a0bbfaaa5b05a8fcefc6d4741530d09abcfd95b26f8947e9aecbce68cb75b23",
+    "method": "Sequential warm-machine release runs, no concurrent compilation. CLI includes load and presentation; phase timings exclude initial load. Process peak RSS includes initial load for every phase. No historical timing is presented as a same-binary baseline.",
+    "phases": {
+      "load": {
+        "wallSeconds": 1.6898847640259191,
+        "timeWallSeconds": 1.68,
+        "peakRssKiB": 73576,
+        "milliseconds": [
+          200.714988,
+          198.42965,
+          200.403837,
+          198.710059,
+          202.690279,
+          194.456808,
+          192.723601
+        ],
+        "medianMilliseconds": 198.710059
+      },
+      "index": {
+        "wallSeconds": 0.2610755460045766,
+        "timeWallSeconds": 0.26,
+        "peakRssKiB": 71904,
+        "milliseconds": [
+          4.425241,
+          2.9223640000000004,
+          2.482087,
+          2.7637590000000003,
+          5.073793,
+          3.54768,
+          2.6986139999999996
+        ],
+        "medianMilliseconds": 2.9223640000000004
+      },
+      "outline": {
+        "wallSeconds": 0.2632953390129842,
+        "timeWallSeconds": 0.26,
+        "peakRssKiB": 71876,
+        "milliseconds": [
+          6.091938,
+          4.391969,
+          3.259311,
+          2.9906379999999997,
+          5.187118999999999,
+          4.6931899999999995,
+          3.3125780000000002
+        ],
+        "medianMilliseconds": 4.391969
+      },
+      "explain": {
+        "wallSeconds": 0.5011101749842055,
+        "timeWallSeconds": 0.5,
+        "peakRssKiB": 71848,
+        "milliseconds": [
+          39.742726,
+          36.607089,
+          37.969235,
+          38.274265,
+          37.804957,
+          39.029358,
+          39.400189000000005
+        ],
+        "medianMilliseconds": 38.274265
+      }
+    },
+    "cli": {
+      "outline-json": {
+        "samples": [
+          {
+            "wallSeconds": 0.24140963997342624,
+            "timeWallSeconds": 0.24,
+            "peakRssKiB": 76936
+          },
+          {
+            "wallSeconds": 0.2279471670044586,
+            "timeWallSeconds": 0.22,
+            "peakRssKiB": 76924
+          },
+          {
+            "wallSeconds": 0.22105644299881533,
+            "timeWallSeconds": 0.22,
+            "peakRssKiB": 77080
+          },
+          {
+            "wallSeconds": 0.21443936400464736,
+            "timeWallSeconds": 0.21,
+            "peakRssKiB": 76772
+          },
+          {
+            "wallSeconds": 0.2324317790044006,
+            "timeWallSeconds": 0.23,
+            "peakRssKiB": 77172
+          },
+          {
+            "wallSeconds": 0.22361100098351017,
+            "timeWallSeconds": 0.22,
+            "peakRssKiB": 76800
+          },
+          {
+            "wallSeconds": 0.24914914299733937,
+            "timeWallSeconds": 0.24,
+            "peakRssKiB": 76860
+          }
+        ],
+        "medianSeconds": 0.2279471670044586,
+        "maxRssKiB": 77172
+      },
+      "explain-json": {
+        "samples": [
+          {
+            "wallSeconds": 0.27057640301063657,
+            "timeWallSeconds": 0.26,
+            "peakRssKiB": 77024
+          },
+          {
+            "wallSeconds": 0.2822929300018586,
+            "timeWallSeconds": 0.28,
+            "peakRssKiB": 76844
+          },
+          {
+            "wallSeconds": 0.2583408180216793,
+            "timeWallSeconds": 0.25,
+            "peakRssKiB": 77280
+          },
+          {
+            "wallSeconds": 0.25866884397692047,
+            "timeWallSeconds": 0.25,
+            "peakRssKiB": 77164
+          },
+          {
+            "wallSeconds": 0.25504840101348236,
+            "timeWallSeconds": 0.25,
+            "peakRssKiB": 76848
+          },
+          {
+            "wallSeconds": 0.26077964299474843,
+            "timeWallSeconds": 0.25,
+            "peakRssKiB": 76960
+          },
+          {
+            "wallSeconds": 0.2623023249907419,
+            "timeWallSeconds": 0.26,
+            "peakRssKiB": 76776
+          }
+        ],
+        "medianSeconds": 0.26077964299474843,
+        "maxRssKiB": 77280
+      },
+      "explain-ansi": {
+        "samples": [
+          {
+            "wallSeconds": 0.2739149519766215,
+            "timeWallSeconds": 0.27,
+            "peakRssKiB": 77040
+          },
+          {
+            "wallSeconds": 0.2715601900126785,
+            "timeWallSeconds": 0.27,
+            "peakRssKiB": 77092
+          },
+          {
+            "wallSeconds": 0.270242040976882,
+            "timeWallSeconds": 0.26,
+            "peakRssKiB": 77208
+          },
+          {
+            "wallSeconds": 0.2590659089910332,
+            "timeWallSeconds": 0.25,
+            "peakRssKiB": 76960
+          },
+          {
+            "wallSeconds": 0.2587190539925359,
+            "timeWallSeconds": 0.25,
+            "peakRssKiB": 76744
+          },
+          {
+            "wallSeconds": 0.23969615099485964,
+            "timeWallSeconds": 0.23,
+            "peakRssKiB": 76980
+          },
+          {
+            "wallSeconds": 0.2694862660137005,
+            "timeWallSeconds": 0.26,
+            "peakRssKiB": 77036
+          }
+        ],
+        "medianSeconds": 0.2694862660137005,
+        "maxRssKiB": 77208
+      }
+    },
+    "synthetic": {
+      "64": {
+        "samples": [
+          {
+            "wallSeconds": 0.009308965993113816,
+            "timeWallSeconds": 0.0,
+            "peakRssKiB": 11100
+          },
+          {
+            "wallSeconds": 0.010431119007989764,
+            "timeWallSeconds": 0.0,
+            "peakRssKiB": 11100
+          },
+          {
+            "wallSeconds": 0.009101828996790573,
+            "timeWallSeconds": 0.0,
+            "peakRssKiB": 11264
+          },
+          {
+            "wallSeconds": 0.008965572982560843,
+            "timeWallSeconds": 0.0,
+            "peakRssKiB": 11104
+          },
+          {
+            "wallSeconds": 0.009468920005019754,
+            "timeWallSeconds": 0.0,
+            "peakRssKiB": 11320
+          },
+          {
+            "wallSeconds": 0.009466928022447973,
+            "timeWallSeconds": 0.0,
+            "peakRssKiB": 11012
+          },
+          {
+            "wallSeconds": 0.008829186990624294,
+            "timeWallSeconds": 0.0,
+            "peakRssKiB": 11036
+          }
+        ],
+        "medianSeconds": 0.009308965993113816,
+        "maxRssKiB": 11320
+      },
+      "128": {
+        "samples": [
+          {
+            "wallSeconds": 0.010594247985864058,
+            "timeWallSeconds": 0.01,
+            "peakRssKiB": 11652
+          },
+          {
+            "wallSeconds": 0.009994079009629786,
+            "timeWallSeconds": 0.0,
+            "peakRssKiB": 11588
+          },
+          {
+            "wallSeconds": 0.01039008202496916,
+            "timeWallSeconds": 0.0,
+            "peakRssKiB": 11716
+          },
+          {
+            "wallSeconds": 0.010003542993217707,
+            "timeWallSeconds": 0.0,
+            "peakRssKiB": 11392
+          },
+          {
+            "wallSeconds": 0.010773105022963136,
+            "timeWallSeconds": 0.01,
+            "peakRssKiB": 11772
+          },
+          {
+            "wallSeconds": 0.010393400996690616,
+            "timeWallSeconds": 0.0,
+            "peakRssKiB": 11388
+          },
+          {
+            "wallSeconds": 0.010250117018586025,
+            "timeWallSeconds": 0.0,
+            "peakRssKiB": 11712
+          }
+        ],
+        "medianSeconds": 0.01039008202496916,
+        "maxRssKiB": 11772
+      },
+      "256": {
+        "samples": [
+          {
+            "wallSeconds": 0.012291061982978135,
+            "timeWallSeconds": 0.01,
+            "peakRssKiB": 12636
+          },
+          {
+            "wallSeconds": 0.012378145009279251,
+            "timeWallSeconds": 0.01,
+            "peakRssKiB": 12484
+          },
+          {
+            "wallSeconds": 0.011959322990151122,
+            "timeWallSeconds": 0.01,
+            "peakRssKiB": 12756
+          },
+          {
+            "wallSeconds": 0.012837312009651214,
+            "timeWallSeconds": 0.01,
+            "peakRssKiB": 12684
+          },
+          {
+            "wallSeconds": 0.012181817000964656,
+            "timeWallSeconds": 0.01,
+            "peakRssKiB": 12632
+          },
+          {
+            "wallSeconds": 0.011621204990660772,
+            "timeWallSeconds": 0.01,
+            "peakRssKiB": 12484
+          },
+          {
+            "wallSeconds": 0.012244531011674553,
+            "timeWallSeconds": 0.01,
+            "peakRssKiB": 12784
+          }
+        ],
+        "medianSeconds": 0.012244531011674553,
+        "maxRssKiB": 12784
+      },
+      "512": {
+        "samples": [
+          {
+            "wallSeconds": 0.015997758018784225,
+            "timeWallSeconds": 0.01,
+            "peakRssKiB": 15108
+          },
+          {
+            "wallSeconds": 0.016717296006390825,
+            "timeWallSeconds": 0.01,
+            "peakRssKiB": 15108
+          },
+          {
+            "wallSeconds": 0.015801699017174542,
+            "timeWallSeconds": 0.01,
+            "peakRssKiB": 14800
+          },
+          {
+            "wallSeconds": 0.01662502798717469,
+            "timeWallSeconds": 0.01,
+            "peakRssKiB": 14800
+          },
+          {
+            "wallSeconds": 0.01623836299404502,
+            "timeWallSeconds": 0.01,
+            "peakRssKiB": 14788
+          },
+          {
+            "wallSeconds": 0.016716026002541184,
+            "timeWallSeconds": 0.01,
+            "peakRssKiB": 14492
+          },
+          {
+            "wallSeconds": 0.01605294700129889,
+            "timeWallSeconds": 0.01,
+            "peakRssKiB": 14788
+          }
+        ],
+        "medianSeconds": 0.01623836299404502,
+        "maxRssKiB": 15108
+      },
+      "1024": {
+        "samples": [
+          {
+            "wallSeconds": 0.023871890996815637,
+            "timeWallSeconds": 0.02,
+            "peakRssKiB": 18756
+          },
+          {
+            "wallSeconds": 0.024251588998595253,
+            "timeWallSeconds": 0.02,
+            "peakRssKiB": 19068
+          },
+          {
+            "wallSeconds": 0.024121516005834565,
+            "timeWallSeconds": 0.02,
+            "peakRssKiB": 18948
+          },
+          {
+            "wallSeconds": 0.02360880799824372,
+            "timeWallSeconds": 0.02,
+            "peakRssKiB": 19076
+          },
+          {
+            "wallSeconds": 0.023886879003839567,
+            "timeWallSeconds": 0.02,
+            "peakRssKiB": 18888
+          },
+          {
+            "wallSeconds": 0.022796699980972335,
+            "timeWallSeconds": 0.02,
+            "peakRssKiB": 18952
+          },
+          {
+            "wallSeconds": 0.023821774986572564,
+            "timeWallSeconds": 0.02,
+            "peakRssKiB": 19004
+          }
+        ],
+        "medianSeconds": 0.023871890996815637,
+        "maxRssKiB": 19076
+      }
+    }
+  },
+  "commands": [
+    "bash scripts/check.sh",
+    "cargo test --locked --workspace --all-features",
+    "cargo test --locked -p mant --test terminal_display",
+    "cargo test --locked -p mant-engine --test declaration_groups",
+    "cargo test --locked -p mant-engine --example roff_semantic_profile",
+    "python3 scripts/audit-roff-semantics.py --query-gold tests/fixtures/roff/ENTRY_QUERY_GOLD.json --verify --json target/explain-query-gold-final.json",
+    "python3 scripts/audit-roff-semantics.py --fixtures --verify --recheck-recorded --findings-only --json target/explain-semantic-final.json",
+    "python3 scripts/audit-roff-structure.py --fixtures --recheck-recorded --findings-only",
+    "python3 scripts/audit-roff-fidelity.py --fixtures --recheck-recorded --findings-only",
+    "python3 scripts/audit-roff-layout.py --fixtures --recheck-recorded --findings-only",
+    "python3 scripts/audit-roff-fidelity.py --fixtures --recheck-recorded --findings-only --reference mandoc --reference-kind mandoc --reference-id mandoc-1.14.6-1",
+    "python3 scripts/audit-roff-layout.py --fixtures --recheck-recorded --findings-only --reference mandoc --reference-kind mandoc --reference-id mandoc-1.14.6-1",
+    "bash scripts/update-protocol-schema-snapshot.sh",
+    "cargo build --locked --release -p mant-engine --example measure_native_load",
+    "/usr/bin/time -v target/release/examples/measure_native_load tests/fixtures/roff/real/archlinux/gcc.1.gz load",
+    "/usr/bin/time -v target/release/examples/measure_native_load tests/fixtures/roff/real/archlinux/gcc.1.gz index",
+    "/usr/bin/time -v target/release/examples/measure_native_load tests/fixtures/roff/real/archlinux/gcc.1.gz outline",
+    "/usr/bin/time -v target/release/examples/measure_native_load tests/fixtures/roff/real/archlinux/gcc.1.gz explain -x",
+    "/usr/bin/time -v target/release/mant --input tests/fixtures/roff/real/archlinux/gcc.1.gz --outline --format json",
+    "/usr/bin/time -v target/release/mant --input tests/fixtures/roff/real/archlinux/gcc.1.gz --explain=-x --format json",
+    "/usr/bin/time -v target/release/mant --input tests/fixtures/roff/real/archlinux/gcc.1.gz --explain=-x --format text --color always"
+  ],
+  "syntheticRecipe": "For N=64,128,256,512,1024: .TH PROBE 1; .SH OPTIONS; N consecutive .TP/.B --mode=i heads; 4000 lines of Long original explanation. Feed stdin as roff with --explain=--mode --limit 256 --explain-content-bytes 1 --format json --compact. Seven sequential samples. Wall timer includes the time wrapper; peak RSS is the child process.",
+  "limitations": [
+    "Linux warm-machine measurements, not controlled cold-cache or zero-cost evidence; no native Windows/macOS execution.",
+    "Original source windows and selected query witnesses are reviewed, not all entries on every page.",
+    "Reasoned template/non-declaration rejections remain inspection signals, not proof of source intent.",
+    "Reference differences retain existing reviewed decisions; the recursive fixture still makes groff fail.",
+    "Historical 45036-page sweeps are not claimed as rerun here.",
+    "Large raw output and build logs remain local under target; this record and source-bound gold preserve durable identities and summaries.",
+    "Groups supply reading context, not alias equivalence, sentence-level applicability or inherited children/value domains."
+  ]
+}
