@@ -2,6 +2,97 @@
 use super::*;
 
 #[test]
+fn anchors_follow_hard_lines_in_terms_and_run_in_bodies() {
+    for inline_term in [false, true] {
+        let mut builder = DocumentBuilder::new("target-rows".into(), None);
+        builder.blocks(
+            &[Block::DefinitionList {
+                declaration_groups: Vec::new(),
+                compact: true,
+                items: vec![DefinitionItem {
+                    source: None,
+                    entry: None,
+                    layout: mant_ir::DefinitionLayout {
+                        inline_term,
+                        ..Default::default()
+                    },
+                    terms: vec![vec![
+                        Inline::Text {
+                            value: "FIRST".into(),
+                        },
+                        Inline::LineBreak,
+                        Inline::Strong {
+                            children: vec![
+                                Inline::anchor_at("second-head", None),
+                                Inline::Text {
+                                    value: "SECOND".into(),
+                                },
+                            ],
+                        },
+                    ]],
+                    description: vec![Block::Paragraph {
+                        children: vec![
+                            Inline::anchor_at("body", None),
+                            Inline::Text {
+                                value: "BODY\n".into(),
+                            },
+                            Inline::anchor_at("next-body", None),
+                            Inline::Text {
+                                value: "NEXT".into(),
+                            },
+                        ],
+                        layout: LayoutHint::default(),
+                        source: None,
+                    }],
+                }],
+                layout: LayoutHint::default(),
+                source: None,
+            }],
+            0,
+        );
+        assert_eq!(builder.anchors["second-head"], 1);
+        let first_body = if inline_term { 1 } else { 2 };
+        assert_eq!(builder.anchors["body"], first_body);
+        assert_eq!(builder.anchors["next-body"], first_body + 1);
+    }
+    let mut builder = DocumentBuilder::new("list-target".into(), None);
+    builder.blocks(
+        &[Block::List {
+            kind: ListKind::Bullet,
+            compact: true,
+            items: vec![ListItem {
+                source: None,
+                entry: None,
+                blocks: vec![Block::Paragraph {
+                    children: vec![
+                        Inline::anchor_at("first", None),
+                        Inline::Text {
+                            value: "FIRST".into(),
+                        },
+                        Inline::LineBreak,
+                        Inline::anchor_at("second", None),
+                        Inline::Text {
+                            value: "SECOND".into(),
+                        },
+                    ],
+                    layout: LayoutHint {
+                        continuation_indent_columns: 3,
+                        ..Default::default()
+                    },
+                    source: None,
+                }],
+            }],
+            layout: LayoutHint::default(),
+            source: None,
+        }],
+        0,
+    );
+    assert_eq!(builder.anchors["first"], 0);
+    assert_eq!(builder.anchors["second"], 1);
+    assert_eq!(builder.lines[1].indent, 5);
+}
+
+#[test]
 fn hanging_paragraph_preserves_hard_and_soft_continuation_origins() {
     let mut builder = DocumentBuilder::new("hanging".into(), None);
     builder.blocks(

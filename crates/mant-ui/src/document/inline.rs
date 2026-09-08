@@ -22,8 +22,16 @@ pub(super) fn tldr_style(role: crate::tldr::TldrRole) -> Style {
     }
 }
 
-pub(super) fn inline_anchor_ids(nodes: &[Inline]) -> Vec<String> {
+/// Anchor ownership follows original hard lines, independently of styling or
+/// visual wrapping. Carry the row across nested wrappers instead of flattening
+/// targets into an unordered set at the start of the whole paragraph.
+pub(super) fn inline_anchor_rows(nodes: &[Inline]) -> Vec<(String, usize)> {
     let mut ids = Vec::new();
+    collect_anchor_rows(nodes, &mut 0, &mut ids);
+    ids
+}
+
+fn collect_anchor_rows(nodes: &[Inline], row: &mut usize, ids: &mut Vec<(String, usize)>) {
     for node in nodes {
         match node {
             Inline::Anchor {
@@ -31,16 +39,20 @@ pub(super) fn inline_anchor_ids(nodes: &[Inline]) -> Vec<String> {
                 fragment_aliases,
                 ..
             } => {
-                ids.push(id.to_string());
-                ids.extend(fragment_aliases.iter().map(ToString::to_string));
+                ids.push((id.to_string(), *row));
+                ids.extend(
+                    fragment_aliases
+                        .iter()
+                        .map(|alias| (alias.to_string(), *row)),
+                );
             }
             Inline::Strong { children }
             | Inline::Emphasis { children }
-            | Inline::Link { children, .. } => ids.extend(inline_anchor_ids(children)),
-            Inline::Text { .. } | Inline::Code { .. } | Inline::LineBreak => {}
+            | Inline::Link { children, .. } => collect_anchor_rows(children, row, ids),
+            Inline::Text { value } | Inline::Code { value } => *row += value.matches('\n').count(),
+            Inline::LineBreak => *row += 1,
         }
     }
-    ids
 }
 
 #[cfg(test)]

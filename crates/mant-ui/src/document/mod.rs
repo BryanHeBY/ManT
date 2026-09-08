@@ -34,7 +34,7 @@ use unicode_width::UnicodeWidthStr;
 use crate::theme;
 #[cfg(test)]
 use inline::styled_inline_lines;
-use inline::{count_sections, inline_anchor_ids, shifted_links, spans_width, tldr_style};
+use inline::{count_sections, inline_anchor_rows, shifted_links, spans_width, tldr_style};
 pub use model::ExternalUri;
 pub(crate) use model::LinkTarget;
 use model::{

@@ -5,7 +5,7 @@ use super::{
     Arc, Block, DocumentAddress, ExternalUri, HashMap, Inline, LineSurface, LinkTarget, ListKind,
     LogicalLine, LogicalLinkRange, LogicalTableCell, LogicalTableLayout, Modifier, NavKind,
     NavNode, Section, SemanticIndex, Span, Style, TLDR_ID, TLDR_VERTICAL_PADDING_ROWS,
-    TldrDocument, UnicodeWidthStr, WrapMode, inline_anchor_ids, shifted_links, spans_width, theme,
+    TldrDocument, UnicodeWidthStr, WrapMode, inline_anchor_rows, shifted_links, spans_width, theme,
     tldr_style,
 };
 use mant_protocol::geometry::{compose_origin, coordinate, marker_run_in_gap, padding};
@@ -281,10 +281,15 @@ impl DocumentBuilder<'_> {
                             marker_run_in_gap(indent, marker_width, layout.indent_columns)
                     {
                         self.spacing(layout.spacing_before_lines);
+                        for (id, row) in inline_anchor_rows(children) {
+                            self.anchors.entry(id).or_insert(self.lines.len() + row);
+                        }
                         let content_indent = compose_origin(
                             compose_origin(indent, coordinate(marker_width)),
                             layout.indent_columns,
                         );
+                        let continuation_indent =
+                            compose_origin(content_indent, layout.continuation_indent_columns);
                         let mut inline_lines = styled_bound_inline_lines(
                             children,
                             Style::default().fg(theme::TEXT),
@@ -299,17 +304,21 @@ impl DocumentBuilder<'_> {
                         spans.push(Span::raw(" ".repeat(gap)));
                         spans.extend(first.spans);
                         self.push(
-                            LogicalLine::hanging(padding(indent), padding(content_indent), spans)
-                                .with_links(shifted_links(
-                                    first.links,
-                                    marker_width.saturating_add(gap),
-                                )),
+                            LogicalLine::hanging(
+                                padding(indent),
+                                padding(continuation_indent),
+                                spans,
+                            )
+                            .with_links(shifted_links(
+                                first.links,
+                                marker_width.saturating_add(gap),
+                            )),
                         );
                         for line in inline_lines.into_iter().skip(1) {
                             self.push(
                                 LogicalLine::hanging(
-                                    padding(content_indent),
-                                    padding(content_indent),
+                                    padding(continuation_indent),
+                                    padding(continuation_indent),
                                     line.spans,
                                 )
                                 .with_links(line.links),
@@ -449,8 +458,8 @@ impl DocumentBuilder<'_> {
         let mut head_lines = Vec::new();
         let mut head_targets = Vec::new();
         for term in &item.terms {
-            for id in inline_anchor_ids(term) {
-                head_targets.push((id, head_lines.len()));
+            for (id, row) in inline_anchor_rows(term) {
+                head_targets.push((id, head_lines.len() + row));
             }
             let lines = styled_bound_inline_lines(
                 term,
@@ -486,6 +495,9 @@ impl DocumentBuilder<'_> {
         let mut term_links = last.links;
         let term_width = spans_width(&term_spans);
         if let Some((children, layout)) = item.inline_description() {
+            for (id, row) in inline_anchor_rows(children) {
+                self.anchors.entry(id).or_insert(self.lines.len() + row);
+            }
             let first_indent = compose_origin(block_origin, layout.indent_columns);
             let continuation_indent =
                 compose_origin(first_indent, layout.continuation_indent_columns);
@@ -549,8 +561,8 @@ impl DocumentBuilder<'_> {
         base_style: Style,
         surface: LineSurface,
     ) {
-        for id in inline_anchor_ids(nodes) {
-            self.anchors.entry(id).or_insert(self.lines.len());
+        for (id, row) in inline_anchor_rows(nodes) {
+            self.anchors.entry(id).or_insert(self.lines.len() + row);
         }
         let lines = styled_display_inline_lines(
             nodes,
