@@ -111,5 +111,14 @@ mod tests {
             style.get_fg_color(),
             terminal_style(TerminalRole::Entry(mant_ir::EntryKind::Command)).get_fg_color()
         );
+        let environment = span_style(TextPresentation {
+            inline: mant_protocol::InlinePresentation {
+                entry_kind: Some(mant_ir::EntryKind::EnvironmentVariable),
+                ..presentation.inline
+            },
+            ..presentation
+        });
+        assert_eq!(environment.get_fg_color(), Some(AnsiColor::Magenta.into()));
+        assert_eq!(environment.get_effects(), style.get_effects());
     }
 }

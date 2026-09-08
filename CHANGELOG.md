@@ -65,6 +65,9 @@ that crate was not published for that change.
 
 ### Shared entry presentation
 
+- Give environment-variable names a separate Magenta/MAUVE family across CLI
+  and TUI views, distinct from structural headings, links and general variables.
+
 - Outline text keeps the path and full title on the primary line, with IDs,
   summaries and relationships in labeled hanging lines. Plain/ANSI now share one
   tree renderer. TUI compact/expanded labels use the same explicit label modes,

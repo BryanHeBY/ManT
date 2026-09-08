@@ -102,7 +102,7 @@ pub(super) const fn terminal_style(role: TerminalRole) -> Style {
             mant_protocol::EntryTone::Primary => Style::new().bold(),
             mant_protocol::EntryTone::Parameter => AnsiColor::BrightGreen.on_default().bold(),
             mant_protocol::EntryTone::Command => AnsiColor::BrightYellow.on_default().bold(),
-            mant_protocol::EntryTone::Environment => AnsiColor::BrightCyan.on_default(),
+            mant_protocol::EntryTone::Environment => AnsiColor::Magenta.on_default(),
             mant_protocol::EntryTone::Configuration => AnsiColor::BrightYellow.on_default(),
             mant_protocol::EntryTone::Variable => AnsiColor::BrightMagenta.on_default(),
             mant_protocol::EntryTone::Value => AnsiColor::BrightBlue.on_default(),

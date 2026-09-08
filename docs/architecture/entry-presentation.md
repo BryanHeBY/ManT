@@ -32,8 +32,11 @@ TUI compact labels use Compact; expanded labels use Forms. This difference is
 intentional and does not imply different names or semantic identities.
 
 Terms are primary content, not muted metadata. Values use the blue family;
-parameters green; commands warm; environment variables cyan; configuration
-keys yellow; variables purple/pink. The complete EntryKind, including marker
+parameters green; commands warm; environment variables Magenta (TUI MAUVE);
+configuration keys yellow; variables BrightMagenta (TUI PINK). Environment
+names do not borrow heading BrightCyan or the TUI link foreground. Terminal
+palettes remain user-controlled, so readable kinds/structure are not replaced
+by color. The complete EntryKind, including marker
 and operand subtypes, survives the mapping even where colors are shared.
 Coordinates, connectors and statistics may use secondary colors independently
 of the title. CLI neutral foreground inherits the terminal palette.

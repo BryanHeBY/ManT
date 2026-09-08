@@ -41,7 +41,7 @@ pub(crate) const fn entry_color(kind: mant_ir::EntryKind) -> Color {
         mant_protocol::EntryTone::Primary => TEXT,
         mant_protocol::EntryTone::Parameter => GREEN,
         mant_protocol::EntryTone::Command => PEACH,
-        mant_protocol::EntryTone::Environment => LINK,
+        mant_protocol::EntryTone::Environment => MAUVE,
         mant_protocol::EntryTone::Configuration => YELLOW,
         mant_protocol::EntryTone::Variable => PINK,
         mant_protocol::EntryTone::Value => BLUE,
@@ -58,5 +58,12 @@ mod tests {
         assert_eq!(entry_color(mant_ir::EntryKind::Value), BLUE);
         assert_ne!(entry_color(mant_ir::EntryKind::Term), SUBTEXT);
         assert_eq!(entry_color(mant_ir::EntryKind::ConfigurationKey), YELLOW);
+        assert_eq!(entry_color(mant_ir::EntryKind::EnvironmentVariable), MAUVE);
+        assert_eq!(entry_color(mant_ir::EntryKind::Variable), PINK);
+        assert_ne!(entry_color(mant_ir::EntryKind::EnvironmentVariable), LINK);
+        assert_ne!(
+            entry_color(mant_ir::EntryKind::EnvironmentVariable),
+            HEADING
+        );
     }
 }

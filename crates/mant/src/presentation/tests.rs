@@ -31,6 +31,67 @@ The selected color is visible in terminal output.
 ";
 
 #[test]
+fn environment_names_use_the_same_distinct_palette_across_text_views() {
+    let content = mant_engine::query_roff_bytes(
+        b".TH ENV 1\n.SH ENVIRONMENT\n.TP\n.B DISPLAY\nSelect a display.\n",
+    )
+    .unwrap();
+    for view in [
+        QueryView::Full {},
+        QueryView::Outline {
+            entries: EntryProjection::All,
+            root: None,
+        },
+        QueryView::Excerpt {
+            selectors: vec!["1".into()],
+        },
+        QueryView::Explain {
+            entry: "DISPLAY".into(),
+            options: Default::default(),
+        },
+        QueryView::Search {
+            pattern: "Select".into(),
+            syntax: mant_protocol::SearchSyntax::Literal,
+            case: mant_protocol::SearchCase::Sensitive,
+            scope: mant_protocol::SearchScope::Visible,
+            word: false,
+            context_lines: 0,
+            offset: 0,
+            limit: 10,
+        },
+    ] {
+        let result = project_query_view(content.clone(), &view).unwrap();
+        let colored = render_query_result(
+            &result,
+            options(QueryFormat::Text, true, OutputTarget::Terminal),
+        )
+        .unwrap();
+        let plain = render_query_result(
+            &result,
+            options(QueryFormat::Text, false, OutputTarget::Stream),
+        )
+        .unwrap();
+        assert_eq!(strip_ansi(&colored), plain);
+        let runs = visible_colors(&colored);
+        assert!(
+            plain
+                .match_indices("DISPLAY")
+                .any(|(offset, _)| runs[plain[..offset].chars().count()].1 == Some(35)),
+            "{view:?}: {colored:?}"
+        );
+    }
+    use super::terminal::{TerminalRole, terminal_style};
+    assert_eq!(
+        terminal_style(TerminalRole::Entry(mant_ir::EntryKind::Variable)).get_fg_color(),
+        Some(anstyle::AnsiColor::BrightMagenta.into())
+    );
+    assert_eq!(
+        terminal_style(TerminalRole::Heading).get_fg_color(),
+        Some(anstyle::AnsiColor::BrightCyan.into())
+    );
+}
+
+#[test]
 fn explanation_ansi_uses_the_exact_same_unframed_report_as_plain_text() {
     // Keep the packaged unit test independent of sibling integration fixtures.
     let source = b".TH PROBE 1\n.SH OPTIONS\n.TP\n.B -x, --language=LANG\nSelect language.\n.TP\n.B -Q\nUse -x as well.\n.SH NOTES\n-xylophone is not the same as -x.\n";
