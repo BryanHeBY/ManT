@@ -222,11 +222,22 @@ impl DocumentBuilder<'_> {
                 children, layout, ..
             } => {
                 self.spacing(layout.spacing_before_lines);
+                let start = self.lines.len();
                 self.inline_lines(
                     children,
                     compose_origin(base_indent, layout.indent_columns),
                     Style::default().fg(theme::TEXT),
                 );
+                let continuation = padding(compose_origin(
+                    compose_origin(base_indent, layout.indent_columns),
+                    layout.continuation_indent_columns,
+                ));
+                for (index, line) in self.lines[start..].iter_mut().enumerate() {
+                    line.continuation_indent = continuation;
+                    if index > 0 {
+                        line.indent = continuation;
+                    }
+                }
             }
             Block::Preformatted {
                 children, layout, ..
@@ -475,8 +486,10 @@ impl DocumentBuilder<'_> {
         let mut term_links = last.links;
         let term_width = spans_width(&term_spans);
         if let Some((children, layout)) = item.inline_description() {
-            let continuation_indent = compose_origin(block_origin, layout.indent_columns);
-            let description_indent = continuation_indent.max(compose_origin(
+            let first_indent = compose_origin(block_origin, layout.indent_columns);
+            let continuation_indent =
+                compose_origin(first_indent, layout.continuation_indent_columns);
+            let description_indent = first_indent.max(compose_origin(
                 indent,
                 coordinate(
                     term_width.saturating_add(usize::from(item.layout.min_term_gap_columns)),

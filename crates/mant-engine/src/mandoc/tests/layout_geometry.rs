@@ -105,3 +105,50 @@ fn converted_tag_and_native_list_keep_their_declared_body_column() {
         assert_eq!(column(&text, "SECOND"), 17, "{style}: {text}");
     }
 }
+
+#[test]
+fn man_in_restores_macro_base_instead_of_swapping_previous_requests() {
+    let text = man(".in 10n\nFIRST\n.in +2n\nSECOND\n.in\nTHIRD\n.in\nFOURTH\n");
+    for (token, expected) in [("FIRST", 5), ("SECOND", 7), ("THIRD", 0), ("FOURTH", 0)] {
+        assert_eq!(column(&text, token), expected, "{text}");
+    }
+    let text = man(".RS 3n\n.in 20n\nFIRST\n.in\nSECOND\n.in\nTHIRD\n.RE\nAFTER\n");
+    for (token, expected) in [("FIRST", 15), ("SECOND", 3), ("THIRD", 3), ("AFTER", 0)] {
+        assert_eq!(column(&text, token), expected, "{text}");
+    }
+    let text = mdoc(".in 20n\nBODY\n");
+    assert_eq!(
+        column(&text, "BODY"),
+        0,
+        "mdoc does not execute man in: {text}"
+    );
+}
+
+#[test]
+fn hp_keeps_first_and_continuation_origins_and_updates_tag_width() {
+    let text = man(".HP 12\nFIRST\n.br\nSECOND\n.TP\nTAG\nBODY\n");
+    assert_eq!(column(&text, "FIRST"), 0, "{text}");
+    assert_eq!(column(&text, "SECOND"), 12, "{text}");
+    assert_eq!(column(&text, "BODY"), 12, "{text}");
+    let text = man(".in 10n\nFIRST\n.PP\nSECOND\n.br\nTHIRD\n");
+    assert_eq!(column(&text, "SECOND"), 0, "{text}");
+    assert_eq!(column(&text, "THIRD"), 0, "{text}");
+}
+
+#[test]
+fn nested_mdoc_offsets_keep_basic_units_after_marker_layout() {
+    let text = mdoc(
+        ".Bl -bullet -offset 0.4n -width 0.4n\n.It\n.Bd -ragged -offset 0.4n\nBODY\n.Ed\n.El\n",
+    );
+    assert_eq!(column(&text, "BODY"), 3, "{text}");
+}
+
+#[test]
+fn tq_fit_uses_composed_body_origin_after_fractional_rs() {
+    let text =
+        man(".RS 0.4n\n.TP 20.4n\nABCDEFGHIJKLMNOPQRST\n.TQ\nabcdefghijklmnopqrst\nBODY\n.RE\n");
+    assert!(
+        text.lines().any(|line| line == "abcdefghijklmnopqrst BODY"),
+        "{text}"
+    );
+}

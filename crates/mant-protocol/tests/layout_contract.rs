@@ -52,3 +52,22 @@ fn layout_origins_are_signed_and_the_wire_object_is_closed() {
         LayoutHint::default()
     );
 }
+
+#[test]
+fn paragraph_continuation_geometry_is_not_omitted() {
+    let layout = LayoutHint {
+        continuation_indent_columns: 12,
+        ..Default::default()
+    };
+    assert!(!layout.is_empty());
+    assert_eq!(
+        serde_json::to_value(layout).unwrap(),
+        serde_json::json!({"continuationIndentColumns": 12})
+    );
+    assert_eq!(
+        serde_json::from_str::<LayoutHint>(r#"{"continuationIndentColumns":-3}"#)
+            .unwrap()
+            .continuation_indent_columns,
+        -3
+    );
+}

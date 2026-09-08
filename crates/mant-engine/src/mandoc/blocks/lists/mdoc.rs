@@ -125,9 +125,16 @@ fn lower_mdoc_plain_list(
                     }
                 };
                 let body_origin = context.offset_indent(item.node, list_indent, width);
-                let body_columns = body_origin.offset_from(list_indent).max(marker_width);
+                let measured_columns = body_origin.offset_from(list_indent);
+                let body_columns = measured_columns.max(marker_width);
+                // Visible cell rounding must not feed back into source state:
+                // nested fractional offsets continue from this exact origin.
                 let body_origin = context
-                    .offset_indent(item.node, list_indent, Distance::cells(body_columns))
+                    .offset_indent(
+                        item.node,
+                        body_origin,
+                        Distance::cells(body_columns.saturating_sub(measured_columns)),
+                    )
                     .content_origin();
                 context.lower_inline_with_spacing(
                     item.leading_controls,

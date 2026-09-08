@@ -111,6 +111,32 @@ impl BlockRenderer<'_> {
     }
 
     fn render_block(&self, block: &Block, base_indent: i32) -> Option<String> {
+        if let Block::Paragraph {
+            children, layout, ..
+        } = block
+        {
+            let value = self.inline_text(children, TextRole::Body);
+            if value.trim().is_empty() {
+                return None;
+            }
+            let first_origin = compose_origin(base_indent, layout.indent_columns);
+            return Some(
+                value
+                    .trim_matches('\n')
+                    .split('\n')
+                    .enumerate()
+                    .map(|(index, line)| {
+                        let origin = if index == 0 {
+                            first_origin
+                        } else {
+                            compose_origin(first_origin, layout.continuation_indent_columns)
+                        };
+                        format!("{}{line}", " ".repeat(padding(origin)))
+                    })
+                    .collect::<Vec<_>>()
+                    .join("\n"),
+            );
+        }
         let (value, layout_indent) = match block {
             Block::Paragraph {
                 children, layout, ..
@@ -289,7 +315,10 @@ impl BlockRenderer<'_> {
             output.extend(lines.map(|line| {
                 indent_lines(
                     line,
-                    padding(compose_origin(body_origin, layout.indent_columns)),
+                    padding(compose_origin(
+                        compose_origin(body_origin, layout.indent_columns),
+                        layout.continuation_indent_columns,
+                    )),
                 )
             }));
             let mut result = output.join("\n");

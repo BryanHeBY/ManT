@@ -2010,6 +2010,11 @@
         "description": "Presentation hints retained from roff but optional for semantic outputs.",
         "type": "object",
         "properties": {
+          "continuationIndentColumns": {
+            "description": "Additional displacement for paragraph continuation lines, relative to\nthe first-line origin. Applies to hard breaks and visual wraps, not to\nlater sibling blocks; zero preserves ordinary filled flow.",
+            "type": "integer",
+            "format": "int32"
+          },
           "indentColumns": {
             "description": "Signed terminal-cell displacement from the actual parent's content\norigin. Compose once before clamping a final display position; negative\nchildren can outdent without erasing their parent's source geometry.",
             "type": "integer",
@@ -5402,6 +5407,11 @@
         "description": "Presentation hints retained from roff but optional for semantic outputs.",
         "type": "object",
         "properties": {
+          "continuationIndentColumns": {
+            "description": "Additional displacement for paragraph continuation lines, relative to\nthe first-line origin. Applies to hard breaks and visual wraps, not to\nlater sibling blocks; zero preserves ordinary filled flow.",
+            "type": "integer",
+            "format": "int32"
+          },
           "indentColumns": {
             "description": "Signed terminal-cell displacement from the actual parent's content\norigin. Compose once before clamping a final display position; negative\nchildren can outdent without erasing their parent's source geometry.",
             "type": "integer",
@@ -8621,6 +8631,11 @@
         "description": "Presentation hints retained from roff but optional for semantic outputs.",
         "type": "object",
         "properties": {
+          "continuationIndentColumns": {
+            "description": "Additional displacement for paragraph continuation lines, relative to\nthe first-line origin. Applies to hard breaks and visual wraps, not to\nlater sibling blocks; zero preserves ordinary filled flow.",
+            "type": "integer",
+            "format": "int32"
+          },
           "indentColumns": {
             "description": "Signed terminal-cell displacement from the actual parent's content\norigin. Compose once before clamping a final display position; negative\nchildren can outdent without erasing their parent's source geometry.",
             "type": "integer",
@@ -12473,6 +12488,11 @@
         "description": "Presentation hints retained from roff but optional for semantic outputs.",
         "type": "object",
         "properties": {
+          "continuationIndentColumns": {
+            "description": "Additional displacement for paragraph continuation lines, relative to\nthe first-line origin. Applies to hard breaks and visual wraps, not to\nlater sibling blocks; zero preserves ordinary filled flow.",
+            "type": "integer",
+            "format": "int32"
+          },
           "indentColumns": {
             "description": "Signed terminal-cell displacement from the actual parent's content\norigin. Compose once before clamping a final display position; negative\nchildren can outdent without erasing their parent's source geometry.",
             "type": "integer",

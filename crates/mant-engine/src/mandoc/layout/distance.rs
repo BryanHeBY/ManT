@@ -52,6 +52,7 @@ impl Distance {
         (Self(sum.clamp(-LIMIT, LIMIT)), sum.abs() > LIMIT)
     }
 
+    #[cfg(test)]
     pub(in crate::mandoc) fn columns(self) -> i32 {
         if self.0 < 0 {
             -((-self.0 + (UNITS_PER_CELL - 1) / 2) / UNITS_PER_CELL)

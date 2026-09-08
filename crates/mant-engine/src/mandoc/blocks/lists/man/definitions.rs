@@ -190,8 +190,6 @@ fn lower_man_item(
         *paragraph_distance = distance;
     }
     update_man_definition_width(node, context, definition_hanging_width);
-    let max_width =
-        usize::try_from(definition_hanging_width.columns().saturating_sub(1)).unwrap_or(0);
     let item = definition_item(
         node,
         context,
@@ -205,6 +203,12 @@ fn lower_man_item(
         spacing_enabled,
         formatter,
     );
+    let max_width = usize::try_from(
+        item.layout
+            .body_indent_columns
+            .saturating_sub(i32::from(item.layout.min_term_gap_columns)),
+    )
+    .unwrap_or(0);
     LoweredManItem {
         item,
         spacing_before,

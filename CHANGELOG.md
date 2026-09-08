@@ -18,6 +18,10 @@ that crate was not published for that change.
 
 ### Parent-relative document geometry (unreleased v0.11)
 
+- Paragraph layout now has `continuationIndentColumns` for hanging hard/soft
+  lines. Man `HP` preserves this geometry and updates the prevailing tag width;
+  `in` executes bounded literal positions with CVS HEAD's macro-base restore
+  semantics rather than groff's previous-position swap. mdoc ignores `in`.
 - Definition layout now carries resolved signed `bodyIndentColumns` and
   `minTermGapColumns`; native man tag widths, relative-indent scopes and mdoc
   list/display styles retain their actual geometry. Source distances are

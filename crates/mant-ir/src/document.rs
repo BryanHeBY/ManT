@@ -246,6 +246,11 @@ pub struct LayoutHint {
     /// children can outdent without erasing their parent's source geometry.
     #[serde(default, skip_serializing_if = "is_zero_i32")]
     pub indent_columns: i32,
+    /// Additional displacement for paragraph continuation lines, relative to
+    /// the first-line origin. Applies to hard breaks and visual wraps, not to
+    /// later sibling blocks; zero preserves ordinary filled flow.
+    #[serde(default, skip_serializing_if = "is_zero_i32")]
+    pub continuation_indent_columns: i32,
     /// Terminal rows requested before this block.
     #[serde(default, skip_serializing_if = "is_zero_u16")]
     pub spacing_before_lines: u16,
@@ -765,7 +770,9 @@ impl LayoutHint {
     /// Return whether the hint requests no additional layout behavior.
     #[must_use]
     pub const fn is_empty(&self) -> bool {
-        self.indent_columns == 0 && self.spacing_before_lines == 0
+        self.indent_columns == 0
+            && self.continuation_indent_columns == 0
+            && self.spacing_before_lines == 0
     }
 }
 

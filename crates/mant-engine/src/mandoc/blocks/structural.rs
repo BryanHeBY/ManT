@@ -145,7 +145,14 @@ impl StructuralLowerer<'_, '_, '_> {
                 } else {
                     *self.paragraph_distance
                 };
-                let nested = lower_blocks_with_spacing(
+                if node.macro_name.as_deref() == Some("HP")
+                    && let Some(argument) = crate::mandoc::layout::first_part_argument(node)
+                {
+                    *self.definition_hanging_width =
+                        self.context
+                            .distance_or(node, argument, *self.definition_hanging_width);
+                }
+                let mut nested = lower_blocks_with_spacing(
                     first_part_children(node, NodeKind::Body),
                     self.context,
                     self.indent_columns,
@@ -153,6 +160,16 @@ impl StructuralLowerer<'_, '_, '_> {
                     self.spacing_enabled,
                     self.formatter,
                 );
+                if node.macro_name.as_deref() == Some("HP")
+                    && let Some(Block::Paragraph { layout, .. }) = nested.first_mut()
+                {
+                    let body = self.context.offset_indent(
+                        node,
+                        self.indent_columns,
+                        *self.definition_hanging_width,
+                    );
+                    layout.continuation_indent_columns = body.offset_from(self.indent_columns);
+                }
                 extend_blocks_with_spacing(self.output, nested, spacing_before);
             }
             Some("Bd") if node.display_kind == Some(DisplayKind::Filled) => {

@@ -23,6 +23,12 @@ pub(super) struct SourceIndent {
 }
 
 impl SourceIndent {
+    pub(super) fn absolute(self, distance: Distance) -> Self {
+        Self {
+            source: distance.add(Distance::cells(-5)).0.at_page_floor(),
+            parent: self.parent,
+        }
+    }
     pub(super) fn relative_columns(self) -> i32 {
         self.source
             .position_columns()
@@ -71,10 +77,15 @@ impl super::LoweringContext<'_> {
     }
 
     pub(super) fn distance_or(&self, node: &Node, argument: &str, fallback: Distance) -> Distance {
-        Distance::parse(argument).unwrap_or_else(|| {
+        self.checked_distance(node, argument).unwrap_or(fallback)
+    }
+
+    pub(super) fn checked_distance(&self, node: &Node, argument: &str) -> Option<Distance> {
+        let distance = Distance::parse(argument);
+        if distance.is_none() {
             self.warn_indent(node);
-            fallback
-        })
+        }
+        distance
     }
 
     pub(super) fn measured_mdoc_distance(
@@ -144,7 +155,7 @@ impl super::LoweringContext<'_> {
     }
 }
 
-fn first_part_argument(node: &Node) -> Option<&str> {
+pub(super) fn first_part_argument(node: &Node) -> Option<&str> {
     node.children
         .iter()
         .find(|child| child.kind == libmandoc_rs::NodeKind::Head)
@@ -304,6 +315,7 @@ pub(super) fn layout(indent_columns: SourceIndent) -> LayoutHint {
     LayoutHint {
         indent_columns: indent_columns.relative_columns(),
         spacing_before_lines: 0,
+        ..Default::default()
     }
 }
 
@@ -315,6 +327,7 @@ pub(super) fn layout_with_spacing(
     LayoutHint {
         indent_columns: indent_columns.relative_columns(),
         spacing_before_lines,
+        ..Default::default()
     }
 }
 

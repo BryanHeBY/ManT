@@ -62,7 +62,8 @@ The following `man(7)` macros have dedicated lowering behavior:
 | --- | --- |
 | `TH` | Title, native manual section, date, source, and volume metadata |
 | `SH`, `SS` | Top-level sections and child sections |
-| `P`, `PP`, `LP`, `HP` | Paragraph boundaries and retained vertical spacing |
+| `P`, `PP`, `LP` | Paragraph boundaries and retained vertical spacing |
+| `HP` | Hanging paragraph first/continuation origins; width inherited by later tagged paragraphs |
 | `RS`, `RE` | Nested indentation boundary |
 | `IP`, `TP`, `TQ` | Bullet, ordered-list, or definition-list items, explicit multi-tag heads, hanging layout, and widths |
 | `PD` | Paragraph, definition-item, and heading spacing |
@@ -340,7 +341,7 @@ Requests with direct lowering behavior are:
 | `sp` | Vertical-space block, with normalized height |
 | `nf`, `fi` | Enter and leave preformatted flow |
 | `ft` | Changes the current/previous inline font without emitting its argument |
-| `in` | Consumed indentation state around structures normalized by libmandoc |
+| `in` | Bounded man horizontal position: absolute or relative literal distance; no argument restores the current macro base; ignored in mdoc |
 | `ad`, `na` | Adjustment state omitted |
 | `hy`, `nh` | Hyphenation state omitted |
 | `ne` | Page-layout reservation omitted |
@@ -348,6 +349,8 @@ Requests with direct lowering behavior are:
 | `ta` | Tab-stop state omitted |
 
 `ce`, `rj`, `ll`, `mc`, `po`, and `ti` can be represented by libmandoc nodes but ManT does not promise their device-specific alignment or page geometry. Printable descendants remain visible where the upstream AST provides them.
+
+Man's `.in` state is applied by lowering, not assumed to have been executed by parsing. Following mandoc CVS HEAD, repeated argument-less `.in` requests restore the same current macro base (including an enclosing `RS`); they do not swap previous requested positions as groff does. Ordinary paragraph and structural macro boundaries restore their own geometry. `HP` records a distinct continuation displacement and updates the prevailing tag width. ManT retains explicit source hard breaks as well as that hanging displacement: it does not reproduce the character renderer's `HP` short-line flush artifact that can place text after `br` on the same row. Soft wrapping remains a view concern, and the deterministic unbounded text renderer does not invent soft breaks.
 
 `TS`/`TE` and `EQ`/`EN` are handled as structured preprocessors, described below. For the complete distinction between requests implemented, ignored, unsupported, and insecure in the pinned parser, consult upstream `roff(7)` for mandoc 1.14.6. ManT adds the stricter source and include boundary described in this manual.
 

@@ -249,6 +249,12 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
                 formatter: &mut self.formatter,
             }
             .push(node, table_embedding);
+            if matches!(
+                node.macro_name.as_deref(),
+                Some("PP" | "P" | "LP" | "HP" | "TP" | "TQ" | "IP" | "RS" | "SY")
+            ) {
+                self.state.set_source_indent(self.indent_columns);
+            }
             self.state.inherit_spacing(self.formatter.spacing);
             self.state
                 .queue_targets(structural_targets, source_span(node));
@@ -303,6 +309,27 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
     }
 
     fn consume_control_or_empty_block(&mut self, node: &Node) -> bool {
+        if node.macro_name.as_deref() == Some("in")
+            && self.context.macro_set == libmandoc_rs::MacroSet::Man
+        {
+            let current = self.state.source_indent();
+            let next = node
+                .children
+                .first()
+                .and_then(|node| node.text.as_deref())
+                .map_or(self.indent_columns, |argument| {
+                    let Some(distance) = self.context.checked_distance(node, argument) else {
+                        return current;
+                    };
+                    if argument.starts_with(['+', '-']) {
+                        self.context.offset_indent(node, current, distance)
+                    } else {
+                        current.absolute(distance)
+                    }
+                });
+            self.state.set_source_indent(next);
+            return true;
+        }
         if consume_block_control(
             node,
             self.context,

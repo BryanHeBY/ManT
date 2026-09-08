@@ -2,6 +2,52 @@
 use super::*;
 
 #[test]
+fn hanging_paragraph_preserves_hard_and_soft_continuation_origins() {
+    let mut builder = DocumentBuilder::new("hanging".into(), None);
+    builder.blocks(
+        &[Block::Paragraph {
+            children: vec![
+                Inline::Text {
+                    value: "FIRST words words words".into(),
+                },
+                Inline::LineBreak,
+                Inline::Text {
+                    value: "SECOND".into(),
+                },
+            ],
+            layout: LayoutHint {
+                indent_columns: 2,
+                continuation_indent_columns: 7,
+                ..Default::default()
+            },
+            source: None,
+        }],
+        3,
+    );
+    assert_eq!(
+        (
+            builder.lines[0].indent,
+            builder.lines[0].continuation_indent
+        ),
+        (5, 12)
+    );
+    assert_eq!(
+        (
+            builder.lines[1].indent,
+            builder.lines[1].continuation_indent
+        ),
+        (12, 12)
+    );
+    for width in [20, 40, 80] {
+        let rows = wrap_line(&builder.lines[0], width);
+        assert!(rows[0].to_string().starts_with("     FIRST"));
+        for row in rows.iter().skip(1) {
+            assert!(row.to_string().starts_with("            "));
+        }
+    }
+}
+
+#[test]
 fn container_translation_and_nonparagraph_marker_width_are_preserved() {
     for start in [9, 99, u64::MAX] {
         let blocks = [Block::List {
@@ -321,6 +367,7 @@ fn indented_continuation_without_spacing_follows_its_lead_row() {
             layout: LayoutHint {
                 indent_columns: 4,
                 spacing_before_lines: 0,
+                ..Default::default()
             },
             source: None,
         },

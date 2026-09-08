@@ -520,6 +520,7 @@ mod tests {
             layout: LayoutHint {
                 indent_columns,
                 spacing_before_lines,
+                ..Default::default()
             },
             source: None,
         };
@@ -573,6 +574,7 @@ mod tests {
             layout: LayoutHint {
                 indent_columns,
                 spacing_before_lines: 0,
+                ..Default::default()
             },
             source: None,
         };

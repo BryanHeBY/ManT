@@ -20,6 +20,15 @@ pub(super) struct BlockState {
 }
 
 impl BlockState {
+    pub(super) const fn source_indent(&self) -> crate::mandoc::layout::SourceIndent {
+        self.indent_columns
+    }
+
+    pub(super) fn set_source_indent(&mut self, indent: crate::mandoc::layout::SourceIndent) {
+        self.flush_preformatted();
+        self.flush_paragraph();
+        self.indent_columns = indent;
+    }
     pub(super) const fn with_output(
         indent_columns: crate::mandoc::layout::SourceIndent,
         spacing_enabled: bool,

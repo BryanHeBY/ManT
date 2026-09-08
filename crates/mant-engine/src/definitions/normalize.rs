@@ -160,6 +160,7 @@ pub(super) fn normalize_hanging_definitions(blocks: &mut Vec<Block>, context: De
             layout: LayoutHint {
                 indent_columns: term_indent,
                 spacing_before_lines: 0,
+                ..Default::default()
             },
             source,
         });
@@ -197,6 +198,7 @@ mod tests {
             layout: LayoutHint {
                 indent_columns,
                 spacing_before_lines: 0,
+                ..Default::default()
             },
             source: None,
         }
@@ -222,6 +224,7 @@ mod tests {
             layout: LayoutHint {
                 indent_columns,
                 spacing_before_lines: 0,
+                ..Default::default()
             },
             source: None,
         }
