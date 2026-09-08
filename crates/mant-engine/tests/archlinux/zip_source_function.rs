@@ -21,7 +21,7 @@ fn separates_multiple_operands_in_an_out_of_synopsis_function_pointer() {
         .collect::<Vec<_>>();
 
     assert!(declarations.iter().any(|declaration| {
-        declaration == "(*zip_source_callback)(void *userdata, void *data, zip_uint64_t len, zip_source_cmd_t cmd)"
+        declaration == "typedef zip_int64_t (*zip_source_callback)(void *userdata, void *data, zip_uint64_t len, zip_source_cmd_t cmd)"
     }));
 }
 

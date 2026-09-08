@@ -101,6 +101,23 @@ fn authored_enclosures_consume_empty_words_and_reset_unclosed_joins() {
 
 #[test]
 fn literal_containers_preserve_nested_structural_payloads_and_targets() {
+    #[derive(Default)]
+    struct Shapes {
+        tables: usize,
+        definitions: usize,
+        lists: usize,
+    }
+    impl<'ir> Visit<'ir> for Shapes {
+        fn visit_block(&mut self, block: &'ir Block) {
+            match block {
+                Block::Table { .. } => self.tables += 1,
+                Block::DefinitionList { .. } => self.definitions += 1,
+                Block::List { .. } => self.lists += 1,
+                _ => {}
+            }
+            visit::walk_block(self, block);
+        }
+    }
     for display in ["literal", "unfilled"] {
         for inner in [
             ".TS\nl l.\nWORD\tNEXT\n.TE",
@@ -122,6 +139,15 @@ fn literal_containers_preserve_nested_structural_payloads_and_targets() {
                 }
                 let doc = query.document.as_ref().unwrap();
                 assert!(mant_ir::validate_document(doc).is_empty());
+                let mut shapes = Shapes::default();
+                shapes.visit_document(doc);
+                if inner.contains(".TS") || inner.contains(".Bl -column") {
+                    assert_eq!(shapes.tables, 1, "{inner}");
+                } else if inner.contains(".Bl -tag") {
+                    assert_eq!(shapes.definitions, 1, "{inner}");
+                } else {
+                    assert_eq!(shapes.lists, 1, "{inner}");
+                }
                 if inner.contains("Exact.Target") {
                     assert!(anchor_ids(doc).contains(&"exact-target".into()));
                 }

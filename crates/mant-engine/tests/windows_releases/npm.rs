@@ -23,14 +23,19 @@ fn keeps_the_nested_npm_manual_and_windows_build_requirements() {
     }
 
     let dependencies = block_slice_text(&common::section(document, "Dependencies").blocks);
-    assert!(dependencies.contains("using the git"));
+    assert!(dependencies.contains(r"using the \fBgit\fR"));
     assert!(dependencies.contains("On Windows, Python and Microsoft Visual Studio C++ are needed"));
-    assert!(!dependencies.contains("\\fBgit\\fR"));
 }
 
 #[test]
-fn removes_redundant_generator_fonts_without_hiding_other_markup() {
+fn preserves_authored_literal_font_spellings_without_decoding_them_twice() {
     let document = windows_release_manual("npm");
-    common::assert_document_has_no_source_markup("windows-releases/npm", document);
+    let rendered = mant_engine::render_query_text(&common::query_for_document("npm", document));
+    // The source spells these backslashes with [rs]. Both mandoc and groff
+    // print the literal font strings; a blanket no-\\f assertion hid data.
+    assert!(rendered.contains(r"\fBgit\fR"));
+    assert!(rendered.contains(r"\fBpackage.json\fR"));
+    assert!(!rendered.contains(r"\[rs]"));
+    assert!(!rendered.contains(['\u{1d}', '\u{1e}', '\u{1f}']));
     common::assert_no_duplicate_vertical_spacing(&document.sections, "windows-releases/npm");
 }
