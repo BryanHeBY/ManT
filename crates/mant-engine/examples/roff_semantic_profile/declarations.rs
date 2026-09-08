@@ -74,18 +74,12 @@ fn paragraph_boundary(node: &Node) -> bool {
         .any(paragraph_boundary)
 }
 
-fn bracket_head(node: &Node) -> bool {
-    fn first_text(node: &Node) -> Option<&str> {
-        node.text
-            .as_deref()
-            .filter(|text| !text.trim().is_empty())
-            .or_else(|| node.children.iter().find_map(first_text))
-    }
-    node.children
-        .iter()
-        .find(|n| n.kind == NodeKind::Head)
-        .and_then(first_text)
-        .is_some_and(|text| text.trim_start().starts_with('['))
+fn bracket_head(item: &DefinitionItem) -> bool {
+    // Native text can still contain font escapes before `[`. Inspect the
+    // source-correlated visible head, not raw roff bytes or a derived ID.
+    item.terms
+        .first()
+        .is_some_and(|term| super::inline_text(term).trim_start().starts_with('['))
 }
 
 struct Audit<'a> {
@@ -156,16 +150,17 @@ impl Audit<'_> {
                 // A source-only parameter continuation cannot connect the
                 // declarations before and after it. A literal named `[` (test)
                 // is protected by its actual name facts, not this punctuation.
-                let parameter = bracket_head(child)
-                    && self
-                        .observed
-                        .owners
-                        .get(&(child.line, child.column))
-                        .is_some_and(|item| {
-                            item.entry
+                let parameter = self
+                    .observed
+                    .owners
+                    .get(&(child.line, child.column))
+                    .is_some_and(|item| {
+                        bracket_head(item)
+                            && item
+                                .entry
                                 .as_ref()
                                 .is_none_or(|facts| facts.names.is_empty())
-                        });
+                    });
                 if parameter {
                     self.classify(&run, "parameter-only-head-boundary");
                     run.clear();
@@ -241,7 +236,7 @@ mod tests {
     use super::*;
     #[test]
     fn parameter_continuation_separates_runs_without_hiding_crossing_groups() {
-        let source = b".TH PROBE 1\n.SH COMMANDS\n.TP\n.B first\n.TP\n[ argument ]\n.TP\n.B second\n.TP\n.B third\nBody.\n";
+        let source = b".TH PROBE 1\n.SH COMMANDS\n.TP\n.B first\n.TP\n\\fB      \\fP[ \\fIargument\\fP ]\n.TP\n.B second\n.TP\n.B third\nBody.\n";
         let parsed = libmandoc_rs::Parser::new(Default::default())
             .parse_bytes("probe.1", source)
             .unwrap();
