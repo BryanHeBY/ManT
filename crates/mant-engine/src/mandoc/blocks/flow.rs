@@ -16,6 +16,7 @@ pub(super) struct BlockState {
     preformatted_tight_boundary: bool,
     pending_targets: targets::PendingTargets,
     indent_columns: crate::mandoc::layout::SourceIndent,
+    hanging_origin: Option<crate::mandoc::layout::SourceIndent>,
     spacing_enabled: bool,
 }
 
@@ -28,6 +29,17 @@ impl BlockState {
         self.flush_preformatted();
         self.flush_paragraph();
         self.indent_columns = indent;
+        self.hanging_origin = None;
+    }
+
+    pub(super) fn start_hanging(&mut self, origin: crate::mandoc::layout::SourceIndent) {
+        self.hanging_origin = Some(origin);
+    }
+
+    pub(super) fn consume_hanging_first_line(&mut self) {
+        if let Some(origin) = self.hanging_origin.take() {
+            self.indent_columns = origin;
+        }
     }
     pub(super) const fn with_output(
         indent_columns: crate::mandoc::layout::SourceIndent,
@@ -45,6 +57,7 @@ impl BlockState {
             preformatted_tight_boundary: false,
             pending_targets: targets::PendingTargets::new(),
             indent_columns,
+            hanging_origin: None,
             spacing_enabled,
         }
     }
@@ -219,6 +232,14 @@ impl BlockState {
             self.indent_columns,
             self.spacing_enabled,
         );
+        if self.output.len() > output_start {
+            if let Some(origin) = self.hanging_origin
+                && let Some(Block::Paragraph { layout, .. }) = self.output.last_mut()
+            {
+                layout.continuation_indent_columns = origin.offset_from(self.indent_columns);
+            }
+            self.consume_hanging_first_line();
+        }
         self.attach_pending_to_new_output(output_start);
         self.paragraph_last_line = None;
     }

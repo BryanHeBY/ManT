@@ -14,12 +14,17 @@ mod distance;
 pub(super) use definition::{DefinitionGeometry, TermPlacement};
 pub(super) use distance::Distance;
 
-/// A source position and its actual IR parent's content position. Transparent
-/// roff scopes move only the former; entering an owned body resets the latter.
+/// Independent source formatter position, IR parent origin and man macro base.
+/// Entering an owned description changes the IR parent, not the macro base;
+/// only an RS scope establishes a new base for argument-less `in` restoration.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub(super) struct SourceIndent {
     source: Distance,
     parent: Distance,
+    // man_term's mt->offset is not the current output column or IR owner.
+    // Entering a definition body must not change where argument-less in
+    // restores; only an RS scope establishes a new macro base.
+    macro_base: Distance,
 }
 
 impl SourceIndent {
@@ -27,6 +32,7 @@ impl SourceIndent {
         Self {
             source: distance.add(Distance::cells(-5)).0.at_page_floor(),
             parent: self.parent,
+            macro_base: self.macro_base,
         }
     }
     pub(super) fn relative_columns(self) -> i32 {
@@ -39,6 +45,14 @@ impl SourceIndent {
         Self {
             source: self.source,
             parent: self.source,
+            macro_base: self.macro_base,
+        }
+    }
+
+    pub(super) fn macro_origin(self) -> Self {
+        Self {
+            source: self.macro_base,
+            ..self
         }
     }
 
@@ -55,6 +69,7 @@ impl From<i32> for SourceIndent {
         Self {
             source: Distance::cells(columns),
             parent: Distance::default(),
+            macro_base: Distance::cells(columns),
         }
     }
 }
@@ -73,6 +88,7 @@ impl super::LoweringContext<'_> {
         SourceIndent {
             source: sum.at_page_floor(),
             parent: parent.parent,
+            macro_base: parent.macro_base,
         }
     }
 
@@ -123,7 +139,9 @@ impl super::LoweringContext<'_> {
         let distance = first_part_argument(node).map_or(prevailing, |argument| {
             self.distance_or(node, argument, prevailing)
         });
-        self.offset_indent(node, parent, distance)
+        let mut scope = self.offset_indent(node, parent.macro_origin(), distance);
+        scope.macro_base = scope.source;
+        scope
     }
 
     pub(super) fn display_offset(&self, node: &Node) -> Distance {

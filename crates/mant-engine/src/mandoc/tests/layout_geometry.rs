@@ -152,3 +152,50 @@ fn tq_fit_uses_composed_body_origin_after_fractional_rs() {
         "{text}"
     );
 }
+
+#[test]
+fn in_is_inherited_by_passive_structures_but_not_paragraph_resets() {
+    let text = man(".in 10n\nBEFORE\n.TS\nl.\nCELL\n.TE\nAFTER\n.PP\nRESET\n");
+    for token in ["BEFORE", "CELL", "AFTER"] {
+        assert_eq!(column(&text, token), 5, "{text}");
+    }
+    assert_eq!(column(&text, "RESET"), 0, "{text}");
+}
+
+#[test]
+fn hp_blank_space_consumes_first_line_without_ending_hanging_scope() {
+    let text = man(".HP 12\nFIRST\n.sp 1\nSECOND\n.br\nTHIRD\n");
+    assert_eq!(column(&text, "FIRST"), 0, "{text}");
+    for token in ["SECOND", "THIRD"] {
+        assert_eq!(column(&text, token), 12, "{text}");
+    }
+    let text = man(".HP 12\n.sp 1\nFIRST\n.br\nSECOND\n");
+    for token in ["FIRST", "SECOND"] {
+        assert_eq!(column(&text, token), 12, "{text}");
+    }
+}
+
+#[test]
+fn explicit_in_overrides_hanging_and_restores_real_macro_base_inside_definitions() {
+    for (request, expected) in [("30n", 25), ("+2n", 14), ("", 0)] {
+        let text = man(&format!(
+            ".HP 12\nFIRST\n.sp 1\n.in {request}\nSECOND\n.br\nTHIRD\n"
+        ));
+        for token in ["SECOND", "THIRD"] {
+            assert_eq!(column(&text, token), expected, "{text}");
+        }
+    }
+    for (prefix, suffix, base) in [("", "", 0), (".RS 3n\n", ".RE\n", 3)] {
+        let text = man(&format!(
+            "{prefix}.TP 20\nTAG\nBEFORE\n.in\nAFTER\n{suffix}"
+        ));
+        assert_eq!(column(&text, "BEFORE"), base + 20, "{text}");
+        assert_eq!(column(&text, "AFTER"), base, "{text}");
+    }
+    let text = man(".HP 12\n.TP\nTAG\nBODY\n");
+    assert_eq!(
+        column(&text, "BODY"),
+        7,
+        "empty HP must not assign a new width: {text}"
+    );
+}

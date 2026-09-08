@@ -131,47 +131,48 @@ impl StructuralLowerer<'_, '_, '_> {
         }
     }
 
+    fn lower_man_paragraph(&mut self, node: &Node) {
+        let children = first_part_children(node, NodeKind::Body);
+        let hanging = node.macro_name.as_deref() == Some("HP");
+        if !hanging {
+            *self.definition_hanging_width =
+                crate::mandoc::layout::Distance::cells(DEFAULT_MAN_TAG_WIDTH);
+        } else if !children.is_empty()
+            && let Some(argument) = crate::mandoc::layout::first_part_argument(node)
+        {
+            *self.definition_hanging_width =
+                self.context
+                    .distance_or(node, argument, *self.definition_hanging_width);
+        }
+        let spacing = if self.output.is_empty() {
+            0
+        } else {
+            *self.paragraph_distance
+        };
+        let mut lowerer = super::BlockLowerer::new(
+            self.context,
+            self.indent_columns,
+            self.paragraph_distance,
+            self.spacing_enabled,
+            Vec::new(),
+            *self.formatter,
+        );
+        if hanging && !children.is_empty() {
+            lowerer.state.start_hanging(self.context.offset_indent(
+                node,
+                self.indent_columns,
+                *self.definition_hanging_width,
+            ));
+        }
+        lowerer.push_nodes(children);
+        lowerer.formatter.spacing = lowerer.state.spacing_enabled();
+        *self.formatter = lowerer.formatter;
+        extend_blocks_with_spacing(self.output, lowerer.finish(), spacing);
+    }
+
     fn lower_transparent_container(&mut self, node: &Node) -> bool {
         match node.macro_name.as_deref() {
-            Some("PP" | "P" | "LP" | "HP") => {
-                // man(7) ordinary paragraphs restore the prevailing tag
-                // width; HP is a hanging paragraph, not that reset boundary.
-                if matches!(node.macro_name.as_deref(), Some("PP" | "P" | "LP")) {
-                    *self.definition_hanging_width =
-                        crate::mandoc::layout::Distance::cells(DEFAULT_MAN_TAG_WIDTH);
-                }
-                let spacing_before = if self.output.is_empty() {
-                    0
-                } else {
-                    *self.paragraph_distance
-                };
-                if node.macro_name.as_deref() == Some("HP")
-                    && let Some(argument) = crate::mandoc::layout::first_part_argument(node)
-                {
-                    *self.definition_hanging_width =
-                        self.context
-                            .distance_or(node, argument, *self.definition_hanging_width);
-                }
-                let mut nested = lower_blocks_with_spacing(
-                    first_part_children(node, NodeKind::Body),
-                    self.context,
-                    self.indent_columns,
-                    self.paragraph_distance,
-                    self.spacing_enabled,
-                    self.formatter,
-                );
-                if node.macro_name.as_deref() == Some("HP")
-                    && let Some(Block::Paragraph { layout, .. }) = nested.first_mut()
-                {
-                    let body = self.context.offset_indent(
-                        node,
-                        self.indent_columns,
-                        *self.definition_hanging_width,
-                    );
-                    layout.continuation_indent_columns = body.offset_from(self.indent_columns);
-                }
-                extend_blocks_with_spacing(self.output, nested, spacing_before);
-            }
+            Some("PP" | "P" | "LP" | "HP") => self.lower_man_paragraph(node),
             Some("Bd") if node.display_kind == Some(DisplayKind::Filled) => {
                 let spacing_before = u16::from(!self.output.is_empty() && !node.compact);
                 let nested = lower_blocks_with_spacing(

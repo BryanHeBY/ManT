@@ -216,6 +216,7 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
             }
         } else if node.macro_name.as_deref() == Some("sp") {
             self.state.flush_paragraph();
+            self.state.consume_hanging_first_line();
             if let Some(lines) = vertical_distance_lines(node).filter(|lines| *lines > 0) {
                 self.state.output.push(Block::VerticalSpace {
                     lines,
@@ -240,7 +241,11 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
             let spacing_enabled = self.state.spacing_enabled();
             StructuralLowerer {
                 context: self.context,
-                indent_columns: self.indent_columns,
+                indent_columns: if restores_macro_indent(node) {
+                    self.indent_columns.macro_origin()
+                } else {
+                    self.state.source_indent()
+                },
                 paragraph_distance: self.paragraph_distance,
                 output: &mut self.state.output,
                 definition_hanging_width: &mut self.definition_hanging_width,
@@ -249,11 +254,9 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
                 formatter: &mut self.formatter,
             }
             .push(node, table_embedding);
-            if matches!(
-                node.macro_name.as_deref(),
-                Some("PP" | "P" | "LP" | "HP" | "TP" | "TQ" | "IP" | "RS" | "SY")
-            ) {
-                self.state.set_source_indent(self.indent_columns);
+            if restores_macro_indent(node) {
+                self.state
+                    .set_source_indent(self.indent_columns.macro_origin());
             }
             self.state.inherit_spacing(self.formatter.spacing);
             self.state
@@ -312,12 +315,14 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
         if node.macro_name.as_deref() == Some("in")
             && self.context.macro_set == libmandoc_rs::MacroSet::Man
         {
+            self.state.flush_preformatted();
+            self.state.flush_paragraph();
             let current = self.state.source_indent();
             let next = node
                 .children
                 .first()
                 .and_then(|node| node.text.as_deref())
-                .map_or(self.indent_columns, |argument| {
+                .map_or(self.indent_columns.macro_origin(), |argument| {
                     let Some(distance) = self.context.checked_distance(node, argument) else {
                         return current;
                     };
@@ -669,6 +674,15 @@ fn is_nonprinting_request(node: &Node) -> bool {
     matches!(
         node.macro_name.as_deref(),
         Some("ad" | "fi" | "ft" | "hy" | "in" | "na" | "ne" | "nf" | "nh" | "nr" | "ta" | "ti")
+    )
+}
+
+/// These man macros explicitly assign the formatter's macro base. Passive
+/// structures such as tables and equations inherit the current `.in` position.
+fn restores_macro_indent(node: &Node) -> bool {
+    matches!(
+        node.macro_name.as_deref(),
+        Some("PP" | "P" | "LP" | "HP" | "TP" | "TQ" | "IP" | "RS" | "SY")
     )
 }
 
