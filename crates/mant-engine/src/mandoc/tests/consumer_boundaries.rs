@@ -2,6 +2,20 @@
 use super::inline_boundaries::{assert_flow, query, variants};
 
 #[test]
+fn prose_function_blocks_are_inline_but_synopsis_declarations_remain_separate() {
+    assert_flow(
+        ".No before\n.Fo WORD\n.Fa arg\n.Fc\n.No after",
+        "before WORD(arg) after",
+    );
+    assert_flow(
+        ".No before\n.Fo WORD\n.Fa arg\n.Fc )\n.No after",
+        "before WORD(arg)) after",
+    );
+    let doc = crate::query_roff_bytes(b".Dd Sep 8, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.Fo FIRST\n.Fa arg\n.Fc\n.Fo SECOND\n.Fa arg\n.Fc\n").unwrap();
+    assert_eq!(doc.document.unwrap().sections[0].blocks.len(), 2);
+}
+
+#[test]
 fn font_scopes_reach_bibliographies_and_table_cells() {
     use super::font_boundaries::assert_style;
     for (mode, style) in [("emphasis", 2), ("symbolic", 1), ("literal", 4)] {

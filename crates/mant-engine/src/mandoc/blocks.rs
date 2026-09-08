@@ -733,13 +733,6 @@ impl StructuralLowerer<'_, '_, '_> {
                 self.paragraph_distance,
                 self.spacing_enabled,
             ),
-            Some("Fo") => lower_mdoc_function(
-                self.output,
-                node,
-                self.context,
-                self.indent_columns,
-                self.spacing_enabled,
-            ),
             _ if node.kind == NodeKind::Table => append_table_row(
                 self.output,
                 node,
@@ -892,24 +885,6 @@ fn parts_have_visible_text(nodes: &[Node], default_name: Option<&str>) -> bool {
     !plain_text(&lower_inline_nodes(nodes, default_name))
         .trim()
         .is_empty()
-}
-
-fn lower_mdoc_function(
-    output: &mut Vec<Block>,
-    node: &Node,
-    context: &LoweringContext<'_>,
-    indent_columns: u16,
-    spacing_enabled: bool,
-) {
-    let children = context.lower_inline_with_spacing(std::slice::from_ref(node), spacing_enabled);
-    if children.is_empty() {
-        return;
-    }
-    output.push(Block::Paragraph {
-        children,
-        layout: layout(indent_columns),
-        source: source_span(node),
-    });
 }
 
 fn equation_block(node: &Node, indent_columns: u16) -> Block {
@@ -1117,15 +1092,14 @@ fn extend_blocks_with_spacing(output: &mut Vec<Block>, mut nested: Vec<Block>, l
 
 /// Whether a parsed node contributes to the current filled inline flow.
 ///
-/// Node role is authoritative: the same semantic macro can be an `Element`
-/// in prose and a structural `Block` in a synopsis. Macro-name-only
-/// classification previously treated block-shaped `.Nm` as inline and lost
-/// its command head.
+/// AST block shape is not itself a paragraph boundary. Fo is an inline
+/// function scope in prose; the earlier synopsis declaration policy owns its
+/// structural breaks. Nm retains its separate head/body handling.
 fn participates_in_inline_flow(node: &Node) -> bool {
     matches!(node.kind, NodeKind::Text | NodeKind::Element)
         || is_inline_equation(node)
         || is_enclosure_macro(node.macro_name.as_deref())
-        || node.macro_name.as_deref() == Some("Nd")
+        || matches!(node.macro_name.as_deref(), Some("Nd" | "Fo"))
 }
 
 fn is_nonprinting_request(node: &Node) -> bool {

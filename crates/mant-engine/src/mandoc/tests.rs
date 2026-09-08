@@ -566,21 +566,16 @@ fn preserves_explicit_mdoc_function_and_enclosure_structure() {
     let function = &document.sections[1];
     let [
         Block::Paragraph {
-            children: return_type,
-            ..
-        },
-        Block::Paragraph {
             children: declaration,
             ..
         },
     ] = function.blocks.as_slice()
     else {
-        panic!("expected return type and function declaration paragraphs");
+        panic!("expected one prose function paragraph");
     };
-    assert_eq!(inline_text(return_type), "int");
     assert_eq!(
         inline_text(declaration),
-        "audit_open(const char *path, int flags)"
+        "int audit_open(const char *path, int flags)"
     );
     assert!(declaration.iter().any(|inline| matches!(
         inline,
