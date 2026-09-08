@@ -11,7 +11,7 @@ pub(super) fn query(body: &str) -> ResolvedContent {
     crate::query_roff_bytes(source(body).as_bytes()).unwrap()
 }
 
-fn assert_flow(body: &str, expected: &str) {
+pub(super) fn assert_flow(body: &str, expected: &str) {
     let query = query(body);
     let document = query.document.as_ref().unwrap();
     let blocks = &document.sections[1].blocks;

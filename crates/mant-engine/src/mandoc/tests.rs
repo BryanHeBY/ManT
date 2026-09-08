@@ -11,6 +11,7 @@ use super::{
     parse_manual_bytes, parse_manual_source,
 };
 
+mod consumer_boundaries;
 mod entry_forms;
 mod flow_controls;
 mod font_boundaries;

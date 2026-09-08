@@ -879,17 +879,17 @@ mod tests {
     }
 
     #[test]
-    fn removes_redundant_escaped_font_requests_only_inside_the_same_font() {
+    fn decoded_font_spellings_are_never_reinterpreted_as_controls() {
         let generated = parse_roff_text(r"\fB\\fBpackage.json\\fR config\fR");
-        assert_eq!(plain_text(&generated), "package.json config");
+        assert_eq!(plain_text(&generated), r"\fBpackage.json\fR config");
         assert!(matches!(generated.as_slice(), [Inline::Strong { .. }]));
 
         let emphasis = parse_roff_text(r"\fI\\fIvalue\\fR\fR");
-        assert_eq!(plain_text(&emphasis), "value");
+        assert_eq!(plain_text(&emphasis), r"\fIvalue\fR");
         assert!(matches!(emphasis.as_slice(), [Inline::Emphasis { .. }]));
 
         let code = parse_roff_text(r"\fC\\fCvalue\\fR\fR");
-        assert_eq!(plain_text(&code), "value");
+        assert_eq!(plain_text(&code), r"\fCvalue\fR");
         assert!(matches!(code.as_slice(), [Inline::Code { .. }]));
 
         let literal = parse_roff_text(r"show \\fBbold\\fR markup");

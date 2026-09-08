@@ -3,7 +3,6 @@ use super::super::reference::trailing_sphinx_manual_reference;
 use super::{
     Font, FontState, Inline, InlineBuilder, Node, RoffInlineEvent, append_inline_nodes, decode,
 };
-use std::borrow::Cow;
 
 pub(in crate::mandoc) fn parse_roff_text(source: &str) -> Vec<Inline> {
     parse_roff_text_with_font(source, Font::Regular, true)
@@ -100,7 +99,9 @@ pub(super) fn parse_roff_text_with_state(
     for event in decode(source) {
         match event {
             RoffInlineEvent::Text(value) => {
-                buffer.push_str(&normalize_redundant_escaped_font(&value, font));
+                // The decoder has already classified controls. A backslash
+                // produced by \e or \[rs] is literal author content.
+                buffer.push_str(&value);
             }
             RoffInlineEvent::Font(next_font) => {
                 flush_segment(&mut output, &mut buffer, font, link.as_deref());
@@ -139,28 +140,6 @@ pub(super) fn parse_roff_text_with_state(
     }
     flush_segment(&mut output, &mut buffer, font, link.as_deref());
     output
-}
-
-/// Some generated manuals wrap a link label in a font and then escape another
-/// copy of that same font request as visible text. libmandoc correctly reports
-/// the enclosing font, so remove only the redundant escaped request. Keeping
-/// this conditional on the enclosing font preserves literal `\\f` examples in
-/// formatter manuals and ordinary prose.
-fn normalize_redundant_escaped_font(source: &str, font: Font) -> Cow<'_, str> {
-    let opening = match font {
-        Font::Strong => r"\fB",
-        Font::Emphasis => r"\fI",
-        Font::StrongEmphasis => r"\f[BI]",
-        Font::Code => r"\fC",
-        Font::CodeStrong => r"\f[CB]",
-        Font::CodeEmphasis => r"\f[CI]",
-        Font::Regular => return Cow::Borrowed(source),
-    };
-    if !source.contains(opening) {
-        return Cow::Borrowed(source);
-    }
-
-    Cow::Owned(source.replace(opening, "").replace(r"\fR", ""))
 }
 
 fn promote_sphinx_manual_reference(
