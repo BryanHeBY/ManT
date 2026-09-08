@@ -225,13 +225,6 @@ impl Audit<'_> {
 }
 
 pub(super) fn profile(root: &Node, document: &Document) -> Value {
-    let mut observed = Observed::default();
-    observed.visit_document(document);
-    observed.groups = observed
-        .group_pointers
-        .iter()
-        .map(|group| group.iter().map(|p| observed.pointers[p]).collect())
-        .collect();
     // Physical source coordinates can repeat during macro expansion. Preserve
     // every occurrence in syntax/IR traversal order instead of overwriting a
     // coordinate bucket. Deleted/reordered owners leave unmatched obligations.
@@ -280,6 +273,13 @@ pub(super) fn profile(root: &Node, document: &Document) -> Value {
             native_keys(child, counts, keys);
         }
     }
+    let mut observed = Observed::default();
+    observed.visit_document(document);
+    observed.groups = observed
+        .group_pointers
+        .iter()
+        .map(|group| group.iter().map(|p| observed.pointers[p]).collect())
+        .collect();
     let mut native_owners = BTreeMap::new();
     native_keys(root, &mut BTreeMap::new(), &mut native_owners);
     let group_index = observed

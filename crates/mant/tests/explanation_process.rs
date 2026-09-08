@@ -81,7 +81,7 @@ fn cli_file_stdin_and_public_production_api_agree_on_executed_boundaries() {
             },
             &mant_protocol::ExplanationQuery {
                 entry: "-a".into(),
-                options: Default::default(),
+                options: mant_protocol::ExplanationOptions::default(),
             },
         )
         .unwrap();
