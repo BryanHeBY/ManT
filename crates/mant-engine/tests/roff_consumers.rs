@@ -7,6 +7,28 @@ use mant_ir::{
 };
 use std::fmt::Write as _;
 
+#[test]
+fn lowers_the_pinned_large_mdoc_fixture_without_empty_sections() {
+    let source = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../libmandoc-rs/vendor/mandoc-1.14.6/mandoc.1");
+    // This cross-crate corpus check must actually execute in a source checkout;
+    // published unit tests do not include this integration-test file.
+    let document = mant_engine::parse_manual_source(&source).expect("lower vendored mandoc manual");
+    assert!(document.sections.len() > 5);
+    assert!(
+        document
+            .sections
+            .iter()
+            .any(|section| section.title == "DESCRIPTION")
+    );
+    assert!(
+        document
+            .sections
+            .iter()
+            .all(|section| !section.blocks.is_empty() || !section.children.is_empty())
+    );
+}
+
 thread_local! {
     static FIXTURE_READS: std::cell::RefCell<Option<std::collections::BTreeSet<String>>> =
         const { std::cell::RefCell::new(None) };
