@@ -68,13 +68,31 @@ pub(crate) const DEFAULT_INLINE_TERM_MAX_WIDTH: usize = 6;
 
 /// Decide whether definition terms fit beside their first description line.
 pub(crate) fn terms_fit_inline(terms: &[Vec<Inline>], max_width: usize) -> bool {
-    let width = terms
+    let text = terms
         .iter()
         .map(|term| plain_text(term))
         .collect::<Vec<_>>()
-        .join(", ")
-        .trim()
-        .chars()
-        .count();
+        .join(", ");
+    let width = mant_protocol::geometry::text_width(text.trim());
     (1..=max_width).contains(&width)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn tag_fit_uses_visible_cells_inside_styles_and_original_hard_lines() {
+        let terms = |text: &str| {
+            vec![vec![Inline::Strong {
+                children: vec![Inline::Text { value: text.into() }],
+            }]]
+        };
+        assert!(!terms_fit_inline(&terms("日本日本"), 7));
+        assert!(terms_fit_inline(&terms("日本日本"), 8));
+        assert!(terms_fit_inline(&terms("e\u{301}"), 1));
+        assert!(terms_fit_inline(&terms("😀"), 2));
+        assert!(!terms_fit_inline(&terms("😀"), 1));
+        assert!(terms_fit_inline(&terms("abc\ndef"), 3));
+    }
 }

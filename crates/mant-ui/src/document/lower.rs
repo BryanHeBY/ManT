@@ -263,7 +263,7 @@ impl DocumentBuilder<'_> {
                         }) = item.blocks.first()
                     {
                         self.spacing(layout.spacing_before_lines);
-                        let marker_width = UnicodeWidthStr::width(marker.as_str());
+                        let marker_width = mant_protocol::geometry::text_width(&marker);
                         let content_indent =
                             indent + marker_width + usize::from(layout.indent_columns);
                         let mut inline_lines = styled_bound_inline_lines(

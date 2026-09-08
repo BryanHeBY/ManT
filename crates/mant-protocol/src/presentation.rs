@@ -18,6 +18,7 @@ mod inline;
 pub use inline::{InlinePresentation, visit_inline_text};
 mod text;
 pub use text::{TextPresentation, TextRole};
+pub mod geometry;
 
 /// Transport-neutral evidence outcome and paging/coverage labels.
 #[must_use]

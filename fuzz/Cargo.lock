@@ -284,6 +284,7 @@ dependencies = [
  "mant-ir",
  "schemars",
  "serde",
+ "unicode-width",
 ]
 
 [[package]]
