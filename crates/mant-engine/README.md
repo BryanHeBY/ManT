@@ -114,6 +114,7 @@ a clean target ledger alone does not establish rendering fidelity.
 | Resolve and project a scope request | `DocumentResolver::execute_scope_query` |
 | Parse in-memory Markdown without discovery | `parse_markdown` or `query_markdown_text` |
 | Parse in-memory roff without discovery | `parse_manual_bytes` or `query_roff_bytes` |
+| Audit production file lowering against its exact native witness | `parse_manual_source_with_report` |
 | Build a focused result from existing content | `build_outline_projection`, `select_excerpt`, `search_query` |
 | Collect bounded independent semantic evidence | `explain_query`, `validate_explanation_query` |
 | Produce human or JSON output | The `render_*` functions |

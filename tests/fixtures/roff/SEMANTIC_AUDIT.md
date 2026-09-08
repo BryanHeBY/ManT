@@ -168,13 +168,17 @@ does not exhibit quadratic growth, but is not a complexity proof or a zero-cost
 claim. Native Windows/macOS and the historical 45,036-page corpus were not rerun.
 Large build/output artifacts stay under local `target/`, not in `docs/`.
 
-The development-only `roff_semantic_profile` example parses and lowers each
-page once, builds the final `SemanticIndex`, and records each entry's ID, kind,
+The development-only `roff_semantic_profile` example uses
+`parse_manual_source_with_report` in its default `production` mode: bounded
+file loading, decompression, source preparation, parsing and lowering are the
+same path as the public production API. The returned native report is the
+witness from that single parse, not a second independently prepared input.
+It builds the final `SemanticIndex` and records each entry's ID, kind,
 selectable names (the legacy `aliases` field), explicit `aliasGroups` / `aliasOf`, visible forms, targets, containing section, nested depth, and
-value-domain origin. Profile schema `mant.roff-semantic-profile/v4` names the
+value-domain origin. Profile schema `mant.roff-semantic-profile/v5` names the
 selectable spellings `names`, aligned with the IR and outline rather than
-implying alias equivalence. Historical v1/v2/v3 ledger rows remain readable; a new
-scan records v4 explicitly. Like v2, the profiler also walks
+implying alias equivalence. Historical v1/v2/v3/v4 ledger rows remain readable; a new
+scan records v5 explicitly. Like v2, the profiler also walks
 the IR definition lists independently so an ordinal that failed to become a
 list cannot hide merely because semantic discovery declined it. Independently,
 it derives every punctuated ordinal candidate from the original owned mdoc AST,
@@ -192,8 +196,17 @@ evidence. Missing groups and relocated owners have adversarial profiler tests.
 Nameless/template and non-definition candidates retain their rejection reasons
 for inspection rather than becoming newly inferred names. This is not a full
 syntax oracle: a reasoned rejection does not prove the author's intent, and
-native ASTs can omit source-only whitespace requests. The query gold's original
-source witnesses and explicit-boundary product tests are independent checks.
+native ASTs can omit source-only whitespace requests. Version 5 retains the
+parser's executed flow generation before validation removes empty paragraph
+nodes, and records every owner occurrence even when macro expansion gives
+several owners the same source coordinate. Physical lines containing unexecuted
+conditionals or macro definitions are not execution evidence. Production/API/
+stdin parity tests cover actual and skipped boundaries and compressed input.
+The explicit `confined-include-parser-audit` mode uses a different include
+policy for specialized parser fixtures and is not product-route acceptance.
+Earlier v4 gold results remain historical results of the source-less lowering
+route, not evidence that production CLI queries were equivalent. The query
+gold's original source witnesses are not regenerated to accept new output.
 Gold result reports include per-source run counts and decision histograms, so
 retained-group counts alone cannot stand in for explanation completeness.
 

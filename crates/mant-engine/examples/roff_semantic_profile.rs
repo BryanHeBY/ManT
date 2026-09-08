@@ -27,7 +27,7 @@ use conversions::{conversion_violations, ordinal_conversions};
 #[path = "support/profile_io.rs"]
 mod profile_io;
 
-const PROFILE_SCHEMA: &str = "mant.roff-semantic-profile/v4";
+const PROFILE_SCHEMA: &str = "mant.roff-semantic-profile/v5";
 const SAMPLE_LIMIT: usize = 32;
 
 #[derive(Clone, Serialize)]
@@ -90,20 +90,31 @@ fn profile_request(line: &str) -> Result<Value, String> {
             "queryProfiles": queries::profile(None, &content, queries)?}));
     }
     let path = path_field(&request, "path")?;
-    let root = path_field(&request, "root")?;
-    let report = Parser::new(ParseOptions {
-        includes: IncludePolicy::Root(root),
-        compression: Compression::Auto,
-    })
-    .parse_file(&path)
-    .map_err(|error| error.to_string())?;
-    let document = lower_mandoc_document(&path, &report);
+    let mode = request
+        .get("mode")
+        .and_then(Value::as_str)
+        .unwrap_or("production");
+    let (document, report) = match mode {
+        "production" => mant_engine::parse_manual_source_with_report(&path)
+            .map_err(|error| error.to_string())?,
+        "confined-include-parser-audit" => {
+            let report = Parser::new(ParseOptions {
+                includes: IncludePolicy::Root(path_field(&request, "root")?),
+                compression: Compression::Auto,
+            })
+            .parse_file(&path)
+            .map_err(|error| error.to_string())?;
+            (lower_mandoc_document(&path, &report), report)
+        }
+        _ => return Err(format!("unknown profile mode {mode:?}")),
+    };
     let mut profile = profile_document(
         id,
         &report.document.root,
         &document,
         report.diagnostics.len(),
     );
+    profile["mode"] = mode.into();
     if let Some(queries) = request.get("queries") {
         let queries = queries.as_array().ok_or("queries must be an array")?;
         let content = mant_ir::ResolvedContent {
@@ -535,6 +546,66 @@ fn check_value_domains(entries: &[SemanticEntry], scope: &str, violations: &mut 
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn production_profiler_file_and_stdin_api_share_input_preparation_and_queries() {
+        use std::io::Write;
+        let root =
+            std::env::temp_dir().join(format!("mant-profiler-parity-{}", std::process::id()));
+        std::fs::create_dir_all(&root).unwrap();
+        for (index, between) in [
+            ".PP\n",
+            ".if 1 .PP\n",
+            ".if 0 \\{\\\n.PP\n.\\}\n",
+            ".BREAK\n",
+            ".de UNUSED\n.PP\n..\n",
+        ]
+        .iter()
+        .enumerate()
+        {
+            let source = format!(
+                ".TH PROBE 1\n.de BREAK\n.PP\n..\n.SH OPTIONS\n.TP\n.B -a\n{between}.TP\n.B -b\nBody café 日本.\n"
+            );
+            let mut gzip =
+                flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+            gzip.write_all(source.as_bytes()).unwrap();
+            for (extension, bytes) in [
+                ("1", source.as_bytes().to_vec()),
+                ("1.gz", gzip.finish().unwrap()),
+                (
+                    "1.zst",
+                    zstd::stream::encode_all(source.as_bytes(), 1).unwrap(),
+                ),
+            ] {
+                let path = root.join(format!("probe-{index}.{extension}"));
+                std::fs::write(&path, bytes).unwrap();
+                let profile = super::profile_request(
+                    &serde_json::json!({"id":"probe","path":path,"queries":["-a"]}).to_string(),
+                )
+                .unwrap();
+                assert_eq!(profile["mode"], "production");
+                assert_eq!(
+                    profile["declarationGroups"]["unexpectedGroups"],
+                    serde_json::json!([])
+                );
+                let input = mant_engine::parse_manual_bytes(&path, source.as_bytes()).unwrap();
+                assert_eq!(input, mant_engine::parse_manual_source(&path).unwrap());
+                let content = mant_ir::ResolvedContent {
+                    label: "probe".into(),
+                    address: None,
+                    document: Some(input),
+                    tldr: None,
+                };
+                let expected =
+                    super::queries::profile(None, &content, &[serde_json::json!("-a")]).unwrap();
+                assert_eq!(
+                    profile["queryProfiles"][0]["explanation"],
+                    expected[0]["explanation"]
+                );
+            }
+        }
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
     #[test]
     fn invalid_binding_and_producer_coverage_are_explicit_review_evidence() {
         let source = b".TH PROBE 1 2026-09-08\n.SH OPTIONS\n.TP\n.B -D<NAME>\nDefine it.\n";

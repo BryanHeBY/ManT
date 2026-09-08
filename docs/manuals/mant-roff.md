@@ -157,6 +157,12 @@ explicit `TQ` adds a tag only to the immediately preceding empty definition;
 several such tags retain their source order under one owner. Multiple names or
 forms do not imply an explicit alias relationship.
 
+Declaration adjacency uses executed native flow generations, retained before
+validation removes empty paragraphs. Active conditionals and invoked macros
+can therefore end a reading group; skipped branches and uncalled macro bodies
+cannot. Both source-backed loading and lowering an owned parser report consume
+the same facts without scanning source lines or replaying roff conditionals.
+
 This conservative boundary means that a short declaration in a compact manual
 may have no independent body. Its names, complete form and source remain
 addressable; explain can additionally supply a bounded declaration group's

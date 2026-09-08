@@ -17,6 +17,83 @@ Use `--help` for assistance.
 - `--assist`: Independent examples. <!-- mant:entry {"id":"assist","aliasOf":"brief"} -->
 "#;
 
+#[test]
+fn cli_file_stdin_and_public_production_api_agree_on_executed_boundaries() {
+    use std::{io::Write, process::Stdio};
+    let root = fixture("executed-boundaries");
+    let path = root.join("probe.1");
+    for between in [
+        ".PP\n",
+        ".if 1 .PP\n",
+        ".if 0 \\{\\\n.PP\n.\\}\n",
+        ".BREAK\n",
+        ".de UNUSED\n.PP\n..\n",
+    ] {
+        let source = format!(
+            ".TH PROBE 1\n.de BREAK\n.PP\n..\n.SH OPTIONS\n.TP\n.B -a\n{between}.TP\n.B -b\nShared body.\n"
+        );
+        fs::write(&path, &source).unwrap();
+        let file = success(
+            &Command::new(env!("CARGO_BIN_EXE_mant"))
+                .args([
+                    "--input",
+                    path.to_str().unwrap(),
+                    "--input-format",
+                    "roff",
+                    "--explain=-a",
+                    "--format",
+                    "json",
+                    "--compact",
+                ])
+                .output()
+                .unwrap(),
+        );
+        let mut child = Command::new(env!("CARGO_BIN_EXE_mant"))
+            .args([
+                "--input",
+                "-",
+                "--input-format",
+                "roff",
+                "--explain=-a",
+                "--format",
+                "json",
+                "--compact",
+            ])
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .unwrap();
+        child
+            .stdin
+            .take()
+            .unwrap()
+            .write_all(source.as_bytes())
+            .unwrap();
+        let stdin = success(&child.wait_with_output().unwrap());
+        let document = mant_engine::parse_manual_source(&path).unwrap();
+        let api = mant_engine::explain_query(
+            &mant_ir::ResolvedContent {
+                label: "probe".into(),
+                address: None,
+                document: Some(document),
+                tldr: None,
+            },
+            &mant_protocol::ExplanationQuery {
+                entry: "-a".into(),
+                options: Default::default(),
+            },
+        )
+        .unwrap();
+        let api = serde_json::to_value(api).unwrap();
+        for field in ["evidence", "supports", "counts", "truncation"] {
+            assert_eq!(file[field], stdin[field], "{field} {between:?}");
+            assert_eq!(file[field], api[field], "API {field} {between:?}");
+        }
+    }
+    fs::remove_dir_all(root).unwrap();
+}
+
 fn fixture(name: &str) -> std::path::PathBuf {
     let root = std::env::temp_dir().join(format!("mant-explanation-{name}-{}", std::process::id()));
     let documents = support::registered_documents_dir(&root);

@@ -9,16 +9,34 @@ use mant_ir::{
 use serde_json::{Value, json};
 use std::collections::{BTreeMap, BTreeSet};
 
+type OwnerKey = (u32, u32, usize);
+
 #[derive(Default)]
 struct Observed<'a> {
-    owners: BTreeMap<(u32, u32), &'a DefinitionItem>,
-    groups: Vec<Vec<(u32, u32)>>,
+    owners: BTreeMap<OwnerKey, &'a DefinitionItem>,
+    pointers: BTreeMap<usize, OwnerKey>,
+    occurrences: BTreeMap<(u32, u32), usize>,
+    group_pointers: Vec<Vec<usize>>,
+    groups: Vec<Vec<OwnerKey>>,
     invalid: usize,
 }
 impl<'a> Visit<'a> for Observed<'a> {
+    fn visit_list_item(&mut self, item: &'a mant_ir::ListItem) {
+        // Ordinal/bullet conversion changes the block kind, not its place in
+        // a repeated source-coordinate stream.
+        if let Some(source) = item.source {
+            *self.occurrences.entry(key(source)).or_default() += 1;
+        }
+        visit::walk_list_item(self, item);
+    }
     fn visit_definition_item(&mut self, item: &'a DefinitionItem) {
         if let Some(source) = item.source {
-            self.owners.insert(key(source), item);
+            let coordinate = key(source);
+            let occurrence = self.occurrences.entry(coordinate).or_default();
+            let key = (coordinate.0, coordinate.1, *occurrence);
+            *occurrence += 1;
+            self.owners.insert(key, item);
+            self.pointers.insert(std::ptr::from_ref(item) as usize, key);
         }
         visit::walk_definition_item(self, item);
     }
@@ -33,11 +51,11 @@ impl<'a> Visit<'a> for Observed<'a> {
                 let sources = group.resolve(items).and_then(|members| {
                     members
                         .iter()
-                        .map(|i| i.source.map(key))
+                        .map(|i| i.source.map(|_| std::ptr::from_ref(i) as usize))
                         .collect::<Option<Vec<_>>>()
                 });
                 if let Some(sources) = sources {
-                    self.groups.push(sources);
+                    self.group_pointers.push(sources);
                 } else {
                     self.invalid += 1;
                 }
@@ -87,7 +105,8 @@ struct Audit<'a> {
     rows: Vec<Value>,
     matched: BTreeSet<usize>,
     review: usize,
-    group_index: BTreeMap<Vec<(u32, u32)>, usize>,
+    group_index: BTreeMap<Vec<OwnerKey>, usize>,
+    native_owners: BTreeMap<usize, OwnerKey>,
 }
 impl Audit<'_> {
     fn classify(&mut self, run: &[(&Node, Vec<usize>)], boundary: &str) {
@@ -96,11 +115,15 @@ impl Audit<'_> {
         }
         let mut sources = Vec::new();
         for (node, _) in run {
-            let source = (node.line, node.column);
-            // TQ explicitly contributes another term to the preceding owner.
-            if node.macro_name.as_deref() == Some("TQ")
-                && !self.observed.owners.contains_key(&source)
-            {
+            let Some(&source) = self
+                .native_owners
+                .get(&(std::ptr::from_ref(*node) as usize))
+            else {
+                continue;
+            };
+            // Multiple explicit TQ heads can share one logical owner. Do not
+            // confuse their source coordinate with the next independent TP.
+            if sources.last() == Some(&source) {
                 continue;
             }
             sources.push(source);
@@ -136,24 +159,35 @@ impl Audit<'_> {
         };
         self.rows.push(json!({
             "status": if retained.is_some() { "retained" } else { "rejected" }, "reason": reason,
-            "sourceOwners": run.iter().map(|(n,path)| json!({"astPath":path,"line":n.line,"column":n.column,"macro":n.macro_name})).collect::<Vec<_>>(),
+            "sourceOwners": run.iter().map(|(n,path)| json!({"astPath":path,"line":n.line,"column":n.column,"macro":n.macro_name,"flowEpoch":n.flow_epoch,"ownerOccurrence":self.native_owners.get(&(std::ptr::from_ref(*n) as usize)).map(|key|key.2)})).collect::<Vec<_>>(),
             "physicalSources":sources,"observedGroup":retained,
         }));
     }
     fn walk(&mut self, node: &Node, path: &mut Vec<usize>) {
-        let mut run = Vec::new();
+        let mut run: Vec<(&Node, Vec<usize>)> = Vec::new();
         for (index, child) in node.children.iter().enumerate() {
             path.push(index);
             if child.kind == NodeKind::Block
                 && matches!(child.macro_name.as_deref(), Some("IP" | "TP" | "TQ" | "It"))
             {
+                if run
+                    .last()
+                    .is_some_and(|(previous, _)| previous.flow_epoch != child.flow_epoch)
+                {
+                    self.classify(&run, "executed-flow-boundary");
+                    run.clear();
+                }
                 // A source-only parameter continuation cannot connect the
                 // declarations before and after it. A literal named `[` (test)
                 // is protected by its actual name facts, not this punctuation.
                 let parameter = self
                     .observed
                     .owners
-                    .get(&(child.line, child.column))
+                    .get(
+                        self.native_owners
+                            .get(&(std::ptr::from_ref(child) as usize))
+                            .unwrap_or(&(0, 0, usize::MAX)),
+                    )
                     .is_some_and(|item| {
                         bracket_head(item)
                             && item
@@ -193,6 +227,61 @@ impl Audit<'_> {
 pub(super) fn profile(root: &Node, document: &Document) -> Value {
     let mut observed = Observed::default();
     observed.visit_document(document);
+    observed.groups = observed
+        .group_pointers
+        .iter()
+        .map(|group| group.iter().map(|p| observed.pointers[p]).collect())
+        .collect();
+    // Physical source coordinates can repeat during macro expansion. Preserve
+    // every occurrence in syntax/IR traversal order instead of overwriting a
+    // coordinate bucket. Deleted/reordered owners leave unmatched obligations.
+    fn native_keys(
+        node: &Node,
+        counts: &mut BTreeMap<(u32, u32), usize>,
+        keys: &mut BTreeMap<usize, OwnerKey>,
+    ) {
+        let mut previous: Option<(&Node, OwnerKey)> = None;
+        for child in &node.children {
+            if child.kind == NodeKind::Block
+                && matches!(child.macro_name.as_deref(), Some("IP" | "TP" | "It" | "TQ"))
+            {
+                let headless = child
+                    .children
+                    .iter()
+                    .filter(|n| n.kind == NodeKind::Head)
+                    .all(|n| !readable(n));
+                let continued =
+                    previous.filter(|(before, _)| before.flow_epoch == child.flow_epoch);
+                let merged = child.macro_name.as_deref() == Some("TQ")
+                    && continued.is_some_and(|(before, _)| !body(before));
+                let continuation = child.macro_name.as_deref() == Some("IP")
+                    && headless
+                    && continued.is_some_and(|(before, _)| body(before));
+                if continuation {
+                    // Headless IP is another paragraph of the previous owner,
+                    // not a declaration in a source run.
+                    native_keys(child, counts, keys);
+                    continue;
+                }
+                let source = if merged {
+                    continued.expect("checked preceding owner").1
+                } else {
+                    let coordinate = (child.line, child.column);
+                    let occurrence = counts.entry(coordinate).or_default();
+                    let source = (coordinate.0, coordinate.1, *occurrence);
+                    *occurrence += 1;
+                    source
+                };
+                keys.insert(std::ptr::from_ref(child) as usize, source);
+                previous = Some((child, source));
+            } else if !matches!(child.macro_name.as_deref(), Some("PD" | "Sm" | "Tg" | "ft")) {
+                previous = None;
+            }
+            native_keys(child, counts, keys);
+        }
+    }
+    let mut native_owners = BTreeMap::new();
+    native_keys(root, &mut BTreeMap::new(), &mut native_owners);
     let group_index = observed
         .groups
         .iter()
@@ -206,6 +295,7 @@ pub(super) fn profile(root: &Node, document: &Document) -> Value {
         matched: BTreeSet::new(),
         review: 0,
         group_index,
+        native_owners,
     };
     audit.walk(root, &mut Vec::new());
     let unexpected = audit.observed.groups.iter().enumerate().filter(|(i,_)| !audit.matched.contains(i))
@@ -234,6 +324,51 @@ pub(super) fn violations(profile: &Value) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn same_coordinate_stream_accounts_for_explicit_heads_and_list_conversion() {
+        for prefix in ["", ".IP 1.\nA numbered step.\n", ".IP \\(bu\nA bullet.\n"] {
+            for continuation in ["", ".TQ\n.B --all\n"] {
+                let source = format!(
+                    ".TH PROBE 1\n.SH OPTIONS\n.de PAIR\n{prefix}.TP\n.B -a\n{continuation}.TP\n.B -b\nBody.\n.IP\nTail.\n..\n.PAIR\n.PAIR\n"
+                );
+                let native = libmandoc_rs::Parser::default()
+                    .parse_bytes("probe.1", source.as_bytes())
+                    .unwrap();
+                let document = mant_engine::parse_manual_bytes(
+                    std::path::Path::new("probe.1"),
+                    source.as_bytes(),
+                )
+                .unwrap();
+                let result = profile(&native.document.root, &document);
+                assert_eq!(
+                    result["observedGroups"].as_array().unwrap().len(),
+                    2,
+                    "{source}\n{result}"
+                );
+                assert!(violations(&result).is_empty(), "{source}\n{result}");
+            }
+        }
+    }
+    #[test]
+    fn macro_expansion_retains_every_same_coordinate_owner_occurrence() {
+        let source = b".TH PROBE 1\n.SH OPTIONS\n.de PAIR\n.TP\n.B -a\n.TP\n.B -b\nBody.\n..\n.PAIR\n.PAIR\n";
+        let native = libmandoc_rs::Parser::default()
+            .parse_bytes("probe.1", source)
+            .unwrap();
+        let mut document =
+            mant_engine::parse_manual_bytes(std::path::Path::new("probe.1"), source).unwrap();
+        let original = profile(&native.document.root, &document);
+        assert_eq!(original["observedGroups"].as_array().unwrap().len(), 2);
+        assert!(violations(&original).is_empty(), "{original}");
+        let Block::DefinitionList {
+            declaration_groups, ..
+        } = &mut document.sections[0].blocks[0]
+        else {
+            panic!("definitions")
+        };
+        declaration_groups.remove(0);
+        assert!(!violations(&profile(&native.document.root, &document)).is_empty());
+    }
     #[test]
     fn parameter_continuation_separates_runs_without_hiding_crossing_groups() {
         let source = b".TH PROBE 1\n.SH COMMANDS\n.TP\n.B first\n.TP\n\\fB      \\fP[ \\fIargument\\fP ]\n.TP\n.B second\n.TP\n.B third\nBody.\n";
