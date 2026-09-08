@@ -12,6 +12,15 @@ Every native release archive carries this file as
 `LICENSES/RUST_DEPENDENCIES.html`; CI rejects it when it no longer matches the
 locked multi-platform graph.
 
+## Bundled pager
+
+`crates/mant-ui/src/pager/vendor/` contains minus 5.7.2, privately adapted for
+static/search paging and independent styled-row redraw. It is licensed under
+MIT OR Apache-2.0; both complete texts and the exact adaptation/verification
+instructions accompany the sources. It is included in the mant-ui crate, not
+listed as a separate registry dependency. Native archives carry its licenses as
+`LICENSES/MINUS-MIT` and `LICENSES/MINUS-APACHE`.
+
 ## Bundled parser
 
 `crates/libmandoc-rs/vendor/mandoc-1.14.6/` is a pinned mandoc 1.14.6 source

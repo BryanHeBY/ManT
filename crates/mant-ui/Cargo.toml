@@ -18,7 +18,11 @@ include = ["/Cargo.toml", "/LICENSE", "/README.md", "/src/**"]
 crossterm.workspace = true
 mant-ir = { path = "../mant-ir", version = "^0.11.0" }
 mant-protocol = { path = "../mant-protocol", version = "^0.11.0" }
-minus.workspace = true
+crossbeam-channel = "^0.5"
+parking_lot = "^0.12.1"
+regex = "^1"
+textwrap = { version = "~0.16", default-features = false, features = ["unicode-width"] }
+thiserror = "^2"
 ratatui.workspace = true
 unicode-width.workspace = true
 
@@ -27,6 +31,7 @@ signal-hook.workspace = true
 
 [dev-dependencies]
 mant-engine = { path = "../mant-engine", version = "^0.11.0" }
+tokio = { version = "^1", features = ["rt"] }
 
 [lints]
 workspace = true

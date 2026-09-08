@@ -1,5 +1,11 @@
 # mant-ui
 
+The less-like static pager embeds the pinned minus 5.7.2 static/search engine
+privately, with a physical-row SGR restoration adapter. The implementation and
+complete upstream MIT/Apache-2.0 licenses are packaged under `src/pager/vendor`;
+the source inventory and reproducible adaptation are documented there. This
+keeps the fix effective for crates.io consumers without exposing another API.
+
 `mant-ui` is the Ratatui frontend component used by the `mant` executable. It
 renders `ManT`'s in-memory `mant_ir::ResolvedContent` directly and owns
 interactive navigation, search, scrolling, links, menus, mouse input, and

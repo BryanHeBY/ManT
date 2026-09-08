@@ -2,7 +2,16 @@
 
 use std::io;
 
+// The upstream API cannot replace physical rows. Keep the pinned static/search
+// implementation private and packaged, rather than shipping a Cargo patch that
+// silently disappears when mant-ui is installed from crates.io.
+#[path = "pager/vendor/lib.rs"]
+#[rustfmt::skip]
+#[allow(dead_code, unused_imports, missing_docs, clippy::all, clippy::pedantic, clippy::nursery)]
+mod native;
+mod sgr;
 use minus::{Pager, hooks::Hook};
+use native as minus;
 
 /// Display text through a less-like pager when it exceeds the terminal height.
 ///

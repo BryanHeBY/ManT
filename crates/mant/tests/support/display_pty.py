@@ -184,6 +184,8 @@ def run_cases(root):
     short.write_text("# Short\n\nBody.\n", encoding="utf-8")
     long.write_text("# Long\n\n" + "\n\n".join(f"Paragraph {i}." for i in range(80)), encoding="utf-8")
     wrapped.write_text("# Wrapped\n\n" + "wide text " * 200, encoding="utf-8")
+    styled = root / "styled.md"
+    styled.write_text("# Pager\n\n<!-- mant:entries role=option -->\n- `--" + "z" * 256 + "`: Body.\n\n" + "\n\n".join(f"Paragraph {i}." for i in range(20)), encoding="utf-8")
     environment = dict(os.environ, TERM="xterm-256color", NO_COLOR="1")
     environment.pop("CLICOLOR_FORCE", None)
     for name, path, extra, interactive in [
@@ -201,6 +203,8 @@ def run_cases(root):
     check(["--input", str(long)], False, dict(environment, TERM="dumb"))
     check(["--input", "-", "--input-format", "markdown"], False, environment, b"# Stdin\n\nBody.\n")
     check(["--help"], False, environment)
+    for width in [20, 40, 80, 120]:
+        in_session(lambda: check_pager_rows(styled, environment, width))
     for display in ["tui", "pager"]:
         for termination in [signal.SIGINT, signal.SIGTERM]:
             for wait_for_raw in [False, True]:
@@ -212,6 +216,83 @@ def run_cases(root):
                     wait_for_raw=wait_for_raw,
                 ))
             print("ManT", display, "signal restoration", termination, "passed", flush=True)
+
+
+def check_pager_rows(path, environment, width):
+    """Assert actual SGR on independently emitted continuation glyphs."""
+    import re
+    master, slave = pty.openpty()
+    fcntl.ioctl(slave, termios.TIOCSCTTY, 0)
+    fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 3, width, 0, 0))
+    original = termios.tcgetattr(slave)
+    os.set_blocking(master, False)
+    process = subprocess.Popen([sys.argv[1], "--input", str(path), "--format", "text", "--display", "pager", "--color", "always"], stdin=slave, stdout=slave, stderr=slave, env=environment)
+    all_output = bytearray()
+    def read_output():
+        output = bytearray()
+        end = time.monotonic() + 0.18
+        while time.monotonic() < end:
+            if select.select([master], [], [], 0.02)[0]:
+                chunk = read_chunk(master)
+                if chunk:
+                    output.extend(chunk)
+                    # The search prompt asks the terminal for its cursor position.
+                    if b"\x1b[6n" in output:
+                        os.write(master, b"\x1b[3;1R")
+        all_output.extend(output)
+        return output.decode("utf-8", "replace")
+    def check_colors(text):
+        # Start from the prompt's default, not the preceding content row.
+        foreground, glyphs = None, 0
+        for token in re.findall(r"\x1b\[[0-?]*[ -/]*[@-~]|.", text, re.S):
+            if token.startswith("\x1b["):
+                if token.endswith("m"):
+                    for parameter in token[2:-1].split(";"):
+                        code = int(parameter or "0")
+                        if code in (0, 39): foreground = None
+                        elif 30 <= code <= 37 or 90 <= code <= 97: foreground = code
+            elif token == "z":
+                assert foreground == 92, (width, text, foreground)
+                glyphs += 1
+        return glyphs
+    try:
+        deadline = time.monotonic() + 5
+        while b"\x1b[?1049h" not in all_output and time.monotonic() < deadline:
+            read_output()
+        assert b"\x1b[?1049h" in all_output
+        # Scroll forward and backward while a long single name spans rows.
+        observed = 0
+        for key in [b"j", b"j", b"j", b"k", b"\x04", b"\x15"]:
+            os.write(master, key)
+            observed += check_colors(read_output())
+        assert observed > 0, (width, all_output)
+        for columns in [120, 20, width]:
+            fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 3, columns, 0, 0))
+            process.send_signal(signal.SIGWINCH)
+            check_colors(read_output())
+        os.write(master, b"/")
+        read_output()
+        for key in [b"B", b"o", b"d", b"y", b"\r"]:
+            os.write(master, key)
+            read_output()
+        os.write(master, b"n")
+        read_output()
+        os.write(master, b"q")
+        try:
+            process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            raise AssertionError((width, all_output[-4000:]))
+        read_output()
+        assert process.returncode == 0
+        assert b"\x1b[?1049l" in all_output
+        assert terminal_mode(termios.tcgetattr(slave)) == terminal_mode(original)
+    finally:
+        if process.poll() is None:
+            process.kill()
+            process.wait(timeout=5)
+        signal.signal(signal.SIGHUP, signal.SIG_IGN)
+        os.close(master)
+        os.close(slave)
 
 
 def test_drain_boundaries():

@@ -65,6 +65,11 @@ that crate was not published for that change.
 
 ### Shared entry presentation
 
+- Preserve colors and attributes when the pager independently redraws a soft-wrapped
+  continuation or resizes. Keep logical source text and existing search/selection
+  mapping intact. The pinned static/search pager implementation and licenses now
+  ship privately with mant-ui so registry installations receive the same fix.
+
 - Give environment-variable names a separate Magenta/MAUVE family across CLI
   and TUI views, distinct from structural headings, links and general variables.
 

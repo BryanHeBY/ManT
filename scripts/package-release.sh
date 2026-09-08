@@ -57,6 +57,8 @@ trap cleanup EXIT
 
 rm -rf "$staging"
 mkdir -p "$package/LICENSES" "$package/manuals"
+install -m 0644 crates/mant-ui/src/pager/vendor/LICENSE-MIT "$package/LICENSES/MINUS-MIT"
+install -m 0644 crates/mant-ui/src/pager/vendor/LICENSE-APACHE "$package/LICENSES/MINUS-APACHE"
 install -m 0755 "$binary" "$package/mant"
 install -m 0644 docs/manuals/manifest.txt "$package/manuals/manifest.txt"
 while IFS= read -r manual; do

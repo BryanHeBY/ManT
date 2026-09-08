@@ -1005,13 +1005,18 @@ dependencies = [
 name = "mant-ui"
 version = "0.11.0"
 dependencies = [
+ "crossbeam-channel",
  "crossterm",
  "mant-engine",
  "mant-ir",
  "mant-protocol",
- "minus",
+ "parking_lot",
  "ratatui",
+ "regex",
  "signal-hook",
+ "textwrap",
+ "thiserror",
+ "tokio",
  "unicode-width",
 ]
 
@@ -1029,20 +1034,6 @@ checksum = "1fa76a2c86f704bdb222d66965fb3d63269ce38518b83cb0575fca855ebb6316"
 dependencies = [
  "adler2",
  "simd-adler32",
-]
-
-[[package]]
-name = "minus"
-version = "5.7.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1db1df1b8dd701aa57b41283b50b751b3ebc8fe1406955ec90c53b46b475fa56"
-dependencies = [
- "crossbeam-channel",
- "crossterm",
- "parking_lot",
- "regex",
- "textwrap",
- "thiserror",
 ]
 
 [[package]]

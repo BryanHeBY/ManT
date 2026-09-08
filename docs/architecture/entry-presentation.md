@@ -77,6 +77,17 @@ single line; original body text retains legitimate newlines and tabs.
 
 Ordinary full documents and TUI text never acquire explain report prefixes.
 
+## Static pager rows
+
+The static pager retains original logical text. Its pinned private minus adapter
+propagates effective SGR across logical lines and snapshots that state at each
+actual soft-wrap boundary. Every physical row resets/restores attributes and
+foreground/background independently of preceding rows and the prompt; resize
+recalculates rows from the original source. Search and selection use the existing
+logical/physical mapping, not pre-inserted source newlines. Plain text has no new
+escapes. This fixes style continuity, not hanging-indent geometry: long outline
+title continuations still use the pager's existing wrapping rules.
+
 ## Explanation reports
 
 Single-document and scope reports traverse the same returned DTO, with one
