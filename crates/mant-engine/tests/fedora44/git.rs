@@ -18,9 +18,28 @@ fn keeps_complete_sections_and_semantic_option_outlines() {
     let query = query_for_document("git", document);
     let outline = build_outline_with_detail(&query, OutlineDetail::Entries)
         .unwrap_or_else(|error| panic!("build git option outline: {error}"));
-    assert_eq!(count_outline_entries(&outline.nodes), 94);
+    assert_eq!(count_outline_entries(&outline.nodes), 95);
     assert!(find_outline_entry(&outline.nodes, "--help").is_some());
     assert!(find_outline_entry(&outline.nodes, "GIT_DIR").is_some());
+    let deprecated =
+        common::nested_definition_items(common::section(document, "ENVIRONMENT VARIABLES"))
+            .into_iter()
+            .find(|item| {
+                item.entry
+                    .as_ref()
+                    .is_some_and(|entry| entry.names == ["GIT_PRINT_SHA1_ELLIPSIS"])
+            })
+            .expect("deprecated variable annotation must not erase its declaration");
+    assert_eq!(
+        deprecated.entry.as_ref().unwrap().kind,
+        mant_ir::EntryKind::EnvironmentVariable
+    );
+    assert_eq!(deprecated.source.unwrap().line, 2165);
+    assert!(
+        serde_json::to_string(&deprecated.terms)
+            .unwrap()
+            .contains("deprecated")
+    );
 
     let version = common::nested_definition_items(common::section(document, "OPTIONS"))
         .into_iter()

@@ -341,3 +341,106 @@ fn native_environment_role_and_names_are_independent_of_placeholder_support() {
     assert!(items[1].entry.as_ref().unwrap().names.is_empty());
     assert!(mant_ir::validate_document(query.document.as_ref().unwrap()).is_empty());
 }
+
+#[test]
+fn named_declarations_keep_placeholders_annotations_and_assignment_values_in_forms() {
+    for (section, head, expected, kind) in [
+        (
+            "ENVIRONMENT",
+            "CACHE_HOME <directory>",
+            vec!["CACHE_HOME"],
+            mant_ir::EntryKind::EnvironmentVariable,
+        ),
+        (
+            "ENVIRONMENT",
+            "TLS_BACKEND <TLS backend>",
+            vec!["TLS_BACKEND"],
+            mant_ir::EntryKind::EnvironmentVariable,
+        ),
+        (
+            "ENVIRONMENT",
+            "FIRST <directory>, SECOND <TLS backend>",
+            vec!["FIRST", "SECOND"],
+            mant_ir::EntryKind::EnvironmentVariable,
+        ),
+        (
+            "ENVIRONMENT",
+            "PATH=/a,/b|/c",
+            vec!["PATH"],
+            mant_ir::EntryKind::EnvironmentVariable,
+        ),
+        (
+            "OPTIONS",
+            "AUTO_CD (-J) <D>",
+            vec!["AUTO_CD"],
+            mant_ir::EntryKind::Term,
+        ),
+        (
+            "VARIABLES",
+            "APPEND_HISTORY <K> <S>",
+            vec!["APPEND_HISTORY"],
+            mant_ir::EntryKind::Variable,
+        ),
+        (
+            "CONFIGURATION",
+            "core.editor",
+            vec!["core.editor"],
+            mant_ir::EntryKind::ConfigurationKey,
+        ),
+        (
+            "CONFIGURATION",
+            "Environment=",
+            vec!["Environment"],
+            mant_ir::EntryKind::ConfigurationKey,
+        ),
+        ("TOPIC", "if=FILE", vec!["if"], mant_ir::EntryKind::Term),
+        (
+            "TOPIC",
+            "update (-u)",
+            vec!["update"],
+            mant_ir::EntryKind::Term,
+        ),
+        (
+            "TOPIC",
+            "find-new <subvolume> <last_gen>",
+            vec!["find-new"],
+            mant_ir::EntryKind::Term,
+        ),
+        (
+            "VARIABLES",
+            "vi-cmd-mode-string ((cmd))",
+            vec!["vi-cmd-mode-string"],
+            mant_ir::EntryKind::Variable,
+        ),
+        (
+            "VARIABLES",
+            "isearch-terminators (C-[C-j)",
+            vec!["isearch-terminators"],
+            mant_ir::EntryKind::Variable,
+        ),
+    ] {
+        let source = format!(".TH PROBE 1\n.SH {section}\n.TP\n{head}\nBODY\n");
+        let query = mant_engine::query_roff_bytes(source.as_bytes()).unwrap();
+        let items = definitions(query.document.as_ref().unwrap());
+        assert_eq!(items.len(), 1);
+        let facts = items[0].entry.as_ref().unwrap();
+        assert_eq!(facts.kind, kind, "{head}");
+        assert_eq!(facts.names, expected, "{head}");
+        assert!(mant_ir::validate_document(query.document.as_ref().unwrap()).is_empty());
+        assert!(mant_engine::render_query_text(&query).contains(head));
+        assert!(facts.alias_groups.is_empty());
+    }
+    for head in [
+        "[url-protocol]_PROXY",
+        "NAME <unterminated",
+        "NAME <>",
+        "NAME prose, otherwise",
+        "NAME <arg>, ordinary prose",
+        "NAME=one OTHER=two",
+    ] {
+        let source = format!(".TH PROBE 1\n.SH ENVIRONMENT\n.TP\n{head}\nBODY\n");
+        let query = mant_engine::query_roff_bytes(source.as_bytes()).unwrap();
+        let items = definitions(query.document.as_ref().unwrap());
+        assert!(items[0].entry.as_ref().unwrap().names.is_empty(), "{head}");
+    }
+}

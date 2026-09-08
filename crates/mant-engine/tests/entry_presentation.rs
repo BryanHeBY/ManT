@@ -62,10 +62,9 @@ fn explicit_presentation_fixture_has_all_roles_without_diagnostics() {
 
 #[test]
 fn search_keeps_a_form_label_without_inventing_a_name() {
-    let content = query_roff_bytes(
-        b".TH PROBE 1\n.SH TERMS\n.TP\n.B find-new <subvolume> <last_gen>\nFind new files.\n",
-    )
-    .unwrap();
+    let content =
+        query_roff_bytes(b".TH PROBE 1\n.SH TERMS\n.TP\n.B ^find-new.*\nFind new files.\n")
+            .unwrap();
     let search = mant_engine::search_query(
         &content,
         &mant_protocol::SearchQuery {
@@ -81,10 +80,7 @@ fn search_keeps_a_form_label_without_inventing_a_name() {
     )
     .unwrap();
     let node = &search.matches[0].outline.node;
-    assert_eq!(
-        search.matches[0].outline.title(),
-        "find-new <subvolume> <last_gen>"
-    );
+    assert_eq!(search.matches[0].outline.title(), "^find-new.*");
     assert!(
         matches!(node, mant_protocol::OutlineNodeReference::DocumentEntry { names, .. } if names.is_empty())
     );

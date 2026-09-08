@@ -27,7 +27,8 @@ pub(in crate::definitions) fn is_ordinal_marker(value: &str) -> bool {
     })
 }
 
-/// Accept a complete semantic name and one delimited trailing annotation.
+/// Accept a complete semantic name and bounded trailing annotations. The
+/// suffix is retained in the form, never expanded into additional names.
 pub(in crate::definitions) fn named_term_name(
     value: &str,
     validate: fn(&str) -> bool,
@@ -36,8 +37,123 @@ pub(in crate::definitions) fn named_term_name(
     if validate(value) {
         return Some(value);
     }
-    let (name, annotation) = value.rsplit_once(" (")?;
-    (annotation.ends_with(')') && validate(name)).then_some(name)
+    let (name, annotation) = value.split_once(char::is_whitespace)?;
+    (validate(name) && annotations(annotation)).then_some(name)
+}
+
+fn annotations(value: &str) -> bool {
+    let mut rest = value.trim();
+    let mut count = 0;
+    while !rest.is_empty() {
+        count += 1;
+        if count > 64 {
+            return false;
+        }
+        let Some(end) = annotation_end(rest) else {
+            return false;
+        };
+        let body = &rest[1..end];
+        if body.trim().is_empty() || body.contains(['\r', '\n']) {
+            return false;
+        }
+        rest = rest[end + 1..].trim_start();
+    }
+    count > 0
+}
+
+fn annotation_end(value: &str) -> Option<usize> {
+    let opener = value.chars().next()?;
+    let closer = match opener {
+        '(' => ')',
+        '<' => '>',
+        _ => return None,
+    };
+    let mut depth = 1;
+    for (index, character) in value.char_indices().skip(1) {
+        if character == opener {
+            depth += 1;
+            if depth > 64 {
+                return None;
+            }
+        } else if character == closer {
+            depth -= 1;
+            if depth == 0 {
+                return Some(index);
+            }
+        }
+    }
+    None
+}
+
+/// Delimiters inside a bounded annotation or placeholder are not declaration
+/// separators. Every outer part still has to pass its entire name grammar.
+fn named_groups(text: &str) -> Option<Vec<&str>> {
+    let mut parts = Vec::new();
+    let mut start = 0;
+    let mut closers = Vec::new();
+    for (index, character) in text.char_indices() {
+        // Parenthesized annotations contain literal defaults/key bindings:
+        // the '[' in C-[ is not a fresh syntax group. Only their own delimiter
+        // pair nests; commas and pipes remain inside the annotation.
+        if matches!(closers.last(), Some(')')) && !matches!(character, '(' | ')')
+            || matches!(closers.last(), Some('>')) && !matches!(character, '<' | '>')
+        {
+            continue;
+        }
+        match character {
+            '(' | '<' | '[' | '{' => {
+                if closers.len() >= 64 {
+                    return None;
+                }
+                closers.push(match character {
+                    '(' => ')',
+                    '<' => '>',
+                    '[' => ']',
+                    _ => '}',
+                });
+            }
+            ')' | '>' | ']' | '}' if closers.pop() != Some(character) => return None,
+            ',' | '|' if closers.is_empty() => {
+                parts.push(&text[start..index]);
+                start = index + 1;
+            }
+            _ => {}
+        }
+    }
+    if !closers.is_empty() {
+        return None;
+    }
+    parts.push(&text[start..]);
+    Some(parts)
+}
+
+pub(super) fn named_occurrences(
+    text: &str,
+    validate: fn(&str) -> bool,
+) -> Option<Vec<RecognizedName>> {
+    let parts = if text.contains('=') {
+        vec![text]
+    } else {
+        named_groups(text)?
+    };
+    parts
+        .into_iter()
+        .map(|part| {
+            let name = if let Some((name, value)) = part.trim().split_once('=') {
+                let name = name.trim_end();
+                if !validate(name) || contains_additional_environment_assignment(value) {
+                    return None;
+                }
+                name
+            } else {
+                named_term_name(part, validate)?
+            };
+            Some(RecognizedName::contiguous(
+                name,
+                name.as_ptr() as usize - text.as_ptr() as usize,
+            ))
+        })
+        .collect()
 }
 
 /// A declaration group is atomic: accepting a word after rejected prose does
@@ -46,12 +162,17 @@ pub(super) fn environment_occurrences(text: &str) -> Option<Vec<RecognizedName>>
     let parts = if text.contains('=') {
         vec![text]
     } else {
-        text.split([',', '|']).collect()
+        named_groups(text)?
     };
     parts
         .into_iter()
         .map(|part| {
-            let name = environment_variable_alias(part)?;
+            let name = environment_variable_alias(part).or_else(|| {
+                let (name, suffix) = part.trim().split_once(char::is_whitespace)?;
+                annotations(suffix)
+                    .then(|| environment_variable_alias(name))
+                    .flatten()
+            })?;
             let start = part.as_ptr() as usize - text.as_ptr() as usize + part.len()
                 - part.trim_start().len();
             Some(RecognizedName::contiguous(&name, start))
@@ -156,12 +277,13 @@ pub(in crate::definitions) fn is_variable_term(value: &str) -> bool {
 }
 
 pub(in crate::definitions) fn is_configuration_key(value: &str) -> bool {
-    !value.is_empty()
-        && value
-            .chars()
-            .all(|character| character.is_ascii_alphanumeric() || matches!(character, '-' | '_'))
-        && value
-            .chars()
-            .next()
-            .is_some_and(|character| character.is_ascii_alphabetic() || character == '_')
+    value.split('.').all(|component| {
+        !component.is_empty()
+            && component.chars().all(|character| {
+                character.is_ascii_alphanumeric() || matches!(character, '-' | '_')
+            })
+    }) && value
+        .chars()
+        .next()
+        .is_some_and(|character| character.is_ascii_alphabetic() || character == '_')
 }

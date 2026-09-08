@@ -114,6 +114,8 @@ Layout-inferred paragraph heads must pass a complete declaration check before an
 
 An mdoc definition headed by `Fl` or `Ev` retains that option or environment-variable evidence independently of its section heading. This includes punctuation flags such as `-@`, `-%`, and `-,`, and an environment name followed by an `Ar` placeholder. `Ic` and `Cm` preserve literal naming evidence but do not alone prove that a definition is a command; a named Term is valid when context is inconclusive. Unsupported name syntax does not erase a proved native role. The same macros in ordinary body text remain inline mentions, not new definitions.
 
+Complete named heads can retain bounded trailing parenthesized annotations or angle-bracket placeholders without adding those suffixes to names: `AUTO_CD (-J) <D>`, `NAME <TLS backend>`, and `update (-u)` preserve their full forms. Nested parenthesized defaults and literal key bindings such as `C-[` remain intact. A single assignment binds its left-hand name, not its value; assignment spelling alone does not prove an Option or ConfigurationKey role (`if=FILE` can remain a named Term). Configuration contexts support exact dotted keys. Templates such as `[url-protocol]_PROXY`, malformed groups and prose suffixes are not expanded into guessed names, and neither case variants nor annotations create alias relationships.
+
 The required mdoc prologue and structural macros are normalized as follows:
 
 | Macros | ManT result |

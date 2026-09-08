@@ -38,34 +38,7 @@ pub(super) fn infer_identity(
         .first()
         .map_or_else(String::new, |term| plain_text(term));
     let trimmed = first.trim();
-    let parameter = || EntryKind::Parameter {
-        parameter_kind: match trimmed {
-            "--" | "--%" => ParameterKind::Marker,
-            "-" => ParameterKind::Operand,
-            _ => ParameterKind::Option,
-        },
-    };
-    let (mut kind, mut case) = match context {
-        DefinitionContext::Commands
-            if trimmed.starts_with(['-', '+']) || trimmed.starts_with("[-+]") =>
-        {
-            (parameter(), NameCase::Sensitive)
-        }
-        DefinitionContext::Commands => (EntryKind::Command, NameCase::Sensitive),
-        DefinitionContext::EnvironmentVariables => {
-            (EntryKind::EnvironmentVariable, NameCase::Sensitive)
-        }
-        DefinitionContext::Variables => (EntryKind::Variable, NameCase::Sensitive),
-        DefinitionContext::ConfigurationKeys => {
-            (EntryKind::ConfigurationKey, NameCase::Insensitive)
-        }
-        DefinitionContext::Values => (EntryKind::Value, NameCase::Sensitive),
-        DefinitionContext::Parameters => (parameter(), NameCase::Sensitive),
-        DefinitionContext::Generic if trimmed.starts_with('-') => {
-            (parameter(), NameCase::Sensitive)
-        }
-        DefinitionContext::Generic => (EntryKind::Term, NameCase::Sensitive),
-    };
+    let (mut kind, mut case) = inherited_kind(trimmed, context);
     match hint {
         Some(super::NativeHeadRole::Option) => {
             kind = EntryKind::Parameter {
@@ -93,6 +66,16 @@ pub(super) fn infer_identity(
     };
     if hint == Some(super::NativeHeadRole::Literal) && occurrences.iter().all(Vec::is_empty) {
         occurrences = name_occurrences(item, EntryKind::Command);
+        kind = EntryKind::Term;
+        case = NameCase::Sensitive;
+    }
+    if occurrences.iter().all(Vec::is_empty)
+        && !matches!(
+            hint,
+            Some(super::NativeHeadRole::Option | super::NativeHeadRole::Environment)
+        )
+    {
+        occurrences = name_occurrences(item, EntryKind::Term);
         kind = EntryKind::Term;
         case = NameCase::Sensitive;
     }
@@ -126,6 +109,38 @@ pub(super) fn infer_identity(
         case,
         names,
         occurrences,
+    }
+}
+
+/// A section/parent default is only a hint; native evidence can override it.
+fn inherited_kind(trimmed: &str, context: DefinitionContext) -> (EntryKind, NameCase) {
+    let parameter = || EntryKind::Parameter {
+        parameter_kind: match trimmed {
+            "--" | "--%" => ParameterKind::Marker,
+            "-" => ParameterKind::Operand,
+            _ => ParameterKind::Option,
+        },
+    };
+    match context {
+        DefinitionContext::Commands
+            if trimmed.starts_with(['-', '+']) || trimmed.starts_with("[-+]") =>
+        {
+            (parameter(), NameCase::Sensitive)
+        }
+        DefinitionContext::Commands => (EntryKind::Command, NameCase::Sensitive),
+        DefinitionContext::EnvironmentVariables => {
+            (EntryKind::EnvironmentVariable, NameCase::Sensitive)
+        }
+        DefinitionContext::Variables => (EntryKind::Variable, NameCase::Sensitive),
+        DefinitionContext::ConfigurationKeys => {
+            (EntryKind::ConfigurationKey, NameCase::Insensitive)
+        }
+        DefinitionContext::Values => (EntryKind::Value, NameCase::Sensitive),
+        DefinitionContext::Parameters => (parameter(), NameCase::Sensitive),
+        DefinitionContext::Generic if trimmed.starts_with('-') => {
+            (parameter(), NameCase::Sensitive)
+        }
+        DefinitionContext::Generic => (EntryKind::Term, NameCase::Sensitive),
     }
 }
 
@@ -185,11 +200,7 @@ pub(super) fn name_occurrences(
                         EntryKind::ConfigurationKey => is_configuration_key,
                         _ => is_value_name,
                     };
-                    text.split(',')
-                        .filter_map(|part| {
-                            named::named_term_name(part, validate).map(|name| locate(part, name))
-                        })
-                        .collect()
+                    named::named_occurrences(&text, validate).unwrap_or_default()
                 }
                 EntryKind::Command => {
                     if let Some((name, _)) = super::context::key_binding_command_form(&text) {
@@ -213,7 +224,10 @@ pub(super) fn name_occurrences(
                         })
                         .collect()
                 }
-                _ => Vec::new(),
+                EntryKind::Term => {
+                    named::named_occurrences(&text, is_variable_term).unwrap_or_default()
+                }
+                EntryKind::Parameter { .. } => Vec::new(),
             }
         })
         .collect()

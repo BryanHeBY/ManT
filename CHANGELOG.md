@@ -35,6 +35,10 @@ that crate was not published for that change.
   normalization, including punctuation flags and environment placeholders.
   `Ic`/`Cm` can supply names without forcing a Command classification. These
   private witnesses do not create entries from body mentions or add wire fields.
+- Named declarations support bounded annotations/placeholders, exact dotted
+  configuration keys and single assignment names. Genuine Terms can retain
+  names without being reclassified as commands/options. Templates and prose
+  remain unexpanded; complete forms, default values and case are preserved.
 
 ### Explanation match locations (unreleased v0.11)
 
