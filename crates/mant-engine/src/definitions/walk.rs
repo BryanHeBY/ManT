@@ -215,9 +215,11 @@ fn collect_owner<'a>(
 mod budget_tests {
     #[test]
     fn borrowed_budget_shape_equals_the_owned_original_excerpt() {
-        let content =
-            crate::query_roff_bytes(include_bytes!("../../tests/fixtures/entry-presentation.1"))
-                .unwrap();
+        // Unit tests ship with src; repository integration fixtures do not.
+        let content = crate::query_roff_bytes(
+            b".TH PROBE 1\n.SH OPTIONS\n.TP\n.B -a\nFirst.\n.TP\n.B -b\nSecond.\n",
+        )
+        .unwrap();
         let document = content.document.unwrap();
         let mut checked = 0;
         for section in &document.sections {

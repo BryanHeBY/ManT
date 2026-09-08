@@ -32,7 +32,8 @@ The selected color is visible in terminal output.
 
 #[test]
 fn explanation_ansi_uses_the_exact_same_framed_report_as_plain_text() {
-    let source = include_bytes!("../../../mant-engine/tests/fixtures/entry-presentation.1");
+    // Keep the packaged unit test independent of sibling integration fixtures.
+    let source = b".TH PROBE 1\n.SH OPTIONS\n.TP\n.B -x, --language=LANG\nSelect language.\n.TP\n.B -Q\nUse -x as well.\n.SH NOTES\n-xylophone is not the same as -x.\n";
     let content = mant_engine::query_roff_bytes(source).unwrap();
     let result = mant_engine::explain_query(
         &content,
