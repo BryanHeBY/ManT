@@ -234,6 +234,20 @@ fn link_and_include_font_state() {
 
 #[test]
 fn address_sequence_shares_one_font_scope_without_merging_email_targets() {
+    #[derive(Default)]
+    struct Addresses(Vec<String>);
+    impl<'ir> Visit<'ir> for Addresses {
+        fn visit_inline(&mut self, inline: &'ir mant_ir::Inline) {
+            if let mant_ir::Inline::Link {
+                target: mant_ir::LinkTarget::Email { address },
+                ..
+            } = inline
+            {
+                self.0.push(address.clone());
+            }
+            visit::walk_inline(self, inline);
+        }
+    }
     for (second, next_style, resumed_style) in
         [("NEXT@example.org", 1, 2), (r"\fPNEXT@example.org", 2, 1)]
     {
@@ -245,20 +259,6 @@ fn address_sequence_shares_one_font_scope_without_merging_email_targets() {
         style(&query, "NEXT", next_style);
         style(&query, "TAIL", 0);
         style(&query, "RESUMED", resumed_style);
-        #[derive(Default)]
-        struct Addresses(Vec<String>);
-        impl<'ir> Visit<'ir> for Addresses {
-            fn visit_inline(&mut self, inline: &'ir mant_ir::Inline) {
-                if let mant_ir::Inline::Link {
-                    target: mant_ir::LinkTarget::Email { address },
-                    ..
-                } = inline
-                {
-                    self.0.push(address.clone());
-                }
-                visit::walk_inline(self, inline);
-            }
-        }
         let mut addresses = Addresses::default();
         addresses.visit_document(query.document.as_ref().unwrap());
         assert_eq!(addresses.0, ["WORD@example.org", "NEXT@example.org"]);
