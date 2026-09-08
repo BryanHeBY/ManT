@@ -1,7 +1,7 @@
 {
   "schema": "mant.roff-query-gold/v1",
   "reviewed": "2026-09-08",
-  "producer": "1047d2a4",
+  "producer": "cedbd7cd",
   "scope": "160 selected queries across 120 fixed input paths / 119 unique decompressed sources / 93 topics. Head, source owner, bounded body witnesses, kind/names/forms and forbidden direct records; not full-document fidelity or exhaustive recall.",
   "roots": {
     "host": "/usr/share/man",

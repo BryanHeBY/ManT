@@ -32,6 +32,83 @@ proof of owner equality. The comparator combines source coordinates with exact
 forms, names, kinds and body witnesses; it refuses incomplete/omitted evidence.
 Unreviewed or missing-input probes remain unresolved rather than silently clean.
 
+### Fixed-panel acceptance: 2026-09-08
+
+The final implementation/test producer is `cedbd7cd`, compared with the saved
+`483dd1a0` baseline. [ENTRY_QUERY_CHANGES.json](ENTRY_QUERY_CHANGES.json) retains
+the source-identical 120-path delta, manifest and binary hashes, per-query
+before/after owners, names, kinds, forms, body hashes, IDs, paths and relationship
+changes. It contains no full manual bodies. The baseline full QueryBundles were
+captured before editing; the baseline *query* comparison replays those bundles
+through the final collector, not the old CLI executable. Snapshot digests identify
+the larger local evidence; the checked-in delta and current gold remain usable
+without those snapshots. Body hashes in the page census include IR layout; query
+body hashes represent visible text. Neither substitutes for source review.
+
+All 160 selected queries passed, including 10 negative queries and exactly 229
+expected/returned direct owners; none were unresolved. Eighty-three queries
+changed. The page census grew from 24,676 to 28,484 owners: independent compact
+heads no longer borrow bodies, complete PP/RS declarations gain owners, and TP
+bullets/prose-like labels cease to be semantic entries. Names and types also
+change with complete-head parsing and local/native evidence. No same-source
+owner acquired an inferred alias group, alias reference or value domain.
+These are selected-query results, not whole-page precision/recall percentages.
+Normal controls, malformed-source negatives, multiple direct owners and empty
+independent declarations are kept alongside positive recovery cases. Query notes
+explicitly retain conservative long-tail classifications rather than hiding them
+in an Option-or-Term assertion. The final delta review additionally caught the
+logger `--sd-id` and Git `--trailer` compact-argument heads; their positive gold
+and source-shaped regressions are included. Existing gold must not be regenerated
+from observed output merely to clear a failure.
+
+Replay the current panel and repository-only subset with:
+
+```sh
+cargo build --locked -p mant-engine --example roff_semantic_profile
+python3 scripts/audit-roff-semantics.py \
+  --query-gold tests/fixtures/roff/ENTRY_QUERY_GOLD.json
+python3 scripts/audit-roff-semantics.py --fixtures \
+  --query-gold tests/fixtures/roff/ENTRY_QUERY_GOLD.json
+```
+
+The full `scripts/check.sh` gate passed at this producer, with temporary package
+builds kept under the repository's `target/` via `TMPDIR`. A separate workspace
+`--all-features` run passed 1,558 tests, with 35 ignored (including 29 upstream
+minus API doctests that do not describe the private embedding). The public UI
+README doctest, native pager tests and real Unix PTY checks execute. Formatting,
+strict Clippy/rustdoc, fuzz compilation, packaged-crate verification, release
+build and smoke passed. Projection, target, semantic and structure audits each
+checked all 51 current fixtures clean; the seven checked-in query probes also
+passed. This does not supersede historical 45,036-page sweep evidence.
+
+Fresh differential checks used groff 1.24.1 through man-db 2.13.1 and mandoc
+1.14.6 (host package `mandoc-noconflict 1.14.6-1`). Groff fidelity reported
+46 clean, four reviewed differences and one expected recursive-input formatter
+failure; groff layout reported 49 clean, one reviewed difference and that same
+failure. Mandoc fidelity reported 45 clean and six reviewed differences; its
+layout reported 50 clean and one reviewed difference. The per-source ledgers
+retain their review conclusions, including the `Fa` prose punctuation/spacing
+comparison. These reference differences are **not** relabeled clean. Commands
+use `--fixtures --recheck-recorded --findings-only`; mandoc additionally uses
+`--reference mandoc --reference-kind mandoc --reference-id mandoc-1.14.6-1`.
+
+Five sequential debug runs of each real `gcc --manual` route, with output
+discarded, yielded the following median seconds and maximum RSS in KiB. The
+checked-in delta includes all samples and exact command arguments.
+
+| Route | Before / after seconds | Before / after peak KiB |
+| --- | --- | --- |
+| Full text | 1.093 / 1.197 | 92,088 / 95,452 |
+| Outline JSON | 1.064 / 1.174 | 91,936 / 95,392 |
+| Explain JSON | 1.148 / 1.229 | 92,456 / 96,036 |
+| Colored explain | 1.138 / 1.226 | 92,732 / 96,032 |
+
+This is a measured 7–10% time and 3.6–3.9% peak-memory increase, not a zero-cost
+refactor. The same GCC source now contains 4,918 independent owners instead of
+3,837, among other recognition changes; the measurements do not isolate one
+cause. Runs used a warm machine, not controlled cold caches. Native Windows
+and macOS execution was not available in this Linux acceptance run.
+
 The development-only `roff_semantic_profile` example parses and lowers each
 page once, builds the final `SemanticIndex`, and records each entry's ID, kind,
 selectable names (the legacy `aliases` field), explicit `aliasGroups` / `aliasOf`, visible forms, targets, containing section, nested depth, and

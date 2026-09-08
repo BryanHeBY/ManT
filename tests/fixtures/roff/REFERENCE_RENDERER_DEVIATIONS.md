@@ -74,7 +74,7 @@ fully replayable with GNU groff 1.24.1:
 
 - `.TP` followed by two `.TQ` requests produces three stacked terms in the
   terminal reference. ManT retains the same visible spellings and additionally
-  exposes them as aliases of one semantic option identity, so any spelling can
+  exposes them as separate names/forms of one semantic option identity, so any spelling can
   select the shared description without guessing ownership.
 - A directly recursive user macro makes groff stop at its input-stack limit
   with exit status 4 after emitting more than one million blank lines and no
@@ -84,6 +84,10 @@ fully replayable with GNU groff 1.24.1:
 These are deliberately different claims: the first is extra semantic structure
 over the same visible content; the second is bounded recovery from hostile or
 broken input. Neither is generalized beyond the recorded fixture and toolchain.
+
+The historical CSV category `semantic-aliasing` describes that shared authored
+owner, not an `aliasGroups` equivalence relationship. Independent compact
+`TP`/`IP`/`It` heads do not share bodies; only explicit multi-tag structure does.
 
 ## Mandoc-specific reproduced evidence
 
