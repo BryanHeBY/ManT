@@ -126,6 +126,14 @@ Validated libmandoc tags on man and mdoc definitions are retained for page-local
 
 After source lowering, ManT assigns semantic identities only inside a reliable structural context. Definition lists under environment sections recognize a complete term in bare `NAME`, shell `$NAME`, PowerShell `$Env:NAME` and `${Env:NAME}`, Windows `%NAME%`, or one assignment `NAME=value` form through the same grammar used by explicit Markdown declarations. The assignment value is not part of the selector. Named variables and similar entries may also carry one explicitly delimited trailing parenthetical annotation, such as Readline's `(On)` default notation; that annotation remains in the authored form but not the selector. ManT never takes only the first word of a term, and a composite heading such as `ENVIRONMENT OPTIONS` selects the more specific option grammar. Hanging paragraph plus relative-indent layouts are reconstructed as definitions only in that environment context. Ordinary prose and unrelated uppercase terms are never scanned or promoted. A definition-shaped term that fails the selected grammar remains visible as an unclassified term and emits `manual.semantic-entry.unclassified-definition`; the outline then reports `semanticsComplete: false` rather than claiming a complete semantic inventory.
 
+Command contexts accept `COMMAND`/`COMMANDS`, `SUBCOMMAND`/`SUBCOMMANDS`, and
+the explicit `BUILTIN COMMAND`/`BUILTIN COMMANDS` phrase as complete normalized
+words, not arbitrary substrings such as `SUBCOMMANDER`. More specific option,
+environment and variable contexts keep their precedence: `SUBCOMMAND OPTIONS`
+does not promote every definition to a command. Correcting a previously
+unclassified command can intentionally change its kind, names and derived ID;
+the authored form and body remain unchanged.
+
 ManT merges man `TP`, `TQ`, and compact `IP` heads only when the source proves
 one alias group through an explicit continuation or a bounded compact run. The
 aliases retain source order. If an `IP` or `TQ` description follows earlier

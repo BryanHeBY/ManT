@@ -122,6 +122,10 @@ that crate was not published for that change.
 
 ### mant-engine 0.11.0
 
+- Recognize singular COMMAND/SUBCOMMAND headings like their plural forms,
+  using complete heading words and preserving option/environment precedence.
+  Affected native entries intentionally become commands with documented names
+  and command-derived IDs; this is a semantic correction, not a color change.
 - Keep a nonempty form/identity fallback in search entry titles without
   inventing selectable names. Search and strict navigation share the compact
   label policy; outlines explicitly prefer complete forms.

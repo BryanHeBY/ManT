@@ -149,9 +149,13 @@ impl DefinitionContext {
         if words.contains(&"VARIABLES") || words.contains(&"VARIABLE") {
             return Self::Variables;
         }
-        if normalized.trim() == "COMMANDS"
-            || normalized.contains("BUILTIN COMMANDS")
-            || normalized.contains("SUBCOMMANDS")
+        if matches!(words.as_slice(), ["COMMAND" | "COMMANDS"])
+            || words
+                .windows(2)
+                .any(|pair| matches!(pair, ["BUILTIN", "COMMAND" | "COMMANDS"]))
+            || words
+                .iter()
+                .any(|word| matches!(*word, "SUBCOMMAND" | "SUBCOMMANDS"))
         {
             return Self::Commands;
         }
@@ -159,5 +163,61 @@ impl DefinitionContext {
             return Self::ConfigurationKeys;
         }
         inherited
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::DefinitionContext as Context;
+
+    #[test]
+    fn command_context_uses_complete_words_and_preserves_specific_priority() {
+        for heading in [
+            "COMMAND",
+            "COMMANDS",
+            "SUBCOMMAND",
+            "SUBCOMMANDS",
+            "SHELL BUILTIN COMMAND",
+            "SHELL BUILTIN COMMANDS",
+            "Available Subcommands",
+        ] {
+            assert_eq!(
+                Context::for_section(heading, Context::Generic),
+                Context::Commands,
+                "{heading}"
+            );
+        }
+        for heading in [
+            "SUBCOMMANDER",
+            "SUBCOMMANDSET",
+            "BUILTIN COMMANDSET",
+            "COMMAND LINE",
+            "TERMS",
+        ] {
+            assert_eq!(
+                Context::for_section(heading, Context::Generic),
+                Context::Generic,
+                "{heading}"
+            );
+        }
+        for heading in [
+            "SUBCOMMAND OPTIONS",
+            "COMMAND OPTION",
+            "ENVIRONMENT OPTIONS",
+        ] {
+            assert_eq!(
+                Context::for_section(heading, Context::Generic),
+                Context::Parameters,
+                "{heading}"
+            );
+        }
+        assert_eq!(
+            Context::for_section("COMMAND ENVIRONMENT", Context::Generic),
+            Context::EnvironmentVariables
+        );
+        assert_eq!(
+            Context::for_section("SUBCOMMAND VARIABLES", Context::Generic),
+            Context::Variables
+        );
     }
 }

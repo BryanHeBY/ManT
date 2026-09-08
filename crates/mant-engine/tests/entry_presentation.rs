@@ -92,3 +92,20 @@ fn search_keeps_a_form_label_without_inventing_a_name() {
         serde_json::from_str(&serde_json::to_string(&search).unwrap()).unwrap();
     assert_eq!(decoded, search);
 }
+
+#[test]
+fn singular_command_headings_share_the_plural_semantic_contract() {
+    for heading in ["COMMAND", "COMMANDS", "SUBCOMMAND", "SUBCOMMANDS"] {
+        let source = format!(
+            ".TH PROBE 1\n.SH {heading}\n.TP\n.B find-new <subvolume> <last_gen>\nFind new files.\n"
+        );
+        let content = query_roff_bytes(source.as_bytes()).unwrap();
+        let document = content.document.as_ref().unwrap();
+        let index = mant_ir::SemanticIndex::build(document);
+        let entry = &index.section(&document.sections[0].id)[0];
+        assert_eq!(entry.kind, mant_ir::EntryKind::Command, "{heading}");
+        assert_eq!(entry.names, ["find-new"]);
+        assert_eq!(entry.id.as_str(), "command-find-new");
+        assert_eq!(entry.forms, ["find-new <subvolume> <last_gen>"]);
+    }
+}
