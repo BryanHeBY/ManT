@@ -70,6 +70,8 @@ fn generated_option_prefix_join_ends_with_its_operands() {
         (".Fl", "-"),
         (".Fl a", "-a"),
         (".Fl Fl a", "--a"),
+        (".Fl Ar file", "-file"),
+        (".Fl Fl Ar file", "--file"),
         (".Fl \"\" Ns Ar file", "-file"),
         (".Fl a Ns Ar tail", "-atail"),
         (".Fl \"\" Pf X No y", "- Xy"),

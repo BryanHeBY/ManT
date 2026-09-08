@@ -212,7 +212,7 @@ fn flush_segment(output: &mut Vec<Inline>, buffer: &mut String, font: Font, link
     }
 }
 
-fn styled_segment(value: String, font: Font) -> Inline {
+pub(super) fn styled_segment(value: String, font: Font) -> Inline {
     match font {
         Font::Regular => Inline::Text { value },
         Font::Strong => Inline::Strong {
@@ -234,4 +234,23 @@ fn styled_segment(value: String, font: Font) -> Inline {
             children: vec![Inline::Code { value }],
         },
     }
+}
+
+/// Keep a generated prefix and equally styled operands in a single visible
+/// run, without wrapping font overrides in an additional, additive style.
+pub(super) fn coalesce_font_runs(nodes: Vec<Inline>) -> Vec<Inline> {
+    let mut output: Vec<Inline> = Vec::new();
+    for node in nodes {
+        match (output.last_mut(), node) {
+            (Some(Inline::Strong { children: previous }), Inline::Strong { mut children })
+            | (Some(Inline::Emphasis { children: previous }), Inline::Emphasis { mut children }) => {
+                previous.append(&mut children);
+            }
+            (Some(Inline::Text { value: previous }), Inline::Text { value }) => {
+                previous.push_str(&value);
+            }
+            (_, node) => output.push(node),
+        }
+    }
+    output
 }

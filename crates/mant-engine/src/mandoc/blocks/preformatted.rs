@@ -1,11 +1,11 @@
 //! Preserves no-fill and literal display content as preformatted blocks.
 
-use libmandoc_rs::{Node, NodeKind, NormalizedFont};
+use libmandoc_rs::{MacroSet, Node, NodeKind};
 use mant_ir::{Block, Inline};
 
 use super::super::{
     LoweringContext, first_part_children,
-    inline::{InlineBuilder, append_inline_node_with_next, lower_inline_nodes, plain_text},
+    inline::{InlineBuilder, append_inline_node_with_next, lower_inline_nodes},
     layout::{layout, vertical_distance_lines},
     source_span,
 };
@@ -115,7 +115,13 @@ fn preformatted_inlines_refs(
     spacing_enabled: bool,
 ) -> (Vec<Inline>, bool) {
     let mut line = InlineBuilder::with_spacing(spacing_enabled);
+    if context.macro_set == MacroSet::Mdoc {
+        line.font = context.mdoc_font.get();
+    }
     NoFillFlow::default().append(nodes.iter().copied(), &mut line, context);
+    if context.macro_set == MacroSet::Mdoc {
+        context.mdoc_font.set(line.font);
+    }
     let final_spacing = line.spacing_enabled();
     (line.finish(), final_spacing)
 }
@@ -158,16 +164,11 @@ impl NoFillFlow {
         // through the same cursor/builder so controls and continuation at the
         // end of a nested body remain active for the next outside leaf.
         if node.macro_name.as_deref() == Some("Bf") {
-            line.append_scope(
-                |line| self.append(first_part_children(node, NodeKind::Body), line, context),
-                |nodes| {
-                    if let Some(font) = node.font {
-                        style_preformatted_inlines(nodes, font)
-                    } else {
-                        nodes
-                    }
-                },
-            );
+            let saved = node.font.map(|font| line.font.push_scope(font.into()));
+            self.append(first_part_children(node, NodeKind::Body), line, context);
+            if let Some(saved) = saved {
+                line.font.pop_scope(saved);
+            }
             return;
         }
         if node.kind == NodeKind::Block
@@ -209,58 +210,19 @@ impl NoFillFlow {
     }
 }
 
-pub(super) fn style_preformatted_inlines(nodes: Vec<Inline>, font: NormalizedFont) -> Vec<Inline> {
-    let mut output = Vec::new();
-    let mut line = Vec::new();
-    for node in nodes {
-        if node == Inline::LineBreak {
-            append_styled_preformatted_line(&mut output, &mut line, font);
-            output.push(Inline::LineBreak);
-        } else {
-            line.push(node);
-        }
-    }
-    append_styled_preformatted_line(&mut output, &mut line, font);
-    output
-}
-
-fn append_styled_preformatted_line(
-    output: &mut Vec<Inline>,
-    line: &mut Vec<Inline>,
-    font: NormalizedFont,
-) {
-    let content = std::mem::take(line);
-    if content.is_empty() {
-        return;
-    }
-    output.push(match font {
-        NormalizedFont::Emphasis => Inline::Emphasis { children: content },
-        NormalizedFont::Literal => Inline::Code {
-            value: plain_text(&content),
-        },
-        NormalizedFont::Symbolic => Inline::Strong { children: content },
-    });
-}
-
 #[cfg(test)]
 mod tests {
-    use libmandoc_rs::NormalizedFont;
     use mant_ir::Inline;
 
     #[test]
     fn font_styling_preserves_line_boundaries() {
-        let styled = super::style_preformatted_inlines(
-            vec![
-                Inline::Text {
-                    value: "first".to_owned(),
-                },
-                Inline::LineBreak,
-                Inline::Text {
-                    value: "second".to_owned(),
-                },
-            ],
-            NormalizedFont::Symbolic,
-        );
+        let mut builder = super::InlineBuilder::new();
+        builder.with_font_scope(crate::mandoc::roff_escape::RoffFont::Strong, |builder| {
+            builder.append_text("first");
+            builder.hard_break();
+            builder.append_text("second");
+        });
+        let styled = builder.finish();
 
         assert!(matches!(
             styled.as_slice(),
@@ -268,7 +230,7 @@ mod tests {
                 Inline::Strong { children: first },
                 Inline::LineBreak,
                 Inline::Strong { children: second },
-            ] if super::plain_text(first) == "first" && super::plain_text(second) == "second"
+            ] if crate::inline::plain_text(first) == "first" && crate::inline::plain_text(second) == "second"
         ));
     }
 }

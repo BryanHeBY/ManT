@@ -184,9 +184,9 @@ Displays lower as follows:
 | `Bd -literal`, `Bd -unfilled` | Preformatted flow; nested `tbl` rows remain structured tables |
 | `Bd -filled`, `Bd -ragged`, `Bd -centered` | Filled blocks; device alignment is not retained |
 | `D1`, `Dl` | Single preformatted display |
-| `Bf -emphasis` | Emphasis applied to contained blocks |
-| `Bf -literal` | Code styling applied to contained blocks |
-| `Bf -symbolic` | Strong styling applied to contained blocks |
+| `Bf -emphasis` | Scoped emphasis default; inner font selections can override it |
+| `Bf -literal` | Scoped code default; inner font selections can override it |
+| `Bf -symbolic` | Scoped strong default; inner font selections can override it |
 | `An -split`, `An -nosplit` | Author layout mode used while forming visible author content |
 
 Closing macros such as `Ed`, `Ef`, and `El` terminate libmandoc scopes and do not produce independent visible nodes.
@@ -201,13 +201,14 @@ The following macros receive dedicated inline treatment:
 
 | Semantics | Macros |
 | --- | --- |
-| Strong | `Nm`, `Fl`, `Cm`, `Ic`, `Sy` |
-| Emphasis | `Ar`, `Pa`, `Em`, `Va`, `Vt`, `Ft`, `Fa` |
+| Strong | `Nm`, `Fl`, `Cm`, `Ic`, `Sy`, `Ms` |
+| Emphasis | `Ar`, `Pa`, `Em`, `Va`, `Vt`, `Ft`, `Fa`, `Ad`, `Fr` |
+| Regular | `No`, `Dv` |
 | Code | `Li` |
 | Header reference | `In` (`<header>` in prose; `#include <header>` at the start of a synopsis source line) |
 | Manual link | `Xr` |
 | External or email link | `Lk`, `Mt` |
-| Section link | `Sx` |
+| Emphasized section link | `Sx` |
 | No-space boundary | `Ns` |
 | Visible no-space prefix | `Pf` (prefix retained) |
 | Automatic spacing mode | `Sm on`, `Sm off` |
@@ -234,15 +235,17 @@ The opener owns the complete scoped body in libmandoc's tree, so ManT surrounds 
 
 Inline spacing follows output order across prose, definition heads, literal displays, and supported tbl source recovery. `Ap` attaches on both sides, including across styled siblings (`.No x Ap y` becomes `x'y`). A generated closing bracket or quote consumes an internal `Ns`/`Pf` boundary; it does not carry that boundary outside the enclosure. An explicitly external `Ns` can still join the following text. Styles and zero-width targets do not consume pending boundaries; real line and paragraph breaks terminate them.
 
-The generated dash of `Fl` joins only its own operands. An empty string or zero-width `\&` operand therefore leaves the next external argument separate (`Fl "" Ar file` becomes `- file`). Zero-width targets remain non-consuming, but they do not extend a generated prefix's internal join beyond its operand scope. Explicit `Ns`/`Pf` effects remain distinct and can still request an external join.
+The generated dash of `Fl` joins its own operands. An empty string or zero-width `\&` operand consumes that internal join and leaves the next external argument separate (`Fl "" Ar file` becomes `- file`). An operand-less `Fl` is different: it joins the next non-text sibling on the same source line (`Fl Ar file` becomes `-file`, and `Fl Fl Ar file` becomes `--file`). Zero-width targets remain non-consuming, but do not extend the internal join beyond its operand scope. Explicit `Ns`/`Pf` effects remain distinct and can still request an external join.
 
-Font state has a different lifetime from spacing state. Font escapes inside mdoc semantic macros and their native text operands are local: both current and previous font selections are restored on scope exit, without discarding pending spacing controls. A multi-word native text node still shares its font escapes internally; words are not independently reset. This prevents `Em \fBword` from making following siblings or paragraphs bold. It does not impose a universal reset on man text, explicit `.ft` requests, or structural `Bf`/literal presentation scopes.
+Font state has a different lifetime from spacing state. A font-selecting mdoc macro pushes its effective font, rather than adding a wrapper to the inherited style: `No` selects regular even inside `Bf -emphasis`, and `Em \fBword` produces bold, not bold-plus-emphasis. Explicit escapes override the macro's initial selection. On scope exit the outer current font resumes; the previous-selection register is not rolled back. ManT follows mandoc's font stack here: `No \fBword\fIinner` followed by `\fPtail` makes `tail` bold, while groff makes it italic.
+
+Plain text and transparent macros such as `Pf` do not create font scopes. Their escapes can change subsequent text until another font selection intervenes. `Bf` establishes a scoped default through nested lists and displays; local macros can override it, and `Ef` resumes the outer font without inventing a paragraph or line boundary. ManT retains code presentation for `Li` and `Bf -literal`, although a terminal formatter may use its ordinary monospaced font. These rules do not change the separate font-reset policy for man macros. Spacing controls and zero-width targets remain independent of font push/pop.
 
 `Ns` suppresses a boundary only when libmandoc does not mark it as starting a source line. `Pf` retains its prefix but joins the next sibling only when that sibling exists on the same source line. Line-start `Ns` and `Pf` without that successor are recovery cases, not recommended authoring forms; native diagnostics remain observable. Formatter differences remain relevant: groff rejects bare line-start `Ap`, and its handling of ordinary text under `Sm off` differs from mandoc. ManT follows the pinned parser's mdoc model rather than promising identical output from every formatter.
 
 `Fn` and `Fo` retain the function name, join their arguments inside parentheses, and preserve the formatter-owned terminating semicolon when libmandoc marks the declaration for synopsis presentation. Each operand of `Fa` inside `Fo` is a separate parameter; quote multi-word parameters (`.Fa "const char *path"`). Spacing controls and zero-width targets retain their effect and position without becoming arguments. Outside `Fo`, `Fa` keeps ordinary spaced operands. The same `Fn` in prose remains an inline function reference without a semicolon. For example, `Fo audit_open` with two `Fa` lines lowers to `audit_open(arg1, arg2);` in `SYNOPSIS` rather than discarding the function name or punctuation.
 
-Other standard mdoc semantic macros, including `Fd`, `Cd`, `Dv`, `Er`, `Ev`, `Rv`, `Ex`, `Lb`, `St`, `Rs`, and bibliography fields, currently use visible-child fallback. Text remains readable, but specialized typography, punctuation synthesis, or domain identity is not guaranteed unless listed above.
+Other standard mdoc semantic macros, including `Fd`, `Cd`, `Er`, `Ev`, `Rv`, `Ex`, `Lb`, `St`, `Rs`, and bibliography fields, currently use visible-child fallback. Text remains readable, but specialized typography, punctuation synthesis, or domain identity is not guaranteed unless listed above.
 
 The pinned parser's `St` name catalogue includes the upstream OpenBSD entries
 for C23 (`-isoC-2023`) and POSIX.1-2024 (`-p1003.1-2024`). The resulting

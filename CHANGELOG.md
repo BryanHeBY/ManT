@@ -122,14 +122,17 @@ that crate was not published for that change.
 
 ### mant-engine 0.11.0
 
-- Restore mdoc local current/previous font selections independently of shared
-  inline spacing, preventing macro font escapes from styling later siblings or
-  paragraphs. Preserve man persistent fonts, explicit font requests, and
-  structural literal/Bf presentation; test IR styles as well as Markdown.
+- Model mdoc font-selecting macros as effective font scopes, not additive
+  styles: local escapes override the macro default, and scope exit restores
+  the outer current font without rolling back mandoc's previous-font register.
+  Keep plain text and transparent macros unscoped; carry `Bf` defaults through
+  nested lists and displays without adding paragraph breaks. Preserve the
+  separate man font policy; test IR styles as well as Markdown.
 
 - Bound generated `Fl` prefix joins to their operands, preserving the space
   before external arguments after empty or zero-width operands while retaining
-  explicit `Ns`/`Pf` controls and zero-width targets.
+  explicit `Ns`/`Pf` controls and zero-width targets. Preserve the distinct
+  operand-less form's join to the next non-text sibling on the same line.
 
 - Preserve mdoc inline boundary effects across prose and styled siblings:
   apostrophes attach on both sides, generated enclosure closers consume internal

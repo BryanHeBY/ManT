@@ -13,7 +13,7 @@ mod source_lines;
 mod targets;
 
 use std::{
-    cell::RefCell,
+    cell::{Cell, RefCell},
     collections::{BTreeMap, HashMap, HashSet},
     path::Path,
 };
@@ -209,6 +209,9 @@ fn normalize_metadata(value: Option<&str>) -> Option<String> {
 
 struct LoweringContext<'a> {
     macro_set: MacroSet,
+    // Shared only by source-ordered mdoc structural lowering. Man retains
+    // its independent paragraph and macro font-reset policy.
+    mdoc_font: Cell<inline::FontState>,
     default_name: Option<&'a str>,
     source_lines: Option<SourceLineIndex<'a>>,
     equation_delimiters: Vec<EquationDelimiterChange>,
@@ -257,6 +260,7 @@ impl<'a> LoweringContext<'a> {
     fn new(default_name: Option<&'a str>, source: Option<&'a str>) -> Self {
         Self {
             macro_set: MacroSet::None,
+            mdoc_font: Cell::new(inline::FontState::new()),
             default_name,
             source_lines: source.map(SourceLineIndex::new),
             equation_delimiters: source.map_or_else(Vec::new, equation_delimiter_changes),
@@ -266,6 +270,21 @@ impl<'a> LoweringContext<'a> {
             explicit_targets: HashSet::new(),
             diagnostics: RefCell::new(Vec::new()),
         }
+    }
+
+    fn lower_inline_with_spacing(&self, nodes: &[Node], spacing: bool) -> Vec<mant_ir::Inline> {
+        if self.macro_set != MacroSet::Mdoc {
+            return inline::lower_inline_nodes_with_spacing(nodes, self.default_name, spacing);
+        }
+        let mut font = self.mdoc_font.get();
+        let output = inline::lower_inline_nodes_with_font_state(
+            nodes,
+            self.default_name,
+            spacing,
+            &mut font,
+        );
+        self.mdoc_font.set(font);
+        output
     }
 
     fn equation_delimiters_at(&self, line: u32) -> Option<(char, char)> {

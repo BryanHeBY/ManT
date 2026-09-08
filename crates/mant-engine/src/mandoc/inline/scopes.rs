@@ -1,15 +1,12 @@
 //! Compose semantic wrappers in output order, not by inspecting AST tails.
+use super::font::coalesce_font_runs;
 use super::{
-    Inline, InlineBuilder, Node, NodeKind, append_inline_node, append_inline_node_with_next,
+    Font, Inline, InlineBuilder, Node, NodeKind, append_inline_node, append_inline_node_with_next,
     append_inline_nodes, enclosure_marks, first_part_children, inline_children, lower_atomic_node,
-    navigation_anchor, plain_text, text_node, visible_text, wrap_emphasis, wrap_strong,
+    navigation_anchor, plain_text, visible_text,
 };
 
 pub(super) fn append(builder: &mut InlineBuilder, node: &Node, name: Option<&str>) {
-    builder.with_local_fonts(|builder| append_scoped(builder, node, name));
-}
-
-fn append_scoped(builder: &mut InlineBuilder, node: &Node, name: Option<&str>) {
     if node.macro_name.as_deref() == Some("Tg") {
         if let Some(anchor) = navigation_anchor(node) {
             builder.append(vec![anchor]);
@@ -37,44 +34,47 @@ fn append_scoped(builder: &mut InlineBuilder, node: &Node, name: Option<&str>) {
     let children = inline_children(node);
     match node.macro_name.as_deref() {
         Some("Nm") if node.kind == NodeKind::Block => {
-            builder.append_scope(
-                |builder| append_name(builder, first_part_children(node, NodeKind::Head), name),
-                wrap_strong,
-            );
+            builder.with_font_scope(Font::Strong, |builder| {
+                append_name(builder, first_part_children(node, NodeKind::Head), name);
+            });
             append_inline_nodes(builder, first_part_children(node, NodeKind::Body), name);
         }
         Some("Nm") => {
-            builder.append_scope(|builder| append_name(builder, children, name), wrap_strong);
+            builder.with_font_scope(Font::Strong, |builder| append_name(builder, children, name));
         }
         Some("Fl") => builder.append_scope(
             |builder| {
-                builder.append(text_node("-"));
-                builder.with_prefix_join(|builder| append_inline_nodes(builder, children, name));
+                builder.with_font_scope(Font::Strong, |builder| {
+                    builder.append_text("-");
+                    builder
+                        .with_prefix_join(|builder| append_inline_nodes(builder, children, name));
+                });
             },
-            wrap_strong,
+            coalesce_font_runs,
         ),
-        Some("Cm" | "Ic" | "Sy") => builder.append_scope(
-            |builder| append_inline_nodes(builder, children, name),
-            wrap_strong,
-        ),
-        Some("Ar" | "Pa" | "Em" | "Va" | "Vt" | "Ft" | "Fa") => builder.append_scope(
-            |builder| append_inline_nodes(builder, children, name),
-            wrap_emphasis,
-        ),
-        Some("Li") => builder.append_scope(
-            |builder| append_inline_nodes(builder, children, name),
-            |children| {
-                vec![Inline::Code {
-                    value: plain_text(&children),
-                }]
-            },
-        ),
+        Some("Cm" | "Ic" | "Sy" | "Ms") => builder.with_font_scope(Font::Strong, |builder| {
+            append_inline_nodes(builder, children, name);
+        }),
+        Some("Ar" | "Pa" | "Em" | "Va" | "Vt" | "Ft" | "Fa" | "Ad" | "Fr") => builder
+            .with_font_scope(Font::Emphasis, |builder| {
+                append_inline_nodes(builder, children, name);
+            }),
+        Some("No" | "Dv") => builder.with_font_scope(Font::Regular, |builder| {
+            append_inline_nodes(builder, children, name);
+        }),
+        Some("Li") => builder.with_font_scope(Font::Code, |builder| {
+            append_inline_nodes(builder, children, name);
+        }),
         Some("Sx") => builder.append_scope(
-            |builder| append_inline_nodes(builder, children, name),
+            |builder| {
+                builder.with_font_scope(Font::Emphasis, |builder| {
+                    append_inline_nodes(builder, children, name);
+                });
+            },
             section_reference,
         ),
         Some("Nd") => {
-            builder.append(text_node("— "));
+            builder.append_text("— ");
             append_inline_nodes(builder, children, name);
         }
         Some("Eo") => authored_enclosure(builder, node, name),
@@ -146,7 +146,7 @@ fn authored_enclosure(builder: &mut InlineBuilder, node: &Node, name: Option<&st
 fn append_name(builder: &mut InlineBuilder, nodes: &[Node], name: Option<&str>) {
     if nodes.is_empty() {
         if let Some(name) = name {
-            builder.append(text_node(name));
+            builder.append_text(name);
         }
     } else {
         append_inline_nodes(builder, nodes, name);
@@ -161,12 +161,12 @@ fn enclosed(
     name: Option<&str>,
 ) {
     if !open.is_empty() {
-        builder.append(text_node(open));
+        builder.append_text(open);
         builder.tighten_next_boundary();
     }
     append_inline_nodes(builder, nodes, name);
     if !close.is_empty() {
         builder.tighten_next_boundary();
-        builder.append(text_node(close));
+        builder.append_text(close);
     }
 }

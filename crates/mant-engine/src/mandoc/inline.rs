@@ -130,15 +130,11 @@ pub(super) fn append_inline_node_with_next(
         if node.flags.delimiter_close {
             builder.tighten_next_boundary();
         }
-        let font = builder.font;
         let inlines = parse_roff_text_with_state(
             node.text.as_deref().unwrap_or_default(),
             &mut builder.font,
             !node.flags.no_fill,
         );
-        if builder.local_operand_fonts {
-            builder.font = font;
-        }
         builder.append(inlines);
         if node.flags.delimiter_open || node.flags.line_continuation {
             builder.tighten_next_boundary();
@@ -218,10 +214,19 @@ pub(super) fn append_inline_node_with_next(
         }
         Some("Ap") => {
             builder.tighten_next_boundary();
-            builder.append(vec![Inline::Text { value: "'".into() }]);
+            builder.append_text("'");
             builder.tighten_next_boundary();
         }
         _ => scopes::append(builder, node, default_name),
+    }
+    // A bare Fl followed by a callable macro on the same source line owns an
+    // external join. An explicit empty operand is different: it consumes the
+    // prefix's operand position and must leave that sibling separate.
+    if node.macro_name.as_deref() == Some("Fl")
+        && node.children.is_empty()
+        && next.is_some_and(|next| next.kind != NodeKind::Text && !next.flags.line_start)
+    {
+        builder.tighten_next_boundary();
     }
     if node.flags.delimiter_open || node.flags.line_continuation {
         builder.tighten_next_boundary();
@@ -713,23 +718,20 @@ fn push_text(nodes: &mut Vec<Inline>, value: String) {
 #[cfg(test)]
 mod tests {
     #[test]
-    fn local_font_scopes_restore_both_selections_without_resetting_spacing() {
+    fn font_scope_pop_preserves_previous_selection_and_spacing() {
         let mut builder = super::InlineBuilder::new();
         builder.font.select(super::Font::Emphasis);
         builder.font.select(super::Font::Strong);
-        builder.with_local_fonts(|builder| {
-            builder.font.select(super::Font::Code);
-            builder.with_local_fonts(|builder| {
-                builder.font.select(super::Font::Regular);
+        builder.with_font_scope(super::Font::Code, |builder| {
+            builder.with_font_scope(super::Font::Regular, |builder| {
                 builder.tighten_next_boundary();
             });
             assert_eq!(builder.font.current, super::Font::Code);
-            assert_eq!(builder.font.previous, super::Font::Strong);
+            assert_eq!(builder.font.previous, super::Font::Code);
         });
         assert_eq!(builder.font.current, super::Font::Strong);
-        assert_eq!(builder.font.previous, super::Font::Emphasis);
+        assert_eq!(builder.font.previous, super::Font::Code);
         assert!(builder.has_tight_boundary());
-        assert!(!builder.local_operand_fonts);
     }
 
     #[test]

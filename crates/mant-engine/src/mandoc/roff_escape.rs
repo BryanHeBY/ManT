@@ -23,6 +23,16 @@ pub(super) enum RoffFont {
     CodeEmphasis,
 }
 
+impl From<libmandoc_rs::NormalizedFont> for RoffFont {
+    fn from(font: libmandoc_rs::NormalizedFont) -> Self {
+        match font {
+            libmandoc_rs::NormalizedFont::Emphasis => Self::Emphasis,
+            libmandoc_rs::NormalizedFont::Symbolic => Self::Strong,
+            libmandoc_rs::NormalizedFont::Literal => Self::Code,
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) enum PresentationKind {
     Color,

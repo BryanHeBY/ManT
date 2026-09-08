@@ -1,6 +1,6 @@
 //! Reconstructs sections and semantic blocks from the copied mandoc tree.
 
-use libmandoc_rs::{AuthorMode, DisplayKind, Node, NodeKind, NormalizedFont};
+use libmandoc_rs::{AuthorMode, DisplayKind, MacroSet, Node, NodeKind};
 use mant_ir::{Block, Inline, Section};
 
 use super::{
@@ -31,7 +31,7 @@ use lists::{
     lower_mdoc_list,
 };
 use man_lists::{ManListState, append_relative_continuation};
-use preformatted::{preformatted_blocks, style_preformatted_inlines};
+use preformatted::preformatted_blocks;
 use tables::{TableEmbedding, TableEmbeddingPlan, append_table_row};
 
 pub(super) fn lower_sections(root: &Node, context: &mut LoweringContext<'_>) -> Vec<Section> {
@@ -161,6 +161,7 @@ fn lower_blocks(
     indent_columns: u16,
     paragraph_distance: &mut u16,
 ) -> Vec<Block> {
+    context.mdoc_font.set(FontState::new());
     lower_blocks_with_spacing(nodes, context, indent_columns, paragraph_distance, true)
 }
 
@@ -196,7 +197,6 @@ fn lower_blocks_onto(
     spacing_enabled: bool,
     output: Vec<Block>,
 ) -> Vec<Block> {
-    let table_plan = TableEmbeddingPlan::new(nodes, context);
     let mut lowerer = BlockLowerer::new(
         context,
         indent_columns,
@@ -204,14 +204,7 @@ fn lower_blocks_onto(
         spacing_enabled,
         output,
     );
-    for (index, node) in nodes.iter().enumerate() {
-        if !table_plan.consumes(index) && !is_inline_equation_quote_artifact(nodes, index) {
-            if follows_inline_equation_punctuation(nodes, index) {
-                lowerer.state.tighten_next_boundary();
-            }
-            lowerer.push(node, nodes.get(index + 1), table_plan.embedding(index));
-        }
-    }
+    lowerer.push_nodes(nodes);
     lowerer.finish()
 }
 
@@ -251,12 +244,31 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
             indent_columns,
             paragraph_distance,
             state: BlockState::with_output(indent_columns, spacing_enabled, output),
-            font: FontState::new(),
+            font: if context.macro_set == MacroSet::Mdoc {
+                context.mdoc_font.get()
+            } else {
+                FontState::new()
+            },
             definition_hanging_width: DEFAULT_MAN_TAG_WIDTH,
             split_authors: false,
             synopsis_return_type_open: false,
             man_alias_state: ManAliasState::None,
             man_list_state: ManListState::None,
+        }
+    }
+
+    fn push_nodes(&mut self, nodes: &[Node]) {
+        let table_plan = TableEmbeddingPlan::new(nodes, self.context);
+        for (index, node) in nodes.iter().enumerate() {
+            if table_plan.consumes(index) || is_inline_equation_quote_artifact(nodes, index) {
+                continue;
+            }
+            if follows_inline_equation_punctuation(nodes, index) {
+                self.state.tighten_next_boundary();
+            }
+            self.context.mdoc_font.set(self.font);
+            self.push(node, nodes.get(index + 1), table_plan.embedding(index));
+            self.context.mdoc_font.set(self.font);
         }
     }
 
@@ -281,10 +293,10 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
             );
             return;
         }
-        let structural_targets = targets::structural_targets(node);
-        if self.consume_control_or_empty_block(node) {
+        if self.push_font_scope(node) || self.consume_control_or_empty_block(node) {
             return;
         }
+        let structural_targets = targets::structural_targets(node);
         if self.push_no_fill_lines(node) {
             self.state
                 .queue_targets(structural_targets, source_span(node));
@@ -353,6 +365,9 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
                 spacing_enabled,
             }
             .push(node, table_embedding);
+            if self.context.macro_set == MacroSet::Mdoc {
+                self.font = self.context.mdoc_font.get();
+            }
             self.state
                 .queue_targets(structural_targets, source_span(node));
             self.state.attach_pending_to_structural_output(output_start);
@@ -362,6 +377,20 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
             self.state.spacing_enabled(),
             self.context.default_name,
         ));
+    }
+
+    fn push_font_scope(&mut self, node: &Node) -> bool {
+        if node.macro_name.as_deref() != Some("Bf") {
+            return false;
+        }
+        self.state
+            .queue_targets(targets::structural_targets(node), source_span(node));
+        let saved = node.font.map(|font| self.font.push_scope(font.into()));
+        self.push_nodes(first_part_children(node, NodeKind::Body));
+        if let Some(saved) = saved {
+            self.font.pop_scope(saved);
+        }
+        true
     }
 
     fn consume_control_or_empty_block(&mut self, node: &Node) -> bool {
@@ -755,19 +784,6 @@ impl StructuralLowerer<'_, '_, '_> {
                 );
                 extend_blocks_with_spacing(self.output, nested, spacing_before);
             }
-            Some("Bf") => {
-                let mut nested = lower_blocks_with_spacing(
-                    first_part_children(node, NodeKind::Body),
-                    self.context,
-                    self.indent_columns,
-                    self.paragraph_distance,
-                    self.spacing_enabled,
-                );
-                if let Some(font) = node.font {
-                    apply_normalized_font(&mut nested, font);
-                }
-                extend_transparent_blocks(self.output, nested, *self.paragraph_distance);
-            }
             Some("Bd") if node.display_kind == Some(DisplayKind::Filled) => {
                 let spacing_before = u16::from(!self.output.is_empty() && !node.compact);
                 let nested = lower_blocks_with_spacing(
@@ -1015,45 +1031,6 @@ fn lower_synopsis_head(
     output.extend(nested);
 }
 
-fn apply_normalized_font(blocks: &mut [Block], font: NormalizedFont) {
-    for block in blocks {
-        match block {
-            Block::Paragraph { children, .. } | Block::Preformatted { children, .. } => {
-                let content = std::mem::take(children);
-                if content.is_empty() {
-                    continue;
-                }
-                *children = style_preformatted_inlines(content, font);
-            }
-            Block::List { items, .. } => {
-                for item in items {
-                    apply_normalized_font(&mut item.blocks, font);
-                }
-            }
-            Block::DefinitionList { items, .. } => {
-                for item in items {
-                    for term in &mut item.terms {
-                        let content = std::mem::take(term);
-                        if !content.is_empty() {
-                            *term = style_preformatted_inlines(content, font);
-                        }
-                    }
-                    apply_normalized_font(&mut item.description, font);
-                }
-            }
-            Block::Table { rows, .. } => {
-                for cell in rows.iter_mut().flat_map(|row| &mut row.cells) {
-                    apply_normalized_font(&mut cell.blocks, font);
-                }
-            }
-            Block::Equation { .. }
-            | Block::VerticalSpace { .. }
-            | Block::ThematicBreak { .. }
-            | Block::Unsupported { .. } => {}
-        }
-    }
-}
-
 fn append_to_last_inline_block(blocks: &mut [Block], tail: &[Inline]) -> bool {
     for block in blocks.iter_mut().rev() {
         match block {
@@ -1137,62 +1114,7 @@ fn ends_with_line_continuation(node: &Node) -> bool {
         .is_some_and(ends_with_line_continuation)
 }
 
-/// Appends blocks lowered through a transparent styling wrapper.
-fn extend_transparent_blocks(
-    output: &mut Vec<Block>,
-    mut nested: Vec<Block>,
-    paragraph_distance: u16,
-) {
-    // Styling blocks are lowered in isolation so the normalized font can be
-    // applied only to their children. Restore their boundary distance without
-    // duplicating an explicit vertical-space node.
-    let boundary_spacing = if output.is_empty()
-        || output
-            .last()
-            .is_some_and(|block| matches!(block, Block::VerticalSpace { .. }))
-    {
-        0
-    } else {
-        paragraph_distance
-    };
-    add_leading_spacing(&mut nested, boundary_spacing);
-    let merged_first = match (output.last_mut(), nested.first_mut()) {
-        (
-            Some(Block::DefinitionList {
-                items: previous_items,
-                compact: previous_compact,
-                layout: previous_layout,
-                ..
-            }),
-            Some(Block::DefinitionList {
-                items: nested_items,
-                compact: nested_compact,
-                layout: nested_layout,
-                ..
-            }),
-        ) if previous_layout.indent_columns == nested_layout.indent_columns => {
-            if let Some(first) = nested_items.first_mut() {
-                first.layout.spacing_before_lines = Some(if previous_items.is_empty() {
-                    0
-                } else {
-                    nested_layout.spacing_before_lines
-                });
-            }
-            previous_items.append(nested_items);
-            *previous_compact = *previous_compact && *nested_compact && paragraph_distance == 0;
-            true
-        }
-        _ => false,
-    };
-
-    if merged_first {
-        nested.remove(0);
-    }
-    output.extend(nested);
-}
-
-/// Appends nested semantic blocks while attaching a macro's leading distance
-/// to the first visible block rather than inventing renderer-side margins.
+/// Attach a macro's leading distance to its first visible nested block.
 fn extend_blocks_with_spacing(output: &mut Vec<Block>, mut nested: Vec<Block>, lines: u16) {
     add_leading_spacing(&mut nested, lines);
     output.extend(nested);

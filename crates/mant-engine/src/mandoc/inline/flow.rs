@@ -10,7 +10,6 @@ pub(in crate::mandoc) struct InlineBuilder {
     last_visible_character: Option<char>,
     has_printable_content: bool,
     pub(in crate::mandoc) font: FontState,
-    pub(super) local_operand_fonts: bool,
 }
 
 /// Roff remembers the previous selection independently of the current font.
@@ -35,6 +34,18 @@ impl FontState {
 
     pub(super) fn restore(&mut self) {
         std::mem::swap(&mut self.current, &mut self.previous);
+    }
+
+    /// mdoc font scopes push a selection. Popping restores the saved current
+    /// font, not the previous-selection register used by `\\fP` and `.ft P`.
+    pub(in crate::mandoc) fn push_scope(&mut self, font: Font) -> Font {
+        let saved = self.current;
+        self.select(font);
+        saved
+    }
+
+    pub(in crate::mandoc) fn pop_scope(&mut self, saved: Font) {
+        self.current = saved;
     }
 }
 
@@ -101,7 +112,6 @@ impl InlineBuilder {
             last_visible_character: None,
             has_printable_content: false,
             font: FontState::new(),
-            local_operand_fonts: false,
         }
     }
 
@@ -113,7 +123,6 @@ impl InlineBuilder {
             last_visible_character: None,
             has_printable_content: false,
             font: FontState::new(),
-            local_operand_fonts: false,
         }
     }
 
@@ -192,19 +201,25 @@ impl InlineBuilder {
         self.append_at_boundary(&mut incoming);
     }
 
-    /// Semantic mdoc scopes share spacing with their caller, not local font
-    /// escapes. Save both font selections, including the meaning of `\\fP`.
-    /// Text operands inside this scope also restore their entry font state;
-    /// a native multi-word text node remains one font scope, not one per word.
-    /// This is deliberately separate from the source-neutral styling helper:
-    /// man text, `.ft`, and structural literal/Bf scopes have other lifetimes.
-    pub(super) fn with_local_fonts(&mut self, append: impl FnOnce(&mut Self)) {
-        let font = self.font;
-        let local_operand_fonts = self.local_operand_fonts;
-        self.local_operand_fonts = true;
+    /// Generated glyphs use the effective font just like authored text, but
+    /// are not reparsed as roff source (names can contain literal escapes).
+    pub(in crate::mandoc) fn append_text(&mut self, value: &str) {
+        self.append(vec![super::font::styled_segment(
+            value.into(),
+            self.font.current,
+        )]);
+    }
+
+    /// Only macros that select a font establish this scope. Transparent
+    /// macros and text operands must not invent a push/pop of their own.
+    pub(in crate::mandoc) fn with_font_scope(
+        &mut self,
+        font: Font,
+        append: impl FnOnce(&mut Self),
+    ) {
+        let saved = self.font.push_scope(font);
         append(self);
-        self.font = font;
-        self.local_operand_fonts = local_operand_fonts;
+        self.font.pop_scope(saved);
     }
 
     /// Style newly appended content without creating a new formatter state.

@@ -9,8 +9,7 @@ use mant_ir::{
 use super::super::{
     LoweringContext, first_part_children,
     inline::{
-        InlineBuilder, lower_inline_nodes_with_spacing, plain_text, spacing_after_node,
-        spacing_after_nodes, terms_fit_inline,
+        InlineBuilder, plain_text, spacing_after_node, spacing_after_nodes, terms_fit_inline,
     },
     layout::{
         block_indent, horizontal_distance_columns, layout, layout_with_spacing,
@@ -499,17 +498,11 @@ fn definition_item(
     let body = first_part_children(node, NodeKind::Body);
     let (displaced_equations, body) = displaced_definition_equations(head, body);
     let mut term_builder = InlineBuilder::with_spacing(spacing_enabled);
-    term_builder.append(lower_inline_nodes_with_spacing(
-        head,
-        context.default_name,
-        spacing_enabled,
-    ));
+    term_builder.append(context.lower_inline_with_spacing(head, spacing_enabled));
     for equation in displaced_equations {
-        term_builder.append(lower_inline_nodes_with_spacing(
-            std::slice::from_ref(equation),
-            context.default_name,
-            spacing_enabled,
-        ));
+        term_builder.append(
+            context.lower_inline_with_spacing(std::slice::from_ref(equation), spacing_enabled),
+        );
     }
     let mut term = term_builder.finish();
     if let Some(id) = definition_head_anchor(node) {
