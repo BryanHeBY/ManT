@@ -260,16 +260,25 @@ fn generated_git_option_descriptions_follow_their_terms_without_a_blank_row() {
 fn real_git_command_references_are_visibly_clickable() {
     let rendered = view("archlinux/git.1.gz").render(132);
 
-    assert!(
-        rendered
-            .text
-            .lines
-            .iter()
-            .flat_map(|line| &line.spans)
-            .any(|span| span.content.contains("git-add(1)")
-                && span.style.add_modifier.contains(Modifier::UNDERLINED)),
-        "git-add(1) must retain a visible link affordance in the real manual"
-    );
+    let line = rendered
+        .text
+        .lines
+        .iter()
+        .find(|line| line.to_string().contains("git-add(1)"))
+        .expect("visible git-add(1) reference");
+    let text = line.to_string();
+    let start = text[..text.find("git-add(1)").unwrap()].chars().count();
+    // Semantic naming can split git-add and its (1) suffix into differently
+    // colored spans. Every displayed character still needs the link affordance.
+    for (_, style) in line
+        .spans
+        .iter()
+        .flat_map(|span| span.content.chars().map(move |ch| (ch, span.style)))
+        .skip(start)
+        .take("git-add(1)".len())
+    {
+        assert!(style.add_modifier.contains(Modifier::UNDERLINED));
+    }
 }
 
 #[test]
