@@ -19,10 +19,12 @@ pub(in crate::definitions) fn leading_styled_command_name(term: &[Inline]) -> Op
         Inline::Text { value } => !value.trim().is_empty(),
         _ => true,
     })?;
-    let Inline::Strong { children } = first else {
-        return None;
+    let name = match first {
+        Inline::Strong { children } => plain_text(children),
+        Inline::Link { children, .. } => return leading_styled_command_name(children),
+        Inline::Code { value } => value.clone(),
+        _ => return None,
     };
-    let name = plain_text(children);
     let name = styled_command_prefix(name.trim());
     is_command_name(name).then(|| name.to_owned())
 }

@@ -39,6 +39,12 @@ pub(super) fn infer_identity(
         .map_or_else(String::new, |term| plain_text(term));
     let trimmed = first.trim();
     let (mut kind, mut case) = inherited_kind(trimmed, context);
+    if local_option_spelling(trimmed) {
+        kind = EntryKind::Parameter {
+            parameter_kind: ParameterKind::Option,
+        };
+        case = NameCase::Sensitive;
+    }
     match hint {
         Some(super::NativeHeadRole::Option) => {
             kind = EntryKind::Parameter {
@@ -142,6 +148,21 @@ fn inherited_kind(trimmed: &str, context: DefinitionContext) -> (EntryKind, Name
         }
         DefinitionContext::Generic => (EntryKind::Term, NameCase::Sensitive),
     }
+}
+
+/// Local complete dash spelling overrides a weak inherited category. A
+/// negative number is not a flag, and an arbitrary dash in prose is not a head.
+fn local_option_spelling(text: &str) -> bool {
+    let Some(token) = text.split_whitespace().next() else {
+        return false;
+    };
+    if token.starts_with('-')
+        && !token.starts_with("--")
+        && token.chars().nth(1).is_some_and(|c| c.is_ascii_digit())
+    {
+        return false;
+    }
+    option_prefix(token).is_some()
 }
 
 /// The same role-specific grammars produce both names and their lexical

@@ -39,6 +39,11 @@ that crate was not published for that change.
   configuration keys and single assignment names. Genuine Terms can retain
   names without being reclassified as commands/options. Templates and prose
   remain unexpanded; complete forms, default values and case are preserved.
+- Recover complete hanging command/configuration/variable declarations and
+  retain explicit spacing before their indented bodies. Complete local flags
+  override inherited value/configuration categories. Finite short/long pairs
+  separated by whitespace or `or` bind both names without inventing aliases;
+  argument/prose suffixes remain guarded by whole-head validation.
 
 ### Explanation match locations (unreleased v0.11)
 

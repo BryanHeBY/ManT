@@ -23,8 +23,13 @@ impl<'a> AuthoredForm<'a> {
                 // All removed separators are one ASCII byte. Opaque argument
                 // runs were not split, and remain part of this visible length.
                 *offset += plain_text(&inlines).len() + 1;
-                Some(FormCandidate { inlines, start })
+                Some(FormCandidate {
+                    inlines,
+                    start,
+                    token: None,
+                })
             })
+            .flat_map(FormCandidate::paired_invocations)
     }
 }
 
@@ -33,10 +38,14 @@ impl<'a> AuthoredForm<'a> {
 pub(super) struct FormCandidate {
     inlines: Vec<Inline>,
     start: usize,
+    token: Option<(String, usize)>,
 }
 
 impl FormCandidate {
     pub(super) fn invocation_token(&self) -> Option<(String, usize)> {
+        if let Some(token) = &self.token {
+            return Some(token.clone());
+        }
         if starts_with_parameter(&self.inlines) {
             return None;
         }
@@ -51,6 +60,50 @@ impl FormCandidate {
         let offset = token.as_ptr() as usize - prefix.as_ptr() as usize;
         Some((token.to_owned(), self.start + offset))
     }
+
+    fn paired_invocations(self) -> Vec<Self> {
+        let Some([first, second]) = paired_option_tokens(&self.inlines) else {
+            return vec![self];
+        };
+        vec![
+            Self {
+                inlines: self.inlines.clone(),
+                start: self.start,
+                token: Some((first.0, self.start + first.1)),
+            },
+            Self {
+                inlines: self.inlines,
+                start: self.start,
+                token: Some((second.0, self.start + second.1)),
+            },
+        ]
+    }
+}
+
+/// A complete short/long pair is a finite declaration convention, not argv
+/// parsing. An arbitrary later dash token, third literal argument, or an
+/// emphasized operand cannot restart name recognition.
+pub(super) fn paired_option_tokens(inlines: &[Inline]) -> Option<[(String, usize); 2]> {
+    let prefix = literal_prefix(inlines);
+    let tokens: Vec<_> = prefix.split_whitespace().take(4).collect();
+    let (first, second) = match tokens.as_slice() {
+        [first, second] | [first, "or", second] => (*first, *second),
+        _ => return None,
+    };
+    if first.len() != 2
+        || !first.starts_with('-')
+        || !second.starts_with("--")
+        || super::options::option_prefix(first) != Some(first)
+        || super::options::option_prefix(second) != Some(second)
+    {
+        return None;
+    }
+    Some([first, second].map(|token| {
+        (
+            token.to_owned(),
+            token.as_ptr() as usize - prefix.as_ptr() as usize,
+        )
+    }))
 }
 
 /// Read visible literal content only until an explicitly styled parameter.

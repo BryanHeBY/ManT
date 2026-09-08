@@ -6,29 +6,62 @@
 
 use mant_ir::Inline;
 
-use super::{forms, named, options};
+use super::{commands, forms, named, options};
 use crate::{definitions::context::DefinitionContext, inline::plain_text};
 
 pub(in crate::definitions) fn is_inferred_head(
     inlines: &[Inline],
     context: DefinitionContext,
 ) -> bool {
-    match context {
-        DefinitionContext::EnvironmentVariables => {
-            named::environment_occurrences(&plain_text(inlines)).is_some()
-        }
-        DefinitionContext::Generic | DefinitionContext::Parameters => {
-            forms::declaration_groups(inlines)
-                .iter()
-                .all(|group| is_option_head(group))
-        }
-        _ => false,
+    // Candidate syntax precedes final role: a complete flag declaration does
+    // not stop being a candidate under a configuration/value heading.
+    if forms::declaration_groups(inlines)
+        .iter()
+        .all(|group| is_option_head(group))
+    {
+        return true;
     }
+    let text = plain_text(inlines);
+    match context {
+        DefinitionContext::EnvironmentVariables => named::environment_occurrences(&text).is_some(),
+        DefinitionContext::Commands => forms::declaration_groups(inlines)
+            .iter()
+            .all(|group| is_command_head(group)),
+        DefinitionContext::ConfigurationKeys => {
+            named::named_occurrences(&text, named::is_configuration_key).is_some()
+                && (commands::leading_styled_command_name(inlines).is_some()
+                    || text.contains(['.', '=']))
+        }
+        DefinitionContext::Variables => {
+            named::named_occurrences(&text, named::is_variable_term).is_some()
+                && commands::leading_styled_command_name(inlines).is_some()
+        }
+        DefinitionContext::Generic | DefinitionContext::Parameters | DefinitionContext::Values => {
+            false
+        }
+    }
+}
+
+fn is_command_head(inlines: &[Inline]) -> bool {
+    let Some(name) = commands::leading_styled_command_name(inlines) else {
+        return false;
+    };
+    let mut literal = String::new();
+    append_syntax(inlines, &mut literal);
+    let Some(tail) = literal.trim_start().strip_prefix(&name) else {
+        return false;
+    };
+    arguments(tail.split_whitespace())
 }
 
 fn is_option_head(inlines: &[Inline]) -> bool {
     let mut literal = String::new();
     append_syntax(inlines, &mut literal);
+    if let Some([_, (name, start)]) = forms::paired_option_tokens(inlines) {
+        return literal
+            .get(start + name.len()..)
+            .is_some_and(|tail| arguments(tail.split_whitespace()));
+    }
     let mut tokens = literal.split_whitespace();
     let Some(first) = tokens.next() else {
         return false;
@@ -48,13 +81,18 @@ fn is_option_head(inlines: &[Inline]) -> bool {
     if !attached.is_empty() && !attached.starts_with(['=', '[', '{', '<', '(']) {
         return false;
     }
+    arguments(
+        (!attached.is_empty() && !attached.starts_with('='))
+            .then_some(attached)
+            .into_iter()
+            .chain(tokens),
+    )
+}
+
+fn arguments<'a>(tokens: impl Iterator<Item = &'a str>) -> bool {
     let mut closers = Vec::new();
     let mut bare_arguments = 0;
-    for token in (!attached.is_empty() && !attached.starts_with('='))
-        .then_some(attached)
-        .into_iter()
-        .chain(tokens)
-    {
+    for token in tokens {
         let inside = !closers.is_empty();
         for character in token.chars() {
             if let Some(closer) = match character {
@@ -112,7 +150,10 @@ fn append_syntax(inlines: &[Inline], output: &mut String) {
                 append_syntax(children, output);
             }
             Inline::Emphasis { children } => {
-                if !plain_text(children).trim().is_empty() {
+                let value = plain_text(children);
+                if value.trim().is_empty() {
+                    output.push_str(&value);
+                } else {
                     output.push_str(" \0 ");
                 }
             }

@@ -93,7 +93,11 @@ pub(super) fn normalize_hanging_definitions(blocks: &mut Vec<Block>, context: De
             if hanging_term_indent(next, context) == Some(term_indent) {
                 break;
             }
-            if matches!(next, Block::VerticalSpace { .. }) && description.is_empty() {
+            if pending
+                .iter()
+                .find(|block| !matches!(block, Block::VerticalSpace { .. }))
+                .is_some_and(|block| matches!(block, Block::Table { .. }))
+            {
                 break;
             }
             let Some(length) = indented_continuation_len(&pending, term_indent) else {
@@ -295,5 +299,16 @@ mod tests {
         };
         assert_eq!(items[0].description.len(), 3);
         assert_eq!(items[0].description[1], space(2));
+    }
+
+    #[test]
+    fn explicit_head_spacing_preserves_original_paragraph_geometry() {
+        for spacing in [0, 1, 3] {
+            let mut blocks = vec![paragraph("--option", 0), space(spacing)];
+            blocks.push(paragraph("Description.", 4));
+            let before = text(blocks.clone());
+            normalize_hanging_definitions(&mut blocks, DefinitionContext::Parameters);
+            assert_eq!(text(blocks), before, "spacing={spacing}");
+        }
     }
 }

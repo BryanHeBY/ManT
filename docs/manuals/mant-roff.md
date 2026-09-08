@@ -116,6 +116,10 @@ An mdoc definition headed by `Fl` or `Ev` retains that option or environment-var
 
 Complete named heads can retain bounded trailing parenthesized annotations or angle-bracket placeholders without adding those suffixes to names: `AUTO_CD (-J) <D>`, `NAME <TLS backend>`, and `update (-u)` preserve their full forms. Nested parenthesized defaults and literal key bindings such as `C-[` remain intact. A single assignment binds its left-hand name, not its value; assignment spelling alone does not prove an Option or ConfigurationKey role (`if=FILE` can remain a named Term). Configuration contexts support exact dotted keys. Templates such as `[url-protocol]_PROXY`, malformed groups and prose suffixes are not expanded into guessed names, and neither case variants nor annotations create alias relationships.
 
+Complete command, configuration-key and variable heads can use the same paragraph-plus-indented-description shape as options. Command/variable recovery requires a literal-styled head in a matching context; configuration contexts also accept unstyled dotted keys or assignments. Spacing-only runs between a validated head and its deeper body are preserved, not treated as new owners. Recovery stops at outer content, another same-level head, a table boundary or the end of the container. A complete local dash declaration takes precedence over inherited value/configuration hints without changing its place in the document tree.
+
+A complete short/long pair such as `-a --ascii` or `-a or --ascii` exposes both names without implying an alias relationship. This is a bounded declaration convention, not general argv parsing: an arbitrary third literal token or later dash-prefixed argument does not restart name recognition, and parameter paths/alternatives remain part of their original form.
+
 The required mdoc prologue and structural macros are normalized as follows:
 
 | Macros | ManT result |

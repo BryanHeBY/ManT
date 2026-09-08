@@ -5,6 +5,9 @@ use mant_ir::{
 };
 use mant_protocol::{EvidenceClass, ExplanationOptions, ExplanationQuery};
 
+#[path = "native_declarations/hanging.rs"]
+mod hanging;
+
 fn definitions(document: &Document) -> Vec<&DefinitionItem> {
     struct Items<'a>(Vec<&'a DefinitionItem>);
     impl<'a> Visit<'a> for Items<'a> {
