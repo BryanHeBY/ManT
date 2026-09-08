@@ -232,13 +232,13 @@ fn empty_independent_definition_is_not_reported_as_budget_omission() {
     assert!(!text.contains("no independent description"), "{text}");
     assert!(text.contains("Declaration-group context"));
     assert!(text.contains("Other description"));
-    let own = serde_json::to_value(&report.evidence[0].content).unwrap();
-    assert!(
-        own["block"]["items"][0]["description"]
-            .as_array()
-            .unwrap()
-            .is_empty()
-    );
+    let own = report.evidence[0]
+        .content
+        .as_ref()
+        .unwrap()
+        .referenced_owner(&report.supports)
+        .unwrap();
+    assert!(matches!(own, mant_ir::EntryOwner::Definition(item) if item.description.is_empty()));
     assert!(!text.contains("\nForms:"));
     report.evidence[0].content = None;
     report.evidence[0].content_omitted = true;

@@ -87,10 +87,16 @@ fn consecutive_declarations_supply_context_without_borrowing_ownership() {
         assert_eq!(first.class, EvidenceClass::DirectEntry);
         assert!(first.entry.as_ref().unwrap().alias_groups.is_empty());
         let json = serde_json::to_value(&response).unwrap();
-        assert_eq!(
-            json["evidence"][0]["content"]["block"]["items"][0]["description"],
-            serde_json::json!([])
+        let owner = first
+            .content
+            .as_ref()
+            .unwrap()
+            .referenced_owner(&response.supports)
+            .unwrap();
+        assert!(
+            matches!(owner, mant_ir::EntryOwner::Definition(item) if item.description.is_empty())
         );
+        assert!(first.covered_by_support(&response.supports));
         assert!(
             json["supports"].as_array().is_some_and(|v| !v.is_empty()),
             "{name}: missing declaration-group explanation"
@@ -104,5 +110,110 @@ fn consecutive_declarations_supply_context_without_borrowing_ownership() {
             mant_engine::render_explanation_markdown(&decoded),
             mant_engine::render_explanation_markdown(&response)
         );
+    }
+}
+
+#[test]
+fn shared_context_is_copied_once_with_valid_owner_local_positions() {
+    let response = explained(
+        ".TH PROBE 1\n.SH OPTIONS\n.TP\n.B --mode=A\n.TP\n.B --mode=B\nShared body with café and a trailing note.\n",
+        "--mode",
+    );
+    assert_eq!(response.counts.direct_entry.returned, 2);
+    assert_eq!(response.supports.len(), 1);
+    assert!(
+        response
+            .evidence
+            .iter()
+            .all(|e| e.covered_by_support(&response.supports))
+    );
+    response.validate_references().unwrap();
+    let json = serde_json::to_string(&response).unwrap();
+    assert_eq!(json.matches("Shared body with").count(), 1);
+    let decoded: mant_protocol::QueryExplanation = serde_json::from_str(&json).unwrap();
+    let text = mant_engine::render_explanation_text(&decoded);
+    assert_eq!(text.matches("Shared body with").count(), 1);
+    assert!(!text.contains("Forms:") && !text.contains("Definition:"));
+    assert!(text.contains("see support 0"));
+    for (index, e) in decoded.evidence.iter().enumerate() {
+        let mant_protocol::ExplanationContent::DeclarationMember { item_index, .. } =
+            e.content.as_ref().unwrap()
+        else {
+            panic!()
+        };
+        assert_eq!(*item_index, index);
+        for basis in &e.bases {
+            if let mant_protocol::EvidenceBasis::Name { matches } = basis {
+                for occurrence in matches.iter().flat_map(|m| &m.occurrences) {
+                    assert!(!occurrence.content.is_empty());
+                    for range in &occurrence.content {
+                        let root = e
+                            .content
+                            .as_ref()
+                            .unwrap()
+                            .resolve_range(&decoded.supports, range)
+                            .unwrap();
+                        assert!(
+                            root.safe_text()
+                                .contains(if index == 0 { "=A" } else { "=B" })
+                        );
+                    }
+                }
+            }
+        }
+    }
+    let value = serde_json::to_value(&decoded).unwrap();
+    for path in ["missing", "wrong-owner", "range", "position"] {
+        let mut bad = value.clone();
+        match path {
+            "missing" => bad["evidence"][0]["content"]["support"] = 99.into(),
+            "wrong-owner" => bad["evidence"][0]["content"]["itemIndex"] = 1.into(),
+            "range" => bad["supports"][0]["group"]["endItem"] = 999.into(),
+            _ => {
+                bad["evidence"][0]["bases"][0]["matches"][0]["occurrences"][0]["content"][0]["endChar"] =
+                    999.into();
+            }
+        }
+        assert!(
+            serde_json::from_value::<mant_protocol::QueryExplanation>(bad).is_err(),
+            "accepted {path}"
+        );
+    }
+}
+
+#[test]
+fn support_omission_is_explicit_and_each_page_carries_its_context() {
+    let source = ".TH PROBE 1\n.SH OPTIONS\n.TP\n.B --mode=A\n.TP\n.B --mode=B\nShared context.\n";
+    let content = query_roff_bytes(source.as_bytes()).unwrap();
+    for offset in 0..2 {
+        for bytes in [1, 200, 2000, 16_384] {
+            let response = explain_query(
+                &content,
+                &ExplanationQuery {
+                    entry: "--mode".into(),
+                    options: ExplanationOptions {
+                        offset,
+                        limit: 1,
+                        content_bytes: bytes,
+                    },
+                },
+            )
+            .unwrap();
+            assert_eq!(response.returned, 1);
+            let e = &response.evidence[0];
+            assert_eq!(e.ordinal, offset);
+            assert!(e.covered_by_support(&response.supports) || e.support_omitted);
+            if e.support_omitted {
+                assert!(response.truncation.content);
+            }
+            if bytes == 16_384 {
+                assert!(e.covered_by_support(&response.supports));
+            }
+            response.validate_references().unwrap();
+            assert!(
+                !mant_engine::render_explanation_text(&response)
+                    .contains("no independent description")
+            );
+        }
     }
 }

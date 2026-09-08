@@ -1,11 +1,10 @@
 //! Global classification precedes pagination; source reports stay in BFS order.
 use super::{
     collection_plan,
-    materialize::{Budget, materialize, omitted, outcome},
+    materialize::{Budget, omitted, outcome},
 };
 use mant_protocol::{
-    EvidenceCounts, EvidenceOrder, ScopeExplanation, ScopedExplanation, ScopedExplanationEvidence,
-    ScopedQueryFailure,
+    EvidenceCounts, EvidenceOrder, ScopeExplanation, ScopedExplanation, ScopedQueryFailure,
 };
 
 #[cfg(test)]
@@ -41,38 +40,26 @@ pub(crate) fn explain(
     let mut counts = EvidenceCounts::default();
     let mut local_counts = vec![EvidenceCounts::default(); plans.len()];
     let mut budget = Budget(query.options.content_bytes as usize);
-    let mut evidence = Vec::new();
-    let mut supports = (0..plans.len())
-        .map(|_| super::support::Pool::default())
-        .collect::<Vec<_>>();
-    let mut copy_omitted = vec![false; plans.len()];
-    for (ordinal, ((class, doc, _), index)) in order.into_iter().enumerate() {
+    let mut selection = Vec::new();
+    for (ordinal, ((class, doc, _), index)) in order.iter().copied().enumerate() {
         let selected = ordinal >= query.options.offset as usize
-            && evidence.len() < query.options.limit as usize;
+            && selection.len() < query.options.limit as usize;
         counts.record(class, selected);
         local_counts[doc].record(class, selected);
         if selected {
-            let plan = &plans[doc];
-            let mut record = materialize(
-                u32::try_from(ordinal).expect("bounded documents and candidates"),
-                &plan.candidates[index],
-                &plan.located,
-                &plan.rejected_aliases,
-                &mut budget,
-            );
-            plan.supports.attach(
-                plan.candidates[index].located,
-                &mut record,
-                &plan.located,
-                &mut supports[doc],
-                &mut budget,
-            );
-            copy_omitted[doc] |= omitted(&record);
-            evidence.push(ScopedExplanationEvidence {
-                document_index: doc,
-                evidence: record,
-            });
+            selection.push((
+                doc,
+                index,
+                u32::try_from(ordinal).expect("bounded candidates"),
+            ));
         }
+    }
+    let page = super::page::materialize(&plans, &selection, &mut budget);
+    let evidence = page.evidence;
+    let mut supports = page.pools;
+    let mut copy_omitted = vec![false; plans.len()];
+    for result in &evidence {
+        copy_omitted[result.document_index] |= omitted(&result.evidence);
     }
     let mut truncation = mant_protocol::ExplanationTruncation::default();
     let documents = plans

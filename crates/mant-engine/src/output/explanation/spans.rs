@@ -2,8 +2,8 @@
 mod markdown;
 use mant_ir::{EntryKind, Inline};
 use mant_protocol::{
-    EvidenceBasis, ExplanationContent, ExplanationEvidence, ExplanationOccurrence,
-    ExplanationTextRoot, InlinePresentation, TextPresentation, TextRole, visit_inline_text,
+    EvidenceBasis, ExplanationEvidence, ExplanationOccurrence, ExplanationTextRoot,
+    InlinePresentation, TextPresentation, TextRole, visit_inline_text,
 };
 use std::{collections::BTreeMap, marker::PhantomData, ops::Range};
 
@@ -18,6 +18,7 @@ struct Span {
 #[derive(Default)]
 pub(crate) struct LocatedStyles<'a> {
     roots: BTreeMap<(u8, usize), Vec<Span>>,
+    names: mant_protocol::EntryStyleMap<'a>,
     lifetime: PhantomData<&'a ExplanationEvidence>,
 }
 
@@ -30,6 +31,12 @@ fn key(root: ExplanationTextRoot<'_>) -> (u8, usize) {
 
 impl<'a> LocatedStyles<'a> {
     pub(super) fn new(evidence: &'a ExplanationEvidence) -> Self {
+        Self::with_pool(evidence, &[])
+    }
+    pub(super) fn with_pool(
+        evidence: &'a ExplanationEvidence,
+        pool: &'a [mant_protocol::ExplanationSupport],
+    ) -> Self {
         let mut map = Self::default();
         let mut remaining = mant_protocol::MAX_EXPLANATION_POSITIONS;
         if let Some(entry) = &evidence.entry {
@@ -46,6 +53,7 @@ impl<'a> LocatedStyles<'a> {
                     {
                         map.occurrence(
                             evidence,
+                            pool,
                             occurrence,
                             Some(entry.kind),
                             false,
@@ -80,12 +88,10 @@ impl<'a> LocatedStyles<'a> {
                 _ => continue,
             };
             for occurrence in occurrences {
-                map.occurrence(evidence, occurrence, None, true, &mut remaining);
+                map.occurrence(evidence, pool, occurrence, None, true, &mut remaining);
             }
         }
-        if let Some(ExplanationContent::Entry { block } | ExplanationContent::Block { block }) =
-            &evidence.content
-        {
+        if let Some(content) = &evidence.content {
             for preview in &evidence.previews {
                 let ranges = &preview.content_ranges;
                 if ranges.len() > remaining
@@ -95,7 +101,7 @@ impl<'a> LocatedStyles<'a> {
                 }
                 let resolved = ranges
                     .iter()
-                    .map(|r| Some((r.resolve(block)?, r.char_range())))
+                    .map(|r| Some((content.resolve_range(pool, r)?, r.char_range())))
                     .collect::<Option<Vec<_>>>();
                 if let Some(resolved) = resolved {
                     remaining -= resolved.len();
@@ -110,6 +116,29 @@ impl<'a> LocatedStyles<'a> {
                         );
                     }
                 }
+            }
+        }
+        map.normalize();
+        map
+    }
+
+    pub(super) fn for_support(
+        block: &'a mant_ir::Block,
+        records: impl Iterator<
+            Item = (
+                &'a ExplanationEvidence,
+                &'a [mant_protocol::ExplanationSupport],
+            ),
+        >,
+    ) -> Self {
+        let mut map = Self {
+            names: mant_protocol::EntryStyleMap::for_blocks(std::slice::from_ref(block)),
+            ..Self::default()
+        };
+        for (evidence, pool) in records {
+            let other = Self::with_pool(evidence, pool);
+            for (root, spans) in other.roots {
+                map.roots.entry(root).or_default().extend(spans);
             }
         }
         map.normalize();
@@ -150,6 +179,7 @@ impl<'a> LocatedStyles<'a> {
     fn occurrence(
         &mut self,
         evidence: &'a ExplanationEvidence,
+        pool: &'a [mant_protocol::ExplanationSupport],
         occurrence: &ExplanationOccurrence,
         kind: Option<EntryKind>,
         matched: bool,
@@ -184,15 +214,14 @@ impl<'a> LocatedStyles<'a> {
                 }
             }
         }
-        if let Some(ExplanationContent::Entry { block } | ExplanationContent::Block { block }) =
-            &evidence.content
+        if let Some(content) = &evidence.content
             && occurrence.content.len() <= limit
             && occurrence.content.len() <= *remaining
         {
             let resolved = occurrence
                 .content
                 .iter()
-                .map(|r| Some((r.resolve(block)?, r.char_range())))
+                .map(|r| Some((content.resolve_range(pool, r)?, r.char_range())))
                 .collect::<Option<Vec<_>>>();
             if let Some(resolved) = resolved {
                 *remaining -= resolved.len();
@@ -226,7 +255,7 @@ impl<'a> LocatedStyles<'a> {
             .map_or(&[][..], Vec::as_slice);
         let mut cursor = 0;
         let mut output = String::new();
-        visit_inline_text(nodes, &[], |inline, _, text| {
+        visit_inline_text(nodes, self.names.ranges(nodes), |inline, _, text| {
             pieces(
                 text,
                 &mut cursor,
@@ -282,7 +311,7 @@ fn pieces(
         let index = spans.partition_point(|span| span.chars.end <= *cursor);
         if let Some(span) = spans.get(index).filter(|span| span.chars.contains(cursor)) {
             next.matched = span.matched;
-            next.inline.entry_kind = span.kind;
+            next.inline.entry_kind = span.kind.or(next.inline.entry_kind);
         }
         if next != style {
             if offset > start {

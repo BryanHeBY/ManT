@@ -6,6 +6,7 @@ pub use location::resolve_explanation_block;
 mod details;
 mod matches;
 mod materialize;
+mod page;
 mod plan;
 mod positions;
 mod preview;

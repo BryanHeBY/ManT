@@ -271,6 +271,16 @@ impl ExplanationEvidence {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "kind", rename_all = "kebab-case", deny_unknown_fields)]
 pub enum ExplanationContent {
+    /// Original owner already present in the document-local support pool.
+    /// Positions remain owner-local (outer item zero), resolved through this
+    /// reference rather than reinterpreted against the whole group.
+    DeclarationMember {
+        /// Index in the containing document response's support pool.
+        support: usize,
+        /// Zero-based member in the returned group, not the original list.
+        #[serde(rename = "itemIndex")]
+        item_index: usize,
+    },
     /// One original entry in a single-item list retaining its numbering/layout.
     Entry {
         /// Complete original owner, including independently addressable children.
@@ -284,7 +294,7 @@ pub enum ExplanationContent {
 }
 
 /// One readable document's independently collected explanation evidence.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 #[schemars(extend("$id" = "urn:mant:explanation:v0.11"))]
 pub struct QueryExplanation {
@@ -336,4 +346,43 @@ pub struct ExplanationTruncation {
     pub relations: bool,
     /// Some selected body, details or previews were omitted by the copy budget.
     pub content: bool,
+}
+
+// Remote derive keeps the public schema closed while validating cross-field
+// references after structural decoding, without a JSON intermediate tree.
+#[derive(Deserialize)]
+#[serde(
+    remote = "QueryExplanation",
+    rename_all = "camelCase",
+    deny_unknown_fields
+)]
+struct QueryExplanationWire {
+    pub supports: Vec<ExplanationSupport>,
+    pub order: EvidenceOrder,
+    pub counts: EvidenceCounts,
+    pub schema: ExplanationSchema,
+    pub query: ExplanationQuery,
+    pub label: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub address: Option<DocumentAddress>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub producer: Option<Producer>,
+    pub outcome: ExplanationOutcome,
+    pub total: u32,
+    pub returned: u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub next_offset: Option<u32>,
+    pub truncation: ExplanationTruncation,
+    pub semantics_complete: bool,
+    pub diagnostics: Vec<Diagnostic>,
+    pub evidence: Vec<ExplanationEvidence>,
+}
+impl<'de> Deserialize<'de> for QueryExplanation {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let value = QueryExplanationWire::deserialize(deserializer)?;
+        value
+            .validate_references()
+            .map_err(serde::de::Error::custom)?;
+        Ok(value)
+    }
 }

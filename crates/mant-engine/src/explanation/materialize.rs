@@ -17,30 +17,25 @@ pub(super) fn response(
     let total = u32::try_from(plan.candidates.len()).expect("bounded candidates");
     let mut counts = mant_protocol::EvidenceCounts::default();
     let mut budget = Budget(query.options.content_bytes as usize);
-    let mut evidence = Vec::new();
-    let mut supports = super::support::Pool::default();
+    let mut selection = Vec::new();
     for (ordinal, candidate) in plan.candidates.iter().enumerate() {
         let selected = ordinal >= query.options.offset as usize
-            && evidence.len() < query.options.limit as usize;
+            && selection.len() < query.options.limit as usize;
         counts.record(candidate.class(), selected);
         if selected {
-            let mut record = materialize(
+            selection.push((
+                0,
+                ordinal,
                 u32::try_from(ordinal).expect("bounded candidates"),
-                candidate,
-                &plan.located,
-                &plan.rejected_aliases,
-                &mut budget,
-            );
-            plan.supports.attach(
-                candidate.located,
-                &mut record,
-                &plan.located,
-                &mut supports,
-                &mut budget,
-            );
-            evidence.push(record);
+            ));
         }
     }
+    let mut page = super::page::materialize(std::slice::from_ref(&plan), &selection, &mut budget);
+    let evidence = page
+        .evidence
+        .into_iter()
+        .map(|e| e.evidence)
+        .collect::<Vec<_>>();
     let returned = u32::try_from(evidence.len()).expect("bounded result page");
     let end = query.options.offset.saturating_add(returned);
     let mut truncation = plan.truncation;
@@ -51,7 +46,7 @@ pub(super) fn response(
         .saturating_sub(u32::try_from(budget.0).expect("bounded copy budget"));
     (
         QueryExplanation {
-            supports: supports.values,
+            supports: std::mem::take(&mut page.pools[0].values),
             schema: ExplanationSchema::V0Dot11,
             order: mant_protocol::EvidenceOrder::ClassThenSource,
             counts,
@@ -87,11 +82,10 @@ pub(super) fn omitted(evidence: &ExplanationEvidence) -> bool {
     evidence.has_omitted_content()
 }
 
-pub(super) fn materialize(
+pub(super) fn prepare(
     ordinal: u32,
     candidate: &Candidate<'_>,
     located: &[LocatedNode<'_>],
-    rejected_aliases: &std::collections::BTreeSet<mant_ir::NodeId>,
     budget: &mut Budget,
 ) -> ExplanationEvidence {
     let node = candidate.located.or(candidate.section).map(|i| &located[i]);
@@ -99,7 +93,42 @@ pub(super) fn materialize(
     let owner = candidate
         .located
         .and_then(|index| super::owner(&located[index]));
-    let (mut bases, mut match_details_omitted) = super::details::matched(candidate, owner, budget);
+    let (bases, match_details_omitted) = super::details::matched(candidate, owner, budget);
+    ExplanationEvidence {
+        support: None,
+        support_omitted: false,
+        class: candidate.class(),
+        ordinal,
+        outline,
+        block_path: candidate.block_path.clone(),
+        source: candidate.source,
+        bases,
+        entry: None,
+        previews: Vec::new(),
+        previews_omitted: false,
+        details_omitted: false,
+        match_details_omitted,
+        name_bindings_omitted: false,
+        content_omitted: false,
+        content: None,
+    }
+}
+
+pub(super) fn materialize(
+    record: &mut ExplanationEvidence,
+    candidate: &Candidate<'_>,
+    located: &[LocatedNode<'_>],
+    rejected_aliases: &std::collections::BTreeSet<mant_ir::NodeId>,
+    budget: &mut Budget,
+) {
+    let owner = candidate
+        .located
+        .and_then(|index| super::owner(&located[index]));
+    let mut bases = std::mem::take(&mut record.bases);
+    let mut match_details_omitted = record.match_details_omitted;
+    // Page facts were reserved before any optional payload. References keep
+    // owner-local positions while avoiding a second copy of the group body.
+    let content = record.content.take();
     let mut entry = owner.and_then(|owner| super::details::entry(owner, rejected_aliases, budget));
     let details_omitted = owner.is_some() && entry.is_none();
     let mut name_bindings_omitted = false;
@@ -127,7 +156,6 @@ pub(super) fn materialize(
             previews_omitted = true;
         }
     }
-    let content = copy_body(candidate, located, budget);
     // Reserve and accept the complete body before committing any reference to
     // it. Optional complete location domains consume only the remaining budget;
     // no rollback/retry can leave a reference to a body that was later dropped.
@@ -164,23 +192,25 @@ pub(super) fn materialize(
             }
         }
     }
-    ExplanationEvidence {
-        support: None,
-        support_omitted: false,
-        class: candidate.class(),
-        ordinal,
-        outline,
-        block_path: candidate.block_path.clone(),
-        source: candidate.source,
-        bases,
-        entry,
-        previews,
-        previews_omitted,
-        details_omitted,
-        match_details_omitted,
-        name_bindings_omitted,
-        content_omitted: content.is_none(),
-        content,
+    record.bases = bases;
+    record.entry = entry;
+    record.previews = previews;
+    record.previews_omitted = previews_omitted;
+    record.details_omitted = details_omitted;
+    record.match_details_omitted = match_details_omitted;
+    record.name_bindings_omitted = name_bindings_omitted;
+    record.content_omitted = content.is_none();
+    record.content = content;
+}
+
+pub(super) fn body(
+    record: &mut ExplanationEvidence,
+    candidate: &Candidate<'_>,
+    located: &[LocatedNode<'_>],
+    budget: &mut Budget,
+) {
+    if record.content.is_none() {
+        record.content = copy_body(candidate, located, budget);
     }
 }
 
@@ -274,6 +304,9 @@ fn root_trail() -> OutlineTrail {
 
 pub(super) struct Budget(pub usize);
 impl Budget {
+    pub(super) fn fits(&self, value: &impl serde::Serialize) -> bool {
+        Self::size(value, self.0).is_some()
+    }
     pub(super) fn take_growth(
         &mut self,
         old: &impl serde::Serialize,

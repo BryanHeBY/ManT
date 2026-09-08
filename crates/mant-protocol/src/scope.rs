@@ -447,7 +447,7 @@ pub enum ScopeQueryResult {
 
 /// Global evidence page over a resolved scope. Source loading failures/frontier
 /// remain in `ScopeQueryResponse.scope`, independently of this normal outcome.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ScopeExplanation {
     /// Normative global category/BFS/source ordering.
@@ -486,4 +486,36 @@ pub struct ScopeQueryResponse {
     pub scope: ResolvedDocumentScope,
     /// Requested projection over that graph.
     pub result: ScopeQueryResult,
+}
+
+// Remote derive keeps the public schema closed while validating cross-field
+// references after structural decoding, without a JSON intermediate tree.
+#[derive(Deserialize)]
+#[serde(
+    remote = "ScopeExplanation",
+    rename_all = "camelCase",
+    deny_unknown_fields
+)]
+struct ScopeExplanationWire {
+    pub order: crate::EvidenceOrder,
+    pub counts: crate::EvidenceCounts,
+    pub query: crate::ExplanationQuery,
+    pub outcome: crate::ExplanationOutcome,
+    pub total: u32,
+    pub returned: u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub next_offset: Option<u32>,
+    pub truncation: crate::ExplanationTruncation,
+    pub documents: Vec<ScopedExplanation>,
+    pub evidence: Vec<ScopedExplanationEvidence>,
+    pub failures: Vec<ScopedQueryFailure>,
+}
+impl<'de> Deserialize<'de> for ScopeExplanation {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let value = ScopeExplanationWire::deserialize(deserializer)?;
+        value
+            .validate_references()
+            .map_err(serde::de::Error::custom)?;
+        Ok(value)
+    }
 }

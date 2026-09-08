@@ -73,9 +73,10 @@ impl Report<'_> {
             ),
         >,
     ) {
+        let records = records.collect::<Vec<_>>();
         let mut previous = None;
         let mut displayed = std::collections::HashSet::new();
-        for (e, address, supports) in records {
+        for &(e, address, supports) in &records {
             if previous == Some(e.class) {
                 write!(
                     output,
@@ -103,7 +104,8 @@ impl Report<'_> {
                 .expect("String writer");
             }
             previous = Some(e.class);
-            self.owner(output, e, address);
+            let covered = e.covered_by_support(supports);
+            self.owner(output, e, address, covered);
             if let Some(support) = e.support.and_then(|index| supports.get(index)) {
                 if displayed.insert(std::ptr::from_ref(support) as usize) {
                     let mant_protocol::ExplanationSupport::DeclarationGroup {
@@ -114,7 +116,14 @@ impl Report<'_> {
                         TextRole::Metadata,
                         "Declaration-group context (recovered from consecutive declarations):",
                     );
-                    let locations = spans::LocatedStyles::default();
+                    let locations = spans::LocatedStyles::for_support(
+                        block,
+                        records.iter().filter_map(|&(other, _, pool)| {
+                            let context = other.support.and_then(|index| pool.get(index))?;
+                            (std::ptr::eq(context, support) && other.covered_by_support(pool))
+                                .then_some((other, pool))
+                        }),
+                    );
                     let text = if self.markdown {
                         super::super::markdown::blocks::render_located_blocks(
                             std::slice::from_ref(block),
@@ -145,7 +154,10 @@ impl Report<'_> {
                     self.line(
                         output,
                         TextRole::Metadata,
-                        "Declaration-group context: see the group already displayed above.",
+                        &format!(
+                            "Declaration-group context: see support {} displayed above.",
+                            e.support.expect("resolved reference")
+                        ),
                     );
                 }
             } else if e.support_omitted {
@@ -157,7 +169,13 @@ impl Report<'_> {
             }
         }
     }
-    fn owner(&self, output: &mut String, e: &ExplanationEvidence, address: Option<&str>) {
+    fn owner(
+        &self,
+        output: &mut String,
+        e: &ExplanationEvidence,
+        address: Option<&str>,
+        covered: bool,
+    ) {
         let locations = spans::LocatedStyles::new(e);
         write!(
             output,
@@ -204,8 +222,10 @@ impl Report<'_> {
             TextRole::Metadata,
             &format!("Matched by: {}", metadata::bases(e)),
         );
-        self.details(output, e, &locations);
-        self.body(output, e, &locations);
+        self.details(output, e, &locations, covered);
+        if !covered {
+            self.body(output, e, &locations);
+        }
         output.push('\n');
         self.line(
             output,
@@ -225,9 +245,11 @@ impl Report<'_> {
         output: &mut String,
         evidence: &ExplanationEvidence,
         locations: &spans::LocatedStyles<'_>,
+        covered: bool,
     ) {
         let Some(entry) = &evidence.entry else { return };
-        if !entry.forms.is_empty()
+        if !covered
+            && !entry.forms.is_empty()
             && !DefinitionDisplay::new(evidence).is_some_and(|body| body.includes_forms())
         {
             self.line(output, TextRole::Metadata, "Forms:");

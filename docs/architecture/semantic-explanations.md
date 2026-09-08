@@ -162,12 +162,24 @@ Literal collection retains the actual matched block and range. Materialization
 copies at most two representative windows, at most 1024 Unicode scalars each,
 preserving a complete query match. `resolve_explanation_block` resolves their
 absolute final-IR paths; source spans belong to the matched block, not the
-whole entry. Safe text projection precedes scalar-range calculation. Facts,
-windows and atomic original body consume the same budget, in that order;
+whole entry. Safe text projection precedes scalar-range calculation. All page
+direct-match facts are reserved first, followed by direct bodies and necessary
+declaration-group contexts, then optional metadata/windows and weaker evidence.
+These payloads consume one shared serialized-byte budget;
 window clipping and budget omission remain independent. Text/Markdown/MCP
 render full direct/related content but only preview windows for mentions.
 For example, GCC's `-Q` can mention `--help` without becoming its alias or
 another direct definition. This does not mutate the full document renderer.
+
+`content.kind: declaration-member` refers to a member of the document-local
+`supports` pool. The original group body is copied once, including all heads,
+tables, examples and the final member's description. The reference resolves
+owner-local positions (outer item zero) into the actual returned member; it does
+not change the physical owner, aliases or scope. Decoding rejects invalid pool,
+member, identity and position references. An unavailable context sets
+`supportOmitted` and overall content truncation, rather than claiming that the
+source contains no explanation. Pool and group sizes are bounded by the page
+owner limit; repeated references do not retry a group that failed the budget.
 
 Validation findings, available source coverage, result truncation and unknown
 fields are separate dimensions. Neither `semanticsComplete` nor a clean audit

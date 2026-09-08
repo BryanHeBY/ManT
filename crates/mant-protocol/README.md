@@ -1,5 +1,11 @@
 # mant-protocol
 
+Explanation pages share original declaration contexts in a document-local
+support pool. `ExplanationContent::DeclarationMember` references one physical
+member without copying its body a second time. `resolve_range` retains the
+owner-local coordinate contract, while response decoding validates pool, owner
+and position references. Context is neither an alias nor another query match.
+
 Explanation responses can carry a page-local `supports` pool. A direct
 evidence owner's optional `support` index refers to a recovered
 `declaration-group`, containing the original heads and the final member's

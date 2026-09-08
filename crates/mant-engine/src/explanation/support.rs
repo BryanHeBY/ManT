@@ -74,28 +74,56 @@ impl<'a> SupportIndex<'a> {
             return;
         };
         if let Some(&reference) = pool.copied.get(&index) {
-            if budget.take(&reference) {
+            let content = mant_protocol::ExplanationContent::DeclarationMember {
+                support: reference,
+                item_index: group_member(&self.groups[index], owner),
+            };
+            if budget.take(&(reference, &content)) {
                 evidence.support = Some(reference);
+                evidence.content = Some(content);
             } else {
                 evidence.support_omitted = true;
             }
             return;
         }
         let group = &self.groups[index];
+        if pool.failed.contains(&index) {
+            evidence.support_omitted = true;
+            return;
+        }
         let reference = pool.values.len();
+        let content = mant_protocol::ExplanationContent::DeclarationMember {
+            support: reference,
+            item_index: group_member(group, owner),
+        };
+        if !budget.take(&content) {
+            evidence.support_omitted = true;
+            return;
+        }
         if let Some(value) = group.copy(located, budget, reference) {
             pool.values.push(value);
             pool.copied.insert(index, reference);
             evidence.support = Some(reference);
+            evidence.content = Some(content);
         } else {
+            pool.failed.insert(index);
             evidence.support_omitted = true;
         }
     }
 }
 
+fn group_member(group: &Group<'_>, owner: Option<usize>) -> usize {
+    group
+        .owners
+        .iter()
+        .position(|&member| Some(member) == owner)
+        .expect("indexed group member")
+}
+
 #[derive(Default)]
 pub(super) struct Pool {
     copied: HashMap<usize, usize>,
+    failed: std::collections::HashSet<usize>,
     pub values: Vec<ExplanationSupport>,
 }
 
@@ -145,8 +173,28 @@ impl Group<'_> {
         let members = self
             .owners
             .iter()
-            .map(|&i| trail(&located[i]))
-            .collect::<Vec<_>>();
+            .map(|&i| {
+                let LocatedNode::Entry {
+                    title,
+                    breadcrumbs,
+                    entry,
+                    ..
+                } = &located[i]
+                else {
+                    return None;
+                };
+                // Check borrowed string payloads before cloning a member trail.
+                // The complete serialized support below accounts for all field
+                // names, paths, metadata and array framing before body copying.
+                let ancestors = breadcrumbs
+                    .iter()
+                    .map(|b| (&b.id, &b.title))
+                    .collect::<Vec<_>>();
+                budget
+                    .fits(&(title, entry.names, ancestors))
+                    .then(|| trail(&located[i]))
+            })
+            .collect::<Option<Vec<_>>>()?;
         let rebased = DeclarationGroup {
             start_item: 0,
             end_item: items.len(),

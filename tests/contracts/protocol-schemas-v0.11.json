@@ -4380,6 +4380,34 @@
         "description": "Original content copied for one evidence owner, not a navigation selection.",
         "oneOf": [
           {
+            "description": "Original owner already present in the document-local support pool.\nPositions remain owner-local (outer item zero), resolved through this\nreference rather than reinterpreted against the whole group.",
+            "type": "object",
+            "properties": {
+              "itemIndex": {
+                "description": "Zero-based member in the returned group, not the original list.",
+                "type": "integer",
+                "format": "uint",
+                "minimum": 0
+              },
+              "kind": {
+                "type": "string",
+                "const": "declaration-member"
+              },
+              "support": {
+                "description": "Index in the containing document response's support pool.",
+                "type": "integer",
+                "format": "uint",
+                "minimum": 0
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "support",
+              "itemIndex"
+            ]
+          },
+          {
             "description": "One original entry in a single-item list retaining its numbering/layout.",
             "type": "object",
             "properties": {
@@ -11308,6 +11336,34 @@
       "ExplanationContent": {
         "description": "Original content copied for one evidence owner, not a navigation selection.",
         "oneOf": [
+          {
+            "description": "Original owner already present in the document-local support pool.\nPositions remain owner-local (outer item zero), resolved through this\nreference rather than reinterpreted against the whole group.",
+            "type": "object",
+            "properties": {
+              "itemIndex": {
+                "description": "Zero-based member in the returned group, not the original list.",
+                "type": "integer",
+                "format": "uint",
+                "minimum": 0
+              },
+              "kind": {
+                "type": "string",
+                "const": "declaration-member"
+              },
+              "support": {
+                "description": "Index in the containing document response's support pool.",
+                "type": "integer",
+                "format": "uint",
+                "minimum": 0
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "support",
+              "itemIndex"
+            ]
+          },
           {
             "description": "One original entry in a single-item list retaining its numbering/layout.",
             "type": "object",

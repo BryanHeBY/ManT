@@ -16,7 +16,10 @@ impl<'a> DefinitionDisplay<'a> {
             return None;
         }
         let content = evidence.content.as_ref()?;
-        let (ExplanationContent::Entry { block } | ExplanationContent::Block { block }) = content;
+        let (ExplanationContent::Entry { block } | ExplanationContent::Block { block }) = content
+        else {
+            return None;
+        };
         let owner = if evidence.content_omitted
             || !matches!(content, ExplanationContent::Entry { .. })
         {
