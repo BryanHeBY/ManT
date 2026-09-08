@@ -154,11 +154,11 @@ fn scope_supports_are_document_local_even_when_node_ids_coincide() {
             outcome: r.outcome,
             total: r.total,
             returned: r.returned,
-            counts: r.counts.clone(),
+            counts: r.counts,
             truncation: r.truncation,
         })
         .collect();
-    let mut counts = first.counts.clone();
+    let mut counts = first.counts;
     counts.direct_entry.total = 2;
     counts.direct_entry.returned = 2;
     let result = ScopeExplanation {

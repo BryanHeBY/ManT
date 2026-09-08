@@ -476,6 +476,50 @@ fn partial_query_text_is_colored_only_when_the_stream_policy_allows_it() {
 }
 
 #[test]
+fn one_owner_explanation_page_keeps_its_context_in_every_cli_format() {
+    let source = b".TH PROBE 1\n.SH OPTIONS\n.TP\n.B --first\n.TP\n.B --second\nOnly the second changes output.\n";
+    for format in ["text", "markdown", "json"] {
+        let mut child = Command::new(executable())
+            .args([
+                "--input",
+                "-",
+                "--input-format",
+                "roff",
+                "--explain=--first",
+                "--limit",
+                "1",
+                "--format",
+                format,
+            ])
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .unwrap();
+        child.stdin.take().unwrap().write_all(source).unwrap();
+        let output = child.wait_with_output().unwrap();
+        assert!(output.status.success(), "{output:?}");
+        assert!(output.stderr.is_empty(), "{output:?}");
+        let text = String::from_utf8(output.stdout).unwrap();
+        assert!(text.contains("Only the second changes output"), "{text}");
+        if format == "json" {
+            let response: mant_protocol::QueryExplanation = serde_json::from_str(&text).unwrap();
+            assert_eq!(response.counts.direct_entry.returned, 1);
+            assert_eq!(response.supports.len(), 1);
+            assert!(response.evidence[0].covered_by_support(&response.supports));
+        } else {
+            let heading = if format == "markdown" {
+                "Declaration\\-group context"
+            } else {
+                "Declaration-group context"
+            };
+            assert!(text.contains(heading), "{text}");
+            assert!(!text.contains("no independent description"), "{text}");
+        }
+    }
+}
+
+#[test]
 fn regex_search_rejects_patterns_that_can_split_utf8_characters() {
     let path =
         std::env::temp_dir().join(format!("mant-utf8-regex-process-{}.md", std::process::id()));

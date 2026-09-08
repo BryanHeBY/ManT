@@ -74,6 +74,20 @@ fn paragraph_boundary(node: &Node) -> bool {
         .any(paragraph_boundary)
 }
 
+fn bracket_head(node: &Node) -> bool {
+    fn first_text(node: &Node) -> Option<&str> {
+        node.text
+            .as_deref()
+            .filter(|text| !text.trim().is_empty())
+            .or_else(|| node.children.iter().find_map(first_text))
+    }
+    node.children
+        .iter()
+        .find(|n| n.kind == NodeKind::Head)
+        .and_then(first_text)
+        .is_some_and(|text| text.trim_start().starts_with('['))
+}
+
 struct Audit<'a> {
     observed: Observed<'a>,
     rows: Vec<Value>,
@@ -139,6 +153,27 @@ impl Audit<'_> {
             if child.kind == NodeKind::Block
                 && matches!(child.macro_name.as_deref(), Some("IP" | "TP" | "TQ" | "It"))
             {
+                // A source-only parameter continuation cannot connect the
+                // declarations before and after it. A literal named `[` (test)
+                // is protected by its actual name facts, not this punctuation.
+                let parameter = bracket_head(child)
+                    && self
+                        .observed
+                        .owners
+                        .get(&(child.line, child.column))
+                        .is_some_and(|item| {
+                            item.entry
+                                .as_ref()
+                                .is_none_or(|facts| facts.names.is_empty())
+                        });
+                if parameter {
+                    self.classify(&run, "parameter-only-head-boundary");
+                    run.clear();
+                    self.classify(&[(child, path.clone())], "parameter-only-head");
+                    self.walk(child, path);
+                    path.pop();
+                    continue;
+                }
                 run.push((child, path.clone()));
                 if body(child) {
                     if run.len() > 1 {
@@ -204,6 +239,40 @@ pub(super) fn violations(profile: &Value) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn parameter_continuation_separates_runs_without_hiding_crossing_groups() {
+        let source = b".TH PROBE 1\n.SH COMMANDS\n.TP\n.B first\n.TP\n[ argument ]\n.TP\n.B second\n.TP\n.B third\nBody.\n";
+        let parsed = libmandoc_rs::Parser::new(Default::default())
+            .parse_bytes("probe.1", source)
+            .unwrap();
+        let mut document = mant_engine::query_roff_bytes(source)
+            .unwrap()
+            .document
+            .unwrap();
+        let valid = profile(&parsed.document.root, &document);
+        assert_eq!(valid["unexpectedGroups"], json!([]));
+        assert!(
+            valid["sourceRuns"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|r| r["reason"] == "parameter-only-head")
+        );
+        let Block::DefinitionList {
+            declaration_groups, ..
+        } = &mut document.sections[0].blocks[0]
+        else {
+            panic!()
+        };
+        declaration_groups[0].start_item = 0;
+        assert_eq!(
+            profile(&parsed.document.root, &document)["unexpectedGroups"]
+                .as_array()
+                .unwrap()
+                .len(),
+            1
+        );
+    }
     #[test]
     fn accounting_detects_missing_and_unbacked_groups_in_both_directions() {
         let source = b".TH PROBE 1\n.SH OPTIONS\n.TP\n.B --first\n.TP\n.B --second\nBody.\n";
