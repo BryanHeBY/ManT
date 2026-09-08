@@ -6,6 +6,7 @@ use crate::inline::plain_text;
 use mant_ir::{DefinitionItem, EntryKind, NameCase, ParameterKind};
 
 mod commands;
+mod declaration;
 mod forms;
 mod named;
 mod options;
@@ -170,7 +171,7 @@ pub(super) fn name_occurrences(
                         return vec![locate(&text, name)];
                     }
                     let mut offset = 0;
-                    forms::alias_groups(term)
+                    forms::declaration_groups(term)
                         .into_iter()
                         .filter_map(|group| {
                             let text = plain_text(&group);

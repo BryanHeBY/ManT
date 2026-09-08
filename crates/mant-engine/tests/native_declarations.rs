@@ -145,3 +145,41 @@ fn explicit_tp_and_ip_bullets_keep_equivalent_rendered_layout() {
     });
     assert_eq!(outputs[0], outputs[1]);
 }
+
+#[test]
+fn parameter_alternations_never_become_declared_command_names() {
+    for (head, expected) in [
+        (
+            r"\fBset \fP[ {\fB+\fP|\fB\-\fP}\fIoptions\fP | {\fB+\fP|\fB\-\fP}\fBo\fP [ \fIoption_name\fP ] ]",
+            "set",
+        ),
+        (
+            r"\fBsnapshot\fP <source> <dest>|[<dest>/]<name>",
+            "snapshot",
+        ),
+        (r"\fBresize\fP [<devid>:]max|<size>", "resize"),
+        (r"\fBshow\fP <path>|<uuid>", "show"),
+        (r"\fB[\fP", "["),
+        (r"\fB.\fP", "."),
+        (r"\fB:\fP", ":"),
+    ] {
+        let source = format!(".TH PROBE 1\n.SH COMMANDS\n.TP\n{head}\nBODY\n");
+        let query = mant_engine::query_roff_bytes(source.as_bytes()).unwrap();
+        let document = query.document.as_ref().unwrap();
+        assert!(mant_ir::validate_document(document).is_empty());
+        let items = definitions(document);
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].entry.as_ref().unwrap().names, [expected], "{head}");
+        for fake in ["{+", "<uuid>", "[<dest>/]<name>"] {
+            let result = mant_engine::explain_query(
+                &query,
+                &ExplanationQuery {
+                    entry: fake.into(),
+                    options: ExplanationOptions::default(),
+                },
+            )
+            .unwrap();
+            assert_eq!(result.counts.direct_entry.total, 0, "{fake}: {head}");
+        }
+    }
+}

@@ -1,4 +1,5 @@
-//! Keep alias separators and parameter styling distinct until name extraction.
+//! Keep declaration separators and parameter styling distinct until extraction.
+use super::declaration::DeclarationState;
 use mant_ir::Inline;
 
 use crate::inline::plain_text;
@@ -78,18 +79,23 @@ fn append_name_prefix(nodes: &[Inline], output: &mut String) -> bool {
     true
 }
 
-/// Split explicit alias separators without flattening argument spans. A generic
-/// strong/code run can contain several names, whereas punctuation inside an
-/// emphasized argument is not evidence for another alias.
-pub(super) fn alias_groups(term: &[Inline]) -> Vec<Vec<Inline>> {
-    split_groups(term, &[',', '|'], &mut None)
+/// Split complete declarations without flattening parameter spans. Bracket
+/// nesting and local argument phases survive strong/link wrapper boundaries;
+/// punctuation inside an argument is not a fresh declaration.
+pub(super) fn declaration_groups(term: &[Inline]) -> Vec<Vec<Inline>> {
+    split_groups(
+        term,
+        &[',', '|'],
+        &mut None,
+        &mut DeclarationState::new(plain_text(term), term),
+    )
 }
 
 /// Slashes only separate the invocation token after its option grammar has
 /// been validated. Keep candidate trees intact so each candidate still passes
 /// the parameter check; never split argument paths later in the form.
 fn option_alias_groups(term: &[Inline]) -> Vec<Vec<Inline>> {
-    alias_groups(term)
+    declaration_groups(term)
         .into_iter()
         .flat_map(|group| {
             let text = plain_text(&group);
@@ -102,7 +108,12 @@ fn option_alias_groups(term: &[Inline]) -> Vec<Vec<Inline>> {
             let Some(start) = text.find(token) else {
                 return vec![group];
             };
-            split_groups(&group, &['/'], &mut Some(start + token.len()))
+            split_groups(
+                &group,
+                &['/'],
+                &mut Some(start + token.len()),
+                &mut DeclarationState::new(text, &group).within_validated_token(),
+            )
         })
         .collect()
 }
@@ -126,12 +137,15 @@ fn split_groups(
     term: &[Inline],
     separators: &[char],
     remaining: &mut Option<usize>,
+    state: &mut DeclarationState,
 ) -> Vec<Vec<Inline>> {
     let mut groups = vec![Vec::new()];
     for inline in term {
         let parts = match inline {
             Inline::Text { value } => value
-                .split(|character| take_separator(character, separators, remaining))
+                .split(|character| {
+                    state.separator(character, take_separator(character, separators, remaining))
+                })
                 .map(|value| {
                     vec![Inline::Text {
                         value: value.into(),
@@ -139,14 +153,16 @@ fn split_groups(
                 })
                 .collect(),
             Inline::Code { value } => value
-                .split(|character| take_separator(character, separators, remaining))
+                .split(|character| {
+                    state.separator(character, take_separator(character, separators, remaining))
+                })
                 .map(|value| {
                     vec![Inline::Code {
                         value: value.into(),
                     }]
                 })
                 .collect(),
-            Inline::Strong { children } => split_groups(children, separators, remaining)
+            Inline::Strong { children } => split_groups(children, separators, remaining, state)
                 .into_iter()
                 .map(|children| vec![Inline::Strong { children }])
                 .collect(),
@@ -154,7 +170,7 @@ fn split_groups(
                 target,
                 title,
                 children,
-            } => split_groups(children, separators, remaining)
+            } => split_groups(children, separators, remaining, state)
                 .into_iter()
                 .map(|children| {
                     vec![Inline::Link {
@@ -165,6 +181,7 @@ fn split_groups(
                 })
                 .collect(),
             _ => {
+                state.opaque(&plain_text(std::slice::from_ref(inline)));
                 if let Some(bytes) = remaining {
                     *bytes = bytes.saturating_sub(plain_text(std::slice::from_ref(inline)).len());
                 }
@@ -212,6 +229,54 @@ fn first_content_is_parameter(term: &[Inline]) -> Option<bool> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn declaration_state_crosses_wrappers_and_bounds_uncertain_nesting() {
+        let text = |value: &str| Inline::Text {
+            value: value.into(),
+        };
+        let link = |children| Inline::Link {
+            target: mant_ir::LinkTarget::External {
+                uri: "https://example.invalid/".into(),
+            },
+            title: None,
+            children,
+        };
+        for parameter in ["[a|b]", "{+|-}", "<日本,名前>", "[a|b", "a] | b"] {
+            let term = vec![
+                Inline::Strong {
+                    children: vec![text("set ")],
+                },
+                link(vec![text(parameter)]),
+            ];
+            assert_eq!(declaration_groups(&term), vec![term], "{parameter}");
+        }
+        let deeply_nested = format!("set {}x{} | phantom", "[".repeat(65), "]".repeat(65));
+        let term = vec![text(&deeply_nested)];
+        assert_eq!(declaration_groups(&term), vec![term]);
+
+        let term = vec![
+            text("--界"),
+            Inline::Emphasis {
+                children: vec![link(vec![text("値,--FAKE")])],
+            },
+            text(", --other"),
+        ];
+        let names: Vec<_> = AuthoredForm::new(&term)
+            .option_candidates()
+            .filter_map(|candidate| candidate.invocation_token())
+            .collect();
+        assert_eq!(
+            names,
+            [
+                ("--界".into(), 0),
+                ("--other".into(), "--界値,--FAKE, ".len())
+            ]
+        );
+
+        let term = vec![text("--mode=[a|b], --other")];
+        assert_eq!(declaration_groups(&term).len(), 2);
+    }
 
     #[test]
     fn transparent_links_preserve_separators_and_parameter_ancestry() {
@@ -294,7 +359,7 @@ mod tests {
                 "{term:?}"
             );
             // Option-only slash rules must not leak into command grouping.
-            assert_eq!(alias_groups(&term), vec![term]);
+            assert_eq!(declaration_groups(&term), vec![term]);
         }
     }
 

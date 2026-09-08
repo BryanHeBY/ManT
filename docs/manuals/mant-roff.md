@@ -108,6 +108,8 @@ Option aliases come from invocation names separated by explicit alias punctuatio
 
 Styled command aliases are likewise grouped before separating each command name from its arguments. A single environment assignment retains its complete value, including commas and pipes, but only its variable name becomes a selector. Mixed assignments with unprovable name/value boundaries remain unclassified rather than introducing guessed aliases. Variable subscripts must be completely closed, with no trailing text or repeated brackets.
 
+Declaration grouping preserves bracket nesting and parameter styling across inline wrappers. Commas and pipes inside `[a|b]`, `{+|-}`, or a styled parameter do not create names. A subsequent explicit declaration can resume at a literal separator, such as `-L` followed by an emphasized `dir,--FAKE` and literal `, --library`; only `-L` and `--library` are names. Unclosed or excessively nested syntax is kept as a complete form without guessing additional declarations. Literal shell commands such as `[` remain valid names.
+
 The required mdoc prologue and structural macros are normalized as follows:
 
 | Macros | ManT result |

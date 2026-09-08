@@ -23,6 +23,10 @@ that crate was not published for that change.
 - Complete `TP` tags using named roff bullet escapes now become ordinary list
   items rather than semantic `•` entries. Literal operator definitions remain
   addressable; this is not a global punctuation filter.
+- Declaration separators now respect bracket nesting and styled parameter
+  boundaries across inline wrappers. Argument alternatives no longer introduce
+  spurious command names; explicit subsequent declarations and literal shell
+  operator names remain supported, without rewriting their original forms.
 
 ### Explanation match locations (unreleased v0.11)
 

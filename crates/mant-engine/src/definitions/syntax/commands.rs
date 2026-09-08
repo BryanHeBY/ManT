@@ -45,6 +45,7 @@ pub(in crate::definitions) fn is_command_name(value: &str) -> bool {
     !value.is_empty()
         && !value.chars().any(char::is_control)
         && !value.starts_with(['-', '+', '/'])
+        && (value == "[" || !value.contains(['[', ']', '{', '}', '<', '>', '|', ',']))
         && !value
             .chars()
             .next()
