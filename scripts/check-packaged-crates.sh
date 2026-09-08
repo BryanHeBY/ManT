@@ -5,7 +5,8 @@ set -euo pipefail
 
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 PACKAGES=(mant-ir mant-protocol libmandoc-rs mant-sources mant-engine mant-ui mant)
-PACKAGE_CHECK_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/mant-package-check.XXXXXX")
+mkdir -p "$ROOT/target"
+PACKAGE_CHECK_ROOT=$(mktemp -d "$ROOT/target/mant-package-check.XXXXXX")
 trap 'rm -rf "$PACKAGE_CHECK_ROOT"' EXIT
 
 mkdir -p "$PACKAGE_CHECK_ROOT/crates"
@@ -39,10 +40,10 @@ for package in "${PACKAGES[@]}"; do
   fi
 done
 
-# Each run must compile the just-extracted sources. Reusing one target tree
-# across dirty same-version package checks can retain an artifact built from a
-# previous source set and hide, or invent, an API compatibility failure.
-export CARGO_TARGET_DIR="$PACKAGE_CHECK_ROOT/target"
+# The unique extracted source path invalidates workspace fingerprints even for
+# dirty same-version checks. Keep build products in the repository target tree
+# (not a temporary filesystem); third-party dependency artifacts can be reused.
+export CARGO_TARGET_DIR="$ROOT/target"
 cargo test --manifest-path "$PACKAGE_CHECK_ROOT/Cargo.toml" --locked --workspace
 cargo test --manifest-path "$PACKAGE_CHECK_ROOT/Cargo.toml" --locked \
   --package libmandoc-rs --all-features
