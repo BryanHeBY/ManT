@@ -37,6 +37,7 @@ struct	roff_man {
 	const char	 *os_s;    /* Default operating system. */
 	struct roff_node *last;    /* The last node parsed. */
 	struct roff_node *last_es; /* The most recent Es node. */
+	size_t		  flow_epoch; /* Per-document executed flow generation. */
 	int		  quick;   /* Abort parse early. */
 	int		  flags;   /* Parse flags. */
 	int		  macro_depth; /* Nested mdoc macro calls. */

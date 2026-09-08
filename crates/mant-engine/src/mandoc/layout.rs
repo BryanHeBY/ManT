@@ -275,6 +275,7 @@ mod tests {
             tag: None,
             line: 0,
             column: 0,
+            flow_epoch: 0,
             flags: NodeFlags::default(),
             list_kind: None,
             definition_list_style: None,

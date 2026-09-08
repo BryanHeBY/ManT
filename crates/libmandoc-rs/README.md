@@ -297,6 +297,11 @@ the ordered patches in `patches/series`:
 - `0031-bound-native-tree-lifecycle.patch` stops excessively nested input
   before finalization/validation and frees syntax and equation trees
   iteratively. The shim separately checks both tree depths before rendering.
+- `0032-retain-executed-flow-boundaries.patch` stamps native nodes with a
+  per-document flow generation before empty paragraph validation. Conditional
+  and user-macro execution, not physical source lines, determines whether
+  neighboring declarations have an intervening flow boundary. The owned
+  `Node::flow_epoch` survives parser release without a second interpreter.
 
 - `0001-memory-only-input.patch` adds the buffer-only entry point used on
   Windows and makes `.so` requests without an explicit bundle or strict root

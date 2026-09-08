@@ -1,0 +1,72 @@
+diff --git a/roff.c b/roff.c
+index 8292ed73..ed5a2ea4 100644
+--- a/roff.c
++++ b/roff.c
+@@ -869,6 +869,7 @@ static void
+ roff_man_alloc1(struct roff_man *man)
+ {
+ 	memset(&man->meta, 0, sizeof(man->meta));
++	man->flow_epoch = 0;
+ 	man->meta.first = mandoc_calloc(1, sizeof(*man->meta.first));
+ 	man->meta.first->type = ROFFT_ROOT;
+ 	man->meta.macroset = MACROSET_NONE;
+@@ -917,6 +918,35 @@ roff_node_alloc(struct roff_man *man, int line, int pos,
+ 	n->tok = tok;
+ 	n->type = type;
+ 	n->sec = man->lastsec;
++	/* Allocation follows roff conditional/user-macro execution and precedes
++	 * validation, which can delete an empty paragraph. Stamp actual nodes,
++	 * not physical source lines. HEAD/BODY wrappers share their BLOCK event. */
++	if (type == ROFFT_BLOCK || type == ROFFT_ELEM) {
++		switch (tok) {
++		case MAN_PP:
++		case MAN_P:
++		case MAN_LP:
++		case MAN_RS:
++		case MAN_RE:
++		case MAN_SH:
++		case MAN_SS:
++		case MDOC_Pp:
++		case MDOC_Lp:
++		case MDOC_Bd:
++		case MDOC_Ed:
++		case MDOC_Bl:
++		case MDOC_El:
++		case MDOC_Sh:
++		case MDOC_Ss:
++		case ROFF_sp:
++		case ROFF_br:
++			man->flow_epoch++;
++			break;
++		default:
++			break;
++		}
++	}
++	n->flow_epoch = man->flow_epoch;
+ 
+ 	if (man->flags & MDOC_SYNOPSIS)
+ 		n->flags |= NODE_SYNPRETTY;
+diff --git a/roff.h b/roff.h
+index 369dc67f..4071ec95 100644
+--- a/roff.h
++++ b/roff.h
+@@ -512,6 +512,7 @@ struct	roff_node {
+ 	struct eqn_box	 *eqn;     /* EQN */
+ 	int		  line;    /* Input file line number. */
+ 	int		  pos;     /* Input file column number. */
++	size_t		  flow_epoch; /* Executed flow boundaries at allocation. */
+ 	int		  flags;
+ #define	NODE_VALID	 (1 << 0)  /* Has been validated. */
+ #define	NODE_ENDED	 (1 << 1)  /* Gone past body end mark. */
+diff --git a/roff_int.h b/roff_int.h
+index c2d6615b..2123fdad 100644
+--- a/roff_int.h
++++ b/roff_int.h
+@@ -37,6 +37,7 @@ struct	roff_man {
+ 	const char	 *os_s;    /* Default operating system. */
+ 	struct roff_node *last;    /* The last node parsed. */
+ 	struct roff_node *last_es; /* The most recent Es node. */
++	size_t		  flow_epoch; /* Per-document executed flow generation. */
+ 	int		  quick;   /* Abort parse early. */
+ 	int		  flags;   /* Parse flags. */
+ 	int		  macro_depth; /* Nested mdoc macro calls. */

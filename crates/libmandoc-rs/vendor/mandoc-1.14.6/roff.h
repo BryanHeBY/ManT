@@ -512,6 +512,7 @@ struct	roff_node {
 	struct eqn_box	 *eqn;     /* EQN */
 	int		  line;    /* Input file line number. */
 	int		  pos;     /* Input file column number. */
+	size_t		  flow_epoch; /* Executed flow boundaries at allocation. */
 	int		  flags;
 #define	NODE_VALID	 (1 << 0)  /* Has been validated. */
 #define	NODE_ENDED	 (1 << 1)  /* Gone past body end mark. */

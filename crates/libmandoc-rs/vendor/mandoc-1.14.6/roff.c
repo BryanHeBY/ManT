@@ -869,6 +869,7 @@ static void
 roff_man_alloc1(struct roff_man *man)
 {
 	memset(&man->meta, 0, sizeof(man->meta));
+	man->flow_epoch = 0;
 	man->meta.first = mandoc_calloc(1, sizeof(*man->meta.first));
 	man->meta.first->type = ROFFT_ROOT;
 	man->meta.macroset = MACROSET_NONE;
@@ -917,6 +918,35 @@ roff_node_alloc(struct roff_man *man, int line, int pos,
 	n->tok = tok;
 	n->type = type;
 	n->sec = man->lastsec;
+	/* Allocation follows roff conditional/user-macro execution and precedes
+	 * validation, which can delete an empty paragraph. Stamp actual nodes,
+	 * not physical source lines. HEAD/BODY wrappers share their BLOCK event. */
+	if (type == ROFFT_BLOCK || type == ROFFT_ELEM) {
+		switch (tok) {
+		case MAN_PP:
+		case MAN_P:
+		case MAN_LP:
+		case MAN_RS:
+		case MAN_RE:
+		case MAN_SH:
+		case MAN_SS:
+		case MDOC_Pp:
+		case MDOC_Lp:
+		case MDOC_Bd:
+		case MDOC_Ed:
+		case MDOC_Bl:
+		case MDOC_El:
+		case MDOC_Sh:
+		case MDOC_Ss:
+		case ROFF_sp:
+		case ROFF_br:
+			man->flow_epoch++;
+			break;
+		default:
+			break;
+		}
+	}
+	n->flow_epoch = man->flow_epoch;
 
 	if (man->flags & MDOC_SYNOPSIS)
 		n->flags |= NODE_SYNPRETTY;

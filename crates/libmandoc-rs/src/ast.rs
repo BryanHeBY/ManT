@@ -238,6 +238,14 @@ pub struct Node {
     pub line: u32,
     /// One-based source column reported by libmandoc, or zero when unavailable.
     pub column: u32,
+    /// Per-document generation of executed paragraph/container boundaries.
+    ///
+    /// Recorded when the native node is allocated, after conditionals and
+    /// user macros execute but before empty paragraphs can be removed. Equal
+    /// values on adjacent declaration blocks mean no intervening executed
+    /// flow boundary. This is not a source line or a persistent identity;
+    /// generations are only comparable within the same parse report.
+    pub flow_epoch: usize,
     /// Source and renderer flags attached to the node.
     pub flags: NodeFlags,
     /// Normalized list behavior for an mdoc list block.

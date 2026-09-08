@@ -38,3 +38,4 @@
 0029-avoid-retagging-mdoc-parts.patch
 0030-close-root-element-scope.patch
 0031-bound-native-tree-lifecycle.patch
+0032-retain-executed-flow-boundaries.patch

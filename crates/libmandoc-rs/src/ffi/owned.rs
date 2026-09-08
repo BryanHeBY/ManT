@@ -198,6 +198,7 @@ unsafe fn copy_node(
         tag: unsafe { visible_string(view.tag) },
         line: view.line.try_into().unwrap_or_default(),
         column: view.column.try_into().unwrap_or_default(),
+        flow_epoch: view.flow_epoch,
         flags: NodeFlags {
             generated: view.flags & NODE_GENERATED != 0,
             sentence_end: view.flags & NODE_SENTENCE_END != 0,

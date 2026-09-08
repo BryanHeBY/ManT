@@ -1452,6 +1452,7 @@ mant_mandoc_node_snapshot(struct mant_mandoc_document *document,
 	view->tag = source->tag;
 	view->line = source->line;
 	view->column = source->pos + 1;
+	view->flow_epoch = source->flow_epoch;
 	view->flags = snapshot_node_flags(source);
 	snapshot_normalized_data(view, source);
 	if (source->type == ROFFT_TBL && source->span != NULL &&
