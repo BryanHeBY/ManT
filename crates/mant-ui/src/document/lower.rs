@@ -17,6 +17,7 @@ pub(super) struct DocumentBuilder<'a> {
     pub(super) lines: Vec<LogicalLine>,
     pub(super) navigation: Vec<NavNode>,
     pub(super) anchors: HashMap<String, usize>,
+    pending_anchors: Vec<String>,
     pending_gap: mant_protocol::geometry::GapPlan,
 }
 
@@ -33,7 +34,10 @@ pub(super) struct BuiltDocument {
 }
 
 impl DocumentBuilder<'_> {
-    pub(super) fn finish(self) -> BuiltDocument {
+    pub(super) fn finish(mut self) -> BuiltDocument {
+        // No source content follows these targets. Keep the end-of-document
+        // sentinel rather than inventing a visible row or landing in a gap.
+        self.resolve_pending_anchors();
         BuiltDocument {
             label: self.label,
             navigation: self.navigation,
@@ -51,13 +55,25 @@ impl DocumentBuilder<'_> {
             lines: Vec::new(),
             navigation: Vec::new(),
             anchors: HashMap::new(),
+            pending_anchors: Vec::new(),
             pending_gap: mant_protocol::geometry::GapPlan::default(),
         }
     }
 
     pub(super) fn push(&mut self, line: LogicalLine) {
+        self.resolve_pending_anchors();
         self.pending_gap = mant_protocol::geometry::GapPlan::default();
         self.lines.push(line);
+    }
+
+    fn resolve_pending_anchors(&mut self) {
+        for id in self.pending_anchors.drain(..) {
+            self.anchors.entry(id).or_insert(self.lines.len());
+        }
+    }
+
+    fn defer_anchors(&mut self, ids: impl IntoIterator<Item = String>) {
+        self.pending_anchors.extend(ids);
     }
 
     pub(super) fn tldr(
@@ -329,9 +345,7 @@ impl DocumentBuilder<'_> {
         base_style: Style,
         surface: LineSurface,
     ) {
-        for (id, row) in inline_anchor_rows(nodes) {
-            self.anchors.entry(id).or_insert(self.lines.len() + row);
-        }
+        let targets = inline_anchor_rows(nodes);
         let lines = styled_display_inline_lines(
             nodes,
             base_style,
@@ -340,7 +354,11 @@ impl DocumentBuilder<'_> {
             surface == LineSurface::Code,
         );
         if lines.len() == 1 && lines[0].spans.is_empty() {
+            self.defer_anchors(targets.into_iter().map(|(id, _)| id));
             return;
+        }
+        for (id, row) in targets {
+            self.anchors.entry(id).or_insert(self.lines.len() + row);
         }
         let lines = lines
             .into_iter()

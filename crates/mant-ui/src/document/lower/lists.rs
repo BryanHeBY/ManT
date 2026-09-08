@@ -138,6 +138,12 @@ impl DocumentBuilder<'_> {
                 head_lines.extend(lines);
             }
         }
+        let block_origin = compose_origin(indent, item.layout.body_indent_columns);
+        if head_lines.is_empty() {
+            self.defer_anchors(head_targets.into_iter().map(|(id, _)| id));
+            self.blocks(&item.description, block_origin);
+            return;
+        }
         // A trailing zero-width root shares the last head/body row when that
         // row runs in. Its provisional slot is not a new visible line.
         let last_target_row = if item.inline_description().is_some() {
@@ -150,7 +156,6 @@ impl DocumentBuilder<'_> {
                 .entry(id)
                 .or_insert(self.lines.len() + row.min(last_target_row));
         }
-        let block_origin = compose_origin(indent, item.layout.body_indent_columns);
         let last = head_lines.pop().unwrap_or_default();
         for line in head_lines {
             self.push(
