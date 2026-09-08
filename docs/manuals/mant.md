@@ -1013,6 +1013,13 @@ needed to operate an interactive screen. A pager is still a terminal destination
 its text receives the same terminal-safety treatment even with `--color never`.
 stdout and stderr apply colour detection independently.
 
+Entry colors indicate semantic categories, not confidence or alias equivalence.
+Generic terms remain primary text; values use a blue family. Full and selected
+document text apply type color only to validated name bindings, while preserving
+source bold, italic and link styling. A name mentioned in ordinary prose or at
+the start of a longer word does not acquire that type color. Search/explanation
+match emphasis and TUI selection are separate from semantic name colors.
+
 ## Diagnostics
 
 <!-- mant:entries role=option case=sensitive -->

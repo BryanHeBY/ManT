@@ -1,13 +1,13 @@
 //! Renders query, outline, and excerpt contracts as unstyled semantic text.
 
 use mant_ir::{
-    Block, DefinitionItem, EntryKind, EntrySummary, Inline, ListItem, ListKind, ParameterKind,
-    Section, TableCell, TldrCommandPart, TldrDocument, TldrOrigin,
+    Block, EntryKind, EntrySummary, ParameterKind, TldrCommandPart, TldrDocument, TldrOrigin,
 };
 use mant_protocol::{
-    EntryDocumentTarget, EntryValueDomain, ExcerptSelection, OutlineNode, QueryExcerpt,
-    QueryOutline,
+    EntryDocumentTarget, EntryStyleMap, EntryValueDomain, ExcerptSelection, OutlineNode,
+    QueryExcerpt, QueryOutline, TextPresentation, TextRole,
 };
+mod blocks;
 
 use crate::ResolvedContent;
 
@@ -15,6 +15,17 @@ use crate::ResolvedContent;
 #[must_use]
 pub fn render_query_text(query: &ResolvedContent) -> String {
     render_query_body(query, true)
+}
+
+/// Render source-aware text spans without recovering roles from rendered lines.
+/// The decorator must preserve visible text, newlines and boundary whitespace;
+/// it may add zero-width styles or replace unsafe scalars one-for-one.
+#[must_use]
+pub fn render_query_text_with(
+    query: &ResolvedContent,
+    decorate: impl Fn(TextPresentation, &str) -> String,
+) -> String {
+    render_query_body_with(query, true, &decorate, true)
 }
 
 /// Render the manual as `man(1)`-faithful plain text.
@@ -32,17 +43,33 @@ pub fn render_query_man(query: &ResolvedContent) -> String {
 }
 
 fn render_query_body(query: &ResolvedContent, include_tldr: bool) -> String {
+    render_query_body_with(query, include_tldr, &|_, text| text.to_owned(), false)
+}
+
+fn render_query_body_with(
+    query: &ResolvedContent,
+    include_tldr: bool,
+    decorate: &dyn Fn(TextPresentation, &str) -> String,
+    styled: bool,
+) -> String {
     let section = query
         .document
         .as_ref()
         .and_then(|document| document.meta.manual_section.as_deref());
-    let mut parts = vec![document_label(&query.label, section)];
+    let mut parts = vec![decorate(
+        TextRole::Document.into(),
+        &document_label(&query.label, section),
+    )];
     if include_tldr && let Some(tldr) = &query.tldr {
         parts.push(render_tldr_text(tldr));
     }
     if let Some(document) = &query.document {
-        parts.push(render_blocks(&document.blocks, 0));
-        parts.push(render_sections(&document.sections, 0));
+        let renderer = blocks::BlockRenderer {
+            names: styled.then(|| EntryStyleMap::for_document(document)),
+            decorate,
+        };
+        parts.push(renderer.render_blocks(&document.blocks, 0));
+        parts.push(renderer.render_sections(&document.sections, 0));
     }
     join_parts(parts)
 }
@@ -68,18 +95,39 @@ pub fn render_outline_text(outline: &QueryOutline) -> String {
 /// Render selected query nodes as unstyled text with outline context.
 #[must_use]
 pub fn render_excerpt_text(excerpt: &QueryExcerpt) -> String {
-    let mut parts = vec![document_label(
-        &excerpt.label,
-        excerpt
-            .meta
-            .as_ref()
-            .and_then(|meta| meta.manual_section.as_deref()),
+    render_excerpt_with(excerpt, &|_, text| text.to_owned(), false)
+}
+
+/// Render materialized selections with source roles and validated name ranges.
+/// The decoration contract is the same as [`render_query_text_with`].
+#[must_use]
+pub fn render_excerpt_text_with(
+    excerpt: &QueryExcerpt,
+    decorate: impl Fn(TextPresentation, &str) -> String,
+) -> String {
+    render_excerpt_with(excerpt, &decorate, true)
+}
+
+fn render_excerpt_with(
+    excerpt: &QueryExcerpt,
+    decorate: &dyn Fn(TextPresentation, &str) -> String,
+    styled: bool,
+) -> String {
+    let mut parts = vec![decorate(
+        TextRole::Document.into(),
+        &document_label(
+            &excerpt.label,
+            excerpt
+                .meta
+                .as_ref()
+                .and_then(|meta| meta.manual_section.as_deref()),
+        ),
     )];
     if !excerpt.semantics_complete {
         parts.push("Semantic entries are incomplete; use search to inspect unclassified or rejected content.".to_owned());
     }
     for selection in &excerpt.selections {
-        parts.push(render_selection(selection));
+        parts.push(render_selection(selection, decorate, styled));
     }
     join_parts(parts)
 }
@@ -297,21 +345,38 @@ pub(super) const fn entry_kind_label(kind: EntryKind, singular: bool) -> &'stati
     }
 }
 
-fn render_selection(selection: &ExcerptSelection) -> String {
-    let context = render_outline_trail(selection.outline());
+fn render_selection(
+    selection: &ExcerptSelection,
+    decorate: &dyn Fn(TextPresentation, &str) -> String,
+    styled: bool,
+) -> String {
+    let context = decorate(
+        TextRole::Heading.into(),
+        &render_outline_trail(selection.outline()),
+    );
+    let names = styled.then(|| match selection {
+        ExcerptSelection::DocumentRoot { blocks, .. } => EntryStyleMap::for_blocks(blocks),
+        ExcerptSelection::DocumentSection { section, .. } => EntryStyleMap::for_section(section),
+        ExcerptSelection::DocumentEntry { entry, .. } => {
+            EntryStyleMap::for_blocks(std::slice::from_ref(entry))
+        }
+        ExcerptSelection::Tldr { .. } => EntryStyleMap::default(),
+    });
+    let renderer = blocks::BlockRenderer { names, decorate };
     match selection {
         ExcerptSelection::Tldr { document, .. } => {
             join_parts(vec![context, render_tldr_text(document)])
         }
         ExcerptSelection::DocumentRoot { blocks, .. } => {
-            join_parts(vec![context, render_blocks(blocks, 0)])
+            join_parts(vec![context, renderer.render_blocks(blocks, 0)])
         }
         ExcerptSelection::DocumentSection { section, .. } => {
-            join_parts(vec![context, render_section(section, 0)])
+            join_parts(vec![context, renderer.render_section(section, 0)])
         }
-        ExcerptSelection::DocumentEntry { entry, .. } => {
-            join_parts(vec![context, render_blocks(std::slice::from_ref(entry), 0)])
-        }
+        ExcerptSelection::DocumentEntry { entry, .. } => join_parts(vec![
+            context,
+            renderer.render_blocks(std::slice::from_ref(entry), 0),
+        ]),
     }
 }
 
@@ -360,208 +425,15 @@ fn render_tldr_text(tldr: &TldrDocument) -> String {
     lines.join("\n\n")
 }
 
-fn render_sections(sections: &[Section], depth: usize) -> String {
-    sections
-        .iter()
-        .map(|section| render_section(section, depth))
-        .filter(|section| !section.is_empty())
-        .collect::<Vec<_>>()
-        .join("\n\n")
-}
-
-fn render_section(section: &Section, depth: usize) -> String {
-    let heading_indent = "  ".repeat(depth);
-    let mut parts = vec![format!("{heading_indent}{}", section.title)];
-    let blocks = render_blocks(&section.blocks, depth.saturating_mul(2));
-    if !blocks.is_empty() {
-        parts.push(blocks);
-    }
-    let children = render_sections(&section.children, depth + 1);
-    if !children.is_empty() {
-        parts.push(children);
-    }
-    join_parts(parts)
-}
-
 pub(super) fn render_blocks(blocks: &[Block], base_indent: usize) -> String {
-    render_block_sequence(blocks, base_indent, None)
+    plain_renderer().render_blocks(blocks, base_indent)
 }
 
-fn render_block_sequence(
-    blocks: &[Block],
-    base_indent: usize,
-    leading_gap: Option<usize>,
-) -> String {
-    // Blocks are separated by a single blank line by default. An explicit
-    // vertical-space node *sets* the gap before the next block rather than
-    // adding to it, so `.sp` and blank input lines are not double-counted
-    // against the default paragraph separation (which previously turned one
-    // requested blank line into several). Leading and trailing gaps are
-    // dropped so a section never opens or closes with blank lines.
-    let mut output = String::new();
-    // A definition term is preceding content too. Its first body block is
-    // normally tight (Some(0)); a continuation of an inline paragraph uses
-    // the normal block gap (Some(1)). Explicit space can override either.
-    let mut has_content = leading_gap.is_some();
-    let mut default_gap = leading_gap.unwrap_or(1);
-    let mut pending_blank_lines: Option<usize> = None;
-    for block in blocks {
-        if let Block::VerticalSpace { lines, .. } = block {
-            if has_content {
-                let requested = usize::from(*lines);
-                pending_blank_lines = Some(pending_blank_lines.unwrap_or(0).max(requested));
-            }
-            continue;
-        }
-        let Some(text) = render_block(block, base_indent) else {
-            continue;
-        };
-        if has_content {
-            let blank_lines = pending_blank_lines.unwrap_or(default_gap);
-            output.push_str(&"\n".repeat(blank_lines + 1));
-        }
-        output.push_str(&text);
-        has_content = true;
-        default_gap = 1;
-        pending_blank_lines = None;
+fn plain_renderer() -> blocks::BlockRenderer<'static> {
+    blocks::BlockRenderer {
+        names: None,
+        decorate: &|_, text| text.to_owned(),
     }
-    output
-}
-
-fn render_block(block: &Block, base_indent: usize) -> Option<String> {
-    let (value, layout_indent) = match block {
-        Block::Paragraph {
-            children, layout, ..
-        }
-        | Block::Preformatted {
-            children, layout, ..
-        } => (inline_text(children), usize::from(layout.indent_columns)),
-        Block::List {
-            kind,
-            items,
-            layout,
-            ..
-        } => (
-            render_list(*kind, items, base_indent),
-            usize::from(layout.indent_columns),
-        ),
-        Block::DefinitionList {
-            items,
-            compact,
-            layout,
-            ..
-        } => (
-            render_definitions(items, *compact, base_indent),
-            usize::from(layout.indent_columns),
-        ),
-        Block::Table { rows, layout, .. } => (
-            super::table::table_rows(rows, cell_text).join("\n"),
-            usize::from(layout.indent_columns),
-        ),
-        Block::Equation { value, layout, .. }
-        | Block::Unsupported {
-            text: value,
-            layout,
-            ..
-        } => (value.clone(), usize::from(layout.indent_columns)),
-        // Vertical space is handled as an inter-block separator in
-        // `render_blocks`, never as a standalone rendered block.
-        Block::VerticalSpace { .. } => return None,
-        Block::ThematicBreak { .. } => ("---".to_owned(), 0),
-    };
-    let value = value.trim_matches('\n');
-    (!value.trim().is_empty()).then(|| indent_lines(value, base_indent + layout_indent))
-}
-
-fn render_list(kind: ListKind, items: &[ListItem], base_indent: usize) -> String {
-    items
-        .iter()
-        .enumerate()
-        .filter_map(|(index, item)| {
-            let marker = match kind {
-                ListKind::Ordered { .. } => {
-                    format!("{}. ", kind.ordinal(index).expect("ordered list ordinal"))
-                }
-                ListKind::Bullet => "- ".to_owned(),
-                ListKind::Plain => String::new(),
-            };
-            prefix_text_item(&render_blocks(&item.blocks, base_indent), &marker)
-        })
-        .collect::<Vec<_>>()
-        .join("\n")
-}
-
-fn render_definitions(items: &[DefinitionItem], compact: bool, base_indent: usize) -> String {
-    let rendered = items
-        .iter()
-        .filter_map(|item| {
-            let terms = item
-                .terms
-                .iter()
-                .map(|term| inline_text(term))
-                .filter(|term| !term.trim().is_empty())
-                .collect::<Vec<_>>()
-                .join(", ");
-            let body_indent = usize::from(DefinitionItem::DESCRIPTION_INDENT_COLUMNS);
-            let value = if !terms.is_empty() && item.inline_description().is_some() {
-                let head = render_blocks(&item.description[..1], base_indent);
-                // Continue the same block stream so leading .sp in the tail
-                // remains an inter-block gap, not discarded leading space.
-                let tail = render_block_sequence(&item.description[1..], base_indent, Some(1));
-                Some(format!(
-                    "{terms} {}{}",
-                    head.trim_start(),
-                    indent_lines(&tail, body_indent)
-                ))
-            } else {
-                let description = render_block_sequence(
-                    &item.description,
-                    base_indent,
-                    (!terms.is_empty()).then_some(0),
-                );
-                match (terms.is_empty(), description.is_empty()) {
-                    (false, false) => Some(format!(
-                        "{terms}{}",
-                        indent_lines(&description, body_indent)
-                    )),
-                    (false, true) => Some(terms),
-                    (true, false) => Some(description),
-                    (true, true) => None,
-                }
-            }?;
-            Some((value, item.layout.spacing_before_lines))
-        })
-        .collect::<Vec<_>>();
-
-    let Some((first, rest)) = rendered.split_first() else {
-        return String::new();
-    };
-    let mut output = first.0.clone();
-    for (item, spacing_before_lines) in rest {
-        let blank_lines = spacing_before_lines.unwrap_or(u16::from(!compact));
-        output.push_str(&"\n".repeat(usize::from(blank_lines) + 1));
-        output.push_str(item);
-    }
-    output
-}
-
-fn cell_text(cell: &TableCell) -> String {
-    render_blocks(&cell.blocks, 0).replace('\n', " ")
-}
-
-fn inline_text(children: &[Inline]) -> String {
-    let mut output = String::new();
-    for child in children {
-        match child {
-            Inline::Text { value } | Inline::Code { value } => output.push_str(value),
-            Inline::Strong { children }
-            | Inline::Emphasis { children }
-            | Inline::Link { children, .. } => output.push_str(&inline_text(children)),
-            Inline::Anchor { .. } => {}
-            Inline::LineBreak => output.push('\n'),
-        }
-    }
-    output
 }
 
 fn prefix_text_item(content: &str, marker: &str) -> Option<String> {
@@ -644,7 +516,7 @@ mod tests {
                     },
                 ];
                 assert_eq!(
-                    super::render_block_sequence(&blocks, 0, Some(leading_gap)),
+                    super::plain_renderer().render_block_sequence(&blocks, 0, Some(leading_gap)),
                     format!("{}CONTENT", "\n".repeat(usize::from(lines) + 1))
                 );
             }

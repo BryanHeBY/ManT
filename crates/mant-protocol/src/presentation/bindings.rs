@@ -119,6 +119,15 @@ impl<'a> EntryStyleMap<'a> {
         map
     }
 
+    /// Collect bindings within a materialized section and its descendants.
+    #[must_use]
+    pub fn for_section(section: &'a mant_ir::Section) -> Self {
+        let mut map = Self::default();
+        map.visit_section(section);
+        map.normalize();
+        map
+    }
+
     /// Exact-root lookup; empty/unbound containers return no semantic decoration.
     #[must_use]
     pub fn ranges(&self, nodes: &[Inline]) -> &[InlineNameRange] {

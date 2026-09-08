@@ -188,6 +188,8 @@ root-relative Unicode scalar ranges without copying the source tree.
 markup as borrowed spans. Adapters own colors, escaping and line geometry;
 they must not reconstruct name bindings by searching rendered strings.
 Query-match and selection overlays remain separate from ordinary name roles.
+The shared [entry presentation contract](https://github.com/BryanHeBY/ManT/blob/main/docs/architecture/entry-presentation.md)
+documents ownership, coordinate roots and adapter responsibilities.
 
 ## License
 

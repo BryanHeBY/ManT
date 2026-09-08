@@ -16,6 +16,8 @@ mod bindings;
 pub use bindings::{EntryStyleMap, InlineNameRange, RootTextRange, project_content_slice};
 mod inline;
 pub use inline::{InlinePresentation, visit_inline_text};
+mod text;
+pub use text::{TextPresentation, TextRole};
 
 /// Transport-neutral evidence outcome and paging/coverage labels.
 #[must_use]

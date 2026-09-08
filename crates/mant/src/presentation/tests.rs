@@ -31,6 +31,76 @@ The selected color is visible in terminal output.
 ";
 
 #[test]
+fn full_and_node_color_validated_names_without_prefix_guessing() {
+    let source = b".TH PROBE 1\n.SH OPTIONS\n.TP\n.B -x, --language=LANG\nSelect language.\n.SH NOTES\n-xylophone is not an option.\n";
+    for view in [
+        QueryView::Full {},
+        QueryView::Excerpt {
+            selectors: vec!["1".into(), "2".into()],
+        },
+    ] {
+        let query = mant_engine::query_roff_bytes(source).unwrap();
+        let result = project_query_view(query, &view).unwrap();
+        let plain = render_query_result(
+            &result,
+            options(QueryFormat::Text, false, OutputTarget::Stream),
+        )
+        .unwrap();
+        let colored = render_query_result(
+            &result,
+            options(QueryFormat::Text, true, OutputTarget::Terminal),
+        )
+        .unwrap();
+        assert_eq!(strip_ansi(&colored), plain);
+        let colors = visible_colors(&colored);
+        for name in ["-x,", "--language=", "LANG", "-xylophone"] {
+            let byte = plain.find(name).unwrap();
+            let start = plain[..byte].chars().count();
+            let expected = matches!(name, "-x," | "--language=").then_some(92);
+            assert_eq!(colors[start].1, expected, "{name}: {colored:?}");
+        }
+        assert!(colored.contains("-xylophone is not an option."));
+    }
+}
+
+#[test]
+fn source_styling_preserves_whitespace_only_blocks_nested_terms_and_tables() {
+    let source = ".TH PROBE 1\n.SH OPTIONS\n.TP\n.B --help\n.RS 4\n.sp 2\n.B nested\n.RE\n.TS\nl l.\nleft\tright\n.TE\n.nf\n  code\n\n    tail\n.fi\n";
+    let query = mant_engine::query_roff_bytes(source.as_bytes()).unwrap();
+    let plain = mant_engine::render_query_text(&query);
+    let colored = mant_engine::render_query_text_with(&query, |style, text| {
+        super::content::decorate(style, text, true)
+    });
+    assert_eq!(strip_ansi(&colored), plain);
+    assert_eq!(
+        mant_engine::render_query_text_with(&query, |_, text| text.to_owned()),
+        plain
+    );
+}
+
+fn visible_colors(text: &str) -> Vec<(char, Option<u16>)> {
+    let mut chars = text.chars();
+    let mut color = None;
+    let mut output = Vec::new();
+    while let Some(ch) = chars.next() {
+        if ch == '\u{1b}' {
+            assert_eq!(chars.next(), Some('['));
+            let params: String = chars.by_ref().take_while(|c| *c != 'm').collect();
+            for parameter in params.split(';') {
+                match parameter.parse::<u16>().unwrap_or(0) {
+                    0 | 39 => color = None,
+                    foreground @ (30..=37 | 90..=97) => color = Some(foreground),
+                    _ => {}
+                }
+            }
+        } else {
+            output.push((ch, color));
+        }
+    }
+    output
+}
+
+#[test]
 fn terminal_styles_do_not_change_visible_query_text() {
     for view in [
         QueryView::Full {},

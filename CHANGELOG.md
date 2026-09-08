@@ -14,6 +14,11 @@ that crate was not published for that change.
 
 ### Shared entry presentation
 
+- Full/node CLI text now styles source-bound spans through the shared block
+  renderer. A documented name no longer colors an unrelated longer word,
+  placeholder or list marker. Rendering no longer clones the full document
+  merely to style text, and ANSI/plain use the same block-layout implementation.
+
 - TUI body colors now follow validated owner-local name bindings instead of
   treating every code span alike. Nested code and links preserve source bold
   and italic styling; emphasis remains primary text, and link affordances

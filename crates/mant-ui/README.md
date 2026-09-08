@@ -49,6 +49,8 @@ that color. Code-token accents do not overwrite semantic name roles.
 the resulting immutable styled lines. Resizing only reflows those lines;
 search and selection overlay their own state without rewriting the base styles,
 link targets, source coordinates or copied text.
+See the shared [entry presentation contract](https://github.com/BryanHeBY/ManT/blob/main/docs/architecture/entry-presentation.md)
+for label modes, source binding coordinates and style precedence.
 
 ## Host boundary
 

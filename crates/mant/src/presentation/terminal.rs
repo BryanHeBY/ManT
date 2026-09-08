@@ -2,10 +2,8 @@
 use super::RenderOptions;
 use crate::{arguments::QueryFormat, error::Failure};
 use anstyle::{AnsiColor, Style};
-use mant_ir::{Block, DocumentMeta, EntryKind, Inline, ResolvedContent, Section, SourceFormat};
-use mant_protocol::{
-    ExcerptSelection, OutlineNode, QueryExcerpt, QueryOutline, QuerySearch, sanitize_terminal_text,
-};
+use mant_ir::{DocumentMeta, EntryKind, ResolvedContent, SourceFormat};
+use mant_protocol::{OutlineNode, QueryExcerpt, QueryOutline, QuerySearch, sanitize_terminal_text};
 use std::fmt::Write as _;
 /// Keep protocol-owned catalog text intact while applying optional CLI styling.
 pub(crate) fn render_catalog_output(
@@ -141,18 +139,9 @@ fn outline_node_summary(node: &OutlineNode) -> Option<&mant_ir::EntrySummary> {
 }
 
 pub(super) fn render_terminal_excerpt(excerpt: &QueryExcerpt, color: bool) -> String {
-    let excerpt = terminal_excerpt(excerpt);
-    let plain = mant_engine::render_excerpt_text(&excerpt);
-    if !color || plain.is_empty() {
-        return plain;
-    }
-
-    let mut headings = Vec::new();
-    let mut terms = Vec::new();
-    for selection in &excerpt.selections {
-        collect_excerpt_semantics(selection, &mut headings, &mut terms);
-    }
-    style_content_text(&plain, &headings, terms)
+    mant_engine::render_excerpt_text_with(excerpt, |style, text| {
+        super::content::decorate(style, text, color)
+    })
 }
 
 pub(super) fn render_terminal_explanation(
@@ -287,91 +276,6 @@ fn render_excerpt_line(
     output.plain(line);
 }
 
-fn collect_excerpt_semantics(
-    selection: &ExcerptSelection,
-    headings: &mut Vec<String>,
-    terms: &mut Vec<(String, EntryKind)>,
-) {
-    match selection {
-        ExcerptSelection::Tldr { .. } | ExcerptSelection::DocumentRoot { .. } => {}
-        ExcerptSelection::DocumentSection { section, .. } => {
-            collect_section_semantics(section, headings, terms);
-        }
-        ExcerptSelection::DocumentEntry { entry, .. } => {
-            collect_block_semantics(std::slice::from_ref(entry), terms);
-        }
-    }
-}
-
-fn collect_section_semantics(
-    section: &Section,
-    headings: &mut Vec<String>,
-    terms: &mut Vec<(String, EntryKind)>,
-) {
-    headings.push(section.title.clone());
-    collect_block_semantics(&section.blocks, terms);
-    for child in &section.children {
-        collect_section_semantics(child, headings, terms);
-    }
-}
-
-fn collect_block_semantics(blocks: &[Block], terms: &mut Vec<(String, EntryKind)>) {
-    for block in blocks {
-        match block {
-            Block::DefinitionList { items, .. } => {
-                for item in items {
-                    collect_entry(mant_ir::EntryOwner::Definition(item), terms);
-                    collect_block_semantics(&item.description, terms);
-                }
-            }
-            Block::List { items, .. } => {
-                for item in items {
-                    collect_entry(mant_ir::EntryOwner::List(item), terms);
-                    collect_block_semantics(&item.blocks, terms);
-                }
-            }
-            Block::Table { rows, .. } => {
-                for cell in rows.iter().flat_map(|row| &row.cells) {
-                    collect_block_semantics(&cell.blocks, terms);
-                }
-            }
-            Block::Paragraph { .. }
-            | Block::Preformatted { .. }
-            | Block::Equation { .. }
-            | Block::VerticalSpace { .. }
-            | Block::ThematicBreak { .. }
-            | Block::Unsupported { .. } => {}
-        }
-    }
-}
-
-fn collect_entry(item: mant_ir::EntryOwner<'_>, terms: &mut Vec<(String, EntryKind)>) {
-    let Some(identity) = item.facts() else {
-        return;
-    };
-    terms.extend(
-        item.forms()
-            .unwrap_or_default()
-            .iter()
-            .map(|term| (inline_text(term), identity.kind)),
-    );
-}
-
-fn inline_text(inlines: &[Inline]) -> String {
-    let mut output = String::new();
-    for inline in inlines {
-        match inline {
-            Inline::Text { value } | Inline::Code { value } => output.push_str(value),
-            Inline::Strong { children }
-            | Inline::Emphasis { children }
-            | Inline::Link { children, .. } => output.push_str(&inline_text(children)),
-            Inline::Anchor { .. } => {}
-            Inline::LineBreak => output.push('\n'),
-        }
-    }
-    output
-}
-
 const fn outline_node_role(node: &OutlineNode) -> TerminalRole {
     match node {
         OutlineNode::DocumentEntry { entry_kind, .. } => entry_kind_role(*entry_kind),
@@ -500,22 +404,9 @@ pub(super) fn render_full_query(
                 },
             ))
         }
-        QueryFormat::Text => {
-            let query = terminal_content(query);
-            let plain = mant_engine::render_query_text(&query);
-            if !options.color || plain.is_empty() {
-                return Ok(plain);
-            }
-            let mut headings = Vec::new();
-            let mut terms = Vec::new();
-            if let Some(document) = &query.document {
-                collect_block_semantics(&document.blocks, &mut terms);
-                for section in &document.sections {
-                    collect_section_semantics(section, &mut headings, &mut terms);
-                }
-            }
-            Ok(style_content_text(&plain, &headings, terms))
-        }
+        QueryFormat::Text => Ok(mant_engine::render_query_text_with(query, |style, text| {
+            super::content::decorate(style, text, options.color)
+        })),
         QueryFormat::Man => {
             let Some(document) = query.document.as_ref() else {
                 return Err(Failure::operational(

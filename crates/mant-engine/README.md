@@ -39,6 +39,9 @@ deterministic output without owning a terminal or command-line process.
 - Excerpt selection and literal or regular-expression search with generated
   Markdown coordinates.
 - Markdown, text, man-style text, and JSON renderers over one normalized IR.
+- Source-aware `render_query_text_with` / `render_excerpt_text_with` callbacks
+  over the same plain-text block layout, with composable source markup and
+  validated owner-local name roles rather than rendered-line name matching.
 - Installed-client and private tldr cache discovery. Explicit subprocess-backed
   updates are available only with the opt-in `tldr-update` feature.
 

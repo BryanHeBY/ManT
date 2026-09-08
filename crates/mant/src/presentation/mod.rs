@@ -1,4 +1,5 @@
 //! Deterministic rendering of already materialized query views.
+mod content;
 mod scope;
 mod terminal;
 #[cfg(test)]
