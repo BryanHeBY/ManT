@@ -198,6 +198,8 @@ impl Decoder {
                 });
             }
             'N' => {
+                let start = self.index;
+                let delimiter = self.characters.get(start).copied();
                 let argument = if self
                     .characters
                     .get(self.index)
@@ -207,10 +209,26 @@ impl Decoder {
                 } else {
                     self.take_delimited_argument()
                 };
-                self.emit(RoffInlineEvent::Presentation {
-                    kind: PresentationKind::FormatterState,
-                    argument,
+                let closed = delimiter.is_some_and(|delimiter| {
+                    !delimiter.is_ascii_digit()
+                        && self.index > start + 1
+                        && self.characters.get(self.index - 1) == Some(&delimiter)
                 });
+                // mandoc's mchars_num2char accepts only the 8-bit terminal
+                // range. N is a font glyph index, not an arbitrary Unicode
+                // scalar; unsupported/device-dependent indices stay visible.
+                if let Some(number) = argument
+                    .as_deref()
+                    .filter(|_| closed)
+                    .and_then(|value| value.parse::<u8>().ok())
+                {
+                    push_terminal_safe(&mut self.text, char::from(number));
+                } else {
+                    self.text.push_str(r"\N");
+                    for character in &self.characters[start..self.index] {
+                        push_terminal_safe(&mut self.text, *character);
+                    }
+                }
             }
             'z' => {
                 // Suppress the glyph's advance, not its visible spelling. Let
@@ -692,8 +710,32 @@ mod tests {
         assert_eq!(visible_text("alpha\\"), "alpha\\");
         assert_eq!(visible_text(r"alpha\qbeta"), "alphaqbeta");
         assert_eq!(visible_text(r"\EfBbold\EfR"), "bold");
-        assert_eq!(visible_text(r"before\N1after"), "beforeafter");
+        assert_eq!(visible_text(r"before\N1after"), r"before\N1after");
         assert_eq!(visible_text(r"before\zXafter"), "beforeXafter");
+    }
+
+    #[test]
+    fn numbered_glyphs_follow_the_terminal_range_not_unicode_indices() {
+        for (source, expected) in [
+            (r"\N'65'", "A"),
+            (r"\N|65|", "A"),
+            (r"\N'255'", "ÿ"),
+            (r"\N'0'", " "),
+            (r"\N'27'", " "),
+        ] {
+            assert_eq!(visible_text(source), expected, "{source}");
+        }
+        for source in [
+            r"\N'256'",
+            r"\N'128512'",
+            r"\N'-1'",
+            r"\N'abc'",
+            r"\N'65",
+            r"\N'999999999999999999999'",
+            r"\N1",
+        ] {
+            assert_eq!(visible_text(source), source);
+        }
     }
 
     #[test]

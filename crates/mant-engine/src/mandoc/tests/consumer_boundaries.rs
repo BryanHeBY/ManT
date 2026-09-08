@@ -2,6 +2,16 @@
 use super::inline_boundaries::{assert_flow, query, variants};
 
 #[test]
+fn numbered_glyphs_retain_visible_content_in_every_consumer() {
+    for body in variants(r".No A\N'65'B") {
+        assert_flow(&body, "AAB");
+    }
+    let content = crate::query_roff_bytes(b".TH PROBE 1\n.SH DESCRIPTION\n.B A\\N'65'B\n").unwrap();
+    assert!(crate::render_query_text(&content).contains("AAB"));
+    super::font_boundaries::assert_style(&content, "AAB", 1);
+}
+
+#[test]
 fn man_literal_synopsis_preserves_font_state_across_lines() {
     use super::font_boundaries::assert_style;
     for (body, style) in [
