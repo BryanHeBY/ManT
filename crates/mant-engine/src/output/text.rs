@@ -792,6 +792,7 @@ mod tests {
                     title: "OPERATORS".to_owned(),
                     spacing_before_lines: 0,
                     blocks: vec![Block::DefinitionList {
+                        declaration_groups: Vec::new(),
                         compact: false,
                         layout: LayoutHint::default(),
                         source: None,
@@ -880,6 +881,7 @@ mod tests {
                     title: "OPERATORS".to_owned(),
                     spacing_before_lines: 0,
                     blocks: vec![Block::DefinitionList {
+                        declaration_groups: Vec::new(),
                         compact: false,
                         layout: LayoutHint::default(),
                         source: None,

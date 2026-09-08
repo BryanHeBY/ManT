@@ -10,7 +10,7 @@ pub(super) fn collect<'a>(
     query: &str,
     located: &[LocatedNode<'a>],
     _validation: Option<&mant_ir::DocumentValidation<'_>>,
-) -> (Candidates<'a>, Vec<usize>) {
+) -> (Candidates<'a>, Vec<usize>, super::support::SupportIndex<'a>) {
     let mut scan = Scan {
         query,
         located,
@@ -32,15 +32,17 @@ pub(super) fn collect<'a>(
         candidates: Candidates::default(),
         next_order: 0,
         orders: vec![0; located.len()],
+        supports: super::support::SupportIndex::default(),
     };
     if let Some(document) = &content.document {
         scan.blocks(&document.blocks, None, None, "root");
         scan.sections(&document.sections, "sections");
     }
-    (scan.candidates, scan.orders)
+    (scan.candidates, scan.orders, scan.supports)
 }
 
 struct Scan<'a, 'b> {
+    supports: super::support::SupportIndex<'a>,
     query: &'b str,
     located: &'b [LocatedNode<'a>],
     owners: HashMap<usize, usize>,
@@ -130,6 +132,7 @@ impl<'a> Scan<'a, '_> {
                     }
                 }
                 Block::DefinitionList { items, .. } => {
+                    self.supports.record(block, &block_path, &self.owners);
                     for (i, item) in items.iter().enumerate() {
                         let owner = self.enter_owner(EntryOwner::Definition(item), current);
                         // Terms are already matched as complete forms; literal

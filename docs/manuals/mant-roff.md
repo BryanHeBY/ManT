@@ -204,6 +204,8 @@ Parsing does not consult the installed manual index, so the same roff bytes prod
 
 Consecutive mdoc `It` heads remain independent, even when they name the same option or only the final item has a body. Multiple forms inside a single `It`/`Xo` retain that authored owner. Empty items, their targets and source locations are not moved to the next described item.
 
+Independence does not discard useful reading context. A bounded run of complete native declaration heads with no readable body, followed by a described declaration, can carry a `declarationGroups` annotation. Explain returns the group's original heads and final description as explicitly recovered context, not as aliases or inherited children/value domains. Source paragraph/container boundaries stop grouping; arbitrary later prose is never a fallback explanation. Ordinary Markdown items are not automatically grouped, and the annotation does not change full-document rendering.
+
 Some deployed mdoc pages use `Bl -tag` for numbered procedures instead of the
 standard `Bl -enum`. ManT recovers ordered-list semantics only when the entire
 tag list contains at least two described, consecutively increasing integers

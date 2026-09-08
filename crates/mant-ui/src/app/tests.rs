@@ -102,6 +102,7 @@ fn navigation_bundle() -> ResolvedContent {
                 title: "OPTIONS".to_owned(),
                 spacing_before_lines: 0,
                 blocks: vec![AstBlock::DefinitionList {
+                    declaration_groups: Vec::new(),
                     items: vec![DefinitionItem {
                         source: None,
                         entry: Some(EntryFacts {

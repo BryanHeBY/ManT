@@ -229,8 +229,16 @@ fn empty_independent_definition_is_not_reported_as_budget_omission() {
     )
     .unwrap();
     let text = render_explanation_text(&report);
-    assert!(text.contains("no independent description"), "{text}");
-    assert!(!text.contains("Other description"));
+    assert!(!text.contains("no independent description"), "{text}");
+    assert!(text.contains("Declaration-group context"));
+    assert!(text.contains("Other description"));
+    let own = serde_json::to_value(&report.evidence[0].content).unwrap();
+    assert!(
+        own["block"]["items"][0]["description"]
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
     assert!(!text.contains("\nForms:"));
     report.evidence[0].content = None;
     report.evidence[0].content_omitted = true;
@@ -311,6 +319,7 @@ fn scoped_serialized_owners_with_the_same_id_keep_independent_name_roles() {
             evidence,
         });
         explanation.documents.push(ScopedExplanation {
+            supports: Vec::new(),
             address: mant_ir::DocumentAddress::Manual {
                 name: format!("doc{index}"),
                 manual_section: "1".into(),

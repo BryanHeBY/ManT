@@ -48,6 +48,11 @@ pub(super) fn definition_item(
             formatter,
         ),
     };
+    context
+        .native_heads
+        .borrow_mut()
+        .groups
+        .record(&item, std::ptr::from_ref(node) as usize);
     if context.macro_set == libmandoc_rs::MacroSet::Mdoc
         && let Some(role) = super::evidence::leading_role(head)
     {

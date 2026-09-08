@@ -169,6 +169,7 @@ mod tests {
             &["-L"],
             &["-L port:host:hostport", "-L socket:remote_socket"],
             vec![Block::DefinitionList {
+                declaration_groups: Vec::new(),
                 items: vec![value],
                 compact: true,
                 layout: LayoutHint::default(),
@@ -188,6 +189,7 @@ mod tests {
         query.document.as_mut().expect("document").sections[1]
             .blocks
             .push(Block::DefinitionList {
+                declaration_groups: Vec::new(),
                 items: vec![local_forward, marker],
                 compact: true,
                 layout: LayoutHint::default(),
@@ -214,6 +216,7 @@ mod tests {
         );
         insensitive.entry.as_mut().expect("identity").case = NameCase::Insensitive;
         let blocks = vec![Block::DefinitionList {
+            declaration_groups: Vec::new(),
             items: vec![sensitive, insensitive],
             compact: true,
             layout: LayoutHint::default(),
@@ -381,6 +384,7 @@ mod tests {
         query.document.as_mut().expect("document").sections[1].children[0]
             .blocks
             .push(Block::DefinitionList {
+                declaration_groups: Vec::new(),
                 items: vec![definition(
                     "generic-readline-term",
                     EntryKind::Term,
@@ -474,6 +478,7 @@ mod tests {
         query.document.as_mut().expect("document").sections[2]
             .blocks
             .push(Block::DefinitionList {
+                declaration_groups: Vec::new(),
                 items: vec![definition(
                     "option-other-local-forward",
                     EntryKind::Parameter {
@@ -513,6 +518,7 @@ mod tests {
         query.document.as_mut().expect("document").sections[1]
             .blocks
             .push(Block::DefinitionList {
+                declaration_groups: Vec::new(),
                 items: vec![definition(
                     "command-force",
                     EntryKind::Command,
@@ -736,6 +742,7 @@ mod tests {
         query.document.as_mut().expect("document").sections[1]
             .blocks
             .push(Block::DefinitionList {
+                declaration_groups: Vec::new(),
                 items: vec![DefinitionItem {
                     source: None,
                     entry: Some(EntryFacts {

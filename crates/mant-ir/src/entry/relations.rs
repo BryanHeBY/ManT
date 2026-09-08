@@ -364,6 +364,7 @@ mod tests {
             diagnostics: Vec::new(),
             sections: Vec::new(),
             blocks: vec![Block::DefinitionList {
+                declaration_groups: Vec::new(),
                 items,
                 compact: true,
                 layout: LayoutHint::default(),

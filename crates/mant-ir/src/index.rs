@@ -229,6 +229,7 @@ mod tests {
             fragment_aliases: Vec::new(),
             diagnostics: Vec::new(),
             blocks: vec![crate::Block::DefinitionList {
+                declaration_groups: Vec::new(),
                 items: vec![DefinitionItem {
                     source: None,
                     entry: Some(EntryFacts {

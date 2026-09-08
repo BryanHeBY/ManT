@@ -22,6 +22,7 @@ struct HeadWitness {
 /// it. Conflicting same-location witnesses deliberately supply no role.
 #[derive(Default)]
 pub(crate) struct NativeHeadEvidence {
+    pub(crate) groups: super::groups::GroupEvidence,
     witnesses: HashMap<(u32, u32), Vec<HeadWitness>>,
 }
 

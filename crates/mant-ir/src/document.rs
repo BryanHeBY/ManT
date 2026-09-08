@@ -303,6 +303,10 @@ pub enum Block {
     DefinitionList {
         /// Definitions in source order.
         items: Vec<DefinitionItem>,
+        /// Recovered consecutive declaration contexts, not alias relationships.
+        /// Ranges refer to this list only and do not change item ownership/layout.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        declaration_groups: Vec<crate::DeclarationGroup>,
         /// Whether renderers should suppress extra spacing between definitions.
         #[serde(default, skip_serializing_if = "is_false")]
         compact: bool,

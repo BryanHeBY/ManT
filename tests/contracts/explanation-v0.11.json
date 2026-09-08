@@ -28,7 +28,10 @@
           "path": "root/e1",
           "id": "help",
           "title": "--help",
-          "entryKind": {"kind":"parameter","parameterKind":"option"},
+          "entryKind": {
+            "kind": "parameter",
+            "parameterKind": "option"
+          },
           "case": "sensitive",
           "names": [
             "--help"
@@ -38,15 +41,53 @@
       "bases": [
         {
           "kind": "name",
-          "matches": [{"name":"--help","occurrences":[{"sourceOccurrenceIndex":0,"forms":[{"formIndex":0,"startChar":0,"endChar":6}],"content":[]}]}]
+          "matches": [
+            {
+              "name": "--help",
+              "occurrences": [
+                {
+                  "sourceOccurrenceIndex": 0,
+                  "forms": [
+                    {
+                      "formIndex": 0,
+                      "startChar": 0,
+                      "endChar": 6
+                    }
+                  ],
+                  "content": []
+                }
+              ]
+            }
+          ]
         },
         {
           "kind": "form",
-          "matches": [{"sourceFormIndex":0,"text":"--help","occurrences":[{"sourceOccurrenceIndex":0,"forms":[{"formIndex":0,"startChar":0,"endChar":6}],"content":[]}]}]
+          "matches": [
+            {
+              "sourceFormIndex": 0,
+              "text": "--help",
+              "occurrences": [
+                {
+                  "sourceOccurrenceIndex": 0,
+                  "forms": [
+                    {
+                      "formIndex": 0,
+                      "startChar": 0,
+                      "endChar": 6
+                    }
+                  ],
+                  "content": []
+                }
+              ]
+            }
+          ]
         }
       ],
       "entry": {
-        "kind": {"kind":"parameter","parameterKind":"option"},
+        "kind": {
+          "kind": "parameter",
+          "parameterKind": "option"
+        },
         "case": "sensitive",
         "names": [
           "--help"
@@ -60,7 +101,24 @@
           ]
         ],
         "aliasGroups": [],
-        "nameBindings": [{"nameIndex":0,"occurrences":[{"sourceOccurrenceIndex":0,"forms":[{"formIndex":0,"startChar":0,"endChar":6}],"content":[]}]}]
+        "nameBindings": [
+          {
+            "nameIndex": 0,
+            "occurrences": [
+              {
+                "sourceOccurrenceIndex": 0,
+                "forms": [
+                  {
+                    "formIndex": 0,
+                    "startChar": 0,
+                    "endChar": 6
+                  }
+                ],
+                "content": []
+              }
+            ]
+          }
+        ]
       },
       "detailsOmitted": false,
       "matchDetailsOmitted": false,
@@ -68,7 +126,8 @@
       "contentOmitted": true,
       "class": "direct-entry",
       "previews": [],
-      "previewsOmitted": false
+      "previewsOmitted": false,
+      "supportOmitted": false
     },
     {
       "ordinal": 1,
@@ -111,10 +170,18 @@
           "matchEndChar": 10,
           "clippedBefore": false,
           "clippedAfter": false,
-          "contentRanges": [{"kind":"block-text","path":[],"startChar":4,"endChar":10}]
+          "contentRanges": [
+            {
+              "kind": "block-text",
+              "path": [],
+              "startChar": 4,
+              "endChar": 10
+            }
+          ]
         }
       ],
-      "previewsOmitted": false
+      "previewsOmitted": false,
+      "supportOmitted": false
     }
   ],
   "order": "class-then-source",
@@ -135,5 +202,6 @@
       "total": 1,
       "returned": 1
     }
-  }
+  },
+  "supports": []
 }

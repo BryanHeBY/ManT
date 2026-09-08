@@ -31,11 +31,13 @@ impl ContentEntry<'_> {
                 source: *source,
             },
             Block::DefinitionList {
+                declaration_groups: _,
                 items,
                 compact,
                 layout,
                 source,
             } => Block::DefinitionList {
+                declaration_groups: Vec::new(),
                 items: vec![items[self.item_index].clone()],
                 compact: *compact,
                 layout: *layout,
@@ -69,6 +71,7 @@ impl serde::Serialize for ContentEntry<'_> {
                 (layout, source)
             }
             Block::DefinitionList {
+                declaration_groups: _,
                 items,
                 compact,
                 layout,

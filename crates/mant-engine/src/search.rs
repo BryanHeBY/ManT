@@ -498,6 +498,7 @@ mod tests {
                     title: "OPTIONS".to_owned(),
                     spacing_before_lines: 0,
                     blocks: vec![Block::DefinitionList {
+                        declaration_groups: Vec::new(),
                         items: vec![DefinitionItem {
                             source: None,
                             layout: mant_ir::DefinitionLayout {

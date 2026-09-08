@@ -378,6 +378,8 @@ pub struct ScopeSearch {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ScopedExplanation {
+    /// Declaration context pool for evidence with this document index.
+    pub supports: Vec<crate::ExplanationSupport>,
     /// Stable logical document identity.
     pub address: DocumentAddress,
     /// Distance retained from the resolved scope.

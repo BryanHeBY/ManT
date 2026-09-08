@@ -126,6 +126,7 @@ pub(super) fn normalize_hanging_definitions(blocks: &mut Vec<Block>, context: De
         }
         let terms = vec![children];
         normalized.push(Block::DefinitionList {
+            declaration_groups: Vec::new(),
             items: vec![DefinitionItem {
                 source,
                 entry: None,
@@ -183,6 +184,7 @@ mod tests {
 
     fn definition(indent_columns: u16) -> Block {
         Block::DefinitionList {
+            declaration_groups: Vec::new(),
             items: vec![DefinitionItem {
                 source: None,
                 entry: None,

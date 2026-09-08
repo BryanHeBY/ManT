@@ -5,6 +5,7 @@ mod binding;
 mod context;
 mod diagnostics;
 mod evidence;
+mod groups;
 mod identity;
 mod normalize;
 mod preparation;
@@ -238,6 +239,7 @@ mod tests {
             title: "OPTIONS".to_owned(),
             spacing_before_lines: 0,
             blocks: vec![Block::DefinitionList {
+                declaration_groups: Vec::new(),
                 items: vec![option],
                 compact: true,
                 layout: LayoutHint::default(),
@@ -276,6 +278,7 @@ mod tests {
             title: "NOTES".to_owned(),
             spacing_before_lines: 0,
             blocks: vec![Block::DefinitionList {
+                declaration_groups: Vec::new(),
                 items: vec![target_only],
                 compact: true,
                 layout: LayoutHint::default(),
@@ -324,6 +327,7 @@ mod tests {
             title: "ENVIRONMENT OPTIONS".to_owned(),
             spacing_before_lines: 0,
             blocks: vec![Block::DefinitionList {
+                declaration_groups: Vec::new(),
                 items: vec![item("Unix Bourne shell:"), item("-q")],
                 compact: true,
                 layout: LayoutHint::default(),
@@ -350,6 +354,7 @@ mod tests {
     #[test]
     fn command_discovery_requires_a_structural_or_syntactic_boundary() {
         let definition_list = |items| Block::DefinitionList {
+            declaration_groups: Vec::new(),
             items,
             compact: true,
             layout: LayoutHint::default(),
@@ -469,6 +474,7 @@ mod tests {
                 title: "OPTIONS".to_owned(),
                 spacing_before_lines: 0,
                 blocks: vec![Block::DefinitionList {
+                    declaration_groups: Vec::new(),
                     items: terms.iter().map(|term| item(term)).collect(),
                     compact: true,
                     layout: LayoutHint::default(),
@@ -618,6 +624,7 @@ mod tests {
             title: "COMMANDS".to_owned(),
             spacing_before_lines: 0,
             blocks: vec![Block::DefinitionList {
+                declaration_groups: Vec::new(),
                 items: vec![command],
                 compact: true,
                 layout: LayoutHint::default(),
@@ -646,6 +653,7 @@ mod tests {
             title: "GLOSSARY".to_owned(),
             spacing_before_lines: 0,
             blocks: vec![Block::DefinitionList {
+                declaration_groups: Vec::new(),
                 items: vec![item("widget")],
                 compact: true,
                 layout: LayoutHint::default(),
@@ -681,6 +689,7 @@ mod tests {
         }
 
         let definition_list = |items| Block::DefinitionList {
+            declaration_groups: Vec::new(),
             items,
             compact: true,
             layout: LayoutHint::default(),

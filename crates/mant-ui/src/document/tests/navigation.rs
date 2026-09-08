@@ -331,6 +331,7 @@ fn typed_email_links_use_the_shared_mailto_serializer() {
 fn inline_definitions_hang_the_description_and_expose_their_anchor() {
     let mut bundle = bundle();
     bundle.document.as_mut().expect("document").sections[0].blocks = vec![Block::DefinitionList {
+        declaration_groups: Vec::new(),
         items: vec![DefinitionItem {
             source: None,
             entry: Some(EntryFacts {

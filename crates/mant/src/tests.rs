@@ -593,6 +593,7 @@ fn explainable_manual() -> Document {
         .find(|section| section.id == "options-2")
         .expect("options section");
     options.blocks.push(Block::DefinitionList {
+        declaration_groups: Vec::new(),
         items: vec![DefinitionItem {
             source: None,
             layout: mant_ir::DefinitionLayout {

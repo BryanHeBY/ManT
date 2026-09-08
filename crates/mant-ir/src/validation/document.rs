@@ -130,6 +130,7 @@ pub fn is_semantic_completeness_diagnostic(code: &str) -> bool {
     matches!(
         code,
         "ir.empty-identity"
+            | "ir.invalid-declaration-group"
             | "ir.invalid-entry-content"
             | "ir.invalid-entry-name-binding"
             | "ir.invalid-entry-alias-groups"
@@ -257,6 +258,23 @@ impl<'ir> Visit<'ir> for InvariantCollector {
     }
 
     fn visit_block(&mut self, block: &'ir Block) {
+        if let Block::DefinitionList {
+            items,
+            declaration_groups,
+            ..
+        } = block
+        {
+            let mut end = 0;
+            for group in declaration_groups {
+                if group.start_item < end || group.resolve(items).is_none() {
+                    self.diagnostics.push(invariant(
+                        "ir.invalid-declaration-group",
+                        "declaration groups must be ordered, disjoint, in bounds and end in readable context after empty heads".to_owned(),
+                    ));
+                }
+                end = group.end_item;
+            }
+        }
         let source = match block {
             Block::Paragraph { source, .. }
             | Block::Preformatted { source, .. }
@@ -468,6 +486,7 @@ mod tests {
             title: "invalid".to_owned(),
             spacing_before_lines: 0,
             blocks: vec![Block::DefinitionList {
+                declaration_groups: Vec::new(),
                 items: vec![DefinitionItem {
                     source: None,
                     entry: Some(EntryFacts {
@@ -732,6 +751,7 @@ mod tests {
             },
         };
         let blocks = vec![Block::DefinitionList {
+            declaration_groups: Vec::new(),
             items: vec![definition.clone()],
             compact: true,
             layout: LayoutHint::default(),
@@ -760,6 +780,7 @@ mod tests {
         let diagnostics = validate_document(&document(
             Vec::new(),
             vec![Block::DefinitionList {
+                declaration_groups: Vec::new(),
                 items: vec![definition],
                 compact: true,
                 layout: LayoutHint::default(),

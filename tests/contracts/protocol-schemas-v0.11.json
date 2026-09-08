@@ -851,6 +851,13 @@
                 "description": "Whether renderers should suppress extra spacing between definitions.",
                 "type": "boolean"
               },
+              "declarationGroups": {
+                "description": "Recovered consecutive declaration contexts, not alias relationships.\nRanges refer to this list only and do not change item ownership/layout.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/DeclarationGroup"
+                }
+              },
               "items": {
                 "description": "Definitions in source order.",
                 "type": "array",
@@ -1058,6 +1065,29 @@
               "text"
             ]
           }
+        ]
+      },
+      "DeclarationGroup": {
+        "description": "A recovered run of consecutive declarations in one definition list.\n\nEarlier members have no readable description; the final member supplies\nthe group's context. This never asserts that the members are aliases or\nthat every sentence applies to every member. The half-open item coordinates\nbelong to the exact containing list, not a durable or cross-document ID.",
+        "type": "object",
+        "properties": {
+          "endItem": {
+            "description": "End of declarations, exclusive; the preceding item supplies context.",
+            "type": "integer",
+            "format": "uint",
+            "minimum": 0
+          },
+          "startItem": {
+            "description": "First declaration, inclusive.",
+            "type": "integer",
+            "format": "uint",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "startItem",
+          "endItem"
         ]
       },
       "DefinitionItem": {
@@ -3078,6 +3108,13 @@
         "description": "Semantic validation coverage, never a recall-completeness claim.",
         "type": "boolean"
       },
+      "supports": {
+        "description": "Source-qualified context shared by the direct owners on this page.",
+        "type": "array",
+        "items": {
+          "$ref": "#/$defs/ExplanationSupport"
+        }
+      },
       "total": {
         "description": "Number of collected matching owners before pagination; a lower bound\nwhen candidate or relationship traversal is truncated.",
         "type": "integer",
@@ -3091,6 +3128,7 @@
     },
     "additionalProperties": false,
     "required": [
+      "supports",
       "order",
       "counts",
       "schema",
@@ -3242,6 +3280,13 @@
               "compact": {
                 "description": "Whether renderers should suppress extra spacing between definitions.",
                 "type": "boolean"
+              },
+              "declarationGroups": {
+                "description": "Recovered consecutive declaration contexts, not alias relationships.\nRanges refer to this list only and do not change item ownership/layout.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/DeclarationGroup"
+                }
               },
               "items": {
                 "description": "Definitions in source order.",
@@ -3450,6 +3495,29 @@
               "text"
             ]
           }
+        ]
+      },
+      "DeclarationGroup": {
+        "description": "A recovered run of consecutive declarations in one definition list.\n\nEarlier members have no readable description; the final member supplies\nthe group's context. This never asserts that the members are aliases or\nthat every sentence applies to every member. The half-open item coordinates\nbelong to the exact containing list, not a durable or cross-document ID.",
+        "type": "object",
+        "properties": {
+          "endItem": {
+            "description": "End of declarations, exclusive; the preceding item supplies context.",
+            "type": "integer",
+            "format": "uint",
+            "minimum": 0
+          },
+          "startItem": {
+            "description": "First declaration, inclusive.",
+            "type": "integer",
+            "format": "uint",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "startItem",
+          "endItem"
         ]
       },
       "DefinitionItem": {
@@ -4612,10 +4680,24 @@
                 "type": "null"
               }
             ]
+          },
+          "support": {
+            "description": "Response-local declaration context; in scope results the pool belongs\nto this evidence's document report. This is not an alias edge.",
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint",
+            "minimum": 0
+          },
+          "supportOmitted": {
+            "description": "A known declaration context could not fit the copy budget.",
+            "type": "boolean"
           }
         },
         "additionalProperties": false,
         "required": [
+          "supportOmitted",
           "class",
           "ordinal",
           "outline",
@@ -4925,6 +5007,48 @@
             "description": "Unreleased v0.11 explanation family.",
             "type": "string",
             "const": "mant.explanation/v0.11"
+          }
+        ]
+      },
+      "ExplanationSupport": {
+        "description": "Original content supporting directly matched declarations. IDs are indices\nin the containing document response's pool, never persistent identities.",
+        "oneOf": [
+          {
+            "description": "Recovered adjacency supplies reading context, not proof that each\nsentence applies to every member or that members are interchangeable.",
+            "type": "object",
+            "properties": {
+              "block": {
+                "description": "Complete original heads and final description. Local group indices\nare rebased; original item sources and identities remain unchanged.",
+                "$ref": "#/$defs/Block"
+              },
+              "blockPath": {
+                "description": "Exact containing list in the queried document snapshot.",
+                "type": "string"
+              },
+              "group": {
+                "description": "Half-open range in the original list, before response slicing.",
+                "$ref": "#/$defs/DeclarationGroup"
+              },
+              "kind": {
+                "type": "string",
+                "const": "declaration-group"
+              },
+              "members": {
+                "description": "Original members in source order; the last supplies the description.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/OutlineTrail"
+                }
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "blockPath",
+              "group",
+              "members",
+              "block"
+            ]
           }
         ]
       },
@@ -7232,6 +7356,13 @@
                 "description": "Whether renderers should suppress extra spacing between definitions.",
                 "type": "boolean"
               },
+              "declarationGroups": {
+                "description": "Recovered consecutive declaration contexts, not alias relationships.\nRanges refer to this list only and do not change item ownership/layout.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/DeclarationGroup"
+                }
+              },
               "items": {
                 "description": "Definitions in source order.",
                 "type": "array",
@@ -7439,6 +7570,29 @@
               "text"
             ]
           }
+        ]
+      },
+      "DeclarationGroup": {
+        "description": "A recovered run of consecutive declarations in one definition list.\n\nEarlier members have no readable description; the final member supplies\nthe group's context. This never asserts that the members are aliases or\nthat every sentence applies to every member. The half-open item coordinates\nbelong to the exact containing list, not a durable or cross-document ID.",
+        "type": "object",
+        "properties": {
+          "endItem": {
+            "description": "End of declarations, exclusive; the preceding item supplies context.",
+            "type": "integer",
+            "format": "uint",
+            "minimum": 0
+          },
+          "startItem": {
+            "description": "First declaration, inclusive.",
+            "type": "integer",
+            "format": "uint",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "startItem",
+          "endItem"
         ]
       },
       "DefinitionItem": {
@@ -9894,6 +10048,13 @@
                 "description": "Whether renderers should suppress extra spacing between definitions.",
                 "type": "boolean"
               },
+              "declarationGroups": {
+                "description": "Recovered consecutive declaration contexts, not alias relationships.\nRanges refer to this list only and do not change item ownership/layout.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/DeclarationGroup"
+                }
+              },
               "items": {
                 "description": "Definitions in source order.",
                 "type": "array",
@@ -10101,6 +10262,29 @@
               "text"
             ]
           }
+        ]
+      },
+      "DeclarationGroup": {
+        "description": "A recovered run of consecutive declarations in one definition list.\n\nEarlier members have no readable description; the final member supplies\nthe group's context. This never asserts that the members are aliases or\nthat every sentence applies to every member. The half-open item coordinates\nbelong to the exact containing list, not a durable or cross-document ID.",
+        "type": "object",
+        "properties": {
+          "endItem": {
+            "description": "End of declarations, exclusive; the preceding item supplies context.",
+            "type": "integer",
+            "format": "uint",
+            "minimum": 0
+          },
+          "startItem": {
+            "description": "First declaration, inclusive.",
+            "type": "integer",
+            "format": "uint",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "startItem",
+          "endItem"
         ]
       },
       "DefinitionItem": {
@@ -11425,10 +11609,24 @@
                 "type": "null"
               }
             ]
+          },
+          "support": {
+            "description": "Response-local declaration context; in scope results the pool belongs\nto this evidence's document report. This is not an alias edge.",
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint",
+            "minimum": 0
+          },
+          "supportOmitted": {
+            "description": "A known declaration context could not fit the copy budget.",
+            "type": "boolean"
           }
         },
         "additionalProperties": false,
         "required": [
+          "supportOmitted",
           "class",
           "ordinal",
           "outline",
@@ -11729,6 +11927,48 @@
         "required": [
           "entry",
           "options"
+        ]
+      },
+      "ExplanationSupport": {
+        "description": "Original content supporting directly matched declarations. IDs are indices\nin the containing document response's pool, never persistent identities.",
+        "oneOf": [
+          {
+            "description": "Recovered adjacency supplies reading context, not proof that each\nsentence applies to every member or that members are interchangeable.",
+            "type": "object",
+            "properties": {
+              "block": {
+                "description": "Complete original heads and final description. Local group indices\nare rebased; original item sources and identities remain unchanged.",
+                "$ref": "#/$defs/Block"
+              },
+              "blockPath": {
+                "description": "Exact containing list in the queried document snapshot.",
+                "type": "string"
+              },
+              "group": {
+                "description": "Half-open range in the original list, before response slicing.",
+                "$ref": "#/$defs/DeclarationGroup"
+              },
+              "kind": {
+                "type": "string",
+                "const": "declaration-group"
+              },
+              "members": {
+                "description": "Original members in source order; the last supplies the description.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/OutlineTrail"
+                }
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "blockPath",
+              "group",
+              "members",
+              "block"
+            ]
+          }
         ]
       },
       "ExplanationTruncation": {
@@ -12793,6 +13033,13 @@
             "description": "Semantic validation, not evidence recall.",
             "type": "boolean"
           },
+          "supports": {
+            "description": "Declaration context pool for evidence with this document index.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/ExplanationSupport"
+            }
+          },
           "total": {
             "description": "Local collected owners.",
             "type": "integer",
@@ -12806,6 +13053,7 @@
         },
         "additionalProperties": false,
         "required": [
+          "supports",
           "address",
           "depth",
           "label",

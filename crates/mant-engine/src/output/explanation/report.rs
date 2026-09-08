@@ -65,10 +65,17 @@ impl Report<'_> {
     pub(super) fn records<'a>(
         &self,
         output: &mut String,
-        records: impl Iterator<Item = (&'a ExplanationEvidence, Option<&'a str>)>,
+        records: impl Iterator<
+            Item = (
+                &'a ExplanationEvidence,
+                Option<&'a str>,
+                &'a [mant_protocol::ExplanationSupport],
+            ),
+        >,
     ) {
         let mut previous = None;
-        for (e, address) in records {
+        let mut displayed = std::collections::HashSet::new();
+        for (e, address, supports) in records {
             if previous == Some(e.class) {
                 write!(
                     output,
@@ -97,6 +104,57 @@ impl Report<'_> {
             }
             previous = Some(e.class);
             self.owner(output, e, address);
+            if let Some(support) = e.support.and_then(|index| supports.get(index)) {
+                if displayed.insert(std::ptr::from_ref(support) as usize) {
+                    let mant_protocol::ExplanationSupport::DeclarationGroup {
+                        block, members, ..
+                    } = support;
+                    self.line(
+                        output,
+                        TextRole::Metadata,
+                        "Declaration-group context (recovered from consecutive declarations):",
+                    );
+                    let locations = spans::LocatedStyles::default();
+                    let text = if self.markdown {
+                        super::super::markdown::blocks::render_located_blocks(
+                            std::slice::from_ref(block),
+                            super::super::MarkdownOptions::default(),
+                            Some(&locations),
+                        )
+                        .join("\n\n")
+                    } else {
+                        super::super::text::render_located_blocks(
+                            std::slice::from_ref(block),
+                            &locations,
+                            &|p, t| (self.decorate)(p, &metadata::safe(t)),
+                        )
+                    };
+                    self.quote(output, &text);
+                    if let Some(provider) = members.last() {
+                        self.line(
+                            output,
+                            TextRole::Path,
+                            &format!(
+                                "Source of description: {}; node {}",
+                                provider.title(),
+                                provider.path()
+                            ),
+                        );
+                    }
+                } else {
+                    self.line(
+                        output,
+                        TextRole::Metadata,
+                        "Declaration-group context: see the group already displayed above.",
+                    );
+                }
+            } else if e.support_omitted {
+                self.line(
+                    output,
+                    TextRole::Notice,
+                    "Declaration-group context exists but was omitted by the content budget.",
+                );
+            }
         }
     }
     fn owner(&self, output: &mut String, e: &ExplanationEvidence, address: Option<&str>) {
@@ -255,7 +313,7 @@ impl Report<'_> {
                         body
                     },
                 );
-                if display.empty_description() {
+                if display.empty_description() && e.support.is_none() && !e.support_omitted {
                     self.line(output, TextRole::Notice, "Declaration located; no independent description was provided for this owner.");
                 } else if e.content_omitted {
                     self.line(

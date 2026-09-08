@@ -7,6 +7,7 @@ use mant_protocol::{
 use std::collections::BTreeMap;
 
 pub(super) struct CollectionPlan<'a> {
+    pub supports: super::support::SupportIndex<'a>,
     pub content: &'a ResolvedContent,
     pub located: Vec<LocatedNode<'a>>,
     pub candidates: Vec<Candidate<'a>>,

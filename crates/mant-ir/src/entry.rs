@@ -86,6 +86,7 @@ mod tests {
     #[test]
     fn choice_validation_uses_direct_entry_ownership_through_containers() {
         let list = |item| Block::DefinitionList {
+            declaration_groups: Vec::new(),
             items: vec![item],
             compact: true,
             layout: LayoutHint::default(),
@@ -153,6 +154,7 @@ mod tests {
             &["ssh"],
             &["ssh destination"],
             vec![Block::DefinitionList {
+                declaration_groups: Vec::new(),
                 items: vec![option],
                 compact: true,
                 layout: LayoutHint::default(),
@@ -175,6 +177,7 @@ mod tests {
                 title: "SYNOPSIS".to_owned(),
                 spacing_before_lines: 0,
                 blocks: vec![Block::DefinitionList {
+                    declaration_groups: Vec::new(),
                     items: vec![command],
                     compact: true,
                     layout: LayoutHint::default(),

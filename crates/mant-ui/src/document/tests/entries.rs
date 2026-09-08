@@ -281,6 +281,7 @@ fn definition_lists_honour_compact_and_per_item_spacing() {
     };
     let mut bundle = bundle();
     bundle.document.as_mut().expect("document").sections[0].blocks = vec![Block::DefinitionList {
+        declaration_groups: Vec::new(),
         items: vec![
             definition("-E", "Run the preprocessor.", None),
             definition("-S", "Run the compiler.", Some(2)),

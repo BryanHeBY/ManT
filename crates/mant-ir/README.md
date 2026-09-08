@@ -34,6 +34,14 @@ description. Nested entries record content ownership, not automatically a
 complete runtime value domain. Configuration keys may describe fields inside
 an option's argument. Only explicit `valueDomain` facts make that relationship.
 
+`Block::DefinitionList.declaration_groups` optionally records recovered reading
+context: consecutive empty declaration heads followed by one described item.
+Each `DeclarationGroup` is a checked half-open range in its containing list.
+The last member supplies context, not inherited ownership or proof of aliases;
+items, sources, children and value domains remain independent. Whole-document
+rendering ignores the annotation. Transformations must rebase complete groups
+or drop partial groups when slicing; IR round trips retain the annotation.
+
 The important public families are:
 
 | API | Purpose |

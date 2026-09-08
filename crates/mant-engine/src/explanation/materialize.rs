@@ -18,18 +18,27 @@ pub(super) fn response(
     let mut counts = mant_protocol::EvidenceCounts::default();
     let mut budget = Budget(query.options.content_bytes as usize);
     let mut evidence = Vec::new();
+    let mut supports = super::support::Pool::default();
     for (ordinal, candidate) in plan.candidates.iter().enumerate() {
         let selected = ordinal >= query.options.offset as usize
             && evidence.len() < query.options.limit as usize;
         counts.record(candidate.class(), selected);
         if selected {
-            evidence.push(materialize(
+            let mut record = materialize(
                 u32::try_from(ordinal).expect("bounded candidates"),
                 candidate,
                 &plan.located,
                 &plan.rejected_aliases,
                 &mut budget,
-            ));
+            );
+            plan.supports.attach(
+                candidate.located,
+                &mut record,
+                &plan.located,
+                &mut supports,
+                &mut budget,
+            );
+            evidence.push(record);
         }
     }
     let returned = u32::try_from(evidence.len()).expect("bounded result page");
@@ -42,6 +51,7 @@ pub(super) fn response(
         .saturating_sub(u32::try_from(budget.0).expect("bounded copy budget"));
     (
         QueryExplanation {
+            supports: supports.values,
             schema: ExplanationSchema::V0Dot11,
             order: mant_protocol::EvidenceOrder::ClassThenSource,
             counts,
@@ -155,6 +165,8 @@ pub(super) fn materialize(
         }
     }
     ExplanationEvidence {
+        support: None,
+        support_omitted: false,
         class: candidate.class(),
         ordinal,
         outline,
@@ -208,7 +220,7 @@ fn copy_body(
             })
     }
 }
-fn trail(node: &LocatedNode<'_>) -> OutlineTrail {
+pub(super) fn trail(node: &LocatedNode<'_>) -> OutlineTrail {
     let (breadcrumbs, reference) = match node {
         LocatedNode::Section {
             section,

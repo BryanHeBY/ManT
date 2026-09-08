@@ -14,6 +14,7 @@ fn entry_fragments_validate_without_inserting_a_head_anchor() {
             };
             let item = items.pop().unwrap();
             doc.blocks[1] = Block::DefinitionList {
+                declaration_groups: Vec::new(),
                 items: vec![DefinitionItem {
                     source: None,
                     entry: item.entry,

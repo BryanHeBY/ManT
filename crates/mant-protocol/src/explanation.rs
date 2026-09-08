@@ -2,6 +2,7 @@
 mod classification;
 mod locations;
 mod matches;
+mod support;
 use crate::{OutlineTrail, Producer};
 pub use classification::*;
 pub use locations::ExplanationTextRoot;
@@ -11,6 +12,7 @@ use mant_ir::{
 pub use matches::*;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+pub use support::*;
 
 /// Maximum evidence owners materialized in one page.
 pub const MAX_EXPLANATION_RESULTS: u32 = 256;
@@ -210,6 +212,12 @@ pub struct ExplanationEntry {
 #[allow(clippy::struct_excessive_bools)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ExplanationEvidence {
+    /// Response-local declaration context; in scope results the pool belongs
+    /// to this evidence's document report. This is not an alias edge.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub support: Option<usize>,
+    /// A known declaration context could not fit the copy budget.
+    pub support_omitted: bool,
     /// Exclusive category determined before pagination or content copying.
     pub class: EvidenceClass,
     /// Zero-based ordinal before result pagination.
@@ -251,6 +259,7 @@ impl ExplanationEvidence {
     #[must_use]
     pub const fn has_omitted_content(&self) -> bool {
         self.content_omitted
+            || self.support_omitted
             || self.details_omitted
             || self.previews_omitted
             || self.match_details_omitted
@@ -279,6 +288,8 @@ pub enum ExplanationContent {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 #[schemars(extend("$id" = "urn:mant:explanation:v0.11"))]
 pub struct QueryExplanation {
+    /// Source-qualified context shared by the direct owners on this page.
+    pub supports: Vec<ExplanationSupport>,
     /// Normative category-first ordering, before result pagination.
     pub order: EvidenceOrder,
     /// Per-class collected and returned owners; zero categories remain present.

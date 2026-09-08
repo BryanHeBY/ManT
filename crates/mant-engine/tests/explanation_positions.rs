@@ -163,6 +163,7 @@ fn synthetic(names: usize, repeats: usize) -> ResolvedContent {
         spellings.push(spelling);
     }
     content.document.as_mut().unwrap().sections[0].blocks = vec![Block::DefinitionList {
+        declaration_groups: Vec::new(),
         items: vec![DefinitionItem {
             terms,
             description: vec![],

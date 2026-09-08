@@ -36,6 +36,9 @@ deterministic output without owning a terminal or command-line process.
 - Independent bounded explanation evidence: exact names/forms, literal content
   and validated alias relationships. Multiple owners and no-evidence are normal;
   ordinary support retains its section and block path without becoming an entry.
+  Consecutive native declaration groups additionally supply complete reading
+  context for empty heads without moving another item's body or inferring
+  aliases. Context is carried in the returned DTO, not recovered by a renderer.
 - Excerpt selection and literal or regular-expression search with generated
   Markdown coordinates.
 - Markdown, text, man-style text, and JSON renderers over one normalized IR.

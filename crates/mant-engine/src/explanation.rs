@@ -11,6 +11,7 @@ mod positions;
 mod preview;
 mod relations;
 mod scoped;
+mod support;
 pub(crate) use scoped::explain as explain_scope;
 
 use crate::selectors::{LocatedNode, collect_root_entries, collect_sections};
@@ -109,7 +110,8 @@ fn collection_plan<'a>(
         .document
         .as_ref()
         .map(mant_ir::DocumentValidation::new);
-    let (mut candidates, orders) = collect::collect(content, entry, &located, validation.as_ref());
+    let (mut candidates, orders, supports) =
+        collect::collect(content, entry, &located, validation.as_ref());
     let relations = relations::expand(
         validation.as_ref(),
         entry,
@@ -146,6 +148,7 @@ fn collection_plan<'a>(
         content,
         located,
         candidates,
+        supports,
         diagnostics,
         rejected_aliases,
         truncation: mant_protocol::ExplanationTruncation {

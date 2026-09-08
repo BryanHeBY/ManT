@@ -86,10 +86,16 @@ impl PreparedDefinitions {
                         self.blocks(&mut item.blocks, child_context, evidence);
                     }
                 }
-                Block::DefinitionList { items, .. } => {
+                Block::DefinitionList {
+                    items,
+                    declaration_groups,
+                    ..
+                } => {
                     let item_context = definition_group_context(items, context);
-                    for item in items {
+                    let mut heads = Vec::with_capacity(items.len());
+                    for item in items.iter_mut() {
                         let identity = identity_plan(item, item_context, evidence.role(item));
+                        heads.push(!identity.names.is_empty());
                         if has_semantic_spelling(item, &identity) {
                             *self
                                 .preferred_counts
@@ -104,6 +110,7 @@ impl PreparedDefinitions {
                         });
                         self.blocks(&mut item.description, child_context, evidence);
                     }
+                    *declaration_groups = evidence.groups.resolve(items, &heads);
                 }
                 Block::Table { rows, .. } => {
                     for row in rows {
@@ -142,6 +149,7 @@ mod tests {
             },
         };
         let mut blocks = vec![Block::DefinitionList {
+            declaration_groups: Vec::new(),
             items: vec![item.clone()],
             compact: false,
             source: None,

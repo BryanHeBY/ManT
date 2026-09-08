@@ -81,7 +81,8 @@
             "candidates": false,
             "relations": false,
             "content": false
-          }
+          },
+          "supports": []
         }
       ],
       "failures": [],

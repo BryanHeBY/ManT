@@ -80,7 +80,10 @@ fn render(result: &QueryExplanation, report: &Report<'_>) -> String {
         .map(mant_ir::DocumentAddress::catalog_path);
     report.records(
         &mut output,
-        result.evidence.iter().map(|e| (e, address.as_deref())),
+        result
+            .evidence
+            .iter()
+            .map(|e| (e, address.as_deref(), result.supports.as_slice())),
     );
     output
 }
@@ -115,6 +118,10 @@ fn render_scope(result: &ScopeExplanation, report: &Report<'_>) -> String {
             (
                 &e.evidence,
                 addresses.get(e.document_index).map(String::as_str),
+                result
+                    .documents
+                    .get(e.document_index)
+                    .map_or(&[][..], |d| d.supports.as_slice()),
             )
         }),
     );

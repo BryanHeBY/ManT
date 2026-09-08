@@ -155,6 +155,7 @@ fn lower_mdoc_definition_list(
         };
     }
     Block::DefinitionList {
+        declaration_groups: Vec::new(),
         items: lowered_items,
         compact: node.compact,
         layout: layout(indent_columns),

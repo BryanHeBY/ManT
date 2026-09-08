@@ -82,6 +82,22 @@ concepts with their existing authority boundaries.
 
 ## Explanation is evidence collection, not navigation
 
+Independent physical ownership does not require an empty explanation. Native
+producers may retain a bounded consecutive declaration group as a definition-list
+annotation: empty heads followed by a described member. Explain can return all
+of those original heads and the final member's complete description as recovered
+context. This does not prove that every sentence applies to each member and does
+not create aliases, children or value domains. Source boundaries and complete
+head recognition determine grouping; neither equal indentation nor a search
+for the next nonempty paragraph is sufficient.
+
+Context belongs to the selected evidence page, not a later result page. Returned
+support references are local to one document's response pool, also in scoped
+queries. Original content coordinates and the description provider remain
+explicit; omission of a known context is different from absence of context.
+Markdown does not infer groups from adjacent items, and full-document rendering
+does not change when native grouping metadata is present.
+
 The independent Rust `explain_query` collector serves CLI, request JSON and
 MCP. `select_explanation` is a default-budget convenience returning the same
 `QueryExplanation`; `select_excerpt` retains strict navigation.

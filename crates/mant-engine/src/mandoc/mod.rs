@@ -3,6 +3,7 @@
 mod adjacency;
 mod blocks;
 mod containers;
+mod declaration_groups;
 mod diagnostics;
 mod error;
 mod formatter;
@@ -149,6 +150,7 @@ fn lower_mandoc_document_with_source(
     let explicit_targets = target_plan.explicit();
     let mut context = LoweringContext::new(parsed.metadata.name.as_deref(), source);
     context.macro_set = parsed.macro_set;
+    declaration_groups::record(&parsed.root, &mut context.native_heads.borrow_mut(), source);
     context.reserve_section_ids(explicit_targets);
     let mut diagnostics = diagnostics::lower_diagnostics(&report.diagnostics);
     let mut sections = blocks::lower_sections(&parsed.root, &mut context);

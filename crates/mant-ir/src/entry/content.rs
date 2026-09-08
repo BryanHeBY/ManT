@@ -659,6 +659,7 @@ mod tests {
             Some(EntryForms::Unrecorded)
         ));
         let doc = document(vec![Block::DefinitionList {
+            declaration_groups: Vec::new(),
             items: vec![native],
             compact: true,
             layout: LayoutHint::default(),

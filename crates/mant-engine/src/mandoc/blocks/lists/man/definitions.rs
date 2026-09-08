@@ -317,6 +317,7 @@ fn append_definition(
             paragraph_distance
         };
         output.push(Block::DefinitionList {
+            declaration_groups: Vec::new(),
             items: vec![item],
             compact: paragraph_distance == 0,
             layout: layout_with_spacing(indent_columns, spacing_before_lines),

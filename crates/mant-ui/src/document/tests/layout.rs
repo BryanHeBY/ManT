@@ -17,6 +17,7 @@ fn definition_continuations_keep_rows_when_reparented_across_spacing() {
                     source: None,
                 };
                 let definition = Block::DefinitionList {
+                    declaration_groups: Vec::new(),
                     items: vec![DefinitionItem {
                         source: None,
                         entry: None,

@@ -7,6 +7,7 @@ use mant_protocol::{
 #[test]
 fn typed_term_roots_validate_indices_ranges_and_canonical_unicode() {
     let body = Block::DefinitionList {
+        declaration_groups: Vec::new(),
         items: vec![DefinitionItem {
             terms: vec![vec![Inline::Code {
                 value: "é\u{1b}名\n".into(),

@@ -349,6 +349,7 @@ fn preserves_inline_lists_definitions_and_nested_headings() {
         source: None,
     };
     let definitions = Block::DefinitionList {
+        declaration_groups: Vec::new(),
         items: vec![DefinitionItem {
             source: None,
             entry: None,
@@ -401,6 +402,7 @@ fn preserves_inline_lists_definitions_and_nested_headings() {
 #[test]
 fn keeps_adjacent_bold_and_italic_runs_unambiguous_in_commonmark() {
     let definitions = Block::DefinitionList {
+        declaration_groups: Vec::new(),
         items: vec![DefinitionItem {
             source: None,
             entry: None,
@@ -1062,6 +1064,7 @@ fn protects_hanging_definition_terms_from_becoming_nested_lists() {
         document: Some(manual(vec![section(
             "NOTES",
             vec![Block::DefinitionList {
+                declaration_groups: Vec::new(),
                 items: vec![DefinitionItem {
                     source: None,
                     entry: None,
@@ -1096,6 +1099,7 @@ fn protects_hanging_definition_terms_from_becoming_nested_lists() {
 #[test]
 fn keeps_block_definition_descriptions_on_their_own_commonmark_line() {
     let definitions = Block::DefinitionList {
+        declaration_groups: Vec::new(),
         items: vec![DefinitionItem {
             source: None,
             entry: None,
@@ -1281,6 +1285,7 @@ fn addressable_rendering_returns_exact_semantic_node_ranges() {
             "OPTIONS",
             vec![
                 Block::DefinitionList {
+                    declaration_groups: Vec::new(),
                     items: vec![entry],
                     compact: true,
                     layout: LayoutHint::default(),

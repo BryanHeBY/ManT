@@ -78,6 +78,7 @@ fn sidebar_exposes_every_semantic_role_supported_by_the_document_contract() {
         }],
     }];
     entries[0].description = vec![Block::DefinitionList {
+        declaration_groups: Vec::new(),
         items: vec![DefinitionItem {
             source: None,
             entry: Some(EntryFacts {
@@ -128,6 +129,7 @@ fn sidebar_exposes_every_semantic_role_supported_by_the_document_contract() {
                 title: "REFERENCE".to_owned(),
                 spacing_before_lines: 0,
                 blocks: vec![Block::DefinitionList {
+                    declaration_groups: Vec::new(),
                     items: entries,
                     compact: true,
                     layout: LayoutHint::default(),

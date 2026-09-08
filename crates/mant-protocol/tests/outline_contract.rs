@@ -212,6 +212,7 @@ fn excerpt_contract_can_return_one_semantic_definition() {
                 },
             },
             entry: Block::DefinitionList {
+                declaration_groups: Vec::new(),
                 items: vec![entry],
                 compact: true,
                 layout: LayoutHint::default(),

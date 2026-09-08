@@ -1,5 +1,14 @@
 # mant-protocol
 
+Explanation responses can carry a page-local `supports` pool. A direct
+evidence owner's optional `support` index refers to a recovered
+`declaration-group`, containing the original heads and the final member's
+description. This is reading context, not another match or an alias edge.
+For scoped explanations the pool belongs to the evidence's `documentIndex`.
+`supportOmitted` distinguishes a known context that exceeded the copy budget
+from an owner with no available context. Consumers must not treat an empty
+own description as an empty explanation without checking this support.
+
 `mant-protocol` is `ManT`'s transport-neutral interaction boundary. It defines
 query contracts and projections shared by in-process hosts, CLI JSON, request
 JSON, and compact MCP presentation without owning any transport. It owns schema

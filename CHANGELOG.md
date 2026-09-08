@@ -12,6 +12,17 @@ that crate was not published for that change.
 
 ## Unreleased
 
+### Recovered declaration context (unreleased v0.11)
+
+- Preserve consecutive native declaration groups as optional definition-list
+  annotations without changing physical owners, names, source positions or
+  layout. Explanation responses carry a page-local context pool, separate from
+  alias evidence, so empty short declarations can retrieve their group's
+  explanation even with a one-owner result limit. Scope pools are document-local.
+- Extend the unpublished IR and explanation schemas together. Consumers must
+  check support references and `supportOmitted` as well as the owner's content;
+  an empty independent description no longer means no explanation is available.
+
 ### Independent native definition ownership
 
 - Independent man `IP`/`TP` and mdoc `It` declarations no longer share a body
@@ -19,7 +30,8 @@ that crate was not published for that change.
   head continuations still have one owner; multiple forms never imply aliases.
   This intentionally splits formerly merged IDs/paths and can return several
   direct declarations of the same name. An empty declaration retains its form
-  and source, but does not borrow the next item's explanation.
+  and source; separately labelled declaration-group context can make the
+  following explanation accessible without borrowing its physical ownership.
 - Complete `TP` tags using named roff bullet escapes now become ordinary list
   items rather than semantic `•` entries. Literal operator definitions remain
   addressable; this is not a global punctuation filter.
