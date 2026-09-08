@@ -13,13 +13,14 @@ pub(super) use flow::{FilledBoundary, FontState, InlineBuilder};
 mod source;
 mod source_fragment;
 
+use font::lower_man_font_scope;
 #[cfg(test)]
 use font::parse_roff_text_with_font;
+pub(super) use font::parse_roff_text_with_state;
 pub(super) use font::{lower_inline_nodes_with_font_state, parse_roff_text};
-use font::{lower_man_font_scope, parse_roff_text_with_state};
 
 pub(super) use source::roff_macro_arguments;
-pub(super) use source_fragment::lower_source_fragment;
+pub(super) use source_fragment::lower_source_fragment_with_font_state;
 
 use super::{
     first_part_children,
@@ -36,30 +37,7 @@ pub(super) fn lower_inline_nodes_with_spacing(
     spacing_enabled: bool,
 ) -> Vec<Inline> {
     let mut builder = InlineBuilder::with_spacing(spacing_enabled);
-    for (index, node) in nodes.iter().enumerate() {
-        if node.macro_name.as_deref() == Some("Sm") {
-            let setting = plain_text(&lower_inline_nodes(&node.children, default_name));
-            builder.set_spacing(setting.trim());
-            continue;
-        }
-        // mandoc joins the final pair in a contiguous mdoc bibliography
-        // author run with "and". The conjunction is formatter-generated, so
-        // it is not a child of either `%A` node and must be restored while the
-        // sibling context is still available.
-        if node.macro_name.as_deref() == Some("%A")
-            && index > 0
-            && nodes[index - 1].macro_name.as_deref() == Some("%A")
-            && nodes
-                .get(index + 1)
-                .is_none_or(|next| next.macro_name.as_deref() != Some("%A"))
-        {
-            builder.append(text_node("and"));
-        }
-        let spacing_before = builder.spacing_enabled();
-        append_inline_node_with_next(&mut builder, node, nodes.get(index + 1), default_name);
-        let spacing_after = spacing_after_node(node, spacing_before, default_name);
-        builder.inherit_spacing(spacing_after);
-    }
+    append_inline_nodes(&mut builder, nodes, default_name);
     builder.finish()
 }
 
@@ -237,7 +215,28 @@ pub(super) fn append_inline_node_with_next(
 /// Append sibling events without throwing away pending formatter effects.
 fn append_inline_nodes(builder: &mut InlineBuilder, nodes: &[Node], default_name: Option<&str>) {
     for (index, node) in nodes.iter().enumerate() {
+        if node.macro_name.as_deref() == Some("Sm") {
+            let setting = plain_text(&lower_inline_nodes(&node.children, default_name));
+            builder.set_spacing(setting.trim());
+            continue;
+        }
+        // mandoc joins the final pair in a contiguous mdoc bibliography
+        // author run with "and". The conjunction is formatter-generated, so
+        // it is not a child of either `%A` node and must be restored while the
+        // sibling context is still available.
+        if node.macro_name.as_deref() == Some("%A")
+            && index > 0
+            && nodes[index - 1].macro_name.as_deref() == Some("%A")
+            && nodes
+                .get(index + 1)
+                .is_none_or(|next| next.macro_name.as_deref() != Some("%A"))
+        {
+            builder.append_text("and");
+        }
+        let spacing_before = builder.spacing_enabled();
         append_inline_node_with_next(builder, node, nodes.get(index + 1), default_name);
+        let spacing_after = spacing_after_node(node, spacing_before, default_name);
+        builder.inherit_spacing(spacing_after);
     }
 }
 
@@ -247,9 +246,12 @@ fn lower_inline_node(
     node: &Node,
     default_name: Option<&str>,
     spacing_enabled: bool,
+    font: &mut FontState,
 ) -> Vec<Inline> {
     let mut builder = InlineBuilder::with_spacing(spacing_enabled);
+    builder.font = *font;
     append_inline_node(&mut builder, node, default_name);
+    *font = builder.font;
     builder.finish()
 }
 
@@ -259,6 +261,7 @@ fn lower_atomic_node(
     node: &Node,
     default_name: Option<&str>,
     spacing_enabled: bool,
+    font: &mut FontState,
 ) -> Vec<Inline> {
     if node.kind == NodeKind::Equation {
         return node
@@ -272,7 +275,8 @@ fn lower_atomic_node(
     let children = inline_children(node);
     let mut output = match node.macro_name.as_deref() {
         Some("In") => {
-            let lowered = lower_inline_nodes_with_spacing(children, default_name, spacing_enabled);
+            let lowered =
+                lower_inline_nodes_with_font_state(children, default_name, spacing_enabled, font);
             if lowered.is_empty() {
                 Vec::new()
             } else {
@@ -289,11 +293,11 @@ fn lower_atomic_node(
                 }]
             }
         }
-        Some("Lk") => lower_link(children, default_name, spacing_enabled),
-        Some("Mt") => lower_mail_addresses(children, default_name, spacing_enabled),
+        Some("Lk") => lower_link(children, default_name, spacing_enabled, font),
+        Some("Mt") => lower_mail_addresses(children, default_name, spacing_enabled, font),
         Some("Bx") => lower_bsd_reference(
             node,
-            lower_inline_nodes_with_spacing(children, default_name, spacing_enabled),
+            lower_inline_nodes_with_font_state(children, default_name, spacing_enabled, font),
         ),
         _ => unreachable!("only generated references/declarations are atomic"),
     };
@@ -343,16 +347,23 @@ fn inline_children(node: &Node) -> &[Node] {
         .map_or(&node.children, |body| &body.children)
 }
 
-fn lower_link(children: &[Node], default_name: Option<&str>, spacing_enabled: bool) -> Vec<Inline> {
+fn lower_link(
+    children: &[Node],
+    default_name: Option<&str>,
+    spacing_enabled: bool,
+    font: &mut FontState,
+) -> Vec<Inline> {
     let Some(first) = children.first() else {
         return Vec::new();
     };
-    let address = plain_text(&lower_inline_node(first, default_name, spacing_enabled));
+    let address_nodes = lower_inline_node(first, default_name, spacing_enabled, font);
+    let address = plain_text(&address_nodes);
     if address.is_empty() {
         return Vec::new();
     }
-    let label = lower_inline_nodes_with_spacing(&children[1..], default_name, spacing_enabled);
-    lower_external_link(address, label, false)
+    let label =
+        lower_inline_nodes_with_font_state(&children[1..], default_name, spacing_enabled, font);
+    lower_external_link(address, address_nodes, label, false)
 }
 
 /// Unlike Lk, Mt owns a sequence of addresses, not an address and a label.
@@ -360,18 +371,28 @@ fn lower_mail_addresses(
     children: &[Node],
     default_name: Option<&str>,
     spacing_enabled: bool,
+    font: &mut FontState,
 ) -> Vec<Inline> {
     let mut builder = InlineBuilder::with_spacing(spacing_enabled);
+    builder.font = *font;
     for child in children {
         if child.flags.delimiter_close || child.flags.delimiter_open {
             append_inline_node(&mut builder, child, default_name);
             continue;
         }
-        let address = plain_text(&lower_inline_node(child, default_name, spacing_enabled));
+        let address_nodes =
+            lower_inline_node(child, default_name, spacing_enabled, &mut builder.font);
+        let address = plain_text(&address_nodes);
         if !address.is_empty() {
-            builder.append(lower_external_link(address, Vec::new(), true));
+            builder.append(lower_external_link(
+                address,
+                address_nodes,
+                Vec::new(),
+                true,
+            ));
         }
     }
+    *font = builder.font;
     builder.finish()
 }
 
@@ -381,10 +402,15 @@ fn lower_mail_addresses(
 /// It is not a descriptive label: a source spelling such as `.Lk URL .` must
 /// render `URL.` rather than an otherwise invisible link whose only child is
 /// `.`. The same policy is shared with the source fallback below.
-fn lower_external_link(address: String, label: Vec<Inline>, email: bool) -> Vec<Inline> {
+fn lower_external_link(
+    address: String,
+    address_nodes: Vec<Inline>,
+    label: Vec<Inline>,
+    email: bool,
+) -> Vec<Inline> {
     let punctuation_only = is_source_closing_punctuation(&plain_text(&label));
     if punctuation_only {
-        let children = text_node(&address);
+        let children = address_nodes;
         let target = external_link_target(address, email);
         let mut output = vec![Inline::Link {
             target,
@@ -395,7 +421,7 @@ fn lower_external_link(address: String, label: Vec<Inline>, email: bool) -> Vec<
         return output;
     }
     let children = if label.is_empty() {
-        text_node(&address)
+        address_nodes
     } else {
         label
     };

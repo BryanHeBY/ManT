@@ -9,18 +9,23 @@ use libmandoc_rs::{
 };
 use mant_ir::Inline;
 
-use super::{InlineBuilder, append_inline_node_with_next, lower_man_link, parse_roff_text};
+use super::{
+    FontState, InlineBuilder, append_inline_node_with_next, lower_man_link,
+    parse_roff_text_with_state,
+};
 
 pub(in crate::mandoc) struct RecoveredFragment {
     pub(in crate::mandoc) inlines: Vec<Inline>,
     pub(in crate::mandoc) complete: bool,
+    pub(in crate::mandoc) font: FontState,
 }
 
-pub(in crate::mandoc) fn lower_source_fragment(
+pub(in crate::mandoc) fn lower_source_fragment_with_font_state(
     source: &str,
     dialect: MacroSet,
     default_name: Option<&str>,
     synopsis: bool,
+    font: FontState,
 ) -> Option<RecoveredFragment> {
     let mut requests = 0;
     for line in source.lines() {
@@ -44,9 +49,13 @@ pub(in crate::mandoc) fn lower_source_fragment(
     }
     // Bound extra parsing work and nesting before entering the native parser.
     // On exhaustion retain the entire source spelling, including tail tokens.
-    let fallback = || RecoveredFragment {
-        inlines: parse_roff_text(source),
-        complete: false,
+    let fallback = || {
+        let mut font = font;
+        RecoveredFragment {
+            inlines: parse_roff_text_with_state(source, &mut font, true),
+            complete: false,
+            font,
+        }
     };
     if requests > 64
         || source
@@ -105,14 +114,31 @@ pub(in crate::mandoc) fn lower_source_fragment(
         .children
         .iter()
         .find(|node| node.kind == NodeKind::Body)?;
+    let mut font = font;
     Some(RecoveredFragment {
-        inlines: lower_body(&body.children, default_name),
+        inlines: lower_body(&body.children, default_name, &mut font),
         complete: true,
+        font,
     })
 }
 
-fn lower_body(nodes: &[libmandoc_rs::Node], default_name: Option<&str>) -> Vec<Inline> {
+#[cfg(test)]
+fn lower_source_fragment(
+    source: &str,
+    dialect: MacroSet,
+    default_name: Option<&str>,
+    synopsis: bool,
+) -> Option<RecoveredFragment> {
+    lower_source_fragment_with_font_state(source, dialect, default_name, synopsis, FontState::new())
+}
+
+fn lower_body(
+    nodes: &[libmandoc_rs::Node],
+    default_name: Option<&str>,
+    font: &mut FontState,
+) -> Vec<Inline> {
     let mut builder = InlineBuilder::new();
+    builder.font = *font;
     for (index, node) in nodes.iter().enumerate() {
         if matches!(node.macro_name.as_deref(), Some("UR" | "MT")) {
             builder.append(lower_man_link(
@@ -124,6 +150,7 @@ fn lower_body(nodes: &[libmandoc_rs::Node], default_name: Option<&str>) -> Vec<I
             append_inline_node_with_next(&mut builder, node, nodes.get(index + 1), default_name);
         }
     }
+    *font = builder.font;
     builder.finish()
 }
 

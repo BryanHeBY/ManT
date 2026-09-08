@@ -287,6 +287,16 @@ impl<'a> LoweringContext<'a> {
         output
     }
 
+    fn lower_text(&self, source: &str) -> Vec<mant_ir::Inline> {
+        if self.macro_set != MacroSet::Mdoc {
+            return inline::parse_roff_text(source);
+        }
+        let mut font = self.mdoc_font.get();
+        let output = inline::parse_roff_text_with_state(source, &mut font, true);
+        self.mdoc_font.set(font);
+        output
+    }
+
     fn equation_delimiters_at(&self, line: u32) -> Option<(char, char)> {
         self.equation_delimiters
             .iter()

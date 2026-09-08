@@ -2,8 +2,8 @@
 use crate::mandoc::{
     LoweringContext, TableTextBlock,
     inline::{
-        FilledBoundary, InlineBuilder, lower_inline_nodes_with_spacing, lower_man_link,
-        lower_source_fragment, parse_roff_text, plain_text,
+        FilledBoundary, InlineBuilder, lower_man_link, lower_source_fragment_with_font_state,
+        plain_text,
     },
     roff_escape::visible_text,
 };
@@ -104,6 +104,7 @@ pub(super) fn lower_table_cell(
     semantic_nodes: &[&Node],
 ) -> Vec<Inline> {
     if let Some(text_block) = text_block {
+        let initial_font = context.mdoc_font.get();
         let semantic_nodes = semantic_nodes
             .iter()
             .copied()
@@ -125,10 +126,11 @@ pub(super) fn lower_table_cell(
         let reconstructed = match recovered {
             TableTextRecovery::Complete(inlines) => inlines,
             TableTextRecovery::Incomplete => {
+                context.mdoc_font.set(initial_font);
                 if let Some(text) = cell.text.as_deref().filter(|text| !text.is_empty()) {
                     return lower_table_cell_text(text, node.line, context);
                 }
-                parse_roff_text(&text_block.source)
+                context.lower_text(&text_block.source)
             }
         };
         if !reconstructed.is_empty() {
@@ -155,6 +157,7 @@ pub(super) fn lower_table_cell(
                 return reconstructed;
             }
         }
+        context.mdoc_font.set(initial_font);
     }
     if cell.text.as_deref().is_some_and(|text| !text.is_empty()) {
         return lower_table_cell_text(cell.text.as_deref().unwrap_or_default(), node.line, context);
@@ -185,7 +188,7 @@ pub(super) fn lower_table_cell(
                     }]
                 })
             } else {
-                Some(parse_roff_text(argument))
+                Some(context.lower_text(argument))
             }
         });
     if let Some(children) = name.filter(|children| !children.is_empty()) {
@@ -213,7 +216,7 @@ fn table_text_agrees(reconstructed: &str, parsed: &str) -> bool {
 
 fn lower_table_cell_text(source: &str, line: u32, context: &LoweringContext<'_>) -> Vec<Inline> {
     let Some((opening, closing)) = context.equation_delimiters_at(line) else {
-        return parse_roff_text(source);
+        return context.lower_text(source);
     };
     let mut output = Vec::new();
     let mut remainder = source;
@@ -222,7 +225,7 @@ fn lower_table_cell_text(source: &str, line: u32, context: &LoweringContext<'_>)
         let Some(closing_index) = after_opening.find(closing) else {
             break;
         };
-        output.extend(parse_roff_text(&remainder[..opening_index]));
+        output.extend(context.lower_text(&remainder[..opening_index]));
         let expression = &after_opening[..closing_index];
         if !expression.trim().is_empty() {
             output.push(Inline::Code {
@@ -231,7 +234,7 @@ fn lower_table_cell_text(source: &str, line: u32, context: &LoweringContext<'_>)
         }
         remainder = &after_opening[closing_index + closing.len_utf8()..];
     }
-    output.extend(parse_roff_text(remainder));
+    output.extend(context.lower_text(remainder));
     output
 }
 
@@ -246,16 +249,18 @@ fn lower_table_text_block(
     context: &LoweringContext<'_>,
     synopsis: bool,
 ) -> TableTextRecovery {
-    if let Some(recovered) = lower_source_fragment(
+    if let Some(recovered) = lower_source_fragment_with_font_state(
         &block.source,
         context.macro_set,
         context.default_name,
         synopsis,
+        context.mdoc_font.get(),
     ) {
         if !recovered.complete {
             context.warn_unhandled_table_text_block_line(block.start_line);
             return TableTextRecovery::Incomplete;
         }
+        context.mdoc_font.set(recovered.font);
         return TableTextRecovery::Complete(recovered.inlines);
     }
     // A rejected request sequence cannot be proven complete by stitching
@@ -289,11 +294,7 @@ fn lower_table_text_block(
                 let lowered = if matches!(node.macro_name.as_deref(), Some("UR" | "MT")) {
                     lower_man_link(node, context.default_name, spacing_enabled)
                 } else {
-                    lower_inline_nodes_with_spacing(
-                        std::slice::from_ref(node),
-                        context.default_name,
-                        spacing_enabled,
-                    )
+                    context.lower_inline_with_spacing(std::slice::from_ref(node), spacing_enabled)
                 };
                 builder.append_filled(lowered, FilledBoundary::Word);
             }
@@ -304,7 +305,7 @@ fn lower_table_text_block(
         if source_line.is_empty() {
             continue;
         }
-        builder.append_filled(parse_roff_text(source_line), FilledBoundary::Word);
+        builder.append_filled(context.lower_text(source_line), FilledBoundary::Word);
     }
     TableTextRecovery::Complete(builder.finish())
 }
@@ -368,16 +369,26 @@ mod tests {
 
     #[test]
     fn source_requests_dispatch_to_man_and_mdoc_inline_lowering() {
-        let man =
-            super::lower_source_fragment(".BR git (1)", libmandoc_rs::MacroSet::Man, None, false)
-                .unwrap()
-                .inlines;
+        let man = super::lower_source_fragment_with_font_state(
+            ".BR git (1)",
+            libmandoc_rs::MacroSet::Man,
+            None,
+            false,
+            crate::mandoc::inline::FontState::new(),
+        )
+        .unwrap()
+        .inlines;
         assert_eq!(plain_text(&man), "git(1)");
 
-        let mdoc =
-            super::lower_source_fragment(".Xr git 1 ,", libmandoc_rs::MacroSet::Mdoc, None, false)
-                .unwrap()
-                .inlines;
+        let mdoc = super::lower_source_fragment_with_font_state(
+            ".Xr git 1 ,",
+            libmandoc_rs::MacroSet::Mdoc,
+            None,
+            false,
+            crate::mandoc::inline::FontState::new(),
+        )
+        .unwrap()
+        .inlines;
         assert_eq!(plain_text(&mdoc), "git(1),");
         assert!(matches!(
             mdoc.first(),

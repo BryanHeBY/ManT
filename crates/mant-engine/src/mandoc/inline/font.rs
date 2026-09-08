@@ -86,7 +86,7 @@ pub(in crate::mandoc) fn lower_inline_nodes_with_font_state(
     builder.finish()
 }
 
-pub(super) fn parse_roff_text_with_state(
+pub(in crate::mandoc) fn parse_roff_text_with_state(
     source: &str,
     state: &mut FontState,
     recognize_generated_references: bool,

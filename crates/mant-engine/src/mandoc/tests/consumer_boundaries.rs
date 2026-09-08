@@ -2,6 +2,32 @@
 use super::inline_boundaries::{assert_flow, query, variants};
 
 #[test]
+fn font_scopes_reach_bibliographies_and_table_cells() {
+    use super::font_boundaries::assert_style;
+    for (mode, style) in [("emphasis", 2), ("symbolic", 1), ("literal", 4)] {
+        for inner in [
+            ".Rs\n.%A WORD\n.%A NEXT\n.Re",
+            ".TS\nl l.\nWORD\tNEXT\n.TE",
+            ".TS\nl.\nT{\nWORD\nNEXT\nT}\n.TE",
+            ".TS\nl.\nT{\nWORD\n.No NEXT\nT}\n.TE",
+        ] {
+            let content = query(&format!(".Bf -{mode}\n{inner}\nRESUMED\n.Ef\nTAIL"));
+            assert_style(&content, "WORD", style);
+            assert_style(
+                &content,
+                "NEXT",
+                if inner.contains(".No NEXT") { 0 } else { style },
+            );
+            assert_style(&content, "RESUMED", style);
+            assert_style(&content, "TAIL", 0);
+            if inner.starts_with(".Rs") {
+                assert!(crate::render_query_text(&content).contains("WORD and NEXT"));
+            }
+        }
+    }
+}
+
+#[test]
 fn generated_functions_and_references_share_operand_state() {
     use super::font_boundaries::assert_style;
     for body in [r".Fn \fIWORD \fBNEXT", ".Fo \\fIWORD\n.Fa \\fBNEXT\n.Fc"] {

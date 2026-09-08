@@ -22,7 +22,8 @@ pub(super) fn append(builder: &mut InlineBuilder, node: &Node, name: Option<&str
     if node.kind == NodeKind::Equation
         || matches!(node.macro_name.as_deref(), Some("In" | "Lk" | "Mt" | "Bx"))
     {
-        builder.append(lower_atomic_node(node, name, builder.spacing_enabled()));
+        let nodes = lower_atomic_node(node, name, builder.spacing_enabled(), &mut builder.font);
+        builder.append(nodes);
         return;
     }
     if let Some(anchor) = navigation_anchor(node) {

@@ -709,9 +709,8 @@ impl StructuralLowerer<'_, '_, '_> {
                 self.output.extend(nested);
             }
             Some("Rs") => {
-                let mut children = lower_inline_nodes_with_spacing(
+                let mut children = self.context.lower_inline_with_spacing(
                     first_part_children(node, NodeKind::Body),
-                    self.context.default_name,
                     self.spacing_enabled,
                 );
                 if !children.is_empty() {
@@ -902,11 +901,7 @@ fn lower_mdoc_function(
     indent_columns: u16,
     spacing_enabled: bool,
 ) {
-    let children = lower_inline_nodes_with_spacing(
-        std::slice::from_ref(node),
-        context.default_name,
-        spacing_enabled,
-    );
+    let children = context.lower_inline_with_spacing(std::slice::from_ref(node), spacing_enabled);
     if children.is_empty() {
         return;
     }
