@@ -72,8 +72,8 @@ DEVIATION_FIELDS = [
 CURRENT_STRUCTURE_SCHEMA = "mant.roff-structure-profile/v4"
 CURRENT_PROJECTION_SCHEMA = "mant.roff-projection-profile/v3"
 CURRENT_LAYOUT_SCHEMA = "mant.roff-layout-audit/v3"
-CURRENT_TARGET_SCHEMA = "mant.roff-target-profile/v3"
-CURRENT_SEMANTIC_SCHEMA = "mant.roff-semantic-profile/v1"
+CURRENT_TARGET_SCHEMA = "mant.roff-target-profile/v4"
+CURRENT_SEMANTIC_SCHEMA = "mant.roff-semantic-profile/v3"
 SOURCE_DIGEST = re.compile(r"[0-9a-f]{64}")
 PROFILE_SCHEMA = re.compile(
     r"mant\.roff-(?:structure|projection|target|semantic)-profile/v[1-9][0-9]*"
@@ -495,7 +495,28 @@ def summarize(label: str, missing: frozenset[Identity]) -> None:
     print(f"  {label}: {len(missing)} {noun}" + (f" ({detail})" if detail else ""))
 
 
+def validate_current_profile_schemas() -> None:
+    # These independent profilers deliberately own their schemas. A version
+    # change must update coverage too, rather than treating fresh rows as absent.
+    for route, script, expected in (
+        ("target", "targets", CURRENT_TARGET_SCHEMA),
+        ("semantic", "semantics", CURRENT_SEMANTIC_SCHEMA),
+    ):
+        for path in (
+            ROOT / f"scripts/audit-roff-{script}.py",
+            ROOT / f"crates/mant-engine/examples/roff_{route}_profile.rs",
+        ):
+            declared = re.search(
+                r'^(?:const )?PROFILE_SCHEMA(?:\s*:\s*&str)?\s*=\s*"([^"]+)"',
+                path.read_text(encoding="utf-8"),
+                re.MULTILINE,
+            )
+            if not declared or declared[1] != expected:
+                raise ValueError(f"coverage schema {expected} disagrees with {path}")
+
+
 def self_check() -> None:
+    validate_current_profile_schemas()
     a = Identity("alpha", "man/man1/a.1", "a" * 64)
     b = Identity("alpha", "man/man1/b.1", "b" * 64)
     fixture = Identity("fixtures", "real/a.1", "c" * 64)
@@ -606,6 +627,7 @@ def main(argv: Sequence[str]) -> int:
         print("roff audit coverage self-check succeeded")
         return 0
     try:
+        validate_current_profile_schemas()
         coverage = load_coverage(arguments)
     except ValueError as error:
         print(f"check-roff-audit-coverage: {error}", file=sys.stderr)
