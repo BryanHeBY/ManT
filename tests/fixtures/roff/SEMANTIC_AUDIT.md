@@ -173,6 +173,14 @@ The development-only `roff_semantic_profile` example uses
 file loading, decompression, source preparation, parsing and lowering are the
 same path as the public production API. The returned native report is the
 witness from that single parse, not a second independently prepared input.
+`ENTRY_CONTEXT_AUDIT.json` records the production follow-up at `3dfea88a`:
+199 unchanged gold queries over 125 paths/122 source identities, 4,114 source
+runs and 3,471 observed groups, with no invalid/unexpected/unresolved groups.
+All 51 checked-in semantic fixtures are clean. The full local gate and
+all-feature workspace tests passed before the final profiler-only correction;
+that correction has focused, strict-lint and complete gold/fixture reruns.
+The same record retains historical source-less results and explicitly scopes
+their evidence, rather than silently relabelling them as production parity.
 It builds the final `SemanticIndex` and records each entry's ID, kind,
 selectable names (the legacy `aliases` field), explicit `aliasGroups` / `aliasOf`, visible forms, targets, containing section, nested depth, and
 value-domain origin. Profile schema `mant.roff-semantic-profile/v5` names the

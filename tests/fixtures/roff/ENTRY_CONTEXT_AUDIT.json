@@ -1,4 +1,1633 @@
 {
+  "productionFollowup": {
+    "producerCommit": "3dfea88a6bbea2754dc2dc9fe8a275525525fdd8",
+    "productBuildCommit": "86d62429",
+    "profileSchema": "mant.roff-semantic-profile/v5",
+    "mode": "production",
+    "scannedAt": "2026-09-08T15:36:48Z",
+    "profileBinarySha256": "9a72ebc3f1e3c3f5e44447d1829fa053da1d1ac0b06032fc8ca8bc6f78e0f30d",
+    "productBinarySha256": "cc908433afdda3fa13db2acc6e2730c14d82fd68b5837f0086f312cefd844505",
+    "manifestSha256": "5a53a655940d08fa78081a74d29b50245a7f9104161b391b082216729471b55f",
+    "queryGold": {
+      "passed": 199,
+      "sourcePaths": 125,
+      "uniqueSourceIdentities": 122,
+      "reportSha256": "9ed2776d47eff68067e85529928d950d3fd7d5d8a41d506d094934dff044f4f0"
+    },
+    "sourceGroupAudit": {
+      "sourceRuns": 4114,
+      "observedGroups": 3471,
+      "sources": [
+        {
+          "id": "P001",
+          "sourceSha256": "7f5115d15c9647b77bbc4aa838dff90818a20f03763f1557e1a0e36292ab614e",
+          "observedGroups": 0,
+          "sourceRuns": 0,
+          "decisions": {},
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P002",
+          "sourceSha256": "cbedf24cf75128a6794a24a4c380307f73515047945b6736933d313af4623ae7",
+          "observedGroups": 4,
+          "sourceRuns": 6,
+          "decisions": {
+            "parameter-only-head": 1,
+            "source-run-retained": 4,
+            "no-exact-name-review-template-or-non-declaration": 1
+          },
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P003",
+          "sourceSha256": "fee817f32be2ca893147affc5b9f82dce17ad8f44d77fcb40839450ea94dd15d",
+          "observedGroups": 0,
+          "sourceRuns": 4,
+          "decisions": {
+            "unclosed-head-run": 2,
+            "executed-flow-boundary": 1,
+            "source-container-or-content-boundary": 1
+          },
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P004",
+          "sourceSha256": "9d485cfd9bc5200abd465929b8e8e933b1bbb77cf600eae3deaba4b0981110b0",
+          "observedGroups": 16,
+          "sourceRuns": 31,
+          "decisions": {
+            "no-exact-name-review-template-or-non-declaration": 10,
+            "source-run-retained": 16,
+            "parameter-only-head-boundary": 2,
+            "parameter-only-head": 3
+          },
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P005",
+          "sourceSha256": "2104e25313a4eb3dbd3597764d4eb04893eb474b63ce0071138c93e8d069cac1",
+          "observedGroups": 0,
+          "sourceRuns": 1,
+          "decisions": {
+            "source-container-or-content-boundary": 1
+          },
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P006",
+          "sourceSha256": "2e51b010c53b31757c559695c915acb414bc01eda32abe0f3871698cabd78c63",
+          "observedGroups": 6,
+          "sourceRuns": 6,
+          "decisions": {
+            "source-run-retained": 6
+          },
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P007",
+          "sourceSha256": "ebf3201731dae4e106d29f8ab94ac56ba6dfd13a726e8fb0f2c8493eae65229a",
+          "observedGroups": 0,
+          "sourceRuns": 17,
+          "decisions": {
+            "no-exact-name-review-template-or-non-declaration": 11,
+            "parameter-only-head-boundary": 3,
+            "parameter-only-head": 3
+          },
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P008",
+          "sourceSha256": "c2396033efd69bc5db1f31d6555fa0e3e0e4c8ce83aac2b3b93747a31f8f19de",
+          "observedGroups": 9,
+          "sourceRuns": 16,
+          "decisions": {
+            "no-exact-name-review-template-or-non-declaration": 2,
+            "parameter-only-head": 4,
+            "parameter-only-head-boundary": 1,
+            "source-run-retained": 9
+          },
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P009",
+          "sourceSha256": "f31a9ae03e8e20baad471d47c4e17391038d852e32719c101001da6eb52b3083",
+          "observedGroups": 805,
+          "sourceRuns": 854,
+          "decisions": {
+            "no-exact-name-review-template-or-non-declaration": 23,
+            "source-run-retained": 805,
+            "unclosed-head-run": 11,
+            "source-container-or-content-boundary": 15
+          },
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P010",
+          "sourceSha256": "7aad0096c8fa69c22b8487f45ace7e38f820d4b7dc1a5877b2e95ebd9a28ae96",
+          "observedGroups": 0,
+          "sourceRuns": 0,
+          "decisions": {},
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P011",
+          "sourceSha256": "24973f6ab55783d25e1c5e5fe1be90fbcaa5331ae5813a0c0976ef3b87dbcde3",
+          "observedGroups": 0,
+          "sourceRuns": 0,
+          "decisions": {},
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P012",
+          "sourceSha256": "107c35463c2fb970318b34ccca09db100e1b99bfab793196eab68ef91d350b78",
+          "observedGroups": 0,
+          "sourceRuns": 0,
+          "decisions": {},
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P013",
+          "sourceSha256": "b8cd4f0980a6a3abd243c00a146bf336564b2bf6c270d1101f541da4d9796623",
+          "observedGroups": 89,
+          "sourceRuns": 90,
+          "decisions": {
+            "source-run-retained": 89,
+            "parameter-only-head": 1
+          },
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P014",
+          "sourceSha256": "aa172ef0f613c7366c72dc4d683937c4dab919af6cb94ed9c7442afbda9f8c76",
+          "observedGroups": 0,
+          "sourceRuns": 1,
+          "decisions": {
+            "parameter-only-head": 1
+          },
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P015",
+          "sourceSha256": "ddf0aeebe698e5fb25bae35d1d84b025f7a78873ac3a4e5049b066b48ee62251",
+          "observedGroups": 0,
+          "sourceRuns": 0,
+          "decisions": {},
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P016",
+          "sourceSha256": "e12692ed363dffeb86248489cbe3333e399e2da4a8435dddfd0146b0c3e2e314",
+          "observedGroups": 0,
+          "sourceRuns": 0,
+          "decisions": {},
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P017",
+          "sourceSha256": "a169108ad497a9d66fdfc28b3fc4bb21341482847209d21da8422cde8170e1a3",
+          "observedGroups": 0,
+          "sourceRuns": 0,
+          "decisions": {},
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P018",
+          "sourceSha256": "ef82039414564d6812eeec370bc78c43bc053447e3b6a67bd6597103e20af3cb",
+          "observedGroups": 0,
+          "sourceRuns": 0,
+          "decisions": {},
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P019",
+          "sourceSha256": "3021a4bc914a7b24ba0e51bdf2d974b95f5ac4734972296d0c09de1a98069954",
+          "observedGroups": 0,
+          "sourceRuns": 0,
+          "decisions": {},
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P020",
+          "sourceSha256": "7b136f9c7e0156f4029495e7549846f9653dcee1d711a36db7d85e903c6e2ed5",
+          "observedGroups": 1,
+          "sourceRuns": 2,
+          "decisions": {
+            "single-physical-owner": 1,
+            "source-run-retained": 1
+          },
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P021",
+          "sourceSha256": "23f7bd155c57125864094d2cb4e1f6ec9f8c2ea002e18bebeb3ed4bcfaad1971",
+          "observedGroups": 19,
+          "sourceRuns": 44,
+          "decisions": {
+            "source-run-retained": 19,
+            "parameter-only-head": 2,
+            "no-exact-name-review-template-or-non-declaration": 11,
+            "source-container-or-content-boundary": 11,
+            "unclosed-head-run": 1
+          },
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P022",
+          "sourceSha256": "29301db4c4c016483fc4d3c42652f678cc99bcfaec16cbb2490151fc172a15f7",
+          "observedGroups": 0,
+          "sourceRuns": 1,
+          "decisions": {
+            "unclosed-head-run": 1
+          },
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P023",
+          "sourceSha256": "254d06fba007c3fe6e01c79233be156cd98a743e1746f481efd68cc065d4d4aa",
+          "observedGroups": 0,
+          "sourceRuns": 0,
+          "decisions": {},
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P024",
+          "sourceSha256": "fd9e77b243df05ee43b4315b72b5ee5d4e0c2ef6f28a38222d059728cddced88",
+          "observedGroups": 0,
+          "sourceRuns": 0,
+          "decisions": {},
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P025",
+          "sourceSha256": "60a3db3df56c9f7edf21d226cd5c041d2def107c0c0d4ee1d48da63a43c3d94d",
+          "observedGroups": 6,
+          "sourceRuns": 22,
+          "decisions": {
+            "unclosed-head-run": 10,
+            "source-container-or-content-boundary": 6,
+            "source-run-retained": 6
+          },
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P026",
+          "sourceSha256": "ecfb6fc44d2ed89d15126d616db3e0481addc141cb200df80291321300006669",
+          "observedGroups": 0,
+          "sourceRuns": 0,
+          "decisions": {},
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P027",
+          "sourceSha256": "33cba6afb24873e00d4d4796e29dd12e9babaf305c44c87621abe5e7fcf1e0fe",
+          "observedGroups": 0,
+          "sourceRuns": 3,
+          "decisions": {
+            "source-container-or-content-boundary": 3
+          },
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P028",
+          "sourceSha256": "da9f57e800f6d441f15502699f713a8b9db10f874473962e93694f710f24e1b6",
+          "observedGroups": 0,
+          "sourceRuns": 2,
+          "decisions": {
+            "parameter-only-head": 2
+          },
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P029",
+          "sourceSha256": "c905464c8bd894805b5befd2cd497171e30e45732ce6e9ee0e36de70235bf4fc",
+          "observedGroups": 0,
+          "sourceRuns": 0,
+          "decisions": {},
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P030",
+          "sourceSha256": "60739e1a91d6383dea073037c1d90b72c7ef9666bc96e44fa873414f91367d36",
+          "observedGroups": 0,
+          "sourceRuns": 0,
+          "decisions": {},
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P031",
+          "sourceSha256": "6cfb2259badbd3c770e1943e9a9950742fd6e9405596d69aadee325faf83726d",
+          "observedGroups": 0,
+          "sourceRuns": 0,
+          "decisions": {},
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P032",
+          "sourceSha256": "7f3a513ba0e0a5141906e83109050ec37a293e0fcb7b293d2ffadd597faa755f",
+          "observedGroups": 0,
+          "sourceRuns": 0,
+          "decisions": {},
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P033",
+          "sourceSha256": "bc21793e07f9aa4438faf93889ceb99ede2904ac67570c9ef3f35076a74c8cf3",
+          "observedGroups": 0,
+          "sourceRuns": 0,
+          "decisions": {},
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P034",
+          "sourceSha256": "3a85ebdd1601114e7c8c1dfa35726f8394d59412887242ffc6ef49ec021017ee",
+          "observedGroups": 0,
+          "sourceRuns": 0,
+          "decisions": {},
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P035",
+          "sourceSha256": "3aac999f695f48491ceaccc16be1c88deeadc36a2e46e785d37b8fc2b7dbb3ae",
+          "observedGroups": 0,
+          "sourceRuns": 0,
+          "decisions": {},
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P036",
+          "sourceSha256": "16b67cdb2faf38cbd5501cf3134ef00f8ad3d2c0d888754c225d0884cf267ca9",
+          "observedGroups": 0,
+          "sourceRuns": 0,
+          "decisions": {},
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P037",
+          "sourceSha256": "983e50d0a3cb005e15b2b388a27c1dca7811f87b35a91e4100bcaec528bb2225",
+          "observedGroups": 0,
+          "sourceRuns": 0,
+          "decisions": {},
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P038",
+          "sourceSha256": "972d02783f80881b47c5a717025a730b9d2737aecba61c76d74dc2c2bfc3607d",
+          "observedGroups": 1,
+          "sourceRuns": 1,
+          "decisions": {
+            "source-run-retained": 1
+          },
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P039",
+          "sourceSha256": "2ded3ceb9855e43713e0ccb6fd82a0781d7cbfc4df46b6da40c5b63bece19c86",
+          "observedGroups": 0,
+          "sourceRuns": 0,
+          "decisions": {},
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P040",
+          "sourceSha256": "35e63e95c5f9f32895f8f90b44b12151d77b8d38192ed85ec4dd84d64122506c",
+          "observedGroups": 0,
+          "sourceRuns": 0,
+          "decisions": {},
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P041",
+          "sourceSha256": "1fd575f736c31a9a81791a64dfd9d67ded8dd199767ac43eee2da4571b61969b",
+          "observedGroups": 0,
+          "sourceRuns": 0,
+          "decisions": {},
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P042",
+          "sourceSha256": "eb299c2cfc6e004c531937a63c19d757b8033089c25d0f19a41eae6893ff987c",
+          "observedGroups": 0,
+          "sourceRuns": 0,
+          "decisions": {},
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P043",
+          "sourceSha256": "9529c69e157b9a1983f4757c99e5f52b2b946a931e9a4faf9b61e93f3dfbe2a3",
+          "observedGroups": 1,
+          "sourceRuns": 1,
+          "decisions": {
+            "source-run-retained": 1
+          },
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P044",
+          "sourceSha256": "b0f4c066c80c825d57e6e1f4b6e11cd21d050f2289d367e95a3ac218d92634af",
+          "observedGroups": 0,
+          "sourceRuns": 0,
+          "decisions": {},
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P045",
+          "sourceSha256": "9f22b48869c3202c2d4add538b246fcd0cf6ee2e1c5f42f9f4bb28238b0796cc",
+          "observedGroups": 0,
+          "sourceRuns": 0,
+          "decisions": {},
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P046",
+          "sourceSha256": "3a85ebdd1601114e7c8c1dfa35726f8394d59412887242ffc6ef49ec021017ee",
+          "observedGroups": 0,
+          "sourceRuns": 0,
+          "decisions": {},
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P047",
+          "sourceSha256": "531ca21b660c1fbd294218e921d834adfaccd61c6f400a2a5d844759f40fc034",
+          "observedGroups": 803,
+          "sourceRuns": 852,
+          "decisions": {
+            "no-exact-name-review-template-or-non-declaration": 23,
+            "source-run-retained": 803,
+            "unclosed-head-run": 11,
+            "source-container-or-content-boundary": 15
+          },
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P048",
+          "sourceSha256": "2ee1c5dd84a69dfc91d84840e943e7df0ee06b86bf27eb4bb9369c415f3351c1",
+          "observedGroups": 0,
+          "sourceRuns": 0,
+          "decisions": {},
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P049",
+          "sourceSha256": "60b65fb826d4f9b0de0d01f484e4080a5ccf1ad41a3aa5fd850b706dc7748fec",
+          "observedGroups": 0,
+          "sourceRuns": 0,
+          "decisions": {},
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P050",
+          "sourceSha256": "15c5484880936b3fcb259c66a3615d43529d29995b8a1a373156613c1f374ab7",
+          "observedGroups": 0,
+          "sourceRuns": 0,
+          "decisions": {},
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P051",
+          "sourceSha256": "fedc66648fcf262298293689c6e1a8dda946c6f940f8ea033928f9bf1bd5829c",
+          "observedGroups": 0,
+          "sourceRuns": 0,
+          "decisions": {},
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P052",
+          "sourceSha256": "a4e84763f83e5a2eb9aa4572545bbe518e502f21880c63a06d9e56961e8b61ba",
+          "observedGroups": 0,
+          "sourceRuns": 0,
+          "decisions": {},
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P053",
+          "sourceSha256": "0f6252ae51279e02e6b6f461f5ab17099f477ccc2f0086d3ab455f837356a1a1",
+          "observedGroups": 5,
+          "sourceRuns": 19,
+          "decisions": {
+            "parameter-only-head": 11,
+            "source-run-retained": 5,
+            "no-exact-name-review-template-or-non-declaration": 2,
+            "parameter-only-head-boundary": 1
+          },
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P054",
+          "sourceSha256": "97b7194312c177ed26e32d45b833dbd6903fd72c8238144e6aff31fb1f9da65a",
+          "observedGroups": 0,
+          "sourceRuns": 0,
+          "decisions": {},
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P055",
+          "sourceSha256": "cee6f49c6949f33fbc2471bf1a9050051e42291dd67956f296eb449dcdb85f14",
+          "observedGroups": 0,
+          "sourceRuns": 13,
+          "decisions": {
+            "single-physical-owner": 11,
+            "unclosed-head-run": 1,
+            "source-container-or-content-boundary": 1
+          },
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P056",
+          "sourceSha256": "d1d70ad837ee15a6b0ed2081ab629ae91e3762486b3424407b816a63735e9618",
+          "observedGroups": 0,
+          "sourceRuns": 14,
+          "decisions": {
+            "unclosed-head-run": 7,
+            "no-exact-name-review-template-or-non-declaration": 7
+          },
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P057",
+          "sourceSha256": "93616c4dfc29e4fd7336c21e9d5f86690a6443d9bbffb39c6cbf6a9cf772c473",
+          "observedGroups": 6,
+          "sourceRuns": 16,
+          "decisions": {
+            "parameter-only-head": 10,
+            "source-run-retained": 6
+          },
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P058",
+          "sourceSha256": "0c10a0eb02ca7153401d9865e376d70f81553f8471e25c97567c61769460ab0c",
+          "observedGroups": 0,
+          "sourceRuns": 1,
+          "decisions": {
+            "unclosed-head-run": 1
+          },
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P059",
+          "sourceSha256": "e037d991f8eb695f43ce5196dd1ada25fe603621645652a4a2ab53776ac3bc2b",
+          "observedGroups": 1,
+          "sourceRuns": 2,
+          "decisions": {
+            "source-run-retained": 1,
+            "no-exact-name-review-template-or-non-declaration": 1
+          },
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P060",
+          "sourceSha256": "b9c1e393e985a4f40263f2b9ee6d7c0dc78b2501d0408faba842ed09aa5bdaeb",
+          "observedGroups": 1,
+          "sourceRuns": 1,
+          "decisions": {
+            "source-run-retained": 1
+          },
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P061",
+          "sourceSha256": "078df94670ddd4f9d72edb1bfbda9d54ba8c48e1369215298085fdcaea537f93",
+          "observedGroups": 0,
+          "sourceRuns": 0,
+          "decisions": {},
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P062",
+          "sourceSha256": "004dc5af3d727bf14bd36f8b6d7a112d209a1437d98e2325d224651899617f06",
+          "observedGroups": 0,
+          "sourceRuns": 1,
+          "decisions": {
+            "unclosed-head-run": 1
+          },
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P063",
+          "sourceSha256": "5f2ec8b3d0495a3dfad76bdbcb614b8631995d2afdc6ace4a846a60655c59efe",
+          "observedGroups": 0,
+          "sourceRuns": 0,
+          "decisions": {},
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P064",
+          "sourceSha256": "348b67ad3c9e4cb4e7603ee23b8d23958498f85e70b1ff94c025aff87ae6d5a1",
+          "observedGroups": 0,
+          "sourceRuns": 0,
+          "decisions": {},
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P065",
+          "sourceSha256": "fbef0624ae8abda144ef8c4ab61bdd2f4e2e8b306653be9655a294c74ace54c1",
+          "observedGroups": 1,
+          "sourceRuns": 2,
+          "decisions": {
+            "source-run-retained": 1,
+            "no-exact-name-review-template-or-non-declaration": 1
+          },
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P066",
+          "sourceSha256": "ea097734274a84abb874309f2a3501c2c6276ee1a689f0f82c13f8d387a7a12b",
+          "observedGroups": 1,
+          "sourceRuns": 1,
+          "decisions": {
+            "source-run-retained": 1
+          },
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P067",
+          "sourceSha256": "829b130cae16ff1f6e998f632d47112c0fcf03af2af249291e0658aac689f6da",
+          "observedGroups": 0,
+          "sourceRuns": 0,
+          "decisions": {},
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P068",
+          "sourceSha256": "8830d7d2139c2927f5465a8e41ede7de9071444149cb3fb76f1d953d7e321edb",
+          "observedGroups": 0,
+          "sourceRuns": 0,
+          "decisions": {},
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P069",
+          "sourceSha256": "e5e0d346bf00d7c41280d618c5b37fedb7c7016caff78f6c600ee25f8efac421",
+          "observedGroups": 0,
+          "sourceRuns": 29,
+          "decisions": {
+            "parameter-only-head": 29
+          },
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P070",
+          "sourceSha256": "6339a161e8b9827303b9204d1252e39cbf2f2d1e6e014fc7fcd5ccb4c06491b2",
+          "observedGroups": 6,
+          "sourceRuns": 16,
+          "decisions": {
+            "parameter-only-head": 10,
+            "source-run-retained": 6
+          },
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P071",
+          "sourceSha256": "249b232d42ce6091c61bf1ab85e0e32e9aeb1c30ab73f9ba0d8ef943a55200d2",
+          "observedGroups": 9,
+          "sourceRuns": 9,
+          "decisions": {
+            "source-run-retained": 9
+          },
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P072",
+          "sourceSha256": "7d7d0817c869c1439d4e183f3d77d0194884c1360f8c9a7e4cd1a6c44f4b3429",
+          "observedGroups": 0,
+          "sourceRuns": 0,
+          "decisions": {},
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P073",
+          "sourceSha256": "43d5f0a72186a3072e5c8eae22689538e487a7d97ef70021d6e651c986e995f0",
+          "observedGroups": 7,
+          "sourceRuns": 18,
+          "decisions": {
+            "parameter-only-head": 10,
+            "source-run-retained": 7,
+            "no-exact-name-review-template-or-non-declaration": 1
+          },
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P074",
+          "sourceSha256": "27ba05c9c4e73005dc0df00a59d0f939c11a4a74493ae3fa28fb0d1fbac88b4c",
+          "observedGroups": 0,
+          "sourceRuns": 0,
+          "decisions": {},
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P075",
+          "sourceSha256": "788f769ec797645a5fb2786a77af143e34561ad5a633237870bc5a38e6594a4a",
+          "observedGroups": 4,
+          "sourceRuns": 5,
+          "decisions": {
+            "parameter-only-head": 1,
+            "source-run-retained": 4
+          },
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P076",
+          "sourceSha256": "297ef5d7f8749697189c7330d872457d4a6ab8a355c8d7e3ad0748677d101959",
+          "observedGroups": 4,
+          "sourceRuns": 5,
+          "decisions": {
+            "source-run-retained": 4,
+            "unclosed-head-run": 1
+          },
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P077",
+          "sourceSha256": "4173b892ae66b6c891617c7423bc78f0cfc7120d552f0d7a00a5eda3e8783d24",
+          "observedGroups": 3,
+          "sourceRuns": 5,
+          "decisions": {
+            "no-exact-name-review-template-or-non-declaration": 1,
+            "source-run-retained": 3,
+            "unclosed-head-run": 1
+          },
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P078",
+          "sourceSha256": "fac720cec57d1fcc4d4c7e5c3af4f68c2d66caf5cd3c09e40bfa4a7736b54554",
+          "observedGroups": 0,
+          "sourceRuns": 0,
+          "decisions": {},
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P079",
+          "sourceSha256": "2cc46f8ba8fae696f92932f87a265bb2604fa8afbe5520d40714b11b165ce053",
+          "observedGroups": 0,
+          "sourceRuns": 1,
+          "decisions": {
+            "unclosed-head-run": 1
+          },
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P080",
+          "sourceSha256": "9d236780c58a47f1fc87bd37ca77d2e874a8fcca3ffe7ad3d5bf4c655f17ece6",
+          "observedGroups": 0,
+          "sourceRuns": 0,
+          "decisions": {},
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P081",
+          "sourceSha256": "a4806bc7be32ead0e963772188a43b8f7630c82e05623f2ba24f28db43d47ef9",
+          "observedGroups": 0,
+          "sourceRuns": 1,
+          "decisions": {
+            "unclosed-head-run": 1
+          },
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P082",
+          "sourceSha256": "28f55872fe8aeb4e88e4848f7e6e1d875f38d84cb27eb7e6945f6d47211662c9",
+          "observedGroups": 4,
+          "sourceRuns": 6,
+          "decisions": {
+            "parameter-only-head": 1,
+            "source-run-retained": 4,
+            "no-exact-name-review-template-or-non-declaration": 1
+          },
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P083",
+          "sourceSha256": "47bc5f14da1ba0db2859f8faba377df8473ae36081b7e0c8f7306115e40a8598",
+          "observedGroups": 0,
+          "sourceRuns": 0,
+          "decisions": {},
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P084",
+          "sourceSha256": "8a091512f85e019d01ff839fda30932810c9e630cda192c6cb5215c7c96e2a0f",
+          "observedGroups": 0,
+          "sourceRuns": 0,
+          "decisions": {},
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P085",
+          "sourceSha256": "6a94a0a121a46574e32576214740460601e0116a1a23c47a68ce23a9845e59aa",
+          "observedGroups": 0,
+          "sourceRuns": 0,
+          "decisions": {},
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P086",
+          "sourceSha256": "76a80bbe71403412f9ab12baf1f40579a3cbee239978a70eade95cf63393de7b",
+          "observedGroups": 0,
+          "sourceRuns": 0,
+          "decisions": {},
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P087",
+          "sourceSha256": "c4f3ea39c9c937dd13db8e4ff93fa5c9d178edfbeb421a699a0edbce6647db33",
+          "observedGroups": 1,
+          "sourceRuns": 1,
+          "decisions": {
+            "source-run-retained": 1
+          },
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P088",
+          "sourceSha256": "1057746f50ef8f555b1784cb49cd5d1cb917ff6aa2a99404ff0a7539df822487",
+          "observedGroups": 0,
+          "sourceRuns": 0,
+          "decisions": {},
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P089",
+          "sourceSha256": "2326e93e2c6564962b0c912cb5054edbcdb4bafab560898d4775c31f8ba45dd7",
+          "observedGroups": 0,
+          "sourceRuns": 0,
+          "decisions": {},
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P090",
+          "sourceSha256": "e24244e08c5fdfc96dfb2215f485266772a50bfd6ae84ca75f75cb471b35ba4f",
+          "observedGroups": 0,
+          "sourceRuns": 10,
+          "decisions": {
+            "parameter-only-head": 10
+          },
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P091",
+          "sourceSha256": "6d774ba0cc564a0622f936a1446c471d0da33a367a456c356bd20dda4de237fb",
+          "observedGroups": 4,
+          "sourceRuns": 5,
+          "decisions": {
+            "parameter-only-head": 1,
+            "source-run-retained": 4
+          },
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P092",
+          "sourceSha256": "b121bd3bc53876205a5c0f37666e6a5234d899ad0632fdd429fb5d3f598a3fbe",
+          "observedGroups": 2,
+          "sourceRuns": 51,
+          "decisions": {
+            "parameter-only-head": 46,
+            "no-exact-name-review-template-or-non-declaration": 3,
+            "source-run-retained": 2
+          },
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P093",
+          "sourceSha256": "08152a1ed1b01df59c898320600c8c4a32e39f7c1412596d5e65082fe65f2d81",
+          "observedGroups": 0,
+          "sourceRuns": 46,
+          "decisions": {
+            "parameter-only-head": 46
+          },
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P094",
+          "sourceSha256": "d97e13a13f1535c49c5191575db1bde5255e3f89a2332cda46d0bc7529c94f58",
+          "observedGroups": 2,
+          "sourceRuns": 5,
+          "decisions": {
+            "source-run-retained": 2,
+            "parameter-only-head": 2,
+            "unclosed-head-run": 1
+          },
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P095",
+          "sourceSha256": "988410b1ab80051e018d13ba76fb81c81a8a948d6e977c809529d5799f355af3",
+          "observedGroups": 0,
+          "sourceRuns": 20,
+          "decisions": {
+            "parameter-only-head": 20
+          },
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P096",
+          "sourceSha256": "8d75a1628d868fef74ca216a4034f4e4df44490f58a1d17616a672c215e5f8eb",
+          "observedGroups": 0,
+          "sourceRuns": 0,
+          "decisions": {},
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P097",
+          "sourceSha256": "fdb9fbe8d2c5fd4453d72e6423e2b9f640f05e3c41243194091a1df772dbe9a5",
+          "observedGroups": 6,
+          "sourceRuns": 16,
+          "decisions": {
+            "parameter-only-head": 10,
+            "source-run-retained": 6
+          },
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P098",
+          "sourceSha256": "831758775fe2fdaa3d5acf913dfd5024a608fd3538281e0d1cab857ce66faa95",
+          "observedGroups": 0,
+          "sourceRuns": 0,
+          "decisions": {},
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P099",
+          "sourceSha256": "72de98371bbac79f8dc59b50e4d506c23fc82add3da9c5bd60a36f8bacc0cf25",
+          "observedGroups": 1,
+          "sourceRuns": 2,
+          "decisions": {
+            "source-run-retained": 1,
+            "no-exact-name-review-template-or-non-declaration": 1
+          },
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P100",
+          "sourceSha256": "96f1e91c9a56b877886c2d07d655255a795547e6d20cfd144df4e7739963ee27",
+          "observedGroups": 0,
+          "sourceRuns": 0,
+          "decisions": {},
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P101",
+          "sourceSha256": "8d78e06342d7cf032e8dd0982349aa8a6d443b27d8e1d1305fe9ae1f5be8b72f",
+          "observedGroups": 0,
+          "sourceRuns": 0,
+          "decisions": {},
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P102",
+          "sourceSha256": "08e040b088db321a06eb4094a077d65f1634472a79886558839f555b50e726c6",
+          "observedGroups": 0,
+          "sourceRuns": 0,
+          "decisions": {},
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P103",
+          "sourceSha256": "238902087fc9b5d7e1cd34bf0d703e9dd83e1a586dc34c69249a1a876767f85e",
+          "observedGroups": 0,
+          "sourceRuns": 0,
+          "decisions": {},
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P104",
+          "sourceSha256": "bb19ad89850afdee8efb7e8e9332e2a52d410c4065af3b69b0e701888f99fdd6",
+          "observedGroups": 0,
+          "sourceRuns": 0,
+          "decisions": {},
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P105",
+          "sourceSha256": "4196bf0af923ae345f03f4b379d7e277da1754a6f4cdf025ac38981ada5957e7",
+          "observedGroups": 4,
+          "sourceRuns": 4,
+          "decisions": {
+            "source-run-retained": 4
+          },
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P106",
+          "sourceSha256": "65c02f17ab03acc8d821d917c50ce22c967616d5783dec58bb1fcc28e3184ed8",
+          "observedGroups": 5,
+          "sourceRuns": 54,
+          "decisions": {
+            "source-run-retained": 5,
+            "parameter-only-head": 42,
+            "no-exact-name-review-template-or-non-declaration": 6,
+            "unclosed-head-run": 1
+          },
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P107",
+          "sourceSha256": "689e9f7717eda500beffcbcdf7f1255a0840ff9910ffbf072e331a025dbd53ce",
+          "observedGroups": 2,
+          "sourceRuns": 2,
+          "decisions": {
+            "source-run-retained": 2
+          },
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P108",
+          "sourceSha256": "98c9cb4b916037a49e1d97f4baaae0cb71d5e8b85a6cdb4ff3e12590fe2660a3",
+          "observedGroups": 0,
+          "sourceRuns": 0,
+          "decisions": {},
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P109",
+          "sourceSha256": "21b595496e6dd69833a4b0e60de6c3e5ec05371537e88b80f116e943457c0bfd",
+          "observedGroups": 0,
+          "sourceRuns": 0,
+          "decisions": {},
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P110",
+          "sourceSha256": "fbdf81c5000af686d765b19a18f75e52b0460b866690299b715093db7e04312e",
+          "observedGroups": 0,
+          "sourceRuns": 1,
+          "decisions": {
+            "parameter-only-head": 1
+          },
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P111",
+          "sourceSha256": "6bfba32f6501b797e45feed845521bfa26122cb79006198cc62e1d89eee9646c",
+          "observedGroups": 0,
+          "sourceRuns": 1,
+          "decisions": {
+            "parameter-only-head": 1
+          },
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P112",
+          "sourceSha256": "f8be9675b0e64e75f2ebffd28a6e5295219669390a77c67b604cb4ff7c32cb60",
+          "observedGroups": 0,
+          "sourceRuns": 7,
+          "decisions": {
+            "source-container-or-content-boundary": 6,
+            "unclosed-head-run": 1
+          },
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P113",
+          "sourceSha256": "396abc2d13342adf2dd1d4dba7a3d443fc743aa33db2e83680b27d3c83d4dfc9",
+          "observedGroups": 0,
+          "sourceRuns": 0,
+          "decisions": {},
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P114",
+          "sourceSha256": "34557de7f44cfdaf1bccdc05621bae7108df3bf58c49d24b1688292b82cff158",
+          "observedGroups": 0,
+          "sourceRuns": 0,
+          "decisions": {},
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P115",
+          "sourceSha256": "f35de3b3008f684a7db141a7626db68b08c46e5b3d45c97726bc6d97eebade4e",
+          "observedGroups": 0,
+          "sourceRuns": 0,
+          "decisions": {},
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P116",
+          "sourceSha256": "e83d82c28bb2683cf71500e5fb8d9746a162bb24b08a6396a15ab2ed1d96cb45",
+          "observedGroups": 0,
+          "sourceRuns": 0,
+          "decisions": {},
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P117",
+          "sourceSha256": "d0e7de01eb61dd787cf8162f00ab60f68d8b271a084c0f2cbc0652797a01d4b9",
+          "observedGroups": 0,
+          "sourceRuns": 0,
+          "decisions": {},
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P118",
+          "sourceSha256": "c483b800c9aceb307fb15ea4138783838cb379b6f4e306a8dabe84af8fd4b01d",
+          "observedGroups": 0,
+          "sourceRuns": 0,
+          "decisions": {},
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P119",
+          "sourceSha256": "03a056a5b5041454e837f12027e3002ceee1e452530d17a5c55edf14183b9afb",
+          "observedGroups": 0,
+          "sourceRuns": 0,
+          "decisions": {},
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P120",
+          "sourceSha256": "4f5e1946154896899d6471c4e5b0bf902394429641231074dcacc71bbc5dd20b",
+          "observedGroups": 0,
+          "sourceRuns": 0,
+          "decisions": {},
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P121",
+          "sourceSha256": "a86bd1d671aa2afff558eb3b7c8b6e2a8bbaf55cb9fb2a6549b7538dd56e0f0f",
+          "observedGroups": 804,
+          "sourceRuns": 853,
+          "decisions": {
+            "no-exact-name-review-template-or-non-declaration": 23,
+            "source-run-retained": 804,
+            "unclosed-head-run": 11,
+            "source-container-or-content-boundary": 15
+          },
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P122",
+          "sourceSha256": "531ca21b660c1fbd294218e921d834adfaccd61c6f400a2a5d844759f40fc034",
+          "observedGroups": 803,
+          "sourceRuns": 852,
+          "decisions": {
+            "no-exact-name-review-template-or-non-declaration": 23,
+            "source-run-retained": 803,
+            "unclosed-head-run": 11,
+            "source-container-or-content-boundary": 15
+          },
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P123",
+          "sourceSha256": "a3de526eb64c1f066d50899fa6ba2a7e63eb77b977aa881c67599d89978debf1",
+          "observedGroups": 19,
+          "sourceRuns": 44,
+          "decisions": {
+            "source-run-retained": 19,
+            "parameter-only-head": 2,
+            "no-exact-name-review-template-or-non-declaration": 11,
+            "source-container-or-content-boundary": 11,
+            "unclosed-head-run": 1
+          },
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P124",
+          "sourceSha256": "a271c9471543684df90d1a3f0d988628588ed8ec4f49bb2f7e402fc752ff4a83",
+          "observedGroups": 1,
+          "sourceRuns": 2,
+          "decisions": {
+            "source-run-retained": 1,
+            "parameter-only-head": 1
+          },
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        },
+        {
+          "id": "P125",
+          "sourceSha256": "0f6252ae51279e02e6b6f461f5ab17099f477ccc2f0086d3ab455f837356a1a1",
+          "observedGroups": 5,
+          "sourceRuns": 19,
+          "decisions": {
+            "parameter-only-head": 11,
+            "source-run-retained": 5,
+            "no-exact-name-review-template-or-non-declaration": 2,
+            "parameter-only-head-boundary": 1
+          },
+          "unexpectedGroups": [],
+          "invalidGroups": 0,
+          "unresolvedRuns": 0
+        }
+      ]
+    },
+    "verification": {
+      "fullGate": {
+        "commit": "86d62429",
+        "command": "bash scripts/check.sh",
+        "passed": true,
+        "logSha256": "58fc687f133d6505ecf816fcc75103b0000fafbaa1185b853fd7bb835c521704"
+      },
+      "allFeatures": {
+        "command": "cargo test --locked --workspace --all-features --quiet",
+        "passed": true,
+        "logSha256": "3689c3397739e9793379cbf1d6d6dadda6f5c2943c4a969a71a0f0c74498f2d5"
+      },
+      "finalProfilerTests": 15,
+      "declarationTests": 20,
+      "fixtureSemantic": {
+        "pages": 51,
+        "clean": 51,
+        "reportSha256": "d337a61daf05add679f4b921be6e3d314d63a48da0f637956a6ad59b9cc0ec67"
+      },
+      "parity": "CLI file/stdin and public file/bytes API; profiler production API covers plain/gzip/zstd. Active/skipped conditional and macro paragraph boundaries are tested; source-less lowering consumes the same executed epochs."
+    },
+    "performance": {
+      "method": "Sequential warm release CLI runs without concurrent compilation. GCC is the current local source below, not the different historical corpus; these numbers are not a before/after regression comparison. Nested runs use the independently authored 1600-word repeated-body regression.",
+      "gccCompressedSha256": "df3b6a9da8c70559bb4df49050137faa0022fecae965674326ce4fe65d5488e8",
+      "gccSourceSha256": "f31a9ae03e8e20baad471d47c4e17391038d852e32719c101001da6eb52b3083",
+      "samples": [
+        {
+          "case": "gcc-outline",
+          "samples": [
+            {
+              "seconds": 0.39774976900662296,
+              "rssKiB": 85564
+            },
+            {
+              "seconds": 0.39707693399395794,
+              "rssKiB": 85668
+            },
+            {
+              "seconds": 0.39730157400481403,
+              "rssKiB": 85740
+            },
+            {
+              "seconds": 0.40800162599771284,
+              "rssKiB": 85544
+            },
+            {
+              "seconds": 0.38956703699659556,
+              "rssKiB": 85800
+            }
+          ],
+          "medianSeconds": 0.39730157400481403,
+          "peakRssKiB": 85800
+        },
+        {
+          "case": "gcc-explain",
+          "samples": [
+            {
+              "seconds": 0.41259554101270624,
+              "rssKiB": 85628
+            },
+            {
+              "seconds": 0.4118850399972871,
+              "rssKiB": 85900
+            },
+            {
+              "seconds": 0.42236297301133163,
+              "rssKiB": 85960
+            },
+            {
+              "seconds": 0.4112334119854495,
+              "rssKiB": 85744
+            },
+            {
+              "seconds": 0.4114245319797192,
+              "rssKiB": 86032
+            }
+          ],
+          "medianSeconds": 0.4118850399972871,
+          "peakRssKiB": 86032
+        },
+        {
+          "budget": 32768,
+          "seconds": 0.004410524008562788,
+          "rssKiB": 9012,
+          "bodyCopies": 1,
+          "counts": {
+            "directEntry": {
+              "total": 2,
+              "returned": 2
+            },
+            "relatedEntry": {
+              "total": 0,
+              "returned": 0
+            },
+            "entryMention": {
+              "total": 0,
+              "returned": 0
+            },
+            "contextMention": {
+              "total": 0,
+              "returned": 0
+            }
+          },
+          "truncation": {
+            "candidates": false,
+            "relations": false,
+            "content": true
+          }
+        },
+        {
+          "budget": 40000,
+          "seconds": 0.004000940010882914,
+          "rssKiB": 9256,
+          "bodyCopies": 1,
+          "counts": {
+            "directEntry": {
+              "total": 2,
+              "returned": 2
+            },
+            "relatedEntry": {
+              "total": 0,
+              "returned": 0
+            },
+            "entryMention": {
+              "total": 0,
+              "returned": 0
+            },
+            "contextMention": {
+              "total": 0,
+              "returned": 0
+            }
+          },
+          "truncation": {
+            "candidates": false,
+            "relations": false,
+            "content": false
+          }
+        },
+        {
+          "budget": 65536,
+          "seconds": 0.003949795995140448,
+          "rssKiB": 9140,
+          "bodyCopies": 1,
+          "counts": {
+            "directEntry": {
+              "total": 2,
+              "returned": 2
+            },
+            "relatedEntry": {
+              "total": 0,
+              "returned": 0
+            },
+            "entryMention": {
+              "total": 0,
+              "returned": 0
+            },
+            "contextMention": {
+              "total": 0,
+              "returned": 0
+            }
+          },
+          "truncation": {
+            "candidates": false,
+            "relations": false,
+            "content": false
+          }
+        }
+      ]
+    },
+    "limitations": "The original top-level v1 record below is retained as historical source-less profiler evidence, not production CLI parity. This follow-up does not claim native Windows/macOS runs or a new 45036-page scan. The final commit after the full gate changes only profiler owner accounting, covered by focused tests, strict example Clippy and rerun 199 gold/51 fixtures."
+  },
   "schema": "mant.roff-declaration-context-acceptance/v1",
   "producerCommit": "27027ed3ba31766ff4f467aacbfa30315a13eaa6",
   "profileProducerCommit": "8c076d4ef312e3e985c23bec10b18b83b7cf5f0a",
