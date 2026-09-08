@@ -2,6 +2,23 @@
 use super::inline_boundaries::{assert_flow, query, variants};
 
 #[test]
+fn generated_functions_and_references_share_operand_state() {
+    use super::font_boundaries::assert_style;
+    for body in [r".Fn \fIWORD \fBNEXT", ".Fo \\fIWORD\n.Fa \\fBNEXT\n.Fc"] {
+        let content = query(body);
+        assert_style(&content, "WORD", 2);
+        assert_style(&content, "NEXT", 1);
+    }
+    let content = query(".Xr \\fBWORD 1\nTAIL");
+    assert_style(&content, "WORD", 1);
+    assert_style(&content, "TAIL", 1);
+    assert_flow(
+        ".Oo\n.Fo WORD\n.Sm off\n.Fa x\n.Fc\n.No NEXT TAIL\n.Oc\n.Sm on",
+        "[WORD(x)NEXTTAIL]",
+    );
+}
+
+#[test]
 fn authored_enclosures_consume_empty_words_and_reset_unclosed_joins() {
     for (body, expected) in [
         (".Eo [\n.No word Ns\n.Ec\n.No TAIL", "[word TAIL"),
@@ -82,6 +99,16 @@ use super::*;
 
 #[test]
 fn decoded_literal_font_spellings_are_content_in_every_font() {
+    struct Terms(bool);
+    impl<'ir> Visit<'ir> for Terms {
+        fn visit_definition_item(&mut self, item: &'ir mant_ir::DefinitionItem) {
+            self.0 |= item
+                .terms
+                .iter()
+                .any(|term| inline_text(term) == r"\fB, \fI, \fR, \fP");
+            visit::walk_definition_item(self, item);
+        }
+    }
     for (macro_name, escape) in [("Sy", "B"), ("Em", "I"), ("Li", "C"), ("No", "R")] {
         for slash in [r"\e", r"\[rs]"] {
             for input in variants(&format!(".{macro_name} before{slash}f{escape}after")) {
@@ -96,16 +123,6 @@ fn decoded_literal_font_spellings_are_content_in_every_font() {
         "/../../tests/fixtures/roff/real/debian/groff_man_style.7.gz"
     )))
     .unwrap();
-    struct Terms(bool);
-    impl<'ir> Visit<'ir> for Terms {
-        fn visit_definition_item(&mut self, item: &'ir mant_ir::DefinitionItem) {
-            self.0 |= item
-                .terms
-                .iter()
-                .any(|term| inline_text(term) == r"\fB, \fI, \fR, \fP");
-            visit::walk_definition_item(self, item);
-        }
-    }
     let mut terms = Terms(false);
     terms.visit_document(&document);
     assert!(

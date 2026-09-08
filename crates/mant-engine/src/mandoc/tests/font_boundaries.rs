@@ -2,7 +2,7 @@
 use super::inline_boundaries::{query, variants};
 use super::*;
 
-fn assert_style(query: &ResolvedContent, word: &str, expected: u8) {
+pub(super) fn assert_style(query: &ResolvedContent, word: &str, expected: u8) {
     struct Styles<'a> {
         word: &'a str,
         current: u8,

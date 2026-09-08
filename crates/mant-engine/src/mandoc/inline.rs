@@ -7,6 +7,7 @@ pub(crate) use crate::inline::{plain_text, terms_fit_inline};
 
 mod flow;
 mod font;
+mod generated;
 mod scopes;
 pub(super) use flow::{FilledBoundary, FontState, InlineBuilder};
 mod source;
@@ -288,123 +289,18 @@ fn lower_atomic_node(
                 }]
             }
         }
-        Some("Xr" | "MR") => lower_manual_reference(children, default_name, spacing_enabled),
         Some("Lk") => lower_link(children, default_name, spacing_enabled),
         Some("Mt") => lower_mail_addresses(children, default_name, spacing_enabled),
         Some("Bx") => lower_bsd_reference(
             node,
             lower_inline_nodes_with_spacing(children, default_name, spacing_enabled),
         ),
-        Some("Fn") => lower_function_element(node, default_name, spacing_enabled),
-        Some("Fo") => lower_function_declaration(node, default_name, spacing_enabled),
         _ => unreachable!("only generated references/declarations are atomic"),
     };
     if let Some(anchor) = navigation_anchor(node) {
         output.insert(0, anchor);
     }
     output
-}
-
-fn lower_function_element(
-    node: &Node,
-    default_name: Option<&str>,
-    spacing_enabled: bool,
-) -> Vec<Inline> {
-    let Some((name, arguments)) = inline_children(node).split_first() else {
-        return Vec::new();
-    };
-    let mut declaration = wrap_strong(lower_inline_node(name, default_name, spacing_enabled));
-    declaration.push(Inline::Text { value: "(".into() });
-    for (index, argument) in arguments.iter().enumerate() {
-        if index > 0 {
-            declaration.push(Inline::Text { value: ", ".into() });
-        }
-        declaration.extend(wrap_emphasis(lower_inline_node(
-            argument,
-            default_name,
-            spacing_enabled,
-        )));
-    }
-    declaration.push(Inline::Text {
-        value: function_closing(node.flags.synopsis_pretty).into(),
-    });
-    declaration
-}
-
-fn lower_function_declaration(
-    node: &Node,
-    default_name: Option<&str>,
-    spacing_enabled: bool,
-) -> Vec<Inline> {
-    let head = lower_inline_nodes_with_spacing(
-        first_part_children(node, NodeKind::Head),
-        default_name,
-        spacing_enabled,
-    );
-    let body = first_part_children(node, NodeKind::Body);
-    if head.is_empty() {
-        return lower_inline_nodes_with_spacing(body, default_name, spacing_enabled);
-    }
-
-    // `Fo` stores an explicit `.Tg` on its head wrapper, while the visible
-    // function declaration is lowered from the complete block.
-    let target = super::targets::part_target_with_source(node, NodeKind::Head);
-    let mut declaration = target
-        .into_iter()
-        .map(super::targets::OwnedTarget::into_inline)
-        .collect::<Vec<_>>();
-    declaration.push(Inline::Strong { children: head });
-    declaration.push(Inline::Text { value: "(".into() });
-    let mut has_argument = false;
-    let mut arguments = InlineBuilder::with_spacing(spacing_enabled);
-    for (index, argument) in body.iter().enumerate() {
-        if argument.macro_name.as_deref() == Some("Fa") && !argument.flags.no_print {
-            if let Some(anchor) = navigation_anchor(argument) {
-                arguments.append(vec![anchor]);
-            }
-            // Fo owns one parameter per Fa operand; quoting, not guessing
-            // C syntax or whitespace, determines a multi-word operand.
-            for operand in inline_children(argument) {
-                if operand.flags.delimiter_close {
-                    append_inline_node(&mut arguments, operand, default_name);
-                    continue;
-                }
-                if has_argument {
-                    arguments.tighten_next_boundary();
-                    arguments.append(text_node(", "));
-                }
-                arguments.append(wrap_emphasis(lower_inline_node(
-                    operand,
-                    default_name,
-                    arguments.spacing_enabled(),
-                )));
-                has_argument = true;
-            }
-        } else {
-            // Controls and zero-width targets keep their ordinary inline
-            // effects and source position, but never consume a parameter.
-            append_inline_node_with_next(
-                &mut arguments,
-                argument,
-                body.get(index + 1),
-                default_name,
-            );
-        }
-    }
-    declaration.extend(arguments.finish());
-    let synopsis_pretty = node.flags.synopsis_pretty
-        || node
-            .children
-            .iter()
-            .any(|child| child.kind == NodeKind::Body && child.flags.synopsis_pretty);
-    declaration.push(Inline::Text {
-        value: function_closing(synopsis_pretty).into(),
-    });
-    declaration
-}
-
-const fn function_closing(synopsis_pretty: bool) -> &'static str {
-    if synopsis_pretty { ");" } else { ")" }
 }
 
 /// Whether a semantic macro owns an inline enclosure body.
@@ -445,39 +341,6 @@ fn inline_children(node: &Node) -> &[Node] {
         .iter()
         .find(|child| child.kind == NodeKind::Body)
         .map_or(&node.children, |body| &body.children)
-}
-
-fn lower_manual_reference(
-    children: &[Node],
-    default_name: Option<&str>,
-    spacing_enabled: bool,
-) -> Vec<Inline> {
-    let Some(name_node) = children.first() else {
-        return Vec::new();
-    };
-    let name = plain_text(&lower_inline_node(name_node, default_name, spacing_enabled));
-    if name.is_empty() {
-        return Vec::new();
-    }
-    let section = children
-        .get(1)
-        .map(|child| plain_text(&lower_inline_node(child, default_name, spacing_enabled)))
-        .filter(|value| !value.is_empty());
-    let display = section
-        .as_ref()
-        .map_or_else(|| name.clone(), |section| format!("{name}({section})"));
-    let mut output = vec![Inline::Link {
-        target: mant_ir::LinkTarget::Manual {
-            name,
-            manual_section: section,
-        },
-        title: None,
-        children: text_node(&display),
-    }];
-    for child in children.iter().skip(2) {
-        output.extend(lower_inline_node(child, default_name, spacing_enabled));
-    }
-    output
 }
 
 fn lower_link(children: &[Node], default_name: Option<&str>, spacing_enabled: bool) -> Vec<Inline> {
@@ -662,20 +525,6 @@ pub(super) fn lower_man_link(
         spacing_enabled,
     ));
     output
-}
-
-fn wrap_strong(children: Vec<Inline>) -> Vec<Inline> {
-    (!children.is_empty())
-        .then_some(Inline::Strong { children })
-        .into_iter()
-        .collect()
-}
-
-fn wrap_emphasis(children: Vec<Inline>) -> Vec<Inline> {
-    (!children.is_empty())
-        .then_some(Inline::Emphasis { children })
-        .into_iter()
-        .collect()
 }
 
 fn alternating_font_pair(macro_name: Option<&str>) -> Option<(Font, Font)> {

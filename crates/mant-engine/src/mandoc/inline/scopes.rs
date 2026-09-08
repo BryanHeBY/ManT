@@ -20,10 +20,7 @@ pub(super) fn append(builder: &mut InlineBuilder, node: &Node, name: Option<&str
     // function declarations, etc.); their output cannot carry a guessed tail
     // effect. Transparent and styled scopes below share the caller's flow.
     if node.kind == NodeKind::Equation
-        || matches!(
-            node.macro_name.as_deref(),
-            Some("In" | "Xr" | "MR" | "Lk" | "Mt" | "Bx" | "Fn" | "Fo")
-        )
+        || matches!(node.macro_name.as_deref(), Some("In" | "Lk" | "Mt" | "Bx"))
     {
         builder.append(lower_atomic_node(node, name, builder.spacing_enabled()));
         return;
@@ -33,6 +30,8 @@ pub(super) fn append(builder: &mut InlineBuilder, node: &Node, name: Option<&str
     }
     let children = inline_children(node);
     match node.macro_name.as_deref() {
+        Some("Fn" | "Fo") => super::generated::function(builder, node, name),
+        Some("Xr" | "MR") => super::generated::manual_reference(builder, node, name),
         Some("Nm") if node.kind == NodeKind::Block => {
             builder.with_font_scope(Font::Strong, |builder| {
                 append_name(builder, first_part_children(node, NodeKind::Head), name);
