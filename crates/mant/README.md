@@ -1,5 +1,14 @@
 # mant
 
+Explanation reports retain separate owners, readable kinds and source coordinates.
+Plain output leaves original lines unframed; Markdown quotes them. Complete
+displayed definitions suppress duplicate Forms per record, while omitted bodies
+keep Forms and empty independent declarations have a distinct notice. Reports
+are for reading; JSON supplies the machine boundary. Environment names use a
+separate color family from headings and ordinary variables, without making color
+a semantic guarantee. The static pager restores styles on actual soft-wrap rows
+and resizes from logical source text rather than inserting hard newlines.
+
 `mant` is `ManT`'s local-first documentation command. It turns native man/mdoc
 pages and Markdown libraries into one catalog exposed as an interactive TUI,
 a deterministic structured CLI, and a read-only stdio MCP server. Every

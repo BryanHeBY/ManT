@@ -890,9 +890,13 @@ evidence and coverage. MCP has the same semantics, with separate character
 paging of the completed text.
 
 Text reports separate the owner title, `Kind`, `Matched by`, forms and source
-content. All source lines (including blanks) begin with `| `; Markdown/MCP uses
-block quotes instead. This boundary distinguishes original manual text from
-generated report fields. ANSI adds name-type colors and exact match emphasis
+content. Plain text does not add a `| ` prefix; source-authored bars remain.
+Markdown/MCP uses block quotes. Plain labels are reading aids, not authenticated
+boundaries; consumers requiring machine boundaries use JSON. Forms are hidden
+only for a record whose displayed body includes the complete matching owner and
+forms. Missing bodies retain Forms; a genuinely empty independent declaration
+gets a separate no-independent-description notice and its reading coordinates.
+ANSI adds name-type colors and exact match emphasis
 without changing text or layout; a matching prefix never colors a longer word.
 Name/Form match details and ordinary `nameBindings` are separate JSON facts.
 Their independent omission flags report budget limits, not missing evidence.

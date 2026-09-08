@@ -26,6 +26,14 @@ ResolvedContent
 └── tldr: TldrDocument?             distinct quick-reference channel
 ```
 
+Names and kinds are independent: a `Term` may have exact bound names, while a
+native template can have a proved parameter/environment kind but no supported
+exact name. `terms` are native displayed content, `forms` reference authored
+syntax, and `names` reference selectable spellings; none replaces an owner's
+description. Nested entries record content ownership, not automatically a
+complete runtime value domain. Configuration keys may describe fields inside
+an option's argument. Only explicit `valueDomain` facts make that relationship.
+
 The important public families are:
 
 | API | Purpose |

@@ -130,6 +130,14 @@ same budget, in that order. Clipping is not omission; an omitted window sets
 check `outcome`, source coverage, truncation and diagnostics separately.
 `semanticsComplete` is validation coverage, not exhaustive recall.
 
+An independently declared empty definition is a real direct record, not a
+missing-body result: it must not borrow the following owner's description.
+Renderers may suppress Forms only when that particular record displays the
+complete matching owner and forms. Mentions and omitted/cropped content retain
+the separately returned forms. Plain reports have no generated body frame;
+their headings aid navigation but do not authenticate untrusted body text.
+Structured consumers use the DTO's class, source and omission fields instead.
+
 Name/Form bases retain bounded matched spellings and occurrences, not just a
 unit discriminator; Identity bases identify the matched outline fields.
 `ExplanationEntry::name_bindings` is the independent, owner-local ordinary-name
