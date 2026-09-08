@@ -16,6 +16,7 @@ struct Observed<'a> {
     owners: BTreeMap<OwnerKey, &'a DefinitionItem>,
     pointers: BTreeMap<usize, OwnerKey>,
     occurrences: BTreeMap<(u32, u32), usize>,
+    list_owners: BTreeSet<OwnerKey>,
     group_pointers: Vec<Vec<usize>>,
     groups: Vec<Vec<OwnerKey>>,
     invalid: usize,
@@ -25,7 +26,11 @@ impl<'a> Visit<'a> for Observed<'a> {
         // Ordinal/bullet conversion changes the block kind, not its place in
         // a repeated source-coordinate stream.
         if let Some(source) = item.source {
-            *self.occurrences.entry(key(source)).or_default() += 1;
+            let coordinate = key(source);
+            let occurrence = self.occurrences.entry(coordinate).or_default();
+            self.list_owners
+                .insert((coordinate.0, coordinate.1, *occurrence));
+            *occurrence += 1;
         }
         visit::walk_list_item(self, item);
     }
@@ -232,28 +237,33 @@ pub(super) fn profile(root: &Node, document: &Document) -> Value {
         node: &Node,
         counts: &mut BTreeMap<(u32, u32), usize>,
         keys: &mut BTreeMap<usize, OwnerKey>,
+        list_owners: &BTreeSet<OwnerKey>,
     ) {
         let mut previous: Option<(&Node, OwnerKey)> = None;
         for child in &node.children {
             if child.kind == NodeKind::Block
                 && matches!(child.macro_name.as_deref(), Some("IP" | "TP" | "It" | "TQ"))
             {
+                // IP's first argument is its tag; later HEAD children are
+                // layout widths, not term text (`.IP "" 4`).
                 let headless = child
                     .children
                     .iter()
-                    .filter(|n| n.kind == NodeKind::Head)
-                    .all(|n| !readable(n));
+                    .find(|n| n.kind == NodeKind::Head)
+                    .and_then(|head| head.children.first())
+                    .is_none_or(|tag| !readable(tag));
                 let continued =
                     previous.filter(|(before, _)| before.flow_epoch == child.flow_epoch);
                 let merged = child.macro_name.as_deref() == Some("TQ")
                     && continued.is_some_and(|(before, _)| !body(before));
                 let continuation = child.macro_name.as_deref() == Some("IP")
                     && headless
-                    && continued.is_some_and(|(before, _)| body(before));
+                    && continued
+                        .is_some_and(|(before, key)| body(before) && !list_owners.contains(&key));
                 if continuation {
                     // Headless IP is another paragraph of the previous owner,
                     // not a declaration in a source run.
-                    native_keys(child, counts, keys);
+                    native_keys(child, counts, keys, list_owners);
                     continue;
                 }
                 let source = if merged {
@@ -270,7 +280,7 @@ pub(super) fn profile(root: &Node, document: &Document) -> Value {
             } else if !matches!(child.macro_name.as_deref(), Some("PD" | "Sm" | "Tg" | "ft")) {
                 previous = None;
             }
-            native_keys(child, counts, keys);
+            native_keys(child, counts, keys, list_owners);
         }
     }
     let mut observed = Observed::default();
@@ -281,7 +291,12 @@ pub(super) fn profile(root: &Node, document: &Document) -> Value {
         .map(|group| group.iter().map(|p| observed.pointers[p]).collect())
         .collect();
     let mut native_owners = BTreeMap::new();
-    native_keys(root, &mut BTreeMap::new(), &mut native_owners);
+    native_keys(
+        root,
+        &mut BTreeMap::new(),
+        &mut native_owners,
+        &observed.list_owners,
+    );
     let group_index = observed
         .groups
         .iter()
@@ -324,6 +339,38 @@ pub(super) fn violations(profile: &Value) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn headless_ip_layout_arguments_and_non_definition_predecessors_preserve_obligations() {
+        for prefix in [
+            ".TP\n.B -c\n.TP\n.B -d\nFirst body.\n.IP \"\" 4\nTail.\n",
+            ".IP \\(bu\nBullet body.\n.IP\nTail.\n",
+        ] {
+            let source = format!(
+                ".TH PROBE 1\n.SH OPTIONS\n.de PAIR\n{prefix}.TP\n.B -a\n.TP\n.B -b\nSecond body.\n..\n.PAIR\n"
+            );
+            let native = libmandoc_rs::Parser::default()
+                .parse_bytes("probe.1", source.as_bytes())
+                .unwrap();
+            let mut document =
+                mant_engine::parse_manual_bytes(std::path::Path::new("probe.1"), source.as_bytes())
+                    .unwrap();
+            let original = profile(&native.document.root, &document);
+            assert!(violations(&original).is_empty(), "{source}\n{original}");
+            for block in &mut document.sections[0].blocks {
+                if let Block::DefinitionList {
+                    declaration_groups, ..
+                } = block
+                {
+                    declaration_groups.clear();
+                }
+            }
+            let removed = profile(&native.document.root, &document);
+            assert!(
+                !violations(&removed).is_empty(),
+                "deleted groups were silently accepted: {source}\n{removed}"
+            );
+        }
+    }
     #[test]
     fn same_coordinate_stream_accounts_for_explicit_heads_and_list_conversion() {
         for prefix in ["", ".IP 1.\nA numbered step.\n", ".IP \\(bu\nA bullet.\n"] {
