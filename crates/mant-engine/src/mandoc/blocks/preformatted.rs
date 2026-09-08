@@ -5,7 +5,7 @@ use mant_ir::{Block, Inline};
 
 use super::super::{
     LoweringContext, first_part_children,
-    inline::{InlineBuilder, append_inline_node, lower_inline_nodes, plain_text},
+    inline::{InlineBuilder, append_inline_node_with_next, lower_inline_nodes, plain_text},
     layout::{layout, vertical_distance_lines},
     source_span,
 };
@@ -135,12 +135,19 @@ impl NoFillFlow {
         line: &mut InlineBuilder,
         context: &LoweringContext<'_>,
     ) {
-        for node in nodes {
-            self.push(node, line, context);
+        let mut nodes = nodes.into_iter().peekable();
+        while let Some(node) = nodes.next() {
+            self.push(node, nodes.peek().copied(), line, context);
         }
     }
 
-    fn push(&mut self, node: &Node, line: &mut InlineBuilder, context: &LoweringContext<'_>) {
+    fn push(
+        &mut self,
+        node: &Node,
+        next: Option<&Node>,
+        line: &mut InlineBuilder,
+        context: &LoweringContext<'_>,
+    ) {
         if node.kind == NodeKind::Comment || node.flags.no_print {
             return;
         }
@@ -186,7 +193,7 @@ impl NoFillFlow {
                 return;
             }
             Some("Sm" | "ft" | "Ns") => {
-                append_inline_node(line, node, context.default_name);
+                append_inline_node_with_next(line, node, next, context.default_name);
                 return;
             }
             _ => {}
@@ -196,7 +203,7 @@ impl NoFillFlow {
         {
             line.blank_rows(context.no_fill_blank_rows_between(Some(previous), Some(node.line)));
         }
-        append_inline_node(line, node, context.default_name);
+        append_inline_node_with_next(line, node, next, context.default_name);
         self.previous_line = Some(node.line);
         self.continues_line = ends_with_line_continuation(node);
     }

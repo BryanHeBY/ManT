@@ -1,8 +1,7 @@
 //! Stateful roff font decoding shared by prose, macro operands and table cells.
 use super::super::reference::trailing_sphinx_manual_reference;
 use super::{
-    Font, FontState, Inline, InlineBuilder, Node, NodeKind, RoffInlineEvent, append_inline_node,
-    decode,
+    Font, FontState, Inline, InlineBuilder, Node, RoffInlineEvent, append_inline_nodes, decode,
 };
 use std::borrow::Cow;
 
@@ -83,9 +82,7 @@ pub(in crate::mandoc) fn lower_inline_nodes_with_font_state(
 ) -> Vec<Inline> {
     let mut builder = InlineBuilder::with_spacing(spacing);
     builder.font = *state;
-    for node in nodes {
-        append_inline_node(&mut builder, node, default_name);
-    }
+    append_inline_nodes(&mut builder, nodes, default_name);
     *state = builder.font;
     builder.finish()
 }
@@ -164,20 +161,6 @@ fn normalize_redundant_escaped_font(source: &str, font: Font) -> Cow<'_, str> {
     }
 
     Cow::Owned(source.replace(opening, "").replace(r"\fR", ""))
-}
-
-/// Lower a text node after honoring a macro-provided default font. Nodes marked
-/// non-printing by libmandoc are never allowed to escape through this shortcut.
-pub(super) fn lower_text_node(node: &Node, initial_font: Font) -> Vec<Inline> {
-    if node.flags.no_print || node.kind == NodeKind::Comment {
-        Vec::new()
-    } else {
-        parse_roff_text_with_font(
-            node.text.as_deref().unwrap_or_default(),
-            initial_font,
-            !node.flags.no_fill,
-        )
-    }
 }
 
 fn promote_sphinx_manual_reference(

@@ -76,6 +76,26 @@ impl<'a> mant_ir::visit::Visit<'a> for Bindings {
         mant_ir::visit::walk_definition_item(self, item);
     }
 }
+
+#[test]
+fn enclosure_spacing_preserves_option_forms_names_and_explanation_sources() {
+    for head in ["Fl x Oo Ar arg Ns Oc Ar tail", "Fl x Oo Pf arg Oc Ar tail"] {
+        let source = format!(
+            ".Dd September 8, 2026\n.Dt PROBE 1\n.Os\n.Sh OPTIONS\n.Bl -tag -width Ds\n.Tg Exact.Target\n.It {head}\nPAYLOAD.\n.El\n"
+        );
+        let query = mant_engine::query_roff_bytes(source.as_bytes()).unwrap();
+        assert_direct_names(&query, &["-x"], "-x [arg] tail");
+        let document = query.document.as_ref().unwrap();
+        let mant_ir::Block::DefinitionList { items, .. } = &document.sections[0].blocks[0] else {
+            panic!("expected definition")
+        };
+        assert_eq!(items[0].source.unwrap().line, 7);
+        assert!(mant_engine::render_query_text(&query).contains("-x [arg] tail"));
+        assert!(items[0].terms[0].iter().any(|inline| matches!(
+            inline, mant_ir::Inline::Strong { children } if inline_text(children) == "-x"
+        )));
+    }
+}
 fn check_bindings(owner: mant_ir::EntryOwner<'_>) {
     if let Some(facts) = owner.facts() {
         for binding in &facts.name_bindings {

@@ -9,7 +9,7 @@ use libmandoc_rs::{
 };
 use mant_ir::Inline;
 
-use super::{InlineBuilder, append_inline_node, lower_man_link, parse_roff_text};
+use super::{InlineBuilder, append_inline_node_with_next, lower_man_link, parse_roff_text};
 
 pub(in crate::mandoc) struct RecoveredFragment {
     pub(in crate::mandoc) inlines: Vec<Inline>,
@@ -105,8 +105,15 @@ pub(in crate::mandoc) fn lower_source_fragment(
         .children
         .iter()
         .find(|node| node.kind == NodeKind::Body)?;
+    Some(RecoveredFragment {
+        inlines: lower_body(&body.children, default_name),
+        complete: true,
+    })
+}
+
+fn lower_body(nodes: &[libmandoc_rs::Node], default_name: Option<&str>) -> Vec<Inline> {
     let mut builder = InlineBuilder::new();
-    for node in &body.children {
+    for (index, node) in nodes.iter().enumerate() {
         if matches!(node.macro_name.as_deref(), Some("UR" | "MT")) {
             builder.append(lower_man_link(
                 node,
@@ -114,13 +121,10 @@ pub(in crate::mandoc) fn lower_source_fragment(
                 builder.spacing_enabled(),
             ));
         } else {
-            append_inline_node(&mut builder, node, default_name);
+            append_inline_node_with_next(&mut builder, node, nodes.get(index + 1), default_name);
         }
     }
-    Some(RecoveredFragment {
-        inlines: builder.finish(),
-        complete: true,
-    })
+    builder.finish()
 }
 
 fn clear_synthetic_targets(node: &mut libmandoc_rs::Node) {

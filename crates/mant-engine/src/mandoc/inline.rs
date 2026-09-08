@@ -7,6 +7,7 @@ pub(crate) use crate::inline::{plain_text, terms_fit_inline};
 
 mod flow;
 mod font;
+mod scopes;
 pub(super) use flow::{FilledBoundary, FontState, InlineBuilder};
 mod source;
 mod source_fragment;
@@ -14,7 +15,7 @@ mod source_fragment;
 #[cfg(test)]
 use font::parse_roff_text_with_font;
 pub(super) use font::{lower_inline_nodes_with_font_state, parse_roff_text};
-use font::{lower_man_font_scope, lower_text_node, parse_roff_text_with_state};
+use font::{lower_man_font_scope, parse_roff_text_with_state};
 
 pub(super) use source::roff_macro_arguments;
 pub(super) use source_fragment::lower_source_fragment;
@@ -54,7 +55,7 @@ pub(super) fn lower_inline_nodes_with_spacing(
             builder.append(text_node("and"));
         }
         let spacing_before = builder.spacing_enabled();
-        append_inline_node(&mut builder, node, default_name);
+        append_inline_node_with_next(&mut builder, node, nodes.get(index + 1), default_name);
         let spacing_after = spacing_after_node(node, spacing_before, default_name);
         builder.inherit_spacing(spacing_after);
     }
@@ -109,6 +110,22 @@ pub(super) fn append_inline_node(
     node: &Node,
     default_name: Option<&str>,
 ) {
+    append_inline_node_with_next(builder, node, None, default_name);
+}
+
+pub(super) fn append_inline_node_with_next(
+    builder: &mut InlineBuilder,
+    node: &Node,
+    next: Option<&Node>,
+    default_name: Option<&str>,
+) {
+    if node.flags.no_print || node.kind == NodeKind::Comment {
+        // Tg can recover an authored target even when native output is hidden.
+        if node.macro_name.as_deref() == Some("Tg") {
+            scopes::append(builder, node, default_name);
+        }
+        return;
+    }
     if node.kind == NodeKind::Text && !node.flags.no_print {
         if node.flags.delimiter_close {
             builder.tighten_next_boundary();
@@ -137,17 +154,19 @@ pub(super) fn append_inline_node(
             );
             builder.append(inlines);
         }
-        Some("Ns") => builder.tighten_next_boundary(),
+        Some("Ns") => {
+            if !node.flags.line_start {
+                builder.tighten_next_boundary();
+            }
+        }
         // `Pf` owns visible prefix text and suppresses only the boundary to
         // the following sibling. Treating it like the empty `Ns` request
         // silently discarded constructs such as `.Pf [\-]ddd Cm \&.`.
         Some("Pf") => {
-            builder.append(lower_inline_node(
-                node,
-                default_name,
-                builder.spacing_enabled(),
-            ));
-            builder.tighten_next_boundary();
+            scopes::append(builder, node, default_name);
+            if next.is_some_and(|next| !next.flags.line_start) {
+                builder.tighten_next_boundary();
+            }
         }
         // A roff break ends the current output line, not the paragraph.
         // `Pp` can also occur inside an extended mdoc definition head, where
@@ -185,9 +204,7 @@ pub(super) fn append_inline_node(
             }
         }
         Some("SM") => {
-            for child in &node.children {
-                append_inline_node(builder, child, default_name);
-            }
+            append_inline_nodes(builder, &node.children, default_name);
         }
         Some("Sm") => {
             let setting = plain_text(&lower_inline_nodes(&node.children, default_name));
@@ -200,51 +217,39 @@ pub(super) fn append_inline_node(
             builder.append(vec![Inline::Text { value: "'".into() }]);
             builder.tighten_next_boundary();
         }
-        _ => builder.append(lower_inline_node(
-            node,
-            default_name,
-            builder.spacing_enabled(),
-        )),
+        _ => scopes::append(builder, node, default_name),
     }
-    if node.flags.delimiter_open || node.flags.line_continuation || ends_with_no_space_control(node)
-    {
+    if node.flags.delimiter_open || node.flags.line_continuation {
         builder.tighten_next_boundary();
     }
 }
 
-/// Whether a nested inline scope leaves a no-space request for its next sibling.
-///
-/// libmandoc can keep `.Ns` as the final child of a styled macro while moving
-/// the following text beside that macro. The inner builder sees the request,
-/// but without this propagation its pending boundary would disappear when the
-/// styled fragment is returned to the outer flow.
-fn ends_with_no_space_control(node: &Node) -> bool {
-    if matches!(node.macro_name.as_deref(), Some("Ns" | "Pf")) {
-        return true;
+/// Append sibling events without throwing away pending formatter effects.
+fn append_inline_nodes(builder: &mut InlineBuilder, nodes: &[Node], default_name: Option<&str>) {
+    for (index, node) in nodes.iter().enumerate() {
+        append_inline_node_with_next(builder, node, nodes.get(index + 1), default_name);
     }
-    node.children
-        .iter()
-        .rev()
-        .find(|child| child.kind != NodeKind::Comment && !child.flags.no_print)
-        .is_some_and(ends_with_no_space_control)
 }
 
+/// Materialize an independent value only where a caller needs a complete
+/// label/operand. Normal sibling and wrapper flow uses the shared builder.
 fn lower_inline_node(
     node: &Node,
     default_name: Option<&str>,
     spacing_enabled: bool,
 ) -> Vec<Inline> {
-    if node.macro_name.as_deref() == Some("Tg") {
-        return super::targets::raw_target(node)
-            .map(|id| vec![Inline::anchor_at(id, super::source_span(node))])
-            .unwrap_or_default();
-    }
-    if node.flags.no_print || node.kind == NodeKind::Comment {
-        return Vec::new();
-    }
-    if node.kind == NodeKind::Text {
-        return lower_text_node(node, Font::Regular);
-    }
+    let mut builder = InlineBuilder::with_spacing(spacing_enabled);
+    append_inline_node(&mut builder, node, default_name);
+    builder.finish()
+}
+
+/// Generated references/declarations consume their inner boundaries as part
+/// of their own punctuation, rather than exporting an AST-tail approximation.
+fn lower_atomic_node(
+    node: &Node,
+    default_name: Option<&str>,
+    spacing_enabled: bool,
+) -> Vec<Inline> {
     if node.kind == NodeKind::Equation {
         return node
             .equation
@@ -254,175 +259,41 @@ fn lower_inline_node(
             .map(|value| vec![Inline::Code { value }])
             .unwrap_or_default();
     }
-
-    let macro_name = node.macro_name.as_deref();
-    if macro_name == Some("Nm") && node.kind == NodeKind::Block {
-        return lower_structural_name(node, default_name, spacing_enabled);
-    }
     let children = inline_children(node);
-    if matches!(
-        macro_name,
-        Some("B" | "SB" | "I" | "R" | "BI" | "BR" | "IB" | "IR" | "RB" | "RI" | "OP")
-    ) {
-        return lower_man_font_scope(node, default_name, spacing_enabled, &mut FontState::new());
-    }
-    let lowered = lower_inline_nodes_with_spacing(children, default_name, spacing_enabled);
-    let anchor = navigation_anchor(node);
-    let mut output = lower_macro_inline(
-        node,
-        macro_name,
-        children,
-        lowered,
-        default_name,
-        spacing_enabled,
-    );
-    if let Some(anchor) = anchor {
-        output.insert(0, anchor);
-    }
-    output
-}
-
-fn lower_macro_inline(
-    node: &Node,
-    macro_name: Option<&str>,
-    children: &[Node],
-    lowered: Vec<Inline>,
-    default_name: Option<&str>,
-    spacing_enabled: bool,
-) -> Vec<Inline> {
-    match macro_name {
-        Some("Nm") => wrap_strong(if lowered.is_empty() {
-            default_name.map_or_else(Vec::new, text_node)
-        } else {
-            lowered
-        }),
-        Some("Fl") => {
-            // mdoc prepends one dash per `Fl` unconditionally: nested
-            // `.Fl Fl acls` is the canonical spelling of `--acls`, and a bare
-            // trailing `.Fl Fl` renders the `--` end-of-options marker.
-            let mut content = vec![Inline::Text { value: "-".into() }];
-            content.extend(lowered);
-            wrap_strong(content)
+    let mut output = match node.macro_name.as_deref() {
+        Some("In") => {
+            let lowered = lower_inline_nodes_with_spacing(children, default_name, spacing_enabled);
+            if lowered.is_empty() {
+                Vec::new()
+            } else {
+                vec![Inline::Code {
+                    value: format!(
+                        "{}<{}>",
+                        if node.flags.synopsis_pretty && node.flags.line_start {
+                            "#include "
+                        } else {
+                            ""
+                        },
+                        plain_text(&lowered)
+                    ),
+                }]
+            }
         }
-        Some("Cm" | "Ic" | "Sy" | "B" | "SB") => wrap_strong(lowered),
-        Some("Ar" | "Pa" | "Em" | "Va" | "Vt" | "Ft" | "Fa" | "I") => wrap_emphasis(lowered),
-        Some("Li") => vec![Inline::Code {
-            value: plain_text(&lowered),
-        }],
-        Some("In") if !lowered.is_empty() => vec![Inline::Code {
-            value: format!(
-                "{}<{}>",
-                if node.flags.synopsis_pretty && node.flags.line_start {
-                    "#include "
-                } else {
-                    ""
-                },
-                plain_text(&lowered)
-            ),
-        }],
         Some("Xr" | "MR") => lower_manual_reference(children, default_name, spacing_enabled),
         Some("Lk") => lower_link(children, default_name, spacing_enabled),
         Some("Mt") => lower_mail_addresses(children, default_name, spacing_enabled),
-        Some("Bx") => lower_bsd_reference(node, lowered),
-        // Keep the heading text as a private unresolved target until the
-        // complete section tree is available. The document post-pass replaces
-        // it with the stable Section::id or degrades it to ordinary text.
-        Some("Sx") if !lowered.is_empty() => vec![Inline::Link {
-            target: mant_ir::LinkTarget::Section {
-                id: plain_text(&lowered).trim().into(),
-            },
-            title: None,
-            children: lowered,
-        }],
-        Some("Nd") => {
-            // `Nd` owns the separator between the name list and its one-line
-            // description. This is formatter-generated punctuation rather
-            // than a boundary between sibling source nodes, so spell the
-            // required trailing space explicitly.
-            let mut content = text_node("— ");
-            content.extend(lowered);
-            content
-        }
+        Some("Bx") => lower_bsd_reference(
+            node,
+            lower_inline_nodes_with_spacing(children, default_name, spacing_enabled),
+        ),
         Some("Fn") => lower_function_element(node, default_name, spacing_enabled),
         Some("Fo") => lower_function_declaration(node, default_name, spacing_enabled),
-        Some("Eo") => lower_authored_enclosure(node, default_name, spacing_enabled),
-        Some("En") => match node.enclosure.as_ref() {
-            Some(enclosure) => surround(
-                &visible_text(&enclosure.opening),
-                lowered,
-                &enclosure
-                    .closing
-                    .as_deref()
-                    .map(visible_text)
-                    .unwrap_or_default(),
-            ),
-            None => lowered,
-        },
-        Some(name) if enclosure_marks(name).is_some() => {
-            let (opening, closing) = enclosure_marks(name).expect("matched enclosure macro");
-            let mut content = surround(opening, lowered, closing);
-            content.extend(trailing_enclosure_delimiters(
-                node,
-                default_name,
-                spacing_enabled,
-            ));
-            content
-        }
-        _ => lowered,
-    }
-}
-
-/// Retain punctuation that libmandoc moves behind an implicit enclosure body.
-///
-/// In input such as `.Pq phrase ;`, the semicolon is neither part of the
-/// structural body nor the generated closing parenthesis. libmandoc keeps it
-/// as a direct child and marks its validated delimiter role. Reading only the
-/// body would silently turn `(phrase);` into `(phrase)`.
-fn trailing_enclosure_delimiters(
-    node: &Node,
-    default_name: Option<&str>,
-    spacing_enabled: bool,
-) -> Vec<Inline> {
-    node.children
-        .iter()
-        .filter(|child| child.flags.delimiter_close)
-        .flat_map(|child| lower_inline_node(child, default_name, spacing_enabled))
-        .collect()
-}
-
-/// Lower the block form of an mdoc `Nm` synopsis without losing its head.
-///
-/// In an extended `It Xo ... Xc` term, libmandoc places the command in the
-/// `Nm` head and the following options in its body.  Treating that wrapper as
-/// an ordinary inline `Nm` selects only the body, omits the command whenever
-/// options exist, and wraps every option in the command's strong style.  An
-/// empty body takes the opposite fallback path and lowers both structural
-/// parts, duplicating the command.  Keep the two parts explicit instead:
-/// style the head as the command and append the body with its own semantics.
-fn lower_structural_name(
-    node: &Node,
-    default_name: Option<&str>,
-    spacing_enabled: bool,
-) -> Vec<Inline> {
-    let head = lower_inline_nodes_with_spacing(
-        first_part_children(node, NodeKind::Head),
-        default_name,
-        spacing_enabled,
-    );
-    let head = if head.is_empty() {
-        default_name.map_or_else(Vec::new, text_node)
-    } else {
-        head
+        _ => unreachable!("only generated references/declarations are atomic"),
     };
-    let body = lower_inline_nodes_with_spacing(
-        first_part_children(node, NodeKind::Body),
-        default_name,
-        spacing_enabled,
-    );
-    let mut builder = InlineBuilder::with_spacing(spacing_enabled);
-    builder.append(wrap_strong(head));
-    builder.append(body);
-    builder.finish()
+    if let Some(anchor) = navigation_anchor(node) {
+        output.insert(0, anchor);
+    }
+    output
 }
 
 fn lower_function_element(
@@ -477,7 +348,7 @@ fn lower_function_declaration(
     declaration.push(Inline::Text { value: "(".into() });
     let mut has_argument = false;
     let mut arguments = InlineBuilder::with_spacing(spacing_enabled);
-    for argument in body {
+    for (index, argument) in body.iter().enumerate() {
         if argument.macro_name.as_deref() == Some("Fa") && !argument.flags.no_print {
             if let Some(anchor) = navigation_anchor(argument) {
                 arguments.append(vec![anchor]);
@@ -503,7 +374,12 @@ fn lower_function_declaration(
         } else {
             // Controls and zero-width targets keep their ordinary inline
             // effects and source position, but never consume a parameter.
-            append_inline_node(&mut arguments, argument, default_name);
+            append_inline_node_with_next(
+                &mut arguments,
+                argument,
+                body.get(index + 1),
+                default_name,
+            );
         }
     }
     declaration.extend(arguments.finish());
@@ -560,29 +436,6 @@ fn inline_children(node: &Node) -> &[Node] {
         .iter()
         .find(|child| child.kind == NodeKind::Body)
         .map_or(&node.children, |body| &body.children)
-}
-
-fn lower_authored_enclosure(
-    node: &Node,
-    default_name: Option<&str>,
-    spacing_enabled: bool,
-) -> Vec<Inline> {
-    let mut result = Vec::new();
-    // Native delimiter normalization may put opening punctuation directly on
-    // the block and closing punctuation after it. Visit each direct child
-    // exactly once, unwrapping structural parts rather than invoking Eo again.
-    for child in &node.children {
-        if matches!(child.kind, NodeKind::Head | NodeKind::Body | NodeKind::Tail) {
-            result.extend(lower_inline_nodes_with_spacing(
-                &child.children,
-                default_name,
-                spacing_enabled,
-            ));
-        } else {
-            result.extend(lower_inline_node(child, default_name, spacing_enabled));
-        }
-    }
-    result
 }
 
 fn lower_manual_reference(

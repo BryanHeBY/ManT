@@ -6,9 +6,9 @@ use mant_ir::{Block, Inline, Section};
 use super::{
     LoweringContext, first_part_children,
     inline::{
-        FilledBoundary, FontState, InlineBuilder, is_enclosure_macro, lower_inline_nodes,
-        lower_inline_nodes_with_font_state, lower_inline_nodes_with_spacing, lower_man_link,
-        plain_text, spacing_after_node, updated_spacing,
+        FilledBoundary, FontState, InlineBuilder, append_inline_node_with_next, is_enclosure_macro,
+        lower_inline_nodes, lower_inline_nodes_with_font_state, lower_inline_nodes_with_spacing,
+        lower_man_link, plain_text, spacing_after_node, updated_spacing,
     },
     layout::{
         add_leading_spacing, layout, layout_with_spacing, normalize_explicit_vertical_spacing,
@@ -209,7 +209,7 @@ fn lower_blocks_onto(
             if follows_inline_equation_punctuation(nodes, index) {
                 lowerer.state.tighten_next_boundary();
             }
-            lowerer.push(node, table_plan.embedding(index));
+            lowerer.push(node, nodes.get(index + 1), table_plan.embedding(index));
         }
     }
     lowerer.finish()
@@ -260,7 +260,12 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
         }
     }
 
-    fn push(&mut self, node: &Node, table_embedding: Option<&TableEmbedding<'_>>) {
+    fn push(
+        &mut self,
+        node: &Node,
+        next: Option<&Node>,
+        table_embedding: Option<&TableEmbedding<'_>>,
+    ) {
         if matches!(
             node.macro_name.as_deref(),
             Some("PP" | "HP" | "IP" | "TP" | "TQ" | "RS" | "SY")
@@ -332,7 +337,7 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
                 spacing_enabled,
             );
         } else if participates_in_inline_flow(node) {
-            self.push_inline_node(node);
+            self.push_inline_node(node, next);
         } else {
             self.state.flush_paragraph();
             let output_start = self.state.output.len();
@@ -417,25 +422,18 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
         true
     }
 
-    fn push_inline_node(&mut self, node: &Node) {
+    fn push_inline_node(&mut self, node: &Node, next: Option<&Node>) {
         let source = source_span(node);
-        if node.flags.delimiter_close || node.macro_name.as_deref() == Some("Ns") {
-            self.state.tighten_next_boundary();
-        }
-        self.state.push_inline(
-            lower_inline_nodes_with_font_state(
-                std::slice::from_ref(node),
-                self.context.default_name,
-                self.state.spacing_enabled(),
-                &mut self.font,
-            ),
+        self.state.push_inline_with(
             source,
             starts_indented_filled_line(node),
             ends_with_line_continuation(node),
+            |builder| {
+                builder.font = self.font;
+                append_inline_node_with_next(builder, node, next, self.context.default_name);
+                self.font = builder.font;
+            },
         );
-        if node.macro_name.as_deref() == Some("Pf") {
-            self.state.tighten_next_boundary();
-        }
     }
 
     /// Preserve declaration boundaries selected by mdoc's SYNOPSIS grammar.
@@ -460,20 +458,20 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
         match role {
             SynopsisDeclarationRole::ReturnType => {
                 self.state.flush_paragraph();
-                self.push_inline_node(node);
+                self.push_inline_node(node, None);
                 self.synopsis_return_type_open = true;
             }
             SynopsisDeclarationRole::Function => {
                 if !self.synopsis_return_type_open {
                     self.state.flush_paragraph();
                 }
-                self.push_inline_node(node);
+                self.push_inline_node(node, None);
                 self.state.flush_paragraph();
                 self.synopsis_return_type_open = false;
             }
             SynopsisDeclarationRole::Standalone => {
                 self.state.flush_paragraph();
-                self.push_inline_node(node);
+                self.push_inline_node(node, None);
                 self.state.flush_paragraph();
                 self.synopsis_return_type_open = false;
             }

@@ -9,7 +9,7 @@ pub(in crate::mandoc) struct InlineBuilder {
     spacing: SpacingMode,
     last_visible_character: Option<char>,
     has_printable_content: bool,
-    pub(super) font: FontState,
+    pub(in crate::mandoc) font: FontState,
 }
 
 /// Roff remembers the previous selection independently of the current font.
@@ -111,6 +111,10 @@ impl InlineBuilder {
         self.boundary = PendingBoundary::Tight;
     }
 
+    pub(super) fn clear_tight_boundary(&mut self) {
+        self.boundary = PendingBoundary::Ordinary;
+    }
+
     pub(in crate::mandoc) const fn has_tight_boundary(&self) -> bool {
         matches!(self.boundary, PendingBoundary::Tight)
     }
@@ -151,6 +155,10 @@ impl InlineBuilder {
 
     pub(in crate::mandoc) fn is_empty(&self) -> bool {
         self.nodes.is_empty()
+    }
+
+    pub(in crate::mandoc) fn node_count(&self) -> usize {
+        self.nodes.len()
     }
 
     /// Preserve a formatter-requested line boundary without creating empty

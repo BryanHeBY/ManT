@@ -76,9 +76,20 @@ impl BlockState {
             }
             return;
         }
-        if self.paragraph_source.is_none() {
-            self.paragraph_source = source;
-        }
+        self.push_inline_with(source, starts_indented_line, continues_line, |paragraph| {
+            paragraph.append(nodes);
+        });
+    }
+
+    /// Lower siblings into the same flow so zero-width controls and two-sided
+    /// punctuation can act on both the preceding and following visible runs.
+    pub(super) fn push_inline_with(
+        &mut self,
+        source: Option<mant_ir::SourceSpan>,
+        starts_indented_line: bool,
+        continues_line: bool,
+        append: impl FnOnce(&mut InlineBuilder),
+    ) {
         let source_line = source.map(|span| span.line);
         let crossed_source_line = self
             .paragraph_last_line
@@ -91,12 +102,21 @@ impl BlockState {
         } else {
             FilledBoundary::Word
         };
-        self.paragraph.append_filled(nodes, boundary);
+        if boundary == FilledBoundary::LineBreak {
+            self.paragraph.hard_break();
+        }
+        let previous_count = self.paragraph.node_count();
+        append(&mut self.paragraph);
         if continues_line {
             self.paragraph.tighten_next_boundary();
         }
-        if source_line.is_some() {
-            self.paragraph_last_line = source_line;
+        if self.paragraph.node_count() != previous_count {
+            if self.paragraph_source.is_none() {
+                self.paragraph_source = source;
+            }
+            if source_line.is_some() {
+                self.paragraph_last_line = source_line;
+            }
         }
     }
 
