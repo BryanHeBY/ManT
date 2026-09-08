@@ -18,6 +18,11 @@ that crate was not published for that change.
 
 ### Parent-relative document geometry (unreleased v0.11)
 
+- Definition layout now carries resolved signed `bodyIndentColumns` and
+  `minTermGapColumns`; native man tag widths, relative-indent scopes and mdoc
+  list/display styles retain their actual geometry. Source distances are
+  accumulated before cell rounding. Reconstructed lists and continuations
+  rebase only their moved roots, preserving source body columns.
 - `mant-ir` layout indentation is now signed and relative to the actual content
   parent. The closed layout object rejects unknown fields. Source lowering
   keeps source positions separate from IR parent origins; reparenting changes

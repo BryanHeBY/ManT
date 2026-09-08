@@ -57,6 +57,7 @@ fn sidebar_exposes_every_semantic_role_supported_by_the_document_contract() {
         layout: mant_ir::DefinitionLayout {
             inline_term: false,
             spacing_before_lines: None,
+            ..Default::default()
         },
     })
     .collect::<Vec<_>>();
@@ -103,6 +104,7 @@ fn sidebar_exposes_every_semantic_role_supported_by_the_document_contract() {
             layout: mant_ir::DefinitionLayout {
                 inline_term: false,
                 spacing_before_lines: None,
+                ..Default::default()
             },
         }],
         compact: true,

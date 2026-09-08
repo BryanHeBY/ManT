@@ -2,15 +2,12 @@
 
 use mant_ir::{Block, DefinitionItem, ListItem, ListKind, SourceSpan};
 
-use crate::block::block_layout_mut;
+use crate::block::rebase_roots;
 use crate::mandoc::{
     inline::plain_text,
     layout::{layout, layout_with_spacing},
     targets,
 };
-
-pub(in crate::mandoc::blocks) const MAN_DEFINITION_BODY_INDENT: u16 =
-    DefinitionItem::DESCRIPTION_INDENT_COLUMNS;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(in crate::mandoc::blocks) struct DefinitionLocation {
@@ -163,7 +160,11 @@ pub(in crate::mandoc::blocks) fn append_ordered(
                 return;
             };
             *compact = *compact && paragraph_distance == 0;
-            items.push(list_item_from_definition(item, indent_columns, source));
+            items.push(list_item_from_definition(
+                item,
+                ordinal_width(marker.value),
+                source,
+            ));
             *state = ManListState::Ordered { block, marker };
         }
         ManListState::None | ManListState::Ordered { .. } => {
@@ -195,7 +196,11 @@ fn append_new_ordered(
             start: Some(marker.value),
         },
         compact: paragraph_distance == 0,
-        items: vec![list_item_from_definition(item, indent_columns, source)],
+        items: vec![list_item_from_definition(
+            item,
+            ordinal_width(marker.value),
+            source,
+        )],
         layout: layout_with_spacing(indent_columns, paragraph_distance),
         source,
     });
@@ -215,11 +220,11 @@ pub(in crate::mandoc::blocks) fn append_relative_continuation(
     indent_columns: crate::mandoc::layout::SourceIndent,
     state: ManListState,
 ) -> bool {
-    let origin = indent_columns
-        .relative_columns()
-        .saturating_add(i32::from(MAN_DEFINITION_BODY_INDENT));
     match state {
-        ManListState::Ordered { block, .. } => {
+        ManListState::Ordered { block, marker } => {
+            let origin = indent_columns
+                .relative_columns()
+                .saturating_add(ordinal_width(marker.value));
             let Some(Block::List {
                 kind: ListKind::Ordered { .. },
                 items,
@@ -231,7 +236,7 @@ pub(in crate::mandoc::blocks) fn append_relative_continuation(
             let Some(item) = items.last_mut() else {
                 return false;
             };
-            make_relative(nested, origin);
+            rebase_roots(nested, 0, origin);
             item.blocks.append(nested);
             true
         }
@@ -239,30 +244,31 @@ pub(in crate::mandoc::blocks) fn append_relative_continuation(
     }
 }
 
-fn make_relative(blocks: &mut [Block], origin: i32) {
-    for block in blocks {
-        if let Some(layout) = block_layout_mut(block) {
-            layout.indent_columns =
-                mant_protocol::geometry::rebase_origin(layout.indent_columns, 0, origin);
-        }
-    }
+fn ordinal_width(value: u64) -> i32 {
+    mant_protocol::geometry::coordinate(mant_protocol::geometry::text_width(&format!("{value}. ")))
 }
 
 /// Remove an `.IP`/`.TP` mark from visible content while conserving any target
 /// it owned and making item indentation relative to the new list container.
 pub(in crate::mandoc::blocks) fn list_item_from_definition(
     item: DefinitionItem,
-    _indent_columns: crate::mandoc::layout::SourceIndent,
+    marker_width: i32,
     source: Option<SourceSpan>,
 ) -> ListItem {
     let DefinitionItem {
         source: item_source,
         terms,
         mut description,
+        layout: definition_layout,
         ..
     } = item;
-    // The definition body already has its own content origin. Converting the
-    // marker does not subtract an ancestor's source position a second time.
+    // The source body column survives semantic conversion. Only these roots
+    // move from the definition body origin to the list marker's body origin.
+    rebase_roots(
+        &mut description,
+        definition_layout.body_indent_columns,
+        marker_width,
+    );
     let mut anchors = Vec::new();
     for term in &terms {
         targets::inline_anchor_ids(term, &mut anchors);
@@ -291,6 +297,7 @@ mod tests {
             layout: mant_ir::DefinitionLayout {
                 inline_term: false,
                 spacing_before_lines: None,
+                ..Default::default()
             },
             terms: vec![vec![Inline::Text {
                 value: term.to_owned(),

@@ -9,10 +9,7 @@ use mant_ir::{
 use super::super::{
     LoweringContext, first_part_children,
     inline::{InlineBuilder, plain_text, terms_fit_inline},
-    layout::{
-        block_indent, horizontal_distance_columns, layout, layout_with_spacing,
-        paragraph_distance_lines,
-    },
+    layout::{block_indent, layout, layout_with_spacing, paragraph_distance_lines},
     part_child_groups, source_span, targets,
 };
 use super::{is_inline_equation, is_inline_equation_quote_artifact, lower_blocks_with_spacing};
@@ -28,8 +25,8 @@ use definition::{definition_item, prepend_definition_heads};
 #[cfg(test)]
 use man::is_ip_bullet_item;
 use man::ordered::{
-    DefinitionLocation, MAN_DEFINITION_BODY_INDENT, ManListState, append_ordered,
-    list_item_from_definition, ordinal_marker, ordinal_sequence,
+    DefinitionLocation, ManListState, append_ordered, list_item_from_definition, ordinal_marker,
+    ordinal_sequence,
 };
 pub(super) use man::{ManDefinitionState, lower_man_definition};
 
@@ -52,6 +49,7 @@ mod tests {
             layout: mant_ir::DefinitionLayout {
                 inline_term: false,
                 spacing_before_lines: None,
+                ..Default::default()
             },
             terms: vec![text(term)],
             description: vec![Block::Paragraph {

@@ -517,7 +517,7 @@ fn find_preformatted<'a>(
                     if let Some(found) = find_preformatted(
                         &item.description,
                         needle,
-                        base_indent + layout.indent_columns + 4,
+                        base_indent + layout.indent_columns + item.layout.body_indent_columns,
                     ) {
                         return Some(found);
                     }

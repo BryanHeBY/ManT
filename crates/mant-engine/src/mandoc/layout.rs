@@ -9,10 +9,10 @@ use mant_ir::{Block, LayoutHint};
 
 use crate::block::{block_layout, block_layout_mut};
 
+mod definition;
 mod distance;
-use distance::Distance;
-
-const MAX_INDENT_COLUMNS: u16 = 4096;
+pub(super) use definition::{DefinitionGeometry, TermPlacement};
+pub(super) use distance::Distance;
 
 /// A source position and its actual IR parent's content position. Transparent
 /// roff scopes move only the former; entering an owned body resets the latter.
@@ -24,7 +24,9 @@ pub(super) struct SourceIndent {
 
 impl SourceIndent {
     pub(super) fn relative_columns(self) -> i32 {
-        self.source.columns().saturating_sub(self.parent.columns())
+        self.source
+            .position_columns()
+            .saturating_sub(self.parent.position_columns())
     }
 
     pub(super) fn content_origin(self) -> Self {
@@ -32,6 +34,12 @@ impl SourceIndent {
             source: self.source,
             parent: self.source,
         }
+    }
+
+    pub(super) fn offset_from(self, other: Self) -> i32 {
+        self.source
+            .position_columns()
+            .saturating_sub(other.source.position_columns())
     }
 }
 
@@ -46,29 +54,77 @@ impl From<i32> for SourceIndent {
 }
 
 impl super::LoweringContext<'_> {
-    pub(super) fn nested_indent(
+    pub(super) fn offset_indent(
         &self,
         node: &Node,
         parent: SourceIndent,
-        extra: u16,
+        extra: Distance,
     ) -> SourceIndent {
-        let (sum, bounded) = parent.source.add(Distance::cells(i32::from(extra)));
-        if bounded || extra > MAX_INDENT_COLUMNS {
+        let (sum, bounded) = parent.source.add(extra);
+        if bounded {
             self.warn_indent(node);
         }
         SourceIndent {
-            source: sum,
+            source: sum.at_page_floor(),
             parent: parent.parent,
         }
     }
 
-    pub(super) fn display_offset(&self, node: &Node) -> u16 {
-        if node.offset.as_deref().is_some_and(|offset| {
-            !matches!(offset, "left" | "indent") && horizontal_distance_columns(offset).is_none()
-        }) {
+    pub(super) fn distance_or(&self, node: &Node, argument: &str, fallback: Distance) -> Distance {
+        Distance::parse(argument).unwrap_or_else(|| {
             self.warn_indent(node);
+            fallback
+        })
+    }
+
+    pub(super) fn measured_mdoc_distance(
+        &self,
+        node: &Node,
+        text: &str,
+        fallback: Distance,
+    ) -> Distance {
+        // Unlike man distances, mdoc requires a unit; a bare number is a
+        // printable width sample. Do not mistake digit-leading samples for
+        // malformed numeric distances.
+        if let Some((number, unit)) = text
+            .trim()
+            .split_at_checked(text.trim().len().saturating_sub(1))
+            && matches!(
+                unit,
+                "n" | "m" | "u" | "c" | "f" | "i" | "M" | "P" | "v" | "p"
+            )
+            && number.parse::<f64>().is_ok()
+        {
+            return self.distance_or(node, text, fallback);
         }
-        display_indent(node)
+        let visible = super::inline::plain_text(&super::inline::parse_roff_text(text));
+        Distance::cells(mant_protocol::geometry::coordinate(
+            mant_protocol::geometry::text_width(&visible),
+        ))
+    }
+
+    pub(super) fn man_relative_indent(
+        &self,
+        node: &Node,
+        parent: SourceIndent,
+        prevailing: Distance,
+    ) -> SourceIndent {
+        let distance = first_part_argument(node).map_or(prevailing, |argument| {
+            self.distance_or(node, argument, prevailing)
+        });
+        self.offset_indent(node, parent, distance)
+    }
+
+    pub(super) fn display_offset(&self, node: &Node) -> Distance {
+        if matches!(node.macro_name.as_deref(), Some("D1" | "Dl")) {
+            return Distance::cells(6);
+        }
+        match node.offset.as_deref() {
+            None | Some("left") => Distance::default(),
+            Some("indent") => Distance::cells(6),
+            Some("indent-two") => Distance::cells(12),
+            Some(offset) => self.measured_mdoc_distance(node, offset, Distance::default()),
+        }
     }
 
     fn warn_indent(&self, node: &Node) {
@@ -86,6 +142,13 @@ impl super::LoweringContext<'_> {
             source: super::source_span(node),
         });
     }
+}
+
+fn first_part_argument(node: &Node) -> Option<&str> {
+    node.children
+        .iter()
+        .find(|child| child.kind == libmandoc_rs::NodeKind::Head)
+        .and_then(first_text)
 }
 
 /// Update the current man(7) paragraph distance after a `.PD` request.
@@ -227,7 +290,8 @@ fn first_text(node: &Node) -> Option<&str> {
 /// units use the same 10-characters-per-inch ratios as its ASCII renderer.
 /// This intentionally accepts only absolute finite values: relative widths
 /// depend on formatter state and should retain the caller's previous value.
-pub(super) fn horizontal_distance_columns(argument: &str) -> Option<usize> {
+#[cfg(test)]
+fn horizontal_distance_columns(argument: &str) -> Option<usize> {
     let argument = argument.trim();
     if argument.starts_with(['+', '-']) {
         return None;
@@ -254,28 +318,12 @@ pub(super) fn layout_with_spacing(
     }
 }
 
-/// Translate mandoc display offsets to terminal columns.
-pub(super) fn display_indent(node: &Node) -> u16 {
-    let Some(offset) = node.offset.as_deref() else {
-        return 4;
-    };
-    if offset == "left" {
-        return 0;
-    }
-    if offset == "indent" {
-        return 4;
-    }
-    horizontal_distance_columns(offset)
-        .and_then(|columns| u16::try_from(columns).ok())
-        .unwrap_or(4)
-}
-
 #[cfg(test)]
 mod tests {
     use libmandoc_rs::{Node, NodeFlags, NodeKind};
 
     use super::{
-        display_indent, horizontal_distance_columns, layout, layout_with_spacing,
+        horizontal_distance_columns, layout, layout_with_spacing,
         normalize_explicit_vertical_spacing, paragraph_distance_lines, vertical_distance_lines,
     };
     use mant_ir::Block;
@@ -324,16 +372,7 @@ mod tests {
     }
 
     #[test]
-    fn normalizes_display_offsets_and_layout_hints() {
-        assert_eq!(display_indent(&node(NodeKind::Root, None, None)), 4);
-        assert_eq!(display_indent(&node(NodeKind::Root, None, Some("left"))), 0);
-        assert_eq!(display_indent(&node(NodeKind::Root, None, Some("8n"))), 8);
-        assert_eq!(display_indent(&node(NodeKind::Root, None, Some("1i"))), 10);
-        assert_eq!(display_indent(&node(NodeKind::Root, None, Some("24u"))), 1);
-        assert_eq!(
-            display_indent(&node(NodeKind::Root, None, Some("65535n"))),
-            4
-        );
+    fn normalizes_layout_hints() {
         assert_eq!(layout(3.into()).indent_columns, 3);
     }
 

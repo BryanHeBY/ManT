@@ -534,7 +534,9 @@ fn only_tag_definition_lists_recover_ordered_procedures() {
             };
             assert_eq!(layout.indent_columns, 4);
             assert!(items.iter().all(|item| {
-                matches!(item.blocks.first(), Some(Block::Paragraph { layout, .. }) if layout.indent_columns == 0)
+                // Source sample "1." is two cells plus the two-cell tag
+                // buffer; the rendered ordinal marker consumes three.
+                matches!(item.blocks.first(), Some(Block::Paragraph { layout, .. }) if layout.indent_columns == 1)
             }));
         } else {
             assert!(
@@ -557,8 +559,10 @@ fn only_tag_definition_lists_recover_ordered_procedures() {
         panic!("native enum must remain an ordered list")
     };
     assert!(items.iter().all(|item| {
-        matches!(item.blocks.first(), Some(Block::Paragraph { layout, .. }) if layout.indent_columns == 0)
-    }));
+        // mdoc validation supplies 3n; the renderer adds two cells, leaving
+        // two cells beyond the three-cell "1. " marker.
+        matches!(item.blocks.first(), Some(Block::Paragraph { layout, .. }) if layout.indent_columns == 2)
+    }), "{items:#?}");
 }
 
 #[test]
@@ -585,7 +589,7 @@ fn distinguishes_man_ip_enumeration_from_numeric_option_values() {
         .flatten()
         .collect::<Vec<_>>();
     assert_eq!(options.len(), 3);
-    for option in &options[..2] {
+    for (option, body_delta) in options[..2].iter().zip([1, 4]) {
         assert!(option.description.iter().any(|block| {
             let Block::List {
                 kind: ListKind::Ordered { start: Some(1) },
@@ -599,7 +603,7 @@ fn distinguishes_man_ip_enumeration_from_numeric_option_values() {
                 && items.iter().all(|item| {
                     matches!(
                         item.blocks.first(),
-                        Some(Block::Paragraph { layout, .. }) if layout.indent_columns == 0
+                        Some(Block::Paragraph { layout, .. }) if layout.indent_columns == body_delta
                     )
                 })
         }));
@@ -659,7 +663,7 @@ fn recognizes_one_source_proven_ip_ordinal_without_semantic_entry() {
                 layout: continuation,
                 ..
             }
-        ] if body.indent_columns == 0 && continuation.indent_columns == 0
+        ] if body.indent_columns == 1 && continuation.indent_columns == 1
     ));
     assert!(SemanticIndex::build(&document).section("notes").is_empty());
 }
@@ -1030,7 +1034,7 @@ fn recovers_complete_numbered_sequences_from_mdoc_tag_lists() {
         unreachable!("numbered tag list was asserted above")
     };
     assert!(items.iter().all(|item| {
-        matches!(item.blocks.first(), Some(Block::Paragraph { layout, .. }) if layout.indent_columns == 0)
+        matches!(item.blocks.first(), Some(Block::Paragraph { layout, .. }) if layout.indent_columns == 1)
     }));
     assert!(matches!(
         document.sections[0].blocks[1],
@@ -1058,7 +1062,7 @@ fn recovers_complete_numbered_sequences_from_mdoc_tag_lists() {
         tldr: None,
     });
     assert!(
-        rendered.contains("1. First step.\n\n2. Second step.\n\n3. Third step."),
+        rendered.contains("1.  First step.\n\n2.  Second step.\n\n3.  Third step."),
         "{rendered}"
     );
     assert!(!rendered.contains("1.         First step."));

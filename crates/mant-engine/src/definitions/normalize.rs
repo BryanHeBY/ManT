@@ -1,9 +1,6 @@
 //! Definition normalize policy; coordinated by the parent discovery passes.
 use super::{context::DefinitionContext, syntax::is_inferred_head};
-use crate::{
-    block::{block_layout, block_layout_mut},
-    inline::{DEFAULT_INLINE_TERM_MAX_WIDTH, terms_fit_inline},
-};
+use crate::block::{block_layout, block_layout_mut};
 use mant_ir::{Block, DefinitionItem, LayoutHint};
 use std::{collections::VecDeque, mem};
 
@@ -35,8 +32,7 @@ pub(super) fn normalize_definition_nesting_with_boundaries(
             normalized.push(block);
             continue;
         };
-        let description_origin =
-            base_indent.saturating_add(i32::from(DefinitionItem::DESCRIPTION_INDENT_COLUMNS));
+        let description_origin = base_indent.saturating_add(last_item.layout.body_indent_columns);
         while let Some(length) = indented_continuation_len(&pending, base_indent) {
             if pending.iter().take(length).any(|block| {
                 crate::block::block_source(block)
@@ -132,8 +128,10 @@ pub(super) fn normalize_hanging_definitions(blocks: &mut Vec<Block>, context: De
         else {
             unreachable!("option_term_indent only accepts paragraphs");
         };
-        let description_origin =
-            term_indent.saturating_add(i32::from(DefinitionItem::DESCRIPTION_INDENT_COLUMNS));
+        let description_origin = description
+            .iter()
+            .find_map(block_layout)
+            .map_or(term_indent, |layout| layout.indent_columns);
         for child in &mut description {
             shift_block_indent(child, description_origin);
         }
@@ -144,8 +142,16 @@ pub(super) fn normalize_hanging_definitions(blocks: &mut Vec<Block>, context: De
                 source,
                 entry: None,
                 layout: mant_ir::DefinitionLayout {
-                    inline_term: terms_fit_inline(&terms, DEFAULT_INLINE_TERM_MAX_WIDTH),
+                    // This is an ownership change, not a request to join two
+                    // originally distinct source paragraphs into one line.
+                    inline_term: false,
+                    body_indent_columns: mant_protocol::geometry::rebase_origin(
+                        description_origin,
+                        0,
+                        term_indent,
+                    ),
                     spacing_before_lines: Some(layout.spacing_before_lines),
+                    ..Default::default()
                 },
                 terms,
                 description,
@@ -209,6 +215,7 @@ mod tests {
                 layout: mant_ir::DefinitionLayout {
                     inline_term: false,
                     spacing_before_lines: None,
+                    ..Default::default()
                 },
             }],
             compact: false,
@@ -325,6 +332,38 @@ mod tests {
             let before = text(blocks.clone());
             normalize_hanging_definitions(&mut blocks, DefinitionContext::Parameters);
             assert_eq!(text(blocks), before, "spacing={spacing}");
+        }
+    }
+
+    #[test]
+    fn inferred_ownership_preserves_distinct_unspaced_paragraphs() {
+        for origin in [0, 2, 5, -2] {
+            for offset in [2, 4, 12] {
+                for head in ["--x", "--long-option-name"] {
+                    let mut blocks = vec![
+                        paragraph(head, origin),
+                        paragraph("Description.", origin + offset),
+                    ];
+                    let before = text(blocks.clone());
+                    normalize_hanging_definitions(&mut blocks, DefinitionContext::Parameters);
+                    let Block::DefinitionList { items, .. } = &blocks[0] else {
+                        panic!("inferred definition")
+                    };
+                    assert!(!items[0].layout.inline_term);
+                    assert_eq!(items[0].layout.body_indent_columns, offset);
+                    assert_eq!(
+                        text(blocks)
+                            .lines()
+                            .filter(|line| !line.is_empty())
+                            .collect::<Vec<_>>(),
+                        before
+                            .lines()
+                            .filter(|line| !line.is_empty())
+                            .collect::<Vec<_>>(),
+                        "origin={origin} offset={offset}"
+                    );
+                }
+            }
         }
     }
 }

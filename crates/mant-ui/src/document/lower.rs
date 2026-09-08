@@ -357,10 +357,7 @@ impl DocumentBuilder<'_> {
                         }
                         self.blocks(
                             &item.description,
-                            compose_origin(
-                                indent,
-                                i32::from(mant_ir::DefinitionItem::DESCRIPTION_INDENT_COLUMNS),
-                            ),
+                            compose_origin(indent, item.layout.body_indent_columns),
                         );
                     }
                 }
@@ -466,10 +463,7 @@ impl DocumentBuilder<'_> {
                 .entry(id)
                 .or_insert(self.lines.len() + row.min(last_target_row));
         }
-        let block_origin = compose_origin(
-            indent,
-            i32::from(mant_ir::DefinitionItem::DESCRIPTION_INDENT_COLUMNS),
-        );
+        let block_origin = compose_origin(indent, item.layout.body_indent_columns);
         let last = head_lines.pop().unwrap_or_default();
         for line in head_lines {
             self.push(
@@ -484,13 +478,15 @@ impl DocumentBuilder<'_> {
             let continuation_indent = compose_origin(block_origin, layout.indent_columns);
             let description_indent = continuation_indent.max(compose_origin(
                 indent,
-                coordinate(term_width.saturating_add(1)),
+                coordinate(
+                    term_width.saturating_add(usize::from(item.layout.min_term_gap_columns)),
+                ),
             ));
             term_spans.push(Span::raw(
                 " ".repeat(
                     padding(description_indent)
                         .saturating_sub(padding(indent).saturating_add(term_width))
-                        .max(1),
+                        .max(usize::from(item.layout.min_term_gap_columns)),
                 ),
             ));
             let mut description_lines = styled_bound_inline_lines(

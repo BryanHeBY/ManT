@@ -1148,9 +1148,21 @@
         "description": "Definition-item presentation. Missing spacing inherits list compactness;\nexplicit zero spacing is a distinct, preserved source request.",
         "type": "object",
         "properties": {
+          "bodyIndentColumns": {
+            "description": "Description content origin relative to the label origin. Hard and\nwrapped continuation lines use this origin even if a long run-in head\nforces the first description text further right. The generic default\nis four cells; source producers resolve their own widths explicitly.",
+            "type": "integer",
+            "format": "int32"
+          },
           "inlineTerm": {
             "description": "Render the term on the same line as the first description line (a man(7)\nhanging tag that fits the indent) instead of on its own line. Decided\nonce during lowering so every renderer lays the item out identically.",
             "type": "boolean"
+          },
+          "minTermGapColumns": {
+            "description": "Minimum separation after a run-in term, independent of body origin.",
+            "type": "integer",
+            "format": "uint16",
+            "maximum": 65535,
+            "minimum": 0
           },
           "spacingBeforeLines": {
             "description": "Terminal rows requested before this item when man(7) changes `.PD`.\n`None` inherits the containing list's compactness policy.",
@@ -3577,9 +3589,21 @@
         "description": "Definition-item presentation. Missing spacing inherits list compactness;\nexplicit zero spacing is a distinct, preserved source request.",
         "type": "object",
         "properties": {
+          "bodyIndentColumns": {
+            "description": "Description content origin relative to the label origin. Hard and\nwrapped continuation lines use this origin even if a long run-in head\nforces the first description text further right. The generic default\nis four cells; source producers resolve their own widths explicitly.",
+            "type": "integer",
+            "format": "int32"
+          },
           "inlineTerm": {
             "description": "Render the term on the same line as the first description line (a man(7)\nhanging tag that fits the indent) instead of on its own line. Decided\nonce during lowering so every renderer lays the item out identically.",
             "type": "boolean"
+          },
+          "minTermGapColumns": {
+            "description": "Minimum separation after a run-in term, independent of body origin.",
+            "type": "integer",
+            "format": "uint16",
+            "maximum": 65535,
+            "minimum": 0
           },
           "spacingBeforeLines": {
             "description": "Terminal rows requested before this item when man(7) changes `.PD`.\n`None` inherits the containing list's compactness policy.",
@@ -7781,9 +7805,21 @@
         "description": "Definition-item presentation. Missing spacing inherits list compactness;\nexplicit zero spacing is a distinct, preserved source request.",
         "type": "object",
         "properties": {
+          "bodyIndentColumns": {
+            "description": "Description content origin relative to the label origin. Hard and\nwrapped continuation lines use this origin even if a long run-in head\nforces the first description text further right. The generic default\nis four cells; source producers resolve their own widths explicitly.",
+            "type": "integer",
+            "format": "int32"
+          },
           "inlineTerm": {
             "description": "Render the term on the same line as the first description line (a man(7)\nhanging tag that fits the indent) instead of on its own line. Decided\nonce during lowering so every renderer lays the item out identically.",
             "type": "boolean"
+          },
+          "minTermGapColumns": {
+            "description": "Minimum separation after a run-in term, independent of body origin.",
+            "type": "integer",
+            "format": "uint16",
+            "maximum": 65535,
+            "minimum": 0
           },
           "spacingBeforeLines": {
             "description": "Terminal rows requested before this item when man(7) changes `.PD`.\n`None` inherits the containing list's compactness policy.",
@@ -10472,9 +10508,21 @@
         "description": "Definition-item presentation. Missing spacing inherits list compactness;\nexplicit zero spacing is a distinct, preserved source request.",
         "type": "object",
         "properties": {
+          "bodyIndentColumns": {
+            "description": "Description content origin relative to the label origin. Hard and\nwrapped continuation lines use this origin even if a long run-in head\nforces the first description text further right. The generic default\nis four cells; source producers resolve their own widths explicitly.",
+            "type": "integer",
+            "format": "int32"
+          },
           "inlineTerm": {
             "description": "Render the term on the same line as the first description line (a man(7)\nhanging tag that fits the indent) instead of on its own line. Decided\nonce during lowering so every renderer lays the item out identically.",
             "type": "boolean"
+          },
+          "minTermGapColumns": {
+            "description": "Minimum separation after a run-in term, independent of body origin.",
+            "type": "integer",
+            "format": "uint16",
+            "maximum": 65535,
+            "minimum": 0
           },
           "spacingBeforeLines": {
             "description": "Terminal rows requested before this item when man(7) changes `.PD`.\n`None` inherits the containing list's compactness policy.",

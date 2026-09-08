@@ -8,12 +8,12 @@ const UNITS_PER_CELL: i32 = 24;
 const LIMIT: i32 = 4096 * UNITS_PER_CELL;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub(super) struct Distance(i32);
+pub(in crate::mandoc) struct Distance(i32);
 
 impl Distance {
     /// Parse one finite literal distance, using ens for a bare number.
     /// Expressions, registers and unsupported units remain explicit failures.
-    pub(super) fn parse(value: &str) -> Option<Self> {
+    pub(in crate::mandoc) fn parse(value: &str) -> Option<Self> {
         let value = value.trim();
         let end = value
             .find(|c: char| c.is_ascii_alphabetic())
@@ -41,23 +41,34 @@ impl Distance {
         Some(Self(units))
     }
 
-    pub(super) fn cells(value: i32) -> Self {
+    pub(in crate::mandoc) fn cells(value: i32) -> Self {
         Self(value.saturating_mul(UNITS_PER_CELL).clamp(-LIMIT, LIMIT))
     }
 
     /// Compose source positions without premature cell rounding. The bool
     /// reports bounding so the producer can issue its source diagnostic.
-    pub(super) fn add(self, other: Self) -> (Self, bool) {
+    pub(in crate::mandoc) fn add(self, other: Self) -> (Self, bool) {
         let sum = self.0.saturating_add(other.0);
         (Self(sum.clamp(-LIMIT, LIMIT)), sum.abs() > LIMIT)
     }
 
-    pub(super) fn columns(self) -> i32 {
+    pub(in crate::mandoc) fn columns(self) -> i32 {
         if self.0 < 0 {
             -((-self.0 + (UNITS_PER_CELL - 1) / 2) / UNITS_PER_CELL)
         } else {
             (self.0 + (UNITS_PER_CELL - 1) / 2) / UNITS_PER_CELL
         }
+    }
+
+    /// Source coordinates exclude the ordinary five-cell page margin. Round
+    /// the nonnegative physical position so half-cell outdents follow the same
+    /// character-device rule as positive offsets; clamp only at page left.
+    pub(in crate::mandoc) fn position_columns(self) -> i32 {
+        ((self.0 + 5 * UNITS_PER_CELL).max(0) + (UNITS_PER_CELL - 1) / 2) / UNITS_PER_CELL - 5
+    }
+
+    pub(in crate::mandoc) fn at_page_floor(self) -> Self {
+        Self(self.0.max(-5 * UNITS_PER_CELL))
     }
 }
 

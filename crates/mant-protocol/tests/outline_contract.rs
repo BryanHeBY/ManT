@@ -171,6 +171,7 @@ fn excerpt_contract_can_return_one_semantic_definition() {
         layout: mant_ir::DefinitionLayout {
             inline_term: false,
             spacing_before_lines: None,
+            ..Default::default()
         },
         entry: Some(EntryFacts {
             name_bindings: Vec::new(),

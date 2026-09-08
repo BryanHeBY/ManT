@@ -477,7 +477,7 @@ pub struct DefinitionItem {
 
 /// Definition-item presentation. Missing spacing inherits list compactness;
 /// explicit zero spacing is a distinct, preserved source request.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct DefinitionLayout {
     /// Render the term on the same line as the first description line (a man(7)
@@ -485,6 +485,21 @@ pub struct DefinitionLayout {
     /// once during lowering so every renderer lays the item out identically.
     #[serde(default, skip_serializing_if = "is_false")]
     pub inline_term: bool,
+    /// Description content origin relative to the label origin. Hard and
+    /// wrapped continuation lines use this origin even if a long run-in head
+    /// forces the first description text further right. The generic default
+    /// is four cells; source producers resolve their own widths explicitly.
+    #[serde(
+        default = "default_definition_indent",
+        skip_serializing_if = "is_default_definition_indent"
+    )]
+    pub body_indent_columns: i32,
+    /// Minimum separation after a run-in term, independent of body origin.
+    #[serde(
+        default = "default_term_gap",
+        skip_serializing_if = "is_default_term_gap"
+    )]
+    pub min_term_gap_columns: u16,
     /// Terminal rows requested before this item when man(7) changes `.PD`.
     /// `None` inherits the containing list's compactness policy.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -495,21 +510,49 @@ impl DefinitionLayout {
     /// Whether all presentation choices inherit their existing defaults.
     #[must_use]
     pub const fn is_empty(&self) -> bool {
-        !self.inline_term && self.spacing_before_lines.is_none()
+        !self.inline_term
+            && self.spacing_before_lines.is_none()
+            && self.body_indent_columns == default_definition_indent()
+            && self.min_term_gap_columns == default_term_gap()
     }
 }
 
+impl Default for DefinitionLayout {
+    fn default() -> Self {
+        Self {
+            inline_term: false,
+            body_indent_columns: default_definition_indent(),
+            min_term_gap_columns: default_term_gap(),
+            spacing_before_lines: None,
+        }
+    }
+}
+
+const fn default_definition_indent() -> i32 {
+    4
+}
+const fn default_term_gap() -> u16 {
+    1
+}
+#[allow(clippy::trivially_copy_pass_by_ref)] // Serde predicate.
+const fn is_default_definition_indent(value: &i32) -> bool {
+    *value == default_definition_indent()
+}
+#[allow(clippy::trivially_copy_pass_by_ref)] // Serde predicate.
+const fn is_default_term_gap(value: &u16) -> bool {
+    *value == default_term_gap()
+}
+
 impl DefinitionItem {
-    /// Structural indentation of standalone description blocks, before their
-    /// own layout hints. Native continuation normalization and terminal/text
-    /// renderers must use the same origin when moving flat blocks into an
-    /// owning definition; otherwise a semantic-only move changes geometry.
+    /// Generic default for authored definitions. Source-specific producers
+    /// set [`DefinitionLayout::body_indent_columns`]; consumers must read that
+    /// resolved field rather than applying this default a second time.
     pub const DESCRIPTION_INDENT_COLUMNS: u16 = 4;
 
     /// The first paragraph that can share the term's displayed line.
     ///
     /// Only this paragraph's wrapped lines hang from its first-line text.
-    /// Every later block uses [`Self::DESCRIPTION_INDENT_COLUMNS`] from the
+    /// Every later block uses [`DefinitionLayout::body_indent_columns`] from the
     /// definition container, independently of label width and inline mode.
     /// Explicit leading spacing or a non-paragraph first block prevents the
     /// inline presentation; it must not be consumed by joining the term.

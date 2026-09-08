@@ -1,8 +1,8 @@
 //! Shared definition content, source ownership, and head construction.
 use super::{
-    DefinitionItem, Inline, InlineBuilder, LoweringContext, MAN_DEFINITION_BODY_INDENT, Node,
-    NodeKind, first_part_children, is_inline_equation, is_inline_equation_quote_artifact,
-    lower_blocks_with_spacing, source_span, targets, terms_fit_inline,
+    DefinitionItem, Inline, InlineBuilder, LoweringContext, Node, NodeKind, first_part_children,
+    is_inline_equation, is_inline_equation_quote_artifact, lower_blocks_with_spacing, source_span,
+    targets,
 };
 
 pub(super) fn definition_item(
@@ -10,7 +10,7 @@ pub(super) fn definition_item(
     context: &LoweringContext<'_>,
     indent_columns: crate::mandoc::layout::SourceIndent,
     paragraph_distance: &mut u16,
-    max_term_width: usize,
+    geometry: crate::mandoc::layout::DefinitionGeometry,
     spacing_enabled: bool,
     formatter: &mut crate::mandoc::formatter::FormatterState,
 ) -> DefinitionItem {
@@ -31,20 +31,16 @@ pub(super) fn definition_item(
         term.insert(0, Inline::anchor_at(id, source_span(node)));
     }
     let terms = split_definition_terms(term);
+    let (layout, body_origin) = geometry.resolve(context, node, indent_columns, &terms);
     let item = DefinitionItem {
         source: source_span(node),
         entry: None,
-        layout: mant_ir::DefinitionLayout {
-            inline_term: terms_fit_inline(&terms, max_term_width),
-            spacing_before_lines: None,
-        },
+        layout,
         terms,
         description: lower_blocks_with_spacing(
             body,
             context,
-            context
-                .nested_indent(node, indent_columns, MAN_DEFINITION_BODY_INDENT)
-                .content_origin(),
+            body_origin,
             paragraph_distance,
             formatter.spacing,
             formatter,

@@ -231,6 +231,7 @@ fn definition_continuations_keep_rows_when_reparented_across_spacing() {
                         layout: mant_ir::DefinitionLayout {
                             inline_term,
                             spacing_before_lines: None,
+                            ..Default::default()
                         },
                     }],
                     compact: false,

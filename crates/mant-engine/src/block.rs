@@ -49,3 +49,16 @@ pub(crate) const fn block_source(block: &Block) -> Option<SourceSpan> {
         | Block::Unsupported { source, .. } => *source,
     }
 }
+/// Move already-relative roots between actual content origins. Descendants
+/// remain relative to those roots and must never receive this translation.
+pub(crate) fn rebase_roots(blocks: &mut [mant_ir::Block], old_parent: i32, new_parent: i32) {
+    for block in blocks {
+        if let Some(layout) = block_layout_mut(block) {
+            layout.indent_columns = mant_protocol::geometry::rebase_origin(
+                layout.indent_columns,
+                old_parent,
+                new_parent,
+            );
+        }
+    }
+}

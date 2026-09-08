@@ -599,6 +599,7 @@ fn explainable_manual() -> Document {
             layout: mant_ir::DefinitionLayout {
                 inline_term: false,
                 spacing_before_lines: None,
+                ..Default::default()
             },
             entry: Some(EntryFacts {
                 name_bindings: vec![mant_ir::EntryNameBinding {

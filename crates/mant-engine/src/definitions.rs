@@ -165,6 +165,7 @@ mod tests {
             layout: mant_ir::DefinitionLayout {
                 inline_term: false,
                 spacing_before_lines: None,
+                ..Default::default()
             },
             terms: vec![vec![Inline::Text {
                 value: value.into(),
@@ -180,6 +181,7 @@ mod tests {
             layout: mant_ir::DefinitionLayout {
                 inline_term: false,
                 spacing_before_lines: None,
+                ..Default::default()
             },
             terms: vec![vec![Inline::Strong {
                 children: vec![Inline::Text {
@@ -269,6 +271,7 @@ mod tests {
             layout: mant_ir::DefinitionLayout {
                 inline_term: true,
                 spacing_before_lines: None,
+                ..Default::default()
             },
             terms: vec![vec![Inline::anchor("native-target")]],
             description: Vec::new(),

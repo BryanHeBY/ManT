@@ -356,6 +356,7 @@ fn preserves_inline_lists_definitions_and_nested_headings() {
             layout: mant_ir::DefinitionLayout {
                 inline_term: false,
                 spacing_before_lines: None,
+                ..Default::default()
             },
             terms: vec![
                 vec![Inline::Strong {
@@ -409,6 +410,7 @@ fn keeps_adjacent_bold_and_italic_runs_unambiguous_in_commonmark() {
             layout: mant_ir::DefinitionLayout {
                 inline_term: false,
                 spacing_before_lines: None,
+                ..Default::default()
             },
             terms: vec![vec![
                 Inline::Strong {
@@ -1077,6 +1079,7 @@ fn protects_hanging_definition_terms_from_becoming_nested_lists() {
                     layout: mant_ir::DefinitionLayout {
                         inline_term: true,
                         spacing_before_lines: None,
+                        ..Default::default()
                     },
                 }],
                 compact: true,
@@ -1106,6 +1109,7 @@ fn keeps_block_definition_descriptions_on_their_own_commonmark_line() {
             layout: mant_ir::DefinitionLayout {
                 inline_term: true,
                 spacing_before_lines: None,
+                ..Default::default()
             },
             terms: vec![vec![Inline::Text {
                 value: "plain".to_owned(),
@@ -1276,6 +1280,7 @@ fn addressable_rendering_returns_exact_semantic_node_ranges() {
         layout: mant_ir::DefinitionLayout {
             inline_term: false,
             spacing_before_lines: None,
+            ..Default::default()
         },
     };
     let query = ResolvedContent {

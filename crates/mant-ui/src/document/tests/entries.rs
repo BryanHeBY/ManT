@@ -277,6 +277,7 @@ fn definition_lists_honour_compact_and_per_item_spacing() {
         layout: mant_ir::DefinitionLayout {
             inline_term: false,
             spacing_before_lines,
+            ..Default::default()
         },
     };
     let mut bundle = bundle();

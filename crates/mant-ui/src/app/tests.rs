@@ -125,6 +125,7 @@ fn navigation_bundle() -> ResolvedContent {
                         layout: mant_ir::DefinitionLayout {
                             inline_term: false,
                             spacing_before_lines: None,
+                            ..Default::default()
                         },
                     }],
                     compact: true,

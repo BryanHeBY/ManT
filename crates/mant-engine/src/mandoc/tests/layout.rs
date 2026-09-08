@@ -28,13 +28,9 @@ fn excessive_display_and_list_offsets_are_bounded_without_losing_content() {
                 .diagnostics
                 .iter()
                 .any(|diagnostic| diagnostic.code.as_deref() == Some("manual.indentation-limit"));
-            // A list without -offset no longer adds an invented four columns.
-            // Exactly 4096n therefore stays within the source-position limit
-            // for a bullet body; definitions/displays add an actual offset.
-            assert_eq!(
-                bounded,
-                offset != "4096n" || body != ".Bl -bullet\n.It\nCONTENT\n.El"
-            );
+            // Every listed child has an actual body/display displacement;
+            // a body beyond the source limit must also report bounding.
+            assert!(bounded);
             assert!(
                 crate::query_roff_bytes(source.as_bytes())
                     .map(|query| crate::render_query_text(&query).contains("CONTENT"))
@@ -761,7 +757,7 @@ fn keeps_relative_indent_references_inside_man_ip_enumerations() {
     assert!(items.iter().all(|item| {
         item.blocks.len() == 2
             && item.blocks.iter().all(
-                |block| matches!(block, Block::Paragraph { layout, .. } if layout.indent_columns == 0),
+                |block| matches!(block, Block::Paragraph { layout, .. } if layout.indent_columns == 1),
             )
     }));
     assert!(SemanticIndex::build(&document).section("notes").is_empty());

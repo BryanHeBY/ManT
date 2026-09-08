@@ -129,5 +129,6 @@ fn inline_text(children: &[Inline]) -> String {
 
 mod entries;
 mod layout;
+mod layout_geometry;
 mod navigation;
 mod tables;

@@ -146,6 +146,7 @@ mod tests {
             layout: mant_ir::DefinitionLayout {
                 inline_term: false,
                 spacing_before_lines: None,
+                ..Default::default()
             },
         };
         let mut blocks = vec![Block::DefinitionList {

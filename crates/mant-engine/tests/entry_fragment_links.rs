@@ -23,6 +23,7 @@ fn entry_fragments_validate_without_inserting_a_head_anchor() {
                     layout: mant_ir::DefinitionLayout {
                         inline_term: false,
                         spacing_before_lines: None,
+                        ..Default::default()
                     },
                 }],
                 compact: false,

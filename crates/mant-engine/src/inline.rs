@@ -63,16 +63,13 @@ fn last_character(node: &Inline) -> Option<char> {
     }
 }
 
-/// Default visible width for a definition term that shares a description row.
-pub(crate) const DEFAULT_INLINE_TERM_MAX_WIDTH: usize = 6;
-
 /// Decide whether definition terms fit beside their first description line.
 pub(crate) fn terms_fit_inline(terms: &[Vec<Inline>], max_width: usize) -> bool {
     let text = terms
         .iter()
         .map(|term| plain_text(term))
         .collect::<Vec<_>>()
-        .join(", ");
+        .join("\n");
     let width = mant_protocol::geometry::text_width(text.trim());
     (1..=max_width).contains(&width)
 }

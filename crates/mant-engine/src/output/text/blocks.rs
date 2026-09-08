@@ -245,10 +245,7 @@ impl BlockRenderer<'_> {
     }
 
     fn render_definition(&self, item: &DefinitionItem, origin: i32) -> String {
-        let body_origin = compose_origin(
-            origin,
-            i32::from(DefinitionItem::DESCRIPTION_INDENT_COLUMNS),
-        );
+        let body_origin = compose_origin(origin, item.layout.body_indent_columns);
         let mut terms = item
             .terms
             .iter()
@@ -266,9 +263,13 @@ impl BlockRenderer<'_> {
                 .map(|term| crate::inline::plain_text(term))
                 .unwrap_or_default();
             let last_width = text_width(last_plain.rsplit('\n').next().unwrap_or_default());
-            let first_origin = compose_origin(body_origin, layout.indent_columns).max(
-                compose_origin(origin, coordinate(last_width.saturating_add(1))),
-            );
+            let first_origin =
+                compose_origin(body_origin, layout.indent_columns).max(compose_origin(
+                    origin,
+                    coordinate(
+                        last_width.saturating_add(usize::from(item.layout.min_term_gap_columns)),
+                    ),
+                ));
             let body = self.inline_text(children, TextRole::Body);
             let mut lines = body.split('\n');
             let mut output = terms
@@ -281,7 +282,7 @@ impl BlockRenderer<'_> {
                 " ".repeat(
                     padding(first_origin)
                         .saturating_sub(padding(origin).saturating_add(last_width))
-                        .max(1)
+                        .max(usize::from(item.layout.min_term_gap_columns))
                 ),
                 lines.next().unwrap_or_default()
             ));

@@ -2,8 +2,8 @@
 use super::super::{
     Block, DefinitionItem, DefinitionLocation, ListKind, LoweringContext, ManListState, Node,
     NodeKind, append_ordered, block_indent, block_layout_mut, definition_item, first_part_children,
-    horizontal_distance_columns, layout_with_spacing, list_item_from_definition, ordinal_marker,
-    paragraph_distance_lines, plain_text, prepend_definition_heads, source_span, terms_fit_inline,
+    layout_with_spacing, list_item_from_definition, ordinal_marker, paragraph_distance_lines,
+    plain_text, prepend_definition_heads, source_span, terms_fit_inline,
 };
 
 fn is_bullet_glyph(text: &str) -> bool {
@@ -172,7 +172,7 @@ fn lower_man_item(
     context: &LoweringContext<'_>,
     indent_columns: crate::mandoc::layout::SourceIndent,
     paragraph_distance: &mut u16,
-    definition_hanging_width: &mut usize,
+    definition_hanging_width: &mut crate::mandoc::layout::Distance,
     spacing_enabled: bool,
     formatter: &mut crate::mandoc::formatter::FormatterState,
 ) -> LoweredManItem {
@@ -189,14 +189,19 @@ fn lower_man_item(
     if let Some(distance) = leading_head_distance {
         *paragraph_distance = distance;
     }
-    update_man_definition_width(node, definition_hanging_width);
-    let max_width = definition_hanging_width.saturating_sub(1);
+    update_man_definition_width(node, context, definition_hanging_width);
+    let max_width =
+        usize::try_from(definition_hanging_width.columns().saturating_sub(1)).unwrap_or(0);
     let item = definition_item(
         node,
         context,
         indent_columns,
         paragraph_distance,
-        max_width,
+        crate::mandoc::layout::DefinitionGeometry {
+            body: *definition_hanging_width,
+            placement: crate::mandoc::layout::TermPlacement::Fit,
+            gap: 1,
+        },
         spacing_enabled,
         formatter,
     );
@@ -210,7 +215,7 @@ fn lower_man_item(
 pub(in crate::mandoc::blocks) struct ManDefinitionState<'a> {
     pub(in crate::mandoc::blocks) paragraph_distance: &'a mut u16,
     pub(in crate::mandoc::blocks) output: &'a mut Vec<Block>,
-    pub(in crate::mandoc::blocks) definition_hanging_width: &'a mut usize,
+    pub(in crate::mandoc::blocks) definition_hanging_width: &'a mut crate::mandoc::layout::Distance,
     pub(in crate::mandoc::blocks) list_state: &'a mut ManListState,
 }
 
@@ -304,6 +309,11 @@ fn append_ip_continuation(
     if let Some(layout) = item.description.first_mut().and_then(block_layout_mut) {
         layout.spacing_before_lines = layout.spacing_before_lines.max(paragraph_distance);
     }
+    crate::block::rebase_roots(
+        &mut item.description,
+        item.layout.body_indent_columns,
+        previous.layout.body_indent_columns,
+    );
     previous.description.append(&mut item.description);
     *compact = *compact && paragraph_distance == 0;
     true
@@ -376,7 +386,11 @@ fn append_definition(
     }
 }
 
-fn update_man_definition_width(node: &Node, current_width: &mut usize) {
+fn update_man_definition_width(
+    node: &Node,
+    context: &LoweringContext<'_>,
+    current_width: &mut crate::mandoc::layout::Distance,
+) {
     let head = first_part_children(node, NodeKind::Head);
     let argument = match node.macro_name.as_deref() {
         Some("TP" | "TQ") => head
@@ -386,8 +400,8 @@ fn update_man_definition_width(node: &Node, current_width: &mut usize) {
         Some("IP") => head.get(1).and_then(first_node_text),
         _ => None,
     };
-    if let Some(width) = argument.and_then(horizontal_distance_columns) {
-        *current_width = width;
+    if let Some(argument) = argument {
+        *current_width = context.distance_or(node, argument, *current_width);
     }
 }
 
@@ -410,7 +424,7 @@ fn append_ip_bullet(
     paragraph_distance: u16,
     source: Option<mant_ir::SourceSpan>,
 ) {
-    let list_item = list_item_from_definition(item, indent_columns, source);
+    let list_item = list_item_from_definition(item, 2, source);
     if let Some(Block::List {
         kind: ListKind::Bullet,
         compact,

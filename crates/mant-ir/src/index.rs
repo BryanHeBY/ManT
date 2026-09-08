@@ -250,6 +250,7 @@ mod tests {
                     layout: crate::DefinitionLayout {
                         inline_term: false,
                         spacing_before_lines: None,
+                        ..Default::default()
                     },
                 }],
                 compact: false,

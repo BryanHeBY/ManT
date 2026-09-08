@@ -20,8 +20,7 @@ fn ordinary_man_paragraphs_reset_prevailing_definition_width() {
         assert_eq!(widths.0, [true, inline_second], "{source}");
         let text = crate::render_query_text(&query);
         assert!(
-            text.lines()
-                .any(|line| line.contains("FIRSTLONGTAG") && line.contains("FIRSTLONGTAG FIRST")),
+            text.lines().any(|line| line == "FIRSTLONGTAG   FIRST"),
             "{text}"
         );
         assert_eq!(

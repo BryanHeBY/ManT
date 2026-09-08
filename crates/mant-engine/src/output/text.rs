@@ -788,6 +788,7 @@ mod tests {
                                 layout: mant_ir::DefinitionLayout {
                                     inline_term: true,
                                     spacing_before_lines: Some(1),
+                                    ..Default::default()
                                 },
                                 terms: vec![vec![Inline::Text {
                                     value: "* / %".to_owned(),
@@ -806,6 +807,7 @@ mod tests {
                                 layout: mant_ir::DefinitionLayout {
                                     inline_term: true,
                                     spacing_before_lines: Some(1),
+                                    ..Default::default()
                                 },
                                 terms: vec![vec![Inline::Text {
                                     value: "space".to_owned(),
@@ -877,6 +879,7 @@ mod tests {
                                 layout: mant_ir::DefinitionLayout {
                                     inline_term: true,
                                     spacing_before_lines: Some(1),
+                                    ..Default::default()
                                 },
                                 terms: vec![vec![Inline::Text {
                                     value: "&&".to_owned(),
@@ -895,6 +898,7 @@ mod tests {
                                 layout: mant_ir::DefinitionLayout {
                                     inline_term: false,
                                     spacing_before_lines: Some(1),
+                                    ..Default::default()
                                 },
                                 terms: vec![vec![Inline::Text {
                                     value: "--long-option-name".to_owned(),

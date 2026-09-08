@@ -3,8 +3,8 @@
 use super::{
     AstTableAlignment, AstTableCell, Block, DefinitionItem, DefinitionListStyle, Inline, ListItem,
     ListKind, LoweringContext, Node, NodeKind, NormalizedListKind, TableRow, definition_item,
-    first_part_children, horizontal_distance_columns, layout, lower_blocks_with_spacing,
-    ordinal_sequence, part_child_groups, source_span, targets,
+    first_part_children, layout, lower_blocks_with_spacing, ordinal_sequence, part_child_groups,
+    source_span, targets,
 };
 
 pub(in crate::mandoc::blocks) fn lower_mdoc_list(
@@ -28,11 +28,17 @@ pub(in crate::mandoc::blocks) fn lower_mdoc_list(
         && items
             .iter()
             .any(|item| !first_part_children(item.node, NodeKind::Head).is_empty()));
-    let offset = node
-        .offset
-        .as_ref()
-        .map_or(0, |_| context.display_offset(node));
-    let list_indent = context.nested_indent(node, indent_columns, offset);
+    let offset =
+        node.offset
+            .as_deref()
+            .map_or(crate::mandoc::layout::Distance::default(), |offset| {
+                context.measured_mdoc_distance(
+                    node,
+                    offset,
+                    crate::mandoc::layout::Distance::default(),
+                )
+            });
+    let list_indent = context.offset_indent(node, indent_columns, offset);
     let mut block = if node.list_kind == Some(NormalizedListKind::Column) {
         lower_mdoc_column_list(
             node,
@@ -54,45 +60,14 @@ pub(in crate::mandoc::blocks) fn lower_mdoc_list(
             formatter,
         )
     } else {
-        Block::List {
-            kind: match node.list_kind {
-                Some(NormalizedListKind::Ordered) => ListKind::Ordered { start: Some(1) },
-                Some(NormalizedListKind::Plain) => ListKind::Plain,
-                _ => ListKind::Bullet,
-            },
-            compact: node.compact,
-            items: items
-                .into_iter()
-                .map(|item| {
-                    context.lower_inline_with_spacing(
-                        item.leading_controls,
-                        formatter.spacing,
-                        formatter,
-                    );
-                    context.lower_inline_with_spacing(
-                        first_part_children(item.node, NodeKind::Head),
-                        formatter.spacing,
-                        formatter,
-                    );
-                    let mut blocks = lower_blocks_with_spacing(
-                        first_part_children(item.node, NodeKind::Body),
-                        context,
-                        list_indent.content_origin(),
-                        paragraph_distance,
-                        formatter.spacing,
-                        formatter,
-                    );
-                    attach_item_targets(&mut blocks, &item, layout(list_indent.content_origin()));
-                    ListItem {
-                        source: source_span(item.node),
-                        entry: None,
-                        blocks,
-                    }
-                })
-                .collect(),
-            layout: layout(list_indent),
-            source: source_span(node),
-        }
+        lower_mdoc_plain_list(
+            node,
+            items,
+            context,
+            list_indent,
+            paragraph_distance,
+            formatter,
+        )
     };
     for targets::OwnedTarget {
         name: target,
@@ -110,6 +85,82 @@ pub(in crate::mandoc::blocks) fn lower_mdoc_list(
     block
 }
 
+fn lower_mdoc_plain_list(
+    node: &Node,
+    items: Vec<MdocListItem<'_>>,
+    context: &LoweringContext<'_>,
+    list_indent: crate::mandoc::layout::SourceIndent,
+    paragraph_distance: &mut u16,
+    formatter: &mut crate::mandoc::formatter::FormatterState,
+) -> Block {
+    use crate::mandoc::layout::Distance;
+    let kind = match node.list_kind {
+        Some(NormalizedListKind::Ordered) => ListKind::Ordered { start: Some(1) },
+        Some(NormalizedListKind::Plain) => ListKind::Plain,
+        _ => ListKind::Bullet,
+    };
+    let width = node.width.as_deref().map_or(
+        Distance::cells(if kind == ListKind::Plain { 0 } else { 2 }),
+        |width| {
+            context
+                .measured_mdoc_distance(node, width, Distance::default())
+                .add(Distance::cells(2))
+                .0
+        },
+    );
+    Block::List {
+        kind,
+        compact: node.compact,
+        items: items
+            .into_iter()
+            .enumerate()
+            .map(|(index, item)| {
+                let marker_width = match kind {
+                    ListKind::Plain => 0,
+                    ListKind::Bullet => 2,
+                    ListKind::Ordered { .. } => {
+                        mant_protocol::geometry::coordinate(mant_protocol::geometry::text_width(
+                            &format!("{}. ", kind.ordinal(index).unwrap_or(u64::MAX)),
+                        ))
+                    }
+                };
+                let body_origin = context.offset_indent(item.node, list_indent, width);
+                let body_columns = body_origin.offset_from(list_indent).max(marker_width);
+                let body_origin = context
+                    .offset_indent(item.node, list_indent, Distance::cells(body_columns))
+                    .content_origin();
+                context.lower_inline_with_spacing(
+                    item.leading_controls,
+                    formatter.spacing,
+                    formatter,
+                );
+                context.lower_inline_with_spacing(
+                    first_part_children(item.node, NodeKind::Head),
+                    formatter.spacing,
+                    formatter,
+                );
+                let mut blocks = lower_blocks_with_spacing(
+                    first_part_children(item.node, NodeKind::Body),
+                    context,
+                    body_origin,
+                    paragraph_distance,
+                    formatter.spacing,
+                    formatter,
+                );
+                attach_item_targets(&mut blocks, &item, layout(body_origin));
+                crate::block::rebase_roots(&mut blocks, body_columns, marker_width);
+                ListItem {
+                    source: source_span(item.node),
+                    entry: None,
+                    blocks,
+                }
+            })
+            .collect(),
+        layout: layout(list_indent),
+        source: source_span(node),
+    }
+}
+
 fn lower_mdoc_definition_list(
     node: &Node,
     items: Vec<MdocListItem<'_>>,
@@ -119,11 +170,40 @@ fn lower_mdoc_definition_list(
     paragraph_distance: &mut u16,
     formatter: &mut crate::mandoc::formatter::FormatterState,
 ) -> Block {
-    let max_term_width = node
-        .width
-        .as_deref()
-        .and_then(horizontal_distance_columns)
-        .unwrap_or(6);
+    use crate::mandoc::layout::{DefinitionGeometry, Distance, TermPlacement};
+    let width = node.width.as_deref().map_or(Distance::cells(8), |width| {
+        context
+            .measured_mdoc_distance(node, width, Distance::cells(6))
+            .add(Distance::cells(2))
+            .0
+    });
+    let geometry = match node.definition_list_style {
+        Some(DefinitionListStyle::Hang) => DefinitionGeometry {
+            body: width,
+            placement: TermPlacement::RunIn,
+            gap: 1,
+        },
+        Some(DefinitionListStyle::Inset) => DefinitionGeometry {
+            body: Distance::default(),
+            placement: TermPlacement::RunIn,
+            gap: 1,
+        },
+        Some(DefinitionListStyle::Diagnostic) => DefinitionGeometry {
+            body: Distance::default(),
+            placement: TermPlacement::RunIn,
+            gap: 2,
+        },
+        Some(DefinitionListStyle::Overhang) => DefinitionGeometry {
+            body: Distance::default(),
+            placement: TermPlacement::Stacked,
+            gap: 0,
+        },
+        _ => DefinitionGeometry {
+            body: width,
+            placement: TermPlacement::Fit,
+            gap: 2,
+        },
+    };
     let lowered_items = items
         .into_iter()
         .map(|item| {
@@ -133,7 +213,7 @@ fn lower_mdoc_definition_list(
                 context,
                 list_indent,
                 paragraph_distance,
-                max_term_width,
+                geometry,
                 formatter.spacing,
                 formatter,
             );
@@ -157,7 +237,18 @@ fn lower_mdoc_definition_list(
             compact: node.compact,
             items: lowered_items
                 .into_iter()
-                .map(|item| mdoc_list_item_from_definition(item, list_indent, source_span(node)))
+                .enumerate()
+                .map(|(index, item)| {
+                    let ordinal = ListKind::Ordered {
+                        start: Some(first.value()),
+                    }
+                    .ordinal(index)
+                    .unwrap_or(u64::MAX);
+                    let marker_width = mant_protocol::geometry::coordinate(
+                        mant_protocol::geometry::text_width(&format!("{ordinal}. ")),
+                    );
+                    mdoc_list_item_from_definition(item, marker_width, source_span(node))
+                })
                 .collect(),
             layout: layout(indent_columns),
             source: source_span(node),
@@ -177,15 +268,21 @@ fn lower_mdoc_definition_list(
 /// those terms at the same item position.
 fn mdoc_list_item_from_definition(
     item: DefinitionItem,
-    list_indent: crate::mandoc::layout::SourceIndent,
+    marker_width: i32,
     source: Option<mant_ir::SourceSpan>,
 ) -> ListItem {
     let DefinitionItem {
         source: item_source,
         terms,
         mut description,
+        layout: definition_layout,
         ..
     } = item;
+    crate::block::rebase_roots(
+        &mut description,
+        definition_layout.body_indent_columns,
+        marker_width,
+    );
     let owner_source = terms
         .iter()
         .find_map(|term| targets::inline_anchor_owner_source(term))
@@ -197,7 +294,7 @@ fn mdoc_list_item_from_definition(
     targets::attach_targets(
         &mut description,
         anchors,
-        layout(list_indent.content_origin()),
+        mant_ir::LayoutHint::default(),
         owner_source,
     );
     ListItem {
@@ -399,6 +496,7 @@ fn append_list_targets(
                     layout: mant_ir::DefinitionLayout {
                         inline_term: true,
                         spacing_before_lines: None,
+                        ..Default::default()
                     },
                 });
             }

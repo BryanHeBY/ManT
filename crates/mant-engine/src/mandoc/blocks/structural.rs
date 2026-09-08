@@ -13,7 +13,7 @@ pub(super) struct StructuralLowerer<'a, 'source, 'state> {
     pub(super) indent_columns: crate::mandoc::layout::SourceIndent,
     pub(super) paragraph_distance: &'state mut u16,
     pub(super) output: &'state mut Vec<Block>,
-    pub(super) definition_hanging_width: &'state mut usize,
+    pub(super) definition_hanging_width: &'state mut crate::mandoc::layout::Distance,
     pub(super) man_list_state: &'state mut ManListState,
     pub(super) spacing_enabled: bool,
     pub(super) formatter: &'state mut crate::mandoc::formatter::FormatterState,
@@ -65,7 +65,7 @@ impl StructuralLowerer<'_, '_, '_> {
                 let mut nested = preformatted_blocks(
                     node,
                     self.context,
-                    self.context.nested_indent(
+                    self.context.offset_indent(
                         node,
                         self.indent_columns,
                         self.context.display_offset(node),
@@ -137,7 +137,8 @@ impl StructuralLowerer<'_, '_, '_> {
                 // man(7) ordinary paragraphs restore the prevailing tag
                 // width; HP is a hanging paragraph, not that reset boundary.
                 if matches!(node.macro_name.as_deref(), Some("PP" | "P" | "LP")) {
-                    *self.definition_hanging_width = DEFAULT_MAN_TAG_WIDTH;
+                    *self.definition_hanging_width =
+                        crate::mandoc::layout::Distance::cells(DEFAULT_MAN_TAG_WIDTH);
                 }
                 let spacing_before = if self.output.is_empty() {
                     0
@@ -159,7 +160,7 @@ impl StructuralLowerer<'_, '_, '_> {
                 let nested = lower_blocks_with_spacing(
                     first_part_children(node, NodeKind::Body),
                     self.context,
-                    self.context.nested_indent(
+                    self.context.offset_indent(
                         node,
                         self.indent_columns,
                         self.context.display_offset(node),
@@ -175,7 +176,11 @@ impl StructuralLowerer<'_, '_, '_> {
                     let mut nested = lower_blocks_with_spacing(
                         first_part_children(node, NodeKind::Body),
                         self.context,
-                        self.context.nested_indent(node, self.indent_columns, 4),
+                        self.context.man_relative_indent(
+                            node,
+                            self.indent_columns,
+                            *self.definition_hanging_width,
+                        ),
                         self.paragraph_distance,
                         self.spacing_enabled,
                         self.formatter,
@@ -196,7 +201,11 @@ impl StructuralLowerer<'_, '_, '_> {
                 *self.output = lower_blocks_onto(
                     first_part_children(node, NodeKind::Body),
                     self.context,
-                    self.context.nested_indent(node, self.indent_columns, 4),
+                    self.context.man_relative_indent(
+                        node,
+                        self.indent_columns,
+                        *self.definition_hanging_width,
+                    ),
                     self.paragraph_distance,
                     self.spacing_enabled,
                     output,

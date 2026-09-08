@@ -634,6 +634,7 @@ mod tests {
             layout: crate::DefinitionLayout {
                 inline_term: false,
                 spacing_before_lines: None,
+                ..Default::default()
             },
         };
         let facts = native.entry.as_mut().unwrap();

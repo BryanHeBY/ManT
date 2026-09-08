@@ -107,7 +107,7 @@ fn lower_blocks_onto(
     lowerer.finish()
 }
 
-const DEFAULT_MAN_TAG_WIDTH: usize = 7;
+const DEFAULT_MAN_TAG_WIDTH: i32 = 7;
 
 struct BlockLowerer<'a, 'source> {
     context: &'a LoweringContext<'source>,
@@ -118,7 +118,7 @@ struct BlockLowerer<'a, 'source> {
     // man(7) starts each section or relative-indent scope with a seven-column
     // hanging margin. Explicit `.TP`/`.IP` widths update it for following
     // tagged paragraphs, exactly as mandoc's terminal renderer does.
-    definition_hanging_width: usize,
+    definition_hanging_width: crate::mandoc::layout::Distance,
     split_authors: bool,
     synopsis_return_type_open: bool,
     // Source-proven `.IP`/`.TP` ordinals form lists immediately; this state
@@ -141,7 +141,7 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
             paragraph_distance,
             state: BlockState::with_output(indent_columns, spacing_enabled, output),
             formatter,
-            definition_hanging_width: DEFAULT_MAN_TAG_WIDTH,
+            definition_hanging_width: crate::mandoc::layout::Distance::cells(DEFAULT_MAN_TAG_WIDTH),
             split_authors: false,
             synopsis_return_type_open: false,
             man_list_state: ManListState::None,
