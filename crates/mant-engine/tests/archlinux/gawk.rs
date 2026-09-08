@@ -55,23 +55,35 @@ fn operator_table_has_correct_inline_term_decisions() {
 // gawk EXIT STATUS is prose paragraphs, not a bullet list — skip
 // bullet-normalisation test for this fixture.
 
-/// --format man renders inline operator terms tight (single space, no
-/// leaked indent).
+/// Inline operator bodies use the resolved source column, not a renderer's
+/// hard-coded single-space separator. The compound width expression in this
+/// fixture uses the documented unsupported-measurement fallback.
 #[test]
-fn man_format_renders_operator_table_tight() {
+fn man_format_preserves_resolved_operator_body_columns() {
     let output = render_query_man(&archlinux_manual_query("gawk"));
-
-    assert!(
-        output.contains("* / % Multiplication, division, and modulus."),
-        "got: {output:?}"
-    );
-    assert!(
-        output.contains("space String concatenation."),
-        "got: {output:?}"
-    );
-    // No leaked double-space.
-    assert!(!output.contains("* / %  "), "got: {output:?}");
-    assert!(!output.contains("space  "), "got: {output:?}");
+    let document = archlinux_manual("gawk");
+    let items = common::nested_definition_items(common::section(document, "PATTERNS AND ACTIONS"));
+    for (term, body) in [
+        ("* / %", "Multiplication, division, and modulus."),
+        ("space", "String concatenation."),
+    ] {
+        let item = items
+            .iter()
+            .find(|item| {
+                item.terms
+                    .iter()
+                    .any(|head| common::inline_text(head) == term)
+            })
+            .unwrap();
+        assert!(item.layout.inline_term);
+        assert_eq!(item.layout.body_indent_columns, 7);
+        let line = output.lines().find(|line| line.contains(body)).unwrap();
+        assert_eq!(
+            line.find(body).unwrap() - line.find(term).unwrap(),
+            7,
+            "{line}"
+        );
+    }
 }
 
 // gawk legitimately contains `\f` inside regex character-class literals
