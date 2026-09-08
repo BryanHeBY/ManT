@@ -34,3 +34,29 @@ pub const SELECTED: Color = BORDER;
 pub const TLDR_SELECTED: Color = Color::Rgb(73, 64, 95);
 pub const SEARCH_MATCH: Color = Color::Rgb(69, 71, 90);
 pub const SEARCH_ACTIVE: Color = YELLOW;
+
+/// Entry names retain semantic families; generic terms are primary content.
+pub(crate) const fn entry_color(kind: mant_ir::EntryKind) -> Color {
+    match mant_protocol::entry_tone(kind) {
+        mant_protocol::EntryTone::Primary => TEXT,
+        mant_protocol::EntryTone::Parameter => GREEN,
+        mant_protocol::EntryTone::Command => PEACH,
+        mant_protocol::EntryTone::Environment => LINK,
+        mant_protocol::EntryTone::Configuration => YELLOW,
+        mant_protocol::EntryTone::Variable => PINK,
+        mant_protocol::EntryTone::Value => BLUE,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn entry_families_do_not_downgrade_terms_or_values() {
+        assert_eq!(entry_color(mant_ir::EntryKind::Term), TEXT);
+        assert_eq!(entry_color(mant_ir::EntryKind::Value), BLUE);
+        assert_ne!(entry_color(mant_ir::EntryKind::Term), SUBTEXT);
+        assert_eq!(entry_color(mant_ir::EntryKind::ConfigurationKey), YELLOW);
+    }
+}

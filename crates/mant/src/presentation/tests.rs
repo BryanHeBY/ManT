@@ -1,4 +1,20 @@
 //! Presentation contracts: style must not alter visible semantic output.
+
+#[test]
+fn semantic_term_and_value_are_not_muted_metadata() {
+    use super::terminal::{TerminalRole, terminal_style};
+    let term = terminal_style(TerminalRole::Entry(mant_ir::EntryKind::Term));
+    let value = terminal_style(TerminalRole::Entry(mant_ir::EntryKind::Value));
+    let muted = terminal_style(TerminalRole::Muted);
+    assert_ne!(term, muted);
+    assert_ne!(value, muted);
+    assert!(!term.to_string().contains("90m"));
+    assert!(value.to_string().contains("94m"));
+    assert_ne!(
+        terminal_style(TerminalRole::Match),
+        terminal_style(TerminalRole::Entry(mant_ir::EntryKind::Command))
+    );
+}
 use mant_engine::{project_query_view, query_markdown_text};
 use mant_protocol::{EntryProjection, QueryView};
 

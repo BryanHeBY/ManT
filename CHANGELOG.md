@@ -12,6 +12,13 @@ that crate was not published for that change.
 
 ## Unreleased
 
+### Shared entry presentation
+
+- Keep generic Term titles and names in the primary foreground instead of
+  treating them as muted metadata. CLI and TUI share semantic palette families
+  and stable kind labels, with Value distinct from Term and Match distinct from
+  command color. Palette choices do not change semantic kinds or identities.
+
 ### mant-sources (next release)
 
 - Reject non-portable archive member components before host path assembly,

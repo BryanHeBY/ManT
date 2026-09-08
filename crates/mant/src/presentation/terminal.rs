@@ -33,10 +33,7 @@ pub(crate) fn render_catalog_output(
 pub(super) enum TerminalRole {
     Document,
     Heading,
-    Option,
-    Command,
-    Environment,
-    Variable,
+    Entry(EntryKind),
     Match,
     Coordinate,
     Path,
@@ -385,23 +382,24 @@ const fn outline_node_role(node: &OutlineNode) -> TerminalRole {
 }
 
 const fn entry_kind_role(kind: EntryKind) -> TerminalRole {
-    match kind {
-        EntryKind::Parameter { .. } => TerminalRole::Option,
-        EntryKind::Command => TerminalRole::Command,
-        EntryKind::EnvironmentVariable => TerminalRole::Environment,
-        EntryKind::Variable | EntryKind::ConfigurationKey => TerminalRole::Variable,
-        EntryKind::Value | EntryKind::Term => TerminalRole::Muted,
-    }
+    TerminalRole::Entry(kind)
 }
 
 pub(super) const fn terminal_style(role: TerminalRole) -> Style {
     match role {
         TerminalRole::Document => AnsiColor::BrightBlue.on_default().bold(),
         TerminalRole::Heading => AnsiColor::BrightCyan.on_default().bold(),
-        TerminalRole::Option => AnsiColor::BrightGreen.on_default().bold(),
-        TerminalRole::Command | TerminalRole::Match => AnsiColor::BrightYellow.on_default().bold(),
-        TerminalRole::Environment => AnsiColor::BrightCyan.on_default(),
-        TerminalRole::Variable | TerminalRole::Path => AnsiColor::BrightMagenta.on_default(),
+        TerminalRole::Entry(kind) => match mant_protocol::entry_tone(kind) {
+            mant_protocol::EntryTone::Primary => Style::new().bold(),
+            mant_protocol::EntryTone::Parameter => AnsiColor::BrightGreen.on_default().bold(),
+            mant_protocol::EntryTone::Command => AnsiColor::BrightYellow.on_default().bold(),
+            mant_protocol::EntryTone::Environment => AnsiColor::BrightCyan.on_default(),
+            mant_protocol::EntryTone::Configuration => AnsiColor::BrightYellow.on_default(),
+            mant_protocol::EntryTone::Variable => AnsiColor::BrightMagenta.on_default(),
+            mant_protocol::EntryTone::Value => AnsiColor::BrightBlue.on_default(),
+        },
+        TerminalRole::Match => Style::new().underline().bold(),
+        TerminalRole::Path => AnsiColor::BrightMagenta.on_default(),
         TerminalRole::Coordinate | TerminalRole::TreeGuide | TerminalRole::Muted => {
             AnsiColor::BrightBlack.on_default()
         }

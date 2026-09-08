@@ -10,6 +10,8 @@ mod evidence;
 pub use evidence::render_evidence_counts;
 mod labels;
 pub use labels::{EntryLabelMode, entry_label};
+mod roles;
+pub use roles::{EntryTone, entry_kind_label, entry_tone};
 
 /// Transport-neutral evidence outcome and paging/coverage labels.
 #[must_use]
