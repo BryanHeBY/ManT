@@ -171,7 +171,7 @@ mod tests {
             LineNumbers,
             screen::{format_line, format_search_rows},
         };
-        for width in [20, 40, 80] {
+        for width in [20, 40, 80, 120] {
             let original = format!("\x1b[92m{}\x1b[0m", "z".repeat(160));
             for (pattern, expected) in [("92", false), ("^z+$", true), ("NEVER_PRESENT", false)] {
                 let query = regex::Regex::new(pattern).unwrap();

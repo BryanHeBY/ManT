@@ -300,9 +300,17 @@ def check_pager_rows(path, environment, width):
             os.write(master, query + b"\r")
             read_output()
             assert process.poll() is None, (query, process.returncode, all_output)
-            os.write(master, b"n")
-            read_output()
-            assert process.poll() is None
+            for key in (b"n", b"N"):
+                os.write(master, key)
+                check_colors(read_output())
+                assert process.poll() is None
+        # Cancelling a new query clears the search overlay, not source colors.
+        os.write(master, b"/")
+        read_output()
+        os.write(master, b"\x1b")
+        check_colors(read_output())
+        os.write(master, b"k")
+        check_colors(read_output())
         os.write(master, b"q")
         try:
             process.wait(timeout=5)
