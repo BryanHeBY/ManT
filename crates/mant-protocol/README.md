@@ -174,6 +174,21 @@ The complete wire contract is documented by
 Compatibility and migration notes are recorded in the
 [crate changelog](https://github.com/BryanHeBY/ManT/blob/main/CHANGELOG.md).
 
+## In-memory presentation
+
+`EntryLabelMode` makes Compact (validated names, visible forms, then ID) and
+Forms (visible forms first) explicit. `EntryTone` preserves the complete
+`EntryKind` at adapter boundaries; terms are primary content, not muted metadata.
+These are display policies, not aliases, confidence levels or new wire fields.
+
+`EntryStyleMap` prepares owner-local validated name ranges once per borrowed
+document or excerpt. `project_content_slice` maps UTF-8 content slices into
+root-relative Unicode scalar ranges without copying the source tree.
+`visit_inline_text` composes those ranges with Strong, Emphasis, Code and Link
+markup as borrowed spans. Adapters own colors, escaping and line geometry;
+they must not reconstruct name bindings by searching rendered strings.
+Query-match and selection overlays remain separate from ordinary name roles.
+
 ## License
 
 Apache-2.0.
