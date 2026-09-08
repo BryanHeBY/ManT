@@ -50,7 +50,7 @@ fn all_entry_roles_color_only_bound_source_text_not_markers_or_body_mentions() {
         ("marker", "--", theme::GREEN),
         ("operand", "-", theme::GREEN),
         ("command", "Launch", theme::PEACH),
-        ("environment-variable", "$Env:HOME", theme::LINK),
+        ("environment-variable", "$Env:HOME", theme::MAUVE),
         ("configuration-key", "ServerAliveInterval", theme::YELLOW),
         ("variable", "$local_name", theme::PINK),
         ("value", "automatic", theme::BLUE),

@@ -74,15 +74,17 @@ impl DocumentBuilder<'_> {
 mod tests {
     #[test]
     fn sidebar_modes_use_shared_names_and_complete_form_fallbacks() {
-        let query = mant_engine::query_roff_bytes(b".TH PROBE 1\n.SH OPTIONS\n.TP\n.B -x, --language=LANG\nSelect language.\n.SH TERMS\n.TP\n.B find-new <subvolume> <last_gen>\nFind new files.\n").unwrap();
+        let query = mant_engine::query_roff_bytes(b".TH PROBE 1\n.SH OPTIONS\n.TP\n.B -x, --language=LANG\nSelect language.\n.SH TERMS\n.TP\n.B find-new <subvolume> <last_gen>\nFind new files.\n.TP\n.B [left|right]\nAn opaque grammar form.\n").unwrap();
         let view = crate::DocumentView::new(&query);
         let nodes = view.navigation();
         let option = nodes.iter().find(|n| n.title == "-x, --language").unwrap();
         assert!(option.full_title.as_ref().unwrap().contains("LANG"));
-        let term = nodes
-            .iter()
-            .find(|n| n.title == "find-new <subvolume> <last_gen>")
-            .unwrap();
+        let named = nodes.iter().find(|n| n.title == "find-new").unwrap();
+        assert_eq!(
+            named.full_title.as_deref(),
+            Some("find-new <subvolume> <last_gen>")
+        );
+        let term = nodes.iter().find(|n| n.title == "[left|right]").unwrap();
         assert!(term.full_title.is_none());
     }
 }
