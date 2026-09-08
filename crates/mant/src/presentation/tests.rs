@@ -31,7 +31,7 @@ The selected color is visible in terminal output.
 ";
 
 #[test]
-fn explanation_ansi_uses_the_exact_same_framed_report_as_plain_text() {
+fn explanation_ansi_uses_the_exact_same_unframed_report_as_plain_text() {
     // Keep the packaged unit test independent of sibling integration fixtures.
     let source = b".TH PROBE 1\n.SH OPTIONS\n.TP\n.B -x, --language=LANG\nSelect language.\n.TP\n.B -Q\nUse -x as well.\n.SH NOTES\n-xylophone is not the same as -x.\n";
     let content = mant_engine::query_roff_bytes(source).unwrap();
@@ -46,8 +46,9 @@ fn explanation_ansi_uses_the_exact_same_framed_report_as_plain_text() {
     let plain = super::terminal::render_terminal_explanation(&result, false);
     let colored = super::terminal::render_terminal_explanation(&result, true);
     assert_eq!(strip_ansi(&colored), plain);
-    assert!(plain.contains("\nForms:\n| "));
-    assert!(plain.contains("\nDefinition:\n| "));
+    assert!(plain.contains("\nForms:\n-Q"));
+    assert!(plain.contains("\nDefinition:\n-x, --language=LANG"));
+    assert!(!plain.lines().any(|line| line.starts_with("| ")));
     let colors = visible_colors(&colored);
     for (offset, _) in plain.match_indices("-xylophone") {
         assert_ne!(colors[plain[..offset].chars().count()].1, Some(92));
