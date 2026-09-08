@@ -47,6 +47,7 @@ pub(super) fn lower_man_definition(
     indent_columns: u16,
     state: ManDefinitionState<'_>,
     spacing_enabled: bool,
+    formatter: &mut crate::mandoc::formatter::FormatterState,
 ) {
     let ManDefinitionState {
         paragraph_distance,
@@ -68,6 +69,7 @@ pub(super) fn lower_man_definition(
         paragraph_distance,
         definition_hanging_width,
         spacing_enabled,
+        formatter,
     );
     let macro_name = node.macro_name.as_deref();
     let ordinal = matches!(macro_name, Some("IP" | "TP"))
@@ -234,6 +236,7 @@ fn lower_man_item(
     paragraph_distance: &mut u16,
     definition_hanging_width: &mut usize,
     spacing_enabled: bool,
+    formatter: &mut crate::mandoc::formatter::FormatterState,
 ) -> LoweredManItem {
     // Capture the distance before lowering the body: a `.PD` request that
     // follows this item can live inside libmandoc's block scope and updates
@@ -259,6 +262,7 @@ fn lower_man_item(
         paragraph_distance,
         max_width,
         spacing_enabled,
+        formatter,
     );
     LoweredManItem {
         item,
@@ -493,16 +497,19 @@ fn definition_item(
     paragraph_distance: &mut u16,
     max_term_width: usize,
     spacing_enabled: bool,
+    formatter: &mut crate::mandoc::formatter::FormatterState,
 ) -> DefinitionItem {
     let head = visible_definition_head(node);
     let body = first_part_children(node, NodeKind::Body);
     let (displaced_equations, body) = displaced_definition_equations(head, body);
     let mut term_builder = InlineBuilder::with_spacing(spacing_enabled);
-    term_builder.append(context.lower_inline_with_spacing(head, spacing_enabled));
+    term_builder.append(context.lower_inline_with_spacing(head, spacing_enabled, formatter));
     for equation in displaced_equations {
-        term_builder.append(
-            context.lower_inline_with_spacing(std::slice::from_ref(equation), spacing_enabled),
-        );
+        term_builder.append(context.lower_inline_with_spacing(
+            std::slice::from_ref(equation),
+            spacing_enabled,
+            formatter,
+        ));
     }
     let mut term = term_builder.finish();
     if let Some(id) = definition_head_anchor(node) {
@@ -523,6 +530,7 @@ fn definition_item(
             context.nested_indent(node, indent_columns, MAN_DEFINITION_BODY_INDENT),
             paragraph_distance,
             spacing_after_nodes(head, spacing_enabled, context.default_name),
+            formatter,
         ),
     }
 }

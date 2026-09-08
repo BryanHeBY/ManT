@@ -1,6 +1,6 @@
 //! Preserves no-fill and literal display content as preformatted blocks.
 
-use libmandoc_rs::{MacroSet, Node, NodeKind};
+use libmandoc_rs::{Node, NodeKind};
 use mant_ir::{Block, Inline};
 
 use super::super::{
@@ -19,6 +19,7 @@ pub(super) fn preformatted_blocks(
     context: &LoweringContext<'_>,
     indent_columns: u16,
     spacing_enabled: bool,
+    formatter: &mut crate::mandoc::formatter::FormatterState,
 ) -> Vec<Block> {
     let mut flow = DisplayFlow {
         output: Vec::new(),
@@ -27,10 +28,9 @@ pub(super) fn preformatted_blocks(
         source: None,
         context,
         indent_columns,
+        formatter: *formatter,
     };
-    if context.macro_set == MacroSet::Mdoc {
-        flow.line.font = context.mdoc_font.get();
-    }
+    flow.line.font = formatter.font;
     let body_index = node
         .children
         .iter()
@@ -48,9 +48,8 @@ pub(super) fn preformatted_blocks(
         }
     }
     flow.flush();
-    if context.macro_set == MacroSet::Mdoc {
-        context.mdoc_font.set(flow.line.font);
-    }
+    formatter.font = flow.line.font;
+    formatter.spacing = flow.line.spacing_enabled();
     flow.output
 }
 
@@ -64,6 +63,7 @@ struct DisplayFlow<'a, 'source> {
     source: Option<mant_ir::SourceSpan>,
     context: &'a LoweringContext<'source>,
     indent_columns: u16,
+    formatter: crate::mandoc::formatter::FormatterState,
 }
 
 impl DisplayFlow<'_, '_> {
@@ -117,7 +117,8 @@ impl DisplayFlow<'_, '_> {
                     && matches!(node.macro_name.as_deref(), Some("Bl" | "Rs")))
             {
                 self.flush();
-                self.context.mdoc_font.set(self.line.font);
+                self.formatter.font = self.line.font;
+                self.formatter.spacing = self.line.spacing_enabled();
                 if node.kind == NodeKind::Table {
                     append_table_row(
                         &mut self.output,
@@ -125,6 +126,7 @@ impl DisplayFlow<'_, '_> {
                         self.context,
                         self.indent_columns,
                         plan.embedding(index),
+                        &mut self.formatter,
                     );
                 } else {
                     self.output.extend(super::lower_blocks_with_spacing(
@@ -133,11 +135,11 @@ impl DisplayFlow<'_, '_> {
                         self.indent_columns,
                         &mut 1,
                         self.line.spacing_enabled(),
+                        &mut self.formatter,
                     ));
                 }
-                if self.context.macro_set == MacroSet::Mdoc {
-                    self.line.font = self.context.mdoc_font.get();
-                }
+                self.line.font = self.formatter.font;
+                self.line.inherit_spacing(self.formatter.spacing);
                 self.cursor = NoFillFlow::default();
                 self.source = None;
             } else if node.kind != NodeKind::Text && node.macro_name.is_none() {

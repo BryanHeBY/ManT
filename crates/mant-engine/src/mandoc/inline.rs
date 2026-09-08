@@ -213,7 +213,11 @@ pub(super) fn append_inline_node_with_next(
 }
 
 /// Append sibling events without throwing away pending formatter effects.
-fn append_inline_nodes(builder: &mut InlineBuilder, nodes: &[Node], default_name: Option<&str>) {
+pub(super) fn append_inline_nodes(
+    builder: &mut InlineBuilder,
+    nodes: &[Node],
+    default_name: Option<&str>,
+) {
     for (index, node) in nodes.iter().enumerate() {
         if node.macro_name.as_deref() == Some("Sm") {
             let setting = plain_text(&lower_inline_nodes(&node.children, default_name));

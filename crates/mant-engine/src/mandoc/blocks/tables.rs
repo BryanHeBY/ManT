@@ -14,6 +14,7 @@ pub(super) fn append_table_row(
     context: &LoweringContext<'_>,
     indent_columns: u16,
     embedding: Option<&TableEmbedding<'_>>,
+    formatter: &mut crate::mandoc::formatter::FormatterState,
 ) {
     if node.table_cells.is_empty() {
         return;
@@ -52,27 +53,28 @@ pub(super) fn append_table_row(
                     // payload: source recovery must never resurrect it.
                     Vec::new()
                 } else {
-                    let children = cell.map_or_else(
-                        || lower_missing_table_cell(raw_source, node, context),
-                        |cell| {
-                            let lowered = lower_table_cell(
-                                cell,
+                    let children = if let Some(cell) = cell {
+                        let lowered = lower_table_cell(
+                            cell,
+                            recovery::CellPosition {
                                 index,
-                                &node.table_cells,
-                                node,
-                                context,
-                                text_block,
-                                embedding.map_or(&[], |embedding| embedding.nodes.as_slice()),
-                            );
-                            if lowered.is_empty()
-                                && raw_source.is_some_and(|source| !source.is_empty())
-                            {
-                                lower_missing_table_cell(raw_source, node, context)
-                            } else {
-                                lowered
-                            }
-                        },
-                    );
+                                row: &node.table_cells,
+                            },
+                            node,
+                            context,
+                            text_block,
+                            embedding.map_or(&[], |embedding| embedding.nodes.as_slice()),
+                            formatter,
+                        );
+                        if lowered.is_empty() && raw_source.is_some_and(|source| !source.is_empty())
+                        {
+                            lower_missing_table_cell(raw_source, node, context, formatter)
+                        } else {
+                            lowered
+                        }
+                    } else {
+                        lower_missing_table_cell(raw_source, node, context, formatter)
+                    };
                     vec![Block::Paragraph {
                         children,
                         layout: LayoutHint::default(),

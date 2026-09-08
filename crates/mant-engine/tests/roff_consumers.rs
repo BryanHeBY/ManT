@@ -88,9 +88,26 @@ fn enclosure_font_scope() {
 }
 
 #[test]
-#[ignore = "R03: baseline state transfer defect; enable with explicit state"]
 fn display_final_spacing() {
     assert!(description(&fixture("display-spacing")).contains("NEXTTAIL"));
+    for kind in ["-bullet", "-tag -width Ds", "-column one two"] {
+        for (initial, request, expected) in [
+            ("on", "off", "NEXTTAIL"),
+            ("off", "on", "NEXT TAIL"),
+            ("on", "", "NEXTTAIL"),
+            ("off", "", "NEXT TAIL"),
+        ] {
+            let source = format!(
+                ".Dd September 8, 2026\n.Dt SPACING 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal\n.Sm {initial}\n.Bl {kind}\n.It WORD\n.Sm {request}\n.El\n.No NEXT No TAIL\n.Sm on\n.Ed\n"
+            );
+            let query = mant_engine::query_roff_bytes(source.as_bytes()).unwrap();
+            assert!(
+                description(&query).contains(expected),
+                "{kind}, {initial}, {request}: {}",
+                description(&query)
+            );
+        }
+    }
 }
 
 #[test]

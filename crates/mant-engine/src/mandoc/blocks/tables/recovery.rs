@@ -79,12 +79,13 @@ pub(super) fn lower_missing_table_cell(
     source: Option<&str>,
     node: &Node,
     context: &LoweringContext<'_>,
+    formatter: &mut crate::mandoc::formatter::FormatterState,
 ) -> Vec<Inline> {
     let source = source.unwrap_or_default().trim();
     if source.is_empty() {
         return Vec::new();
     }
-    let lowered = lower_table_cell_text(source, node.line, context);
+    let lowered = lower_table_cell_text(source, node.line, context, formatter);
     if !lowered.is_empty() {
         return lowered;
     }
@@ -94,17 +95,27 @@ pub(super) fn lower_missing_table_cell(
     }]
 }
 
+/// A cell's position is needed to interpret row-local tbl layout controls.
+pub(super) struct CellPosition<'a> {
+    pub(super) index: usize,
+    pub(super) row: &'a [libmandoc_rs::TableCell],
+}
+
 pub(super) fn lower_table_cell(
     cell: &libmandoc_rs::TableCell,
-    cell_index: usize,
-    row_cells: &[libmandoc_rs::TableCell],
+    position: CellPosition<'_>,
     node: &Node,
     context: &LoweringContext<'_>,
     text_block: Option<&TableTextBlock>,
     semantic_nodes: &[&Node],
+    formatter: &mut crate::mandoc::formatter::FormatterState,
 ) -> Vec<Inline> {
+    let CellPosition {
+        index: cell_index,
+        row: row_cells,
+    } = position;
     if let Some(text_block) = text_block {
-        let initial_font = context.mdoc_font.get();
+        let initial_font = formatter.font;
         let semantic_nodes = semantic_nodes
             .iter()
             .copied()
@@ -119,6 +130,7 @@ pub(super) fn lower_table_cell(
             &semantic_nodes,
             context,
             node.flags.synopsis_pretty,
+            formatter,
         );
         // Recovery is transactional: a partially lowered cell is not a
         // replacement for the native payload. If that payload is absent,
@@ -126,11 +138,11 @@ pub(super) fn lower_table_cell(
         let reconstructed = match recovered {
             TableTextRecovery::Complete(inlines) => inlines,
             TableTextRecovery::Incomplete => {
-                context.mdoc_font.set(initial_font);
+                formatter.font = initial_font;
                 if let Some(text) = cell.text.as_deref().filter(|text| !text.is_empty()) {
-                    return lower_table_cell_text(text, node.line, context);
+                    return lower_table_cell_text(text, node.line, context, formatter);
                 }
-                context.lower_text(&text_block.source)
+                context.lower_text(&text_block.source, formatter)
             }
         };
         if !reconstructed.is_empty() {
@@ -157,10 +169,15 @@ pub(super) fn lower_table_cell(
                 return reconstructed;
             }
         }
-        context.mdoc_font.set(initial_font);
+        formatter.font = initial_font;
     }
     if cell.text.as_deref().is_some_and(|text| !text.is_empty()) {
-        return lower_table_cell_text(cell.text.as_deref().unwrap_or_default(), node.line, context);
+        return lower_table_cell_text(
+            cell.text.as_deref().unwrap_or_default(),
+            node.line,
+            context,
+            formatter,
+        );
     }
     if !cell.text_block {
         return Vec::new();
@@ -188,7 +205,7 @@ pub(super) fn lower_table_cell(
                     }]
                 })
             } else {
-                Some(context.lower_text(argument))
+                Some(context.lower_text(argument, formatter))
             }
         });
     if let Some(children) = name.filter(|children| !children.is_empty()) {
@@ -214,9 +231,14 @@ fn table_text_agrees(reconstructed: &str, parsed: &str) -> bool {
             && (reconstructed.contains(&parsed) || parsed.contains(&reconstructed)))
 }
 
-fn lower_table_cell_text(source: &str, line: u32, context: &LoweringContext<'_>) -> Vec<Inline> {
+fn lower_table_cell_text(
+    source: &str,
+    line: u32,
+    context: &LoweringContext<'_>,
+    formatter: &mut crate::mandoc::formatter::FormatterState,
+) -> Vec<Inline> {
     let Some((opening, closing)) = context.equation_delimiters_at(line) else {
-        return context.lower_text(source);
+        return context.lower_text(source, formatter);
     };
     let mut output = Vec::new();
     let mut remainder = source;
@@ -225,7 +247,7 @@ fn lower_table_cell_text(source: &str, line: u32, context: &LoweringContext<'_>)
         let Some(closing_index) = after_opening.find(closing) else {
             break;
         };
-        output.extend(context.lower_text(&remainder[..opening_index]));
+        output.extend(context.lower_text(&remainder[..opening_index], formatter));
         let expression = &after_opening[..closing_index];
         if !expression.trim().is_empty() {
             output.push(Inline::Code {
@@ -234,7 +256,7 @@ fn lower_table_cell_text(source: &str, line: u32, context: &LoweringContext<'_>)
         }
         remainder = &after_opening[closing_index + closing.len_utf8()..];
     }
-    output.extend(context.lower_text(remainder));
+    output.extend(context.lower_text(remainder, formatter));
     output
 }
 
@@ -248,19 +270,20 @@ fn lower_table_text_block(
     semantic_nodes: &[&Node],
     context: &LoweringContext<'_>,
     synopsis: bool,
+    formatter: &mut crate::mandoc::formatter::FormatterState,
 ) -> TableTextRecovery {
     if let Some(recovered) = lower_source_fragment_with_font_state(
         &block.source,
         context.macro_set,
         context.default_name,
         synopsis,
-        context.mdoc_font.get(),
+        formatter.font,
     ) {
         if !recovered.complete {
             context.warn_unhandled_table_text_block_line(block.start_line);
             return TableTextRecovery::Incomplete;
         }
-        context.mdoc_font.set(recovered.font);
+        formatter.font = recovered.font;
         return TableTextRecovery::Complete(recovered.inlines);
     }
     // A rejected request sequence cannot be proven complete by stitching
@@ -294,7 +317,11 @@ fn lower_table_text_block(
                 let lowered = if matches!(node.macro_name.as_deref(), Some("UR" | "MT")) {
                     lower_man_link(node, context.default_name, spacing_enabled)
                 } else {
-                    context.lower_inline_with_spacing(std::slice::from_ref(node), spacing_enabled)
+                    context.lower_inline_with_spacing(
+                        std::slice::from_ref(node),
+                        spacing_enabled,
+                        formatter,
+                    )
                 };
                 builder.append_filled(lowered, FilledBoundary::Word);
             }
@@ -305,7 +332,10 @@ fn lower_table_text_block(
         if source_line.is_empty() {
             continue;
         }
-        builder.append_filled(context.lower_text(source_line), FilledBoundary::Word);
+        builder.append_filled(
+            context.lower_text(source_line, formatter),
+            FilledBoundary::Word,
+        );
     }
     TableTextRecovery::Complete(builder.finish())
 }
@@ -351,12 +381,15 @@ mod tests {
             cell.text_block = true;
             let inlines = super::lower_table_cell(
                 &cell,
-                0,
-                std::slice::from_ref(&cell),
+                super::CellPosition {
+                    index: 0,
+                    row: std::slice::from_ref(&cell),
+                },
                 node,
                 &context,
                 Some(&block),
                 &[],
+                &mut crate::mandoc::formatter::FormatterState::default(),
             );
             assert_eq!(
                 plain_text(&inlines),

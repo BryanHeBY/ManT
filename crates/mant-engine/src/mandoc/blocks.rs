@@ -1,6 +1,6 @@
 //! Reconstructs sections and semantic blocks from the copied mandoc tree.
 
-use libmandoc_rs::{AuthorMode, DisplayKind, MacroSet, Node, NodeKind};
+use libmandoc_rs::{AuthorMode, DisplayKind, Node, NodeKind};
 use mant_ir::{Block, Inline, Section};
 
 use super::{
@@ -8,7 +8,7 @@ use super::{
     inline::{
         FilledBoundary, FontState, InlineBuilder, append_inline_node_with_next, is_enclosure_macro,
         lower_inline_nodes, lower_inline_nodes_with_font_state, lower_inline_nodes_with_spacing,
-        lower_man_link, plain_text, spacing_after_node, updated_spacing,
+        lower_man_link, plain_text, updated_spacing,
     },
     layout::{
         add_leading_spacing, layout, layout_with_spacing, normalize_explicit_vertical_spacing,
@@ -161,8 +161,15 @@ fn lower_blocks(
     indent_columns: u16,
     paragraph_distance: &mut u16,
 ) -> Vec<Block> {
-    context.mdoc_font.set(FontState::new());
-    lower_blocks_with_spacing(nodes, context, indent_columns, paragraph_distance, true)
+    let mut formatter = crate::mandoc::formatter::FormatterState::default();
+    lower_blocks_with_spacing(
+        nodes,
+        context,
+        indent_columns,
+        paragraph_distance,
+        true,
+        &mut formatter,
+    )
 }
 
 fn lower_blocks_with_spacing(
@@ -171,6 +178,7 @@ fn lower_blocks_with_spacing(
     indent_columns: u16,
     paragraph_distance: &mut u16,
     spacing_enabled: bool,
+    formatter: &mut crate::mandoc::formatter::FormatterState,
 ) -> Vec<Block> {
     lower_blocks_onto(
         nodes,
@@ -179,6 +187,7 @@ fn lower_blocks_with_spacing(
         paragraph_distance,
         spacing_enabled,
         Vec::new(),
+        formatter,
     )
 }
 
@@ -196,6 +205,7 @@ fn lower_blocks_onto(
     paragraph_distance: &mut u16,
     spacing_enabled: bool,
     output: Vec<Block>,
+    formatter: &mut crate::mandoc::formatter::FormatterState,
 ) -> Vec<Block> {
     let mut lowerer = BlockLowerer::new(
         context,
@@ -203,8 +213,11 @@ fn lower_blocks_onto(
         paragraph_distance,
         spacing_enabled,
         output,
+        *formatter,
     );
     lowerer.push_nodes(nodes);
+    lowerer.formatter.spacing = lowerer.state.spacing_enabled();
+    *formatter = lowerer.formatter;
     lowerer.finish()
 }
 
@@ -215,7 +228,7 @@ struct BlockLowerer<'a, 'source> {
     indent_columns: u16,
     paragraph_distance: &'a mut u16,
     state: BlockState,
-    font: FontState,
+    formatter: crate::mandoc::formatter::FormatterState,
     // man(7) starts each section or relative-indent scope with a seven-column
     // hanging margin. Explicit `.TP`/`.IP` widths update it for following
     // tagged paragraphs, exactly as mandoc's terminal renderer does.
@@ -238,17 +251,14 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
         paragraph_distance: &'a mut u16,
         spacing_enabled: bool,
         output: Vec<Block>,
+        formatter: crate::mandoc::formatter::FormatterState,
     ) -> Self {
         Self {
             context,
             indent_columns,
             paragraph_distance,
             state: BlockState::with_output(indent_columns, spacing_enabled, output),
-            font: if context.macro_set == MacroSet::Mdoc {
-                context.mdoc_font.get()
-            } else {
-                FontState::new()
-            },
+            formatter,
             definition_hanging_width: DEFAULT_MAN_TAG_WIDTH,
             split_authors: false,
             synopsis_return_type_open: false,
@@ -266,9 +276,7 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
             if follows_inline_equation_punctuation(nodes, index) {
                 self.state.tighten_next_boundary();
             }
-            self.context.mdoc_font.set(self.font);
             self.push(node, nodes.get(index + 1), table_plan.embedding(index));
-            self.context.mdoc_font.set(self.font);
         }
     }
 
@@ -282,14 +290,14 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
             node.macro_name.as_deref(),
             Some("PP" | "HP" | "IP" | "TP" | "TQ" | "RS" | "SY")
         ) {
-            self.font = FontState::new();
+            self.formatter.font = FontState::new();
         }
         if node.macro_name.as_deref() == Some("ft") {
             lower_inline_nodes_with_font_state(
                 std::slice::from_ref(node),
                 self.context.default_name,
                 self.state.spacing_enabled(),
-                &mut self.font,
+                &mut self.formatter.font,
             );
             return;
         }
@@ -304,11 +312,6 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
         }
         self.state.flush_preformatted();
         if self.push_mdoc_synopsis_declaration(node) {
-            self.state.inherit_spacing(spacing_after_node(
-                node,
-                self.state.spacing_enabled(),
-                self.context.default_name,
-            ));
             return;
         }
         if node.flags.delimiter_close
@@ -363,20 +366,14 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
                 man_alias_state: &mut self.man_alias_state,
                 man_list_state: &mut self.man_list_state,
                 spacing_enabled,
+                formatter: &mut self.formatter,
             }
             .push(node, table_embedding);
-            if self.context.macro_set == MacroSet::Mdoc {
-                self.font = self.context.mdoc_font.get();
-            }
+            self.state.inherit_spacing(self.formatter.spacing);
             self.state
                 .queue_targets(structural_targets, source_span(node));
             self.state.attach_pending_to_structural_output(output_start);
         }
-        self.state.inherit_spacing(spacing_after_node(
-            node,
-            self.state.spacing_enabled(),
-            self.context.default_name,
-        ));
     }
 
     fn push_font_scope(&mut self, node: &Node) -> bool {
@@ -385,10 +382,12 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
         }
         self.state
             .queue_targets(targets::structural_targets(node), source_span(node));
-        let saved = node.font.map(|font| self.font.push_scope(font.into()));
+        let saved = node
+            .font
+            .map(|font| self.formatter.font.push_scope(font.into()));
         self.push_nodes(first_part_children(node, NodeKind::Body));
         if let Some(saved) = saved {
-            self.font.pop_scope(saved);
+            self.formatter.font.pop_scope(saved);
         }
         true
     }
@@ -436,7 +435,8 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
     }
 
     fn push_no_fill_lines(&mut self, node: &Node) -> bool {
-        let Some(lines) = lower_no_fill_lines(node, self.context.default_name, &mut self.font)
+        let Some(lines) =
+            lower_no_fill_lines(node, self.context.default_name, &mut self.formatter.font)
         else {
             return false;
         };
@@ -458,11 +458,13 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
             starts_indented_filled_line(node),
             ends_with_line_continuation(node),
             |builder| {
-                builder.font = self.font;
+                builder.font = self.formatter.font;
                 append_inline_node_with_next(builder, node, next, self.context.default_name);
-                self.font = builder.font;
+                self.formatter.font = builder.font;
+                self.formatter.spacing = builder.spacing_enabled();
             },
         );
+        self.state.inherit_spacing(self.formatter.spacing);
     }
 
     /// Preserve declaration boundaries selected by mdoc's SYNOPSIS grammar.
@@ -658,6 +660,7 @@ struct StructuralLowerer<'a, 'source, 'state> {
     man_alias_state: &'state mut ManAliasState,
     man_list_state: &'state mut ManListState,
     spacing_enabled: bool,
+    formatter: &'state mut crate::mandoc::formatter::FormatterState,
 }
 
 impl StructuralLowerer<'_, '_, '_> {
@@ -674,6 +677,7 @@ impl StructuralLowerer<'_, '_, '_> {
                 list_state: self.man_list_state,
             },
             self.spacing_enabled,
+            self.formatter,
         );
     }
 
@@ -698,6 +702,7 @@ impl StructuralLowerer<'_, '_, '_> {
                     self.indent_columns,
                     self.paragraph_distance,
                     self.spacing_enabled,
+                    self.formatter,
                 );
                 if !self.output.is_empty() && !node.compact {
                     set_block_spacing(&mut block, 1);
@@ -714,6 +719,7 @@ impl StructuralLowerer<'_, '_, '_> {
                         self.context.display_offset(node),
                     ),
                     self.spacing_enabled,
+                    self.formatter,
                 );
                 if node.macro_name.as_deref() == Some("Bd")
                     && !self.output.is_empty()
@@ -727,6 +733,7 @@ impl StructuralLowerer<'_, '_, '_> {
                 let mut children = self.context.lower_inline_with_spacing(
                     first_part_children(node, NodeKind::Body),
                     self.spacing_enabled,
+                    self.formatter,
                 );
                 if !children.is_empty() {
                     append_bibliography_period(&mut children);
@@ -747,6 +754,7 @@ impl StructuralLowerer<'_, '_, '_> {
                 self.indent_columns,
                 self.paragraph_distance,
                 self.spacing_enabled,
+                self.formatter,
             ),
             _ if node.kind == NodeKind::Table => append_table_row(
                 self.output,
@@ -754,6 +762,7 @@ impl StructuralLowerer<'_, '_, '_> {
                 self.context,
                 self.indent_columns,
                 table_embedding,
+                self.formatter,
             ),
             _ if node.kind == NodeKind::Equation => {
                 self.output.push(equation_block(node, self.indent_columns));
@@ -765,6 +774,7 @@ impl StructuralLowerer<'_, '_, '_> {
                 self.indent_columns,
                 self.paragraph_distance,
                 self.spacing_enabled,
+                self.formatter,
             ),
         }
     }
@@ -788,6 +798,7 @@ impl StructuralLowerer<'_, '_, '_> {
                     self.indent_columns,
                     self.paragraph_distance,
                     self.spacing_enabled,
+                    self.formatter,
                 );
                 extend_blocks_with_spacing(self.output, nested, spacing_before);
             }
@@ -803,6 +814,7 @@ impl StructuralLowerer<'_, '_, '_> {
                     ),
                     self.paragraph_distance,
                     self.spacing_enabled,
+                    self.formatter,
                 );
                 extend_blocks_with_spacing(self.output, nested, spacing_before);
             }
@@ -814,6 +826,7 @@ impl StructuralLowerer<'_, '_, '_> {
                         self.context.nested_indent(node, self.indent_columns, 4),
                         self.paragraph_distance,
                         self.spacing_enabled,
+                        self.formatter,
                     );
                     if append_relative_continuation(
                         self.output,
@@ -835,6 +848,7 @@ impl StructuralLowerer<'_, '_, '_> {
                     self.paragraph_distance,
                     self.spacing_enabled,
                     output,
+                    self.formatter,
                 );
             }
             _ => return false,
@@ -863,6 +877,7 @@ fn lower_structural_fallback(
     indent_columns: u16,
     paragraph_distance: &mut u16,
     spacing_enabled: bool,
+    formatter: &mut crate::mandoc::formatter::FormatterState,
 ) {
     let heads = part_child_groups(node, NodeKind::Head).collect::<Vec<_>>();
     let bodies = part_child_groups(node, NodeKind::Body).collect::<Vec<_>>();
@@ -882,6 +897,7 @@ fn lower_structural_fallback(
             indent_columns,
             paragraph_distance,
             spacing_enabled,
+            formatter,
         ));
     } else {
         for body in bodies {
@@ -891,6 +907,7 @@ fn lower_structural_fallback(
                 indent_columns,
                 paragraph_distance,
                 spacing_enabled,
+                formatter,
             ));
         }
     }
@@ -975,6 +992,7 @@ fn lower_synopsis_head(
     indent_columns: u16,
     paragraph_distance: &mut u16,
     spacing_enabled: bool,
+    formatter: &mut crate::mandoc::formatter::FormatterState,
 ) {
     let head = lower_inline_nodes_with_spacing(
         first_part_children(node, NodeKind::Head),
@@ -987,6 +1005,7 @@ fn lower_synopsis_head(
         indent_columns,
         paragraph_distance,
         spacing_enabled,
+        formatter,
     );
     if head.is_empty() {
         output.extend(nested);

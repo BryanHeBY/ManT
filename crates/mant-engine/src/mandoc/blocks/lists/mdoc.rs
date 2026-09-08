@@ -14,10 +14,12 @@ pub(in crate::mandoc::blocks) fn lower_mdoc_list(
     indent_columns: u16,
     paragraph_distance: &mut u16,
     initial_spacing: bool,
+    formatter: &mut crate::mandoc::formatter::FormatterState,
 ) -> Block {
     let MdocListItems {
         items,
         trailing_targets,
+        final_spacing,
     } = mdoc_list_items(node, initial_spacing, context.default_name);
     let is_definition = matches!(
         node.list_kind,
@@ -35,6 +37,7 @@ pub(in crate::mandoc::blocks) fn lower_mdoc_list(
             indent_columns,
             list_indent,
             paragraph_distance,
+            formatter,
         )
     } else if is_definition {
         lower_mdoc_definition_list(
@@ -44,6 +47,7 @@ pub(in crate::mandoc::blocks) fn lower_mdoc_list(
             indent_columns,
             list_indent,
             paragraph_distance,
+            formatter,
         )
     } else {
         Block::List {
@@ -66,6 +70,7 @@ pub(in crate::mandoc::blocks) fn lower_mdoc_list(
                             item.spacing_enabled,
                             context.default_name,
                         ),
+                        formatter,
                     );
                     attach_item_targets(&mut blocks, &item, layout(list_indent));
                     ListItem {
@@ -86,6 +91,7 @@ pub(in crate::mandoc::blocks) fn lower_mdoc_list(
     {
         append_list_targets(&mut block, vec![target], layout(list_indent), source);
     }
+    formatter.spacing = final_spacing;
     block
 }
 
@@ -96,6 +102,7 @@ fn lower_mdoc_definition_list(
     indent_columns: u16,
     list_indent: u16,
     paragraph_distance: &mut u16,
+    formatter: &mut crate::mandoc::formatter::FormatterState,
 ) -> Block {
     let max_term_width = node
         .width
@@ -112,6 +119,7 @@ fn lower_mdoc_definition_list(
                 paragraph_distance,
                 max_term_width,
                 item.spacing_enabled,
+                formatter,
             );
             for targets::OwnedTarget {
                 name: target,
@@ -274,6 +282,7 @@ fn attach_item_targets(
 struct MdocListItems<'a> {
     items: Vec<MdocListItem<'a>>,
     trailing_targets: Vec<targets::OwnedTarget>,
+    final_spacing: bool,
 }
 
 /// Pair each mdoc list item with the formatter spacing state active at its
@@ -310,6 +319,7 @@ fn mdoc_list_items<'a>(
     MdocListItems {
         items,
         trailing_targets: pending_targets,
+        final_spacing: spacing_enabled,
     }
 }
 
@@ -326,6 +336,7 @@ fn lower_mdoc_column_list(
     indent_columns: u16,
     cell_indent: u16,
     paragraph_distance: &mut u16,
+    formatter: &mut crate::mandoc::formatter::FormatterState,
 ) -> Block {
     let rows = items
         .into_iter()
@@ -343,6 +354,7 @@ fn lower_mdoc_column_list(
                         cell_indent,
                         paragraph_distance,
                         body_spacing,
+                        formatter,
                     ),
                     column_span: 1,
                     row_span: 1,
