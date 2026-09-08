@@ -197,39 +197,7 @@ impl Decoder {
                     argument,
                 });
             }
-            'N' => {
-                let start = self.index;
-                let delimiter = self.characters.get(start).copied();
-                let argument = if self
-                    .characters
-                    .get(self.index)
-                    .is_some_and(char::is_ascii_digit)
-                {
-                    Some(self.take_counted(1))
-                } else {
-                    self.take_delimited_argument()
-                };
-                let closed = delimiter.is_some_and(|delimiter| {
-                    !delimiter.is_ascii_digit()
-                        && self.index > start + 1
-                        && self.characters.get(self.index - 1) == Some(&delimiter)
-                });
-                // mandoc's mchars_num2char accepts only the 8-bit terminal
-                // range. N is a font glyph index, not an arbitrary Unicode
-                // scalar; unsupported/device-dependent indices stay visible.
-                if let Some(number) = argument
-                    .as_deref()
-                    .filter(|_| closed)
-                    .and_then(|value| value.parse::<u8>().ok())
-                {
-                    push_terminal_safe(&mut self.text, char::from(number));
-                } else {
-                    self.text.push_str(r"\N");
-                    for character in &self.characters[start..self.index] {
-                        push_terminal_safe(&mut self.text, *character);
-                    }
-                }
-            }
+            'N' => self.decode_numbered_glyph(),
             'z' => {
                 // Suppress the glyph's advance, not its visible spelling. Let
                 // the normal iterative decoder consume the complete glyph
@@ -277,6 +245,40 @@ impl Decoder {
                 kind: PresentationKind::Postprocessor,
                 argument: None,
             }),
+        }
+    }
+
+    fn decode_numbered_glyph(&mut self) {
+        let start = self.index;
+        let delimiter = self.characters.get(start).copied();
+        let argument = if self
+            .characters
+            .get(self.index)
+            .is_some_and(char::is_ascii_digit)
+        {
+            Some(self.take_counted(1))
+        } else {
+            self.take_delimited_argument()
+        };
+        let closed = delimiter.is_some_and(|delimiter| {
+            !delimiter.is_ascii_digit()
+                && self.index > start + 1
+                && self.characters.get(self.index - 1) == Some(&delimiter)
+        });
+        // mandoc's mchars_num2char accepts only the 8-bit terminal
+        // range. N is a font glyph index, not an arbitrary Unicode
+        // scalar; unsupported/device-dependent indices stay visible.
+        if let Some(number) = argument
+            .as_deref()
+            .filter(|_| closed)
+            .and_then(|value| value.parse::<u8>().ok())
+        {
+            push_terminal_safe(&mut self.text, char::from(number));
+        } else {
+            self.text.push_str(r"\N");
+            for character in &self.characters[start..self.index] {
+                push_terminal_safe(&mut self.text, *character);
+            }
         }
     }
 
