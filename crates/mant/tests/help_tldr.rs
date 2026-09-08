@@ -22,8 +22,29 @@ fn embedded_help_matches_the_self_manual() {
         std::fs::read_to_string(root.join("crates/mant/src/arguments/help_tldr_generated.rs"))
             .unwrap();
     assert_eq!(
-        generated,
+        normalized_checkout(&generated),
         help_tldr_generation::generate(&manual),
         "run cargo run --locked -p mant --example generate_help_tldr",
     );
+}
+
+// Attributes govern future checkouts; an existing clean Windows checkout can
+// still contain CRLF after the eol=lf rule is added. Ignore that representation
+// difference only, without hiding content drift or changing generator policy.
+fn normalized_checkout(text: &str) -> String {
+    text.replace("\r\n", "\n")
+}
+
+#[test]
+fn checkout_normalization_accepts_crlf_but_preserves_content_differences() {
+    let canonical = include_str!("../src/arguments/help_tldr_generated.rs").replace("\r\n", "\n");
+    for checkout in [canonical.clone(), canonical.replace('\n', "\r\n")] {
+        assert_eq!(normalized_checkout(&checkout), canonical);
+        assert_ne!(normalized_checkout(&format!("{checkout} ")), canonical);
+        assert_ne!(normalized_checkout(&format!("{checkout}\r")), canonical);
+        assert_ne!(
+            normalized_checkout(&checkout.replacen("mant", "other", 1)),
+            canonical
+        );
+    }
 }
