@@ -5,6 +5,7 @@ use mant_ir::{
     DefinitionItem,
     visit::{self, Visit},
 };
+use std::fmt::Write as _;
 
 fn fixture(name: &str) -> mant_engine::ResolvedContent {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -34,7 +35,7 @@ fn style(query: &mant_engine::ResolvedContent, word: &str, expected: u8) {
                 Inline::Strong { .. } => self.active |= 1,
                 Inline::Emphasis { .. } => self.active |= 2,
                 Inline::Code { value } if value.contains(self.word) => {
-                    self.found.push(self.active | 4)
+                    self.found.push(self.active | 4);
                 }
                 Inline::Text { value } if value.contains(self.word) => self.found.push(self.active),
                 _ => {}
@@ -107,9 +108,9 @@ fn two_level_containers_preserve_each_structural_payload() {
             let mut source =
                 String::from(".Dd September 8, 2026\n.Dt PAYLOAD 1\n.Os\n.Sh DESCRIPTION\n");
             if let Some(mode) = display {
-                source.push_str(&format!(".Bd {mode}\n"));
+                writeln!(source, ".Bd {mode}").unwrap();
             }
-            source.push_str(&format!(".Eo [\n.Bk -words\n{payload}\n.Ek\n.Ec ]\n"));
+            writeln!(source, ".Eo [\n.Bk -words\n{payload}\n.Ek\n.Ec ]").unwrap();
             if display.is_some() {
                 source.push_str(".Ed\n");
             }
@@ -182,16 +183,23 @@ fn function_logical_adjacency() {
 }
 
 #[test]
-#[ignore = "R06: deliberate plain-text spacing policy change"]
 fn plain_text_lines_keep_word_boundaries() {
     assert_eq!(
         description(&fixture("sm-plain-lines")).trim(),
         "WORD NEXT TAIL"
     );
+    for (body, expected) in [
+        (".Sm off\n.No WORD NEXT\n.Sm on", "WORDNEXT"),
+        (".Sm off\nWORD\\c\nNEXT\n.Sm on", "WORDNEXT"),
+        (".Sm off\nWORD\n NEXT\n.Sm on", "WORD\n NEXT"),
+    ] {
+        let source = format!(".Dd September 8, 2026\n.Dt WORDS 1\n.Os\n.Sh DESCRIPTION\n{body}\n");
+        let query = mant_engine::query_roff_bytes(source.as_bytes()).unwrap();
+        assert_eq!(description(&query).trim(), expected, "{body}");
+    }
 }
 
 #[test]
-#[ignore = "R07: fixed native literal line policy; enable with source cursor"]
 fn literal_macro_descendants_keep_source_lines() {
     assert_eq!(
         description(&fixture("literal-function")).trim(),

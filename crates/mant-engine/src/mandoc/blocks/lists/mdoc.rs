@@ -5,7 +5,7 @@ use super::{
     ListKind, LoweringContext, MAN_DEFINITION_BODY_INDENT, Node, NodeKind, NormalizedListKind,
     TableRow, block_layout_mut, definition_item, first_part_children, horizontal_distance_columns,
     layout, lower_blocks_with_spacing, ordinal_sequence, part_child_groups, plain_text,
-    source_span, spacing_after_node, spacing_after_nodes, targets, terms_fit_inline,
+    source_span, targets, terms_fit_inline,
 };
 
 pub(in crate::mandoc::blocks) fn lower_mdoc_list(
@@ -19,8 +19,9 @@ pub(in crate::mandoc::blocks) fn lower_mdoc_list(
     let MdocListItems {
         items,
         trailing_targets,
-        final_spacing,
-    } = mdoc_list_items(node, initial_spacing, context.default_name);
+        trailing_controls,
+    } = mdoc_list_items(node);
+    formatter.spacing = initial_spacing;
     let is_definition = matches!(
         node.list_kind,
         Some(NormalizedListKind::Definition | NormalizedListKind::Column)
@@ -60,16 +61,22 @@ pub(in crate::mandoc::blocks) fn lower_mdoc_list(
             items: items
                 .into_iter()
                 .map(|item| {
+                    context.lower_inline_with_spacing(
+                        item.leading_controls,
+                        formatter.spacing,
+                        formatter,
+                    );
+                    context.lower_inline_with_spacing(
+                        first_part_children(item.node, NodeKind::Head),
+                        formatter.spacing,
+                        formatter,
+                    );
                     let mut blocks = lower_blocks_with_spacing(
                         first_part_children(item.node, NodeKind::Body),
                         context,
                         list_indent,
                         paragraph_distance,
-                        spacing_after_nodes(
-                            first_part_children(item.node, NodeKind::Head),
-                            item.spacing_enabled,
-                            context.default_name,
-                        ),
+                        formatter.spacing,
                         formatter,
                     );
                     attach_item_targets(&mut blocks, &item, layout(list_indent));
@@ -91,7 +98,7 @@ pub(in crate::mandoc::blocks) fn lower_mdoc_list(
     {
         append_list_targets(&mut block, vec![target], layout(list_indent), source);
     }
-    formatter.spacing = final_spacing;
+    context.lower_inline_with_spacing(trailing_controls, formatter.spacing, formatter);
     block
 }
 
@@ -112,13 +119,14 @@ fn lower_mdoc_definition_list(
     let lowered_items = items
         .into_iter()
         .map(|item| {
+            context.lower_inline_with_spacing(item.leading_controls, formatter.spacing, formatter);
             let mut lowered = definition_item(
                 item.node,
                 context,
                 list_indent,
                 paragraph_distance,
                 max_term_width,
-                item.spacing_enabled,
+                formatter.spacing,
                 formatter,
             );
             for targets::OwnedTarget {
@@ -240,7 +248,7 @@ fn is_option_definition(item: &DefinitionItem) -> bool {
 
 struct MdocListItem<'a> {
     node: &'a Node,
-    spacing_enabled: bool,
+    leading_controls: &'a [Node],
     leading_targets: Vec<targets::OwnedTarget>,
 }
 
@@ -282,26 +290,23 @@ fn attach_item_targets(
 struct MdocListItems<'a> {
     items: Vec<MdocListItem<'a>>,
     trailing_targets: Vec<targets::OwnedTarget>,
-    final_spacing: bool,
+    trailing_controls: &'a [Node],
 }
 
-/// Pair each mdoc list item with the formatter spacing state active at its
-/// source position.
+/// Retain control slices between items without executing formatter state.
 ///
 /// libmandoc keeps state-only `.Sm` requests as siblings of `.It` blocks.
 /// Filtering the body directly to items therefore erased precisely the state
 /// needed to render compact forms such as `Odevice`, `:S/old/new/`, and
-/// `@newuser name:uid`. Walking the structural stream once also lets an
-/// intentionally unbalanced transition inside an item affect later items.
-fn mdoc_list_items<'a>(
-    node: &'a Node,
-    initial_spacing: bool,
-    default_name: Option<&str>,
-) -> MdocListItems<'a> {
-    let mut spacing_enabled = initial_spacing;
+/// `@newuser name:uid`. Consumers execute these slices between item bodies,
+/// including trailing controls, exactly once in source order. This also
+/// preserves font requests, not just the spacing settings known to a scanner.
+fn mdoc_list_items(node: &Node) -> MdocListItems<'_> {
+    let body = first_part_children(node, NodeKind::Body);
+    let mut controls_start = 0;
     let mut items = Vec::new();
     let mut pending_targets: Vec<targets::OwnedTarget> = Vec::new();
-    for child in first_part_children(node, NodeKind::Body) {
+    for (index, child) in body.iter().enumerate() {
         if let Some(target) = targets::list_stream_target(child)
             && !pending_targets.iter().any(|pending| pending.name == target)
         {
@@ -310,16 +315,16 @@ fn mdoc_list_items<'a>(
         if child.macro_name.as_deref() == Some("It") {
             items.push(MdocListItem {
                 node: child,
-                spacing_enabled,
+                leading_controls: &body[controls_start..index],
                 leading_targets: std::mem::take(&mut pending_targets),
             });
+            controls_start = index + 1;
         }
-        spacing_enabled = spacing_after_node(child, spacing_enabled, default_name);
     }
     MdocListItems {
         items,
         trailing_targets: pending_targets,
-        final_spacing: spacing_enabled,
+        trailing_controls: &body[controls_start..],
     }
 }
 
@@ -341,10 +346,11 @@ fn lower_mdoc_column_list(
     let rows = items
         .into_iter()
         .map(|item| {
-            let body_spacing = spacing_after_nodes(
+            context.lower_inline_with_spacing(item.leading_controls, formatter.spacing, formatter);
+            context.lower_inline_with_spacing(
                 first_part_children(item.node, NodeKind::Head),
-                item.spacing_enabled,
-                context.default_name,
+                formatter.spacing,
+                formatter,
             );
             let mut cells = part_child_groups(item.node, NodeKind::Body)
                 .map(|body| AstTableCell {
@@ -353,7 +359,7 @@ fn lower_mdoc_column_list(
                         context,
                         cell_indent,
                         paragraph_distance,
-                        body_spacing,
+                        formatter.spacing,
                         formatter,
                     ),
                     column_span: 1,

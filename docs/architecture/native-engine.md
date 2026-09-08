@@ -112,6 +112,13 @@ owners, observed structure and matching policies remain independent of
 product lowering. Test modules are grouped by behavior rather than by the
 historical review that introduced them.
 
+Roff structural consumers pass an explicit formatter state containing current
+and previous font selections and spacing mode. Source services do not hide
+formatter state in interior-mutable cells. Shared streaming container boundaries
+route borrowed children to inline or structural consumers; physical-line cursors
+advance at executed words, independently of font wrappers. List controls execute
+in source order instead of being replayed by a second spacing scan.
+
 ## Shared document model
 
 `mant-ir::Document` is the source-neutral in-memory representation. It contains

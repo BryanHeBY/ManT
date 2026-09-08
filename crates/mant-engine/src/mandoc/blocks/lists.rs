@@ -8,9 +8,7 @@ use mant_ir::{
 
 use super::super::{
     LoweringContext, first_part_children,
-    inline::{
-        InlineBuilder, plain_text, spacing_after_node, spacing_after_nodes, terms_fit_inline,
-    },
+    inline::{InlineBuilder, plain_text, terms_fit_inline},
     layout::{
         block_indent, horizontal_distance_columns, layout, layout_with_spacing,
         paragraph_distance_lines,
@@ -529,7 +527,7 @@ fn definition_item(
             context,
             context.nested_indent(node, indent_columns, MAN_DEFINITION_BODY_INDENT),
             paragraph_distance,
-            spacing_after_nodes(head, spacing_enabled, context.default_name),
+            formatter.spacing,
             formatter,
         ),
     }

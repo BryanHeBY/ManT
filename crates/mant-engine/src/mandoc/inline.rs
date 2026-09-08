@@ -9,6 +9,7 @@ mod flow;
 mod font;
 mod generated;
 mod scopes;
+mod source_cursor;
 pub(super) use flow::{FilledBoundary, FontState, InlineBuilder};
 mod source;
 mod source_fragment;
@@ -55,35 +56,6 @@ pub(super) fn updated_spacing(current: bool, setting: &str) -> bool {
     }
 }
 
-pub(super) fn spacing_after_nodes(
-    nodes: &[Node],
-    mut spacing_enabled: bool,
-    default_name: Option<&str>,
-) -> bool {
-    for node in nodes {
-        spacing_enabled = spacing_after_node(node, spacing_enabled, default_name);
-    }
-    spacing_enabled
-}
-
-pub(super) fn spacing_after_node(
-    node: &Node,
-    spacing_enabled: bool,
-    default_name: Option<&str>,
-) -> bool {
-    if node.macro_name.as_deref() == Some("Sm") {
-        let setting = plain_text(&lower_inline_nodes(&node.children, default_name));
-        return updated_spacing(spacing_enabled, setting.trim());
-    }
-    spacing_after_nodes(&node.children, spacing_enabled, default_name)
-}
-
-/// Lower one syntax node into an existing inline flow.
-///
-/// libmandoc classifies bare opening and closing delimiters during parsing.
-/// Preserve those roles instead of re-inferring punctuation from visible
-/// characters: literal displays can intentionally put spaces around the same
-/// glyphs that ordinary prose uses as attached punctuation.
 pub(super) fn append_inline_node(
     builder: &mut InlineBuilder,
     node: &Node,
@@ -106,22 +78,17 @@ pub(super) fn append_inline_node_with_next(
         return;
     }
     if node.kind == NodeKind::Text && !node.flags.no_print {
-        if node.flags.delimiter_close {
-            builder.tighten_next_boundary();
-        }
-        let inlines = parse_roff_text_with_state(
-            node.text.as_deref().unwrap_or_default(),
-            &mut builder.font,
-            !node.flags.no_fill,
-        );
-        builder.append_word(inlines);
-        if node.flags.delimiter_open || node.flags.line_continuation {
-            builder.tighten_next_boundary();
-        }
+        append_text_node(builder, node);
         return;
     }
     if node.flags.delimiter_close {
         builder.tighten_next_boundary();
+    }
+    if matches!(
+        node.macro_name.as_deref(),
+        Some("Fl" | "Ap" | "Fn" | "Fo" | "In" | "Lk" | "Mt" | "Bx" | "Nm")
+    ) {
+        builder.begin_source_line(node.line);
     }
     match node.macro_name.as_deref() {
         Some("B" | "I" | "SB" | "R" | "BI" | "BR" | "IB" | "IR" | "RB" | "RI" | "OP") => {
@@ -212,6 +179,27 @@ pub(super) fn append_inline_node_with_next(
     }
 }
 
+fn append_text_node(builder: &mut InlineBuilder, node: &Node) {
+    if node.flags.no_fill && node.flags.line_start && node.text.as_deref().is_none_or(str::is_empty)
+    {
+        return;
+    }
+    builder.begin_source_line(node.line);
+    if node.flags.delimiter_close {
+        builder.tighten_next_boundary();
+    }
+    let inlines = parse_roff_text_with_state(
+        node.text.as_deref().unwrap_or_default(),
+        &mut builder.font,
+        !node.flags.no_fill,
+    );
+    builder.append_word(inlines);
+    if node.flags.delimiter_open || node.flags.line_continuation {
+        builder.tighten_next_boundary();
+    }
+    builder.continue_source_line(super::blocks::ends_with_line_continuation(node));
+}
+
 /// Append sibling events without throwing away pending formatter effects.
 pub(super) fn append_inline_nodes(
     builder: &mut InlineBuilder,
@@ -237,10 +225,7 @@ pub(super) fn append_inline_nodes(
         {
             builder.append_text("and");
         }
-        let spacing_before = builder.spacing_enabled();
         append_inline_node_with_next(builder, node, nodes.get(index + 1), default_name);
-        let spacing_after = spacing_after_node(node, spacing_before, default_name);
-        builder.inherit_spacing(spacing_after);
     }
 }
 

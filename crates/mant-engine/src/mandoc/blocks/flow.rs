@@ -90,6 +90,17 @@ impl BlockState {
         continues_line: bool,
         append: impl FnOnce(&mut InlineBuilder),
     ) {
+        self.push_source_inline_with(source, starts_indented_line, continues_line, false, append);
+    }
+
+    pub(super) fn push_source_inline_with(
+        &mut self,
+        source: Option<mant_ir::SourceSpan>,
+        starts_indented_line: bool,
+        continues_line: bool,
+        ordinary_text: bool,
+        append: impl FnOnce(&mut InlineBuilder),
+    ) {
         let source_line = source.map(|span| span.line);
         let crossed_source_line = self
             .paragraph_last_line
@@ -104,6 +115,8 @@ impl BlockState {
         };
         if boundary == FilledBoundary::LineBreak {
             self.paragraph.hard_break();
+        } else if boundary == FilledBoundary::Word && ordinary_text {
+            self.paragraph.preserve_source_word_boundary();
         }
         let previous_count = self.paragraph.node_count();
         append(&mut self.paragraph);

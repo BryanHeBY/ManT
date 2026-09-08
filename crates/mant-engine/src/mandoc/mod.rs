@@ -209,12 +209,15 @@ fn normalize_metadata(value: Option<&str>) -> Option<String> {
     value.map(visible_text)
 }
 
+type NoFillRows = std::sync::Arc<[(u32, u16)]>;
+
 struct LoweringContext<'a> {
     macro_set: MacroSet,
     // Immutable source services. Formatter execution is passed separately;
     // the RefCells below are memoization and diagnostic collection only.
     default_name: Option<&'a str>,
     source_lines: Option<SourceLineIndex<'a>>,
+    no_fill_rows: RefCell<Option<NoFillRows>>,
     equation_delimiters: Vec<EquationDelimiterChange>,
     normalized_equations: RefCell<BTreeMap<String, String>>,
     section_ids: HashMap<String, usize>,
@@ -263,6 +266,7 @@ impl<'a> LoweringContext<'a> {
             macro_set: MacroSet::None,
             default_name,
             source_lines: source.map(SourceLineIndex::new),
+            no_fill_rows: RefCell::new(None),
             equation_delimiters: source.map_or_else(Vec::new, equation_delimiter_changes),
             normalized_equations: RefCell::new(BTreeMap::new()),
             section_ids: HashMap::new(),
@@ -474,6 +478,28 @@ impl<'a> LoweringContext<'a> {
             .map(no_fill_vertical_rows)
             .max()
             .unwrap_or(0)
+    }
+
+    fn no_fill_source_rows(&self) -> std::sync::Arc<[(u32, u16)]> {
+        if let Some(rows) = self.no_fill_rows.borrow().as_ref() {
+            return rows.clone();
+        }
+        let rows: std::sync::Arc<[(u32, u16)]> = self
+            .source_lines
+            .as_ref()
+            .map(|source| {
+                source
+                    .lines_from(1)
+                    .filter_map(|(number, line)| {
+                        let rows = no_fill_vertical_rows(line);
+                        (rows > 0).then_some((number, rows))
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default()
+            .into();
+        *self.no_fill_rows.borrow_mut() = Some(rows.clone());
+        rows
     }
 
     fn section_id(&mut self, title: &str) -> String {

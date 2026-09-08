@@ -12,6 +12,7 @@ pub(in crate::mandoc) struct InlineBuilder {
     empty_word: bool,
     pending_word_spaces: usize,
     pub(in crate::mandoc) font: FontState,
+    source_cursor: Option<super::source_cursor::SourceCursor>,
 }
 
 /// Roff remembers the previous selection independently of the current font.
@@ -116,6 +117,7 @@ impl InlineBuilder {
             empty_word: false,
             pending_word_spaces: 0,
             font: FontState::new(),
+            source_cursor: None,
         }
     }
 
@@ -129,6 +131,7 @@ impl InlineBuilder {
             empty_word: false,
             pending_word_spaces: 0,
             font: FontState::new(),
+            source_cursor: None,
         }
     }
 
@@ -136,8 +139,46 @@ impl InlineBuilder {
         self.boundary = PendingBoundary::Tight;
     }
 
+    pub(in crate::mandoc) fn track_source_lines(&mut self, rows: std::sync::Arc<[(u32, u16)]>) {
+        self.source_cursor = Some(super::source_cursor::SourceCursor::new(rows));
+    }
+
+    pub(in crate::mandoc) fn begin_source_line(&mut self, line: u32) {
+        if let Some(rows) = self
+            .source_cursor
+            .as_mut()
+            .and_then(|cursor| cursor.advance(line))
+        {
+            self.blank_rows(rows);
+        }
+    }
+
+    pub(in crate::mandoc) fn continue_source_line(&mut self, continued: bool) {
+        if let Some(cursor) = &mut self.source_cursor {
+            cursor.continue_line(continued);
+        }
+    }
+
+    pub(in crate::mandoc) fn transfer_source_cursor(&mut self, next: &mut Self) {
+        next.source_cursor = self.source_cursor.take();
+    }
+
+    pub(in crate::mandoc) fn reset_source_cursor(&mut self) {
+        if let Some(cursor) = &mut self.source_cursor {
+            cursor.reset();
+        }
+    }
+
     pub(in crate::mandoc) fn release_next_boundary(&mut self) {
         self.boundary = PendingBoundary::Ordinary;
+    }
+
+    /// Source wrapping is a word boundary even while macro auto-spacing is
+    /// disabled. Explicit joins still take precedence over ordinary wrapping.
+    pub(in crate::mandoc) fn preserve_source_word_boundary(&mut self) {
+        if !self.boundary.is_tight() {
+            self.boundary = PendingBoundary::Preserved;
+        }
     }
 
     /// Join a generated prefix only to its own operand scope. Word events

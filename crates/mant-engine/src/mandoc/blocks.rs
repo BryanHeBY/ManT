@@ -483,10 +483,11 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
 
     fn push_inline_node(&mut self, node: &Node, next: Option<&Node>) {
         let source = source_span(node);
-        self.state.push_inline_with(
+        self.state.push_source_inline_with(
             source,
             starts_indented_filled_line(node),
             ends_with_line_continuation(node),
+            node.kind == NodeKind::Text && node.flags.line_start,
             |builder| {
                 builder.font = self.formatter.font;
                 append_inline_node_with_next(builder, node, next, self.context.default_name);
@@ -1134,7 +1135,7 @@ fn starts_indented_filled_line(node: &Node) -> bool {
 /// Whether the final printable fragment in this syntax subtree ends with the
 /// roff `\c` escape. The parser retains this as source-boundary semantics so
 /// filled and no-fill flows can make the same join decision.
-fn ends_with_line_continuation(node: &Node) -> bool {
+pub(super) fn ends_with_line_continuation(node: &Node) -> bool {
     if node.flags.no_print || node.kind == NodeKind::Comment {
         return false;
     }

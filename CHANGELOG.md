@@ -122,6 +122,10 @@ that crate was not published for that change.
 
 ### mant-engine 0.11.0
 
+- Preserve structural tables/lists through nested mdoc enclosures and font
+  scopes, and carry font and spacing state out of every structural consumer.
+  Literal source lines follow macro descendants; ordinary filled text keeps
+  word boundaries under `Sm off` while macro operands still obey that mode.
 - Preserve generated function/reference font and spacing effects, including
   nested `Sm`, and keep ordinary `Fo` declarations in their surrounding prose.
   SYNOPSIS declarations retain their independent boundaries. Empty `Eo`/`Ec`
