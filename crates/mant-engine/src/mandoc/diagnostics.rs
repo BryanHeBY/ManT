@@ -53,15 +53,6 @@ impl LoweringContext<'_> {
         });
     }
 
-    pub(super) fn warn_definition_alias_boundary(&self, node: &Node) {
-        self.diagnostics.borrow_mut().push(Diagnostic {
-            level: DiagnosticLevel::Warning,
-            code: Some("manual.definition-alias-boundary".to_owned()),
-            message: "unlabelled definition heads were kept separate because this macro does not prove that they share one description".to_owned(),
-            source: source_span(node),
-        });
-    }
-
     pub(super) fn warn_unhandled_table_text_block(&self, node: &Node) {
         self.diagnostics.borrow_mut().push(Diagnostic {
             level: DiagnosticLevel::Warning,

@@ -80,7 +80,7 @@ fn separates_definition_layout_arguments_from_visible_terms() {
 }
 
 #[test]
-fn preserves_consecutive_tp_aliases_ending_in_line_continuations() {
+fn line_continuations_do_not_merge_independent_tp_owners() {
     let path = temporary_source(
         "continued-definition-aliases",
         ".TH ALIASES 1\n\
@@ -99,19 +99,17 @@ fn preserves_consecutive_tp_aliases_ending_in_line_continuations() {
     let [Block::DefinitionList { items, .. }] = document.sections[0].blocks.as_slice() else {
         panic!("expected one definition list");
     };
-    assert_eq!(items.len(), 1);
+    assert_eq!(items.len(), 2);
     assert_eq!(
-        items[0]
-            .terms
+        items
             .iter()
-            .map(|term| inline_text(term))
+            .map(|item| inline_text(&item.terms[0]))
             .collect::<Vec<_>>(),
         ["-symbols=file", "-s file"]
     );
-    let Block::Paragraph { children, .. } = &items[0].description[0] else {
-        panic!("expected alias description paragraph");
-    };
-    assert_eq!(inline_text(children), "Read symbols.");
+    assert!(items.iter().all(|item| item.terms.len() == 1));
+    assert!(items[..1].iter().all(|item| item.description.is_empty()));
+    assert!(!items[1].description.is_empty());
 }
 
 #[test]
@@ -172,7 +170,7 @@ fn paragraph_distance_zero_does_not_turn_tp_items_into_aliases() {
 }
 
 #[test]
-fn restored_paragraph_distance_closes_a_compact_tp_alias_group() {
+fn restoring_paragraph_distance_keeps_tp_owners_independent() {
     let path = temporary_source(
         "compact-alias-group",
         ".TH ALIASES 1\n\
@@ -191,18 +189,21 @@ fn restored_paragraph_distance_closes_a_compact_tp_alias_group() {
     let [Block::DefinitionList { items, .. }] = document.sections[0].blocks.as_slice() else {
         panic!("expected one definition list");
     };
-    assert_eq!(items.len(), 1);
-    assert_eq!(items[0].terms.len(), 2);
-    assert_eq!(inline_text(&items[0].terms[0]), "bind first-form");
-    assert_eq!(inline_text(&items[0].terms[1]), "bind second-form");
-    let Block::Paragraph { children, .. } = &items[0].description[0] else {
-        panic!("expected shared description");
-    };
-    assert_eq!(inline_text(children), "Shared description.");
+    assert_eq!(items.len(), 2);
+    assert_eq!(
+        items
+            .iter()
+            .map(|item| inline_text(&item.terms[0]))
+            .collect::<Vec<_>>(),
+        ["bind first-form", "bind second-form"]
+    );
+    assert!(items.iter().all(|item| item.terms.len() == 1));
+    assert!(items[..1].iter().all(|item| item.description.is_empty()));
+    assert!(!items[1].description.is_empty());
 }
 
 #[test]
-fn paragraph_distance_in_the_first_tp_head_opens_a_compact_alias_group() {
+fn head_paragraph_distance_keeps_tp_owners_independent() {
     let path = temporary_source(
         "head-owned-compact-alias-group",
         ".TH ALIASES 1\n\
@@ -221,18 +222,21 @@ fn paragraph_distance_in_the_first_tp_head_opens_a_compact_alias_group() {
     let [Block::DefinitionList { items, .. }] = document.sections[0].blocks.as_slice() else {
         panic!("expected one definition list");
     };
-    assert_eq!(items.len(), 1);
-    assert_eq!(items[0].terms.len(), 2);
-    assert_eq!(inline_text(&items[0].terms[0]), "--first");
-    assert_eq!(inline_text(&items[0].terms[1]), "--second");
-    let Block::Paragraph { children, .. } = &items[0].description[0] else {
-        panic!("expected shared description");
-    };
-    assert_eq!(inline_text(children), "Shared description.");
+    assert_eq!(items.len(), 2);
+    assert_eq!(
+        items
+            .iter()
+            .map(|item| inline_text(&item.terms[0]))
+            .collect::<Vec<_>>(),
+        ["--first", "--second"]
+    );
+    assert!(items.iter().all(|item| item.terms.len() == 1));
+    assert!(items[..1].iter().all(|item| item.description.is_empty()));
+    assert!(!items[1].description.is_empty());
 }
 
 #[test]
-fn compact_alias_group_does_not_absorb_a_preceding_orphan() {
+fn compact_tp_heads_and_preceding_orphan_remain_independent() {
     let path = temporary_source(
         "bounded-compact-alias-group",
         ".TH ALIASES 1\n\
@@ -253,16 +257,21 @@ fn compact_alias_group_does_not_absorb_a_preceding_orphan() {
     let [Block::DefinitionList { items, .. }] = document.sections[0].blocks.as_slice() else {
         panic!("expected one definition list");
     };
-    assert_eq!(items.len(), 2);
-    assert_eq!(inline_text(&items[0].terms[0]), "orphan");
-    assert!(items[0].description.is_empty());
-    assert_eq!(items[1].terms.len(), 2);
-    assert_eq!(inline_text(&items[1].terms[0]), "--first");
-    assert_eq!(inline_text(&items[1].terms[1]), "--second");
+    assert_eq!(items.len(), 3);
+    assert_eq!(
+        items
+            .iter()
+            .map(|item| inline_text(&item.terms[0]))
+            .collect::<Vec<_>>(),
+        ["orphan", "--first", "--second"]
+    );
+    assert!(items.iter().all(|item| item.terms.len() == 1));
+    assert!(items[..2].iter().all(|item| item.description.is_empty()));
+    assert!(!items[2].description.is_empty());
 }
 
 #[test]
-fn adjacent_compact_alias_groups_keep_their_exact_boundaries() {
+fn adjacent_compact_tp_runs_keep_all_owner_boundaries() {
     let path = temporary_source(
         "adjacent-compact-alias-groups",
         ".TH ALIASES 1\n\
@@ -288,15 +297,34 @@ fn adjacent_compact_alias_groups_keep_their_exact_boundaries() {
     let [Block::DefinitionList { items, .. }] = document.sections[0].blocks.as_slice() else {
         panic!("expected one definition list");
     };
-    assert_eq!(items.len(), 2);
-    assert_eq!(inline_text(&items[0].terms[0]), "--first");
-    assert_eq!(inline_text(&items[0].terms[1]), "--second");
-    assert_eq!(inline_text(&items[1].terms[0]), "--third");
-    assert_eq!(inline_text(&items[1].terms[1]), "--fourth");
+    assert_eq!(items.len(), 4);
+    assert_eq!(
+        items
+            .iter()
+            .map(|item| inline_text(&item.terms[0]))
+            .collect::<Vec<_>>(),
+        ["--first", "--second", "--third", "--fourth"]
+    );
+    assert!(items.iter().all(|item| item.terms.len() == 1));
+    assert!(items[0].description.is_empty() && items[2].description.is_empty());
+    assert_eq!(
+        inline_text(match &items[1].description[0] {
+            Block::Paragraph { children, .. } => children,
+            _ => panic!("paragraph"),
+        }),
+        "First description."
+    );
+    assert_eq!(
+        inline_text(match &items[3].description[0] {
+            Block::Paragraph { children, .. } => children,
+            _ => panic!("paragraph"),
+        }),
+        "Second description."
+    );
 }
 
 #[test]
-fn lowers_indented_aliases_without_roff_layout_arguments() {
+fn compact_ip_heads_keep_independent_descriptions() {
     let path = temporary_source(
         "indented-aliases",
         ".TH CONTROL 1\n\
@@ -315,20 +343,17 @@ fn lowers_indented_aliases_without_roff_layout_arguments() {
     let [Block::DefinitionList { items, .. }] = document.sections[0].blocks.as_slice() else {
         panic!("expected one definition list");
     };
-    assert_eq!(items.len(), 1);
+    assert_eq!(items.len(), 2);
     assert_eq!(
-        items[0]
-            .terms
+        items
             .iter()
-            .map(|term| inline_text(term))
+            .map(|item| inline_text(&item.terms[0]))
             .collect::<Vec<_>>(),
         ["-a", "--all"]
     );
-    assert_eq!(items[0].description.len(), 1);
-    let Block::Paragraph { children, .. } = &items[0].description[0] else {
-        panic!("expected alias description paragraph");
-    };
-    assert_eq!(inline_text(children), "Show all entries.");
+    assert!(items.iter().all(|item| item.terms.len() == 1));
+    assert!(items[..1].iter().all(|item| item.description.is_empty()));
+    assert!(!items[1].description.is_empty());
 }
 
 #[test]
@@ -435,7 +460,7 @@ fn ip_does_not_absorb_unproven_definition_heads() {
     );
     assert!(items[..3].iter().all(|item| item.description.is_empty()));
     assert!(!items[3].description.is_empty());
-    assert!(document.diagnostics.iter().any(|diagnostic| {
+    assert!(!document.diagnostics.iter().any(|diagnostic| {
         diagnostic.code.as_deref() == Some("manual.definition-alias-boundary")
     }));
 }
@@ -770,7 +795,7 @@ fn preserves_nested_mdoc_spacing_state_in_definition_terms() {
 }
 
 #[test]
-fn groups_mdoc_option_forms_that_share_one_description() {
+fn independent_mdoc_option_forms_do_not_borrow_the_following_description() {
     let document = parse_manual_bytes(
         std::path::Path::new("shared-option-forms.1"),
         b".Dd August 27, 2026\n.Dt SHARED-OPTION-FORMS 1\n.Os\n.Sh OPTIONS\n\
@@ -786,32 +811,26 @@ Forward a local socket.\n.El\n",
     let Block::DefinitionList { items, .. } = &document.sections[0].blocks[0] else {
         panic!("expected an option definition list");
     };
-    assert_eq!(items.len(), 1);
+    assert_eq!(items.len(), 4);
     assert_eq!(
-        items[0]
-            .terms
+        items
             .iter()
-            .map(|term| inline_text(term))
+            .map(|item| inline_text(&item.terms[0]))
             .collect::<Vec<_>>(),
         [
             "-L [bind_address:]port:host:hostport",
             "-L [bind_address:]port:remote_socket",
             "-L local_socket:host:hostport",
-            "-L local_socket:remote_socket",
+            "-L local_socket:remote_socket"
         ]
     );
-    assert_eq!(items[0].entry.as_ref().unwrap().names, ["-L"]);
-    assert!(document.sections[0].blocks.iter().any(|block| {
-        matches!(block, Block::DefinitionList { items, .. }
-        if items[0].description.iter().any(|description| {
-            matches!(description, Block::Paragraph { children, .. }
-                if inline_text(children).contains("Forward a local socket"))
-        }))
-    }));
+    assert!(items.iter().all(|item| item.terms.len() == 1));
+    assert!(items[..3].iter().all(|item| item.description.is_empty()));
+    assert!(!items[3].description.is_empty());
 }
 
 #[test]
-fn groups_distinct_mdoc_options_that_share_one_description() {
+fn independent_mdoc_options_keep_their_own_descriptions() {
     let document = parse_manual_bytes(
         std::path::Path::new("shared-option-description.1"),
         b".Dd August 29, 2026\n.Dt SHARED-OPTION-DESCRIPTION 1\n.Os\n.Sh OPTIONS\n\
@@ -826,20 +845,17 @@ Convert filenames from the specified encoding.\n\
     let Block::DefinitionList { items, .. } = &document.sections[0].blocks[0] else {
         panic!("expected an option definition list");
     };
-    assert_eq!(items.len(), 1);
+    assert_eq!(items.len(), 2);
     assert_eq!(
-        items[0]
-            .terms
+        items
             .iter()
-            .map(|term| inline_text(term))
+            .map(|item| inline_text(&item.terms[0]))
             .collect::<Vec<_>>(),
         ["-I encoding", "-O encoding"]
     );
-    assert_eq!(items[0].entry.as_ref().unwrap().names, ["-I", "-O"]);
-    assert!(items[0].description.iter().any(|description| {
-        matches!(description, Block::Paragraph { children, .. }
-            if inline_text(children) == "Convert filenames from the specified encoding.")
-    }));
+    assert!(items.iter().all(|item| item.terms.len() == 1));
+    assert!(items[..1].iter().all(|item| item.description.is_empty()));
+    assert!(!items[1].description.is_empty());
 }
 
 #[test]
@@ -976,7 +992,7 @@ fn tq_continuation_starts_at_the_immediately_preceding_head() {
             .collect::<Vec<_>>(),
         ["-b", "--beta"]
     );
-    assert!(document.diagnostics.iter().any(|diagnostic| {
+    assert!(!document.diagnostics.iter().any(|diagnostic| {
         diagnostic.code.as_deref() == Some("manual.definition-alias-boundary")
     }));
 }

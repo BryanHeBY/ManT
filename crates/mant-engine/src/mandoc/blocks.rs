@@ -36,8 +36,7 @@ mod tables;
 
 use lists::man::ordered::{ManListState, append_relative_continuation};
 use lists::{
-    ManAliasState, ManDefinitionState, lower_man_definition as lower_man_definition_block,
-    lower_mdoc_list,
+    ManDefinitionState, lower_man_definition as lower_man_definition_block, lower_mdoc_list,
 };
 use preformatted::preformatted_blocks;
 use tables::{TableEmbedding, TableEmbeddingPlan, append_table_row};
@@ -122,10 +121,6 @@ struct BlockLowerer<'a, 'source> {
     definition_hanging_width: usize,
     split_authors: bool,
     synopsis_return_type_open: bool,
-    // Retain explicit continuation and bounded `.PD 0` group state across
-    // adjacent man definitions. The state owns the exact first item of a
-    // compact group so a later close cannot absorb an unrelated orphan.
-    man_alias_state: ManAliasState,
     // Source-proven `.IP`/`.TP` ordinals form lists immediately; this state
     // joins only adjacent, consecutively numbered items of the same style.
     man_list_state: ManListState,
@@ -149,7 +144,6 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
             definition_hanging_width: DEFAULT_MAN_TAG_WIDTH,
             split_authors: false,
             synopsis_return_type_open: false,
-            man_alias_state: ManAliasState::None,
             man_list_state: ManListState::None,
         }
     }
@@ -250,7 +244,6 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
                 paragraph_distance: self.paragraph_distance,
                 output: &mut self.state.output,
                 definition_hanging_width: &mut self.definition_hanging_width,
-                man_alias_state: &mut self.man_alias_state,
                 man_list_state: &mut self.man_list_state,
                 spacing_enabled,
                 formatter: &mut self.formatter,

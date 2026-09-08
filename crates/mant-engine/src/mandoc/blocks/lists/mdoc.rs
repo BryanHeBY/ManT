@@ -4,8 +4,7 @@ use super::{
     AstTableAlignment, AstTableCell, Block, DefinitionItem, DefinitionListStyle, Inline, ListItem,
     ListKind, LoweringContext, MAN_DEFINITION_BODY_INDENT, Node, NodeKind, NormalizedListKind,
     TableRow, block_layout_mut, definition_item, first_part_children, horizontal_distance_columns,
-    layout, lower_blocks_with_spacing, ordinal_sequence, part_child_groups, plain_text,
-    source_span, targets, terms_fit_inline,
+    layout, lower_blocks_with_spacing, ordinal_sequence, part_child_groups, source_span, targets,
 };
 
 pub(in crate::mandoc::blocks) fn lower_mdoc_list(
@@ -156,7 +155,7 @@ fn lower_mdoc_definition_list(
         };
     }
     Block::DefinitionList {
-        items: coalesce_pending_definition_terms(lowered_items, max_term_width),
+        items: lowered_items,
         compact: node.compact,
         layout: layout(indent_columns),
         source: source_span(node),
@@ -198,52 +197,6 @@ fn mdoc_list_item_from_definition(
         entry: None,
         blocks: description,
     }
-}
-
-/// Attach consecutive description-less definition heads to the next item.
-///
-/// Both man(7) `.TQ` and mdoc(7) commonly express several equivalent input
-/// forms as a run of heads followed by one shared body.  The man lowering
-/// path already folds pending `.TQ` heads in `append_definition`; mdoc lists
-/// arrive as one complete collection, so perform the same structural
-/// normalization before the source-specific list representation leaves this
-/// module.  A trailing run stays intact because no shared description proves
-/// that the terms belong to one definition.
-fn coalesce_pending_definition_terms(
-    items: Vec<DefinitionItem>,
-    max_term_width: usize,
-) -> Vec<DefinitionItem> {
-    let mut output = Vec::with_capacity(items.len());
-    let mut pending = Vec::new();
-
-    for mut item in items {
-        if item.description.is_empty() {
-            pending.push(item);
-            continue;
-        }
-        if is_option_definition(&item) && pending.iter().all(is_option_definition) {
-            super::prepend_definition_heads(&mut item, pending.drain(..));
-            item.layout.inline_term = terms_fit_inline(&item.terms, max_term_width);
-        } else {
-            output.append(&mut pending);
-        }
-        output.push(item);
-    }
-
-    output.extend(pending);
-    output
-}
-
-fn is_option_definition(item: &DefinitionItem) -> bool {
-    item.terms.iter().any(|term| {
-        let text = plain_text(term);
-        let Some(token) = text.split_whitespace().next() else {
-            return false;
-        };
-        let name =
-            token.trim_matches(|character: char| matches!(character, '[' | ']' | '(' | ')' | ','));
-        name.starts_with('-') && name != "-"
-    })
 }
 
 struct MdocListItem<'a> {

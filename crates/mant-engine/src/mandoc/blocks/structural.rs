@@ -1,7 +1,7 @@
 //! Structural payload dispatch; state and output remain caller-owned.
 use super::{
-    Block, DEFAULT_MAN_TAG_WIDTH, DisplayKind, Inline, LoweringContext, ManAliasState,
-    ManDefinitionState, ManListState, Node, NodeKind, TableEmbedding, add_leading_spacing,
+    Block, DEFAULT_MAN_TAG_WIDTH, DisplayKind, Inline, LoweringContext, ManDefinitionState,
+    ManListState, Node, NodeKind, TableEmbedding, add_leading_spacing,
     append_relative_continuation, append_table_row, equation_block, extend_blocks_with_spacing,
     first_part_children, layout_with_spacing, lower_blocks_onto, lower_blocks_with_spacing,
     lower_inline_nodes, lower_man_definition_block, lower_mdoc_list, lower_synopsis_head,
@@ -14,7 +14,6 @@ pub(super) struct StructuralLowerer<'a, 'source, 'state> {
     pub(super) paragraph_distance: &'state mut u16,
     pub(super) output: &'state mut Vec<Block>,
     pub(super) definition_hanging_width: &'state mut usize,
-    pub(super) man_alias_state: &'state mut ManAliasState,
     pub(super) man_list_state: &'state mut ManListState,
     pub(super) spacing_enabled: bool,
     pub(super) formatter: &'state mut crate::mandoc::formatter::FormatterState,
@@ -30,7 +29,6 @@ impl StructuralLowerer<'_, '_, '_> {
                 paragraph_distance: self.paragraph_distance,
                 output: self.output,
                 definition_hanging_width: self.definition_hanging_width,
-                alias_state: self.man_alias_state,
                 list_state: self.man_list_state,
             },
             self.spacing_enabled,
@@ -39,9 +37,6 @@ impl StructuralLowerer<'_, '_, '_> {
     }
 
     pub(super) fn push(&mut self, node: &Node, table_embedding: Option<&TableEmbedding<'_>>) {
-        if !matches!(node.macro_name.as_deref(), Some("TP" | "IP" | "TQ")) {
-            *self.man_alias_state = ManAliasState::None;
-        }
         let continues_ip_item =
             node.macro_name.as_deref() == Some("RS") && self.man_list_state.is_active();
         if !matches!(node.macro_name.as_deref(), Some("IP" | "TP")) && !continues_ip_item {

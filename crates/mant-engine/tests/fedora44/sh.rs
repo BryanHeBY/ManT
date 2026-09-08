@@ -6,6 +6,37 @@ use mant_ir::{EntryKind, ParameterKind, SemanticEntry, SemanticIndex, SourceForm
 use crate::common::{self, collect_sections, source_path_ends_with};
 use crate::fixtures::fedora44_manual;
 
+fn assert_builtin_evidence(query: &mant_ir::ResolvedContent, name: &str) {
+    let explanation = mant_engine::explain_query(
+        query,
+        &mant_protocol::ExplanationQuery {
+            entry: name.into(),
+            options: mant_protocol::ExplanationOptions::default(),
+        },
+    )
+    .unwrap();
+    let direct = explanation
+        .evidence
+        .iter()
+        .filter(|e| e.class == mant_protocol::EvidenceClass::DirectEntry)
+        .collect::<Vec<_>>();
+    assert!(!direct.is_empty(), "{name}");
+    for evidence in direct {
+        let entry = evidence.entry.as_ref().unwrap();
+        assert_eq!(entry.kind, EntryKind::Command, "{name}");
+        assert!(entry.names.iter().any(|candidate| candidate == name));
+        assert!(
+            evidence
+                .outline
+                .ancestors
+                .iter()
+                .any(|a| a.title == "SHELL BUILTIN COMMANDS")
+        );
+        let excerpt = select_excerpt(query, &[evidence.outline.path()]).unwrap();
+        assert!(!render_excerpt_markdown(&excerpt).contains("set-mark (C-@"));
+    }
+}
+
 #[test]
 fn parses_the_real_bash_backed_shell_manual() {
     let document = fedora44_manual("sh");
@@ -38,7 +69,9 @@ fn rebuilds_builtin_parameter_hierarchy_from_relative_indentation() {
         .iter()
         .flat_map(|section| index.section(&section.id))
         .find(|entry| {
-            entry.kind == EntryKind::Command && entry.names.iter().any(|alias| alias == "set")
+            entry.kind == EntryKind::Command
+                && entry.names.iter().any(|alias| alias == "set")
+                && !entry.children.is_empty()
         })
         .expect("the set builtin is a semantic command");
 
@@ -125,10 +158,7 @@ fn preserves_complete_readline_command_names_as_selectable_aliases() {
         "generated role-qualified ID must select set-mark"
     );
 
-    let builtin = select_excerpt(&query, &["set"]).expect("set builtin alias");
-    let rendered = render_excerpt_markdown(&builtin);
-    assert!(rendered.contains("SHELL BUILTIN COMMANDS"));
-    assert!(!rendered.contains("set-mark (C-@"));
+    assert_builtin_evidence(&query, "set");
 }
 
 #[test]
@@ -229,10 +259,7 @@ fn preserves_complete_readline_variable_names_without_shadowing_builtins() {
         );
     }
     for builtin in ["bind", "echo", "enable", "set"] {
-        let excerpt = select_excerpt(&query, &[builtin])
-            .unwrap_or_else(|error| panic!("builtin {builtin} must remain exact: {error}"));
-        let rendered = render_excerpt_markdown(&excerpt);
-        assert!(rendered.contains("SHELL BUILTIN COMMANDS"), "{rendered}");
+        assert_builtin_evidence(&query, builtin);
     }
     assert!(matches!(
         select_excerpt(&query, &["history"])
@@ -248,7 +275,7 @@ fn preserves_complete_readline_variable_names_without_shadowing_builtins() {
 }
 
 #[test]
-fn preserves_compact_invocation_aliases_and_their_shared_description() {
+fn preserves_compact_invocations_without_borrowing_the_next_description() {
     let document = fedora44_manual("sh");
     let index = SemanticIndex::build(document);
     let mut sections = Vec::new();
@@ -262,21 +289,19 @@ fn preserves_compact_invocation_aliases_and_their_shared_description() {
             .unwrap_or_else(|| panic!("missing invocation option {alias}"))
     });
 
-    assert_eq!(entries[0].id, entries[1].id);
-    assert!(
-        aliases
-            .iter()
-            .all(|alias| { entries[0].names.iter().any(|candidate| candidate == alias) })
-    );
+    assert_ne!(entries[0].id, entries[1].id);
 
     let query = common::query_for_document("sh", document);
     for alias in aliases {
         let excerpt = select_excerpt(&query, &[alias])
             .unwrap_or_else(|error| panic!("{alias} must be explainable: {error}"));
         let rendered = render_excerpt_markdown(&excerpt);
-        assert!(rendered.contains("--init-file"), "{rendered}");
-        assert!(rendered.contains("--rcfile"), "{rendered}");
-        assert!(rendered.contains("Execute commands from"), "{rendered}");
+        assert!(rendered.contains(alias), "{rendered}");
+        assert_eq!(
+            rendered.contains("Execute commands from"),
+            alias == "--rcfile",
+            "{rendered}"
+        );
     }
 }
 

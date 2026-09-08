@@ -29,7 +29,7 @@ fn dragonfly_adduser_carries_sm_off_into_a_display_line() {
 }
 
 #[test]
-fn dragonfly_gdb_preserves_consecutive_tp_option_aliases() {
+fn dragonfly_gdb_preserves_independent_tp_option_declarations() {
     let document = bsd_manual("dragonfly-gdb");
     let options = section(document, "OPTIONS");
     let aliases = definition_items(options)
@@ -42,14 +42,12 @@ fn dragonfly_gdb_preserves_consecutive_tp_option_aliases() {
         })
         .collect::<Vec<_>>();
 
-    assert!(
-        aliases.contains(&vec!["-symbols=file".into(), "-s file".into()]),
-        "aliases={aliases:?}"
-    );
-    assert!(
-        aliases.contains(&vec!["-exec=file".into(), "-e file".into()]),
-        "aliases={aliases:?}"
-    );
+    for form in ["-symbols=file", "-s file", "-exec=file", "-e file"] {
+        assert!(
+            aliases.contains(&vec![form.into()]),
+            "declarations={aliases:?}"
+        );
+    }
 }
 
 #[test]

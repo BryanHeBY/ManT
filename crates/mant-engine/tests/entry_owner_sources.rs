@@ -39,16 +39,6 @@ fn transformed_native_owners_keep_the_first_head_for_explain_and_search() {
             3,
         ),
         (
-            ".Dd September 8, 2026\n.Dt PROBE 1\n.Os\n.Sh OPTIONS\n.Bl -tag -width Ds\n.It Fl a\n.It Fl all\nPAYLOAD\n.El\n",
-            vec!["-a", "-all"],
-            6,
-        ),
-        (
-            ".Dd September 8, 2026\n.Dt PROBE 1\n.Os\n.Sh OPTIONS\n.Bl -tag -width Ds\n.It Fl a\n.It Fl all\n.It Fl everything\nPAYLOAD\n.El\n",
-            vec!["-a", "-all", "-everything"],
-            6,
-        ),
-        (
             ".TH PROBE 1\n.SH OPTIONS\n.TP\n.B -a\nPAYLOAD\n",
             vec!["-a"],
             3,

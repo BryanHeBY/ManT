@@ -15,10 +15,7 @@ use super::super::{
     },
     part_child_groups, source_span, targets,
 };
-use super::{
-    ends_with_line_continuation, is_inline_equation, is_inline_equation_quote_artifact,
-    lower_blocks_with_spacing,
-};
+use super::{is_inline_equation, is_inline_equation_quote_artifact, lower_blocks_with_spacing};
 use crate::block::block_layout_mut;
 
 mod definition;
@@ -26,14 +23,14 @@ pub(super) mod man;
 mod mdoc;
 #[cfg(test)]
 use definition::split_definition_terms;
-use definition::{definition_item, prepend_definition_heads, visible_definition_head};
+use definition::{definition_item, prepend_definition_heads};
 #[cfg(test)]
 use man::is_ip_bullet_item;
 use man::ordered::{
     DefinitionLocation, MAN_DEFINITION_BODY_INDENT, ManListState, append_ordered,
     list_item_from_definition, ordinal_marker, ordinal_sequence,
 };
-pub(super) use man::{ManAliasState, ManDefinitionState, lower_man_definition};
+pub(super) use man::{ManDefinitionState, lower_man_definition};
 
 pub(super) use mdoc::lower_mdoc_list;
 

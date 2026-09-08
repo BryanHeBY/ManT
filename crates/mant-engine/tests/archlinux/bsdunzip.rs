@@ -9,7 +9,7 @@ use crate::{
 };
 
 #[test]
-fn distinct_option_heads_share_the_following_mdoc_description() {
+fn distinct_option_heads_do_not_borrow_the_following_mdoc_description() {
     let document = archlinux_manual("bsdunzip");
     let mut sections = Vec::new();
     collect_sections(&document.sections, &mut sections);
@@ -33,10 +33,10 @@ fn distinct_option_heads_share_the_following_mdoc_description() {
                     == EntryKind::Parameter {
                         parameter_kind: mant_ir::ParameterKind::Option,
                     }
-                    && identity.names == ["-I".to_owned(), "-O".to_owned()]
+                    && identity.names == ["-O".to_owned()]
             })
         })
-        .expect("-I and -O must form one semantic definition");
+        .expect("-O must retain its own semantic definition");
 
     assert_eq!(
         encoding
@@ -44,15 +44,16 @@ fn distinct_option_heads_share_the_following_mdoc_description() {
             .iter()
             .map(|term| inline_text(term))
             .collect::<Vec<_>>(),
-        ["-I encoding", "-O encoding"]
+        ["-O encoding"]
     );
     let query = archlinux_manual_query("bsdunzip");
     for selector in ["-I", "-O"] {
         let excerpt = select_excerpt(&query, &[selector])
             .unwrap_or_else(|error| panic!("explain {selector}: {error}"));
-        assert!(
+        assert_eq!(
             render_excerpt_markdown(&excerpt)
-                .contains("Convert filenames from the specified encoding.")
+                .contains("Convert filenames from the specified encoding."),
+            selector == "-O"
         );
     }
 }

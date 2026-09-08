@@ -134,12 +134,17 @@ does not promote every definition to a command. Correcting a previously
 unclassified command can intentionally change its kind, names and derived ID;
 the authored form and body remain unchanged.
 
-ManT merges man `TP`, `TQ`, and compact `IP` heads only when the source proves
-one alias group through an explicit continuation or a bounded compact run. The
-aliases retain source order. If an `IP` or `TQ` description follows earlier
-unlabelled heads outside that proven group, those heads remain independent and
-the document reports `manual.definition-alias-boundary` instead of silently
-absorbing them.
+Independent `IP`, `TP`, and definition-form `It` items retain separate semantic
+owners, including items without a description. Neither `PD 0`, a later `PD`
+reset, font changes nor suppressed line breaks prove shared ownership. An
+explicit `TQ` adds a tag only to the immediately preceding empty definition;
+several such tags retain their source order under one owner. Multiple names or
+forms do not imply an explicit alias relationship.
+
+This conservative boundary means that a short declaration in a compact manual
+may have no independent explanation. Its names, complete form and source remain
+addressable; read the containing section for context. ManT does not borrow the
+next item's body or treat the lack of a description as budget truncation.
 
 ## Manual References
 
@@ -175,7 +180,7 @@ Parsing does not consult the installed manual index, so the same roff bytes prod
 
 `-compact`, `-offset`, and `-width` are normalized where they affect terminal structure. Definition descriptions and list items retain nested blocks.
 
-Consecutive option-shaped mdoc `It` heads without bodies are retained as alternative terms of the next described definition. This covers both several forms of one option and distinct options such as `-I` and `-O` that intentionally share one description; a trailing run with no following body remains separate.
+Consecutive mdoc `It` heads remain independent, even when they name the same option or only the final item has a body. Multiple forms inside a single `It`/`Xo` retain that authored owner. Empty items, their targets and source locations are not moved to the next described item.
 
 Some deployed mdoc pages use `Bl -tag` for numbered procedures instead of the
 standard `Bl -enum`. ManT recovers ordered-list semantics only when the entire

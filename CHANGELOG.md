@@ -12,6 +12,15 @@ that crate was not published for that change.
 
 ## Unreleased
 
+### Independent native definition ownership
+
+- Independent man `IP`/`TP` and mdoc `It` declarations no longer share a body
+  merely because they are compact or preceding items are empty. Explicit `TQ`
+  head continuations still have one owner; multiple forms never imply aliases.
+  This intentionally splits formerly merged IDs/paths and can return several
+  direct declarations of the same name. An empty declaration retains its form
+  and source, but does not borrow the next item's explanation.
+
 ### Explanation match locations (unreleased v0.11)
 
 - Name/Form evidence now carries actual matched spellings and bounded source
