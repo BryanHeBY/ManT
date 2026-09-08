@@ -62,6 +62,36 @@ fn variants(body: &str) -> Vec<String> {
 }
 
 #[test]
+fn generated_option_prefix_join_ends_with_its_operands() {
+    for (body, expected) in [
+        (".Fl \"\" Ar file", "- file"),
+        (r".Fl \& Ar file", "- file"),
+        (".Fl \"\" No next", "- next"),
+        (".Fl", "-"),
+        (".Fl a", "-a"),
+        (".Fl Fl a", "--a"),
+        (".Fl \"\" Ns Ar file", "-file"),
+        (".Fl a Ns Ar tail", "-atail"),
+        (".Fl \"\" Pf X No y", "- Xy"),
+    ] {
+        for input in variants(body) {
+            assert_flow(&input, expected);
+        }
+    }
+    for operand in ["\"\"", r"\&"] {
+        assert_flow(&format!(".Fl {operand}\n.No next"), "- next");
+        assert_flow(
+            &format!(".Bd -literal\n.Fl {operand}\n.No next\n.Ed"),
+            "-\nnext",
+        );
+        assert_flow(
+            &format!(".TS\nl.\nT{{\n.Fl {operand}\n.No next\nT}}\n.TE"),
+            "- next",
+        );
+    }
+}
+
+#[test]
 fn apostrophes_attach_across_prose_and_style_siblings() {
     for (body, expected) in [
         (".No x Ap y", "x'y"),

@@ -45,13 +45,7 @@ pub(super) fn append(builder: &mut InlineBuilder, node: &Node, name: Option<&str
         Some("Fl") => builder.append_scope(
             |builder| {
                 builder.append(text_node("-"));
-                builder.tighten_next_boundary();
-                append_inline_nodes(builder, children, name);
-                // A generated dash does not itself request an outside join.
-                // Empty Fl still needs that internal boundary consumed.
-                if children.is_empty() {
-                    builder.clear_tight_boundary();
-                }
+                builder.with_prefix_join(|builder| append_inline_nodes(builder, children, name));
             },
             wrap_strong,
         ),

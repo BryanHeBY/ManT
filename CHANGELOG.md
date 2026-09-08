@@ -122,6 +122,10 @@ that crate was not published for that change.
 
 ### mant-engine 0.11.0
 
+- Bound generated `Fl` prefix joins to their operands, preserving the space
+  before external arguments after empty or zero-width operands while retaining
+  explicit `Ns`/`Pf` controls and zero-width targets.
+
 - Preserve mdoc inline boundary effects across prose and styled siblings:
   apostrophes attach on both sides, generated enclosure closers consume internal
   joins, and `Ns`/`Pf` honor native source-line and successor conditions.

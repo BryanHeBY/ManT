@@ -709,6 +709,38 @@ fn push_text(nodes: &mut Vec<Inline>, value: String) {
 #[cfg(test)]
 mod tests {
     #[test]
+    fn prefix_scope_distinguishes_invisible_operands_from_explicit_joins() {
+        for explicit in [false, true] {
+            let mut builder = super::InlineBuilder::new();
+            builder.append(super::text_node("-"));
+            builder.with_prefix_join(|builder| {
+                builder.append(vec![super::Inline::anchor("operand")]);
+                builder.append(super::text_node(""));
+                if explicit {
+                    builder.tighten_next_boundary();
+                }
+            });
+            builder.append(super::text_node("next"));
+            let output = builder.finish();
+            assert_eq!(
+                super::plain_text(&output),
+                if explicit { "-next" } else { "- next" }
+            );
+            assert!(output.iter().any(
+                |node| matches!(node, super::Inline::Anchor { id, .. } if id.as_str() == "operand")
+            ));
+        }
+        let mut builder = super::InlineBuilder::new();
+        builder.append(super::text_node("-"));
+        builder.with_prefix_join(|builder| {
+            builder.append(super::text_node("-"));
+            builder.with_prefix_join(|builder| builder.append(super::text_node("")));
+        });
+        builder.append(super::text_node("next"));
+        assert_eq!(super::plain_text(&builder.finish()), "-- next");
+    }
+
+    #[test]
     fn styled_scopes_preserve_pending_spacing_and_continuation() {
         for tight in [false, true] {
             let mut builder = super::InlineBuilder::new();

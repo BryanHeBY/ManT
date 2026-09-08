@@ -41,7 +41,14 @@ impl FontState {
 enum PendingBoundary {
     Ordinary,
     Tight,
+    PrefixJoin,
     Preserved,
+}
+
+impl PendingBoundary {
+    const fn is_tight(self) -> bool {
+        matches!(self, Self::Tight | Self::PrefixJoin)
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -111,12 +118,19 @@ impl InlineBuilder {
         self.boundary = PendingBoundary::Tight;
     }
 
-    pub(super) fn clear_tight_boundary(&mut self) {
-        self.boundary = PendingBoundary::Ordinary;
+    /// Join a generated prefix only to its own operand scope. Empty text and
+    /// zero-width anchors do not consume the join, so expire it on scope exit.
+    /// An explicit control replaces `PrefixJoin` with `Tight` and must survive.
+    pub(super) fn with_prefix_join(&mut self, append: impl FnOnce(&mut Self)) {
+        self.boundary = PendingBoundary::PrefixJoin;
+        append(self);
+        if self.boundary == PendingBoundary::PrefixJoin {
+            self.boundary = PendingBoundary::Ordinary;
+        }
     }
 
     pub(in crate::mandoc) const fn has_tight_boundary(&self) -> bool {
-        matches!(self.boundary, PendingBoundary::Tight)
+        self.boundary.is_tight()
     }
 
     pub(in crate::mandoc) const fn spacing_enabled(&self) -> bool {
@@ -133,7 +147,7 @@ impl InlineBuilder {
         // the first following fragment, then concatenate subsequent macro
         // arguments until spacing is enabled again.
         self.boundary = match (updated, !self.has_printable_content, self.boundary) {
-            (_, _, PendingBoundary::Tight) => PendingBoundary::Tight,
+            (_, _, boundary) if boundary.is_tight() => boundary,
             (false, false, _) => PendingBoundary::Preserved,
             _ => PendingBoundary::Ordinary,
         };
@@ -235,7 +249,7 @@ impl InlineBuilder {
         let add_space = needs_boundary_space(self.last_visible_character, incoming_first);
         let boundary = std::mem::replace(&mut self.boundary, PendingBoundary::Ordinary);
         if (self.spacing.enabled() || matches!(boundary, PendingBoundary::Preserved))
-            && !matches!(boundary, PendingBoundary::Tight)
+            && !boundary.is_tight()
             && add_space
         {
             push_text(&mut self.nodes, " ".to_owned());
