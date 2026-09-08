@@ -14,6 +14,332 @@ fn explained(source: &str, name: &str) -> mant_protocol::QueryExplanation {
 }
 
 #[test]
+fn declaration_boundaries_follow_executed_requests_not_physical_source_lines() {
+    for (between, grouped) in [
+        ("", true),
+        (".PP\n", false),
+        (".if n .PP\n", false),
+        (".if 1 .PP\n", false),
+        (".if 0 .PP\n", true),
+        (".if 0 \\{\\\n.PP\n.\\}\n", true),
+        (".de UN\n.PP\n..\n", true),
+        (".BREAK\n", false),
+        (".ie 0 .PP\n.el .PP\n", false),
+        (".ie 1 .PD 0\n.el .PP\n", true),
+        (".if 1 .if 1 .PP\n", false),
+        (".if 1 .if 0 .PP\n", true),
+    ] {
+        let source = format!(
+            ".TH PROBE 1\n.de BREAK\n.PP\n..\n.SH OPTIONS\n.TP\n.B -a\n{between}.TP\n.B -b\nShared description.\n"
+        );
+        let result = explained(&source, "-a");
+        assert_eq!(!result.supports.is_empty(), grouped, "{between:?}");
+        let native = libmandoc_rs::Parser::default()
+            .parse_bytes("probe.1", source.as_bytes())
+            .unwrap();
+        let detached = mant_engine::lower_mandoc_document(std::path::Path::new("probe.1"), &native);
+        let detached = mant_ir::ResolvedContent {
+            label: "probe".into(),
+            address: None,
+            document: Some(detached),
+            tldr: None,
+        };
+        let detached = explain_query(
+            &detached,
+            &ExplanationQuery {
+                entry: "-a".into(),
+                options: ExplanationOptions::default(),
+            },
+        )
+        .unwrap();
+        assert_eq!(
+            !detached.supports.is_empty(),
+            grouped,
+            "detached {between:?}"
+        );
+    }
+}
+
+#[test]
+fn nested_group_context_is_a_source_reference_not_a_second_body_copy() {
+    let body = "unique_body_word ".repeat(1600);
+    let source = format!(
+        ".Dd September 8, 2026\n.Dt PROBE 1\n.Os\n.Sh OPTIONS\n.Bl -tag -width Ds\n.It Fl a\n.It Fl b\nOuter description.\n.Bl -tag -width Ds\n.It Fl a\n.It Fl c\n{body}\n.El\n.El\n"
+    );
+    let content = query_roff_bytes(source.as_bytes()).unwrap();
+    for bytes in [32768, 40000, 65536] {
+        let response = explain_query(
+            &content,
+            &ExplanationQuery {
+                entry: "-a".into(),
+                options: ExplanationOptions {
+                    content_bytes: bytes,
+                    ..Default::default()
+                },
+            },
+        )
+        .unwrap();
+        assert_eq!(response.counts.direct_entry.returned, 2);
+        assert_eq!(response.supports.len(), 2);
+        assert!(
+            response
+                .evidence
+                .iter()
+                .all(|e| !e.support_omitted && !e.content_omitted),
+            "both bodies fit budget {bytes}"
+        );
+        if bytes >= 40000 {
+            assert!(!response.truncation.content);
+        }
+        assert!(
+            response
+                .evidence
+                .iter()
+                .all(|e| e.covered_by_support(&response.supports))
+        );
+        response.validate_references().unwrap();
+        let encoded = serde_json::to_string(&response).unwrap();
+        assert_eq!(encoded.matches(body.trim()).count(), 1);
+        let decoded: mant_protocol::QueryExplanation = serde_json::from_str(&encoded).unwrap();
+        assert_eq!(
+            mant_engine::render_explanation_text(&decoded)
+                .matches(body.trim())
+                .count(),
+            1
+        );
+        assert_eq!(
+            mant_engine::render_explanation_markdown(&decoded)
+                .matches(body.trim())
+                .count(),
+            1
+        );
+    }
+    for offset in [0, 1] {
+        let response = explain_query(
+            &content,
+            &ExplanationQuery {
+                entry: "-a".into(),
+                options: ExplanationOptions {
+                    offset,
+                    limit: 1,
+                    content_bytes: 40000,
+                },
+            },
+        )
+        .unwrap();
+        assert_eq!(response.supports.len(), 1);
+        assert!(
+            response.supports[0].items().is_some(),
+            "each isolated page owns its own context"
+        );
+        let text = mant_engine::render_explanation_text(&response);
+        assert_eq!(text.matches(body.trim()).count(), 1);
+        if offset == 1 {
+            assert!(!text.contains("Outer description"));
+        }
+    }
+}
+
+#[test]
+fn ordinary_parent_reuses_nested_owners_and_groups_by_source_location() {
+    for head in [".It Fl a\n", ".It Fl a\n.It Fl c\n"] {
+        let source = format!(
+            ".Dd September 8, 2026\n.Dt PROBE 1\n.Os\n.Sh OPTIONS\n.Bl -tag -width Ds\n.It Fl a\nOuter description.\n.Bl -tag -width Ds\n{head}Unique nested café 日本 body.\n.El\n.El\n"
+        );
+        let response = explained(&source, "-a");
+        assert_eq!(response.counts.direct_entry.returned, 2);
+        response.validate_references().unwrap();
+        assert_eq!(
+            serde_json::to_string(&response)
+                .unwrap()
+                .matches("Unique nested café 日本 body.")
+                .count(),
+            1
+        );
+        for reversed in [false, true] {
+            let mut response = response.clone();
+            if reversed {
+                response.evidence.reverse();
+            }
+            let wire = serde_json::to_string(&response).unwrap();
+            let decoded: mant_protocol::QueryExplanation = serde_json::from_str(&wire).unwrap();
+            for text in [
+                mant_engine::render_explanation_text(&decoded),
+                mant_engine::render_explanation_markdown(&decoded),
+            ] {
+                assert_eq!(
+                    text.matches("Unique nested café 日本 body.").count(),
+                    1,
+                    "{text}"
+                );
+                assert!(text.contains("Outer description"));
+            }
+        }
+        // Even valid pool indices and resolvable paths must not authorize
+        // a different physical owner or rewritten forms.
+        let value = serde_json::to_value(&response).unwrap();
+        for mode in 0..5 {
+            let mut bad = value.clone();
+            match mode {
+                0 => bad["evidence"][0]["content"]["itemIndex"] = 1.into(),
+                1 => {
+                    bad["evidence"][0]["content"]["path"] =
+                        serde_json::json!([{"kind":"definition-item","index":0}]);
+                }
+                2 => bad["evidence"][0]["entry"]["forms"] = serde_json::json!([]),
+                3 => bad["evidence"][0]["class"] = "entry-mention".into(),
+                _ => bad["evidence"][0]["contentOmitted"] = true.into(),
+            }
+            assert!(
+                serde_json::from_value::<mant_protocol::QueryExplanation>(bad).is_err(),
+                "accepted mutation {mode}"
+            );
+        }
+    }
+}
+
+#[test]
+fn deep_shared_fragments_are_deterministic_at_small_copy_budgets() {
+    let mut source = String::from(".Dd September 8, 2026\n.Dt PROBE 1\n.Os\n.Sh OPTIONS\n");
+    for _ in 0..12 {
+        source.push_str(".Bl -tag -width Ds\n.It Fl a\nLayer body.\n");
+    }
+    source.push_str("Unique leaf café 日本.\n");
+    source.push_str(&".El\n".repeat(12));
+    let content = query_roff_bytes(source.as_bytes()).unwrap();
+    for bytes in [600, 2000, 5000, 12000, 32768, 65536] {
+        let query = ExplanationQuery {
+            entry: "-a".into(),
+            options: ExplanationOptions {
+                content_bytes: bytes,
+                ..ExplanationOptions::default()
+            },
+        };
+        let expected = explain_query(&content, &query).unwrap();
+        expected.validate_references().unwrap();
+        for _ in 0..4 {
+            assert_eq!(
+                explain_query(&content, &query).unwrap(),
+                expected,
+                "budget {bytes}"
+            );
+        }
+        if !expected.truncation.content {
+            assert_eq!(
+                serde_json::to_string(&expected)
+                    .unwrap()
+                    .matches("Unique leaf café 日本.")
+                    .count(),
+                1
+            );
+            assert_eq!(
+                mant_engine::render_explanation_text(&expected)
+                    .matches("Unique leaf café 日本.")
+                    .count(),
+                1
+            );
+        }
+    }
+}
+
+#[test]
+fn valid_pool_indices_do_not_authorize_wrong_group_or_wrong_evidence_class() {
+    let response = explained(
+        ".TH PROBE 1\n.SH OPTIONS\n.TP\n.B -a\n.TP\n.B -b\nFIRST_CONTEXT\n.TP\n.B -a\n.TP\n.B -c\nSECOND_CONTEXT\n",
+        "-a",
+    );
+    assert_eq!(response.supports.len(), 2);
+    for mode in 0..4 {
+        let mut altered = response.clone();
+        let first = &mut altered.evidence[0];
+        match mode {
+            0 => first.support = Some(1),
+            1 => {
+                first.support = Some(1);
+                first.content = Some(mant_protocol::ExplanationContent::Entry {
+                    block: mant_ir::Block::DefinitionList {
+                        items: vec![response.supports[0].items().unwrap()[0].clone()],
+                        declaration_groups: vec![],
+                        compact: false,
+                        layout: mant_ir::LayoutHint::default(),
+                        source: None,
+                    },
+                });
+            }
+            2 => {
+                first.support = Some(1);
+                first.content = None;
+                first.content_omitted = true;
+            }
+            _ => first.class = EvidenceClass::EntryMention,
+        }
+        assert!(altered.validate_references().is_err(), "mode {mode}");
+        assert!(
+            serde_json::from_str::<mant_protocol::QueryExplanation>(
+                &serde_json::to_string(&altered).unwrap()
+            )
+            .is_err()
+        );
+        altered.evidence.truncate(1);
+        assert!(
+            !mant_engine::render_explanation_text(&altered).contains("SECOND_CONTEXT"),
+            "in-memory invalid reference mode {mode}"
+        );
+    }
+}
+
+#[test]
+fn provider_fallback_is_reused_when_its_complete_declaration_group_does_not_fit() {
+    let body = "unique_inner_body_word ".repeat(300);
+    let source = format!(
+        ".Dd September 8, 2026\n.Dt PROBE 1\n.Os\n.Sh OPTIONS\n.Bl -tag -width Ds\n.It Fl b Ar {}\n.It Fl a\nOuter description.\n.Bl -tag -width Ds\n.It Fl a\n.It Fl c\n{body}\n.El\n.El\n",
+        "X".repeat(15000)
+    );
+    let content = query_roff_bytes(source.as_bytes()).unwrap();
+    for bytes in [12000, 18000, 20000, 24000, 30000] {
+        let response = explain_query(
+            &content,
+            &ExplanationQuery {
+                entry: "-a".into(),
+                options: ExplanationOptions {
+                    content_bytes: bytes,
+                    ..Default::default()
+                },
+            },
+        )
+        .unwrap();
+        assert_eq!(response.counts.direct_entry.returned, 2);
+        assert!(
+            !response.evidence[1].support_omitted,
+            "inner group already present at {bytes}"
+        );
+        response.validate_references().unwrap();
+        assert_eq!(
+            serde_json::to_string(&response)
+                .unwrap()
+                .matches(body.trim())
+                .count(),
+            1
+        );
+        for reversed in [false, true] {
+            let mut response = response.clone();
+            if reversed {
+                response.evidence.reverse();
+            }
+            let text = mant_engine::render_explanation_text(&response);
+            assert!(text.contains("Outer description"));
+            assert_eq!(text.matches(body.trim()).count(), 1);
+            assert_eq!(
+                mant_engine::render_explanation_markdown(&response)
+                    .matches(body.trim())
+                    .count(),
+                1
+            );
+        }
+    }
+}
+
+#[test]
 fn group_highlights_only_the_matched_member_in_offline_presentation() {
     let original = explained(
         ".Dd September 8, 2026\n.Dt PROBE 1\n.Os\n.Sh OPTIONS\n.Bl -tag -width Ds\n.It Fl a\n.It Fl b\nUnicode café 日本.\n.Lk https://example.org More\n.Pp\nTrailing paragraph.\n.El\n",
@@ -188,6 +514,23 @@ fn scope_supports_are_document_local_even_when_node_ids_coincide() {
     let rendered = mant_engine::render_scope_explanation_text(&decoded);
     assert_eq!(rendered.matches("First context").count(), 1);
     assert_eq!(rendered.matches("Second context").count(), 1);
+    for mode in 0..4 {
+        let mut invalid = wire.clone();
+        let e = &mut invalid["evidence"][0]["evidence"];
+        match mode {
+            0 => e["class"] = "entry-mention".into(),
+            1 => e["supportOmitted"] = true.into(),
+            2 => {
+                e["content"] = serde_json::Value::Null;
+                e["contentOmitted"] = true.into();
+            }
+            _ => e["content"]["itemIndex"] = 1.into(),
+        }
+        assert!(
+            serde_json::from_value::<ScopeExplanation>(invalid).is_err(),
+            "scoped cross-field mutation {mode}"
+        );
+    }
     // Another document's pool cannot satisfy a dangling reference in this one.
     let mut invalid = wire;
     invalid["documents"][1]["supports"] = serde_json::json!([]);

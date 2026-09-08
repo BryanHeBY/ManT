@@ -2,7 +2,10 @@
 
 Explanation pages share original declaration contexts in a document-local
 support pool. `ExplanationContent::DeclarationMember` references one physical
-member without copying its body a second time. `resolve_range` retains the
+member without copying its body a second time. Nested groups retain separate
+member/provider descriptors but use typed paths into a materialized ancestor;
+`SharedEntry` likewise addresses a physical owner within that source fragment.
+`resolve_range` retains the
 owner-local coordinate contract, while response decoding validates pool, owner
 and position references. Context is neither an alias nor another query match.
 
@@ -14,6 +17,9 @@ For scoped explanations the pool belongs to the evidence's `documentIndex`.
 `supportOmitted` distinguishes a known context that exceeded the copy budget
 from an owner with no available context. Consumers must not treat an empty
 own description as an empty explanation without checking this support.
+Only direct evidence with a matching owner, forms and content reference can
+claim group support. Decoding and offline rendering use the same validated
+resolver; a valid numeric index alone never authorizes another owner's body.
 
 `mant-protocol` is `ManT`'s transport-neutral interaction boundary. It defines
 query contracts and projections shared by in-process hosts, CLI JSON, request

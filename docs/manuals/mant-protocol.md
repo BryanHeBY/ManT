@@ -1286,7 +1286,9 @@ Independent same-name owners remain distinct, even across documents with the
 same NodeId. `AliasGroup` supplements matched names, not a separate owner/class.
 `entry` is present only for a real semantic owner and may itself be omitted. `content` contains its
 original single-item block, an ordinary supporting block, or a `declaration-member`
-reference into the returned document-local `supports` pool. It can be omitted
+reference into the returned document-local `supports` pool. A `shared-entry`
+uses `support`, typed `path` steps and `itemIndex` to select a physical owner
+already contained in a returned source fragment. It can be omitted
 atomically when it exceeds the copy budget (`contentOmitted`); oversized
 facts/forms set `detailsOmitted`. Read the returned node to retrieve original
 content independently. Metadata and protocol envelope bytes are outside this
@@ -1304,6 +1306,25 @@ sets `supportOmitted` and content truncation rather than claiming no explanation
 Only owner records are paginated: even a one-owner page carries its necessary
 support, and multiple direct records share one copy. Scoped pools belong to
 their source document, never to a global node-ID namespace.
+
+An `owned-entry` stores a single physical owner's original excerpt when it
+also contains another selected owner. A `contained-declaration-group` retains
+its own original `blockPath`, `group`, members and provider, but refers through
+`support` and a typed `path` to a nested list in an owned fragment. References
+point directly to `owned-entry` or `declaration-group`, never another reference.
+Containment is source-coordinate based, not equality of text or IDs. The same
+body is copied and displayed once while all evidence counts and distinct
+providers remain observable. An inner-only page carries just its needed source
+context, not an unselected ancestor.
+
+An evidence `support` requires `class: direct-entry`, a matching
+`declaration-member` content reference and a resolvable owner whose ID and
+forms agree with the evidence. It cannot coexist with `supportOmitted` or
+`contentOmitted`. `shared-entry` is also direct-only, with no evidence `support`;
+it reuses physical content without claiming a recovered reading relationship.
+It may coexist with `supportOmitted` when the original owner fits but its whole
+reading group does not. Decoding, explicit validation and offline presentation
+share these checks; a bare valid pool index cannot authorize unrelated content.
 
 Every record includes `previews` and `previewsOmitted`. Without Literal support
 they are `[]` and `false`. Otherwise at most two distinct matched blocks are
@@ -1364,7 +1385,9 @@ Preview `contentRanges` supplement the original absolute provenance coordinates.
 For `declaration-member`, `support` and `itemIndex` select the returned group
 member. Content ranges remain owner-local (outer item zero); use
 `ExplanationContent::resolve_range` to map them to the shared body. No reference
-targets a body or metadata omitted from the response. Strict response decoding
+targets a body or metadata omitted from the response. `shared-entry` paths
+select the containing list before `itemIndex`; content ranges still use the
+owner-local outer item zero. Strict response decoding
 rejects dangling, wrong-owner and out-of-bounds content/position references.
 
 Per evidence, Name/Form details share a 32-record limit; ordinary name bindings

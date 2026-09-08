@@ -37,6 +37,47 @@ def compact(value: object) -> str:
     return " ".join(visible(value).split())
 
 
+def support_items(support: dict, pool: list) -> list:
+    """Resolve typed returned fragments; never rediscover a body by its text."""
+    if support.get("kind") == "declaration-group":
+        return support["block"]["items"]
+    if support.get("kind") != "contained-declaration-group":
+        return []
+    parent = pool[support["support"]]
+    if parent["kind"] not in {"declaration-group", "owned-entry"}:
+        raise ValueError("contained support cannot reference another reference")
+    if not support["path"]:
+        raise ValueError("invalid contained support path")
+    block = source_block(parent["block"], support["path"])
+    group = support["group"]
+    if group not in block["declarationGroups"]:
+        raise ValueError("contained support is not an original group")
+    items = block["items"][group["startItem"]:group["endItem"]]
+    if len(items) != len(support["members"]):
+        raise ValueError("incomplete contained support")
+    return items
+
+
+def source_block(block: dict, path: list) -> dict:
+    """Follow the same typed source coordinates as the response contract."""
+    if len(path) % 2:
+        raise ValueError("invalid source path")
+    for slot in range(0, len(path), 2):
+        owner, child = path[slot:slot + 2]
+        if child["kind"] != "block":
+            raise ValueError("item/cell path must select a block")
+        if owner["kind"] == "definition-item":
+            blocks = block["items"][owner["index"]]["description"]
+        elif owner["kind"] == "list-item":
+            blocks = block["items"][owner["index"]]["blocks"]
+        elif owner["kind"] == "table-cell":
+            blocks = block["rows"][owner["row"]]["cells"][owner["column"]]["blocks"]
+        else:
+            raise ValueError("invalid contained support owner")
+        block = blocks[child["index"]]
+    return block
+
+
 def owner_record(evidence: dict, supports: list | None = None) -> dict:
     entry = evidence.get("entry") or {}
     block = (evidence.get("content") or {}).get("block") or {}
@@ -46,9 +87,15 @@ def owner_record(evidence: dict, supports: list | None = None) -> dict:
         pool = supports or []
         index, member = content.get("support", -1), content.get("itemIndex", -1)
         if 0 <= index < len(pool):
-            group_items = pool[index].get("block", {}).get("items", [])
+            group_items = support_items(pool[index], pool)
             if 0 <= member < len(group_items):
                 items = [group_items[member]]
+    elif content.get("kind") == "shared-entry":
+        parent = (supports or [])[content["support"]]
+        if parent["kind"] not in {"declaration-group", "owned-entry"}:
+            raise ValueError("shared entry requires a materialized fragment")
+        block = source_block(parent["block"], content["path"])
+        items = [block["items"][content["itemIndex"]]]
     body = items[0].get("description", items[0].get("blocks", [])) if len(items) == 1 else []
     kind = entry.get("kind", {})
     return {
@@ -113,15 +160,16 @@ def compare(probe: dict, response: dict) -> tuple[str, list[str], list[dict]]:
             errors.append(f"forbidden direct name at {got['source']}")
     if "expectedSupports" in probe:
         expected_supports = probe["expectedSupports"]
-        if len(supports) != len(expected_supports):
-            errors.append(f"support count: {len(supports)} != {len(expected_supports)}")
+        groups = [s for s in supports if s["kind"] != "owned-entry"]
+        if len(groups) != len(expected_supports):
+            errors.append(f"support count: {len(groups)} != {len(expected_supports)}")
         for want in expected_supports:
-            matches = [s for s in supports if [item.get("source") for item in s.get("block", {}).get("items", [])] == want["memberSources"]]
+            matches = [s for s in groups if [item.get("source") for item in support_items(s, supports)] == want["memberSources"]]
             if len(matches) != 1:
                 errors.append(f"support member sources: expected one match for {want['memberSources']}")
                 continue
             support = matches[0]
-            items = support["block"]["items"]
+            items = support_items(support, supports)
             if [[compact(term) for term in item["terms"]] for item in items] != want["memberForms"]:
                 errors.append("support original heads differ")
             body = compact(items[-1].get("description", []))

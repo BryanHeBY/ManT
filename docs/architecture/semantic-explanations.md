@@ -181,6 +181,21 @@ member, identity and position references. An unavailable context sets
 source contains no explanation. Pool and group sizes are bounded by the page
 owner limit; repeated references do not retry a group that failed the budget.
 
+Source containment, not equal text or equal IDs, permits reuse across nested
+contexts. `contained-declaration-group` records its own members and provider
+while pointing directly into an owned source fragment. `owned-entry` can retain
+a selected ancestor's body without inventing a reading group; `shared-entry`
+uses typed block/item steps to address nested physical owners. Materialization
+visits selected ancestors first, independently of evidence presentation order.
+An inner-only page does not acquire its unselected ancestor. Metadata and
+reference costs remain bounded; an already returned body is not copied again.
+
+A support is usable only by direct evidence with matching content, owner ID,
+forms and omission flags. The same validated resolver serves response decoding,
+owner-local positions and offline rendering. Invalid in-memory DTOs cannot
+print a different group's body merely because a numeric index exists. Each
+scoped document retains its own pool; references cannot chain or cross pools.
+
 Validation findings, available source coverage, result truncation and unknown
 fields are separate dimensions. Neither `semanticsComplete` nor a clean audit
 proves complete name recall or correct knowledge of an executable's behavior.

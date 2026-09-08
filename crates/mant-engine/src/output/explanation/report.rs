@@ -75,53 +75,48 @@ impl Report<'_> {
     ) {
         let records = records.collect::<Vec<_>>();
         let mut previous = None;
-        let mut displayed = std::collections::HashSet::new();
+        let mut displayed = std::collections::HashMap::new();
         for &(e, address, supports) in &records {
-            if previous == Some(e.class) {
-                write!(
-                    output,
-                    "\n\n{}",
-                    if self.markdown {
-                        "---".into()
-                    } else {
-                        self.meta(TextRole::Guide, "----------")
-                    }
-                )
-                .expect("String writer");
-            } else {
-                write!(
-                    output,
-                    "\n\n{}",
-                    if self.markdown {
-                        format!("## {}", metadata::escape(e.class.title()))
-                    } else {
-                        self.meta(
-                            TextRole::EvidenceClass(e.class),
-                            &format!("========== {} ==========", e.class.title()),
-                        )
-                    }
-                )
-                .expect("String writer");
-            }
+            self.record_separator(output, e.class, previous == Some(e.class));
             previous = Some(e.class);
-            let covered = e.covered_by_support(supports);
+            let reference = e.source_reference(supports);
+            let covered = reference.is_some();
             self.owner(output, e, address, covered);
-            if let Some(support) = e.support.and_then(|index| supports.get(index)) {
-                if displayed.insert(std::ptr::from_ref(support) as usize) {
-                    let mant_protocol::ExplanationSupport::DeclarationGroup {
-                        block, members, ..
-                    } = support;
+            if let Some(support) = reference.and_then(|index| supports.get(index)) {
+                let Some(block) = support.materialized(supports) else {
+                    continue;
+                };
+                let block_key = std::ptr::from_ref(block) as usize;
+                let grouped = e.covered_by_support(supports);
+                let context_label = if grouped {
+                    "Declaration-group context"
+                } else {
+                    "Original entry context"
+                };
+                if let std::collections::hash_map::Entry::Vacant(slot) = displayed.entry(block_key)
+                {
+                    slot.insert(reference.expect("validated support"));
                     self.line(
                         output,
                         TextRole::Metadata,
-                        &format!("Declaration-group context [support {}] (recovered from consecutive declarations):", e.support.expect("resolved reference")),
+                        &format!(
+                            "{context_label} [support {}]:{}",
+                            reference.expect("resolved reference"),
+                            if grouped {
+                                " recovered from consecutive declarations"
+                            } else {
+                                ""
+                            }
+                        ),
                     );
                     let locations = spans::LocatedStyles::for_support(
                         block,
                         records.iter().filter_map(|&(other, _, pool)| {
-                            let context = other.support.and_then(|index| pool.get(index))?;
-                            (std::ptr::eq(context, support) && other.covered_by_support(pool))
-                                .then_some((other, pool))
+                            let context = other
+                                .source_reference(pool)
+                                .and_then(|index| pool.get(index))?
+                                .materialized(pool)?;
+                            std::ptr::eq(context, block).then_some((other, pool))
                         }),
                     );
                     let text = if self.markdown {
@@ -139,28 +134,29 @@ impl Report<'_> {
                         )
                     };
                     self.quote(output, &text);
-                    if let Some(provider) = members.last() {
-                        self.line(
-                            output,
-                            TextRole::Path,
-                            &format!(
-                                "Source of description: {}; node {}",
-                                provider.title(),
-                                provider.path()
-                            ),
-                        );
-                    }
                 } else {
                     self.line(
                         output,
                         TextRole::Metadata,
                         &format!(
-                            "Declaration-group context: see support {} displayed above.",
-                            e.support.expect("resolved reference")
+                            "{context_label}: see support {} displayed above.",
+                            displayed[&block_key]
                         ),
                     );
                 }
-            } else if e.support_omitted {
+                if let Some(provider) = grouped.then(|| support.members().last()).flatten() {
+                    self.line(
+                        output,
+                        TextRole::Path,
+                        &format!(
+                            "Source of description: {}; node {}",
+                            provider.title(),
+                            provider.path()
+                        ),
+                    );
+                }
+            }
+            if e.support_omitted {
                 self.line(
                     output,
                     TextRole::Notice,
@@ -168,6 +164,18 @@ impl Report<'_> {
                 );
             }
         }
+    }
+    fn record_separator(&self, output: &mut String, class: EvidenceClass, same_class: bool) {
+        let separator = match (same_class, self.markdown) {
+            (true, true) => "---".into(),
+            (true, false) => self.meta(TextRole::Guide, "----------"),
+            (false, true) => format!("## {}", metadata::escape(class.title())),
+            (false, false) => self.meta(
+                TextRole::EvidenceClass(class),
+                &format!("========== {} ==========", class.title()),
+            ),
+        };
+        write!(output, "\n\n{separator}").expect("String writer");
     }
     fn owner(
         &self,

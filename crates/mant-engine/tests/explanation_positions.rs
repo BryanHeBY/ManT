@@ -16,7 +16,9 @@ fn query(name: &str, content_bytes: u32) -> ExplanationQuery {
 fn content_block(evidence: &ExplanationEvidence) -> &Block {
     match evidence.content.as_ref().unwrap() {
         ExplanationContent::Entry { block } | ExplanationContent::Block { block } => block,
-        ExplanationContent::DeclarationMember { .. } => panic!("fixture has no declaration groups"),
+        ExplanationContent::DeclarationMember { .. } | ExplanationContent::SharedEntry { .. } => {
+            panic!("fixture has no shared context")
+        }
     }
 }
 

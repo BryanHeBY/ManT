@@ -111,7 +111,7 @@ impl ExplanationFormRange {
     }
 }
 
-fn block_at<'a>(mut block: &'a Block, path: &[Step]) -> Option<&'a Block> {
+pub(super) fn block_at<'a>(mut block: &'a Block, path: &[Step]) -> Option<&'a Block> {
     if path.len() > 514 || !path.len().is_multiple_of(2) {
         return None;
     }

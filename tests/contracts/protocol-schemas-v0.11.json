@@ -4380,6 +4380,42 @@
         "description": "Original content copied for one evidence owner, not a navigation selection.",
         "oneOf": [
           {
+            "description": "Physical owner stored once because nested selected contexts also use\nits body; not a declaration-group or alias relationship.",
+            "type": "object",
+            "properties": {
+              "itemIndex": {
+                "description": "Owner in that list; zero for a standalone single-entry fragment.",
+                "type": "integer",
+                "format": "uint",
+                "minimum": 0
+              },
+              "kind": {
+                "type": "string",
+                "const": "shared-entry"
+              },
+              "path": {
+                "description": "Typed path from the owned source fragment to the owner's list.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/ExplanationBlockStep"
+                }
+              },
+              "support": {
+                "description": "Document-local index of an `owned-entry` source fragment.",
+                "type": "integer",
+                "format": "uint",
+                "minimum": 0
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "support",
+              "path",
+              "itemIndex"
+            ]
+          },
+          {
             "description": "Original owner already present in the document-local support pool.\nPositions remain owner-local (outer item zero), resolved through this\nreference rather than reinterpreted against the whole group.",
             "type": "object",
             "properties": {
@@ -5042,6 +5078,25 @@
         "description": "Original content supporting directly matched declarations. IDs are indices\nin the containing document response's pool, never persistent identities.",
         "oneOf": [
           {
+            "description": "A physical owner's original body reused by contained contexts.",
+            "type": "object",
+            "properties": {
+              "block": {
+                "description": "Single-entry original list excerpt, including nested content.",
+                "$ref": "#/$defs/Block"
+              },
+              "kind": {
+                "type": "string",
+                "const": "owned-entry"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "block"
+            ]
+          },
+          {
             "description": "Recovered adjacency supplies reading context, not proof that each\nsentence applies to every member or that members are interchangeable.",
             "type": "object",
             "properties": {
@@ -5076,6 +5131,53 @@
               "group",
               "members",
               "block"
+            ]
+          },
+          {
+            "description": "A nested declaration group already present in another returned source\nfragment. The descriptor preserves its own members and provider without\ncopying their body again. References point directly to an owned fragment.",
+            "type": "object",
+            "properties": {
+              "blockPath": {
+                "description": "Original containing list in the document snapshot.",
+                "type": "string"
+              },
+              "group": {
+                "description": "Original member interval in the nested list.",
+                "$ref": "#/$defs/DeclarationGroup"
+              },
+              "kind": {
+                "type": "string",
+                "const": "contained-declaration-group"
+              },
+              "members": {
+                "description": "Exact nested members, in source order.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/OutlineTrail"
+                }
+              },
+              "path": {
+                "description": "Typed path from that fragment's copied block to the nested list.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/ExplanationBlockStep"
+                }
+              },
+              "support": {
+                "description": "Index of a materialized `declaration-group` or `owned-entry`.",
+                "type": "integer",
+                "format": "uint",
+                "minimum": 0
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "blockPath",
+              "group",
+              "members",
+              "support",
+              "path"
             ]
           }
         ]
@@ -11337,6 +11439,42 @@
         "description": "Original content copied for one evidence owner, not a navigation selection.",
         "oneOf": [
           {
+            "description": "Physical owner stored once because nested selected contexts also use\nits body; not a declaration-group or alias relationship.",
+            "type": "object",
+            "properties": {
+              "itemIndex": {
+                "description": "Owner in that list; zero for a standalone single-entry fragment.",
+                "type": "integer",
+                "format": "uint",
+                "minimum": 0
+              },
+              "kind": {
+                "type": "string",
+                "const": "shared-entry"
+              },
+              "path": {
+                "description": "Typed path from the owned source fragment to the owner's list.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/ExplanationBlockStep"
+                }
+              },
+              "support": {
+                "description": "Document-local index of an `owned-entry` source fragment.",
+                "type": "integer",
+                "format": "uint",
+                "minimum": 0
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "support",
+              "path",
+              "itemIndex"
+            ]
+          },
+          {
             "description": "Original owner already present in the document-local support pool.\nPositions remain owner-local (outer item zero), resolved through this\nreference rather than reinterpreted against the whole group.",
             "type": "object",
             "properties": {
@@ -11989,6 +12127,25 @@
         "description": "Original content supporting directly matched declarations. IDs are indices\nin the containing document response's pool, never persistent identities.",
         "oneOf": [
           {
+            "description": "A physical owner's original body reused by contained contexts.",
+            "type": "object",
+            "properties": {
+              "block": {
+                "description": "Single-entry original list excerpt, including nested content.",
+                "$ref": "#/$defs/Block"
+              },
+              "kind": {
+                "type": "string",
+                "const": "owned-entry"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "block"
+            ]
+          },
+          {
             "description": "Recovered adjacency supplies reading context, not proof that each\nsentence applies to every member or that members are interchangeable.",
             "type": "object",
             "properties": {
@@ -12023,6 +12180,53 @@
               "group",
               "members",
               "block"
+            ]
+          },
+          {
+            "description": "A nested declaration group already present in another returned source\nfragment. The descriptor preserves its own members and provider without\ncopying their body again. References point directly to an owned fragment.",
+            "type": "object",
+            "properties": {
+              "blockPath": {
+                "description": "Original containing list in the document snapshot.",
+                "type": "string"
+              },
+              "group": {
+                "description": "Original member interval in the nested list.",
+                "$ref": "#/$defs/DeclarationGroup"
+              },
+              "kind": {
+                "type": "string",
+                "const": "contained-declaration-group"
+              },
+              "members": {
+                "description": "Exact nested members, in source order.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/OutlineTrail"
+                }
+              },
+              "path": {
+                "description": "Typed path from that fragment's copied block to the nested list.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/ExplanationBlockStep"
+                }
+              },
+              "support": {
+                "description": "Index of a materialized `declaration-group` or `owned-entry`.",
+                "type": "integer",
+                "format": "uint",
+                "minimum": 0
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "blockPath",
+              "group",
+              "members",
+              "support",
+              "path"
             ]
           }
         ]

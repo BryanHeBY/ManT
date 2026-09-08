@@ -271,6 +271,17 @@ impl ExplanationEvidence {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "kind", rename_all = "kebab-case", deny_unknown_fields)]
 pub enum ExplanationContent {
+    /// Physical owner stored once because nested selected contexts also use
+    /// its body; not a declaration-group or alias relationship.
+    SharedEntry {
+        /// Document-local index of an `owned-entry` source fragment.
+        support: usize,
+        /// Typed path from the owned source fragment to the owner's list.
+        path: Vec<ExplanationBlockStep>,
+        /// Owner in that list; zero for a standalone single-entry fragment.
+        #[serde(rename = "itemIndex")]
+        item_index: usize,
+    },
     /// Original owner already present in the document-local support pool.
     /// Positions remain owner-local (outer item zero), resolved through this
     /// reference rather than reinterpreted against the whole group.
