@@ -167,10 +167,13 @@ full owner content. Clipping, omitted previews, and atomic body omission are
 distinct. No evidence query performs I/O or executes examples.
 
 `render_explanation_text_with` and `render_scope_explanation_text_with` expose
-the same framed report as plain text, with terminal-neutral `TextPresentation`
+the same report as plain text, with terminal-neutral `TextPresentation`
 spans. Their callbacks preserve visible text and boundary whitespace. Exact
 matches and ordinary name styling resolve only against returned forms/content;
 deserialized responses need no original document or query-side table. The
+plain report does not prefix original lines. Complete displayed declaration
+owners suppress duplicate Forms per record; absent bodies and empty definitions
+have distinct notices. This does not change the DTO. The
 corresponding Markdown renderers quote source lines, escape metadata, and retain
 verbatim fenced code. Outline text likewise has one plain/decorated tree through
 `render_outline_text_with`, with complete IDs on hanging metadata lines.

@@ -1,8 +1,9 @@
-//! Report furniture is generated; every line of source stays in a quote frame.
-use super::{metadata, spans};
+//! Report furniture is generated; source remains unframed in plain text and
+//! uses standard blockquotes in Markdown. Neither surface is a wire protocol.
+use super::{definition::DefinitionDisplay, metadata, spans};
 use mant_protocol::{
-    EvidenceClass, EvidenceCounts, ExplanationContent, ExplanationEvidence,
-    ExplanationIdentityField, TextPresentation, TextRole,
+    EvidenceClass, EvidenceCounts, ExplanationEvidence, ExplanationIdentityField, TextPresentation,
+    TextRole,
 };
 use std::fmt::Write;
 
@@ -168,7 +169,9 @@ impl Report<'_> {
         locations: &spans::LocatedStyles<'_>,
     ) {
         let Some(entry) = &evidence.entry else { return };
-        if !entry.forms.is_empty() {
+        if !entry.forms.is_empty()
+            && !DefinitionDisplay::new(evidence).is_some_and(|body| body.includes_forms())
+        {
             self.line(output, TextRole::Metadata, "Forms:");
             for form in &entry.forms {
                 let text = if self.markdown {
@@ -210,8 +213,6 @@ impl Report<'_> {
             output.push('\n');
             if self.markdown {
                 output.push_str("> ");
-            } else {
-                output.push_str(&self.meta(TextRole::Guide, "| "));
             }
             output.push_str(line);
         }
@@ -229,9 +230,8 @@ impl Report<'_> {
             e.class,
             EvidenceClass::DirectEntry | EvidenceClass::RelatedEntry
         ) {
-            if let Some(ExplanationContent::Entry { block } | ExplanationContent::Block { block }) =
-                &e.content
-            {
+            if let Some(display) = DefinitionDisplay::new(e) {
+                let block = display.block;
                 self.line(output, TextRole::Metadata, "Definition:");
                 let body = if self.markdown {
                     super::super::markdown::blocks::render_located_blocks(
@@ -254,6 +254,21 @@ impl Report<'_> {
                     } else {
                         body
                     },
+                );
+                if display.empty_description() {
+                    self.line(output, TextRole::Notice, "Declaration located; no independent description was provided for this owner.");
+                } else if e.content_omitted {
+                    self.line(
+                        output,
+                        TextRole::Notice,
+                        "Definition content is incomplete or omitted; read the original owner.",
+                    );
+                }
+            } else {
+                self.line(
+                    output,
+                    TextRole::Notice,
+                    "Definition content was not returned; read the original owner.",
                 );
             }
         } else {

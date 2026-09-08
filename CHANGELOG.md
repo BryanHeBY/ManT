@@ -71,8 +71,10 @@ that crate was not published for that change.
   including complete-form fallback when no validated name exists.
 
 - Explain reports separate title, matched basis, kind and original content;
-  source lines are quoted and class/owner boundaries remain visible without
-  color. ANSI uses response-local match ranges and ordinary name bindings,
+  plain source lines have no generated frame, while CommonMark uses blockquotes.
+  Class/owner boundaries remain visible without color. Forms are omitted only
+  when that record displays the complete matching owner; empty independent
+  definitions and omitted bodies have distinct notices. ANSI uses response-local match ranges and ordinary name bindings,
   not prefix guessing. Single/scope and decoded JSON share the same renderer;
   CommonMark retains source wrappers and verbatim fenced code.
 

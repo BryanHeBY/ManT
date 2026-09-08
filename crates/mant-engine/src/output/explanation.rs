@@ -1,4 +1,5 @@
 //! One DTO-only report traversal for direct CLI, scope, Markdown and MCP.
+mod definition;
 mod metadata;
 mod report;
 pub(super) mod spans;

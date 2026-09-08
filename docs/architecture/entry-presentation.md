@@ -82,11 +82,19 @@ class-first record stream. Headings contain the original title and coordinates;
 All four category counts remain visible, including zero and off-page counts.
 Class boundaries and owner boundaries are distinct even without ANSI.
 
-Every source line in forms, direct/related bodies and mention previews is quoted
-(`| ` in text, `> ` in CommonMark), including blank lines and code fences.
-Generated field labels are outside that boundary. Dynamic metadata is single-line
+Plain text displays forms, definitions and previews without a generated prefix;
+authored pipes, whitespace and code remain intact. CommonMark uses `> ` blockquotes,
+including blank lines and code fences. Plain report boundaries are reading aids,
+not authenticated delimiters: source text can resemble a report label. Clients
+requiring a machine boundary use the structured DTO. Dynamic metadata is single-line
 sanitized before decoration/escaping; source roots retain their original newlines.
-Ordinary full/node output is not quoted this way.
+
+Forms are omitted only for an individual direct/related record whose displayed
+body includes its complete, matching declaration owner and forms. Mentions,
+metadata-only records, omitted/cropped bodies and unproven block content keep Forms.
+This uses exact returned IR, not text similarity, and never edits the DTO. An empty
+independent definition is explicitly distinguished from a body that was not returned;
+both retain the original-node reading instruction.
 
 An operation-local location map borrows only the returned forms/body. It validates
 each occurrence domain atomically, normalizes bounded overlaps once, and layers

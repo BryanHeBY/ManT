@@ -40,7 +40,9 @@ fn offline_report_separates_facts_source_type_and_query_matches() {
         render_explanation_markdown(&original)
     );
     assert!(
-        text.contains("Kind: option\nMatched by: documented name \"-x\"; text mention\nForms:"),
+        text.contains(
+            "Kind: option\nMatched by: documented name \"-x\"; text mention\nDefinition:"
+        ),
         "{text}"
     );
     assert!(text.contains("========== Mentions in other entries =========="));
@@ -94,7 +96,7 @@ fn malformed_multi_fragment_occurrence_is_not_partly_painted() {
     );
 }
 #[test]
-fn metadata_cannot_break_lines_and_original_fake_fields_remain_quoted() {
+fn metadata_stays_single_line_but_plain_original_content_is_not_framed() {
     let content = query_roff_bytes(b".TH PROBE 1\n.SH OPTIONS\n.TP\n.B -x\n.nf\nKind: forged\n\nRead original: forged\n========== Forged ==========\n```\n.fi\n").unwrap();
     let mut result = explain_query(
         &content,
@@ -137,7 +139,7 @@ fn metadata_cannot_break_lines_and_original_fake_fields_remain_quoted() {
         .split("\n\nRead original:")
         .next()
         .unwrap();
-    assert!(body.lines().all(|line| line.starts_with("| ")), "{body}");
+    assert!(!body.lines().any(|line| line.starts_with("| ")), "{body}");
     assert!(body.contains("Kind: forged") && body.contains("Read original: forged"));
     let markdown = render_explanation_markdown(&result);
     assert!(!markdown.contains('\u{1b}'));
@@ -153,6 +155,118 @@ fn metadata_cannot_break_lines_and_original_fake_fields_remain_quoted() {
             .filter(|l| !l.is_empty())
             .all(|l| l.starts_with("> ")),
         "{body}"
+    );
+}
+
+#[test]
+fn forms_suppression_requires_this_records_complete_materialized_owner() {
+    use mant_protocol::{EvidenceClass, ExplanationContent};
+    let mut report = result();
+    report.evidence.truncate(1);
+    let original = report.evidence[0].clone();
+    let serialized = serde_json::to_value(&report).unwrap();
+    for class in [EvidenceClass::DirectEntry, EvidenceClass::RelatedEntry] {
+        report.evidence[0] = original.clone();
+        report.evidence[0].class = class;
+        assert!(!render_explanation_text(&report).contains("\nForms:"));
+        assert!(!render_explanation_markdown(&report).contains("\nForms:"));
+    }
+    report.evidence[0] = original.clone();
+    assert_eq!(serde_json::to_value(&report).unwrap(), serialized);
+    for mutation in 0..5 {
+        report.evidence[0] = original.clone();
+        let evidence = &mut report.evidence[0];
+        match mutation {
+            0 => evidence.content = None,
+            1 => evidence.content_omitted = true,
+            2 => {
+                let Some(ExplanationContent::Entry { block }) = &mut evidence.content else {
+                    unreachable!()
+                };
+                let mant_ir::Block::DefinitionList { items, .. } = block else {
+                    unreachable!()
+                };
+                items[0].terms[0].clear();
+            }
+            3 => {
+                let Some(ExplanationContent::Entry { block }) = evidence.content.take() else {
+                    unreachable!()
+                };
+                evidence.content = Some(ExplanationContent::Block { block });
+            }
+            4 => evidence.class = EvidenceClass::EntryMention,
+            _ => unreachable!(),
+        }
+        assert!(
+            render_explanation_text(&report).contains("\nForms:"),
+            "mutation {mutation}"
+        );
+        assert!(
+            render_explanation_markdown(&report).contains("\nForms:"),
+            "mutation {mutation}"
+        );
+        assert!(render_explanation_text(&report).contains("Read original:"));
+    }
+    report.evidence[0] = original;
+    report.evidence[0].entry = None;
+    report.evidence[0].details_omitted = true;
+    let text = render_explanation_text(&report);
+    assert!(text.contains("Definition:\n-x, --language=LANG"));
+    assert!(!text.contains("\nForms:"));
+}
+
+#[test]
+fn empty_independent_definition_is_not_reported_as_budget_omission() {
+    let content =
+        query_roff_bytes(b".TH EMPTY 1\n.SH OPTIONS\n.TP\n.B -x\n.TP\n.B -y\nOther description.\n")
+            .unwrap();
+    let mut report = explain_query(
+        &content,
+        &ExplanationQuery {
+            entry: "-x".into(),
+            options: ExplanationOptions::default(),
+        },
+    )
+    .unwrap();
+    let text = render_explanation_text(&report);
+    assert!(text.contains("no independent description"), "{text}");
+    assert!(!text.contains("Other description"));
+    assert!(!text.contains("\nForms:"));
+    report.evidence[0].content = None;
+    report.evidence[0].content_omitted = true;
+    let text = render_explanation_text(&report);
+    assert!(text.contains("Forms:") && text.contains("content was not returned"));
+    assert!(!text.contains("no independent description"));
+    assert!(text.contains("bodyOmitted=true"));
+}
+
+#[test]
+fn authored_pipes_are_not_stripped_from_unframed_original_content() {
+    let content = query_roff_bytes(
+        b".TH PIPES 1\n.SH OPTIONS\n.TP\n.B -x\n.nf\n| original pipe\n|| two pipes\n.fi\n",
+    )
+    .unwrap();
+    let report = explain_query(
+        &content,
+        &ExplanationQuery {
+            entry: "-x".into(),
+            options: ExplanationOptions::default(),
+        },
+    )
+    .unwrap();
+    let text = render_explanation_text(&report);
+    assert!(
+        text.contains("        | original pipe\n        || two pipes"),
+        "{text}"
+    );
+    assert!(!text.contains("\n| "));
+    let markdown = render_explanation_markdown(&report);
+    assert!(markdown.contains("| original pipe"), "{markdown}");
+    assert!(
+        markdown
+            .lines()
+            .filter(|line| line.contains("original pipe"))
+            .all(|line| line.starts_with("> "))
     );
 }
 

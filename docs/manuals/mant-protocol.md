@@ -1315,11 +1315,18 @@ entries outside this page are explicitly distinguished from zero collected
 direct entries. Neither case proves that a command lacks the queried option.
 
 Report headings keep coordinates and the original title separate from `Matched by`.
-Every forms/body/preview line stays inside a text `| ` or CommonMark `> ` frame,
-including source blank lines and fences. Metadata is single-line sanitized and
+Plain forms/body/preview text has no generated `| ` prefix; authored bars remain.
+CommonMark quotes source lines with `> `, including blank lines and fences.
+Plain report labels are reading aids, not authenticated source boundaries;
+machine consumers use the structured response. Metadata is single-line sanitized and
 Markdown-escaped; source text retains its own newlines. Exact available ranges
 compose with original inline styles; fenced CommonMark displays remain verbatim.
 Plain and ANSI reports use the same layout and class/owner boundaries.
+An individual direct/related record suppresses Forms only when its displayed body
+already contains the complete matching owner and forms. Mentions and records with
+omitted or incomplete bodies retain Forms. An empty independent definition gets
+a no-independent-description notice, distinct from a body-copy budget omission.
+These presentation choices do not remove facts or forms from the response DTO.
 
 Name bases carry `matches` with actual authored `name` spellings; Form bases
 carry `matches` with `sourceFormIndex` and complete `text`. Identity bases carry
