@@ -204,7 +204,7 @@ fn mdoc_list_item_from_definition(
 ///
 /// Both man(7) `.TQ` and mdoc(7) commonly express several equivalent input
 /// forms as a run of heads followed by one shared body.  The man lowering
-/// path already folds pending `.TQ` heads in [`append_definition`]; mdoc lists
+/// path already folds pending `.TQ` heads in `append_definition`; mdoc lists
 /// arrive as one complete collection, so perform the same structural
 /// normalization before the source-specific list representation leaves this
 /// module.  A trailing run stays intact because no shared description proves

@@ -1,0 +1,603 @@
+//! Man TP/TQ/IP definition, alias, and continuation state.
+use super::super::{
+    Block, DefinitionItem, DefinitionLocation, ListKind, LoweringContext, ManListState, Node,
+    NodeKind, append_ordered, block_indent, block_layout_mut, definition_item,
+    ends_with_line_continuation, first_part_children, horizontal_distance_columns,
+    layout_with_spacing, list_item_from_definition, ordinal_marker, paragraph_distance_lines,
+    plain_text, prepend_definition_heads, source_span, terms_fit_inline, visible_definition_head,
+};
+
+fn is_bullet_glyph(text: &str) -> bool {
+    let mut chars = text.chars();
+    match (chars.next(), chars.next()) {
+        // `o` is the ASCII bullet convention in man pages; otherwise any single
+        // non-alphanumeric mark (`*`, `•`, `-`, `+`, …) is a bullet.
+        (Some(glyph), None) => glyph == 'o' || !glyph.is_alphanumeric(),
+        _ => false,
+    }
+}
+
+pub(in crate::mandoc::blocks) fn lower_man_definition(
+    node: &Node,
+    context: &LoweringContext<'_>,
+    indent_columns: u16,
+    state: ManDefinitionState<'_>,
+    spacing_enabled: bool,
+    formatter: &mut crate::mandoc::formatter::FormatterState,
+) {
+    let ManDefinitionState {
+        paragraph_distance,
+        output,
+        definition_hanging_width,
+        alias_state,
+        list_state,
+    } = state;
+    let LoweredManItem {
+        mut item,
+        spacing_before,
+        leading_head_distance,
+        leading_body_distance,
+        max_width,
+    } = lower_man_item(
+        node,
+        context,
+        indent_columns,
+        paragraph_distance,
+        definition_hanging_width,
+        spacing_enabled,
+        formatter,
+    );
+    let macro_name = node.macro_name.as_deref();
+    let ordinal = matches!(macro_name, Some("IP" | "TP"))
+        .then(|| {
+            ordinal_marker(
+                &item,
+                macro_name == Some("IP") && context.man_ip_uses_incrementing_register(node.line),
+            )
+        })
+        .flatten();
+    let description_empty = item.description.is_empty();
+    let opens_compact_group = macro_name == Some("TP")
+        && description_empty
+        && (leading_head_distance == Some(0) || leading_body_distance == Some(0));
+    let closes_compact_group = macro_name == Some("TP")
+        && !description_empty
+        && leading_body_distance.is_some_and(|distance| distance != 0);
+    let explicit_continuation = description_empty
+        && (macro_name == Some("TQ")
+            || visible_definition_head(node)
+                .last()
+                .is_some_and(ends_with_line_continuation));
+    let previous_location = last_definition_location(output, indent_columns);
+    let merge = definition_merge(
+        macro_name,
+        closes_compact_group,
+        *alias_state,
+        previous_location,
+    );
+    warn_unproven_alias_boundary(
+        node,
+        context,
+        output,
+        indent_columns,
+        macro_name,
+        description_empty,
+        merge,
+    );
+    if node.macro_name.as_deref() == Some("IP")
+        && item.terms.is_empty()
+        && append_ip_continuation(output, &mut item, indent_columns, spacing_before)
+    {
+        return;
+    }
+    emit_man_definition(
+        output,
+        alias_state,
+        list_state,
+        ManDefinitionEmission {
+            item,
+            macro_name,
+            source: source_span(node),
+            indent_columns,
+            spacing_before,
+            max_width,
+            ordinal,
+            description_empty,
+            opens_compact_group,
+            explicit_continuation,
+            previous_location,
+            merge,
+            leading_head_distance,
+            leading_body_distance,
+        },
+    );
+}
+
+struct ManDefinitionEmission<'a> {
+    item: DefinitionItem,
+    macro_name: Option<&'a str>,
+    source: Option<mant_ir::SourceSpan>,
+    indent_columns: u16,
+    spacing_before: u16,
+    max_width: usize,
+    ordinal: Option<super::ordered::ManOrdinalMarker>,
+    description_empty: bool,
+    opens_compact_group: bool,
+    explicit_continuation: bool,
+    previous_location: Option<DefinitionLocation>,
+    merge: DefinitionMerge,
+    leading_head_distance: Option<u16>,
+    leading_body_distance: Option<u16>,
+}
+
+fn emit_man_definition(
+    output: &mut Vec<Block>,
+    alias_state: &mut ManAliasState,
+    list_state: &mut ManListState,
+    emission: ManDefinitionEmission<'_>,
+) {
+    let ManDefinitionEmission {
+        item,
+        macro_name,
+        source,
+        indent_columns,
+        spacing_before,
+        max_width,
+        ordinal,
+        description_empty,
+        opens_compact_group,
+        explicit_continuation,
+        previous_location,
+        merge,
+        leading_head_distance,
+        leading_body_distance,
+    } = emission;
+    if macro_name == Some("IP") && is_ip_bullet_item(&item) {
+        *list_state = ManListState::None;
+        append_ip_bullet(output, item, indent_columns, spacing_before, source);
+    } else {
+        if let Some(marker) = ordinal {
+            append_ordered(
+                output,
+                item,
+                indent_columns,
+                spacing_before,
+                source,
+                marker,
+                list_state,
+            );
+            *alias_state = ManAliasState::None;
+            return;
+        }
+        let location = append_definition(
+            output,
+            item,
+            indent_columns,
+            spacing_before,
+            source,
+            max_width,
+            merge,
+        );
+        transition_alias_state(
+            alias_state,
+            AliasTransition {
+                macro_name,
+                description_empty,
+                opens_compact_group,
+                explicit_continuation,
+                previous_location,
+                merge,
+                location,
+                spacing_before,
+                leading_head_distance,
+                leading_body_distance,
+            },
+        );
+        *list_state = ManListState::None;
+    }
+}
+
+struct LoweredManItem {
+    item: DefinitionItem,
+    spacing_before: u16,
+    leading_head_distance: Option<u16>,
+    leading_body_distance: Option<u16>,
+    max_width: usize,
+}
+
+fn lower_man_item(
+    node: &Node,
+    context: &LoweringContext<'_>,
+    indent_columns: u16,
+    paragraph_distance: &mut u16,
+    definition_hanging_width: &mut usize,
+    spacing_enabled: bool,
+    formatter: &mut crate::mandoc::formatter::FormatterState,
+) -> LoweredManItem {
+    // Capture the distance before lowering the body: a `.PD` request that
+    // follows this item can live inside libmandoc's block scope and updates
+    // spacing for the *next* item, not the current one.
+    let spacing_before = if node.macro_name.as_deref() == Some("TQ") {
+        0
+    } else {
+        *paragraph_distance
+    };
+    let head = first_part_children(node, NodeKind::Head);
+    let body = first_part_children(node, NodeKind::Body);
+    let leading_head_distance = leading_paragraph_distance(head);
+    let leading_body_distance = leading_paragraph_distance(body);
+    if let Some(distance) = leading_head_distance {
+        *paragraph_distance = distance;
+    }
+    update_man_definition_width(node, definition_hanging_width);
+    let max_width = definition_hanging_width.saturating_sub(1);
+    let item = definition_item(
+        node,
+        context,
+        indent_columns,
+        paragraph_distance,
+        max_width,
+        spacing_enabled,
+        formatter,
+    );
+    LoweredManItem {
+        item,
+        spacing_before,
+        leading_head_distance,
+        leading_body_distance,
+        max_width,
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(in crate::mandoc::blocks) enum ManAliasState {
+    None,
+    ExplicitContinuation(DefinitionLocation),
+    CompactRun(DefinitionLocation),
+}
+
+impl ManAliasState {
+    const fn compact_start(self) -> Option<DefinitionLocation> {
+        match self {
+            Self::CompactRun(location) => Some(location),
+            Self::None | Self::ExplicitContinuation(_) => None,
+        }
+    }
+
+    const fn explicit_start(self) -> Option<DefinitionLocation> {
+        match self {
+            Self::ExplicitContinuation(location) => Some(location),
+            Self::None | Self::CompactRun(_) => None,
+        }
+    }
+}
+
+pub(in crate::mandoc::blocks) struct ManDefinitionState<'a> {
+    pub(in crate::mandoc::blocks) paragraph_distance: &'a mut u16,
+    pub(in crate::mandoc::blocks) output: &'a mut Vec<Block>,
+    pub(in crate::mandoc::blocks) definition_hanging_width: &'a mut usize,
+    pub(in crate::mandoc::blocks) alias_state: &'a mut ManAliasState,
+    pub(in crate::mandoc::blocks) list_state: &'a mut ManListState,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum DefinitionMerge {
+    None,
+    From(DefinitionLocation),
+}
+
+#[derive(Clone, Copy)]
+struct AliasTransition<'a> {
+    macro_name: Option<&'a str>,
+    description_empty: bool,
+    opens_compact_group: bool,
+    explicit_continuation: bool,
+    previous_location: Option<DefinitionLocation>,
+    merge: DefinitionMerge,
+    location: DefinitionLocation,
+    spacing_before: u16,
+    leading_head_distance: Option<u16>,
+    leading_body_distance: Option<u16>,
+}
+
+fn transition_alias_state(alias_state: &mut ManAliasState, transition: AliasTransition<'_>) {
+    let AliasTransition {
+        macro_name,
+        description_empty,
+        opens_compact_group,
+        explicit_continuation,
+        previous_location,
+        merge,
+        location,
+        spacing_before,
+        leading_head_distance,
+        leading_body_distance,
+    } = transition;
+    *alias_state = if opens_compact_group
+        || (macro_name == Some("IP")
+            && description_empty
+            && (spacing_before == 0
+                || leading_head_distance == Some(0)
+                || leading_body_distance == Some(0)))
+    {
+        match *alias_state {
+            ManAliasState::CompactRun(start) => ManAliasState::CompactRun(start),
+            ManAliasState::None | ManAliasState::ExplicitContinuation(_) => {
+                ManAliasState::CompactRun(location)
+            }
+        }
+    } else if explicit_continuation {
+        match *alias_state {
+            ManAliasState::CompactRun(start) => ManAliasState::CompactRun(start),
+            ManAliasState::ExplicitContinuation(start) => {
+                ManAliasState::ExplicitContinuation(start)
+            }
+            ManAliasState::None if macro_name == Some("TQ") => previous_location.map_or(
+                ManAliasState::ExplicitContinuation(location),
+                ManAliasState::ExplicitContinuation,
+            ),
+            ManAliasState::None => ManAliasState::ExplicitContinuation(location),
+        }
+    } else if matches!(merge, DefinitionMerge::None) && description_empty {
+        *alias_state
+    } else {
+        ManAliasState::None
+    };
+}
+
+fn definition_merge(
+    macro_name: Option<&str>,
+    closes_compact_group: bool,
+    alias_state: ManAliasState,
+    previous_location: Option<DefinitionLocation>,
+) -> DefinitionMerge {
+    let start = if macro_name == Some("TQ") {
+        alias_state
+            .explicit_start()
+            .or_else(|| alias_state.compact_start())
+            .or(previous_location)
+    } else if closes_compact_group {
+        alias_state.compact_start()
+    } else if let Some(start) = alias_state.explicit_start() {
+        Some(start)
+    } else if macro_name == Some("IP") {
+        alias_state.compact_start()
+    } else {
+        None
+    };
+    start.map_or(DefinitionMerge::None, DefinitionMerge::From)
+}
+
+fn warn_unproven_alias_boundary(
+    node: &Node,
+    context: &LoweringContext<'_>,
+    output: &[Block],
+    indent_columns: u16,
+    macro_name: Option<&str>,
+    description_empty: bool,
+    merge: DefinitionMerge,
+) {
+    if !description_empty
+        && matches!(macro_name, Some("IP" | "TQ"))
+        && pending_definition_start(output, indent_columns).is_some_and(
+            |pending| !matches!(merge, DefinitionMerge::From(start) if start == pending),
+        )
+    {
+        context.warn_definition_alias_boundary(node);
+    }
+}
+
+fn last_definition_location(output: &[Block], indent_columns: u16) -> Option<DefinitionLocation> {
+    let block = output.len().checked_sub(1)?;
+    let Block::DefinitionList { items, .. } = output
+        .last()
+        .filter(|candidate| block_indent(candidate) == Some(indent_columns))?
+    else {
+        return None;
+    };
+    Some(DefinitionLocation {
+        block,
+        item: items.len().checked_sub(1)?,
+    })
+}
+
+fn pending_definition_start(output: &[Block], indent_columns: u16) -> Option<DefinitionLocation> {
+    let block = output.len().checked_sub(1)?;
+    let Block::DefinitionList { items, .. } = output
+        .last()
+        .filter(|candidate| block_indent(candidate) == Some(indent_columns))?
+    else {
+        return None;
+    };
+    let item = items
+        .iter()
+        .rposition(|previous| !previous.description.is_empty())
+        .map_or(0, |index| index + 1);
+    (item < items.len()).then_some(DefinitionLocation { block, item })
+}
+
+fn leading_paragraph_distance(nodes: &[Node]) -> Option<u16> {
+    let mut distance = None;
+    for node in nodes {
+        if node.macro_name.as_deref() == Some("PD") {
+            if let Some(value) = paragraph_distance_lines(node) {
+                distance = Some(value);
+            }
+        } else if !node.flags.no_print && node.kind != NodeKind::Comment {
+            break;
+        }
+    }
+    distance
+}
+
+/// Attach an unlabelled `.IP` body to the preceding labelled item.
+///
+/// man(7) uses a headless `.IP` to begin another indented paragraph under the
+/// current tag. It is a continuation only when the immediately preceding
+/// item already has both a term and a description; otherwise the anonymous
+/// block remains explicit so malformed or intentionally unlabelled input is
+/// never discarded.
+fn append_ip_continuation(
+    output: &mut [Block],
+    item: &mut DefinitionItem,
+    indent_columns: u16,
+    paragraph_distance: u16,
+) -> bool {
+    if item.description.is_empty() {
+        return false;
+    }
+    let Some(Block::DefinitionList { items, compact, .. }) = output
+        .last_mut()
+        .filter(|block| block_indent(block) == Some(indent_columns))
+    else {
+        return false;
+    };
+    let Some(previous) = items
+        .last_mut()
+        .filter(|previous| !previous.terms.is_empty() && !previous.description.is_empty())
+    else {
+        return false;
+    };
+    if let Some(layout) = item.description.first_mut().and_then(block_layout_mut) {
+        layout.spacing_before_lines = layout.spacing_before_lines.max(paragraph_distance);
+    }
+    previous.description.append(&mut item.description);
+    *compact = *compact && paragraph_distance == 0;
+    true
+}
+
+fn append_definition(
+    output: &mut Vec<Block>,
+    mut item: DefinitionItem,
+    indent_columns: u16,
+    paragraph_distance: u16,
+    source: Option<mant_ir::SourceSpan>,
+    max_term_width: usize,
+    merge: DefinitionMerge,
+) -> DefinitionLocation {
+    let block_index = output.len().saturating_sub(1);
+    if let Some(Block::DefinitionList { items, compact, .. }) = output
+        .last_mut()
+        .filter(|block| block_indent(block) == Some(indent_columns))
+    {
+        if !item.description.is_empty() {
+            let first_pending = match merge {
+                DefinitionMerge::From(location)
+                    if location.block == block_index
+                        && location.item < items.len()
+                        && items[location.item..]
+                            .iter()
+                            .all(|pending| pending.description.is_empty()) =>
+                {
+                    Some(location.item)
+                }
+                DefinitionMerge::None | DefinitionMerge::From(_) => None,
+            };
+            if let Some(first_pending) = first_pending {
+                prepend_definition_heads(&mut item, items.drain(first_pending..));
+                // Source-proven `.TQ`, `\c`, and bounded compact aliases are
+                // collected as pending terms. Recompute their combined layout.
+                item.layout.inline_term = terms_fit_inline(&item.terms, max_term_width);
+            }
+        }
+        item.layout.spacing_before_lines = Some(if items.is_empty() {
+            0
+        } else {
+            paragraph_distance
+        });
+        *compact = *compact && paragraph_distance == 0;
+        let item_index = items.len();
+        items.push(item);
+        DefinitionLocation {
+            block: block_index,
+            item: item_index,
+        }
+    } else {
+        item.layout.spacing_before_lines = Some(0);
+        let spacing_before_lines = if output.is_empty() {
+            0
+        } else {
+            paragraph_distance
+        };
+        output.push(Block::DefinitionList {
+            items: vec![item],
+            compact: paragraph_distance == 0,
+            layout: layout_with_spacing(indent_columns, spacing_before_lines),
+            source,
+        });
+        DefinitionLocation {
+            block: output.len() - 1,
+            item: 0,
+        }
+    }
+}
+
+fn update_man_definition_width(node: &Node, current_width: &mut usize) {
+    let head = first_part_children(node, NodeKind::Head);
+    let argument = match node.macro_name.as_deref() {
+        Some("TP" | "TQ") => head
+            .iter()
+            .find(|child| !child.flags.line_start)
+            .and_then(first_node_text),
+        Some("IP") => head.get(1).and_then(first_node_text),
+        _ => None,
+    };
+    if let Some(width) = argument.and_then(horizontal_distance_columns) {
+        *current_width = width;
+    }
+}
+
+fn first_node_text(node: &Node) -> Option<&str> {
+    node.text
+        .as_deref()
+        .or_else(|| node.children.iter().find_map(first_node_text))
+}
+
+/// Append a man(7) `.IP` bullet while the source macro is still known.
+///
+/// Inferring this later from the serialized term text is unsafe: a legitimate
+/// `.TP *` glossary entry looks identical after lowering. Keeping the decision
+/// at this boundary preserves real `.IP o`/`.IP \(bu` lists without erasing
+/// punctuation-only definition terms.
+fn append_ip_bullet(
+    output: &mut Vec<Block>,
+    item: DefinitionItem,
+    indent_columns: u16,
+    paragraph_distance: u16,
+    source: Option<mant_ir::SourceSpan>,
+) {
+    let list_item = list_item_from_definition(item, indent_columns, source);
+    if let Some(Block::List {
+        kind: ListKind::Bullet,
+        compact,
+        items,
+        ..
+    }) = output
+        .last_mut()
+        .filter(|block| block_indent(block) == Some(indent_columns))
+    {
+        *compact = *compact && paragraph_distance == 0;
+        items.push(list_item);
+        return;
+    }
+
+    let spacing_before_lines = if output.is_empty() {
+        0
+    } else {
+        paragraph_distance
+    };
+    output.push(Block::List {
+        kind: ListKind::Bullet,
+        compact: paragraph_distance == 0,
+        items: vec![list_item],
+        layout: layout_with_spacing(indent_columns, spacing_before_lines),
+        source,
+    });
+}
+
+pub(in crate::mandoc::blocks) fn is_ip_bullet_item(item: &DefinitionItem) -> bool {
+    let [term] = item.terms.as_slice() else {
+        return false;
+    };
+    is_bullet_glyph(plain_text(term).trim())
+}

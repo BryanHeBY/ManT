@@ -2,23 +2,24 @@
 
 use mant_ir::{Block, DefinitionItem, ListItem, ListKind, SourceSpan};
 
-use super::super::{
+use crate::block::block_layout_mut;
+use crate::mandoc::{
     inline::plain_text,
     layout::{layout, layout_with_spacing},
     targets,
 };
-use crate::block::block_layout_mut;
 
-pub(super) const MAN_DEFINITION_BODY_INDENT: u16 = DefinitionItem::DESCRIPTION_INDENT_COLUMNS;
+pub(in crate::mandoc::blocks) const MAN_DEFINITION_BODY_INDENT: u16 =
+    DefinitionItem::DESCRIPTION_INDENT_COLUMNS;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(super) struct DefinitionLocation {
-    pub(super) block: usize,
-    pub(super) item: usize,
+pub(in crate::mandoc::blocks) struct DefinitionLocation {
+    pub(in crate::mandoc::blocks) block: usize,
+    pub(in crate::mandoc::blocks) item: usize,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(super) enum ManListState {
+pub(in crate::mandoc::blocks) enum ManListState {
     None,
     Ordered {
         block: usize,
@@ -27,19 +28,19 @@ pub(super) enum ManListState {
 }
 
 impl ManListState {
-    pub(super) const fn is_active(self) -> bool {
+    pub(in crate::mandoc::blocks) const fn is_active(self) -> bool {
         !matches!(self, Self::None)
     }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(super) struct ManOrdinalMarker {
+pub(in crate::mandoc::blocks) struct ManOrdinalMarker {
     value: u64,
     style: IpOrdinalStyle,
 }
 
 impl ManOrdinalMarker {
-    pub(super) const fn value(self) -> u64 {
+    pub(in crate::mandoc::blocks) const fn value(self) -> u64 {
         self.value
     }
 }
@@ -60,7 +61,7 @@ enum IpOrdinalStyle {
 /// the source line used roff's pre-increment register form. Punctuation is
 /// retained as a sequence style so `1.` followed by `2)` cannot accidentally
 /// merge across unrelated tagged paragraphs.
-pub(super) fn ordinal_marker(
+pub(in crate::mandoc::blocks) fn ordinal_marker(
     item: &DefinitionItem,
     uses_incrementing_register: bool,
 ) -> Option<ManOrdinalMarker> {
@@ -100,7 +101,9 @@ pub(super) fn ordinal_marker(
 /// definition list. Override it only when at least two described items form a
 /// complete, consecutive sequence with one punctuation style. This leaves
 /// singleton numeric terms and value domains untouched.
-pub(super) fn ordinal_sequence(items: &[DefinitionItem]) -> Option<ManOrdinalMarker> {
+pub(in crate::mandoc::blocks) fn ordinal_sequence(
+    items: &[DefinitionItem],
+) -> Option<ManOrdinalMarker> {
     if items.len() < 2 {
         return None;
     }
@@ -123,7 +126,7 @@ pub(super) fn ordinal_sequence(items: &[DefinitionItem]) -> Option<ManOrdinalMar
 /// evidence even when a list contains only one item.  Requiring a second item
 /// used to leak singleton footnote labels such as `1.` into the semantic entry
 /// index.  Bare literal integers remain excluded by [`ordinal_marker`].
-pub(super) fn append_ordered(
+pub(in crate::mandoc::blocks) fn append_ordered(
     output: &mut Vec<Block>,
     item: DefinitionItem,
     indent_columns: u16,
@@ -206,7 +209,7 @@ fn append_new_ordered(
 /// that scope as a sibling of the `.IP`, but it remains content of the same
 /// visible item and must not break ordinal sequence recognition.  Proven list
 /// items use coordinates relative to the list container.
-pub(super) fn append_relative_continuation(
+pub(in crate::mandoc::blocks) fn append_relative_continuation(
     output: &mut [Block],
     nested: &mut Vec<Block>,
     indent_columns: u16,
@@ -244,7 +247,7 @@ fn make_relative(blocks: &mut [Block], origin: u16) {
 
 /// Remove an `.IP`/`.TP` mark from visible content while conserving any target
 /// it owned and making item indentation relative to the new list container.
-pub(super) fn list_item_from_definition(
+pub(in crate::mandoc::blocks) fn list_item_from_definition(
     item: DefinitionItem,
     indent_columns: u16,
     source: Option<SourceSpan>,

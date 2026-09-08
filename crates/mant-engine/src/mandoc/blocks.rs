@@ -31,15 +31,14 @@ use man_nofill::lower_no_fill_lines;
 mod flow;
 use flow::BlockState;
 mod lists;
-mod man_lists;
 mod preformatted;
 mod tables;
 
+use lists::man::ordered::{ManListState, append_relative_continuation};
 use lists::{
     ManAliasState, ManDefinitionState, lower_man_definition as lower_man_definition_block,
     lower_mdoc_list,
 };
-use man_lists::{ManListState, append_relative_continuation};
 use preformatted::preformatted_blocks;
 use tables::{TableEmbedding, TableEmbeddingPlan, append_table_row};
 
