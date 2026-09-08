@@ -10,7 +10,7 @@ use std::{
 use super::{
     ExpansionOutcome, MAX_EXPANDED_CONFIG_CANDIDATES, MAX_EXPANDED_CONFIG_PATHS,
     MAX_MANUAL_PATH_CONFIG_BYTES, ManualPathDiagnostic, ManualRootDiscovery, ScanBudget,
-    expand_path_pattern_bounded,
+    expansion::{GlobCase, expand_path_pattern_with_case},
 };
 
 const MAX_CONFIG_TREE_BYTES: u64 = 8 * 1024 * 1024;
@@ -265,7 +265,9 @@ struct IncludedPaths {
 }
 
 fn collect_include_paths(patterns: &[PathBuf]) -> IncludedPaths {
-    collect_include_paths_with(patterns, expand_path_pattern_bounded)
+    collect_include_paths_with(patterns, |pattern, budget| {
+        expand_path_pattern_with_case(pattern, budget, GlobCase::AsciiInsensitive)
+    })
 }
 
 fn collect_include_paths_with(
@@ -765,6 +767,38 @@ mod tests {
         assert_eq!(plan.roots, vec![PathBuf::from(r"C:\from-fragment")]);
     }
 
+    #[test]
+    fn windows_globs_match_mixed_case_components_and_deduplicate_overlaps() {
+        let fixture =
+            std::env::temp_dir().join(format!("mant-windows-glob-case-{}", std::process::id()));
+        let fragments = fixture.join("MAN.D");
+        fs::create_dir_all(&fragments).unwrap();
+        let first = fragments.join("10-ROOT.CONF");
+        let second = fragments.join("20-extra.conf");
+        fs::write(&first, "").unwrap();
+        fs::write(&second, "").unwrap();
+        fs::write(fragments.join("30-ignore.conf.bak"), "").unwrap();
+        let pattern = fixture.join("man.?").join("*.conf");
+        let included =
+            super::collect_include_paths(&[pattern.clone(), fixture.join("MAN.?").join("*.CONF")]);
+        assert_eq!(included.paths, [first, second]);
+        assert!(!included.candidate_truncated && !included.fragment_truncated);
+
+        // The same shared expander still implements case-sensitive Unix glob
+        // semantics, regardless of whether the host filesystem folds case.
+        let mut budget = super::ScanBudget::new(MAX_EXPANDED_CONFIG_CANDIDATES);
+        let unix = crate::manual_paths::expand_path_pattern_bounded(&pattern, &mut budget);
+        assert!(unix.paths.is_empty() && !unix.exhausted);
+        let mut budget = super::ScanBudget::new(1);
+        let bounded = super::expand_path_pattern_with_case(
+            &pattern,
+            &mut budget,
+            super::GlobCase::AsciiInsensitive,
+        );
+        assert!(bounded.paths.is_empty() && bounded.exhausted);
+        fs::remove_dir_all(fixture).unwrap();
+    }
+
     #[cfg(windows)]
     #[test]
     fn windows_config_file_orders_direct_fragment_mapped_and_mandatory_roots() {
@@ -783,13 +817,13 @@ mod tests {
         fs::write(
             fixture.join("man.conf"),
             "manpath \"%MANT_TEST_ROOT%\\direct root\"\n\
-             MANCONFIG \"%MANT_TEST_ROOT%\\man.d\\*.conf\"\n\
+             MANCONFIG \"%MANT_TEST_ROOT%\\MAN.?\\*.conf\"\n\
              MANPATH_MAP \"%MANT_TEST_ROOT%\\bin path\" \"%MANT_TEST_ROOT%\\mapped root\"\n\
              MANDATORY_MANPATH \"%MANT_TEST_ROOT%\\required root\"\n",
         )
         .expect("write main configuration");
         fs::write(
-            fragments.join("10-tool.conf"),
+            fragments.join("10-TOOL.CONF"),
             "MANPATH \"%MANT_TEST_ROOT%\\fragment root\"\n\
              MANCONFIG \"%MANT_TEST_ROOT%\\nested\\*.conf\"\n",
         )

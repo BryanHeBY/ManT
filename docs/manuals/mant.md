@@ -340,6 +340,12 @@ the Windows configuration tree is bounded to 8 MiB and 4096 input lines.
 Expanded paths are limited to 4096 encoded bytes. Only `MANCONFIG` expands
 wildcards in this Windows configuration;
 all root and map directives describe literal directories.
+Windows `MANCONFIG` wildcard components compare ASCII letters without case
+distinctions: `*.conf` also matches `10-ROOT.CONF`, and `man.?` matches `MAN.D`.
+Matched paths retain their actual spelling. Non-ASCII characters compare
+exactly; this is a configuration matching rule, not locale-aware folding or
+an emulation of every filesystem's case rules. Unix configuration wildcards
+retain case-sensitive matching.
 `MANDB_MAP`, `DEFINE`, `SECTION`, and
 formatter or pager directives do not describe source roots and are ignored.
 

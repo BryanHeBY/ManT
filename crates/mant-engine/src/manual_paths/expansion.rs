@@ -5,6 +5,22 @@ use std::{
     path::{Component, Path, PathBuf},
 };
 
+/// Configuration dialect policy, independent of the host running the parser.
+#[derive(Clone, Copy)]
+pub(super) enum GlobCase {
+    Sensitive,
+    AsciiInsensitive,
+}
+
+impl GlobCase {
+    fn matches(self, left: char, right: char) -> bool {
+        match self {
+            Self::Sensitive => left == right,
+            Self::AsciiInsensitive => left.eq_ignore_ascii_case(&right),
+        }
+    }
+}
+
 /// Final paths and whether this expansion exhausted its work budget.
 pub(super) struct ExpansionOutcome {
     pub(super) paths: Vec<PathBuf>,
@@ -37,6 +53,14 @@ impl ScanBudget {
 pub(super) fn expand_path_pattern_bounded(
     pattern: &Path,
     budget: &mut ScanBudget,
+) -> ExpansionOutcome {
+    expand_path_pattern_with_case(pattern, budget, GlobCase::Sensitive)
+}
+
+pub(super) fn expand_path_pattern_with_case(
+    pattern: &Path,
+    budget: &mut ScanBudget,
+    case: GlobCase,
 ) -> ExpansionOutcome {
     // Bound both component count and wildcard-matcher work for a single path.
     if pattern.as_os_str().len() > 4096 || !budget.charge() {
@@ -88,6 +112,7 @@ pub(super) fn expand_path_pattern_bounded(
                             &name.to_string_lossy(),
                             value,
                             &mut budget.matcher_cells,
+                            case,
                         ) else {
                             budget.remaining = 0;
                             return ExpansionOutcome {
@@ -119,10 +144,15 @@ pub(super) fn expand_path_pattern_bounded(
 #[cfg(test)]
 pub(super) fn wildcard_matches(pattern: &str, value: &str) -> bool {
     let mut cells = usize::MAX;
-    wildcard_matches_bounded(pattern, value, &mut cells).unwrap()
+    wildcard_matches_bounded(pattern, value, &mut cells, GlobCase::Sensitive).unwrap()
 }
 
-fn wildcard_matches_bounded(pattern: &str, value: &str, cells: &mut usize) -> Option<bool> {
+fn wildcard_matches_bounded(
+    pattern: &str,
+    value: &str,
+    cells: &mut usize,
+    case: GlobCase,
+) -> Option<bool> {
     let value = value.chars().collect::<Vec<_>>();
     let mut previous = vec![false; value.len() + 1];
     previous[0] = true;
@@ -139,7 +169,7 @@ fn wildcard_matches_bounded(pattern: &str, value: &str, cells: &mut usize) -> Op
             '?' => current[1..].copy_from_slice(&previous[..value.len()]),
             token => {
                 for index in 1..=value.len() {
-                    current[index] = previous[index - 1] && value[index - 1] == token;
+                    current[index] = previous[index - 1] && case.matches(value[index - 1], token);
                 }
             }
         }
@@ -153,12 +183,47 @@ mod tests {
     use super::*;
 
     #[test]
+    fn dialect_case_policy_preserves_scalar_matching_and_comparison_budgets() {
+        for (pattern, value, sensitive, insensitive) in [
+            ("*.conf", "10-ROOT.CONF", false, true),
+            ("MAN.?", "man.d", false, true),
+            ("?.conf", "日.CONF", false, true),
+            ("?.conf", "ab.conf", false, false),
+            ("*.conf", "root.conf.bak", false, false),
+            ("É.conf", "é.conf", false, false),
+        ] {
+            let mut remaining = Vec::new();
+            for (case, expected) in [
+                (GlobCase::Sensitive, sensitive),
+                (GlobCase::AsciiInsensitive, insensitive),
+            ] {
+                let mut cells = 1024;
+                assert_eq!(
+                    wildcard_matches_bounded(pattern, value, &mut cells, case),
+                    Some(expected),
+                    "{pattern} / {value}"
+                );
+                remaining.push(cells);
+                let mut insufficient = 0;
+                assert_eq!(
+                    wildcard_matches_bounded(pattern, value, &mut insufficient, case),
+                    None
+                );
+            }
+            assert_eq!(remaining[0], remaining[1]);
+        }
+    }
+
+    #[test]
     fn wildcard_question_mark_counts_unicode_scalars() {
         assert!(wildcard_matches("?.conf", "é.conf"));
         assert!(wildcard_matches("?.conf", "日.conf"));
         assert!(!wildcard_matches("?.conf", "ab.conf"));
         let mut cells = 8;
-        assert_eq!(wildcard_matches_bounded("***", "abc", &mut cells), None);
+        assert_eq!(
+            wildcard_matches_bounded("***", "abc", &mut cells, GlobCase::Sensitive),
+            None
+        );
         assert_eq!(cells, 0);
     }
 

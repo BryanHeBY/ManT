@@ -122,6 +122,11 @@ that crate was not published for that change.
 
 ### mant-engine 0.11.0
 
+- Match Windows `MANCONFIG` wildcard components without ASCII case
+  distinctions, including configuration filenames and wildcard directories.
+  Preserve actual path spelling, shared scan limits and fragment deduplication;
+  Unix wildcard matching remains case-sensitive.
+
 - Bind recognized names from the grammar's original byte ranges, including
   Vim-style `-w{number}`, enclosing punctuation, leading whitespace and
   cross-style `[-+]O`. Native and inferred Markdown definitions retain their
