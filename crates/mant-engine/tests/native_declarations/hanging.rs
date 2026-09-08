@@ -200,9 +200,7 @@ fn unstyled_dotted_keys_italic_settings_and_repeated_arguments_keep_owners() {
         0
     );
 }
-#[test]
-fn compact_parameter_grammar_and_opaque_environment_templates_remain_declarations() {
-    let source = br".TH HEADS 1
+const COMPACT_DECLARATIONS: &[u8] = br".TH HEADS 1
 .SH OPTIONS
 .PP
 \fB-L\fR\fI<start>\fR,\fI<end>\fR:\fI<file>\fR, \fB-L\fR:\fI<funcname>\fR:\fI<file>\fR
@@ -256,7 +254,9 @@ ENV_BODY
 PROSE_BODY
 .RE
 ";
-    let content = mant_engine::query_roff_bytes(source).unwrap();
+#[test]
+fn compact_parameter_grammar_and_opaque_environment_templates_remain_declarations() {
+    let content = mant_engine::query_roff_bytes(COMPACT_DECLARATIONS).unwrap();
     for (query, total, body) in [
         ("-L", 1, "RANGE_BODY"),
         ("--max-count", 1, "COUNT_BODY"),
