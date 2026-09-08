@@ -9,6 +9,9 @@ pub(in crate::definitions) fn command_name_from_authored_form(value: &str) -> Op
         return is_command_name(value).then_some(value);
     };
     let suffix = suffix.trim_start();
+    if first == "." && super::named::is_variable_term(suffix) {
+        return Some(first);
+    }
     (suffix.starts_with(['-', '+', '/', '[', '<', '{']) && is_command_name(first)).then_some(first)
 }
 
@@ -28,7 +31,7 @@ fn append_literal_head(inlines: &[Inline], output: &mut String) -> bool {
         match inline {
             Inline::Anchor { .. } => {}
             Inline::Text { value } if value.chars().all(char::is_whitespace) => {
-                output.push_str(value)
+                output.push_str(value);
             }
             Inline::Strong { children } => output.push_str(&plain_text(children)),
             Inline::Code { value } => output.push_str(value),

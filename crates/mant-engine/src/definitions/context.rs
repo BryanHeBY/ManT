@@ -156,7 +156,7 @@ impl DefinitionContext {
         if words.contains(&"VARIABLES") || words.contains(&"VARIABLE") {
             return Self::Variables;
         }
-        if matches!(words.as_slice(), ["COMMAND" | "COMMANDS"])
+        if matches!(words.as_slice(), ["COMMAND" | "COMMANDS" | "BUILTINS"])
             || words
                 .windows(2)
                 .any(|pair| matches!(pair, ["BUILTIN", "COMMAND" | "COMMANDS"]))

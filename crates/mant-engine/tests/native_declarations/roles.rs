@@ -35,6 +35,12 @@ fn split_literal_command_heads_keep_the_whole_name_and_stop_before_arguments() {
             "{name}"
         );
     }
+    let source = b".Dd September 8, 2026\n.Dt DOT 1\n.Os\n.Sh Builtins\n.Bl -tag -width Ds\n.It \\&. file\nRead commands from the file.\n.El\n";
+    let content = mant_engine::query_roff_bytes(source).unwrap();
+    let result = mant_engine::select_explanation(&content, ".").unwrap();
+    assert_eq!(result.counts.direct_entry.total, 1);
+    assert_eq!(result.evidence[0].entry.as_ref().unwrap().names, ["."]);
+    assert!(mant_engine::render_explanation_text(&result).contains("Read commands from the file"));
 }
 
 #[test]
