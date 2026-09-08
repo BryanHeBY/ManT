@@ -14,7 +14,11 @@ a workspace-only Cargo patch would silently disappear from their build.
 Mechanical adaptation qualifies upstream `crate::` paths, fixes features to
 static/search on and dynamic/clipboard off, and removes upstream crate-level
 documentation/lint switches. Two upstream tests are adapted for the embedding
-package name and an otherwise ambiguous empty byte vector. Unused public APIs
+package name and an otherwise ambiguous empty byte vector. Upstream Rust
+documentation examples remain visible but are marked ignored: they import the
+upstream public `minus` crate, not this private implementation. They are not
+counted as executed consumer tests; native unit tests and ManT PTY tests run.
+Unused public APIs
 and upstream stylistic lints are allowed only at this private vendor boundary;
 ManT's SGR adapter is outside that allowance and receives normal strict checks.
 

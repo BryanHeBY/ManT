@@ -67,7 +67,7 @@ impl RunMode {
     /// Returns true if minus hasn't started
     ///
     /// # Example
-    /// ```
+    /// ```rust,ignore
     /// use minus::RunMode;
     ///
     /// let runmode = RunMode::Uninitialized;

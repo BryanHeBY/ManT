@@ -25,7 +25,7 @@
 //!
 //! ## Threads
 //!
-//! ```rust,no_run
+//! ```rust,ignore
 //! use std::{
 //!     fmt::Write,
 //!     thread::{spawn, sleep},
@@ -56,7 +56,7 @@
 //!
 //! ## tokio
 //!
-//! ```rust,no_run
+//! ```rust,ignore
 //! use std::time::Duration;
 //! use std::fmt::Write;
 //!
@@ -96,7 +96,7 @@
 //! ```
 //!
 //! ## Static output
-//! ```rust,no_run
+//! ```rust,ignore
 //! use std::fmt::Write;
 //!
 //! # #[cfg(all())]

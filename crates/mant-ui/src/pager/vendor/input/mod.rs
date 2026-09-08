@@ -18,7 +18,7 @@
 //! writing these descriptions.
 //
 //! ## Example
-//! ```
+//! ```rust,ignore
 //! use minus::input::{InputEvent, HashedEventRegister, crossterm_event::Event};
 //!
 //! let mut input_register = HashedEventRegister::default();
@@ -96,7 +96,7 @@
 //! [crossterm](https://docs.rs/crossterm/latest) crate to define the events.
 //!
 //! ## Example
-//! ```
+//! ```rust,ignore
 //! use minus::{input::{InputEvent, InputClassifier}, Pager, PagerState};
 //! use crossterm::event::{Event, KeyEvent, KeyCode, KeyModifiers};
 //!

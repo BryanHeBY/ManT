@@ -28,7 +28,7 @@ use crate::pager::native::search::SearchOpts;
 /// [`Pager`] also implements the [`std::fmt::Write`] trait which means you can directly call [`write!`] and
 /// [`writeln!`] macros on it. For example, you can easily do this
 ///
-/// ```
+/// ```rust,ignore
 /// use minus::Pager;
 /// use std::fmt::Write;
 ///
@@ -49,7 +49,7 @@ impl Pager {
     /// Initialize a new pager
     ///
     /// # Example
-    /// ```
+    /// ```rust,ignore
     /// let pager = minus::Pager::new();
     /// ```
     #[must_use]
@@ -69,7 +69,7 @@ impl Pager {
     /// could not be sent to the receiver
     ///
     /// # Example
-    /// ```
+    /// ```rust,ignore
     /// let pager = minus::Pager::new();
     /// pager.set_text("This is a line").expect("Failed to send data to the pager");
     /// ```
@@ -90,7 +90,7 @@ impl Pager {
     /// could not be sent to the receiver
     ///
     /// # Example
-    /// ```
+    /// ```rust,ignore
     /// use std::fmt::Write;
     ///
     /// let mut pager = minus::Pager::new();
@@ -111,7 +111,7 @@ impl Pager {
     /// could not be sent to the receiver
     ///
     /// # Example
-    /// ```
+    /// ```rust,ignore
     /// use minus::{Pager, LineNumbers};
     ///
     /// let pager = Pager::new();
@@ -133,7 +133,7 @@ impl Pager {
     /// could not be sent to the receiver
     ///
     /// Example
-    /// ```
+    /// ```rust,ignore
     /// use minus::Pager;
     ///
     /// let pager = Pager::new();
@@ -160,7 +160,7 @@ impl Pager {
     /// could not be sent to the receiver
     ///
     /// # Example
-    /// ```
+    /// ```rust,ignore
     /// use minus::Pager;
     ///
     /// let pager = Pager::new();
@@ -181,7 +181,7 @@ impl Pager {
     /// This function will return a [`Err(MinusError::Communication)`](MinusError::Communication) if the data
     /// could not be sent to the receiver
     ///
-    /// ```
+    /// ```rust,ignore
     /// use minus::{Pager, ExitStrategy};
     ///
     /// let pager = Pager::new();
@@ -214,7 +214,7 @@ impl Pager {
     /// This function will return a [`Err(MinusError::Communication)`](MinusError::Communication) if the data
     /// could not be sent to the receiver
     ///
-    /// ```
+    /// ```rust,ignore
     /// use minus::Pager;
     ///
     /// let pager = Pager::new();
@@ -233,7 +233,7 @@ impl Pager {
     /// This function will return a [`Err(MinusError::Communication)`](MinusError::Communication) if the data
     /// could not be sent to the receiver
     ///
-    /// ```
+    /// ```rust,ignore
     /// use minus::Pager;
     ///
     /// let pager = Pager::new();
@@ -297,7 +297,7 @@ impl Pager {
     /// could not be sent to the receiver
     ///
     /// # Example
-    /// ```
+    /// ```rust,ignore
     /// use minus::Pager;
     ///
     /// fn hello() {
@@ -377,7 +377,7 @@ impl Pager {
     /// could not be sent to the mus's receiving end
     ///
     /// # Example
-    /// ```
+    /// ```rust,ignore
     /// use minus::Pager;
     ///
     /// let pager = Pager::new();
@@ -401,7 +401,7 @@ impl Pager {
     /// could not be sent to the mus's receiving end
     ///
     /// # Example
-    /// ```
+    /// ```rust,ignore
     /// use minus::Pager;
     ///
     /// let pager = Pager::new();

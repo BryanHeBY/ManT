@@ -155,7 +155,7 @@ where
     ///
     /// # Example
     /// These are from the original sources
-    /// ```
+    /// ```rust,ignore
     /// use minus::input::{InputEvent, HashedEventRegister, crossterm_event::Event};
     ///
     /// let mut input_register = HashedEventRegister::default();
@@ -200,7 +200,7 @@ where
     /// over this one.
     ///
     /// # Example
-    /// ```
+    /// ```rust,ignore
     /// use minus::input::{InputEvent, HashedEventRegister, crossterm_event};
     ///
     /// let mut input_register = HashedEventRegister::default();
@@ -233,7 +233,7 @@ where
     /// is set to true. This helps preventing accidental overrides of your keybindings.
     ///
     /// # Example
-    /// ```should_panic
+    /// ```rust,ignore
     /// use minus::input::{InputEvent, HashedEventRegister, crossterm_event};
     ///
     /// let mut input_register = HashedEventRegister::default();
@@ -259,7 +259,7 @@ where
 
     /// Removes the callback associated with the all the elements of `desc`.
     ///
-    /// ```
+    /// ```rust,ignore
     /// use minus::input::{InputEvent, HashedEventRegister, crossterm_event};
     ///
     /// let mut input_register = HashedEventRegister::default();
@@ -287,7 +287,7 @@ where
     /// over this one.
     ///
     /// # Example
-    /// ```
+    /// ```rust,ignore
     /// use minus::input::{InputEvent, HashedEventRegister};
     ///
     /// let mut input_register = HashedEventRegister::default();
@@ -319,7 +319,7 @@ where
     /// is set to true. This helps preventing accidental overrides of your keybindings.
     ///
     /// # Example
-    /// ```should_panic
+    /// ```rust,ignore
     /// use minus::input::{InputEvent, HashedEventRegister};
     ///
     /// let mut input_register = HashedEventRegister::default();
@@ -345,7 +345,7 @@ where
 
     /// Removes the callback associated with the all the elements of `desc`.
     ///
-    /// ```
+    /// ```rust,ignore
     /// use minus::input::{InputEvent, HashedEventRegister, crossterm_event};
     ///
     /// let mut input_register = HashedEventRegister::default();

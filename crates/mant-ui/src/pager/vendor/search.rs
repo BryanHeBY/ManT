@@ -28,21 +28,21 @@
 //!
 //! Here is a an example to demonstrate on its usage. Here we set the condition to run incremental
 //! search only when the length of the search query is greater than 1.
-//! ```
+//! ```rust,ignore
 //! use minus::{Pager, search::SearchOpts};
 //!
 //! let pager = Pager::new();
 //! pager.set_incremental_search_condition(Box::new(|so: &SearchOpts| so.string.len() > 1)).unwrap();
 //! ```
 //! To completely disable incremental search, set the condition to false
-//! ```
+//! ```rust,ignore
 //! use minus::{Pager, search::SearchOpts};
 //!
 //! let pager = Pager::new();
 //! pager.set_incremental_search_condition(Box::new(|_| false)).unwrap();
 //! ```
 //! Similarly to always run incremental search, set the condition to true
-//! ```
+//! ```rust,ignore
 //! use minus::{Pager, search::SearchOpts};
 //!
 //! let pager = Pager::new();

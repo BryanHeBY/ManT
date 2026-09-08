@@ -13,6 +13,19 @@ const destination = path.join(root, 'crates/mant-ui/src/pager/vendor');
 
 export function adapted(name, input) {
   let text = input.replaceAll('crate::', 'crate::pager::native::');
+  // These examples describe the upstream public minus crate, not our private
+  // embedding. Preserve them as documentation without compiling nonexistent
+  // minus imports as mant-ui consumer examples. Native unit/PTY tests still run.
+  let codeFence = false;
+  text = text.split('\n').map(line => {
+    const comment = /^([ \t]*\/\/[/!][ \t]*)(.*)$/.exec(line);
+    if (!comment) { codeFence = false; return line; }
+    if (!comment[2].startsWith('```')) return line;
+    codeFence = !codeFence;
+    const language = comment[2].slice(3);
+    const rust = !language || /^(rust|no_run|should_panic|compile_fail|ignore)/.test(language);
+    return `${comment[1]}\`\`\`${codeFence && rust ? 'rust,ignore' : language}`;
+  }).join('\n');
   text = text.replace(/feature = "(search|static_output)"/g, 'all()')
     .replace(/feature = "(dynamic_output|clipboard)"/g, 'any()')
     .replaceAll('any(any(), all())', 'all()')
