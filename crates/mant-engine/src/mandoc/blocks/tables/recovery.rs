@@ -2,7 +2,7 @@
 use crate::mandoc::{
     LoweringContext, TableTextBlock,
     inline::{
-        FilledBoundary, InlineBuilder, lower_man_link, lower_source_fragment_with_font_state,
+        FilledBoundary, InlineBuilder, lower_man_link, lower_source_fragment_with_formatter_state,
         plain_text,
     },
     roff_escape::visible_text,
@@ -102,6 +102,47 @@ pub(super) struct CellPosition<'a> {
     pub(super) row: &'a [libmandoc_rs::TableCell],
 }
 
+#[must_use]
+struct CellCandidate {
+    inlines: Vec<Inline>,
+    formatter: crate::mandoc::formatter::FormatterState,
+    diagnostics: Vec<mant_ir::Diagnostic>,
+}
+
+impl CellCandidate {
+    /// An empty normalized cell can shift source-block association. Accept
+    /// styles only when the candidate agrees with this cell or is not proven
+    /// to belong to another one; a control-only empty cell still commits state.
+    fn belongs_to(&self, cell: &libmandoc_rs::TableCell, position: CellPosition<'_>) -> bool {
+        if self.inlines.is_empty() {
+            return cell.text.as_deref().is_none_or(str::is_empty);
+        }
+        let text = plain_text(&self.inlines);
+        let agrees = cell
+            .text
+            .as_deref()
+            .is_none_or(|native| table_text_agrees(&text, &visible_text(native)));
+        agrees
+            || !position.row.iter().enumerate().any(|(index, candidate)| {
+                index != position.index
+                    && candidate
+                        .text
+                        .as_deref()
+                        .is_some_and(|native| table_text_agrees(&text, &visible_text(native)))
+            })
+    }
+
+    fn commit(
+        self,
+        context: &LoweringContext<'_>,
+        formatter: &mut crate::mandoc::formatter::FormatterState,
+    ) -> Vec<Inline> {
+        *formatter = self.formatter;
+        context.diagnostics.borrow_mut().extend(self.diagnostics);
+        self.inlines
+    }
+}
+
 pub(super) fn lower_table_cell(
     cell: &libmandoc_rs::TableCell,
     position: CellPosition<'_>,
@@ -111,12 +152,9 @@ pub(super) fn lower_table_cell(
     semantic_nodes: &[&Node],
     formatter: &mut crate::mandoc::formatter::FormatterState,
 ) -> Vec<Inline> {
-    let CellPosition {
-        index: cell_index,
-        row: row_cells,
-    } = position;
     if let Some(text_block) = text_block {
-        let initial_font = formatter.font;
+        let initial_state = *formatter;
+        let diagnostic_start = context.diagnostics.borrow().len();
         let semantic_nodes = semantic_nodes
             .iter()
             .copied()
@@ -126,51 +164,41 @@ pub(super) fn lower_table_cell(
         // flattened libmandoc cell text has already discarded request-level
         // font and spacing semantics. Reconstruct from the bounded source
         // block first even when no printable AST siblings escaped the table.
+        let mut candidate_state = initial_state;
         let recovered = lower_table_text_block(
             text_block,
             &semantic_nodes,
             context,
             node.flags.synopsis_pretty,
-            formatter,
+            &mut candidate_state,
         );
         // Recovery is transactional: a partially lowered cell is not a
         // replacement for the native payload. If that payload is absent,
         // retain the entire source rather than only the supported lines.
+        let candidate_diagnostics = context.diagnostics.borrow_mut().split_off(diagnostic_start);
         let reconstructed = match recovered {
             TableTextRecovery::Complete(inlines) => inlines,
             TableTextRecovery::Incomplete => {
-                formatter.font = initial_font;
+                context
+                    .diagnostics
+                    .borrow_mut()
+                    .extend(candidate_diagnostics);
+                *formatter = initial_state;
                 if let Some(text) = cell.text.as_deref().filter(|text| !text.is_empty()) {
                     return lower_table_cell_text(text, node.line, context, formatter);
                 }
-                context.lower_text(&text_block.source, formatter)
+                return context.lower_text(&text_block.source, formatter);
             }
         };
-        if !reconstructed.is_empty() {
-            // libmandoc associates the row with its first physical input
-            // line, but an empty `T{ T}` cell can be normalized to an
-            // ordinary empty cell. Source recovery then has fewer semantic
-            // cells than physical text blocks and may hand the next cell's
-            // block to this one. Never replace the parser's known visible
-            // payload with unrelated recovered text; retain source-derived
-            // styles and links whenever the two representations still
-            // contain one another.
-            let reconstructed_text = plain_text(&reconstructed);
-            let agrees_with_current = cell
-                .text
-                .as_deref()
-                .is_none_or(|text| table_text_agrees(&reconstructed_text, &visible_text(text)));
-            let belongs_to_other_cell = row_cells.iter().enumerate().any(|(index, candidate)| {
-                index != cell_index
-                    && candidate.text.as_deref().is_some_and(|text| {
-                        table_text_agrees(&reconstructed_text, &visible_text(text))
-                    })
-            });
-            if agrees_with_current || !belongs_to_other_cell {
-                return reconstructed;
-            }
+        let candidate = CellCandidate {
+            inlines: reconstructed,
+            formatter: candidate_state,
+            diagnostics: candidate_diagnostics,
+        };
+        if candidate.belongs_to(cell, position) {
+            return candidate.commit(context, formatter);
         }
-        formatter.font = initial_font;
+        *formatter = initial_state;
     }
     if cell.text.as_deref().is_some_and(|text| !text.is_empty()) {
         return lower_table_cell_text(
@@ -273,18 +301,18 @@ fn lower_table_text_block(
     synopsis: bool,
     formatter: &mut crate::mandoc::formatter::FormatterState,
 ) -> TableTextRecovery {
-    if let Some(recovered) = lower_source_fragment_with_font_state(
+    if let Some(recovered) = lower_source_fragment_with_formatter_state(
         &block.source,
         context.macro_set,
         context.default_name,
         synopsis,
-        formatter.font,
+        *formatter,
     ) {
         if !recovered.complete {
             context.warn_unhandled_table_text_block_line(block.start_line);
             return TableTextRecovery::Incomplete;
         }
-        formatter.font = recovered.font;
+        *formatter = recovered.formatter;
         return TableTextRecovery::Complete(recovered.inlines);
     }
     // A rejected request sequence cannot be proven complete by stitching
@@ -302,7 +330,7 @@ fn lower_table_text_block(
         );
         return TableTextRecovery::Incomplete;
     }
-    let mut builder = InlineBuilder::new();
+    let mut builder = InlineBuilder::with_spacing(formatter.spacing);
     for (offset, source_line) in block.source.lines().enumerate() {
         let line = block
             .start_line
@@ -324,6 +352,7 @@ fn lower_table_text_block(
                         formatter,
                     )
                 };
+                builder.inherit_spacing(formatter.spacing);
                 builder.append_filled(lowered, FilledBoundary::Word);
             }
             continue;
@@ -338,6 +367,7 @@ fn lower_table_text_block(
             FilledBoundary::Word,
         );
     }
+    formatter.spacing = builder.spacing_enabled();
     TableTextRecovery::Complete(builder.finish())
 }
 
@@ -346,6 +376,64 @@ mod tests {
     use mant_ir::Inline;
 
     use crate::mandoc::inline::plain_text;
+
+    #[test]
+    fn candidates_commit_or_discard_the_whole_formatter_state() {
+        fn find(node: &libmandoc_rs::Node) -> Option<&libmandoc_rs::Node> {
+            if node.kind == libmandoc_rs::NodeKind::Table {
+                Some(node)
+            } else {
+                node.children.iter().find_map(find)
+            }
+        }
+        let report = libmandoc_rs::Parser::new(libmandoc_rs::ParseOptions::default())
+            .parse_bytes("state.1", b".Dd September 8, 2026\n.Dt STATE 1\n.Os\n.Sh DESCRIPTION\n.TS\nl l.\nWORD\tNEXT\n.TE\n").unwrap();
+        let node = find(&report.document.root).unwrap();
+        let mut context = crate::mandoc::LoweringContext::new(None, None);
+        context.macro_set = libmandoc_rs::MacroSet::Mdoc;
+        for (source, expected_spacing, expected_text, native) in [
+            (".Sm off\n.Em NEXT", true, "WORD", "WORD"),
+            (".Sm off\n.Em WORD", false, "WORD", "WORD"),
+            (".Sm off", false, "", ""),
+            (".Sm off\n.Pp\nWORD", true, "WORD", "WORD"),
+        ] {
+            let mut cell = node.table_cells[0].clone();
+            cell.text = Some(native.to_owned());
+            cell.text_block = true;
+            let block = super::TableTextBlock {
+                source: source.to_owned(),
+                start_line: 7,
+                end_line: 9,
+            };
+            let mut state = crate::mandoc::formatter::FormatterState::default();
+            state
+                .font
+                .push_scope(crate::mandoc::roff_escape::RoffFont::Strong);
+            let mut expected = state;
+            expected.spacing = expected_spacing;
+            if source == ".Sm off\n.Em WORD" {
+                let saved = expected
+                    .font
+                    .push_scope(crate::mandoc::roff_escape::RoffFont::Emphasis);
+                expected.font.pop_scope(saved);
+            }
+            let result = super::lower_table_cell(
+                &cell,
+                super::CellPosition {
+                    index: 0,
+                    row: &node.table_cells,
+                },
+                node,
+                &context,
+                Some(&block),
+                &[],
+                &mut state,
+            );
+            assert_eq!(plain_text(&result), expected_text, "{source}");
+            assert_eq!(state.spacing, expected_spacing, "{source}");
+            assert_eq!(state, expected, "{source}");
+        }
+    }
 
     #[test]
     fn incomplete_cell_recovery_keeps_whole_native_payload_or_whole_source() {
@@ -403,23 +491,23 @@ mod tests {
 
     #[test]
     fn source_requests_dispatch_to_man_and_mdoc_inline_lowering() {
-        let man = super::lower_source_fragment_with_font_state(
+        let man = super::lower_source_fragment_with_formatter_state(
             ".BR git (1)",
             libmandoc_rs::MacroSet::Man,
             None,
             false,
-            crate::mandoc::inline::FontState::new(),
+            crate::mandoc::formatter::FormatterState::default(),
         )
         .unwrap()
         .inlines;
         assert_eq!(plain_text(&man), "git(1)");
 
-        let mdoc = super::lower_source_fragment_with_font_state(
+        let mdoc = super::lower_source_fragment_with_formatter_state(
             ".Xr git 1 ,",
             libmandoc_rs::MacroSet::Mdoc,
             None,
             false,
-            crate::mandoc::inline::FontState::new(),
+            crate::mandoc::formatter::FormatterState::default(),
         )
         .unwrap()
         .inlines;

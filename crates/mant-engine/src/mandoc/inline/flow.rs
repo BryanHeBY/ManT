@@ -16,7 +16,7 @@ pub(in crate::mandoc) struct InlineBuilder {
 }
 
 /// Roff remembers the previous selection independently of the current font.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(in crate::mandoc) struct FontState {
     pub(super) current: Font,
     pub(super) previous: Font,
@@ -107,6 +107,7 @@ pub(in crate::mandoc) enum FilledBoundary {
 }
 
 impl InlineBuilder {
+    #[cfg(test)]
     pub(in crate::mandoc) const fn new() -> Self {
         Self {
             nodes: Vec::new(),

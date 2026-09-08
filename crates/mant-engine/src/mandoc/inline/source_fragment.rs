@@ -10,22 +10,22 @@ use libmandoc_rs::{
 use mant_ir::Inline;
 
 use super::{
-    FontState, InlineBuilder, append_inline_node_with_next, lower_man_link,
-    parse_roff_text_with_state,
+    InlineBuilder, append_inline_node_with_next, lower_man_link, parse_roff_text_with_state,
 };
 
+#[must_use]
 pub(in crate::mandoc) struct RecoveredFragment {
     pub(in crate::mandoc) inlines: Vec<Inline>,
     pub(in crate::mandoc) complete: bool,
-    pub(in crate::mandoc) font: FontState,
+    pub(in crate::mandoc) formatter: crate::mandoc::formatter::FormatterState,
 }
 
-pub(in crate::mandoc) fn lower_source_fragment_with_font_state(
+pub(in crate::mandoc) fn lower_source_fragment_with_formatter_state(
     source: &str,
     dialect: MacroSet,
     default_name: Option<&str>,
     synopsis: bool,
-    font: FontState,
+    formatter: crate::mandoc::formatter::FormatterState,
 ) -> Option<RecoveredFragment> {
     let mut requests = 0;
     for line in source.lines() {
@@ -50,11 +50,11 @@ pub(in crate::mandoc) fn lower_source_fragment_with_font_state(
     // Bound extra parsing work and nesting before entering the native parser.
     // On exhaustion retain the entire source spelling, including tail tokens.
     let fallback = || {
-        let mut font = font;
+        let mut font = formatter.font;
         RecoveredFragment {
             inlines: parse_roff_text_with_state(source, &mut font, true),
             complete: false,
-            font,
+            formatter,
         }
     };
     if requests > 64
@@ -114,11 +114,12 @@ pub(in crate::mandoc) fn lower_source_fragment_with_font_state(
         .children
         .iter()
         .find(|node| node.kind == NodeKind::Body)?;
-    let mut font = font;
+    let mut formatter = formatter;
+    let inlines = lower_body(&body.children, default_name, &mut formatter);
     Some(RecoveredFragment {
-        inlines: lower_body(&body.children, default_name, &mut font),
+        inlines,
         complete: true,
-        font,
+        formatter,
     })
 }
 
@@ -129,16 +130,22 @@ fn lower_source_fragment(
     default_name: Option<&str>,
     synopsis: bool,
 ) -> Option<RecoveredFragment> {
-    lower_source_fragment_with_font_state(source, dialect, default_name, synopsis, FontState::new())
+    lower_source_fragment_with_formatter_state(
+        source,
+        dialect,
+        default_name,
+        synopsis,
+        crate::mandoc::formatter::FormatterState::default(),
+    )
 }
 
 fn lower_body(
     nodes: &[libmandoc_rs::Node],
     default_name: Option<&str>,
-    font: &mut FontState,
+    formatter: &mut crate::mandoc::formatter::FormatterState,
 ) -> Vec<Inline> {
-    let mut builder = InlineBuilder::new();
-    builder.font = *font;
+    let mut builder = InlineBuilder::with_spacing(formatter.spacing);
+    builder.font = formatter.font;
     for (index, node) in nodes.iter().enumerate() {
         if matches!(node.macro_name.as_deref(), Some("UR" | "MT")) {
             builder.append(lower_man_link(
@@ -150,7 +157,8 @@ fn lower_body(
             append_inline_node_with_next(&mut builder, node, nodes.get(index + 1), default_name);
         }
     }
-    *font = builder.font;
+    formatter.font = builder.font;
+    formatter.spacing = builder.spacing_enabled();
     builder.finish()
 }
 
