@@ -21,6 +21,7 @@ pub(super) struct DeclarationState {
     phase: Phase,
     uncertain: bool,
     literal_starts: HashSet<usize>,
+    argument_starts: HashSet<usize>,
     validated_token: bool,
 }
 
@@ -28,6 +29,21 @@ impl DeclarationState {
     pub(super) fn new(text: String, inlines: &[Inline]) -> Self {
         let mut literal_starts = HashSet::new();
         collect_literal_starts(inlines, false, false, &mut 0, &mut literal_starts);
+        let mut ranges = Vec::new();
+        literal_ranges(inlines, false, false, &mut 0, &mut ranges);
+        let argument_starts = ranges
+            .iter()
+            .filter_map(|&(_, end)| {
+                let rest = &text[end..];
+                let next = rest.trim_start();
+                let offset = text.len() - next.len();
+                (rest.starts_with(char::is_whitespace)
+                    && !next.is_empty()
+                    && !next.starts_with([',', '|', '/', '-', '+'])
+                    && !literal_starts.contains(&offset))
+                .then_some(offset)
+            })
+            .collect();
         Self {
             text,
             offset: 0,
@@ -35,6 +51,7 @@ impl DeclarationState {
             phase: Phase::Name,
             uncertain: false,
             literal_starts,
+            argument_starts,
             validated_token: false,
         }
     }
@@ -45,6 +62,9 @@ impl DeclarationState {
     }
 
     pub(super) fn separator(&mut self, character: char, eligible: bool) -> bool {
+        if self.argument_starts.contains(&self.offset) {
+            self.begin_argument();
+        }
         let next_offset = self.offset + character.len_utf8();
         // This method sees every visible scalar, not just separators. Avoid
         // rescanning the remaining head for every character in a long form.
@@ -57,7 +77,7 @@ impl DeclarationState {
         let fresh_option = remainder.starts_with(char::is_whitespace)
             && remainder.trim_start().starts_with(['-', '+']);
         let following = remainder.trim_start();
-        let fresh_literal = self.phase == Phase::StyledArgument
+        let fresh_literal = self.phase != Phase::Name
             && self
                 .literal_starts
                 .contains(&(self.text.len() - following.len()))
@@ -115,6 +135,40 @@ impl DeclarationState {
     fn begin_argument(&mut self) {
         if self.phase == Phase::Name {
             self.phase = Phase::Argument;
+        }
+    }
+}
+
+/// Preserve literal coverage through transparent wrappers. Only a whitespace-
+/// separated unstyled suffix begins an ordinary argument; a multiword literal
+/// command or a new independently styled declaration keeps its full spelling.
+fn literal_ranges(
+    nodes: &[Inline],
+    literal: bool,
+    parameter: bool,
+    offset: &mut usize,
+    ranges: &mut Vec<(usize, usize)>,
+) {
+    for node in nodes {
+        match node {
+            Inline::Text { value } | Inline::Code { value } => {
+                let end = *offset + value.len();
+                if (literal || matches!(node, Inline::Code { .. })) && !parameter {
+                    ranges.push((*offset, end));
+                }
+                *offset = end;
+            }
+            Inline::Strong { children } => {
+                literal_ranges(children, true, parameter, offset, ranges);
+            }
+            Inline::Emphasis { children } => {
+                literal_ranges(children, literal, true, offset, ranges);
+            }
+            Inline::Link { children, .. } => {
+                literal_ranges(children, literal, parameter, offset, ranges);
+            }
+            Inline::LineBreak => *offset += 1,
+            Inline::Anchor { .. } => {}
         }
     }
 }

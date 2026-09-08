@@ -46,7 +46,9 @@ pub(super) fn infer_identity(
         item.terms
             .iter()
             .map(|term| {
-                named::environment_occurrences(&forms::literal_prefix(term)).unwrap_or_default()
+                forms::environment_prefix(term)
+                    .and_then(|prefix| named::environment_occurrences(&prefix))
+                    .unwrap_or_default()
             })
             .collect()
     } else {

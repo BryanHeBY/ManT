@@ -62,6 +62,16 @@ impl FormCandidate {
     }
 
     fn paired_invocations(self) -> Vec<Self> {
+        if let Some(tokens) = pattern_declarations(&self.inlines) {
+            return tokens
+                .into_iter()
+                .map(|(token, offset)| Self {
+                    inlines: Vec::new(),
+                    start: self.start,
+                    token: Some((token, self.start + offset)),
+                })
+                .collect();
+        }
         let Some([first, second]) = paired_option_tokens(&self.inlines) else {
             return vec![self];
         };
@@ -80,8 +90,41 @@ impl FormCandidate {
     }
 }
 
+/// A complete whitespace-separated literal head may contain a pattern plus
+/// independently spelled long options. Accept no operands, argument styling,
+/// assignment suffixes or prose; a pattern itself never expands into names.
+fn pattern_declarations(inlines: &[Inline]) -> Option<Vec<(String, usize)>> {
+    let mut literal = String::new();
+    if !append_name_prefix(inlines, &mut literal) {
+        return None;
+    }
+    let tokens = literal.split_whitespace().collect::<Vec<_>>();
+    if tokens.len() < 2
+        || !tokens[0].starts_with('-')
+        || !tokens[0].contains('#')
+        || !tokens[0].chars().all(|c| matches!(c, '-' | '#'))
+        || !tokens[1..].iter().all(|token| {
+            token.starts_with("--") && super::options::option_prefix(token) == Some(*token)
+        })
+    {
+        return None;
+    }
+    Some(
+        tokens[1..]
+            .iter()
+            .map(|token| {
+                (
+                    (*token).to_owned(),
+                    token.as_ptr() as usize - literal.as_ptr() as usize,
+                )
+            })
+            .collect(),
+    )
+}
+
 /// A complete short/long pair is a finite declaration convention, not argv
-/// parsing. An arbitrary later dash token, third literal argument, or an
+/// parsing. Separately validated pattern heads are handled above. An arbitrary
+/// later dash token, third literal argument, or an
 /// emphasized operand cannot restart name recognition.
 pub(super) fn paired_option_tokens(inlines: &[Inline]) -> Option<[(String, usize); 2]> {
     let prefix = literal_prefix(inlines);
@@ -136,6 +179,14 @@ pub(super) fn literal_prefix(inlines: &[Inline]) -> String {
     let mut prefix = String::new();
     append_name_prefix(inlines, &mut prefix);
     prefix
+}
+
+/// An adjacent placeholder is part of the variable name, not the boundary of
+/// a shorter exact name. Separated operands and assignment values are different.
+pub(super) fn environment_prefix(inlines: &[Inline]) -> Option<String> {
+    let mut prefix = String::new();
+    let complete = append_name_prefix(inlines, &mut prefix);
+    (complete || prefix.ends_with(char::is_whitespace) || prefix.contains('=')).then_some(prefix)
 }
 
 /// Split complete declarations without flattening parameter spans. Bracket

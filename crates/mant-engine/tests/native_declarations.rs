@@ -5,6 +5,8 @@ use mant_ir::{
 };
 use mant_protocol::{EvidenceClass, ExplanationOptions, ExplanationQuery};
 
+#[path = "native_declarations/boundaries.rs"]
+mod boundaries;
 #[path = "native_declarations/hanging.rs"]
 mod hanging;
 #[path = "native_declarations/roles.rs"]
