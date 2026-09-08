@@ -32,6 +32,7 @@ The selected color is visible in terminal output.
 
 #[test]
 fn environment_names_use_the_same_distinct_palette_across_text_views() {
+    use super::terminal::{TerminalRole, terminal_style};
     let content = mant_engine::query_roff_bytes(
         b".TH ENV 1\n.SH ENVIRONMENT\n.TP\n.B DISPLAY\nSelect a display.\n",
     )
@@ -47,7 +48,7 @@ fn environment_names_use_the_same_distinct_palette_across_text_views() {
         },
         QueryView::Explain {
             entry: "DISPLAY".into(),
-            options: Default::default(),
+            options: mant_protocol::ExplanationOptions::default(),
         },
         QueryView::Search {
             pattern: "Select".into(),
@@ -80,7 +81,6 @@ fn environment_names_use_the_same_distinct_palette_across_text_views() {
             "{view:?}: {colored:?}"
         );
     }
-    use super::terminal::{TerminalRole, terminal_style};
     assert_eq!(
         terminal_style(TerminalRole::Entry(mant_ir::EntryKind::Variable)).get_fg_color(),
         Some(anstyle::AnsiColor::BrightMagenta.into())
