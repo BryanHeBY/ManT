@@ -155,3 +155,84 @@ fn metadata_cannot_break_lines_and_original_fake_fields_remain_quoted() {
         "{body}"
     );
 }
+
+#[test]
+fn scoped_serialized_owners_with_the_same_id_keep_independent_name_roles() {
+    use mant_protocol::{
+        ScopeQueryResponse, ScopeQueryResult, ScopedExplanation, ScopedExplanationEvidence,
+    };
+    let template: ScopeQueryResponse = serde_json::from_str(include_str!(
+        "../../../tests/contracts/scope-explain-v0.11.json"
+    ))
+    .unwrap();
+    let ScopeQueryResult::Explain { mut explanation } = template.result else {
+        unreachable!()
+    };
+    explanation.documents.clear();
+    explanation.query.entry = "mode".into();
+    explanation.total = 2;
+    explanation.returned = 2;
+    explanation.outcome = mant_protocol::ExplanationOutcome::Evidence;
+    explanation.counts.direct_entry.total = 2;
+    explanation.counts.direct_entry.returned = 2;
+    for (index, role) in ["command", "configuration-key"].into_iter().enumerate() {
+        let mut content = mant_engine::query_markdown_text(&format!("# Tool\n\n<!-- mant:entries role={role} case=sensitive -->\n- `mode`: Original description.\n"),None).unwrap();
+        let mant_ir::Block::List { items, .. } = &mut content.document.as_mut().unwrap().blocks[0]
+        else {
+            unreachable!()
+        };
+        items[0].entry.as_mut().unwrap().id = "shared-owner".into();
+        let mut result = explain_query(
+            &content,
+            &ExplanationQuery {
+                entry: "mode".into(),
+                options: ExplanationOptions::default(),
+            },
+        )
+        .unwrap();
+        let mut evidence = result.evidence.remove(0);
+        evidence.ordinal = u32::try_from(index).unwrap();
+        explanation.evidence.push(ScopedExplanationEvidence {
+            document_index: index,
+            evidence,
+        });
+        explanation.documents.push(ScopedExplanation {
+            address: mant_ir::DocumentAddress::Manual {
+                name: format!("doc{index}"),
+                manual_section: "1".into(),
+            },
+            depth: 0,
+            label: format!("doc{index}"),
+            producer: None,
+            diagnostics: vec![],
+            semantics_complete: true,
+            outcome: result.outcome,
+            total: 1,
+            returned: 1,
+            counts: result.counts,
+            truncation: result.truncation,
+        });
+    }
+    let decoded = serde_json::from_slice(&serde_json::to_vec(&explanation).unwrap()).unwrap();
+    let seen = RefCell::new(vec![]);
+    let text = mant_engine::render_scope_explanation_text_with(&decoded, |style, text| {
+        if style.matched && text == "mode" {
+            seen.borrow_mut().push(style.inline.entry_kind);
+        }
+        text.to_owned()
+    });
+    assert_eq!(
+        text,
+        mant_engine::render_scope_explanation_text(&explanation)
+    );
+    assert_eq!(
+        mant_engine::render_scope_explanation_markdown(&decoded),
+        mant_engine::render_scope_explanation_markdown(&explanation)
+    );
+    assert!(text.contains("Read original: manual/1/doc0; node root/e1"));
+    assert!(text.contains("Read original: manual/1/doc1; node root/e1"));
+    assert!(text.contains("\n\n----------\n\n"));
+    let seen = seen.into_inner();
+    assert!(seen.contains(&Some(mant_ir::EntryKind::Command)));
+    assert!(seen.contains(&Some(mant_ir::EntryKind::ConfigurationKey)));
+}

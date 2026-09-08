@@ -165,6 +165,7 @@ fn bound_link_name_keeps_type_and_modifiers_through_code_surface_and_wrapping() 
                 .iter()
                 .any(|link| matches!(&link.target, LinkTarget::Document { .. }))
         );
+        assert_link_selection(&view, &rendered, &hit, width);
     }
 }
 
@@ -308,4 +309,51 @@ fn definition_lists_honour_compact_and_per_item_spacing() {
     assert_eq!(second_term, first_description + 3);
     assert!(rows[first_description + 1].trim().is_empty());
     assert!(rows[first_description + 2].trim().is_empty());
+}
+
+fn assert_link_selection(
+    view: &DocumentView,
+    rendered: &crate::document::RenderedDocument,
+    hit: &[crate::document::RenderedSearchMatch],
+    width: u16,
+) {
+    let first = &hit[0];
+    let (last_row, last_end) = first
+        .additional_fragments
+        .last()
+        .map_or((first.row, first.end_column), |f| (f.row, f.end_column));
+    let selection = crate::document::RenderedSelection {
+        anchor: crate::document::TextPosition {
+            row: first.row,
+            column: first.start_column,
+        },
+        focus: crate::document::TextPosition {
+            row: last_row,
+            column: last_end - 1,
+        },
+    };
+    let highlighted = rendered.viewport_text(0, rendered.row_count, hit, Some(0), Some(selection));
+    let selected: Vec<_> = highlighted
+        .lines
+        .iter()
+        .flat_map(|line| &line.spans)
+        .filter(|s| s.style.bg == Some(theme::SELECTED))
+        .collect();
+    assert_eq!(
+        selected
+            .iter()
+            .map(|s| s.content.as_ref())
+            .collect::<String>(),
+        "--help"
+    );
+    assert!(
+        selected
+            .iter()
+            .all(|s| s.style.add_modifier.contains(Modifier::UNDERLINED))
+    );
+    assert_eq!(
+        rendered.selected_text(selection).replace('\n', ""),
+        "--help"
+    );
+    assert_eq!(view.render(width).text, rendered.text);
 }

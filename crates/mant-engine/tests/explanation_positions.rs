@@ -315,6 +315,12 @@ fn records_occurrences_and_total_positions_have_independent_omissions() {
         assert!(evidence.name_bindings_omitted);
         assert_eq!(evidence.match_details_omitted, request != "subject");
         assert!(result.truncation.content);
+        if names == 32 && repeats == 32 {
+            let count: usize = occurrences(evidence)
+                .map(|o| o.forms.len() + o.content.len())
+                .sum();
+            assert_eq!(count, MAX_EXPLANATION_POSITIONS);
+        }
     }
     let content = synthetic(1, 35);
     let result =
@@ -363,6 +369,36 @@ fn all_budget_sizes_keep_locations_resolvable_and_account_for_new_payload() {
         assert!(used <= bytes as usize, "budget {bytes}: copied {used}");
         assert_eq!(result.truncation.content, evidence.has_omitted_content());
     }
+}
+
+#[test]
+fn matched_facts_and_body_survive_when_expanded_form_metadata_does_not_fit() {
+    let mut content = synthetic(1, 1);
+    let Block::DefinitionList { items, .. } =
+        &mut content.document.as_mut().unwrap().sections[0].blocks[0]
+    else {
+        unreachable!()
+    };
+    let item = &mut items[0];
+    item.terms[0] = vec![Inline::Code {
+        value: format!("name0 {}", "填".repeat(400)),
+    }];
+    item.entry.as_mut().unwrap().forms = vec![EntryForm::term(0); 100];
+    let result = explain_query(&content, &query("name0", 16384)).unwrap();
+    let evidence = &result.evidence[0];
+    assert!(evidence.details_omitted && evidence.entry.is_none());
+    assert!(!evidence.content_omitted && evidence.content.is_some());
+    assert!(!evidence.name_bindings_omitted && !evidence.match_details_omitted);
+    let EvidenceBasis::Name { matches } = &evidence.bases[0] else {
+        panic!("name")
+    };
+    assert_eq!(matches[0].name, "name0");
+    assert!(matches[0].occurrences[0].forms.is_empty());
+    assert_eq!(
+        text_at(evidence, &matches[0].occurrences[0].content[0]),
+        "name0"
+    );
+    validate_positions(evidence);
 }
 
 #[test]

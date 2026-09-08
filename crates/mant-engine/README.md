@@ -166,6 +166,15 @@ IR. Compact rendering shows those windows for mentions instead of unrelated
 full owner content. Clipping, omitted previews, and atomic body omission are
 distinct. No evidence query performs I/O or executes examples.
 
+`render_explanation_text_with` and `render_scope_explanation_text_with` expose
+the same framed report as plain text, with terminal-neutral `TextPresentation`
+spans. Their callbacks preserve visible text and boundary whitespace. Exact
+matches and ordinary name styling resolve only against returned forms/content;
+deserialized responses need no original document or query-side table. The
+corresponding Markdown renderers quote source lines, escape metadata, and retain
+verbatim fenced code. Outline text likewise has one plain/decorated tree through
+`render_outline_text_with`, with complete IDs on hanging metadata lines.
+
 ```rust
 let query = mant_engine::query_markdown_text("# Demo\n\n- `--help`: Usage.\n", None)?;
 let evidence = mant_engine::select_explanation(&query, "--help")?;
