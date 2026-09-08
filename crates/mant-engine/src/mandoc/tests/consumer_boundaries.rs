@@ -2,6 +2,24 @@
 use super::inline_boundaries::{assert_flow, query, variants};
 
 #[test]
+fn man_literal_synopsis_preserves_font_state_across_lines() {
+    use super::font_boundaries::assert_style;
+    for (body, style) in [
+        ("\\fBWORD\nNEXT", 1),
+        ("\\fIWORD\nNEXT", 2),
+        (".ft B\nWORD\nNEXT", 1),
+        ("\\fBWORD\\fIOTHER\n\\fPNEXT", 1),
+    ] {
+        let source =
+            format!(".TH PROBE 1\n.SH DESCRIPTION\n.EX\n.SY command\n{body}\n.YS\n.EE\nTAIL\n");
+        let content = crate::query_roff_bytes(source.as_bytes()).unwrap();
+        assert_style(&content, "WORD", style);
+        assert_style(&content, "NEXT", style);
+        assert_style(&content, "TAIL", 0);
+    }
+}
+
+#[test]
 fn prose_function_blocks_are_inline_but_synopsis_declarations_remain_separate() {
     assert_flow(
         ".No before\n.Fo WORD\n.Fa arg\n.Fc\n.No after",

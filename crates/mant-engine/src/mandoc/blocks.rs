@@ -611,10 +611,17 @@ fn lower_no_fill_lines(
     }
 
     let mut lines = Vec::new();
-    let head = lower_inline_nodes(first_part_children(node, NodeKind::Head), default_name);
+    let saved = font.push_scope(super::roff_escape::RoffFont::Strong);
+    let head = lower_inline_nodes_with_font_state(
+        first_part_children(node, NodeKind::Head),
+        default_name,
+        true,
+        font,
+    );
+    font.pop_scope(saved);
     if !head.is_empty() {
         lines.push(LoweredNoFillLine {
-            nodes: vec![Inline::Strong { children: head }],
+            nodes: head,
             source: source_span(node),
             continues_line: first_part_children(node, NodeKind::Head)
                 .last()
@@ -622,7 +629,12 @@ fn lower_no_fill_lines(
         });
     }
     for child in body {
-        let line = lower_inline_nodes(std::slice::from_ref(child), default_name);
+        let line = lower_inline_nodes_with_font_state(
+            std::slice::from_ref(child),
+            default_name,
+            true,
+            font,
+        );
         if !line.is_empty() {
             lines.push(LoweredNoFillLine {
                 nodes: line,
@@ -631,6 +643,9 @@ fn lower_no_fill_lines(
             });
         }
     }
+    // The man SY macro closes its font scope after its whole body, not after
+    // each physical no-fill line. YS/EE and subsequent prose start regular.
+    *font = FontState::new();
     Some(lines)
 }
 
