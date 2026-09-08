@@ -78,6 +78,17 @@ impl<'a> mant_ir::visit::Visit<'a> for Bindings {
 }
 
 #[test]
+fn local_mdoc_fonts_keep_name_bindings_and_complete_forms() {
+    for head in [r"Fl x Ar \fBARG No NEXT", r"Fl x Em \fIARG No NEXT"] {
+        let source = format!(
+            ".Dd September 8, 2026\n.Dt PROBE 1\n.Os\n.Sh OPTIONS\n.Bl -tag -width Ds\n.It {head}\nPAYLOAD.\n.El\n"
+        );
+        let query = mant_engine::query_roff_bytes(source.as_bytes()).unwrap();
+        assert_direct_names(&query, &["-x"], "-x ARG NEXT");
+    }
+}
+
+#[test]
 fn enclosure_spacing_preserves_option_forms_names_and_explanation_sources() {
     for head in ["Fl x Oo Ar arg Ns Oc Ar tail", "Fl x Oo Pf arg Oc Ar tail"] {
         let source = format!(

@@ -130,11 +130,15 @@ pub(super) fn append_inline_node_with_next(
         if node.flags.delimiter_close {
             builder.tighten_next_boundary();
         }
+        let font = builder.font;
         let inlines = parse_roff_text_with_state(
             node.text.as_deref().unwrap_or_default(),
             &mut builder.font,
             !node.flags.no_fill,
         );
+        if builder.local_operand_fonts {
+            builder.font = font;
+        }
         builder.append(inlines);
         if node.flags.delimiter_open || node.flags.line_continuation {
             builder.tighten_next_boundary();
@@ -708,6 +712,26 @@ fn push_text(nodes: &mut Vec<Inline>, value: String) {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn local_font_scopes_restore_both_selections_without_resetting_spacing() {
+        let mut builder = super::InlineBuilder::new();
+        builder.font.select(super::Font::Emphasis);
+        builder.font.select(super::Font::Strong);
+        builder.with_local_fonts(|builder| {
+            builder.font.select(super::Font::Code);
+            builder.with_local_fonts(|builder| {
+                builder.font.select(super::Font::Regular);
+                builder.tighten_next_boundary();
+            });
+            assert_eq!(builder.font.current, super::Font::Code);
+            assert_eq!(builder.font.previous, super::Font::Strong);
+        });
+        assert_eq!(builder.font.current, super::Font::Strong);
+        assert_eq!(builder.font.previous, super::Font::Emphasis);
+        assert!(builder.has_tight_boundary());
+        assert!(!builder.local_operand_fonts);
+    }
+
     #[test]
     fn prefix_scope_distinguishes_invisible_operands_from_explicit_joins() {
         for explicit in [false, true] {

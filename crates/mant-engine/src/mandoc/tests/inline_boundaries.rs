@@ -7,7 +7,7 @@ fn source(body: &str) -> String {
     )
 }
 
-fn query(body: &str) -> ResolvedContent {
+pub(super) fn query(body: &str) -> ResolvedContent {
     crate::query_roff_bytes(source(body).as_bytes()).unwrap()
 }
 
@@ -49,7 +49,7 @@ fn unindent(text: &str) -> String {
         .join("\n")
 }
 
-fn variants(body: &str) -> Vec<String> {
+pub(super) fn variants(body: &str) -> Vec<String> {
     vec![
         body.into(),
         format!(".Bd -literal\n{body}\n.Ed"),

@@ -10,6 +10,7 @@ pub(in crate::mandoc) struct InlineBuilder {
     last_visible_character: Option<char>,
     has_printable_content: bool,
     pub(in crate::mandoc) font: FontState,
+    pub(super) local_operand_fonts: bool,
 }
 
 /// Roff remembers the previous selection independently of the current font.
@@ -100,6 +101,7 @@ impl InlineBuilder {
             last_visible_character: None,
             has_printable_content: false,
             font: FontState::new(),
+            local_operand_fonts: false,
         }
     }
 
@@ -111,6 +113,7 @@ impl InlineBuilder {
             last_visible_character: None,
             has_printable_content: false,
             font: FontState::new(),
+            local_operand_fonts: false,
         }
     }
 
@@ -187,6 +190,21 @@ impl InlineBuilder {
 
     pub(in crate::mandoc) fn append(&mut self, mut incoming: Vec<Inline>) {
         self.append_at_boundary(&mut incoming);
+    }
+
+    /// Semantic mdoc scopes share spacing with their caller, not local font
+    /// escapes. Save both font selections, including the meaning of `\\fP`.
+    /// Text operands inside this scope also restore their entry font state;
+    /// a native multi-word text node remains one font scope, not one per word.
+    /// This is deliberately separate from the source-neutral styling helper:
+    /// man text, `.ft`, and structural literal/Bf scopes have other lifetimes.
+    pub(super) fn with_local_fonts(&mut self, append: impl FnOnce(&mut Self)) {
+        let font = self.font;
+        let local_operand_fonts = self.local_operand_fonts;
+        self.local_operand_fonts = true;
+        append(self);
+        self.font = font;
+        self.local_operand_fonts = local_operand_fonts;
     }
 
     /// Style newly appended content without creating a new formatter state.

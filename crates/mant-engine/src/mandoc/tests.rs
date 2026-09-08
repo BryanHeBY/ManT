@@ -13,6 +13,7 @@ use super::{
 
 mod entry_forms;
 mod flow_controls;
+mod font_boundaries;
 mod inline_boundaries;
 mod upstream_inline;
 mod upstream_tables;

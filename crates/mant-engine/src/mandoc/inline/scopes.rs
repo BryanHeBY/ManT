@@ -6,6 +6,10 @@ use super::{
 };
 
 pub(super) fn append(builder: &mut InlineBuilder, node: &Node, name: Option<&str>) {
+    builder.with_local_fonts(|builder| append_scoped(builder, node, name));
+}
+
+fn append_scoped(builder: &mut InlineBuilder, node: &Node, name: Option<&str>) {
     if node.macro_name.as_deref() == Some("Tg") {
         if let Some(anchor) = navigation_anchor(node) {
             builder.append(vec![anchor]);
