@@ -14,14 +14,52 @@ use distance::Distance;
 
 const MAX_INDENT_COLUMNS: u16 = 4096;
 
+/// A source position and its actual IR parent's content position. Transparent
+/// roff scopes move only the former; entering an owned body resets the latter.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(super) struct SourceIndent {
+    source: Distance,
+    parent: Distance,
+}
+
+impl SourceIndent {
+    pub(super) fn relative_columns(self) -> i32 {
+        self.source.columns().saturating_sub(self.parent.columns())
+    }
+
+    pub(super) fn content_origin(self) -> Self {
+        Self {
+            source: self.source,
+            parent: self.source,
+        }
+    }
+}
+
+#[cfg(test)]
+impl From<i32> for SourceIndent {
+    fn from(columns: i32) -> Self {
+        Self {
+            source: Distance::cells(columns),
+            parent: Distance::default(),
+        }
+    }
+}
+
 impl super::LoweringContext<'_> {
-    pub(super) fn nested_indent(&self, node: &Node, parent: u16, extra: u16) -> u16 {
-        let (sum, bounded) =
-            Distance::cells(i32::from(parent)).add(Distance::cells(i32::from(extra)));
-        if bounded || parent > MAX_INDENT_COLUMNS || extra > MAX_INDENT_COLUMNS {
+    pub(super) fn nested_indent(
+        &self,
+        node: &Node,
+        parent: SourceIndent,
+        extra: u16,
+    ) -> SourceIndent {
+        let (sum, bounded) = parent.source.add(Distance::cells(i32::from(extra)));
+        if bounded || extra > MAX_INDENT_COLUMNS {
             self.warn_indent(node);
         }
-        u16::try_from(sum.columns()).unwrap_or(MAX_INDENT_COLUMNS)
+        SourceIndent {
+            source: sum,
+            parent: parent.parent,
+        }
     }
 
     pub(super) fn display_offset(&self, node: &Node) -> u16 {
@@ -125,7 +163,7 @@ pub(super) fn normalize_explicit_vertical_spacing(blocks: &mut [Block]) {
 }
 
 /// Return a block's indentation when it has one.
-pub(super) fn block_indent(block: &Block) -> Option<u16> {
+pub(super) fn block_indent(block: &Block) -> Option<i32> {
     block_layout(block).map(|layout| layout.indent_columns)
 }
 
@@ -198,20 +236,20 @@ pub(super) fn horizontal_distance_columns(argument: &str) -> Option<usize> {
 }
 
 /// Construct a zero-spacing layout at a semantic indentation level.
-pub(super) const fn layout(indent_columns: u16) -> LayoutHint {
+pub(super) fn layout(indent_columns: SourceIndent) -> LayoutHint {
     LayoutHint {
-        indent_columns,
+        indent_columns: indent_columns.relative_columns(),
         spacing_before_lines: 0,
     }
 }
 
 /// Construct a layout that preserves an explicit leading vertical distance.
-pub(super) const fn layout_with_spacing(
-    indent_columns: u16,
+pub(super) fn layout_with_spacing(
+    indent_columns: SourceIndent,
     spacing_before_lines: u16,
 ) -> LayoutHint {
     LayoutHint {
-        indent_columns,
+        indent_columns: indent_columns.relative_columns(),
         spacing_before_lines,
     }
 }
@@ -296,7 +334,7 @@ mod tests {
             display_indent(&node(NodeKind::Root, None, Some("65535n"))),
             4
         );
-        assert_eq!(layout(3).indent_columns, 3);
+        assert_eq!(layout(3.into()).indent_columns, 3);
     }
 
     #[test]
@@ -308,7 +346,7 @@ mod tests {
             },
             Block::Paragraph {
                 children: Vec::new(),
-                layout: layout_with_spacing(4, 1),
+                layout: layout_with_spacing(4.into(), 1),
                 source: None,
             },
         ];

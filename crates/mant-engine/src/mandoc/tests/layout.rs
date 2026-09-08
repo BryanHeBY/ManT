@@ -24,10 +24,16 @@ fn excessive_display_and_list_offsets_are_bounded_without_losing_content() {
             let document =
                 parse_manual_bytes(std::path::Path::new("offset.1"), source.as_bytes()).unwrap();
             LayoutBounds.visit_document(&document);
-            assert!(
-                document.diagnostics.iter().any(
-                    |diagnostic| diagnostic.code.as_deref() == Some("manual.indentation-limit")
-                )
+            let bounded = document
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.code.as_deref() == Some("manual.indentation-limit"));
+            // A list without -offset no longer adds an invented four columns.
+            // Exactly 4096n therefore stays within the source-position limit
+            // for a bullet body; definitions/displays add an actual offset.
+            assert_eq!(
+                bounded,
+                offset != "4096n" || body != ".Bl -bullet\n.It\nCONTENT\n.El"
             );
             assert!(
                 crate::query_roff_bytes(source.as_bytes())

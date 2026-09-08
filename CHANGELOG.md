@@ -16,6 +16,20 @@ that crate was not published for that change.
   including colon-form colors. A query with no matches preserves the viewport
   instead of panicking; wrapped-row regex anchors retain physical-row semantics.
 
+### Parent-relative document geometry (unreleased v0.11)
+
+- `mant-ir` layout indentation is now signed and relative to the actual content
+  parent. The closed layout object rejects unknown fields. Source lowering
+  keeps source positions separate from IR parent origins; reparenting changes
+  only the moved root, not every descendant.
+- `mant-engine` text and `mant-ui` compose parent origins once, share marker
+  collision and cell-width rules, and preserve separate source term lines
+  instead of inserting commas. Zero-width targets do not introduce blank rows.
+  Markdown list nesting no longer multiplies the section's indentation.
+- `mant-protocol` exposes pure geometry helpers; the unpublished v0.11 schema
+  reflects signed block origins. Consumers must not treat these displacements
+  as unsigned cumulative margins.
+
 ### Recovered declaration context (unreleased v0.11)
 
 - Preserve consecutive native declaration groups as optional definition-list

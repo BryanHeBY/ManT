@@ -32,7 +32,7 @@ pub(super) fn lower_synopsis_head(
     output: &mut Vec<Block>,
     node: &Node,
     context: &LoweringContext<'_>,
-    indent_columns: u16,
+    indent_columns: crate::mandoc::layout::SourceIndent,
     paragraph_distance: &mut u16,
     spacing_enabled: bool,
     formatter: &mut crate::mandoc::formatter::FormatterState,

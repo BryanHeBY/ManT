@@ -417,21 +417,6 @@ fn plain_renderer() -> blocks::BlockRenderer<'static> {
     }
 }
 
-fn prefix_text_item(content: &str, marker: &str) -> Option<String> {
-    if content.trim().is_empty() {
-        return None;
-    }
-    let continuation = " ".repeat(marker.chars().count());
-    let mut lines = content.lines();
-    let mut output = format!("{marker}{}", lines.next()?);
-    for line in lines {
-        output.push('\n');
-        output.push_str(&continuation);
-        output.push_str(line);
-    }
-    Some(output)
-}
-
 fn indent_lines(value: &str, columns: usize) -> String {
     if columns == 0 {
         return value.to_owned();
@@ -932,8 +917,9 @@ mod tests {
         };
 
         let man = render_query_man(&bundle);
-        // inline_term=true in --format man: tight single-space.
-        assert!(man.contains("&& Logical AND."), "got: {man:?}");
+        // Inline terms use the same structural body origin as standalone
+        // paragraphs, rather than introducing a label-length-dependent origin.
+        assert!(man.contains("&&  Logical AND."), "got: {man:?}");
         // inline_term=false in --format man: term on its own line.
         assert!(
             man.contains("--long-option-name\n    A lengthy flag."),

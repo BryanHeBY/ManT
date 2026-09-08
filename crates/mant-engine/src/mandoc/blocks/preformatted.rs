@@ -14,7 +14,7 @@ use super::tables::{TableEmbeddingPlan, append_table_row};
 pub(super) fn preformatted_blocks(
     node: &Node,
     context: &LoweringContext<'_>,
-    indent_columns: u16,
+    indent_columns: crate::mandoc::layout::SourceIndent,
     spacing_enabled: bool,
     formatter: &mut crate::mandoc::formatter::FormatterState,
 ) -> Vec<Block> {
@@ -58,7 +58,7 @@ struct DisplayFlow<'a, 'source> {
     line: InlineBuilder,
     source: Option<mant_ir::SourceSpan>,
     context: &'a LoweringContext<'source>,
-    indent_columns: u16,
+    indent_columns: crate::mandoc::layout::SourceIndent,
     formatter: crate::mandoc::formatter::FormatterState,
 }
 

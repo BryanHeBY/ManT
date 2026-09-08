@@ -88,7 +88,7 @@ fn inline_roff_continuations_retain_indent_and_explicit_blank_lines() {
     );
     let text = String::from_utf8(output.stdout).unwrap();
     assert!(
-        text.contains("-a Initial.\n\n\n    INLINE_CONTINUATION."),
+        text.contains("-a  Initial.\n\n\n    INLINE_CONTINUATION."),
         "{text}"
     );
     for payload in ["CODE_CONTINUATION", "SECOND_CONTINUATION."] {

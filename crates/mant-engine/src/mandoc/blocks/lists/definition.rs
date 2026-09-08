@@ -8,7 +8,7 @@ use super::{
 pub(super) fn definition_item(
     node: &Node,
     context: &LoweringContext<'_>,
-    indent_columns: u16,
+    indent_columns: crate::mandoc::layout::SourceIndent,
     paragraph_distance: &mut u16,
     max_term_width: usize,
     spacing_enabled: bool,
@@ -42,7 +42,9 @@ pub(super) fn definition_item(
         description: lower_blocks_with_spacing(
             body,
             context,
-            context.nested_indent(node, indent_columns, MAN_DEFINITION_BODY_INDENT),
+            context
+                .nested_indent(node, indent_columns, MAN_DEFINITION_BODY_INDENT)
+                .content_origin(),
             paragraph_distance,
             formatter.spacing,
             formatter,

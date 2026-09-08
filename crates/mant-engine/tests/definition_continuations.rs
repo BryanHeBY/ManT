@@ -41,10 +41,10 @@ fn leading_spacing_and_code_do_not_become_an_inline_description() {
             let query = mant_engine::query_roff_bytes(source.as_bytes()).unwrap();
             let text = mant_engine::render_query_text(&query);
             assert!(text.lines().any(|line| line == label), "{text}");
-            assert!(text.lines().any(|line| line == "        CONTENT"), "{text}");
+            assert!(text.lines().any(|line| line == "    CONTENT"), "{text}");
             if body.starts_with(".sp") {
                 assert!(
-                    text.contains(&format!("{label}\n\n\n        CONTENT")),
+                    text.contains(&format!("{label}\n\n\n    CONTENT")),
                     "{text}"
                 );
             }

@@ -44,7 +44,7 @@ use tables::{TableEmbedding, TableEmbeddingPlan, append_table_row};
 fn lower_blocks(
     nodes: &[Node],
     context: &LoweringContext<'_>,
-    indent_columns: u16,
+    indent_columns: crate::mandoc::layout::SourceIndent,
     paragraph_distance: &mut u16,
 ) -> Vec<Block> {
     let mut formatter = crate::mandoc::formatter::FormatterState::default();
@@ -61,7 +61,7 @@ fn lower_blocks(
 fn lower_blocks_with_spacing(
     nodes: &[Node],
     context: &LoweringContext<'_>,
-    indent_columns: u16,
+    indent_columns: crate::mandoc::layout::SourceIndent,
     paragraph_distance: &mut u16,
     spacing_enabled: bool,
     formatter: &mut crate::mandoc::formatter::FormatterState,
@@ -87,7 +87,7 @@ fn lower_blocks_with_spacing(
 fn lower_blocks_onto(
     nodes: &[Node],
     context: &LoweringContext<'_>,
-    indent_columns: u16,
+    indent_columns: crate::mandoc::layout::SourceIndent,
     paragraph_distance: &mut u16,
     spacing_enabled: bool,
     output: Vec<Block>,
@@ -111,7 +111,7 @@ const DEFAULT_MAN_TAG_WIDTH: usize = 7;
 
 struct BlockLowerer<'a, 'source> {
     context: &'a LoweringContext<'source>,
-    indent_columns: u16,
+    indent_columns: crate::mandoc::layout::SourceIndent,
     paragraph_distance: &'a mut u16,
     state: BlockState,
     formatter: crate::mandoc::formatter::FormatterState,
@@ -129,7 +129,7 @@ struct BlockLowerer<'a, 'source> {
 impl<'a, 'source> BlockLowerer<'a, 'source> {
     fn new(
         context: &'a LoweringContext<'source>,
-        indent_columns: u16,
+        indent_columns: crate::mandoc::layout::SourceIndent,
         paragraph_distance: &'a mut u16,
         spacing_enabled: bool,
         output: Vec<Block>,
@@ -471,7 +471,7 @@ fn push_man_link(
 /// Most no-fill input arrives as text or inline elements. GNU man-ext also
 /// permits a complete `.SY` block inside `.EX`; its printable head and body
 /// still represent adjacent source lines and must join the same verbatim block.
-fn equation_block(node: &Node, indent_columns: u16) -> Block {
+fn equation_block(node: &Node, indent_columns: crate::mandoc::layout::SourceIndent) -> Block {
     Block::Equation {
         // Equation boxes carry the same named-character escapes as ordinary
         // roff text, but they bypass inline-node lowering. Decode them here so
@@ -669,7 +669,7 @@ mod tests {
 
     #[test]
     fn block_state_preserves_filled_line_boundaries_and_continuations() {
-        let mut state = BlockState::with_output(3, true, Vec::new());
+        let mut state = BlockState::with_output(3.into(), true, Vec::new());
         state.push_inline(text("alpha"), Some(source(1)), false, false);
         state.push_inline(text("beta"), Some(source(2)), false, false);
         state.push_inline(text("gamma"), Some(source(3)), true, false);
@@ -695,14 +695,14 @@ mod tests {
                 .count(),
             1
         );
-        assert_eq!(*paragraph_layout, layout(3));
+        assert_eq!(*paragraph_layout, layout(3.into()));
         assert_eq!(*paragraph_source, Some(source(1)));
     }
 
     #[test]
     fn block_state_flushes_paragraph_before_tight_preformatted_lines() {
         let context = LoweringContext::new(None, None);
-        let mut state = BlockState::with_output(2, true, Vec::new());
+        let mut state = BlockState::with_output(2.into(), true, Vec::new());
         state.push_inline(text("prose"), Some(source(1)), false, false);
         state.push_preformatted(text("first"), Some(source(3)), false, &context);
         state.push_preformatted(text("second"), Some(source(4)), true, &context);
@@ -734,8 +734,8 @@ mod tests {
                 .count(),
             1
         );
-        assert_eq!(*paragraph_layout, layout(2));
-        assert_eq!(*preformatted_layout, layout(2));
+        assert_eq!(*paragraph_layout, layout(2.into()));
+        assert_eq!(*preformatted_layout, layout(2.into()));
         assert_eq!(*paragraph_source, Some(source(1)));
         assert_eq!(*preformatted_source, Some(source(3)));
         assert_eq!(*language, None);

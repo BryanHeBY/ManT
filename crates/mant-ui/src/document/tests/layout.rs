@@ -2,6 +2,209 @@
 use super::*;
 
 #[test]
+fn container_translation_and_nonparagraph_marker_width_are_preserved() {
+    for start in [9, 99, u64::MAX] {
+        let blocks = [Block::List {
+            kind: ListKind::Ordered { start: Some(start) },
+            compact: true,
+            items: vec![ListItem {
+                source: None,
+                entry: None,
+                blocks: vec![Block::Preformatted {
+                    children: vec![Inline::Text {
+                        value: "CODE".into(),
+                    }],
+                    language: None,
+                    layout: LayoutHint::default(),
+                    source: None,
+                }],
+            }],
+            layout: LayoutHint {
+                indent_columns: 3,
+                ..Default::default()
+            },
+            source: None,
+        }];
+        let before = blocks.clone();
+        for shift in [0, 2, 5] {
+            let mut builder = DocumentBuilder::new("translation".into(), None);
+            builder.blocks(&blocks, shift);
+            assert_eq!(builder.lines[0].indent, usize::try_from(shift + 3).unwrap());
+            let marker_width = format!("{start}. ").len();
+            assert_eq!(
+                builder.lines[1].indent,
+                usize::try_from(shift + 3).unwrap() + marker_width
+            );
+            assert_eq!(
+                builder.lines[1].continuation_indent,
+                builder.lines[1].indent
+            );
+        }
+        assert_eq!(blocks, before);
+    }
+    let mut child = paragraph("OUTDENT");
+    let Block::Paragraph { layout, .. } = &mut child else {
+        unreachable!()
+    };
+    layout.indent_columns = 3;
+    let mut builder = DocumentBuilder::new("signed".into(), None);
+    builder.blocks(
+        &[Block::List {
+            kind: ListKind::Plain,
+            compact: true,
+            items: vec![ListItem {
+                source: None,
+                entry: None,
+                blocks: vec![child],
+            }],
+            layout: LayoutHint {
+                indent_columns: -2,
+                ..Default::default()
+            },
+            source: None,
+        }],
+        0,
+    );
+    assert_eq!(
+        builder.lines[0].indent, 1,
+        "do not clamp a container before composing its child"
+    );
+}
+
+#[test]
+fn outdented_list_paragraph_keeps_links_on_the_visible_body() {
+    let mut builder = DocumentBuilder::new("outdent".into(), None);
+    builder.blocks(
+        &[Block::List {
+            kind: ListKind::Bullet,
+            compact: true,
+            items: vec![ListItem {
+                source: None,
+                entry: None,
+                blocks: vec![Block::Paragraph {
+                    children: vec![
+                        Inline::Link {
+                            title: None,
+                            target: mant_ir::LinkTarget::Section {
+                                id: "target".into(),
+                            },
+                            children: vec![Inline::Text {
+                                value: "LINK".into(),
+                            }],
+                        },
+                        Inline::LineBreak,
+                        Inline::Text {
+                            value: "CONTINUED".into(),
+                        },
+                    ],
+                    layout: LayoutHint {
+                        indent_columns: -1,
+                        ..Default::default()
+                    },
+                    source: None,
+                }],
+            }],
+            layout: LayoutHint::default(),
+            source: None,
+        }],
+        5,
+    );
+    assert_eq!(builder.lines[0].indent, 5);
+    assert_eq!(builder.lines[1].indent, 6);
+    assert_eq!(builder.lines[2].indent, 6);
+    assert_eq!(builder.lines[1].links[0].start_column, 0);
+    assert_eq!(builder.lines[1].links[0].end_column, 4);
+    assert_eq!(
+        builder.lines[1]
+            .spans
+            .iter()
+            .map(|span| span.content.as_ref())
+            .collect::<String>(),
+        "LINK"
+    );
+}
+
+#[test]
+fn target_only_terms_are_zero_width_and_extreme_origins_are_bounded() {
+    for inline_term in [false, true] {
+        for origin in [0, i32::MAX, i32::MIN] {
+            let mut builder = DocumentBuilder::new("targets".into(), None);
+            builder.blocks(
+                &[Block::DefinitionList {
+                    declaration_groups: vec![],
+                    compact: true,
+                    items: vec![DefinitionItem {
+                        source: None,
+                        entry: None,
+                        terms: vec![
+                            vec![Inline::anchor_at("target", None)],
+                            vec![Inline::Text {
+                                value: "TERM".into(),
+                            }],
+                        ],
+                        description: vec![paragraph("BODY")],
+                        layout: mant_ir::DefinitionLayout {
+                            inline_term,
+                            ..Default::default()
+                        },
+                    }],
+                    layout: LayoutHint {
+                        indent_columns: origin,
+                        ..Default::default()
+                    },
+                    source: None,
+                }],
+                0,
+            );
+            assert_eq!(builder.anchors.get("target"), Some(&0));
+            assert!(!builder.lines[0].spans.is_empty());
+            assert!(
+                builder
+                    .lines
+                    .iter()
+                    .all(|line| line.indent <= 4096 && line.continuation_indent <= 4096)
+            );
+        }
+    }
+}
+
+#[test]
+fn trailing_zero_width_heads_share_the_final_run_in_row() {
+    for trailing_count in [1, 2, 3] {
+        let mut terms = vec![vec![Inline::Text {
+            value: "TERM".into(),
+        }]];
+        terms.extend(
+            (0..trailing_count).map(|i| vec![Inline::anchor_at(format!("target-{i}"), None)]),
+        );
+        let mut builder = DocumentBuilder::new("trailing-targets".into(), None);
+        builder.blocks(
+            &[Block::DefinitionList {
+                declaration_groups: vec![],
+                compact: true,
+                items: vec![DefinitionItem {
+                    source: None,
+                    entry: None,
+                    terms,
+                    description: vec![paragraph("BODY")],
+                    layout: mant_ir::DefinitionLayout {
+                        inline_term: true,
+                        ..Default::default()
+                    },
+                }],
+                layout: LayoutHint::default(),
+                source: None,
+            }],
+            0,
+        );
+        assert_eq!(builder.lines.len(), 1);
+        for i in 0..trailing_count {
+            assert_eq!(builder.anchors.get(&format!("target-{i}")), Some(&0));
+        }
+    }
+}
+
+#[test]
 fn definition_continuations_keep_rows_when_reparented_across_spacing() {
     for inline_term in [false, true] {
         for label in ["-a", "--long-option", "界", "e\u{301}"] {
@@ -11,7 +214,7 @@ fn definition_continuations_keep_rows_when_reparented_across_spacing() {
                 let Block::Paragraph { layout, .. } = &mut continuation else {
                     unreachable!()
                 };
-                layout.indent_columns = DefinitionItem::DESCRIPTION_INDENT_COLUMNS;
+                layout.indent_columns = i32::from(DefinitionItem::DESCRIPTION_INDENT_COLUMNS);
                 let space = Block::VerticalSpace {
                     lines: 2,
                     source: None,

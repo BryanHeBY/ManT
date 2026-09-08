@@ -58,7 +58,7 @@ pub(in crate::mandoc) fn lower_root_blocks(
         output.extend(lower_blocks(
             &root.children[start..index],
             context,
-            0,
+            crate::mandoc::layout::SourceIndent::default(),
             &mut paragraph_distance,
         ));
         start = index + 1;
@@ -66,7 +66,7 @@ pub(in crate::mandoc) fn lower_root_blocks(
     output.extend(lower_blocks(
         &root.children[start..],
         context,
-        0,
+        crate::mandoc::layout::SourceIndent::default(),
         &mut paragraph_distance,
     ));
     output
@@ -91,7 +91,12 @@ fn lower_section(
         .iter()
         .position(|child| is_section(child, false))
         .unwrap_or(body.len());
-    let blocks = lower_blocks(&body[..first_subsection], context, 0, paragraph_distance);
+    let blocks = lower_blocks(
+        &body[..first_subsection],
+        context,
+        crate::mandoc::layout::SourceIndent::default(),
+        paragraph_distance,
+    );
     let mut children = Vec::new();
     let mut has_preceding_content = !blocks.is_empty();
     for child in &body[first_subsection..] {

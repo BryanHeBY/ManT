@@ -10,7 +10,7 @@ use super::{
 
 pub(super) struct StructuralLowerer<'a, 'source, 'state> {
     pub(super) context: &'a LoweringContext<'source>,
-    pub(super) indent_columns: u16,
+    pub(super) indent_columns: crate::mandoc::layout::SourceIndent,
     pub(super) paragraph_distance: &'state mut u16,
     pub(super) output: &'state mut Vec<Block>,
     pub(super) definition_hanging_width: &'state mut usize,
@@ -226,7 +226,7 @@ fn lower_structural_fallback(
     output: &mut Vec<Block>,
     node: &Node,
     context: &LoweringContext<'_>,
-    indent_columns: u16,
+    indent_columns: crate::mandoc::layout::SourceIndent,
     paragraph_distance: &mut u16,
     spacing_enabled: bool,
     formatter: &mut crate::mandoc::formatter::FormatterState,

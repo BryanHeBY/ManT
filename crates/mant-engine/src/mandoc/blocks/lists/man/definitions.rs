@@ -19,7 +19,7 @@ fn is_bullet_glyph(text: &str) -> bool {
 pub(in crate::mandoc::blocks) fn lower_man_definition(
     node: &Node,
     context: &LoweringContext<'_>,
-    indent_columns: u16,
+    indent_columns: crate::mandoc::layout::SourceIndent,
     state: ManDefinitionState<'_>,
     spacing_enabled: bool,
     formatter: &mut crate::mandoc::formatter::FormatterState,
@@ -109,7 +109,7 @@ pub(in crate::mandoc::blocks) fn lower_man_definition(
 struct ManDefinitionEmission {
     item: DefinitionItem,
     source: Option<mant_ir::SourceSpan>,
-    indent_columns: u16,
+    indent_columns: crate::mandoc::layout::SourceIndent,
     spacing_before: u16,
     max_width: usize,
     ordinal: Option<super::ordered::ManOrdinalMarker>,
@@ -170,7 +170,7 @@ struct LoweredManItem {
 fn lower_man_item(
     node: &Node,
     context: &LoweringContext<'_>,
-    indent_columns: u16,
+    indent_columns: crate::mandoc::layout::SourceIndent,
     paragraph_distance: &mut u16,
     definition_hanging_width: &mut usize,
     spacing_enabled: bool,
@@ -220,11 +220,14 @@ enum DefinitionMerge {
     From(DefinitionLocation),
 }
 
-fn last_definition_location(output: &[Block], indent_columns: u16) -> Option<DefinitionLocation> {
+fn last_definition_location(
+    output: &[Block],
+    indent_columns: crate::mandoc::layout::SourceIndent,
+) -> Option<DefinitionLocation> {
     let block = output.len().checked_sub(1)?;
     let Block::DefinitionList { items, .. } = output
         .last()
-        .filter(|candidate| block_indent(candidate) == Some(indent_columns))?
+        .filter(|candidate| block_indent(candidate) == Some(indent_columns.relative_columns()))?
     else {
         return None;
     };
@@ -258,7 +261,7 @@ fn leading_paragraph_distance(nodes: &[Node]) -> Option<u16> {
 fn append_ip_continuation(
     output: &mut Vec<Block>,
     item: &mut DefinitionItem,
-    indent_columns: u16,
+    indent_columns: crate::mandoc::layout::SourceIndent,
     paragraph_distance: u16,
 ) -> bool {
     if item.description.is_empty() {
@@ -269,13 +272,13 @@ fn append_ip_continuation(
     // different declaration, and its later IP notes must follow its contents.
     // The same idempotent topology pass runs at final normalization.
     let Some(start) = output.iter().rposition(|block| match block_indent(block) {
-        Some(indent) => indent <= indent_columns,
+        Some(indent) => indent <= indent_columns.relative_columns(),
         None => !matches!(block, Block::VerticalSpace { .. }),
     }) else {
         return false;
     };
     if !matches!(&output[start], Block::DefinitionList { .. })
-        || block_indent(&output[start]) != Some(indent_columns)
+        || block_indent(&output[start]) != Some(indent_columns.relative_columns())
     {
         return false;
     }
@@ -288,7 +291,7 @@ fn append_ip_continuation(
     }
     let Some(Block::DefinitionList { items, compact, .. }) = output
         .last_mut()
-        .filter(|block| block_indent(block) == Some(indent_columns))
+        .filter(|block| block_indent(block) == Some(indent_columns.relative_columns()))
     else {
         return false;
     };
@@ -309,7 +312,7 @@ fn append_ip_continuation(
 fn append_definition(
     output: &mut Vec<Block>,
     mut item: DefinitionItem,
-    indent_columns: u16,
+    indent_columns: crate::mandoc::layout::SourceIndent,
     paragraph_distance: u16,
     source: Option<mant_ir::SourceSpan>,
     max_term_width: usize,
@@ -318,7 +321,7 @@ fn append_definition(
     let block_index = output.len().saturating_sub(1);
     if let Some(Block::DefinitionList { items, compact, .. }) = output
         .last_mut()
-        .filter(|block| block_indent(block) == Some(indent_columns))
+        .filter(|block| block_indent(block) == Some(indent_columns.relative_columns()))
     {
         {
             let first_pending = match merge {
@@ -403,7 +406,7 @@ fn first_node_text(node: &Node) -> Option<&str> {
 fn append_ip_bullet(
     output: &mut Vec<Block>,
     item: DefinitionItem,
-    indent_columns: u16,
+    indent_columns: crate::mandoc::layout::SourceIndent,
     paragraph_distance: u16,
     source: Option<mant_ir::SourceSpan>,
 ) {
@@ -415,7 +418,7 @@ fn append_ip_bullet(
         ..
     }) = output
         .last_mut()
-        .filter(|block| block_indent(block) == Some(indent_columns))
+        .filter(|block| block_indent(block) == Some(indent_columns.relative_columns()))
     {
         *compact = *compact && paragraph_distance == 0;
         items.push(list_item);

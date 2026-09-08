@@ -65,7 +65,7 @@ struct IrStructure {
     definition_items: usize,
     table_rows: usize,
     table_spanning_cells: usize,
-    max_indent_columns: u16,
+    max_indent_columns: i32,
     hard_breaks: usize,
     manual_links: usize,
     external_links: usize,

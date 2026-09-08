@@ -12,7 +12,7 @@ pub(super) fn append_table_row(
     output: &mut Vec<Block>,
     node: &Node,
     context: &LoweringContext<'_>,
-    indent_columns: u16,
+    indent_columns: crate::mandoc::layout::SourceIndent,
     embedding: Option<&TableEmbedding<'_>>,
     formatter: &mut crate::mandoc::formatter::FormatterState,
 ) {

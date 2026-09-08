@@ -239,11 +239,13 @@ pub struct Section {
 
 /// Presentation hints retained from roff but optional for semantic outputs.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct LayoutHint {
-    /// Additional terminal columns requested before the block.
-    #[serde(default, skip_serializing_if = "is_zero_u16")]
-    pub indent_columns: u16,
+    /// Signed terminal-cell displacement from the actual parent's content
+    /// origin. Compose once before clamping a final display position; negative
+    /// children can outdent without erasing their parent's source geometry.
+    #[serde(default, skip_serializing_if = "is_zero_i32")]
+    pub indent_columns: i32,
     /// Terminal rows requested before this block.
     #[serde(default, skip_serializing_if = "is_zero_u16")]
     pub spacing_before_lines: u16,
@@ -726,6 +728,11 @@ impl LayoutHint {
 
 #[allow(clippy::trivially_copy_pass_by_ref)]
 const fn is_zero_u16(value: &u16) -> bool {
+    *value == 0
+}
+
+#[allow(clippy::trivially_copy_pass_by_ref)] // Serde skip predicates receive a reference.
+const fn is_zero_i32(value: &i32) -> bool {
     *value == 0
 }
 

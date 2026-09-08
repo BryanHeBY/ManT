@@ -8,6 +8,7 @@ use super::{
     TldrDocument, UnicodeWidthStr, WrapMode, inline_anchor_ids, shifted_links, spans_width, theme,
     tldr_style,
 };
+use mant_protocol::geometry::{compose_origin, coordinate, marker_run_in_gap, padding};
 pub(super) struct DocumentBuilder<'a> {
     pub(super) entry_styles: Arc<mant_protocol::EntryStyleMap<'a>>,
     pub(super) label: String,
@@ -192,7 +193,10 @@ impl DocumentBuilder<'_> {
                 .fg(theme::HEADING)
                 .add_modifier(Modifier::BOLD),
         ));
-        self.blocks(&section.blocks, depth * 4 + 3);
+        self.blocks(
+            &section.blocks,
+            coordinate(depth.saturating_mul(4).saturating_add(3)),
+        );
         let child_count = section.children.len();
         for (index, child) in section.children.iter().enumerate() {
             self.section_with_position(
@@ -205,14 +209,14 @@ impl DocumentBuilder<'_> {
         }
     }
 
-    pub(super) fn blocks(&mut self, blocks: &[Block], base_indent: usize) {
+    pub(super) fn blocks(&mut self, blocks: &[Block], base_indent: i32) {
         for block in blocks {
             self.block(block, base_indent);
         }
     }
 
     #[allow(clippy::too_many_lines)]
-    pub(super) fn block(&mut self, block: &Block, base_indent: usize) {
+    pub(super) fn block(&mut self, block: &Block, base_indent: i32) {
         match block {
             Block::Paragraph {
                 children, layout, ..
@@ -220,7 +224,7 @@ impl DocumentBuilder<'_> {
                 self.spacing(layout.spacing_before_lines);
                 self.inline_lines(
                     children,
-                    base_indent + usize::from(layout.indent_columns),
+                    compose_origin(base_indent, layout.indent_columns),
                     Style::default().fg(theme::TEXT),
                 );
             }
@@ -230,7 +234,7 @@ impl DocumentBuilder<'_> {
                 self.spacing(layout.spacing_before_lines);
                 self.inline_lines_with_surface(
                     children,
-                    base_indent + usize::from(layout.indent_columns),
+                    compose_origin(base_indent, layout.indent_columns),
                     Style::default().fg(theme::TEXT),
                     LineSurface::Code,
                 );
@@ -243,7 +247,7 @@ impl DocumentBuilder<'_> {
                 ..
             } => {
                 self.spacing(layout.spacing_before_lines);
-                let indent = base_indent + usize::from(layout.indent_columns);
+                let indent = compose_origin(base_indent, layout.indent_columns);
                 for (index, item) in items.iter().enumerate() {
                     if index > 0 && !compact {
                         self.spacing(1);
@@ -257,15 +261,19 @@ impl DocumentBuilder<'_> {
                         ListKind::Plain => String::new(),
                     };
                     let has_marker = !marker.is_empty();
+                    let marker_width = mant_protocol::geometry::text_width(&marker);
                     if has_marker
                         && let Some(Block::Paragraph {
                             children, layout, ..
                         }) = item.blocks.first()
+                        && let Some(gap) =
+                            marker_run_in_gap(indent, marker_width, layout.indent_columns)
                     {
                         self.spacing(layout.spacing_before_lines);
-                        let marker_width = mant_protocol::geometry::text_width(&marker);
-                        let content_indent =
-                            indent + marker_width + usize::from(layout.indent_columns);
+                        let content_indent = compose_origin(
+                            compose_origin(indent, coordinate(marker_width)),
+                            layout.indent_columns,
+                        );
                         let mut inline_lines = styled_bound_inline_lines(
                             children,
                             Style::default().fg(theme::TEXT),
@@ -277,29 +285,41 @@ impl DocumentBuilder<'_> {
                             .map_or_else(StyledInlineLine::default, std::mem::take);
                         let mut spans =
                             vec![Span::styled(marker, Style::default().fg(theme::HEADING))];
-                        spans.push(Span::raw(" ".repeat(usize::from(layout.indent_columns))));
+                        spans.push(Span::raw(" ".repeat(gap)));
                         spans.extend(first.spans);
                         self.push(
-                            LogicalLine::hanging(indent, content_indent, spans).with_links(
-                                shifted_links(first.links, content_indent.saturating_sub(indent)),
-                            ),
+                            LogicalLine::hanging(padding(indent), padding(content_indent), spans)
+                                .with_links(shifted_links(
+                                    first.links,
+                                    marker_width.saturating_add(gap),
+                                )),
                         );
                         for line in inline_lines.into_iter().skip(1) {
                             self.push(
-                                LogicalLine::hanging(content_indent, content_indent, line.spans)
-                                    .with_links(line.links),
+                                LogicalLine::hanging(
+                                    padding(content_indent),
+                                    padding(content_indent),
+                                    line.spans,
+                                )
+                                .with_links(line.links),
                             );
                         }
-                        self.blocks(&item.blocks[1..], indent + marker_width);
+                        self.blocks(
+                            &item.blocks[1..],
+                            compose_origin(indent, coordinate(marker_width)),
+                        );
                     } else {
                         if has_marker {
                             self.push(LogicalLine::plain(
-                                indent,
+                                padding(indent),
                                 marker,
                                 Style::default().fg(theme::HEADING),
                             ));
                         }
-                        self.blocks(&item.blocks, indent + usize::from(has_marker) * 2);
+                        self.blocks(
+                            &item.blocks,
+                            compose_origin(indent, coordinate(marker_width)),
+                        );
                     }
                     if let Some(facts) = &item.entry {
                         // Leading spacing is presentation, not the semantic landing row.
@@ -318,7 +338,7 @@ impl DocumentBuilder<'_> {
                 ..
             } => {
                 self.spacing(layout.spacing_before_lines);
-                let indent = base_indent + usize::from(layout.indent_columns);
+                let indent = compose_origin(base_indent, layout.indent_columns);
                 for (index, item) in items.iter().enumerate() {
                     let spacing = item
                         .layout
@@ -337,15 +357,17 @@ impl DocumentBuilder<'_> {
                         }
                         self.blocks(
                             &item.description,
-                            indent
-                                + usize::from(mant_ir::DefinitionItem::DESCRIPTION_INDENT_COLUMNS),
+                            compose_origin(
+                                indent,
+                                i32::from(mant_ir::DefinitionItem::DESCRIPTION_INDENT_COLUMNS),
+                            ),
                         );
                     }
                 }
             }
             Block::Table { rows, layout, .. } => {
                 self.spacing(layout.spacing_before_lines);
-                let indent = base_indent + usize::from(layout.indent_columns);
+                let indent = compose_origin(base_indent, layout.indent_columns);
                 let grid = mant_ir::TableGrid::new(rows);
                 let rows = (0..grid.rows.len())
                     .map(|row| {
@@ -378,14 +400,18 @@ impl DocumentBuilder<'_> {
                 table_layout.force_stack = grid.column_count > 256;
                 let table_layout = Arc::new(table_layout);
                 for cells in rows {
-                    self.push(LogicalLine::table(indent, cells, Arc::clone(&table_layout)));
+                    self.push(LogicalLine::table(
+                        padding(indent),
+                        cells,
+                        Arc::clone(&table_layout),
+                    ));
                 }
             }
             Block::Equation { value, layout, .. } => {
                 self.spacing(layout.spacing_before_lines);
                 self.push(
                     LogicalLine::plain(
-                        base_indent + usize::from(layout.indent_columns),
+                        padding(compose_origin(base_indent, layout.indent_columns)),
                         value.clone(),
                         Style::default().fg(theme::YELLOW),
                     )
@@ -393,11 +419,11 @@ impl DocumentBuilder<'_> {
                 );
             }
             Block::VerticalSpace { lines, .. } => self.spacing(*lines),
-            Block::ThematicBreak { .. } => self.push(LogicalLine::rule(base_indent)),
+            Block::ThematicBreak { .. } => self.push(LogicalLine::rule(padding(base_indent))),
             Block::Unsupported { text, layout, .. } => {
                 self.spacing(layout.spacing_before_lines);
                 self.push(LogicalLine::plain(
-                    base_indent + usize::from(layout.indent_columns),
+                    padding(compose_origin(base_indent, layout.indent_columns)),
                     text.clone(),
                     Style::default().fg(theme::PEACH),
                 ));
@@ -411,36 +437,62 @@ impl DocumentBuilder<'_> {
         }
     }
 
-    pub(super) fn inline_definition(&mut self, item: &mant_ir::DefinitionItem, indent: usize) {
-        let mut term_spans = Vec::new();
-        let mut term_links = Vec::new();
-        for (index, term) in item.terms.iter().enumerate() {
-            for line in styled_bound_inline_lines(
+    pub(super) fn inline_definition(&mut self, item: &mant_ir::DefinitionItem, indent: i32) {
+        let mut head_lines = Vec::new();
+        let mut head_targets = Vec::new();
+        for term in &item.terms {
+            for id in inline_anchor_ids(term) {
+                head_targets.push((id, head_lines.len()));
+            }
+            let lines = styled_bound_inline_lines(
                 term,
                 Style::default().fg(theme::TEXT),
                 self.address.as_ref(),
                 self.entry_styles.ranges(term),
-            ) {
-                let offset = spans_width(&term_spans);
-                term_links.extend(shifted_links(line.links, offset));
-                term_spans.extend(line.spans);
+            );
+            if lines.len() != 1 || !lines[0].spans.is_empty() {
+                head_lines.extend(lines);
             }
-            term_spans.push(Span::styled(
-                if index + 1 < item.terms.len() {
-                    ", "
-                } else {
-                    " "
-                },
-                Style::default().fg(theme::TEXT),
-            ));
         }
+        // A trailing zero-width root shares the last head/body row when that
+        // row runs in. Its provisional slot is not a new visible line.
+        let last_target_row = if item.inline_description().is_some() {
+            head_lines.len().saturating_sub(1)
+        } else {
+            head_lines.len()
+        };
+        for (id, row) in head_targets {
+            self.anchors
+                .entry(id)
+                .or_insert(self.lines.len() + row.min(last_target_row));
+        }
+        let block_origin = compose_origin(
+            indent,
+            i32::from(mant_ir::DefinitionItem::DESCRIPTION_INDENT_COLUMNS),
+        );
+        let last = head_lines.pop().unwrap_or_default();
+        for line in head_lines {
+            self.push(
+                LogicalLine::hanging(padding(indent), padding(indent), line.spans)
+                    .with_links(line.links),
+            );
+        }
+        let mut term_spans = last.spans;
+        let mut term_links = last.links;
         let term_width = spans_width(&term_spans);
-
-        let block_origin =
-            indent + usize::from(mant_ir::DefinitionItem::DESCRIPTION_INDENT_COLUMNS);
         if let Some((children, layout)) = item.inline_description() {
-            let description_indent = indent + term_width + usize::from(layout.indent_columns);
-            term_spans.push(Span::raw(" ".repeat(usize::from(layout.indent_columns))));
+            let continuation_indent = compose_origin(block_origin, layout.indent_columns);
+            let description_indent = continuation_indent.max(compose_origin(
+                indent,
+                coordinate(term_width.saturating_add(1)),
+            ));
+            term_spans.push(Span::raw(
+                " ".repeat(
+                    padding(description_indent)
+                        .saturating_sub(padding(indent).saturating_add(term_width))
+                        .max(1),
+                ),
+            ));
             let mut description_lines = styled_bound_inline_lines(
                 children,
                 Style::default().fg(theme::TEXT),
@@ -454,29 +506,37 @@ impl DocumentBuilder<'_> {
             term_links.extend(shifted_links(first.links, description_offset));
             term_spans.extend(first.spans);
             self.push(
-                LogicalLine::hanging(indent, description_indent, term_spans).with_links(term_links),
+                LogicalLine::hanging(padding(indent), padding(continuation_indent), term_spans)
+                    .with_links(term_links),
             );
             for line in description_lines.into_iter().skip(1) {
                 self.push(
-                    LogicalLine::hanging(description_indent, description_indent, line.spans)
-                        .with_links(line.links),
+                    LogicalLine::hanging(
+                        padding(continuation_indent),
+                        padding(continuation_indent),
+                        line.spans,
+                    )
+                    .with_links(line.links),
                 );
             }
             self.blocks(&item.description[1..], block_origin);
         } else {
-            self.push(LogicalLine::hanging(indent, indent, term_spans).with_links(term_links));
+            self.push(
+                LogicalLine::hanging(padding(indent), padding(indent), term_spans)
+                    .with_links(term_links),
+            );
             self.blocks(&item.description, block_origin);
         }
     }
 
-    pub(super) fn inline_lines(&mut self, nodes: &[Inline], indent: usize, base_style: Style) {
+    pub(super) fn inline_lines(&mut self, nodes: &[Inline], indent: i32, base_style: Style) {
         self.inline_lines_with_surface(nodes, indent, base_style, LineSurface::Normal);
     }
 
     pub(super) fn inline_lines_with_surface(
         &mut self,
         nodes: &[Inline],
-        indent: usize,
+        indent: i32,
         base_style: Style,
         surface: LineSurface,
     ) {
@@ -489,22 +549,26 @@ impl DocumentBuilder<'_> {
             self.address.as_ref(),
             self.entry_styles.ranges(nodes),
             surface == LineSurface::Code,
-        )
-        .into_iter()
-        .map(|line| LogicalLine {
-            indent,
-            continuation_indent: indent,
-            spans: line.spans,
-            surface,
-            wrap_mode: if surface == LineSurface::Code {
-                WrapMode::Character
-            } else {
-                WrapMode::Word
-            },
-            table_row: None,
-            links: line.links,
-        })
-        .collect::<Vec<_>>();
+        );
+        if lines.len() == 1 && lines[0].spans.is_empty() {
+            return;
+        }
+        let lines = lines
+            .into_iter()
+            .map(|line| LogicalLine {
+                indent: padding(indent),
+                continuation_indent: padding(indent),
+                spans: line.spans,
+                surface,
+                wrap_mode: if surface == LineSurface::Code {
+                    WrapMode::Character
+                } else {
+                    WrapMode::Word
+                },
+                table_row: None,
+                links: line.links,
+            })
+            .collect::<Vec<_>>();
 
         for line in lines {
             self.push(line);

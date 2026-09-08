@@ -129,7 +129,7 @@ pub(in crate::mandoc::blocks) fn ordinal_sequence(
 pub(in crate::mandoc::blocks) fn append_ordered(
     output: &mut Vec<Block>,
     item: DefinitionItem,
-    indent_columns: u16,
+    indent_columns: crate::mandoc::layout::SourceIndent,
     paragraph_distance: u16,
     source: Option<SourceSpan>,
     marker: ManOrdinalMarker,
@@ -183,7 +183,7 @@ pub(in crate::mandoc::blocks) fn append_ordered(
 fn append_new_ordered(
     output: &mut Vec<Block>,
     item: DefinitionItem,
-    indent_columns: u16,
+    indent_columns: crate::mandoc::layout::SourceIndent,
     paragraph_distance: u16,
     source: Option<SourceSpan>,
     marker: ManOrdinalMarker,
@@ -212,10 +212,12 @@ fn append_new_ordered(
 pub(in crate::mandoc::blocks) fn append_relative_continuation(
     output: &mut [Block],
     nested: &mut Vec<Block>,
-    indent_columns: u16,
+    indent_columns: crate::mandoc::layout::SourceIndent,
     state: ManListState,
 ) -> bool {
-    let origin = indent_columns.saturating_add(MAN_DEFINITION_BODY_INDENT);
+    let origin = indent_columns
+        .relative_columns()
+        .saturating_add(i32::from(MAN_DEFINITION_BODY_INDENT));
     match state {
         ManListState::Ordered { block, .. } => {
             let Some(Block::List {
@@ -237,10 +239,11 @@ pub(in crate::mandoc::blocks) fn append_relative_continuation(
     }
 }
 
-fn make_relative(blocks: &mut [Block], origin: u16) {
+fn make_relative(blocks: &mut [Block], origin: i32) {
     for block in blocks {
         if let Some(layout) = block_layout_mut(block) {
-            layout.indent_columns = layout.indent_columns.saturating_sub(origin);
+            layout.indent_columns =
+                mant_protocol::geometry::rebase_origin(layout.indent_columns, 0, origin);
         }
     }
 }
@@ -249,7 +252,7 @@ fn make_relative(blocks: &mut [Block], origin: u16) {
 /// it owned and making item indentation relative to the new list container.
 pub(in crate::mandoc::blocks) fn list_item_from_definition(
     item: DefinitionItem,
-    indent_columns: u16,
+    _indent_columns: crate::mandoc::layout::SourceIndent,
     source: Option<SourceSpan>,
 ) -> ListItem {
     let DefinitionItem {
@@ -258,18 +261,18 @@ pub(in crate::mandoc::blocks) fn list_item_from_definition(
         mut description,
         ..
     } = item;
-    for block in &mut description {
-        if let Some(layout) = block_layout_mut(block) {
-            layout.indent_columns = layout
-                .indent_columns
-                .saturating_sub(indent_columns.saturating_add(MAN_DEFINITION_BODY_INDENT));
-        }
-    }
+    // The definition body already has its own content origin. Converting the
+    // marker does not subtract an ancestor's source position a second time.
     let mut anchors = Vec::new();
     for term in &terms {
         targets::inline_anchor_ids(term, &mut anchors);
     }
-    targets::attach_targets(&mut description, anchors, layout(0), source);
+    targets::attach_targets(
+        &mut description,
+        anchors,
+        layout(crate::mandoc::layout::SourceIndent::default()),
+        source,
+    );
     ListItem {
         source: item_source,
         entry: None,
@@ -349,7 +352,15 @@ mod tests {
         let mut output = Vec::new();
         let mut state = super::ManListState::None;
 
-        super::append_ordered(&mut output, item, 0, 1, None, marker, &mut state);
+        super::append_ordered(
+            &mut output,
+            item,
+            crate::mandoc::layout::SourceIndent::default(),
+            1,
+            None,
+            marker,
+            &mut state,
+        );
 
         let [
             Block::List {

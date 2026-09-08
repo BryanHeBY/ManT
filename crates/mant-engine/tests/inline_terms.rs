@@ -210,12 +210,12 @@ fn query() -> mant_engine::ResolvedContent {
 fn text_format_renders_inline_terms_tight_and_block_terms_hanging() {
     let output = render_query_text(&query());
 
-    // inline_term=true: tight single-space layout.
+    // Inline heads share their structural body origin, clearing long terms.
     assert!(
         output.contains("* / % Multiplication, division, and modulus."),
         "got: {output:?}"
     );
-    assert!(output.contains("&& Logical AND."), "got: {output:?}");
+    assert!(output.contains("&&  Logical AND."), "got: {output:?}");
     assert!(
         output.contains("space String concatenation."),
         "got: {output:?}"
@@ -246,8 +246,8 @@ fn man_format_renders_inline_terms_tight() {
     assert!(!output.contains("* / %  "), "got: {output:?}");
     assert!(!output.contains("space  "), "got: {output:?}");
     assert!(
-        output.contains("-a, --all\n"),
-        "aliases should use the shared term separator, got: {output:?}"
+        output.contains("-a\n--all\n"),
+        "separate source heads must not acquire an invented comma, got: {output:?}"
     );
 }
 

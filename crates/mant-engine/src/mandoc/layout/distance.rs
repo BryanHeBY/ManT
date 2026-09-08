@@ -54,9 +54,9 @@ impl Distance {
 
     pub(super) fn columns(self) -> i32 {
         if self.0 < 0 {
-            -((-self.0 + UNITS_PER_CELL / 2) / UNITS_PER_CELL)
+            -((-self.0 + (UNITS_PER_CELL - 1) / 2) / UNITS_PER_CELL)
         } else {
-            (self.0 + UNITS_PER_CELL / 2) / UNITS_PER_CELL
+            (self.0 + (UNITS_PER_CELL - 1) / 2) / UNITS_PER_CELL
         }
     }
 }
@@ -89,6 +89,26 @@ mod tests {
         assert_eq!(
             Distance::cells(4095).add(Distance::cells(2)),
             (Distance::cells(4096), true)
+        );
+    }
+
+    #[test]
+    fn source_device_half_cell_does_not_advance() {
+        // ascii_advance advances only when viscol + sz / 2 < destination.
+        for (units, columns) in [(11, 0), (12, 0), (13, 1), (35, 1), (36, 1), (37, 2)] {
+            assert_eq!(
+                Distance::parse(&format!("{units}u")).unwrap().columns(),
+                columns
+            );
+        }
+        let half = Distance::parse("12u").unwrap();
+        assert_eq!(Distance::cells(2).add(half).0.columns(), 2);
+        assert_eq!(
+            Distance::cells(2)
+                .add(Distance::parse("-12u").unwrap())
+                .0
+                .columns(),
+            1
         );
     }
 }

@@ -532,9 +532,9 @@ fn only_tag_definition_lists_recover_ordered_procedures() {
             else {
                 panic!("-{style} must recover one ordered list")
             };
-            assert_eq!(layout.indent_columns, 0);
+            assert_eq!(layout.indent_columns, 4);
             assert!(items.iter().all(|item| {
-                matches!(item.blocks.first(), Some(Block::Paragraph { layout, .. }) if layout.indent_columns == 4)
+                matches!(item.blocks.first(), Some(Block::Paragraph { layout, .. }) if layout.indent_columns == 0)
             }));
         } else {
             assert!(
@@ -557,7 +557,7 @@ fn only_tag_definition_lists_recover_ordered_procedures() {
         panic!("native enum must remain an ordered list")
     };
     assert!(items.iter().all(|item| {
-        matches!(item.blocks.first(), Some(Block::Paragraph { layout, .. }) if layout.indent_columns == 4)
+        matches!(item.blocks.first(), Some(Block::Paragraph { layout, .. }) if layout.indent_columns == 0)
     }));
 }
 
@@ -1030,7 +1030,7 @@ fn recovers_complete_numbered_sequences_from_mdoc_tag_lists() {
         unreachable!("numbered tag list was asserted above")
     };
     assert!(items.iter().all(|item| {
-        matches!(item.blocks.first(), Some(Block::Paragraph { layout, .. }) if layout.indent_columns == 4)
+        matches!(item.blocks.first(), Some(Block::Paragraph { layout, .. }) if layout.indent_columns == 0)
     }));
     assert!(matches!(
         document.sections[0].blocks[1],
@@ -1057,7 +1057,10 @@ fn recovers_complete_numbered_sequences_from_mdoc_tag_lists() {
         document: Some(document),
         tldr: None,
     });
-    assert!(rendered.contains("1.     First step.\n2.     Second step.\n3.     Third step."));
+    assert!(
+        rendered.contains("1. First step.\n\n2. Second step.\n\n3. Third step."),
+        "{rendered}"
+    );
     assert!(!rendered.contains("1.         First step."));
 }
 

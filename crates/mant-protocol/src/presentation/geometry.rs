@@ -34,8 +34,38 @@ pub const fn compose_origin(parent: i32, relative: i32) -> i32 {
 /// Reparent one already-relative root while preserving its source position.
 /// Descendants keep their own relative deltas and must not be rebased again.
 #[must_use]
-pub const fn rebase_origin(relative: i32, old_parent: i32, new_parent: i32) -> i32 {
-    compose_origin(old_parent, relative).saturating_sub(new_parent)
+pub fn rebase_origin(relative: i32, old_parent: i32, new_parent: i32) -> i32 {
+    let relative = i64::from(old_parent) + i64::from(relative) - i64::from(new_parent);
+    i32::try_from(relative).unwrap_or(if relative < 0 { i32::MIN } else { i32::MAX })
+}
+
+/// Bounded final padding at a logical leaf, after all parent displacements.
+/// This is not a viewport clipping policy and must not be applied recursively
+/// to containers: a negative container may have positive child displacements.
+#[must_use]
+pub fn padding(origin: i32) -> usize {
+    usize::try_from(origin.clamp(0, 4096)).unwrap_or(0)
+}
+
+/// Convert an in-memory cell count to a signed coordinate without wrapping.
+#[must_use]
+pub fn coordinate(cells: usize) -> i32 {
+    i32::try_from(cells).unwrap_or(i32::MAX)
+}
+
+/// Space between a visible marker and its first paragraph, or `None` when
+/// their composed origins require separate lines. Decide after final padding:
+/// clipping a negative container is not the same as adding its child's delta.
+#[must_use]
+pub fn marker_run_in_gap(origin: i32, marker_width: usize, child_delta: i32) -> Option<usize> {
+    if child_delta < 0 {
+        return None;
+    }
+    let body = compose_origin(
+        compose_origin(origin, coordinate(marker_width)),
+        child_delta,
+    );
+    padding(body).checked_sub(padding(origin).saturating_add(marker_width))
 }
 
 /// A contradictory projection of the same source gap. Distinct requests must
@@ -95,6 +125,13 @@ impl GapPlan {
         self.explicit.unwrap_or(default).min(MAX_GAP_ROWS)
     }
 
+    /// Whether resolving this default would lose geometry, including a
+    /// bounded inherited gap when no explicit request was supplied.
+    #[must_use]
+    pub fn resolution_is_bounded(&self, default: u16) -> bool {
+        self.bounded || (self.explicit.is_none() && default > MAX_GAP_ROWS)
+    }
+
     /// Whether row or request-count limits prevented complete geometry.
     #[must_use]
     pub const fn is_bounded(&self) -> bool {
@@ -138,6 +175,11 @@ mod tests {
         }
         assert_eq!(compose_origin(i32::MAX, 1), i32::MAX);
         assert_eq!(compose_origin(i32::MIN, -1), i32::MIN);
+        assert_eq!(rebase_origin(1, i32::MAX, i32::MAX), 1);
+        assert_eq!(rebase_origin(-1, i32::MIN, i32::MIN), -1);
+        assert_eq!(marker_run_in_gap(-5, 2, 4), None);
+        assert_eq!(marker_run_in_gap(-5, 2, 10), Some(5));
+        assert_eq!(marker_run_in_gap(5, 2, -1), None);
     }
 
     #[test]
@@ -151,8 +193,11 @@ mod tests {
             assert!(!gap.is_bounded());
         }
         let mut gap = GapPlan::default();
+        assert!(gap.resolution_is_bounded(u16::MAX));
+        assert!(!gap.resolution_is_bounded(1));
         assert_eq!(gap.rows(1), 1);
         gap.request(0, 0).unwrap();
+        assert!(!gap.resolution_is_bounded(u16::MAX));
         assert_eq!(gap.rows(1), 0);
         assert_eq!(gap.request(0, 1), Err(ConflictingGap));
         gap.request(1, u16::MAX).unwrap();

@@ -2,15 +2,15 @@
 
 use super::{
     AstTableAlignment, AstTableCell, Block, DefinitionItem, DefinitionListStyle, Inline, ListItem,
-    ListKind, LoweringContext, MAN_DEFINITION_BODY_INDENT, Node, NodeKind, NormalizedListKind,
-    TableRow, block_layout_mut, definition_item, first_part_children, horizontal_distance_columns,
-    layout, lower_blocks_with_spacing, ordinal_sequence, part_child_groups, source_span, targets,
+    ListKind, LoweringContext, Node, NodeKind, NormalizedListKind, TableRow, definition_item,
+    first_part_children, horizontal_distance_columns, layout, lower_blocks_with_spacing,
+    ordinal_sequence, part_child_groups, source_span, targets,
 };
 
 pub(in crate::mandoc::blocks) fn lower_mdoc_list(
     node: &Node,
     context: &LoweringContext<'_>,
-    indent_columns: u16,
+    indent_columns: crate::mandoc::layout::SourceIndent,
     paragraph_distance: &mut u16,
     initial_spacing: bool,
     formatter: &mut crate::mandoc::formatter::FormatterState,
@@ -28,13 +28,17 @@ pub(in crate::mandoc::blocks) fn lower_mdoc_list(
         && items
             .iter()
             .any(|item| !first_part_children(item.node, NodeKind::Head).is_empty()));
-    let list_indent = context.nested_indent(node, indent_columns, context.display_offset(node));
+    let offset = node
+        .offset
+        .as_ref()
+        .map_or(0, |_| context.display_offset(node));
+    let list_indent = context.nested_indent(node, indent_columns, offset);
     let mut block = if node.list_kind == Some(NormalizedListKind::Column) {
         lower_mdoc_column_list(
             node,
             items,
             context,
-            indent_columns,
+            list_indent,
             list_indent,
             paragraph_distance,
             formatter,
@@ -44,7 +48,7 @@ pub(in crate::mandoc::blocks) fn lower_mdoc_list(
             node,
             items,
             context,
-            indent_columns,
+            list_indent,
             list_indent,
             paragraph_distance,
             formatter,
@@ -73,12 +77,12 @@ pub(in crate::mandoc::blocks) fn lower_mdoc_list(
                     let mut blocks = lower_blocks_with_spacing(
                         first_part_children(item.node, NodeKind::Body),
                         context,
-                        list_indent,
+                        list_indent.content_origin(),
                         paragraph_distance,
                         formatter.spacing,
                         formatter,
                     );
-                    attach_item_targets(&mut blocks, &item, layout(list_indent));
+                    attach_item_targets(&mut blocks, &item, layout(list_indent.content_origin()));
                     ListItem {
                         source: source_span(item.node),
                         entry: None,
@@ -86,7 +90,7 @@ pub(in crate::mandoc::blocks) fn lower_mdoc_list(
                     }
                 })
                 .collect(),
-            layout: layout(indent_columns),
+            layout: layout(list_indent),
             source: source_span(node),
         }
     };
@@ -95,7 +99,12 @@ pub(in crate::mandoc::blocks) fn lower_mdoc_list(
         owner_source: source,
     } in trailing_targets
     {
-        append_list_targets(&mut block, vec![target], layout(list_indent), source);
+        append_list_targets(
+            &mut block,
+            vec![target],
+            layout(list_indent.content_origin()),
+            source,
+        );
     }
     context.lower_inline_with_spacing(trailing_controls, formatter.spacing, formatter);
     block
@@ -105,8 +114,8 @@ fn lower_mdoc_definition_list(
     node: &Node,
     items: Vec<MdocListItem<'_>>,
     context: &LoweringContext<'_>,
-    indent_columns: u16,
-    list_indent: u16,
+    indent_columns: crate::mandoc::layout::SourceIndent,
+    list_indent: crate::mandoc::layout::SourceIndent,
     paragraph_distance: &mut u16,
     formatter: &mut crate::mandoc::formatter::FormatterState,
 ) -> Block {
@@ -168,7 +177,7 @@ fn lower_mdoc_definition_list(
 /// those terms at the same item position.
 fn mdoc_list_item_from_definition(
     item: DefinitionItem,
-    list_indent: u16,
+    list_indent: crate::mandoc::layout::SourceIndent,
     source: Option<mant_ir::SourceSpan>,
 ) -> ListItem {
     let DefinitionItem {
@@ -177,13 +186,6 @@ fn mdoc_list_item_from_definition(
         mut description,
         ..
     } = item;
-    for block in &mut description {
-        if let Some(layout) = block_layout_mut(block) {
-            layout.indent_columns = layout
-                .indent_columns
-                .saturating_sub(MAN_DEFINITION_BODY_INDENT);
-        }
-    }
     let owner_source = terms
         .iter()
         .find_map(|term| targets::inline_anchor_owner_source(term))
@@ -192,7 +194,12 @@ fn mdoc_list_item_from_definition(
     for term in &terms {
         targets::inline_anchor_ids(term, &mut anchors);
     }
-    targets::attach_targets(&mut description, anchors, layout(list_indent), owner_source);
+    targets::attach_targets(
+        &mut description,
+        anchors,
+        layout(list_indent.content_origin()),
+        owner_source,
+    );
     ListItem {
         source: item_source,
         entry: None,
@@ -292,8 +299,8 @@ fn lower_mdoc_column_list(
     node: &Node,
     items: Vec<MdocListItem<'_>>,
     context: &LoweringContext<'_>,
-    indent_columns: u16,
-    cell_indent: u16,
+    indent_columns: crate::mandoc::layout::SourceIndent,
+    cell_indent: crate::mandoc::layout::SourceIndent,
     paragraph_distance: &mut u16,
     formatter: &mut crate::mandoc::formatter::FormatterState,
 ) -> Block {
@@ -311,7 +318,7 @@ fn lower_mdoc_column_list(
                     blocks: lower_blocks_with_spacing(
                         body,
                         context,
-                        cell_indent,
+                        cell_indent.content_origin(),
                         paragraph_distance,
                         formatter.spacing,
                         formatter,
@@ -322,10 +329,14 @@ fn lower_mdoc_column_list(
                 })
                 .collect::<Vec<_>>();
             if let Some(cell) = cells.first_mut() {
-                attach_item_targets(&mut cell.blocks, &item, layout(cell_indent));
+                attach_item_targets(
+                    &mut cell.blocks,
+                    &item,
+                    layout(cell_indent.content_origin()),
+                );
             } else {
                 let mut blocks = Vec::new();
-                attach_item_targets(&mut blocks, &item, layout(cell_indent));
+                attach_item_targets(&mut blocks, &item, layout(cell_indent.content_origin()));
                 if !blocks.is_empty() {
                     cells.push(AstTableCell {
                         blocks,

@@ -378,8 +378,8 @@ fn inline_definitions_hang_the_description_and_expose_their_anchor() {
         .collect::<Vec<_>>();
 
     assert_eq!(rendered.anchor_row("help-option"), Some(1));
-    assert_eq!(rows[1], "   -h Show");
-    assert!(rows[2].starts_with("      detailed"));
+    assert_eq!(rows[1], "   -h  Show");
+    assert!(rows[2].starts_with("       detailed"));
 }
 
 #[test]

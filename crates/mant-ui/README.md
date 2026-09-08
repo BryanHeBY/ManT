@@ -55,6 +55,11 @@ that color. Code-token accents do not overwrite semantic name roles.
 the resulting immutable styled lines. Resizing only reflows those lines;
 search and selection overlay their own state without rewriting the base styles,
 link targets, source coordinates or copied text.
+Block indentation is a signed displacement from its parent's content origin.
+The UI shares cell measurement, origin composition and marker collision rules
+with the plain-text frontend through `mant-protocol`; only visible leaves are
+bounded for padding. Source term roots keep their hard lines and zero-width
+targets do not manufacture blank rows.
 See the shared [entry presentation contract](https://github.com/BryanHeBY/ManT/blob/main/docs/architecture/entry-presentation.md)
 for label modes, source binding coordinates and style precedence.
 

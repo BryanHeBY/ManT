@@ -1,7 +1,8 @@
 //! One source-aware block layout for plain and decorated text.
 //! Decorators must preserve visible content and boundary whitespace.
-use super::{indent_lines, join_parts, prefix_text_item};
+use super::{indent_lines, join_parts};
 use mant_ir::{Block, DefinitionItem, Inline, ListItem, ListKind, Section, TableCell};
+use mant_protocol::geometry::{compose_origin, coordinate, marker_run_in_gap, padding, text_width};
 use mant_protocol::{EntryStyleMap, TextPresentation, TextRole, visit_inline_text};
 
 pub(super) struct BlockRenderer<'a> {
@@ -52,7 +53,7 @@ impl BlockRenderer<'_> {
             "{heading_indent}{}",
             self.paint(TextRole::Heading, &section.title)
         )];
-        let blocks = self.render_blocks(&section.blocks, depth.saturating_mul(2));
+        let blocks = self.render_blocks(&section.blocks, coordinate(depth.saturating_mul(2)));
         if !blocks.is_empty() {
             parts.push(blocks);
         }
@@ -63,14 +64,14 @@ impl BlockRenderer<'_> {
         join_parts(parts)
     }
 
-    pub(super) fn render_blocks(&self, blocks: &[Block], base_indent: usize) -> String {
+    pub(super) fn render_blocks(&self, blocks: &[Block], base_indent: i32) -> String {
         self.render_block_sequence(blocks, base_indent, None)
     }
 
     pub(super) fn render_block_sequence(
         &self,
         blocks: &[Block],
-        base_indent: usize,
+        base_indent: i32,
         leading_gap: Option<usize>,
     ) -> String {
         // Blocks are separated by a single blank line by default. An explicit
@@ -109,7 +110,7 @@ impl BlockRenderer<'_> {
         output
     }
 
-    fn render_block(&self, block: &Block, base_indent: usize) -> Option<String> {
+    fn render_block(&self, block: &Block, base_indent: i32) -> Option<String> {
         let (value, layout_indent) = match block {
             Block::Paragraph {
                 children, layout, ..
@@ -118,29 +119,37 @@ impl BlockRenderer<'_> {
                 children, layout, ..
             } => (
                 self.inline_text(children, TextRole::Body),
-                usize::from(layout.indent_columns),
+                layout.indent_columns,
             ),
             Block::List {
                 kind,
                 items,
+                compact,
                 layout,
                 ..
-            } => (
-                self.render_list(*kind, items, base_indent),
-                usize::from(layout.indent_columns),
-            ),
+            } => {
+                return Some(self.render_list(
+                    *kind,
+                    items,
+                    *compact,
+                    compose_origin(base_indent, layout.indent_columns),
+                ));
+            }
             Block::DefinitionList {
                 items,
                 compact,
                 layout,
                 ..
-            } => (
-                self.render_definitions(items, *compact, base_indent),
-                usize::from(layout.indent_columns),
-            ),
+            } => {
+                return Some(self.render_definitions(
+                    items,
+                    *compact,
+                    compose_origin(base_indent, layout.indent_columns),
+                ));
+            }
             Block::Table { rows, layout, .. } => (
                 super::super::table::table_rows(rows, |cell| self.cell_text(cell)).join("\n"),
-                usize::from(layout.indent_columns),
+                layout.indent_columns,
             ),
             Block::Equation { value, layout, .. }
             | Block::Unsupported {
@@ -152,7 +161,7 @@ impl BlockRenderer<'_> {
                     || self.paint(TextRole::Body, value),
                     |locations| locations.text(value, self.decorate),
                 ),
-                usize::from(layout.indent_columns),
+                layout.indent_columns,
             ),
             // Vertical space is handled as an inter-block separator in
             // `render_blocks`, never as a standalone rendered block.
@@ -160,10 +169,17 @@ impl BlockRenderer<'_> {
             Block::ThematicBreak { .. } => ("---".to_owned(), 0),
         };
         let value = value.trim_matches('\n');
-        (!value.trim().is_empty()).then(|| indent_lines(value, base_indent + layout_indent))
+        (!value.trim().is_empty())
+            .then(|| indent_lines(value, padding(compose_origin(base_indent, layout_indent))))
     }
 
-    fn render_list(&self, kind: ListKind, items: &[ListItem], base_indent: usize) -> String {
+    fn render_list(
+        &self,
+        kind: ListKind,
+        items: &[ListItem],
+        compact: bool,
+        base_indent: i32,
+    ) -> String {
         items
             .iter()
             .enumerate()
@@ -175,56 +191,43 @@ impl BlockRenderer<'_> {
                     ListKind::Bullet => "- ".to_owned(),
                     ListKind::Plain => String::new(),
                 };
-                prefix_text_item(&self.render_blocks(&item.blocks, base_indent), &marker)
+                let body_origin = compose_origin(base_indent, coordinate(text_width(&marker)));
+                let body = self.render_blocks(&item.blocks, body_origin);
+                if marker.is_empty() {
+                    return (!body.is_empty()).then_some(body);
+                }
+                let prefix = format!("{}{marker}", " ".repeat(padding(base_indent)));
+                if let Some(Block::Paragraph { layout, .. }) = item.blocks.first()
+                    && let Some(gap) =
+                        marker_run_in_gap(base_indent, text_width(&marker), layout.indent_columns)
+                    && let Some(rest) = body.strip_prefix(
+                        &" ".repeat(padding(compose_origin(body_origin, layout.indent_columns))),
+                    )
+                {
+                    Some(format!("{prefix}{}{rest}", " ".repeat(gap)))
+                } else if body.is_empty() {
+                    Some(prefix.trim_end().to_owned())
+                } else {
+                    Some(format!("{}\n{body}", prefix.trim_end()))
+                }
             })
             .collect::<Vec<_>>()
-            .join("\n")
+            .join(if compact { "\n" } else { "\n\n" })
     }
 
     fn render_definitions(
         &self,
         items: &[DefinitionItem],
         compact: bool,
-        base_indent: usize,
+        base_indent: i32,
     ) -> String {
         let rendered = items
             .iter()
             .filter_map(|item| {
-                let terms = item
-                    .terms
-                    .iter()
-                    .map(|term| self.inline_text(term, TextRole::DefinitionTerm))
-                    .filter(|term| !term.trim().is_empty())
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                let body_indent = usize::from(DefinitionItem::DESCRIPTION_INDENT_COLUMNS);
-                let value = if !terms.is_empty() && item.inline_description().is_some() {
-                    let head = self.render_blocks(&item.description[..1], base_indent);
-                    // Continue the same block stream so leading .sp in the tail
-                    // remains an inter-block gap, not discarded leading space.
-                    let tail =
-                        self.render_block_sequence(&item.description[1..], base_indent, Some(1));
-                    Some(format!(
-                        "{terms} {}{}",
-                        head.trim_start(),
-                        indent_lines(&tail, body_indent)
-                    ))
-                } else {
-                    let description = self.render_block_sequence(
-                        &item.description,
-                        base_indent,
-                        (!terms.is_empty()).then_some(0),
-                    );
-                    match (terms.is_empty(), description.is_empty()) {
-                        (false, false) => Some(format!(
-                            "{terms}{}",
-                            indent_lines(&description, body_indent)
-                        )),
-                        (false, true) => Some(terms),
-                        (true, false) => Some(description),
-                        (true, true) => None,
-                    }
-                }?;
+                let value = self.render_definition(item, base_indent);
+                if value.is_empty() {
+                    return None;
+                }
                 Some((value, item.layout.spacing_before_lines))
             })
             .collect::<Vec<_>>();
@@ -241,7 +244,232 @@ impl BlockRenderer<'_> {
         output
     }
 
+    fn render_definition(&self, item: &DefinitionItem, origin: i32) -> String {
+        let body_origin = compose_origin(
+            origin,
+            i32::from(DefinitionItem::DESCRIPTION_INDENT_COLUMNS),
+        );
+        let mut terms = item
+            .terms
+            .iter()
+            .map(|term| self.inline_text(term, TextRole::DefinitionTerm))
+            .filter(|term| !term.is_empty())
+            .collect::<Vec<_>>();
+        if let Some((children, layout)) = item.inline_description()
+            && let Some(last) = terms.pop()
+        {
+            let last_plain = item
+                .terms
+                .iter()
+                .rev()
+                .find(|term| !crate::inline::plain_text(term).is_empty())
+                .map(|term| crate::inline::plain_text(term))
+                .unwrap_or_default();
+            let last_width = text_width(last_plain.rsplit('\n').next().unwrap_or_default());
+            let first_origin = compose_origin(body_origin, layout.indent_columns).max(
+                compose_origin(origin, coordinate(last_width.saturating_add(1))),
+            );
+            let body = self.inline_text(children, TextRole::Body);
+            let mut lines = body.split('\n');
+            let mut output = terms
+                .into_iter()
+                .map(|term| indent_lines(&term, padding(origin)))
+                .collect::<Vec<_>>();
+            output.push(format!(
+                "{}{}{}",
+                indent_lines(&last, padding(origin)),
+                " ".repeat(
+                    padding(first_origin)
+                        .saturating_sub(padding(origin).saturating_add(last_width))
+                        .max(1)
+                ),
+                lines.next().unwrap_or_default()
+            ));
+            output.extend(lines.map(|line| {
+                indent_lines(
+                    line,
+                    padding(compose_origin(body_origin, layout.indent_columns)),
+                )
+            }));
+            let mut result = output.join("\n");
+            result.push_str(&self.render_block_sequence(
+                &item.description[1..],
+                body_origin,
+                Some(1),
+            ));
+            return result;
+        }
+        let terms = terms
+            .into_iter()
+            .map(|term| indent_lines(&term, padding(origin)))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let body = self.render_block_sequence(
+            &item.description,
+            body_origin,
+            (!terms.is_empty()).then_some(0),
+        );
+        format!("{terms}{body}")
+    }
+
     fn cell_text(&self, cell: &TableCell) -> String {
         self.render_blocks(&cell.blocks, 0).replace('\n', " ")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use mant_ir::LayoutHint;
+
+    fn paragraph(text: &str, indent: i32) -> Block {
+        Block::Paragraph {
+            children: vec![Inline::Text { value: text.into() }],
+            layout: LayoutHint {
+                indent_columns: indent,
+                ..Default::default()
+            },
+            source: None,
+        }
+    }
+
+    fn plain_list(blocks: Vec<Block>, indent: i32) -> Block {
+        Block::List {
+            kind: ListKind::Plain,
+            compact: true,
+            items: vec![ListItem {
+                blocks,
+                source: None,
+                entry: None,
+            }],
+            layout: LayoutHint {
+                indent_columns: indent,
+                ..Default::default()
+            },
+            source: None,
+        }
+    }
+
+    #[test]
+    fn subtree_translation_is_applied_once_at_each_visible_leaf() {
+        let blocks = vec![
+            paragraph("PROSE", 0),
+            plain_list(
+                vec![
+                    paragraph("CHILD", 0),
+                    plain_list(vec![paragraph("DEEP", 1)], 2),
+                    Block::DefinitionList {
+                        declaration_groups: vec![],
+                        compact: false,
+                        items: vec![DefinitionItem {
+                            terms: vec![vec![Inline::Text {
+                                value: "TERM".into(),
+                            }]],
+                            description: vec![paragraph("BODY", -2)],
+                            source: None,
+                            entry: None,
+                            layout: mant_ir::DefinitionLayout::default(),
+                        }],
+                        layout: LayoutHint::default(),
+                        source: None,
+                    },
+                    Block::Table {
+                        rows: vec![mant_ir::TableRow {
+                            cells: vec![TableCell {
+                                blocks: vec![paragraph("CELL", 1)],
+                                column_span: 1,
+                                row_span: 1,
+                                alignment: None,
+                            }],
+                        }],
+                        layout: LayoutHint::default(),
+                        source: None,
+                    },
+                ],
+                3,
+            ),
+        ];
+        let original = blocks.clone();
+        let renderer = super::super::plain_renderer();
+        let baseline = renderer.render_blocks(&blocks, 0);
+        for shift in [0, 2, 5] {
+            assert_eq!(
+                renderer.render_blocks(&blocks, shift),
+                indent_lines(&baseline, padding(shift))
+            );
+        }
+        assert_eq!(
+            blocks, original,
+            "presentation cannot compensate by mutating IR"
+        );
+        assert!(baseline.lines().any(|line| line == "      DEEP"));
+        assert!(baseline.lines().any(|line| line == "     BODY"));
+        assert_eq!(
+            renderer.render_blocks(&[plain_list(vec![paragraph("OUTDENT", 3)], -2)], 0),
+            " OUTDENT"
+        );
+    }
+
+    #[test]
+    fn distinct_term_roots_and_hard_lines_do_not_acquire_commas() {
+        let blocks = [Block::DefinitionList {
+            declaration_groups: vec![],
+            compact: true,
+            items: vec![DefinitionItem {
+                terms: ["-a", "--all"]
+                    .map(|value| {
+                        vec![Inline::Text {
+                            value: value.into(),
+                        }]
+                    })
+                    .into(),
+                description: vec![paragraph("FIRST\nCONTINUATION", 0)],
+                source: None,
+                entry: None,
+                layout: mant_ir::DefinitionLayout {
+                    inline_term: true,
+                    ..Default::default()
+                },
+            }],
+            layout: LayoutHint::default(),
+            source: None,
+        }];
+        assert_eq!(
+            super::super::plain_renderer().render_blocks(&blocks, 0),
+            "-a\n--all FIRST\n    CONTINUATION"
+        );
+    }
+
+    #[test]
+    fn zero_width_terms_and_clipped_markers_do_not_move_body_text() {
+        let renderer = super::super::plain_renderer();
+        let mut block = plain_list(vec![paragraph("BODY", 4)], -5);
+        let Block::List { kind, .. } = &mut block else {
+            unreachable!()
+        };
+        *kind = ListKind::Bullet;
+        assert_eq!(renderer.render_blocks(&[block], 0), "-\n BODY");
+        let block = Block::DefinitionList {
+            declaration_groups: vec![],
+            compact: true,
+            items: vec![DefinitionItem {
+                source: None,
+                entry: None,
+                terms: vec![
+                    vec![Inline::anchor_at("target", None)],
+                    vec![Inline::Text {
+                        value: "TERM".into(),
+                    }],
+                ],
+                description: vec![paragraph("BODY", 0)],
+                layout: mant_ir::DefinitionLayout {
+                    inline_term: true,
+                    ..Default::default()
+                },
+            }],
+            layout: LayoutHint::default(),
+            source: None,
+        };
+        assert_eq!(renderer.render_blocks(&[block], 0), "TERM BODY");
     }
 }

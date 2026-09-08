@@ -36,7 +36,7 @@ pub(super) fn normalize_definition_nesting_with_boundaries(
             continue;
         };
         let description_origin =
-            base_indent.saturating_add(DefinitionItem::DESCRIPTION_INDENT_COLUMNS);
+            base_indent.saturating_add(i32::from(DefinitionItem::DESCRIPTION_INDENT_COLUMNS));
         while let Some(length) = indented_continuation_len(&pending, base_indent) {
             if pending.iter().take(length).any(|block| {
                 crate::block::block_source(block)
@@ -60,7 +60,7 @@ pub(super) fn normalize_definition_nesting_with_boundaries(
 /// an indented continuation. Do not cross other layout-less blocks, equal or
 /// shallower content, or the end of this container. Consume a whole run at once
 /// so even long sequences of explicit spacing are examined only once.
-fn indented_continuation_len(pending: &VecDeque<Block>, base_indent: u16) -> Option<usize> {
+fn indented_continuation_len(pending: &VecDeque<Block>, base_indent: i32) -> Option<usize> {
     let (index, block) = pending
         .iter()
         .enumerate()
@@ -70,7 +70,7 @@ fn indented_continuation_len(pending: &VecDeque<Block>, base_indent: u16) -> Opt
         .then_some(index + 1)
 }
 
-fn block_definition_indent(block: &Block) -> Option<u16> {
+fn block_definition_indent(block: &Block) -> Option<i32> {
     match block {
         Block::DefinitionList { layout, .. } => Some(layout.indent_columns),
         _ => None,
@@ -133,7 +133,7 @@ pub(super) fn normalize_hanging_definitions(blocks: &mut Vec<Block>, context: De
             unreachable!("option_term_indent only accepts paragraphs");
         };
         let description_origin =
-            term_indent.saturating_add(DefinitionItem::DESCRIPTION_INDENT_COLUMNS);
+            term_indent.saturating_add(i32::from(DefinitionItem::DESCRIPTION_INDENT_COLUMNS));
         for child in &mut description {
             shift_block_indent(child, description_origin);
         }
@@ -162,7 +162,7 @@ pub(super) fn normalize_hanging_definitions(blocks: &mut Vec<Block>, context: De
     *blocks = normalized;
 }
 
-fn hanging_term_indent(block: &Block, context: DefinitionContext) -> Option<u16> {
+fn hanging_term_indent(block: &Block, context: DefinitionContext) -> Option<i32> {
     let Block::Paragraph {
         children, layout, ..
     } = block
@@ -173,9 +173,10 @@ fn hanging_term_indent(block: &Block, context: DefinitionContext) -> Option<u16>
     recognized.then_some(layout.indent_columns)
 }
 
-fn shift_block_indent(block: &mut Block, origin: u16) {
+fn shift_block_indent(block: &mut Block, origin: i32) {
     if let Some(layout) = block_layout_mut(block) {
-        layout.indent_columns = layout.indent_columns.saturating_sub(origin);
+        layout.indent_columns =
+            mant_protocol::geometry::rebase_origin(layout.indent_columns, 0, origin);
     }
 }
 
@@ -184,7 +185,7 @@ mod tests {
     use super::*;
     use mant_ir::Inline;
 
-    fn paragraph(text: &str, indent_columns: u16) -> Block {
+    fn paragraph(text: &str, indent_columns: i32) -> Block {
         Block::Paragraph {
             children: vec![Inline::Text { value: text.into() }],
             layout: LayoutHint {
@@ -195,7 +196,7 @@ mod tests {
         }
     }
 
-    fn definition(indent_columns: u16) -> Block {
+    fn definition(indent_columns: i32) -> Block {
         Block::DefinitionList {
             declaration_groups: Vec::new(),
             items: vec![DefinitionItem {

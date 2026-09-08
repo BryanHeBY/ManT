@@ -15,13 +15,13 @@ pub(super) struct BlockState {
     preformatted_last_line: Option<u32>,
     preformatted_tight_boundary: bool,
     pending_targets: targets::PendingTargets,
-    indent_columns: u16,
+    indent_columns: crate::mandoc::layout::SourceIndent,
     spacing_enabled: bool,
 }
 
 impl BlockState {
     pub(super) const fn with_output(
-        indent_columns: u16,
+        indent_columns: crate::mandoc::layout::SourceIndent,
         spacing_enabled: bool,
         output: Vec<Block>,
     ) -> Self {
@@ -241,7 +241,7 @@ fn flush_paragraph(
     output: &mut Vec<Block>,
     paragraph: &mut InlineBuilder,
     source: &mut Option<mant_ir::SourceSpan>,
-    indent_columns: u16,
+    indent_columns: crate::mandoc::layout::SourceIndent,
     spacing_enabled: bool,
 ) {
     let current =
@@ -261,7 +261,7 @@ fn flush_preformatted(
     output: &mut Vec<Block>,
     preformatted: &mut Vec<Inline>,
     source: &mut Option<mant_ir::SourceSpan>,
-    indent_columns: u16,
+    indent_columns: crate::mandoc::layout::SourceIndent,
 ) {
     if preformatted.is_empty() {
         *source = None;

@@ -1999,11 +1999,9 @@
         "type": "object",
         "properties": {
           "indentColumns": {
-            "description": "Additional terminal columns requested before the block.",
+            "description": "Signed terminal-cell displacement from the actual parent's content\norigin. Compose once before clamping a final display position; negative\nchildren can outdent without erasing their parent's source geometry.",
             "type": "integer",
-            "format": "uint16",
-            "maximum": 65535,
-            "minimum": 0
+            "format": "int32"
           },
           "spacingBeforeLines": {
             "description": "Terminal rows requested before this block.",
@@ -2012,7 +2010,8 @@
             "maximum": 65535,
             "minimum": 0
           }
-        }
+        },
+        "additionalProperties": false
       },
       "LinkTarget": {
         "description": "Typed destination kind for [`Inline::Link`].\n\nThis enum records navigation intent, not host resolution state. The query\nengine resolves [`LinkTarget::Document`] and [`LinkTarget::Manual`] against\nthe catalog; consumers must not infer equivalent edges from rendered text.",
@@ -5380,11 +5379,9 @@
         "type": "object",
         "properties": {
           "indentColumns": {
-            "description": "Additional terminal columns requested before the block.",
+            "description": "Signed terminal-cell displacement from the actual parent's content\norigin. Compose once before clamping a final display position; negative\nchildren can outdent without erasing their parent's source geometry.",
             "type": "integer",
-            "format": "uint16",
-            "maximum": 65535,
-            "minimum": 0
+            "format": "int32"
           },
           "spacingBeforeLines": {
             "description": "Terminal rows requested before this block.",
@@ -5393,7 +5390,8 @@
             "maximum": 65535,
             "minimum": 0
           }
-        }
+        },
+        "additionalProperties": false
       },
       "LinkTarget": {
         "description": "Typed destination kind for [`Inline::Link`].\n\nThis enum records navigation intent, not host resolution state. The query\nengine resolves [`LinkTarget::Document`] and [`LinkTarget::Manual`] against\nthe catalog; consumers must not infer equivalent edges from rendered text.",
@@ -8588,11 +8586,9 @@
         "type": "object",
         "properties": {
           "indentColumns": {
-            "description": "Additional terminal columns requested before the block.",
+            "description": "Signed terminal-cell displacement from the actual parent's content\norigin. Compose once before clamping a final display position; negative\nchildren can outdent without erasing their parent's source geometry.",
             "type": "integer",
-            "format": "uint16",
-            "maximum": 65535,
-            "minimum": 0
+            "format": "int32"
           },
           "spacingBeforeLines": {
             "description": "Terminal rows requested before this block.",
@@ -8601,7 +8597,8 @@
             "maximum": 65535,
             "minimum": 0
           }
-        }
+        },
+        "additionalProperties": false
       },
       "LinkTarget": {
         "description": "Typed destination kind for [`Inline::Link`].\n\nThis enum records navigation intent, not host resolution state. The query\nengine resolves [`LinkTarget::Document`] and [`LinkTarget::Manual`] against\nthe catalog; consumers must not infer equivalent edges from rendered text.",
@@ -12429,11 +12426,9 @@
         "type": "object",
         "properties": {
           "indentColumns": {
-            "description": "Additional terminal columns requested before the block.",
+            "description": "Signed terminal-cell displacement from the actual parent's content\norigin. Compose once before clamping a final display position; negative\nchildren can outdent without erasing their parent's source geometry.",
             "type": "integer",
-            "format": "uint16",
-            "maximum": 65535,
-            "minimum": 0
+            "format": "int32"
           },
           "spacingBeforeLines": {
             "description": "Terminal rows requested before this block.",
@@ -12442,7 +12437,8 @@
             "maximum": 65535,
             "minimum": 0
           }
-        }
+        },
+        "additionalProperties": false
       },
       "LinkTarget": {
         "description": "Typed destination kind for [`Inline::Link`].\n\nThis enum records navigation intent, not host resolution state. The query\nengine resolves [`LinkTarget::Document`] and [`LinkTarget::Manual`] against\nthe catalog; consumers must not infer equivalent edges from rendered text.",

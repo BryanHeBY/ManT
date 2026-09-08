@@ -484,7 +484,7 @@ pub fn as_preformatted(block: &Block) -> Option<&[Inline]> {
     }
 }
 
-pub fn assert_preformatted(section: &Section, needle: &str, expected_indent: u16) {
+pub fn assert_preformatted(section: &Section, needle: &str, expected_indent: i32) {
     let (children, indent) = find_preformatted(&section.blocks, needle, 0)
         .unwrap_or_else(|| panic!("missing preformatted text {needle:?} in {}", section.title));
     assert!(inline_text(children).contains(needle));
@@ -494,8 +494,8 @@ pub fn assert_preformatted(section: &Section, needle: &str, expected_indent: u16
 fn find_preformatted<'a>(
     blocks: &'a [Block],
     needle: &str,
-    base_indent: u16,
-) -> Option<(&'a [Inline], u16)> {
+    base_indent: i32,
+) -> Option<(&'a [Inline], i32)> {
     for block in blocks {
         match block {
             Block::Preformatted {
