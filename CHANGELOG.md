@@ -20,6 +20,9 @@ that crate was not published for that change.
   This intentionally splits formerly merged IDs/paths and can return several
   direct declarations of the same name. An empty declaration retains its form
   and source, but does not borrow the next item's explanation.
+- Complete `TP` tags using named roff bullet escapes now become ordinary list
+  items rather than semantic `•` entries. Literal operator definitions remain
+  addressable; this is not a global punctuation filter.
 
 ### Explanation match locations (unreleased v0.11)
 

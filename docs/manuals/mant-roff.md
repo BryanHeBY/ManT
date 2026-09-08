@@ -64,7 +64,7 @@ The following `man(7)` macros have dedicated lowering behavior:
 | `SH`, `SS` | Top-level sections and child sections |
 | `P`, `PP`, `LP`, `HP` | Paragraph boundaries and retained vertical spacing |
 | `RS`, `RE` | Nested indentation boundary |
-| `IP`, `TP`, `TQ` | Bullet, ordered-list, or definition-list items, aliases, hanging layout, and widths |
+| `IP`, `TP`, `TQ` | Bullet, ordered-list, or definition-list items, explicit multi-tag heads, hanging layout, and widths |
 | `PD` | Paragraph, definition-item, and heading spacing |
 | `B`, `SB` | Strong inline content |
 | `I` | Emphasized inline content |
@@ -145,6 +145,12 @@ This conservative boundary means that a short declaration in a compact manual
 may have no independent explanation. Its names, complete form and source remain
 addressable; read the containing section for context. ManT does not borrow the
 next item's body or treat the lack of a description as budget truncation.
+
+A `TP` whose complete tag is the named roff bullet `\(bu` or `\[bu]`
+(including leading escaped spacing) becomes a regular bullet item, not a
+semantic term named `•`. This narrow recovery retains body, layout and targets;
+it does not apply `IP`'s broader marker convention to literal `TP` operators
+such as `*`, `-`, or `+`.
 
 ## Manual References
 

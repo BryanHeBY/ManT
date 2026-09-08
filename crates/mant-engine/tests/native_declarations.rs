@@ -97,3 +97,51 @@ fn an_explicit_tq_after_a_body_does_not_steal_that_body() {
         assert!(serde_json::to_string(children).unwrap().contains(expected));
     }
 }
+
+#[test]
+fn named_roff_bullets_are_lists_but_literal_operator_definitions_survive() {
+    for marker in [r"\(bu", r"\[bu]", r"\ \(bu"] {
+        let source = format!(
+            ".TH PROBE 1\n.SH TOPIC\n.PD 0\n.TP 4\n{marker}\nFIRST\n.TP 4\n{marker}\nSECOND\n.RS 4\nNested continuation.\n.RE\n.TP 4\n.B *\nAn operator.\n.TP 4\n.B -\nStandard input.\n.TP 4\n.B +\nAnother operator.\n"
+        );
+        let query = mant_engine::query_roff_bytes(source.as_bytes()).unwrap();
+        let document = query.document.as_ref().unwrap();
+        let items = definitions(document);
+        assert_eq!(items.len(), 3, "{items:?}");
+        let Block::List {
+            kind: mant_ir::ListKind::Bullet,
+            items,
+            ..
+        } = &document.sections[0].blocks[0]
+        else {
+            panic!("bullet list")
+        };
+        assert_eq!(items.len(), 2);
+        assert!(
+            items
+                .iter()
+                .all(|item| item.entry.is_none() && item.source.is_some())
+        );
+        let text = mant_engine::render_query_text(&query);
+        assert!(
+            text.contains("FIRST")
+                && text.contains("SECOND")
+                && text.contains("Nested continuation.")
+        );
+        assert!(mant_ir::validate_document(document).is_empty());
+    }
+}
+
+#[test]
+fn explicit_tp_and_ip_bullets_keep_equivalent_rendered_layout() {
+    let body = "BODY\n.RS 4\nCONTINUATION\n.RE\n";
+    let outputs = [".TP 4\n\\(bu", ".IP \\(bu 4"].map(|head| {
+        let source = format!(".TH PROBE 1\n.SH TOPIC\n{head}\n{body}");
+        let query = mant_engine::query_roff_bytes(source.as_bytes()).unwrap();
+        (
+            mant_engine::render_query_text(&query),
+            mant_engine::render_markdown(&query),
+        )
+    });
+    assert_eq!(outputs[0], outputs[1]);
+}

@@ -44,6 +44,8 @@ pub(in crate::mandoc::blocks) fn lower_man_definition(
         formatter,
     );
     let macro_name = node.macro_name.as_deref();
+    let bullet = (macro_name == Some("IP") && is_ip_bullet_item(&item))
+        || (macro_name == Some("TP") && is_explicit_tp_bullet(node, &item));
     let ordinal = matches!(macro_name, Some("IP" | "TP"))
         .then(|| {
             ordinal_marker(
@@ -72,44 +74,44 @@ pub(in crate::mandoc::blocks) fn lower_man_definition(
         list_state,
         ManDefinitionEmission {
             item,
-            macro_name,
             source: source_span(node),
             indent_columns,
             spacing_before,
             max_width,
             ordinal,
             merge,
+            bullet,
         },
     );
 }
 
-struct ManDefinitionEmission<'a> {
+struct ManDefinitionEmission {
     item: DefinitionItem,
-    macro_name: Option<&'a str>,
     source: Option<mant_ir::SourceSpan>,
     indent_columns: u16,
     spacing_before: u16,
     max_width: usize,
     ordinal: Option<super::ordered::ManOrdinalMarker>,
     merge: DefinitionMerge,
+    bullet: bool,
 }
 
 fn emit_man_definition(
     output: &mut Vec<Block>,
     list_state: &mut ManListState,
-    emission: ManDefinitionEmission<'_>,
+    emission: ManDefinitionEmission,
 ) {
     let ManDefinitionEmission {
         item,
-        macro_name,
         source,
         indent_columns,
         spacing_before,
         max_width,
         ordinal,
         merge,
+        bullet,
     } = emission;
-    if macro_name == Some("IP") && is_ip_bullet_item(&item) {
+    if bullet {
         *list_state = ManListState::None;
         append_ip_bullet(output, item, indent_columns, spacing_before, source);
     } else {
@@ -395,4 +397,20 @@ pub(in crate::mandoc::blocks) fn is_ip_bullet_item(item: &DefinitionItem) -> boo
         return false;
     };
     is_bullet_glyph(plain_text(term).trim())
+}
+
+/// TP can define literal operators, so do not apply IP's broad marker
+/// convention. Require the complete tag to be a bullet and native source
+/// evidence for the named roff bullet escape; no section-name heuristic.
+fn is_explicit_tp_bullet(node: &Node, item: &DefinitionItem) -> bool {
+    fn contains_bullet_escape(node: &Node) -> bool {
+        node.text
+            .as_ref()
+            .is_some_and(|text| text.contains(r"\(bu") || text.contains(r"\[bu]"))
+            || node.children.iter().any(contains_bullet_escape)
+    }
+    matches!(item.terms.as_slice(), [term] if plain_text(term).trim() == "•")
+        && super::super::definition::visible_definition_head(node)
+            .iter()
+            .any(contains_bullet_escape)
 }

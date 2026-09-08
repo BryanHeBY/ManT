@@ -51,6 +51,39 @@ fn dragonfly_gdb_preserves_independent_tp_option_declarations() {
 }
 
 #[test]
+fn dragonfly_gdb_restriction_bullets_are_not_semantic_terms() {
+    fn check(entries: &[mant_ir::SemanticEntry]) {
+        for entry in entries {
+            assert!(!entry.forms.iter().any(|form| form == "•"));
+            check(&entry.children);
+        }
+    }
+    let document = bsd_manual("dragonfly-gdb");
+    let index = mant_ir::SemanticIndex::build(document);
+    let mut sections = Vec::new();
+    common::collect_sections(&document.sections, &mut sections);
+    for section in sections {
+        check(index.section(&section.id));
+    }
+    let text = mant_engine::render_query_text(&common::query_for_document("gdb", document));
+    for body in [
+        "Start your program",
+        "Make your program stop",
+        "Examine what has happened",
+        "Change things in your program",
+    ] {
+        assert!(text.contains(body), "lost {body}");
+    }
+    assert!(
+        section(document, "DESCRIPTION")
+            .blocks
+            .iter()
+            .any(|block| matches!(block,
+        mant_ir::Block::List { kind: mant_ir::ListKind::Bullet, items, .. } if items.len() == 4))
+    );
+}
+
+#[test]
 fn openbsd_term_preserves_digits_after_a_signed_legacy_size() {
     let document = bsd_manual("openbsd-current-term");
     let example = block_slice_text(&section(document, "EXAMPLE").blocks);
