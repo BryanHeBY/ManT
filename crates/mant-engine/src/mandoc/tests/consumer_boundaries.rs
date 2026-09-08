@@ -2,6 +2,19 @@
 use super::inline_boundaries::{assert_flow, query, variants};
 
 #[test]
+fn authored_enclosures_consume_empty_words_and_reset_unclosed_joins() {
+    for (body, expected) in [
+        (".Eo [\n.No word Ns\n.Ec\n.No TAIL", "[word TAIL"),
+        (".No x Ns\n.Eo\n.Ec\n.No y", "x y"),
+        (".No x\n.Eo \"\"\n.No word\n.Ec\n.No y", "x word y"),
+        (".No x\n.Eo\n.Ec ]\n.No y", "x ] y"),
+        (".Eo [\n.No word Ns\n.Ec ]\n.No TAIL", "[word] TAIL"),
+    ] {
+        assert_flow(body, expected);
+    }
+}
+
+#[test]
 fn literal_containers_preserve_nested_structural_payloads_and_targets() {
     for display in ["literal", "unfilled"] {
         for inner in [

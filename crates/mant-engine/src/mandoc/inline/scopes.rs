@@ -123,21 +123,34 @@ fn section_reference(children: Vec<Inline>) -> Vec<Inline> {
 }
 
 fn authored_enclosure(builder: &mut InlineBuilder, node: &Node, name: Option<&str>) {
+    let head = first_part_children(node, NodeKind::Head);
+    let body = first_part_children(node, NodeKind::Body);
+    let tail = first_part_children(node, NodeKind::Tail);
     for (index, child) in node.children.iter().enumerate() {
         match child.kind {
             NodeKind::Head => {
                 append_inline_nodes(builder, &child.children, name);
-                if !child.children.is_empty() {
+                if !head.is_empty() && (!body.is_empty() || !tail.is_empty()) {
                     builder.tighten_next_boundary();
                 }
             }
             NodeKind::Tail => {
-                if !child.children.is_empty() {
+                if !tail.is_empty() && (!head.is_empty() || !body.is_empty()) {
                     builder.tighten_next_boundary();
                 }
                 append_inline_nodes(builder, &child.children, name);
             }
-            NodeKind::Body => append_inline_nodes(builder, &child.children, name),
+            NodeKind::Body => {
+                append_inline_nodes(builder, &child.children, name);
+                // Eo/Ec owns its closing boundary even when no closing glyph
+                // was supplied. A completely empty enclosure is a zero-width
+                // word, not a transparent target/control scope.
+                if head.is_empty() && body.is_empty() && tail.is_empty() {
+                    builder.append_word(Vec::new());
+                } else if tail.is_empty() {
+                    builder.release_next_boundary();
+                }
+            }
             _ => append_inline_node_with_next(builder, child, node.children.get(index + 1), name),
         }
     }

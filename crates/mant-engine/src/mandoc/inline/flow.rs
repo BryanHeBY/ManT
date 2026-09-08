@@ -136,6 +136,10 @@ impl InlineBuilder {
         self.boundary = PendingBoundary::Tight;
     }
 
+    pub(super) fn release_next_boundary(&mut self) {
+        self.boundary = PendingBoundary::Ordinary;
+    }
+
     /// Join a generated prefix only to its own operand scope. Empty text and
     /// zero-width anchors do not consume the join, so expire it on scope exit.
     /// An explicit control replaces `PrefixJoin` with `Tight` and must survive.
