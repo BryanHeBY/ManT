@@ -195,6 +195,8 @@ Literal and unfilled flows preserve physical line boundaries without resetting i
 
 Styling wrappers such as `Bf` are not line boundaries. Continuation and pending spacing pass through their opening and closing nodes, including a body containing only state requests. An explicit break inside a wrapper still terminates the current logical line.
 
+No-fill changes line layout, not content reachability: nested tables and lists retain their cells, terms, bodies and targets even inside font scopes. Such structural payloads interrupt the current preformatted run rather than being flattened into partial inline text.
+
 ## mdoc Inline Semantics
 
 The following macros receive dedicated inline treatment:
@@ -233,6 +235,8 @@ Delimiter macros preserve their visible punctuation and libmandoc spacing roles:
 
 The opener owns the complete scoped body in libmandoc's tree, so ManT surrounds that body once. Closing macros terminate the scope and do not emit a second delimiter. `Eo` and `Ec` retain their literal, author-supplied delimiters. The obsolete `Es` macro changes parser state but emits no text; libmandoc resolves that state onto each `En` invocation before ManT lowers it.
 
+An empty `Eo`/`Ec` scope is a zero-width word event. If an authored enclosure has no closing delimiter, its closing boundary still releases an internal no-space request. Empty strings and zero-width text can consume word boundaries; invisible targets and hidden nodes cannot.
+
 Inline spacing follows output order across prose, definition heads, literal displays, and supported tbl source recovery. `Ap` attaches on both sides, including across styled siblings (`.No x Ap y` becomes `x'y`). A generated closing bracket or quote consumes an internal `Ns`/`Pf` boundary; it does not carry that boundary outside the enclosure. An explicitly external `Ns` can still join the following text. Styles and zero-width targets do not consume pending boundaries; real line and paragraph breaks terminate them.
 
 The generated dash of `Fl` joins its own operands. An empty string or zero-width `\&` operand consumes that internal join and leaves the next external argument separate (`Fl "" Ar file` becomes `- file`). An operand-less `Fl` is different: it joins the next non-text sibling on the same source line (`Fl Ar file` becomes `-file`, and `Fl Fl Ar file` becomes `--file`). Zero-width targets remain non-consuming, but do not extend the internal join beyond its operand scope. Explicit `Ns`/`Pf` effects remain distinct and can still request an external join.
@@ -240,6 +244,8 @@ The generated dash of `Fl` joins its own operands. An empty string or zero-width
 Font state has a different lifetime from spacing state. A font-selecting mdoc macro pushes its effective font, rather than adding a wrapper to the inherited style: `No` selects regular even inside `Bf -emphasis`, and `Em \fBword` produces bold, not bold-plus-emphasis. Explicit escapes override the macro's initial selection. On scope exit the outer current font resumes; the previous-selection register is not rolled back. ManT follows mandoc's font stack here: `No \fBword\fIinner` followed by `\fPtail` makes `tail` bold, while groff makes it italic.
 
 Plain text and transparent macros such as `Pf` do not create font scopes. Their escapes can change subsequent text until another font selection intervenes. `Bf` establishes a scoped default through nested lists and displays; local macros can override it, and `Ef` resumes the outer font without inventing a paragraph or line boundary. ManT retains code presentation for `Li` and `Bf -literal`, although a terminal formatter may use its ordinary monospaced font. These rules do not change the separate font-reset policy for man macros. Spacing controls and zero-width targets remain independent of font push/pop.
+
+Bibliographies and table cells inherit the enclosing font state; a rejected cell recovery does not commit its partial state. Generated function and manual-reference punctuation participates in the same output flow as its operands. `Fo` is an inline scope in ordinary prose, while SYNOPSIS retains declaration boundaries. Font changes inside a man `SY` body persist across physical no-fill lines and reset when that macro scope ends.
 
 `Ns` suppresses a boundary only when libmandoc does not mark it as starting a source line. `Pf` retains its prefix but joins the next sibling only when that sibling exists on the same source line. Line-start `Ns` and `Pf` without that successor are recovery cases, not recommended authoring forms; native diagnostics remain observable. Formatter differences remain relevant: groff rejects bare line-start `Ap`, and its handling of ordinary text under `Sm off` differs from mandoc. ManT follows the pinned parser's mdoc model rather than promising identical output from every formatter.
 
@@ -299,6 +305,7 @@ ManT decodes visible roff text after libmandoc parsing. These escape families ha
 | `\p` | Inline line break |
 | `\(XX`, `\[NAME]`, `\C'desc'` | Named special character from the pinned libmandoc catalog; bracketed `uXXXX` Unicode names and `_`-joined scalar sequences are decoded, while an unknown name remains visible in escaped source form |
 | `\E` | Copy-mode-safe nested escape |
+| `\N'number'` | Numbered glyph in the pinned mandoc terminal range 0–255, with control filtering; unsupported or malformed indices remain visibly escaped, not interpreted as arbitrary Unicode |
 | `\X'tty: link URI'` | External terminal link start; `\X'tty: link'` ends it |
 
 Named characters resolve through the complete character catalog compiled from the pinned libmandoc source. ManT deliberately applies copy-friendly compatibility folds to common quotes and symbols; other catalog entries use their declared Unicode scalar. Groff-style bracketed Unicode names such as `\[u2192]` and composite names such as `\[u0061_0301]` are decoded independently of that catalog. A name absent from both forms is retained as `\(XX`, `\[NAME]`, or `\C'desc'` instead of being silently deleted, while known zero-width controls remain invisible.
@@ -327,6 +334,8 @@ escaping is minimal but lossless: intraword underscores such as the one in
 Color, point size, vertical or non-literal motion, drawing, overstrike, register, string, device, and postprocessor escape operands are consumed so control syntax cannot leak into prose. Their presentation effect is omitted. A positive literal relative horizontal motion retains one space as a text-mode approximation, including before a `\c` line join; negative, absolute, register-based, and compound motions remain presentation-only. Known zero-width spacing and formatter controls remain zero width. An otherwise undefined one-character escape follows roff's visible-trigger fallback after terminal-control filtering.
 
 The zero-advance `\z` escape retains its complete following glyph, including named glyph escapes, at ordinary advance as a text-mode approximation. It never exposes a partial glyph operand or removes the glyph's visible content.
+
+Decoded text is never interpreted a second time as roff syntax. In particular, literal font-escape spellings authored with `\e` or `\[rs]` remain visible even when their letters resemble the currently selected font.
 
 ## Tables
 

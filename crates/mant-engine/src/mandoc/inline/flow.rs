@@ -140,8 +140,8 @@ impl InlineBuilder {
         self.boundary = PendingBoundary::Ordinary;
     }
 
-    /// Join a generated prefix only to its own operand scope. Empty text and
-    /// zero-width anchors do not consume the join, so expire it on scope exit.
+    /// Join a generated prefix only to its own operand scope. Word events
+    /// consume it even without glyphs; anchors do not. Expire unused joins.
     /// An explicit control replaces `PrefixJoin` with `Tight` and must survive.
     pub(super) fn with_prefix_join(&mut self, append: impl FnOnce(&mut Self)) {
         self.boundary = PendingBoundary::PrefixJoin;

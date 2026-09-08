@@ -122,6 +122,16 @@ that crate was not published for that change.
 
 ### mant-engine 0.11.0
 
+- Preserve generated function/reference font and spacing effects, including
+  nested `Sm`, and keep ordinary `Fo` declarations in their surrounding prose.
+  SYNOPSIS declarations retain their independent boundaries. Empty `Eo`/`Ec`
+  scopes consume word events and do not leak internal joins to following text.
+- Carry scoped fonts into bibliographies and table recovery, keeping generated
+  author conjunctions and rolling back rejected recovery state. Preserve font
+  changes across physical lines inside man `EX`/`SY`, resetting at scope exit.
+- Decode numbered glyphs in mandoc's 8-bit terminal range, with terminal-safe
+  control filtering; unsupported or malformed indices remain visibly escaped
+  instead of disappearing or being misinterpreted as arbitrary Unicode.
 - Preserve tables, list terms, every column cell and navigation targets inside
   literal/unfilled displays, including nested font scopes. No-fill line layout
   no longer flattens structural payloads into an incomplete inline sequence.
