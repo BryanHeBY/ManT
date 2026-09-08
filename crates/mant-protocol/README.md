@@ -19,10 +19,10 @@ discovery, parsing, query execution, terminal I/O, or MCP transport.
 
 ```text
 QueryRequest ──> host / mant-engine ──┬─> QueryBundle
-                                     ├─> QueryOutline
-                                     ├─> QueryExcerpt
-                                     ├─> QueryExplanation
-                                     └─> QuerySearch
+                                      ├─> QueryOutline
+                                      ├─> QueryExcerpt
+                                      ├─> QueryExplanation
+                                      └─> QuerySearch
 
 ScopeQueryRequest ──> host / mant-engine ──> ScopeQueryResponse
 
