@@ -24,7 +24,9 @@ fn inline_definition_continuations_keep_the_structural_description_origin() {
         assert_eq!(line, format!("    {payload}"));
     }
     assert!(
-        text.contains("Initial.\n\n\n    INLINE_CONTINUATION."),
+        // Independent .sp and .sp 2 consume three blank rows, as in
+        // mandoc CVS HEAD term_vspace and groff (not max(1, 2)).
+        text.contains("Initial.\n\n\n\n    INLINE_CONTINUATION."),
         "{text}"
     );
     let excerpt = select_excerpt(&query, &["-a"]).unwrap();

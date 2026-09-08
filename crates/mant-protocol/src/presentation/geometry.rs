@@ -7,6 +7,12 @@
 use std::collections::BTreeMap;
 use unicode_width::UnicodeWidthStr;
 
+mod table;
+pub use table::table_requires_origin_preserving_stack;
+
+mod gaps;
+pub use gaps::has_bounded_gap;
+
 /// Maximum explicit gap in one logical block boundary. The producer can report
 /// saturation through [`GapPlan::is_bounded`] without allocating blank rows.
 pub const MAX_GAP_ROWS: u16 = 4096;
@@ -88,6 +94,14 @@ pub struct GapPlan {
 }
 
 impl GapPlan {
+    /// Append an independently owned, already resolved IR boundary fact.
+    /// Unlike [`Self::request`], this does not deduplicate projections: source
+    /// producers must give each request exactly one IR consumption point.
+    pub fn append_resolved(&mut self, rows: u16) {
+        let total = u32::from(self.explicit.unwrap_or(0)) + u32::from(rows);
+        self.bounded |= total > u32::from(MAX_GAP_ROWS);
+        self.explicit = Some(u16::try_from(total).unwrap_or(u16::MAX).min(MAX_GAP_ROWS));
+    }
     /// Contribute a source request or another projection of the same request.
     ///
     /// # Errors
@@ -136,6 +150,25 @@ impl GapPlan {
     #[must_use]
     pub const fn is_bounded(&self) -> bool {
         self.bounded
+    }
+}
+
+/// Resolved rows owned by a block's leading boundary. Zero is an explicit
+/// tight boundary, not an instruction for a renderer to invent paragraph
+/// spacing. Source and Markdown producers resolve their defaults before IR.
+#[must_use]
+pub const fn block_gap(block: &mant_ir::Block) -> u16 {
+    use mant_ir::Block;
+    match block {
+        Block::Paragraph { layout, .. }
+        | Block::Preformatted { layout, .. }
+        | Block::List { layout, .. }
+        | Block::DefinitionList { layout, .. }
+        | Block::Table { layout, .. }
+        | Block::Equation { layout, .. }
+        | Block::Unsupported { layout, .. } => layout.spacing_before_lines,
+        Block::VerticalSpace { lines, .. } => *lines,
+        Block::ThematicBreak { .. } => 0,
     }
 }
 

@@ -264,7 +264,7 @@ fn authored_pipes_are_not_stripped_from_unframed_original_content() {
     .unwrap();
     let text = render_explanation_text(&report);
     assert!(
-        text.contains("    | original pipe\n    || two pipes"),
+        text.contains("       | original pipe\n       || two pipes"),
         "{text}"
     );
     assert!(!text.contains("\n| "));

@@ -91,7 +91,7 @@ fn keeps_complete_sections_and_semantic_option_outlines() {
         }] if items.len() == 7
     ));
 
-    common::assert_no_duplicate_vertical_spacing(&document.sections, "fedora44/git");
+    common::assert_bounded_vertical_spacing(&document.sections, "fedora44/git");
 }
 
 /// No roff escapes leak into text.

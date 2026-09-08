@@ -2,6 +2,82 @@
 use super::*;
 
 #[test]
+fn thematic_rule_source_gaps_survive_root_section_and_nested_list_lowering() {
+    for prefix in [
+        "",
+        "## Details\n\n",
+        "- Container\n\n",
+        "- Outer\n\n  - Inner\n\n",
+    ] {
+        let indent = match prefix {
+            "- Container\n\n" => "  ",
+            "- Outer\n\n  - Inner\n\n" => "    ",
+            _ => "",
+        };
+        for blank in [false, true] {
+            let separator = if blank { "\n\n" } else { "\n" };
+            let body = ["BEFORE", "***", "AFTER"]
+                .map(|line| format!("{indent}{line}"))
+                .join(separator);
+            let source = format!("{prefix}{body}\n");
+            let query = crate::query_markdown_text(&source, None).unwrap();
+            let document = query.document.as_ref().unwrap();
+            let mut blocks = if document.sections.is_empty() {
+                document.blocks.as_slice()
+            } else {
+                document.sections[0].blocks.as_slice()
+            };
+            while let Some(Block::List { items, .. }) = blocks.first() {
+                blocks = &items[0].blocks;
+                if let Some(index) = blocks
+                    .iter()
+                    .position(|block| matches!(block, Block::List { .. }))
+                {
+                    blocks = &blocks[index..];
+                }
+            }
+            let rule = blocks
+                .iter()
+                .position(|block| matches!(block, Block::ThematicBreak { .. }))
+                .unwrap();
+            assert_eq!(
+                matches!(blocks[rule - 1], Block::VerticalSpace { lines: 1, .. }),
+                blank,
+                "{source}"
+            );
+            let Block::Paragraph { layout, .. } = &blocks[rule + 1] else {
+                panic!("rule must retain its following paragraph: {source}");
+            };
+            assert_eq!(layout.spacing_before_lines, u16::from(blank), "{source}");
+            let text = crate::render_query_text(&query);
+            let lines = text.lines().collect::<Vec<_>>();
+            let before = lines
+                .iter()
+                .position(|line| line.contains("BEFORE"))
+                .unwrap();
+            let rule = lines.iter().position(|line| line.trim() == "---").unwrap();
+            let after = lines
+                .iter()
+                .position(|line| line.contains("AFTER"))
+                .unwrap();
+            assert_eq!(rule - before, 1 + usize::from(blank), "{source}\n{text}");
+            assert_eq!(after - rule, 1 + usize::from(blank), "{source}\n{text}");
+
+            let mut repeated = document.clone();
+            super::super::layout::normalize_markdown_layout(
+                &super::super::source::MarkdownSource::new(&source),
+                &mut repeated.blocks,
+                &mut repeated.sections,
+            );
+            assert_eq!(
+                &repeated, document,
+                "normalization must not duplicate gaps: {source}"
+            );
+        }
+    }
+}
+
+#[test]
 fn annotations_preserve_the_original_event_tree_and_every_visible_delimiter() {
     use mant_ir::visit::{VisitMut, walk_list_item_mut};
     struct EraseFacts;

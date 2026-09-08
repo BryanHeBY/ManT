@@ -1,8 +1,5 @@
 //! Paragraph and literal flow own pending text, provenance and flush boundaries.
-use super::{
-    FilledBoundary, InlineBuilder, LoweringContext, layout, normalize_explicit_vertical_spacing,
-    targets, updated_spacing,
-};
+use super::{FilledBoundary, InlineBuilder, LoweringContext, layout, targets, updated_spacing};
 use mant_ir::{Block, Inline};
 
 pub(super) struct BlockState {
@@ -262,7 +259,6 @@ impl BlockState {
         self.flush_paragraph();
         let output_end = self.output.len();
         self.attach_pending_to_structural_output(output_end);
-        normalize_explicit_vertical_spacing(&mut self.output);
         self.output
     }
 }

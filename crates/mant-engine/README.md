@@ -96,6 +96,14 @@ literal displays, lists and table recovery:
 | Container routing | `containers.rs` streams borrowed children and scope boundaries; structural payloads remain tables/lists. Logical punctuation adjacency is a separate, non-executing classification in `adjacency.rs`. |
 | Inline and physical lines | `InlineBuilder` executes word/control events; `source_cursor.rs` places source-visible events on physical lines. No-fill changes layout, not macro interpretation. |
 | Structural layout | Block drivers own pending paragraphs and list state; section, synopsis, man no-fill and dialect-specific list consumers remain separate. Shared definition helpers do not own formatter state. |
+
+Source geometry retains bounded basic-unit positions independently of the IR
+parent and man macro base. Conversion produces signed relative offsets;
+ownership normalization rebases only transferred roots. Text presentation
+composes each parent once. It keeps resolved gap requests separate from literal
+newlines through nested flow composition, sharing cell/marker/gap rules with
+the UI through `mant-protocol::geometry`. Zero block spacing is tight, not a
+frontend default; each source request has one consumption point.
 | Speculative recovery | Table-cell candidates retain output, final formatter state and diagnostics until ownership acceptance. Rejection rolls back all three, unlike a normal font-scope exit. |
 
 Complete corpus regressions live in the repository integration tests, outside

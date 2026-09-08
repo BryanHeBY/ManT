@@ -1,5 +1,6 @@
 //! One source-aware block layout for plain and decorated text.
 //! Decorators must preserve visible content and boundary whitespace.
+use super::flow::Flow;
 use super::{indent_lines, join_parts};
 use mant_ir::{Block, DefinitionItem, Inline, ListItem, ListKind, Section, TableCell};
 use mant_protocol::geometry::{compose_origin, coordinate, marker_run_in_gap, padding, text_width};
@@ -74,53 +75,30 @@ impl BlockRenderer<'_> {
         base_indent: i32,
         leading_gap: Option<usize>,
     ) -> String {
-        // Blocks are separated by a single blank line by default. An explicit
-        // vertical-space node *sets* the gap before the next block rather than
-        // adding to it, so `.sp` and blank input lines are not double-counted
-        // against the default paragraph separation (which previously turned one
-        // requested blank line into several). Leading and trailing gaps are
-        // dropped so a section never opens or closes with blank lines.
-        let mut output = String::new();
-        // A definition term is preceding content too. Its first body block is
-        // normally tight (Some(0)); a continuation of an inline paragraph uses
-        // the normal block gap (Some(1)). Explicit space can override either.
-        let mut has_content = leading_gap.is_some();
-        let mut default_gap = leading_gap.unwrap_or(1);
-        let mut pending_blank_lines: Option<usize> = None;
+        self.block_flow(blocks, base_indent)
+            .finish(leading_gap.is_some())
+    }
+
+    fn block_flow(&self, blocks: &[Block], base_indent: i32) -> Flow {
+        let mut output = Flow::default();
         for block in blocks {
-            if let Block::VerticalSpace { lines, .. } = block {
-                if has_content {
-                    let requested = usize::from(*lines);
-                    pending_blank_lines = Some(pending_blank_lines.unwrap_or(0).max(requested));
-                }
-                continue;
-            }
-            let Some(text) = self.render_block(block, base_indent) else {
-                continue;
-            };
-            if has_content {
-                let blank_lines = pending_blank_lines.unwrap_or(default_gap);
-                output.push_str(&"\n".repeat(blank_lines + 1));
-            }
-            output.push_str(&text);
-            has_content = true;
-            default_gap = 1;
-            pending_blank_lines = None;
+            output.gap(mant_protocol::geometry::block_gap(block));
+            output.extend(self.render_block(block, base_indent));
         }
         output
     }
 
-    fn render_block(&self, block: &Block, base_indent: i32) -> Option<String> {
+    fn render_block(&self, block: &Block, base_indent: i32) -> Flow {
         if let Block::Paragraph {
             children, layout, ..
         } = block
         {
             let value = self.inline_text(children, TextRole::Body);
             if value.trim().is_empty() {
-                return None;
+                return Flow::default();
             }
             let first_origin = compose_origin(base_indent, layout.indent_columns);
-            return Some(
+            return Flow::text(
                 value
                     .trim_matches('\n')
                     .split('\n')
@@ -154,12 +132,12 @@ impl BlockRenderer<'_> {
                 layout,
                 ..
             } => {
-                return Some(self.render_list(
+                return self.render_list(
                     *kind,
                     items,
                     *compact,
                     compose_origin(base_indent, layout.indent_columns),
-                ));
+                );
             }
             Block::DefinitionList {
                 items,
@@ -167,16 +145,22 @@ impl BlockRenderer<'_> {
                 layout,
                 ..
             } => {
-                return Some(self.render_definitions(
+                return self.render_definitions(
                     items,
                     *compact,
                     compose_origin(base_indent, layout.indent_columns),
-                ));
+                );
             }
-            Block::Table { rows, layout, .. } => (
-                super::super::table::table_rows(rows, |cell| self.cell_text(cell)).join("\n"),
-                layout.indent_columns,
-            ),
+            Block::Table { rows, layout, .. } => {
+                let origin = compose_origin(base_indent, layout.indent_columns);
+                if mant_protocol::geometry::table_requires_origin_preserving_stack(rows, origin) {
+                    return self.stacked_table_flow(rows, origin);
+                }
+                (
+                    super::super::table::table_rows(rows, |cell| self.cell_text(cell)).join("\n"),
+                    layout.indent_columns,
+                )
+            }
             Block::Equation { value, layout, .. }
             | Block::Unsupported {
                 text: value,
@@ -191,12 +175,18 @@ impl BlockRenderer<'_> {
             ),
             // Vertical space is handled as an inter-block separator in
             // `render_blocks`, never as a standalone rendered block.
-            Block::VerticalSpace { .. } => return None,
+            Block::VerticalSpace { .. } => return Flow::default(),
             Block::ThematicBreak { .. } => ("---".to_owned(), 0),
         };
         let value = value.trim_matches('\n');
-        (!value.trim().is_empty())
-            .then(|| indent_lines(value, padding(compose_origin(base_indent, layout_indent))))
+        if value.trim().is_empty() {
+            Flow::default()
+        } else {
+            Flow::text(indent_lines(
+                value,
+                padding(compose_origin(base_indent, layout_indent)),
+            ))
+        }
     }
 
     fn render_list(
@@ -205,40 +195,45 @@ impl BlockRenderer<'_> {
         items: &[ListItem],
         compact: bool,
         base_indent: i32,
-    ) -> String {
-        items
-            .iter()
-            .enumerate()
-            .filter_map(|(index, item)| {
-                let marker = match kind {
-                    ListKind::Ordered { .. } => {
-                        format!("{}. ", kind.ordinal(index).expect("ordered list ordinal"))
-                    }
-                    ListKind::Bullet => "- ".to_owned(),
-                    ListKind::Plain => String::new(),
-                };
-                let body_origin = compose_origin(base_indent, coordinate(text_width(&marker)));
-                let body = self.render_blocks(&item.blocks, body_origin);
-                if marker.is_empty() {
-                    return (!body.is_empty()).then_some(body);
+    ) -> Flow {
+        let mut output = Flow::default();
+        for (index, item) in items.iter().enumerate() {
+            if index > 0 && !compact {
+                output.gap(1);
+            }
+            let marker = match kind {
+                ListKind::Ordered { .. } => {
+                    format!("{}. ", kind.ordinal(index).expect("ordered list ordinal"))
                 }
-                let prefix = format!("{}{marker}", " ".repeat(padding(base_indent)));
-                if let Some(Block::Paragraph { layout, .. }) = item.blocks.first()
-                    && let Some(gap) =
-                        marker_run_in_gap(base_indent, text_width(&marker), layout.indent_columns)
-                    && let Some(rest) = body.strip_prefix(
-                        &" ".repeat(padding(compose_origin(body_origin, layout.indent_columns))),
-                    )
-                {
-                    Some(format!("{prefix}{}{rest}", " ".repeat(gap)))
-                } else if body.is_empty() {
-                    Some(prefix.trim_end().to_owned())
-                } else {
-                    Some(format!("{}\n{body}", prefix.trim_end()))
-                }
-            })
-            .collect::<Vec<_>>()
-            .join(if compact { "\n" } else { "\n\n" })
+                ListKind::Bullet => "- ".to_owned(),
+                ListKind::Plain => String::new(),
+            };
+            let body_origin = compose_origin(base_indent, coordinate(text_width(&marker)));
+            if marker.is_empty() {
+                output.extend(self.block_flow(&item.blocks, body_origin));
+                continue;
+            }
+            let prefix = format!("{}{marker}", " ".repeat(padding(base_indent)));
+            if let Some(first @ Block::Paragraph { layout, .. }) = item.blocks.first()
+                && let Some(gap) =
+                    marker_run_in_gap(base_indent, text_width(&marker), layout.indent_columns)
+            {
+                // The first paragraph's boundary precedes the whole item,
+                // not the text after its marker. Keep it out of string
+                // prefix tests and preserve subsequent hard-line origins.
+                output.gap(layout.spacing_before_lines);
+                let body = self.render_block(first, body_origin).finish(false);
+                let indent =
+                    " ".repeat(padding(compose_origin(body_origin, layout.indent_columns)));
+                let rest = body.strip_prefix(&indent).unwrap_or(&body);
+                output.push_text(format!("{prefix}{}{rest}", " ".repeat(gap)));
+                output.extend(self.block_flow(&item.blocks[1..], body_origin));
+            } else {
+                output.push_text(prefix.trim_end().to_owned());
+                output.extend(self.block_flow(&item.blocks, body_origin));
+            }
+        }
+        output
     }
 
     fn render_definitions(
@@ -246,31 +241,20 @@ impl BlockRenderer<'_> {
         items: &[DefinitionItem],
         compact: bool,
         base_indent: i32,
-    ) -> String {
-        let rendered = items
-            .iter()
-            .filter_map(|item| {
-                let value = self.render_definition(item, base_indent);
-                if value.is_empty() {
-                    return None;
-                }
-                Some((value, item.layout.spacing_before_lines))
-            })
-            .collect::<Vec<_>>();
-
-        let Some((first, rest)) = rendered.split_first() else {
-            return String::new();
-        };
-        let mut output = first.0.clone();
-        for (item, spacing_before_lines) in rest {
-            let blank_lines = spacing_before_lines.unwrap_or(u16::from(!compact));
-            output.push_str(&"\n".repeat(usize::from(blank_lines) + 1));
-            output.push_str(item);
+    ) -> Flow {
+        let mut output = Flow::default();
+        for (index, item) in items.iter().enumerate() {
+            output.gap(
+                item.layout
+                    .spacing_before_lines
+                    .unwrap_or(u16::from(index > 0 && !compact)),
+            );
+            output.extend(self.render_definition(item, base_indent));
         }
         output
     }
 
-    fn render_definition(&self, item: &DefinitionItem, origin: i32) -> String {
+    fn render_definition(&self, item: &DefinitionItem, origin: i32) -> Flow {
         let body_origin = compose_origin(origin, item.layout.body_indent_columns);
         let mut terms = item
             .terms
@@ -321,12 +305,10 @@ impl BlockRenderer<'_> {
                     )),
                 )
             }));
-            let mut result = output.join("\n");
-            result.push_str(&self.render_block_sequence(
-                &item.description[1..],
-                body_origin,
-                Some(1),
-            ));
+            let mut result = Flow::default();
+            result.gap(layout.spacing_before_lines);
+            result.push_text(output.join("\n"));
+            result.extend(self.block_flow(&item.description[1..], body_origin));
             return result;
         }
         let terms = terms
@@ -334,12 +316,17 @@ impl BlockRenderer<'_> {
             .map(|term| indent_lines(&term, padding(origin)))
             .collect::<Vec<_>>()
             .join("\n");
-        let body = self.render_block_sequence(
-            &item.description,
-            body_origin,
-            (!terms.is_empty()).then_some(0),
-        );
-        format!("{terms}{body}")
+        let mut result = Flow::text(terms);
+        result.extend(self.block_flow(&item.description, body_origin));
+        result
+    }
+
+    fn stacked_table_flow(&self, rows: &[mant_ir::TableRow], origin: i32) -> Flow {
+        let mut output = Flow::default();
+        for cell in rows.iter().flat_map(|row| &row.cells) {
+            output.extend(self.block_flow(&cell.blocks, origin));
+        }
+        output
     }
 
     fn cell_text(&self, cell: &TableCell) -> String {
@@ -351,6 +338,82 @@ impl BlockRenderer<'_> {
 mod tests {
     use super::*;
     use mant_ir::LayoutHint;
+
+    #[test]
+    fn signed_table_cells_compose_parent_origins_before_clipping() {
+        let renderer = super::super::plain_renderer();
+        for (table_indent, child_indent, expected_column) in
+            [(-2, 3, 1), (3, -2, 1), (4096, 3, 4096), (4090, 10, 4096)]
+        {
+            let cell = |text| TableCell {
+                blocks: vec![paragraph(text, child_indent)],
+                column_span: 2,
+                row_span: 1,
+                alignment: None,
+            };
+            let table = Block::Table {
+                rows: vec![mant_ir::TableRow {
+                    cells: vec![cell("FIRST"), cell("SECOND")],
+                }],
+                layout: LayoutHint {
+                    indent_columns: table_indent,
+                    ..Default::default()
+                },
+                source: None,
+            };
+            assert_eq!(
+                renderer.render_blocks(&[table], 0),
+                format!(
+                    "{}FIRST\n{}SECOND",
+                    " ".repeat(expected_column),
+                    " ".repeat(expected_column)
+                )
+            );
+        }
+        let nested = plain_list(
+            vec![Block::Table {
+                rows: vec![mant_ir::TableRow {
+                    cells: vec![TableCell {
+                        blocks: vec![plain_list(vec![paragraph("NESTED", 5)], 3)],
+                        column_span: 1,
+                        row_span: 1,
+                        alignment: None,
+                    }],
+                }],
+                layout: LayoutHint {
+                    indent_columns: 2,
+                    ..Default::default()
+                },
+                source: None,
+            }],
+            4090,
+        );
+        assert_eq!(
+            renderer.render_blocks(&[nested], 0),
+            format!("{}NESTED", " ".repeat(4096))
+        );
+        let table = Block::Table {
+            rows: vec![mant_ir::TableRow {
+                cells: ["FIRST", "SECOND"]
+                    .map(|text| TableCell {
+                        blocks: vec![paragraph(text, 0)],
+                        column_span: 1,
+                        row_span: 1,
+                        alignment: None,
+                    })
+                    .into(),
+            }],
+            layout: LayoutHint::default(),
+            source: None,
+        };
+        let ordinary = renderer.render_blocks(&[table], 0);
+        assert!(
+            ordinary
+                .lines()
+                .any(|line| line.contains("FIRST") && line.contains("SECOND")),
+            "{ordinary}"
+        );
+    }
 
     fn paragraph(text: &str, indent: i32) -> Block {
         Block::Paragraph {
@@ -378,6 +441,44 @@ mod tests {
             },
             source: None,
         }
+    }
+
+    #[test]
+    fn resolved_gaps_cross_transparent_containers_and_precede_whole_items() {
+        let renderer = super::super::plain_renderer();
+        for rows in [0, 1, 2] {
+            let mut body = paragraph("BODY\nNEXT", 0);
+            if let Block::Paragraph { layout, .. } = &mut body {
+                layout.spacing_before_lines = rows;
+            }
+            let mut list = plain_list(vec![body], 0);
+            if let Block::List { kind, .. } = &mut list {
+                *kind = ListKind::Bullet;
+            }
+            assert_eq!(
+                renderer.render_blocks(&[list], 0),
+                format!("{}- BODY\n  NEXT", "\n".repeat(usize::from(rows)))
+            );
+        }
+        let mut container = plain_list(
+            vec![
+                Block::VerticalSpace {
+                    lines: 3000,
+                    source: None,
+                },
+                paragraph("AFTER", 0),
+            ],
+            0,
+        );
+        if let Block::List { layout, .. } = &mut container {
+            layout.spacing_before_lines = 3000;
+        }
+        let blocks = [paragraph("BEFORE", 0), container];
+        assert!(mant_protocol::geometry::has_bounded_gap(&blocks));
+        assert_eq!(
+            renderer.render_blocks(&blocks, 0),
+            format!("BEFORE{}AFTER", "\n".repeat(4097))
+        );
     }
 
     #[test]

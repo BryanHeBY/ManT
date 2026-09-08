@@ -2,6 +2,70 @@
 use super::*;
 
 #[test]
+fn signed_table_cells_preserve_real_origins_links_and_anchors() {
+    for (table_indent, child_indent, expected_column) in
+        [(-2, 3, 1), (3, -2, 1), (4096, 3, 4096), (4090, 10, 4096)]
+    {
+        let cell = |id: &str, text: &str| TableCell {
+            blocks: vec![Block::Paragraph {
+                children: vec![
+                    Inline::anchor_with_aliases(id, vec![format!("Exact.{id}").into()]),
+                    Inline::Link {
+                        target: mant_ir::LinkTarget::Section {
+                            id: "description".into(),
+                        },
+                        title: None,
+                        children: vec![Inline::Text { value: text.into() }],
+                    },
+                ],
+                layout: LayoutHint {
+                    indent_columns: child_indent,
+                    ..Default::default()
+                },
+                source: None,
+            }],
+            column_span: 2,
+            row_span: 1,
+            alignment: None,
+        };
+        let mut query = bundle();
+        let document = query.document.as_mut().unwrap();
+        document.blocks = vec![Block::Table {
+            rows: vec![TableRow {
+                cells: vec![cell("first", "FIRST"), cell("second", "SECOND")],
+            }],
+            layout: LayoutHint {
+                indent_columns: table_indent,
+                ..Default::default()
+            },
+            source: None,
+        }];
+        document.sections.clear();
+        let rendered = DocumentView::new(&query).render((expected_column + 20).max(80));
+        let expected_column = usize::from(expected_column);
+        let rows = rendered
+            .text
+            .lines
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>();
+        for (id, text) in [("first", "FIRST"), ("second", "SECOND")] {
+            let found = rendered.search(text);
+            assert_eq!(found.len(), 1, "{rows:?}");
+            let row = found[0].row;
+            assert_eq!(rows[row].find(text), Some(expected_column), "{rows:?}");
+            assert_eq!(rendered.anchor_row(id), Some(row));
+            assert_eq!(rendered.anchor_row(&format!("Exact.{id}")), Some(row));
+            assert_eq!(
+                rendered.link_target_at(row, expected_column),
+                Some(&LinkTarget::Section("description".into()))
+            );
+        }
+        assert!(rendered.search("FIRST")[0].row < rendered.search("SECOND")[0].row);
+    }
+}
+
+#[test]
 fn table_cells_use_shared_content_driven_columns_and_independent_wrapping() {
     let mut bundle = bundle();
     let paragraph = |value: &str| Block::Paragraph {

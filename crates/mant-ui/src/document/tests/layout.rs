@@ -2,6 +2,74 @@
 use super::*;
 
 #[test]
+fn resolved_gaps_precede_whole_items_and_share_transparent_container_budgets() {
+    for rows in [0, 1, 2, 3000] {
+        let mut builder = DocumentBuilder::new("gaps".into(), None);
+        builder.blocks(
+            &[Block::List {
+                kind: ListKind::Bullet,
+                compact: true,
+                items: vec![ListItem {
+                    source: None,
+                    entry: None,
+                    blocks: vec![Block::Paragraph {
+                        children: vec![Inline::Text {
+                            value: "BODY\nNEXT".into(),
+                        }],
+                        layout: LayoutHint {
+                            spacing_before_lines: rows,
+                            ..Default::default()
+                        },
+                        source: None,
+                    }],
+                }],
+                layout: LayoutHint::default(),
+                source: None,
+            }],
+            0,
+        );
+        assert_eq!(builder.lines.len(), usize::from(rows) + 2);
+        let text = builder.lines[usize::from(rows)]
+            .spans
+            .iter()
+            .map(|s| s.content.as_ref())
+            .collect::<String>();
+        assert_eq!(text, "• BODY");
+    }
+    let mut builder = DocumentBuilder::new("bounded".into(), None);
+    builder.blocks(
+        &[Block::List {
+            kind: ListKind::Plain,
+            compact: true,
+            layout: LayoutHint {
+                spacing_before_lines: 3000,
+                ..Default::default()
+            },
+            source: None,
+            items: vec![ListItem {
+                source: None,
+                entry: None,
+                blocks: vec![
+                    Block::VerticalSpace {
+                        lines: 3000,
+                        source: None,
+                    },
+                    Block::Paragraph {
+                        children: vec![Inline::Text {
+                            value: "BODY".into(),
+                        }],
+                        layout: LayoutHint::default(),
+                        source: None,
+                    },
+                ],
+            }],
+        }],
+        0,
+    );
+    assert_eq!(builder.lines.len(), 4097);
+}
+
+#[test]
 fn anchors_follow_hard_lines_in_terms_and_run_in_bodies() {
     for inline_term in [false, true] {
         let mut builder = DocumentBuilder::new("target-rows".into(), None);

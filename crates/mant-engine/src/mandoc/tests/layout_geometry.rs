@@ -199,3 +199,59 @@ fn explicit_in_overrides_hanging_and_restores_real_macro_base_inside_definitions
         "empty HP must not assign a new width: {text}"
     );
 }
+
+#[test]
+fn gaps_execute_independent_requests_without_renderer_defaults() {
+    for (requests, rows) in [
+        (".PD 0\n.PP\n", 0),
+        (".PD 2\n.PP\n", 2),
+        (".sp 0\n", 0),
+        (".sp 1\n.sp 2\n", 3),
+        (".sp 1\n.sp 1\n", 2),
+        (".sp 0\n.sp 2\n", 2),
+        (".sp 1\n.PD 2\n.PP\n", 3),
+        (".RS 0\n", 0),
+        (".RS 0\n.PP\n", 1),
+    ] {
+        let text = man(&format!("BEFORE\n{requests}AFTER\n"));
+        let lines = text.lines().collect::<Vec<_>>();
+        let before = lines
+            .iter()
+            .position(|line| line.contains("BEFORE"))
+            .unwrap();
+        let after = lines
+            .iter()
+            .position(|line| line.contains("AFTER"))
+            .unwrap();
+        assert_eq!(after - before - 1, rows, "{requests:?}: {text}");
+    }
+}
+
+#[test]
+fn excessive_gap_has_a_diagnostic_and_bounded_presentation() {
+    // Each request is within term_vspan's per-request range; it is the
+    // accumulated boundary, not a single invalid distance, that exceeds it.
+    let source = format!(
+        ".TH GAP 1\n.SH DESCRIPTION\nBEFORE\n{}AFTER\n",
+        ".sp 64\n".repeat(80)
+    );
+    let query = crate::query_roff_bytes(source.as_bytes()).unwrap();
+    assert!(
+        query
+            .document
+            .as_ref()
+            .unwrap()
+            .diagnostics
+            .iter()
+            .any(|d| d.code.as_deref() == Some("manual.vertical-spacing-limit"))
+    );
+    let text = crate::render_query_text(&query);
+    let between = text
+        .split_once("BEFORE")
+        .unwrap()
+        .1
+        .split_once("AFTER")
+        .unwrap()
+        .0;
+    assert_eq!(between.bytes().filter(|&b| b == b'\n').count(), 4097);
+}

@@ -50,7 +50,7 @@ fn does_not_leak_roff_markup_or_duplicate_spacing() {
         "cross-platform-releases/cmake-toolchains",
         document,
     );
-    common::assert_no_duplicate_vertical_spacing(
+    common::assert_bounded_vertical_spacing(
         &document.sections,
         "cross-platform-releases/cmake-toolchains",
     );

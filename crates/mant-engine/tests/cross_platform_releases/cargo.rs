@@ -43,8 +43,5 @@ fn keeps_commands_options_files_and_examples() {
 fn does_not_leak_roff_markup_or_duplicate_spacing() {
     let document = cross_platform_release_manual("cargo");
     common::assert_document_has_no_source_markup("cross-platform-releases/cargo", document);
-    common::assert_no_duplicate_vertical_spacing(
-        &document.sections,
-        "cross-platform-releases/cargo",
-    );
+    common::assert_bounded_vertical_spacing(&document.sections, "cross-platform-releases/cargo");
 }

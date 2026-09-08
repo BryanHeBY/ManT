@@ -3,9 +3,9 @@ use super::{
     Block, DEFAULT_MAN_TAG_WIDTH, DisplayKind, Inline, LoweringContext, ManDefinitionState,
     ManListState, Node, NodeKind, TableEmbedding, add_leading_spacing,
     append_relative_continuation, append_table_row, equation_block, extend_blocks_with_spacing,
-    first_part_children, layout_with_spacing, lower_blocks_onto, lower_blocks_with_spacing,
-    lower_inline_nodes, lower_man_definition_block, lower_mdoc_list, lower_synopsis_head,
-    part_child_groups, plain_text, preformatted_blocks, set_block_spacing, source_span,
+    first_part_children, layout_with_spacing, lower_blocks_with_spacing, lower_inline_nodes,
+    lower_man_definition_block, lower_mdoc_list, lower_synopsis_head, part_child_groups,
+    plain_text, preformatted_blocks, set_block_spacing, source_span,
 };
 
 pub(super) struct StructuralLowerer<'a, 'source, 'state> {
@@ -13,6 +13,7 @@ pub(super) struct StructuralLowerer<'a, 'source, 'state> {
     pub(super) indent_columns: crate::mandoc::layout::SourceIndent,
     pub(super) paragraph_distance: &'state mut u16,
     pub(super) output: &'state mut Vec<Block>,
+    pub(super) paragraph_predecessor: bool,
     pub(super) definition_hanging_width: &'state mut crate::mandoc::layout::Distance,
     pub(super) man_list_state: &'state mut ManListState,
     pub(super) spacing_enabled: bool,
@@ -144,7 +145,7 @@ impl StructuralLowerer<'_, '_, '_> {
                 self.context
                     .distance_or(node, argument, *self.definition_hanging_width);
         }
-        let spacing = if self.output.is_empty() {
+        let spacing = if self.output.is_empty() && !self.paragraph_predecessor {
             0
         } else {
             *self.paragraph_distance
@@ -190,19 +191,35 @@ impl StructuralLowerer<'_, '_, '_> {
                 extend_blocks_with_spacing(self.output, nested, spacing_before);
             }
             Some("RS") => {
-                if self.man_list_state.is_active() {
-                    let mut nested = lower_blocks_with_spacing(
-                        first_part_children(node, NodeKind::Body),
-                        self.context,
-                        self.context.man_relative_indent(
-                            node,
-                            self.indent_columns,
-                            *self.definition_hanging_width,
-                        ),
-                        self.paragraph_distance,
-                        self.spacing_enabled,
-                        self.formatter,
-                    );
+                // mandoc's print_bvspace climbs first-child RS wrappers to
+                // find a predecessor. A detached item-continuation buffer
+                // must not erase that source fact: RS itself adds no gap,
+                // while its first PP still applies the current PD distance.
+                let paragraph_predecessor = self.paragraph_predecessor || !self.output.is_empty();
+                let continues_item = self.man_list_state.is_active();
+                let output = if continues_item {
+                    Vec::new()
+                } else {
+                    std::mem::take(self.output)
+                };
+                let mut lowerer = super::BlockLowerer::new(
+                    self.context,
+                    self.context.man_relative_indent(
+                        node,
+                        self.indent_columns,
+                        *self.definition_hanging_width,
+                    ),
+                    self.paragraph_distance,
+                    self.spacing_enabled,
+                    output,
+                    *self.formatter,
+                );
+                lowerer.paragraph_predecessor = paragraph_predecessor;
+                lowerer.push_nodes(first_part_children(node, NodeKind::Body));
+                lowerer.formatter.spacing = lowerer.state.spacing_enabled();
+                *self.formatter = lowerer.formatter;
+                let mut nested = lowerer.finish();
+                if continues_item {
                     if append_relative_continuation(
                         self.output,
                         &mut nested,
@@ -215,20 +232,7 @@ impl StructuralLowerer<'_, '_, '_> {
                     self.output.append(&mut nested);
                     return true;
                 }
-                let output = std::mem::take(self.output);
-                *self.output = lower_blocks_onto(
-                    first_part_children(node, NodeKind::Body),
-                    self.context,
-                    self.context.man_relative_indent(
-                        node,
-                        self.indent_columns,
-                        *self.definition_hanging_width,
-                    ),
-                    self.paragraph_distance,
-                    self.spacing_enabled,
-                    output,
-                    self.formatter,
-                );
+                *self.output = nested;
             }
             _ => return false,
         }

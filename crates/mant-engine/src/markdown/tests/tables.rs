@@ -104,6 +104,10 @@ fn main() {}
         &options.blocks[2],
         Block::Table { layout, .. } if layout.spacing_before_lines == 1
     ));
-    assert!(matches!(&options.blocks[4], Block::ThematicBreak { .. }));
+    assert!(matches!(
+        &options.blocks[4],
+        Block::VerticalSpace { lines: 1, .. }
+    ));
+    assert!(matches!(&options.blocks[5], Block::ThematicBreak { .. }));
     assert!(document.diagnostics.is_empty());
 }

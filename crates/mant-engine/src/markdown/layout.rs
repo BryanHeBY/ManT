@@ -12,7 +12,7 @@ use crate::block::{block_layout_mut, block_source};
 /// Apply source-derived block spacing to the normalized document.
 pub(super) fn normalize_markdown_layout(
     source: &MarkdownSource<'_>,
-    root_blocks: &mut [Block],
+    root_blocks: &mut Vec<Block>,
     sections: &mut [Section],
 ) {
     normalize_blocks(source, root_blocks);
@@ -28,18 +28,29 @@ fn normalize_sections(source: &MarkdownSource<'_>, sections: &mut [Section]) {
 
 /// Preserve one visible row for a source blank line, just as man(7) lowering
 /// records paragraph distance in `LayoutHint::spacing_before_lines`.
-fn normalize_blocks(source: &MarkdownSource<'_>, blocks: &mut [Block]) {
+fn normalize_blocks(source: &MarkdownSource<'_>, blocks: &mut Vec<Block>) {
     let mut previous_source = None;
-    for block in blocks {
-        if let (Some(previous), Some(current)) = (previous_source, block_source(block))
+    let original = std::mem::take(blocks);
+    for mut block in original {
+        if let (Some(previous), Some(current)) = (previous_source, block_source(&block))
             && source.has_blank_line_between(previous, current)
-            && let Some(layout) = block_layout_mut(block)
         {
-            layout.spacing_before_lines = layout.spacing_before_lines.max(1);
+            if let Some(layout) = block_layout_mut(&mut block) {
+                layout.spacing_before_lines = layout.spacing_before_lines.max(1);
+            } else if matches!(block, Block::ThematicBreak { .. }) {
+                // Rules have no layout field. Give their source blank line
+                // its own consumption point instead of requiring a renderer
+                // default, without changing the rule's original source span.
+                blocks.push(Block::VerticalSpace {
+                    lines: 1,
+                    source: None,
+                });
+            }
         }
 
-        normalize_nested_blocks(source, block);
-        previous_source = block_source(block);
+        normalize_nested_blocks(source, &mut block);
+        previous_source = block_source(&block);
+        blocks.push(block);
     }
 }
 

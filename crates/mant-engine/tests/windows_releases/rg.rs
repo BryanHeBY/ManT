@@ -69,5 +69,5 @@ fn renders_the_reviewed_glob_option_as_a_targeted_excerpt() {
 fn does_not_leak_roff_markup_or_duplicate_spacing() {
     let document = windows_release_manual("rg");
     common::assert_document_has_no_source_markup("windows-releases/rg", document);
-    common::assert_no_duplicate_vertical_spacing(&document.sections, "windows-releases/rg");
+    common::assert_bounded_vertical_spacing(&document.sections, "windows-releases/rg");
 }

@@ -8,6 +8,7 @@ use mant_protocol::{
     QueryExcerpt, TextPresentation, TextRole,
 };
 pub(super) mod blocks;
+mod flow;
 
 use crate::ResolvedContent;
 
@@ -747,10 +748,11 @@ mod tests {
         ]));
         assert!(wide.contains("first\n\n\nsecond"), "got: {wide:?}");
 
-        // Leading and trailing vertical space never adds blank lines at the edges.
+        // A source-owned leading gap remains distinct from the heading's
+        // presentation separator. Final CLI framing trims trailing whitespace.
         let edges = render_query_text(&document_with(vec![vspace(2), para("only"), vspace(3)]));
         assert!(edges.ends_with("only"), "got: {edges:?}");
-        assert!(edges.contains("S\n\nonly"), "got: {edges:?}");
+        assert!(edges.contains("S\n\n\n\nonly"), "got: {edges:?}");
     }
 
     #[test]

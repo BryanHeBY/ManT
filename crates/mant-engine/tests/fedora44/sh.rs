@@ -56,7 +56,7 @@ fn parses_the_real_bash_backed_shell_manual() {
 fn keeps_the_bash_shell_page_spacing_and_anchors_normalized() {
     let document = fedora44_manual("sh");
     common::assert_anchor_ids_are_clean("fedora44/sh", document);
-    common::assert_no_duplicate_vertical_spacing(&document.sections, "fedora44/sh");
+    common::assert_bounded_vertical_spacing(&document.sections, "fedora44/sh");
 }
 
 #[test]

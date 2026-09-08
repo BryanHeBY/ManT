@@ -18,6 +18,15 @@ that crate was not published for that change.
 
 ### Parent-relative document geometry (unreleased v0.11)
 
+- Resolve source paragraph gaps before presentation; preserve independent
+  consecutive spacing requests, explicit zero and Markdown rule boundaries.
+  Transparent containers share the 4096-row gap budget instead of multiplying
+  it. Native overflow is diagnosed. First list-paragraph gaps precede the whole
+  marked item; first paragraphs in relative scopes retain source predecessors.
+- Tables with signed outdents use source-order stacked cells at the actual
+  parent origin, preserving links and exact anchors instead of prematurely
+  clipping cell-local positions. Ordinary nonnegative tables retain columns.
+
 - Paragraph layout now has `continuationIndentColumns` for hanging hard/soft
   lines. Man `HP` preserves this geometry and updates the prevailing tag width;
   `in` executes bounded literal positions with CVS HEAD's macro-base restore

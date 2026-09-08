@@ -64,7 +64,7 @@ fn keeps_complete_sections_and_semantic_option_outlines() {
 
     common::assert_gcc_synopsis_layout(document);
 
-    common::assert_no_duplicate_vertical_spacing(&document.sections, "fedora44/gcc");
+    common::assert_bounded_vertical_spacing(&document.sections, "fedora44/gcc");
 }
 
 /// No roff escapes leak into inline text.

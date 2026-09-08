@@ -251,7 +251,9 @@ pub struct LayoutHint {
     /// later sibling blocks; zero preserves ordinary filled flow.
     #[serde(default, skip_serializing_if = "is_zero_i32")]
     pub continuation_indent_columns: i32,
-    /// Terminal rows requested before this block.
+    /// Resolved blank rows owned by this block's leading boundary. Zero means
+    /// tight spacing, not inheritance. Producers resolve source/Markdown
+    /// defaults and assign each request exactly one consumption point.
     #[serde(default, skip_serializing_if = "is_zero_u16")]
     pub spacing_before_lines: u16,
 }

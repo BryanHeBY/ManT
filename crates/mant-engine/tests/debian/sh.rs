@@ -30,7 +30,7 @@ fn preserves_literal_display_spacing_and_closing_delimiters() {
 fn keeps_the_real_dash_page_spacing_and_anchors_normalized() {
     let document = debian_manual("sh");
     common::assert_anchor_ids_are_clean("debian/sh", document);
-    common::assert_no_duplicate_vertical_spacing(&document.sections, "debian/sh");
+    common::assert_bounded_vertical_spacing(&document.sections, "debian/sh");
 }
 
 /// Nested `Ns`, stateful `Sm`, and visible `Pf` prefixes share one spacing

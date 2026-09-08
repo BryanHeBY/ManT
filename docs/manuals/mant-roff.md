@@ -103,6 +103,8 @@ When indented continuation blocks are reattached to a preceding definition, expl
 
 For an inline definition, only the initial paragraph is attached to the label's line. Subsequent paragraphs, code and nested blocks retain the same structural origin as a non-inline description, independently of label width. Explicit leading vertical space is kept between the term and description rather than trimmed away to force an inline presentation.
 
+Paragraph distance is resolved at its source boundary. A first paragraph inside `RS` checks predecessors through enclosing relative scopes, including an ordered-item continuation; `RS` without a paragraph request adds no default gap. Independent requests add: `.sp 1` followed by `.sp 2` produces three blank rows, while `.sp 0` still breaks flow without adding a row. Renderers do not erase a following `PP` distance just because explicit spacing precedes it. A boundary exceeding 4096 rows is bounded with `manual.vertical-spacing-limit`; literal blank lines remain separate content. Text, node and explain output preserve hard lines and these gaps without imposing a soft-wrap width; the TUI reflows its immutable logical lines for the current viewport.
+
 `OP` retains its optional-argument brackets, bold option name, and emphasized metavariable both inside and outside a `SY` synopsis; it does not create a separate IR variant. `AT`, `DT`, `SM`, `UC`, and other libmandoc-recognized man macros retain printable children where available but do not currently have a dedicated ManT semantic variant. For example, `SM` does not preserve point size.
 
 ## mdoc Structure

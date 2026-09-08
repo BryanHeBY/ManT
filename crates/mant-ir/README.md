@@ -67,6 +67,18 @@ within-document navigation.
 
 ## Content and semantic indexes
 
+Layout is source-neutral geometry, not terminal decoration. Signed block
+offsets are relative to the actual content parent; compose them once and clamp
+only at the displayed leaf. A definition resolves its label/body displacement,
+and a paragraph can separately displace continuation lines. Reparent only the
+moved root, preserving the descendants' coordinates and source text.
+
+Block spacing is resolved before IR: zero is tight. Independent explicit gaps
+add across transparent containers; repeated projections of one request belong
+at only one consumption point. Definition-item absent spacing instead inherits
+compactness. Frontends cap a resolved boundary at 4096 rows, without merging
+literal blank lines. Visual wrapping never changes source lines or entry facts.
+
 `DocumentIndex` addresses content nodes. `SemanticIndex` separately groups
 identified content owners into commands, parameter families, configuration keys,
 variables, values, and terms. A semantic entry keeps exact selectable names,

@@ -234,6 +234,14 @@ Definition terms are independent roots, not synthetic paragraphs. When an
 original item N becomes a single-item excerpt, its response index is zero.
 Original `blockPath` and source spans remain provenance, not response paths.
 
+Display-cell origins and visual wrap rows are a separate projection. The shared
+geometry policy composes parent-relative offsets and resolved gaps without
+rewriting these content ranges. CLI text preserves hard lines without width
+reflow; the TUI maps the same logical content onto a width-specific cell plan.
+Its search/link overlays use that plan, not a second search over decorated text.
+Separate source term roots remain separate lines in full-body presentation;
+compact outline labels are not substitutes for those roots.
+
 `matchDetailsOmitted` reports omitted Name/Form records or positions applicable
 to returned targets. `nameBindingsOmitted` independently reports omitted
 ordinary bindings. Both participate in overall content truncation. If an

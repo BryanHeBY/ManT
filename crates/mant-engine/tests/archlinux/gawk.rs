@@ -81,8 +81,5 @@ fn man_format_renders_operator_table_tight() {
 /// No duplicate vertical spacing.
 #[test]
 fn does_not_have_duplicate_vertical_spacing() {
-    common::assert_no_duplicate_vertical_spacing(
-        &archlinux_manual("gawk").sections,
-        "archlinux/gawk",
-    );
+    common::assert_bounded_vertical_spacing(&archlinux_manual("gawk").sections, "archlinux/gawk");
 }

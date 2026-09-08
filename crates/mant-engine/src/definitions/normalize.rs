@@ -354,17 +354,7 @@ mod tests {
                     };
                     assert!(!items[0].layout.inline_term);
                     assert_eq!(items[0].layout.body_indent_columns, offset);
-                    assert_eq!(
-                        text(blocks)
-                            .lines()
-                            .filter(|line| !line.is_empty())
-                            .collect::<Vec<_>>(),
-                        before
-                            .lines()
-                            .filter(|line| !line.is_empty())
-                            .collect::<Vec<_>>(),
-                        "origin={origin} offset={offset}"
-                    );
+                    assert_eq!(text(blocks), before, "origin={origin} offset={offset}");
                 }
             }
         }

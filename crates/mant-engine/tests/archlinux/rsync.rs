@@ -91,8 +91,5 @@ fn does_not_leak_roff_markup() {
 /// No duplicate vertical spacing.
 #[test]
 fn does_not_have_duplicate_vertical_spacing() {
-    common::assert_no_duplicate_vertical_spacing(
-        &archlinux_manual("rsync").sections,
-        "archlinux/rsync",
-    );
+    common::assert_bounded_vertical_spacing(&archlinux_manual("rsync").sections, "archlinux/rsync");
 }

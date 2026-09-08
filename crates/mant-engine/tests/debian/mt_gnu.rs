@@ -14,8 +14,5 @@ fn keeps_complete_section_topology_and_clean_anchor_ids() {
 /// No consecutive vertical-space blocks duplicate the same gap.
 #[test]
 fn does_not_have_duplicate_vertical_spacing() {
-    common::assert_no_duplicate_vertical_spacing(
-        &debian_manual("mt-gnu").sections,
-        "debian/mt-gnu",
-    );
+    common::assert_bounded_vertical_spacing(&debian_manual("mt-gnu").sections, "debian/mt-gnu");
 }

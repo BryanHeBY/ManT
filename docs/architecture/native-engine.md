@@ -423,6 +423,18 @@ breaks remain distinct from source wrapping. TUI, text, and CommonMark
 renderers therefore adapt one layout model instead of reconstructing roff or
 Markdown rules independently.
 
+Native source distances and man macro bases remain private, bounded formatter
+state. They retain basic-unit precision until converted to signed offsets from
+the actual IR content parent. Definition ownership recovery rebases only moved
+roots; it does not reinterpret those offsets as cumulative margins.
+`mant-protocol::geometry` owns cell measurement, signed origin composition,
+marker collision and gap rules. CLI text keeps gap events separate from literal
+text until the complete flow is assembled; TUI uses the same boundary budget
+while building logical rows. Empty containers cannot start a second budget.
+The source producer gives each request one consumption point, rather than
+deduplicating unrelated equal-sized requests in a renderer. Markdown producers
+resolve their own blank-line rules, including thematic breaks.
+
 ## Verification boundary
 
 Rust tests are authoritative for parsing, lowering, contracts, source

@@ -37,5 +37,5 @@ fn preserves_authored_literal_font_spellings_without_decoding_them_twice() {
     assert!(rendered.contains(r"\fBpackage.json\fR"));
     assert!(!rendered.contains(r"\[rs]"));
     assert!(!rendered.contains(['\u{1d}', '\u{1e}', '\u{1f}']));
-    common::assert_no_duplicate_vertical_spacing(&document.sections, "windows-releases/npm");
+    common::assert_bounded_vertical_spacing(&document.sections, "windows-releases/npm");
 }

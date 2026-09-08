@@ -223,7 +223,7 @@ fn render_definition_list(
                 .map(|term| inline(term, options, locations))
                 .filter(|term| !term.is_empty())
                 .collect::<Vec<_>>()
-                .join(", ");
+                .join("  \n");
             let description = mapped_blocks(&item.description, options, locations);
             let has_terms = !terms.is_empty();
             let mut content = match (terms.is_empty(), description.text.is_empty()) {

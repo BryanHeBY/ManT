@@ -45,8 +45,5 @@ fn keeps_compiler_options_environment_and_release_metadata() {
 fn does_not_leak_roff_markup_or_duplicate_spacing() {
     let document = cross_platform_release_manual("rustc");
     common::assert_document_has_no_source_markup("cross-platform-releases/rustc", document);
-    common::assert_no_duplicate_vertical_spacing(
-        &document.sections,
-        "cross-platform-releases/rustc",
-    );
+    common::assert_bounded_vertical_spacing(&document.sections, "cross-platform-releases/rustc");
 }

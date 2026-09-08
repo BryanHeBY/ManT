@@ -75,6 +75,22 @@ impl From<i32> for SourceIndent {
 }
 
 impl super::LoweringContext<'_> {
+    pub(super) fn check_gap_bounds(&self, blocks: &[Block]) {
+        if mant_protocol::geometry::has_bounded_gap(blocks) {
+            let mut diagnostics = self.diagnostics.borrow_mut();
+            if !diagnostics
+                .iter()
+                .any(|d| d.code.as_deref() == Some("manual.vertical-spacing-limit"))
+            {
+                diagnostics.push(mant_ir::Diagnostic {
+                        level: mant_ir::DiagnosticLevel::Warning,
+                        code: Some("manual.vertical-spacing-limit".into()),
+                        message: "vertical spacing exceeds the 4096-row boundary limit; presentation is bounded".into(),
+                        source: blocks.first().and_then(crate::block::block_source),
+                    });
+            }
+        }
+    }
     pub(super) fn offset_indent(
         &self,
         node: &Node,
@@ -232,25 +248,9 @@ pub(super) fn set_block_spacing(block: &mut Block, lines: u16) {
         lines: existing, ..
     } = block
     {
-        *existing = (*existing).max(lines);
+        *existing = existing.saturating_add(lines);
     } else if let Some(layout) = block_layout_mut(block) {
-        layout.spacing_before_lines = layout.spacing_before_lines.max(lines);
-    }
-}
-
-/// Let an explicit vertical-space block exclusively own the following gap.
-///
-/// Nested transparent wrappers can lower their first semantic child with a
-/// paragraph distance before the outer scope reveals that a blank text node
-/// already represents the same gap. Normalize that boundary once the complete
-/// block sequence is available.
-pub(super) fn normalize_explicit_vertical_spacing(blocks: &mut [Block]) {
-    let mut follows_explicit_space = false;
-    for block in blocks {
-        if follows_explicit_space && let Some(layout) = block_layout_mut(block) {
-            layout.spacing_before_lines = 0;
-        }
-        follows_explicit_space = matches!(block, Block::VerticalSpace { .. });
+        layout.spacing_before_lines = layout.spacing_before_lines.saturating_add(lines);
     }
 }
 
@@ -354,8 +354,8 @@ mod tests {
     use libmandoc_rs::{Node, NodeFlags, NodeKind};
 
     use super::{
-        horizontal_distance_columns, layout, layout_with_spacing,
-        normalize_explicit_vertical_spacing, paragraph_distance_lines, vertical_distance_lines,
+        horizontal_distance_columns, layout, layout_with_spacing, paragraph_distance_lines,
+        vertical_distance_lines,
     };
     use mant_ir::Block;
 
@@ -408,7 +408,7 @@ mod tests {
     }
 
     #[test]
-    fn explicit_vertical_space_owns_the_following_gap() {
+    fn independent_paragraph_and_vertical_space_requests_are_not_erased() {
         let mut blocks = [
             Block::VerticalSpace {
                 lines: 1,
@@ -421,13 +421,14 @@ mod tests {
             },
         ];
 
-        normalize_explicit_vertical_spacing(&mut blocks);
+        super::set_block_spacing(&mut blocks[0], 2);
 
         let Block::Paragraph { layout, .. } = &blocks[1] else {
             panic!("expected paragraph after explicit vertical space");
         };
         assert_eq!(layout.indent_columns, 4);
-        assert_eq!(layout.spacing_before_lines, 0);
+        assert_eq!(layout.spacing_before_lines, 1);
+        assert!(matches!(blocks[0], Block::VerticalSpace { lines: 3, .. }));
     }
 
     #[test]

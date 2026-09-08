@@ -11,8 +11,8 @@ use super::{
         lower_man_link, plain_text, updated_spacing,
     },
     layout::{
-        add_leading_spacing, layout, layout_with_spacing, normalize_explicit_vertical_spacing,
-        section_spacing, set_block_spacing, update_paragraph_distance, vertical_distance_lines,
+        add_leading_spacing, layout, layout_with_spacing, section_spacing, set_block_spacing,
+        update_paragraph_distance, vertical_distance_lines,
     },
     part_child_groups,
     roff_escape::visible_text,
@@ -124,6 +124,9 @@ struct BlockLowerer<'a, 'source> {
     // Source-proven `.IP`/`.TP` ordinals form lists immediately; this state
     // joins only adjacent, consecutively numbered items of the same style.
     man_list_state: ManListState,
+    // Transparent `.RS` scopes retain their native predecessor even when
+    // their IR is collected separately for attachment to an ordered item.
+    paragraph_predecessor: bool,
 }
 
 impl<'a, 'source> BlockLowerer<'a, 'source> {
@@ -145,6 +148,7 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
             split_authors: false,
             synopsis_return_type_open: false,
             man_list_state: ManListState::None,
+            paragraph_predecessor: false,
         }
     }
 
@@ -217,7 +221,7 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
         } else if node.macro_name.as_deref() == Some("sp") {
             self.state.flush_paragraph();
             self.state.consume_hanging_first_line();
-            if let Some(lines) = vertical_distance_lines(node).filter(|lines| *lines > 0) {
+            if let Some(lines) = vertical_distance_lines(node) {
                 self.state.output.push(Block::VerticalSpace {
                     lines,
                     source: source_span(node),
@@ -248,6 +252,7 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
                 },
                 paragraph_distance: self.paragraph_distance,
                 output: &mut self.state.output,
+                paragraph_predecessor: self.paragraph_predecessor,
                 definition_hanging_width: &mut self.definition_hanging_width,
                 man_list_state: &mut self.man_list_state,
                 spacing_enabled,
@@ -373,7 +378,9 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
     }
 
     fn finish(self) -> Vec<Block> {
-        self.state.finish()
+        let blocks = self.state.finish();
+        self.context.check_gap_bounds(&blocks);
+        blocks
     }
 
     fn push_no_fill_lines(&mut self, node: &Node) -> bool {

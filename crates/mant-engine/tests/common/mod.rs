@@ -338,60 +338,18 @@ pub fn count_outline_entries(nodes: &[OutlineNode]) -> usize {
 // Vertical spacing assertions
 // ---------------------------------------------------------------------------
 
-pub fn assert_no_duplicate_vertical_spacing(sections: &[Section], fixture: &str) {
+pub fn assert_bounded_vertical_spacing(sections: &[Section], fixture: &str) {
     for section in sections {
-        assert_block_spacing_is_normalized(&section.blocks, fixture, &section.title);
-        assert_no_duplicate_vertical_spacing(&section.children, fixture);
-    }
-}
-
-fn assert_block_spacing_is_normalized(blocks: &[Block], fixture: &str, section_name: &str) {
-    for pair in blocks.windows(2) {
-        if matches!(pair[0], Block::VerticalSpace { .. }) {
-            assert_eq!(
-                block_spacing_before(&pair[1]),
-                0,
-                "fixture {fixture} section {section_name} stores one roff gap twice",
-            );
-        }
-    }
-    for block in blocks {
-        match block {
-            Block::List { items, .. } => {
-                for item in items {
-                    assert_block_spacing_is_normalized(&item.blocks, fixture, section_name);
-                }
-            }
-            Block::DefinitionList { items, .. } => {
-                for item in items {
-                    assert_block_spacing_is_normalized(&item.description, fixture, section_name);
-                }
-            }
-            Block::Table { rows, .. } => {
-                for cell in rows.iter().flat_map(|row| &row.cells) {
-                    assert_block_spacing_is_normalized(&cell.blocks, fixture, section_name);
-                }
-            }
-            Block::Paragraph { .. }
-            | Block::Preformatted { .. }
-            | Block::Equation { .. }
-            | Block::ThematicBreak { .. }
-            | Block::VerticalSpace { .. }
-            | Block::Unsupported { .. } => {}
-        }
-    }
-}
-
-fn block_spacing_before(block: &Block) -> u16 {
-    match block {
-        Block::Paragraph { layout, .. }
-        | Block::Preformatted { layout, .. }
-        | Block::List { layout, .. }
-        | Block::DefinitionList { layout, .. }
-        | Block::Table { layout, .. }
-        | Block::Equation { layout, .. }
-        | Block::Unsupported { layout, .. } => layout.spacing_before_lines,
-        Block::ThematicBreak { .. } | Block::VerticalSpace { .. } => 0,
+        // Adjacency or equal row counts cannot establish duplicated source
+        // requests: .sp followed by .PP is intentionally additive. Source
+        // ownership/one-consumption is tested by the explicit request matrix;
+        // the broad fixture guard checks the resolved geometry's bound.
+        assert!(
+            !mant_protocol::geometry::has_bounded_gap(&section.blocks),
+            "fixture {fixture} section {} exceeds a resolved gap boundary",
+            section.title
+        );
+        assert_bounded_vertical_spacing(&section.children, fixture);
     }
 }
 

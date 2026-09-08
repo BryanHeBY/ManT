@@ -16,6 +16,7 @@ pub(super) struct DocumentBuilder<'a> {
     pub(super) lines: Vec<LogicalLine>,
     pub(super) navigation: Vec<NavNode>,
     pub(super) anchors: HashMap<String, usize>,
+    pending_gap: mant_protocol::geometry::GapPlan,
 }
 
 /// Logical payload and its anchors must cross layout boundaries together.
@@ -49,10 +50,12 @@ impl DocumentBuilder<'_> {
             lines: Vec::new(),
             navigation: Vec::new(),
             anchors: HashMap::new(),
+            pending_gap: mant_protocol::geometry::GapPlan::default(),
         }
     }
 
     pub(super) fn push(&mut self, line: LogicalLine) {
+        self.pending_gap = mant_protocol::geometry::GapPlan::default();
         self.lines.push(line);
     }
 
@@ -210,9 +213,17 @@ impl DocumentBuilder<'_> {
     }
 
     pub(super) fn blocks(&mut self, blocks: &[Block], base_indent: i32) {
+        let mut gap = mant_protocol::geometry::GapPlan::default();
         for block in blocks {
+            gap.append_resolved(mant_protocol::geometry::block_gap(block));
+            if matches!(block, Block::VerticalSpace { .. }) {
+                continue;
+            }
+            self.spacing(gap.rows(0));
+            gap = mant_protocol::geometry::GapPlan::default();
             self.block(block, base_indent);
         }
+        self.spacing(gap.rows(0));
     }
 
     #[allow(clippy::too_many_lines)]
@@ -221,7 +232,6 @@ impl DocumentBuilder<'_> {
             Block::Paragraph {
                 children, layout, ..
             } => {
-                self.spacing(layout.spacing_before_lines);
                 let start = self.lines.len();
                 self.inline_lines(
                     children,
@@ -242,7 +252,6 @@ impl DocumentBuilder<'_> {
             Block::Preformatted {
                 children, layout, ..
             } => {
-                self.spacing(layout.spacing_before_lines);
                 self.inline_lines_with_surface(
                     children,
                     compose_origin(base_indent, layout.indent_columns),
@@ -257,7 +266,6 @@ impl DocumentBuilder<'_> {
                 layout,
                 ..
             } => {
-                self.spacing(layout.spacing_before_lines);
                 let indent = compose_origin(base_indent, layout.indent_columns);
                 for (index, item) in items.iter().enumerate() {
                     if index > 0 && !compact {
@@ -357,7 +365,6 @@ impl DocumentBuilder<'_> {
                 layout,
                 ..
             } => {
-                self.spacing(layout.spacing_before_lines);
                 let indent = compose_origin(base_indent, layout.indent_columns);
                 for (index, item) in items.iter().enumerate() {
                     let spacing = item
@@ -383,8 +390,13 @@ impl DocumentBuilder<'_> {
                 }
             }
             Block::Table { rows, layout, .. } => {
-                self.spacing(layout.spacing_before_lines);
                 let indent = compose_origin(base_indent, layout.indent_columns);
+                if mant_protocol::geometry::table_requires_origin_preserving_stack(rows, indent) {
+                    for cell in rows.iter().flat_map(|row| &row.cells) {
+                        self.blocks(&cell.blocks, indent);
+                    }
+                    return;
+                }
                 let grid = mant_ir::TableGrid::new(rows);
                 let rows = (0..grid.rows.len())
                     .map(|row| {
@@ -425,7 +437,6 @@ impl DocumentBuilder<'_> {
                 }
             }
             Block::Equation { value, layout, .. } => {
-                self.spacing(layout.spacing_before_lines);
                 self.push(
                     LogicalLine::plain(
                         padding(compose_origin(base_indent, layout.indent_columns)),
@@ -438,7 +449,6 @@ impl DocumentBuilder<'_> {
             Block::VerticalSpace { lines, .. } => self.spacing(*lines),
             Block::ThematicBreak { .. } => self.push(LogicalLine::rule(padding(base_indent))),
             Block::Unsupported { text, layout, .. } => {
-                self.spacing(layout.spacing_before_lines);
                 self.push(LogicalLine::plain(
                     padding(compose_origin(base_indent, layout.indent_columns)),
                     text.clone(),
@@ -449,7 +459,9 @@ impl DocumentBuilder<'_> {
     }
 
     pub(super) fn spacing(&mut self, lines: u16) {
-        for _ in 0..lines {
+        let before = self.pending_gap.rows(0);
+        self.pending_gap.append_resolved(lines);
+        for _ in before..self.pending_gap.rows(0) {
             self.lines.push(LogicalLine::empty());
         }
     }

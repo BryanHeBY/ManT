@@ -31,7 +31,7 @@ fn keeps_complete_sections_and_semantic_option_outlines() {
     assert_eq!(count_outline_entries(&outline.nodes), 219);
     assert!(find_outline_entry(&outline.nodes, "--acls").is_some());
 
-    common::assert_no_duplicate_vertical_spacing(&document.sections, "fedora44/tar");
+    common::assert_bounded_vertical_spacing(&document.sections, "fedora44/tar");
 }
 
 /// `--acls` option is addressable through a v0.11 outline and

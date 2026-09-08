@@ -164,8 +164,8 @@ fn tq_aliases_share_one_definition_and_recompute_its_layout() {
         ["-a", "--all"]
     );
     assert!(
-        !item.layout.inline_term,
-        "combined '-a, --all' width must not inherit --all's stale layout"
+        item.layout.inline_term,
+        "separate source heads are measured independently; --all fits width 7"
     );
 }
 
@@ -212,12 +212,12 @@ fn text_format_renders_inline_terms_tight_and_block_terms_hanging() {
 
     // Inline heads share their structural body origin, clearing long terms.
     assert!(
-        output.contains("* / % Multiplication, division, and modulus."),
+        output.contains("* / %  Multiplication, division, and modulus."),
         "got: {output:?}"
     );
-    assert!(output.contains("&&  Logical AND."), "got: {output:?}");
+    assert!(output.contains("&&     Logical AND."), "got: {output:?}");
     assert!(
-        output.contains("space String concatenation."),
+        output.contains("space  String concatenation."),
         "got: {output:?}"
     );
 
@@ -234,19 +234,17 @@ fn man_format_renders_inline_terms_tight() {
 
     // Same tight layout via --format man (tldr omitted, same renderer).
     assert!(
-        output.contains("* / % Multiplication, division, and modulus."),
+        output.contains("* / %  Multiplication, division, and modulus."),
         "got: {output:?}"
     );
     assert!(
-        output.contains("space String concatenation."),
+        output.contains("space  String concatenation."),
         "got: {output:?}"
     );
 
-    // No leaked double-space between term and description.
-    assert!(!output.contains("* / %  "), "got: {output:?}");
-    assert!(!output.contains("space  "), "got: {output:?}");
+    // The native body starts at seven cells, not one space after each head.
     assert!(
-        output.contains("-a\n--all\n"),
+        output.contains("-a\n--all  Show all entries."),
         "separate source heads must not acquire an invented comma, got: {output:?}"
     );
 }
@@ -272,7 +270,7 @@ fn markdown_renders_inline_terms_on_the_same_line() {
         "markdown block term should be on its own line, got: {output:?}"
     );
     assert!(
-        output.contains("**-a**, **--all**\n"),
-        "aliases should be comma-separated without a Markdown hard break, got: {output:?}"
+        output.contains("**-a**  \n  **--all** Show all entries."),
+        "separate authored heads retain a hard break without invented commas, got: {output:?}"
     );
 }

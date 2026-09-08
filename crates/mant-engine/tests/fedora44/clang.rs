@@ -38,7 +38,7 @@ fn keeps_complete_sections_and_semantic_option_outlines() {
     assert!(text.contains("Currently equivalent to -O3"), "{text}");
     assert!(!text.contains("Control debug information output"), "{text}");
 
-    common::assert_no_duplicate_vertical_spacing(&document.sections, "fedora44/clang");
+    common::assert_bounded_vertical_spacing(&document.sections, "fedora44/clang");
 }
 
 /// No roff escapes or control characters leak into text.
