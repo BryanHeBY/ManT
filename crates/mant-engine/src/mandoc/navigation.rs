@@ -387,6 +387,63 @@ fn is_parenthetical_section_qualification(reference: &str, title: &str) -> bool 
         .is_some_and(|suffix| suffix.starts_with('(') || suffix.starts_with(" ("))
 }
 
+use super::{LoweringContext, Node, targets};
+
+impl LoweringContext<'_> {
+    pub(super) fn reserve_section_ids(&mut self, ids: &HashSet<String>) {
+        self.explicit_targets.clone_from(ids);
+        self.assigned_section_ids.extend(ids.iter().cloned());
+    }
+    pub(super) fn section_identity_for(
+        &mut self,
+        title: &str,
+        node: &Node,
+    ) -> (String, Vec<mant_ir::FragmentAlias>) {
+        let id = self.section_id(title);
+        let fragment_aliases = targets::section_target(node)
+            .filter(|target| self.explicit_targets.contains(target))
+            .map(|target| vec![target.into()])
+            .unwrap_or_default();
+        (id, fragment_aliases)
+    }
+    pub(super) fn section_id(&mut self, title: &str) -> String {
+        let slug: String = title
+            .chars()
+            .flat_map(char::to_lowercase)
+            .map(|character| {
+                if character.is_alphanumeric() {
+                    character
+                } else {
+                    '-'
+                }
+            })
+            .collect::<String>()
+            .split('-')
+            .filter(|part| !part.is_empty())
+            .collect::<Vec<_>>()
+            .join("-");
+        let base = if slug.is_empty() {
+            "section".to_owned()
+        } else if crate::selectors::is_reserved_selector(&slug) {
+            format!("{slug}-section")
+        } else {
+            slug
+        };
+        let count = self.section_ids.entry(base.clone()).or_default();
+        loop {
+            *count += 1;
+            let candidate = if *count == 1 {
+                base.clone()
+            } else {
+                format!("{base}-{count}")
+            };
+            if self.assigned_section_ids.insert(candidate.clone()) {
+                return candidate;
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;

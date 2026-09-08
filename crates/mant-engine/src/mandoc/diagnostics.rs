@@ -38,6 +38,105 @@ pub(super) fn lower_diagnostics(input: &[MandocDiagnostic]) -> Vec<Diagnostic> {
         .collect()
 }
 
+use super::{LoweringContext, MAX_INLINE_EQUATION_NORMALIZATIONS, Node, SourceSpan, source_span};
+
+impl LoweringContext<'_> {
+    pub(super) fn warn_unhandled_structural_parts(&self, node: &Node) {
+        let macro_name = node.macro_name.as_deref().unwrap_or("unknown");
+        self.diagnostics.borrow_mut().push(Diagnostic {
+            level: DiagnosticLevel::Warning,
+            code: Some("manual.unhandled-structural-parts".to_owned()),
+            message: format!(
+                "structural macro '{macro_name}' contains parts without a complete lowering policy"
+            ),
+            source: source_span(node),
+        });
+    }
+
+    pub(super) fn warn_definition_alias_boundary(&self, node: &Node) {
+        self.diagnostics.borrow_mut().push(Diagnostic {
+            level: DiagnosticLevel::Warning,
+            code: Some("manual.definition-alias-boundary".to_owned()),
+            message: "unlabelled definition heads were kept separate because this macro does not prove that they share one description".to_owned(),
+            source: source_span(node),
+        });
+    }
+
+    pub(super) fn warn_unhandled_table_text_block(&self, node: &Node) {
+        self.diagnostics.borrow_mut().push(Diagnostic {
+            level: DiagnosticLevel::Warning,
+            code: Some("manual.unhandled-table-text-block".to_owned()),
+            message: "tbl text block contains semantic roff that could not be retained".to_owned(),
+            source: source_span(node),
+        });
+    }
+
+    pub(super) fn warn_unhandled_table_text_block_line(&self, line: u32) {
+        self.diagnostics.borrow_mut().push(Diagnostic {
+            level: DiagnosticLevel::Warning,
+            code: Some("manual.unhandled-table-text-block".to_owned()),
+            message: "tbl inline semantics could not be reconstructed completely; complete native cell text or source spelling was retained".to_owned(),
+            source: Some(SourceSpan {
+                byte_range: None,
+                line,
+                column: 1,
+                end_line: None,
+                end_column: None,
+            }),
+        });
+    }
+
+    pub(super) fn warn_unexpanded_table_cell(&self, line: u32) {
+        let mut diagnostics = self.diagnostics.borrow_mut();
+        if diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.code.as_deref() == Some("manual.unexpanded-table-cell"))
+        {
+            return;
+        }
+        diagnostics.push(Diagnostic {
+            level: DiagnosticLevel::Unsupported,
+            code: Some("manual.unexpanded-table-cell".to_owned()),
+            message: "one or more tbl cells contain formatter strings that could not be expanded; their source spellings were preserved".to_owned(),
+            source: Some(SourceSpan {
+                byte_range: None,
+                line,
+                column: 1,
+                end_line: None,
+                end_column: None,
+            }),
+        });
+    }
+
+    pub(super) fn warn_inline_equation_budget(&self, line: u32) {
+        let mut diagnostics = self.diagnostics.borrow_mut();
+        if diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.code.as_deref() == Some("manual.inline-equation-budget"))
+        {
+            return;
+        }
+        diagnostics.push(Diagnostic {
+            level: DiagnosticLevel::Unsupported,
+            code: Some("manual.inline-equation-budget".to_owned()),
+            message: format!(
+                "more than {MAX_INLINE_EQUATION_NORMALIZATIONS} distinct inline table equations; later source spellings were retained without normalization"
+            ),
+            source: Some(SourceSpan {
+                byte_range: None,
+                line,
+                column: 1,
+                end_line: None,
+                end_column: None,
+            }),
+        });
+    }
+
+    pub(super) fn take_diagnostics(&self) -> Vec<Diagnostic> {
+        self.diagnostics.take()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use libmandoc_rs::{Diagnostic as MandocDiagnostic, DiagnosticLevel as MandocDiagnosticLevel};
