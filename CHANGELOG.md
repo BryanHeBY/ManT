@@ -44,6 +44,10 @@ that crate was not published for that change.
   override inherited value/configuration categories. Finite short/long pairs
   separated by whitespace or `or` bind both names without inventing aliases;
   argument/prose suffixes remain guarded by whole-head validation.
+- Fixed-panel query checks also cover unstyled dotted keys under Variables,
+  italic mixed-case assignment headings under topical sections, and ellipses
+  after an explicit argument. Adjacent literal macro runs retain multiword
+  command names such as `zfs get`; argument alternatives never become names.
 - Role selection now treats inherited categories as defaults: nested setting
   assignments and variable-like names are not blindly accepted Values, and
   mixed-case configuration assignments do not become environment variables.

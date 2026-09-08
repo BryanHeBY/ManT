@@ -1,6 +1,22 @@
 //! named recognition; complete forms retain their role-specific grammar.
 use crate::definitions::RecognizedName;
 
+/// Strong local configuration spelling, used only on complete declaration
+/// heads. A dotted key needs a configuration/variable context; a mixed-case
+/// assignment label is useful even under topical headings such as PATHS.
+pub(super) fn local_configuration_head(text: &str, variable_context: bool) -> bool {
+    let text = text.trim();
+    if let Some(key) = text.strip_suffix('=') {
+        return is_configuration_key(key)
+            && key.chars().any(char::is_lowercase)
+            && key.chars().any(char::is_uppercase)
+            && !key.contains('_');
+    }
+    variable_context
+        && text.contains('.')
+        && named_occurrences(text, is_configuration_key).is_some()
+}
+
 pub(in crate::definitions) fn is_value_name(value: &str) -> bool {
     !value.is_empty()
         && value.len() <= 128

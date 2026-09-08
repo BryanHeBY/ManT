@@ -25,6 +25,16 @@ pub(super) fn select_kind(
         }
         Some(NativeHeadRole::Literal) | None => {}
     }
+    if hint == Some(NativeHeadRole::Literal)
+        && context == DefinitionContext::Generic
+        && head.contains(" [-")
+        && head
+            .split_whitespace()
+            .next()
+            .is_some_and(super::commands::is_command_name)
+    {
+        return (EntryKind::Command, NameCase::Sensitive);
+    }
     if local_option_spelling(head) {
         return (
             EntryKind::Parameter {
@@ -32,6 +42,15 @@ pub(super) fn select_kind(
             },
             NameCase::Sensitive,
         );
+    }
+    if named::local_configuration_head(
+        head,
+        matches!(
+            context,
+            DefinitionContext::Variables | DefinitionContext::ConfigurationKeys
+        ),
+    ) {
+        return (EntryKind::ConfigurationKey, NameCase::Sensitive);
     }
     if let Some((key, _)) = head.split_once('=') {
         let key = key.trim();

@@ -14,19 +14,33 @@ pub(in crate::definitions) fn command_name_from_authored_form(value: &str) -> Op
 
 /// Read a formatter-emphasized command name without adjacent placeholders.
 pub(in crate::definitions) fn leading_styled_command_name(term: &[Inline]) -> Option<String> {
-    let first = term.iter().find(|inline| match inline {
-        Inline::Anchor { .. } => false,
-        Inline::Text { value } => !value.trim().is_empty(),
-        _ => true,
-    })?;
-    let name = match first {
-        Inline::Strong { children } => plain_text(children),
-        Inline::Link { children, .. } => return leading_styled_command_name(children),
-        Inline::Code { value } => value.clone(),
-        _ => return None,
-    };
+    let mut name = String::new();
+    append_literal_head(term, &mut name);
     let name = styled_command_prefix(name.trim());
     is_command_name(name).then(|| name.to_owned())
+}
+
+// Nm/Cm and adjacent font runs can form one multiword literal head. Preserve
+// their actual whitespace and stop at the first argument or unstyled token;
+// never scan later literals in the invocation for additional names.
+fn append_literal_head(inlines: &[Inline], output: &mut String) -> bool {
+    for inline in inlines {
+        match inline {
+            Inline::Anchor { .. } => {}
+            Inline::Text { value } if value.chars().all(char::is_whitespace) => {
+                output.push_str(value)
+            }
+            Inline::Strong { children } => output.push_str(&plain_text(children)),
+            Inline::Code { value } => output.push_str(value),
+            Inline::Link { children, .. } => {
+                if !append_literal_head(children, output) {
+                    return false;
+                }
+            }
+            _ => return false,
+        }
+    }
+    true
 }
 
 /// A style run can include an entire invocation. Keep a multiword literal
@@ -47,7 +61,7 @@ pub(in crate::definitions) fn is_command_name(value: &str) -> bool {
     !value.is_empty()
         && !value.chars().any(char::is_control)
         && !value.starts_with(['-', '+', '/'])
-        && (value == "[" || !value.contains(['[', ']', '{', '}', '<', '>', '|', ',']))
+        && (matches!(value, "[" | "{") || !value.contains(['[', ']', '{', '}', '<', '>', '|', ',']))
         && !value
             .chars()
             .next()

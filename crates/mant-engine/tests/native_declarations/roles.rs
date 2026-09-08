@@ -2,6 +2,42 @@ use super::{EvidenceClass, ExplanationOptions, ExplanationQuery, definitions};
 use mant_ir::{EntryKind, ParameterKind};
 
 #[test]
+fn split_literal_command_heads_keep_the_whole_name_and_stop_before_arguments() {
+    let source = b".Dd September 8, 2026\n.Dt TREE 1\n.Os\n.Sh COMMANDS\n.Bl -tag -width Ds\n.It Nm zfs Cm get Op Fl r Ns | Ns Fl d Ar depth\nGET_BODY\n.It Nm zfs Cm set Ar property Ns = Ns Ar value\nSET_BODY\n.It Sy { Ar list Ns Sy ;}\nCOMPOUND_BODY\n.El\n.Sh SESSIONS\n.Bl -tag -width Ds\n.It Ic new-session Op Fl Ad Ar name\nSESSION_BODY\n.It Ic label Ar value\nAMBIGUOUS_BODY\n.El\n";
+    let content = mant_engine::query_roff_bytes(source).unwrap();
+    for (name, kind, body) in [
+        ("zfs get", EntryKind::Command, "GET_BODY"),
+        ("zfs set", EntryKind::Command, "SET_BODY"),
+        ("{", EntryKind::Command, "COMPOUND_BODY"),
+        ("new-session", EntryKind::Command, "SESSION_BODY"),
+        ("label", EntryKind::Term, "AMBIGUOUS_BODY"),
+    ] {
+        let result = mant_engine::select_explanation(&content, name).unwrap();
+        let direct: Vec<_> = result
+            .evidence
+            .iter()
+            .filter(|e| e.class == EvidenceClass::DirectEntry)
+            .collect();
+        assert_eq!(direct.len(), 1, "{name}: {result:?}");
+        assert_eq!(direct[0].entry.as_ref().unwrap().names, [name]);
+        assert_eq!(direct[0].entry.as_ref().unwrap().kind, kind);
+        assert!(mant_engine::render_explanation_text(&result).contains(body));
+        assert!(direct[0].entry.as_ref().unwrap().alias_groups.is_empty());
+    }
+    for name in ["zfs", "get", "depth", "property", "{+"] {
+        assert_eq!(
+            mant_engine::select_explanation(&content, name)
+                .unwrap()
+                .counts
+                .direct_entry
+                .total,
+            0,
+            "{name}"
+        );
+    }
+}
+
+#[test]
 fn local_definitions_override_inherited_values_without_inventing_domains() {
     let source = b".TH PROBE 1\n.SH OPTIONS\n.TP\n.B --outer\nOUTER_BODY\n.RS 4\n.TP\n.B --inner=fast\nINNER_BODY\n.TP\n.B true\nVALUE_BODY\n.TP\n.B -42\nNEGATIVE_BODY\n.TP\n.B PROCESS_HOME\nVARIABLE_BODY\n.TP\n.B color=[yes|no]\nKEY_BODY\n.TP\n.B .*-fallthrough.*\nREGEX_BODY\n.RE\n.TP\n.B --next\nNEXT_BODY\n";
     let query = mant_engine::query_roff_bytes(source).unwrap();

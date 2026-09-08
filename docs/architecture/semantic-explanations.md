@@ -265,6 +265,11 @@ Names are retained independently when the appropriate result is Term. A
 parent option does not prove that every nested definition is an accepted
 value, nor does assignment syntax alone prove an environment variable.
 Native literal `Cm -` is not automatically a standard-input operand.
+Topical literal heads with explicit option groups can establish a command;
+adjacent literal runs form one name up to the first argument. Complete dotted
+keys in variable/configuration sections and mixed-case assignment labels are
+local configuration evidence, independent of font choice. These rules do not
+promote body references or classify arbitrary filenames as configuration keys.
 Uncertain classifications must be reviewed with their query/owner evidence;
 they must not be hidden by dropping Terms or manufacturing value domains.
 

@@ -22,6 +22,15 @@ pub(in crate::definitions) fn is_inferred_head(
         return true;
     }
     let text = plain_text(inlines);
+    if named::local_configuration_head(
+        &text,
+        matches!(
+            context,
+            DefinitionContext::Variables | DefinitionContext::ConfigurationKeys
+        ),
+    ) {
+        return true;
+    }
     match context {
         DefinitionContext::EnvironmentVariables => named::environment_occurrences(&text).is_some(),
         DefinitionContext::Commands => forms::declaration_groups(inlines)
@@ -114,7 +123,7 @@ fn arguments<'a>(tokens: impl Iterator<Item = &'a str>) -> bool {
         if inside || token.starts_with(['[', '{', '<', '(']) {
             continue;
         }
-        if token == "\u{0}" {
+        if token == "\u{0}" || token == "..." {
             continue;
         }
         if token.chars().any(char::is_uppercase)

@@ -152,3 +152,51 @@ fn finite_short_long_pairs_bind_names_without_rescanning_argument_tokens() {
     let query = mant_engine::query_roff_bytes(source).unwrap();
     assert!(definitions(query.document.as_ref().unwrap()).is_empty());
 }
+#[test]
+fn unstyled_dotted_keys_italic_settings_and_repeated_arguments_keep_owners() {
+    let source = b".TH LOCAL 1\n.SH VARIABLES\n.PP\ncore.editor\n.RS 4\nThe chosen editor.\n.RE\n.PP\nuser.name, user.email\n.RS 4\nIdentity settings.\n.RE\n.SH PATHS\n.PP\n.I WorkingDirectory=\n.RS 4\nSet the working directory.\n.RE\n.SH OPTIONS\n.PP\n.B -O, --test-opts\n.I option\n...\n.RS 4\nTest the supplied options.\n.RE\n";
+    let content = mant_engine::query_roff_bytes(source).unwrap();
+    for (name, kind, body) in [
+        (
+            "core.editor",
+            mant_ir::EntryKind::ConfigurationKey,
+            "The chosen editor",
+        ),
+        (
+            "user.email",
+            mant_ir::EntryKind::ConfigurationKey,
+            "Identity settings",
+        ),
+        (
+            "WorkingDirectory",
+            mant_ir::EntryKind::ConfigurationKey,
+            "Set the working directory",
+        ),
+        (
+            "--test-opts",
+            mant_ir::EntryKind::Parameter {
+                parameter_kind: mant_ir::ParameterKind::Option,
+            },
+            "Test the supplied options",
+        ),
+    ] {
+        let result = mant_engine::select_explanation(&content, name).unwrap();
+        let direct: Vec<_> = result
+            .evidence
+            .iter()
+            .filter(|e| e.class == mant_protocol::EvidenceClass::DirectEntry)
+            .collect();
+        assert_eq!(direct.len(), 1, "{name}: {result:?}");
+        assert_eq!(direct[0].entry.as_ref().unwrap().kind, kind);
+        assert!(mant_engine::render_explanation_text(&result).contains(body));
+    }
+    let negative = mant_engine::query_roff_bytes(b".TH NO 1\n.SH NOTES\n.PP\nfile.md\n.RS 4\nA file example, not a configuration declaration.\n.RE\n").unwrap();
+    assert_eq!(
+        mant_engine::select_explanation(&negative, "file.md")
+            .unwrap()
+            .counts
+            .direct_entry
+            .total,
+        0
+    );
+}
