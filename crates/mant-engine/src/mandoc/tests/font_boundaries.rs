@@ -208,3 +208,111 @@ fn font_blocks_pass_effective_fonts_through_lists_and_displays() {
         assert!(mant_ir::validate_document(query.document.as_ref().unwrap()).is_empty());
     }
 }
+
+#[test]
+fn lets_explicit_fonts_override_an_alternating_macro_default() {
+    let path = temporary_source(
+        "alternating-font-reset",
+        ".TH MAN 1\n\
+         .SH OPTIONS\n\
+         .TP\n\
+         .BI \\-r\\  prompt \\fR,\\ \\fB\\-\\-prompt= prompt\n\
+         Set the pager prompt.\n",
+    );
+
+    let document = parse_manual_source(&path).expect("lower alternating font reset");
+    fs::remove_file(path).expect("remove temporary roff fixture");
+
+    let [Block::DefinitionList { items, .. }] = document.sections[0].blocks.as_slice() else {
+        panic!("expected one definition list");
+    };
+    let term = items[0]
+        .terms
+        .first()
+        .expect("first definition term")
+        .iter()
+        .filter(|inline| !matches!(inline, Inline::Anchor { .. }))
+        .collect::<Vec<_>>();
+
+    assert_eq!(term.len(), 5);
+    assert!(matches!(term[0], Inline::Strong { children } if inline_text(children) == "-r "));
+    assert!(matches!(term[1], Inline::Emphasis { children } if inline_text(children) == "prompt"));
+    assert!(matches!(term[2], Inline::Text { value } if value == ", "));
+    assert!(matches!(term[3], Inline::Strong { children } if inline_text(children) == "--prompt="));
+    assert!(matches!(term[4], Inline::Emphasis { children } if inline_text(children) == "prompt"));
+}
+
+#[test]
+fn suppresses_pod_font_requests_around_verbatim_blocks() {
+    let path = temporary_source(
+        "pod-verbatim-fonts",
+        ".de Vb\n\
+         .ft CW\n\
+         .nf\n\
+         ..\n\
+         .de Ve\n\
+         .ft R\n\
+         .fi\n\
+         ..\n\
+         .TH POD 1\n\
+         .SH EXAMPLES\n\
+         .Vb 2\n\
+         \\&struct A { int a; };\n\
+         \\&struct B : A {};\n\
+         .Ve\n",
+    );
+
+    let document = parse_manual_source(&path).expect("lower Pod::Man verbatim source");
+    fs::remove_file(path).expect("remove temporary roff fixture");
+
+    assert_eq!(document.sections[0].blocks.len(), 1);
+    let Block::Preformatted { children, .. } = &document.sections[0].blocks[0] else {
+        panic!("expected one preformatted block");
+    };
+    assert_eq!(
+        inline_text(children),
+        "struct A { int a; };\nstruct B : A {};"
+    );
+}
+
+#[test]
+fn lowers_normalized_mdoc_font_and_author_layout() {
+    let path = temporary_source(
+        "normalized-mdoc-modes",
+        ".Dd July 19, 2026\n\
+         .Dt NORMALIZED-MODES 1\n\
+         .Os\n\
+         .Sh AUTHORS\n\
+         .An -split\n\
+         .An Alice Example\n\
+         .An Bob Example\n\
+         .An -nosplit\n\
+         .An Carol Example\n\
+         .An Dave Example\n\
+         .Sh DESCRIPTION\n\
+         .Bf -literal\n\
+         literal text\n\
+         .Ef\n",
+    );
+
+    let document = parse_manual_source(&path).expect("lower normalized mdoc modes");
+    fs::remove_file(path).expect("remove temporary roff fixture");
+
+    let authors = &document.sections[0];
+    let Block::Paragraph { children, .. } = &authors.blocks[0] else {
+        panic!("authors are one paragraph");
+    };
+    assert_eq!(
+        inline_text(children),
+        "Alice Example\nBob Example Carol Example Dave Example"
+    );
+
+    let description = &document.sections[1];
+    let Block::Paragraph { children, .. } = &description.blocks[0] else {
+        panic!("font block is a paragraph");
+    };
+    assert!(matches!(
+        children.as_slice(),
+        [Inline::Code { value }] if value == "literal text"
+    ));
+}

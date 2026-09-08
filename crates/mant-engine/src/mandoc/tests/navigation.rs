@@ -886,3 +886,226 @@ fn preserves_printable_roff_content_outside_formal_sections() {
     );
     assert_eq!(document.sections[0].title, "SYNOPSIS");
 }
+
+#[test]
+fn native_section_ids_ignore_unrelated_section_insertions() {
+    let mut original = LoweringContext::new(None, None);
+    let original_name = original.section_id("NAME");
+    let original_options = original.section_id("OPTIONS");
+
+    let mut edited = LoweringContext::new(None, None);
+    assert_eq!(edited.section_id("NOTES"), "notes");
+    assert_eq!(edited.section_id("NAME"), original_name);
+    assert_eq!(edited.section_id("OPTIONS"), original_options);
+    assert_eq!(edited.section_id("OPTIONS"), "options-2");
+}
+
+#[test]
+fn native_section_ids_disambiguate_final_slug_collisions() {
+    let mut context = LoweringContext::new(None, None);
+    assert_eq!(context.section_id("FOO"), "foo");
+    assert_eq!(context.section_id("FOO"), "foo-2");
+    assert_eq!(context.section_id("FOO 2"), "foo-2-2");
+}
+
+#[test]
+fn recognizes_explicitly_styled_traditional_man_references_in_any_section() {
+    let path = temporary_source(
+        "man-see-also",
+        ".TH TOOL 1\n\
+         .SH DESCRIPTION\n\
+         The styled reference \\fBprintf\\fP(3) is usable here.\n\
+         .SH SEE ALSO\n\
+         .BR printf (3),\n\
+         .BR man (1)\n",
+    );
+
+    let document = parse_manual_source(&path).expect("lower man references");
+    fs::remove_file(path).expect("remove temporary roff fixture");
+
+    let see_also = document
+        .sections
+        .iter()
+        .find(|section| section.title == "SEE ALSO")
+        .expect("SEE ALSO");
+    let Block::Paragraph { children, .. } = &see_also.blocks[0] else {
+        panic!("references are a paragraph");
+    };
+    assert!(children.iter().any(|inline| matches!(
+        inline,
+        Inline::Link { target: mant_ir::LinkTarget::Manual { name, manual_section: Some(manual_section) }, .. }
+            if name == "printf" && manual_section == "3"
+    )));
+    assert!(children.iter().any(|inline| matches!(
+        inline,
+        Inline::Link { target: mant_ir::LinkTarget::Manual { name, manual_section: Some(manual_section) }, .. }
+            if name == "man" && manual_section == "1"
+    )));
+
+    let Block::Paragraph { children, .. } = &document.sections[0].blocks[0] else {
+        panic!("description is a paragraph");
+    };
+    assert!(children.iter().any(|inline| matches!(
+        inline,
+        Inline::Link { target: mant_ir::LinkTarget::Manual { name, manual_section: Some(manual_section) }, .. }
+            if name == "printf" && manual_section == "3"
+    )));
+}
+
+#[test]
+fn lowers_modern_groff_manual_uri_and_mail_macros() {
+    let path = temporary_source(
+        "man-modern-links",
+        ".TH TOOL 1\n\
+         .SH DESCRIPTION\n\
+         .MR git-add 1 ,\n\
+         .PP\n\
+         Read\n\
+         .UR https://example.test/docs\n\
+         Documentation\n\
+         .UE\n\
+         now.\n\
+         .PP\n\
+         Mail comments, suggestions and bug reports to\n\
+         .MT docs@example.test\n\
+         Sean\n\
+         .ME .\n",
+    );
+
+    let document = parse_manual_source(&path).expect("lower modern man links");
+    fs::remove_file(path).expect("remove temporary roff fixture");
+    let section = &document.sections[0];
+    let mut manual = false;
+    let mut web = false;
+    let mut mail = false;
+    for children in section.blocks.iter().filter_map(|block| match block {
+        Block::Paragraph { children, .. } => Some(children),
+        _ => None,
+    }) {
+        for inline in children {
+            match inline {
+                Inline::Link {
+                    target:
+                        mant_ir::LinkTarget::Manual {
+                            name,
+                            manual_section: Some(manual_section),
+                        },
+                    ..
+                } if name == "git-add" && manual_section == "1" => manual = true,
+                Inline::Link {
+                    target: mant_ir::LinkTarget::External { uri },
+                    ..
+                } if uri == "https://example.test/docs" => {
+                    web = true;
+                }
+                Inline::Link {
+                    target: mant_ir::LinkTarget::Email { address },
+                    ..
+                } if address == "docs@example.test" => {
+                    mail = true;
+                }
+                _ => {}
+            }
+        }
+    }
+
+    assert!(manual && web && mail);
+    assert!(section.blocks.iter().any(|block| match block {
+        Block::Paragraph { children, .. } => inline_text(children).contains("git-add(1),"),
+        _ => false,
+    }));
+    let linked_paragraphs = section
+        .blocks
+        .iter()
+        .filter_map(|block| match block {
+            Block::Paragraph { children, .. }
+                if children.iter().any(|inline| {
+                    matches!(
+                        inline,
+                        Inline::Link {
+                            target: mant_ir::LinkTarget::External { .. },
+                            ..
+                        } | Inline::Link {
+                            target: mant_ir::LinkTarget::Email { .. },
+                            ..
+                        }
+                    )
+                }) =>
+            {
+                Some(inline_text(children))
+            }
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(
+        linked_paragraphs,
+        [
+            "Read Documentation ⟨https://example.test/docs⟩ now.",
+            "Mail comments, suggestions and bug reports to Sean ⟨docs@example.test⟩."
+        ]
+    );
+}
+
+#[test]
+fn resolves_a_unique_parenthetically_qualified_mdoc_section_reference() {
+    let path = temporary_source(
+        "mdoc-qualified-navigation",
+        ".Dd July 19, 2026\n\
+         .Dt NAVIGATION 1\n\
+         .Os\n\
+         .Sh DESCRIPTION\n\
+         See\n\
+         .Sx White Space Splitting\n\
+         .Sh \"White Space Splitting (Field Splitting)\"\n\
+         Target content.\n",
+    );
+
+    let document = parse_manual_source(&path).expect("lower qualified navigation source");
+    fs::remove_file(path).expect("remove temporary roff fixture");
+
+    let Block::Paragraph { children, .. } = &document.sections[0].blocks[0] else {
+        panic!("expected navigation paragraph");
+    };
+    assert!(children.iter().any(|inline| matches!(
+        inline,
+        Inline::Link {
+            target: mant_ir::LinkTarget::Section { id },
+            children,
+            ..
+        } if id == "white-space-splitting-field-splitting"
+            && inline_text(children) == "White Space Splitting"
+    )));
+    assert!(
+        document.diagnostics.iter().all(|diagnostic| {
+            diagnostic.code.as_deref() != Some("unresolved-section-reference")
+        })
+    );
+}
+
+#[test]
+fn degrades_unresolved_mdoc_section_references_to_text() {
+    let path = temporary_source(
+        "mdoc-missing-section",
+        ".Dd July 19, 2026\n.Dt NAVIGATION 1\n.Os\n.Sh DESCRIPTION\n.Sx MISSING\n",
+    );
+
+    let document = parse_manual_source(&path).expect("lower unresolved navigation source");
+    fs::remove_file(path).expect("remove temporary roff fixture");
+
+    let Block::Paragraph { children, .. } = &document.sections[0].blocks[0] else {
+        panic!("expected reference paragraph");
+    };
+    assert_eq!(inline_text(children), "MISSING");
+    assert!(children.iter().all(|inline| !matches!(
+        inline,
+        Inline::Link {
+            target: mant_ir::LinkTarget::Section { .. },
+            ..
+        }
+    )));
+    assert!(
+        document.diagnostics.iter().any(|diagnostic| {
+            diagnostic.code.as_deref() == Some("unresolved-section-reference")
+        })
+    );
+}

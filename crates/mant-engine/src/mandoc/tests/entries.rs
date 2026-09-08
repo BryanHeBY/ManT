@@ -885,3 +885,242 @@ fn separates_alternative_terms_in_an_extended_mdoc_definition_head() {
     assert_eq!(inline_text(&items[0].terms[0]), "ipaddr[/masklen]");
     assert_eq!(inline_text(&items[0].terms[1]), "ipaddr[/prefixlen]");
 }
+
+#[test]
+fn reads_incrementing_registers_only_from_ip_markers() {
+    let context = LoweringContext::new(
+        None,
+        Some(".IP \\n+[step] 4\n.IP 1 \\n+[width]\n.IPX \\n+[other]\n'IP \"\\n+[quoted]\" 4\n"),
+    );
+
+    assert!(context.man_ip_uses_incrementing_register(1));
+    assert!(!context.man_ip_uses_incrementing_register(2));
+    assert!(!context.man_ip_uses_incrementing_register(3));
+    assert!(context.man_ip_uses_incrementing_register(4));
+}
+
+#[test]
+fn unclosed_compact_run_does_not_cross_a_section_boundary() {
+    let path = temporary_source(
+        "section-bounded-compact-alias-group",
+        ".TH ALIASES 1\n\
+         .SH FIRST\n\
+         .TP\n\
+         .PD 0\n\
+         first\n\
+         .SH SECOND\n\
+         .TP\n\
+         second\n\
+         .PD\n\
+         Second description.\n",
+    );
+
+    let document = parse_manual_source(&path).expect("lower section-bounded compact run");
+    fs::remove_file(path).expect("remove temporary roff fixture");
+    let [first, second] = document.sections.as_slice() else {
+        panic!("expected two sections");
+    };
+    let [
+        Block::DefinitionList {
+            items: first_items, ..
+        },
+    ] = first.blocks.as_slice()
+    else {
+        panic!("expected first definition list");
+    };
+    let [
+        Block::DefinitionList {
+            items: second_items,
+            ..
+        },
+    ] = second.blocks.as_slice()
+    else {
+        panic!("expected second definition list");
+    };
+    assert_eq!(first_items.len(), 1);
+    assert_eq!(inline_text(&first_items[0].terms[0]), "first");
+    assert!(first_items[0].description.is_empty());
+    assert_eq!(second_items.len(), 1);
+    assert_eq!(inline_text(&second_items[0].terms[0]), "second");
+    assert!(!second_items[0].description.is_empty());
+}
+
+#[test]
+fn tq_continuation_starts_at_the_immediately_preceding_head() {
+    let path = temporary_source(
+        "bounded-tq-aliases",
+        ".TH TQ-BOUNDARY 7\n\
+         .SH OPTIONS\n\
+         .TP\n\
+         -a\n\
+         .TP\n\
+         -b\n\
+         .TQ\n\
+         --beta\n\
+         Description only for beta.\n",
+    );
+
+    let document = parse_manual_source(&path).expect("lower bounded TQ definitions");
+    fs::remove_file(path).expect("remove temporary roff fixture");
+    let [Block::DefinitionList { items, .. }] = document.sections[0].blocks.as_slice() else {
+        panic!("expected one definition list");
+    };
+    assert_eq!(items.len(), 2);
+    assert_eq!(inline_text(&items[0].terms[0]), "-a");
+    assert!(items[0].description.is_empty());
+    assert_eq!(
+        items[1]
+            .terms
+            .iter()
+            .map(|term| inline_text(term))
+            .collect::<Vec<_>>(),
+        ["-b", "--beta"]
+    );
+    assert!(document.diagnostics.iter().any(|diagnostic| {
+        diagnostic.code.as_deref() == Some("manual.definition-alias-boundary")
+    }));
+}
+
+#[test]
+fn recovers_complete_numbered_sequences_from_mdoc_tag_lists() {
+    let document = parse_manual_bytes(
+        std::path::Path::new("mdoc-tag-enumeration.4"),
+        b".Dd September 4, 2026\n.Dt MDOC-TAG-ENUMERATION 4\n.Os\n.Sh EXAMPLES\n\
+.Bl -tag -width \"1.\"\n\
+.It 1.\nFirst step.\n\
+.Tg second-step\n\
+.It 2.\nSecond step.\n\
+.It 3.\nThird step.\n\
+.El\n\
+.Bl -tag -width \"1.\"\n\
+.It 1.\nA real singleton definition.\n\
+.El\n\
+.Bl -tag -width \"1.\"\n\
+.It 1.\nFirst non-sequence term.\n\
+.It 3.\nThird non-sequence term.\n\
+.El\n",
+    )
+    .expect("lower mdoc tag lists with numeric terms");
+
+    assert!(matches!(
+        document.sections[0].blocks[0],
+        Block::List {
+            kind: ListKind::Ordered { start: Some(1) },
+            ref items,
+            ..
+        } if items.len() == 3
+    ));
+    let Block::List { items, .. } = &document.sections[0].blocks[0] else {
+        unreachable!("numbered tag list was asserted above")
+    };
+    assert!(items.iter().all(|item| {
+        matches!(item.blocks.first(), Some(Block::Paragraph { layout, .. }) if layout.indent_columns == 4)
+    }));
+    assert!(matches!(
+        document.sections[0].blocks[1],
+        Block::DefinitionList { ref items, .. } if items.len() == 1
+    ));
+    assert!(matches!(
+        document.sections[0].blocks[2],
+        Block::DefinitionList { ref items, .. } if items.len() == 2
+    ));
+    assert!(
+        SemanticIndex::build(&document)
+            .section("examples")
+            .iter()
+            .all(|entry| entry.names.iter().all(|alias| alias != "2."))
+    );
+    assert!(
+        mant_ir::DocumentIndex::build(&document)
+            .fragment_target("second-step")
+            .is_some()
+    );
+    let rendered = crate::render_query_text(&ResolvedContent {
+        label: "mdoc-tag-enumeration".to_owned(),
+        address: None,
+        document: Some(document),
+        tldr: None,
+    });
+    assert!(rendered.contains("1.     First step.\n2.     Second step.\n3.     Third step."));
+    assert!(!rendered.contains("1.         First step."));
+}
+
+#[test]
+fn keeps_man_ordinal_boundaries_explicit_without_reclassifying_numeric_terms() {
+    let document = parse_manual_bytes(
+        std::path::Path::new("ordinal-boundaries.1"),
+        b".TH ORDINAL-BOUNDARIES 1\n.SH BREAKS\n\
+.IP 1. 4\none\n.IP 3. 4\nthree\n.IP 1) 4\nparen\n.IP 2. 4\nperiod\n\
+.SH MIXED\n.IP 1. 4\none\n.TP\n.B 2.\ntwo\n\
+.SH VALUES\n.TP\n.B 1\none\n.TP\n.B 2.2\ndecimal\n.TP\n.B v1.\nversion\n.TP\n.B 1.2.\nrelease\n",
+    )
+    .expect("lower ordinal boundaries");
+
+    let starts = document.sections[0]
+        .blocks
+        .iter()
+        .filter_map(|block| match block {
+            Block::List {
+                kind: ListKind::Ordered { start },
+                ..
+            } => *start,
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(starts, [1, 3, 1, 2]);
+    assert!(matches!(
+        document.sections[1].blocks.as_slice(),
+        [Block::List {
+            kind: ListKind::Ordered { start: Some(1) },
+            items,
+            ..
+        }] if items.len() == 2
+    ));
+    assert!(matches!(
+        document.sections[2].blocks.as_slice(),
+        [Block::DefinitionList { items, .. }] if items.len() == 4
+    ));
+}
+
+#[test]
+fn keeps_each_adjacent_rs_scope_in_the_current_ordinal_item() {
+    let document = parse_manual_bytes(
+        std::path::Path::new("ordinal-continuations.1"),
+        b".TH ORDINAL-CONTINUATIONS 1\n.SH NOTES\n\
+.IP 1. 4\none\n.RS 4\nfirst continuation\n.RE\n.RS 4\nsecond continuation\n.RE\n\
+.PP\nseparate paragraph\n.IP 2. 4\ntwo\n",
+    )
+    .expect("lower adjacent relative-indent continuations");
+
+    assert!(matches!(
+        document.sections[0].blocks.as_slice(),
+        [
+            Block::List {
+                kind: ListKind::Ordered { start: Some(1) },
+                items: first,
+                ..
+            },
+            Block::Paragraph { .. },
+            Block::List {
+                kind: ListKind::Ordered { start: Some(2) },
+                items: second,
+                ..
+            }
+        ] if first.len() == 1 && first[0].blocks.len() == 3 && second.len() == 1
+    ));
+}
+
+#[test]
+fn preserves_the_boundary_that_enters_a_compact_mdoc_term() {
+    let document = parse_manual_bytes(
+        std::path::Path::new("spacing-transition.5"),
+        b".Dd August 19, 2026\n.Dt SPACING-TRANSITION 5\n.Os\n.Sh KEYWORDS\n\
+.Bl -tag -width Ds\n.It Xo\n.Cm @newuser\n.Sm off\n.Ar name : uid : gid\n.Sm on\n.Xc\nCreate a user.\n.El\n",
+    )
+    .expect("lower an mdoc spacing transition inside a term");
+
+    let Block::DefinitionList { items, .. } = &document.sections[0].blocks[0] else {
+        panic!("expected a keyword definition list");
+    };
+    assert_eq!(inline_text(&items[0].terms[0]), "@newuser name:uid:gid");
+}

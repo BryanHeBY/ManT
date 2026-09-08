@@ -477,3 +477,25 @@ fn lowers_every_mdoc_column_list_cell() {
         ["CLSET_TIMEOUT", "struct timeval *", "set total timeout"]
     );
 }
+
+#[test]
+fn keeps_unexpanded_tabular_cells_visible_with_a_diagnostic() {
+    let document = parse_manual_bytes(
+        std::path::Path::new("unexpanded-table-cell.7"),
+        b".TH UNEXPANDED-TABLE-CELL 7\n.SH DESCRIPTION\n.TS\nl l.\n1\t\\*[unknown-label]\n.TE\n",
+    )
+    .expect("lower unresolved formatter string in a table cell");
+
+    let Block::Table { rows, .. } = &document.sections[0].blocks[0] else {
+        panic!("expected a structured table");
+    };
+    assert_eq!(rows[0].cells.len(), 2);
+    let [Block::Paragraph { children, .. }] = rows[0].cells[1].blocks.as_slice() else {
+        panic!("expected one recovered table-cell paragraph");
+    };
+    assert_eq!(inline_text(children), r"\*[unknown-label]");
+    assert!(document.diagnostics.iter().any(|diagnostic| {
+        diagnostic.level == DiagnosticLevel::Unsupported
+            && diagnostic.code.as_deref() == Some("manual.unexpanded-table-cell")
+    }));
+}
