@@ -57,15 +57,25 @@ pub(super) fn head_content(terms: &[Vec<Inline>]) -> Vec<Vec<Inline>> {
         inlines
             .iter()
             .filter_map(|inline| {
-                let mut inline = inline.clone();
-                match &mut inline {
+                Some(match inline {
                     Inline::Anchor { .. } => return None,
-                    Inline::Strong { children }
-                    | Inline::Emphasis { children }
-                    | Inline::Link { children, .. } => *children = without_anchors(children),
-                    _ => {}
-                }
-                Some(inline)
+                    Inline::Strong { children } => Inline::Strong {
+                        children: without_anchors(children),
+                    },
+                    Inline::Emphasis { children } => Inline::Emphasis {
+                        children: without_anchors(children),
+                    },
+                    Inline::Link {
+                        children,
+                        target,
+                        title,
+                    } => Inline::Link {
+                        children: without_anchors(children),
+                        target: target.clone(),
+                        title: title.clone(),
+                    },
+                    _ => inline.clone(),
+                })
             })
             .collect()
     }

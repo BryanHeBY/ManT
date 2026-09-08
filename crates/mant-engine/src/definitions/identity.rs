@@ -128,8 +128,7 @@ pub(super) fn identify_list_item(
 
 pub(super) fn identify_item(
     item: &mut DefinitionItem,
-    context: DefinitionContext,
-    hint: Option<super::NativeHeadRole>,
+    plan: IdentityPlan,
     used: &mut HashSet<String>,
     reserved: &HashSet<String>,
     retained: &mut HashSet<String>,
@@ -147,7 +146,7 @@ pub(super) fn identify_item(
         occurrences,
         value_domain,
         mut preferred,
-    } = identity_plan(item, context, hint);
+    } = plan;
 
     let mut anchors = Vec::new();
     for term in &item.terms {

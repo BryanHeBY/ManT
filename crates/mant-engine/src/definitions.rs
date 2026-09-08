@@ -7,20 +7,17 @@ mod diagnostics;
 mod evidence;
 mod identity;
 mod normalize;
+mod preparation;
 mod recognized;
 mod syntax;
 mod walk;
 
-use context::{DefinitionContext, child_definition_context, definition_group_context};
+use context::DefinitionContext;
 pub(crate) use diagnostics::manual_discovery_diagnostics;
 pub(crate) use evidence::{NativeHeadEvidence, NativeHeadRole};
 pub(crate) use identity::document_id_slug;
-use identity::{
-    document_anchor_ids, has_semantic_spelling, identify_item, identify_list_item, identity_plan,
-    list_identity_base,
-};
+use identity::{document_anchor_ids, identify_item, identify_list_item};
 use mant_ir::{Block, Section};
-use normalize::{normalize_definition_nesting, normalize_hanging_definitions};
 pub(crate) use recognized::RecognizedName;
 use std::collections::{HashMap, HashSet};
 pub(crate) use syntax::{
@@ -55,7 +52,6 @@ pub(crate) fn identify_definitions_with_evidence(
     document_name: Option<&str>,
     evidence: &NativeHeadEvidence,
 ) -> HashSet<String> {
-    let mut preferred_counts = HashMap::new();
     let root_context = document_name.map_or(DefinitionContext::Generic, |name| {
         let name = name.to_ascii_lowercase();
         if name.ends_with("_config") || name.ends_with("-config") {
@@ -64,92 +60,27 @@ pub(crate) fn identify_definitions_with_evidence(
             DefinitionContext::Generic
         }
     });
-    prepare_blocks(blocks, root_context, &mut preferred_counts, evidence);
-    prepare_sections(sections, root_context, &mut preferred_counts, evidence);
+    let prepared = preparation::prepare(blocks, sections, root_context, evidence);
 
     let used = document_anchor_ids(blocks, sections);
     let mut discovery = DefinitionDiscovery {
         retained: used.clone(),
         used,
         reserved: reserved_targets,
-        preferred_counts: &preferred_counts,
-        evidence,
+        preferred_counts: &prepared.preferred_counts,
+        plans: prepared.plans.into_iter(),
     };
-    discovery.identify_blocks(blocks, root_context);
-    for section in sections {
-        let context = DefinitionContext::for_section(&section.title, root_context);
-        discovery.identify_blocks(&mut section.blocks, context);
-        discovery.identify_sections(&mut section.children, context);
-    }
+    discovery.identify_blocks(blocks);
+    discovery.identify_sections(sections);
+    assert!(
+        discovery.plans.next().is_none(),
+        "all prepared owners were allocated"
+    );
     discovery.retained
 }
 
-fn prepare_sections(
-    sections: &mut [Section],
-    parent_context: DefinitionContext,
-    preferred_counts: &mut HashMap<String, usize>,
-    evidence: &NativeHeadEvidence,
-) {
-    for section in sections {
-        let context = DefinitionContext::for_section(&section.title, parent_context);
-        prepare_blocks(&mut section.blocks, context, preferred_counts, evidence);
-        prepare_sections(&mut section.children, context, preferred_counts, evidence);
-    }
-}
-
-fn prepare_blocks(
-    blocks: &mut Vec<Block>,
-    context: DefinitionContext,
-    preferred_counts: &mut HashMap<String, usize>,
-    evidence: &NativeHeadEvidence,
-) {
-    normalize_definition_nesting(blocks);
-    normalize_hanging_definitions(blocks, context);
-    for block in blocks {
-        match block {
-            Block::List { items, .. } => {
-                for item in items {
-                    if let Some(preferred) = list_identity_base(item) {
-                        *preferred_counts.entry(preferred).or_default() += 1;
-                    }
-                    prepare_blocks(&mut item.blocks, context, preferred_counts, evidence);
-                }
-            }
-            Block::DefinitionList { items, .. } => {
-                let item_context = definition_group_context(items, context);
-                for item in items {
-                    let plan = identity_plan(item, item_context, evidence.role(item));
-                    if has_semantic_spelling(item, &plan) {
-                        *preferred_counts.entry(plan.preferred).or_default() += 1;
-                    }
-                    let child_context = child_definition_context(plan.kind, item_context);
-                    prepare_blocks(
-                        &mut item.description,
-                        child_context,
-                        preferred_counts,
-                        evidence,
-                    );
-                }
-            }
-            Block::Table { rows, .. } => {
-                for row in rows {
-                    for cell in &mut row.cells {
-                        prepare_blocks(&mut cell.blocks, context, preferred_counts, evidence);
-                    }
-                }
-            }
-            Block::Paragraph { .. }
-            | Block::Preformatted { .. }
-            | Block::Equation { .. }
-            | Block::VerticalSpace { .. }
-            | Block::ThematicBreak { .. }
-            | Block::Unsupported { .. } => {}
-        }
-    }
-}
-
 struct DefinitionDiscovery<'a> {
-    evidence: &'a NativeHeadEvidence,
+    plans: std::vec::IntoIter<preparation::PreparedDefinition>,
     used: HashSet<String>,
     reserved: &'a HashSet<String>,
     retained: HashSet<String>,
@@ -157,51 +88,50 @@ struct DefinitionDiscovery<'a> {
 }
 
 impl DefinitionDiscovery<'_> {
-    fn identify_sections(&mut self, sections: &mut [Section], parent_context: DefinitionContext) {
+    fn identify_sections(&mut self, sections: &mut [Section]) {
         for section in sections {
-            let context = DefinitionContext::for_section(&section.title, parent_context);
-            self.identify_blocks(&mut section.blocks, context);
-            self.identify_sections(&mut section.children, context);
+            self.identify_blocks(&mut section.blocks);
+            self.identify_sections(&mut section.children);
         }
     }
 
-    fn identify_blocks(&mut self, blocks: &mut [Block], context: DefinitionContext) {
+    fn identify_blocks(&mut self, blocks: &mut [Block]) {
         for block in blocks {
             match block {
                 Block::List { items, .. } => {
                     for item in items {
-                        let role = identify_list_item(
+                        identify_list_item(
                             item,
                             &mut self.used,
                             self.reserved,
                             &mut self.retained,
                             self.preferred_counts,
                         );
-                        let context =
-                            role.map_or(context, |role| child_definition_context(role, context));
-                        self.identify_blocks(&mut item.blocks, context);
+                        self.identify_blocks(&mut item.blocks);
                     }
                 }
                 Block::DefinitionList { items, .. } => {
-                    let item_context = definition_group_context(items, context);
                     for item in items {
-                        let role = identify_item(
+                        let plan = self
+                            .plans
+                            .next()
+                            .expect("every final definition was prepared")
+                            .for_item(item);
+                        identify_item(
                             item,
-                            item_context,
-                            self.evidence.role(item),
+                            plan,
                             &mut self.used,
                             self.reserved,
                             &mut self.retained,
                             self.preferred_counts,
                         );
-                        let child_context = child_definition_context(role, item_context);
-                        self.identify_blocks(&mut item.description, child_context);
+                        self.identify_blocks(&mut item.description);
                     }
                 }
                 Block::Table { rows, .. } => {
                     for row in rows {
                         for cell in &mut row.cells {
-                            self.identify_blocks(&mut cell.blocks, context);
+                            self.identify_blocks(&mut cell.blocks);
                         }
                     }
                 }

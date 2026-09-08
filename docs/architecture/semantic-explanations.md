@@ -249,6 +249,16 @@ this evidence, while changed/split heads and conflicting witnesses invalidate
 it. No temporary role, synthetic semantic ID or separate evidence index enters
 the public IR. Body macros are not registered as definition witnesses.
 
+Preparation normalizes each container before reading its heads, derives child
+context from that same recognition result, and retains one private plan per
+final definition. Counting and ID/name-binding allocation consume these plans
+in the frozen traversal order instead of re-running the grammar. Allocation
+verifies source and styled head equality; only zero-width anchors may change.
+There is no intervening topology/context mutation API. Any new normalization
+must run before preparation or rebuild the affected plans and counts, not
+reuse stale ranges. Temporary validation copies contain heads, never bodies
+or a second full document, and are dropped during allocation.
+
 Separate fidelity normalization from semantic inference before removing
 heuristics. Existing target, continuation, indentation, table and line-flow
 repairs remain required. Do not erase a normalization module or all section
