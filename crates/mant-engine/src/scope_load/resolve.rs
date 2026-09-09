@@ -4,12 +4,12 @@ mod tests;
 use super::references::{ScopeReference, document_references};
 use super::{
     BTreeMap, BTreeSet, DocumentAddress, DocumentEdge, DocumentEdgeKind, DocumentFrontier,
-    DocumentResolver, DocumentScope, DocumentSelector, LoadError, LoadSpec, LoadedDocumentScope,
-    MAX_SCOPE_CONTENT_BYTES, QueryPolicy, ResolvedContent, ResolvedDocumentScope, ScopeQueryError,
+    DocumentLoader, DocumentScope, DocumentSelector, LoadError, LoadSpec, LoadedDocumentScope,
+    MAX_SCOPE_CONTENT_BYTES, QueryPolicy, ResolvedContent, ResolvedDocumentScope, ScopeLoadError,
     ScopedDocument, TraversalLimit, UnresolvedDocument, VecDeque, Write, validate_document_scope,
 };
 
-impl DocumentResolver {
+impl DocumentLoader {
     /// Resolve initial documents and their typed outbound links breadth-first.
     ///
     /// # Errors
@@ -19,12 +19,12 @@ impl DocumentResolver {
     pub fn resolve_scope(
         &self,
         query: &DocumentScope,
-    ) -> Result<LoadedDocumentScope, ScopeQueryError> {
+    ) -> Result<LoadedDocumentScope, ScopeLoadError> {
         validate_document_scope(query)?;
         let mut resolution = ScopeResolution::new(query);
         resolution.resolve_roots(self);
         if resolution.documents.is_empty() {
-            return Err(ScopeQueryError::NoResolvedDocuments {
+            return Err(ScopeLoadError::NoResolvedDocuments {
                 reasons: resolution
                     .graph
                     .unresolved
@@ -134,7 +134,7 @@ impl ScopeResolution {
         }
     }
 
-    fn resolve_roots(&mut self, resolver: &DocumentResolver) {
+    fn resolve_roots(&mut self, resolver: &DocumentLoader) {
         for (root_index, selector) in self.graph.query.documents.clone().iter().enumerate() {
             match self.failures.resolve(selector, QueryPolicy::Combined, || {
                 resolver
@@ -196,7 +196,7 @@ impl ScopeResolution {
         }
     }
 
-    fn follow_links(&mut self, resolver: &DocumentResolver) {
+    fn follow_links(&mut self, resolver: &DocumentLoader) {
         while let Some(position) = self.queue.pop_front() {
             let depth = self.graph.documents[position].depth;
             if depth >= self.graph.query.traversal.effective_max_depth() {
@@ -243,7 +243,7 @@ impl ScopeResolution {
 
     fn follow_reference(
         &mut self,
-        resolver: &DocumentResolver,
+        resolver: &DocumentLoader,
         from: &DocumentAddress,
         depth: u16,
         reference: &ScopeReference,

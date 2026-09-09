@@ -177,6 +177,14 @@ complete request and joins loading with query execution. `QueryError::Load` and
 `QueryError::QueryValidation` preserve the originating category and error chain
 without giving acquisition code access to search or projection behavior.
 
+The same split applies to scopes: `ScopeLoadError` describes traversal inputs
+or acquisition failures, while `ScopeQueryError::Execution` retains failures
+from querying the already-loaded collection. One-shot request functions reject
+invalid inputs and views before constructing a system resolver. Explicit
+resolver methods reuse their caller-owned snapshot; the validated execution
+path does not repeat the application validation merely because a snapshot was
+created by a convenience function.
+
 `resolve_scope` and `execute_scope_query` keep linked-document traversal,
 aggregate content budgets, and breadth-first projections at that same engine
 boundary. Process and MCP adapters should pass a `ScopeQueryRequest` rather

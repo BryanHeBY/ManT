@@ -244,7 +244,7 @@ mod tests {
 
     #[test]
     fn heading_references_keep_source_order_without_metadata_or_body_duplicates() {
-        let query = crate::query_markdown_text("# [Catalog](index.md)\n\n[before](before.md)\n\n## [Topic](topic.md)\n\n[after](after.md)\n", None).unwrap();
+        let query = crate::scope_load::tests::markdown_content("# [Catalog](index.md)\n\n[before](before.md)\n\n## [Topic](topic.md)\n\n[after](after.md)\n", None).unwrap();
         let references = document_references(&query).references;
         let names = references
             .iter()
@@ -263,7 +263,7 @@ mod tests {
 
     #[test]
     fn ordinary_item_domains_follow_earlier_head_and_body_links() {
-        let mut query = crate::query_markdown_text(
+        let mut query = crate::scope_load::tests::markdown_content(
             "# Tools\n\n<!-- mant:entries role=command case=sensitive -->\n- [`target`](target.md): See [body](body.md).\n\n  <!-- mant:domain entries=domain.md roles=command -->\n", None,
         ).unwrap();
         assert!(
@@ -297,7 +297,7 @@ mod tests {
 
     #[test]
     fn repeated_fragments_do_not_consume_distinct_document_capacity() {
-        let query = crate::query_markdown_text(
+        let query = crate::scope_load::tests::markdown_content(
             "# Links\n\n[a](one.md#a) [b](one.md#b) [next](two.md) [excluded](three.md)\n",
             None,
         )
@@ -333,7 +333,9 @@ mod tests {
 
     #[test]
     fn scope_reference_bounds_stop_before_retaining_oversized_targets() {
-        let query = crate::query_markdown_text("# Links\n\n[x](oversized.md)\n", None).unwrap();
+        let query =
+            crate::scope_load::tests::markdown_content("# Links\n\n[x](oversized.md)\n", None)
+                .unwrap();
         let result = collect_references(&query, ReferenceScanLimits::default(), 2, 3);
         assert!(result.references.is_empty());
         assert_eq!(
@@ -359,7 +361,7 @@ mod tests {
 
     #[test]
     fn scope_does_not_inspect_excluded_external_payloads_or_form_metadata() {
-        let mut query = crate::query_markdown_text(
+        let mut query = crate::scope_load::tests::markdown_content(
             "# Links\n\n[remote](https://example.org) [local](local.md)\n",
             None,
         )

@@ -13,6 +13,7 @@ mod output;
 mod projection;
 mod query;
 mod scope;
+mod scope_load;
 mod scope_query;
 mod search;
 mod selectors;
@@ -61,7 +62,8 @@ pub use query::{
     execute_query, project_query_view, query_markdown_text, query_roff_bytes, resolve_query,
     resolve_query_with_policy, validate_query_request,
 };
-pub use scope::{LoadedDocumentScope, ScopeQueryError, validate_scope_query_request};
+pub use scope::{ScopeQueryError, execute_scope_query, validate_scope_query_request};
+pub use scope_load::{LoadedDocumentScope, ScopeLoadError, validate_document_scope};
 pub use scope_query::{
     QueryScopeView, ScopeExecutionError, ScopeInputError, explain_scope, search_scope,
 };

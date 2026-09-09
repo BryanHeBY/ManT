@@ -48,9 +48,7 @@ impl QueryService {
             .map_err(|_| "MCP query service is shutting down".to_owned())?;
         task::spawn_blocking(move || {
             let _permit = permit;
-            mant_engine::DocumentResolver::from_system()
-                .execute_scope_query(&request)
-                .map_err(scope_error_for_mcp)
+            mant_engine::execute_scope_query(&request).map_err(scope_error_for_mcp)
         })
         .await
         .map_err(|_| "MCP scope-query worker failed".to_owned())?
@@ -81,9 +79,10 @@ fn scope_error_for_mcp(error: mant_engine::ScopeQueryError) -> String {
         // Resolution errors can contain host paths. The individual selectors
         // remain visible in the tool input, so the aggregate result is enough
         // for this path-safe boundary.
-        ScopeQueryError::NoResolvedDocuments { .. } => {
-            "none of the requested documents could be resolved".to_owned()
-        }
+        ScopeQueryError::Load(mant_engine::ScopeLoadError::NoResolvedDocuments { .. })
+        | ScopeQueryError::Execution(mant_engine::ScopeExecutionError::NoReadableDocuments {
+            ..
+        }) => "none of the requested documents could be resolved".to_owned(),
         other => other.to_string(),
     }
 }
@@ -139,7 +138,31 @@ pub(super) fn query_error_for_mcp(error: mant_engine::QueryExecutionError) -> St
 
 #[cfg(test)]
 mod tests {
-    use super::discovery_error_for_mcp;
+    use super::{discovery_error_for_mcp, scope_error_for_mcp};
+
+    #[test]
+    fn scope_loading_errors_redact_host_paths_but_preserve_usage_guidance() {
+        use mant_engine::{ScopeExecutionError, ScopeLoadError, ScopeQueryError};
+
+        assert_eq!(
+            scope_error_for_mcp(ScopeQueryError::Load(ScopeLoadError::NoResolvedDocuments {
+                reasons: vec!["/home/demo/private/source.md: permission denied".into()],
+            })),
+            "none of the requested documents could be resolved"
+        );
+        assert_eq!(
+            scope_error_for_mcp(ScopeQueryError::Execution(
+                ScopeExecutionError::NoReadableDocuments {
+                    reasons: vec!["/home/demo/private/source.md: no readable body".into()],
+                },
+            )),
+            "none of the requested documents could be resolved"
+        );
+        assert_eq!(
+            scope_error_for_mcp(ScopeQueryError::Load(ScopeLoadError::EmptyScope)),
+            "at least one document is required"
+        );
+    }
 
     #[test]
     fn discovery_errors_never_expose_configuration_paths_or_source_lines() {

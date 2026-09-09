@@ -146,6 +146,8 @@ pub fn resolve_query(request: &QueryRequest) -> Result<ResolvedContent, QueryErr
 
 /// Query with an explicit input-resolution policy.
 ///
+/// The entire request is validated before capturing local source configuration.
+///
 /// # Errors
 ///
 /// Returns [`QueryError`] under the same conditions as [`resolve_query`].
@@ -153,11 +155,13 @@ pub fn resolve_query_with_policy(
     request: &QueryRequest,
     policy: QueryPolicy,
 ) -> Result<ResolvedContent, QueryError> {
-    let resolver = DocumentResolver::from_system();
-    resolver.resolve(request, policy)
+    let resolver = validated_resolver(request, policy, DocumentResolver::from_system)?;
+    resolver.resolve_validated(request, policy)
 }
 
 /// Load and materialize the view encoded in one native request.
+///
+/// Invalid input or view bounds are rejected before local source discovery.
 ///
 /// # Errors
 ///
@@ -166,8 +170,20 @@ pub fn execute_query(
     request: &QueryRequest,
     policy: QueryPolicy,
 ) -> Result<QueryViewResult, QueryExecutionError> {
-    let resolver = DocumentResolver::from_system();
-    resolver.execute(request, policy)
+    let resolver = validated_resolver(request, policy, DocumentResolver::from_system)
+        .map_err(QueryExecutionError::Query)?;
+    resolver.execute_validated(request, policy)
+}
+
+// Capturing a system snapshot already reads manual configuration. Validation
+// therefore precedes construction, not merely the loader's first lookup.
+fn validated_resolver<T>(
+    request: &QueryRequest,
+    policy: QueryPolicy,
+    factory: impl FnOnce() -> T,
+) -> Result<T, QueryError> {
+    validate_query_request(request, policy)?;
+    Ok(factory())
 }
 
 #[cfg(test)]

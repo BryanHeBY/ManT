@@ -1,6 +1,6 @@
 //! Application adapters validate complete requests before loading or querying.
 use super::{
-    CatalogQuery, DocumentCatalog, DocumentLoader, LoadError, LoadHost, LoadSpec, QueryError,
+    CatalogQuery, DocumentCatalog, DocumentLoader, LoadHost, LoadSpec, QueryError,
     QueryExecutionError, QueryInput, QueryPolicy, QueryRequest, QueryViewResult, ResolvedContent,
     load_with, project_query_view, validate_query_request,
 };
@@ -26,7 +26,15 @@ impl DocumentResolver {
         request: &QueryRequest,
         policy: QueryPolicy,
     ) -> Result<ResolvedContent, QueryError> {
-        query_with(request, policy, &self.loader)
+        validate_query_request(request, policy)?;
+        self.resolve_validated(request, policy)
+    }
+    pub(super) fn resolve_validated(
+        &self,
+        request: &QueryRequest,
+        policy: QueryPolicy,
+    ) -> Result<ResolvedContent, QueryError> {
+        load_validated_request(request, policy, &self.loader)
     }
     /// Load and materialize the view encoded by a complete request.
     ///
@@ -37,8 +45,16 @@ impl DocumentResolver {
         request: &QueryRequest,
         policy: QueryPolicy,
     ) -> Result<QueryViewResult, QueryExecutionError> {
+        validate_query_request(request, policy).map_err(QueryExecutionError::Query)?;
+        self.execute_validated(request, policy)
+    }
+    pub(super) fn execute_validated(
+        &self,
+        request: &QueryRequest,
+        policy: QueryPolicy,
+    ) -> Result<QueryViewResult, QueryExecutionError> {
         let content = self
-            .resolve(request, policy)
+            .resolve_validated(request, policy)
             .map_err(QueryExecutionError::Query)?;
         project_query_view(content, &request.view)
     }
@@ -49,12 +65,8 @@ impl DocumentResolver {
     pub fn discover(&self, query: &CatalogQuery) -> Result<DocumentCatalog, String> {
         self.loader.discover(query)
     }
-    pub(crate) fn load(
-        &self,
-        spec: LoadSpec<'_>,
-        policy: QueryPolicy,
-    ) -> Result<ResolvedContent, LoadError> {
-        self.loader.load(spec, policy)
+    pub(crate) fn loader(&self) -> &DocumentLoader {
+        &self.loader
     }
 }
 
@@ -76,12 +88,21 @@ pub(super) fn load_spec(input: &QueryInput) -> LoadSpec<'_> {
     }
 }
 
+#[cfg(test)]
 pub(super) fn query_with(
     request: &QueryRequest,
     policy: QueryPolicy,
     host: &dyn LoadHost,
 ) -> Result<ResolvedContent, QueryError> {
     validate_query_request(request, policy)?;
+    load_validated_request(request, policy, host)
+}
+
+fn load_validated_request(
+    request: &QueryRequest,
+    policy: QueryPolicy,
+    host: &dyn LoadHost,
+) -> Result<ResolvedContent, QueryError> {
     load_with(load_spec(&request.input), policy, host).map_err(QueryError::Load)
 }
 

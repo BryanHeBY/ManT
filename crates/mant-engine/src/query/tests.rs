@@ -837,7 +837,47 @@ fn invalid_query_views_never_touch_the_loading_host() {
             request.view
         );
         assert!(host.calls.lock().unwrap().is_empty(), "{:?}", request.view);
+        // Constructing the real snapshot also performs configuration I/O.
+        // A host-call counter alone does not guard that earlier boundary.
+        let factory_calls = std::cell::Cell::new(0);
+        assert!(matches!(
+            super::validated_resolver(&request, QueryPolicy::Combined, || {
+                factory_calls.set(factory_calls.get() + 1);
+            }),
+            Err(QueryError::QueryValidation(_))
+        ));
+        assert_eq!(factory_calls.get(), 0, "{:?}", request.view);
     }
+}
+
+#[test]
+fn invalid_load_selection_never_constructs_a_system_snapshot() {
+    let mut request = request();
+    request.input = QueryInput::Document {
+        selector: String::new(),
+        source: None,
+        manual_section: None,
+    };
+    let factory_calls = std::cell::Cell::new(0);
+    assert!(matches!(
+        super::validated_resolver(&request, QueryPolicy::Combined, || {
+            factory_calls.set(factory_calls.get() + 1);
+        }),
+        Err(QueryError::Load(LoadError::EmptyName))
+    ));
+    assert_eq!(factory_calls.get(), 0);
+}
+
+#[test]
+fn valid_query_constructs_exactly_one_snapshot_after_validation() {
+    let factory_calls = std::cell::Cell::new(0);
+    let snapshot = super::validated_resolver(&request(), QueryPolicy::Combined, || {
+        factory_calls.set(factory_calls.get() + 1);
+        "snapshot"
+    })
+    .unwrap();
+    assert_eq!(snapshot, "snapshot");
+    assert_eq!(factory_calls.get(), 1);
 }
 
 #[test]

@@ -121,8 +121,8 @@ fn normalized_content_budget_refuses_another_document_before_retaining_it() {
         }],
         traversal: mant_protocol::DocumentTraversal::default(),
     };
-    let mut content =
-        crate::query_markdown_text("# Child\n\nBody.\n", None).expect("fixture content");
+    let mut content = crate::scope_load::tests::markdown_content("# Child\n\nBody.\n", None)
+        .expect("fixture content");
     let address = DocumentAddress::Markdown {
         path: "child".into(),
         origin: MarkdownOrigin::Documents,
@@ -155,6 +155,70 @@ fn normalized_content_budget_refuses_another_document_before_retaining_it() {
     assert!(resolution.queue.is_empty());
 }
 
+fn assert_two_document_cycle(
+    resolution: &ScopeResolution,
+    scope: &DocumentScope,
+    address: &DocumentAddress,
+    child_address: &DocumentAddress,
+) {
+    assert_eq!(resolution.graph.documents.len(), resolution.documents.len());
+    let addresses = resolution
+        .graph
+        .documents
+        .iter()
+        .map(|document| &document.address)
+        .collect::<Vec<_>>();
+    assert_eq!(
+        addresses.iter().copied().collect::<BTreeSet<_>>().len(),
+        addresses.len()
+    );
+    for (source, content) in resolution.graph.documents.iter().zip(&resolution.documents) {
+        assert_eq!(content.address.as_ref(), Some(&source.address));
+    }
+    // Hand-written graph expectations retain the complete source/provenance
+    // contract without invoking the downstream query validator as an oracle.
+    assert_eq!(resolution.graph.query, *scope);
+    assert_eq!(
+        resolution.graph.documents,
+        [
+            ScopedDocument {
+                address: address.clone(),
+                depth: 0,
+                root_indices: vec![0, 1],
+                reached_from: vec![child_address.clone()],
+            },
+            ScopedDocument {
+                address: child_address.clone(),
+                depth: 1,
+                root_indices: Vec::new(),
+                reached_from: vec![address.clone()],
+            },
+        ]
+    );
+    assert_eq!(
+        resolution.graph.edges,
+        [
+            DocumentEdge {
+                from: address.clone(),
+                to: child_address.clone(),
+                kind: DocumentEdgeKind::Document,
+            },
+            DocumentEdge {
+                from: child_address.clone(),
+                to: address.clone(),
+                kind: DocumentEdgeKind::Document,
+            },
+        ]
+    );
+    assert_eq!(
+        resolution.positions,
+        BTreeMap::from([(address.clone(), 0), (child_address.clone(), 1)])
+    );
+    assert!(resolution.graph.frontier.is_empty());
+    assert!(resolution.graph.unresolved.is_empty());
+    assert!(resolution.graph.reference_limits.is_empty());
+}
+
 #[test]
 fn scope_admission_keeps_graph_content_queue_and_budget_in_one_commit() {
     let selector = DocumentSelector {
@@ -170,7 +234,7 @@ fn scope_admission_keeps_graph_content_queue_and_budget_in_one_commit() {
             max_documents: Some(4),
         },
     };
-    let mut root = crate::query_markdown_text("# Root\n\nBody.\n", None).unwrap();
+    let mut root = crate::scope_load::tests::markdown_content("# Root\n\nBody.\n", None).unwrap();
     let address = DocumentAddress::Markdown {
         path: "root".into(),
         origin: MarkdownOrigin::Documents,
@@ -185,7 +249,7 @@ fn scope_admission_keeps_graph_content_queue_and_budget_in_one_commit() {
     assert_eq!(resolution.graph.documents[0].root_indices, [0, 1]);
     assert_eq!(resolution.queue.iter().copied().collect::<Vec<_>>(), [0]);
 
-    let mut child = crate::query_markdown_text("# Child\n\nBody.\n", None).unwrap();
+    let mut child = crate::scope_load::tests::markdown_content("# Child\n\nBody.\n", None).unwrap();
     let child_address = DocumentAddress::Markdown {
         path: "child".into(),
         origin: MarkdownOrigin::Documents,
@@ -205,22 +269,33 @@ fn scope_admission_keeps_graph_content_queue_and_budget_in_one_commit() {
     assert_eq!(resolution.queue.iter().copied().collect::<Vec<_>>(), [0, 1]);
     assert!(resolution.record_existing_edge(&edge));
     assert!(resolution.record_existing_edge(&DocumentEdge {
-        from: child_address,
-        to: address,
+        from: child_address.clone(),
+        to: address.clone(),
         kind: DocumentEdgeKind::Document,
     }));
     assert_eq!(resolution.documents.len(), 2);
     assert_eq!(resolution.graph.edges.len(), 2);
     assert_eq!(resolution.content_bytes, MAX_SCOPE_CONTENT_BYTES);
-    assert!(crate::QueryScopeView::new(&resolution.graph, &resolution.documents).is_ok());
+    assert_two_document_cycle(&resolution, &scope, &address, &child_address);
+    let admitted_graph = resolution.graph.clone();
 
-    let mut rejected = crate::query_markdown_text("# Rejected\n", None).unwrap();
+    let mut rejected = crate::scope_load::tests::markdown_content("# Rejected\n", None).unwrap();
     rejected.address = Some(DocumentAddress::Markdown {
         path: "rejected".into(),
         origin: MarkdownOrigin::Documents,
     });
     resolution.insert_root(rejected, &selector, 0);
     assert_eq!(resolution.graph.unresolved.len(), 1);
+    assert_eq!(resolution.graph.unresolved[0].from, None);
+    assert_eq!(resolution.graph.unresolved[0].selector, selector);
+    assert_eq!(resolution.graph.query, admitted_graph.query);
+    assert_eq!(resolution.graph.documents, admitted_graph.documents);
+    assert_eq!(resolution.graph.edges, admitted_graph.edges);
+    assert_eq!(resolution.graph.frontier, admitted_graph.frontier);
+    assert_eq!(
+        resolution.graph.reference_limits,
+        admitted_graph.reference_limits
+    );
     assert_eq!(resolution.documents.len(), 2);
     assert_eq!(resolution.graph.documents.len(), 2);
     assert_eq!(resolution.graph.edges.len(), 2);
@@ -240,8 +315,8 @@ fn root_content_budget_is_reported_as_an_unresolved_root() {
         documents: vec![selector.clone()],
         traversal: mant_protocol::DocumentTraversal::default(),
     };
-    let mut content =
-        crate::query_markdown_text("# Root\n\nBody.\n", None).expect("fixture content");
+    let mut content = crate::scope_load::tests::markdown_content("# Root\n\nBody.\n", None)
+        .expect("fixture content");
     content.address = Some(DocumentAddress::Markdown {
         path: "root".to_owned(),
         origin: MarkdownOrigin::Documents,

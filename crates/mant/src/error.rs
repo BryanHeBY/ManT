@@ -5,7 +5,7 @@ use std::io::Write;
 use anstyle::{AnsiColor, Style};
 use mant_engine::{
     LoadError, ProjectionError, QueryError, QueryExecutionError, QueryValidationError,
-    ScopeQueryError, SearchError,
+    ScopeExecutionError, ScopeLoadError, ScopeQueryError, SearchError,
 };
 use mant_protocol::sanitize_terminal_text;
 
@@ -167,18 +167,41 @@ pub(super) fn query_execution_failure(error: QueryExecutionError) -> Failure {
 
 pub(super) fn scope_query_failure(error: ScopeQueryError) -> Failure {
     match error {
-        ScopeQueryError::NoResolvedDocuments { .. } | ScopeQueryError::InvalidLoadedScope(_) => {
-            Failure::operational(error)
-        }
-        ScopeQueryError::EmptyScope
-        | ScopeQueryError::TooManyDocuments
-        | ScopeQueryError::DepthLimit
-        | ScopeQueryError::DocumentLimit
-        | ScopeQueryError::TraversalLimitsRequireLinks
-        | ScopeQueryError::DocumentSelector(_)
-        | ScopeQueryError::EntrySelector(_) => Failure::usage(error),
+        ScopeQueryError::Load(error) => scope_load_failure(error),
+        ScopeQueryError::Execution(error) => scope_execution_failure(error),
+        ScopeQueryError::InvalidLoadedScope(_) => Failure::operational(error),
+        ScopeQueryError::EntrySelector(_) => Failure::usage(error),
         ScopeQueryError::Search(error) => search_failure(&error),
         ScopeQueryError::Explanation(error) => Failure::usage(error),
+    }
+}
+
+fn scope_execution_failure(error: ScopeExecutionError) -> Failure {
+    match error {
+        ScopeExecutionError::Explanation(error) => Failure::usage(error),
+        ScopeExecutionError::Search(error) => search_failure(&error),
+        ScopeExecutionError::NoReadableDocuments { reasons } => {
+            // Preserve the CLI's aggregate wording without attributing a pure
+            // query execution failure to the source loader's error domain.
+            let mut message = "none of the initial documents could be resolved".to_owned();
+            if !reasons.is_empty() {
+                message.push_str(": ");
+                message.push_str(&reasons.join("; "));
+            }
+            Failure::operational(message)
+        }
+    }
+}
+
+fn scope_load_failure(error: ScopeLoadError) -> Failure {
+    match error {
+        ScopeLoadError::NoResolvedDocuments { .. } => Failure::operational(error),
+        ScopeLoadError::EmptyScope
+        | ScopeLoadError::TooManyDocuments
+        | ScopeLoadError::DepthLimit
+        | ScopeLoadError::DocumentLimit
+        | ScopeLoadError::TraversalLimitsRequireLinks
+        | ScopeLoadError::DocumentSelector(_) => Failure::usage(error),
     }
 }
 
@@ -299,6 +322,70 @@ mod tests {
             ),
         ] {
             let failure = super::query_failure(error);
+            assert_eq!(failure.message(), expected_message);
+            assert_eq!(
+                report_failure(&failure, &mut Vec::new(), false),
+                expected_status
+            );
+        }
+    }
+
+    #[test]
+    fn scope_loading_errors_keep_their_exit_categories_and_messages() {
+        use mant_engine::{ScopeLoadError, ScopeQueryError};
+
+        for (error, expected_status, expected_message) in [
+            (
+                ScopeLoadError::EmptyScope,
+                2,
+                "at least one document is required",
+            ),
+            (
+                ScopeLoadError::TraversalLimitsRequireLinks,
+                2,
+                "maxDepth and maxDocuments require followLinks=true",
+            ),
+            (
+                ScopeLoadError::NoResolvedDocuments {
+                    reasons: vec!["missing manual".into()],
+                },
+                1,
+                "none of the initial documents could be resolved: missing manual",
+            ),
+        ] {
+            let failure = super::scope_query_failure(ScopeQueryError::Load(error));
+            assert_eq!(failure.message(), expected_message);
+            assert_eq!(
+                report_failure(&failure, &mut Vec::new(), false),
+                expected_status
+            );
+        }
+    }
+
+    #[test]
+    fn scope_execution_errors_keep_their_presentation_without_becoming_load_errors() {
+        use mant_engine::{ExplanationError, ScopeExecutionError, ScopeQueryError};
+
+        for (error, expected_status, expected_message) in [
+            (
+                ScopeExecutionError::Explanation(ExplanationError::MissingContent),
+                2,
+                "explanation requires readable content",
+            ),
+            (
+                ScopeExecutionError::Search(SearchError::EmptyPattern),
+                2,
+                "search pattern must not be empty",
+            ),
+            (
+                ScopeExecutionError::NoReadableDocuments {
+                    reasons: vec!["missing body".into()],
+                },
+                1,
+                "none of the initial documents could be resolved: missing body",
+            ),
+        ] {
+            let failure = super::scope_query_failure(ScopeQueryError::Execution(error));
             assert_eq!(failure.message(), expected_message);
             assert_eq!(
                 report_failure(&failure, &mut Vec::new(), false),
