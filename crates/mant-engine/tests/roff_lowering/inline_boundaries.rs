@@ -8,7 +8,7 @@ fn source(body: &str) -> String {
 }
 
 pub(super) fn query(body: &str) -> ResolvedContent {
-    crate::query_roff_bytes(source(body).as_bytes()).unwrap()
+    mant_engine::query_roff_bytes(source(body).as_bytes()).unwrap()
 }
 
 pub(super) fn assert_flow(body: &str, expected: &str) {
@@ -26,13 +26,13 @@ pub(super) fn assert_flow(body: &str, expected: &str) {
     };
     assert_eq!(inline_text(inlines), expected, "{body}");
     assert!(
-        unindent(&crate::render_query_text(&query)).contains(expected),
+        unindent(&mant_engine::render_query_text(&query)).contains(expected),
         "{body}"
     );
-    let markdown = crate::render_markdown(&query);
-    let reparsed = crate::query_markdown_text(&markdown, None).unwrap();
+    let markdown = mant_engine::render_markdown(&query);
+    let reparsed = mant_engine::query_markdown_text(&markdown, None).unwrap();
     assert!(
-        unindent(&crate::render_query_text(&reparsed)).contains(expected),
+        unindent(&mant_engine::render_query_text(&reparsed)).contains(expected),
         "{body}: {markdown}"
     );
     assert!(
@@ -140,11 +140,12 @@ fn line_start_ns_and_pf_without_same_line_successor_do_not_join_words() {
     for body in ["a\n.Ns\nb", ".Pf a\nb"] {
         assert_flow(body, "a b");
         assert_flow(&format!(".Bd -literal\n{body}\n.Ed"), "a\nb");
-        let native = Parser::new(libmandoc_rs::ParseOptions::default())
-            .parse_bytes("probe.1", source(body).as_bytes())
-            .unwrap();
+        // The codec-local companion checks each native diagnostic conversion;
+        // this public boundary must retain those findings in the query result.
+        let expected =
+            parse_manual_bytes(std::path::Path::new("probe.1"), source(body).as_bytes()).unwrap();
         let query = query(body);
-        for finding in super::super::diagnostics::lower_diagnostics(&native.diagnostics) {
+        for finding in expected.diagnostics {
             assert!(
                 query
                     .document

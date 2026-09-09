@@ -6,8 +6,9 @@ fn numbered_glyphs_retain_visible_content_in_every_consumer() {
     for body in variants(r".No A\N'65'B") {
         assert_flow(&body, "AAB");
     }
-    let content = crate::query_roff_bytes(b".TH PROBE 1\n.SH DESCRIPTION\n.B A\\N'65'B\n").unwrap();
-    assert!(crate::render_query_text(&content).contains("AAB"));
+    let content =
+        mant_engine::query_roff_bytes(b".TH PROBE 1\n.SH DESCRIPTION\n.B A\\N'65'B\n").unwrap();
+    assert!(mant_engine::render_query_text(&content).contains("AAB"));
     super::font_boundaries::assert_style(&content, "AAB", 1);
 }
 
@@ -22,7 +23,7 @@ fn man_literal_synopsis_preserves_font_state_across_lines() {
     ] {
         let source =
             format!(".TH PROBE 1\n.SH DESCRIPTION\n.EX\n.SY command\n{body}\n.YS\n.EE\nTAIL\n");
-        let content = crate::query_roff_bytes(source.as_bytes()).unwrap();
+        let content = mant_engine::query_roff_bytes(source.as_bytes()).unwrap();
         assert_style(&content, "WORD", style);
         assert_style(&content, "NEXT", style);
         assert_style(&content, "TAIL", 0);
@@ -39,7 +40,7 @@ fn prose_function_blocks_are_inline_but_synopsis_declarations_remain_separate() 
         ".No before\n.Fo WORD\n.Fa arg\n.Fc )\n.No after",
         "before WORD(arg)) after",
     );
-    let doc = crate::query_roff_bytes(b".Dd Sep 8, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.Fo FIRST\n.Fa arg\n.Fc\n.Fo SECOND\n.Fa arg\n.Fc\n").unwrap();
+    let doc = mant_engine::query_roff_bytes(b".Dd Sep 8, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.Fo FIRST\n.Fa arg\n.Fc\n.Fo SECOND\n.Fa arg\n.Fc\n").unwrap();
     assert_eq!(doc.document.unwrap().sections[0].blocks.len(), 2);
 }
 
@@ -63,7 +64,7 @@ fn font_scopes_reach_bibliographies_and_table_cells() {
             assert_style(&content, "RESUMED", style);
             assert_style(&content, "TAIL", 0);
             if inner.starts_with(".Rs") {
-                assert!(crate::render_query_text(&content).contains("WORD and NEXT"));
+                assert!(mant_engine::render_query_text(&content).contains("WORD and NEXT"));
             }
         }
     }
@@ -133,7 +134,7 @@ fn literal_containers_preserve_nested_structural_payloads_and_targets() {
                     inner.into()
                 };
                 let query = query(&format!(".Bd -{display}\nBEFORE\n{inner}\nAFTER\n.Ed"));
-                let text = crate::render_query_text(&query);
+                let text = mant_engine::render_query_text(&query);
                 for word in ["BEFORE", "WORD", "NEXT", "AFTER"] {
                     assert!(text.contains(word), "{inner}: missing {word}: {text}");
                 }
@@ -174,7 +175,7 @@ fn zero_width_words_consume_boundaries_without_fabricating_names() {
     let body = ".Bl -tag -width Ds\n.It Fl a Ns No \\& Fl b\nBODY\n.El";
     assert_flow(body, "-a -b");
     let query = query(body);
-    let explained = crate::explain_query(
+    let explained = mant_engine::explain_query(
         &query,
         &mant_protocol::ExplanationQuery {
             entry: "-a-b".into(),
@@ -200,6 +201,6 @@ fn decoded_literal_font_spellings_are_content_in_every_font() {
             }
         }
     }
-    let query = crate::query_roff_bytes(b".TH PROBE 1\n.SH DESCRIPTION\n.B \\efB\n").unwrap();
-    assert!(crate::render_query_text(&query).contains(r"\fB"));
+    let query = mant_engine::query_roff_bytes(b".TH PROBE 1\n.SH DESCRIPTION\n.B \\efB\n").unwrap();
+    assert!(mant_engine::render_query_text(&query).contains(r"\fB"));
 }

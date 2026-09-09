@@ -96,3 +96,20 @@ fn masks_terminal_controls_before_native_parsing() {
             .any(|diagnostic| { diagnostic.code.as_deref() == Some("manual.control-characters") })
     );
 }
+
+#[test]
+fn line_start_recovery_retains_each_native_structured_diagnostic() {
+    for body in ["a\n.Ns\nb", ".Pf a\nb"] {
+        let source = format!(
+            ".Dd September 8, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd probe\n.Sh DESCRIPTION\n{body}\n"
+        );
+        let native = Parser::new(libmandoc_rs::ParseOptions::default())
+            .parse_bytes("probe.1", source.as_bytes())
+            .unwrap();
+        let document =
+            parse_manual_bytes(std::path::Path::new("probe.1"), source.as_bytes()).unwrap();
+        for finding in super::super::diagnostics::lower_diagnostics(&native.diagnostics) {
+            assert!(document.diagnostics.contains(&finding));
+        }
+    }
+}

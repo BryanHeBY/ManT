@@ -19,8 +19,8 @@ fn horizontal_spans_keep_following_cells_in_the_same_logical_column() {
         tldr: None,
     };
     for rendered in [
-        crate::render_query_text(&query),
-        crate::render_markdown(&query),
+        mant_engine::render_query_text(&query),
+        mant_engine::render_markdown(&query),
     ] {
         assert!(rendered.contains("TOPSPAN |  | RIGHT"), "{rendered}");
         assert!(rendered.contains("LEFT | MIDDLE | END"), "{rendered}");

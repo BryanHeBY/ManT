@@ -1,8 +1,7 @@
-use std::{collections::HashSet, fmt::Write as _, fs, process};
+use std::{fmt::Write as _, fs, process};
 
 use mant_ir::{
-    Block, DiagnosticLevel, Inline, ListKind, ResolvedContent, SemanticIndex, SourceFormat,
-    ValueDomain,
+    Block, DiagnosticLevel, Inline,
     visit::{self, Visit},
 };
 
@@ -18,60 +17,12 @@ fn parse_manual_source(
     Ok(parse_manual_bytes(path, &fs::read(path)?)?)
 }
 
-mod consumer_boundaries;
-mod driver;
-mod entry_forms;
-mod flow_controls;
-mod font_boundaries;
-mod glyphs;
-mod inline_boundaries;
 mod parser_contracts;
-mod upstream_inline;
-mod upstream_tables;
 
 fn temporary_source(label: &str, source: &str) -> std::path::PathBuf {
     let path = std::env::temp_dir().join(format!("mant-lower-{label}-{}.1", process::id()));
     fs::write(&path, source).expect("write temporary roff fixture");
     path
-}
-
-fn anchor_ids(document: &mant_ir::Document) -> Vec<String> {
-    struct AnchorCollector(Vec<String>);
-
-    impl<'ir> Visit<'ir> for AnchorCollector {
-        fn visit_inline(&mut self, inline: &'ir Inline) {
-            if let Inline::Anchor { id, .. } = inline {
-                self.0.push(id.to_string());
-            }
-            visit::walk_inline(self, inline);
-        }
-    }
-
-    let mut collector = AnchorCollector(Vec::new());
-    collector.visit_document(document);
-    collector.0
-}
-
-fn anchor_owner_lines(document: &mant_ir::Document) -> Vec<(String, u32)> {
-    struct AnchorCollector(Vec<(String, u32)>);
-
-    impl<'ir> Visit<'ir> for AnchorCollector {
-        fn visit_inline(&mut self, inline: &'ir Inline) {
-            if let Inline::Anchor {
-                id,
-                owner_source: Some(source),
-                ..
-            } = inline
-            {
-                self.0.push((id.to_string(), source.line));
-            }
-            visit::walk_inline(self, inline);
-        }
-    }
-
-    let mut collector = AnchorCollector(Vec::new());
-    collector.visit_document(document);
-    collector.0
 }
 
 fn visible_document_text(document: &mant_ir::Document) -> String {
@@ -136,7 +87,6 @@ fn inline_text(children: &[Inline]) -> String {
 }
 
 mod entries;
-mod layout;
-mod layout_geometry;
+
 mod navigation;
 mod tables;

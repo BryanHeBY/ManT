@@ -29,7 +29,7 @@ fn literal_flow(blocks: &[mant_ir::Block]) -> String {
     output
 }
 
-fn assert_markdown_literal_rows(query: &crate::ResolvedContent, expected: &str) {
+fn assert_markdown_literal_rows(query: &mant_engine::ResolvedContent, expected: &str) {
     use mant_ir::visit::{Visit, walk_block};
     #[derive(Default)]
     struct LiteralRows(Vec<String>);
@@ -46,8 +46,8 @@ fn assert_markdown_literal_rows(query: &crate::ResolvedContent, expected: &str) 
             walk_block(self, block);
         }
     }
-    let markdown = crate::render_markdown(query);
-    let reloaded = crate::query_markdown_text(&markdown, None).unwrap();
+    let markdown = mant_engine::render_markdown(query);
+    let reloaded = mant_engine::query_markdown_text(&markdown, None).unwrap();
     let mut rows = LiteralRows::default();
     rows.visit_document(reloaded.document.as_ref().unwrap());
     // Markdown owns fence separators: rereading may normalize inter-fence
@@ -77,11 +77,11 @@ fn ordinary_man_paragraphs_reset_prevailing_definition_width() {
         let source = format!(
             ".TH PROBE 1\n.SH DESCRIPTION\n.TP 15\nFIRSTLONGTAG\nFIRST\n.{boundary}\nBETWEEN\n.TP\nSECONDLONGTAG\nSECOND\n"
         );
-        let query = crate::query_roff_bytes(source.as_bytes()).unwrap();
+        let query = mant_engine::query_roff_bytes(source.as_bytes()).unwrap();
         let mut widths = Widths(Vec::new());
         widths.visit_document(query.document.as_ref().unwrap());
         assert_eq!(widths.0, [true, inline_second], "{source}");
-        let text = crate::render_query_text(&query);
+        let text = mant_engine::render_query_text(&query);
         assert!(
             text.lines().any(|line| line == "FIRSTLONGTAG   FIRST"),
             "{text}"
@@ -118,7 +118,7 @@ fn literal_display_controls_preserve_physical_rows_and_continuation() {
             let source = format!(
                 ".Dd September 7, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.Bd -{display} -offset left\n{body}\n.Ed\n"
             );
-            let query = crate::query_roff_bytes(source.as_bytes()).unwrap();
+            let query = mant_engine::query_roff_bytes(source.as_bytes()).unwrap();
             let document = query.document.as_ref().unwrap();
             assert_eq!(
                 literal_flow(&document.sections[0].blocks),
@@ -126,9 +126,9 @@ fn literal_display_controls_preserve_physical_rows_and_continuation() {
                 "{source}"
             );
             assert!(
-                crate::render_query_text(&query).contains(expected),
+                mant_engine::render_query_text(&query).contains(expected),
                 "{source}: {}",
-                crate::render_query_text(&query)
+                mant_engine::render_query_text(&query)
             );
         }
     }
@@ -147,13 +147,13 @@ fn literal_continuations_cross_styling_containers_without_phantom_rows() {
         let source = format!(
             ".Dd September 7, 2026\n.Dt FLOW 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal -offset left\n{body}\n.Ed\n"
         );
-        let query = crate::query_roff_bytes(source.as_bytes()).unwrap();
+        let query = mant_engine::query_roff_bytes(source.as_bytes()).unwrap();
         assert_eq!(
             literal_flow(&query.document.as_ref().unwrap().sections[0].blocks),
             "FIRSTSECONDTHIRD",
             "{body}"
         );
-        assert!(crate::render_query_text(&query).contains("FIRSTSECONDTHIRD"));
+        assert!(mant_engine::render_query_text(&query).contains("FIRSTSECONDTHIRD"));
         assert_markdown_literal_rows(&query, "FIRSTSECONDTHIRD");
     }
 }
@@ -178,13 +178,13 @@ fn styled_literal_breaks_and_eof_keep_exact_content_boundaries() {
         let source = format!(
             ".Dd September 7, 2026\n.Dt FLOW 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal -offset left\n{body}\n.Ed\n"
         );
-        let query = crate::query_roff_bytes(source.as_bytes()).unwrap();
+        let query = mant_engine::query_roff_bytes(source.as_bytes()).unwrap();
         assert_eq!(
             literal_flow(&query.document.as_ref().unwrap().sections[0].blocks),
             expected,
             "{body}"
         );
-        assert!(crate::render_query_text(&query).contains(expected));
+        assert!(mant_engine::render_query_text(&query).contains(expected));
         assert_markdown_literal_rows(&query, expected);
     }
 }
@@ -234,7 +234,7 @@ fn explicit_literal_breaks_are_not_repeated_at_styling_boundaries() {
                     let source = format!(
                         ".Dd September 7, 2026\n.Dt FLOW 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal -offset left\n{body}\n.Ed\n"
                     );
-                    let query = crate::query_roff_bytes(source.as_bytes()).unwrap();
+                    let query = mant_engine::query_roff_bytes(source.as_bytes()).unwrap();
                     let flow = literal_flow(&query.document.as_ref().unwrap().sections[0].blocks);
                     assert_eq!(flow, expected, "{body}");
                     assert_eq!(
@@ -243,7 +243,7 @@ fn explicit_literal_breaks_are_not_repeated_at_styling_boundaries() {
                         "{body}"
                     );
                     assert!(
-                        crate::render_query_text(&query).contains(&expected),
+                        mant_engine::render_query_text(&query).contains(&expected),
                         "{body}"
                     );
                     assert_markdown_literal_rows(&query, &expected);

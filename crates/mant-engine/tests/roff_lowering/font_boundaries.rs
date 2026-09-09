@@ -37,7 +37,7 @@ pub(super) fn assert_style(query: &ResolvedContent, word: &str, expected: u8) {
         styles.found.iter().all(|style| *style == expected),
         "{word}: {:?}\n{}",
         styles.found,
-        crate::render_markdown(query)
+        mant_engine::render_markdown(query)
     );
 }
 
@@ -57,11 +57,11 @@ fn mdoc_operand_font_escapes_do_not_escape_their_scope() {
             let query = query(&input);
             assert_style(&query, "NEXT", expected);
             assert!(mant_ir::validate_document(query.document.as_ref().unwrap()).is_empty());
-            let markdown = crate::render_markdown(&query);
+            let markdown = mant_engine::render_markdown(&query);
             // Literal/code projections intentionally carry code presentation,
             // not individual font runs. For prose, check the actual export.
             if input == body {
-                let reparsed = crate::query_markdown_text(&markdown, None).unwrap();
+                let reparsed = mant_engine::query_markdown_text(&markdown, None).unwrap();
                 assert_style(&reparsed, "NEXT", expected);
             }
         }
@@ -81,7 +81,7 @@ fn mdoc_font_scope_exit_preserves_previous_font_and_pending_boundaries() {
     assert_style(&query, "LAST", 0);
     assert_style(&query, "RESET", 0);
     let query = super::inline_boundaries::query(".Em \\fBWORD Ap s\n.No NEXT");
-    assert!(crate::render_query_text(&query).contains("WORD's NEXT"));
+    assert!(mant_engine::render_query_text(&query).contains("WORD's NEXT"));
     assert_style(&query, "NEXT", 0);
 }
 
@@ -97,7 +97,7 @@ fn mdoc_bf_and_man_persistent_fonts_keep_their_existing_lifetimes() {
         assert_style(&query, "NEXT", 0);
         assert_style(&query, "LAST", 0);
     }
-    let query = crate::query_roff_bytes(
+    let query = mant_engine::query_roff_bytes(
         b".TH PROBE 1\n.SH DESCRIPTION\n\\fBWORD\nNEXT\n.ft I\nITALIC\n.ft P\nBACK\n.PP\nRESET\n",
     )
     .unwrap();
@@ -121,8 +121,8 @@ fn mdoc_macros_select_fonts_instead_of_adding_to_the_outer_font() {
         let query = query(body);
         assert_style(&query, "WORD", word);
         assert_style(&query, "TAIL", tail);
-        let exported = crate::render_markdown(&query);
-        let reparsed = crate::query_markdown_text(&exported, None).unwrap();
+        let exported = mant_engine::render_markdown(&query);
+        let reparsed = mant_engine::query_markdown_text(&exported, None).unwrap();
         assert_style(&reparsed, "WORD", word);
         assert_style(&reparsed, "TAIL", tail);
     }

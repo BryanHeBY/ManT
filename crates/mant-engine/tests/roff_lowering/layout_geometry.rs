@@ -3,12 +3,12 @@
 
 fn man(body: &str) -> String {
     let source = format!(".TH GEOMETRY 1\n.SH DESCRIPTION\n{body}\n");
-    crate::render_query_text(&crate::query_roff_bytes(source.as_bytes()).unwrap())
+    mant_engine::render_query_text(&mant_engine::query_roff_bytes(source.as_bytes()).unwrap())
 }
 
 fn mdoc(body: &str) -> String {
     let source = format!(".Dd September 9, 2026\n.Dt GEOMETRY 1\n.Os\n.Sh DESCRIPTION\n{body}\n");
-    crate::render_query_text(&crate::query_roff_bytes(source.as_bytes()).unwrap())
+    mant_engine::render_query_text(&mant_engine::query_roff_bytes(source.as_bytes()).unwrap())
 }
 
 fn column(text: &str, token: &str) -> usize {
@@ -235,7 +235,7 @@ fn excessive_gap_has_a_diagnostic_and_bounded_presentation() {
         ".TH GAP 1\n.SH DESCRIPTION\nBEFORE\n{}AFTER\n",
         ".sp 64\n".repeat(80)
     );
-    let query = crate::query_roff_bytes(source.as_bytes()).unwrap();
+    let query = mant_engine::query_roff_bytes(source.as_bytes()).unwrap();
     assert!(
         query
             .document
@@ -245,7 +245,7 @@ fn excessive_gap_has_a_diagnostic_and_bounded_presentation() {
             .iter()
             .any(|d| d.code.as_deref() == Some("manual.vertical-spacing-limit"))
     );
-    let text = crate::render_query_text(&query);
+    let text = mant_engine::render_query_text(&query);
     let between = text
         .split_once("BEFORE")
         .unwrap()

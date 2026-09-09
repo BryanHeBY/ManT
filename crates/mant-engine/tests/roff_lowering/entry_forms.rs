@@ -73,12 +73,13 @@ fn assert_invocation_consumers(
     use mant_protocol::{
         EntryProjection, OutlineNode, SearchCase, SearchQuery, SearchScope, SearchSyntax,
     };
-    let query = crate::query_roff_bytes(source.as_bytes()).unwrap();
+    let query = mant_engine::query_roff_bytes(source.as_bytes()).unwrap();
     let index = mant_ir::SemanticIndex::build(query.document.as_ref().unwrap());
     let indexed = &index.section(&query.document.as_ref().unwrap().sections[0].id)[0];
     assert_eq!(indexed.names, names);
     assert_eq!(indexed.forms, [form]);
-    let outline = crate::build_outline_projection(&query, EntryProjection::All, None).unwrap();
+    let outline =
+        mant_engine::build_outline_projection(&query, EntryProjection::All, None).unwrap();
     let OutlineNode::DocumentSection { children, .. } = &outline.nodes[0] else {
         panic!("{outline:?}")
     };
@@ -94,7 +95,7 @@ fn assert_invocation_consumers(
     };
     assert_eq!(projected, names);
     assert_eq!(forms, &[form]);
-    let direct = crate::select_excerpt(
+    let direct = mant_engine::select_excerpt(
         &query,
         &[mant_protocol::ContentSelector::path(path.as_str())],
     )
@@ -102,11 +103,11 @@ fn assert_invocation_consumers(
     for alias in names {
         let explained = crate::semantic_test_read::semantic_excerpt(&query, &[alias]).unwrap();
         assert_eq!(explained.selections, direct.selections);
-        assert!(crate::render_excerpt_text(&explained).contains("OWNEDPAYLOAD"));
+        assert!(mant_engine::render_excerpt_text(&explained).contains("OWNEDPAYLOAD"));
     }
     assert!(crate::semantic_test_read::semantic_excerpt(&query, &[rejected]).is_err());
     for scope in [SearchScope::Visible, SearchScope::Markdown] {
-        let found = crate::search_query(
+        let found = mant_engine::search_query(
             &query,
             &SearchQuery {
                 pattern: "OWNEDPAYLOAD".into(),
@@ -188,12 +189,13 @@ fn incomplete_tag_paragraphs_preserve_visible_terms_at_eof() {
         ".BI \"--unfinished \" VALUE",
         ".B --first\n.TP\n.B --unfinished",
     ] {
-        let query =
-            crate::query_roff_bytes(format!(".TH TAGS 1\n.SH OPTIONS\n.TP\n{tail}\n").as_bytes())
-                .unwrap();
+        let query = mant_engine::query_roff_bytes(
+            format!(".TH TAGS 1\n.SH OPTIONS\n.TP\n{tail}\n").as_bytes(),
+        )
+        .unwrap();
         for text in [
-            crate::render_query_text(&query),
-            crate::render_markdown(&query),
+            mant_engine::render_query_text(&query),
+            mant_engine::render_markdown(&query),
         ] {
             assert!(text.contains("--unfinished"), "{tail}: {text}");
             if tail.contains("--first") {
@@ -222,7 +224,7 @@ fn variable_subscripts_must_be_complete_authored_forms() {
         "FOO[bar]]",
     ] {
         let source = format!(".TH PROBE 1\n.SH VARIABLES\n.TP\n.B {name}\nValue.\n");
-        let query = crate::query_roff_bytes(source.as_bytes()).unwrap();
+        let query = mant_engine::query_roff_bytes(source.as_bytes()).unwrap();
         let document = query.document.as_ref().unwrap();
         let index = mant_ir::SemanticIndex::build(document);
         assert!(
@@ -230,7 +232,10 @@ fn variable_subscripts_must_be_complete_authored_forms() {
             "{name}"
         );
         assert!(document.diagnostics.iter().any(|d| d.code.as_deref() == Some("manual.semantic-entry.unclassified-definition")), "{name}: {:?}", document.diagnostics);
-        assert!(crate::render_query_text(&query).contains(name), "{name}");
+        assert!(
+            mant_engine::render_query_text(&query).contains(name),
+            "{name}"
+        );
     }
 }
 
@@ -261,7 +266,7 @@ fn option_arguments_never_become_aliases() {
 }
 
 fn assert_names(source: &str, names: &[&str], missed: &str) {
-    let query = crate::query_roff_bytes(source.as_bytes()).unwrap();
+    let query = mant_engine::query_roff_bytes(source.as_bytes()).unwrap();
     let index = mant_ir::SemanticIndex::build(query.document.as_ref().unwrap());
     let entries = index.section(&query.document.as_ref().unwrap().sections[0].id);
     assert_eq!(entries[0].names, names, "{source}");
@@ -292,7 +297,7 @@ fn environment_assignment_values_are_not_alias_groups() {
         "missing",
     );
     for form in ["FOO=one, BAR=two", "FOO=one|BAR=two", "FOO=one BAR=two"] {
-        let query = crate::query_roff_bytes(
+        let query = mant_engine::query_roff_bytes(
             format!(".TH PROBE 1\n.SH ENVIRONMENT\n.TP\n.B \"{form}\"\nSet values.\n").as_bytes(),
         )
         .unwrap();

@@ -96,8 +96,3 @@ mod tests {
         assert_eq!(native_api_version(), "0.11");
     }
 }
-
-#[cfg(test)]
-extern crate self as mant_engine;
-#[cfg(test)]
-mod semantic_test_read;
