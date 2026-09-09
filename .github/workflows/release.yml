@@ -11,6 +11,7 @@ on:
       - "mant-sources-v*.*.*"
       - "mant-codec-v*.*.*"
       - "mant-loader-v*.*.*"
+      - "mant-query-v*.*.*"
       - "mant-engine-v*.*.*"
       - "mant-ui-v*.*.*"
   workflow_dispatch:
@@ -74,7 +75,7 @@ jobs:
             printf '%s\n' "${id##*[#@]}"
           }
 
-          packages=(mant-ir mant-protocol libmandoc-rs mant-sources mant-codec mant-loader mant-engine mant-ui)
+          packages=(mant-ir mant-protocol libmandoc-rs mant-sources mant-codec mant-loader mant-query mant-engine mant-ui)
           product=false
           package=
           if [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then

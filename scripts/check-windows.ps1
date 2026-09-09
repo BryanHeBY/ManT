@@ -33,6 +33,7 @@ $Packages = @(
     "--package", "mant-sources",
     "--package", "mant-codec",
     "--package", "mant-loader",
+    "--package", "mant-query",
     "--package", "mant-engine",
     "--package", "mant-ui",
     "--package", "mant"

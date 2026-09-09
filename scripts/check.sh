@@ -54,6 +54,8 @@ run "check independent Markdown codec consumer" bash scripts/check-codec-consume
 run "test Markdown-only loader" cargo test --locked --package mant-loader --no-default-features
 run "test native manual loader" cargo test --locked --package mant-loader --features roff
 run "check independent Markdown loader consumer" bash scripts/check-loader-consumer.sh
+run "test independent query package" cargo test --locked --package mant-query --no-default-features
+run "check independent IR query consumer" bash scripts/check-query-consumer.sh
 run "test roff audit profilers" \
   cargo test --locked --package mant-engine --examples
 run "test optional libmandoc features" \

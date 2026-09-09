@@ -1,0 +1,15 @@
+[package]
+name = "mant-query-ir-consumer"
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.88"
+publish = false
+
+# A consumer of existing IR must not inherit the application's loader features.
+[workspace]
+resolver = "3"
+
+[dependencies]
+mant-query = { path = "../../../crates/mant-query", default-features = false }
+mant-ir = { path = "../../../crates/mant-ir" }
+mant-protocol = { path = "../../../crates/mant-protocol" }

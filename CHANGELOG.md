@@ -12,6 +12,16 @@ that crate was not published for that change.
 
 ## Unreleased
 
+### mant-query 0.11.0
+
+- Pure outline, content selection, explanation, search and reference projection
+  now have an independent crate. Queries borrow existing IR or a validated
+  `QueryScopeView`; they do not depend on local discovery, loading or rendering.
+  Global collection ordering, paging, content budgets and coverage are unchanged.
+- Markdown-scope search retains the explicit non-native codec dependency for
+  canonical text and source mapping. Use `mant-query` directly for existing
+  snapshots; `mant-engine` continues composing complete load-and-query requests.
+
 ### mant-loader 0.11.0
 
 - New read-only loading boundary owns installed-document discovery, bounded

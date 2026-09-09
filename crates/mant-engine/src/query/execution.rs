@@ -22,7 +22,7 @@ pub fn project_query_view(
             root,
             references,
         } => {
-            crate::projection::build_outline_with_references(
+            mant_query::build_outline_with_references(
                 &query,
                 entries.clone(),
                 root.clone(),

@@ -28,14 +28,12 @@ roff = ["mant-loader/roff", "mant-codec/roff"]
 tldr-update = []
 
 [dependencies]
-grep-matcher.workspace = true
-grep-regex.workspace = true
 mant-ir = { path = "../mant-ir", version = "^0.11.0" }
 mant-codec = { path = "../mant-codec", version = "^0.11.0", default-features = false }
 mant-loader = { path = "../mant-loader", version = "^0.11.0", default-features = false }
+mant-query = { path = "../mant-query", version = "^0.11.0", default-features = false }
 mant-protocol = { path = "../mant-protocol", version = "^0.11.0" }
 pulldown-cmark.workspace = true
-regex-syntax.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 

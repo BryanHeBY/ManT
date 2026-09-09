@@ -2,8 +2,8 @@
 
 `mant-engine` is `ManT`'s document execution layer. It resolves local documents
 through `mant-loader`, which delegates decoding and lowering to `mant-codec` into
-the semantic center in `mant-ir`, builds in-memory and versioned protocol
-projections, and produces
+the semantic center in `mant-ir`. It delegates bounded content queries to
+`mant-query`, composes versioned protocol responses, and produces
 deterministic output without owning a terminal or command-line process.
 
 ## What this crate provides
@@ -96,8 +96,8 @@ DocumentResolver ──> mant-loader ──> mant-codec (Markdown / tldr / roff)
               │
               v
       mant_ir::ResolvedContent
-         ├─> ListItem / DefinitionItem.entry ─> SemanticIndex ─> outline / excerpt
-         ├─> typed document graph ─> bounded scope search / explain
+         ├─> mant-query ─> outline / excerpt / search / explain / references
+         ├─> typed document graph ─> mant-query borrowed scope
          ├─> Markdown / text / man-style renderers
          └─> versioned mant-protocol responses
 ```
@@ -122,7 +122,8 @@ with rendered text even when table cells flatten for portable Markdown.
 portable document encoding. Its [native ownership map](https://github.com/BryanHeBY/ManT/blob/dev/crates/mant-codec/README.md#native-lowering-ownership)
 documents formatter state, source geometry, target retention and transactional
 table recovery. `mant-loader` prepares inputs; the engine composes queries over
-that one implementation; it does not reinterpret source macros or rebuild entry facts.
+that one implementation through `mant-query`; it does not reinterpret source
+macros, rebuild entry facts, or duplicate selection and evidence algorithms.
 
 ### Public entry points
 
@@ -135,14 +136,14 @@ that one implementation; it does not reinterpret source macros or rebuild entry 
 | Resolve and project its requested view | `execute_query` |
 | Resolve a bounded multi-document scope without querying | `mant_loader::DocumentLoader::resolve_scope` |
 | Resolve and project a scope request | `execute_scope_query` or `DocumentResolver::execute_scope_query` |
-| Query caller-owned document snapshots without loading | `QueryScopeView::new`, `search_scope`, `explain_scope` |
+| Query caller-owned document snapshots without loading | `mant_query::QueryScopeView::new`, `mant_query::search_scope`, `mant_query::explain_scope` |
 | Parse in-memory Markdown without query composition | `mant_codec::parse_markdown` (also re-exported here) |
 | Compose a query from in-memory Markdown | `query_markdown_text` |
 | Parse prepared plain roff without loading or decompression | `mant_codec::parse_roff_bytes` (`roff` feature) |
 | Apply standalone-input policy to prepared plain roff bytes | `mant_loader::parse_manual_bytes` or engine `query_roff_bytes` (`roff`) |
 | Audit production file lowering against its exact native witness | `mant_loader::parse_manual_source_with_report` (`roff`) |
-| Build a focused result from existing content | `build_outline_projection`, `select_excerpt`, `search_query` |
-| Collect bounded independent semantic evidence | `explain_query`, `validate_explanation_query` |
+| Build a focused result from existing content | `mant_query::build_outline_projection`, `mant_query::select_excerpt`, `mant_query::search_query` |
+| Collect bounded independent semantic evidence | `mant_query::explain_query`, `mant_query::validate_explanation_query` |
 | Produce human or JSON output | The `render_*` functions |
 
 ## Basic use
@@ -152,9 +153,8 @@ platform:
 
 ```rust
 use mant_protocol::EntryProjection;
-use mant_engine::{
-    build_outline_projection, query_markdown_text, render_outline_text,
-};
+use mant_engine::{query_markdown_text, render_outline_text};
+use mant_query::build_outline_projection;
 
 let query = query_markdown_text(
     "# Demo\n\n## Options\n\n- `--verbose`: Show more detail.\n",
@@ -304,13 +304,17 @@ not synthesize visible placeholder text. This policy is implemented once in
 
 `mant-engine` returns an owned `mant_ir::ResolvedContent` for direct semantic
 use and owned `mant-protocol` values at versioned integration boundaries. It does not expose
-libmandoc C structures. It owns application composition, query execution and
-report rendering; it is not merely a forwarding facade. Parser/encoder and
-loader re-exports are transitional conveniences, not duplicate implementations.
+libmandoc C structures. It owns application request composition and report
+rendering; it is not merely a forwarding facade. Pure query execution belongs
+to `mant-query`. Parser/encoder, loader and query re-exports are transitional
+conveniences, not duplicate implementations.
 Consumers needing only source-to-IR conversion or portable document Markdown
 should depend on `mant-codec` directly; consumers needing source discovery,
-loading, read-only caches or owned scopes should use `mant-loader`. The engine's
-opt-in tldr maintenance implementation remains separate from loader authority. Applications that only
+loading, read-only caches or owned scopes should use `mant-loader`. Consumers
+with existing IR that need selection, search, explanation or reference
+projections should use `mant-query`, which does not load files or render reports.
+The engine's opt-in tldr maintenance implementation remains separate from
+loader authority. Applications that only
 need raw roff syntax should use
 [`libmandoc-rs`](https://crates.io/crates/libmandoc-rs) directly. Applications
 that need the complete command or reader should install

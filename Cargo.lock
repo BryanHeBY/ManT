@@ -964,15 +964,13 @@ name = "mant-engine"
 version = "0.11.0"
 dependencies = [
  "flate2",
- "grep-matcher",
- "grep-regex",
  "libmandoc-rs",
  "mant-codec",
  "mant-ir",
  "mant-loader",
  "mant-protocol",
+ "mant-query",
  "pulldown-cmark",
- "regex-syntax",
  "serde",
  "serde_json",
  "zstd",
@@ -1015,6 +1013,21 @@ dependencies = [
  "serde_json",
  "unicode-segmentation",
  "unicode-width",
+]
+
+[[package]]
+name = "mant-query"
+version = "0.11.0"
+dependencies = [
+ "grep-matcher",
+ "grep-regex",
+ "mant-codec",
+ "mant-ir",
+ "mant-protocol",
+ "pulldown-cmark",
+ "regex-syntax",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

@@ -101,7 +101,7 @@ On Windows, run the native product boundary from PowerShell:
 .\scripts\check-windows.ps1
 ```
 
-It tests `libmandoc-rs`, `mant-ir`, `mant-protocol`, `mant-sources`, `mant-codec`, `mant-loader`, `mant-engine`, `mant-ui`, and `mant`,
+It tests `libmandoc-rs`, `mant-ir`, `mant-protocol`, `mant-sources`, `mant-codec`, `mant-loader`, `mant-query`, `mant-engine`, `mant-ui`, and `mant`,
 including the shared roff fixture suites.
 
 The product crates are workspace `default-members`, so a bare `cargo build`,
@@ -125,6 +125,12 @@ graph excludes native parsers, compression, source acquisition, engine queries,
 and frontends. The default and `roff` loader surfaces also run as separate test
 and packaged-source checks; workspace feature unification is not evidence for
 the default-only boundary.
+
+`scripts/check-query-consumer.sh` builds an independent consumer that supplies
+its own semantic IR and graph. It exercises single-document queries and borrowed
+collection queries, and rejects enabled loader, renderer, frontend, native and
+update dependencies. This guards against accidentally restoring host authority
+through a query convenience API.
 
 The script checks formatting and installer syntax, runs every workspace test,
 runs clippy with all targets and features, builds the optimized executable,
@@ -269,6 +275,7 @@ crates/mant-protocol/         Versioned request/response DTOs and JSON Schema
 crates/mant-sources/          Local Markdown registry and transactional source updates
 crates/mant-codec/            In-memory Markdown/tldr, optional roff lowering, document Markdown
 crates/mant-loader/           Read-only catalogs, native roots, bounded inputs and linked scopes
+crates/mant-query/            Pure semantic queries over existing content and borrowed collections
 crates/mant-engine/           Loading, codec integration, projections, queries, report rendering
 crates/mant-ui/               Ratatui reader, navigation, search, and terminal styling
 crates/mant/                  Mode selection, CLI, request JSON, and MCP stdio boundary

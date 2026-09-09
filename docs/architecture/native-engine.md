@@ -27,9 +27,10 @@ local sources ─> mant-loader ─> mant-codec ─> mant-ir
                     │              └─ libmandoc-rs (roff)
                     └─ mant-sources
 
-mant-ir ─> mant-engine (queries, projections, reports)
-             ├─ IR ─> mant-ui / human renderers
-             └─ mant-protocol ─> host callbacks / CLI / MCP
+mant-ir ─> mant-query ─> mant-protocol projections
+    └─> mant-ui / human renderers
+
+mant-engine composes loading, queries and reports for host / CLI / MCP
 ```
 
 That diagram describes data ownership. The compile-time workspace dependency
@@ -45,6 +46,7 @@ mant
 │  │  ├─ mant-codec ─> mant-ir
 │  │  │  └─ libmandoc-rs (roff)
 │  │  └─ libmandoc-rs (roff report/error types)
+│  ├─ mant-query ─> mant-ir / mant-protocol / mant-codec (no native features)
 │  └─ mant-codec (document/report encoding)
 ├─ mant-sources (update feature)
 └─ mant-ir / mant-protocol
@@ -58,7 +60,8 @@ libmandoc, native zstd, nor a C compiler. The loader's `roff` feature owns
 optional source decompression and native report/error types. Engine-only native
 audit dependencies are development dependencies, not another production loader.
 `mant-engine` owns human report renderers and delegates complete document
-Markdown encoding to `mant-codec`, while `mant-ui` owns interactive terminal
+Markdown encoding to `mant-codec` and pure content queries to `mant-query`,
+while `mant-ui` owns interactive terminal
 presentation. The `mant` crate is the composition root and the only crate that
 turns those components into the user-facing process.
 
@@ -72,7 +75,8 @@ The crates have deliberately asymmetric responsibilities:
 | `mant-sources` | Registered Markdown discovery and optional transactional Git/archive installation | Native manuals, rendering, or MCP |
 | `mant-codec` | In-memory Markdown/tldr decoding; optional libmandoc lowering; semantic annotation and identity production; portable document Markdown and source-bound artifacts | Source acquisition, discovery, query execution, protocol DTOs, terminal policy, or source updates |
 | `mant-loader` | Read-only discovery, configuration and source I/O; optional native decompression/redirect policy; tldr composition; bounded BFS and owned loaded scopes | Query execution, report rendering, subprocesses, downloads, or cache updates |
-| `mant-engine` | Complete-request validation, loader/query composition, query execution, projections, report renderers, and opt-in tldr maintenance | Its own parser or source loader, CLI policy, terminal lifecycle, or MCP transport |
+| `mant-query` | Bounded strict selection, outline/excerpt/reference projections, search and independent explanation over existing IR; borrowed scope queries | Source discovery or loading, report rendering, native parsing, or input mutation |
+| `mant-engine` | Complete-request validation, loader/query composition, report renderers, and opt-in tldr maintenance | Its own parser, source loader or query algorithms; CLI policy, terminal lifecycle, or MCP transport |
 | `mant-ui` | Interactive navigation, document tabs, discovery, links, history, search, selection, typed copy requests, layout, and terminal lifecycle | Filesystem lookup, source mutation, or system clipboard access |
 | `mant` | User-facing modes, terminal detection, native/OSC 52 clipboard delivery, source updates, request JSON, schemas, and MCP stdio | A second parser or frontend-specific document model |
 
@@ -80,10 +84,12 @@ The crates have deliberately asymmetric responsibilities:
 execution layer that queries content acquired by `mant-loader`. Codec
 inputs are caller-owned text/bytes and metadata labels; decoding never grants
 access to paths named by those labels. Parsing, annotation and document encoding
-have one implementation in `mant-codec`. Source I/O and scope acquisition have one owner in `mant-loader`; queries
-and report rendering still have concrete implementations in the engine.
-These nine workspace crates are actual boundaries, not a claim that query and
-report rendering already live in separate packages. Interactive queries pass an in-memory `ResolvedContent` directly to
+have one implementation in `mant-codec`. Source I/O and scope acquisition have
+one owner in `mant-loader`; selection and evidence queries have one owner in
+`mant-query`. These ten workspace crates are actual boundaries; report rendering
+and opt-in tldr maintenance still have concrete implementations in the engine.
+Its temporary codec, loader and query re-exports do not duplicate those implementations.
+Interactive queries pass an in-memory `ResolvedContent` directly to
 `mant-ui`; human renderers also consume
 the in-memory model. They do not serialize through JSON or spawn a child
 process. Structured host and process interactions instead use
@@ -106,7 +112,7 @@ retaining or charging for a second content snapshot.
 
 The loading result keeps its graph and content private with immutable accessors
 and a joint ownership-transfer operation. Pure collection queries instead accept
-`QueryScopeView`: borrowed IR plus a logical graph, never a loader service or a
+`mant_query::QueryScopeView`: borrowed IR plus a logical graph, never a loader service or a
 callback capable of acquiring missing content. View construction validates exact
 address/length/order alignment and graph provenance; the caller supplies one
 coherent snapshot and retains responsibility for freshness. Query execution does
@@ -128,11 +134,11 @@ a second parser, selector resolver, or audit oracle.
 | Owner | Handoff and invariant |
 | --- | --- |
 | Codec definitions | Styled form candidates retain parameter evidence; topology/context preparation precedes producer identity allocation. Shared IR validation and local navigation policy are not duplicated by the codec. |
-| Engine selectors | Typed paths and IDs resolve immutable content; producer recognition is not repeated during navigation. |
-| Engine explanation | An independent collector visits immutable IR owners and explicit relationships, preserving name/form/literal/relationship bases. Global scope pagination and content budgets do not alter strict navigation or source authority. |
+| Query selectors | Typed paths and IDs resolve immutable content; producer recognition is not repeated during navigation. |
+| Query explanation | An independent collector visits immutable IR owners and explicit relationships, preserving name/form/literal/relationship bases. Global scope pagination and content budgets do not alter strict navigation or source authority. |
 | Codec lowering | Prepared Markdown pairs original events with source declarations. Roff flow state, target provenance, and table recovery plans preserve their distinct physical-line and owner policies. |
 | Codec encoding | Complete document encoding owns canonical bytes and borrowed owner mappings; report fragments expose decoration without semantic declaration metadata. |
-| Engine search | A validated matcher is reused within one scope request. Markdown artifacts own final anchor ranges; source-coordinate mapping remains separate from result collection. |
+| Query search | A validated matcher is reused within one scope request. Canonical Markdown artifacts borrow original content and carry final anchor ranges; source-coordinate mapping remains separate from result collection. |
 | Loader discovery and scope | One explicit loader snapshots registry/manual indexes. Admission pairs graph/content, address positions and budgets; readonly probes never launch a process or update a cache. |
 | CLI and MCP | Native request decoding is separate from execution; rendered CLI data travels with its business status. Owned MCP presentations perform preparation before rendering, sanitization and character paging. |
 | Sources | Read-only installation probes collect lazy facts, while callers retain their own trust policy. Selection precedes staging; only synced metadata produces a prepared installation for controlled activation. |

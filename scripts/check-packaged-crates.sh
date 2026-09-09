@@ -4,7 +4,7 @@
 set -euo pipefail
 
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-PACKAGES=(mant-ir mant-protocol libmandoc-rs mant-sources mant-codec mant-loader mant-engine mant-ui mant)
+PACKAGES=(mant-ir mant-protocol libmandoc-rs mant-sources mant-codec mant-loader mant-query mant-engine mant-ui mant)
 mkdir -p "$ROOT/target"
 PACKAGE_CHECK_ROOT=$(mktemp -d "$ROOT/target/mant-package-check.XXXXXX")
 trap 'rm -rf "$PACKAGE_CHECK_ROOT"' EXIT
@@ -22,9 +22,10 @@ for package in "${PACKAGES[@]}"; do
     mant-protocol) dependencies=(mant-ir) ;;
     mant-codec) dependencies=(libmandoc-rs mant-ir) ;;
     mant-loader) dependencies=(libmandoc-rs mant-ir mant-protocol mant-sources mant-codec) ;;
-    mant-engine) dependencies=(libmandoc-rs mant-ir mant-protocol mant-sources mant-codec mant-loader) ;;
-    mant-ui) dependencies=(libmandoc-rs mant-ir mant-protocol mant-sources mant-codec mant-loader mant-engine) ;;
-    mant) dependencies=(libmandoc-rs mant-ir mant-protocol mant-sources mant-codec mant-loader mant-engine mant-ui) ;;
+    mant-query) dependencies=(libmandoc-rs mant-ir mant-protocol mant-codec) ;;
+    mant-engine) dependencies=(libmandoc-rs mant-ir mant-protocol mant-sources mant-codec mant-loader mant-query) ;;
+    mant-ui) dependencies=(libmandoc-rs mant-ir mant-protocol mant-sources mant-codec mant-loader mant-query mant-engine) ;;
+    mant) dependencies=(libmandoc-rs mant-ir mant-protocol mant-sources mant-codec mant-loader mant-query mant-engine mant-ui) ;;
   esac
   package_patches=()
   for dependency in "${dependencies[@]}"; do
@@ -57,6 +58,8 @@ cargo test --manifest-path "$PACKAGE_CHECK_ROOT/Cargo.toml" --locked \
   --package mant-loader --no-default-features
 cargo test --manifest-path "$PACKAGE_CHECK_ROOT/Cargo.toml" --locked \
   --package mant-loader --no-default-features --features roff
+cargo test --manifest-path "$PACKAGE_CHECK_ROOT/Cargo.toml" --locked \
+  --package mant-query --no-default-features
 cargo test --manifest-path "$PACKAGE_CHECK_ROOT/Cargo.toml" --locked \
   --package libmandoc-rs --all-features
 

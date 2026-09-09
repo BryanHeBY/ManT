@@ -1,22 +1,11 @@
 #![doc = include_str!("../README.md")]
 #![warn(missing_docs)]
 
-mod entry_presentation;
-mod explanation;
 mod output;
-mod projection;
 mod query;
-#[cfg(test)]
-mod query_fixture;
 mod scope;
-mod scope_query;
-mod search;
-mod selectors;
 mod tldr;
 
-pub use explanation::{
-    ExplanationError, explain_query, resolve_explanation_block, validate_explanation_query,
-};
 #[cfg(feature = "roff")]
 pub use mant_codec::lower_mandoc_document;
 pub use mant_codec::{MarkdownParseError, ParsedMarkdown, TldrDirectiveError, parse_markdown};
@@ -44,6 +33,19 @@ pub use mant_loader::{
 pub use mant_loader::{
     is_command_manual_section, is_manual_section, parenthesized_manual_reference,
 };
+pub use mant_query::{
+    ExplanationError, explain_query, resolve_explanation_block, validate_explanation_query,
+};
+pub use mant_query::{
+    ProjectionError, ReferenceProjectionLimits, SelectorCandidate, build_outline,
+    build_outline_projection, build_outline_with_detail, build_outline_with_references,
+    project_references, project_references_with_limits, select_excerpt, select_explanation,
+    semantics_complete,
+};
+pub use mant_query::{
+    QueryScopeView, ScopeExecutionError, ScopeInputError, explain_scope, search_scope,
+};
+pub use mant_query::{SearchError, search_query, validate_search_query};
 pub use output::{
     MarkdownFragmentOptions, MarkdownOptions, SearchTextRole, render_excerpt_json,
     render_excerpt_markdown, render_excerpt_markdown_with_options, render_excerpt_text,
@@ -55,12 +57,6 @@ pub use output::{
     render_scope_explanation_text, render_scope_explanation_text_with, render_search_json,
     render_search_markdown, render_search_text, render_search_text_with, render_update_json,
 };
-pub use projection::{
-    ProjectionError, ReferenceProjectionLimits, SelectorCandidate, build_outline,
-    build_outline_projection, build_outline_with_detail, build_outline_with_references,
-    project_references, project_references_with_limits, select_excerpt, select_explanation,
-    semantics_complete,
-};
 #[cfg(feature = "roff")]
 pub use query::query_roff_bytes;
 pub use query::{
@@ -69,10 +65,6 @@ pub use query::{
     resolve_query_with_policy, validate_query_request,
 };
 pub use scope::{ScopeQueryError, execute_scope_query, validate_scope_query_request};
-pub use scope_query::{
-    QueryScopeView, ScopeExecutionError, ScopeInputError, explain_scope, search_scope,
-};
-pub use search::{SearchError, search_query, validate_search_query};
 pub use tldr::{
     HostPlatform, TldrCacheError, TldrPageLocation, TldrParseError, get_system_tldr_cache_dirs,
     get_tldr_cache_dir, get_tldr_languages, get_tldr_platforms, get_tldr_read_cache_dirs,
