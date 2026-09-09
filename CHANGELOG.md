@@ -24,6 +24,10 @@ that crate was not published for that change.
 
 ### Ongoing v0.11 development
 
+- Terminal setup now releases already registered signal handlers if a later
+  handler registration fails. Normal teardown and explicit signal termination
+  share the same single-owner cleanup path without changing inherited masks.
+
 - Reference target copying now emits reusable link destinations rather than
   display labels. Shared IR URI conversion preserves Markdown document suffixes,
   literal manual-name parentheses, percent signs and fragments; unsupported

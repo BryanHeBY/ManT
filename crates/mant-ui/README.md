@@ -97,6 +97,9 @@ POSIX termination handlers respect the host's signal mask; registering a
 handler does not unblock a signal. Signal tests explicitly control the test
 thread's mask, verify deferred delivery after unblocking, and restore the
 original mask on exit. Production does not silently override host masking.
+Signal registrations have an owner from the first successful acquisition:
+partial setup failures unregister earlier handlers, and explicit cleanup
+followed by destruction does not unregister a token twice.
 
 ## Basic use
 
