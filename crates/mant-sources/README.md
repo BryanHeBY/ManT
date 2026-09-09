@@ -58,6 +58,14 @@ bytewise name order. Explicit `mant NAME --tldr` lookup reuses this ordering for
 Markdown-owned quick references, with cached tldr sharing the built-in zero
 baseline; Markdown files without an embedded quick reference are skipped.
 
+Discovery and selection are separate private domains over that same immutable
+index. The scanner alone checks source readiness, file types, hierarchy bounds
+and duplicate extensions; selection inspects only the stored ordered candidates.
+An exact path wins over suffixes within an origin, but never bypasses a
+higher-precedence origin. Ambiguous matches remain explicit, and neither a
+fallback lookup nor a content-specific match group rescans files or enters the
+update transaction.
+
 Personal `documents/` may contain explicitly named leaf-file links to regular
 files, including external targets. Directory and broken links are ignored.
 Managed source caches never follow links; Git tree modes and archive entry
