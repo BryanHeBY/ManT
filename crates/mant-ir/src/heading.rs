@@ -22,21 +22,7 @@ impl Heading {
     /// Derive the displayed words without losing the authoritative inline nodes.
     #[must_use]
     pub fn plain_text(&self) -> String {
-        fn append(nodes: &[Inline], output: &mut String) {
-            for node in nodes {
-                match node {
-                    Inline::Text { value } | Inline::Code { value } => output.push_str(value),
-                    Inline::Strong { children }
-                    | Inline::Emphasis { children }
-                    | Inline::Link { children, .. } => append(children, output),
-                    Inline::LineBreak => output.push('\n'),
-                    Inline::Anchor { .. } => {}
-                }
-            }
-        }
-        let mut output = String::new();
-        append(&self.content, &mut output);
-        output
+        crate::inline_plain_text(&self.content)
     }
 }
 
