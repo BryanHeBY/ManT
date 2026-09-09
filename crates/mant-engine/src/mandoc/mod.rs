@@ -6,14 +6,14 @@ mod containers;
 mod controls;
 mod declaration_groups;
 mod diagnostics;
-mod error;
 mod formatter;
 pub(crate) mod inline;
 mod layout;
 mod navigation;
+mod redirect;
 mod reference;
 mod roff_escape;
-mod source;
+pub(crate) use redirect::redirect_target;
 mod source_context;
 mod source_lines;
 use source_context::{LoweringContext, TableTextBlock};
@@ -30,116 +30,35 @@ use std::{
 };
 
 use libmandoc_rs::{
-    Compression, Document as MandocDocument, IncludePolicy, MacroSet, Node, ParseOptions,
-    ParseReport, Parser,
+    Compression, Document as MandocDocument, IncludePolicy, MacroSet, Node, ParseError,
+    ParseOptions, ParseReport, Parser,
 };
 use mant_ir::{
     Diagnostic, DiagnosticLevel, Document, DocumentMeta, DocumentSource, ParserInfo, SourceFormat,
     SourceSpan, validate_document,
 };
 
-use self::{
-    roff_escape::visible_text,
-    source::{load_manual_source, redirect_target, resolve_manual_redirects},
-    source_lines::SourceLineIndex,
-};
-use crate::ManualPage;
+use self::{roff_escape::visible_text, source_lines::SourceLineIndex};
 use crate::text_safety::mask_terminal_control_bytes;
-
-pub use error::{ManualError, ManualErrorKind};
-pub use source::MAX_MANUAL_BYTES;
 
 const MAX_INLINE_EQUATION_NORMALIZATIONS: usize = 256;
 
-/// Parse and normalize one standalone man or mdoc source file.
-///
-/// This safe convenience entry point does not expand `.so` redirects because
-/// no caller-approved manual hierarchy accompanies a bare path. `ManT`'s indexed
-/// query path uses [`parse_manual_page`] instead.
-///
-/// # Errors
-///
-/// Returns [`ManualError`] when the source cannot be opened, decoded, or parsed.
-pub fn parse_manual_source(path: &Path) -> Result<Document, ManualError> {
-    parse_manual_source_with_report(path).map(|(document, _)| document)
+/// Parse already prepared bytes; `path` is a source label, never opened.
+pub(crate) fn parse_plain_manual(path: &Path, source: &[u8]) -> Result<Document, ParseError> {
+    parse_plain_manual_report(path, source).map(|(document, _)| document)
 }
 
-/// Parse through the production file pipeline, retaining its native witness.
-///
-/// Both results describe the same bounded, decompressed and control-masked
-/// input, with the same deny-include policy as [`parse_manual_source`]. This
-/// avoids a second parser invocation when consumers audit native-to-IR facts.
-/// The native report is fully owned and no source file is read during lowering.
-///
-/// # Errors
-///
-/// Returns [`ManualError`] on source, decompression, redirect or parser failure.
-pub fn parse_manual_source_with_report(
-    path: &Path,
-) -> Result<(Document, ParseReport), ManualError> {
-    let loaded = load_manual_source(path)?;
-    reject_standalone_redirect(path, &loaded.source)?;
-    parse_plain_manual_report(path, &loaded.source, None)
-}
-
-/// Parse one already bounded, uncompressed standalone roff input.
-///
-/// This is the standard-input counterpart of [`parse_manual_source`]. It does
-/// not expand `.so` redirects and never reads another file.
-///
-/// # Errors
-///
-/// Returns [`ManualError`] when libmandoc rejects the input.
-pub fn parse_manual_bytes(path: &Path, source: &[u8]) -> Result<Document, ManualError> {
-    reject_standalone_redirect(path, source)?;
-    parse_plain_manual(path, source, None)
-}
-
-fn reject_standalone_redirect(path: &Path, source: &[u8]) -> Result<(), ManualError> {
-    if redirect_target(path, source)?.is_some() {
-        return Err(ManualError::redirect(
-            path,
-            "standalone .so redirects require MANPATH discovery and cannot be followed by --input",
-        ));
-    }
-    Ok(())
-}
-
-/// Parse an indexed manual, resolving `.so` redirects against its discovered
-/// manual hierarchy without falling back to the process working directory.
-///
-/// # Errors
-///
-/// Returns [`ManualError`] when the source cannot be opened, decoded, or parsed.
-pub fn parse_manual_page(page: &ManualPage) -> Result<Document, ManualError> {
-    let resolved = resolve_manual_redirects(page)?;
-    parse_plain_manual(
-        &page.path,
-        &resolved.source,
-        resolved.alias_target.as_deref(),
-    )
-}
-
-fn parse_plain_manual(
+/// Lower one owned witness from the same input, without filesystem fallbacks.
+pub(crate) fn parse_plain_manual_report(
     path: &Path,
     source: &[u8],
-    alias_target: Option<&str>,
-) -> Result<Document, ManualError> {
-    parse_plain_manual_report(path, source, alias_target).map(|(document, _)| document)
-}
-
-fn parse_plain_manual_report(
-    path: &Path,
-    source: &[u8],
-    alias_target: Option<&str>,
-) -> Result<(Document, ParseReport), ManualError> {
+) -> Result<(Document, ParseReport), ParseError> {
     let (source, masked_controls) = mask_terminal_control_bytes(source);
     let report = Parser::new(ParseOptions {
         includes: IncludePolicy::Deny,
         compression: Compression::Plain,
     })
-    .parse_bytes(path, source.as_ref())
-    .map_err(ManualError::from)?;
+    .parse_bytes(path, source.as_ref())?;
     let source_text = String::from_utf8_lossy(source.as_ref());
     let mut document = lower_mandoc_document_with_source(path, &report, Some(&source_text));
     if masked_controls > 0 {
@@ -153,9 +72,6 @@ fn parse_plain_manual_report(
                 source: None,
             },
         );
-    }
-    if let Some(alias_target) = alias_target {
-        document.meta.alias_target = Some(alias_target.to_owned());
     }
     Ok((document, report))
 }

@@ -1,4 +1,4 @@
-//! Product-level failures while loading and parsing one native manual.
+//! Loader-level failures while preparing and parsing one native manual.
 
 use std::{
     fmt,

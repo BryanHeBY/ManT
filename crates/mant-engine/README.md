@@ -244,6 +244,15 @@ for those versioned DTOs.
 
 Every supported target compiles `libmandoc-rs`. Windows uses its memory-only C
 transport while Rust owns file I/O, decompression, paths, and `.so` redirects.
+Within the engine, `manual_input` owns that product input policy and its
+`ManualError` failures. The `mandoc` codec accepts prepared plain bytes and a
+source label, with includes denied; it never opens that label or a redirect.
+Standalone alias syntax is recognized once by a pure codec helper, while only
+the indexed loader may resolve it. Stored and decoded bytes each share a
+16 MiB budget across the complete chain, which permits at most 16 redirects.
+The report-bearing file API lowers the same owned native parse witness rather
+than reopening or reparsing the input. Indexed alias metadata is attached by
+the loader after parsing, not used to authorize codec IO.
 Native root discovery is also Rust-owned: Linux reads man-db mappings or
 mandoc `man.conf`, macOS reads its PATH, active developer selection, and
 `MANPATH`/`MANCONFIG` configuration, and Windows optionally reads `ManT`'s own

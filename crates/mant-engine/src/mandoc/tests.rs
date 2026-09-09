@@ -6,10 +6,17 @@ use mant_ir::{
     visit::{self, Visit},
 };
 
-use super::{
-    LoweringContext, MAX_INLINE_EQUATION_NORMALIZATIONS, Parser, lower_mandoc_document,
-    parse_manual_bytes, parse_manual_source,
-};
+use super::parse_plain_manual as parse_manual_bytes;
+use super::{LoweringContext, MAX_INLINE_EQUATION_NORMALIZATIONS, Parser, lower_mandoc_document};
+
+// Lowering tests acquire their own plain-text fixtures, then exercise only the
+// byte codec. Product IO, compression and redirect policy tests live under
+// manual_input; codec tests must not import that higher-level loader.
+fn parse_manual_source(
+    path: &std::path::Path,
+) -> Result<mant_ir::Document, Box<dyn std::error::Error>> {
+    Ok(parse_manual_bytes(path, &fs::read(path)?)?)
+}
 
 mod consumer_boundaries;
 mod entry_forms;

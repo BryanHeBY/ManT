@@ -1,10 +1,30 @@
 use super::*;
 
 #[test]
-fn standalone_inputs_reject_redirect_only_so_pages() {
-    let error = parse_manual_bytes(std::path::Path::new("stdin"), b".so man1/target.1\n")
-        .expect_err("standalone input must not follow another file");
-    assert!(error.to_string().contains("require MANPATH discovery"));
+fn byte_codec_never_opens_the_source_label_or_embedded_include() {
+    let path = temporary_source("codec-no-io", ".TH ONDISK 1\n.SH NAME\nDISK_SECRET\n");
+    let source = format!(
+        ".TH INMEMORY 1\n.SH NAME\nBEFORE\n.so {}\nAFTER\n",
+        path.to_string_lossy()
+    );
+    let result = super::super::parse_plain_manual_report(&path, source.as_bytes());
+    fs::remove_file(&path).expect("remove inaccessible input witness");
+    let (document, native) = result.expect("embedded include is a recoverable denied request");
+    assert_eq!(document.meta.title.as_deref(), Some("INMEMORY"));
+    assert_eq!(native.document.metadata.title.as_deref(), Some("INMEMORY"));
+    assert_eq!(
+        document.source.path.as_deref(),
+        Some(path.to_string_lossy().as_ref())
+    );
+    let text = visible_document_text(&document);
+    assert!(text.contains("BEFORE") && text.contains("AFTER"));
+    assert!(!text.contains("DISK_SECRET"));
+    assert!(
+        document
+            .diagnostics
+            .iter()
+            .any(|finding| finding.message.contains(".so"))
+    );
 }
 
 #[test]

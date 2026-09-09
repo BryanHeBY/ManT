@@ -10,6 +10,7 @@ mod explanation;
 mod inline;
 mod mandoc;
 mod manual;
+mod manual_input;
 mod manual_paths;
 mod markdown;
 mod markdown_mapping;
@@ -32,12 +33,13 @@ pub use executable::find_host_executable;
 pub use explanation::{
     ExplanationError, explain_query, resolve_explanation_block, validate_explanation_query,
 };
-pub use mandoc::{
-    MAX_MANUAL_BYTES, ManualError, ManualErrorKind, lower_mandoc_document, parse_manual_bytes,
-    parse_manual_page, parse_manual_source, parse_manual_source_with_report,
-};
+pub use mandoc::lower_mandoc_document;
 pub use mant_ir::ResolvedContent;
 pub use manual::{is_command_manual_section, is_manual_section, parenthesized_manual_reference};
+pub use manual_input::{
+    MAX_MANUAL_BYTES, ManualError, ManualErrorKind, parse_manual_bytes, parse_manual_page,
+    parse_manual_source, parse_manual_source_with_report,
+};
 pub use manual_paths::{
     ManualPathDiagnostic, ManualRootDiscovery, discover_manual_roots, inspect_manual_roots,
 };

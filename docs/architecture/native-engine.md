@@ -259,6 +259,16 @@ explicitly indexed leaf symlink may identify an external file, but every `.so`
 target must remain inside the logical manual root. Direct `--input` pages have
 no collection root and therefore reject redirect-only aliases.
 
+The engine's `manual_input` boundary owns these loading policies, cumulative
+16 MiB stored/decoded budgets, the 16-redirect cap and `ManualError` categories.
+The `mandoc` byte codec returns native parse errors, not loader errors. Its
+standalone-alias recognizer is pure syntax: it does not validate or authorize
+filesystem paths. Loading calls that recognizer before applying root policy,
+then passes one borrowed prepared byte buffer to parsing/lowering. The source
+label is metadata only, includes remain denied, and the loader attaches the
+resolved alias metadata after success. Report-bearing calls return the same
+owned native witness used for lowering, without a second parse or source copy.
+
 `libmandoc-rs` wraps the bundled C parser behind a small private shim. Parser
 calls retain the completed native session only while shallow borrowed node
 snapshots are copied directly into owned Rust data; the session is released

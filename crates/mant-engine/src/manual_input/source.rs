@@ -12,7 +12,7 @@ use std::{ffi::OsStr, os::unix::ffi::OsStrExt};
 
 use flate2::read::MultiGzDecoder;
 
-use crate::ManualPage;
+use crate::{ManualPage, mandoc::redirect_target};
 
 use super::error::ManualError;
 
@@ -132,7 +132,9 @@ fn resolve_manual_redirects_with_budget(
 
         let loaded = load_manual_source_with_budget(&identity, &mut budget)?;
 
-        let Some(target) = redirect_target(&current, &loaded.source)? else {
+        let Some(target) = redirect_target(&loaded.source)
+            .map_err(|error| ManualError::redirect(&current, error.to_string()))?
+        else {
             return Ok(ResolvedManualSource {
                 source: loaded.source,
                 alias_target,
@@ -166,74 +168,6 @@ fn remaining_budget(
             format!("manual .so chain exceeds the {MAX_MANUAL_BYTES}-byte {form} input limit"),
         )
     })
-}
-
-pub(super) fn redirect_target(path: &Path, source: &[u8]) -> Result<Option<Vec<u8>>, ManualError> {
-    let mut payloads = Vec::new();
-    let mut has_other_content = false;
-
-    for raw_line in source.split(|byte| *byte == b'\n') {
-        let line = raw_line.strip_suffix(b"\r").unwrap_or(raw_line);
-        if trim_ascii(line).is_empty() || is_roff_comment(line) {
-            continue;
-        }
-        let Some(payload) = so_request_payload(line) else {
-            has_other_content = true;
-            continue;
-        };
-        payloads.push(payload);
-    }
-
-    match (payloads.as_slice(), has_other_content) {
-        ([payload], false) => parse_so_target(path, payload).map(Some),
-        // An embedded include is not an alias. Leave it in the source so the
-        // safe libmandoc policy emits a diagnostic and preserves surrounding
-        // content instead of rejecting the complete page before parsing.
-        _ => Ok(None),
-    }
-}
-
-fn so_request_payload(line: &[u8]) -> Option<&[u8]> {
-    let payload = line
-        .strip_prefix(b".so")
-        .or_else(|| line.strip_prefix(b"'so"))?;
-    (payload.is_empty() || payload[0].is_ascii_whitespace()).then_some(payload)
-}
-
-fn parse_so_target(path: &Path, payload: &[u8]) -> Result<Vec<u8>, ManualError> {
-    let payload = trim_ascii(payload);
-    let target_end = payload
-        .iter()
-        .position(u8::is_ascii_whitespace)
-        .unwrap_or(payload.len());
-    let target = &payload[..target_end];
-    let trailing = trim_ascii(&payload[target_end..]);
-    if target.is_empty()
-        || target.contains(&0)
-        || (!trailing.is_empty() && !trailing.starts_with(b"\\\"") && !trailing.starts_with(b"\\#"))
-    {
-        return Err(ManualError::redirect(
-            path,
-            "manual .so redirect must contain exactly one target path",
-        ));
-    }
-    Ok(target.to_vec())
-}
-
-fn is_roff_comment(line: &[u8]) -> bool {
-    [b".\\\"".as_slice(), b"'\\\"", b".\\#", b"'\\#"]
-        .into_iter()
-        .any(|prefix| line.starts_with(prefix))
-}
-
-fn trim_ascii(mut value: &[u8]) -> &[u8] {
-    while value.first().is_some_and(u8::is_ascii_whitespace) {
-        value = &value[1..];
-    }
-    while value.last().is_some_and(u8::is_ascii_whitespace) {
-        value = &value[..value.len() - 1];
-    }
-    value
 }
 
 fn resolve_redirect_target(
@@ -699,6 +633,76 @@ mod tests {
         assert_eq!(error.kind(), ManualErrorKind::Limit);
         assert!(error.message().contains("14-byte limit"), "{error}");
         fs::remove_dir_all(root).expect("remove budget fixture");
+    }
+
+    #[test]
+    fn exactly_sixteen_redirects_keep_the_original_source_identity() {
+        let root = std::env::temp_dir().join(format!("mant-exact-so-depth-{}", process::id()));
+        let man1 = root.join("man1");
+        fs::create_dir_all(&man1).expect("create section");
+        for depth in 0..MAX_SO_REDIRECTS {
+            fs::write(
+                man1.join(format!("page-{depth}.1")),
+                format!(".so page-{}.1\n", depth + 1),
+            )
+            .expect("write redirect");
+        }
+        fs::write(
+            man1.join(format!("page-{MAX_SO_REDIRECTS}.1")),
+            ".TH FINAL 1\n.SH NAME\nFINAL_BODY\n",
+        )
+        .expect("write final page");
+        let original = man1.join("page-0.1");
+        let result = parse_manual_page(&ManualPage {
+            name: "page-0".into(),
+            section: "1".into(),
+            path: original.clone(),
+            manual_root: root.clone(),
+        });
+        fs::remove_dir_all(root).expect("remove exact depth fixture");
+        let document = result.expect("sixteen redirects are allowed");
+        assert_eq!(document.meta.title.as_deref(), Some("FINAL"));
+        assert_eq!(document.meta.alias_target.as_deref(), Some("page-1.1"));
+        assert_eq!(
+            document.source.path.as_deref(),
+            Some(original.to_string_lossy().as_ref())
+        );
+    }
+
+    #[test]
+    fn compressed_redirects_share_the_decoded_budget_even_when_stored_bytes_fit() {
+        let root = std::env::temp_dir().join(format!("mant-decoded-so-budget-{}", process::id()));
+        let man1 = root.join("man1");
+        fs::create_dir_all(&man1).expect("create section");
+        let alias = format!(".\\\" {}\n.so target.1\n", "A".repeat(180));
+        let target = format!(".TH TARGET 1\n.SH NAME\n{}\n", "B".repeat(180));
+        let encode = |source: &str| {
+            let mut gzip = GzEncoder::new(Vec::new(), GzipCompression::fast());
+            gzip.write_all(source.as_bytes()).unwrap();
+            gzip.finish().unwrap()
+        };
+        let alias_gzip = encode(&alias);
+        let target_gzip = encode(&target);
+        assert!(alias.len() <= 256 && target.len() <= 256);
+        assert!(alias.len() + target.len() > 256);
+        assert!(alias_gzip.len() + target_gzip.len() <= 256);
+        let path = man1.join("alias.1.gz");
+        let target_path = man1.join("target.1.gz");
+        fs::write(&path, alias_gzip).unwrap();
+        fs::write(&target_path, target_gzip).unwrap();
+        let page = ManualPage {
+            name: "alias".into(),
+            section: "1".into(),
+            path,
+            manual_root: root.clone(),
+        };
+        let expected_path = fs::canonicalize(&target_path).unwrap();
+        let result = resolve_manual_redirects_with_budget(&page, ManualBudget::new(256));
+        fs::remove_dir_all(root).expect("remove decoded budget fixture");
+        let error = result.expect_err("decoding must use the chain's remaining allowance");
+        assert_eq!(error.kind(), ManualErrorKind::Limit);
+        assert_eq!(error.path(), expected_path);
+        assert!(error.message().contains("exceeds"));
     }
 
     #[test]
