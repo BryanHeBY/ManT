@@ -172,6 +172,20 @@ fn clear_synthetic_targets(node: &mut libmandoc_rs::Node) {
 }
 
 fn inline_request(name: &str, dialect: MacroSet) -> bool {
+    // These controls neither add document structure nor own text. Reuse the
+    // ordinary control dispatcher rather than recovering their operands as
+    // prose. Fill, indentation and paragraph requests stay out of the bounded
+    // inline-only language, as do payload-bearing ce/rj.
+    use crate::mandoc::controls::{OperandControl, operand_control};
+    match operand_control(Some(name)) {
+        Some(OperandControl::Font | OperandControl::Presentation) => {
+            return dialect != MacroSet::None;
+        }
+        Some(OperandControl::Spacing | OperandControl::Delimiters) => {
+            return dialect == MacroSet::Mdoc;
+        }
+        _ => {}
+    }
     match dialect {
         MacroSet::Man => matches!(
             name,

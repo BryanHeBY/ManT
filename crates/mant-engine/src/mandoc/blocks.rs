@@ -294,6 +294,12 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
                 // In filled structural flow input-line wrappers alone are
                 // not paragraph breaks. Literal DisplayFlow consumes them.
                 Event::BeginNode(_) => {}
+                Event::Break => {
+                    self.state.flush_preformatted();
+                    self.state.flush_paragraph();
+                    self.state.consume_hanging_first_line();
+                }
+                Event::FlushLine => self.state.flush_requested_line(source_span(node)),
                 Event::Children(nodes) => self.push_nodes(nodes),
                 Event::EnterFont(font) => saved_font = Some(self.formatter.font.push_scope(font)),
                 Event::ExitFont => {
@@ -373,7 +379,7 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
         ) || node.flags.no_print
             || node.kind == NodeKind::Comment
             || is_section(node, false)
-            || is_nonprinting_request(node)
+            || super::controls::operand_control(node.macro_name.as_deref()).is_some()
         {
             return true;
         }
@@ -747,13 +753,6 @@ fn participates_in_inline_flow(node: &Node) -> bool {
         || is_inline_equation(node)
         || is_enclosure_macro(node.macro_name.as_deref())
         || matches!(node.macro_name.as_deref(), Some("Nd" | "Fo"))
-}
-
-fn is_nonprinting_request(node: &Node) -> bool {
-    matches!(
-        node.macro_name.as_deref(),
-        Some("ad" | "fi" | "ft" | "hy" | "in" | "na" | "ne" | "nf" | "nh" | "nr" | "ta" | "ti")
-    )
 }
 
 /// These man macros explicitly assign the formatter's macro base. Passive

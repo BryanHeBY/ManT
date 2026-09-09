@@ -3,6 +3,7 @@
 mod adjacency;
 mod blocks;
 mod containers;
+mod controls;
 mod declaration_groups;
 mod diagnostics;
 mod error;

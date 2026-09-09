@@ -9,6 +9,10 @@ use super::{first_part_children, inline::enclosure_marks, roff_escape::RoffFont}
 pub(super) enum Event<'a> {
     /// An executed wrapper boundary whose children are emitted separately.
     BeginNode(&'a Node),
+    /// A formatter flush boundary, distinct from an extra blank row.
+    Break,
+    /// Emit the current output row even if preceding requests emptied it.
+    FlushLine,
     Children(&'a [Node]),
     Glyph(String),
     Tight,
@@ -19,7 +23,7 @@ pub(super) enum Event<'a> {
 }
 
 pub(super) fn is_container(node: &Node) -> bool {
-    matches!(node.macro_name.as_deref(), Some("Bf" | "Bk"))
+    matches!(node.macro_name.as_deref(), Some("Bf" | "Bk" | "ce" | "rj"))
         || super::inline::is_enclosure_macro(node.macro_name.as_deref())
         || (node.macro_name.is_none()
             && matches!(
@@ -43,6 +47,7 @@ pub(super) fn walk(node: &Node, mut emit: impl FnMut(Event<'_>)) -> bool {
             }
         }
         Some("Bk") => emit(Event::Children(body)),
+        Some("ce" | "rj") => aligned_line_payload(node, &mut emit),
         Some("Eo") => authored_enclosure(node, &mut emit),
         name if super::inline::is_enclosure_macro(name) => {
             let marks = node.enclosure.as_ref().map_or_else(
@@ -104,6 +109,25 @@ pub(super) fn walk(node: &Node, mut emit: impl FnMut(Event<'_>)) -> bool {
     true
 }
 
+/// Native `ce`/`rj` own a control count followed by actual input lines and
+/// intervening requests. Mirror `roff_term_pre_ce`'s child grouping, without
+/// implementing device-specific centering/right alignment. Neither numeric
+/// body text nor state/spacing requests belong to the discarded count slot.
+fn aligned_line_payload<'a>(node: &'a Node, emit: &mut impl FnMut(Event<'a>)) {
+    emit(Event::Break);
+    let children = node.children.get(1..).unwrap_or_default();
+    let mut start = 0;
+    while start < children.len() {
+        let end = children[start + 1..]
+            .iter()
+            .position(|child| child.kind == NodeKind::Text && child.flags.line_start)
+            .map_or(children.len(), |relative| start + 1 + relative);
+        emit(Event::Children(&children[start..end]));
+        emit(Event::FlushLine);
+        start = end;
+    }
+}
+
 /// Authored delimiters can be siblings of the body wrappers. Keep wrapper
 /// execution events in that same stream even when an Ec tail has no text.
 fn authored_enclosure<'a>(node: &'a Node, emit: &mut impl FnMut(Event<'a>)) {
@@ -143,6 +167,7 @@ fn authored_enclosure<'a>(node: &'a Node, emit: &mut impl FnMut(Event<'a>)) {
 /// A payload consumer must never flatten these nodes through inline children.
 pub(super) fn has_structural_payload(node: &Node) -> bool {
     node.kind == NodeKind::Table
+        || matches!(node.macro_name.as_deref(), Some("ce" | "rj"))
         || (node.kind == NodeKind::Block
             && matches!(
                 node.macro_name.as_deref(),

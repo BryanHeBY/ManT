@@ -33,6 +33,14 @@ pub(super) fn append(builder: &mut InlineBuilder, node: &Node, name: Option<&str
         use crate::mandoc::containers::Event;
         match event {
             Event::BeginNode(node) => builder.begin_executed_node(node),
+            Event::Break => {
+                builder.hard_break();
+                builder.reset_source_cursor();
+            }
+            Event::FlushLine => {
+                builder.append(vec![Inline::LineBreak]);
+                builder.reset_source_cursor();
+            }
             Event::Children(nodes) => append_inline_nodes(builder, nodes, name),
             Event::Glyph(value) => builder.append_text(&value),
             Event::Tight => builder.tighten_next_boundary(),

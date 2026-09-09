@@ -83,6 +83,25 @@ impl DisplayFlow<'_, '_> {
             }
             match event {
                 Event::BeginNode(node) => self.line.begin_executed_node(node),
+                Event::Break => {
+                    self.flush();
+                    self.line.reset_source_cursor();
+                }
+                Event::FlushLine => {
+                    let start = self.output.len();
+                    self.flush();
+                    if !super::flow::has_flushed_row(&self.output[start..]) {
+                        self.output.push(Block::Preformatted {
+                            children: vec![Inline::Text {
+                                value: String::new(),
+                            }],
+                            language: None,
+                            layout: layout(self.indent_columns),
+                            source: source_span(node),
+                        });
+                    }
+                    self.line.reset_source_cursor();
+                }
                 Event::Children(nodes) => self.append_nodes(nodes),
                 Event::Glyph(value) => {
                     self.line.append_text(&value);

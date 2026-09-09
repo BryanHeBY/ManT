@@ -154,8 +154,7 @@ pub(super) fn append_inline_node_with_next(
             let setting = plain_text(&lower_inline_nodes(&node.children, default_name));
             builder.set_spacing(setting.trim());
         }
-        Some("Es" | "PD" | "ad" | "fi" | "hy" | "in" | "na" | "ne" | "nf" | "nh" | "nr" | "ta") => {
-        }
+        name if super::controls::operand_control(name).is_some() => {}
         Some("Ap") => {
             builder.tighten_next_boundary();
             builder.append_text("'");

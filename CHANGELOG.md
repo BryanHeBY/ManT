@@ -18,6 +18,12 @@ that crate was not published for that change.
 
 ### Parent-relative document geometry (unreleased v0.11)
 
+- Roff control operands no longer leak into body text or create phantom
+  paragraphs in filled, no-fill and nested display paths. Shared control
+  classification preserves supported state changes. `ce`/`rj` retain their
+  actual counted content and line boundaries while omitting device alignment;
+  their control count is not mistaken for a printable word.
+
 - Retained mdoc `Pp` requests in literal/unfilled displays add their own
   paragraph spacing even after `sp` or a continued word, with targets kept
   after the gap. Display predecessor detection now shares native logical

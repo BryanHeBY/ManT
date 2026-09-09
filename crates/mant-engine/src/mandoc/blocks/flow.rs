@@ -275,6 +275,27 @@ impl BlockState {
         self.preformatted_row_occupied = false;
     }
 
+    /// Unlike an ordinary break, native `term_flushln` emits a row even
+    /// after an embedded spacing/font request emptied its pending content.
+    pub(super) fn flush_requested_line(&mut self, source: Option<mant_ir::SourceSpan>) {
+        let start = self.output.len();
+        self.flush_preformatted();
+        self.flush_paragraph();
+        if !has_flushed_row(&self.output[start..]) {
+            let start = self.output.len();
+            self.output.push(Block::Preformatted {
+                children: vec![Inline::Text {
+                    value: String::new(),
+                }],
+                language: None,
+                layout: layout(self.indent_columns),
+                source,
+            });
+            self.attach_pending_to_new_output(start);
+        }
+        self.consume_hanging_first_line();
+    }
+
     pub(super) fn finish(mut self) -> Vec<Block> {
         self.flush_preformatted();
         self.flush_paragraph();
@@ -282,6 +303,16 @@ impl BlockState {
         self.attach_pending_to_structural_output(output_end);
         self.output
     }
+}
+
+/// Only actual buffered rows satisfy an unconditional formatter flush.
+/// Zero-width target blocks remain available without masquerading as rows.
+pub(super) fn has_flushed_row(blocks: &[Block]) -> bool {
+    blocks.iter().any(|block| match block {
+        Block::Preformatted { children, .. } => mant_protocol::geometry::has_literal_rows(children),
+        Block::Paragraph { children, .. } => crate::inline::has_printable_character(children),
+        _ => false,
+    })
 }
 
 fn flush_paragraph(

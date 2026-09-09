@@ -363,8 +363,13 @@ Requests with direct lowering behavior are:
 | `ne` | Page-layout reservation omitted |
 | `nr` | Register request omitted after upstream evaluation |
 | `ta` | Tab-stop state omitted |
+| `ll`, `po` | Device line length and page origin omitted; reader width/origin policy remains in charge |
+| `mc` | Margin-character decoration omitted |
+| `ti` | Device temporary indentation omitted |
 
-`ce`, `rj`, `ll`, `mc`, `po`, and `ti` can be represented by libmandoc nodes but ManT does not promise their device-specific alignment or page geometry. Printable descendants remain visible where the upstream AST provides them.
+Control operands are never printable descendants. The block, inline and display paths share this distinction while still executing supported font, fill and spacing effects. Logical-sibling transparency is separate: an ignored device effect does not automatically make its source node transparent, and a transparent `ft` or `Tg` still changes font state or retains a target.
+
+`ce` and `rj` omit device-specific centering/right alignment but preserve their counted text rows, entry/exit line boundaries and nested requests. Their first native child is the control count, including a synthesized default or invalid count spelling; only subsequent children own content. Numeric words in that content remain visible. A native line-group flush can produce an empty literal row even after another request already ended that group; it is not another paragraph-distance request.
 
 Man's `.in` state is applied by lowering, not assumed to have been executed by parsing. Following mandoc CVS HEAD, repeated argument-less `.in` requests restore the same current macro base (including an enclosing `RS`); they do not swap previous requested positions as groff does. Ordinary paragraph and structural macro boundaries restore their own geometry. `HP` records a distinct continuation displacement and updates the prevailing tag width. ManT retains explicit source hard breaks as well as that hanging displacement: it does not reproduce the character renderer's `HP` short-line flush artifact that can place text after `br` on the same row. Soft wrapping remains a view concern, and the deterministic unbounded text renderer does not invent soft breaks.
 

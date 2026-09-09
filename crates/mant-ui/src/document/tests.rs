@@ -443,6 +443,7 @@ fn case_folding_maps_expanding_unicode_back_to_the_source_character() {
     );
 }
 
+mod control_line_payloads;
 mod entries;
 mod item_spacing;
 mod layout;

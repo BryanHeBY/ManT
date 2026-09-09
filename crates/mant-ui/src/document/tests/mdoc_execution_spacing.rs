@@ -72,6 +72,26 @@ fn display_pp_keeps_independent_space_and_post_gap_target() {
 }
 
 #[test]
+fn page_control_operands_do_not_create_body_rows_or_move_targets() {
+    for control in [".ll 50n", ".po 0n", ".mc |", ".ll\n.po\n.mc"] {
+        for nested in [false, true] {
+            let body = format!("{control}\n.Tg control-target\n.Bd -literal\nBODY\n.Ed");
+            let body = if nested {
+                format!(".Bd -literal -compact\n{body}\n.Ed")
+            } else {
+                body
+            };
+            let content = query(&body);
+            assert_rows(&content, "TEST", "BODY", 0);
+            assert!(
+                mant_ir::DocumentIndex::build(content.document.as_ref().unwrap())
+                    .contains("control-target")
+            );
+        }
+    }
+}
+
+#[test]
 fn invisible_native_siblings_are_not_confused_with_transparent_controls() {
     // CVS print_bvspace uses roff_node_prev, not emitted words. groff may
     // apply a different initial no-space policy for the invisible positives.
