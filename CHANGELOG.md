@@ -12,6 +12,10 @@ that crate was not published for that change.
 
 ## Unreleased
 
+- `mant-ui` keeps combining marks and joined emoji intact in associated outline
+  labels, including wrapping and narrow-sidebar clipping. Reference badge limits
+  also stop at complete grapheme boundaries without increasing the scan budget.
+
 - Associated heading/form references now appear on their existing outline rows,
   independently styled from entry names. TUI `O` opens a source-aware reference
   chooser and `Shift+Y` copies a chosen target; content Enter/expansion stays local.

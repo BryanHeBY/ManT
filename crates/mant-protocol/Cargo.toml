@@ -17,6 +17,7 @@ include = ["/Cargo.toml", "/LICENSE", "/README.md", "/src/**"]
 mant-ir = { path = "../mant-ir", version = "^0.11.0" }
 schemars.workspace = true
 serde.workspace = true
+unicode-segmentation.workspace = true
 unicode-width.workspace = true
 
 [dev-dependencies]

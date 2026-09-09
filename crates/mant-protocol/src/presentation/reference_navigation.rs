@@ -3,6 +3,7 @@
 use std::collections::HashSet;
 
 use mant_ir::{ContentLocation, LinkTarget};
+use unicode_segmentation::UnicodeSegmentation;
 
 use super::{references::target_parts, sanitize_terminal_text};
 
@@ -48,7 +49,8 @@ pub fn reference_attachment(
 /// scope, not that any destination has been loaded or validated. Partial pages
 /// must pass `false`, even if their only record happens to be the only known link.
 /// At most 1,000 records are inspected and a single-target label is capped at
-/// 160 Unicode scalars. This helper never initiates discovery or target lookup.
+/// 160 Unicode scalars, ending at a complete grapheme boundary. This helper
+/// never initiates discovery or target lookup.
 #[must_use]
 pub fn reference_badge<'a>(
     targets: impl IntoIterator<Item = &'a LinkTarget>,
@@ -68,10 +70,8 @@ pub fn reference_badge<'a>(
         return String::new();
     };
     let mut badge = if unique.len() == 1 {
-        let mut chars = target_parts(first).into_iter().flat_map(str::chars);
-        let label: String = chars.by_ref().take(160).collect();
-        let label = sanitize_terminal_text(&label);
-        format!("↗ {label}{}", if chars.next().is_some() { "…" } else { "" })
+        let label = bounded_reference_label(target_parts(first).into_iter().flat_map(str::chars));
+        format!("↗ {label}")
     } else {
         format!("↗ {} targets", unique.len())
     };
@@ -79,6 +79,22 @@ pub fn reference_badge<'a>(
         badge.push_str(" (known; more may exist)");
     }
     badge
+}
+
+fn bounded_reference_label(chars: impl Iterator<Item = char>) -> String {
+    // Do not scan through an arbitrarily long combining sequence in order to
+    // find its end. One scalar of lookahead is enough to identify whether the
+    // sample is truncated; discard its final, potentially incomplete cluster.
+    let sample: String = chars.take(161).collect();
+    let truncated = sample.chars().count() > 160;
+    let mut label = sanitize_terminal_text(&sample).into_owned();
+    if truncated {
+        if let Some((last, _)) = label.grapheme_indices(true).next_back() {
+            label.truncate(last);
+        }
+        label.push('…');
+    }
+    label
 }
 
 fn target_key(target: &LinkTarget) -> (u8, &str, Option<&str>) {
@@ -160,5 +176,31 @@ mod tests {
         assert!(text.ends_with('…'));
         assert!(!text.chars().any(char::is_control));
         assert!(text.chars().count() <= 163);
+    }
+
+    #[test]
+    fn badge_truncation_never_splits_terminal_graphemes_or_scans_unbounded_input() {
+        for cluster in ["e\u{301}", "👩‍💻"] {
+            let complete = format!("{}{}", "a".repeat(157), cluster);
+            assert_eq!(bounded_reference_label(complete.chars()), complete);
+            for padding in [158, 159, 160] {
+                let prefix = "a".repeat(padding);
+                let value = format!("{prefix}{cluster}suffix");
+                let label = bounded_reference_label(value.chars());
+                assert!(label.ends_with('…'));
+                assert!(label.chars().count() <= 161);
+                let rendered = label.trim_end_matches('…');
+                assert!(rendered == prefix || rendered.starts_with(&format!("{prefix}{cluster}")));
+            }
+        }
+        let pathological = std::iter::once('e').chain(std::iter::repeat('\u{301}'));
+        assert_eq!(bounded_reference_label(pathological), "…");
+        let mut inspected = 0;
+        let endless = std::iter::repeat('x').inspect(|_| inspected += 1);
+        assert_eq!(
+            bounded_reference_label(endless),
+            format!("{}…", "x".repeat(160))
+        );
+        assert_eq!(inspected, 161);
     }
 }

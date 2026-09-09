@@ -14,7 +14,7 @@ use ratatui::{
     style::{Modifier, Style},
     text::{Line, Span},
 };
-use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
+use unicode_width::UnicodeWidthStr;
 
 use mant_ir::EntryKind;
 
@@ -111,21 +111,33 @@ pub(crate) fn rows_with_references(
             let mut used = 0;
             lines.clear();
             for (text, role) in [(title, style), (badge, link_style)] {
-                for character in text.chars() {
-                    let columns = character.width().unwrap_or(0);
+                let span = Span::raw(text);
+                let mut run = String::new();
+                // Ratatui segments each Span independently. Keep contiguous
+                // style runs intact and break only at the same grapheme
+                // boundaries used by its terminal renderer.
+                for grapheme in span.styled_graphemes(role) {
+                    let columns = grapheme.symbol.width();
                     if used + columns > available && used > 0 {
+                        if !run.is_empty() {
+                            current.push(Span::styled(std::mem::take(&mut run), role));
+                        }
                         lines.push(finish_reference_row(current, *index, width, style));
                         current = vec![continuation.clone()];
                         used = 0;
                     }
-                    // A wide scalar on a one-cell sidebar must not overflow its row.
+                    // Substitute a whole grapheme only when even an otherwise
+                    // empty row cannot hold it; never emit a partial cluster.
                     let rendered = if columns > available {
-                        "�".to_owned()
+                        "�"
                     } else {
-                        character.to_string()
+                        grapheme.symbol
                     };
                     used += columns.min(available);
-                    current.push(Span::styled(rendered, role));
+                    run.push_str(rendered);
+                }
+                if !run.is_empty() {
+                    current.push(Span::styled(run, role));
                 }
             }
             lines.push(finish_reference_row(current, *index, width, style));
@@ -258,7 +270,7 @@ fn node_lines(
                 continuation_prefix.clone()
             };
             let title = if title.width() > width.saturating_sub(line_prefix.width()) {
-                // Only chrome substitutes a scalar wider than its whole cell
+                // Only chrome substitutes a grapheme wider than its whole cell
                 // budget; the original document/search text is unchanged.
                 "�".to_owned()
             } else {
@@ -392,15 +404,18 @@ fn take_prefix_columns(value: &str, width: usize) -> &str {
 }
 
 fn take_suffix_columns(value: &str, width: usize) -> &str {
-    let mut used = 0;
-    let mut start = value.len();
-    for (index, character) in value.char_indices().rev() {
-        let character_width = character.width().unwrap_or(0);
-        if used + character_width > width {
+    let span = Span::raw(value);
+    let mut remaining: usize = span
+        .styled_graphemes(Style::default())
+        .map(|grapheme| grapheme.symbol.width())
+        .sum();
+    let mut start = 0;
+    for grapheme in span.styled_graphemes(Style::default()) {
+        if remaining <= width {
             break;
         }
-        used += character_width;
-        start = index;
+        remaining -= grapheme.symbol.width();
+        start += grapheme.symbol.len();
     }
     &value[start..]
 }
@@ -426,6 +441,15 @@ fn wrap_to_width(value: &str, width: usize) -> Vec<String> {
         let mut remaining = word;
         while remaining.width() > width {
             let split = byte_index_at_width(remaining, width);
+            if split == 0 {
+                let span = Span::raw(remaining);
+                let Some(grapheme) = span.styled_graphemes(Style::default()).next() else {
+                    break;
+                };
+                remaining = &remaining[grapheme.symbol.len()..];
+                lines.push("�".to_owned());
+                continue;
+            }
             lines.push(remaining[..split].to_owned());
             remaining = &remaining[split..];
         }
@@ -445,16 +469,15 @@ fn byte_index_at_width(value: &str, width: usize) -> usize {
         return 0;
     }
     let mut used = 0;
-    for (index, character) in value.char_indices() {
-        let character_width = character.width().unwrap_or(0);
-        if used + character_width > width {
-            return if index == 0 {
-                character.len_utf8()
-            } else {
-                index
-            };
+    let mut index = 0;
+    let span = Span::raw(value);
+    for grapheme in span.styled_graphemes(Style::default()) {
+        let columns = grapheme.symbol.width();
+        if used + columns > width {
+            return index;
         }
-        used += character_width;
+        used += columns;
+        index += grapheme.symbol.len();
     }
     value.len()
 }
@@ -463,10 +486,105 @@ fn byte_index_at_width(value: &str, width: usize) -> usize {
 mod tests {
     use std::collections::HashSet;
 
+    use ratatui::{buffer::Buffer, layout::Rect, widgets::Widget};
     use unicode_width::UnicodeWidthStr;
 
     use super::{node_lines, node_row_range, truncate_middle};
     use crate::{NavKind, NavNode, theme};
+
+    fn rendered_symbols(rows: &[super::NavigationRow], width: u16) -> Vec<String> {
+        let height = u16::try_from(rows.len()).expect("test rows fit a terminal");
+        let mut buffer = Buffer::empty(Rect::new(0, 0, width, height));
+        for (index, row) in rows.iter().enumerate() {
+            let y = u16::try_from(index).expect("test row fits a terminal");
+            row.line
+                .clone()
+                .render(Rect::new(0, y, width, 1), &mut buffer);
+        }
+        buffer
+            .content
+            .iter()
+            .map(|cell| cell.symbol().to_owned())
+            .collect()
+    }
+
+    #[test]
+    fn associated_unicode_titles_render_as_whole_terminal_graphemes() {
+        let nodes = vec![node("Cafe\u{301} 👩‍💻")];
+        let badges = [("node".to_owned(), "↗ Cafe\u{301}👩‍💻".to_owned())]
+            .into_iter()
+            .collect();
+        for width in [11_u16, 12, 16, 80] {
+            for (selected, full) in [(0, false), (usize::MAX, true), (usize::MAX, false)] {
+                let rows = super::rows_with_references(
+                    &nodes,
+                    &[0],
+                    selected,
+                    &HashSet::new(),
+                    full,
+                    usize::from(width),
+                    &badges,
+                );
+                let symbols = rendered_symbols(&rows, width);
+                assert!(
+                    rows.iter()
+                        .all(|row| row.line.width() <= usize::from(width))
+                );
+                // Inspect real terminal cells, not just reconstructed strings:
+                // scalar Spans preserve the latter while corrupting the former.
+                for symbol in &symbols {
+                    if symbol.contains('\u{301}') {
+                        assert_eq!(symbol, "e\u{301}");
+                    }
+                    if symbol.contains(['👩', '💻', '\u{200d}']) {
+                        assert_eq!(symbol, "👩‍💻");
+                    }
+                }
+                if selected == 0 || full || width == 80 {
+                    assert!(symbols.iter().any(|symbol| symbol == "e\u{301}"));
+                    assert!(symbols.iter().any(|symbol| symbol == "👩‍💻"));
+                }
+                if selected == usize::MAX && !full {
+                    assert_eq!(rows.len(), 1);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn ordinary_navigation_uses_the_same_grapheme_safe_width_boundaries() {
+        for width in [10_u16, 11, 12, 16, 80] {
+            let rows = node_lines(
+                &node("Cafe\u{301}👩‍💻Suffix"),
+                0,
+                true,
+                false,
+                false,
+                usize::from(width),
+            );
+            let symbols = rendered_symbols(&rows, width);
+            assert!(symbols.iter().any(|symbol| symbol == "e\u{301}"));
+            if width > 10 {
+                assert!(symbols.iter().any(|symbol| symbol == "👩‍💻"));
+            } else {
+                assert!(symbols.iter().any(|symbol| symbol == "�"));
+            }
+            assert!(
+                !symbols
+                    .iter()
+                    .any(|symbol| matches!(symbol.as_str(), "👩" | "💻"))
+            );
+            assert!(
+                rows.iter()
+                    .all(|row| row.line.width() <= usize::from(width))
+            );
+        }
+        assert_eq!(super::take_prefix_columns("👩‍💻x", 1), "");
+        assert_eq!(super::take_prefix_columns("e\u{301}x", 1), "e\u{301}");
+        assert_eq!(super::take_suffix_columns("x👩‍💻", 1), "");
+        assert_eq!(super::take_suffix_columns("xe\u{301}", 1), "e\u{301}");
+        assert_eq!(truncate_middle("012345👩‍💻", 6), "0...👩‍💻");
+    }
 
     #[test]
     fn associated_badges_wrap_with_reference_style_without_recoloring_the_owner() {
