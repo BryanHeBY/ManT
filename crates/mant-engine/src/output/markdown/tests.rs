@@ -24,12 +24,14 @@ fn large_entry_source_maps_keep_monotonic_exact_ownership() {
         writeln!(source, "- `--flag-{index}`: Payload{index}.").unwrap();
     }
     let query = crate::query_markdown_text(&source, None).unwrap();
+    let document = query.document.unwrap();
     let rendered = super::blocks::render_blocks_with_entries(
-        &query.document.unwrap().blocks,
+        &document.blocks,
         MarkdownOptions {
             preserve_anchors: true,
             ..MarkdownOptions::default()
         },
+        true,
     );
     assert_eq!(rendered.entries.len(), 1000);
     for (index, entry) in rendered.entries.iter().enumerate() {
@@ -46,6 +48,77 @@ fn paragraph(children: Vec<Inline>) -> Block {
         layout: LayoutHint::default(),
         source: None,
     }
+}
+
+#[test]
+fn document_export_skips_maps_but_keeps_identical_addressable_bytes() {
+    let source = "# Tool\n\n<!-- mant:entries role=option case=sensitive -->\n- `--root`: Root payload.\n\n## Parent\n\n<!-- mant:entries role=option case=sensitive -->\n- `--first`: First payload.\n\n### Child\n\n<!-- mant:entries role=option case=sensitive -->\n- `--second`: Second payload.\n";
+    let query = crate::query_markdown_text(source, None).unwrap();
+    let mapped = render_addressable_markdown(&query);
+    let plain = super::render_markdown_artifact(&query, MarkdownOptions::ADDRESSABLE, false);
+    assert_eq!(mapped.text(), plain.text());
+    assert!(plain.nodes().is_empty());
+    assert!(plain.sections.is_empty());
+    assert!(plain.anchors.get().is_none());
+    assert_eq!(mapped.sections.len(), 2);
+    assert_eq!(mapped.sections[0].parent, None);
+    assert_eq!(mapped.sections[1].parent, Some(0));
+    let document = query.document.as_ref().unwrap();
+    assert!(std::ptr::eq(
+        mapped.sections[0].section,
+        &raw const document.sections[0]
+    ));
+    assert!(std::ptr::eq(
+        mapped.sections[1].section,
+        &raw const document.sections[0].children[0]
+    ));
+    let mut entries = 0;
+    for mapped in mapped.nodes() {
+        if let MarkdownNode::DocumentEntry { owner, names, .. } = &mapped.node {
+            entries += 1;
+            assert!(std::ptr::eq(
+                names.as_ptr(),
+                owner.facts().unwrap().names.as_ptr()
+            ));
+        }
+    }
+    assert_eq!(entries, 3);
+}
+
+#[test]
+fn maps_borrow_owners_from_their_exact_source_snapshot() {
+    fn owner<'a>(node: &MarkdownNode<'a>) -> Option<mant_ir::EntryOwner<'a>> {
+        match node {
+            MarkdownNode::DocumentEntry { owner, .. } => Some(*owner),
+            _ => None,
+        }
+    }
+    let source =
+        "# Tool\n\n<!-- mant:entries role=option case=sensitive -->\n- `--flag`: Payload.\n";
+    let first = crate::query_markdown_text(source, None).unwrap();
+    let second = first.clone();
+    let a = render_addressable_markdown(&first);
+    let b = render_addressable_markdown(&second);
+    let a_owner = a
+        .nodes()
+        .iter()
+        .find_map(|mapped| owner(&mapped.node))
+        .unwrap();
+    let b_owner = b
+        .nodes()
+        .iter()
+        .find_map(|mapped| owner(&mapped.node))
+        .unwrap();
+    assert_eq!(a_owner.facts().unwrap().id, b_owner.facts().unwrap().id);
+    assert!(!std::ptr::eq(
+        a_owner.facts().unwrap(),
+        b_owner.facts().unwrap()
+    ));
+    let original = mant_ir::content_entries(&first.document.as_ref().unwrap().blocks);
+    assert!(std::ptr::eq(
+        a_owner.facts().unwrap(),
+        original[0].owner().facts().unwrap()
+    ));
 }
 
 #[test]
@@ -1318,11 +1391,11 @@ fn addressable_rendering_returns_exact_semantic_node_ranges() {
         .iter()
         .find(|mapped| matches!(mapped.node, MarkdownNode::DocumentEntry { .. }))
         .expect("semantic entry range");
-    let MarkdownNode::DocumentEntry { path, id, .. } = &mapped.node else {
+    let MarkdownNode::DocumentEntry { path, owner, .. } = &mapped.node else {
         unreachable!();
     };
     assert_eq!(path.to_string(), "1/e1");
-    assert_eq!(id, "help-entry");
+    assert_eq!(owner.facts().unwrap().id, "help-entry");
     let rendered = &artifact.text()[mapped.range.clone()];
     assert!(rendered.contains("--help"));
     assert!(rendered.contains("Show help."));
@@ -1355,7 +1428,10 @@ fn serializes_a_large_source_lowered_document() {
 }
 #[test]
 fn final_artifact_owns_only_real_anchor_ranges() {
-    let mut builder = super::ArtifactBuilder::default();
+    let mut builder = super::ArtifactBuilder {
+        track: true,
+        ..super::ArtifactBuilder::default()
+    };
     builder.begin_root(0);
     builder.push("<a id=\"real\"></a>\n`<a id=\"literal\"></a>`\n\n ");
     let artifact = builder.finish();

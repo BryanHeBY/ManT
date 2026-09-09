@@ -1,7 +1,7 @@
 //! Maps native block nodes to portable `CommonMark` block constructs.
 
 use mant_ir::{
-    Block, DefinitionItem, EntryFacts, EntryOwner, ListItem, ListKind, SourceSpan, TableRow,
+    Block, DefinitionItem, EntryOwner, ListItem, ListKind, SourceSpan, TableRow, content_entries,
 };
 
 use super::inline::{
@@ -10,19 +10,18 @@ use super::inline::{
 };
 use super::mapped::MappedText;
 use super::{MarkdownInlineProjection, MarkdownOptions};
-use crate::definitions::content_entries;
 
-pub(super) struct RenderedBlocks {
+pub(super) struct RenderedBlocks<'src> {
     pub(super) text: String,
-    pub(super) entries: Vec<RenderedEntry>,
+    pub(super) entries: Vec<RenderedEntry<'src>>,
 }
 
-pub(super) struct RenderedEntry {
+pub(super) struct RenderedEntry<'src> {
     pub(super) indices: Vec<usize>,
     pub(super) start: usize,
     pub(super) end: usize,
-    pub(super) entry: EntryFacts,
-    pub(super) title: String,
+    pub(super) owner: EntryOwner<'src>,
+    pub(super) names: &'src [String],
     pub(super) source: Option<SourceSpan>,
 }
 
@@ -36,7 +35,7 @@ pub(crate) fn render_located_blocks(
 ) -> Vec<String> {
     blocks
         .iter()
-        .filter_map(|block| render_block(block, options, locations))
+        .filter_map(|block| render_block(block, options, locations, false))
         .map(|block| block.text)
         .collect()
 }
@@ -44,53 +43,46 @@ pub(crate) fn render_located_blocks(
 pub(super) fn render_blocks_with_entries(
     blocks: &[Block],
     options: MarkdownOptions,
-) -> RenderedBlocks {
-    let rendered = mapped_blocks(blocks, options, None);
-    let ranges = rendered.owner_ranges();
-    let text = rendered.text;
-    let mut entries = Vec::new();
-    if options.preserve_anchors {
-        for located in content_entries(blocks) {
-            let entry = located.owner();
-            let Some(identity) = entry.facts() else {
-                continue;
-            };
-            let Some(range) = ranges.get(&std::ptr::from_ref(identity)) else {
-                continue;
-            };
-            let start = range.start;
-            let end = range.end;
-            let mut identity = identity.clone();
-            identity.names = located.names().to_vec();
-            if !identity.alias_groups.is_empty() {
-                identity.alias_groups = entry.validated_alias_groups().unwrap_or_default().to_vec();
-            }
-            entries.push(RenderedEntry {
-                title: crate::entry_presentation::owner_label(
-                    entry,
-                    &identity.names,
-                    mant_protocol::EntryLabelMode::Compact,
-                ),
-                indices: located.indices().to_vec(),
-                start,
-                end,
-                entry: identity,
-                source: located.source(),
-            });
-        }
+    track: bool,
+) -> RenderedBlocks<'_> {
+    let rendered = mapped_blocks(blocks, options, None, track);
+    let entries = if track {
+        let ranges = rendered.owner_ranges();
+        content_entries(blocks)
+            .into_iter()
+            .filter_map(|located| {
+                let owner = located.owner();
+                let identity = owner.facts()?;
+                let range = ranges.get(&std::ptr::from_ref(identity))?;
+                Some(RenderedEntry {
+                    owner,
+                    names: located.names(),
+                    indices: located.indices().to_vec(),
+                    start: range.start,
+                    end: range.end,
+                    source: located.source(),
+                })
+            })
+            .collect()
+    } else {
+        Vec::new()
+    };
+    RenderedBlocks {
+        text: rendered.text,
+        entries,
     }
-    RenderedBlocks { text, entries }
 }
 
 fn mapped_blocks(
     blocks: &[Block],
     options: MarkdownOptions,
     locations: Option<&dyn MarkdownInlineProjection>,
+    track: bool,
 ) -> MappedText {
     MappedText::join(
         blocks
             .iter()
-            .filter_map(|block| render_block(block, options, locations)),
+            .filter_map(|block| render_block(block, options, locations, track)),
         "\n\n",
     )
 }
@@ -99,6 +91,7 @@ fn render_block(
     block: &Block,
     options: MarkdownOptions,
     locations: Option<&dyn MarkdownInlineProjection>,
+    track: bool,
 ) -> Option<MappedText> {
     match block {
         Block::Paragraph { children, .. } => nonempty(inline(children, options, locations)),
@@ -110,11 +103,11 @@ fn render_block(
             compact,
             items,
             ..
-        } => render_list(*kind, *compact, items, options, locations),
+        } => render_list(*kind, *compact, items, options, locations, track),
         Block::DefinitionList { items, compact, .. } => {
-            render_definition_list(items, *compact, options, locations)
+            render_definition_list(items, *compact, options, locations, track)
         }
-        Block::Table { rows, .. } => render_table(rows, options.preserve_anchors),
+        Block::Table { rows, .. } => render_table(rows, track),
         Block::Equation { value, display, .. } => {
             if *display {
                 Some(fenced_code(value, Some("math")).into())
@@ -151,6 +144,7 @@ fn render_list(
     items: &[ListItem],
     options: MarkdownOptions,
     locations: Option<&dyn MarkdownInlineProjection>,
+    track: bool,
 ) -> Option<MappedText> {
     let rendered = items
         .iter()
@@ -165,7 +159,7 @@ fn render_list(
             let mut blocks = item
                 .blocks
                 .iter()
-                .filter_map(|block| render_block(block, options, locations))
+                .filter_map(|block| render_block(block, options, locations, track))
                 .collect::<Vec<_>>();
             if options.preserve_semantics
                 && let Some(facts) = &item.entry
@@ -189,7 +183,7 @@ fn render_list(
                 content.insert(0, &html_anchor(&facts.id));
             }
             content
-                .with_owner(EntryOwner::List(item), options.preserve_anchors)
+                .with_owner(EntryOwner::List(item), track)
                 .prefix(&marker)
                 .map(|content| (content, item.layout.spacing_before_lines))
         })
@@ -213,6 +207,7 @@ fn render_definition_list(
     compact: bool,
     options: MarkdownOptions,
     locations: Option<&dyn MarkdownInlineProjection>,
+    track: bool,
 ) -> Option<MappedText> {
     let rendered = items
         .iter()
@@ -224,7 +219,7 @@ fn render_definition_list(
                 .filter(|term| !term.is_empty())
                 .collect::<Vec<_>>()
                 .join("  \n");
-            let description = mapped_blocks(&item.description, options, locations);
+            let description = mapped_blocks(&item.description, options, locations, track);
             let has_terms = !terms.is_empty();
             let mut content = match (terms.is_empty(), description.text.is_empty()) {
                 (false, false) => {
@@ -254,7 +249,7 @@ fn render_definition_list(
                 content.insert(position, "\\");
             }
             content
-                .with_owner(EntryOwner::Definition(item), options.preserve_anchors)
+                .with_owner(EntryOwner::Definition(item), track)
                 .prefix("- ")
                 .map(|content| (content, item.layout.spacing_before_lines))
         })

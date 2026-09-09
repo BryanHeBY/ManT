@@ -106,7 +106,16 @@ fn search_with_matcher(
     let (raw_groups, total) = collector.finish();
     let selected = raw_groups
         .iter()
-        .map(|found| build_match(found, &searchable, markdown, &lines, request.context_lines))
+        .map(|found| {
+            build_match(
+                found,
+                &searchable,
+                markdown,
+                &lines,
+                &owners,
+                request.context_lines,
+            )
+        })
         .collect::<Vec<_>>();
     let returned = u32::try_from(selected.len()).unwrap_or(u32::MAX);
     let consumed = request.offset.saturating_add(returned);
@@ -146,7 +155,7 @@ fn collect_occurrences(
     searchable: &SearchableText,
     markdown: &str,
     lines: &LineIndex,
-    owners: &OwnerIndex,
+    owners: &OwnerIndex<'_, '_>,
     collector: &mut SearchCollector<'_>,
 ) -> Result<(), SearchError> {
     let mut invalid_utf8_match = false;
@@ -303,7 +312,7 @@ impl<'a> SearchCollector<'a> {
             occurrences,
             occurrence_count: 1,
             owner: if retained {
-                PendingOwner::Retained(owner.clone())
+                PendingOwner::Retained(*owner)
             } else {
                 PendingOwner::CountOnly(owner.key)
             },
@@ -346,6 +355,7 @@ fn build_match(
     searchable: &SearchableText,
     markdown: &str,
     lines: &LineIndex,
+    owners: &OwnerIndex<'_, '_>,
     context_lines: u16,
 ) -> SearchHit {
     let first = &found.occurrences[0];
@@ -372,7 +382,7 @@ fn build_match(
 
     SearchHit {
         ordinal: found.ordinal,
-        outline: found.owner.outline.clone(),
+        outline: owners.trail(found.owner.key),
         occurrences: found
             .occurrences
             .iter()

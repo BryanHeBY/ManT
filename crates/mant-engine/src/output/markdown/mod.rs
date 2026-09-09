@@ -10,10 +10,8 @@ mod semantic;
 use std::{borrow::Cow, ops::Range};
 
 use mant_ir::{
-    EntryKind, NameCase, NodeId, OutlinePath, Section, SourceSpan, TldrCommandPart, TldrDocument,
-    TldrOrigin,
+    EntryOwner, OutlinePath, Section, SourceSpan, TldrCommandPart, TldrDocument, TldrOrigin,
 };
-use mant_protocol::OutlineReference;
 
 pub(crate) use self::inline::{
     code_span as commonmark_code_span, escape_text as escape_commonmark,
@@ -63,24 +61,30 @@ pub fn render_markdown(query: &ResolvedContent) -> String {
 /// Render a complete query using explicit presentation-only options.
 #[must_use]
 pub fn render_markdown_with_options(query: &ResolvedContent, options: MarkdownOptions) -> String {
-    render_markdown_artifact(query, options).into_text()
+    render_markdown_artifact(query, options, false).into_text()
 }
 
-pub(crate) struct MarkdownArtifact {
+pub(crate) struct MarkdownArtifact<'src> {
     text: String,
-    nodes: Vec<MarkdownNodeRange>,
+    nodes: Vec<MarkdownNodeRange<'src>>,
+    sections: Vec<MarkdownSection<'src>>,
     anchors: std::sync::OnceLock<Vec<Range<usize>>>,
 }
 
-impl MarkdownArtifact {
+impl<'src> MarkdownArtifact<'src> {
     /// Final, trimmed bytes against which all node and anchor ranges are indexed.
     pub(crate) fn text(&self) -> &str {
         &self.text
     }
 
     /// Read-only node ranges; callers cannot detach them from the final bytes.
-    pub(crate) fn nodes(&self) -> &[MarkdownNodeRange] {
+    pub(crate) fn nodes(&self) -> &[MarkdownNodeRange<'src>] {
         &self.nodes
+    }
+
+    /// Source-bound section context shared by every mapped entry in that section.
+    pub(crate) fn section(&self, slot: usize) -> &MarkdownSection<'src> {
+        &self.sections[slot]
     }
 
     /// Consume the complete artifact when no coordinate mapping is needed.
@@ -101,51 +105,46 @@ impl MarkdownArtifact {
     }
 }
 
-#[derive(Clone)]
-pub(crate) struct MarkdownNodeRange {
+pub(crate) struct MarkdownNodeRange<'src> {
     pub(crate) range: Range<usize>,
-    pub(crate) node: MarkdownNode,
+    pub(crate) node: MarkdownNode<'src>,
 }
 
-#[derive(Clone)]
-pub(crate) struct MarkdownSection {
+/// One borrowed section and its parent slot, never a copied title/DTO trail.
+pub(crate) struct MarkdownSection<'src> {
     pub(crate) path: OutlinePath,
-    pub(crate) id: NodeId,
-    pub(crate) title: String,
-    pub(crate) ancestors: Vec<OutlineReference>,
+    pub(crate) section: &'src Section,
+    pub(crate) parent: Option<usize>,
 }
 
-#[derive(Clone)]
-pub(crate) enum MarkdownNode {
+pub(crate) enum MarkdownNode<'src> {
     Tldr,
     DocumentHeading {
         source: Option<SourceSpan>,
     },
     DocumentRoot,
     DocumentSection {
-        section: MarkdownSection,
+        section: usize,
         source: Option<SourceSpan>,
     },
     DocumentEntry {
         path: OutlinePath,
-        id: NodeId,
-        title: String,
-        role: EntryKind,
-        case: NameCase,
-        names: Vec<String>,
-        section: Option<MarkdownSection>,
+        owner: EntryOwner<'src>,
+        names: &'src [String],
+        section: Option<usize>,
         source: Option<SourceSpan>,
     },
 }
 
-pub(crate) fn render_addressable_markdown(query: &ResolvedContent) -> MarkdownArtifact {
-    render_markdown_artifact(query, MarkdownOptions::ADDRESSABLE)
+pub(crate) fn render_addressable_markdown(query: &ResolvedContent) -> MarkdownArtifact<'_> {
+    render_markdown_artifact(query, MarkdownOptions::ADDRESSABLE, true)
 }
 
 fn render_markdown_artifact(
     query: &ResolvedContent,
     mut options: MarkdownOptions,
-) -> MarkdownArtifact {
+    track: bool,
+) -> MarkdownArtifact<'_> {
     let heading_links = query.document.as_ref().is_some_and(|document| {
         document
             .heading
@@ -160,7 +159,10 @@ fn render_markdown_artifact(
     // over optional entry metadata for that document.
     options.preserve_anchors =
         heading_links || (options.preserve_anchors && !options.preserve_semantics);
-    let mut output = ArtifactBuilder::default();
+    let mut output = ArtifactBuilder {
+        track,
+        ..ArtifactBuilder::default()
+    };
     if let Some(heading) = query
         .document
         .as_ref()
@@ -177,12 +179,14 @@ fn render_markdown_artifact(
             ));
         }
         let range = output.push(&render_heading(1, heading, options));
-        output.nodes.push(MarkdownNodeRange {
-            range,
-            node: MarkdownNode::DocumentHeading {
-                source: heading.source,
-            },
-        });
+        if track {
+            output.nodes.push(MarkdownNodeRange {
+                range,
+                node: MarkdownNode::DocumentHeading {
+                    source: heading.source,
+                },
+            });
+        }
     } else {
         output.push(&heading(1, &query.label));
     }
@@ -214,24 +218,26 @@ fn render_markdown_artifact(
                 output.text.len()
             };
             output.begin_root(start);
-            let rendered = render_blocks_with_entries(&document.blocks, options);
+            let rendered = render_blocks_with_entries(&document.blocks, options, track);
             output.push_scope(rendered, None, None);
         }
-        render_artifact_sections(&mut output, &document.sections, &[], &[], 2, options);
+        render_artifact_sections(&mut output, &document.sections, &[], None, 2, options);
     }
     output.finish()
 }
 
 #[derive(Default)]
-struct ArtifactBuilder {
+struct ArtifactBuilder<'src> {
     text: String,
-    nodes: Vec<MarkdownNodeRange>,
+    nodes: Vec<MarkdownNodeRange<'src>>,
+    sections: Vec<MarkdownSection<'src>>,
+    track: bool,
     tldr: Option<usize>,
     root: Option<usize>,
     last_section: Option<usize>,
 }
 
-impl ArtifactBuilder {
+impl<'src> ArtifactBuilder<'src> {
     fn push(&mut self, block: &str) -> Range<usize> {
         if block.is_empty() {
             return self.text.len()..self.text.len();
@@ -245,20 +251,15 @@ impl ArtifactBuilder {
     }
 
     fn begin_tldr(&mut self, start: usize) {
-        self.tldr = Some(self.node(start, MarkdownNode::Tldr));
+        self.tldr = self.node(start, MarkdownNode::Tldr);
     }
 
     fn begin_root(&mut self, start: usize) {
         self.close_tldr(start);
-        self.root = Some(self.node(start, MarkdownNode::DocumentRoot));
+        self.root = self.node(start, MarkdownNode::DocumentRoot);
     }
 
-    fn begin_section(
-        &mut self,
-        start: usize,
-        section: MarkdownSection,
-        source: Option<SourceSpan>,
-    ) {
+    fn begin_section(&mut self, start: usize, section: usize, source: Option<SourceSpan>) {
         self.close_tldr(start);
         if let Some(root) = self.root.take() {
             self.nodes[root].range.end = start;
@@ -266,14 +267,13 @@ impl ArtifactBuilder {
         if let Some(previous) = self.last_section {
             self.nodes[previous].range.end = start;
         }
-        self.last_section =
-            Some(self.node(start, MarkdownNode::DocumentSection { section, source }));
+        self.last_section = self.node(start, MarkdownNode::DocumentSection { section, source });
     }
 
     fn push_scope(
         &mut self,
-        rendered: RenderedBlocks,
-        section: Option<&MarkdownSection>,
+        rendered: RenderedBlocks<'src>,
+        section: Option<usize>,
         coordinates: Option<&[usize]>,
     ) {
         if rendered.text.is_empty() {
@@ -287,25 +287,25 @@ impl ArtifactBuilder {
                 range: block.start + entry.start..block.start + entry.end,
                 node: MarkdownNode::DocumentEntry {
                     path,
-                    id: entry.entry.id,
-                    title: entry.title,
-                    role: entry.entry.kind,
-                    case: entry.entry.case,
-                    names: entry.entry.names,
-                    section: section.cloned(),
+                    owner: entry.owner,
+                    names: entry.names,
+                    section,
                     source: entry.source,
                 },
             });
         }
     }
 
-    fn node(&mut self, start: usize, node: MarkdownNode) -> usize {
+    fn node(&mut self, start: usize, node: MarkdownNode<'src>) -> Option<usize> {
+        if !self.track {
+            return None;
+        }
         let index = self.nodes.len();
         self.nodes.push(MarkdownNodeRange {
             range: start..self.text.len(),
             node,
         });
-        index
+        Some(index)
     }
 
     fn close_tldr(&mut self, end: usize) {
@@ -314,7 +314,7 @@ impl ArtifactBuilder {
         }
     }
 
-    fn finish(mut self) -> MarkdownArtifact {
+    fn finish(mut self) -> MarkdownArtifact<'src> {
         let end = self.text.trim_end().len();
         self.text.truncate(end);
         self.close_tldr(end);
@@ -330,24 +330,21 @@ impl ArtifactBuilder {
         MarkdownArtifact {
             text: self.text,
             nodes: self.nodes,
+            sections: self.sections,
             anchors: std::sync::OnceLock::new(),
         }
     }
 }
 
-fn render_artifact_sections(
-    output: &mut ArtifactBuilder,
-    sections: &[Section],
+fn render_artifact_sections<'src>(
+    output: &mut ArtifactBuilder<'src>,
+    sections: &'src [Section],
     parent: &[usize],
-    ancestors: &[OutlineReference],
+    parent_slot: Option<usize>,
     depth: usize,
     options: MarkdownOptions,
 ) {
     for (index, section) in sections.iter().enumerate() {
-        let mut coordinates = parent.to_vec();
-        coordinates.push(index + 1);
-        let path =
-            OutlinePath::section(&coordinates).expect("enumerated section paths are one-based");
         let rendered_heading = if options.preserve_anchors {
             format!(
                 "{}\n\n{}",
@@ -358,29 +355,45 @@ fn render_artifact_sections(
             render_heading(depth, &section.heading, options)
         };
         let range = output.push(&rendered_heading);
-        let reference = MarkdownSection {
-            path: path.clone(),
-            id: section.id.clone(),
-            title: section.heading.plain_text(),
-            ancestors: ancestors.to_vec(),
-        };
-        output.begin_section(range.start, reference.clone(), section.source);
+        if !output.track {
+            // Stream one scope at a time without retaining the whole document
+            // as intermediate block strings or constructing semantic paths.
+            output.push_scope(
+                render_blocks_with_entries(&section.blocks, options, false),
+                None,
+                None,
+            );
+            render_artifact_sections(
+                output,
+                &section.children,
+                &[],
+                None,
+                depth.saturating_add(1),
+                options,
+            );
+            continue;
+        }
+        let mut coordinates = parent.to_vec();
+        coordinates.push(index + 1);
+        let path =
+            OutlinePath::section(&coordinates).expect("enumerated section paths are one-based");
+        let slot = output.sections.len();
+        output.sections.push(MarkdownSection {
+            path,
+            section,
+            parent: parent_slot,
+        });
+        output.begin_section(range.start, slot, section.source);
         output.push_scope(
-            render_blocks_with_entries(&section.blocks, options),
-            Some(&reference),
+            render_blocks_with_entries(&section.blocks, options, true),
+            Some(slot),
             Some(&coordinates),
         );
-        let mut child_ancestors = ancestors.to_vec();
-        child_ancestors.push(OutlineReference {
-            path: path.to_string().into(),
-            id: section.id.clone(),
-            title: section.heading.plain_text(),
-        });
         render_artifact_sections(
             output,
             &section.children,
             &coordinates,
-            &child_ancestors,
+            Some(slot),
             depth.saturating_add(1),
             options,
         );
