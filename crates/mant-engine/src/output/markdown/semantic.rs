@@ -1,7 +1,7 @@
 //! Conservative semantic export: never infer relationships from shared heads.
 use mant_ir::{
-    Block, DefinitionItem, Document, EntryFacts, EntryKind, EntryNameEvidence, NameCase,
-    ParameterKind, SemanticDocumentReference, ValueDomain,
+    Block, DefinitionItem, Document, DocumentReference, EntryFacts, EntryKind, EntryNameEvidence,
+    NameCase, ParameterKind, ValueDomain,
     visit::{self, Visit},
 };
 
@@ -74,11 +74,11 @@ pub(super) fn domain(value: &ValueDomain) -> Option<String> {
             ..
         } => {
             let target = match reference {
-                SemanticDocumentReference::Document {
+                DocumentReference::Document {
                     name,
                     fragment: None,
                 } => crate::markdown::link_destination::document_destination(name, None),
-                SemanticDocumentReference::Manual {
+                DocumentReference::Manual {
                     name,
                     manual_section: Some(section),
                 } if !name.contains(char::is_whitespace) => format!("manual/{section}/{name}"),

@@ -1,26 +1,25 @@
 //! Scope references: preserve request-local ownership and source order.
 use super::{
-    Block, DefinitionItem, DocumentAddress, DocumentEdgeKind, DocumentSelector, Inline,
-    ResolvedContent, SemanticDocumentReference, ValueDomain, Visit, walk_block,
-    walk_definition_item, walk_inline,
+    Block, DefinitionItem, DocumentAddress, DocumentEdgeKind, DocumentReference, DocumentSelector,
+    Inline, ResolvedContent, ValueDomain, Visit, walk_block, walk_definition_item, walk_inline,
 };
 
 #[derive(Clone)]
-pub(super) struct DocumentReference {
-    pub(super) target: SemanticDocumentReference,
+pub(super) struct ScopeReference {
+    pub(super) target: DocumentReference,
     pub(super) kind: DocumentEdgeKind,
     pub(super) source_offset: Option<u32>,
     pub(super) sequence: usize,
 }
 
-impl DocumentReference {
+impl ScopeReference {
     pub(super) fn exact_address(&self, from: &DocumentAddress) -> Option<DocumentAddress> {
         self.target.resolve_from(from)
     }
 
     pub(super) fn selector(&self, from: &DocumentAddress) -> Option<DocumentSelector> {
         match &self.target {
-            SemanticDocumentReference::Document { name, .. } => {
+            DocumentReference::Document { name, .. } => {
                 let address = from.resolve_document_reference(name)?;
                 Some(DocumentSelector {
                     selector: address.catalog_path(),
@@ -28,7 +27,7 @@ impl DocumentReference {
                     manual_section: None,
                 })
             }
-            SemanticDocumentReference::Manual {
+            DocumentReference::Manual {
                 name,
                 manual_section,
             } => Some(DocumentSelector {
@@ -41,8 +40,9 @@ impl DocumentReference {
 
     pub(super) fn fallback_selector(&self) -> DocumentSelector {
         let selector = match &self.target {
-            SemanticDocumentReference::Document { name, .. }
-            | SemanticDocumentReference::Manual { name, .. } => name.clone(),
+            DocumentReference::Document { name, .. } | DocumentReference::Manual { name, .. } => {
+                name.clone()
+            }
         };
         DocumentSelector {
             selector,
@@ -52,9 +52,9 @@ impl DocumentReference {
     }
 }
 
-pub(super) fn document_references(bundle: &ResolvedContent) -> Vec<DocumentReference> {
+pub(super) fn document_references(bundle: &ResolvedContent) -> Vec<ScopeReference> {
     struct Collector {
-        references: Vec<DocumentReference>,
+        references: Vec<ScopeReference>,
         source_offset: Option<u32>,
         sequence: usize,
     }
@@ -76,11 +76,11 @@ pub(super) fn document_references(bundle: &ResolvedContent) -> Vec<DocumentRefer
 
         fn push(
             &mut self,
-            target: SemanticDocumentReference,
+            target: DocumentReference,
             kind: DocumentEdgeKind,
             source_offset: Option<u32>,
         ) {
-            self.references.push(DocumentReference {
+            self.references.push(ScopeReference {
                 target,
                 kind,
                 source_offset,
@@ -110,7 +110,7 @@ pub(super) fn document_references(bundle: &ResolvedContent) -> Vec<DocumentRefer
 
         fn visit_inline(&mut self, inline: &'ir Inline) {
             if let Inline::Link { target, .. } = inline
-                && let Some(target) = SemanticDocumentReference::from_link_target(target)
+                && let Some(target) = DocumentReference::from_link_target(target)
             {
                 let kind = reference_edge_kind(&target);
                 self.push(target, kind, self.source_offset);
@@ -154,10 +154,10 @@ pub(super) fn document_references(bundle: &ResolvedContent) -> Vec<DocumentRefer
     collector.references
 }
 
-const fn reference_edge_kind(reference: &SemanticDocumentReference) -> DocumentEdgeKind {
+const fn reference_edge_kind(reference: &DocumentReference) -> DocumentEdgeKind {
     match reference {
-        SemanticDocumentReference::Document { .. } => DocumentEdgeKind::Document,
-        SemanticDocumentReference::Manual { .. } => DocumentEdgeKind::Manual,
+        DocumentReference::Document { .. } => DocumentEdgeKind::Document,
+        DocumentReference::Manual { .. } => DocumentEdgeKind::Manual,
     }
 }
 
@@ -172,8 +172,8 @@ mod tests {
         let names = references
             .iter()
             .map(|reference| match &reference.target {
-                SemanticDocumentReference::Document { name, .. } => name.as_str(),
-                SemanticDocumentReference::Manual { .. } => panic!("Markdown reference"),
+                DocumentReference::Document { name, .. } => name.as_str(),
+                DocumentReference::Manual { .. } => panic!("Markdown reference"),
             })
             .collect::<Vec<_>>();
         assert_eq!(names, ["index", "before", "topic", "after"]);
@@ -198,7 +198,7 @@ mod tests {
         assert_eq!(references.len(), 3);
         for (reference, expected) in references.iter().zip(["target", "body", "domain"]) {
             assert!(
-                matches!(&reference.target, SemanticDocumentReference::Document { name, .. } if name == expected)
+                matches!(&reference.target, DocumentReference::Document { name, .. } if name == expected)
             );
         }
         let document = query.document.as_mut().unwrap();

@@ -748,7 +748,8 @@ impl Inline {
 #[serde(
     tag = "kind",
     rename_all = "kebab-case",
-    rename_all_fields = "camelCase"
+    rename_all_fields = "camelCase",
+    deny_unknown_fields
 )]
 pub enum LinkTarget {
     /// An external URI from mdoc `Lk`, man `UR`, or Markdown links.

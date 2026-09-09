@@ -9,7 +9,7 @@ use super::{
 };
 use super::{
     execute::{execute_scope_explain, execute_scope_search},
-    references::{DocumentReference, document_references},
+    references::{ScopeReference, document_references},
 };
 
 impl DocumentResolver {
@@ -290,7 +290,7 @@ impl ScopeResolution {
         resolver: &DocumentResolver,
         from: &DocumentAddress,
         depth: u16,
-        reference: &DocumentReference,
+        reference: &ScopeReference,
     ) {
         if let Some(address) = reference.exact_address(from) {
             let edge = DocumentEdge {
@@ -442,7 +442,7 @@ impl ScopeResolution {
     pub(super) fn record_frontier(
         &mut self,
         from: &DocumentAddress,
-        reference: &DocumentReference,
+        reference: &ScopeReference,
         limit: TraversalLimit,
     ) {
         let frontier = DocumentFrontier {

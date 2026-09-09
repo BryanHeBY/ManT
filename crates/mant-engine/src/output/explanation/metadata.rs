@@ -98,14 +98,14 @@ pub(super) fn domain_label(domain: &mant_ir::ValueDomain) -> String {
             ..
         } => {
             let target = match reference {
-                mant_ir::SemanticDocumentReference::Document { name, fragment } => format!(
+                mant_ir::DocumentReference::Document { name, fragment } => format!(
                     "{name}{}",
                     fragment
                         .as_ref()
                         .map(|f| format!("#{f}"))
                         .unwrap_or_default()
                 ),
-                mant_ir::SemanticDocumentReference::Manual {
+                mant_ir::DocumentReference::Manual {
                     name,
                     manual_section,
                 } => format!("manual/{}/{name}", manual_section.as_deref().unwrap_or("?")),

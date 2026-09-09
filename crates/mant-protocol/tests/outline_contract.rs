@@ -1,8 +1,8 @@
 //! Locks the public JSON shapes used for outline discovery and excerpts.
 
 use mant_ir::{
-    Block, DefinitionItem, DocumentAddress, DocumentMeta, DocumentSource, EntryFacts, EntryKind,
-    EntrySummary, Inline, LayoutHint, NameCase, ParameterKind, Section, SemanticDocumentReference,
+    Block, DefinitionItem, DocumentAddress, DocumentMeta, DocumentReference, DocumentSource,
+    EntryFacts, EntryKind, EntrySummary, Inline, LayoutHint, NameCase, ParameterKind, Section,
     SourceFormat, TldrDocument, TldrOrigin,
 };
 use mant_protocol::{
@@ -53,7 +53,7 @@ fn outline_contract_exposes_both_human_paths_and_document_ids() {
                 forms: vec!["-a, --all".to_owned()],
                 document_targets: vec![EntryDocumentTarget {
                     label: "help(1)".to_owned(),
-                    reference: SemanticDocumentReference::Manual {
+                    reference: DocumentReference::Manual {
                         name: "help".to_owned(),
                         manual_section: Some("1".to_owned()),
                     },

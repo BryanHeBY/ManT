@@ -38,7 +38,7 @@ identity. No persistent duplicate link array is added to Document. A streaming
 visitor can be stopped before another node or path is materialized; callers
 need not build `SemanticIndex` or project all forms to obtain a summary.
 
-The neutral `DocumentReference` name replaces `SemanticDocumentReference`.
+The neutral `DocumentReference` type is shared by semantic relations and scope.
 Only document/manual targets are accepted by entry-set relations. Entry sets
 remain semantic relations, not visible link occurrences. Valid form slices
 associate with original link occurrences; they never create a second edge.

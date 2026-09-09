@@ -224,14 +224,14 @@ fn entry_document_label(target: &EntryDocumentTarget) -> String {
 }
 
 fn resolved_reference_label(
-    reference: &mant_ir::SemanticDocumentReference,
+    reference: &mant_ir::DocumentReference,
     address: Option<&mant_ir::DocumentAddress>,
 ) -> String {
     let Some(address) = address else {
         return semantic_reference_label(reference);
     };
     let mut destination = address.catalog_path();
-    if let mant_ir::SemanticDocumentReference::Document {
+    if let mant_ir::DocumentReference::Document {
         fragment: Some(fragment),
         ..
     } = reference
@@ -242,12 +242,12 @@ fn resolved_reference_label(
     destination
 }
 
-fn semantic_reference_label(reference: &mant_ir::SemanticDocumentReference) -> String {
+fn semantic_reference_label(reference: &mant_ir::DocumentReference) -> String {
     match reference {
-        mant_ir::SemanticDocumentReference::Document { name, fragment } => fragment
+        mant_ir::DocumentReference::Document { name, fragment } => fragment
             .as_ref()
             .map_or_else(|| name.clone(), |fragment| format!("{name}#{fragment}")),
-        mant_ir::SemanticDocumentReference::Manual {
+        mant_ir::DocumentReference::Manual {
             name,
             manual_section,
         } => manual_section.as_ref().map_or_else(

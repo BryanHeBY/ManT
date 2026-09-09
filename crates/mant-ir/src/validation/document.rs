@@ -7,8 +7,8 @@ use super::{
     source::validate_source_span,
 };
 use crate::{
-    Block, DefinitionItem, Diagnostic, DiagnosticLevel, Document, DocumentIndex, IndexedRole,
-    Inline, LinkTarget, NodeId, Section, SemanticDocumentReference, SourceSpan, ValueDomain,
+    Block, DefinitionItem, Diagnostic, DiagnosticLevel, Document, DocumentIndex, DocumentReference,
+    IndexedRole, Inline, LinkTarget, NodeId, Section, SourceSpan, ValueDomain,
     visit::{self, Visit},
 };
 
@@ -346,16 +346,16 @@ impl<'ir> Visit<'ir> for InvariantCollector {
 
 fn validate_semantic_document_reference(
     diagnostics: &mut Vec<Diagnostic>,
-    reference: &SemanticDocumentReference,
+    reference: &DocumentReference,
 ) {
     let empty = match reference {
-        SemanticDocumentReference::Document { name, fragment } => {
+        DocumentReference::Document { name, fragment } => {
             name.trim().is_empty()
                 || fragment
                     .as_deref()
                     .is_some_and(|fragment| fragment.trim().is_empty())
         }
-        SemanticDocumentReference::Manual {
+        DocumentReference::Manual {
             name,
             manual_section,
         } => {
@@ -743,7 +743,7 @@ mod tests {
                 case: NameCase::Sensitive,
                 names: vec!["--output".to_owned()],
                 value_domain: Some(crate::ValueDomain::EntrySet {
-                    reference: crate::SemanticDocumentReference::Manual {
+                    reference: crate::DocumentReference::Manual {
                         name: String::new(),
                         manual_section: Some(String::new()),
                     },
@@ -776,7 +776,7 @@ mod tests {
 
         definition.entry.as_mut().expect("identity").value_domain =
             Some(crate::ValueDomain::EntrySet {
-                reference: crate::SemanticDocumentReference::Manual {
+                reference: crate::DocumentReference::Manual {
                     name: "ssh_config".to_owned(),
                     manual_section: Some("qgroup".to_owned()),
                 },

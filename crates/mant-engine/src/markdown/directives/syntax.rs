@@ -3,9 +3,7 @@ use super::{
     AttachedValuePolicy, DomainDeclaration, EntryDeclaration, domain_diagnostic,
     semantic_diagnostic,
 };
-use mant_ir::{
-    Diagnostic, EntryKind, NameCase, SemanticDocumentReference, SourceSpan, ValueDomain,
-};
+use mant_ir::{Diagnostic, DocumentReference, EntryKind, NameCase, SourceSpan, ValueDomain};
 pub(super) fn is_semantic_directive(raw: &str, name: &str) -> bool {
     raw.trim()
         .strip_prefix("<!--")
@@ -186,12 +184,12 @@ fn parse_domain_declaration(value: &str, source: SourceSpan) -> Result<DomainDec
     Ok(DomainDeclaration { value, source })
 }
 
-fn parse_domain_reference(value: &str) -> Result<SemanticDocumentReference, String> {
+fn parse_domain_reference(value: &str) -> Result<DocumentReference, String> {
     if let Some(rest) = value.strip_prefix("manual/") {
         let Some((manual_section, name)) = rest.split_once('/') else {
             return Err("manual entry domains use manual/<section>/<name>".to_owned());
         };
-        let reference = SemanticDocumentReference::Manual {
+        let reference = DocumentReference::Manual {
             name: name.to_owned(),
             manual_section: Some(manual_section.to_owned()),
         };
@@ -208,7 +206,7 @@ fn parse_domain_reference(value: &str) -> Result<SemanticDocumentReference, Stri
     if fragment.is_some() {
         return Err("entry domains must reference a complete document, not a fragment".to_owned());
     }
-    let reference = SemanticDocumentReference::Document { name, fragment };
+    let reference = DocumentReference::Document { name, fragment };
     reference
         .is_well_formed()
         .then_some(reference)

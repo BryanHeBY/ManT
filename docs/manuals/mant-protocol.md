@@ -1213,7 +1213,7 @@ Selections retain source-neutral IR: an entry-set `valueDomain` carries its
 authored reference and source span, not a catalog lookup result. Outline uses
 the protocol-owned summary with a namespace-resolved `address` instead.
 Excerpt clients can use the excerpt's `address` with
-`SemanticDocumentReference::resolve_from`, or request the corresponding outline
+`DocumentReference::resolve_from`, or request the corresponding outline
 node for its resolved relationship summary. Direct-file inputs have no logical
 namespace; an address never proves that a target document is installed.
 

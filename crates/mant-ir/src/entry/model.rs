@@ -97,7 +97,7 @@ pub enum ValueDomain {
     /// Entries owned by another logical document form the value space.
     EntrySet {
         /// Source-neutral reference to the document that owns the entries.
-        reference: SemanticDocumentReference,
+        reference: DocumentReference,
         /// Accepted semantic categories in the referenced document.
         #[schemars(length(min = 1, max = 9))]
         entry_kinds: Vec<EntryKind>,
@@ -112,9 +112,10 @@ pub enum ValueDomain {
 #[serde(
     tag = "kind",
     rename_all = "kebab-case",
-    rename_all_fields = "camelCase"
+    rename_all_fields = "camelCase",
+    deny_unknown_fields
 )]
-pub enum SemanticDocumentReference {
+pub enum DocumentReference {
     /// A relative Markdown document in the current registered namespace.
     Document {
         /// Extension-free relative document path.
@@ -137,7 +138,7 @@ pub enum SemanticDocumentReference {
     },
 }
 
-impl SemanticDocumentReference {
+impl DocumentReference {
     /// Return whether every component follows the source-neutral reference
     /// grammar shared by producers and IR validation.
     #[must_use]
@@ -224,7 +225,7 @@ pub struct SemanticDocumentTarget {
     /// Visible term text associated with this destination.
     pub label: String,
     /// Source-neutral logical destination.
-    pub reference: SemanticDocumentReference,
+    pub reference: DocumentReference,
 }
 
 /// One indexed content record backed by exactly one annotated content owner.

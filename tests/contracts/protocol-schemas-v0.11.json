@@ -1358,6 +1358,67 @@
           }
         }
       },
+      "DocumentReference": {
+        "description": "A source-neutral reference to another locally addressable document.",
+        "oneOf": [
+          {
+            "description": "A relative Markdown document in the current registered namespace.",
+            "type": "object",
+            "properties": {
+              "fragment": {
+                "description": "Optional document-local fragment.",
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "minLength": 1
+              },
+              "kind": {
+                "type": "string",
+                "const": "document"
+              },
+              "name": {
+                "description": "Extension-free relative document path.",
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "name"
+            ]
+          },
+          {
+            "description": "A typed native manual reference.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "manual"
+              },
+              "manualSection": {
+                "description": "Native manual category, when source-specified.",
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "minLength": 1
+              },
+              "name": {
+                "description": "Manual topic without a section suffix.",
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "name"
+            ]
+          }
+        ]
+      },
       "DocumentSource": {
         "description": "Original source identity; temporary decompression paths must not appear.",
         "type": "object",
@@ -2092,6 +2153,7 @@
                 "type": "string"
               }
             },
+            "additionalProperties": false,
             "required": [
               "kind",
               "uri"
@@ -2110,6 +2172,7 @@
                 "const": "email"
               }
             },
+            "additionalProperties": false,
             "required": [
               "kind",
               "address"
@@ -2135,6 +2198,7 @@
                 "type": "string"
               }
             },
+            "additionalProperties": false,
             "required": [
               "kind",
               "name"
@@ -2160,6 +2224,7 @@
                 "type": "string"
               }
             },
+            "additionalProperties": false,
             "required": [
               "kind",
               "name"
@@ -2178,6 +2243,7 @@
                 "const": "section"
               }
             },
+            "additionalProperties": false,
             "required": [
               "kind",
               "id"
@@ -2672,65 +2738,6 @@
           "children"
         ]
       },
-      "SemanticDocumentReference": {
-        "description": "A source-neutral reference to another locally addressable document.",
-        "oneOf": [
-          {
-            "description": "A relative Markdown document in the current registered namespace.",
-            "type": "object",
-            "properties": {
-              "fragment": {
-                "description": "Optional document-local fragment.",
-                "type": [
-                  "string",
-                  "null"
-                ],
-                "minLength": 1
-              },
-              "kind": {
-                "type": "string",
-                "const": "document"
-              },
-              "name": {
-                "description": "Extension-free relative document path.",
-                "type": "string",
-                "minLength": 1
-              }
-            },
-            "required": [
-              "kind",
-              "name"
-            ]
-          },
-          {
-            "description": "A typed native manual reference.",
-            "type": "object",
-            "properties": {
-              "kind": {
-                "type": "string",
-                "const": "manual"
-              },
-              "manualSection": {
-                "description": "Native manual category, when source-specified.",
-                "type": [
-                  "string",
-                  "null"
-                ],
-                "minLength": 1
-              },
-              "name": {
-                "description": "Manual topic without a section suffix.",
-                "type": "string",
-                "minLength": 1
-              }
-            },
-            "required": [
-              "kind",
-              "name"
-            ]
-          }
-        ]
-      },
       "SourceFormat": {
         "description": "Source format consumed by the normalization engine.",
         "oneOf": [
@@ -3081,7 +3088,7 @@
               },
               "reference": {
                 "description": "Source-neutral reference to the document that owns the entries.",
-                "$ref": "#/$defs/SemanticDocumentReference"
+                "$ref": "#/$defs/DocumentReference"
               },
               "source": {
                 "description": "Source position of the relationship declaration, when available.",
@@ -3894,6 +3901,67 @@
               "kind",
               "name",
               "manualSection"
+            ]
+          }
+        ]
+      },
+      "DocumentReference": {
+        "description": "A source-neutral reference to another locally addressable document.",
+        "oneOf": [
+          {
+            "description": "A relative Markdown document in the current registered namespace.",
+            "type": "object",
+            "properties": {
+              "fragment": {
+                "description": "Optional document-local fragment.",
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "minLength": 1
+              },
+              "kind": {
+                "type": "string",
+                "const": "document"
+              },
+              "name": {
+                "description": "Extension-free relative document path.",
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "name"
+            ]
+          },
+          {
+            "description": "A typed native manual reference.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "manual"
+              },
+              "manualSection": {
+                "description": "Native manual category, when source-specified.",
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "minLength": 1
+              },
+              "name": {
+                "description": "Manual topic without a section suffix.",
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "name"
             ]
           }
         ]
@@ -5510,6 +5578,7 @@
                 "type": "string"
               }
             },
+            "additionalProperties": false,
             "required": [
               "kind",
               "uri"
@@ -5528,6 +5597,7 @@
                 "const": "email"
               }
             },
+            "additionalProperties": false,
             "required": [
               "kind",
               "address"
@@ -5553,6 +5623,7 @@
                 "type": "string"
               }
             },
+            "additionalProperties": false,
             "required": [
               "kind",
               "name"
@@ -5578,6 +5649,7 @@
                 "type": "string"
               }
             },
+            "additionalProperties": false,
             "required": [
               "kind",
               "name"
@@ -5596,6 +5668,7 @@
                 "const": "section"
               }
             },
+            "additionalProperties": false,
             "required": [
               "kind",
               "id"
@@ -6030,65 +6103,6 @@
           "end"
         ]
       },
-      "SemanticDocumentReference": {
-        "description": "A source-neutral reference to another locally addressable document.",
-        "oneOf": [
-          {
-            "description": "A relative Markdown document in the current registered namespace.",
-            "type": "object",
-            "properties": {
-              "fragment": {
-                "description": "Optional document-local fragment.",
-                "type": [
-                  "string",
-                  "null"
-                ],
-                "minLength": 1
-              },
-              "kind": {
-                "type": "string",
-                "const": "document"
-              },
-              "name": {
-                "description": "Extension-free relative document path.",
-                "type": "string",
-                "minLength": 1
-              }
-            },
-            "required": [
-              "kind",
-              "name"
-            ]
-          },
-          {
-            "description": "A typed native manual reference.",
-            "type": "object",
-            "properties": {
-              "kind": {
-                "type": "string",
-                "const": "manual"
-              },
-              "manualSection": {
-                "description": "Native manual category, when source-specified.",
-                "type": [
-                  "string",
-                  "null"
-                ],
-                "minLength": 1
-              },
-              "name": {
-                "description": "Manual topic without a section suffix.",
-                "type": "string",
-                "minLength": 1
-              }
-            },
-            "required": [
-              "kind",
-              "name"
-            ]
-          }
-        ]
-      },
       "SourceSpan": {
         "description": "Location in the original source file.\n\nLines and columns are one-based for diagnostics. `byte_range`, when the\nparser provides exact offsets, is the canonical machine-facing boundary.",
         "type": "object",
@@ -6283,7 +6297,7 @@
               },
               "reference": {
                 "description": "Source-neutral reference to the document that owns the entries.",
-                "$ref": "#/$defs/SemanticDocumentReference"
+                "$ref": "#/$defs/DocumentReference"
               },
               "source": {
                 "description": "Source position of the relationship declaration, when available.",
@@ -6578,6 +6592,67 @@
           }
         }
       },
+      "DocumentReference": {
+        "description": "A source-neutral reference to another locally addressable document.",
+        "oneOf": [
+          {
+            "description": "A relative Markdown document in the current registered namespace.",
+            "type": "object",
+            "properties": {
+              "fragment": {
+                "description": "Optional document-local fragment.",
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "minLength": 1
+              },
+              "kind": {
+                "type": "string",
+                "const": "document"
+              },
+              "name": {
+                "description": "Extension-free relative document path.",
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "name"
+            ]
+          },
+          {
+            "description": "A typed native manual reference.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "manual"
+              },
+              "manualSection": {
+                "description": "Native manual category, when source-specified.",
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "minLength": 1
+              },
+              "name": {
+                "description": "Manual topic without a section suffix.",
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "name"
+            ]
+          }
+        ]
+      },
       "DocumentSource": {
         "description": "Original source identity; temporary decompression paths must not appear.",
         "type": "object",
@@ -6620,7 +6695,7 @@
           },
           "reference": {
             "description": "Source-authored logical reference.",
-            "$ref": "#/$defs/SemanticDocumentReference"
+            "$ref": "#/$defs/DocumentReference"
           }
         },
         "additionalProperties": false,
@@ -6916,7 +6991,7 @@
               },
               "reference": {
                 "description": "Source-authored logical reference.",
-                "$ref": "#/$defs/SemanticDocumentReference"
+                "$ref": "#/$defs/DocumentReference"
               }
             },
             "additionalProperties": false,
@@ -7261,65 +7336,6 @@
             "description": "Positional or special operand such as a documented stdin `-`.",
             "type": "string",
             "const": "operand"
-          }
-        ]
-      },
-      "SemanticDocumentReference": {
-        "description": "A source-neutral reference to another locally addressable document.",
-        "oneOf": [
-          {
-            "description": "A relative Markdown document in the current registered namespace.",
-            "type": "object",
-            "properties": {
-              "fragment": {
-                "description": "Optional document-local fragment.",
-                "type": [
-                  "string",
-                  "null"
-                ],
-                "minLength": 1
-              },
-              "kind": {
-                "type": "string",
-                "const": "document"
-              },
-              "name": {
-                "description": "Extension-free relative document path.",
-                "type": "string",
-                "minLength": 1
-              }
-            },
-            "required": [
-              "kind",
-              "name"
-            ]
-          },
-          {
-            "description": "A typed native manual reference.",
-            "type": "object",
-            "properties": {
-              "kind": {
-                "type": "string",
-                "const": "manual"
-              },
-              "manualSection": {
-                "description": "Native manual category, when source-specified.",
-                "type": [
-                  "string",
-                  "null"
-                ],
-                "minLength": 1
-              },
-              "name": {
-                "description": "Manual topic without a section suffix.",
-                "type": "string",
-                "minLength": 1
-              }
-            },
-            "required": [
-              "kind",
-              "name"
-            ]
           }
         ]
       },
@@ -8113,6 +8129,67 @@
           }
         }
       },
+      "DocumentReference": {
+        "description": "A source-neutral reference to another locally addressable document.",
+        "oneOf": [
+          {
+            "description": "A relative Markdown document in the current registered namespace.",
+            "type": "object",
+            "properties": {
+              "fragment": {
+                "description": "Optional document-local fragment.",
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "minLength": 1
+              },
+              "kind": {
+                "type": "string",
+                "const": "document"
+              },
+              "name": {
+                "description": "Extension-free relative document path.",
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "name"
+            ]
+          },
+          {
+            "description": "A typed native manual reference.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "manual"
+              },
+              "manualSection": {
+                "description": "Native manual category, when source-specified.",
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "minLength": 1
+              },
+              "name": {
+                "description": "Manual topic without a section suffix.",
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "name"
+            ]
+          }
+        ]
+      },
       "DocumentResponse": {
         "description": "Serializable v0.11 envelope around `ManT`'s protocol-independent document IR.",
         "type": "object",
@@ -8801,6 +8878,7 @@
                 "type": "string"
               }
             },
+            "additionalProperties": false,
             "required": [
               "kind",
               "uri"
@@ -8819,6 +8897,7 @@
                 "const": "email"
               }
             },
+            "additionalProperties": false,
             "required": [
               "kind",
               "address"
@@ -8844,6 +8923,7 @@
                 "type": "string"
               }
             },
+            "additionalProperties": false,
             "required": [
               "kind",
               "name"
@@ -8869,6 +8949,7 @@
                 "type": "string"
               }
             },
+            "additionalProperties": false,
             "required": [
               "kind",
               "name"
@@ -8887,6 +8968,7 @@
                 "const": "section"
               }
             },
+            "additionalProperties": false,
             "required": [
               "kind",
               "id"
@@ -9201,65 +9283,6 @@
           "heading",
           "blocks",
           "children"
-        ]
-      },
-      "SemanticDocumentReference": {
-        "description": "A source-neutral reference to another locally addressable document.",
-        "oneOf": [
-          {
-            "description": "A relative Markdown document in the current registered namespace.",
-            "type": "object",
-            "properties": {
-              "fragment": {
-                "description": "Optional document-local fragment.",
-                "type": [
-                  "string",
-                  "null"
-                ],
-                "minLength": 1
-              },
-              "kind": {
-                "type": "string",
-                "const": "document"
-              },
-              "name": {
-                "description": "Extension-free relative document path.",
-                "type": "string",
-                "minLength": 1
-              }
-            },
-            "required": [
-              "kind",
-              "name"
-            ]
-          },
-          {
-            "description": "A typed native manual reference.",
-            "type": "object",
-            "properties": {
-              "kind": {
-                "type": "string",
-                "const": "manual"
-              },
-              "manualSection": {
-                "description": "Native manual category, when source-specified.",
-                "type": [
-                  "string",
-                  "null"
-                ],
-                "minLength": 1
-              },
-              "name": {
-                "description": "Manual topic without a section suffix.",
-                "type": "string",
-                "minLength": 1
-              }
-            },
-            "required": [
-              "kind",
-              "name"
-            ]
-          }
         ]
       },
       "SourceFormat": {
@@ -9612,7 +9635,7 @@
               },
               "reference": {
                 "description": "Source-neutral reference to the document that owns the entries.",
-                "$ref": "#/$defs/SemanticDocumentReference"
+                "$ref": "#/$defs/DocumentReference"
               },
               "source": {
                 "description": "Source position of the relationship declaration, when available.",
@@ -10979,6 +11002,67 @@
           "target",
           "kind",
           "limit"
+        ]
+      },
+      "DocumentReference": {
+        "description": "A source-neutral reference to another locally addressable document.",
+        "oneOf": [
+          {
+            "description": "A relative Markdown document in the current registered namespace.",
+            "type": "object",
+            "properties": {
+              "fragment": {
+                "description": "Optional document-local fragment.",
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "minLength": 1
+              },
+              "kind": {
+                "type": "string",
+                "const": "document"
+              },
+              "name": {
+                "description": "Extension-free relative document path.",
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "name"
+            ]
+          },
+          {
+            "description": "A typed native manual reference.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "manual"
+              },
+              "manualSection": {
+                "description": "Native manual category, when source-specified.",
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "minLength": 1
+              },
+              "name": {
+                "description": "Manual topic without a section suffix.",
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "name"
+            ]
+          }
         ]
       },
       "DocumentScope": {
@@ -12679,6 +12763,7 @@
                 "type": "string"
               }
             },
+            "additionalProperties": false,
             "required": [
               "kind",
               "uri"
@@ -12697,6 +12782,7 @@
                 "const": "email"
               }
             },
+            "additionalProperties": false,
             "required": [
               "kind",
               "address"
@@ -12722,6 +12808,7 @@
                 "type": "string"
               }
             },
+            "additionalProperties": false,
             "required": [
               "kind",
               "name"
@@ -12747,6 +12834,7 @@
                 "type": "string"
               }
             },
+            "additionalProperties": false,
             "required": [
               "kind",
               "name"
@@ -12765,6 +12853,7 @@
                 "const": "section"
               }
             },
+            "additionalProperties": false,
             "required": [
               "kind",
               "id"
@@ -14017,65 +14106,6 @@
           }
         ]
       },
-      "SemanticDocumentReference": {
-        "description": "A source-neutral reference to another locally addressable document.",
-        "oneOf": [
-          {
-            "description": "A relative Markdown document in the current registered namespace.",
-            "type": "object",
-            "properties": {
-              "fragment": {
-                "description": "Optional document-local fragment.",
-                "type": [
-                  "string",
-                  "null"
-                ],
-                "minLength": 1
-              },
-              "kind": {
-                "type": "string",
-                "const": "document"
-              },
-              "name": {
-                "description": "Extension-free relative document path.",
-                "type": "string",
-                "minLength": 1
-              }
-            },
-            "required": [
-              "kind",
-              "name"
-            ]
-          },
-          {
-            "description": "A typed native manual reference.",
-            "type": "object",
-            "properties": {
-              "kind": {
-                "type": "string",
-                "const": "manual"
-              },
-              "manualSection": {
-                "description": "Native manual category, when source-specified.",
-                "type": [
-                  "string",
-                  "null"
-                ],
-                "minLength": 1
-              },
-              "name": {
-                "description": "Manual topic without a section suffix.",
-                "type": "string",
-                "minLength": 1
-              }
-            },
-            "required": [
-              "kind",
-              "name"
-            ]
-          }
-        ]
-      },
       "SourceSpan": {
         "description": "Location in the original source file.\n\nLines and columns are one-based for diagnostics. `byte_range`, when the\nparser provides exact offsets, is the canonical machine-facing boundary.",
         "type": "object",
@@ -14319,7 +14349,7 @@
               },
               "reference": {
                 "description": "Source-neutral reference to the document that owns the entries.",
-                "$ref": "#/$defs/SemanticDocumentReference"
+                "$ref": "#/$defs/DocumentReference"
               },
               "source": {
                 "description": "Source position of the relationship declaration, when available.",

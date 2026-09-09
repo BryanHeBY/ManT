@@ -4,8 +4,8 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Deserializer, Serialize};
 
 use mant_ir::{
-    Block, Diagnostic, DocumentAddress, DocumentMeta, DocumentSource, EntryKind, EntrySummary,
-    NameCase, NodeId, Section, SemanticDocumentReference, TldrDocument,
+    Block, Diagnostic, DocumentAddress, DocumentMeta, DocumentReference, DocumentSource, EntryKind,
+    EntrySummary, NameCase, NodeId, Section, TldrDocument,
 };
 
 use crate::{NodePath, NodeSelector, Producer};
@@ -140,7 +140,7 @@ pub struct EntryDocumentTarget {
     #[schemars(length(min = 1))]
     pub label: String,
     /// Source-authored logical reference.
-    pub reference: SemanticDocumentReference,
+    pub reference: DocumentReference,
     /// Exact logical destination resolved in the source document namespace.
     ///
     /// This is absent for direct-file inputs and references, such as an
@@ -166,7 +166,7 @@ pub enum EntryValueDomain {
     /// Entries owned by another logical document form the value space.
     EntrySet {
         /// Source-authored logical reference.
-        reference: SemanticDocumentReference,
+        reference: DocumentReference,
         /// Exact logical destination when namespace-only resolution suffices.
         #[serde(skip_serializing_if = "Option::is_none")]
         address: Option<DocumentAddress>,

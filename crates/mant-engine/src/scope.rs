@@ -5,8 +5,7 @@ use std::{error::Error, fmt, io::Write};
 
 use mant_ir::visit::{Visit, walk_block, walk_definition_item, walk_inline};
 use mant_ir::{
-    Block, DefinitionItem, DocumentAddress, Inline, ResolvedContent, SemanticDocumentReference,
-    ValueDomain,
+    Block, DefinitionItem, DocumentAddress, DocumentReference, Inline, ResolvedContent, ValueDomain,
 };
 use mant_protocol::{
     DocumentEdge, DocumentEdgeKind, DocumentFrontier, DocumentScope, DocumentSelector,
@@ -26,7 +25,7 @@ mod resolve;
 #[cfg(test)]
 use execute::{execute_scope_explain, execute_scope_search};
 #[cfg(test)]
-use references::{DocumentReference, document_references};
+use references::{ScopeReference, document_references};
 #[cfg(test)]
 use resolve::{ResolutionFailures, ScopeResolution, normalized_content_bytes};
 
@@ -304,8 +303,8 @@ mod tests {
 
         assert!(matches!(
             references.as_slice(),
-            [DocumentReference {
-                target: SemanticDocumentReference::Manual {
+            [ScopeReference {
+                target: DocumentReference::Manual {
                     name,
                     manual_section: Some(section),
                 },
@@ -356,8 +355,8 @@ mod tests {
             references
                 .iter()
                 .map(|reference| match &reference.target {
-                    SemanticDocumentReference::Document { name, .. }
-                    | SemanticDocumentReference::Manual { name, .. } => name.as_str(),
+                    DocumentReference::Document { name, .. }
+                    | DocumentReference::Manual { name, .. } => name.as_str(),
                 })
                 .collect::<Vec<_>>(),
             ["target", "description", "domain"]
@@ -633,8 +632,8 @@ mod tests {
             let Inline::Link { target, .. } = &children[0] else {
                 panic!("link")
             };
-            let reference = DocumentReference {
-                target: SemanticDocumentReference::from_link_target(target).unwrap(),
+            let reference = ScopeReference {
+                target: DocumentReference::from_link_target(target).unwrap(),
                 kind: DocumentEdgeKind::Document,
                 source_offset: None,
                 sequence: 0,
@@ -649,8 +648,8 @@ mod tests {
 
     #[test]
     fn relative_links_use_the_current_markdown_namespace() {
-        let reference = DocumentReference {
-            target: SemanticDocumentReference::Document {
+        let reference = ScopeReference {
+            target: DocumentReference::Document {
                 name: "../other".to_owned(),
                 fragment: None,
             },
@@ -686,8 +685,8 @@ mod tests {
             name: "root".to_owned(),
             manual_section: "1".to_owned(),
         };
-        let reference = DocumentReference {
-            target: SemanticDocumentReference::Manual {
+        let reference = ScopeReference {
+            target: DocumentReference::Manual {
                 name: "child".to_owned(),
                 manual_section: None,
             },

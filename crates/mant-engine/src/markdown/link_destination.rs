@@ -34,7 +34,7 @@ pub(super) fn manual_reference(value: &str) -> Option<mant_ir::LinkTarget> {
         return None;
     }
     let name = decode_component(name)?;
-    let reference = mant_ir::SemanticDocumentReference::Manual {
+    let reference = mant_ir::DocumentReference::Manual {
         name: name.clone(),
         manual_section: section.clone(),
     };

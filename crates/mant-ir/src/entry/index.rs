@@ -1,7 +1,7 @@
 //! Rebuild an operation-local semantic index from finalized identities.
 use super::{
     model::{
-        EntryKind, EntrySummary, SemanticDocumentReference, SemanticDocumentTarget, SemanticEntry,
+        DocumentReference, EntryKind, EntrySummary, SemanticDocumentTarget, SemanticEntry,
         ValueDomain,
     },
     walk::visit_child_entries,
@@ -160,10 +160,10 @@ fn collect_document_targets(inlines: &[Inline], output: &mut Vec<SemanticDocumen
         match inline {
             Inline::Link {
                 target, children, ..
-            } if SemanticDocumentReference::from_link_target(target).is_some() => {
+            } if DocumentReference::from_link_target(target).is_some() => {
                 let candidate = SemanticDocumentTarget {
                     label: inline_text(children),
-                    reference: SemanticDocumentReference::from_link_target(target)
+                    reference: DocumentReference::from_link_target(target)
                         .expect("the match guard accepts a document reference"),
                 };
                 if !output.contains(&candidate) {

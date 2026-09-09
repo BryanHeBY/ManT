@@ -268,7 +268,7 @@ mod tests {
             entry.document_targets,
             [SemanticDocumentTarget {
                 label: "winget.exe".to_owned(),
-                reference: SemanticDocumentReference::Document {
+                reference: DocumentReference::Document {
                     name: "winget.exe".to_owned(),
                     fragment: None,
                 },
@@ -288,7 +288,7 @@ mod tests {
             Vec::new(),
         );
         item.entry.as_mut().expect("identity").value_domain = Some(ValueDomain::EntrySet {
-            reference: SemanticDocumentReference::Manual {
+            reference: DocumentReference::Manual {
                 name: "ssh_config".to_owned(),
                 manual_section: Some("5".to_owned()),
             },
@@ -300,7 +300,7 @@ mod tests {
         assert!(matches!(
             entry.value_domain,
             Some(ValueDomain::EntrySet {
-                reference: SemanticDocumentReference::Manual {
+                reference: DocumentReference::Manual {
                     ref name,
                 manual_section: Some(ref section),
                 },
@@ -315,11 +315,11 @@ mod tests {
     #[test]
     fn semantic_document_references_share_one_strict_grammar() {
         for reference in [
-            SemanticDocumentReference::Document {
+            DocumentReference::Document {
                 name: "../reference/options".to_owned(),
                 fragment: Some("output".to_owned()),
             },
-            SemanticDocumentReference::Manual {
+            DocumentReference::Manual {
                 name: "ssh_config".to_owned(),
                 manual_section: Some("5".to_owned()),
             },
@@ -327,11 +327,11 @@ mod tests {
             assert!(reference.is_well_formed(), "{reference:?}");
         }
         for reference in [
-            SemanticDocumentReference::Document {
+            DocumentReference::Document {
                 name: "broken//path".to_owned(),
                 fragment: None,
             },
-            SemanticDocumentReference::Manual {
+            DocumentReference::Manual {
                 name: "ssh_config".to_owned(),
                 manual_section: Some("qgroup".to_owned()),
             },

@@ -905,7 +905,7 @@ fn semantic_directives_are_independent_of_markdown_line_endings() {
         assert!(matches!(
             entry.value_domain,
             Some(mant_ir::ValueDomain::EntrySet {
-                reference: mant_ir::SemanticDocumentReference::Manual {
+                reference: mant_ir::DocumentReference::Manual {
                     ref name,
                     manual_section: Some(ref section),
                 },
@@ -958,7 +958,7 @@ fn entry_domain_directives_resolve_cross_document_value_spaces() {
     assert!(matches!(
         entry.value_domain,
         Some(mant_ir::ValueDomain::EntrySet {
-            reference: mant_ir::SemanticDocumentReference::Manual {
+            reference: mant_ir::DocumentReference::Manual {
                 ref name,
                 manual_section: Some(ref section),
             },
@@ -992,7 +992,7 @@ fn entry_domain_directives_resolve_cross_document_value_spaces() {
             value_domain: Some(value_domain),
             ..
         }] if matches!(value_domain.as_ref(), mant_protocol::EntryValueDomain::EntrySet {
-                reference: mant_ir::SemanticDocumentReference::Manual { name, manual_section: Some(section) },
+                reference: mant_ir::DocumentReference::Manual { name, manual_section: Some(section) },
                 address: Some(DocumentAddress::Manual { name: address_name, manual_section: address_section }),
                 entry_kinds,
             } if name == "ssh_config"
@@ -1027,7 +1027,7 @@ fn entry_domains_attach_to_multiline_nested_items_with_crlf() {
         assert!(matches!(
             child.value_domain,
             Some(mant_ir::ValueDomain::EntrySet {
-                reference: mant_ir::SemanticDocumentReference::Manual {
+                reference: mant_ir::DocumentReference::Manual {
                     ref name,
                     manual_section: Some(ref section),
                 },
@@ -1100,14 +1100,14 @@ fn entry_domains_on_nested_items_remain_independent() {
     assert!(matches!(
         parent.value_domain,
         Some(mant_ir::ValueDomain::EntrySet {
-            reference: mant_ir::SemanticDocumentReference::Document { ref name, .. },
+            reference: mant_ir::DocumentReference::Document { ref name, .. },
             ..
         }) if name == "query-values"
     ));
     assert!(matches!(
         child.value_domain,
         Some(mant_ir::ValueDomain::EntrySet {
-            reference: mant_ir::SemanticDocumentReference::Document { ref name, .. },
+            reference: mant_ir::DocumentReference::Document { ref name, .. },
             ..
         }) if name == "user-values"
     ));
@@ -1204,13 +1204,13 @@ fn linked_code_terms_define_entry_document_destinations() {
         entries[0].document_targets.as_slice(),
         [mant_ir::SemanticDocumentTarget {
             label: first_label,
-            reference: mant_ir::SemanticDocumentReference::Document {
+            reference: mant_ir::DocumentReference::Document {
                 name: first_name,
                 fragment: Some(first_fragment),
             },
         }, mant_ir::SemanticDocumentTarget {
             label: second_label,
-            reference: mant_ir::SemanticDocumentReference::Document {
+            reference: mant_ir::DocumentReference::Document {
                 name: second_name,
                 fragment: Some(second_fragment),
             },
@@ -1247,11 +1247,11 @@ fn linked_code_terms_define_entry_document_destinations() {
                 document_targets.as_slice(),
                 [mant_protocol::EntryDocumentTarget {
                     label: first_label,
-                    reference: mant_ir::SemanticDocumentReference::Document { name: first_name, fragment: Some(first_fragment) },
+                    reference: mant_ir::DocumentReference::Document { name: first_name, fragment: Some(first_fragment) },
                     address: Some(DocumentAddress::Markdown { path: first_path, origin: MarkdownOrigin::Documents }),
                 }, mant_protocol::EntryDocumentTarget {
                     label: second_label,
-                    reference: mant_ir::SemanticDocumentReference::Document { name: second_name, fragment: Some(second_fragment) },
+                    reference: mant_ir::DocumentReference::Document { name: second_name, fragment: Some(second_fragment) },
                     address: Some(DocumentAddress::Markdown { path, origin: MarkdownOrigin::Documents }),
                 }] if first_label == "winget"
                     && second_label == "w"
