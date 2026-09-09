@@ -3,10 +3,9 @@ use super::*;
 
 #[test]
 fn roff_manual_name_link_excludes_surrounding_prose_after_wrapping() {
-    let source = include_str!("../../../../../docs/manuals/mant-roff.md")
-        .lines()
-        .find(|line| line.starts_with("The following "))
-        .expect("man macro introduction");
+    // Keep packaged unit tests self-contained. The engine's repository-level
+    // self_manual_authoring test separately checks the actual shipped labels.
+    let source = "The following [man(7)](https://mandoc.bsd.lv/man/man.7.html) macros documented by mandoc have dedicated lowering behavior:";
     let query = mant_engine::query_markdown_text(source, None).unwrap();
     let view = DocumentView::new(&query);
     let target = LinkTarget::External(
