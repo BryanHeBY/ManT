@@ -13,6 +13,9 @@ pub use table::table_requires_origin_preserving_stack;
 mod gaps;
 pub use gaps::has_bounded_gap;
 
+mod terms;
+pub use terms::definition_run_in_width;
+
 /// Maximum explicit gap in one logical block boundary. The producer can report
 /// saturation through [`GapPlan::is_bounded`] without allocating blank rows.
 pub const MAX_GAP_ROWS: u16 = 4096;

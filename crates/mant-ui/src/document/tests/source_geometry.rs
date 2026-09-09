@@ -1,5 +1,6 @@
 //! Source-derived geometry must agree across the two production frontends.
 use super::*;
+use std::fmt::Write;
 
 fn column(text: &str, token: &str) -> usize {
     text.lines()
@@ -106,5 +107,92 @@ fn markdown_semantic_annotation_does_not_change_translated_content_geometry() {
                 }
             }
         }
+    }
+}
+
+#[test]
+fn tq_run_in_uses_only_the_final_label_and_preserves_one_source_owner() {
+    // CVS HEAD man_term.c pre_TP/post_TP flush each head independently;
+    // groff's TQ enters TP after a break as well. Completed heads do not fit
+    // against the last head's body column.
+    for labels in [
+        vec!["--long-first-label", "-b"],
+        vec!["-a", "--long-last-label"],
+        vec!["--long-first-label", "--long-last-label"],
+        vec!["-a", "-b"],
+        vec!["--long-first-label", "--another-long-label", "-c", "-d"],
+        vec!["--long-first-label", "日本"],
+    ] {
+        let mut source = format!(".TH PROBE 1\n.SH OPTIONS\n.TP 7\n.B {}\n", labels[0]);
+        for label in &labels[1..] {
+            writeln!(source, ".TQ\n.B {label}").unwrap();
+        }
+        source.push_str("BODY\n.br\nTAIL\n");
+        let query = mant_engine::query_roff_bytes(source.as_bytes()).unwrap();
+        let document = query.document.as_ref().unwrap();
+        let items = document.sections[0]
+            .blocks
+            .iter()
+            .find_map(|block| match block {
+                Block::DefinitionList { items, .. } => Some(items),
+                _ => None,
+            })
+            .unwrap();
+        assert_eq!(items.len(), 1, "{source}");
+        assert_eq!(items[0].terms.len(), labels.len(), "{source}");
+        let last = labels.last().unwrap();
+        let runs_in = last.width() <= 6;
+        assert_eq!(items[0].layout.inline_term, runs_in, "{source}");
+        if labels.iter().all(|label| label.starts_with('-')) {
+            let facts = items[0].entry.as_ref().unwrap();
+            assert_eq!(facts.names, labels, "{source}");
+            for name in &labels {
+                let excerpt = mant_engine::select_excerpt(&query, &[*name]).unwrap();
+                let text = mant_engine::render_excerpt_text(&excerpt);
+                let body = text.lines().find(|line| line.contains("BODY")).unwrap();
+                assert_eq!(body.contains(last), runs_in, "{source}\n{text}");
+                let explained = mant_engine::explain_query(
+                    &query,
+                    &mant_protocol::ExplanationQuery {
+                        entry: (*name).into(),
+                        options: mant_protocol::ExplanationOptions::default(),
+                    },
+                )
+                .unwrap();
+                assert_eq!(explained.counts.direct_entry.total, 1);
+                let text = mant_engine::render_explanation_text(&explained);
+                assert!(text.contains("BODY"), "{text}");
+                assert!(text.contains("TAIL"), "{text}");
+            }
+        }
+        let before = query.clone();
+        for (text, origin) in std::iter::once((mant_engine::render_query_text(&query), 0)).chain(
+            [40, 80, 120].map(|width| {
+                (
+                    DocumentView::new(&query)
+                        .render(width)
+                        .text
+                        .lines
+                        .iter()
+                        .map(ToString::to_string)
+                        .collect::<Vec<_>>()
+                        .join("\n"),
+                    3,
+                )
+            }),
+        ) {
+            let body = text.lines().find(|line| line.contains("BODY")).unwrap();
+            assert_eq!(body.contains(last), runs_in, "{source}\n{text}");
+            assert_eq!(
+                body.split("BODY").next().unwrap().width(),
+                origin + 7,
+                "{text}"
+            );
+            assert_eq!(column(&text, "TAIL"), origin + 7, "{text}");
+            for label in &labels[..labels.len() - 1] {
+                assert!(text.lines().any(|line| line.trim() == *label), "{text}");
+            }
+        }
+        assert_eq!(query, before);
     }
 }

@@ -165,7 +165,7 @@ impl DocumentBuilder<'_> {
         }
         let mut term_spans = last.spans;
         let mut term_links = last.links;
-        let term_width = spans_width(&term_spans);
+        let term_width = mant_protocol::geometry::definition_run_in_width(&item.terms).unwrap_or(0);
         if let Some((children, layout)) = item.inline_description() {
             for (id, row) in inline_anchor_rows(children) {
                 self.anchors.entry(id).or_insert(self.lines.len() + row);

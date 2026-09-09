@@ -83,14 +83,8 @@ impl BlockRenderer<'_> {
         if let Some((children, layout)) = item.inline_description()
             && let Some(last) = terms.pop()
         {
-            let last_plain = item
-                .terms
-                .iter()
-                .rev()
-                .find(|term| !crate::inline::plain_text(term).is_empty())
-                .map(|term| crate::inline::plain_text(term))
-                .unwrap_or_default();
-            let last_width = text_width(last_plain.rsplit('\n').next().unwrap_or_default());
+            let last_width =
+                mant_protocol::geometry::definition_run_in_width(&item.terms).unwrap_or(0);
             let first_origin =
                 compose_origin(body_origin, layout.indent_columns).max(compose_origin(
                     origin,
