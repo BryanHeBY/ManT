@@ -66,6 +66,7 @@ impl DocumentLoader {
     /// Returns source-configuration or catalog-query failures as one host
     /// boundary diagnostic.
     pub fn discover(&self, query: &CatalogQuery) -> Result<DocumentCatalog, String> {
+        let plan = crate::catalog::CatalogPlan::new(query).map_err(|error| error.to_string())?;
         let registered = self
             .registered
             .get_or_init(RegisteredDocumentIndex::load)
@@ -80,8 +81,7 @@ impl DocumentLoader {
                 manuals.pages(),
             )
         });
-        crate::catalog::query_available_documents(documents, query)
-            .map_err(|error| error.to_string())
+        Ok(plan.apply(documents))
     }
 }
 
@@ -194,3 +194,34 @@ impl LoadHost for DocumentLoader {
     }
 }
 use super::ResolvedContent;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn invalid_discovery_preserves_uninitialized_snapshot_indexes() {
+        let loader = DocumentLoader {
+            registered: OnceLock::new(),
+            manual_roots: Vec::new(),
+            manuals: OnceLock::new(),
+            available: OnceLock::new(),
+        };
+        for query in [
+            CatalogQuery {
+                limit: 0,
+                ..CatalogQuery::default()
+            },
+            CatalogQuery {
+                pattern: Some("[".into()),
+                syntax: mant_protocol::SearchSyntax::Regex,
+                ..CatalogQuery::default()
+            },
+        ] {
+            assert!(loader.discover(&query).is_err());
+            assert!(loader.registered.get().is_none());
+            assert!(loader.manuals.get().is_none());
+            assert!(loader.available.get().is_none());
+        }
+    }
+}

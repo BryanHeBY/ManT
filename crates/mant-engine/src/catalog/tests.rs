@@ -15,6 +15,49 @@ use super::{
 };
 
 #[test]
+fn invalid_catalog_requests_never_start_inventory_discovery() {
+    let queries = [
+        CatalogQuery {
+            limit: 0,
+            ..CatalogQuery::default()
+        },
+        CatalogQuery {
+            pattern: Some("[".into()),
+            syntax: SearchSyntax::Regex,
+            ..CatalogQuery::default()
+        },
+        CatalogQuery {
+            pattern: Some("x".repeat(MAX_CATALOG_PATTERN_CHARS + 1)),
+            ..CatalogQuery::default()
+        },
+        CatalogQuery {
+            source: Some("local".into()),
+            kind: Some(CatalogDocumentKind::Manual),
+            ..CatalogQuery::default()
+        },
+    ];
+    for query in queries {
+        let calls = std::cell::Cell::new(0);
+        assert!(
+            super::discover_with(&query, || {
+                calls.set(calls.get() + 1);
+                panic!("invalid catalog request must not discover source roots")
+            })
+            .is_err()
+        );
+        assert_eq!(calls.get(), 0);
+    }
+    let calls = std::cell::Cell::new(0);
+    let catalog = super::discover_with(&CatalogQuery::default(), || {
+        calls.set(calls.get() + 1);
+        Ok(Vec::new())
+    })
+    .expect("valid request executes its inventory once");
+    assert_eq!(calls.get(), 1);
+    assert_eq!((catalog.total, catalog.returned), (0, 0));
+}
+
+#[test]
 fn catalog_pages_an_immutable_inventory_without_losing_scope_coverage() {
     let documents = ["zeta", "alpha", "beta"]
         .into_iter()

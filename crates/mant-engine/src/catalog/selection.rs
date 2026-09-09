@@ -19,84 +19,104 @@ pub fn query_available_documents(
     documents: &[AvailableDocument],
     query: &CatalogQuery,
 ) -> Result<DocumentCatalog, CatalogError> {
-    validate_catalog_query(query)?;
-    let compiled_pattern = query
-        .pattern
-        .as_deref()
-        .map(|pattern| build_matcher(pattern, query.syntax, query.case))
-        .transpose()?;
-    let in_scope = |document: &&AvailableDocument| catalog_scope_matches(document, query);
-    let scope_total = documents.iter().filter(in_scope).count();
-    let mut filtered = documents
-        .iter()
-        .filter(in_scope)
-        .filter_map(|document| {
-            let match_catalog_path = query
-                .pattern
-                .as_deref()
-                .is_some_and(|pattern| pattern.contains('/'));
-            let matched = compiled_pattern.as_ref().map_or(Ok(true), |matcher| {
-                matcher
-                    .is_match(document.name.as_bytes())
-                    .and_then(|matched| {
-                        if matched {
-                            Ok(true)
-                        } else {
-                            matcher.is_match(document.logical_path.as_bytes())
-                        }
-                    })
-                    .and_then(|matched| {
-                        if matched {
-                            Ok(true)
-                        } else if !match_catalog_path {
-                            Ok(false)
-                        } else {
-                            matcher.is_match(available_catalog_path(document).as_bytes())
-                        }
-                    })
-            });
-            matched.ok().filter(|matched| *matched).map(|_| document)
-        })
-        .collect::<Vec<_>>();
-    filtered.sort_by(|left, right| {
-        match_score(left, query)
-            .cmp(&match_score(right, query))
-            .then_with(|| {
-                left.logical_path
-                    .to_lowercase()
-                    .cmp(&right.logical_path.to_lowercase())
-            })
-            .then_with(|| left.logical_path.cmp(&right.logical_path))
-            .then_with(|| left.name.to_lowercase().cmp(&right.name.to_lowercase()))
-            .then_with(|| left.name.cmp(&right.name))
-            .then_with(|| compare_precedence(left, right))
-            .then_with(|| left.manual_section.cmp(&right.manual_section))
-            .then_with(|| left.origin.cmp(&right.origin))
-    });
+    Ok(CatalogPlan::new(query)?.apply(documents))
+}
 
-    let total = filtered.len();
-    let offset = usize::try_from(query.offset)
-        .unwrap_or(usize::MAX)
-        .min(total);
-    let limit = usize::try_from(query.limit).unwrap_or(usize::MAX);
-    let end = offset.saturating_add(limit).min(total);
-    let coverage = catalog_coverage(documents, scope_total);
-    let documents = filtered[offset..end]
-        .iter()
-        .copied()
-        .map(document_summary)
-        .collect::<Vec<_>>();
-    Ok(DocumentCatalog {
-        schema: CatalogSchema::V0Dot11,
-        query: query.clone(),
-        coverage,
-        total: u32::try_from(total).unwrap_or(u32::MAX),
-        returned: u32::try_from(documents.len()).unwrap_or(u32::MAX),
-        offset: u32::try_from(offset).unwrap_or(u32::MAX),
-        truncated: end < total,
-        next_offset: (end < total).then(|| u32::try_from(end).unwrap_or(u32::MAX)),
-        documents,
-    })
+/// Validated filters and one compiled matcher, prepared before source discovery.
+pub(crate) struct CatalogPlan<'query> {
+    query: &'query CatalogQuery,
+    compiled_pattern: Option<grep_regex::RegexMatcher>,
+}
+
+impl<'query> CatalogPlan<'query> {
+    pub(crate) fn new(query: &'query CatalogQuery) -> Result<Self, CatalogError> {
+        validate_catalog_query(query)?;
+        let compiled_pattern = query
+            .pattern
+            .as_deref()
+            .map(|pattern| build_matcher(pattern, query.syntax, query.case))
+            .transpose()?;
+        Ok(Self {
+            query,
+            compiled_pattern,
+        })
+    }
+
+    pub(crate) fn apply(&self, documents: &[AvailableDocument]) -> DocumentCatalog {
+        let query = self.query;
+        let in_scope = |document: &&AvailableDocument| catalog_scope_matches(document, query);
+        let scope_total = documents.iter().filter(in_scope).count();
+        let mut filtered = documents
+            .iter()
+            .filter(in_scope)
+            .filter_map(|document| {
+                let match_catalog_path = query
+                    .pattern
+                    .as_deref()
+                    .is_some_and(|pattern| pattern.contains('/'));
+                let matched = self.compiled_pattern.as_ref().map_or(Ok(true), |matcher| {
+                    matcher
+                        .is_match(document.name.as_bytes())
+                        .and_then(|matched| {
+                            if matched {
+                                Ok(true)
+                            } else {
+                                matcher.is_match(document.logical_path.as_bytes())
+                            }
+                        })
+                        .and_then(|matched| {
+                            if matched {
+                                Ok(true)
+                            } else if !match_catalog_path {
+                                Ok(false)
+                            } else {
+                                matcher.is_match(available_catalog_path(document).as_bytes())
+                            }
+                        })
+                });
+                matched.ok().filter(|matched| *matched).map(|_| document)
+            })
+            .collect::<Vec<_>>();
+        filtered.sort_by(|left, right| {
+            match_score(left, query)
+                .cmp(&match_score(right, query))
+                .then_with(|| {
+                    left.logical_path
+                        .to_lowercase()
+                        .cmp(&right.logical_path.to_lowercase())
+                })
+                .then_with(|| left.logical_path.cmp(&right.logical_path))
+                .then_with(|| left.name.to_lowercase().cmp(&right.name.to_lowercase()))
+                .then_with(|| left.name.cmp(&right.name))
+                .then_with(|| compare_precedence(left, right))
+                .then_with(|| left.manual_section.cmp(&right.manual_section))
+                .then_with(|| left.origin.cmp(&right.origin))
+        });
+
+        let total = filtered.len();
+        let offset = usize::try_from(query.offset)
+            .unwrap_or(usize::MAX)
+            .min(total);
+        let limit = usize::try_from(query.limit).unwrap_or(usize::MAX);
+        let end = offset.saturating_add(limit).min(total);
+        let coverage = catalog_coverage(documents, scope_total);
+        let documents = filtered[offset..end]
+            .iter()
+            .copied()
+            .map(document_summary)
+            .collect::<Vec<_>>();
+        DocumentCatalog {
+            schema: CatalogSchema::V0Dot11,
+            query: query.clone(),
+            coverage,
+            total: u32::try_from(total).unwrap_or(u32::MAX),
+            returned: u32::try_from(documents.len()).unwrap_or(u32::MAX),
+            offset: u32::try_from(offset).unwrap_or(u32::MAX),
+            truncated: end < total,
+            next_offset: (end < total).then(|| u32::try_from(end).unwrap_or(u32::MAX)),
+            documents,
+        }
+    }
 }
 
 fn catalog_scope_matches(document: &AvailableDocument, query: &CatalogQuery) -> bool {

@@ -11,6 +11,7 @@ mod selection;
 mod tests;
 
 pub(crate) use inventory::list_available_documents_from;
+pub(crate) use selection::CatalogPlan;
 pub use selection::query_available_documents;
 
 /// Source family used to resolve one available document.
@@ -111,6 +112,14 @@ pub fn list_available_documents() -> Result<Vec<AvailableDocument>, SourceConfig
 /// Returns source configuration or catalog validation failures as text because
 /// both are operational boundaries for every frontend.
 pub fn discover_documents(query: &CatalogQuery) -> Result<DocumentCatalog, String> {
-    let documents = list_available_documents().map_err(|error| error.to_string())?;
-    query_available_documents(&documents, query).map_err(|error| error.to_string())
+    discover_with(query, list_available_documents)
+}
+
+fn discover_with(
+    query: &CatalogQuery,
+    inventory: impl FnOnce() -> Result<Vec<AvailableDocument>, SourceConfigError>,
+) -> Result<DocumentCatalog, String> {
+    let plan = CatalogPlan::new(query).map_err(|error| error.to_string())?;
+    let documents = inventory().map_err(|error| error.to_string())?;
+    Ok(plan.apply(&documents))
 }
