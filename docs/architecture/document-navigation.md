@@ -1,9 +1,20 @@
 # Document content and reference navigation
 
-This is the implementation contract for the unreleased v0.11 navigation work.
-The migration is ordered: authoritative headings, bounded reference traversal,
-protocol projection and selectors, scope/CLI/MCP, then interactive navigation.
-It does not introduce a new crate or a second document model.
+This is the implemented navigation contract for unreleased v0.11. Authoritative
+headings, bounded reference traversal, protocol projections and interactive
+navigation all use the same document model.
+
+`mant-codec` preserves headings and typed links in `mant-ir`, which owns content
+locations, reference traversal and URI encoding. `mant-query` projects references
+and resolves local content within already supplied snapshots; it cannot load a
+missing target. `mant-loader` separately resolves catalog addresses and follows
+authorized document/manual edges in its bounded scope-loading traversal.
+`mant-engine` composes those operations for complete requests, while
+`mant-protocol` defines their portable contracts. `mant-render` formats reference
+labels and reports; `mant-ui` owns selection, history and typed navigation
+intentions. The host supplies explicit capabilities for loader-backed document
+acquisition, clipboard delivery and external opening. Displaying or copying a
+reference does not itself authorize following it.
 
 ## Content and positions
 

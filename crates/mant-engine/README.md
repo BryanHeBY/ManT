@@ -164,6 +164,36 @@ macros, rebuild entry facts, or duplicate selection and evidence algorithms.
 
 ## Basic use
 
+For a complete request, let the engine validate the input and view before it
+captures source configuration, loads the explicitly supplied local file through
+the loader, and executes the requested projection. This example expects the
+caller to provide an existing `notes.md`; rendering remains a host choice.
+
+```rust,no_run
+use mant_engine::{execute_query, QueryViewResult};
+use mant_loader::LoadPolicy;
+use mant_protocol::{EntryProjection, InputFormat, QueryInput, QueryRequest, QueryView, RequestSchema};
+use mant_render::render_outline_text;
+
+let request = QueryRequest {
+    schema: RequestSchema::V0Dot11,
+    input: QueryInput::File {
+        path: "notes.md".to_owned(),
+        format: InputFormat::Markdown,
+    },
+    view: QueryView::Outline {
+        entries: EntryProjection::All,
+        root: None,
+        references: Default::default(),
+    },
+};
+let QueryViewResult::Outline(outline) = execute_query(&request, LoadPolicy::Combined)? else {
+    unreachable!("the requested view is an outline");
+};
+println!("{}", render_outline_text(&outline));
+# Ok::<(), Box<dyn std::error::Error>>(())
+```
+
 The in-memory Markdown path is deterministic and works on every supported
 platform:
 

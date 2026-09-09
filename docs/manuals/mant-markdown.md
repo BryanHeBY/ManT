@@ -255,8 +255,9 @@ observed all-value children may still infer open choices, never an exhaustive
 claim. The `choices` form cannot be combined with `entries` or `roles`.
 A syntactically valid reference
 remains useful when it is the entry's only declaration even if catalog lookup
-is unavailable; resolution is an engine/protocol concern rather than a
-Markdown parsing requirement.
+is unavailable. `mant-protocol` describes the relationship; `mant-loader` owns
+catalog resolution and linked-document acquisition, and `mant-query` queries
+already loaded targets. These operations are separate from Markdown parsing.
 
 Ordinary option-shaped definition lists produced by native manuals can receive identities automatically. Markdown lists require either the explicit directive or the conservative complete-list inference described in the shipped examples; authors should use the directive when role or case policy matters.
 

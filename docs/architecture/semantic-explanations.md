@@ -6,6 +6,17 @@ collection. Normative authoring syntax lives in
 live in [mant-protocol(5)](../manuals/mant-protocol.md), and public IR types in
 [mant-ir(7)](../manuals/mant-ir.md).
 
+`mant-codec` produces content and semantic annotations; `mant-ir` owns their
+source-neutral validation, locations and derived indexes. `mant-query` collects
+explanation evidence from existing IR, including caller-authored documents,
+without a loader or host callback. `mant-protocol` defines the request and
+response contracts, not query execution. `mant-render` presents the returned
+DTOs without rerunning collection or consulting producer-private state.
+`mant-loader` acquires documents, while `mant-engine` validates and composes
+complete loading/query requests. The host alone authorizes external actions;
+neither recognizing a name nor returning evidence executes an example, opens a
+link or updates a source.
+
 ## Content is authoritative; annotations add facts
 
 Ordinary Markdown owns visible words, punctuation, order, list structure,
