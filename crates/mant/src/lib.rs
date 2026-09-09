@@ -3,6 +3,7 @@
 
 mod arguments;
 mod clipboard;
+mod delivery;
 mod doctor;
 mod error;
 mod external;
@@ -604,7 +605,7 @@ fn execute_query(
         return document.map_or_else(
             || Err(Failure::operational("no tldr quick reference is available")),
             |document| {
-                Ok(mant_ui::render_tldr_terminal(
+                Ok(delivery::tldr::render_tldr_terminal(
                     document,
                     color == ColorMode::Always,
                 ))

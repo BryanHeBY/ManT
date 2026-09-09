@@ -5,8 +5,8 @@ use super::{
     Style, StyledInlineLine, UnicodeWidthStr, theme,
 };
 
-pub(super) fn tldr_style(role: crate::tldr::TldrRole) -> Style {
-    use crate::tldr::TldrRole;
+pub(super) fn tldr_style(role: mant_render::TldrRole) -> Style {
+    use mant_render::TldrRole;
 
     match role {
         TldrRole::Title => Style::default()

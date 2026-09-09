@@ -100,17 +100,17 @@ impl DocumentBuilder<'_> {
         for _ in 0..TLDR_VERTICAL_PADDING_ROWS {
             self.push(LogicalLine::empty().surface(LineSurface::Tldr));
         }
-        for line in crate::tldr::layout_tldr(tldr) {
+        for line in mant_render::layout_tldr(tldr) {
             let command = line.spans.iter().any(|span| {
                 matches!(
                     span.role,
-                    crate::tldr::TldrRole::Command | crate::tldr::TldrRole::Placeholder
+                    mant_render::TldrRole::Command | mant_render::TldrRole::Placeholder
                 )
             });
             let links = line
                 .spans
                 .iter()
-                .filter(|span| span.role == crate::tldr::TldrRole::Link)
+                .filter(|span| span.role == mant_render::TldrRole::Link)
                 .filter_map(|span| {
                     tldr.more_information
                         .as_deref()
