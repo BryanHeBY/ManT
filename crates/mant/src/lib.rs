@@ -485,7 +485,7 @@ fn execute(
         }
         Command::UpdateTldr { pretty } => {
             let update = host.update_tldr()?;
-            mant_engine::render_update_json(&update, pretty).map_err(Failure::operational)
+            mant_render::render_update_json(&update, pretty).map_err(Failure::operational)
         }
         Command::Query {
             source,

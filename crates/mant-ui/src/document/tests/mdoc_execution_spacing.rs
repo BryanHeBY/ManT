@@ -10,7 +10,7 @@ fn query(body: &str) -> ResolvedContent {
 
 fn assert_rows(query: &ResolvedContent, first: &str, last: &str, blanks: usize) {
     for text in
-        std::iter::once(mant_engine::render_query_text(query)).chain([40, 80, 120].map(|width| {
+        std::iter::once(mant_render::render_query_text(query)).chain([40, 80, 120].map(|width| {
             DocumentView::new(query)
                 .render(width)
                 .text

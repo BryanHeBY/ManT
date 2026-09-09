@@ -34,11 +34,12 @@ mant-codec = { path = "../mant-codec", version = "^0.11.0", default-features = f
 mant-loader = { path = "../mant-loader", version = "^0.11.0", default-features = false }
 mant-query = { path = "../mant-query", version = "^0.11.0", default-features = false }
 mant-protocol = { path = "../mant-protocol", version = "^0.11.0" }
+
+[dev-dependencies]
+mant-render = { path = "../mant-render", version = "^0.11.0" }
 pulldown-cmark.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-
-[dev-dependencies]
 # Cross-pipeline native audit examples remain outside the production loader API.
 libmandoc-rs = { path = "../libmandoc-rs", version = "^0.10.0" }
 flate2.workspace = true

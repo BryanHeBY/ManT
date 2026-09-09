@@ -25,27 +25,28 @@ resolver; a valid numeric index alone never authorizes another owner's body.
 query contracts and projections shared by in-process hosts, CLI JSON, request
 JSON, and compact MCP presentation without owning any transport. It owns schema
 markers, logical catalog addresses, pagination, outline, excerpt, explanation, search,
-tldr-update results, local doctor reports, deterministic catalog presentation,
+tldr-update results, local doctor reports, stable business labels,
 and JSON Schema generation. The `mant` crate separately composes host
 callbacks, process framing, terminal policy, and MCP transport.
 
 Resolved document geometry belongs to `mant-ir::geometry`: pure display-cell
 measurement, signed origin composition/reparenting and bounded gap composition.
-Protocol presentation consumes those rules without owning document geometry or
+`mant-render` consumes those rules without owning document geometry or
 terminal viewport state. Cell coordinates remain distinct from the byte/scalar
 positions used by semantic bindings and explanation evidence.
 
 Original owner slice-to-scalar conversion belongs to `mant-ir` through
 `project_content_slice` and `RootTextRange`. Protocol response locations remain
-relative to their returned payload; presentation bindings reuse the IR rule
+relative to their returned payload; render-owned presentation bindings reuse the IR rule
 rather than maintaining another interpretation of source bytes and scalars.
 
 Use this crate whenever a Rust host or process consumer needs stable inputs,
-projections, or deterministic non-terminal presentation. The same DTO may
+projections, or their validation. The same DTO may
 cross an in-memory callback, be serialized by a versioned JSON boundary, or be
 rendered into a compact MCP result; serialization is a supported
-representation, not the crate's sole purpose. It performs no document
-discovery, parsing, query execution, terminal I/O, or MCP transport.
+representation, not the crate's sole purpose. `mant-render` supplies deterministic
+reports from these DTOs. Protocol performs no document discovery, parsing, query
+execution, report rendering, terminal I/O, or MCP transport.
 
 ## Contract families
 
@@ -58,11 +59,14 @@ QueryRequest ──> host / mant-engine ──┬─> QueryBundle
 
 ScopeQueryRequest ──> host / mant-engine ──> ScopeQueryResponse
 
-CatalogQuery ──> host ──────────────────> DocumentCatalog ──> compact text
+CatalogQuery ──> host ──────────────────> DocumentCatalog
 
 local inspection ───────────────────────> DoctorReport
 explicit cache maintenance ─────────────> TldrCacheUpdate
 ```
+
+Hosts pass existing DTOs to `mant-render` for compact text or `CommonMark`; this
+does not execute another query or load content.
 
 | Family | Current discriminator | Purpose |
 | --- | --- | --- |
@@ -237,7 +241,7 @@ and occurrence records also supply associated navigation without changing
 source content. Entry outline nodes retain their exact original `owner`;
 validated form associations retain the semantic owner whose bindings were
 checked. Join these structural positions, not similarly named labels or IDs.
-Heading/form badges use the shared `reference_attachment` and `reference_badge`
+Heading/form badges use `mant-render`'s shared `reference_attachment` and `reference_badge`
 presentation helpers, with the independent `TextRole::Reference` role. A partial
 record page describes known targets only and never establishes uniqueness.
 
@@ -252,8 +256,9 @@ resolver or filesystem. `DocumentOpenTarget` is an explicit interactive host
 request, not authority for MCP or a reference inventory to execute an opener.
 
 Normalized document content is defined separately by
-[`mant-ir`](https://crates.io/crates/mant-ir). Parsing, lookup, projection, and
-rendering live in [`mant-engine`](https://crates.io/crates/mant-engine).
+[`mant-ir`](https://crates.io/crates/mant-ir). Parsing lives in `mant-codec`,
+lookup in `mant-loader`, pure projection in `mant-query`, and formatting in
+`mant-render`; `mant-engine` composes loading and query execution.
 The complete wire contract is documented by
 [`mant-protocol(5)`](https://github.com/BryanHeBY/ManT/blob/main/docs/manuals/mant-protocol.md).
 Compatibility and migration notes are recorded in the
@@ -262,14 +267,15 @@ Compatibility and migration notes are recorded in the
 ## In-memory presentation
 
 `EntryLabelMode` makes Compact (validated names, visible forms, then ID) and
-Forms (visible forms first) explicit. `EntryTone` preserves the complete
+Forms (visible forms first) explicit. This stable label policy remains in
+protocol for query and presentation consumers. `mant-render`'s `EntryTone` preserves the complete
 `EntryKind` at adapter boundaries; terms are primary content, not muted metadata.
 These are display policies, not aliases, confidence levels or new wire fields.
 
-`EntryStyleMap` prepares owner-local validated name ranges once per borrowed
+`mant-render`'s `EntryStyleMap` prepares owner-local validated name ranges once per borrowed
 document or excerpt. `project_content_slice` maps UTF-8 content slices into
 root-relative Unicode scalar ranges without copying the source tree.
-`visit_inline_text` composes those ranges with Strong, Emphasis, Code and Link
+Its `visit_inline_text` composes those ranges with Strong, Emphasis, Code and Link
 markup as borrowed spans. Adapters own colors, escaping and line geometry;
 they must not reconstruct name bindings by searching rendered strings.
 Query-match and selection overlays remain separate from ordinary name roles.

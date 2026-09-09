@@ -87,7 +87,7 @@ fn every_rejected_position_invalidates_only_the_local_exhaustive_claim() {
         );
         // Rejected head and all original list items remain visible.
         assert!(
-            mant_engine::render_query_text(&query).contains(["auto", "manual", "other"][rejected])
+            mant_render::render_query_text(&query).contains(["auto", "manual", "other"][rejected])
         );
     }
 }
@@ -263,7 +263,7 @@ fn rejected_declarations_flow_through_ordinary_containers_to_the_semantic_owner(
                             .value_domain
                             .is_none()
                     );
-                    let visible = mant_engine::render_query_text(&query);
+                    let visible = mant_render::render_query_text(&query);
                     assert!(visible.contains("Ordinary container."));
                     assert!(visible.contains("Manual mode."));
                 }
@@ -327,7 +327,7 @@ fn leading_removed_comments_do_not_change_item_ownership() {
                     }),
                     "{input:?}"
                 );
-                assert!(mant_engine::render_query_text(&query).contains("Manual mode."));
+                assert!(mant_render::render_query_text(&query).contains("Manual mode."));
                 if role == "invalid" {
                     assert!(
                         doc.diagnostics

@@ -18,6 +18,7 @@ include = ["/Cargo.toml", "/LICENSE", "/README.md", "/src/**"]
 crossterm.workspace = true
 mant-ir = { path = "../mant-ir", version = "^0.11.0" }
 mant-protocol = { path = "../mant-protocol", version = "^0.11.0" }
+mant-render = { path = "../mant-render", version = "^0.11.0" }
 crossbeam-channel = "^0.5"
 parking_lot = "^0.12.1"
 regex = "^1"
@@ -33,6 +34,7 @@ signal-hook.workspace = true
 libc.workspace = true
 
 [dev-dependencies]
+mant-codec = { path = "../mant-codec", version = "^0.11.0", default-features = false }
 mant-engine = { path = "../mant-engine", version = "^0.11.0" }
 tokio = { version = "^1", features = ["rt"] }
 

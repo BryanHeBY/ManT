@@ -101,7 +101,7 @@ On Windows, run the native product boundary from PowerShell:
 .\scripts\check-windows.ps1
 ```
 
-It tests `libmandoc-rs`, `mant-ir`, `mant-protocol`, `mant-sources`, `mant-codec`, `mant-loader`, `mant-query`, `mant-engine`, `mant-ui`, and `mant`,
+It tests `libmandoc-rs`, `mant-ir`, `mant-protocol`, `mant-sources`, `mant-codec`, `mant-loader`, `mant-query`, `mant-render`, `mant-engine`, `mant-ui`, and `mant`,
 including the shared roff fixture suites.
 
 The product crates are workspace `default-members`, so a bare `cargo build`,
@@ -131,6 +131,15 @@ its own semantic IR and graph. It exercises single-document queries and borrowed
 collection queries, and rejects enabled loader, renderer, frontend, native and
 update dependencies. This guards against accidentally restoring host authority
 through a query convenience API.
+
+`mant-render` is tested independently and in the packaged-source workspace.
+`scripts/check-render-consumer.sh` exercises authored IR/DTO rendering from an
+independent consumer and rejects query, loader, native and terminal dependencies.
+It renders caller-supplied IR and protocol results without executing queries or
+loading sources. Its codec dependency is Markdown-only; workspace feature
+unification must not be mistaken for a native dependency of the renderer.
+UI integration tests separately assert real terminal cells, because unchanged
+concatenated text alone cannot prove correct grapheme rendering or hit maps.
 
 The script checks formatting and installer syntax, runs every workspace test,
 runs clippy with all targets and features, builds the optimized executable,
@@ -276,7 +285,8 @@ crates/mant-sources/          Local Markdown registry and transactional source u
 crates/mant-codec/            In-memory Markdown/tldr, optional roff lowering, document Markdown
 crates/mant-loader/           Read-only catalogs, native roots, bounded inputs and linked scopes
 crates/mant-query/            Pure semantic queries over existing content and borrowed collections
-crates/mant-engine/           Loading, codec integration, projections, queries, report rendering
+crates/mant-render/           Pure IR/DTO text and report formatting, roles and grapheme primitives
+crates/mant-engine/           Request validation and loader/query composition; opt-in tldr updates
 crates/mant-ui/               Ratatui reader, navigation, search, and terminal styling
 crates/mant/                  Mode selection, CLI, request JSON, and MCP stdio boundary
 crates/libmandoc-rs/          Owned libmandoc parse/render API, private C shim, vendored source
@@ -289,6 +299,9 @@ scripts/check-windows.ps1    Native Windows verification sequence
 scripts/check-libmandoc-symbols.sh  Reject downstream-visible unprefixed C symbols
 scripts/check-packaged-crates.sh  Build and test exact published crate source sets
 scripts/check-codec-consumer.sh  Verify the standalone codec's pure-Rust dependency boundary
+scripts/check-loader-consumer.sh  Verify read-only, default-feature source loading
+scripts/check-query-consumer.sh  Verify pure queries over authored IR and borrowed scopes
+scripts/check-render-consumer.sh  Verify pure IR/DTO reports without query or host authority
 scripts/build-and-smoke.sh   Unix debug/release product build and smoke test
 scripts/build-and-smoke.ps1 Windows debug/release product build and smoke test
 scripts/find-successful-ci.sh  Exact-commit full CI verification for automation

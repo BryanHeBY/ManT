@@ -1,5 +1,6 @@
 //! Semantic export consumes public producer coverage, not parser code names.
-use mant_engine::{MarkdownOptions, query_markdown_text, render_markdown_with_options};
+use mant_codec::encode::{MarkdownOptions, render_markdown_with_options};
+use mant_engine::query_markdown_text;
 use mant_ir::{Diagnostic, DiagnosticImpact, DiagnosticLevel};
 
 #[test]

@@ -199,7 +199,7 @@ impl DocumentView {
 
     pub(crate) fn reference_uri(&self, id: &str) -> Option<String> {
         self.reference_target(id)
-            .and_then(mant_protocol::reference_target_uri)
+            .and_then(mant_ir::LinkTarget::to_uri)
     }
 
     pub(crate) fn activation_target(&self, target: &mant_ir::LinkTarget) -> Option<LinkTarget> {
@@ -246,7 +246,7 @@ impl DocumentView {
         if let Some(document) = &bundle.document {
             let semantic_index = SemanticIndex::build(document);
             references.check_source_owners(document, &semantic_index);
-            builder.entry_styles = Arc::new(mant_protocol::EntryStyleMap::for_document(document));
+            builder.entry_styles = Arc::new(mant_render::EntryStyleMap::for_document(document));
             if document.heading.is_some()
                 || !document.blocks.is_empty()
                 || !document.fragment_aliases.is_empty()

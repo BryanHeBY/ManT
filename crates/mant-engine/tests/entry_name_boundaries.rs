@@ -71,7 +71,7 @@ fn assert_direct_names(query: &mant_ir::ResolvedContent, names: &[&str], form: &
             &[mant_protocol::ContentSelector::path(direct.outline.path())],
         )
         .unwrap();
-        assert!(mant_engine::render_excerpt_text(&excerpt).contains("PAYLOAD"));
+        assert!(mant_render::render_excerpt_text(&excerpt).contains("PAYLOAD"));
     }
     mant_ir::visit::Visit::visit_document(&mut Bindings, document);
 }
@@ -112,7 +112,7 @@ fn enclosure_spacing_preserves_option_forms_names_and_explanation_sources() {
             panic!("expected definition")
         };
         assert_eq!(items[0].source.unwrap().line, 7);
-        assert!(mant_engine::render_query_text(&query).contains("-x [arg] tail"));
+        assert!(mant_render::render_query_text(&query).contains("-x [arg] tail"));
         assert!(items[0].terms[0].iter().any(|inline| matches!(
             inline, mant_ir::Inline::Strong { children } if inline_text(children) == "-x"
         )));

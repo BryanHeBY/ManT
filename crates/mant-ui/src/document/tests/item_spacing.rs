@@ -48,7 +48,7 @@ fn native_pd_two_zero_two_matches_text_and_tui_item_boundaries() {
             .collect::<Vec<_>>(),
         [Some(2), Some(0), Some(2)]
     );
-    let text = mant_engine::render_query_text(&query)
+    let text = mant_render::render_query_text(&query)
         .lines()
         .map(str::to_owned)
         .collect::<Vec<_>>();
@@ -132,7 +132,7 @@ fn nonparagraph_body_keeps_item_gap_before_the_whole_marker() {
     let document = query.document.as_mut().unwrap();
     document.sections.clear();
     document.blocks = blocks;
-    let text = mant_engine::render_query_text(&query);
+    let text = mant_render::render_query_text(&query);
     assert_eq!(text, "demo\n\nBEFORE\n\n\n\n-\n  CODE");
 }
 

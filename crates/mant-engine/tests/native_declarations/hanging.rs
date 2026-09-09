@@ -188,7 +188,7 @@ fn unstyled_dotted_keys_italic_settings_and_repeated_arguments_keep_owners() {
             .collect();
         assert_eq!(direct.len(), 1, "{name}: {result:?}");
         assert_eq!(direct[0].entry.as_ref().unwrap().kind, kind);
-        assert!(mant_engine::render_explanation_text(&result).contains(body));
+        assert!(mant_render::render_explanation_text(&result).contains(body));
     }
     let negative = mant_engine::query_roff_bytes(b".TH NO 1\n.SH NOTES\n.PP\nfile.md\n.RS 4\nA file example, not a configuration declaration.\n.RE\n").unwrap();
     assert_eq!(
@@ -272,7 +272,7 @@ fn compact_parameter_grammar_and_opaque_environment_templates_remain_declaration
             result.counts.direct_entry.total, total,
             "{query}: {result:?}"
         );
-        assert!(mant_engine::render_explanation_text(&result).contains(body));
+        assert!(mant_render::render_explanation_text(&result).contains(body));
     }
     for query in [
         "GIT_CONFIG_KEY_",

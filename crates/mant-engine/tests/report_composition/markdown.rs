@@ -1,12 +1,12 @@
 //! Query projection and Markdown report rendering preserve document contracts.
 
 use mant_codec::encode::{MarkdownOptions, render_markdown, render_markdown_with_options};
-use mant_engine::{render_excerpt_markdown, render_outline_markdown};
 use mant_ir::{
     Block, Document, DocumentMeta, DocumentSource, Inline, LayoutHint, ResolvedContent, Section,
     SourceFormat, TldrCommandPart, TldrDocument, TldrExample, TldrOrigin,
 };
 use mant_query::{build_outline, select_excerpt};
+use mant_render::{render_excerpt_markdown, render_outline_markdown};
 
 fn paragraph(children: Vec<Inline>) -> Block {
     Block::Paragraph {

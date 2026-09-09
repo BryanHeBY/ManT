@@ -3,8 +3,9 @@
 `mant-engine` is `ManT`'s document execution layer. It resolves local documents
 through `mant-loader`, which delegates decoding and lowering to `mant-codec` into
 the semantic center in `mant-ir`. It delegates bounded content queries to
-`mant-query`, composes versioned protocol responses, and produces
-deterministic output without owning a terminal or command-line process.
+`mant-query` and composes versioned protocol responses without owning report
+rendering, a terminal, or a command-line process. Hosts format those responses
+with `mant-render`.
 
 ## What this crate provides
 
@@ -46,7 +47,8 @@ deterministic output without owning a terminal or command-line process.
   aliases. Context is carried in the returned DTO, not recovered by a renderer.
 - Excerpt selection and literal or regular-expression search with generated
   Markdown coordinates.
-- Markdown, text, man-style text, and JSON renderers over one normalized IR.
+- Composition with `mant-render` text, man-style text, and JSON reports and
+  `mant-codec` document Markdown over one normalized IR.
   Heading Markdown preserves manual targets as explicit `man:topic(section)`
   (or unqualified `man:topic`) links; document, external and email targets
   remain ordinary Markdown links. A local link in any real heading automatically
@@ -61,7 +63,7 @@ deterministic output without owning a terminal or command-line process.
   Multiline level-one/two headings use Setext syntax. At deeper levels portable
   ATX output folds explicit breaks to spaces while keeping the heading level,
   visible words and links; IR JSON retains the exact break structure.
-- Source-aware `render_query_text_with` / `render_excerpt_text_with` callbacks
+- Source-aware `mant_render::render_query_text_with` / `mant_render::render_excerpt_text_with` callbacks
   over the same plain-text block layout, with composable source markup and
   validated owner-local name roles rather than rendered-line name matching.
 - Loader-owned installed-client and private tldr cache discovery. Explicit subprocess-backed
@@ -98,7 +100,7 @@ DocumentResolver ──> mant-loader ──> mant-codec (Markdown / tldr / roff)
       mant_ir::ResolvedContent
          ├─> mant-query ─> outline / excerpt / search / explain / references
          ├─> typed document graph ─> mant-query borrowed scope
-         ├─> Markdown / text / man-style renderers
+         ├─> mant-codec document Markdown / mant-render body text (host choice)
          └─> versioned mant-protocol responses
 ```
 
@@ -144,7 +146,7 @@ macros, rebuild entry facts, or duplicate selection and evidence algorithms.
 | Audit production file lowering against its exact native witness | `mant_loader::parse_manual_source_with_report` (`roff`) |
 | Build a focused result from existing content | `mant_query::build_outline_projection`, `mant_query::select_excerpt`, `mant_query::search_query` |
 | Collect bounded independent semantic evidence | `mant_query::explain_query`, `mant_query::validate_explanation_query` |
-| Produce human or JSON output | The `render_*` functions |
+| Produce human or JSON output | `mant_render::render_*`; document Markdown uses `mant_codec::encode` |
 
 ## Basic use
 
@@ -153,7 +155,8 @@ platform:
 
 ```rust
 use mant_protocol::EntryProjection;
-use mant_engine::{query_markdown_text, render_outline_text};
+use mant_engine::query_markdown_text;
+use mant_render::render_outline_text;
 use mant_query::build_outline_projection;
 
 let query = query_markdown_text(
@@ -229,7 +232,7 @@ IR. Compact rendering shows those windows for mentions instead of unrelated
 full owner content. Clipping, omitted previews, and atomic body omission are
 distinct. No evidence query performs I/O or executes examples.
 
-`render_explanation_text_with` and `render_scope_explanation_text_with` expose
+`mant-render`'s `render_explanation_text_with` and `render_scope_explanation_text_with` expose
 the same report as plain text, with terminal-neutral `TextPresentation`
 spans. Their callbacks preserve visible text and boundary whitespace. Exact
 matches and ordinary name styling resolve only against returned forms/content;
@@ -304,8 +307,8 @@ not synthesize visible placeholder text. This policy is implemented once in
 
 `mant-engine` returns an owned `mant_ir::ResolvedContent` for direct semantic
 use and owned `mant-protocol` values at versioned integration boundaries. It does not expose
-libmandoc C structures. It owns application request composition and report
-rendering; it is not merely a forwarding facade. Pure query execution belongs
+libmandoc C structures. It owns application request validation and composition;
+it is not merely a forwarding facade. Pure query execution belongs
 to `mant-query`. Parser/encoder, loader and query re-exports are transitional
 conveniences, not duplicate implementations.
 Consumers needing only source-to-IR conversion or portable document Markdown
@@ -313,6 +316,9 @@ should depend on `mant-codec` directly; consumers needing source discovery,
 loading, read-only caches or owned scopes should use `mant-loader`. Consumers
 with existing IR that need selection, search, explanation or reference
 projections should use `mant-query`, which does not load files or render reports.
+Consumers formatting existing content or protocol values should use
+`mant-render`. The engine no longer re-exports rendering functions; its render
+dependency is only for cross-crate regression tests and doctests.
 The engine's opt-in tldr maintenance implementation remains separate from
 loader authority. Applications that only
 need raw roff syntax should use

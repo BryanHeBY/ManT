@@ -1,12 +1,11 @@
 //! Associated badges are an offline view of exact returned content positions.
-use mant_engine::{
-    build_outline_with_references, query_markdown_text, render_outline_text,
-    render_outline_text_with,
-};
+use mant_engine::{build_outline_with_references, query_markdown_text};
 use mant_protocol::{
     EntryProjection, OutlineNode, QueryOutline, ReferenceAssociation, ReferenceProjection,
-    ReferenceProjectionMode, TextRole,
+    ReferenceProjectionMode,
 };
+use mant_render::TextRole;
+use mant_render::{render_outline_text, render_outline_text_with};
 
 const SOURCE: &str = "# [Catalog](catalog.md#root)\n\n## [Commands](commands.md#all)\n\n<!-- mant:entries role=command case=sensitive -->\n- [`run`](run.md#usage): See [body](body.md).\n- [`stop`](stop.md): Stop.\n";
 

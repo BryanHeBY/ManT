@@ -1,5 +1,6 @@
 //! Original regressions: execution, not raw source adjacency, owns literal rows.
-use mant_engine::{query_roff_bytes, render_query_text};
+use mant_engine::query_roff_bytes;
+use mant_render::render_query_text;
 
 fn rendered(mode: &str, body: &str) -> String {
     let source = match mode {

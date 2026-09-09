@@ -154,8 +154,8 @@ fn render_copy_request(request: CopyRequest) -> Result<String, String> {
             let excerpt = mant_engine::select_excerpt(content.as_ref(), &[selector])
                 .map_err(|error| format!("could not select the current node: {error}"))?;
             Ok(match format {
-                CopyFormat::Text => mant_engine::render_excerpt_text(&excerpt),
-                CopyFormat::Markdown => mant_engine::render_excerpt_markdown(&excerpt),
+                CopyFormat::Text => mant_render::render_excerpt_text(&excerpt),
+                CopyFormat::Markdown => mant_render::render_excerpt_markdown(&excerpt),
             })
         }
     }

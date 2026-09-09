@@ -1,5 +1,6 @@
 //! Original regressions for control operands versus printable source words.
-use mant_engine::{query_roff_bytes, render_query_text};
+use mant_engine::query_roff_bytes;
+use mant_render::render_query_text;
 
 fn source(mode: &str, body: &str) -> String {
     match mode {

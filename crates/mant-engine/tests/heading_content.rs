@@ -1,12 +1,11 @@
 //! Headings are authoritative inline content, not labels reconstructed as text.
-use mant_engine::{
-    parse_markdown, query_markdown_text, query_roff_bytes, render_markdown, render_query_text,
-    search_query,
-};
+use mant_codec::encode::render_markdown;
+use mant_engine::{parse_markdown, query_markdown_text, query_roff_bytes, search_query};
 use mant_ir::{
     Document, Inline, LinkTarget,
     visit::{self, Visit},
 };
+use mant_render::render_query_text;
 
 fn links(document: &Document) -> Vec<LinkTarget> {
     #[derive(Default)]
@@ -83,7 +82,7 @@ fn extracted_heading_is_readable_without_body_and_keeps_its_own_fragments() {
     let excerpt =
         mant_engine::select_excerpt(&query, &[mant_protocol::ContentSelector::path("root")])
             .unwrap();
-    assert!(mant_engine::render_excerpt_markdown(&excerpt).contains("[Catalog](index.md)"));
+    assert!(mant_render::render_excerpt_markdown(&excerpt).contains("[Catalog](index.md)"));
     let outline = mant_engine::build_outline_projection(
         &query,
         mant_protocol::EntryProjection::All,
@@ -165,9 +164,9 @@ fn heading_manual_uris_have_explicit_bounded_grammar_and_decode_once() {
 fn heading_all_target_kinds_and_local_fragments_round_trip_in_addressable_mode() {
     let query = query_markdown_text("# [Catalog](index.md)\n\n## [External](https://example.test) [Mail](mailto:user@example.test) [Local](#Mixed.Target)\n\n## Target {#Mixed.Target}\n", None).unwrap();
     let before = links(query.document.as_ref().unwrap());
-    let markdown = mant_engine::render_markdown_with_options(
+    let markdown = mant_codec::encode::render_markdown_with_options(
         &query,
-        mant_engine::MarkdownOptions::ADDRESSABLE,
+        mant_codec::encode::MarkdownOptions::ADDRESSABLE,
     );
     let reparsed = parse_markdown(&markdown, None).unwrap().document;
     assert_eq!(links(&reparsed), before, "{markdown}");
@@ -257,14 +256,14 @@ fn local_heading_links_force_addressable_export_even_when_semantics_were_request
     let query = query_markdown_text("# [Catalog](#catalog)\n\n## [Run](#command-run)\n\n<!-- mant:entries role=command case=sensitive -->\n- `run`: Run the program.\n", None).unwrap();
     let before = links(query.document.as_ref().unwrap());
     for options in [
-        mant_engine::MarkdownOptions::default(),
-        mant_engine::MarkdownOptions::ADDRESSABLE,
-        mant_engine::MarkdownOptions {
+        mant_codec::encode::MarkdownOptions::default(),
+        mant_codec::encode::MarkdownOptions::ADDRESSABLE,
+        mant_codec::encode::MarkdownOptions {
             preserve_semantics: true,
             preserve_anchors: false,
         },
     ] {
-        let markdown = mant_engine::render_markdown_with_options(&query, options);
+        let markdown = mant_codec::encode::render_markdown_with_options(&query, options);
         assert!(
             markdown.contains("[Catalog](#document-overview)"),
             "{markdown}"

@@ -7,7 +7,7 @@ use mant_engine::{
     LoadError, ProjectionError, QueryError, QueryExecutionError, QueryValidationError,
     ScopeExecutionError, ScopeLoadError, ScopeQueryError, SearchError,
 };
-use mant_protocol::sanitize_terminal_text;
+use mant_render::sanitize_terminal_text;
 
 const ERROR_STYLE: Style = AnsiColor::Red.on_default().bold();
 const WARNING_STYLE: Style = AnsiColor::Yellow.on_default().bold();

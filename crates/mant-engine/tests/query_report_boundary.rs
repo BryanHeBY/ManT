@@ -156,15 +156,15 @@ fn semantic_completeness_distinguishes_rejections_from_author_warnings() {
         .expect("excerpt with invalid producer semantics");
     assert!(!excerpt.semantics_complete);
     assert_eq!(excerpt.address, ir_query.address);
-    assert!(mant_engine::render_excerpt_text(&excerpt).contains("Semantic entries are incomplete"));
+    assert!(mant_render::render_excerpt_text(&excerpt).contains("Semantic entries are incomplete"));
     assert!(
-        mant_engine::render_excerpt_markdown(&excerpt).contains("Semantic entries are incomplete")
+        mant_render::render_excerpt_markdown(&excerpt).contains("Semantic entries are incomplete")
     );
     // MCP strips parser findings but must not erase completeness.
     let mut compact = excerpt;
     compact.diagnostics.clear();
     assert!(
-        mant_engine::render_excerpt_markdown(&compact).contains("Semantic entries are incomplete")
+        mant_render::render_excerpt_markdown(&compact).contains("Semantic entries are incomplete")
     );
 }
 
@@ -191,7 +191,7 @@ fn snapshot_relative_positions_can_remain_legal_after_an_unrelated_insertion() {
     assert!(matches!(target,Inline::Link{target:LinkTarget::Document{name,..},..} if name=="new"));
     let excerpt =
         mant_engine::select_excerpt(&after, std::slice::from_ref(&old_record.source_read)).unwrap();
-    assert!(mant_engine::render_excerpt_text(&excerpt).contains("New"));
+    assert!(mant_render::render_excerpt_text(&excerpt).contains("New"));
     assert_eq!(
         old_record.source_read,
         mant_protocol::ContentSelector::path("1")
@@ -210,11 +210,11 @@ fn offline_reference_rendering_uses_only_serialized_facts_and_preserves_decorate
     drop(inventory);
     drop(document);
     let rebuilt: ReferenceInventory = serde_json::from_slice(&wire).unwrap();
-    let plain = mant_protocol::render_reference_inventory(&rebuilt);
+    let plain = mant_render::render_reference_inventory(&rebuilt);
     assert!(plain.contains("target#Mixed.Target"));
     assert!(plain.contains("readSource=path:root"));
     assert!(!plain.contains('\u{1b}'));
-    let decorated = mant_protocol::render_reference_inventory_with(&rebuilt, |_, text| {
+    let decorated = mant_render::render_reference_inventory_with(&rebuilt, |_, text| {
         format!("<paint>{text}</paint>")
     });
     assert_eq!(

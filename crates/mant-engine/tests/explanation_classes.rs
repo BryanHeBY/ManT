@@ -75,7 +75,7 @@ Context mentioning --help.
     let later = explain_query(&content, &tiny).unwrap();
     assert_eq!(later.counts.direct_entry.returned, 0);
     assert!(
-        mant_engine::render_explanation_text(&later)
+        mant_render::render_explanation_text(&later)
             .contains("Direct entries exist but are not included on this page")
     );
 }

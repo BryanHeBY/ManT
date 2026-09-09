@@ -116,10 +116,10 @@ fn outline_keeps_full_titles_on_primary_lines_and_hangs_all_metadata() {
     let outline =
         mant_engine::build_outline_projection(&content, mant_protocol::EntryProjection::All, None)
             .unwrap();
-    let text = mant_engine::render_outline_text(&outline);
+    let text = mant_render::render_outline_text(&outline);
     assert_eq!(
         text,
-        mant_engine::render_outline_text_with(&outline, |_, t| t.to_owned())
+        mant_render::render_outline_text_with(&outline, |_, t| t.to_owned())
     );
     let title_line = text.lines().find(|l| l.contains("command ARG")).unwrap();
     assert!(title_line.contains(&"ARG".repeat(60)));

@@ -1,13 +1,7 @@
-use mant_engine::{
-    build_outline_with_detail, render_excerpt_json, render_excerpt_markdown, render_excerpt_text,
-    render_markdown, render_outline_json, render_outline_markdown, render_outline_text,
-    render_query_json, render_query_man, render_query_text, render_search_json,
-    render_search_markdown, render_search_text, search_query, select_excerpt, select_explanation,
-};
-use mant_protocol::{
-    ContentSelector, OutlineDetail, OutlineNode, ReferenceProjection, ReferenceProjectionMode,
-    ReferenceTargetType, SearchCase, SearchQuery, SearchScope, SearchSyntax,
-};
+use mant_codec::encode::{render_markdown};
+use mant_engine::{build_outline_with_detail, search_query, select_excerpt, select_explanation};
+use mant_render::{render_excerpt_json, render_excerpt_markdown, render_excerpt_text, render_outline_json, render_outline_markdown, render_outline_text, render_query_json, render_query_man, render_query_text, render_search_json, render_search_markdown, render_search_text};
+use mant_protocol::{ContentSelector, OutlineDetail, OutlineNode, ReferenceProjection, ReferenceProjectionMode, ReferenceTargetType, SearchCase, SearchQuery, SearchScope, SearchSyntax};
 
 pub const MAX_INPUT_BYTES: usize = 64 * 1024;
 
@@ -34,7 +28,7 @@ pub fn exercise(query: &mant_engine::ResolvedContent, pattern_seed: &str) {
             ..ReferenceProjection::default()
         },
     ) {
-        let _ = mant_protocol::render_reference_inventory(&outline.references);
+        let _ = mant_render::render_reference_inventory(&outline.references);
     }
 
     for detail in [OutlineDetail::Sections, OutlineDetail::Entries] {

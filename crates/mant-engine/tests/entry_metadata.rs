@@ -79,7 +79,7 @@ fn invalid_objects_are_atomic_and_always_nonvisible() {
                     && entry.id.as_str() != "bad")
         );
         assert!(
-            !mant_engine::render_query_text(&mant_ir::ResolvedContent {
+            !mant_render::render_query_text(&mant_ir::ResolvedContent {
                 address: None,
                 label: "Probe".into(),
                 document: Some(doc),

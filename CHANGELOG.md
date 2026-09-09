@@ -12,6 +12,21 @@ that crate was not published for that change.
 
 ## Unreleased
 
+### mant-render 0.11.0
+
+- New independently usable presentation boundary formats existing IR and
+  protocol DTOs as body text, JSON, and outline/excerpt/search/explanation
+  reports. It owns semantic style composition and borrowed grapheme-safe cell
+  slices, without loading documents, executing queries, enabling native codecs
+  or controlling a terminal. Document Markdown encoding remains in `mant-codec`.
+- Unreleased `mant-engine` consumers must import report functions from
+  `mant-render`; there is no engine rendering facade. Presentation roles,
+  name-style maps, reference badges and catalog formatting likewise move from
+  `mant-protocol` to `mant-render`. Stable entry label modes and kind labels
+  remain in protocol. Copyable destinations use `mant_ir::LinkTarget::to_uri`
+  rather than the removed `reference_target_uri` wrapper. This Rust API owner
+  change does not alter the v0.11 wire schema or independent crate versions.
+
 ### mant-query 0.11.0
 
 - Pure outline, content selection, explanation, search and reference projection

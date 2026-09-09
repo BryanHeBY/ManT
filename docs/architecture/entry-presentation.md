@@ -13,9 +13,10 @@ projection of its evidence response, not another selector query. The TUI builds
 its semantic index and logical content once per DocumentView and performs
 width-dependent layout separately.
 
-`mant-protocol::presentation` owns terminal-neutral label modes, role families
-and source-binding projection. The engine owns textual block layout; CLI and
-TUI adapters own terminal colors and geometry. No ANSI, RGB or presentation
+`mant-protocol` owns stable label modes and kind labels used by both queries
+and presentations. `mant-render` owns role families, source-bound styling and
+textual block layout; CLI and TUI adapters own terminal colors and viewport
+geometry. No ANSI, RGB or presentation
 state is stored in document IR or serialized as a semantic fact.
 
 ## Labels and roles
@@ -71,7 +72,7 @@ styles, facts, anchors, copied text or link hit regions.
 
 ## Text adapters
 
-The engine's plain and decorated full/node outputs share one block-layout
+The render crate's plain and decorated full/node outputs share one block-layout
 implementation. Decorations may add zero-width styles, but preserve source
 characters, newlines and boundary whitespace so trimming, indentation and
 list continuation remain identical. Dynamic metadata is sanitized as a

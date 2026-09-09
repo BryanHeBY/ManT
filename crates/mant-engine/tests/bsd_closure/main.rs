@@ -65,7 +65,7 @@ fn dragonfly_gdb_restriction_bullets_are_not_semantic_terms() {
     for section in sections {
         check(index.section(&section.id));
     }
-    let text = mant_engine::render_query_text(&common::query_for_document("gdb", document));
+    let text = mant_render::render_query_text(&common::query_for_document("gdb", document));
     for body in [
         "Start your program",
         "Make your program stop",

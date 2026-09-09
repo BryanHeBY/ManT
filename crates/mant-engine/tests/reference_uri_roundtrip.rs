@@ -1,9 +1,8 @@
 //! Copy and Markdown export share one URI boundary without host resolution.
-use mant_engine::{
-    MarkdownOptions, project_references, query_markdown_text, render_markdown_with_options,
-};
+use mant_codec::encode::{MarkdownOptions, render_markdown_with_options};
+use mant_engine::{project_references, query_markdown_text};
 use mant_ir::{LinkTarget, ReferenceScope, ReferenceTargetType};
-use mant_protocol::{ReferenceProjection, ReferenceProjectionMode, reference_target_uri};
+use mant_protocol::{ReferenceProjection, ReferenceProjectionMode};
 
 fn targets(source: &str) -> (mant_ir::ResolvedContent, Vec<LinkTarget>) {
     let query = query_markdown_text(source, None).unwrap();
@@ -73,7 +72,7 @@ fn copied_typed_targets_survive_real_markdown_parsing_and_export() {
             uri: "https://example.md/a%2528?q=%20#mixed".into(),
         },
     ] {
-        let uri = reference_target_uri(&target).expect("representable typed target");
+        let uri = target.to_uri().expect("representable typed target");
         let source = format!("# Probe\n\n## Details {{#details}}\n\n### [LINK](<{uri}>)\n");
         let (query, parsed) = targets(&source);
         assert_eq!(
@@ -107,7 +106,7 @@ fn readable_reference_labels_are_not_reused_as_copy_destinations() {
             "man:demo%281%29",
         ),
     ] {
-        assert_eq!(mant_protocol::reference_target_text(&target), display);
-        assert_eq!(reference_target_uri(&target).as_deref(), Some(uri));
+        assert_eq!(mant_render::reference_target_text(&target), display);
+        assert_eq!(target.to_uri().as_deref(), Some(uri));
     }
 }

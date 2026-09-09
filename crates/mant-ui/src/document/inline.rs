@@ -69,7 +69,7 @@ pub(super) fn styled_bound_inline_lines(
     nodes: &[Inline],
     style: Style,
     current_address: Option<&DocumentAddress>,
-    names: &[mant_protocol::InlineNameRange],
+    names: &[mant_render::InlineNameRange],
 ) -> Vec<StyledInlineLine> {
     styled_display_inline_lines(nodes, style, current_address, names, false)
 }
@@ -79,7 +79,7 @@ pub(super) fn styled_display_inline_lines(
     nodes: &[Inline],
     style: Style,
     current_address: Option<&DocumentAddress>,
-    names: &[mant_protocol::InlineNameRange],
+    names: &[mant_render::InlineNameRange],
     code: bool,
 ) -> Vec<StyledInlineLine> {
     styled_reference_inline_lines(
@@ -96,7 +96,7 @@ pub(super) fn styled_reference_inline_lines(
     nodes: &[Inline],
     style: Style,
     current_address: Option<&DocumentAddress>,
-    names: &[mant_protocol::InlineNameRange],
+    names: &[mant_render::InlineNameRange],
     code: bool,
     origins: &super::references::ReferenceOrigins,
 ) -> Vec<StyledInlineLine> {
@@ -190,11 +190,11 @@ fn append_inline(
     nodes: &[Inline],
     style: Style,
     current_address: Option<&DocumentAddress>,
-    names: &[mant_protocol::InlineNameRange],
+    names: &[mant_render::InlineNameRange],
     code: bool,
     lines: &mut Vec<StyledInlineLine>,
 ) {
-    mant_protocol::visit_inline_text(nodes, names, |source, target, text| {
+    mant_render::visit_inline_text(nodes, names, |source, target, text| {
         let first_line = lines.len() - 1;
         let first_column = spans_width(&lines[first_line].spans);
         if code {
@@ -219,7 +219,7 @@ fn append_inline(
 /// No layer discards inherited modifiers. Link affordance survives Code.
 fn source_style(
     mut style: Style,
-    source: mant_protocol::InlinePresentation,
+    source: mant_render::InlinePresentation,
     target: Option<&mant_ir::LinkTarget>,
 ) -> Style {
     if source.strong {

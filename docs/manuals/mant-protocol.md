@@ -19,6 +19,12 @@ than native response envelopes. This reference explains how the boundaries fit
 together and how clients should use them; it is not a substitute for validating
 structured input against the appropriate schema.
 
+The Rust package owns DTOs, validation, schema generation and stable semantic
+labels. `mant-query` produces these projections from existing IR; `mant-render`
+formats existing results as text or CommonMark without re-running queries or
+loading documents. The CLI and MCP host compose those capabilities. Changing
+their crate ownership does not change the wire discriminators below.
+
 Protocol projections reuse selected semantic types from `mant-ir`, including
 blocks, sections, inline nodes, entry facts, logical document
 addresses, metadata, diagnostics, and tldr content. These types are the
@@ -1748,7 +1754,7 @@ block `source`. Controls are masked before ranges are measured. Markdown/ANSI
 rendering cannot change the wire text/ranges. The path starts with `root` or
 `sections/sN[/sN...]`, then zero-based `bN` blocks, `iN` list items, `dN`
 definition descriptions, or `rN/cN` table cells; it resolves in the exact final
-IR using `mant_engine::resolve_explanation_block`, not in exported Markdown.
+IR using `mant_query::resolve_explanation_block`, not in exported Markdown.
 These are snapshot-local locations, not durable NodeIds.
 
 The one `contentBytes` budget first reserves direct-match facts for the page,

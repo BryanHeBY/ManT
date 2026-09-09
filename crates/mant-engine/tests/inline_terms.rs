@@ -11,8 +11,10 @@
 
 use std::path::PathBuf;
 
-use mant_engine::{parse_manual_source, render_markdown, render_query_man, render_query_text};
+use mant_codec::encode::render_markdown;
+use mant_engine::parse_manual_source;
 use mant_ir::{Block, Document};
+use mant_render::{render_query_man, render_query_text};
 
 #[path = "common/mod.rs"]
 #[allow(dead_code)]

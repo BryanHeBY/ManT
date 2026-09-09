@@ -1,5 +1,6 @@
 //! `ce`/`rj` counts are control operands; their captured lines remain content.
-use mant_engine::{query_roff_bytes, render_query_text};
+use mant_engine::query_roff_bytes;
+use mant_render::render_query_text;
 
 fn source_for(mode: &str, body: &str) -> String {
     let (header, open, close) = match mode {

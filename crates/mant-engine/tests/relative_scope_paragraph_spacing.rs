@@ -1,7 +1,8 @@
 //! A transparent RS keeps paragraph predecessor evidence across IR ownership.
 
-use mant_engine::{query_roff_bytes, render_query_text};
+use mant_engine::query_roff_bytes;
 use mant_ir::{Block, Inline, LayoutHint};
+use mant_render::render_query_text;
 
 fn paragraph_layout<'a>(blocks: &'a [Block], text: &str) -> Option<&'a LayoutHint> {
     for block in blocks {

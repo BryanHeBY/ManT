@@ -7,8 +7,9 @@ use crate::{arguments::QueryFormat, error::Failure};
 use mant_ir::DocumentMeta;
 use mant_protocol::{
     QuerySearch, ScopeQueryResponse, ScopeQueryResult, ScopedQueryFailure, ScopedSearchDocument,
-    SearchQuery, SearchSchema, sanitize_terminal_text,
+    SearchQuery, SearchSchema,
 };
+use mant_render::sanitize_terminal_text;
 use std::fmt::Write as _;
 pub(crate) fn render_scope_query_result(
     response: &ScopeQueryResponse,
@@ -33,7 +34,7 @@ pub(crate) fn render_scope_query_result(
     match &response.result {
         ScopeQueryResult::Explain { explanation } => {
             output = if format == QueryFormat::Markdown {
-                mant_engine::render_scope_explanation_markdown(explanation)
+                mant_render::render_scope_explanation_markdown(explanation)
             } else {
                 super::terminal::render_terminal_scope_explanation(explanation, color)
             };
@@ -69,7 +70,7 @@ pub(crate) fn render_scope_query_result(
                 let rendered = match format {
                     QueryFormat::Markdown => {
                         let search = output_terminal.then(|| terminal_search(&local_search));
-                        mant_engine::render_search_markdown(
+                        mant_render::render_search_markdown(
                             search.as_ref().unwrap_or(&local_search),
                         )
                     }

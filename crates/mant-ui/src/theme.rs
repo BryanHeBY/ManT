@@ -37,14 +37,14 @@ pub const SEARCH_ACTIVE: Color = YELLOW;
 
 /// Entry names retain semantic families; generic terms are primary content.
 pub(crate) const fn entry_color(kind: mant_ir::EntryKind) -> Color {
-    match mant_protocol::entry_tone(kind) {
-        mant_protocol::EntryTone::Primary => TEXT,
-        mant_protocol::EntryTone::Parameter => GREEN,
-        mant_protocol::EntryTone::Command => PEACH,
-        mant_protocol::EntryTone::Environment => MAUVE,
-        mant_protocol::EntryTone::Configuration => YELLOW,
-        mant_protocol::EntryTone::Variable => PINK,
-        mant_protocol::EntryTone::Value => BLUE,
+    match mant_render::entry_tone(kind) {
+        mant_render::EntryTone::Primary => TEXT,
+        mant_render::EntryTone::Parameter => GREEN,
+        mant_render::EntryTone::Command => PEACH,
+        mant_render::EntryTone::Environment => MAUVE,
+        mant_render::EntryTone::Configuration => YELLOW,
+        mant_render::EntryTone::Variable => PINK,
+        mant_render::EntryTone::Value => BLUE,
     }
 }
 

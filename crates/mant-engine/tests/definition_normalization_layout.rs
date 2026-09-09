@@ -1,10 +1,11 @@
 //! Source-level rendering contracts paired with codec-only normalization tests.
 
-use mant_engine::{query_roff_bytes, render_query_text};
+use mant_engine::query_roff_bytes;
 use mant_ir::{
     DefinitionItem, Document, inline_plain_text,
     visit::{self, Visit},
 };
+use mant_render::render_query_text;
 
 fn row<'a>(text: &'a str, token: &str) -> &'a str {
     text.lines()

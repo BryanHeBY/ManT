@@ -14,7 +14,7 @@ fn relative_definition_geometry_matches_text_and_all_normal_viewports() {
     // mandoc CVS HEAD 1.250 and groff 1.24.1 agree on these relative columns.
     let query = mant_engine::query_roff_bytes(b".TH GEOMETRY 1\n.SH SUBCOMMAND\n.RS 0\n.TP\n.B create\nCREATE_BODY\n.sp\nOPTIONS_BODY\n.RS 7\n.TP\n.B -i QGROUP\nINNER_BODY\n.RE\n.TP\n.B delete\nDELETE_BODY\n.RE\n").unwrap();
     let before = query.clone();
-    let text = mant_engine::render_query_text(&query);
+    let text = mant_render::render_query_text(&query);
     let expected = [
         ("create", 0),
         ("CREATE_BODY", 7),
@@ -65,8 +65,8 @@ fn markdown_semantic_annotation_does_not_change_translated_content_geometry() {
         let plain = mant_engine::query_markdown_text(&plain, None).unwrap();
         let annotated = mant_engine::query_markdown_text(&annotated, None).unwrap();
         assert_eq!(
-            mant_engine::render_query_text(&plain),
-            mant_engine::render_query_text(&annotated)
+            mant_render::render_query_text(&plain),
+            mant_render::render_query_text(&annotated)
         );
         for query in [&plain, &annotated] {
             let blocks = &query.document.as_ref().unwrap().sections[0].blocks;
@@ -152,7 +152,7 @@ fn tq_run_in_uses_only_the_final_label_and_preserves_one_source_owner() {
                     &[mant_protocol::ContentSelector::id(facts.id.clone())],
                 )
                 .unwrap();
-                let text = mant_engine::render_excerpt_text(&excerpt);
+                let text = mant_render::render_excerpt_text(&excerpt);
                 let body = text.lines().find(|line| line.contains("BODY")).unwrap();
                 assert_eq!(body.contains(last), runs_in, "{source}\n{text}");
                 let explained = mant_engine::explain_query(
@@ -164,13 +164,13 @@ fn tq_run_in_uses_only_the_final_label_and_preserves_one_source_owner() {
                 )
                 .unwrap();
                 assert_eq!(explained.counts.direct_entry.total, 1);
-                let text = mant_engine::render_explanation_text(&explained);
+                let text = mant_render::render_explanation_text(&explained);
                 assert!(text.contains("BODY"), "{text}");
                 assert!(text.contains("TAIL"), "{text}");
             }
         }
         let before = query.clone();
-        for (text, origin) in std::iter::once((mant_engine::render_query_text(&query), 0)).chain(
+        for (text, origin) in std::iter::once((mant_render::render_query_text(&query), 0)).chain(
             [40, 80, 120].map(|width| {
                 (
                     DocumentView::new(&query)

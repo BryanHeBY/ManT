@@ -38,7 +38,7 @@ fn native_manual_links_work_in_heading_body_and_linked_code_terms() {
         1,
         "only the annotated term creates an entry"
     );
-    let exported = mant_engine::render_markdown(&query);
+    let exported = mant_codec::encode::render_markdown(&query);
     assert!(
         exported.contains(r"[Heading](man:linkprobe\(3\))"),
         "{exported}"

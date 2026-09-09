@@ -3,11 +3,10 @@
 mod semantic_read;
 use std::path::Path;
 
-use mant_engine::{
-    build_outline_projection, parse_manual_bytes, query_markdown_text, render_excerpt_text,
-};
+use mant_engine::{build_outline_projection, parse_manual_bytes, query_markdown_text};
 use mant_ir::Block;
 use mant_protocol::{EntryProjection, ExcerptSelection, OutlineNode};
+use mant_render::render_excerpt_text;
 
 #[test]
 fn inline_definition_continuations_keep_the_structural_description_origin() {
@@ -15,7 +14,7 @@ fn inline_definition_continuations_keep_the_structural_description_origin() {
         "../../../tests/fixtures/roff/inline-definition-continuations.1"
     ))
     .unwrap();
-    let text = mant_engine::render_query_text(&query);
+    let text = mant_render::render_query_text(&query);
     for payload in [
         "INLINE_CONTINUATION.",
         "CODE_CONTINUATION",
@@ -42,7 +41,7 @@ fn leading_spacing_and_code_do_not_become_an_inline_description() {
         for body in [".sp 2\nCONTENT", ".nf\nCONTENT\n.fi"] {
             let source = format!(".TH PROBE 1\n.SH OPTIONS\n.IP \"{label}\" 4\n{body}\n");
             let query = mant_engine::query_roff_bytes(source.as_bytes()).unwrap();
-            let text = mant_engine::render_query_text(&query);
+            let text = mant_render::render_query_text(&query);
             assert!(text.lines().any(|line| line == label), "{text}");
             assert!(text.lines().any(|line| line == "    CONTENT"), "{text}");
             if body.starts_with(".sp") {

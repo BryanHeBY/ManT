@@ -1,8 +1,9 @@
 //! All man paragraph forms resolve native predecessor evidence before IR emission.
 #[path = "../src/semantic_test_read.rs"]
 mod semantic_read;
-use mant_engine::{query_roff_bytes, render_excerpt_text, render_query_text};
+use mant_engine::query_roff_bytes;
 use mant_ir::Block;
+use mant_render::{render_excerpt_text, render_query_text};
 
 const PARAGRAPHS: &[&str] = &[
     ".PP\nAFTER\n",

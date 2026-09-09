@@ -1,15 +1,14 @@
 //! Entry projections must borrow ordinary content, not reconstruct definitions.
 #[path = "../src/semantic_test_read.rs"]
 mod semantic_read;
-use mant_engine::{
-    build_outline_projection, query_markdown_text, render_excerpt_markdown, render_excerpt_text,
-    render_markdown, render_query_text,
-};
+use mant_codec::encode::render_markdown;
+use mant_engine::{build_outline_projection, query_markdown_text};
 use mant_ir::{
     Block, EntryContentSlice, EntryFacts, EntryForm, EntryInlineRoot, EntryKind, Inline,
     LayoutHint, ListItem, ListKind, NameCase, ResolvedContent,
 };
 use mant_protocol::{EntryProjection, ExcerptSelection, OutlineNode};
+use mant_render::{render_excerpt_markdown, render_excerpt_text, render_query_text};
 
 fn item(name: &str, payload: &str, entry: bool) -> ListItem {
     ListItem {

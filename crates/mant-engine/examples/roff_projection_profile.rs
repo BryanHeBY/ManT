@@ -9,11 +9,10 @@
 
 use std::{collections::BTreeMap, path::PathBuf};
 
-use mant_engine::{
-    ManualPage, parse_manual_page, parse_markdown, render_excerpt_markdown, render_markdown,
-    select_excerpt,
-};
+use mant_codec::encode::render_markdown;
+use mant_engine::{ManualPage, parse_manual_page, parse_markdown, select_excerpt};
 use mant_ir::{Block, Document, Inline, ListKind, ResolvedContent, Section};
+use mant_render::render_excerpt_markdown;
 use pulldown_cmark::{Event, Parser};
 use serde::Serialize;
 use serde_json::{Value, json};

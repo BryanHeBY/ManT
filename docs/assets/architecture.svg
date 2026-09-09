@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="900" height="740" viewBox="0 0 900 740" role="img" aria-labelledby="title description">
   <title id="title">ManT architecture</title>
-  <desc id="description">mant-engine composes the document workflow and reports. mant-loader resolves and reads local sources; mant-codec decodes Markdown, tldr and optional native manuals into mant-ir; mant-query consumes existing IR without loading sources. The mant-protocol interaction layer supplies logical projections to TUI host interactions, CLI and request JSON, and compact MCP presentation. Separate direct paths carry document IR to the TUI and human renderers.</desc>
+  <desc id="description">mant-engine composes document loading and queries. mant-loader reads local sources; mant-codec decodes Markdown, tldr and optional native manuals into mant-ir; mant-query consumes existing IR. mant-protocol supplies result DTOs and stable labels. Independent mant-render formats existing IR and DTOs without loading or querying; terminal adapters own delivery. The TUI consumes IR directly and shares render styles while keeping interactive layout.</desc>
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
       <path d="M 0 0 L 10 5 L 0 10 z" class="arrow-head"/>
@@ -65,7 +65,7 @@
   <path d="M 740 125 L 740 165" class="connector"/>
 
   <text x="105" y="199" class="engine-title">mant-engine</text>
-  <text x="795" y="198" text-anchor="end" class="detail">request workflow · reports</text>
+  <text x="795" y="198" text-anchor="end" class="detail">request validation · load + query</text>
 
   <g>
     <rect x="110" y="215" width="200" height="62" rx="10" class="stage"/>
@@ -92,13 +92,18 @@
   <text x="450" y="398" text-anchor="middle" class="detail">typed IDs · links · outline paths · ranges · visitors · index</text>
 
   <path d="M 300 418 C 300 500, 85 500, 85 635" class="connector"/>
-  <path d="M 600 418 C 600 500, 765 500, 765 635" class="connector"/>
+  <path d="M 600 418 C 600 480, 735 480, 735 520" class="connector"/>
   <path d="M 450 418 L 450 520" class="connector"/>
   <g filter="url(#shadow)">
     <rect x="325" y="520" width="250" height="58" rx="12" class="protocol"/>
+    <rect x="610" y="520" width="250" height="58" rx="12" class="stage"/>
   </g>
   <text x="450" y="544" text-anchor="middle" class="protocol-title">mant-protocol</text>
-  <text x="450" y="565" text-anchor="middle" class="detail">projections · presentation</text>
+  <text x="450" y="565" text-anchor="middle" class="detail">DTOs · validation · labels</text>
+  <text x="735" y="544" text-anchor="middle" class="title">mant-render</text>
+  <text x="735" y="565" text-anchor="middle" class="detail">body · reports · style roles</text>
+  <path d="M 575 549 L 610 549" class="connector"/>
+  <path d="M 735 578 L 765 635" class="connector"/>
 
   <path d="M 350 578 C 300 610, 210 600, 155 635" class="protocol-connector"/>
   <path d="M 405 578 L 335 635" class="connector"/>
@@ -118,7 +123,7 @@
   <text x="550" y="661" text-anchor="middle" class="interface-title">MCP stdio</text>
   <text x="550" y="684" text-anchor="middle" class="detail">read-only tools</text>
   <text x="550" y="705" text-anchor="middle" class="detail">text · CommonMark</text>
-  <text x="765" y="661" text-anchor="middle" class="interface-title">Human renderers</text>
+  <text x="765" y="661" text-anchor="middle" class="interface-title">Output adapters</text>
   <text x="765" y="684" text-anchor="middle" class="detail">terminal · text</text>
   <text x="765" y="705" text-anchor="middle" class="detail">Markdown · man</text>
 </svg>

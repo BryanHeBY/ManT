@@ -46,7 +46,7 @@ fn assert_markdown_literal_rows(query: &mant_engine::ResolvedContent, expected: 
             walk_block(self, block);
         }
     }
-    let markdown = mant_engine::render_markdown(query);
+    let markdown = mant_codec::encode::render_markdown(query);
     let reloaded = mant_engine::query_markdown_text(&markdown, None).unwrap();
     let mut rows = LiteralRows::default();
     rows.visit_document(reloaded.document.as_ref().unwrap());
@@ -81,7 +81,7 @@ fn ordinary_man_paragraphs_reset_prevailing_definition_width() {
         let mut widths = Widths(Vec::new());
         widths.visit_document(query.document.as_ref().unwrap());
         assert_eq!(widths.0, [true, inline_second], "{source}");
-        let text = mant_engine::render_query_text(&query);
+        let text = mant_render::render_query_text(&query);
         assert!(
             text.lines().any(|line| line == "FIRSTLONGTAG   FIRST"),
             "{text}"
@@ -126,9 +126,9 @@ fn literal_display_controls_preserve_physical_rows_and_continuation() {
                 "{source}"
             );
             assert!(
-                mant_engine::render_query_text(&query).contains(expected),
+                mant_render::render_query_text(&query).contains(expected),
                 "{source}: {}",
-                mant_engine::render_query_text(&query)
+                mant_render::render_query_text(&query)
             );
         }
     }
@@ -153,7 +153,7 @@ fn literal_continuations_cross_styling_containers_without_phantom_rows() {
             "FIRSTSECONDTHIRD",
             "{body}"
         );
-        assert!(mant_engine::render_query_text(&query).contains("FIRSTSECONDTHIRD"));
+        assert!(mant_render::render_query_text(&query).contains("FIRSTSECONDTHIRD"));
         assert_markdown_literal_rows(&query, "FIRSTSECONDTHIRD");
     }
 }
@@ -184,7 +184,7 @@ fn styled_literal_breaks_and_eof_keep_exact_content_boundaries() {
             expected,
             "{body}"
         );
-        assert!(mant_engine::render_query_text(&query).contains(expected));
+        assert!(mant_render::render_query_text(&query).contains(expected));
         assert_markdown_literal_rows(&query, expected);
     }
 }
@@ -243,7 +243,7 @@ fn explicit_literal_breaks_are_not_repeated_at_styling_boundaries() {
                         "{body}"
                     );
                     assert!(
-                        mant_engine::render_query_text(&query).contains(&expected),
+                        mant_render::render_query_text(&query).contains(&expected),
                         "{body}"
                     );
                     assert_markdown_literal_rows(&query, &expected);

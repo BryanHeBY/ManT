@@ -32,7 +32,7 @@ fn keeps_the_nested_npm_manual_and_windows_build_requirements() {
 #[test]
 fn preserves_authored_literal_font_spellings_without_decoding_them_twice() {
     let document = windows_release_manual("npm");
-    let rendered = mant_engine::render_query_text(&common::query_for_document("npm", document));
+    let rendered = mant_render::render_query_text(&common::query_for_document("npm", document));
     // The source spells these backslashes with [rs]. Both mandoc and groff
     // print the literal font strings; a blanket no-\\f assertion hid data.
     assert!(rendered.contains(r"\fBgit\fR"));

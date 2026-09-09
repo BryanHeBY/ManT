@@ -8,16 +8,18 @@
 
 use std::{fs, path::PathBuf};
 
+use mant_codec::encode::{MarkdownOptions, render_markdown, render_markdown_with_options};
 use mant_engine::{
-    MarkdownOptions, build_outline_with_detail, parse_markdown, query_markdown_text,
-    render_excerpt_markdown, render_excerpt_text, render_markdown, render_markdown_with_options,
-    render_outline_text, render_query_json, render_query_man, render_query_text,
-    render_search_text, search_query, select_excerpt,
+    build_outline_with_detail, parse_markdown, query_markdown_text, search_query, select_excerpt,
 };
 use mant_ir::{Block, Section};
 use mant_protocol::{
     OutlineDetail, OutlineNode, SearchCase, SearchQuery, SearchScope, SearchSyntax,
     default_search_limit,
+};
+use mant_render::{
+    render_excerpt_markdown, render_excerpt_text, render_outline_text, render_query_json,
+    render_query_man, render_query_text, render_search_text,
 };
 use pulldown_cmark::{Event, Parser, Tag};
 

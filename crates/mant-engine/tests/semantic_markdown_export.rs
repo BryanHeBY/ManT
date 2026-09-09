@@ -1,5 +1,6 @@
 //! Semantic export is an opt-in subset, not a lossless Markdown serializer.
-use mant_engine::{MarkdownOptions, query_markdown_text, render_markdown_with_options};
+use mant_codec::encode::{MarkdownOptions, render_markdown_with_options};
+use mant_engine::query_markdown_text;
 use mant_ir::{
     Document, EntryFacts, ListItem,
     visit::{self, Visit},

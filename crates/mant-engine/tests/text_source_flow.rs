@@ -1,8 +1,6 @@
 //! Section facades and literal leaves preserve the same source row stream.
-use mant_engine::{
-    query_markdown_text, query_roff_bytes, render_excerpt_text, render_query_text,
-    render_query_text_with,
-};
+use mant_engine::{query_markdown_text, query_roff_bytes};
+use mant_render::{render_excerpt_text, render_query_text, render_query_text_with};
 
 #[test]
 fn native_section_pd_and_explicit_requests_compose_once() {
@@ -73,13 +71,13 @@ fn definition_explain_preserves_nested_fence_blank_rows() {
         },
     )
     .unwrap();
-    let text = mant_engine::render_explanation_text(&explanation);
+    let text = mant_render::render_explanation_text(&explanation);
     assert!(
         text.contains("BEFORE\n\n\n  ALPHA\n\n\n\n  AFTER"),
         "{text:?}"
     );
     assert_eq!(
-        mant_engine::render_explanation_text_with(&explanation, |_, text| text.into()),
+        mant_render::render_explanation_text_with(&explanation, |_, text| text.into()),
         text
     );
 }

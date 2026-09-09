@@ -741,9 +741,9 @@ fn man_optional_arguments_keep_brackets_and_argument_styles() {
                 format!(".TH PROBE 1\n.SH DESCRIPTION\n{requests}\n")
             };
             let query = mant_engine::query_roff_bytes(source.as_bytes()).unwrap();
-            let text = mant_engine::render_query_text(&query);
+            let text = mant_render::render_query_text(&query);
             assert!(text.contains(expected), "{source}: {text}");
-            let markdown = mant_engine::render_markdown(&query);
+            let markdown = mant_codec::encode::render_markdown(&query);
             assert!(markdown.contains("**--"), "{markdown}");
             if requests.contains("FILE") {
                 assert!(markdown.contains("*FILE*"), "{markdown}");
@@ -1042,7 +1042,7 @@ fn recovers_complete_numbered_sequences_from_mdoc_tag_lists() {
             .fragment_target("second-step")
             .is_some()
     );
-    let rendered = mant_engine::render_query_text(&ResolvedContent {
+    let rendered = mant_render::render_query_text(&ResolvedContent {
         label: "mdoc-tag-enumeration".to_owned(),
         address: None,
         document: Some(document),

@@ -63,11 +63,11 @@ fn render_find(catalog: &DocumentCatalog, page: PageRequest) -> TextPage {
     if let Some(next_offset) = catalog.next_offset {
         let _ = write!(text, ", nextOffset={next_offset}");
     }
-    let records = mant_protocol::render_catalog_text(catalog, false);
+    let records = mant_render::render_catalog_text(catalog, false);
     if !records.is_empty() {
         text.push('\n');
         text.push_str(records.trim_end());
-    } else if let Some(coverage) = mant_protocol::render_catalog_coverage_text(catalog) {
+    } else if let Some(coverage) = mant_render::render_catalog_coverage_text(catalog) {
         text.push_str("; ");
         text.push_str(&coverage.replace('\n', "; "));
     }
@@ -75,7 +75,7 @@ fn render_find(catalog: &DocumentCatalog, page: PageRequest) -> TextPage {
 }
 
 fn render_outline(outline: &QueryOutline, page: PageRequest) -> TextPage {
-    let mut text = mant_engine::render_outline_text(outline);
+    let mut text = mant_render::render_outline_text(outline);
     if let Some(address) = &outline.address {
         let mut sources = std::collections::BTreeSet::new();
         for record in &outline.references.records {
@@ -89,7 +89,7 @@ fn render_outline(outline: &QueryOutline, page: PageRequest) -> TextPage {
 }
 
 fn render_excerpt(excerpt: &QueryExcerpt, page: PageRequest) -> TextPage {
-    page_text(&mant_engine::render_excerpt_markdown(excerpt), page)
+    page_text(&mant_render::render_excerpt_markdown(excerpt), page)
 }
 
 fn render_scope_explain(

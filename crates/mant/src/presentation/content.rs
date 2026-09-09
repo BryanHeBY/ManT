@@ -1,7 +1,7 @@
 //! Styles source-aware spans without querying, searching or classifying text.
 use super::terminal::{TerminalRole, terminal_style};
 use anstyle::{AnsiColor, Style};
-use mant_protocol::{TextPresentation, TextRole, sanitize_terminal_text};
+use mant_render::{TextPresentation, TextRole, sanitize_terminal_text};
 use std::fmt::Write as _;
 
 pub(super) fn decorate(presentation: TextPresentation, value: &str, color: bool) -> String {
@@ -90,7 +90,7 @@ mod tests {
     fn decoration_preserves_layout_whitespace_and_composes_all_modifiers() {
         let presentation = TextPresentation {
             role: TextRole::Body,
-            inline: mant_protocol::InlinePresentation {
+            inline: mant_render::InlinePresentation {
                 strong: true,
                 emphasis: true,
                 code: true,
@@ -113,7 +113,7 @@ mod tests {
             terminal_style(TerminalRole::Entry(mant_ir::EntryKind::Command)).get_fg_color()
         );
         let environment = span_style(TextPresentation {
-            inline: mant_protocol::InlinePresentation {
+            inline: mant_render::InlinePresentation {
                 entry_kind: Some(mant_ir::EntryKind::EnvironmentVariable),
                 ..presentation.inline
             },

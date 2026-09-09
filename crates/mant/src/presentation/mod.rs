@@ -53,38 +53,38 @@ pub(super) fn render_query_result(
     match result {
         QueryViewResult::Full(query) => render_full_query(query, options),
         QueryViewResult::Outline(outline) => match format {
-            QueryFormat::Markdown if output_terminal => Ok(mant_engine::render_outline_markdown(
+            QueryFormat::Markdown if output_terminal => Ok(mant_render::render_outline_markdown(
                 &terminal_outline(outline),
             )),
-            QueryFormat::Markdown => Ok(mant_engine::render_outline_markdown(outline)),
+            QueryFormat::Markdown => Ok(mant_render::render_outline_markdown(outline)),
             QueryFormat::Text => Ok(render_terminal_outline(outline, color)),
             QueryFormat::Man => Err(Failure::usage(
                 "--format man applies only to full documents",
             )),
             QueryFormat::Json => {
-                mant_engine::render_outline_json(outline, pretty).map_err(Failure::operational)
+                mant_render::render_outline_json(outline, pretty).map_err(Failure::operational)
             }
         },
         QueryViewResult::Excerpt(excerpt) => render_excerpt(excerpt, options),
         QueryViewResult::Explanation(explanation) => match format {
             QueryFormat::Json => render_json(explanation, pretty),
             QueryFormat::Text => Ok(render_terminal_explanation(explanation, color)),
-            QueryFormat::Markdown => Ok(mant_engine::render_explanation_markdown(explanation)),
+            QueryFormat::Markdown => Ok(mant_render::render_explanation_markdown(explanation)),
             QueryFormat::Man => Err(Failure::usage(
                 "--format man applies only to full documents",
             )),
         },
         QueryViewResult::Search(search) => match format {
-            QueryFormat::Markdown if output_terminal => Ok(mant_engine::render_search_markdown(
+            QueryFormat::Markdown if output_terminal => Ok(mant_render::render_search_markdown(
                 &terminal_search(search),
             )),
-            QueryFormat::Markdown => Ok(mant_engine::render_search_markdown(search)),
+            QueryFormat::Markdown => Ok(mant_render::render_search_markdown(search)),
             QueryFormat::Text => Ok(render_terminal_search(search, color)),
             QueryFormat::Man => Err(Failure::usage(
                 "--format man applies only to full documents",
             )),
             QueryFormat::Json => {
-                mant_engine::render_search_json(search, pretty).map_err(Failure::operational)
+                mant_render::render_search_json(search, pretty).map_err(Failure::operational)
             }
         },
     }
@@ -105,9 +105,9 @@ fn render_excerpt(
     match format {
         QueryFormat::Markdown => {
             let terminal_copy = output_terminal.then(|| terminal_excerpt(excerpt));
-            Ok(mant_engine::render_excerpt_markdown_with_options(
+            Ok(mant_render::render_excerpt_markdown_with_options(
                 terminal_copy.as_ref().unwrap_or(excerpt),
-                mant_engine::MarkdownFragmentOptions { preserve_anchors },
+                mant_codec::encode::MarkdownFragmentOptions { preserve_anchors },
             ))
         }
         QueryFormat::Text => Ok(render_terminal_excerpt(excerpt, color)),
@@ -115,7 +115,7 @@ fn render_excerpt(
             "--format man applies only to full documents",
         )),
         QueryFormat::Json => {
-            mant_engine::render_excerpt_json(excerpt, pretty).map_err(Failure::operational)
+            mant_render::render_excerpt_json(excerpt, pretty).map_err(Failure::operational)
         }
     }
 }

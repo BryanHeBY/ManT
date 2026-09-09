@@ -5,7 +5,7 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 publish.workspace = true
-description = "Transport-neutral query contracts, projections, and presentations for ManT"
+description = "Transport-neutral query contracts and projections for ManT"
 repository.workspace = true
 homepage.workspace = true
 readme = "README.md"
@@ -17,8 +17,6 @@ include = ["/Cargo.toml", "/LICENSE", "/README.md", "/src/**"]
 mant-ir = { path = "../mant-ir", version = "^0.11.0" }
 schemars.workspace = true
 serde.workspace = true
-unicode-segmentation.workspace = true
-unicode-width.workspace = true
 
 [dev-dependencies]
 serde_json.workspace = true

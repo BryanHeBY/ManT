@@ -26,13 +26,13 @@ pub(super) fn assert_flow(body: &str, expected: &str) {
     };
     assert_eq!(inline_text(inlines), expected, "{body}");
     assert!(
-        unindent(&mant_engine::render_query_text(&query)).contains(expected),
+        unindent(&mant_render::render_query_text(&query)).contains(expected),
         "{body}"
     );
-    let markdown = mant_engine::render_markdown(&query);
+    let markdown = mant_codec::encode::render_markdown(&query);
     let reparsed = mant_engine::query_markdown_text(&markdown, None).unwrap();
     assert!(
-        unindent(&mant_engine::render_query_text(&reparsed)).contains(expected),
+        unindent(&mant_render::render_query_text(&reparsed)).contains(expected),
         "{body}: {markdown}"
     );
     assert!(

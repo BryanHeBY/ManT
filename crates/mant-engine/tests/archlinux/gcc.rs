@@ -32,7 +32,7 @@ fn explanation_retains_both_help_definitions_and_the_qualified_tail() {
                 .contains(&mant_protocol::EvidenceBasis::Literal)
     }));
     assert!("--help".parse::<mant_protocol::ContentSelector>().is_err());
-    let full = mant_engine::render_explanation_text(&result);
+    let full = mant_render::render_explanation_text(&result);
     for text in [
         "undocumented",
         "joined",
@@ -71,7 +71,7 @@ fn help_classes_qualifiers_and_tail_examples_share_one_owner() {
     let excerpt =
         mant_engine::select_excerpt(&query, &[mant_protocol::ContentSelector::path(help.path())])
             .unwrap();
-    let text = mant_engine::render_excerpt_text(&excerpt);
+    let text = mant_render::render_excerpt_text(&excerpt);
     for retained in [
         "These are the supported qualifiers",
         "should not consist solely of inverted",

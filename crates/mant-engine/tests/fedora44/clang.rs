@@ -34,7 +34,7 @@ fn keeps_complete_sections_and_semantic_option_outlines() {
     let optimization = find_outline_entry(&outline.nodes, "-O4").unwrap();
     assert_eq!(optimization.id(), "option-o0");
     let explanation = semantic_read::semantic_excerpt(&query, &["-O4"]).unwrap();
-    let text = mant_engine::render_excerpt_text(&explanation);
+    let text = mant_render::render_excerpt_text(&explanation);
     assert!(text.contains("-O4 and higher"), "{text}");
     assert!(text.contains("Currently equivalent to -O3"), "{text}");
     assert!(!text.contains("Control debug information output"), "{text}");

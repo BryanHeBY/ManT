@@ -2,11 +2,11 @@
 #[path = "../src/semantic_test_read.rs"]
 mod semantic_read;
 
-use mant_engine::{
-    build_outline_with_detail, query_markdown_text, render_markdown, render_query_text,
-};
+use mant_codec::encode::render_markdown;
+use mant_engine::{build_outline_with_detail, query_markdown_text};
 use mant_ir::{TldrCommandPart, TldrOrigin};
 use mant_protocol::{ExcerptSelection, OutlineDetail, OutlineNode};
+use mant_render::render_query_text;
 use pulldown_cmark::{CodeBlockKind, Event, Parser, Tag, TagEnd};
 
 const MANT_MANUAL: &str = include_str!("../../../docs/manuals/mant.md");
@@ -288,7 +288,7 @@ fn self_manual_option_excerpts_retain_examples_and_operational_limits() {
     ] {
         let excerpt = semantic_read::semantic_excerpt(&query, &[selector]).expect("option entry");
         assert!(
-            mant_engine::render_excerpt_text(&excerpt).contains(required),
+            mant_render::render_excerpt_text(&excerpt).contains(required),
             "{selector} must retain {required:?} in its own description"
         );
     }

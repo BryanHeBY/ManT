@@ -3,7 +3,8 @@ use super::RenderOptions;
 use crate::{arguments::QueryFormat, error::Failure};
 use anstyle::{AnsiColor, Style};
 use mant_ir::{DocumentMeta, EntryKind, ResolvedContent, SourceFormat};
-use mant_protocol::{QueryExcerpt, QueryOutline, QuerySearch, sanitize_terminal_text};
+use mant_protocol::{QueryExcerpt, QueryOutline, QuerySearch};
+use mant_render::sanitize_terminal_text;
 use std::fmt::Write as _;
 /// Keep protocol-owned catalog text intact while applying optional CLI styling.
 pub(crate) fn render_catalog_output(
@@ -11,8 +12,8 @@ pub(crate) fn render_catalog_output(
     grouped: bool,
     color: bool,
 ) -> String {
-    let text = mant_protocol::render_catalog_coverage_text(catalog)
-        .unwrap_or_else(|| mant_protocol::render_catalog_text(catalog, grouped));
+    let text = mant_render::render_catalog_coverage_text(catalog)
+        .unwrap_or_else(|| mant_render::render_catalog_text(catalog, grouped));
     if !color || text.is_empty() {
         return text;
     }
@@ -40,13 +41,13 @@ pub(super) enum TerminalRole {
 }
 
 pub(super) fn render_terminal_outline(outline: &QueryOutline, color: bool) -> String {
-    mant_engine::render_outline_text_with(outline, |style, text| {
+    mant_render::render_outline_text_with(outline, |style, text| {
         super::content::decorate(style, text, color)
     })
 }
 
 pub(super) fn render_terminal_excerpt(excerpt: &QueryExcerpt, color: bool) -> String {
-    mant_engine::render_excerpt_text_with(excerpt, |style, text| {
+    mant_render::render_excerpt_text_with(excerpt, |style, text| {
         super::content::decorate(style, text, color)
     })
 }
@@ -55,7 +56,7 @@ pub(super) fn render_terminal_explanation(
     explanation: &mant_protocol::QueryExplanation,
     color: bool,
 ) -> String {
-    mant_engine::render_explanation_text_with(explanation, |style, text| {
+    mant_render::render_explanation_text_with(explanation, |style, text| {
         super::content::decorate(style, text, color)
     })
 }
@@ -64,26 +65,26 @@ pub(super) fn render_terminal_scope_explanation(
     explanation: &mant_protocol::ScopeExplanation,
     color: bool,
 ) -> String {
-    mant_engine::render_scope_explanation_text_with(explanation, |style, text| {
+    mant_render::render_scope_explanation_text_with(explanation, |style, text| {
         super::content::decorate(style, text, color)
     })
 }
 
 pub(super) fn render_terminal_search(search: &QuerySearch, color: bool) -> String {
-    mant_engine::render_search_text_with(search, |role, value| {
+    mant_render::render_search_text_with(search, |role, value| {
         let value = sanitize_terminal_text(value);
         if !color {
             return value.into_owned();
         }
         let role = match role {
-            mant_engine::SearchTextRole::Plain => return value.into_owned(),
-            mant_engine::SearchTextRole::Document => TerminalRole::Document,
-            mant_engine::SearchTextRole::Coordinate => TerminalRole::Coordinate,
-            mant_engine::SearchTextRole::Path => TerminalRole::Path,
-            mant_engine::SearchTextRole::Heading => TerminalRole::Heading,
-            mant_engine::SearchTextRole::Definition(kind) => entry_kind_role(kind),
-            mant_engine::SearchTextRole::Match => TerminalRole::Match,
-            mant_engine::SearchTextRole::Muted => TerminalRole::Muted,
+            mant_render::SearchTextRole::Plain => return value.into_owned(),
+            mant_render::SearchTextRole::Document => TerminalRole::Document,
+            mant_render::SearchTextRole::Coordinate => TerminalRole::Coordinate,
+            mant_render::SearchTextRole::Path => TerminalRole::Path,
+            mant_render::SearchTextRole::Heading => TerminalRole::Heading,
+            mant_render::SearchTextRole::Definition(kind) => entry_kind_role(kind),
+            mant_render::SearchTextRole::Match => TerminalRole::Match,
+            mant_render::SearchTextRole::Muted => TerminalRole::Muted,
         };
         let style = terminal_style(role);
         format!("{style}{value}{style:#}")
@@ -98,14 +99,14 @@ pub(super) const fn terminal_style(role: TerminalRole) -> Style {
     match role {
         TerminalRole::Document => AnsiColor::BrightBlue.on_default().bold(),
         TerminalRole::Heading => AnsiColor::BrightCyan.on_default().bold(),
-        TerminalRole::Entry(kind) => match mant_protocol::entry_tone(kind) {
-            mant_protocol::EntryTone::Primary => Style::new().bold(),
-            mant_protocol::EntryTone::Parameter => AnsiColor::BrightGreen.on_default().bold(),
-            mant_protocol::EntryTone::Command => AnsiColor::BrightYellow.on_default().bold(),
-            mant_protocol::EntryTone::Environment => AnsiColor::Magenta.on_default(),
-            mant_protocol::EntryTone::Configuration => AnsiColor::BrightYellow.on_default(),
-            mant_protocol::EntryTone::Variable => AnsiColor::BrightMagenta.on_default(),
-            mant_protocol::EntryTone::Value => AnsiColor::BrightBlue.on_default(),
+        TerminalRole::Entry(kind) => match mant_render::entry_tone(kind) {
+            mant_render::EntryTone::Primary => Style::new().bold(),
+            mant_render::EntryTone::Parameter => AnsiColor::BrightGreen.on_default().bold(),
+            mant_render::EntryTone::Command => AnsiColor::BrightYellow.on_default().bold(),
+            mant_render::EntryTone::Environment => AnsiColor::Magenta.on_default(),
+            mant_render::EntryTone::Configuration => AnsiColor::BrightYellow.on_default(),
+            mant_render::EntryTone::Variable => AnsiColor::BrightMagenta.on_default(),
+            mant_render::EntryTone::Value => AnsiColor::BrightBlue.on_default(),
         },
         TerminalRole::Match => Style::new().underline().bold(),
         TerminalRole::Path => AnsiColor::BrightMagenta.on_default(),
@@ -239,15 +240,15 @@ pub(super) fn render_full_query(
     match format {
         QueryFormat::Markdown => {
             let terminal_copy = output_terminal.then(|| terminal_content(query));
-            Ok(mant_engine::render_markdown_with_options(
+            Ok(mant_codec::encode::render_markdown_with_options(
                 terminal_copy.as_ref().unwrap_or(query),
-                mant_engine::MarkdownOptions {
+                mant_codec::encode::MarkdownOptions {
                     preserve_anchors,
                     ..Default::default()
                 },
             ))
         }
-        QueryFormat::Text => Ok(mant_engine::render_query_text_with(query, |style, text| {
+        QueryFormat::Text => Ok(mant_render::render_query_text_with(query, |style, text| {
             super::content::decorate(style, text, options.color)
         })),
         QueryFormat::Man => {
@@ -262,10 +263,10 @@ pub(super) fn render_full_query(
                 ));
             }
             let query = terminal_content(query);
-            Ok(mant_engine::render_query_man(&query))
+            Ok(mant_render::render_query_man(&query))
         }
         QueryFormat::Json => {
-            mant_engine::render_query_json(query, pretty).map_err(Failure::operational)
+            mant_render::render_query_json(query, pretty).map_err(Failure::operational)
         }
     }
 }

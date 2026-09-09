@@ -14,12 +14,18 @@ The Rust crate is a library contract for trusted semantic components. It is not 
 
 ```text
 Markdown ─┐
-man/mdoc ─┼─> mant-engine ─> mant-ir ─┬─> mant-ui
-tldr ─────┘                           ├─> renderers
-                                      └─> mant-protocol
+man/mdoc ─┼─> mant-codec ─> mant-ir ─┬─> mant-ui
+tldr ─────┘                          ├─> mant-render (body text)
+                                    └─> mant-query ─> mant-protocol DTOs
 ```
 
 Source parsers retain syntax-specific facts only until they can be expressed as shared document semantics. Protocol projections may omit internal data, add schema discriminators, or reshape fields for a stable host or process boundary.
+
+`mant-loader` acquires source input; `mant-engine` validates and composes loading
+and queries. `mant-render` also formats already materialized protocol results.
+Shared IR geometry and original text coordinates remain independent of rendering
+styles, actual terminal wrapping and viewport state. Reusable link addresses
+come from `LinkTarget::to_uri`, not a renderer's human-readable label.
 
 ## Document
 

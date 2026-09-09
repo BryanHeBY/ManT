@@ -1,14 +1,14 @@
 //! End-to-end Markdown contracts live above the parser/encoder boundary.
 use mant_engine::{
     ProjectionError, ResolvedContent, build_outline_projection, build_outline_with_detail,
-    parse_markdown, query_markdown_text, render_outline_text, render_query_text, search_query,
-    select_excerpt,
+    parse_markdown, query_markdown_text, search_query, select_excerpt,
 };
 use mant_ir::{Block, DocumentAddress, EntryKind, Inline, MarkdownOrigin, NameCase};
 use mant_protocol::{
     EntryProjection, ExcerptSelection, OutlineDetail, OutlineNode, OutlineNodeReference,
     SearchCase, SearchQuery, SearchScope, SearchSyntax,
 };
+use mant_render::{render_outline_text, render_query_text};
 
 #[path = "markdown_pipeline/entries.rs"]
 mod entries;

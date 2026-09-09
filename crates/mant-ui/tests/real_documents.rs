@@ -111,8 +111,8 @@ fn empty_cells_and_span_owners_keep_payloads_in_every_terminal_width() {
     )
     .unwrap();
     for output in [
-        mant_engine::render_query_text(&query),
-        mant_engine::render_markdown(&query),
+        mant_render::render_query_text(&query),
+        mant_codec::encode::render_markdown(&query),
     ] {
         assert!(output.contains("WIDE |  | RIGHT"), "{output}");
         assert!(output.contains("LEFT |  | END"), "{output}");

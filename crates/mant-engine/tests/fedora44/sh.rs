@@ -1,8 +1,8 @@
 //! Tests for Fedora Linux 44's `sh(1)` alias of the Bash manual.
 use super::semantic_read;
 
-use mant_engine::render_excerpt_markdown;
 use mant_ir::{EntryKind, ParameterKind, SemanticEntry, SemanticIndex, SourceFormat, ValueDomain};
+use mant_render::render_excerpt_markdown;
 
 use crate::common::{self, collect_sections, source_path_ends_with};
 use crate::fixtures::fedora44_manual;

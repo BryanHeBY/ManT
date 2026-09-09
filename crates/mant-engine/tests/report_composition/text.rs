@@ -1,12 +1,12 @@
 //! Query projection and plain report rendering compose over the same content.
 
-use mant_engine::{render_excerpt_text, render_outline_markdown, render_outline_text};
 use mant_ir::{
     Block, Document, DocumentMeta, DocumentSource, EntryKind, Inline, LayoutHint, ResolvedContent,
     Section, SourceFormat, TldrDocument, TldrOrigin,
 };
 use mant_protocol::EntryProjection;
 use mant_query::{build_outline, build_outline_projection, select_excerpt};
+use mant_render::{render_excerpt_text, render_outline_markdown, render_outline_text};
 
 fn query() -> ResolvedContent {
     ResolvedContent {

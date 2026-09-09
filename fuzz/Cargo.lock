@@ -260,9 +260,6 @@ dependencies = [
  "mant-loader",
  "mant-protocol",
  "mant-query",
- "pulldown-cmark",
- "serde",
- "serde_json",
 ]
 
 [[package]]
@@ -274,6 +271,7 @@ dependencies = [
  "mant-codec",
  "mant-engine",
  "mant-protocol",
+ "mant-render",
 ]
 
 [[package]]
@@ -309,8 +307,6 @@ dependencies = [
  "mant-ir",
  "schemars",
  "serde",
- "unicode-segmentation",
- "unicode-width",
 ]
 
 [[package]]
@@ -326,6 +322,20 @@ dependencies = [
  "regex-syntax",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "mant-render"
+version = "0.11.0"
+dependencies = [
+ "mant-codec",
+ "mant-ir",
+ "mant-protocol",
+ "pulldown-cmark",
+ "serde",
+ "serde_json",
+ "unicode-segmentation",
+ "unicode-width",
 ]
 
 [[package]]

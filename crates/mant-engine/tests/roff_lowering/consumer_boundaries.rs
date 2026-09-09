@@ -8,7 +8,7 @@ fn numbered_glyphs_retain_visible_content_in_every_consumer() {
     }
     let content =
         mant_engine::query_roff_bytes(b".TH PROBE 1\n.SH DESCRIPTION\n.B A\\N'65'B\n").unwrap();
-    assert!(mant_engine::render_query_text(&content).contains("AAB"));
+    assert!(mant_render::render_query_text(&content).contains("AAB"));
     super::font_boundaries::assert_style(&content, "AAB", 1);
 }
 
@@ -64,7 +64,7 @@ fn font_scopes_reach_bibliographies_and_table_cells() {
             assert_style(&content, "RESUMED", style);
             assert_style(&content, "TAIL", 0);
             if inner.starts_with(".Rs") {
-                assert!(mant_engine::render_query_text(&content).contains("WORD and NEXT"));
+                assert!(mant_render::render_query_text(&content).contains("WORD and NEXT"));
             }
         }
     }
@@ -134,7 +134,7 @@ fn literal_containers_preserve_nested_structural_payloads_and_targets() {
                     inner.into()
                 };
                 let query = query(&format!(".Bd -{display}\nBEFORE\n{inner}\nAFTER\n.Ed"));
-                let text = mant_engine::render_query_text(&query);
+                let text = mant_render::render_query_text(&query);
                 for word in ["BEFORE", "WORD", "NEXT", "AFTER"] {
                     assert!(text.contains(word), "{inner}: missing {word}: {text}");
                 }
@@ -202,5 +202,5 @@ fn decoded_literal_font_spellings_are_content_in_every_font() {
         }
     }
     let query = mant_engine::query_roff_bytes(b".TH PROBE 1\n.SH DESCRIPTION\n.B \\efB\n").unwrap();
-    assert!(mant_engine::render_query_text(&query).contains(r"\fB"));
+    assert!(mant_render::render_query_text(&query).contains(r"\fB"));
 }

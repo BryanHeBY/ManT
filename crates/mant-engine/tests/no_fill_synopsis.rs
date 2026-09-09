@@ -3,11 +3,12 @@
 //! preserves an empty macro parameter or a font-only row that mandoc does
 //! not, these tests deliberately select mandoc rather than mix both policies.
 
-use mant_engine::{ResolvedContent, query_roff_bytes, render_query_text};
+use mant_engine::{ResolvedContent, query_roff_bytes};
 use mant_ir::{
     Block, Inline,
     visit::{self, Visit},
 };
+use mant_render::render_query_text;
 
 #[test]
 fn a_literal_display_switched_to_fill_keeps_source_word_and_indent_policy() {

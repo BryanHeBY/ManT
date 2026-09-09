@@ -64,7 +64,7 @@ fn compact_independent_heads_do_not_share_explain_bodies_or_sources() {
                 )],
             )
             .unwrap();
-            let text = mant_engine::render_excerpt_text(&excerpt);
+            let text = mant_render::render_excerpt_text(&excerpt);
             assert_eq!(text.contains("SECOND_BODY"), index == 1, "{name}: {text}");
         }
         if source.contains("First.Target") {
@@ -135,7 +135,7 @@ fn named_roff_bullets_are_lists_but_literal_operator_definitions_survive() {
                 .iter()
                 .all(|item| item.entry.is_none() && item.source.is_some())
         );
-        let text = mant_engine::render_query_text(&query);
+        let text = mant_render::render_query_text(&query);
         assert!(
             text.contains("FIRST")
                 && text.contains("SECOND")
@@ -152,8 +152,8 @@ fn explicit_tp_and_ip_bullets_keep_equivalent_rendered_layout() {
         let source = format!(".TH PROBE 1\n.SH TOPIC\n{head}\n{body}");
         let query = mant_engine::query_roff_bytes(source.as_bytes()).unwrap();
         (
-            mant_engine::render_query_text(&query),
-            mant_engine::render_markdown(&query),
+            mant_render::render_query_text(&query),
+            mant_codec::encode::render_markdown(&query),
         )
     });
     assert_eq!(outputs[0], outputs[1]);
@@ -209,7 +209,7 @@ fn inferred_heads_require_whole_declarations_not_words_inside_prose() {
             definitions(query.document.as_ref().unwrap()).is_empty(),
             "{source}"
         );
-        let text = mant_engine::render_query_text(&query);
+        let text = mant_render::render_query_text(&query);
         assert!(text.contains("program"));
         assert!(mant_ir::validate_document(query.document.as_ref().unwrap()).is_empty());
         for name in ["otherwise", "as", "-T"] {
@@ -248,7 +248,7 @@ fn inferred_heads_require_whole_declarations_not_words_inside_prose() {
         let items = definitions(query.document.as_ref().unwrap());
         assert_eq!(items.len(), 1, "{source}");
         assert_eq!(items[0].entry.as_ref().unwrap().names, expected);
-        assert!(mant_engine::render_query_text(&query).contains("DESCRIPTION_BODY"));
+        assert!(mant_render::render_query_text(&query).contains("DESCRIPTION_BODY"));
     }
 }
 
@@ -261,7 +261,7 @@ fn explicit_diagnostic_labels_remain_definitions_without_prose_fragment_names() 
     let entry = items[0].entry.as_ref().unwrap();
     assert_eq!(entry.kind, mant_ir::EntryKind::Term);
     assert!(entry.names.is_empty());
-    assert!(mant_engine::render_query_text(&query).contains("Permission denied, otherwise"));
+    assert!(mant_render::render_query_text(&query).contains("Permission denied, otherwise"));
 }
 
 #[test]
@@ -440,7 +440,7 @@ fn named_declarations_keep_placeholders_annotations_and_assignment_values_in_for
         assert_eq!(facts.kind, kind, "{head}");
         assert_eq!(facts.names, expected, "{head}");
         assert!(mant_ir::validate_document(query.document.as_ref().unwrap()).is_empty());
-        assert!(mant_engine::render_query_text(&query).contains(head));
+        assert!(mant_render::render_query_text(&query).contains(head));
         assert!(facts.alias_groups.is_empty());
     }
     for head in [

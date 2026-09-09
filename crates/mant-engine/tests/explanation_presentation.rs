@@ -1,11 +1,11 @@
 //! Reports consume standalone DTO locations, not hidden query-side tables.
-use mant_engine::{
-    explain_query, query_roff_bytes, render_explanation_markdown, render_explanation_text,
-    render_explanation_text_with,
-};
+use mant_engine::{explain_query, query_roff_bytes};
 use mant_protocol::{
     EvidenceBasis, ExplanationFormRange, ExplanationOptions, ExplanationQuery, QueryExplanation,
-    TextPresentation, TextRole,
+};
+use mant_render::{TextPresentation, TextRole};
+use mant_render::{
+    render_explanation_markdown, render_explanation_text, render_explanation_text_with,
 };
 use std::cell::RefCell;
 
@@ -338,7 +338,7 @@ fn scoped_serialized_owners_with_the_same_id_keep_independent_name_roles() {
     }
     let decoded = serde_json::from_slice(&serde_json::to_vec(&explanation).unwrap()).unwrap();
     let seen = RefCell::new(vec![]);
-    let text = mant_engine::render_scope_explanation_text_with(&decoded, |style, text| {
+    let text = mant_render::render_scope_explanation_text_with(&decoded, |style, text| {
         if style.matched && text == "mode" {
             seen.borrow_mut().push(style.inline.entry_kind);
         }
@@ -346,11 +346,11 @@ fn scoped_serialized_owners_with_the_same_id_keep_independent_name_roles() {
     });
     assert_eq!(
         text,
-        mant_engine::render_scope_explanation_text(&explanation)
+        mant_render::render_scope_explanation_text(&explanation)
     );
     assert_eq!(
-        mant_engine::render_scope_explanation_markdown(&decoded),
-        mant_engine::render_scope_explanation_markdown(&explanation)
+        mant_render::render_scope_explanation_markdown(&decoded),
+        mant_render::render_scope_explanation_markdown(&explanation)
     );
     assert!(text.contains("Read original: manual/1/doc0; node root/e1"));
     assert!(text.contains("Read original: manual/1/doc1; node root/e1"));

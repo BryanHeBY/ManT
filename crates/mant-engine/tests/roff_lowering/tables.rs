@@ -253,7 +253,7 @@ fn mixed_mdoc_table_requests_preserve_content_when_block_semantics_are_unsupport
             ".Dd September 6, 2026\n.Dt MIXED 1\n.Os\n.Sh DESCRIPTION\n.TS\nl.\nT{{\n{body}\nT}}\n.TE\n"
         );
         let query = mant_engine::query_roff_bytes(source.as_bytes()).unwrap();
-        let text = mant_engine::render_query_text(&query);
+        let text = mant_render::render_query_text(&query);
         assert!(
             text.contains("TOKENA") && text.contains("TOKENB"),
             "{source}: {text}"

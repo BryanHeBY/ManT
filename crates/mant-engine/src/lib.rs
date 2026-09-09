@@ -1,7 +1,6 @@
 #![doc = include_str!("../README.md")]
 #![warn(missing_docs)]
 
-mod output;
 mod query;
 mod scope;
 mod tldr;
@@ -46,17 +45,6 @@ pub use mant_query::{
     QueryScopeView, ScopeExecutionError, ScopeInputError, explain_scope, search_scope,
 };
 pub use mant_query::{SearchError, search_query, validate_search_query};
-pub use output::{
-    MarkdownFragmentOptions, MarkdownOptions, SearchTextRole, render_excerpt_json,
-    render_excerpt_markdown, render_excerpt_markdown_with_options, render_excerpt_text,
-    render_excerpt_text_with, render_explanation_markdown, render_explanation_text,
-    render_explanation_text_with, render_markdown, render_markdown_with_options,
-    render_outline_entry_summary, render_outline_json, render_outline_markdown,
-    render_outline_relationships, render_outline_text, render_outline_text_with, render_query_json,
-    render_query_man, render_query_text, render_query_text_with, render_scope_explanation_markdown,
-    render_scope_explanation_text, render_scope_explanation_text_with, render_search_json,
-    render_search_markdown, render_search_text, render_search_text_with, render_update_json,
-};
 #[cfg(feature = "roff")]
 pub use query::query_roff_bytes;
 pub use query::{

@@ -1,8 +1,8 @@
 //! Regressions from Arch Linux libarchive's `bsdunzip(1)` page.
 use super::semantic_read;
 
-use mant_engine::render_excerpt_markdown;
 use mant_ir::{Block, EntryKind};
+use mant_render::render_excerpt_markdown;
 
 use crate::{
     common::{collect_sections, inline_text},

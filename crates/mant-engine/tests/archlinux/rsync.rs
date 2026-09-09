@@ -3,8 +3,8 @@
 
 use crate::common::{self, RSYNC_SECTIONS};
 use crate::fixtures::{archlinux_manual, archlinux_manual_query};
-use mant_engine::render_query_man;
 use mant_ir::Block;
+use mant_render::render_query_man;
 
 /// Section topology: 32 sections from NAME through AUTHOR.
 #[test]

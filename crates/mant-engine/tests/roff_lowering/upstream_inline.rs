@@ -23,7 +23,7 @@ fn typewriter_and_typographic_quotes_keep_distinct_delimiters() {
                 document: Some(document),
                 tldr: None,
             };
-            let text = mant_engine::render_query_text(&query);
+            let text = mant_render::render_query_text(&query);
             assert!(text.contains(expected), "{input}: {text}");
         }
     }

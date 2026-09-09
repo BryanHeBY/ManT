@@ -162,13 +162,13 @@ fn full_and_node_color_validated_names_without_prefix_guessing() {
 fn source_styling_preserves_whitespace_only_blocks_nested_terms_and_tables() {
     let source = ".TH PROBE 1\n.SH OPTIONS\n.TP\n.B --help\n.RS 4\n.sp 2\n.B nested\n.RE\n.TS\nl l.\nleft\tright\n.TE\n.nf\n  code\n\n    tail\n.fi\n";
     let query = mant_engine::query_roff_bytes(source.as_bytes()).unwrap();
-    let plain = mant_engine::render_query_text(&query);
-    let colored = mant_engine::render_query_text_with(&query, |style, text| {
+    let plain = mant_render::render_query_text(&query);
+    let colored = mant_render::render_query_text_with(&query, |style, text| {
         super::content::decorate(style, text, true)
     });
     assert_eq!(strip_ansi(&colored), plain);
     assert_eq!(
-        mant_engine::render_query_text_with(&query, |_, text| text.to_owned()),
+        mant_render::render_query_text_with(&query, |_, text| text.to_owned()),
         plain
     );
 }

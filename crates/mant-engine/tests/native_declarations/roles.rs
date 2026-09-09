@@ -21,7 +21,7 @@ fn split_literal_command_heads_keep_the_whole_name_and_stop_before_arguments() {
         assert_eq!(direct.len(), 1, "{name}: {result:?}");
         assert_eq!(direct[0].entry.as_ref().unwrap().names, [name]);
         assert_eq!(direct[0].entry.as_ref().unwrap().kind, kind);
-        assert!(mant_engine::render_explanation_text(&result).contains(body));
+        assert!(mant_render::render_explanation_text(&result).contains(body));
         assert!(direct[0].entry.as_ref().unwrap().alias_groups.is_empty());
     }
     for name in ["zfs", "get", "depth", "property", "{+"] {
@@ -40,7 +40,7 @@ fn split_literal_command_heads_keep_the_whole_name_and_stop_before_arguments() {
     let result = mant_engine::select_explanation(&content, ".").unwrap();
     assert_eq!(result.counts.direct_entry.total, 1);
     assert_eq!(result.evidence[0].entry.as_ref().unwrap().names, ["."]);
-    assert!(mant_engine::render_explanation_text(&result).contains("Read commands from the file"));
+    assert!(mant_render::render_explanation_text(&result).contains("Read commands from the file"));
 }
 
 #[test]

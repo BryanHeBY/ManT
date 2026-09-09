@@ -24,7 +24,7 @@ pub(super) struct ReferenceRecord {
     fallback_owner: String,
     pub(super) label: String,
     pub(super) target: LinkTarget,
-    attachment: mant_protocol::ReferenceAttachment,
+    attachment: mant_render::ReferenceAttachment,
 }
 
 #[derive(Debug, Default)]
@@ -188,7 +188,7 @@ impl ReferenceNavigation {
         self.associated
             .iter()
             .map(|(owner, indices)| {
-                let badge = mant_protocol::reference_badge(
+                let badge = mant_render::reference_badge(
                     indices.iter().map(|index| &self.records[*index].target),
                     !self.limited,
                 );
@@ -234,8 +234,7 @@ impl ReferenceNavigation {
                 orphaned.push(record);
                 continue;
             };
-            if owner == record.owner
-                && record.attachment != mant_protocol::ReferenceAttachment::Body
+            if owner == record.owner && record.attachment != mant_render::ReferenceAttachment::Body
             {
                 self.associated
                     .entry(owner.to_owned())
@@ -292,13 +291,13 @@ fn reference_attachment(
     budget: &mut mant_ir::ReferenceWorkBudget,
     location: &ContentLocation,
     valid_owner: bool,
-) -> (mant_protocol::ReferenceAttachment, bool) {
+) -> (mant_render::ReferenceAttachment, bool) {
     let association = mant_ir::reference_form_associations(occurrence, budget);
     let forms = (valid_owner
         && association.state == mant_ir::ReferenceFormAssociationState::Complete)
         .then_some(association.forms.as_slice());
     (
-        mant_protocol::reference_attachment(location, forms),
+        mant_render::reference_attachment(location, forms),
         matches!(
             association.state,
             mant_ir::ReferenceFormAssociationState::Limited(_)
@@ -478,7 +477,7 @@ fn reference_node(record: &ReferenceRecord, depth: usize, is_last: bool, parent:
 }
 
 pub(super) fn target_text(target: &LinkTarget) -> String {
-    mant_protocol::reference_target_text(target)
+    mant_render::reference_target_text(target)
 }
 
 fn target_bytes(target: &LinkTarget) -> usize {

@@ -1,13 +1,13 @@
 //! Explicit target selection and source reveal for owner-associated references.
 use crossterm::event::{KeyCode, KeyEvent, MouseButton, MouseEvent, MouseEventKind};
+use mant_render::cells::{after_graphemes, graphemes};
 use ratatui::{
     Frame,
     layout::Rect,
     style::Style,
-    text::{Line, Span},
+    text::Line,
     widgets::{Block, Borders, Clear, Paragraph},
 };
-use unicode_width::UnicodeWidthStr;
 
 use super::{App, Overlay, UpdateOutcome, fit_to_width};
 use crate::{CopyRequest, theme};
@@ -98,11 +98,7 @@ impl App {
                 if let Some(chooser) = &mut self.reference_chooser {
                     let label =
                         crate::text::sanitize_terminal_text(&chooser.choices[chooser.selected].1);
-                    let span = Span::raw(label);
-                    let limit = span
-                        .styled_graphemes(Style::default())
-                        .count()
-                        .saturating_sub(1);
+                    let limit = graphemes(&label).count().saturating_sub(1);
                     chooser.horizontal = if key.code == KeyCode::Left {
                         chooser.horizontal.saturating_sub(12)
                     } else {
@@ -274,13 +270,12 @@ fn reference_choice_text(label: &str, selected: bool, horizontal: usize, width: 
     }
     let mut used = width.min(2);
     let label = crate::text::sanitize_terminal_text(label);
-    let span = Span::raw(label);
-    for grapheme in span.styled_graphemes(Style::default()).skip(horizontal) {
-        let columns = grapheme.symbol.width();
+    for grapheme in graphemes(after_graphemes(&label, horizontal)) {
+        let columns = grapheme.columns();
         if used + columns > width {
             break;
         }
-        text.push_str(grapheme.symbol);
+        text.push_str(grapheme.text());
         used += columns;
     }
     text.push_str(&" ".repeat(width.saturating_sub(used)));

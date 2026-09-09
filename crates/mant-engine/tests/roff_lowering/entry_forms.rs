@@ -103,7 +103,7 @@ fn assert_invocation_consumers(
     for alias in names {
         let explained = crate::semantic_test_read::semantic_excerpt(&query, &[alias]).unwrap();
         assert_eq!(explained.selections, direct.selections);
-        assert!(mant_engine::render_excerpt_text(&explained).contains("OWNEDPAYLOAD"));
+        assert!(mant_render::render_excerpt_text(&explained).contains("OWNEDPAYLOAD"));
     }
     assert!(crate::semantic_test_read::semantic_excerpt(&query, &[rejected]).is_err());
     for scope in [SearchScope::Visible, SearchScope::Markdown] {
@@ -194,8 +194,8 @@ fn incomplete_tag_paragraphs_preserve_visible_terms_at_eof() {
         )
         .unwrap();
         for text in [
-            mant_engine::render_query_text(&query),
-            mant_engine::render_markdown(&query),
+            mant_render::render_query_text(&query),
+            mant_codec::encode::render_markdown(&query),
         ] {
             assert!(text.contains("--unfinished"), "{tail}: {text}");
             if tail.contains("--first") {
@@ -233,7 +233,7 @@ fn variable_subscripts_must_be_complete_authored_forms() {
         );
         assert!(document.diagnostics.iter().any(|d| d.code.as_deref() == Some("manual.semantic-entry.unclassified-definition")), "{name}: {:?}", document.diagnostics);
         assert!(
-            mant_engine::render_query_text(&query).contains(name),
+            mant_render::render_query_text(&query).contains(name),
             "{name}"
         );
     }

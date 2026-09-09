@@ -3,11 +3,12 @@
 //! restores the parent offset at exit. Nested Bd is supported with a native
 //! portability warning, independently of its source geometry.
 
-use mant_engine::{query_roff_bytes, render_query_text};
+use mant_engine::query_roff_bytes;
 use mant_ir::{
     Block, Inline,
     visit::{self, Visit},
 };
+use mant_render::render_query_text;
 
 fn query(body: &str) -> mant_engine::ResolvedContent {
     let source = format!(

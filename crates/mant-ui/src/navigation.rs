@@ -17,6 +17,7 @@ use ratatui::{
 use unicode_width::UnicodeWidthStr;
 
 use mant_ir::EntryKind;
+use mant_render::cells::{graphemes, prefix_columns, suffix_columns};
 
 use crate::{NavKind, NavNode, text::sanitize_terminal_text, theme};
 
@@ -111,13 +112,12 @@ pub(crate) fn rows_with_references(
             let mut used = 0;
             lines.clear();
             for (text, role) in [(title, style), (badge, link_style)] {
-                let span = Span::raw(text);
                 let mut run = String::new();
                 // Ratatui segments each Span independently. Keep contiguous
                 // style runs intact and break only at the same grapheme
                 // boundaries used by its terminal renderer.
-                for grapheme in span.styled_graphemes(role) {
-                    let columns = grapheme.symbol.width();
+                for grapheme in graphemes(&text) {
+                    let columns = grapheme.columns();
                     if used + columns > available && used > 0 {
                         if !run.is_empty() {
                             current.push(Span::styled(std::mem::take(&mut run), role));
@@ -131,7 +131,7 @@ pub(crate) fn rows_with_references(
                     let rendered = if columns > available {
                         "�"
                     } else {
-                        grapheme.symbol
+                        grapheme.text()
                     };
                     used += columns.min(available);
                     run.push_str(rendered);
@@ -159,16 +159,13 @@ fn reference_title_parts(
     // owner + separator + reference marker. Preserve the explicit capability,
     // not a second compact row containing only an invisible separator.
     if available < 3 {
-        return (
-            String::new(),
-            take_prefix_columns(badge, available).to_owned(),
-        );
+        return (String::new(), prefix_columns(badge, available).to_owned());
     }
     let title = truncate_middle(
         title,
         available.saturating_sub((badge.width() + 1).min(available / 2) + 1),
     );
-    let badge = take_prefix_columns(badge, available.saturating_sub(title.width() + 1));
+    let badge = prefix_columns(badge, available.saturating_sub(title.width() + 1));
     (title, format!(" {badge}"))
 }
 
@@ -307,7 +304,7 @@ fn node_lines(
 fn bounded_tree_prefix(prefix: &str, width: usize) -> String {
     // Retain the nearest branch/owner marker when ancestor columns no longer
     // fit, always leaving one content cell for label or reference capability.
-    take_suffix_columns(prefix, width.saturating_sub(1)).to_owned()
+    suffix_columns(prefix, width.saturating_sub(1)).to_owned()
 }
 
 fn node_foreground(node: &NavNode, selected: bool) -> ratatui::style::Color {
@@ -393,31 +390,10 @@ pub(crate) fn truncate_middle(value: &str, width: usize) -> String {
     let suffix_width = remaining - prefix_width;
     format!(
         "{}{}{}",
-        take_prefix_columns(value, prefix_width),
+        prefix_columns(value, prefix_width),
         TRUNCATION_MARKER,
-        take_suffix_columns(value, suffix_width)
+        suffix_columns(value, suffix_width)
     )
-}
-
-fn take_prefix_columns(value: &str, width: usize) -> &str {
-    &value[..byte_index_at_width(value, width)]
-}
-
-fn take_suffix_columns(value: &str, width: usize) -> &str {
-    let span = Span::raw(value);
-    let mut remaining: usize = span
-        .styled_graphemes(Style::default())
-        .map(|grapheme| grapheme.symbol.width())
-        .sum();
-    let mut start = 0;
-    for grapheme in span.styled_graphemes(Style::default()) {
-        if remaining <= width {
-            break;
-        }
-        remaining -= grapheme.symbol.width();
-        start += grapheme.symbol.len();
-    }
-    &value[start..]
 }
 
 fn wrap_to_width(value: &str, width: usize) -> Vec<String> {
@@ -440,13 +416,12 @@ fn wrap_to_width(value: &str, width: usize) -> Vec<String> {
         }
         let mut remaining = word;
         while remaining.width() > width {
-            let split = byte_index_at_width(remaining, width);
+            let split = prefix_columns(remaining, width).len();
             if split == 0 {
-                let span = Span::raw(remaining);
-                let Some(grapheme) = span.styled_graphemes(Style::default()).next() else {
+                let Some(grapheme) = graphemes(remaining).next() else {
                     break;
                 };
-                remaining = &remaining[grapheme.symbol.len()..];
+                remaining = &remaining[grapheme.text().len()..];
                 lines.push("�".to_owned());
                 continue;
             }
@@ -462,24 +437,6 @@ fn wrap_to_width(value: &str, width: usize) -> Vec<String> {
         lines.push(String::new());
     }
     lines
-}
-
-fn byte_index_at_width(value: &str, width: usize) -> usize {
-    if width == 0 {
-        return 0;
-    }
-    let mut used = 0;
-    let mut index = 0;
-    let span = Span::raw(value);
-    for grapheme in span.styled_graphemes(Style::default()) {
-        let columns = grapheme.symbol.width();
-        if used + columns > width {
-            return index;
-        }
-        used += columns;
-        index += grapheme.symbol.len();
-    }
-    value.len()
 }
 
 #[cfg(test)]
@@ -579,10 +536,10 @@ mod tests {
                     .all(|row| row.line.width() <= usize::from(width))
             );
         }
-        assert_eq!(super::take_prefix_columns("👩‍💻x", 1), "");
-        assert_eq!(super::take_prefix_columns("e\u{301}x", 1), "e\u{301}");
-        assert_eq!(super::take_suffix_columns("x👩‍💻", 1), "");
-        assert_eq!(super::take_suffix_columns("xe\u{301}", 1), "e\u{301}");
+        assert_eq!(super::prefix_columns("👩‍💻x", 1), "");
+        assert_eq!(super::prefix_columns("e\u{301}x", 1), "e\u{301}");
+        assert_eq!(super::suffix_columns("x👩‍💻", 1), "");
+        assert_eq!(super::suffix_columns("xe\u{301}", 1), "e\u{301}");
         assert_eq!(truncate_middle("012345👩‍💻", 6), "0...👩‍💻");
     }
 

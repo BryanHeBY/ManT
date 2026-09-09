@@ -102,13 +102,13 @@ fn nested_group_context_is_a_source_reference_not_a_second_body_copy() {
         assert_eq!(encoded.matches(body.trim()).count(), 1);
         let decoded: mant_protocol::QueryExplanation = serde_json::from_str(&encoded).unwrap();
         assert_eq!(
-            mant_engine::render_explanation_text(&decoded)
+            mant_render::render_explanation_text(&decoded)
                 .matches(body.trim())
                 .count(),
             1
         );
         assert_eq!(
-            mant_engine::render_explanation_markdown(&decoded)
+            mant_render::render_explanation_markdown(&decoded)
                 .matches(body.trim())
                 .count(),
             1
@@ -132,7 +132,7 @@ fn nested_group_context_is_a_source_reference_not_a_second_body_copy() {
             response.supports[0].items().is_some(),
             "each isolated page owns its own context"
         );
-        let text = mant_engine::render_explanation_text(&response);
+        let text = mant_render::render_explanation_text(&response);
         assert_eq!(text.matches(body.trim()).count(), 1);
         if offset == 1 {
             assert!(!text.contains("Outer description"));
@@ -164,8 +164,8 @@ fn ordinary_parent_reuses_nested_owners_and_groups_by_source_location() {
             let wire = serde_json::to_string(&response).unwrap();
             let decoded: mant_protocol::QueryExplanation = serde_json::from_str(&wire).unwrap();
             for text in [
-                mant_engine::render_explanation_text(&decoded),
-                mant_engine::render_explanation_markdown(&decoded),
+                mant_render::render_explanation_text(&decoded),
+                mant_render::render_explanation_markdown(&decoded),
             ] {
                 assert_eq!(
                     text.matches("Unique nested café 日本 body.").count(),
@@ -233,7 +233,7 @@ fn deep_shared_fragments_are_deterministic_at_small_copy_budgets() {
                 1
             );
             assert_eq!(
-                mant_engine::render_explanation_text(&expected)
+                mant_render::render_explanation_text(&expected)
                     .matches("Unique leaf café 日本.")
                     .count(),
                 1
@@ -282,7 +282,7 @@ fn valid_pool_indices_do_not_authorize_wrong_group_or_wrong_evidence_class() {
         );
         altered.evidence.truncate(1);
         assert!(
-            !mant_engine::render_explanation_text(&altered).contains("SECOND_CONTEXT"),
+            !mant_render::render_explanation_text(&altered).contains("SECOND_CONTEXT"),
             "in-memory invalid reference mode {mode}"
         );
     }
@@ -326,11 +326,11 @@ fn provider_fallback_is_reused_when_its_complete_declaration_group_does_not_fit(
             if reversed {
                 response.evidence.reverse();
             }
-            let text = mant_engine::render_explanation_text(&response);
+            let text = mant_render::render_explanation_text(&response);
             assert!(text.contains("Outer description"));
             assert_eq!(text.matches(body.trim()).count(), 1);
             assert_eq!(
-                mant_engine::render_explanation_markdown(&response)
+                mant_render::render_explanation_markdown(&response)
                     .matches(body.trim())
                     .count(),
                 1
@@ -348,11 +348,11 @@ fn group_highlights_only_the_matched_member_in_offline_presentation() {
     let response: mant_protocol::QueryExplanation =
         serde_json::from_str(&serde_json::to_string(&original).unwrap()).unwrap();
     let runs = std::cell::RefCell::new(Vec::new());
-    let text = mant_engine::render_explanation_text_with(&response, |style, text| {
+    let text = mant_render::render_explanation_text_with(&response, |style, text| {
         runs.borrow_mut().push((style, text.to_owned()));
         text.to_owned()
     });
-    assert_eq!(text, mant_engine::render_explanation_text(&original));
+    assert_eq!(text, mant_render::render_explanation_text(&original));
     assert!(text.contains("café 日本") && text.contains("Trailing paragraph"));
     let runs = runs.into_inner();
     let matched: String = runs
@@ -511,7 +511,7 @@ fn scope_supports_are_document_local_even_when_node_ids_coincide() {
     };
     let wire = serde_json::to_value(&result).unwrap();
     let decoded: ScopeExplanation = serde_json::from_value(wire.clone()).unwrap();
-    let rendered = mant_engine::render_scope_explanation_text(&decoded);
+    let rendered = mant_render::render_scope_explanation_text(&decoded);
     assert_eq!(rendered.matches("First context").count(), 1);
     assert_eq!(rendered.matches("Second context").count(), 1);
     for mode in 0..4 {
@@ -568,7 +568,7 @@ fn different_behaviors_share_context_without_alias_or_extra_direct_matches() {
     assert_eq!(response.counts.direct_entry.total, 1);
     assert_eq!(response.counts.related_entry.total, 0);
     assert_eq!(response.supports.len(), 1);
-    let text = mant_engine::render_explanation_text(&response);
+    let text = mant_render::render_explanation_text(&response);
     assert!(text.contains("Only b changes the output."));
     assert!(text.contains("Source of description: -b;"));
 }
@@ -626,13 +626,13 @@ fn consecutive_declarations_supply_context_without_borrowing_ownership() {
             "{name}: missing declaration-group explanation"
         );
         let decoded: mant_protocol::QueryExplanation = serde_json::from_value(json).unwrap();
-        let text = mant_engine::render_explanation_text(&decoded);
+        let text = mant_render::render_explanation_text(&decoded);
         assert!(text.contains("Declaration-group context"), "{text}");
         assert!(!text.contains("no independent description"), "{text}");
-        assert_eq!(text, mant_engine::render_explanation_text(&response));
+        assert_eq!(text, mant_render::render_explanation_text(&response));
         assert_eq!(
-            mant_engine::render_explanation_markdown(&decoded),
-            mant_engine::render_explanation_markdown(&response)
+            mant_render::render_explanation_markdown(&decoded),
+            mant_render::render_explanation_markdown(&response)
         );
     }
 }
@@ -655,7 +655,7 @@ fn shared_context_is_copied_once_with_valid_owner_local_positions() {
     let json = serde_json::to_string(&response).unwrap();
     assert_eq!(json.matches("Shared body with").count(), 1);
     let decoded: mant_protocol::QueryExplanation = serde_json::from_str(&json).unwrap();
-    let text = mant_engine::render_explanation_text(&decoded);
+    let text = mant_render::render_explanation_text(&decoded);
     assert_eq!(text.matches("Shared body with").count(), 1);
     assert!(!text.contains("Forms:") && !text.contains("Definition:"));
     assert!(text.contains("see support 0"));
@@ -735,7 +735,7 @@ fn support_omission_is_explicit_and_each_page_carries_its_context() {
             }
             response.validate_references().unwrap();
             assert!(
-                !mant_engine::render_explanation_text(&response)
+                !mant_render::render_explanation_text(&response)
                     .contains("no independent description")
             );
         }
@@ -760,7 +760,7 @@ fn explicit_tq_is_one_owner_inside_a_reading_group() {
 fn empty_ip_after_nested_options_keeps_tail_notes_in_the_provider() {
     let source = ".TH PROBE 1\n.SH COMMANDS\n.TP\n.B first\n.TP\n.B second\nOpening description.\n.RS\n.TP\n.B -c\nNested callback option.\n.RE\n.IP\nCallback timing note.\n.IP\nReturn status note.\n.TP\n.B next\nIndependent next command.\n";
     let response = explained(source, "first");
-    let text = mant_engine::render_explanation_text(&response);
+    let text = mant_render::render_explanation_text(&response);
     for witness in [
         "Opening description",
         "Nested callback option",

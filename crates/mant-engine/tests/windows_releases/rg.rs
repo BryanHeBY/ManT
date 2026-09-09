@@ -2,9 +2,10 @@
 #[path = "../../src/semantic_test_read.rs"]
 mod semantic_read;
 
-use mant_engine::{build_outline_with_detail, render_excerpt_markdown};
+use mant_engine::build_outline_with_detail;
 use mant_ir::{Block, ListKind};
 use mant_protocol::OutlineDetail;
+use mant_render::render_excerpt_markdown;
 
 use crate::common::{self, count_outline_entries, find_outline_entry};
 use crate::fixtures::{windows_release_manual, windows_release_query};

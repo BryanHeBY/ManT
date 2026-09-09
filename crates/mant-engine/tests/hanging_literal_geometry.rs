@@ -1,7 +1,8 @@
 //! HP's temporary first line is consumed by source line boundaries, not blocks.
 
-use mant_engine::{query_roff_bytes, render_query_text};
+use mant_engine::query_roff_bytes;
 use mant_ir::Block;
+use mant_render::render_query_text;
 
 fn render(body: &str) -> String {
     let source = format!(".TH PROBE 1\n.SH DESCRIPTION\n{body}");

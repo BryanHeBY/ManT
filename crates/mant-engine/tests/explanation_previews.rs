@@ -41,7 +41,7 @@ fn previews_keep_two_original_blocks_complete_matches_and_atomic_body() {
             matches!(block, mant_ir::Block::Paragraph { source, .. } if *source == preview.source)
         );
     }
-    let rendered = mant_engine::render_explanation_text(&result);
+    let rendered = mant_render::render_explanation_text(&result);
     assert!(!rendered.contains("No match, unrelated full body"));
     assert!(
         serde_json::to_string(e.content.as_ref().unwrap())
@@ -123,7 +123,7 @@ fn markdown_metadata_is_escaped_and_mentions_are_not_definitions() {
     )
     .unwrap();
     assert_eq!(found.counts.direct_entry.total, 0);
-    let markdown = mant_engine::render_explanation_markdown(&found);
+    let markdown = mant_render::render_explanation_markdown(&found);
     assert!(markdown.contains("\\[**TOKEN**\\]\\(evil\\)"), "{markdown}");
     assert!(!markdown.contains("PRIVATE_UNRELATED_TEXT"));
     assert!(!markdown.contains("## Direct entries"));

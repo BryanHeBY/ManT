@@ -11,7 +11,7 @@ use mant_ir::geometry::{compose_origin, coordinate, padding};
 mod lists;
 mod table;
 pub(super) struct DocumentBuilder<'a> {
-    pub(super) entry_styles: Arc<mant_protocol::EntryStyleMap<'a>>,
+    pub(super) entry_styles: Arc<mant_render::EntryStyleMap<'a>>,
     pub(super) label: String,
     pub(super) address: Option<DocumentAddress>,
     pub(super) lines: Vec<LogicalLine>,

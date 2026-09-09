@@ -27,10 +27,11 @@ local sources ─> mant-loader ─> mant-codec ─> mant-ir
                     │              └─ libmandoc-rs (roff)
                     └─ mant-sources
 
-mant-ir ─> mant-query ─> mant-protocol projections
-    └─> mant-ui / human renderers
+mant-ir ─> mant-query ─> mant-protocol projections ─> mant-render
+    ├─> mant-render (body text)                         │
+    └─> mant-ui (interactive layout) <─ shared roles ────┘
 
-mant-engine composes loading, queries and reports for host / CLI / MCP
+mant-engine composes loading and queries; hosts choose render / UI delivery
 ```
 
 That diagram describes data ownership. The compile-time workspace dependency
@@ -38,7 +39,8 @@ direction is related but not identical:
 
 ```text
 mant
-├─ mant-ui ─> mant-ir / mant-protocol
+├─ mant-ui ─> mant-ir / mant-protocol / mant-render
+├─ mant-render ─> mant-ir / mant-protocol / mant-codec (no native features)
 ├─ mant-engine
 │  ├─ mant-ir / mant-protocol
 │  ├─ mant-loader
@@ -47,7 +49,7 @@ mant
 │  │  │  └─ libmandoc-rs (roff)
 │  │  └─ libmandoc-rs (roff report/error types)
 │  ├─ mant-query ─> mant-ir / mant-protocol / mant-codec (no native features)
-│  └─ mant-codec (document/report encoding)
+│  └─ mant-codec (input convenience APIs)
 ├─ mant-sources (update feature)
 └─ mant-ir / mant-protocol
 ```
@@ -59,9 +61,9 @@ native paths. Standalone loader and codec default consumers need neither
 libmandoc, native zstd, nor a C compiler. The loader's `roff` feature owns
 optional source decompression and native report/error types. Engine-only native
 audit dependencies are development dependencies, not another production loader.
-`mant-engine` owns human report renderers and delegates complete document
-Markdown encoding to `mant-codec` and pure content queries to `mant-query`,
-while `mant-ui` owns interactive terminal
+`mant-render` owns human report renderers and delegates complete document
+Markdown encoding to `mant-codec`. `mant-engine` delegates pure content queries
+to `mant-query`, while `mant-ui` owns interactive terminal
 presentation. The `mant` crate is the composition root and the only crate that
 turns those components into the user-facing process.
 
@@ -70,13 +72,14 @@ The crates have deliberately asymmetric responsibilities:
 | Crate | Owns | Does not own |
 | --- | --- | --- |
 | `mant-ir` | Logical document addresses; source-neutral document and quick-reference IR; typed node IDs and ranges; visitors and derived indexes | Versioned process envelopes, parsing, files, or rendering |
-| `mant-protocol` | Shared query contracts, logical projections, versioned JSON DTOs, and deterministic compact presentation | Parsing, files, query execution, terminal policy, transports, or processes |
+| `mant-protocol` | Shared query contracts, logical projections, versioned JSON DTOs, validation, and stable business labels | Parsing, files, query execution, full report rendering, terminal policy, transports, or processes |
 | `libmandoc-rs` | An owned libmandoc parse tree, diagnostics, parser lifecycle, C build boundary, and default-off bounded upstream reference renderers | ManT types, source discovery, or ManT's semantic presentation |
 | `mant-sources` | Registered Markdown discovery and optional transactional Git/archive installation | Native manuals, rendering, or MCP |
 | `mant-codec` | In-memory Markdown/tldr decoding; optional libmandoc lowering; semantic annotation and identity production; portable document Markdown and source-bound artifacts | Source acquisition, discovery, query execution, protocol DTOs, terminal policy, or source updates |
 | `mant-loader` | Read-only discovery, configuration and source I/O; optional native decompression/redirect policy; tldr composition; bounded BFS and owned loaded scopes | Query execution, report rendering, subprocesses, downloads, or cache updates |
 | `mant-query` | Bounded strict selection, outline/excerpt/reference projections, search and independent explanation over existing IR; borrowed scope queries | Source discovery or loading, report rendering, native parsing, or input mutation |
-| `mant-engine` | Complete-request validation, loader/query composition, report renderers, and opt-in tldr maintenance | Its own parser, source loader or query algorithms; CLI policy, terminal lifecycle, or MCP transport |
+| `mant-render` | Existing IR/DTO body and report formatting, semantic style composition, reference presentation, borrowed grapheme-safe cell primitives | Source loading, query execution, native parsing, terminal I/O, viewport state, or link activation |
+| `mant-engine` | Complete-request validation, loader/query composition, and opt-in tldr maintenance | Its own parser, source loader, query algorithms or report renderers; CLI policy, terminal lifecycle, or MCP transport |
 | `mant-ui` | Interactive navigation, document tabs, discovery, links, history, search, selection, typed copy requests, layout, and terminal lifecycle | Filesystem lookup, source mutation, or system clipboard access |
 | `mant` | User-facing modes, terminal detection, native/OSC 52 clipboard delivery, source updates, request JSON, schemas, and MCP stdio | A second parser or frontend-specific document model |
 
@@ -86,9 +89,13 @@ inputs are caller-owned text/bytes and metadata labels; decoding never grants
 access to paths named by those labels. Parsing, annotation and document encoding
 have one implementation in `mant-codec`. Source I/O and scope acquisition have
 one owner in `mant-loader`; selection and evidence queries have one owner in
-`mant-query`. These ten workspace crates are actual boundaries; report rendering
-and opt-in tldr maintenance still have concrete implementations in the engine.
+`mant-query`; body and report presentation have one owner in `mant-render`.
+These eleven workspace crates are actual boundaries. Opt-in tldr maintenance
+still has its concrete implementation in the engine.
 Its temporary codec, loader and query re-exports do not duplicate those implementations.
+There is no engine rendering re-export or protocol-to-render dependency. The
+engine's render dependency is development-only, retaining cross-layer regression
+tests without granting production workflows presentation authority.
 Interactive queries pass an in-memory `ResolvedContent` directly to
 `mant-ui`; human renderers also consume
 the in-memory model. They do not serialize through JSON or spawn a child
@@ -100,6 +107,24 @@ projections as bounded text or CommonMark rather than exposing the complete
 AST.
 Source update and prune commands use their own schema-marked maintenance
 reports owned by `mant-sources`; they do not become document protocol variants.
+
+### Rendering and terminal layout
+
+Report renderers consume already materialized protocol values. They cannot
+rediscover sources, continue a graph traversal, run a search, or infer a second
+semantic index. Plain and decorated text share one block-layout implementation;
+decoration must preserve visible text and boundary whitespace. Document Markdown
+remains a codec format, while outline, excerpt, search and explanation Markdown
+are reports composed from those existing values and source-bound codec mappings.
+
+Stable entry labels stay in protocol because query projections also need them.
+Rendering-only name maps borrow the original inline roots for one operation;
+equal text in another owner never acquires its styling. Pure owner/scalar
+coordinates, shared layout geometry and reusable target URI encoding stay in IR.
+The render crate supplies grapheme-safe slices of already sanitized display text,
+not source-coordinate rewrites. UI adapters retain Ratatui styles, continuous
+style runs, wrapping policy, viewport caches, anchor rows, hit maps and selection.
+Copying a target calls its IR URI encoder rather than reusing a readable label.
 
 Multi-document operations use `mant-protocol::DocumentScope` as a host-neutral input. `mant-loader::DocumentLoader` resolves its ordered roots, follows only typed IR `Document` and `Manual` edges, and returns one bounded breadth-first graph plus the loaded documents in matching order. Search, explanation, CLI JSON, and interactive search consume that same scope; they do not infer families from filename prefixes or merge independent document trees into one AST. The TUI receives the already loaded scope in memory, while its ordinary catalog finder remains a separate global host callback.
 
@@ -354,8 +379,8 @@ and the opened handle's final path is checked against the approved root. Its
 default-off `render` feature exposes
 libmandoc's ASCII, locale-independent UTF-8, and HTML reference formatters
 through a per-call output sink. These are library capabilities, not a second
-ManT rendering path: `mant-codec` consumes the owned parser tree, while engine
-reports and the UI render the resulting shared source-neutral IR.
+ManT rendering path: `mant-codec` consumes the owned parser tree, while
+`mant-render` reports and the UI render the resulting shared source-neutral IR.
 
 The pinned libmandoc 1.14.6 snapshot originally kept character, diagnostic,
 tag, roff-request, formatter-tab, HTML-ID, and recursion state in process
