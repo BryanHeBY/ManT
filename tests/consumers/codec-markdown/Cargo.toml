@@ -1,0 +1,13 @@
+[package]
+name = "mant-codec-markdown-consumer"
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.88"
+publish = false
+
+# Keep feature resolution independent of the product workspace's native parser.
+[workspace]
+resolver = "3"
+
+[dependencies]
+mant-codec = { path = "../../../crates/mant-codec", default-features = false }
