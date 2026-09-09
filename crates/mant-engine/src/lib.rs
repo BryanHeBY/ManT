@@ -14,6 +14,7 @@ mod manual_paths;
 mod markdown;
 mod markdown_mapping;
 mod output;
+mod producer_identity;
 mod projection;
 mod query;
 mod scope;

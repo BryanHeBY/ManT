@@ -261,7 +261,7 @@ fn parse_document_with_entries(
         ids.targets.retain(|_, target| *target != old);
         ids.targets.insert(new.clone(), new);
     }
-    entry_diagnostics.extend(crate::selectors::outline_identity_diagnostics(
+    entry_diagnostics.extend(crate::producer_identity::outline_identity_diagnostics(
         &document.blocks,
         &document.sections,
         "markdown",
@@ -531,12 +531,12 @@ impl SectionIds {
             .as_deref()
             .zip(normalized_explicit.as_deref())
             .filter(|(authored, normalized)| {
-                *authored == *normalized && !crate::selectors::is_reserved_selector(authored)
+                *authored == *normalized && !crate::producer_identity::is_reserved_selector(authored)
             })
             .map_or_else(|| slug(title), |(_, normalized)| normalized.to_owned());
         let base = if base.is_empty() {
             "section".to_owned()
-        } else if crate::selectors::is_reserved_selector(&base) {
+        } else if crate::producer_identity::is_reserved_selector(&base) {
             // Reserved selectors and bare tree paths would shadow this
             // heading in excerpt selection; keep it addressable instead.
             format!("{base}-section")

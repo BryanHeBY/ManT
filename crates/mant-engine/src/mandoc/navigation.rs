@@ -431,7 +431,7 @@ impl LoweringContext<'_> {
             .join("-");
         let base = if slug.is_empty() {
             "section".to_owned()
-        } else if crate::selectors::is_reserved_selector(&slug) {
+        } else if crate::producer_identity::is_reserved_selector(&slug) {
             format!("{slug}-section")
         } else {
             slug
