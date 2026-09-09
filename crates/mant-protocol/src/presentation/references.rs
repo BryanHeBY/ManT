@@ -2,7 +2,7 @@
 
 use crate::{
     ReferenceCount, ReferenceInventory, ReferenceProjectionMode, ReferenceResolution,
-    TextPresentation, TextRole, sanitize_terminal_text,
+    TextPresentation, TextRole, UnloadedFragment, sanitize_terminal_text,
 };
 
 /// Present independent reference counts and the already bounded occurrence page.
@@ -70,26 +70,41 @@ pub fn render_reference_inventory_with(
                 &format!("readSource={}", record.source_read)
             )
         ));
-        let status = match &record.resolution {
-            ReferenceResolution::NotApplicable {} => "not probed".to_owned(),
-            ReferenceResolution::NotQueried { .. } => {
-                "document not queried; fragment unchecked".to_owned()
-            }
-            ReferenceResolution::MissingContext { .. } => {
-                "source has no registered namespace; target unchecked".to_owned()
-            }
-            ReferenceResolution::LogicalAddress { address, .. } => format!(
-                "logical address={}; document not loaded; fragment unchecked",
-                address.catalog_path()
-            ),
-            ReferenceResolution::Loaded { fragment, .. } => {
-                format!("loaded source; fragment={fragment:?}")
-            }
-            ReferenceResolution::Restricted {} => "restricted target".to_owned(),
-        };
+        let status = resolution_text(&record.resolution);
         lines.push(format!("  {}", paint(TextRole::Notice, &status)));
     }
     lines.join("\n")
+}
+
+fn resolution_text(resolution: &ReferenceResolution) -> String {
+    match resolution {
+        ReferenceResolution::NotApplicable {} => "not probed".to_owned(),
+        ReferenceResolution::NotQueried { fragment } => {
+            format!("document not queried; {}", unloaded_fragment_text(fragment))
+        }
+        ReferenceResolution::MissingContext { fragment } => {
+            format!(
+                "source has no registered namespace; target unchecked; {}",
+                unloaded_fragment_text(fragment)
+            )
+        }
+        ReferenceResolution::LogicalAddress { address, fragment } => format!(
+            "logical address={}; document not loaded; {}",
+            address.catalog_path(),
+            unloaded_fragment_text(fragment)
+        ),
+        ReferenceResolution::Loaded { fragment, .. } => {
+            format!("loaded source; fragment={fragment:?}")
+        }
+        ReferenceResolution::Restricted {} => "restricted target".to_owned(),
+    }
+}
+
+fn unloaded_fragment_text(fragment: &UnloadedFragment) -> &'static str {
+    match fragment {
+        UnloadedFragment::Absent {} => "no fragment",
+        UnloadedFragment::Unchecked {} => "fragment unchecked",
+    }
 }
 
 fn count(count: &ReferenceCount) -> String {
@@ -116,5 +131,41 @@ fn target_text(target: &mant_ir::LinkTarget) -> String {
         mant_ir::LinkTarget::Section { id } => format!("#{id}"),
         mant_ir::LinkTarget::External { uri } => uri.clone(),
         mant_ir::LinkTarget::Email { address } => format!("mailto:{address}"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn absent_and_unchecked_fragments_remain_distinct_in_every_unloaded_stage() {
+        for fragment in [UnloadedFragment::Absent {}, UnloadedFragment::Unchecked {}] {
+            let expected = unloaded_fragment_text(&fragment);
+            let resolutions = [
+                ReferenceResolution::NotQueried {
+                    fragment: fragment.clone(),
+                },
+                ReferenceResolution::MissingContext {
+                    fragment: fragment.clone(),
+                },
+                ReferenceResolution::LogicalAddress {
+                    address: crate::DocumentAddress::Manual {
+                        name: "printf".into(),
+                        manual_section: "3".into(),
+                    },
+                    fragment,
+                },
+            ];
+            for resolution in resolutions {
+                let text = resolution_text(&resolution);
+                assert!(text.ends_with(expected), "{text}");
+                assert_eq!(
+                    text.contains("fragment unchecked"),
+                    expected == "fragment unchecked"
+                );
+                assert!(!text.contains("fragment valid"));
+            }
+        }
     }
 }
