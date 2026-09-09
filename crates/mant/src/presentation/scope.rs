@@ -1,180 +1,146 @@
-//! Scope coverage and document grouping; entry bodies use shared renderers.
-use super::{
-    RenderOptions, render_json,
-    terminal::{TerminalRole, render_terminal_search, terminal_search, terminal_style},
-};
+//! CLI format dispatch and ANSI decoration over pure scope reports.
+use super::{RenderOptions, render_json};
 use crate::{arguments::QueryFormat, error::Failure};
-use mant_ir::DocumentMeta;
-use mant_protocol::{
-    QuerySearch, ScopeQueryResponse, ScopeQueryResult, ScopedQueryFailure, ScopedSearchDocument,
-    SearchQuery, SearchSchema,
-};
-use mant_render::sanitize_terminal_text;
-use std::fmt::Write as _;
+use mant_protocol::ScopeQueryResponse;
+use mant_render::{ScopeTextRole, sanitize_terminal_text};
+
 pub(crate) fn render_scope_query_result(
     response: &ScopeQueryResponse,
     options: RenderOptions,
 ) -> Result<String, Failure> {
-    let RenderOptions {
-        format,
-        pretty,
-        color,
-        ..
-    } = options;
-    let output_terminal = options.terminal();
-    if format == QueryFormat::Json {
-        return render_json(response, pretty);
-    }
-    if format == QueryFormat::Man {
-        return Err(Failure::usage(
+    match options.format {
+        QueryFormat::Json => render_json(response, options.pretty),
+        QueryFormat::Man => Err(Failure::usage(
             "--format man applies only to one full native manual",
-        ));
-    }
-    let mut output = String::new();
-    match &response.result {
-        ScopeQueryResult::Explain { explanation } => {
-            output = if format == QueryFormat::Markdown {
-                mant_render::render_scope_explanation_markdown(explanation)
-            } else {
-                super::terminal::render_terminal_scope_explanation(explanation, color)
-            };
-            let _ = write!(
-                output,
-                "\nCoverage: loaded={}, unresolved={}, frontier={}",
-                explanation.documents.len(),
-                response.scope.unresolved.len(),
-                response.scope.frontier.len()
-            );
-            write_scope_failures(
-                &mut output,
-                &explanation.failures,
-                format,
-                color,
-                output_terminal,
-            );
-        }
-        ScopeQueryResult::Search { search } => {
-            for (index, found) in search.documents.iter().enumerate() {
-                if index > 0 {
-                    output.push_str("\n\n");
-                }
-                write_scope_heading(
-                    &mut output,
-                    &found.address.catalog_path(),
-                    format,
-                    color,
-                    output_terminal,
-                );
-                output.push('\n');
-                let local_search = scoped_search_projection(found, &search.query);
-                let rendered = match format {
-                    QueryFormat::Markdown => {
-                        let search = output_terminal.then(|| terminal_search(&local_search));
-                        mant_render::render_search_markdown(
-                            search.as_ref().unwrap_or(&local_search),
-                        )
-                    }
-                    QueryFormat::Text => render_terminal_search(&local_search, color),
-                    QueryFormat::Json | QueryFormat::Man => unreachable!(),
-                };
-                output.push_str(rendered.trim());
-            }
-        }
-    }
-    for limited in &response.scope.reference_limits {
-        let _ = write!(
-            output,
-            "\nReference scan incomplete for {}: {:?}",
-            sanitize_terminal_text(&limited.document.catalog_path()),
-            limited.coverage.status
-        );
-        if let Some(limit) = limited.retention_limit {
-            let _ = write!(output, " ({limit:?})");
-        }
-    }
-    Ok(output)
-}
-
-fn write_scope_failures(
-    output: &mut String,
-    failures: &[ScopedQueryFailure],
-    format: QueryFormat,
-    color: bool,
-    output_terminal: bool,
-) {
-    for failure in failures {
-        if !output.is_empty() {
-            output.push_str("\n\n");
-        }
-        write_scope_heading(
-            output,
-            &failure.address.catalog_path(),
-            format,
-            color,
-            output_terminal,
-        );
-        output.push('\n');
-        if format == QueryFormat::Text || output_terminal {
-            output.push_str(&sanitize_terminal_text(&failure.reason));
+        )),
+        QueryFormat::Markdown => Ok(if options.terminal() {
+            mant_render::render_scope_query_markdown_with(response, |text| {
+                sanitize_terminal_text(text).into_owned()
+            })
         } else {
-            output.push_str(&failure.reason);
-        }
+            mant_render::render_scope_query_markdown(response)
+        }),
+        QueryFormat::Text => Ok(mant_render::render_scope_query_text_with(
+            response,
+            |role, text| match role {
+                ScopeTextRole::Evidence(style) => {
+                    super::content::decorate(style, text, options.color)
+                }
+                ScopeTextRole::Search(role) => {
+                    super::terminal::decorate_search(role, text, options.color)
+                }
+                ScopeTextRole::Document if options.color => {
+                    let style =
+                        super::terminal::terminal_style(super::terminal::TerminalRole::Document);
+                    format!("{style}{text}{style:#}")
+                }
+                ScopeTextRole::Document => text.to_owned(),
+            },
+        )),
     }
 }
 
-fn scoped_search_projection(found: &ScopedSearchDocument, query: &SearchQuery) -> QuerySearch {
-    let (label, meta) = match &found.address {
-        mant_protocol::DocumentAddress::Manual {
-            name,
-            manual_section,
-        } => (
-            name.clone(),
-            Some(DocumentMeta {
-                manual_section: Some(manual_section.clone()),
-                ..DocumentMeta::default()
-            }),
-        ),
-        mant_protocol::DocumentAddress::Markdown { path, .. } => (path.clone(), None),
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use mant_protocol::{
+        DocumentScope, DocumentTraversal, QuerySearch, ResolvedDocumentScope, ScopeQueryResult,
+        ScopeQuerySchema, ScopeSearch, ScopedSearchDocument,
     };
-    let returned = u32::try_from(found.matches.len()).unwrap_or(u32::MAX);
-    QuerySearch {
-        schema: SearchSchema::V0Dot11,
-        label,
-        source: None,
-        meta,
-        query: query.clone(),
-        render: found.render.clone(),
-        total: returned,
-        returned,
-        offset: 0,
-        truncated: false,
-        next_offset: None,
-        matches: found.matches.clone(),
-    }
-}
 
-fn write_scope_heading(
-    output: &mut String,
-    address: &str,
-    format: QueryFormat,
-    color: bool,
-    output_terminal: bool,
-) {
-    let address = if format == QueryFormat::Text || output_terminal {
-        sanitize_terminal_text(address)
-    } else {
-        std::borrow::Cow::Borrowed(address)
-    };
-    match format {
-        QueryFormat::Markdown => {
-            output.push_str("## ");
-            output.push_str(&address);
+    #[test]
+    fn cli_scope_adapter_preserves_existing_search_ansi_and_terminal_markdown_bytes() {
+        let local: QuerySearch = serde_json::from_value(serde_json::json!({
+            "schema": "mant.search/v0.11",
+            "label": " odd\u{1b} ",
+            "query": {"pattern": "needle"},
+            "render": {
+                "schema": "mant.markdown/v1", "format": "markdown", "scope": "full",
+                "lineBase": 1, "columnBase": 1, "lineCount": 1
+            },
+            "total": 0, "returned": 0, "offset": 0, "truncated": false, "matches": []
+        }))
+        .unwrap();
+        let address = mant_ir::DocumentAddress::Markdown {
+            path: local.label.clone(),
+            origin: mant_ir::MarkdownOrigin::Documents,
+        };
+        let response = ScopeQueryResponse {
+            schema: ScopeQuerySchema::V0Dot11,
+            scope: ResolvedDocumentScope {
+                query: DocumentScope {
+                    documents: vec![],
+                    traversal: DocumentTraversal::default(),
+                },
+                documents: vec![],
+                edges: vec![],
+                frontier: vec![],
+                unresolved: vec![],
+                reference_limits: vec![],
+            },
+            result: ScopeQueryResult::Search {
+                search: ScopeSearch {
+                    query: local.query.clone(),
+                    total: 0,
+                    returned: 0,
+                    offset: 0,
+                    truncated: false,
+                    next_offset: None,
+                    documents: vec![ScopedSearchDocument {
+                        address: address.clone(),
+                        depth: 0,
+                        render: local.render.clone(),
+                        matches: vec![],
+                    }],
+                },
+            },
+        };
+        let options = RenderOptions {
+            format: QueryFormat::Text,
+            pretty: false,
+            preserve_anchors: false,
+            color: true,
+            target: super::super::OutputTarget::Terminal,
+        };
+        let style =
+            super::super::terminal::terminal_style(super::super::terminal::TerminalRole::Document);
+        let expected = format!(
+            "{style}{}{style:#}\n{}",
+            sanitize_terminal_text(&address.catalog_path()),
+            super::super::terminal::render_terminal_search(&local, true).trim()
+        );
+        assert_eq!(
+            render_scope_query_result(&response, options).unwrap(),
+            expected
+        );
+        for terminal in [false, true] {
+            let expected_local = if terminal {
+                super::super::terminal::terminal_search(&local)
+            } else {
+                local.clone()
+            };
+            let heading = if terminal {
+                sanitize_terminal_text(&address.catalog_path()).into_owned()
+            } else {
+                address.catalog_path()
+            };
+            let expected = format!(
+                "## {heading}\n{}",
+                mant_render::render_search_markdown(&expected_local).trim()
+            );
+            let options = RenderOptions {
+                format: QueryFormat::Markdown,
+                target: if terminal {
+                    super::super::OutputTarget::Terminal
+                } else {
+                    super::super::OutputTarget::Stream
+                },
+                ..options
+            };
+            assert_eq!(
+                render_scope_query_result(&response, options).unwrap(),
+                expected
+            );
         }
-        QueryFormat::Text if color => {
-            let style = terminal_style(TerminalRole::Document);
-            write!(output, "{style}{address}{style:#}").expect("writing to String cannot fail");
-        }
-        QueryFormat::Text => output.push_str(&address),
-        QueryFormat::Json | QueryFormat::Man => unreachable!(),
     }
 }

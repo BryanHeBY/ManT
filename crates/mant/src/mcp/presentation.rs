@@ -9,7 +9,6 @@ use mant_protocol::{
 
 use super::params::MAX_PAGE_CHARS;
 use super::params::PageRequest;
-use crate::arguments::QueryFormat;
 
 /// Consume complete responses so cleanup cannot be omitted by tool handlers.
 pub(super) fn present_find(catalog: &DocumentCatalog, page: PageRequest) -> String {
@@ -99,17 +98,7 @@ fn render_scope_explain(
     let ScopeQueryResult::Explain { explanation } = &response.result else {
         return Err("scope response does not contain an explanation".to_owned());
     };
-    let mut text = crate::presentation::render_scope_query_result(
-        response,
-        crate::presentation::RenderOptions {
-            format: QueryFormat::Markdown,
-            pretty: false,
-            preserve_anchors: false,
-            color: false,
-            target: crate::presentation::OutputTarget::Stream,
-        },
-    )
-    .map_err(crate::error::Failure::into_message)?;
+    let mut text = mant_render::render_scope_query_markdown(response);
     if explanation.outcome == mant_protocol::ExplanationOutcome::NoEvidence {
         let document = response.scope.documents.first().map_or_else(
             || "DOCUMENT".to_owned(),
@@ -168,17 +157,7 @@ fn render_scope_search(
     let ScopeQueryResult::Search { search } = &response.result else {
         return Err("scope response does not contain search results".to_owned());
     };
-    let mut text = crate::presentation::render_scope_query_result(
-        response,
-        crate::presentation::RenderOptions {
-            format: QueryFormat::Text,
-            pretty: false,
-            preserve_anchors: false,
-            color: false,
-            target: crate::presentation::OutputTarget::Stream,
-        },
-    )
-    .map_err(crate::error::Failure::into_message)?;
+    let mut text = mant_render::render_scope_query_text(response);
     if search.returned == 0 {
         text = format!(
             "0 matches across {} documents",
@@ -546,6 +525,21 @@ mod tests {
             },
         };
 
+        let page = super::present_scope_explain(
+            response.clone(),
+            PageRequest {
+                start_char: 0,
+                max_chars: MAX_PAGE_CHARS,
+            },
+        )
+        .expect("valid explanation response");
+        assert!(page.starts_with("[mant-page chars=0.."));
+        assert!(page.contains("Coverage: loaded=0, unresolved=0, frontier=0"));
+        assert!(page.contains("document could not be projected"));
+        assert!(!page.contains("multiple entries"));
+        assert!(page.contains("Next: call mant_outline(document=\"DOCUMENT\""));
+        assert!(page.contains("pattern=\"-f\""));
+        assert!(!page.contains('\u{1b}'));
         prepare_scope(&mut response);
         let ScopeQueryResult::Explain { explanation } = response.result else {
             panic!("fixture must stay an explanation");

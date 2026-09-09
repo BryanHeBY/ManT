@@ -61,34 +61,31 @@ pub(super) fn render_terminal_explanation(
     })
 }
 
-pub(super) fn render_terminal_scope_explanation(
-    explanation: &mant_protocol::ScopeExplanation,
-    color: bool,
-) -> String {
-    mant_render::render_scope_explanation_text_with(explanation, |style, text| {
-        super::content::decorate(style, text, color)
-    })
+pub(super) fn render_terminal_search(search: &QuerySearch, color: bool) -> String {
+    mant_render::render_search_text_with(search, |role, value| decorate_search(role, value, color))
 }
 
-pub(super) fn render_terminal_search(search: &QuerySearch, color: bool) -> String {
-    mant_render::render_search_text_with(search, |role, value| {
-        let value = sanitize_terminal_text(value);
-        if !color {
-            return value.into_owned();
-        }
-        let role = match role {
-            mant_render::SearchTextRole::Plain => return value.into_owned(),
-            mant_render::SearchTextRole::Document => TerminalRole::Document,
-            mant_render::SearchTextRole::Coordinate => TerminalRole::Coordinate,
-            mant_render::SearchTextRole::Path => TerminalRole::Path,
-            mant_render::SearchTextRole::Heading => TerminalRole::Heading,
-            mant_render::SearchTextRole::Definition(kind) => entry_kind_role(kind),
-            mant_render::SearchTextRole::Match => TerminalRole::Match,
-            mant_render::SearchTextRole::Muted => TerminalRole::Muted,
-        };
-        let style = terminal_style(role);
-        format!("{style}{value}{style:#}")
-    })
+pub(super) fn decorate_search(
+    role: mant_render::SearchTextRole,
+    value: &str,
+    color: bool,
+) -> String {
+    let value = sanitize_terminal_text(value);
+    if !color {
+        return value.into_owned();
+    }
+    let role = match role {
+        mant_render::SearchTextRole::Plain => return value.into_owned(),
+        mant_render::SearchTextRole::Document => TerminalRole::Document,
+        mant_render::SearchTextRole::Coordinate => TerminalRole::Coordinate,
+        mant_render::SearchTextRole::Path => TerminalRole::Path,
+        mant_render::SearchTextRole::Heading => TerminalRole::Heading,
+        mant_render::SearchTextRole::Definition(kind) => entry_kind_role(kind),
+        mant_render::SearchTextRole::Match => TerminalRole::Match,
+        mant_render::SearchTextRole::Muted => TerminalRole::Muted,
+    };
+    let style = terminal_style(role);
+    format!("{style}{value}{style:#}")
 }
 
 const fn entry_kind_role(kind: EntryKind) -> TerminalRole {
