@@ -5,20 +5,15 @@ use std::{
     time::{Duration, Instant},
 };
 
-use crossterm::{
-    event::{self, DisableMouseCapture, EnableMouseCapture},
-    execute,
-    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
-};
-use ratatui::{Terminal, backend::CrosstermBackend};
+use crossterm::event;
+use ratatui::Terminal;
 
 use mant_ui::{App, ReaderOptions, ReaderServices};
 
 #[cfg(unix)]
-pub(crate) mod signals;
-#[cfg(unix)]
-use signals::TerminationSignals;
+use super::signals::TerminationSignals;
 
+mod backend;
 mod session;
 
 const TERMINATION_POLL_INTERVAL: Duration = Duration::from_millis(50);

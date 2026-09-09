@@ -271,6 +271,13 @@ Within the command host, CLI input adaptation and output dispatch are separate
 from typed application navigation, system services, and process delivery.
 The crate root exposes stream and native-process entry points; the private
 process adapter alone chooses terminal delivery and owns native stdio policy.
+The native reader records each attempted terminal acquisition before executing
+it, including partial writes. Its backend and outer session share one cleanup
+ledger: restoration runs in reverse acquisition order, attempts every pending
+operation, retains the first error, and retries only failed releases on drop.
+The embeddable UI never acquires these process resources. Signal handlers only
+record termination; ordinary host code restores modes before applying the
+signal's exit behavior. Uncatchable signals cannot be recovered.
 `CliHost`/`SystemHost` retain the injectable service boundary; maintenance lives
 under the host rather than in the read-only engine. Schema output is an offline
 adapter, and CLI and MCP share DTO renderers without sharing CLI format types.

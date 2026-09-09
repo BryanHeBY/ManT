@@ -1,19 +1,19 @@
-//! Native terminal acquisition, event loop and restoration in original order.
+//! Original TUI acquisition/event order with one shared restoration ledger.
 use super::{
-    App, CrosstermBackend, DisableMouseCapture, EnableMouseCapture, EnterAlternateScreen, Instant,
-    LeaveAlternateScreen, ReaderOptions, ReaderServices, TERMINATION_POLL_INTERVAL, Terminal,
-    TerminationSignals, disable_raw_mode, enable_raw_mode, event, execute, io, panic,
+    App, Instant, ReaderOptions, ReaderServices, TERMINATION_POLL_INTERVAL, Terminal,
+    TerminationSignals,
+    backend::{self, CrosstermTerminalOps, LeasedBackend},
+    event, io, panic,
 };
+use crate::delivery::terminal_lease::TerminalLease;
+use std::{cell::RefCell, rc::Rc};
 pub(super) fn run(options: ReaderOptions, services: &mut ReaderServices<'_>) -> io::Result<()> {
     let termination = TerminationSignals::install()?;
-    let mut stdout = io::stdout();
-    enable_raw_mode()?;
-    let mut guard = TerminalGuard { active: true };
-    // Install the restoration guard before either terminal command can fail.
-    // Otherwise an unsupported mouse/alternate-screen sequence could leave the
-    // caller in raw mode without ever entering the event loop.
-    execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
-    let backend = CrosstermBackend::new(stdout);
+    let lease = Rc::new(RefCell::new(
+        TerminalLease::new(CrosstermTerminalOps::new()),
+    ));
+    backend::acquire_tui(&lease)?;
+    let backend = LeasedBackend::new(io::stdout(), Rc::clone(&lease));
     let mut terminal = Terminal::new(backend)?;
     let mut app = App::from_shared(options);
 
@@ -45,7 +45,7 @@ pub(super) fn run(options: ReaderOptions, services: &mut ReaderServices<'_>) -> 
         }
     }));
 
-    let restore_result = guard.restore();
+    let restore_result = backend::restore(&lease);
     match result {
         Ok(Ok(Some(signal))) => {
             let signal_result = termination.terminate(signal);
@@ -56,28 +56,6 @@ pub(super) fn run(options: ReaderOptions, services: &mut ReaderServices<'_>) -> 
         Err(payload) => {
             let _ = restore_result;
             panic::resume_unwind(payload);
-        }
-    }
-}
-
-struct TerminalGuard {
-    active: bool,
-}
-
-impl TerminalGuard {
-    fn restore(&mut self) -> io::Result<()> {
-        disable_raw_mode()?;
-        execute!(io::stdout(), LeaveAlternateScreen, DisableMouseCapture)?;
-        self.active = false;
-        Ok(())
-    }
-}
-
-impl Drop for TerminalGuard {
-    fn drop(&mut self) {
-        if self.active {
-            let _ = disable_raw_mode();
-            let _ = execute!(io::stdout(), LeaveAlternateScreen, DisableMouseCapture);
         }
     }
 }

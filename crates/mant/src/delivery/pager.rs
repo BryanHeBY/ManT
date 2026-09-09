@@ -47,7 +47,7 @@ fn run(pager: Pager) -> io::Result<()> {
 
 #[cfg(unix)]
 fn run(pager: Pager) -> io::Result<()> {
-    use crate::delivery::terminal::signals::TerminationSignals;
+    use crate::delivery::signals::TerminationSignals;
     use std::sync::{
         Arc,
         atomic::{AtomicBool, Ordering},
