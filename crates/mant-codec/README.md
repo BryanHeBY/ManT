@@ -10,7 +10,7 @@ assert_eq!(parsed.document.sections.len(), 1);
 
 ## Boundaries
 
-Callers supply source bytes or text and optional source labels. Labels never grant filesystem access. The roff byte entry point uses plain input and disables implicit includes; loading, decompression, redirects, configuration, and catalog discovery remain in `mant-engine`'s loading layer. Native parse reports remain owned values; this crate exposes no raw FFI pointers. The source boundary does not promise that native internals make no operating-system calls: `libmandoc-rs` may use private diagnostic capture files, but cannot open a supplied source label or follow includes through this codec.
+Callers supply source bytes or text and optional source labels. Labels never grant filesystem access. The roff byte entry point uses plain input and disables implicit includes; loading, decompression, redirects, configuration, and catalog discovery belong to `mant-loader`. Native parse reports remain owned values; this crate exposes no raw FFI pointers. The source boundary does not promise that native internals make no operating-system calls: `libmandoc-rs` may use private diagnostic capture files, but cannot open a supplied source label or follow includes through this codec.
 
 Semantic recognition, explicit name bindings, declaration groups, and identity allocation happen once during production. Queries consume the resulting facts rather than recognizing entries again. Markdown extensions add metadata without replacing the original visible content. Semantic Markdown export is a checked subset, not lossless IR serialization.
 

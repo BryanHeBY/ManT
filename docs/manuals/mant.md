@@ -89,7 +89,7 @@ with the `update` feature is required.
 
 ManT preserves source meaning before presentation. Markdown and native manuals
 both become a content tree of sections, blocks, inline nodes, and definition
-items. An addressable definition carries a `EntryFacts`; the
+items. An addressable definition carries `EntryFacts`; the
 rebuildable semantic index groups those facts into commands, parameter
 families, configuration keys, variables, values, and generic terms. Each entry
 keeps exact selector aliases separate from complete authored forms and points
@@ -99,8 +99,9 @@ ownership such as command → option → value.
 Outlines are selective projections of that model, not a second parser or a
 copy of the document. The default outline summarizes semantic coverage; an
 expanded outline exposes entries; `--node` reads the definition content;
-`--explain` requires an entry. The TUI and MCP use the same identities and
-selection precedence. See [mant-ir(7)](mant-ir.md) for the in-process model and
+`--explain` collects semantic definitions and relevant textual or relationship
+evidence; it is not restricted to exact entry navigation. The TUI and MCP use
+the same identities and selection precedence. See [mant-ir(7)](mant-ir.md) for the in-process model and
 [mant-protocol(5)](mant-protocol.md) for versioned projections.
 
 Inline links also retain intent. Sections and anchors are current-document

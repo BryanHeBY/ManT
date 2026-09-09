@@ -429,7 +429,7 @@ libmandoc but unavailable through a public C API:
 
 These extensions never reinterpret source into `ManT`'s document IR. For
 example, semantic reconstruction of roff requests inside tbl `T{ … T}` cells
-belongs to `mant-engine`, because libmandoc intentionally retains that payload
+belongs to `mant-codec`, because libmandoc intentionally retains that payload
 as table text rather than a nested public syntax tree.
 
 ## Build requirements and supported targets

@@ -111,6 +111,8 @@ foreach ($BoundaryPackage in @("mant-codec", "mant-loader")) {
 }
 Invoke-Native -Label "lint portable Rust packages" -Program "cargo" `
     -Arguments (@("clippy", "--locked") + $Packages + @("--all-targets", "--all-features", "--", "-D", "warnings"))
+Invoke-Native -Label "check isolated CLI capability combinations" -Program "python" `
+    -Arguments @("scripts/check-cli-features.py")
 & (Join-Path $PSScriptRoot "build-and-smoke.ps1") -BuildProfile $BuildProfile
 
 Write-Host "`nWindows verification succeeded"

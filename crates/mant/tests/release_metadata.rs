@@ -503,6 +503,7 @@ fn packaged_and_windows_checks_include_extracted_package_test_surfaces() {
     assert!(packaged.contains("--package mant-loader --no-default-features --features roff\n"));
     assert!(packaged.contains("--package mant-query --no-default-features\n"));
     assert!(packaged.contains("--package mant-render --no-default-features\n"));
+    assert!(packaged.contains("--package mant --no-default-features --lib\n"));
 
     let windows = include_str!("../../../scripts/check-windows.ps1");
     assert!(windows.contains("\"--package\", \"mant-codec\""));
@@ -518,6 +519,40 @@ fn packaged_and_windows_checks_include_extracted_package_test_surfaces() {
     assert!(check.contains("bash scripts/check-loader-consumer.sh"));
     assert!(check.contains("bash scripts/check-query-consumer.sh"));
     assert!(check.contains("bash scripts/check-render-consumer.sh"));
+    assert!(check.contains("bash scripts/check-ui-consumer.sh"));
+}
+
+#[test]
+fn cli_capability_matrix_runs_on_every_product_platform() {
+    let unix = include_str!("../../../scripts/check.sh").replace("\r\n", "\n");
+    let windows = include_str!("../../../scripts/check-windows.ps1").replace("\r\n", "\n");
+    let ci = include_str!("../../../.github/workflows/ci.yml").replace("\r\n", "\n");
+    assert!(unix.contains("python3 scripts/check-cli-features.py"));
+    assert!(
+        unix.find("bash scripts/check-ui-consumer.sh").unwrap()
+            < unix.find("python3 scripts/check-cli-features.py").unwrap()
+    );
+    assert!(
+        windows
+            .contains("-Program \"python\" `\n    -Arguments @(\"scripts/check-cli-features.py\")")
+    );
+    let mac = ci
+        .split_once("  macos-native:")
+        .unwrap()
+        .1
+        .split_once("  windows-native:")
+        .unwrap()
+        .0;
+    assert!(mac.contains("run: python3 scripts/check-cli-features.py"));
+    // Production smoke must rebuild the default product after isolated builds.
+    assert!(
+        windows.find("scripts/check-cli-features.py").unwrap()
+            < windows.find("build-and-smoke.ps1").unwrap()
+    );
+    assert!(
+        unix.find("scripts/check-cli-features.py").unwrap()
+            < unix.find("bash scripts/build-and-smoke.sh").unwrap()
+    );
 }
 
 #[cfg(unix)]

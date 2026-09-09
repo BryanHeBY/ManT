@@ -70,6 +70,10 @@ cargo test --manifest-path "$PACKAGE_CHECK_ROOT/Cargo.toml" --locked \
   --package mant-query --no-default-features
 cargo test --manifest-path "$PACKAGE_CHECK_ROOT/Cargo.toml" --locked \
   --package mant-render --no-default-features
+# Keep the executable's minimal unit surface independent of the workspace's
+# default full-product feature unification, using the same packaged sources.
+cargo test --manifest-path "$PACKAGE_CHECK_ROOT/Cargo.toml" --locked \
+  --package mant --no-default-features --lib
 cargo test --manifest-path "$PACKAGE_CHECK_ROOT/Cargo.toml" --locked \
   --package libmandoc-rs --all-features
 

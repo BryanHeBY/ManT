@@ -73,7 +73,7 @@
     <rect x="590" y="215" width="200" height="62" rx="10" class="stage"/>
   </g>
   <text x="210" y="241" text-anchor="middle" class="title">mant-loader</text>
-  <text x="210" y="261" text-anchor="middle" class="detail">read · scope · cache</text>
+  <text x="210" y="261" text-anchor="middle" class="detail">read · catalog · scope</text>
   <text x="450" y="241" text-anchor="middle" class="title">mant-codec</text>
   <text x="450" y="261" text-anchor="middle" class="detail">memory-only formats</text>
   <text x="690" y="241" text-anchor="middle" class="title">mant-query</text>
@@ -115,15 +115,15 @@
     <rect x="455" y="635" width="190" height="85" rx="12" class="card"/>
     <rect x="670" y="635" width="190" height="85" rx="12" class="card"/>
   </g>
-  <text x="120" y="661" text-anchor="middle" class="interface-title">Interactive TUI</text>
+  <text x="120" y="661" text-anchor="middle" class="interface-title">TUI · optional</text>
   <text x="120" y="684" text-anchor="middle" class="detail">document IR</text>
   <text x="120" y="705" text-anchor="middle" class="detail">protocol host DTOs</text>
   <text x="335" y="661" text-anchor="middle" class="interface-title">CLI &amp; request JSON</text>
   <text x="335" y="692" text-anchor="middle" class="detail">queries · schemas</text>
-  <text x="550" y="661" text-anchor="middle" class="interface-title">MCP stdio</text>
+  <text x="550" y="661" text-anchor="middle" class="interface-title">MCP · optional</text>
   <text x="550" y="684" text-anchor="middle" class="detail">read-only tools</text>
   <text x="550" y="705" text-anchor="middle" class="detail">text · CommonMark</text>
   <text x="765" y="661" text-anchor="middle" class="interface-title">Output adapters</text>
   <text x="765" y="684" text-anchor="middle" class="detail">terminal · text</text>
-  <text x="765" y="705" text-anchor="middle" class="detail">Markdown · man</text>
+  <text x="765" y="705" text-anchor="middle" class="detail">optional pager</text>
 </svg>

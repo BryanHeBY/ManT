@@ -58,6 +58,8 @@ run "test independent query package" cargo test --locked --package mant-query --
 run "check independent IR query consumer" bash scripts/check-query-consumer.sh
 run "test independent render package" cargo test --locked --package mant-render --no-default-features
 run "check independent DTO render consumer" bash scripts/check-render-consumer.sh
+run "check independent embedded reader consumer" bash scripts/check-ui-consumer.sh
+run "check isolated CLI capability combinations" python3 scripts/check-cli-features.py
 run "test roff audit profilers" \
   cargo test --locked --package mant-engine --examples
 run "test optional libmandoc features" \

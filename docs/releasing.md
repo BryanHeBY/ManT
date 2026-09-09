@@ -111,9 +111,9 @@ mant-ir + libmandoc-rs (optional roff) ─> mant-codec
 mant-ir + mant-protocol + mant-sources + mant-codec + optional native ─> mant-loader
 mant-ir + mant-protocol + mant-codec (non-native) ─> mant-query
 mant-ir + mant-protocol + mant-codec (non-native) ─> mant-render
-mant-ir + mant-protocol + mant-codec + mant-loader + mant-query + mant-render (dev) ─> mant-engine
-mant-ir + mant-protocol + mant-render + mant-codec (dev) + mant-engine (dev) ─> mant-ui
-mant-ir + mant-protocol + mant-codec + mant-render + mant-sources + mant-engine + mant-ui ─> mant
+mant-ir + mant-protocol + mant-loader + mant-query + mant-codec (dev) + mant-render (dev) ─> mant-engine
+mant-ir + mant-protocol + mant-render + mant-codec (dev) + mant-loader (dev) + mant-query (dev) + mant-engine (dev) ─> mant-ui
+mant-ir + mant-protocol + mant-codec + mant-loader + mant-query + mant-render + mant-sources + mant-engine + mant-ui (optional) ─> mant
 ```
 
 Here an arrow means the package on the left must be visible in crates.io before
@@ -150,6 +150,15 @@ to reach the index before continuing. Existing immutable versions are skipped,
 making a partially completed job safe to rerun. Installing `mant` installs the
 reader, structured CLI, and MCP server as one executable. `mant-ui` is a
 reusable library crate and does not install a second command.
+
+Product archives use the default full `mant` feature set. Before tagging, the
+canonical checks must also pass the eight-build CLI capability matrix on each
+supported CI platform and the independent codec, loader, query, render and UI
+consumer gates. Minimal builds retain complete protocol schemas; removing an
+execution capability must not silently narrow those wire contracts. The exact
+packaged-source gate tests both the full workspace and the minimal `mant` unit
+surface. Keep native parser, terminal recovery and MCP session tests as separate
+evidence: dependency exclusion and redirected process probes cannot replace them.
 
 An internal requirement like `^0.9.0` accepts compatible `0.9.x` releases but
 not `0.10.0`. If a lower-level crate makes a breaking pre-1.0 change, bump its
@@ -202,6 +211,22 @@ Package tags are optional when a new crate version ships as part of a product
 release: the product `vMAJOR.MINOR.PATCH` tag already anchors every unpublished
 crate version selected from that commit. Use a package tag when publishing a
 library fix independently of a new `mant` binary release.
+
+### First publication of an extracted crate
+
+The extracted `mant-codec`, `mant-loader`, `mant-query` and `mant-render` names
+must each be checked for an existing crates.io release before the first product
+release that depends on them. Do not assume a configured repository workflow
+can create an unpublished package. If a first manual publication is required,
+use the frozen green release commit and a narrowly scoped temporary token;
+publish only the missing package after all its declared dependencies are
+visible, configure its Trusted Publisher, then resume the normal workflow.
+Use each package's own manifest version, not the product version. The complete
+publication order above applies to initial uploads as well as later releases.
+Never overwrite an already-published version or repeat a completed bootstrap.
+
+The historical example below documents the earlier three-name migration; it
+is not a command sequence for the current extracted packages.
 
 ### One-time new-crate bootstrap for `0.7.0`
 

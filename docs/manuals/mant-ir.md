@@ -349,7 +349,7 @@ prose.
 | Source Markdown `team/guide/setup` | `sources/team/guide/setup` |
 | Native `printf(3)` | `manual/3/printf` |
 
-`ResolvedContent` is the in-process handoff from the engine. It carries a display label, optional exact address, optional document body, and optional tldr page. The TUI consumes this value directly. Process clients receive versioned protocol projections; MCP tools present focused projections as compact text or CommonMark.
+`ResolvedContent` is the in-process handoff from the loader and complete engine workflows, or a caller-authored snapshot. It carries a display label, optional exact address, optional document body, and optional tldr page. Pure queries borrow it; the TUI can share immutable snapshots through `Arc` without cloning their document bodies. Process clients receive versioned protocol projections; MCP tools present focused projections as compact text or CommonMark.
 
 ## Source Coordinates
 

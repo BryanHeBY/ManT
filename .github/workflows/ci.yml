@@ -188,6 +188,11 @@ jobs:
             cargo test --locked --package "$package" --no-default-features --features roff
           done
 
+      # Hosted macOS includes Python 3; this gate uses its standard library only.
+      # Select mant alone so workspace defaults cannot conceal missing features.
+      - name: Test isolated CLI capability combinations on macOS
+        run: python3 scripts/check-cli-features.py
+
   windows-native:
     # Windows builds the same memory-only libmandoc parser and manual fixtures
     # as Unix while Rust owns source I/O, decompression, and .so redirects.

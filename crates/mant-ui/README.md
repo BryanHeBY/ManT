@@ -228,13 +228,9 @@ in IR by a resize, and its significant spaces remain selectable.
 
 ## Platform behavior
 
-The static pager consumes already projected text rather than querying the
-engine during resize or search. Search uses visible physical rows (excluding
-ANSI control bytes), so regex anchors refer to the current wrapped rows.
-No-result searches preserve a valid viewport and permit forward/backward search
-without an index entry. Match overlays retain source foreground/font state at
-the original glyphs; clearing search restores that base presentation. Native
-pager regressions and the CLI's Unix PTY test verify search, resize and colors.
+Static paging is a separate delivery capability of the `mant` executable, not
+part of this embedded reader. Its terminal lifecycle and pager implementation
+do not enter the reader's production dependency graph.
 Declaration-group context belongs to the protocol projection, not a second
 adjacency inference in the UI; full-document TUI layout ignores that metadata.
 

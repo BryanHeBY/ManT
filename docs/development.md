@@ -61,6 +61,12 @@ whole probe, including earlier queries and all preloaded scope documents, not
 only application construction. Record every scope input hash alongside the
 primary input when comparing runs.
 
+Add `--shared` to measure `app_shared_scope_ms` using caller-owned `Arc`
+snapshots instead of the convenience API's owned-document copying. Snapshot
+preparation occurs before application timing, and each invocation constructs
+only one application. Compare separate, alternating runs with identical scope
+inputs; whole-process RSS still includes all earlier loading and queries.
+
 It reports source-token columns when a token fits on one row; a wrapped/absent
 token is not a failed search. Reuse one `DocumentView` for width changes, record
 the input hash and producer commit, and compare source-relative columns after
@@ -141,6 +147,26 @@ unification must not be mistaken for a native dependency of the renderer.
 UI integration tests separately assert real terminal cells, because unchanged
 concatenated text alone cannot prove correct grapheme rendering or hit maps.
 
+`scripts/check-ui-consumer.sh` embeds the reader with authored IR and explicit
+host services. Its independent normal/build graph rejects loaders, queries,
+native parsers, source updates and the static pager. Crossterm's own transitive
+event dependencies do not grant this component terminal acquisition authority.
+
+`scripts/check-cli-features.py` runs eight isolated product builds: no default
+features, each of `roff`, `tui`, `pager`, `mcp`, and `update` alone, the default
+product, and all features. It inspects normal/build dependency graphs, exercises
+the actual help and structured input/output boundary, and checks that schemas
+remain complete even when execution capabilities are absent. Native catalog
+metadata remains discoverable without a native parser; reading native content
+must then report the unavailable capability rather than a missing document.
+The script runs in Linux, macOS and Windows verification, using Python 3's
+standard library (`python3` on Unix, `python` on Windows). It does not replace
+MCP session tests or real terminal recovery tests. Build products and disposable
+probe inputs stay under repository `target/`; user data paths are isolated for
+process probes. Do not run this matrix concurrently with another Cargo gate.
+The packaged-source gate also runs `cargo test -p mant --no-default-features --lib`, so
+the minimal surface cannot depend on files omitted from its published archive.
+
 The script checks formatting and installer syntax, runs every workspace test,
 runs clippy with all targets and features, builds the optimized executable,
 and smoke-tests its human and JSON surfaces. The result is
@@ -149,7 +175,7 @@ and smoke-tests its human and JSON surfaces. The result is
 Unix process tests also use Python 3's standard-library PTY support to verify
 display selection, wrapped overflow, short-output pass-through, and terminal
 restoration after paging or TUI exit, including real CLI SIGINT/SIGTERM exits.
-The UI integration harness also triggers a Rust host-callback panic and a
+The executable host's private terminal harness also triggers a Rust host-callback panic and a
 broken-output initialization error after raw-mode acquisition, checking exact
 termios restoration and alternate-screen cleanup. These are disposable POSIX
 children; they do not imply recovery from SIGKILL or machine failure.
@@ -286,9 +312,9 @@ crates/mant-codec/            In-memory Markdown/tldr, optional roff lowering, d
 crates/mant-loader/           Read-only catalogs, native roots, bounded inputs and linked scopes
 crates/mant-query/            Pure semantic queries over existing content and borrowed collections
 crates/mant-render/           Pure IR/DTO text and report formatting, roles and grapheme primitives
-crates/mant-engine/           Request validation and loader/query composition; opt-in tldr updates
+crates/mant-engine/           Request validation and loader/query composition
 crates/mant-ui/               Ratatui reader, navigation, search, and terminal styling
-crates/mant/                  Mode selection, CLI, request JSON, and MCP stdio boundary
+crates/mant/                  CLI/MCP, terminal delivery and optional source/tldr maintenance
 crates/libmandoc-rs/          Owned libmandoc parse/render API, private C shim, vendored source
 fuzz/                        Standalone cargo-fuzz workspace
 tests/contracts/             Stable JSON contract fixtures consumed by Rust tests
@@ -302,6 +328,8 @@ scripts/check-codec-consumer.sh  Verify the standalone codec's pure-Rust depende
 scripts/check-loader-consumer.sh  Verify read-only, default-feature source loading
 scripts/check-query-consumer.sh  Verify pure queries over authored IR and borrowed scopes
 scripts/check-render-consumer.sh  Verify pure IR/DTO reports without query or host authority
+scripts/check-ui-consumer.sh  Verify reader embedding without loaders or terminal delivery
+scripts/check-cli-features.py  Eight isolated capability builds and process contract probes
 scripts/build-and-smoke.sh   Unix debug/release product build and smoke test
 scripts/build-and-smoke.ps1 Windows debug/release product build and smoke test
 scripts/find-successful-ci.sh  Exact-commit full CI verification for automation

@@ -26,6 +26,28 @@ that crate was not published for that change.
   removed; all library feature combinations remain read-only. CLI maintenance
   behavior and the independent update response schema are unchanged.
 
+### mant-engine 0.11.0
+
+- The engine now exposes complete-request validation and loader/query workflows
+  only. Import memory parsing from `mant-codec`, local acquisition from
+  `mant-loader`, pure snapshot queries from `mant-query`, and report formatting
+  from `mant-render`; temporary engine forwarding exports are removed.
+  Replace `query_markdown_text` / `query_roff_bytes` with loader `load_*`
+  functions when no query execution is needed. Shared semantic values remain
+  in `mant-ir` and process contracts in `mant-protocol`.
+
+### mant-ui 0.11.0
+
+- The reader is an embedded component with explicit grouped host services;
+  native terminal acquisition, clipboard/open delivery and static paging move
+  into `mant`. It can be driven from an existing event loop without creating
+  an asynchronous runtime or loading documents itself.
+- `App::from_shared(ReaderOptions)` accepts immutable `Arc<ResolvedContent>`
+  snapshots. Current content, loaded scope, copy requests and navigation reuse
+  the exact snapshot; equal addresses do not merge different revisions. The
+  borrowed convenience constructors remain available with documented copy
+  costs. Page changes now cancel stale queued sidebar-resize work.
+
 ### mant-render 0.11.0
 
 - New independently usable presentation boundary formats existing IR and

@@ -13,12 +13,11 @@ The architecture follows four constraints:
   keep agent presentation compact and bounded;
 - keep ordinary reading local, bounded, and independent from host manual tools.
 
-The [semantic explanation design](semantic-explanations.md) records the next
+The [semantic explanation design](semantic-explanations.md) records the
 content/annotation boundary: ordinary content owns presentation, names do not
 imply alias equivalence, and evidence collection is distinct from exact node
-navigation. It explicitly separates current gaps from proposed APIs; the
-current implementation and user manuals below remain authoritative until
-that migration is implemented.
+navigation. The current public APIs and user manuals below describe the
+implemented contracts.
 
 ## Layer model
 
@@ -39,7 +38,9 @@ direction is related but not identical:
 
 ```text
 mant
-├─ mant-ui ─> mant-ir / mant-protocol / mant-render
+├─ mant-ui (tui) ─> mant-ir / mant-protocol / mant-render
+├─ mant-codec (no native features)
+├─ mant-loader / mant-query
 ├─ mant-render ─> mant-ir / mant-protocol / mant-codec (no native features)
 ├─ mant-engine
 │  ├─ mant-ir / mant-protocol
@@ -48,16 +49,15 @@ mant
 │  │  ├─ mant-codec ─> mant-ir
 │  │  │  └─ libmandoc-rs (roff)
 │  │  └─ libmandoc-rs (roff report/error types)
-│  ├─ mant-query ─> mant-ir / mant-protocol / mant-codec (no native features)
-│  └─ mant-codec (input convenience APIs)
-├─ mant-sources (update feature)
+│  └─ mant-query ─> mant-ir / mant-protocol / mant-codec (no native features)
+├─ mant-sources (read-only; mutation requires update)
 └─ mant-ir / mant-protocol
 ```
 
 Arrows show production dependencies; they do not imply serialization. `mant-ui`
 deliberately depends on both the direct IR and the stable catalog DTOs it
-exchanges with its host. The engine's default `roff` feature explicitly enables the loader and codec
-native paths. Standalone loader and codec default consumers need neither
+exchanges with its host. The engine's default `roff` feature enables the loader's
+native path, which in turn enables the codec's native lowering. Standalone loader and codec default consumers need neither
 libmandoc, native zstd, nor a C compiler. The loader's `roff` feature owns
 optional source decompression and native report/error types. Engine-only native
 audit dependencies are development dependencies, not another production loader.
@@ -90,10 +90,10 @@ access to paths named by those labels. Parsing, annotation and document encoding
 have one implementation in `mant-codec`. Source I/O and scope acquisition have
 one owner in `mant-loader`; selection and evidence queries have one owner in
 `mant-query`; body and report presentation have one owner in `mant-render`.
-These eleven workspace crates are actual boundaries. Opt-in tldr maintenance
-still has its concrete implementation in the engine.
-Its temporary codec, loader and query re-exports do not duplicate those implementations.
-There is no engine rendering re-export or protocol-to-render dependency. The
+These eleven workspace crates are actual boundaries. Explicit tldr maintenance
+belongs to the executable host. The engine exposes its complete-request workflows,
+not forwarding aliases for codec, loader, query or rendering APIs. There is no
+protocol-to-render dependency. The
 engine's render dependency is development-only, retaining cross-layer regression
 tests without granting production workflows presentation authority.
 Interactive queries pass an in-memory `ResolvedContent` directly to
@@ -107,6 +107,15 @@ projections as bounded text or CommonMark rather than exposing the complete
 AST.
 Source update and prune commands use their own schema-marked maintenance
 reports owned by `mant-sources`; they do not become document protocol variants.
+
+The executable enables `roff`, `tui`, `pager`, `mcp` and `update` by default,
+but each capability can be selected independently. Missing capabilities remove
+their CLI execution switches, not protocol schema variants. Manual inventory is
+read-only metadata and remains available without native parsing. Process startup
+is synchronous; only explicit MCP delivery creates an asynchronous runtime.
+Embedded reader services and immutable document snapshots do not acquire the
+terminal. The host owns reader and pager sessions, restoring their shared
+resource ledger on normal exit, failure, panic and supported Unix signals.
 
 ### Rendering and terminal layout
 
