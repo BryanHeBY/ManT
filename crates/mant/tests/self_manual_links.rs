@@ -98,13 +98,22 @@ fn native_link_discovery_does_not_require_targets_but_opening_uses_exact_section
     assert_eq!(records[0]["target"]["manualSection"], "3");
     assert_eq!(records[1]["resolution"]["kind"], "not-queried");
     assert_eq!(records[2]["target"]["name"], "linkabsent");
-    let exact = success(&run(&home, &["manual/3/linkprobe"]));
-    assert!(exact.to_string().contains("test manual 3"));
-    let unqualified = success(&run(&home, &["linkprobe", "--manual"]));
-    assert!(
-        unqualified.to_string().contains("test manual 3"),
-        "unqualified opening follows configured manual section precedence, not a guessed section 1"
-    );
+    if cfg!(feature = "roff") {
+        let exact = success(&run(&home, &["manual/3/linkprobe"]));
+        assert!(exact.to_string().contains("test manual 3"));
+        let unqualified = success(&run(&home, &["linkprobe", "--manual"]));
+        assert!(
+            unqualified.to_string().contains("test manual 3"),
+            "unqualified opening follows configured manual section precedence, not a guessed section 1"
+        );
+    } else {
+        let unavailable = run(&home, &["manual/3/linkprobe"]);
+        assert_eq!(unavailable.status.code(), Some(1));
+        assert!(
+            String::from_utf8_lossy(&unavailable.stderr).contains("requires the 'roff' feature")
+        );
+        assert!(unavailable.stdout.is_empty());
+    }
     assert!(!run(&home, &["manual/7/linkabsent"]).status.success());
     // No implicit section is introduced into the unqualified link's target.
     assert!(records[1]["target"].get("manualSection").is_none());

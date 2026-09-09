@@ -1,6 +1,6 @@
 //! Real Unix PTY checks complement the platform-neutral output policy matrix.
 
-#[cfg(unix)]
+#[cfg(all(unix, feature = "tui", feature = "pager"))]
 #[test]
 fn terminal_display_and_restoration() {
     let mut process = std::process::Command::new("python3")

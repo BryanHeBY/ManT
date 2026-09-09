@@ -18,6 +18,7 @@ Use `--help` for assistance.
 "#;
 
 #[test]
+#[cfg(feature = "roff")]
 fn cli_file_stdin_and_public_production_api_agree_on_executed_boundaries() {
     use std::{io::Write, process::Stdio};
     let root = fixture("executed-boundaries");

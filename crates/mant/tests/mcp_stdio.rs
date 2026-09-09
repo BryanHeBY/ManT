@@ -1,4 +1,5 @@
 //! Verifies the compact MCP tool surface over the real stdio transport.
+#![cfg(feature = "mcp")]
 
 #[path = "mcp_stdio/lifecycle.rs"]
 mod lifecycle;
@@ -16,6 +17,7 @@ use serde_json::{Value, json};
 use support::{configure_registered_documents, registered_documents_dir};
 
 #[test]
+#[cfg(feature = "roff")]
 fn incomplete_native_scopes_do_not_terminate_the_mcp_session() {
     let fixture_root = std::env::temp_dir().join(format!("mant-mcp-eof-{}", std::process::id()));
     let manuals = fixture_root.join("man1");

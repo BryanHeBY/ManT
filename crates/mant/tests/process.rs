@@ -26,6 +26,7 @@ fn registered_data_root(home: &std::path::Path) -> PathBuf {
         .to_owned()
 }
 
+#[cfg(feature = "update")]
 fn run_git(directory: &std::path::Path, arguments: &[&str]) {
     let output = Command::new("git")
         .arg("-C")
@@ -105,6 +106,7 @@ fn outline_reference_badges_survive_cli_color_policy() {
 }
 
 #[test]
+#[cfg(feature = "roff")]
 fn inline_roff_continuations_retain_indent_and_explicit_blank_lines() {
     let output = run_text_input(
         &[
@@ -155,11 +157,13 @@ fn source_rows_survive_plain_and_ansi_process_facades() {
         plain
     }
     for (format, source, expected) in [
+        #[cfg(feature = "roff")]
         (
             "roff",
             ".TH PROBE 1\n.PD 2\n.SH FIRST\nALPHA\n.sp 3\n.SH SECOND\nBETA\n",
             "ALPHA\n\n\n\n\n\nSECOND\nBETA",
         ),
+        #[cfg(feature = "roff")]
         (
             "roff",
             ".TH PROBE 1\n.SH TEST\n.nf\nALPHA\n.sp 1\n.sp 2\nBETA\n.fi\n",
@@ -292,18 +296,18 @@ fn help_groups_the_public_query_surface() {
     assert!(help.contains("--format <FORMAT>"));
     assert!(help.contains("--preserve-anchors"));
     assert!(help.contains("--color <COLOR>"));
-    assert!(help.contains("--update-tldr"));
-    assert!(help.contains("--update-docs"));
-    assert!(help.contains("--prune-docs"));
+    assert_eq!(help.contains("--update-tldr"), cfg!(feature = "update"));
+    assert_eq!(help.contains("--update-docs"), cfg!(feature = "update"));
+    assert_eq!(help.contains("--prune-docs"), cfg!(feature = "update"));
     assert!(help.contains("--doctor"));
-    assert!(help.contains("--dry-run"));
+    assert_eq!(help.contains("--dry-run"), cfg!(feature = "update"));
     assert!(help.contains("--source <SOURCE>"));
     assert!(help.contains("--protocol-version"));
     assert!(help.contains("--schema <CONTRACT>"));
-    assert!(help.contains("--mcp"));
+    assert_eq!(help.contains("--mcp"), cfg!(feature = "mcp"));
     assert!(help.contains("--explain <ENTRY>"));
     assert!(help.contains("--search <PATTERN>"));
-    assert!(help.contains("--manual"));
+    assert_eq!(help.contains("--manual"), cfg!(feature = "roff"));
     assert!(help.contains("--tldr"));
     assert!(!help.contains("--force-libmandoc"));
     assert!(!help.contains("--force-groff"));
@@ -395,22 +399,17 @@ fn clap_color_is_terminal_aware_and_explicitly_controllable() {
     assert!(colored_semantic_error.stdout.is_empty());
     assert!(colored_semantic_error.stderr.contains(&0x1b));
 
-    let colored_runtime_error = run(&[
-        "definitely-not-a-real-manual-for-colour",
-        "--manual",
-        "--color",
-        "always",
-    ]);
+    let missing_input = if cfg!(feature = "roff") {
+        ["definitely-not-a-real-manual-for-colour", "--manual"]
+    } else {
+        ["--input", "definitely-not-a-real-markdown-for-colour.md"]
+    };
+    let colored_runtime_error = run(&[missing_input[0], missing_input[1], "--color", "always"]);
     assert_eq!(colored_runtime_error.status.code(), Some(1));
     assert!(colored_runtime_error.stdout.is_empty());
     assert!(colored_runtime_error.stderr.contains(&0x1b));
 
-    let plain_runtime_error = run(&[
-        "definitely-not-a-real-manual-for-colour",
-        "--manual",
-        "--color",
-        "never",
-    ]);
+    let plain_runtime_error = run(&[missing_input[0], missing_input[1], "--color", "never"]);
     assert_eq!(plain_runtime_error.status.code(), Some(1));
     assert!(!plain_runtime_error.stderr.contains(&0x1b));
 
@@ -589,6 +588,7 @@ fn partial_query_text_is_colored_only_when_the_stream_policy_allows_it() {
 }
 
 #[test]
+#[cfg(feature = "roff")]
 fn one_owner_explanation_page_keeps_its_context_in_every_cli_format() {
     let source = b".TH PROBE 1\n.SH OPTIONS\n.TP\n.B --first\n.TP\n.B --second\nOnly the second changes output.\n";
     for format in ["text", "markdown", "json"] {
@@ -791,7 +791,11 @@ fn explicit_tui_requires_a_real_terminal_before_loading_a_document() {
     assert_eq!(output.status.code(), Some(2));
     assert!(output.stdout.is_empty());
     let diagnostic = String::from_utf8(output.stderr).expect("UTF-8 diagnostic");
-    assert!(diagnostic.contains("interactive display requires"));
+    assert!(diagnostic.contains(if cfg!(feature = "tui") {
+        "interactive display requires"
+    } else {
+        "invalid value"
+    }));
     assert!(!diagnostic.contains("No manual entry"));
 }
 
@@ -891,7 +895,11 @@ fn cached_tldr_requires_an_explicit_tldr_query_when_the_document_is_missing() {
     assert_eq!(ordinary.status.code(), Some(1));
     assert!(ordinary.stdout.is_empty());
     let diagnostic = String::from_utf8(ordinary.stderr).expect("ordinary diagnostic");
-    assert!(diagnostic.contains("could not load manual 'quick-only'"));
+    assert!(diagnostic.contains(if cfg!(feature = "roff") {
+        "could not load manual 'quick-only'"
+    } else {
+        "requires the 'roff' feature"
+    }));
     assert!(diagnostic.contains("a tldr entry is available"));
     assert!(diagnostic.contains("mant quick-only --tldr"));
 
@@ -1158,6 +1166,7 @@ fn direct_stdin_reads_markdown_without_extending_the_request_schema() {
 }
 
 #[test]
+#[cfg(feature = "roff")]
 fn explicit_roff_files_and_stdin_use_the_native_parser() {
     let path =
         std::env::temp_dir().join(format!("mant-direct-roff-process-{}.1", std::process::id()));
@@ -1211,6 +1220,7 @@ fn explicit_roff_files_and_stdin_use_the_native_parser() {
 }
 
 #[test]
+#[cfg(feature = "update")]
 fn document_sources_update_on_demand_and_support_explicit_selection() {
     let fixture_root = std::env::temp_dir().join(format!(
         "mant-document-source-process-{}",
@@ -1319,6 +1329,7 @@ fn document_sources_update_on_demand_and_support_explicit_selection() {
 }
 
 #[test]
+#[cfg(feature = "update")]
 fn document_source_pruning_is_explicit_and_preserves_personal_documents() {
     let fixture_root = std::env::temp_dir().join(format!(
         "mant-document-source-prune-process-{}",
@@ -1370,6 +1381,7 @@ fn document_source_pruning_is_explicit_and_preserves_personal_documents() {
 }
 
 #[test]
+#[cfg(feature = "update")]
 fn document_source_failures_keep_a_complete_json_report() {
     let fixture_root = std::env::temp_dir().join(format!(
         "mant-document-source-failure-process-{}",
@@ -2185,14 +2197,27 @@ fn manual_option_bypasses_registered_markdown_with_the_same_name() {
         serde_json::from_slice(&registered.stdout).expect("registered JSON");
     assert_eq!(registered["document"]["source"]["format"], "markdown");
 
-    let manual = run(true);
-    assert!(manual.status.success(), "{manual:?}");
-    assert!(manual.stderr.is_empty());
-    let manual: serde_json::Value = serde_json::from_slice(&manual.stdout).expect("manual JSON");
-    assert_eq!(manual["document"]["source"]["format"], "man");
-    assert_eq!(manual["document"]["meta"]["manualSection"], "1");
-    assert!(manual["tldr"].is_null());
+    #[cfg(feature = "roff")]
+    {
+        let manual = run(true);
+        assert!(manual.status.success(), "{manual:?}");
+        assert!(manual.stderr.is_empty());
+        let manual: serde_json::Value =
+            serde_json::from_slice(&manual.stdout).expect("manual JSON");
+        assert_eq!(manual["document"]["source"]["format"], "man");
+        assert_eq!(manual["document"]["meta"]["manualSection"], "1");
+        assert!(manual["tldr"].is_null());
+    }
 
+    #[cfg(not(feature = "roff"))]
+    {
+        let unavailable = run(true);
+        assert_eq!(unavailable.status.code(), Some(2));
+        assert!(
+            String::from_utf8_lossy(&unavailable.stderr).contains("unexpected argument '--manual'")
+        );
+        assert!(unavailable.stdout.is_empty());
+    }
     fs::remove_dir_all(root).expect("remove source-policy fixture");
 }
 
@@ -2228,64 +2253,53 @@ fn document_and_quick_reference_policies_remain_orthogonal() {
         command.output().expect("query explicit content")
     };
 
-    let combined = run(&["--format", "json", "--compact"]);
-    assert!(combined.status.success(), "{combined:?}");
-    let combined: serde_json::Value =
-        serde_json::from_slice(&combined.stdout).expect("combined JSON");
-    assert_eq!(combined["document"]["source"]["format"], "man");
-    assert!(!combined["tldr"].is_null());
+    #[cfg(feature = "roff")]
+    {
+        let combined = run(&["--format", "json", "--compact"]);
+        assert!(combined.status.success(), "{combined:?}");
+        let combined: serde_json::Value =
+            serde_json::from_slice(&combined.stdout).expect("combined JSON");
+        assert_eq!(combined["document"]["source"]["format"], "man");
+        assert!(!combined["tldr"].is_null());
 
-    let manual_only = run(&["--manual", "--format", "json", "--compact"]);
-    assert!(manual_only.status.success(), "{manual_only:?}");
-    let manual_only: serde_json::Value =
-        serde_json::from_slice(&manual_only.stdout).expect("manual-only JSON");
-    assert_eq!(manual_only["document"]["source"]["format"], "man");
-    assert!(manual_only["tldr"].is_null());
+        let manual_only = run(&["--manual", "--format", "json", "--compact"]);
+        assert!(manual_only.status.success(), "{manual_only:?}");
+        let manual_only: serde_json::Value =
+            serde_json::from_slice(&manual_only.stdout).expect("manual-only JSON");
+        assert_eq!(manual_only["document"]["source"]["format"], "man");
+        assert!(manual_only["tldr"].is_null());
 
-    let selected_section = run(&["--man-section", "1", "--format", "json", "--compact"]);
-    assert!(selected_section.status.success(), "{selected_section:?}");
-    let selected_section: serde_json::Value =
-        serde_json::from_slice(&selected_section.stdout).expect("section-qualified JSON");
-    assert_eq!(selected_section["document"]["meta"]["manualSection"], "1");
-    assert!(!selected_section["tldr"].is_null());
+        let selected_section = run(&["--man-section", "1", "--format", "json", "--compact"]);
+        assert!(selected_section.status.success(), "{selected_section:?}");
+        let selected_section: serde_json::Value =
+            serde_json::from_slice(&selected_section.stdout).expect("section-qualified JSON");
+        assert_eq!(selected_section["document"]["meta"]["manualSection"], "1");
+        assert!(!selected_section["tldr"].is_null());
 
-    let removed = run(&["--section", "1"]);
-    assert_eq!(removed.status.code(), Some(2));
-    let diagnostic = String::from_utf8(removed.stderr).expect("removed option diagnostic");
-    assert!(diagnostic.contains("--section was removed in ManT 0.7.0"));
-    assert!(diagnostic.contains("--man-section <MAN_SECTION>"));
-    assert!(diagnostic.contains("--node <SELECTOR>"));
+        let removed = run(&["--section", "1"]);
+        assert_eq!(removed.status.code(), Some(2));
+        let diagnostic = String::from_utf8(removed.stderr).expect("removed option diagnostic");
+        assert!(diagnostic.contains("--section was removed in ManT 0.7.0"));
+        assert!(diagnostic.contains("--man-section <MAN_SECTION>"));
+        assert!(diagnostic.contains("--node <SELECTOR>"));
 
-    let unavailable = run(&["--man-section", "3"]);
-    assert_eq!(unavailable.status.code(), Some(1));
-    let diagnostic = String::from_utf8(unavailable.stderr).expect("section diagnostic");
-    assert!(
-        diagnostic.contains("manual section '3' is unavailable"),
-        "{diagnostic}"
-    );
-    assert!(diagnostic.contains("available sections: 1"), "{diagnostic}");
-    assert!(
-        !diagnostic.contains("--man-section selects"),
-        "{diagnostic}"
-    );
+        let unavailable = run(&["--man-section", "3"]);
+        assert_eq!(unavailable.status.code(), Some(1));
+        let diagnostic = String::from_utf8(unavailable.stderr).expect("section diagnostic");
+        assert!(
+            diagnostic.contains("manual section '3' is unavailable"),
+            "{diagnostic}"
+        );
+        assert!(diagnostic.contains("available sections: 1"), "{diagnostic}");
+        assert!(
+            !diagnostic.contains("--man-section selects"),
+            "{diagnostic}"
+        );
+    }
 
-    let tldr = run(&["--tldr"]);
-    assert!(tldr.status.success(), "{tldr:?}");
-    assert!(tldr.stderr.is_empty());
-    let tldr = String::from_utf8(tldr.stdout).expect("plain tldr output");
-    assert!(tldr.contains("Cached quick reference."));
-    assert!(!tldr.contains("native manual body"));
-    assert!(!tldr.contains("\u{1b}["));
+    assert_quick_reference_policy(&run);
 
-    let colored = run(&["--tldr", "--color", "always"]);
-    assert!(colored.status.success(), "{colored:?}");
-    assert!(colored.stderr.is_empty());
-    assert!(
-        String::from_utf8(colored.stdout)
-            .expect("colored tldr output")
-            .contains("\u{1b}[")
-    );
-
+    #[cfg(feature = "roff")]
     for selectors in [
         vec!["1", "content-policy"],
         vec!["content-policy(1)"],
@@ -2306,7 +2320,35 @@ fn document_and_quick_reference_policies_remain_orthogonal() {
         assert_eq!(value["document"]["meta"]["manualSection"], "1");
     }
 
+    #[cfg(not(feature = "roff"))]
+    {
+        let unavailable = run(&["--format", "json", "--compact"]);
+        assert_eq!(unavailable.status.code(), Some(1));
+        assert!(
+            String::from_utf8_lossy(&unavailable.stderr).contains("requires the 'roff' feature")
+        );
+        assert!(unavailable.stdout.is_empty());
+    }
     fs::remove_dir_all(root).expect("remove explicit-content fixture");
+}
+
+fn assert_quick_reference_policy(run: &impl Fn(&[&str]) -> std::process::Output) {
+    let tldr = run(&["--tldr"]);
+    assert!(tldr.status.success(), "{tldr:?}");
+    assert!(tldr.stderr.is_empty());
+    let tldr = String::from_utf8(tldr.stdout).expect("plain tldr output");
+    assert!(tldr.contains("Cached quick reference."));
+    assert!(!tldr.contains("native manual body"));
+    assert!(!tldr.contains("\u{1b}["));
+
+    let colored = run(&["--tldr", "--color", "always"]);
+    assert!(colored.status.success(), "{colored:?}");
+    assert!(colored.stderr.is_empty());
+    assert!(
+        String::from_utf8(colored.stdout)
+            .expect("colored tldr output")
+            .contains("\u{1b}[")
+    );
 }
 
 #[cfg(unix)]
@@ -2362,12 +2404,18 @@ fn manual_queries_use_native_paths_without_a_man_executable() {
         .output()
         .expect("query native manual index");
 
-    assert!(output.status.success(), "{output:?}");
-    assert!(output.stderr.is_empty());
-    let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("query JSON");
-    assert_eq!(value["label"], "native-only");
-    assert_eq!(value["document"]["meta"]["manualSection"], "1");
-    assert_eq!(value["document"]["source"]["format"], "man");
+    if cfg!(feature = "roff") {
+        assert!(output.status.success(), "{output:?}");
+        assert!(output.stderr.is_empty());
+        let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("query JSON");
+        assert_eq!(value["label"], "native-only");
+        assert_eq!(value["document"]["meta"]["manualSection"], "1");
+        assert_eq!(value["document"]["source"]["format"], "man");
+    } else {
+        assert_eq!(output.status.code(), Some(1));
+        assert!(String::from_utf8_lossy(&output.stderr).contains("requires the 'roff' feature"));
+        assert!(output.stdout.is_empty());
+    }
 
     fs::remove_dir_all(root).expect("remove native manual fixture");
 }
@@ -2385,27 +2433,30 @@ fn manual_queries_accept_flat_user_man_roots() {
     )
     .expect("write flat manual source");
 
-    let output = Command::new(executable())
-        .args(["flat-native", "--manual", "--format", "json", "--compact"])
-        .env("MANT_MANPATH", &root)
-        .output()
-        .expect("query flat native manual");
+    #[cfg(feature = "roff")]
+    {
+        let output = Command::new(executable())
+            .args(["flat-native", "--manual", "--format", "json", "--compact"])
+            .env("MANT_MANPATH", &root)
+            .output()
+            .expect("query flat native manual");
 
-    assert!(output.status.success(), "{output:?}");
-    let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("query JSON");
-    assert_eq!(value["document"]["meta"]["manualSection"], "1");
-    assert_eq!(value["document"]["source"]["format"], "man");
+        assert!(output.status.success(), "{output:?}");
+        let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("query JSON");
+        assert_eq!(value["document"]["meta"]["manualSection"], "1");
+        assert_eq!(value["document"]["source"]["format"], "man");
 
-    let canonical = Command::new(executable())
-        .args(["manual/1/flat-native", "--format", "json", "--compact"])
-        .env("MANT_MANPATH", &root)
-        .output()
-        .expect("query canonical flat native manual");
-    assert!(canonical.status.success(), "{canonical:?}");
-    let canonical: serde_json::Value =
-        serde_json::from_slice(&canonical.stdout).expect("canonical manual JSON");
-    assert_eq!(canonical["address"]["kind"], "manual");
-    assert_eq!(canonical["address"]["manualSection"], "1");
+        let canonical = Command::new(executable())
+            .args(["manual/1/flat-native", "--format", "json", "--compact"])
+            .env("MANT_MANPATH", &root)
+            .output()
+            .expect("query canonical flat native manual");
+        assert!(canonical.status.success(), "{canonical:?}");
+        let canonical: serde_json::Value =
+            serde_json::from_slice(&canonical.stdout).expect("canonical manual JSON");
+        assert_eq!(canonical["address"]["kind"], "manual");
+        assert_eq!(canonical["address"]["manualSection"], "1");
+    }
 
     let catalog = Command::new(executable())
         .args([
