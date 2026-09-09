@@ -7,7 +7,7 @@ use mant_protocol::{ExplanationTextRoot, TextPresentation};
 use std::borrow::Cow;
 
 impl LocatedStyles<'_> {
-    pub(crate) fn markdown_inline(
+    pub(in crate::output) fn markdown_inline(
         &self,
         nodes: &[Inline],
         options: crate::MarkdownFragmentOptions,

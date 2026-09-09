@@ -17,6 +17,7 @@ include = [
   "/tests/markdown_pipeline.rs", "/tests/markdown_pipeline/**",
   "/tests/definition_normalization_layout.rs",
   "/tests/query_report_boundary.rs",
+  "/tests/report_composition.rs", "/tests/report_composition/**",
 ]
 
 [package.metadata.docs.rs]

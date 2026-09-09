@@ -10,6 +10,7 @@ pub use explanation::{
 mod markdown_report;
 mod outline;
 mod search;
+mod styles;
 mod table;
 mod text;
 pub use outline::{render_outline_text, render_outline_text_with};

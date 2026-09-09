@@ -1,13 +1,19 @@
 //! Presents structure-aware search results for terminals and language models.
 
 use mant_ir::EntryKind;
-use std::{collections::BTreeMap, ops::Range};
+use std::ops::Range;
 
-use mant_protocol::{OutlineNodeReference, OutlineTrail, QuerySearch, SearchHit, SearchScope};
-use pulldown_cmark::{Event, Parser};
+use mant_protocol::{OutlineNodeReference, OutlineTrail, QuerySearch};
 
-use mant_codec::encode::{commonmark_code_span as code_span, escape_commonmark as escape_text};
-use mant_codec::markdown_mapping::{InlineMappingKind, map_inline_characters};
+mod context;
+mod line;
+mod markdown;
+use context::{
+    context_group_end, merged_context, occurrence_line_ranges, text_group_coordinates,
+    truncated_occurrence_summary,
+};
+use line::render_search_line;
+pub use markdown::render_search_markdown;
 
 /// Semantic roles in the grep-like search presentation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -33,86 +39,6 @@ pub enum SearchTextRole {
 #[cfg(test)]
 fn render_search_line_text(markdown: &str) -> String {
     render_search_line(markdown, &[]).0
-}
-
-fn render_search_line(markdown: &str, highlights: &[Range<usize>]) -> (String, Vec<Range<usize>>) {
-    let mut rendered = String::with_capacity(markdown.len());
-    let mut rendered_highlights = Vec::new();
-    for (event, source) in Parser::new(markdown).into_offset_iter() {
-        match event {
-            Event::Text(value) | Event::InlineMath(value) | Event::DisplayMath(value) => {
-                append_mapped_text(
-                    markdown,
-                    &value,
-                    source,
-                    InlineMappingKind::Text,
-                    highlights,
-                    &mut rendered,
-                    &mut rendered_highlights,
-                );
-            }
-            Event::Code(value) => append_mapped_text(
-                markdown,
-                &value,
-                source,
-                InlineMappingKind::Code,
-                highlights,
-                &mut rendered,
-                &mut rendered_highlights,
-            ),
-            Event::SoftBreak | Event::HardBreak => {
-                let start = rendered.len();
-                rendered.push(' ');
-                if highlights
-                    .iter()
-                    .any(|range| ranges_overlap(range, &source))
-                {
-                    rendered_highlights.push(start..rendered.len());
-                }
-            }
-            Event::TaskListMarker(checked) => {
-                rendered.push_str(if checked { "[x] " } else { "[ ] " });
-            }
-            Event::Rule => rendered.push_str("---"),
-            Event::Start(_)
-            | Event::End(_)
-            | Event::Html(_)
-            | Event::InlineHtml(_)
-            | Event::FootnoteReference(_) => {}
-        }
-    }
-    let visible_end = rendered.trim_end().len();
-    rendered.truncate(visible_end);
-    rendered_highlights.retain(|range| range.start < visible_end);
-    for range in &mut rendered_highlights {
-        range.end = range.end.min(visible_end);
-    }
-    (rendered, rendered_highlights)
-}
-
-fn append_mapped_text(
-    markdown: &str,
-    value: &str,
-    source: Range<usize>,
-    kind: InlineMappingKind,
-    highlights: &[Range<usize>],
-    rendered: &mut String,
-    rendered_highlights: &mut Vec<Range<usize>>,
-) {
-    for character in map_inline_characters(markdown, value, source, kind) {
-        let visible_start = rendered.len();
-        rendered.push(character.value);
-        if highlights
-            .iter()
-            .any(|range| ranges_overlap(range, &character.source))
-        {
-            rendered_highlights.push(visible_start..rendered.len());
-        }
-    }
-}
-
-fn ranges_overlap(left: &Range<usize>, right: &Range<usize>) -> bool {
-    left.start < right.end && right.start < left.end
 }
 
 /// Render grep-like results with stable Markdown coordinates and node paths.
@@ -294,160 +220,6 @@ where
     }
 }
 
-fn occurrence_line_ranges(found: &SearchHit, line: u32) -> Vec<Range<usize>> {
-    found
-        .occurrences
-        .iter()
-        .flat_map(|occurrence| occurrence.line_ranges.iter())
-        .filter(|range| range.line == line)
-        .filter_map(|range| {
-            Some(usize::try_from(range.start_byte).ok()?..usize::try_from(range.end_byte).ok()?)
-        })
-        .collect()
-}
-
-fn group_coordinates(matches: &[SearchHit]) -> String {
-    let mut lines: BTreeMap<u32, Vec<u32>> = BTreeMap::new();
-    for occurrence in matches.iter().flat_map(|found| found.occurrences.iter()) {
-        lines
-            .entry(occurrence.markdown.start_line)
-            .or_default()
-            .push(occurrence.markdown.start_column);
-    }
-    format_coordinate_lines(lines)
-}
-
-fn text_group_coordinates(matches: &[SearchHit], scope: SearchScope) -> String {
-    if scope == SearchScope::Markdown {
-        return group_coordinates(matches);
-    }
-
-    let mut lines: BTreeMap<u32, Vec<u32>> = BTreeMap::new();
-    for found in matches {
-        for occurrence in &found.occurrences {
-            let line = occurrence.markdown.start_line;
-            let visible_column = search_line_text(found, line)
-                .and_then(|text| {
-                    let ranges = occurrence
-                        .line_ranges
-                        .iter()
-                        .filter(|range| range.line == line)
-                        .filter_map(|range| {
-                            Some(
-                                usize::try_from(range.start_byte).ok()?
-                                    ..usize::try_from(range.end_byte).ok()?,
-                            )
-                        })
-                        .collect::<Vec<_>>();
-                    let (rendered, highlights) = render_search_line(text, &ranges);
-                    highlights
-                        .iter()
-                        .map(|range| range.start)
-                        .min()
-                        .map(|start| {
-                            u32::try_from(rendered[..start].chars().count().saturating_add(1))
-                                .unwrap_or(u32::MAX)
-                        })
-                })
-                .unwrap_or(occurrence.markdown.start_column);
-            lines.entry(line).or_default().push(visible_column);
-        }
-    }
-    format_coordinate_lines(lines)
-}
-
-fn search_line_text(found: &SearchHit, line: u32) -> Option<&str> {
-    found
-        .context
-        .iter()
-        .find(|context| context.line == line)
-        .map(|context| context.text.as_str())
-        .or_else(|| {
-            found
-                .occurrences
-                .iter()
-                .any(|occurrence| occurrence.markdown.start_line == line)
-                .then_some(found.preview.as_str())
-        })
-}
-
-fn format_coordinate_lines(lines: BTreeMap<u32, Vec<u32>>) -> String {
-    lines
-        .into_iter()
-        .map(|(line, mut columns)| {
-            columns.sort_unstable();
-            columns.dedup();
-            format!(
-                "{line}:{}",
-                columns
-                    .into_iter()
-                    .map(|column| column.to_string())
-                    .collect::<Vec<_>>()
-                    .join(",")
-            )
-        })
-        .collect::<Vec<_>>()
-        .join("; ")
-}
-
-fn truncated_occurrence_summary(matches: &[SearchHit]) -> Option<String> {
-    matches
-        .iter()
-        .any(|found| found.occurrences_truncated)
-        .then(|| {
-            let total = matches
-                .iter()
-                .map(|found| u64::from(found.occurrence_count))
-                .sum::<u64>();
-            let shown = matches
-                .iter()
-                .map(|found| found.occurrences.len() as u64)
-                .sum::<u64>();
-            format!("{total} occurrences; {shown} exact coordinates shown")
-        })
-}
-
-fn context_group_end(matches: &[SearchHit], start: usize) -> usize {
-    let Some((_, mut last_line)) = context_bounds(&matches[start]) else {
-        return start + 1;
-    };
-    let outline = &matches[start].outline;
-    let mut end = start + 1;
-    while let Some(found) = matches.get(end) {
-        let Some((first_line, found_last_line)) = context_bounds(found) else {
-            break;
-        };
-        if &found.outline != outline || first_line > last_line.saturating_add(1) {
-            break;
-        }
-        last_line = last_line.max(found_last_line);
-        end += 1;
-    }
-    end
-}
-
-fn context_bounds(found: &SearchHit) -> Option<(u32, u32)> {
-    Some((found.context.first()?.line, found.context.last()?.line))
-}
-
-type MergedContext<'a> = BTreeMap<u32, (&'a str, bool, Vec<Range<usize>>)>;
-
-fn merged_context(matches: &[SearchHit]) -> MergedContext<'_> {
-    let mut merged: MergedContext<'_> = BTreeMap::new();
-    for found in matches {
-        for line in &found.context {
-            let entry = merged
-                .entry(line.line)
-                .or_insert_with(|| (line.text.as_str(), false, Vec::new()));
-            entry.1 |= line.matched;
-            if line.matched {
-                entry.2.extend(occurrence_line_ranges(found, line.line));
-            }
-        }
-    }
-    merged
-}
-
 fn render_outline_trail<F>(output: &mut SearchTextRenderer<F>, trail: &OutlineTrail)
 where
     F: FnMut(SearchTextRole, &str) -> String,
@@ -476,85 +248,6 @@ const fn search_node_role(node: &OutlineNodeReference) -> SearchTextRole {
         | OutlineNodeReference::DocumentRoot { .. }
         | OutlineNodeReference::DocumentSection { .. } => SearchTextRole::Heading,
     }
-}
-
-/// Render a readable Markdown report whose coordinates target the full page.
-#[must_use]
-pub fn render_search_markdown(search: &QuerySearch) -> String {
-    let label = document_label(search);
-    let mut blocks = vec![format!(
-        "# Search results for {} in {}",
-        code_span(&search.query.pattern),
-        escape_text(&label)
-    )];
-    blocks.push(format!(
-        "{} {} in the full Markdown document.",
-        search.total,
-        if search.total == 1 {
-            "matching line"
-        } else {
-            "matching lines"
-        }
-    ));
-    if search.returned < search.total {
-        if search.returned == 0 {
-            blocks.push(format!(
-                "No matching lines were returned at offset {}.",
-                search.offset
-            ));
-        } else {
-            let range_start = search.offset.saturating_add(1);
-            let range_end = search.offset.saturating_add(search.returned);
-            let continuation = search
-                .next_offset
-                .map_or(String::new(), |offset| format!(" Next offset: `{offset}`."));
-            blocks.push(format!(
-                "Showing matching lines {range_start}–{range_end}.{continuation}"
-            ));
-        }
-    }
-
-    for found in &search.matches {
-        blocks.push(format!(
-            "## {}. {}",
-            found.ordinal,
-            code_span(found.outline.title())
-        ));
-        let mut details = vec![
-            format!("- Outline: {}", code_span(found.outline.path())),
-            format!(
-                "- Trail: {}",
-                found
-                    .outline
-                    .ancestors
-                    .iter()
-                    .map(|ancestor| code_span(&ancestor.title))
-                    .chain(std::iter::once(code_span(found.outline.title())))
-                    .collect::<Vec<_>>()
-                    .join(" → ")
-            ),
-            format!(
-                "- Markdown: {}",
-                group_coordinates(std::slice::from_ref(found))
-            ),
-        ];
-        if let Some(source) = found.node_source {
-            details.push(format!(
-                "- Source: line {}, column {}",
-                source.line, source.column
-            ));
-        }
-        if found.occurrences_truncated {
-            details.push(format!(
-                "- Occurrences: {} total; {} exact coordinates shown",
-                found.occurrence_count,
-                found.occurrences.len()
-            ));
-        }
-        blocks.push(details.join("\n"));
-        blocks.push(format!("> {}", found.preview.replace('\n', "\n> ")));
-    }
-    blocks.join("\n\n").trim_end().to_owned()
 }
 
 fn document_label(search: &QuerySearch) -> String {

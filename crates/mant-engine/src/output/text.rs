@@ -14,7 +14,7 @@ use crate::ResolvedContent;
 
 pub(super) fn render_located_blocks<'a>(
     blocks: &'a [Block],
-    locations: &'a super::explanation::spans::LocatedStyles<'a>,
+    locations: &'a super::styles::LocatedStyles<'a>,
     decorate: &'a dyn Fn(TextPresentation, &str) -> String,
 ) -> String {
     blocks::BlockRenderer {
@@ -488,14 +488,11 @@ fn join_parts(parts: Vec<String>) -> String {
 mod tests {
     use crate::ResolvedContent;
     use mant_ir::{
-        Block, DefinitionItem, Document, DocumentMeta, DocumentSource, EntryKind, Inline,
-        LayoutHint, Section, SourceFormat, TldrDocument, TldrOrigin,
+        Block, DefinitionItem, Document, DocumentMeta, DocumentSource, Inline, LayoutHint, Section,
+        SourceFormat, TldrDocument, TldrOrigin,
     };
-    use mant_protocol::EntryProjection;
 
-    use super::{render_excerpt_text, render_query_man, render_query_text};
-    use crate::render_outline_text;
-    use crate::{build_outline, build_outline_projection, render_outline_markdown, select_excerpt};
+    use super::{render_query_man, render_query_text};
 
     #[test]
     fn explicit_spacing_overrides_the_definition_join_default_even_at_zero() {
@@ -585,70 +582,6 @@ mod tests {
         assert!(output.contains("parent details"));
         assert!(output.contains("Common options"));
         assert!(!output.contains("**"));
-    }
-
-    #[test]
-    fn renders_copyable_outline_trees_and_contextual_excerpts() {
-        let query = query();
-        let outline = build_outline(&query).expect("outline");
-        assert_eq!(
-            render_outline_text(&outline),
-            "demo(1)\n└─ 1 OPTIONS\n     ID: options-1\n  └─ 1.1 Common options\n       ID: common-2\nReferences: occurrences=exact(0), targets=exact(0); coverage=Complete; offset=0, returned=0"
-        );
-
-        let excerpt = select_excerpt(&query, &[mant_protocol::ContentSelector::path("1.1")])
-            .expect("excerpt");
-        let output = render_excerpt_text(&excerpt);
-        assert!(output.contains("Outline 1.1: OPTIONS > Common options"));
-        assert!(output.contains("child details"));
-        assert!(!output.contains("parent details"));
-    }
-
-    #[test]
-    fn renders_an_explicit_zero_for_an_empty_kind_projection() {
-        let outline = build_outline_projection(
-            &query(),
-            EntryProjection::Kinds {
-                kinds: vec![EntryKind::EnvironmentVariable],
-            },
-            None,
-        )
-        .expect("empty kind projection");
-
-        assert_eq!(
-            render_outline_text(&outline),
-            "demo(1)\n0 matching semantic entries for: environment variables\nReferences: occurrences=exact(0), targets=exact(0); coverage=Complete; offset=0, returned=0"
-        );
-        assert!(
-            render_outline_markdown(&outline)
-                .contains("0 matching semantic entries for: environment variables")
-        );
-    }
-
-    #[test]
-    fn renders_tldr_as_zero_in_outlines_and_standalone_excerpts() {
-        let mut query = query();
-        query.tldr = Some(TldrDocument {
-            title: "demo".to_owned(),
-            description: vec!["A small demonstration.".to_owned()],
-            more_information: None,
-            examples: Vec::new(),
-            platform: "common".to_owned(),
-            language: "en".to_owned(),
-            source_path: "/cache/tldr/demo.md".to_owned(),
-            origin: TldrOrigin::TldrPages,
-        });
-
-        let outline = render_outline_text(&build_outline(&query).expect("combined outline"));
-        assert!(outline.contains("├─ 0 TLDR QUICK REFERENCE\n│    ID: tldr"));
-        assert!(outline.contains("└─ 1 OPTIONS\n     ID: options-1"));
-
-        let excerpt = select_excerpt(&query, &[mant_protocol::ContentSelector::id("tldr")])
-            .expect("tldr excerpt");
-        assert_eq!(
-            render_excerpt_text(&excerpt),
-            "demo\n\nOutline 0: TLDR QUICK REFERENCE\n\nTLDR\n\nA small demonstration.\n\ntldr-pages · CC BY 4.0 · common · en"
-        );
     }
 
     #[test]

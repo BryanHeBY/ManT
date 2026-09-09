@@ -16,7 +16,7 @@ struct Span {
 
 /// Keys identify borrowed returned roots, never spellings shared by owners.
 #[derive(Default)]
-pub(crate) struct LocatedStyles<'a> {
+pub(super) struct LocatedStyles<'a> {
     roots: BTreeMap<(u8, usize), Vec<Span>>,
     names: mant_protocol::EntryStyleMap<'a>,
     lifetime: PhantomData<&'a ExplanationEvidence>,
@@ -243,7 +243,7 @@ impl<'a> LocatedStyles<'a> {
         self.roots.entry(key(root)).or_default().push(span);
     }
 
-    pub(crate) fn inline(
+    pub(super) fn inline(
         &self,
         nodes: &[Inline],
         role: TextRole,
@@ -271,7 +271,7 @@ impl<'a> LocatedStyles<'a> {
         output
     }
 
-    pub(crate) fn text(
+    pub(super) fn text(
         &self,
         value: &str,
         decorate: &dyn Fn(TextPresentation, &str) -> String,

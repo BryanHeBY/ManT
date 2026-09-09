@@ -11,7 +11,7 @@ mod lists;
 pub(super) struct BlockRenderer<'a> {
     pub(super) names: Option<EntryStyleMap<'a>>,
     pub(super) decorate: &'a dyn Fn(TextPresentation, &str) -> String,
-    pub(super) locations: Option<&'a super::super::explanation::spans::LocatedStyles<'a>>,
+    pub(super) locations: Option<&'a super::super::styles::LocatedStyles<'a>>,
 }
 
 impl BlockRenderer<'_> {

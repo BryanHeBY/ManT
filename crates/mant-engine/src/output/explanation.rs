@@ -2,7 +2,7 @@
 mod definition;
 mod metadata;
 mod report;
-pub(super) mod spans;
+use super::styles as spans;
 use mant_protocol::{QueryExplanation, ScopeExplanation, TextPresentation, TextRole};
 use report::Report;
 
