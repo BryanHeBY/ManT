@@ -41,9 +41,25 @@ platform's resource measurement tool. Do not compare debug and release timings
 or attribute baseline IR allocation to the new reference index.
 
 The probe also times application construction with the current document
-already present in its caller-owned scope. This is separate from the derived
-document view and resize timings: it exposes snapshot ownership/copy costs
-without charging source parsing or caller scope preparation to the reader.
+already present in its caller-owned scope. Append repeatable `--scope=PATH`
+arguments to include additional documents; ordinary token arguments still
+locate text in the primary document, and `--` makes all remaining arguments
+literal tokens. For example:
+
+```sh
+cargo run --locked --release -p mant-ui --example layout_profile -- /path/to/gcc.1.gz --scope=/path/to/git.1.gz --scope=docs/manuals/mant.md '--help'
+```
+
+The current document is moved into the scope without a preparation-time clone;
+additional loading is reported separately as `scope_prepare_ms`, before
+`app_current_in_scope_ms` starts. Both report the complete scope document count.
+Application timing includes its internally constructed view and ownership/copy
+costs, but excludes source parsing, caller scope preparation and App teardown.
+It is not a pure clone measurement and should not be subtracted from the
+independent view timing to infer exact copy costs. Process peak RSS covers the
+whole probe, including earlier queries and all preloaded scope documents, not
+only application construction. Record every scope input hash alongside the
+primary input when comparing runs.
 
 It reports source-token columns when a token fits on one row; a wrapped/absent
 token is not a failed search. Reuse one `DocumentView` for width changes, record
