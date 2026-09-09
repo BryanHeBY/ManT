@@ -17,7 +17,9 @@ fn keeps_the_nested_npm_manual_and_windows_build_requirements() {
     assert_eq!(sections.len(), 14);
     for title in ["Synopsis", "Dependencies", "Directories", "Developer Usage"] {
         assert!(
-            sections.iter().any(|section| section.title == title),
+            sections
+                .iter()
+                .any(|section| section.heading.plain_text() == title),
             "missing reviewed npm section {title}",
         );
     }

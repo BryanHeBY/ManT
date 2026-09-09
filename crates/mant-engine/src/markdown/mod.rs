@@ -31,8 +31,8 @@ use std::{
 };
 
 use mant_ir::{
-    Block, Diagnostic, DiagnosticLevel, Document, DocumentMeta, DocumentSource, Inline, ParserInfo,
-    Section, SourceFormat, TldrDocument, TldrOrigin, validate_document,
+    Block, Diagnostic, DiagnosticLevel, Document, DocumentMeta, DocumentSource, Heading, Inline,
+    ParserInfo, Section, SourceFormat, TldrDocument, TldrOrigin, validate_document,
     visit::{self, VisitMut},
 };
 #[cfg(test)]
@@ -87,7 +87,7 @@ impl Error for MarkdownParseError {}
 /// Invisible HTML comments delimit the preface so `CommonMark` renderers can
 /// present the enclosed tldr-pages Markdown without leaking extension syntax.
 /// It must be the first non-empty construct. The remaining source is parsed
-/// independently, so its first H1 remains document metadata rather than part
+/// independently, so its first H1 remains document-heading content rather than part
 /// of the preface.
 ///
 /// # Errors
@@ -211,29 +211,20 @@ fn parse_document_with_entries(
         mut root_blocks,
         flat_sections,
         mut ids,
-        title,
         document_title_id,
     } = lower_document_structure(events, &source);
     let mut sections = nest_sections(flat_sections);
-    let extracted_title_aliases = extract_document_title(
+    let extracted_title = extract_document_title(
         &mut root_blocks,
         &mut sections,
         document_title_id.as_deref(),
     );
     let mut document_fragment_aliases = Vec::new();
-    if let Some(fragment_aliases) = extracted_title_aliases {
-        let replacement = if root_blocks.is_empty() {
-            sections.first().map(|section| section.id.as_str())
-        } else {
-            Some(DOCUMENT_ROOT_ID)
-        };
-        ids.remap_target(document_title_id.as_deref(), replacement);
-        if replacement == Some(DOCUMENT_ROOT_ID) {
-            document_fragment_aliases = fragment_aliases;
-        } else if let Some(section) = sections.first_mut() {
-            section.fragment_aliases.extend(fragment_aliases);
-        }
-    }
+    let heading = extracted_title.map(|(heading, fragment_aliases)| {
+        ids.remap_target(document_title_id.as_deref(), Some(DOCUMENT_ROOT_ID));
+        document_fragment_aliases = fragment_aliases;
+        heading
+    });
     normalize_markdown_layout(
         &MarkdownSource::new(source_text),
         &mut root_blocks,
@@ -260,10 +251,8 @@ fn parse_document_with_entries(
             format: SourceFormat::Markdown,
             path: source_path,
         },
-        meta: DocumentMeta {
-            title,
-            ..DocumentMeta::default()
-        },
+        meta: DocumentMeta::default(),
+        heading,
         fragment_aliases: document_fragment_aliases,
         diagnostics,
         blocks: root_blocks,
@@ -288,7 +277,6 @@ struct ParsedDocumentStructure {
     root_blocks: Vec<Block>,
     flat_sections: Vec<FlatSection>,
     ids: SectionIds,
-    title: Option<String>,
     document_title_id: Option<String>,
 }
 
@@ -302,7 +290,6 @@ fn lower_document_structure(
     let mut root_blocks = Vec::new();
     let mut flat_sections = Vec::new();
     let mut ids = SectionIds::default();
-    let mut title = None;
     let mut document_title_id = None;
     let mut saw_heading = false;
 
@@ -333,16 +320,12 @@ fn lower_document_structure(
                 diagnostics.push(Diagnostic {
                     level: DiagnosticLevel::Warning,
                     code: Some("markdown.empty-heading".to_owned()),
-                    message: "ignored an empty Markdown heading".to_owned(),
+                    message: "preserved a Markdown heading without visible text".to_owned(),
                     source: Some(source.span(&(range.start..end))),
                 });
-                continue;
             }
             let is_document_title = !saw_heading && level == HeadingLevel::H1;
             saw_heading = true;
-            if is_document_title {
-                title = Some(heading.clone());
-            }
             let id = ids.allocate(&heading, explicit_id.as_deref());
             let fragment_aliases = explicit_id
                 .as_deref()
@@ -358,7 +341,10 @@ fn lower_document_structure(
                 section: Section {
                     id: id.into(),
                     fragment_aliases,
-                    title: heading.clone(),
+                    heading: Heading {
+                        content: children,
+                        source: Some(source.span(&(range.start..end))),
+                    },
                     spacing_before_lines: u16::from(!flat_sections.is_empty()),
                     blocks: Vec::new(),
                     children: Vec::new(),
@@ -383,7 +369,6 @@ fn lower_document_structure(
         root_blocks,
         flat_sections,
         ids,
-        title,
         document_title_id,
     }
 }
@@ -470,12 +455,12 @@ fn heading_level(level: HeadingLevel) -> u8 {
     }
 }
 
-/// A leading H1 names the document; it is metadata rather than manual content.
+/// Move a leading H1 into the real document-heading root without duplicating it.
 fn extract_document_title(
     root_blocks: &mut Vec<Block>,
     sections: &mut Vec<Section>,
     document_title_id: Option<&str>,
-) -> Option<Vec<mant_ir::FragmentAlias>> {
+) -> Option<(Heading, Vec<mant_ir::FragmentAlias>)> {
     let document_title_id = document_title_id?;
     if sections.first().map(|section| section.id.as_str()) != Some(document_title_id) {
         return None;
@@ -483,7 +468,14 @@ fn extract_document_title(
     let title = sections.remove(0);
     root_blocks.extend(title.blocks);
     sections.splice(0..0, title.children);
-    Some(title.fragment_aliases)
+    let mut aliases = title.fragment_aliases;
+    if !aliases
+        .iter()
+        .any(|alias| alias.as_str() == title.id.as_str())
+    {
+        aliases.push(title.id.to_string().into());
+    }
+    Some((title.heading, aliases))
 }
 
 struct FlatSection {

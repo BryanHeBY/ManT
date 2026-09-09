@@ -534,7 +534,7 @@ fn invoke_with_terminal_output(
 #[test]
 fn terminal_markdown_masks_direct_input_controls_but_redirected_markdown_is_exact() {
     let mut document = semantic_markdown();
-    document.meta.title = Some("ris\u{1b}c".to_owned());
+    document.heading = Some("ris\u{1b}c".into());
     let host = FakeHost {
         document: Some(document),
         ..FakeHost::new()
@@ -556,6 +556,7 @@ fn terminal_markdown_masks_direct_input_controls_but_redirected_markdown_is_exac
 
 fn manual() -> Document {
     Document {
+        heading: None,
         parser: None,
         source: DocumentSource {
             format: SourceFormat::Man,
@@ -668,7 +669,7 @@ fn section(id: &str, title: &str, text: &str, children: Vec<Section>) -> Section
     Section {
         id: id.to_owned().into(),
         fragment_aliases: Vec::new(),
-        title: title.to_owned(),
+        heading: title.into(),
         spacing_before_lines: 0,
         blocks: vec![Block::Paragraph {
             children: vec![Inline::Text {
@@ -776,7 +777,10 @@ fn direct_queries_render_outlines_and_selected_nodes_in_requested_formats() {
     let value: serde_json::Value = serde_json::from_str(&output).expect("excerpt JSON");
     assert_eq!(value["schema"], "mant.excerpt/v0.11");
     assert_eq!(value["selections"][0]["outline"]["node"]["path"], "2.1");
-    assert_eq!(value["selections"][0]["section"]["title"], "Common options");
+    assert_eq!(
+        value["selections"][0]["section"]["heading"]["content"][0]["value"],
+        "Common options"
+    );
     assert!(diagnostics.is_empty());
 
     let (status, output, diagnostics) = invoke(
@@ -1011,7 +1015,7 @@ fn ambiguous_semantic_entries_remain_addressable_by_returned_id() {
     assert_eq!(status, 0);
     assert!(outline_diagnostics.is_empty());
     let outline: serde_json::Value = serde_json::from_str(&outline).expect("outline JSON");
-    let qualified_id = outline["nodes"][4]["children"][0]["id"]
+    let qualified_id = outline["nodes"][5]["children"][0]["id"]
         .as_str()
         .expect("returned semantic ID");
     assert!(qualified_id.starts_with("option-f-"));

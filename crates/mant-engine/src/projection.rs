@@ -42,7 +42,7 @@ mod tests {
         Section {
             id: id.to_owned().into(),
             fragment_aliases: Vec::new(),
-            title: title.to_owned(),
+            heading: title.into(),
             spacing_before_lines: 0,
             blocks: Vec::new(),
             children,
@@ -55,6 +55,7 @@ mod tests {
             address: None,
             label: "demo".to_owned(),
             document: Some(Document {
+                heading: None,
                 parser: None,
                 source: DocumentSource {
                     format: SourceFormat::Man,
@@ -510,7 +511,7 @@ mod tests {
         query.document.as_mut().expect("document").sections[0] = Section {
             id: "force".into(),
             fragment_aliases: Vec::new(),
-            title: "Force".to_owned(),
+            heading: "Force".into(),
             spacing_before_lines: 0,
             blocks: Vec::new(),
             children: Vec::new(),

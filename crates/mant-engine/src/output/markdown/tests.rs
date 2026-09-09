@@ -137,6 +137,7 @@ fn underscore_escaping_is_independent_of_text_segmentation_but_respects_styles()
 
 fn manual(sections: Vec<Section>) -> Document {
     Document {
+        heading: None,
         parser: None,
         source: DocumentSource {
             format: SourceFormat::Man,
@@ -154,7 +155,7 @@ fn section(title: &str, blocks: Vec<Block>, children: Vec<Section>) -> Section {
     Section {
         id: title.to_lowercase().into(),
         fragment_aliases: Vec::new(),
-        title: title.to_owned(),
+        heading: title.into(),
         spacing_before_lines: 0,
         blocks,
         children,
@@ -1187,7 +1188,7 @@ fn escapes_literal_roff_quote_backticks_without_hiding_styles() {
 fn uses_markdown_document_title_without_changing_its_logical_label() {
     let mut document = manual(Vec::new());
     document.source.format = SourceFormat::Markdown;
-    document.meta.title = Some("Actual Doc Title".to_owned());
+    document.heading = Some("Actual Doc Title".into());
     document.blocks = vec![paragraph(vec![Inline::Text {
         value: "body".to_owned(),
     }])];

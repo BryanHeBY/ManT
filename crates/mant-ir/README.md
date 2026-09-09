@@ -17,6 +17,7 @@ ResolvedContent
 ├── address: DocumentAddress?       registered catalog identity
 ├── document: Document?             normalized full document
 │   ├── meta + diagnostics
+│   ├── heading?                    original displayed title inlines
 │   ├── blocks                      content before the first heading
 │   ├── sections[]                  recursive heading-backed content
 │   │   └── blocks[]                paragraphs, lists, definitions, tables, …
@@ -25,6 +26,13 @@ ResolvedContent
 │           └─> SemanticIndex       rebuildable entry hierarchy
 └── tldr: TldrDocument?             distinct quick-reference channel
 ```
+
+`Heading.content` preserves the authoritative inline title, including links,
+styles, anchors and hard breaks. `Section.heading` is required; its plain label
+is derived with `Heading::plain_text()`. A leading Markdown H1 becomes
+`Document.heading`, not a duplicate paragraph or metadata title. Native TH/Dt
+titles remain bibliographic metadata and do not fabricate displayed headings.
+The ordinary immutable/mutable visitors include heading content in source order.
 
 Names and kinds are independent: a `Term` may have exact bound names, while a
 native template can have a proved parameter/environment kind but no supported

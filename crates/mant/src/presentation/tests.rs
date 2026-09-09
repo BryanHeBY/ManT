@@ -300,8 +300,11 @@ fn uncoloured_terminal_presentations_mask_controls_in_direct_input_labels() {
     ];
 
     for view in views {
-        let query = query_markdown_text(PAGE, Some(source_path.clone()))
-            .expect("Markdown query with hostile label");
+        let query = query_markdown_text(
+            PAGE.trim_start_matches("# demo\n"),
+            Some(source_path.clone()),
+        )
+        .expect("Markdown query with hostile label");
         let result = project_query_view(query, &view).expect("query projection");
         let rendered = render_query_result(
             &result,
@@ -339,8 +342,7 @@ fn terminal_markdown_masks_dynamic_controls_without_rewriting_redirected_data() 
     ] {
         let mut query = query_markdown_text(PAGE, Some("ris\u{1b}c.md".to_owned()))
             .expect("Markdown query with hostile label");
-        query.document.as_mut().expect("parsed document").meta.title =
-            Some("ris\u{1b}c".to_owned());
+        query.document.as_mut().expect("parsed document").heading = Some("ris\u{1b}c".into());
         let result = project_query_view(query, &view).expect("query projection");
         let redirected = render_query_result(
             &result,

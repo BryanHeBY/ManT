@@ -107,6 +107,9 @@ pub struct QueryOutline {
     pub root: Option<NodeSelector>,
     /// Human-readable selected-document label.
     pub label: String,
+    /// Plain display title derived from authoritative heading or native metadata.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub display_title: Option<String>,
     /// Exact logical document address, absent for direct-file input.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub address: Option<DocumentAddress>,
@@ -335,6 +338,9 @@ pub struct QueryExcerpt {
     pub schema: ExcerptSchema,
     /// Human-readable selected-document label.
     pub label: String,
+    /// Plain display title derived from authoritative heading or native metadata.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub display_title: Option<String>,
     /// Logical namespace for references in the selected raw IR content.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub address: Option<DocumentAddress>,
@@ -378,6 +384,9 @@ pub enum ExcerptSelection {
     DocumentRoot {
         /// Complete logical location in the document outline.
         outline: OutlineTrail,
+        /// Original visible document title, not a generated report label.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        heading: Option<mant_ir::Heading>,
         /// Complete leading blocks.
         blocks: Vec<Block>,
     },

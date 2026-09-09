@@ -12,7 +12,13 @@ This preservation rule keeps a document readable without pretending that unsuppo
 
 ## Document Structure
 
-Headings from H1 through H6 form a recursive section tree. The first heading, when it is H1, becomes the document title and is removed from the visible section tree. Content before the first remaining section is stored as document-overview blocks.
+Headings from H1 through H6 form a recursive section tree. The first heading, when it is H1, moves to the document's visible `heading` and is removed from the section tree, without discarding its content or duplicating it in metadata. Content before the first remaining section is stored as document-overview blocks. A heading-only document remains readable.
+
+ATX and Setext headings retain their real inline content, including links, nested emphasis, code, anchors and supported hard breaks. A linked title is not automatically a command or another semantic entry. Plain outline labels and IDs derive from visible words, not from link destinations; changing only a destination does not change the heading's local ID.
+
+Markdown export uses Setext syntax for level-one/two headings containing hard breaks. Deeper ATX headings fold those breaks to spaces while retaining the level, words and links; the IR retains the original breaks.
+
+Heading links retain their typed destinations in Markdown output. When a heading links to a local target, export automatically retains addressable HTML anchors, including the document-root target before its visible H1. This addressable fallback takes priority over optional semantic comments: otherwise dropping a non-heading target could leave the exported heading link dangling. Raw anchor HTML is not part of the semantic reimport subset; use IR JSON when every content and navigation fact must round-trip.
 
 Heading levels determine ancestry. Skipped levels are accepted; depth follows the nearest preceding heading with a lower level. Duplicate titles receive distinct document-local IDs.
 
@@ -58,6 +64,7 @@ Markdown links are classified before entering the IR:
 | --- | --- |
 | `#fragment` | Section in the current document |
 | `mailto:user@example.com` | Email address |
+| `man:printf(3)` or `man:printf` | Native manual, with explicit or unresolved section |
 | `other.md` or `guide/other.markdown#part` | Registered Markdown document |
 | Other ordinary URI | External URI |
 
@@ -84,6 +91,13 @@ Paths containing `.` or `..` components are represented but navigation remains c
 Decoded fragments match exact authored aliases or normalized IDs. Resolution does not strip a second `#`, trim whitespace, change case, or generate a fallback slug: `#%23foo` addresses the alias `#foo`, not `foo`.
 
 Wiki links are not part of the supported link contract.
+
+The explicit `man:` destination preserves typed native references when heading
+content is exported back to Markdown. The name and optional parenthesized
+section use the shared manual-reference validation rules; URI components are
+decoded once. Omitting a section does not select section 1 implicitly. Heading
+export retains these links; ordinary body presentation keeps its existing
+compact manual-reference policy.
 
 ## Semantic Entry Lists
 
@@ -310,7 +324,7 @@ For each annotated list, export proves that either the default attached-value po
 
 The Rust renderer's `MarkdownOptions.preserve_semantics` opt-in emits list declarations, item IDs, explicit alias groups, same-document aliasOf relationships and supported value-domain comments. It supports documents whose annotated owners are ordinary lists containing only successfully declared items with the same role/case within each list. Nested lists are checked independently. Relation comments escape HTML delimiter characters in JSON strings. Reimport rebuilds bindings against the new content; original source spans are not retained.
 
-Documents with native definition owners, inferred or mixed/partly rejected lists, invalid IR facts, or an entry-set reference without a representable document destination fall back to ordinary portable Markdown without semantic comments. The same whole-document fallback applies when valid IR metadata exceeds the authoring limits: 32 alias groups, 32 members per group, 512 characters per explicit ID, or 8192 bytes of escaped JSON per item. Import and export share these checks; they are Markdown representation limits, not general IR limits. Roff shared names never manufacture alias groups. Semantic export takes precedence over raw HTML anchor export when both options are set: entry IDs are carried by metadata, not injected into the head. Heading IDs, arbitrary native layout, unsupported containers and exact source bytes are outside this subset. Use IR JSON for a complete facts/bindings serialization; Markdown is not a lossless semantic round trip.
+Documents with native definition owners, inferred or mixed/partly rejected lists, invalid IR facts, or an entry-set reference without a representable document destination fall back to ordinary portable Markdown without semantic comments. The same whole-document fallback applies when valid IR metadata exceeds the authoring limits: 32 alias groups, 32 members per group, 512 characters per explicit ID, or 8192 bytes of escaped JSON per item. Import and export share these checks; they are Markdown representation limits, not general IR limits. Roff shared names never manufacture alias groups. Except for the heading-local-link fallback described above, semantic export takes precedence over raw HTML anchor export when both options are set: entry IDs are carried by metadata, not injected into the head. Heading IDs, arbitrary native layout, unsupported containers and exact source bytes are outside this subset. Use IR JSON for a complete facts/bindings serialization; Markdown is not a lossless semantic round trip.
 
 ## Preserved Unsupported Syntax
 

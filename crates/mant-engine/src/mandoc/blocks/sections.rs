@@ -117,7 +117,14 @@ fn lower_section(
     Section {
         id: id.into(),
         fragment_aliases,
-        title,
+        heading: mant_ir::Heading {
+            content: heading,
+            source: node
+                .children
+                .iter()
+                .find(|child| child.kind == NodeKind::Head)
+                .and_then(source_span),
+        },
         spacing_before_lines,
         blocks,
         children,

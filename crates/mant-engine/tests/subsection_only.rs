@@ -21,10 +21,10 @@ fn fixture_path() -> PathBuf {
 fn root_level_subsections_lower_into_visible_sections() {
     let document = parse_manual_source(&fixture_path()).expect("lower subsection-only fixture");
 
-    let titles: Vec<&str> = document
+    let titles: Vec<String> = document
         .sections
         .iter()
-        .map(|section| section.title.as_str())
+        .map(|section| section.heading.plain_text())
         .collect();
     assert_eq!(
         titles,

@@ -164,6 +164,7 @@ mod tests {
             }],
         );
         let document = Document {
+            heading: None,
             parser: None,
             source: DocumentSource {
                 format: SourceFormat::Mdoc,
@@ -176,7 +177,7 @@ mod tests {
             sections: vec![Section {
                 id: "synopsis".into(),
                 fragment_aliases: Vec::new(),
-                title: "SYNOPSIS".to_owned(),
+                heading: "SYNOPSIS".into(),
                 spacing_before_lines: 0,
                 blocks: vec![Block::DefinitionList {
                     declaration_groups: Vec::new(),

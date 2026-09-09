@@ -130,7 +130,7 @@ pub(super) fn native_anchor_ids(root_blocks: &[Block], sections: &[Section]) -> 
 fn collect_section_targets(sections: &[Section], targets: &mut SectionTargets) {
     for section in sections {
         targets
-            .entry(section.title.clone())
+            .entry(section.heading.plain_text())
             .and_modify(|target| *target = None)
             .or_insert_with(|| Some(section.id.to_string()));
         collect_section_targets(&section.children, targets);
@@ -143,6 +143,13 @@ fn resolve_section(
     retained_targets: &HashSet<String>,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
+    resolve_inlines(
+        &mut section.heading.content,
+        targets,
+        retained_targets,
+        diagnostics,
+    );
+    promote_manual_reference_inlines(&mut section.heading.content);
     resolve_blocks(&mut section.blocks, targets, retained_targets, diagnostics);
     promote_manual_references(&mut section.blocks);
     for child in &mut section.children {

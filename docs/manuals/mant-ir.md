@@ -29,7 +29,8 @@ Source parsers retain syntax-specific facts only until they can be expressed as 
 | --- | --- |
 | `parser` | Producer name and version, when known |
 | `source` | Source format and original path |
-| `meta` | Normalized title, native manual metadata, names, and alias target |
+| `meta` | Native bibliographic title, manual metadata, names, and alias target |
+| `heading` | Optional original visible document heading with full inline content |
 | `fragmentAliases` | Exact source fragments resolving to the normalized document root |
 | `diagnostics` | Recoverable parser and validation findings |
 | `blocks` | Content before the first heading |
@@ -41,9 +42,9 @@ Source parsers retain syntax-specific facts only until they can be expressed as 
 
 ## Sections
 
-A `Section` contains a normalized document-local `NodeId`, optional exact `fragmentAliases`, a plain title, blocks, child sections, optional source coordinates, and source-requested spacing before the heading. Depth is derived from tree position rather than stored as mutable metadata.
+A `Section` contains a normalized document-local `NodeId`, optional exact `fragmentAliases`, an authoritative `Heading`, blocks, child sections, optional source coordinates, and source-requested spacing before the heading. `Heading.content` uses ordinary Inline nodes, preserving links, styles, anchors and hard breaks; `Heading.source` records actual heading provenance. Plain titles are derived, not independently mutable fields. Depth is derived from tree position rather than stored as mutable metadata.
 
-The virtual ID `document-overview` addresses root blocks before the first section and may carry exact source aliases from a removed Markdown H1 title. IDs are unique only inside one document and may change when the source changes. Consumers should rediscover them through the current index or outline rather than persisting them globally.
+The virtual ID `document-overview` addresses the original document heading and root blocks before the first section, including a heading-only document, and may carry exact source aliases from the extracted Markdown H1. Its content moves to `Document.heading`; it is not discarded or duplicated in metadata. Native bibliographic titles remain metadata and do not manufacture a document heading. IDs are unique only inside one document and may change when the source changes. Consumers should rediscover them through the current index or outline rather than persisting them globally.
 
 ## Blocks
 

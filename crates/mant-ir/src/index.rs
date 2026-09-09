@@ -69,7 +69,9 @@ impl DocumentIndex {
     pub fn build(document: &Document) -> Self {
         let mut builder = IndexBuilder::default();
         builder.visit_document(document);
-        if (!document.blocks.is_empty() || !document.fragment_aliases.is_empty())
+        if (document.heading.is_some()
+            || !document.blocks.is_empty()
+            || !document.fragment_aliases.is_empty())
             && !builder.index.nodes.contains_key(DOCUMENT_ROOT_ID)
         {
             builder.register(&NodeId::from(DOCUMENT_ROOT_ID), IndexedRole::Anchor);
@@ -220,6 +222,7 @@ mod tests {
     fn indexes_shared_entry_anchors_without_calling_them_duplicates() {
         let id = NodeId::from("help");
         let document = Document {
+            heading: None,
             parser: None,
             source: DocumentSource {
                 format: SourceFormat::Markdown,
@@ -274,7 +277,7 @@ mod tests {
         let mut section = Section {
             id: "mixed-target".into(),
             fragment_aliases: vec![FragmentAlias::from("Mixed.Target")],
-            title: "Mixed target".to_owned(),
+            heading: "Mixed target".into(),
             spacing_before_lines: 0,
             blocks: Vec::new(),
             children: Vec::new(),
@@ -289,6 +292,7 @@ mod tests {
             source: None,
         });
         let document = Document {
+            heading: None,
             parser: None,
             source: DocumentSource {
                 format: SourceFormat::Markdown,

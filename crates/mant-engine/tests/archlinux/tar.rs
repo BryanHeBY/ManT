@@ -15,7 +15,7 @@ fn keeps_definition_lists_subsections_and_inline_styles() {
         synopsis
             .children
             .iter()
-            .map(|child| child.title.as_str())
+            .map(|child| child.heading.plain_text())
             .collect::<Vec<_>>(),
         ["Traditional usage", "UNIX-style usage", "GNU-style usage"]
     );

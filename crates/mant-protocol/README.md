@@ -127,6 +127,11 @@ Adding or changing a Rust field does not by itself authorize a wire change.
 The native discriminator must advance whenever its serialized contract
 changes outside a patch-compatible addition.
 
+The unreleased v0.11 document envelope retains authoritative heading inlines:
+`Document.heading` is optional, `Section.heading` is required, and a plain
+section `title` is rejected. Outline/excerpt `displayTitle` is only a derived
+report label. Root excerpts include the real heading even without body blocks.
+
 Scoped search has one pagination coordinate system. `ScopeSearch` owns the
 global total, offset, truncation flag, and continuation offset; each
 `ScopedSearchDocument` carries only its logical address, depth, canonical

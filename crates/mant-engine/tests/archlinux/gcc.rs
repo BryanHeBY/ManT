@@ -105,16 +105,16 @@ fn keeps_large_hierarchy_fonts_and_pod_displays_without_control_text() {
 
     let options = common::section(document, "OPTIONS");
     assert_eq!(options.children.len(), 20);
-    assert_eq!(options.children[0].title, "Option Summary");
+    assert_eq!(options.children[0].heading.plain_text(), "Option Summary");
     assert_eq!(
-        options.children[1].title,
+        options.children[1].heading.plain_text(),
         "Options Controlling the Kind of Output"
     );
     assert!(
         options
             .children
             .iter()
-            .any(|child| child.title == "Options to Request or Suppress Warnings")
+            .any(|child| child.heading.plain_text() == "Options to Request or Suppress Warnings")
     );
 
     common::assert_gcc_synopsis_layout(document);

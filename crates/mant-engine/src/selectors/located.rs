@@ -104,7 +104,7 @@ pub(crate) fn collect_sections<'a>(
         child_breadcrumbs.push(LocatedBreadcrumb {
             path: path.clone(),
             id: section.id.clone(),
-            title: section.title.clone(),
+            title: section.heading.plain_text(),
         });
         for located in content_entries(&section.blocks) {
             let entry = located.item;

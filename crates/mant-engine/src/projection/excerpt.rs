@@ -93,12 +93,18 @@ pub fn select_excerpt<S: AsRef<str>>(
                     title: DOCUMENT_ROOT_TITLE.to_owned(),
                 },
             },
+            heading: document.heading.clone(),
             blocks: document.blocks.clone(),
         });
     }
     selections.extend(selected.into_iter().map(LocatedNode::selection));
 
     Ok(QueryExcerpt {
+        display_title: query
+            .document
+            .as_ref()
+            .and_then(mant_ir::Document::display_title)
+            .map(std::borrow::Cow::into_owned),
         schema: ExcerptSchema::V0Dot11,
         label: query.label.clone(),
         address: query.address.clone(),
@@ -138,7 +144,7 @@ fn resolve_excerpt_candidates<'a, S: AsRef<str>>(
             && query
                 .document
                 .as_ref()
-                .is_some_and(|document| !document.blocks.is_empty())
+                .is_some_and(|document| document.heading.is_some() || !document.blocks.is_empty())
         {
             document_root_selected = true;
             continue;
@@ -165,7 +171,7 @@ impl LocatedNode<'_> {
                     node: OutlineNodeReference::DocumentSection {
                         path: path.to_string().into(),
                         id: section.id.clone(),
-                        title: section.title.clone(),
+                        title: section.heading.plain_text(),
                     },
                 },
                 section: (*section).clone(),

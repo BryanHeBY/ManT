@@ -20,6 +20,7 @@ pub(super) struct OwnerIndex {
     entries: Vec<Owner>,
     entry_prefix_max_end: Vec<usize>,
     root: Option<Owner>,
+    heading: Option<Owner>,
     tldr: Option<Owner>,
 }
 
@@ -28,6 +29,7 @@ impl OwnerIndex {
         let mut sections = Vec::new();
         let mut entries = Vec::new();
         let mut root = None;
+        let mut heading = None;
         let mut tldr = None;
 
         for (key, mapped) in artifact.nodes().iter().enumerate() {
@@ -35,6 +37,7 @@ impl OwnerIndex {
             match mapped.node {
                 MarkdownNode::Tldr => tldr = Some(owner),
                 MarkdownNode::DocumentRoot => root = Some(owner),
+                MarkdownNode::DocumentHeading { .. } => heading = Some(owner),
                 MarkdownNode::DocumentSection { .. } => sections.push(owner),
                 MarkdownNode::DocumentEntry { .. } => entries.push(owner),
             }
@@ -55,11 +58,19 @@ impl OwnerIndex {
             entries,
             entry_prefix_max_end,
             root,
+            heading,
             tldr,
         }
     }
 
     pub(super) fn owner(&self, offset: usize) -> Option<&Owner> {
+        if let Some(heading) = self
+            .heading
+            .as_ref()
+            .filter(|owner| owner.start <= offset && offset < owner.end)
+        {
+            return Some(heading);
+        }
         if let Some(entry) = self.entry_owner(offset) {
             return Some(entry);
         }
@@ -113,7 +124,7 @@ fn owner_from_range(key: usize, mapped: &MarkdownNodeRange) -> Owner {
             },
             None,
         ),
-        MarkdownNode::DocumentRoot => (
+        MarkdownNode::DocumentRoot | MarkdownNode::DocumentHeading { .. } => (
             OutlineTrail {
                 ancestors: Vec::new(),
                 node: OutlineNodeReference::DocumentRoot {
@@ -122,7 +133,10 @@ fn owner_from_range(key: usize, mapped: &MarkdownNodeRange) -> Owner {
                     title: "OVERVIEW".to_owned(),
                 },
             },
-            None,
+            match &mapped.node {
+                MarkdownNode::DocumentHeading { source } => *source,
+                _ => None,
+            },
         ),
         MarkdownNode::DocumentSection { section, source } => (
             OutlineTrail {

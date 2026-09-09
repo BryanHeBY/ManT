@@ -470,6 +470,7 @@ mod tests {
 
     fn document(blocks: Vec<Block>) -> Document {
         Document {
+            heading: None,
             parser: None,
             source: DocumentSource {
                 format: SourceFormat::Markdown,

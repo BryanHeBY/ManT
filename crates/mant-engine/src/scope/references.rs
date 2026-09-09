@@ -90,6 +90,15 @@ pub(super) fn document_references(bundle: &ResolvedContent) -> Vec<DocumentRefer
         }
     }
     impl<'ir> Visit<'ir> for Collector {
+        fn visit_heading(&mut self, heading: &'ir mant_ir::Heading) {
+            let previous = self.source_offset;
+            self.source_offset = heading
+                .source
+                .and_then(|source| source.byte_range)
+                .map(|range| range.start.get());
+            mant_ir::visit::walk_heading(self, heading);
+            self.source_offset = previous;
+        }
         fn visit_block(&mut self, block: &'ir Block) {
             let previous = self.source_offset;
             self.source_offset = crate::block::block_source(block)
@@ -155,6 +164,25 @@ const fn reference_edge_kind(reference: &SemanticDocumentReference) -> DocumentE
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn heading_references_keep_source_order_without_metadata_or_body_duplicates() {
+        let query = crate::query_markdown_text("# [Catalog](index.md)\n\n[before](before.md)\n\n## [Topic](topic.md)\n\n[after](after.md)\n", None).unwrap();
+        let references = document_references(&query);
+        let names = references
+            .iter()
+            .map(|reference| match &reference.target {
+                SemanticDocumentReference::Document { name, .. } => name.as_str(),
+                SemanticDocumentReference::Manual { .. } => panic!("Markdown reference"),
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(names, ["index", "before", "topic", "after"]);
+        assert!(
+            references
+                .windows(2)
+                .all(|pair| pair[0].source_offset < pair[1].source_offset)
+        );
+    }
 
     #[test]
     fn ordinary_item_domains_follow_earlier_head_and_body_links() {

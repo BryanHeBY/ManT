@@ -138,13 +138,14 @@ fn shipped_manual_parses_without_lossy_fallbacks() {
     let document = query.document.as_ref().expect("manual body");
     let tldr = query.tldr.as_ref().expect("embedded tldr");
 
-    assert_eq!(document.meta.title.as_deref(), Some("mant"));
+    assert_eq!(document.display_title().as_deref(), Some("mant"));
     assert!(
         !document.sections.is_empty(),
         "{name} has a navigable outline"
     );
     assert_eq!(
-        document.sections[0].title, "Name",
+        document.sections[0].heading.plain_text(),
+        "Name",
         "{name} begins its manual body with a conventional Name section"
     );
     assert!(
@@ -190,7 +191,7 @@ fn shipped_manual_parses_without_lossy_fallbacks() {
         build_outline_with_detail(&query, OutlineDetail::Sections).expect("self manual outline");
     assert_eq!(outline.nodes[0].path(), "0");
     assert!(matches!(
-        &outline.nodes[1],
+        outline.nodes.iter().find(|node| matches!(node, OutlineNode::DocumentSection { path, .. } if path == "1")).expect("Name section"),
         OutlineNode::DocumentSection { path, title, .. }
             if path == "1" && title == "Name"
     ));
@@ -347,7 +348,7 @@ fn protocol_reference_is_structured_and_its_json_examples_are_valid() {
     .expect("protocol reference query");
     let document = query.document.as_ref().expect("protocol document");
 
-    assert_eq!(document.meta.title.as_deref(), Some("mant-protocol"));
+    assert_eq!(document.display_title().as_deref(), Some("mant-protocol"));
     assert!(
         document.diagnostics.is_empty(),
         "the protocol reference must remain inside ManT's supported Markdown subset: {:?}",
@@ -357,7 +358,7 @@ fn protocol_reference_is_structured_and_its_json_examples_are_valid() {
         document
             .sections
             .iter()
-            .any(|section| section.title == "Document Response and IR Projection")
+            .any(|section| section.heading.plain_text() == "Document Response and IR Projection")
     );
 
     let examples = json_fenced_examples(PROTOCOL_REFERENCE);
@@ -383,8 +384,8 @@ fn bundled_reference_manuals_parse_losslessly_and_cross_link() {
         let query = query_markdown_text(source, Some(format!("docs/manuals/{name}")))
             .expect("reference manual query");
         let document = query.document.as_ref().expect("reference manual body");
-        assert_eq!(document.meta.title.as_deref(), Some(title), "{name}");
-        assert_eq!(document.sections[0].title, "Name", "{name}");
+        assert_eq!(document.display_title().as_deref(), Some(title), "{name}");
+        assert_eq!(document.sections[0].heading.plain_text(), "Name", "{name}");
         assert!(
             document.diagnostics.is_empty(),
             "{name} must stay inside the supported Markdown subset: {:?}",
@@ -394,7 +395,7 @@ fn bundled_reference_manuals_parse_losslessly_and_cross_link() {
             document
                 .sections
                 .iter()
-                .any(|section| section.title == "See Also"),
+                .any(|section| section.heading.plain_text() == "See Also"),
             "{name} should end with conventional cross references"
         );
     }

@@ -23,7 +23,7 @@ fn keeps_nested_sections_examples_and_inline_grouping() {
         environment
             .children
             .iter()
-            .any(|child| child.title == "Git Diffs")
+            .any(|child| child.heading.plain_text() == "Git Diffs")
     );
     assert!(!common::section(document, "GIT COMMANDS").blocks.is_empty());
 
@@ -56,7 +56,7 @@ fn keeps_nested_sections_examples_and_inline_grouping() {
     let git_diffs = environment
         .children
         .iter()
-        .find(|child| child.title == "Git Diffs")
+        .find(|child| child.heading.plain_text() == "Git Diffs")
         .expect("Git Diffs subsection");
     common::assert_preformatted(git_diffs, "path old-file", 8);
 

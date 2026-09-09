@@ -91,7 +91,7 @@ fn shared_query_fixture_round_trips_without_shape_changes() {
     assert_eq!(query.label, "ls");
     let manual = query.document.as_ref().expect("manual document");
     assert_eq!(manual.source.format, SourceFormat::Man);
-    assert_eq!(manual.sections[0].title, "NAME");
+    assert_eq!(manual.sections[0].heading.plain_text(), "NAME");
     assert_eq!(manual.sections[1].id, "options-1");
     assert!(matches!(
         &manual.sections[0].blocks[0],

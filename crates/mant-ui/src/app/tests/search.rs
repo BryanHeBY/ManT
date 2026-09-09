@@ -96,6 +96,7 @@ fn confirmed_search_moves_across_a_pre_resolved_document_scope() {
                 title: Some(name.to_owned()),
                 ..DocumentMeta::default()
             },
+            heading: None,
             fragment_aliases: Vec::new(),
             diagnostics: Vec::new(),
             blocks: vec![AstBlock::Paragraph {

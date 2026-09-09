@@ -280,7 +280,7 @@ fn collect_section_entries(
     collect_entries(
         index.section(section.id.as_str()),
         Some(section.id.as_str()),
-        Some(&section.title),
+        Some(&section.heading.plain_text()),
         section.source.map_or(0, |source| source.line),
         0,
         output,
@@ -369,7 +369,7 @@ fn collect_section_definition_candidates(
     collect_definition_candidates(
         &section.blocks,
         Some(section.id.as_str()),
-        Some(&section.title),
+        Some(&section.heading.plain_text()),
         line,
         path,
         output,

@@ -17,13 +17,14 @@ fn bundle() -> ResolvedContent {
                 path: None,
             },
             meta: DocumentMeta::default(),
+            heading: None,
             fragment_aliases: Vec::new(),
             diagnostics: Vec::new(),
             blocks: Vec::new(),
             sections: vec![Section {
                 id: "description".to_owned().into(),
                 fragment_aliases: Vec::new(),
-                title: "Description".to_owned(),
+                heading: "Description".into(),
                 spacing_before_lines: 0,
                 blocks: vec![Block::Paragraph {
                     children: vec![Inline::Text {
@@ -111,7 +112,7 @@ fn geometry_bundle() -> ResolvedContent {
     document.sections[0].children.push(Section {
         id: "details".to_owned().into(),
         fragment_aliases: Vec::new(),
-        title: "Details".to_owned(),
+        heading: "Details".into(),
         spacing_before_lines: 0,
         blocks: vec![paragraph("Nothing is lost after resizing.")],
         children: Vec::new(),
@@ -445,6 +446,7 @@ fn case_folding_maps_expanding_unicode_back_to_the_source_character() {
 
 mod control_line_payloads;
 mod entries;
+mod headings;
 mod item_spacing;
 mod layout;
 mod mdoc_execution_spacing;

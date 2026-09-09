@@ -52,7 +52,7 @@ use self::wrap::wrap_line;
 use self::wrap::{WrappedLine, wrap_line_with_links};
 
 const TLDR_ID: &str = "tldr";
-const ROOT_ID: &str = "document-root";
+const ROOT_ID: &str = mant_ir::DOCUMENT_ROOT_ID;
 const TLDR_VERTICAL_PADDING_ROWS: u16 = 1;
 
 /// One addressable node displayed in the outline sidebar.
@@ -174,7 +174,10 @@ impl DocumentView {
         if let Some(document) = &bundle.document {
             let semantic_index = SemanticIndex::build(document);
             builder.entry_styles = Arc::new(mant_protocol::EntryStyleMap::for_document(document));
-            if !document.blocks.is_empty() || !document.fragment_aliases.is_empty() {
+            if document.heading.is_some()
+                || !document.blocks.is_empty()
+                || !document.fragment_aliases.is_empty()
+            {
                 let entries = semantic_index.root();
                 builder.anchor(NavNode {
                     id: ROOT_ID.to_owned(),
@@ -194,6 +197,9 @@ impl DocumentView {
                         .or_insert(builder.lines.len());
                 }
                 builder.entry_group(ROOT_ID, ROOT_ID, entries, 1, document.sections.is_empty());
+                if let Some(heading) = &document.heading {
+                    builder.heading(heading, 0);
+                }
                 builder.blocks(&document.blocks, 0);
             }
             let section_count = document.sections.len();

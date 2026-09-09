@@ -48,7 +48,11 @@ fn parses_the_real_bash_backed_shell_manual() {
     collect_sections(&document.sections, &mut sections);
     assert_eq!(document.sections.len(), 38);
     for title in ["NAME", "SHELL GRAMMAR", "REDIRECTION", "FUNCTIONS"] {
-        assert!(sections.iter().any(|section| section.title == title));
+        assert!(
+            sections
+                .iter()
+                .any(|section| section.heading.plain_text() == title)
+        );
     }
 }
 
@@ -118,7 +122,7 @@ fn preserves_complete_readline_command_names_as_selectable_aliases() {
         .iter()
         .filter(|section| {
             matches!(
-                section.title.as_str(),
+                section.heading.plain_text().as_str(),
                 "Commands for Manipulating the History" | "Miscellaneous"
             )
         })
@@ -213,7 +217,7 @@ fn preserves_complete_readline_variable_names_without_shadowing_builtins() {
     collect_sections(&document.sections, &mut sections);
     let readline = sections
         .iter()
-        .find(|section| section.title == "Readline Variables")
+        .find(|section| section.heading.plain_text() == "Readline Variables")
         .expect("Readline Variables section");
     let variables = index.section(&readline.id);
 

@@ -186,7 +186,7 @@ pub fn section<'a>(document: &'a Document, title: &str) -> &'a Section {
     collect_sections(&document.sections, &mut sections);
     sections
         .into_iter()
-        .find(|section| section.title == title)
+        .find(|section| section.heading.plain_text() == title)
         .unwrap_or_else(|| panic!("missing section {title}"))
 }
 
@@ -347,7 +347,7 @@ pub fn assert_bounded_vertical_spacing(sections: &[Section], fixture: &str) {
         assert!(
             !mant_protocol::geometry::has_bounded_gap(&section.blocks),
             "fixture {fixture} section {} exceeds a resolved gap boundary",
-            section.title
+            section.heading.plain_text()
         );
         assert_bounded_vertical_spacing(&section.children, fixture);
     }
@@ -443,8 +443,12 @@ pub fn as_preformatted(block: &Block) -> Option<&[Inline]> {
 }
 
 pub fn assert_preformatted(section: &Section, needle: &str, expected_indent: i32) {
-    let (children, indent) = find_preformatted(&section.blocks, needle, 0)
-        .unwrap_or_else(|| panic!("missing preformatted text {needle:?} in {}", section.title));
+    let (children, indent) = find_preformatted(&section.blocks, needle, 0).unwrap_or_else(|| {
+        panic!(
+            "missing preformatted text {needle:?} in {}",
+            section.heading.plain_text()
+        )
+    });
     assert!(inline_text(children).contains(needle));
     assert_eq!(indent, expected_indent);
 }
@@ -685,10 +689,10 @@ pub fn assert_section_topology(name: &str, document: &Document, expected_titles:
         "fixture {name} must retain its source location",
     );
 
-    let section_titles: Vec<&str> = document
+    let section_titles: Vec<String> = document
         .sections
         .iter()
-        .map(|section| section.title.as_str())
+        .map(|section| section.heading.plain_text())
         .collect();
     assert_eq!(section_titles, expected_titles, "fixture {name}");
 

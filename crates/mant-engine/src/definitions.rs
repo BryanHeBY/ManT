@@ -239,7 +239,7 @@ mod tests {
         let mut sections = vec![Section {
             id: "options".into(),
             fragment_aliases: Vec::new(),
-            title: "OPTIONS".to_owned(),
+            heading: "OPTIONS".into(),
             spacing_before_lines: 0,
             blocks: vec![Block::DefinitionList {
                 declaration_groups: Vec::new(),
@@ -279,7 +279,7 @@ mod tests {
         let mut sections = vec![Section {
             id: "notes".into(),
             fragment_aliases: Vec::new(),
-            title: "NOTES".to_owned(),
+            heading: "NOTES".into(),
             spacing_before_lines: 0,
             blocks: vec![Block::DefinitionList {
                 declaration_groups: Vec::new(),
@@ -328,7 +328,7 @@ mod tests {
         let mut sections = vec![Section {
             id: "environment-options".into(),
             fragment_aliases: Vec::new(),
-            title: "ENVIRONMENT OPTIONS".to_owned(),
+            heading: "ENVIRONMENT OPTIONS".into(),
             spacing_before_lines: 0,
             blocks: vec![Block::DefinitionList {
                 declaration_groups: Vec::new(),
@@ -368,7 +368,7 @@ mod tests {
             Section {
                 id: "commands".into(),
                 fragment_aliases: Vec::new(),
-                title: "COMMANDS".to_owned(),
+                heading: "COMMANDS".into(),
                 spacing_before_lines: 0,
                 blocks: vec![definition_list(vec![
                     strong_item("Send Env"),
@@ -383,7 +383,7 @@ mod tests {
             Section {
                 id: "variables".into(),
                 fragment_aliases: Vec::new(),
-                title: "VARIABLES".to_owned(),
+                heading: "VARIABLES".into(),
                 spacing_before_lines: 0,
                 blocks: vec![definition_list(vec![
                     item("real-name"),
@@ -465,7 +465,7 @@ mod tests {
                 sections.push(Section {
                     id: "option-v".into(),
                     fragment_aliases: Vec::new(),
-                    title: "Unrelated notes".to_owned(),
+                    heading: "Unrelated notes".into(),
                     spacing_before_lines: 0,
                     blocks: Vec::new(),
                     children: Vec::new(),
@@ -475,7 +475,7 @@ mod tests {
             sections.push(Section {
                 id: "options".into(),
                 fragment_aliases: Vec::new(),
-                title: "OPTIONS".to_owned(),
+                heading: "OPTIONS".into(),
                 spacing_before_lines: 0,
                 blocks: vec![Block::DefinitionList {
                     declaration_groups: Vec::new(),
@@ -527,7 +527,7 @@ mod tests {
         let mut sections = vec![Section {
             id: "options".to_owned().into(),
             fragment_aliases: Vec::new(),
-            title: "OPTIONS".to_owned(),
+            heading: "OPTIONS".into(),
             spacing_before_lines: 0,
             blocks: vec![
                 paragraph("-v, --version", 0, 1),
@@ -581,7 +581,7 @@ mod tests {
         let mut sections = vec![Section {
             id: "environment".into(),
             fragment_aliases: Vec::new(),
-            title: "ENVIRONMENT VARIABLES".to_owned(),
+            heading: "ENVIRONMENT VARIABLES".into(),
             spacing_before_lines: 0,
             blocks: vec![
                 paragraph("HOME", 0),
@@ -627,7 +627,7 @@ mod tests {
         let mut sections = vec![Section {
             id: "commands".into(),
             fragment_aliases: Vec::new(),
-            title: "COMMANDS".to_owned(),
+            heading: "COMMANDS".into(),
             spacing_before_lines: 0,
             blocks: vec![Block::DefinitionList {
                 declaration_groups: Vec::new(),
@@ -656,7 +656,7 @@ mod tests {
         let mut sections = vec![Section {
             id: "glossary".into(),
             fragment_aliases: Vec::new(),
-            title: "GLOSSARY".to_owned(),
+            heading: "GLOSSARY".into(),
             spacing_before_lines: 0,
             blocks: vec![Block::DefinitionList {
                 declaration_groups: Vec::new(),
@@ -704,7 +704,7 @@ mod tests {
         let section = |id: &str, title: &str, items| Section {
             id: id.into(),
             fragment_aliases: Vec::new(),
-            title: title.to_owned(),
+            heading: title.into(),
             spacing_before_lines: 0,
             blocks: vec![definition_list(items)],
             children: Vec::new(),

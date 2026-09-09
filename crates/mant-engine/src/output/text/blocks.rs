@@ -19,7 +19,7 @@ impl BlockRenderer<'_> {
         (self.decorate)(role.into(), text)
     }
 
-    fn inline_text(&self, children: &[Inline], role: TextRole) -> String {
+    pub(super) fn inline_text(&self, children: &[Inline], role: TextRole) -> String {
         if let Some(locations) = self.locations {
             return locations.inline(children, role, self.decorate);
         }
@@ -59,7 +59,7 @@ impl BlockRenderer<'_> {
         output.gap(section.spacing_before_lines);
         output.push_text(format!(
             "{heading_indent}{}",
-            self.paint(TextRole::Heading, &section.title)
+            self.inline_text(&section.heading.content, TextRole::Heading)
         ));
         output.extend(self.block_flow(&section.blocks, coordinate(depth.saturating_mul(2))));
         output.extend(self.sections_flow(&section.children, depth + 1));

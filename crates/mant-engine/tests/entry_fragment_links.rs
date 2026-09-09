@@ -64,7 +64,7 @@ fn missing_ids_and_identity_collisions_remain_diagnostics() {
     doc.sections.push(mant_ir::Section {
         id: "option-help".into(),
         fragment_aliases: vec!["Mixed.Target".into()],
-        title: "Collision".into(),
+        heading: "Collision".into(),
         spacing_before_lines: 0,
         blocks: Vec::new(),
         children: Vec::new(),

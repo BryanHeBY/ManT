@@ -653,6 +653,13 @@
           "$ref": "#/$defs/Diagnostic"
         }
       },
+      "displayTitle": {
+        "description": "Plain display title derived from authoritative heading or native metadata.",
+        "type": [
+          "string",
+          "null"
+        ]
+      },
       "label": {
         "description": "Human-readable selected-document label.",
         "type": "string"
@@ -1336,7 +1343,7 @@
             ]
           },
           "title": {
-            "description": "Canonical document title.",
+            "description": "Native bibliographic title; Markdown visible titles belong to `Document.heading`.",
             "type": [
               "string",
               "null"
@@ -1771,6 +1778,17 @@
                   "$ref": "#/$defs/Block"
                 }
               },
+              "heading": {
+                "description": "Original visible document title, not a generated report label.",
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/Heading"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
               "kind": {
                 "type": "string",
                 "const": "document-root"
@@ -1840,6 +1858,34 @@
       "FragmentAlias": {
         "description": "Exact source-authored fragment spelling for one local navigation target.\n\nA fragment alias is not a [`NodeId`]: formats such as mdoc deliberately\npermit stable external destinations containing uppercase letters or\npunctuation. Producers retain that spelling here while assigning the\ntarget a separate normalized internal identity. Shared validation rejects\nempty, whitespace-containing, and control-containing aliases.",
         "type": "string"
+      },
+      "Heading": {
+        "description": "One visible heading with the same inline vocabulary as document prose.",
+        "type": "object",
+        "properties": {
+          "content": {
+            "description": "Original inline content. Derived plain labels are not a second authority.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/Inline"
+            }
+          },
+          "source": {
+            "description": "Actual heading provenance, when provided by the producer.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/SourceSpan"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "content"
+        ]
       },
       "Inline": {
         "description": "Inline content shared by prose, terms, and styled preformatted runs.",
@@ -2591,6 +2637,10 @@
               "$ref": "#/$defs/FragmentAlias"
             }
           },
+          "heading": {
+            "description": "Authoritative visible heading content, including links and styles.",
+            "$ref": "#/$defs/Heading"
+          },
           "id": {
             "description": "Unique within one document; consumers must not treat it as a global ID.",
             "$ref": "#/$defs/NodeId"
@@ -2612,16 +2662,12 @@
             "format": "uint16",
             "maximum": 65535,
             "minimum": 0
-          },
-          "title": {
-            "description": "Visible heading text.",
-            "type": "string"
           }
         },
         "additionalProperties": false,
         "required": [
           "id",
-          "title",
+          "heading",
           "blocks",
           "children"
         ]
@@ -6286,6 +6332,13 @@
           "$ref": "#/$defs/Diagnostic"
         }
       },
+      "displayTitle": {
+        "description": "Plain display title derived from authoritative heading or native metadata.",
+        "type": [
+          "string",
+          "null"
+        ]
+      },
       "entries": {
         "description": "Entry projection used to build this outline.",
         "$ref": "#/$defs/EntryProjection"
@@ -6510,7 +6563,7 @@
             ]
           },
           "title": {
-            "description": "Canonical document title.",
+            "description": "Native bibliographic title; Markdown visible titles belong to `Document.heading`.",
             "type": [
               "string",
               "null"
@@ -8045,7 +8098,7 @@
             ]
           },
           "title": {
-            "description": "Canonical document title.",
+            "description": "Native bibliographic title; Markdown visible titles belong to `Document.heading`.",
             "type": [
               "string",
               "null"
@@ -8084,6 +8137,17 @@
             "items": {
               "$ref": "#/$defs/FragmentAlias"
             }
+          },
+          "heading": {
+            "description": "Original visible heading; independent from bibliographic metadata.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/Heading"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "meta": {
             "description": "Source-neutral document metadata.",
@@ -8503,6 +8567,34 @@
       "FragmentAlias": {
         "description": "Exact source-authored fragment spelling for one local navigation target.\n\nA fragment alias is not a [`NodeId`]: formats such as mdoc deliberately\npermit stable external destinations containing uppercase letters or\npunctuation. Producers retain that spelling here while assigning the\ntarget a separate normalized internal identity. Shared validation rejects\nempty, whitespace-containing, and control-containing aliases.",
         "type": "string"
+      },
+      "Heading": {
+        "description": "One visible heading with the same inline vocabulary as document prose.",
+        "type": "object",
+        "properties": {
+          "content": {
+            "description": "Original inline content. Derived plain labels are not a second authority.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/Inline"
+            }
+          },
+          "source": {
+            "description": "Actual heading provenance, when provided by the producer.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/SourceSpan"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "content"
+        ]
       },
       "Inline": {
         "description": "Inline content shared by prose, terms, and styled preformatted runs.",
@@ -9076,6 +9168,10 @@
               "$ref": "#/$defs/FragmentAlias"
             }
           },
+          "heading": {
+            "description": "Authoritative visible heading content, including links and styles.",
+            "$ref": "#/$defs/Heading"
+          },
           "id": {
             "description": "Unique within one document; consumers must not treat it as a global ID.",
             "$ref": "#/$defs/NodeId"
@@ -9097,16 +9193,12 @@
             "format": "uint16",
             "maximum": 65535,
             "minimum": 0
-          },
-          "title": {
-            "description": "Visible heading text.",
-            "type": "string"
           }
         },
         "additionalProperties": false,
         "required": [
           "id",
-          "title",
+          "heading",
           "blocks",
           "children"
         ]
@@ -14704,7 +14796,7 @@
             ]
           },
           "title": {
-            "description": "Canonical document title.",
+            "description": "Native bibliographic title; Markdown visible titles belong to `Document.heading`.",
             "type": [
               "string",
               "null"

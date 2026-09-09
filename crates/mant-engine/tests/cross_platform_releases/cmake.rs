@@ -36,7 +36,7 @@ fn keeps_cross_compiler_and_windows_toolchain_sections() {
             cross_compiling
                 .children
                 .iter()
-                .any(|child| child.title == title),
+                .any(|child| child.heading.plain_text() == title),
             "missing reviewed CMake subsection {title}",
         );
     }

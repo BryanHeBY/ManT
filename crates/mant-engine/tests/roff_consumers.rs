@@ -19,7 +19,7 @@ fn lowers_the_pinned_large_mdoc_fixture_without_empty_sections() {
         document
             .sections
             .iter()
-            .any(|section| section.title == "DESCRIPTION")
+            .any(|section| section.heading.plain_text() == "DESCRIPTION")
     );
     assert!(
         document

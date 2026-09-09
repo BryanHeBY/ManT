@@ -250,6 +250,12 @@ impl InvariantCollector {
 }
 
 impl<'ir> Visit<'ir> for InvariantCollector {
+    fn visit_heading(&mut self, heading: &'ir crate::Heading) {
+        if let Some(source) = heading.source {
+            validate_source_span(&mut self.diagnostics, source);
+        }
+        visit::walk_heading(self, heading);
+    }
     fn visit_section(&mut self, section: &'ir Section) {
         if let Some(source) = section.source {
             validate_source_span(&mut self.diagnostics, source);
@@ -383,6 +389,7 @@ mod tests {
 
     fn document(sections: Vec<Section>, blocks: Vec<Block>) -> Document {
         Document {
+            heading: None,
             parser: None,
             source: DocumentSource {
                 format: SourceFormat::Markdown,
@@ -400,7 +407,7 @@ mod tests {
         Section {
             id: id.into(),
             fragment_aliases: Vec::new(),
-            title: id.to_owned(),
+            heading: id.into(),
             spacing_before_lines: 0,
             blocks: Vec::new(),
             children: Vec::new(),
@@ -483,7 +490,7 @@ mod tests {
         let section = Section {
             id: shared.clone(),
             fragment_aliases: Vec::new(),
-            title: "invalid".to_owned(),
+            heading: "invalid".into(),
             spacing_before_lines: 0,
             blocks: vec![Block::DefinitionList {
                 declaration_groups: Vec::new(),

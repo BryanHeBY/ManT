@@ -139,8 +139,8 @@ fn query_markdown_file(
 ///
 /// # Errors
 ///
-/// Returns [`QueryError::EmptyMarkdown`] when parsing yields no visible blocks
-/// or sections.
+/// Returns [`QueryError::EmptyMarkdown`] when parsing yields no document heading,
+/// blocks, sections, or quick reference.
 pub fn query_markdown_text(
     source: &str,
     source_path: Option<String>,
@@ -160,8 +160,9 @@ pub fn query_markdown_text(
         path: error_path,
         detail: error.to_string(),
     })?;
-    let document_is_empty =
-        parsed.document.blocks.is_empty() && parsed.document.sections.is_empty();
+    let document_is_empty = parsed.document.heading.is_none()
+        && parsed.document.blocks.is_empty()
+        && parsed.document.sections.is_empty();
     if document_is_empty && parsed.tldr.is_none() {
         return Err(QueryError::EmptyMarkdown {
             label: label.clone(),

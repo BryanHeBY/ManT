@@ -517,7 +517,7 @@ mod tests {
             document
                 .sections
                 .iter()
-                .any(|section| section.title == "NAME")
+                .any(|section| section.heading.plain_text() == "NAME")
         );
         assert!(
             document

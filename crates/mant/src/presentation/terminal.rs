@@ -126,6 +126,12 @@ fn terminal_content(query: &ResolvedContent) -> ResolvedContent {
     query.label = sanitize_terminal_text(&query.label).into_owned();
     if let Some(document) = query.document.as_mut() {
         sanitize_terminal_meta(&mut document.meta);
+        if let Some(heading) = &mut document.heading {
+            sanitize_terminal_heading(heading);
+        }
+        for section in &mut document.sections {
+            sanitize_terminal_section_headings(section);
+        }
     }
     query
 }
@@ -133,6 +139,9 @@ fn terminal_content(query: &ResolvedContent) -> ResolvedContent {
 pub(super) fn terminal_outline(outline: &QueryOutline) -> QueryOutline {
     let mut outline = outline.clone();
     outline.label = sanitize_terminal_text(&outline.label).into_owned();
+    if let Some(title) = &mut outline.display_title {
+        *title = sanitize_terminal_text(title).into_owned();
+    }
     if let Some(meta) = outline.meta.as_mut() {
         sanitize_terminal_meta(meta);
     }
@@ -143,10 +152,46 @@ pub(super) fn terminal_outline(outline: &QueryOutline) -> QueryOutline {
 pub(super) fn terminal_excerpt(excerpt: &QueryExcerpt) -> QueryExcerpt {
     let mut excerpt = excerpt.clone();
     excerpt.label = sanitize_terminal_text(&excerpt.label).into_owned();
+    if let Some(title) = &mut excerpt.display_title {
+        *title = sanitize_terminal_text(title).into_owned();
+    }
     if let Some(meta) = excerpt.meta.as_mut() {
         sanitize_terminal_meta(meta);
     }
+    for selection in &mut excerpt.selections {
+        match selection {
+            mant_protocol::ExcerptSelection::DocumentRoot {
+                heading: Some(heading),
+                ..
+            } => sanitize_terminal_heading(heading),
+            mant_protocol::ExcerptSelection::DocumentSection { section, .. } => {
+                sanitize_terminal_section_headings(section);
+            }
+            _ => {}
+        }
+    }
     excerpt
+}
+
+fn sanitize_terminal_section_headings(section: &mut mant_ir::Section) {
+    sanitize_terminal_heading(&mut section.heading);
+    for child in &mut section.children {
+        sanitize_terminal_section_headings(child);
+    }
+}
+
+fn sanitize_terminal_heading(heading: &mut mant_ir::Heading) {
+    use mant_ir::visit::VisitMut;
+    struct Text;
+    impl VisitMut for Text {
+        fn visit_inline_mut(&mut self, inline: &mut mant_ir::Inline) {
+            if let mant_ir::Inline::Text { value } | mant_ir::Inline::Code { value } = inline {
+                *value = sanitize_terminal_text(value).into_owned();
+            }
+            mant_ir::visit::walk_inline_mut(self, inline);
+        }
+    }
+    Text.visit_heading_mut(heading);
 }
 
 pub(super) fn terminal_search(search: &QuerySearch) -> QuerySearch {

@@ -74,7 +74,7 @@ pub fn build_outline_projection(
     }
     if let Some(manual) = &query.document {
         let index = SemanticIndex::build(manual);
-        if !manual.blocks.is_empty() {
+        if manual.heading.is_some() || !manual.blocks.is_empty() {
             let root_entries = index.root();
             let children = project_entries(
                 root_entries,
@@ -110,6 +110,11 @@ pub fn build_outline_projection(
         nodes = vec![selected];
     }
     Ok(QueryOutline {
+        display_title: query
+            .document
+            .as_ref()
+            .and_then(mant_ir::Document::display_title)
+            .map(std::borrow::Cow::into_owned),
         schema: OutlineSchema::V0Dot11,
         entries,
         root,
@@ -162,7 +167,7 @@ fn outline_nodes(
             let node = OutlineNode::DocumentSection {
                 path: path.to_string().into(),
                 id: section.id.clone(),
-                title: section.title.clone(),
+                title: section.heading.plain_text(),
                 entry_summary: projected_summary(semantic_entries, entries),
                 children,
             };
@@ -349,7 +354,7 @@ fn resolve_outline_root<'a>(
         && query
             .document
             .as_ref()
-            .is_some_and(|document| !document.blocks.is_empty())
+            .is_some_and(|document| document.heading.is_some() || !document.blocks.is_empty())
     {
         return find_outline_node(nodes, &|node| {
             node.path() == OutlinePath::DocumentRoot.to_string()

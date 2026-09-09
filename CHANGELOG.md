@@ -18,6 +18,11 @@ that crate was not published for that change.
 
 ### Parent-relative document geometry (unreleased v0.11)
 
+- Document and section headings now preserve their original inline links and
+  styles. A Markdown H1 is retained once as visible content, including in a
+  heading-only document. The unreleased IR/schema replaces plain section
+  titles with `Heading`; native bibliographic metadata remains distinct.
+
 - Captured `ce`/`rj` requests now execute embedded line breaks before their
   group-end flush in every fill mode, matching the selected mandoc behavior.
   Ordinary `br` remains unchanged; font and fill state still propagate.

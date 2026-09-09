@@ -10,6 +10,9 @@ deterministic output without owning a terminal or command-line process.
 - Registered Markdown lookup through the read-only `mant-sources` boundary.
 - A conservative, source-positioned Markdown parser with explicit loss
   diagnostics and optional embedded tldr content.
+- Source-neutral inline headings: Markdown ATX/Setext and native section
+  headings retain styles and typed links. An extracted first H1 is real
+  document-heading content, not duplicated metadata or a synthetic paragraph.
 - Bounded native manual loading, explicit leaf-file symlink support,
   root-constrained `.so` alias resolution, and `man(7)`/`mdoc(7)` lowering on
   every supported platform.
@@ -42,6 +45,20 @@ deterministic output without owning a terminal or command-line process.
 - Excerpt selection and literal or regular-expression search with generated
   Markdown coordinates.
 - Markdown, text, man-style text, and JSON renderers over one normalized IR.
+  Heading Markdown preserves manual targets as explicit `man:topic(section)`
+  (or unqualified `man:topic`) links; document, external and email targets
+  remain ordinary Markdown links. A local link in any real heading automatically
+  selects addressable output, including its destinations; incompatible semantic
+  comments are omitted even when requested. Otherwise `preserve_anchors` remains
+  opt-in. Root destinations precede the actual document heading, not its body
+  or quick reference. An excerpt preserves heading links but may exclude their
+  target content; it does not follow them. This does not change
+  the historical portable body policy of showing native manual-reference labels.
+  Raw anchor destinations support HTML navigation; they do not make addressable
+  Markdown a lossless semantic-IR reimport format. Use IR JSON for that contract.
+  Multiline level-one/two headings use Setext syntax. At deeper levels portable
+  ATX output folds explicit breaks to spaces while keeping the heading level,
+  visible words and links; IR JSON retains the exact break structure.
 - Source-aware `render_query_text_with` / `render_excerpt_text_with` callbacks
   over the same plain-text block layout, with composable source markup and
   validated owner-local name roles rather than rendered-line name matching.

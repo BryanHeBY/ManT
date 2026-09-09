@@ -122,10 +122,13 @@ fn heading_attributes_consume_only_an_explicit_id() {
     let titles = document
         .sections
         .iter()
-        .map(|section| (section.title.as_str(), section.id.as_str()))
+        .map(|section| (section.heading.plain_text(), section.id.as_str()))
         .collect::<Vec<_>>();
     assert_eq!(
-        titles,
+        titles
+            .iter()
+            .map(|(title, id)| (title.as_str(), *id))
+            .collect::<Vec<_>>(),
         vec![
             ("GET /users/{id}", "get-users-id"),
             (
@@ -163,7 +166,7 @@ fn unsupported_math_does_not_leak_markdown_bracket_escapes() {
         document
             .sections
             .iter()
-            .map(|section| section.title.as_str())
+            .map(|section| section.heading.plain_text())
             .collect::<Vec<_>>(),
         vec!["$a ([$b])", "a ([$b])", "$a ([b])", "[$b]", "$a [$b]"]
     );
@@ -283,7 +286,7 @@ Document introduction.
     assert_eq!(tldr.examples[0].command, "demo --help");
     assert_eq!(tldr.origin, TldrOrigin::Embedded);
 
-    assert_eq!(parsed.document.meta.title.as_deref(), Some("Demo"));
+    assert_eq!(parsed.document.display_title().as_deref(), Some("Demo"));
     assert!(matches!(
         parsed.document.blocks.as_slice(),
         [Block::Paragraph { children, source, .. }]
@@ -389,11 +392,11 @@ fn a_leading_byte_order_mark_hides_neither_the_directive_nor_the_title() {
     )
     .expect("embedded tldr behind a BOM");
     assert_eq!(parsed.tldr.expect("quick reference").title, "demo");
-    assert_eq!(parsed.document.meta.title.as_deref(), Some("Demo"));
+    assert_eq!(parsed.document.display_title().as_deref(), Some("Demo"));
 
     let plain = parse_markdown("\u{feff}# Demo\n\nBody.\n", None).expect("plain document");
     assert!(plain.tldr.is_none());
-    assert_eq!(plain.document.meta.title.as_deref(), Some("Demo"));
+    assert_eq!(plain.document.display_title().as_deref(), Some("Demo"));
 }
 
 #[test]
@@ -440,7 +443,7 @@ Normal manual content.
         None,
     );
 
-    assert_eq!(document.sections[1].title, "TLDR");
+    assert_eq!(document.sections[1].heading.plain_text(), "TLDR");
     assert_eq!(
         document.sections[1].id, "tldr-section",
         "an ordinary TLDR heading must not shadow the reserved tldr selector"
@@ -510,7 +513,12 @@ fn declared_fixed_attached_values_keep_their_official_identity() {
     };
     let outline = build_outline_with_detail(&query, OutlineDetail::Entries)
         .expect("fixed attached value outline");
-    let OutlineNode::DocumentSection { children, .. } = &outline.nodes[0] else {
+    let OutlineNode::DocumentSection { children, .. } = outline
+        .nodes
+        .iter()
+        .find(|node| matches!(node, OutlineNode::DocumentSection { .. }))
+        .expect("section node")
+    else {
         panic!("options section");
     };
     assert!(matches!(

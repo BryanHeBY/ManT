@@ -59,7 +59,7 @@ impl PreparedDefinitions {
         evidence: &NativeHeadEvidence,
     ) {
         for section in sections {
-            let context = DefinitionContext::for_section(&section.title, parent);
+            let context = DefinitionContext::for_section(&section.heading.plain_text(), parent);
             self.blocks(&mut section.blocks, context, evidence);
             self.sections(&mut section.children, context, evidence);
         }

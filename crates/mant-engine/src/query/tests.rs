@@ -178,6 +178,7 @@ impl QueryHost for StubHost {
 
 fn document(format: SourceFormat, unsupported: bool, readable: bool) -> Document {
     Document {
+        heading: None,
         parser: None,
         source: DocumentSource { format, path: None },
         meta: DocumentMeta::default(),
@@ -196,7 +197,7 @@ fn document(format: SourceFormat, unsupported: bool, readable: bool) -> Document
             .then_some(Section {
                 id: "name-1".to_owned().into(),
                 fragment_aliases: Vec::new(),
-                title: "NAME".to_owned(),
+                heading: "NAME".into(),
                 spacing_before_lines: 0,
                 blocks: Vec::new(),
                 children: Vec::new(),
@@ -440,7 +441,11 @@ fn explicit_source_reads_only_registered_markdown() {
         })
     );
     assert_eq!(
-        result.document.expect("Markdown").meta.title.as_deref(),
+        result
+            .document
+            .expect("Markdown")
+            .display_title()
+            .as_deref(),
         Some("Tool")
     );
     assert_eq!(
@@ -1092,7 +1097,7 @@ fn in_memory_markdown_is_available_without_a_protocol_content_field() {
     assert_eq!(result.label, "stdin");
     assert!(result.tldr.is_none());
     let document = result.document.expect("document");
-    assert_eq!(document.meta.title.as_deref(), Some("Piped"));
+    assert_eq!(document.display_title().as_deref(), Some("Piped"));
     assert_eq!(document.source.path, None);
 }
 
@@ -1127,8 +1132,8 @@ Document overview.
     assert_eq!(tldr.examples[0].command, "demo {{path}}");
 
     let document = result.document.expect("document body");
-    assert_eq!(document.meta.title.as_deref(), Some("Demo"));
-    assert_eq!(document.sections[0].title, "Options");
+    assert_eq!(document.display_title().as_deref(), Some("Demo"));
+    assert_eq!(document.sections[0].heading.plain_text(), "Options");
     assert!(
         document
             .blocks

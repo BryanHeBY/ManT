@@ -150,7 +150,7 @@ fn projection_topology(document: &Document) -> ProjectionTopology {
 
 fn collect_entity_sections(sections: &[Section], output: &mut Vec<String>) {
     for section in sections {
-        extend_entity_spellings(&section.title, output);
+        extend_entity_spellings(&section.heading.plain_text(), output);
         collect_entity_blocks(&section.blocks, output);
         collect_entity_sections(&section.children, output);
     }
@@ -253,7 +253,7 @@ fn collect_sections(sections: &[Section], parent: &[usize], topology: &mut Proje
         // request. CommonMark has no addressable empty heading, and ManT's
         // Markdown parser deliberately ignores one. Treat the wrapper as
         // transparent while still checking every block and child below it.
-        if section.title.trim().is_empty() {
+        if section.heading.plain_text().trim().is_empty() {
             collect_blocks(&section.blocks, parent, &mut Vec::new(), topology);
             collect_sections(&section.children, parent, topology);
             continue;
@@ -264,7 +264,7 @@ fn collect_sections(sections: &[Section], parent: &[usize], topology: &mut Proje
         topology.sections.push(SectionTopology {
             path: path.clone(),
             depth: path.len() + 1,
-            title: section.title.clone(),
+            title: section.heading.plain_text(),
         });
         collect_blocks(&section.blocks, &path, &mut Vec::new(), topology);
         collect_sections(&section.children, &path, topology);
@@ -538,6 +538,7 @@ fn check_section_excerpts(
         let markdown = render_excerpt_markdown(&excerpt);
         let reparsed = parse_markdown(&markdown, None).map_err(|error| error.to_string())?;
         let expected_document = Document {
+            heading: None,
             source: document.source.clone(),
             meta: document.meta.clone(),
             parser: document.parser.clone(),
@@ -564,7 +565,7 @@ fn flatten_sections<'a>(
 ) {
     let mut projected_index = 0;
     for section in sections {
-        if section.title.trim().is_empty() {
+        if section.heading.plain_text().trim().is_empty() {
             flatten_sections(&section.children, parent, output);
             continue;
         }

@@ -236,8 +236,8 @@ fn clicking_the_sidebar_selects_and_reclicking_a_branch_collapses_it() {
 #[test]
 fn full_outline_labels_mode_wraps_every_visible_title() {
     let mut bundle = navigation_bundle();
-    bundle.document.as_mut().expect("manual").sections[0].children[0].title =
-        "A deliberately long nested section title".to_owned();
+    bundle.document.as_mut().expect("manual").sections[0].children[0].heading =
+        "A deliberately long nested section title".into();
     let backend = TestBackend::new(64, 18);
     let mut terminal = Terminal::new(backend).expect("test terminal");
     let mut app = App::new(&bundle);

@@ -961,7 +961,9 @@ mant tar --explain=--exclude
 - `--compact`: Omit JSON indentation.
 - `--preserve-anchors`: Retain addressable HTML anchors in full-document or excerpt Markdown output.
 
-Clean Markdown output omits internal HTML anchors by default. The `man` format
+Clean Markdown output normally omits internal HTML anchors. A heading with a
+document-local link automatically retains addressable anchors so its target is
+not discarded; the original link remains clickable. The `man` format
 applies only to a complete native roff manual and emits plain manual content
 without an external tldr preface; it rejects Markdown documents and partial
 document views. All document queries default to text, including full documents,

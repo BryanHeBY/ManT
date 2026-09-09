@@ -17,7 +17,7 @@ fn visit_manual_discovery_sections(
     output: &mut Vec<mant_ir::Diagnostic>,
 ) {
     for section in sections {
-        let context = DefinitionContext::for_section(&section.title, parent_context);
+        let context = DefinitionContext::for_section(&section.heading.plain_text(), parent_context);
         visit_manual_discovery_blocks(&section.blocks, context, true, output);
         visit_manual_discovery_sections(&section.children, context, output);
     }

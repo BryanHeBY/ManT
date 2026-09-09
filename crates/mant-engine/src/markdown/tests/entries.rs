@@ -160,7 +160,12 @@ fn annotates_explicit_option_lists_without_rewriting_their_heads() {
         OutlineDetail::Entries,
     )
     .expect("Markdown document has an outline");
-    let OutlineNode::DocumentSection { children, .. } = &outline.nodes[0] else {
+    let OutlineNode::DocumentSection { children, .. } = outline
+        .nodes
+        .iter()
+        .find(|node| matches!(node, OutlineNode::DocumentSection { .. }))
+        .expect("section node")
+    else {
         panic!("options should be a top-level document section");
     };
     assert!(matches!(
@@ -445,7 +450,12 @@ fn declared_variables_keep_shell_and_powershell_automatic_names() {
     };
     let outline =
         build_outline_with_detail(&query, OutlineDetail::Entries).expect("variable entry outline");
-    let OutlineNode::DocumentSection { children, .. } = &outline.nodes[0] else {
+    let OutlineNode::DocumentSection { children, .. } = outline
+        .nodes
+        .iter()
+        .find(|node| matches!(node, OutlineNode::DocumentSection { .. }))
+        .expect("section node")
+    else {
         panic!("variables section");
     };
     assert_eq!(children.len(), 9);
@@ -833,7 +843,12 @@ fn declared_entries_preserve_roles_at_arbitrary_list_depth() {
         OutlineDetail::Entries,
     )
     .expect("deep semantic outline");
-    let OutlineNode::DocumentSection { children, .. } = &outline.nodes[0] else {
+    let OutlineNode::DocumentSection { children, .. } = outline
+        .nodes
+        .iter()
+        .find(|node| matches!(node, OutlineNode::DocumentSection { .. }))
+        .expect("section node")
+    else {
         panic!("commands should be a section");
     };
     let OutlineNode::DocumentEntry {

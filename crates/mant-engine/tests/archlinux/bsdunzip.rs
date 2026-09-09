@@ -15,7 +15,7 @@ fn distinct_option_heads_do_not_borrow_the_following_mdoc_description() {
     collect_sections(&document.sections, &mut sections);
     let description = sections
         .into_iter()
-        .find(|section| section.title == "DESCRIPTION")
+        .find(|section| section.heading.plain_text() == "DESCRIPTION")
         .expect("DESCRIPTION section");
     let items = description
         .blocks

@@ -355,6 +355,7 @@ mod tests {
 
     fn document(items: Vec<DefinitionItem>) -> Document {
         Document {
+            heading: None,
             parser: None,
             source: DocumentSource {
                 format: SourceFormat::Markdown,

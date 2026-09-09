@@ -186,7 +186,7 @@ impl DocumentBuilder<'_> {
         self.anchor(NavNode {
             id: section.id.to_string(),
             target_id: section.id.to_string(),
-            title: section.title.clone(),
+            title: section.heading.plain_text(),
             full_title: None,
             depth,
             kind: NavKind::Section,
@@ -206,13 +206,7 @@ impl DocumentBuilder<'_> {
             depth + 1,
             section.children.is_empty(),
         );
-        self.push(LogicalLine::plain(
-            depth * 4,
-            section.title.clone(),
-            Style::default()
-                .fg(theme::HEADING)
-                .add_modifier(Modifier::BOLD),
-        ));
+        self.heading(&section.heading, coordinate(depth.saturating_mul(4)));
         self.blocks(
             &section.blocks,
             coordinate(depth.saturating_mul(4).saturating_add(3)),
@@ -227,6 +221,18 @@ impl DocumentBuilder<'_> {
                 Some(&section.id),
             );
         }
+    }
+
+    /// Headings use the same original inline path as prose: links, anchors,
+    /// hard lines and nested source styles must not pass through a plain label.
+    pub(super) fn heading(&mut self, heading: &mant_ir::Heading, indent: i32) {
+        self.inline_lines(
+            &heading.content,
+            indent,
+            Style::default()
+                .fg(theme::HEADING)
+                .add_modifier(Modifier::BOLD),
+        );
     }
 
     pub(super) fn blocks(&mut self, blocks: &[Block], base_indent: i32) {

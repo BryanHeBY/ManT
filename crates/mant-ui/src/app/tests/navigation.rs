@@ -602,8 +602,8 @@ fn overflowing_navigation_exposes_a_scrollbar() {
 #[test]
 fn overflowing_navigation_reserves_its_final_column_for_the_scrollbar() {
     let mut bundle = navigation_bundle();
-    bundle.document.as_mut().expect("manual").sections[0].title =
-        "A deliberately long option section ending in XYZ".to_owned();
+    bundle.document.as_mut().expect("manual").sections[0].heading =
+        "A deliberately long option section ending in XYZ".into();
     for (height, reserves_gutter) in [(8, true), (14, false)] {
         let backend = TestBackend::new(80, height);
         let mut terminal = Terminal::new(backend).expect("test terminal");
@@ -696,8 +696,8 @@ fn navigation_scrollbar_click_and_drag_do_not_resize_the_sidebar() {
 #[test]
 fn selected_navigation_titles_wrap_with_a_continuous_background() {
     let mut bundle = navigation_bundle();
-    bundle.document.as_mut().expect("manual").sections[0].children[0].title =
-        "A deliberately long nested section title".to_owned();
+    bundle.document.as_mut().expect("manual").sections[0].children[0].heading =
+        "A deliberately long nested section title".into();
     let backend = TestBackend::new(64, 18);
     let mut terminal = Terminal::new(backend).expect("test terminal");
     let mut app = App::new(&bundle);

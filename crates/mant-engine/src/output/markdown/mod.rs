@@ -10,8 +10,8 @@ mod semantic;
 use std::ops::Range;
 
 use mant_ir::{
-    DocumentMeta, DocumentSource, EntryKind, NameCase, NodeId, OutlinePath, Section, SourceFormat,
-    SourceSpan, TldrCommandPart, TldrDocument, TldrOrigin,
+    EntryKind, NameCase, NodeId, OutlinePath, Section, SourceSpan, TldrCommandPart, TldrDocument,
+    TldrOrigin,
 };
 use mant_protocol::{ExcerptSelection, OutlineNode, OutlineReference, QueryExcerpt, QueryOutline};
 
@@ -109,6 +109,9 @@ pub(crate) struct MarkdownSection {
 #[derive(Clone)]
 pub(crate) enum MarkdownNode {
     Tldr,
+    DocumentHeading {
+        source: Option<SourceSpan>,
+    },
     DocumentRoot,
     DocumentSection {
         section: MarkdownSection,
@@ -134,19 +137,46 @@ fn render_markdown_artifact(
     query: &ResolvedContent,
     mut options: MarkdownOptions,
 ) -> MarkdownArtifact {
-    options.preserve_semantics &= query.document.as_ref().is_some_and(semantic::supported);
-    // Raw HTML anchor blocks are not part of the reimportable subset. Entry
-    // identities travel in metadata; preserve-anchors remains a separate mode.
-    options.preserve_anchors &= !options.preserve_semantics;
+    let heading_links = query.document.as_ref().is_some_and(|document| {
+        document
+            .heading
+            .as_ref()
+            .is_some_and(heading_has_local_link)
+            || section_headings_have_local_links(&document.sections)
+    });
+    options.preserve_semantics &=
+        !heading_links && query.document.as_ref().is_some_and(semantic::supported);
+    // Raw HTML anchor blocks are not part of semantic reimport. Real heading
+    // links require their destinations, so content preservation takes priority
+    // over optional entry metadata for that document.
+    options.preserve_anchors =
+        heading_links || (options.preserve_anchors && !options.preserve_semantics);
     let mut output = ArtifactBuilder::default();
-    output.push(&heading(
-        1,
-        document_title(
-            &query.label,
-            query.document.as_ref().map(|document| &document.source),
-            query.document.as_ref().map(|document| &document.meta),
-        ),
-    ));
+    if let Some(heading) = query
+        .document
+        .as_ref()
+        .and_then(|document| document.heading.as_ref())
+    {
+        if options.preserve_anchors {
+            output.push(&inline::html_anchors(
+                DOCUMENT_ROOT_ID,
+                &query
+                    .document
+                    .as_ref()
+                    .expect("heading owner")
+                    .fragment_aliases,
+            ));
+        }
+        let range = output.push(&render_heading(1, heading, options));
+        output.nodes.push(MarkdownNodeRange {
+            range,
+            node: MarkdownNode::DocumentHeading {
+                source: heading.source,
+            },
+        });
+    } else {
+        output.push(&heading(1, &query.label));
+    }
 
     if let Some(tldr) = &query.tldr {
         for (index, block) in render_tldr(tldr).into_iter().enumerate() {
@@ -161,8 +191,10 @@ fn render_markdown_artifact(
     }
 
     if let Some(document) = &query.document {
-        if !document.blocks.is_empty() || !document.fragment_aliases.is_empty() {
-            let start = if options.preserve_anchors {
+        if !document.blocks.is_empty()
+            || (document.heading.is_none() && !document.fragment_aliases.is_empty())
+        {
+            let start = if options.preserve_anchors && document.heading.is_none() {
                 output
                     .push(&inline::html_anchors(
                         DOCUMENT_ROOT_ID,
@@ -311,16 +343,16 @@ fn render_artifact_sections(
             format!(
                 "{}\n\n{}",
                 inline::html_anchors(&section.id, &section.fragment_aliases),
-                heading(depth, &section.title)
+                render_heading(depth, &section.heading, options)
             )
         } else {
-            heading(depth, &section.title)
+            render_heading(depth, &section.heading, options)
         };
         let range = output.push(&rendered_heading);
         let reference = MarkdownSection {
             path: path.clone(),
             id: section.id.clone(),
-            title: section.title.clone(),
+            title: section.heading.plain_text(),
             ancestors: ancestors.to_vec(),
         };
         output.begin_section(range.start, reference.clone(), section.source);
@@ -333,7 +365,7 @@ fn render_artifact_sections(
         child_ancestors.push(OutlineReference {
             path: path.to_string().into(),
             id: section.id.clone(),
-            title: section.title.clone(),
+            title: section.heading.plain_text(),
         });
         render_artifact_sections(
             output,
@@ -350,11 +382,7 @@ fn render_artifact_sections(
 #[must_use]
 pub fn render_outline_markdown(outline: &QueryOutline) -> String {
     let label = document_label(
-        document_title(
-            &outline.label,
-            outline.source.as_ref(),
-            outline.meta.as_ref(),
-        ),
+        outline.display_title.as_deref().unwrap_or(&outline.label),
         outline
             .meta
             .as_ref()
@@ -379,14 +407,23 @@ pub fn render_excerpt_markdown(excerpt: &QueryExcerpt) -> String {
 #[must_use]
 pub fn render_excerpt_markdown_with_options(
     excerpt: &QueryExcerpt,
-    options: MarkdownOptions,
+    mut options: MarkdownOptions,
 ) -> String {
+    let heading_links = excerpt.selections.iter().any(|selection| match selection {
+        ExcerptSelection::DocumentRoot { heading, .. } => {
+            heading.as_ref().is_some_and(heading_has_local_link)
+        }
+        ExcerptSelection::DocumentSection { section, .. } => {
+            section_headings_have_local_links(std::slice::from_ref(section))
+        }
+        ExcerptSelection::DocumentEntry { .. } | ExcerptSelection::Tldr { .. } => false,
+    });
+    if heading_links {
+        options.preserve_anchors = true;
+        options.preserve_semantics = false;
+    }
     let label = document_label(
-        document_title(
-            &excerpt.label,
-            excerpt.source.as_ref(),
-            excerpt.meta.as_ref(),
-        ),
+        excerpt.display_title.as_deref().unwrap_or(&excerpt.label),
         excerpt
             .meta
             .as_ref()
@@ -403,7 +440,15 @@ pub fn render_excerpt_markdown_with_options(
         output.push(selection_context(selection));
         match selection {
             ExcerptSelection::Tldr { document, .. } => output.extend(render_tldr(document)),
-            ExcerptSelection::DocumentRoot { blocks, .. } => {
+            ExcerptSelection::DocumentRoot {
+                heading, blocks, ..
+            } => {
+                if let Some(heading) = heading {
+                    if options.preserve_anchors {
+                        output.push(inline::html_anchor(DOCUMENT_ROOT_ID));
+                    }
+                    output.push(render_heading(2, heading, options));
+                }
                 output.extend(render_blocks(blocks, options));
             }
             ExcerptSelection::DocumentSection { section, .. } => {
@@ -464,10 +509,10 @@ fn render_sections(
             output.push(format!(
                 "{}\n\n{}",
                 inline::html_anchors(&section.id, &section.fragment_aliases),
-                heading(depth, &section.title)
+                render_heading(depth, &section.heading, options)
             ));
         } else {
-            output.push(heading(depth, &section.title));
+            output.push(render_heading(depth, &section.heading, options));
         }
         output.extend(render_blocks(&section.blocks, options));
         render_sections(output, &section.children, depth.saturating_add(1), options);
@@ -539,18 +584,49 @@ fn heading(depth: usize, title: &str) -> String {
     format!("{} {}", "#".repeat(depth.clamp(1, 6)), escape_text(title))
 }
 
-fn document_title<'a>(
-    label: &'a str,
-    source: Option<&DocumentSource>,
-    meta: Option<&'a DocumentMeta>,
-) -> &'a str {
-    if source.is_some_and(|source| source.format == SourceFormat::Markdown) {
-        meta.and_then(|meta| meta.title.as_deref())
-            .filter(|title| !title.trim().is_empty())
-            .unwrap_or(label)
-    } else {
-        label
+/// A visible heading must not silently lose a local target merely because
+/// ordinary portable body export omits optional raw-HTML destinations.
+fn heading_has_local_link(heading: &mant_ir::Heading) -> bool {
+    fn inlines_have_local_link(content: &[mant_ir::Inline]) -> bool {
+        content.iter().any(|inline| match inline {
+            mant_ir::Inline::Link {
+                target: mant_ir::LinkTarget::Section { .. },
+                ..
+            } => true,
+            mant_ir::Inline::Link { children, .. }
+            | mant_ir::Inline::Strong { children }
+            | mant_ir::Inline::Emphasis { children } => inlines_have_local_link(children),
+            mant_ir::Inline::Text { .. }
+            | mant_ir::Inline::Code { .. }
+            | mant_ir::Inline::Anchor { .. }
+            | mant_ir::Inline::LineBreak => false,
+        })
     }
+    inlines_have_local_link(&heading.content)
+}
+
+fn section_headings_have_local_links(sections: &[Section]) -> bool {
+    sections.iter().any(|section| {
+        heading_has_local_link(&section.heading)
+            || section_headings_have_local_links(&section.children)
+    })
+}
+
+fn render_heading(depth: usize, heading: &mant_ir::Heading, options: MarkdownOptions) -> String {
+    let content = inline::render_heading_inline(&heading.content, options);
+    if depth <= 2 && content.contains('\n') {
+        // Setext headings are the portable CommonMark form that retains
+        // explicit inline breaks; an ATX newline would end the heading.
+        return format!("{content}\n{}", if depth == 1 { "===" } else { "---" });
+    }
+    // CommonMark has no multiline ATX heading. Keep its hierarchy and
+    // linked content on one line rather than accidentally emitting body
+    // paragraphs; IR/JSON retain the original explicit line breaks.
+    format!(
+        "{} {}",
+        "#".repeat(depth.clamp(1, 6)),
+        content.replace("<br>\n", " ").replace("  \n", " ")
+    )
 }
 
 fn document_label(title: &str, section: Option<&str>) -> String {

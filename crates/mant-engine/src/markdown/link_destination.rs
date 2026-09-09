@@ -16,6 +16,44 @@ pub(super) fn decode_path(value: &str) -> Option<String> {
         .map(|parts| parts.join("/"))
 }
 
+/// Explicit `man:` references carry a topic and optional conventional section.
+/// Parse delimiters before decoding so encoded parentheses stay in the topic,
+/// and decode each component only once at the URI boundary.
+pub(super) fn manual_reference(value: &str) -> Option<mant_ir::LinkTarget> {
+    let (scheme, value) = value.split_once(':')?;
+    if !scheme.eq_ignore_ascii_case("man") || value.contains(['/', '\\', '?', '#']) {
+        return None;
+    }
+    let (name, section) = if let Some(without_close) = value.strip_suffix(')') {
+        let (name, section) = without_close.rsplit_once('(')?;
+        (name, Some(decode_component(section)?))
+    } else {
+        (value, None)
+    };
+    if name.contains(['(', ')']) {
+        return None;
+    }
+    let name = decode_component(name)?;
+    let reference = mant_ir::SemanticDocumentReference::Manual {
+        name: name.clone(),
+        manual_section: section.clone(),
+    };
+    reference
+        .is_well_formed()
+        .then_some(mant_ir::LinkTarget::Manual {
+            name,
+            manual_section: section,
+        })
+}
+
+pub(crate) fn manual_destination(name: &str, section: Option<&str>) -> String {
+    let name = encode(name, false);
+    section.map_or_else(
+        || format!("man:{name}"),
+        |section| format!("man:{name}({section})"),
+    )
+}
+
 fn decode_component(value: &str) -> Option<String> {
     let mut bytes = Vec::with_capacity(value.len());
     let mut input = value.bytes();

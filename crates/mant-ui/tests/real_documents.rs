@@ -398,6 +398,9 @@ fn self_hosted_markdown_manuals_use_the_same_terminal_pipeline() {
 }
 
 fn collect_document_fragments(document: &Document, output: &mut Vec<ExpectedFragment>) {
+    if let Some(heading) = &document.heading {
+        collect_inlines(&heading.content, output, false);
+    }
     collect_blocks(&document.blocks, output, false);
     for section in &document.sections {
         collect_section_fragments(section, output);
@@ -405,10 +408,7 @@ fn collect_document_fragments(document: &Document, output: &mut Vec<ExpectedFrag
 }
 
 fn collect_section_fragments(section: &Section, output: &mut Vec<ExpectedFragment>) {
-    output.push(ExpectedFragment {
-        value: section.title.clone(),
-        independent: false,
-    });
+    collect_inlines(&section.heading.content, output, false);
     collect_blocks(&section.blocks, output, false);
     for child in &section.children {
         collect_section_fragments(child, output);

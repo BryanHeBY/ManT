@@ -3,7 +3,7 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Deserializer, Serialize};
 
-use crate::{EntryFacts, NodeId};
+use crate::{EntryFacts, Heading, NodeId};
 
 /// A normalized document ready for interactive or textual rendering.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -16,6 +16,9 @@ pub struct Document {
     pub source: DocumentSource,
     /// Metadata normalized across all supported source formats.
     pub meta: DocumentMeta,
+    /// Original visible document heading, distinct from native bibliographic metadata.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub heading: Option<Heading>,
     /// Exact source fragments resolving to the normalized document root.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub fragment_aliases: Vec<crate::FragmentAlias>,
@@ -66,7 +69,7 @@ pub struct DocumentSource {
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct DocumentMeta {
-    /// Canonical document title.
+    /// Native bibliographic title; Markdown visible titles belong to `Document.heading`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub title: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -223,8 +226,8 @@ pub struct Section {
     /// Exact source fragments resolving to this normalized section identity.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub fragment_aliases: Vec<crate::FragmentAlias>,
-    /// Visible heading text.
-    pub title: String,
+    /// Authoritative visible heading content, including links and styles.
+    pub heading: Heading,
     /// Terminal rows requested before this heading by the source macro set.
     #[serde(default, skip_serializing_if = "is_zero_u16")]
     pub spacing_before_lines: u16,

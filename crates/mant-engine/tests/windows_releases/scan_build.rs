@@ -29,7 +29,7 @@ fn keeps_the_analyzer_options_checkers_and_archive_metadata() {
         document
             .sections
             .iter()
-            .map(|section| section.title.as_str())
+            .map(|section| section.heading.plain_text())
             .collect::<Vec<_>>(),
         SCAN_BUILD_SECTIONS,
     );

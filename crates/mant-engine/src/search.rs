@@ -480,6 +480,7 @@ mod tests {
             address: None,
             label: "demo".to_owned(),
             document: Some(Document {
+                heading: None,
                 parser: None,
                 source: DocumentSource {
                     format: SourceFormat::Man,
@@ -495,7 +496,7 @@ mod tests {
                 sections: vec![Section {
                     id: "options-1".to_owned().into(),
                     fragment_aliases: Vec::new(),
-                    title: "OPTIONS".to_owned(),
+                    heading: "OPTIONS".into(),
                     spacing_before_lines: 0,
                     blocks: vec![Block::DefinitionList {
                         declaration_groups: Vec::new(),
@@ -1008,7 +1009,7 @@ Manual needle.
             .push(Section {
                 id: "next".into(),
                 fragment_aliases: Vec::new(),
-                title: "NEXT".to_owned(),
+                heading: "NEXT".into(),
                 spacing_before_lines: 0,
                 blocks: vec![Block::Paragraph {
                     children: vec![Inline::Text {

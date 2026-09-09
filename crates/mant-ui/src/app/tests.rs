@@ -93,13 +93,14 @@ fn navigation_bundle() -> ResolvedContent {
                 path: None,
             },
             meta: DocumentMeta::default(),
+            heading: None,
             fragment_aliases: Vec::new(),
             diagnostics: Vec::new(),
             blocks: Vec::new(),
             sections: vec![Section {
                 id: "options".to_owned().into(),
                 fragment_aliases: Vec::new(),
-                title: "OPTIONS".to_owned(),
+                heading: "OPTIONS".into(),
                 spacing_before_lines: 0,
                 blocks: vec![AstBlock::DefinitionList {
                     declaration_groups: Vec::new(),
@@ -135,7 +136,7 @@ fn navigation_bundle() -> ResolvedContent {
                 children: vec![Section {
                     id: "details".to_owned().into(),
                     fragment_aliases: Vec::new(),
-                    title: "Details".to_owned(),
+                    heading: "Details".into(),
                     spacing_before_lines: 0,
                     blocks: vec![paragraph("Nested details")],
                     children: Vec::new(),
@@ -154,15 +155,16 @@ fn reflow_navigation_bundle() -> ResolvedContent {
         .map(|index| Section {
             id: format!("section-{index}").into(),
             fragment_aliases: Vec::new(),
-            title: format!("Section {index}"),
+            heading: format!("Section {index}").into(),
             spacing_before_lines: 0,
             blocks: Vec::new(),
             children: vec![Section {
                 id: format!("section-{index}-child").into(),
                 fragment_aliases: Vec::new(),
-                title: format!(
+                heading: format!(
                     "A deliberately long nested section title before selected node {index}"
-                ),
+                )
+                .into(),
                 spacing_before_lines: 0,
                 blocks: Vec::new(),
                 children: Vec::new(),

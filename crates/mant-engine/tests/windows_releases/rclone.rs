@@ -34,7 +34,9 @@ fn keeps_the_large_release_topology_and_windows_specific_sections() {
         "License",
     ] {
         assert!(
-            sections.iter().any(|section| section.title == title),
+            sections
+                .iter()
+                .any(|section| section.heading.plain_text() == title),
             "missing reviewed rclone section {title}",
         );
     }
@@ -53,7 +55,7 @@ fn preserves_windows_paths_and_powershell_commands() {
     let powershell = powershell_section
         .children
         .iter()
-        .find(|section| section.title == "Synopsis")
+        .find(|section| section.heading.plain_text() == "Synopsis")
         .map(|section| block_slice_text(&section.blocks))
         .expect("rclone PowerShell synopsis");
     assert!(powershell.contains("rclone completion powershell | Out-String | Invoke-Expression"));

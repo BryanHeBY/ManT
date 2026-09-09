@@ -11,6 +11,10 @@ use std::{
 
 use support::{configure_registered_documents, registered_documents_dir};
 
+fn plain_document_heading(value: &serde_json::Value) -> &serde_json::Value {
+    &value["document"]["heading"]["content"][0]["value"]
+}
+
 fn executable() -> &'static str {
     env!("CARGO_BIN_EXE_mant")
 }
@@ -1252,7 +1256,7 @@ fn document_sources_update_on_demand_and_support_explicit_selection() {
         .expect("query installed source");
     assert!(query.status.success(), "{query:?}");
     let result: serde_json::Value = serde_json::from_slice(&query.stdout).expect("query JSON");
-    assert_eq!(result["document"]["meta"]["title"], "Source tool");
+    assert_eq!(plain_document_heading(&result), "Source tool");
 
     let documents = registered_documents_dir(&fixture_root);
     fs::create_dir_all(&documents).expect("create root documents");
@@ -1270,7 +1274,7 @@ fn document_sources_update_on_demand_and_support_explicit_selection() {
     assert!(fallback.status.success(), "{fallback:?}");
     let result: serde_json::Value =
         serde_json::from_slice(&fallback.stdout).expect("fallback JSON");
-    assert_eq!(result["document"]["meta"]["title"], "Root tool");
+    assert_eq!(plain_document_heading(&result), "Root tool");
 
     let unknown =
         run_with_registered_documents(&fixture_root, &["source-tool", "--source", "missing"]);
@@ -1384,7 +1388,7 @@ fn direct_and_protocol_queries_read_local_markdown_files_by_path() {
     assert!(direct.status.success());
     assert!(direct.stderr.is_empty());
     let value: serde_json::Value = serde_json::from_slice(&direct.stdout).expect("query JSON");
-    assert_eq!(value["document"]["meta"]["title"], "Local");
+    assert_eq!(value["document"]["heading"]["content"][0]["value"], "Local");
     assert_eq!(
         value["document"]["source"]["path"],
         path.to_str().expect("UTF-8 path")
@@ -1586,9 +1590,15 @@ fn exact_semantic_option_spellings_survive_the_cli_boundary() {
     assert!(outline.stderr.is_empty());
     let outline: serde_json::Value = serde_json::from_slice(&outline.stdout).expect("outline JSON");
     assert!(outline.get("semanticsComplete").is_none());
-    assert_eq!(outline["nodes"][0]["children"][0]["names"][0], "-ca.cert");
-    assert_eq!(outline["nodes"][0]["children"][1]["names"][0], "-ca.chain");
-    assert_eq!(outline["nodes"][0]["children"][2]["names"][0], "--foo.bar");
+    let certificate = outline["nodes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|node| node["path"] == "1")
+        .expect("certificate section");
+    assert_eq!(certificate["children"][0]["names"][0], "-ca.cert");
+    assert_eq!(certificate["children"][1]["names"][0], "-ca.chain");
+    assert_eq!(certificate["children"][2]["names"][0], "--foo.bar");
 
     assert!(dotted.status.success(), "{dotted:?}");
     assert!(dotted.stderr.is_empty());
@@ -1631,7 +1641,10 @@ fn unqualified_names_prefer_registered_markdown() {
     assert!(output.stderr.is_empty());
     let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("query JSON");
     assert_eq!(value["label"], "process-registered");
-    assert_eq!(value["document"]["meta"]["title"], "Registered");
+    assert_eq!(
+        value["document"]["heading"]["content"][0]["value"],
+        "Registered"
+    );
     assert_eq!(value["document"]["source"]["format"], "markdown");
     let source_path = value["document"]["source"]["path"]
         .as_str()
@@ -1982,7 +1995,7 @@ fn query_windows_suffix(
 fn document_title(output: &std::process::Output) -> String {
     assert!(output.status.success(), "{output:?}");
     serde_json::from_slice::<serde_json::Value>(&output.stdout)
-        .expect("suffix query JSON")["document"]["meta"]["title"]
+        .expect("suffix query JSON")["document"]["heading"]["content"][0]["value"]
         .as_str()
         .expect("document title")
         .to_owned()

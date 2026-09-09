@@ -144,6 +144,8 @@ fn link_target(destination: String) -> mant_ir::LinkTarget {
         .and_then(super::link_destination::decode_fragment)
     {
         mant_ir::LinkTarget::Section { id: target.into() }
+    } else if let Some(target) = super::link_destination::manual_reference(&destination) {
+        target
     } else if let Some(address) = mant_ir::email_address_from_mailto_uri(&destination) {
         mant_ir::LinkTarget::Email { address }
     } else if let Some((name, fragment)) = markdown_document_reference(&destination) {

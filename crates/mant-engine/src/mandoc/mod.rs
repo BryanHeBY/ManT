@@ -204,6 +204,7 @@ fn lower_mandoc_document_with_source(
         &mut diagnostics,
     );
     let mut document = Document {
+        heading: None,
         parser: Some(ParserInfo {
             name: "libmandoc".to_owned(),
             version: libmandoc_rs::LIBMANDOC_VERSION.to_owned(),

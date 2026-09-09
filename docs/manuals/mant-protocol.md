@@ -846,6 +846,8 @@ canonical machine-facing half-open UTF-8 range with zero-based `start` and
 `end` offsets. Markdown supplies it exactly; native roff nodes may omit it.
 
 Section depth comes from the tree, not a stored heading-level integer.
+
+Document and section headings carry authoritative `heading.content` inlines rather than a plain section `title`. Optional `Document.heading` preserves an extracted Markdown H1; native bibliographic titles remain in `meta.title`. Outline/excerpt `displayTitle` is a derived plain label, not a second IR fact. A document-root excerpt includes its optional heading and root blocks, so a title-only document remains readable. The unreleased v0.11 shape rejects obsolete section `title` fields instead of silently dropping links.
 Section and explicit anchor IDs share one namespace within a document.
 
 ### Block Variants

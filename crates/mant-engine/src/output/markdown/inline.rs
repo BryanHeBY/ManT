@@ -7,7 +7,19 @@ use mant_ir::{Inline, LinkTarget};
 use super::MarkdownOptions;
 
 pub(crate) fn render_inline(children: &[Inline], options: MarkdownOptions) -> String {
-    let lines = render_inline_raw(children, options)
+    render_inline_content(children, options, false)
+}
+
+pub(super) fn render_heading_inline(children: &[Inline], options: MarkdownOptions) -> String {
+    render_inline_content(children, options, true)
+}
+
+fn render_inline_content(
+    children: &[Inline],
+    options: MarkdownOptions,
+    manual_links: bool,
+) -> String {
+    let lines = render_inline_raw(children, options, manual_links)
         .split('\n')
         .map(|line| line.trim_matches([' ', '\t']))
         .map(|line| (!line.is_empty()).then(|| protect_block_prefix(line)))
@@ -151,7 +163,7 @@ impl InlinePiece {
     }
 }
 
-fn render_inline_raw(nodes: &[Inline], options: MarkdownOptions) -> String {
+fn render_inline_raw(nodes: &[Inline], options: MarkdownOptions, manual_links: bool) -> String {
     let mut pieces = Vec::with_capacity(nodes.len());
     let mut index = 0;
     while let Some(child) = nodes.get(index) {
@@ -172,10 +184,10 @@ fn render_inline_raw(nodes: &[Inline], options: MarkdownOptions) -> String {
             Inline::Strong {
                 children: styled_children,
             } => {
-                let mut rendered = render_inline_raw(styled_children, options);
+                let mut rendered = render_inline_raw(styled_children, options, manual_links);
                 index += 1;
                 while let Some(Inline::Strong { children }) = nodes.get(index) {
-                    rendered.push_str(&render_inline_raw(children, options));
+                    rendered.push_str(&render_inline_raw(children, options, manual_links));
                     index += 1;
                 }
                 pieces.push(InlinePiece::styled(rendered, "**", "__"));
@@ -184,10 +196,10 @@ fn render_inline_raw(nodes: &[Inline], options: MarkdownOptions) -> String {
             Inline::Emphasis {
                 children: styled_children,
             } => {
-                let mut rendered = render_inline_raw(styled_children, options);
+                let mut rendered = render_inline_raw(styled_children, options, manual_links);
                 index += 1;
                 while let Some(Inline::Emphasis { children }) = nodes.get(index) {
-                    rendered.push_str(&render_inline_raw(children, options));
+                    rendered.push_str(&render_inline_raw(children, options, manual_links));
                     index += 1;
                 }
                 pieces.push(InlinePiece::styled(rendered, "*", "_"));
@@ -198,49 +210,13 @@ fn render_inline_raw(nodes: &[Inline], options: MarkdownOptions) -> String {
                 target,
                 title,
                 children,
-            } => match target {
-                LinkTarget::External { uri } => {
-                    pieces.push(InlinePiece::plain(render_link(
-                        uri,
-                        title.as_deref(),
-                        children,
-                        options,
-                    )));
-                }
-                LinkTarget::Email { address } => {
-                    let rendered = mant_ir::mailto_uri_for_email_address(address).map_or_else(
-                        || render_inline_raw(children, options),
-                        |uri| render_link(&uri, title.as_deref(), children, options),
-                    );
-                    pieces.push(InlinePiece::plain(rendered));
-                }
-                LinkTarget::Document { name, fragment } => {
-                    let destination = crate::markdown::link_destination::document_destination(
-                        name,
-                        fragment.as_deref(),
-                    );
-                    pieces.push(InlinePiece::plain(render_link(
-                        &destination,
-                        title.as_deref(),
-                        children,
-                        options,
-                    )));
-                }
-                LinkTarget::Section { id } if options.preserve_anchors => {
-                    pieces.push(InlinePiece::plain(render_link(
-                        &format!(
-                            "#{}",
-                            crate::markdown::link_destination::encode_fragment(id.as_str())
-                        ),
-                        title.as_deref(),
-                        children,
-                        options,
-                    )));
-                }
-                LinkTarget::Manual { .. } | LinkTarget::Section { .. } => {
-                    pieces.push(InlinePiece::plain(render_inline_raw(children, options)));
-                }
-            },
+            } => pieces.push(InlinePiece::plain(render_typed_link(
+                target,
+                title.as_deref(),
+                children,
+                options,
+                manual_links,
+            ))),
             Inline::Anchor {
                 id,
                 fragment_aliases,
@@ -390,8 +366,9 @@ fn render_link(
     title: Option<&str>,
     children: &[Inline],
     options: MarkdownOptions,
+    manual_links: bool,
 ) -> String {
-    let label = render_inline_raw(children, options);
+    let label = render_inline_raw(children, options, manual_links);
     if (target.starts_with("http://") || target.starts_with("https://"))
         && flatten_inline(children) == target
         && !target.chars().any(char::is_whitespace)
@@ -407,6 +384,44 @@ fn render_link(
     title.map_or_else(
         || format!("[{label}]({target})"),
         |title| format!("[{label}]({target} \"{}\")", title.replace('"', "\\\"")),
+    )
+}
+
+/// Share target serialization while keeping portable body and loss-preserving
+/// heading policy explicit. No target is recovered from visible label text.
+fn render_typed_link(
+    target: &LinkTarget,
+    title: Option<&str>,
+    children: &[Inline],
+    options: MarkdownOptions,
+    manual_links: bool,
+) -> String {
+    use crate::markdown::link_destination::{
+        document_destination, encode_fragment, manual_destination,
+    };
+    let destination: Option<Cow<'_, str>> = match target {
+        LinkTarget::External { uri } => Some(Cow::Borrowed(uri)),
+        LinkTarget::Email { address } => {
+            mant_ir::mailto_uri_for_email_address(address).map(Cow::Owned)
+        }
+        LinkTarget::Document { name, fragment } => {
+            Some(Cow::Owned(document_destination(name, fragment.as_deref())))
+        }
+        LinkTarget::Section { id } if options.preserve_anchors => {
+            Some(Cow::Owned(format!("#{}", encode_fragment(id.as_str()))))
+        }
+        LinkTarget::Manual {
+            name,
+            manual_section,
+        } if manual_links => Some(Cow::Owned(manual_destination(
+            name,
+            manual_section.as_deref(),
+        ))),
+        LinkTarget::Manual { .. } | LinkTarget::Section { .. } => None,
+    };
+    destination.map_or_else(
+        || render_inline_raw(children, options, manual_links),
+        |destination| render_link(&destination, title, children, options, manual_links),
     )
 }
 

@@ -70,10 +70,27 @@ fn render_query_body_with(
         .document
         .as_ref()
         .and_then(|document| document.meta.manual_section.as_deref());
-    let mut output = flow::Flow::text(decorate(
-        TextRole::Document.into(),
-        &document_label(&query.label, section),
-    ));
+    let title = query
+        .document
+        .as_ref()
+        .and_then(|document| document.heading.as_ref())
+        .map_or_else(
+            || {
+                decorate(
+                    TextRole::Document.into(),
+                    &document_label(&query.label, section),
+                )
+            },
+            |heading| {
+                blocks::BlockRenderer {
+                    names: None,
+                    decorate,
+                    locations: None,
+                }
+                .inline_text(&heading.content, TextRole::Document)
+            },
+        );
+    let mut output = flow::Flow::text(title);
     if include_tldr && let Some(tldr) = &query.tldr {
         output.gap(1);
         output.push_text(render_tldr_text(tldr));
@@ -120,7 +137,7 @@ fn render_excerpt_with(
     let mut parts = vec![decorate(
         TextRole::Document.into(),
         &document_label(
-            &excerpt.label,
+            excerpt.display_title.as_deref().unwrap_or(&excerpt.label),
             excerpt
                 .meta
                 .as_ref()
@@ -358,9 +375,16 @@ fn render_selection(
         ExcerptSelection::Tldr { document, .. } => {
             join_parts(vec![context, render_tldr_text(document)])
         }
-        ExcerptSelection::DocumentRoot { blocks, .. } => {
-            join_parts(vec![context, renderer.render_blocks(blocks, 0)])
-        }
+        ExcerptSelection::DocumentRoot {
+            heading, blocks, ..
+        } => join_parts(vec![
+            context,
+            heading
+                .as_ref()
+                .map(|heading| renderer.inline_text(&heading.content, TextRole::Heading))
+                .unwrap_or_default(),
+            renderer.render_blocks(blocks, 0),
+        ]),
         ExcerptSelection::DocumentSection { section, .. } => {
             join_parts(vec![context, renderer.render_section(section, 0)])
         }
@@ -503,6 +527,7 @@ mod tests {
             address: None,
             label: "demo".to_owned(),
             document: Some(Document {
+                heading: None,
                 parser: None,
                 source: DocumentSource {
                     format: SourceFormat::Man,
@@ -518,13 +543,13 @@ mod tests {
                 sections: vec![Section {
                     id: "options-1".to_owned().into(),
                     fragment_aliases: Vec::new(),
-                    title: "OPTIONS".to_owned(),
+                    heading: "OPTIONS".into(),
                     spacing_before_lines: 0,
                     blocks: vec![paragraph("parent details", true)],
                     children: vec![Section {
                         id: "common-2".to_owned().into(),
                         fragment_aliases: Vec::new(),
-                        title: "Common options".to_owned(),
+                        heading: "Common options".into(),
                         spacing_before_lines: 1,
                         blocks: vec![paragraph("child details", false)],
                         children: Vec::new(),
@@ -699,6 +724,7 @@ mod tests {
                 address: None,
                 label: "demo".to_owned(),
                 document: Some(Document {
+                    heading: None,
                     parser: None,
                     source: DocumentSource {
                         format: SourceFormat::Man,
@@ -714,7 +740,7 @@ mod tests {
                     sections: vec![Section {
                         id: "s-1".to_owned().into(),
                         fragment_aliases: Vec::new(),
-                        title: "S".to_owned(),
+                        heading: "S".into(),
                         spacing_before_lines: 0,
                         blocks,
                         children: Vec::new(),
@@ -768,6 +794,7 @@ mod tests {
             address: None,
             label: "demo".to_owned(),
             document: Some(Document {
+                heading: None,
                 parser: None,
                 source: DocumentSource {
                     format: SourceFormat::Man,
@@ -783,7 +810,7 @@ mod tests {
                 sections: vec![Section {
                     id: "ops".to_owned().into(),
                     fragment_aliases: Vec::new(),
-                    title: "OPERATORS".to_owned(),
+                    heading: "OPERATORS".into(),
                     spacing_before_lines: 0,
                     blocks: vec![Block::DefinitionList {
                         declaration_groups: Vec::new(),
@@ -859,6 +886,7 @@ mod tests {
             address: None,
             label: "demo".to_owned(),
             document: Some(Document {
+                heading: None,
                 parser: None,
                 source: DocumentSource {
                     format: SourceFormat::Man,
@@ -874,7 +902,7 @@ mod tests {
                 sections: vec![Section {
                     id: "ops".to_owned().into(),
                     fragment_aliases: Vec::new(),
-                    title: "OPERATORS".to_owned(),
+                    heading: "OPERATORS".into(),
                     spacing_before_lines: 0,
                     blocks: vec![Block::DefinitionList {
                         declaration_groups: Vec::new(),

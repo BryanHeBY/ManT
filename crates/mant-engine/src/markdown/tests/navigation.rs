@@ -251,7 +251,7 @@ fn document_title_fragments_follow_the_normalized_root_destination() {
             .iter()
             .map(mant_ir::FragmentAlias::as_str)
             .collect::<Vec<_>>(),
-        ["Mixed.Root"]
+        ["Mixed.Root", "guide"]
     );
     assert_eq!(
         mant_ir::DocumentIndex::build(&document)
@@ -261,19 +261,19 @@ fn document_title_fragments_follow_the_normalized_root_destination() {
     );
 
     let document = parse_document("# Guide {#Empty.Root}\n\n## Details\n\nBody.\n", None);
-    assert!(document.fragment_aliases.is_empty());
+    assert!(document.sections[0].fragment_aliases.is_empty());
     assert_eq!(
-        document.sections[0]
+        document
             .fragment_aliases
             .iter()
             .map(mant_ir::FragmentAlias::as_str)
             .collect::<Vec<_>>(),
-        ["Empty.Root"]
+        ["Empty.Root", "guide"]
     );
     assert_eq!(
         mant_ir::DocumentIndex::build(&document)
             .fragment_target("Empty.Root")
             .map(mant_ir::NodeId::as_str),
-        Some("details")
+        Some(mant_ir::DOCUMENT_ROOT_ID)
     );
 }

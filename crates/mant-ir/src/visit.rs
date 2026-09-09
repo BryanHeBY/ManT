@@ -1,9 +1,15 @@
 //! Reusable traversal over normalized document IR.
 
-use crate::{Block, DefinitionItem, Document, Inline, ListItem, Section, TableCell, TableRow};
+use crate::{
+    Block, DefinitionItem, Document, Heading, Inline, ListItem, Section, TableCell, TableRow,
+};
 
 /// Read-only depth-first traversal with overridable hooks.
 pub trait Visit<'ir> {
+    /// Visit authoritative document or section heading inlines.
+    fn visit_heading(&mut self, heading: &'ir Heading) {
+        walk_heading(self, heading);
+    }
     /// Visit a document, descending into root blocks and sections by default.
     fn visit_document(&mut self, document: &'ir Document) {
         walk_document(self, document);
@@ -40,6 +46,9 @@ pub fn walk_document<'ir, V>(visitor: &mut V, document: &'ir Document)
 where
     V: Visit<'ir> + ?Sized,
 {
+    if let Some(heading) = &document.heading {
+        visitor.visit_heading(heading);
+    }
     walk_blocks(visitor, &document.blocks);
     for section in &document.sections {
         visitor.visit_section(section);
@@ -51,10 +60,16 @@ pub fn walk_section<'ir, V>(visitor: &mut V, section: &'ir Section)
 where
     V: Visit<'ir> + ?Sized,
 {
+    visitor.visit_heading(&section.heading);
     walk_blocks(visitor, &section.blocks);
     for child in &section.children {
         visitor.visit_section(child);
     }
+}
+
+/// Apply the default immutable traversal to heading content.
+pub fn walk_heading<'ir, V: Visit<'ir> + ?Sized>(visitor: &mut V, heading: &'ir Heading) {
+    walk_inlines(visitor, &heading.content);
 }
 
 /// Apply the default immutable traversal for a block.
@@ -142,6 +157,10 @@ where
 
 /// Mutable depth-first traversal with overridable hooks.
 pub trait VisitMut {
+    /// Visit authoritative heading content mutably.
+    fn visit_heading_mut(&mut self, heading: &mut Heading) {
+        walk_heading_mut(self, heading);
+    }
     /// Visit a document mutably, descending into all content by default.
     fn visit_document_mut(&mut self, document: &mut Document) {
         walk_document_mut(self, document);
@@ -178,6 +197,9 @@ pub fn walk_document_mut<V>(visitor: &mut V, document: &mut Document)
 where
     V: VisitMut + ?Sized,
 {
+    if let Some(heading) = &mut document.heading {
+        visitor.visit_heading_mut(heading);
+    }
     walk_blocks_mut(visitor, &mut document.blocks);
     for section in &mut document.sections {
         visitor.visit_section_mut(section);
@@ -189,10 +211,16 @@ pub fn walk_section_mut<V>(visitor: &mut V, section: &mut Section)
 where
     V: VisitMut + ?Sized,
 {
+    visitor.visit_heading_mut(&mut section.heading);
     walk_blocks_mut(visitor, &mut section.blocks);
     for child in &mut section.children {
         visitor.visit_section_mut(child);
     }
+}
+
+/// Apply the default mutable traversal to heading content.
+pub fn walk_heading_mut<V: VisitMut + ?Sized>(visitor: &mut V, heading: &mut Heading) {
+    walk_inlines_mut(visitor, &mut heading.content);
 }
 
 /// Apply the default mutable traversal for a block.

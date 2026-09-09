@@ -54,6 +54,9 @@ pub struct DocumentResponse {
     pub source: DocumentSource,
     /// Source-neutral document metadata.
     pub meta: DocumentMeta,
+    /// Original visible heading; independent from bibliographic metadata.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub heading: Option<mant_ir::Heading>,
     /// Exact source fragments resolving to the normalized document root.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub fragment_aliases: Vec<mant_ir::FragmentAlias>,
@@ -89,6 +92,7 @@ impl From<&IrDocument> for DocumentResponse {
             producer: Producer::for_document(document),
             source: document.source.clone(),
             meta: document.meta.clone(),
+            heading: document.heading.clone(),
             fragment_aliases: document.fragment_aliases.clone(),
             diagnostics: document.diagnostics.clone(),
             blocks: document.blocks.clone(),
@@ -106,6 +110,7 @@ impl From<DocumentResponse> for IrDocument {
             }),
             source: document.source,
             meta: document.meta,
+            heading: document.heading,
             fragment_aliases: document.fragment_aliases,
             diagnostics: document.diagnostics,
             blocks: document.blocks,

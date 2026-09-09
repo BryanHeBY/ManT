@@ -474,7 +474,7 @@ fn section_reference_hit_regions_follow_wrapped_link_text() {
     document.sections[0].children.push(Section {
         id: "details".to_owned().into(),
         fragment_aliases: Vec::new(),
-        title: "Details".to_owned(),
+        heading: "Details".into(),
         spacing_before_lines: 0,
         blocks: Vec::new(),
         children: Vec::new(),

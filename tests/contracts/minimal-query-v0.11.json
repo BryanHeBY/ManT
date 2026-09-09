@@ -23,7 +23,7 @@
     "sections": [
       {
         "id": "section-0",
-        "title": "NAME",
+        "heading": { "content": [{ "type": "text", "value": "NAME" }] },
         "blocks": [
           {
             "type": "paragraph",
@@ -87,7 +87,7 @@
       },
       {
         "id": "options-1",
-        "title": "OPTIONS",
+        "heading": { "content": [{ "type": "text", "value": "OPTIONS" }] },
         "blocks": [
           {
             "type": "paragraph",

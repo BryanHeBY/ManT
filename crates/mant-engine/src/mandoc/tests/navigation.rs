@@ -26,7 +26,7 @@ fn lowers_man_sections_fonts_definitions_and_literal_blocks() {
         document
             .sections
             .iter()
-            .map(|section| section.title.as_str())
+            .map(|section| section.heading.plain_text())
             .collect::<Vec<_>>(),
         vec!["NAME", "OPTIONS"]
     );
@@ -69,7 +69,10 @@ fn lowers_mdoc_semantic_inline_nodes_and_nested_sections() {
     fs::remove_file(path).expect("remove temporary roff fixture");
 
     assert_eq!(document.source.format, SourceFormat::Mdoc);
-    assert_eq!(document.sections[0].children[0].title, "Details");
+    assert_eq!(
+        document.sections[0].children[0].heading.plain_text(),
+        "Details"
+    );
     let Block::Paragraph { children, .. } = &document.sections[0].blocks[0] else {
         panic!("expected description paragraph");
     };
@@ -324,7 +327,7 @@ intro\n.Pp\n.Fn alpha\n",
         )
         .unwrap_or_else(|error| panic!("lower {name} target: {error}"));
         assert_eq!(anchor_ids(&document), ["display-target"]);
-        assert_eq!(visible_document_text(&document).trim(), "hello");
+        assert_eq!(visible_document_text(&document).trim(), "DESCRIPTION hello");
         assert!(matches!(
             document.sections[0].blocks.first(),
             Some(Block::Preformatted { children, .. })
@@ -351,7 +354,10 @@ fn preserves_targets_moved_to_list_items_and_containers() {
     )
     .expect("lower a target moved to a list container");
     assert_eq!(anchor_ids(&container), ["list-target"]);
-    assert_eq!(visible_document_text(&container).trim(), "hello");
+    assert_eq!(
+        visible_document_text(&container).trim(),
+        "DESCRIPTION hello"
+    );
 }
 
 #[test]
@@ -442,7 +448,7 @@ fn preserves_explicit_targets_on_empty_mdoc_list_items() {
         )
     }));
     let visible = visible_document_text(&document);
-    assert_eq!(visible.trim(), "body");
+    assert_eq!(visible.trim(), "DESCRIPTION body");
     assert!(!visible.contains("target"));
 }
 
@@ -465,7 +471,7 @@ fn explicit_section_targets_preserve_fragments_beside_normalized_ids() {
             .collect::<Vec<_>>(),
         ["custom-section"]
     );
-    assert_eq!(document.sections[0].title, "HEADING");
+    assert_eq!(document.sections[0].heading.plain_text(), "HEADING");
     assert_eq!(document.sections[0].children[0].id.as_str(), "subheading");
     assert_eq!(
         document.sections[0].children[0]
@@ -475,7 +481,10 @@ fn explicit_section_targets_preserve_fragments_beside_normalized_ids() {
             .collect::<Vec<_>>(),
         ["custom-subsection"]
     );
-    assert_eq!(document.sections[0].children[0].title, "SUBHEADING");
+    assert_eq!(
+        document.sections[0].children[0].heading.plain_text(),
+        "SUBHEADING"
+    );
     assert!(anchor_ids(&document).is_empty());
 }
 
@@ -901,7 +910,7 @@ fn preserves_printable_roff_content_outside_formal_sections() {
         inline_text(children),
         " .SH NAME manweb - browse generated documentation"
     );
-    assert_eq!(document.sections[0].title, "SYNOPSIS");
+    assert_eq!(document.sections[0].heading.plain_text(), "SYNOPSIS");
 }
 
 #[test]
@@ -943,7 +952,7 @@ fn recognizes_explicitly_styled_traditional_man_references_in_any_section() {
     let see_also = document
         .sections
         .iter()
-        .find(|section| section.title == "SEE ALSO")
+        .find(|section| section.heading.plain_text() == "SEE ALSO")
         .expect("SEE ALSO");
     let Block::Paragraph { children, .. } = &see_also.blocks[0] else {
         panic!("references are a paragraph");

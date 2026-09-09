@@ -21,6 +21,7 @@ fn source() -> DocumentSource {
 #[test]
 fn outline_contract_exposes_both_human_paths_and_document_ids() {
     let outline = QueryOutline {
+        display_title: None,
         schema: OutlineSchema::V0Dot11,
         entries: EntryProjection::All,
         root: None,
@@ -116,13 +117,14 @@ fn excerpt_contract_keeps_breadcrumbs_separate_from_complete_sections() {
     let section = Section {
         id: "common-3".to_owned().into(),
         fragment_aliases: Vec::new(),
-        title: "Common options".to_owned(),
+        heading: "Common options".into(),
         spacing_before_lines: 0,
         blocks: Vec::new(),
         children: Vec::new(),
         source: None,
     };
     let excerpt = QueryExcerpt {
+        display_title: None,
         schema: ExcerptSchema::V0Dot11,
         address: None,
         semantics_complete: true,
@@ -145,7 +147,7 @@ fn excerpt_contract_keeps_breadcrumbs_separate_from_complete_sections() {
                 node: OutlineNodeReference::DocumentSection {
                     path: "2.1".to_owned().into(),
                     id: section.id.clone(),
-                    title: section.title.clone(),
+                    title: section.heading.plain_text(),
                 },
             },
             section,
@@ -190,6 +192,7 @@ fn excerpt_contract_can_return_one_semantic_definition() {
         description: Vec::new(),
     };
     let excerpt = QueryExcerpt {
+        display_title: None,
         schema: ExcerptSchema::V0Dot11,
         label: "demo(1)".to_owned(),
         address: None,
@@ -240,6 +243,7 @@ fn document_root_contract_addresses_content_before_the_first_heading() {
         source: None,
     }];
     let outline = QueryOutline {
+        display_title: None,
         schema: OutlineSchema::V0Dot11,
         entries: EntryProjection::None,
         root: None,
@@ -261,6 +265,7 @@ fn document_root_contract_addresses_content_before_the_first_heading() {
         }],
     };
     let excerpt = QueryExcerpt {
+        display_title: None,
         schema: ExcerptSchema::V0Dot11,
         label: "guide.md".to_owned(),
         address: None,
@@ -270,6 +275,7 @@ fn document_root_contract_addresses_content_before_the_first_heading() {
         meta: outline.meta.clone(),
         diagnostics: Vec::new(),
         selections: vec![ExcerptSelection::DocumentRoot {
+            heading: None,
             outline: OutlineTrail {
                 ancestors: Vec::new(),
                 node: OutlineNodeReference::DocumentRoot {
@@ -306,6 +312,7 @@ fn tldr_uses_the_reserved_zero_path_in_outline_and_excerpt_contracts() {
         origin: TldrOrigin::TldrPages,
     };
     let outline = QueryOutline {
+        display_title: None,
         schema: OutlineSchema::V0Dot11,
         entries: EntryProjection::None,
         root: None,
@@ -322,6 +329,7 @@ fn tldr_uses_the_reserved_zero_path_in_outline_and_excerpt_contracts() {
         }],
     };
     let excerpt = QueryExcerpt {
+        display_title: None,
         schema: ExcerptSchema::V0Dot11,
         label: "demo".to_owned(),
         address: None,
