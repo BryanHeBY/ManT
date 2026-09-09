@@ -82,34 +82,9 @@ pub struct ExplanationFormRange {
     pub end_char: u32,
 }
 
-/// A typed path step relative to the single returned `content.block`.
+/// Shared structural step, rooted here in the single returned `content.block`.
 /// Item/cell steps select an array and must be followed by a block step.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(tag = "kind", rename_all = "kebab-case", deny_unknown_fields)]
-pub enum ExplanationBlockStep {
-    /// One ordinary list item's block array.
-    ListItem {
-        /// Zero-based item index.
-        index: u32,
-    },
-    /// One definition's description block array.
-    DefinitionItem {
-        /// Zero-based item index.
-        index: u32,
-    },
-    /// One table cell's block array.
-    TableCell {
-        /// Zero-based original row index (not a laid-out row).
-        row: u32,
-        /// Zero-based original cell index (not its spanned screen column).
-        column: u32,
-    },
-    /// One block in the array selected by the preceding item/cell step.
-    Block {
-        /// Zero-based block index.
-        index: u32,
-    },
-}
+pub use mant_ir::ContentBlockStep as ExplanationBlockStep;
 
 /// Half-open Unicode scalar offsets rooted in this response's original body.
 /// The path does not reference the full source document or a preview window.

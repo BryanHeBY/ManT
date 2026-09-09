@@ -349,6 +349,18 @@ prose.
 
 Native libmandoc nodes generally provide line and column positions but not exact byte ranges. Markdown lowering preserves byte ranges. Rendered search coordinates belong to the independent `mant.markdown/v1` projection and must not be confused with input spans.
 
+## Content positions and reference traversal
+
+`ContentLocation` identifies original inlines under three closed roots: document heading, section heading, or root/section content. Zero-based section indices and typed `ContentBlockStep` transitions distinguish blocks, ordinary list items, definition descriptions and table cells. `ContentInlineRoot` then identifies paragraph/preformatted inlines or a particular definition term, followed by an inline child path. Empty paths select a whole inline container; a link occurrence always has a nonempty path to its actual `Inline::Link`, including links with no visible label.
+
+Every transition is checked against the actual container and bounds. `EntryOwnerLocationRef::map_slice` maps a valid owner-local `EntryContentSlice` to the original document position; its optional UTF-8 leaf range is validated but does not become a node identity. Invalid and oversized paths return no target, never a label-based guess. Source bytes, IR leaf bytes, projected Unicode scalars and terminal cells remain separate coordinate domains.
+
+`scan_reference_scope` visits the selected document, overview, section, block or item under `ReferenceScanLimits`. The callback borrows the original target, label, position and nearest content/attached-semantic owner. It receives one shared `ReferenceWorkBudget` for optional work such as `reference_form_associations`; exhausted work stays exhausted even at the final occurrence. Default scanning is capped at 250,000 steps, depth 256 and 8 MiB of inspected target/form/label bytes; hard ceilings are 1,000,000 steps and 32 MiB. Summary traversal need not inspect or copy labels. Retained positions have an independent 8 KiB encoded-size limit. Callers must separately bound their retained records and labels.
+
+Repeated targets remain separate occurrences. Valid form associations point back to those original occurrences rather than producing extra links; invalid or incomplete form validation returns no partial associations. An attached semantic owner is not a claim that all its metadata is valid. Entry-set relationships remain separate from visible links. No filesystem, catalog, URI opener or parser is invoked by these APIs.
+
+These addresses are valid within the actual loaded snapshot and rebuild after IR serialization. They do not promise cross-edit or cross-call stale detection. Explanation responses reuse the block/item/cell traversal but explicitly root their positions in the returned content, not in the whole document.
+
 ## Diagnostics
 
 Diagnostics have `style`, `warning`, `error`, or `unsupported` severity, an optional stable code, a message, and an optional source span. They describe recoverable source findings; fatal I/O, decompression, parsing, request, or transport failures remain ordinary errors outside the document.

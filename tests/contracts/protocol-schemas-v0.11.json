@@ -3580,6 +3580,102 @@
           }
         ]
       },
+      "ContentBlockStep": {
+        "description": "A checked transition through block arrays and their containing items/cells.",
+        "oneOf": [
+          {
+            "description": "One ordinary list item's block array.",
+            "type": "object",
+            "properties": {
+              "index": {
+                "description": "Zero-based item index.",
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 0
+              },
+              "kind": {
+                "type": "string",
+                "const": "list-item"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "index"
+            ]
+          },
+          {
+            "description": "One definition item's description block array.",
+            "type": "object",
+            "properties": {
+              "index": {
+                "description": "Zero-based item index.",
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 0
+              },
+              "kind": {
+                "type": "string",
+                "const": "definition-item"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "index"
+            ]
+          },
+          {
+            "description": "One original table cell, independent of visual spans.",
+            "type": "object",
+            "properties": {
+              "column": {
+                "description": "Zero-based original cell.",
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 0
+              },
+              "kind": {
+                "type": "string",
+                "const": "table-cell"
+              },
+              "row": {
+                "description": "Zero-based original row.",
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 0
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "row",
+              "column"
+            ]
+          },
+          {
+            "description": "One block in the current block array.",
+            "type": "object",
+            "properties": {
+              "index": {
+                "description": "Zero-based block index.",
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 0
+              },
+              "kind": {
+                "type": "string",
+                "const": "block"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "index"
+            ]
+          }
+        ]
+      },
       "DeclarationGroup": {
         "description": "A recovered run of consecutive declarations in one definition list.\n\nEarlier members have no readable description; the final member supplies\nthe group's context. This never asserts that the members are aliases or\nthat every sentence applies to every member. The half-open item coordinates\nbelong to the exact containing list, not a durable or cross-document ID.",
         "type": "object",
@@ -4375,102 +4471,6 @@
           }
         ]
       },
-      "ExplanationBlockStep": {
-        "description": "A typed path step relative to the single returned `content.block`.\nItem/cell steps select an array and must be followed by a block step.",
-        "oneOf": [
-          {
-            "description": "One ordinary list item's block array.",
-            "type": "object",
-            "properties": {
-              "index": {
-                "description": "Zero-based item index.",
-                "type": "integer",
-                "format": "uint32",
-                "minimum": 0
-              },
-              "kind": {
-                "type": "string",
-                "const": "list-item"
-              }
-            },
-            "additionalProperties": false,
-            "required": [
-              "kind",
-              "index"
-            ]
-          },
-          {
-            "description": "One definition's description block array.",
-            "type": "object",
-            "properties": {
-              "index": {
-                "description": "Zero-based item index.",
-                "type": "integer",
-                "format": "uint32",
-                "minimum": 0
-              },
-              "kind": {
-                "type": "string",
-                "const": "definition-item"
-              }
-            },
-            "additionalProperties": false,
-            "required": [
-              "kind",
-              "index"
-            ]
-          },
-          {
-            "description": "One table cell's block array.",
-            "type": "object",
-            "properties": {
-              "column": {
-                "description": "Zero-based original cell index (not its spanned screen column).",
-                "type": "integer",
-                "format": "uint32",
-                "minimum": 0
-              },
-              "kind": {
-                "type": "string",
-                "const": "table-cell"
-              },
-              "row": {
-                "description": "Zero-based original row index (not a laid-out row).",
-                "type": "integer",
-                "format": "uint32",
-                "minimum": 0
-              }
-            },
-            "additionalProperties": false,
-            "required": [
-              "kind",
-              "row",
-              "column"
-            ]
-          },
-          {
-            "description": "One block in the array selected by the preceding item/cell step.",
-            "type": "object",
-            "properties": {
-              "index": {
-                "description": "Zero-based block index.",
-                "type": "integer",
-                "format": "uint32",
-                "minimum": 0
-              },
-              "kind": {
-                "type": "string",
-                "const": "block"
-              }
-            },
-            "additionalProperties": false,
-            "required": [
-              "kind",
-              "index"
-            ]
-          }
-        ]
-      },
       "ExplanationContent": {
         "description": "Original content copied for one evidence owner, not a navigation selection.",
         "oneOf": [
@@ -4492,7 +4492,7 @@
                 "description": "Typed path from the owned source fragment to the owner's list.",
                 "type": "array",
                 "items": {
-                  "$ref": "#/$defs/ExplanationBlockStep"
+                  "$ref": "#/$defs/ContentBlockStep"
                 }
               },
               "support": {
@@ -4599,7 +4599,7 @@
                 "description": "Typed path to that leaf, starting at `content.block`.",
                 "type": "array",
                 "items": {
-                  "$ref": "#/$defs/ExplanationBlockStep"
+                  "$ref": "#/$defs/ContentBlockStep"
                 }
               },
               "startChar": {
@@ -4641,7 +4641,7 @@
                 "description": "Typed path to a definition-list block.",
                 "type": "array",
                 "items": {
-                  "$ref": "#/$defs/ExplanationBlockStep"
+                  "$ref": "#/$defs/ContentBlockStep"
                 }
               },
               "startChar": {
@@ -5255,7 +5255,7 @@
                 "description": "Typed path from that fragment's copied block to the nested list.",
                 "type": "array",
                 "items": {
-                  "$ref": "#/$defs/ExplanationBlockStep"
+                  "$ref": "#/$defs/ContentBlockStep"
                 }
               },
               "support": {
@@ -10597,6 +10597,102 @@
           }
         ]
       },
+      "ContentBlockStep": {
+        "description": "A checked transition through block arrays and their containing items/cells.",
+        "oneOf": [
+          {
+            "description": "One ordinary list item's block array.",
+            "type": "object",
+            "properties": {
+              "index": {
+                "description": "Zero-based item index.",
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 0
+              },
+              "kind": {
+                "type": "string",
+                "const": "list-item"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "index"
+            ]
+          },
+          {
+            "description": "One definition item's description block array.",
+            "type": "object",
+            "properties": {
+              "index": {
+                "description": "Zero-based item index.",
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 0
+              },
+              "kind": {
+                "type": "string",
+                "const": "definition-item"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "index"
+            ]
+          },
+          {
+            "description": "One original table cell, independent of visual spans.",
+            "type": "object",
+            "properties": {
+              "column": {
+                "description": "Zero-based original cell.",
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 0
+              },
+              "kind": {
+                "type": "string",
+                "const": "table-cell"
+              },
+              "row": {
+                "description": "Zero-based original row.",
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 0
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "row",
+              "column"
+            ]
+          },
+          {
+            "description": "One block in the current block array.",
+            "type": "object",
+            "properties": {
+              "index": {
+                "description": "Zero-based block index.",
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 0
+              },
+              "kind": {
+                "type": "string",
+                "const": "block"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "index"
+            ]
+          }
+        ]
+      },
       "DeclarationGroup": {
         "description": "A recovered run of consecutive declarations in one definition list.\n\nEarlier members have no readable description; the final member supplies\nthe group's context. This never asserts that the members are aliases or\nthat every sentence applies to every member. The half-open item coordinates\nbelong to the exact containing list, not a durable or cross-document ID.",
         "type": "object",
@@ -11554,102 +11650,6 @@
           }
         ]
       },
-      "ExplanationBlockStep": {
-        "description": "A typed path step relative to the single returned `content.block`.\nItem/cell steps select an array and must be followed by a block step.",
-        "oneOf": [
-          {
-            "description": "One ordinary list item's block array.",
-            "type": "object",
-            "properties": {
-              "index": {
-                "description": "Zero-based item index.",
-                "type": "integer",
-                "format": "uint32",
-                "minimum": 0
-              },
-              "kind": {
-                "type": "string",
-                "const": "list-item"
-              }
-            },
-            "additionalProperties": false,
-            "required": [
-              "kind",
-              "index"
-            ]
-          },
-          {
-            "description": "One definition's description block array.",
-            "type": "object",
-            "properties": {
-              "index": {
-                "description": "Zero-based item index.",
-                "type": "integer",
-                "format": "uint32",
-                "minimum": 0
-              },
-              "kind": {
-                "type": "string",
-                "const": "definition-item"
-              }
-            },
-            "additionalProperties": false,
-            "required": [
-              "kind",
-              "index"
-            ]
-          },
-          {
-            "description": "One table cell's block array.",
-            "type": "object",
-            "properties": {
-              "column": {
-                "description": "Zero-based original cell index (not its spanned screen column).",
-                "type": "integer",
-                "format": "uint32",
-                "minimum": 0
-              },
-              "kind": {
-                "type": "string",
-                "const": "table-cell"
-              },
-              "row": {
-                "description": "Zero-based original row index (not a laid-out row).",
-                "type": "integer",
-                "format": "uint32",
-                "minimum": 0
-              }
-            },
-            "additionalProperties": false,
-            "required": [
-              "kind",
-              "row",
-              "column"
-            ]
-          },
-          {
-            "description": "One block in the array selected by the preceding item/cell step.",
-            "type": "object",
-            "properties": {
-              "index": {
-                "description": "Zero-based block index.",
-                "type": "integer",
-                "format": "uint32",
-                "minimum": 0
-              },
-              "kind": {
-                "type": "string",
-                "const": "block"
-              }
-            },
-            "additionalProperties": false,
-            "required": [
-              "kind",
-              "index"
-            ]
-          }
-        ]
-      },
       "ExplanationContent": {
         "description": "Original content copied for one evidence owner, not a navigation selection.",
         "oneOf": [
@@ -11671,7 +11671,7 @@
                 "description": "Typed path from the owned source fragment to the owner's list.",
                 "type": "array",
                 "items": {
-                  "$ref": "#/$defs/ExplanationBlockStep"
+                  "$ref": "#/$defs/ContentBlockStep"
                 }
               },
               "support": {
@@ -11778,7 +11778,7 @@
                 "description": "Typed path to that leaf, starting at `content.block`.",
                 "type": "array",
                 "items": {
-                  "$ref": "#/$defs/ExplanationBlockStep"
+                  "$ref": "#/$defs/ContentBlockStep"
                 }
               },
               "startChar": {
@@ -11820,7 +11820,7 @@
                 "description": "Typed path to a definition-list block.",
                 "type": "array",
                 "items": {
-                  "$ref": "#/$defs/ExplanationBlockStep"
+                  "$ref": "#/$defs/ContentBlockStep"
                 }
               },
               "startChar": {
@@ -12424,7 +12424,7 @@
                 "description": "Typed path from that fragment's copied block to the nested list.",
                 "type": "array",
                 "items": {
-                  "$ref": "#/$defs/ExplanationBlockStep"
+                  "$ref": "#/$defs/ContentBlockStep"
                 }
               },
               "support": {

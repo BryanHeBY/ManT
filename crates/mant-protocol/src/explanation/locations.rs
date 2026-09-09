@@ -111,27 +111,6 @@ impl ExplanationFormRange {
     }
 }
 
-pub(super) fn block_at<'a>(mut block: &'a Block, path: &[Step]) -> Option<&'a Block> {
-    if path.len() > 514 || !path.len().is_multiple_of(2) {
-        return None;
-    }
-    for pair in path.as_chunks::<2>().0 {
-        let children = match (&pair[0], block) {
-            (Step::ListItem { index }, Block::List { items, .. }) => {
-                &items.get(*index as usize)?.blocks
-            }
-            (Step::DefinitionItem { index }, Block::DefinitionList { items, .. }) => {
-                &items.get(*index as usize)?.description
-            }
-            (Step::TableCell { row, column }, Block::Table { rows, .. }) => {
-                &rows.get(*row as usize)?.cells.get(*column as usize)?.blocks
-            }
-            _ => return None,
-        };
-        let Step::Block { index } = pair[1] else {
-            return None;
-        };
-        block = children.get(index as usize)?;
-    }
-    Some(block)
+pub(super) fn block_at<'a>(block: &'a Block, path: &[Step]) -> Option<&'a Block> {
+    mant_ir::resolve_block_descendant(block, path)
 }

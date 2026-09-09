@@ -426,7 +426,7 @@ fn remap_range(
         return None;
     }
     *index = owner;
-    path.splice(0..0, prefix.iter().cloned());
+    path.splice(0..0, prefix.iter().copied());
     Some(mapped)
 }
 

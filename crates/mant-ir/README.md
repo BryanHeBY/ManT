@@ -67,6 +67,24 @@ The important public families are:
 | `entry_relation_issues`, `EntryRelationIssueKind` | Typed owner-specific relationship failures for producers and evidence consumers; the same policy backs document diagnostics |
 | `is_normalized_node_id` | Shared canonical ID grammar, separate from uniqueness and selector reservation |
 | `Visit`, `VisitMut` | Exhaustive read-only or mutable traversal |
+| `ContentLocation`, `ContentBlockStep`, `EntryOwnerLocationRef` | Checked snapshot-relative heading/content/item positions; explicit mapping from entry-local slices |
+| `scan_reference_scope`, `ReferenceScope`, `ReferenceScanLimits` | Bounded borrowed occurrences from original links, independent of semantic discovery |
+| `ReferenceWorkBudget`, `reference_form_associations` | One shared work account for scanning and optional validated original-form association |
+
+Reference scans visit authoritative heading and body inlines, preserving empty
+labels and repeated destinations. They do not create entries or duplicate form
+links. Callbacks borrow reusable position stacks; retaining a position requires
+an explicit bounded `ContentLocationRef::to_owned()` operation. Reports distinguish
+a complete scan from a work, depth, byte, position or consumer stop. A semantic
+owner exposed during traversal means attached facts, not that every field in
+those facts has been validated; optional form association checks original slices
+atomically under the same work budget. Ordinary overview, section, block and
+unannotated item roots do not require a `SemanticIndex`.
+
+Positions describe the currently loaded IR, not source bytes, visible Unicode
+scalar offsets or terminal cells. They can be rebuilt after serde but have no
+cross-edit stability guarantee. Explanation block positions reuse the same
+checked item/cell traversal while remaining relative to their returned block.
 
 `DocumentMeta::manual_section` is a native manual category such as `1` or
 `3p`. A `Section` is a heading-backed content subtree. The names are kept

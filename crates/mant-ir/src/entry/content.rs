@@ -152,12 +152,7 @@ impl<'a> EntryOwner<'a> {
     /// Compare visible form text without constructing styled inline copies.
     /// Used by exact binding validation, independently of lookup case policy.
     pub(crate) fn form_text_equals(self, form: &EntryForm, mut expected: &str) -> bool {
-        if form.parts.is_empty()
-            || !form
-                .parts
-                .windows(2)
-                .all(|pair| precedes(&pair[0], &pair[1]))
-        {
+        if form.parts.is_empty() || !form.parts.windows(2).all(|pair| pair[0].precedes(&pair[1])) {
             return false;
         }
         for part in &form.parts {
@@ -350,12 +345,7 @@ impl<'a> EntryOwner<'a> {
                 return nodes.get(index..index.checked_add(1)?).map(Cow::Borrowed);
             }
         }
-        if form.parts.is_empty()
-            || !form
-                .parts
-                .windows(2)
-                .all(|pair| precedes(&pair[0], &pair[1]))
-        {
+        if form.parts.is_empty() || !form.parts.windows(2).all(|pair| pair[0].precedes(&pair[1])) {
             return None;
         }
         let parts = form
@@ -390,20 +380,23 @@ fn consume_text(nodes: &[Inline], expected: &mut &str) -> bool {
     true
 }
 
-fn precedes(left: &EntryContentSlice, right: &EntryContentSlice) -> bool {
-    if left.root != right.root {
-        return left.root < right.root;
+impl EntryContentSlice {
+    /// Shared non-overlapping source-order check for forms and reference binding.
+    pub(crate) fn precedes(&self, right: &Self) -> bool {
+        if self.root != right.root {
+            return self.root < right.root;
+        }
+        if self.path == right.path {
+            return self
+                .bytes
+                .as_ref()
+                .zip(right.bytes.as_ref())
+                .is_some_and(|(a, b)| a.end <= b.start);
+        }
+        !self.path.starts_with(&right.path)
+            && !right.path.starts_with(&self.path)
+            && self.path < right.path
     }
-    if left.path == right.path {
-        return left
-            .bytes
-            .as_ref()
-            .zip(right.bytes.as_ref())
-            .is_some_and(|(a, b)| a.end <= b.start);
-    }
-    !left.path.starts_with(&right.path)
-        && !right.path.starts_with(&left.path)
-        && left.path < right.path
 }
 
 #[cfg(test)]
