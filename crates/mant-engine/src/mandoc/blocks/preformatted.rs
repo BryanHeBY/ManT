@@ -145,6 +145,22 @@ impl DisplayFlow<'_, '_> {
             // execution distinguish these from another literal source row.
             Some("fi") => self.set_literal_mode(false),
             Some("nf") => self.set_literal_mode(true),
+            Some("Pp") if !node.flags.no_print => {
+                // mdoc_term.c termp_pp_pre executes term_vspace even after
+                // an explicit sp or a continued word. This is a structural
+                // request, not the inline break used in definition heads.
+                self.flush();
+                self.output.push(Block::VerticalSpace {
+                    lines: 1,
+                    source: source_span(node),
+                });
+                self.line.reset_source_cursor();
+                // Native Pp tags point after its vertical request.
+                for target in super::targets::structural_targets(node) {
+                    self.line
+                        .append(vec![Inline::anchor_at(target, source_span(node))]);
+                }
+            }
             Some("sp") => {
                 self.flush();
                 self.output.push(Block::VerticalSpace {
@@ -188,6 +204,7 @@ impl DisplayFlow<'_, '_> {
                 continue;
             }
             if self.append_container(node) {
+                self.paragraph_predecessor |= super::super::adjacency::is_logical_sibling(node);
                 continue;
             }
             if node.kind == NodeKind::Block
@@ -253,6 +270,7 @@ impl DisplayFlow<'_, '_> {
             } else {
                 self.append_inline(node, nodes.get(index + 1));
             }
+            self.paragraph_predecessor |= super::super::adjacency::is_logical_sibling(node);
         }
     }
 }

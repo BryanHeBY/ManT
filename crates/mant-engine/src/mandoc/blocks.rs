@@ -160,6 +160,11 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
                 self.state.tighten_next_boundary();
             }
             self.push(node, nodes.get(index + 1), table_plan.embedding(index));
+            if self.context.macro_set == libmandoc_rs::MacroSet::Mdoc
+                && super::adjacency::is_logical_sibling(node)
+            {
+                self.paragraph_predecessor = true;
+            }
         }
     }
 
@@ -256,11 +261,6 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
                 formatter: &mut self.formatter,
             }
             .push(node, table_embedding);
-            // An executed display is a source sibling even when its body
-            // is empty and no visible IR block was materialized.
-            if node.kind == NodeKind::Block && node.macro_name.as_deref() == Some("Bd") {
-                self.paragraph_predecessor = true;
-            }
             if restores_macro_indent(node) {
                 self.state
                     .set_source_indent(self.indent_columns.macro_origin());

@@ -267,6 +267,10 @@ Nested displays likewise retain their own fill mode, offset, leading gap, target
 
 An empty `Bd` still retains an executed spacing request and its role as a predecessor for the following source block. A non-plain mdoc `It` itself establishes a paragraph boundary for a first-child display; plain `-item` lists instead inherit the preceding sibling or outer context. This applies to definition and column bodies as well as marked lists, without changing their semantic ownership.
 
+Display predecessors are native logical siblings, not emitted text: a font-only input word or retained empty `Bf` scope counts, while comments, suppressed nodes and transparent requests such as `ft`, `Sm` and `Tg` do not. A scope is not its own first child's predecessor. This follows the selected mandoc no-space behavior, which can differ from groff for invisible content immediately after a heading.
+
+An actual `Pp` retained by native validation inside a literal or unfilled display contributes an independent paragraph gap, even after `sp` or a continued word. Its target belongs after that gap. Native validation can remove duplicate or superseded `Pp` requests; ManT does not recreate them from raw source. Inline `Pp` used in a definition head retains its separate label-break behavior.
+
 ## mdoc Inline Semantics
 
 The following macros receive dedicated inline treatment:

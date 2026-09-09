@@ -561,16 +561,33 @@ fn preserves_targets_moved_to_paragraph_breaks_inside_no_fill_displays() {
     )
     .expect("lower a target moved onto a no-fill paragraph break");
 
-    let [Block::Preformatted { children, .. }] = document.sections[0].blocks.as_slice() else {
+    let [
+        Block::Preformatted {
+            children: before, ..
+        },
+        Block::VerticalSpace { lines: 1, .. },
+        Block::Preformatted { children, .. },
+    ] = document.sections[0].blocks.as_slice()
+    else {
         panic!(
-            "no-fill display must remain preformatted: {:?}",
+            "literal runs must retain their intervening paragraph request: {:?}",
             document.sections[0].blocks
         );
     };
+    assert_eq!(inline_text(before), "first line");
     assert!(
+        !before
+            .iter()
+            .any(|inline| matches!(inline, Inline::Anchor { .. }))
+    );
+    assert_eq!(
         children
             .iter()
-            .any(|inline| matches!(inline, Inline::Anchor { id, .. } if id == "hp-0-0"))
+            .filter(|inline| matches!(inline,
+                Inline::Anchor { id, owner_source: Some(source), .. }
+                if id == "hp-0-0" && source.line == 7))
+            .count(),
+        1
     );
     assert!(inline_text(children).contains("prompt hp(0,0)"));
 }

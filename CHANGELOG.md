@@ -18,6 +18,12 @@ that crate was not published for that change.
 
 ### Parent-relative document geometry (unreleased v0.11)
 
+- Retained mdoc `Pp` requests in literal/unfilled displays add their own
+  paragraph spacing even after `sp` or a continued word, with targets kept
+  after the gap. Display predecessor detection now shares native logical
+  sibling rules with inline lookahead: font-only words and retained empty
+  scopes count, but comments and transparent controls do not.
+
 - No-fill rows now follow executed native AST events, not source-line gaps:
   skipped conditionals and unused macros cannot invent whitespace, repeated
   and trailing empty rows survive, and `sp` operands never become body text.

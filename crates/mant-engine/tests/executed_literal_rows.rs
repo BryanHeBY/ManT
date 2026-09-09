@@ -16,6 +16,31 @@ fn rendered(mode: &str, body: &str) -> String {
 }
 
 #[test]
+fn retained_display_paragraph_requests_are_independent_of_literal_cursor_state() {
+    // CVS mdoc_term.c termp_pp_pre calls term_vspace unconditionally. Native
+    // validation, not our raw-source scan, removes duplicate/superseded Pp.
+    for mode in ["literal", "unfilled"] {
+        for (body, blanks) in [
+            ("ALPHA\n.Pp\nBETA", 1),
+            ("ALPHA\n.sp 1\n.Pp\nBETA", 2),
+            ("ALPHA\n.sp 0\n.Pp\nBETA", 1),
+            ("ALPHA\\c\n.Pp\nBETA", 1),
+            ("ALPHA\n.Pp\n.sp 1\nBETA", 1),
+            ("ALPHA\n.Pp\n.Pp\nBETA", 1),
+            ("ALPHA\n.Bf -emphasis\n.sp 1\n.Pp\n.Ef\nBETA", 2),
+        ] {
+            let text = rendered(mode, body);
+            assert!(
+                text.contains(&format!("ALPHA{}BETA", "\n".repeat(blanks + 1))),
+                "{mode}: {body}: {text:?}"
+            );
+        }
+        let text = rendered(mode, "ALPHA\n.Pp");
+        assert!(text.contains("ALPHA\n\nAFTER"), "{mode}: {text:?}");
+    }
+}
+
+#[test]
 fn literal_requests_execute_before_word_lowering() {
     for mode in ["nf", "EX", "SY", "literal", "unfilled"] {
         for (requests, blanks) in [

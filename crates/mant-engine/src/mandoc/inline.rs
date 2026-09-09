@@ -119,10 +119,10 @@ pub(super) fn append_inline_node_with_next(
         // distinction instead of concatenating the alternatives.
         Some("br") => builder.hard_break(),
         Some("Pp") => {
-            // In no-fill displays libmandoc can move the automatic target of
-            // a later semantic macro onto this paragraph break. The regular
-            // block lowering path conserves structural Pp targets, but this
-            // inline path must do so before replacing the node with a break.
+            // Extended definition heads can retain a Pp target as well as
+            // a label break. Block/display flow handles paragraph spacing
+            // and its post-gap target separately; do not impose that policy
+            // on this inline-only owner.
             if let Some(target) = super::targets::raw_target(node) {
                 builder.append(vec![Inline::anchor_at(target, super::source_span(node))]);
             }
