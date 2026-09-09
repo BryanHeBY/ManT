@@ -9,6 +9,7 @@ use std::io;
 #[rustfmt::skip]
 #[allow(dead_code, unused_imports, missing_docs, clippy::all, clippy::pedantic, clippy::nursery)]
 mod native;
+mod lifecycle;
 mod search_overlay;
 mod sgr;
 use minus::{Pager, hooks::Hook};
@@ -42,7 +43,8 @@ pub(crate) fn page_text(text: String, prompt: &str) -> io::Result<()> {
 
 #[cfg(not(unix))]
 fn run(pager: Pager) -> io::Result<()> {
-    minus::page_all(pager).map_err(pager_error)
+    let terminal = std::sync::Arc::new(lifecycle::PagerTerminal::new(lifecycle::PagerOperations));
+    minus::page_all(pager, &terminal).map_err(pager_error)
 }
 
 #[cfg(unix)]
@@ -60,6 +62,7 @@ fn run(pager: Pager) -> io::Result<()> {
     // action. Its alternate-screen command precedes raw-mode setup, so that
     // command alone is not a safe cleanup boundary.
     let termination = TerminationSignals::install()?;
+    let terminal = Arc::new(lifecycle::PagerTerminal::new(lifecycle::PagerOperations));
     let ready = Arc::new(AtomicBool::new(false));
     let initialized = Arc::clone(&ready);
     pager
@@ -73,6 +76,7 @@ fn run(pager: Pager) -> io::Result<()> {
         .map_err(pager_error)?;
     std::thread::scope(|scope| {
         let (done, finished) = mpsc::channel::<()>();
+        let monitored_terminal = Arc::clone(&terminal);
         let monitor = scope.spawn(move || -> io::Result<()> {
             loop {
                 if ready.load(Ordering::Acquire)
@@ -80,28 +84,20 @@ fn run(pager: Pager) -> io::Result<()> {
                 {
                     // Hold stdout through termination: pager drawing cannot
                     // race another write after we leave the alternate screen.
-                    let mut stdout = io::stdout().lock();
-                    crossterm::terminal::disable_raw_mode()?;
-                    crossterm::execute!(
-                        stdout,
-                        crossterm::cursor::Show,
-                        crossterm::event::DisableMouseCapture,
-                        crossterm::terminal::LeaveAlternateScreen
-                    )?;
-                    return termination.terminate(signal);
+                    return monitored_terminal.restore_then(|| termination.terminate(signal));
                 }
                 match finished.recv_timeout(Duration::from_millis(20)) {
                     Err(mpsc::RecvTimeoutError::Timeout) => {}
                     _ => {
                         // No-overflow output never starts the interactive UI.
-                        return termination
-                            .take()
-                            .map_or(Ok(()), |signal| termination.terminate(signal));
+                        return termination.take().map_or(Ok(()), |signal| {
+                            monitored_terminal.restore_then(|| termination.terminate(signal))
+                        });
                     }
                 }
             }
         });
-        let result = minus::page_all(pager).map_err(pager_error);
+        let result = minus::page_all(pager, &terminal).map_err(pager_error);
         drop(done);
         let cleanup = monitor
             .join()

@@ -51,13 +51,15 @@ export function adapted(name, input) {
   if (name === 'core/utils/display/tests.rs') text = text.replace('let res = Vec::new();', 'let res: Vec<u8> = Vec::new();').replace('res.contains("minus")', 'res.contains("mant")');
   // Apply the original behavioral patch byte-for-byte before relocating its
   // crate-local paths; ownership changes do not rewrite the patch history.
-  return applySearchPatch(name, text).replaceAll('crate::pager::', 'crate::delivery::pager::');
+  text = applyLocalPatch(name, text, '0001-visible-search.patch')
+    .replaceAll('crate::pager::', 'crate::delivery::pager::');
+  return applyLocalPatch(name, text, '0002-host-terminal-lease.patch');
 }
 
 // Exact-context local behavioral patch. Fail closed on upstream drift; this
 // includes the corrected upstream test expectations as well as production code.
-function applySearchPatch(name, text) {
-  const patch = fs.readFileSync(path.join(root, 'crates/mant/src/delivery/pager/patches/0001-visible-search.patch'), 'utf8');
+function applyLocalPatch(name, text, filename) {
+  const patch = fs.readFileSync(path.join(root, 'crates/mant/src/delivery/pager/patches', filename), 'utf8');
   let selected = false, before = [], after = [];
   function flush() {
     if (!before.length && !after.length) return;

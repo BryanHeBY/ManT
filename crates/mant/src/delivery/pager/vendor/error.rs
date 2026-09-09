@@ -73,6 +73,9 @@ pub enum CleanupError {
 #[derive(Debug, thiserror::Error)]
 #[allow(clippy::module_name_repetitions)]
 pub enum MinusError {
+    #[error("Failed to acquire or restore pager terminal modes")]
+    TerminalLifecycle(#[source] std::io::Error),
+
     #[error("Failed to initialize the terminal")]
     Setup(#[from] SetupError),
 

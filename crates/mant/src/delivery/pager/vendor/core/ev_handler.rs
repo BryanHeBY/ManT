@@ -363,6 +363,7 @@ pub fn handle_io_command(
     p: &mut PagerState,
     command_queue: &mut CommandQueue,
     user_input_active: &Arc<(Mutex<bool>, Condvar)>,
+    terminal: &crate::delivery::pager::lifecycle::PagerTerminal,
 ) -> Result<(), MinusError> {
     if p.running.lock().is_uninitialized() {
         return Ok(());
@@ -402,7 +403,7 @@ pub fn handle_io_command(
             *active = false;
             drop(active);
             cvar.notify_one();
-            let search_result = search::fetch_input(&mut out, p)?;
+            let search_result = search::fetch_input(&mut out, p, terminal)?;
             let mut active = lock.lock();
             *active = true;
             drop(active);

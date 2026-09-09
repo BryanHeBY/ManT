@@ -24,6 +24,9 @@ use crate::delivery::pager::native::{Pager, error::MinusError};
 /// # Errors
 /// The function will return with an error if it encounters a error during paging.
 #[allow(clippy::needless_pass_by_value)]
-pub fn page_all(pager: Pager) -> Result<(), MinusError> {
-    init::init_core(&pager, crate::delivery::pager::native::RunMode::Static)
+pub fn page_all(
+    pager: Pager,
+    terminal: &std::sync::Arc<crate::delivery::pager::lifecycle::PagerTerminal>,
+) -> Result<(), MinusError> {
+    init::init_core(&pager, crate::delivery::pager::native::RunMode::Static, terminal)
 }

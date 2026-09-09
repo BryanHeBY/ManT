@@ -678,7 +678,9 @@ where
 pub(crate) fn fetch_input(
     out: &mut impl std::io::Write,
     ps: &PagerState,
+    terminal: &crate::delivery::pager::lifecycle::PagerTerminal,
 ) -> Result<FetchInputResult, MinusError> {
+    terminal.ensure_running().map_err(MinusError::TerminalLifecycle)?;
     // Set the search character to show at column 0
     let search_char = if ps.search_state.search_mode == SearchMode::Forward {
         '/'
@@ -694,17 +696,18 @@ pub(crate) fn fetch_input(
     term::move_cursor(out, 0, ps.rows.try_into().unwrap(), false)?;
     write!(
         out,
-        "{}{}{}",
+        "{}{}",
         Clear(ClearType::CurrentLine),
-        search_char,
-        cursor::Show
+        search_char
     )?;
+    terminal.cursor_visible(true).map_err(MinusError::TerminalLifecycle)?;
     out.flush()?;
 
     let mut search_opts = SearchOpts::from(ps);
 
     // Fetch events from the terminal and handle them
     loop {
+        terminal.ensure_running().map_err(MinusError::TerminalLifecycle)?;
         if event::poll(Duration::from_millis(100)).map_err(|e| MinusError::HandleEvent(e.into()))? {
             let ev = event::read().map_err(|e| MinusError::HandleEvent(e.into()))?;
             search_opts.ev = Some(ev);
@@ -721,7 +724,8 @@ pub(crate) fn fetch_input(
     }
     // Teardown: almost opposite of setup
     term::move_cursor(out, 0, ps.rows.try_into().unwrap(), false)?;
-    write!(out, "{}{}", Clear(ClearType::CurrentLine), cursor::Hide)?;
+    write!(out, "{}", Clear(ClearType::CurrentLine))?;
+    terminal.cursor_visible(false).map_err(MinusError::TerminalLifecycle)?;
     out.flush()?;
 
     let fetch_input_result = match search_opts.input_status {

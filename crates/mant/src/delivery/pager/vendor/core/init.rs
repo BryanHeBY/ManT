@@ -17,7 +17,7 @@ use crate::delivery::pager::native::{
         RunMode,
         commands::Command,
         ev_handler::handle_event,
-        utils::{display::draw_full, term},
+        utils::display::draw_full,
     },
 };
 
@@ -25,7 +25,6 @@ use crossbeam_channel::{Receiver, Sender, TrySendError};
 use crossterm::event;
 use std::{
     io::Write,
-    panic,
     sync::{
         Arc,
         atomic::{AtomicBool, Ordering},
@@ -39,6 +38,186 @@ use parking_lot::Condvar;
 use parking_lot::Mutex;
 
 use super::{CommandQueue, RUNMODE, utils::display::draw_for_change};
+use crate::delivery::pager::lifecycle::PagerTerminal;
+
+// The run mode belongs to this invocation, including direct-output errors,
+// partially completed setup, worker errors and unwinding.
+struct RunModeGuard<'a>(&'a Mutex<RunMode>);
+
+impl<'a> RunModeGuard<'a> {
+    fn acquire(state: &'a Mutex<RunMode>, mode: RunMode) -> Self {
+        let mut current = state.lock();
+        assert_eq!(*current, RunMode::Uninitialized, "another pager is already running");
+        *current = mode;
+        Self(state)
+    }
+}
+
+impl Drop for RunModeGuard<'_> {
+    fn drop(&mut self) {
+        *self.0.lock() = RunMode::Uninitialized;
+    }
+}
+
+#[cfg(test)]
+mod run_mode_tests {
+    use super::{Mutex, RunMode, RunModeGuard};
+
+    #[test]
+    fn run_mode_is_reusable_after_success_error_and_unwind() {
+        let state = Mutex::new(RunMode::Uninitialized);
+        for fail in [false, true] {
+            let result: std::io::Result<()> = (|| {
+                let _mode = RunModeGuard::acquire(&state, RunMode::Static);
+                assert_eq!(*state.lock(), RunMode::Static);
+                if fail {
+                    return Err(std::io::Error::other("direct-output or setup failure"));
+                }
+                Ok(())
+            })();
+            assert_eq!(result.is_err(), fail);
+            assert_eq!(*state.lock(), RunMode::Uninitialized);
+        }
+        assert!(std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let _mode = RunModeGuard::acquire(&state, RunMode::Static);
+            panic!("worker panic");
+        })).is_err());
+        assert_eq!(*state.lock(), RunMode::Uninitialized);
+        let mode = RunModeGuard::acquire(&state, RunMode::Static);
+        assert!(std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            RunModeGuard::acquire(&state, RunMode::Static)
+        })).is_err());
+        assert_eq!(*state.lock(), RunMode::Static, "a rejected invocation does not own reset");
+        drop(mode);
+        assert_eq!(*state.lock(), RunMode::Uninitialized);
+    }
+}
+
+#[cfg(test)]
+mod worker_tests {
+    use super::*;
+    use std::time::{Duration, Instant};
+
+    #[test]
+    fn search_cannot_steal_an_event_between_reader_poll_and_read() {
+        let active = Arc::new((Mutex::new(true), Condvar::new()));
+        let pending = Arc::new(AtomicBool::new(true));
+        let (polled, ready) = std::sync::mpsc::channel();
+        let (continue_read, proceed) = std::sync::mpsc::channel();
+        let reader = {
+            let active = Arc::clone(&active);
+            let pending = Arc::clone(&pending);
+            std::thread::spawn(move || {
+                read_active_event(&active, &AtomicBool::new(false), || {
+                    assert!(pending.load(Ordering::SeqCst), "poll sees the pending event");
+                    polled.send(()).unwrap();
+                    proceed.recv_timeout(Duration::from_secs(2)).unwrap();
+                    assert!(pending.swap(false, Ordering::SeqCst), "read retains its polled event");
+                    Ok(Some(event::Event::FocusGained))
+                }).unwrap()
+            })
+        };
+        ready.recv_timeout(Duration::from_secs(2)).unwrap();
+        assert!(active.0.try_lock().is_none(), "poll/read must retain the existing input gate");
+        let search = {
+            let active = Arc::clone(&active);
+            let pending = Arc::clone(&pending);
+            std::thread::spawn(move || {
+                let mut enabled = active.0.lock();
+                *enabled = false;
+                pending.swap(false, Ordering::SeqCst)
+            })
+        };
+        continue_read.send(()).unwrap();
+        assert_eq!(reader.join().unwrap(), Some(event::Event::FocusGained));
+        assert!(!search.join().unwrap(), "search begins only after the reader consumed its event");
+        assert!(!*active.0.lock());
+    }
+
+    #[test]
+    fn idle_and_paused_workers_stop_without_an_input_event() {
+        let mut child = std::process::Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", "delivery::pager::native::minus_core::init::worker_tests::cancellation_child", "--nocapture"])
+            .env("MANT_TEST_PAGER_CANCEL_CHILD", "1")
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::piped())
+            .spawn().unwrap();
+        let deadline = Instant::now() + Duration::from_secs(15);
+        loop {
+            if child.try_wait().unwrap().is_some() {
+                let output = child.wait_with_output().unwrap();
+                assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+                break;
+            }
+            if Instant::now() >= deadline {
+                let _ = child.kill();
+                let _ = child.wait();
+                panic!("pager cancellation child timed out");
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+    }
+
+    #[test]
+    fn cancellation_child() {
+        if std::env::var_os("MANT_TEST_PAGER_CANCEL_CHILD").is_none() {
+            return;
+        }
+        let terminal = Arc::new(PagerTerminal::new(crate::delivery::pager::lifecycle::PagerOperations));
+        let exited = terminal.exited();
+        let mut state = PagerState::new().unwrap();
+        assert!(state.hooks.remove_callback(Hook::PostPagerExit, 1));
+        let (started, ready) = std::sync::mpsc::channel();
+        state.hooks.add_callback(Hook::PostPagerStart, 17, Box::new(move |_| {
+            started.send(()).unwrap();
+        }));
+        let state = Arc::new(Mutex::new(state));
+        let active = Arc::new((Mutex::new(true), Condvar::new()));
+        let (_send, receive) = crossbeam_channel::unbounded();
+        let _mode = RunModeGuard::acquire(&RUNMODE, RunMode::Static);
+        let (done, completed) = std::sync::mpsc::channel();
+        let reactor = {
+            let state = Arc::clone(&state);
+            let active = Arc::clone(&active);
+            let terminal = Arc::clone(&terminal);
+            let exited = Arc::clone(&exited);
+            std::thread::spawn(move || {
+                let result = start_reactor(&receive, &state, Vec::new(), &active, &exited, &terminal);
+                done.send(result).unwrap();
+            })
+        };
+        ready.recv_timeout(Duration::from_secs(2)).unwrap();
+        // With the initial frame complete and no commands sent, this covers
+        // the idle receive rather than only an already-cancelled startup.
+        std::thread::sleep(Duration::from_millis(150));
+        exited.store(true, Ordering::SeqCst);
+        completed.recv_timeout(Duration::from_secs(2)).unwrap().unwrap();
+        reactor.join().unwrap();
+
+        let exited = Arc::new(AtomicBool::new(false));
+        let active = Arc::new((Mutex::new(false), Condvar::new()));
+        let (send, _receive) = crossbeam_channel::unbounded();
+        let (done, completed) = std::sync::mpsc::channel();
+        let reader = {
+            let active = Arc::clone(&active);
+            let exited = Arc::clone(&exited);
+            std::thread::spawn(move || {
+                done.send(event_reader(&send, &state, &active, &exited)).unwrap();
+            })
+        };
+        let deadline = Instant::now() + Duration::from_secs(2);
+        // notify_one reports a real waiter. The flag changes only after the
+        // reader reached the paused-input wait, not before its initial check.
+        while !active.1.notify_one() {
+            assert!(Instant::now() < deadline, "reader never reached paused wait");
+            std::thread::yield_now();
+        }
+        exited.store(true, Ordering::SeqCst);
+        completed.recv_timeout(Duration::from_secs(2)).unwrap().unwrap();
+        reader.join().unwrap();
+    }
+}
 
 /// The main entry point of minus
 ///
@@ -74,11 +253,13 @@ use super::{CommandQueue, RUNMODE, utils::display::draw_for_change};
 /// [`event reader`]: event_reader
 #[allow(clippy::module_name_repetitions)]
 #[allow(clippy::too_many_lines)]
-pub fn init_core(pager: &Pager, rm: RunMode) -> std::result::Result<(), MinusError> {
+pub fn init_core(
+    pager: &Pager,
+    rm: RunMode,
+    terminal: &Arc<PagerTerminal>,
+) -> std::result::Result<(), MinusError> {
     #[cfg(not(test))]
     let mut out = stdout();
-    #[cfg(test)]
-    let mut out = Vec::new();
 
     // Is the event reader running
     let input_thread_running = Arc::new((Mutex::new(true), Condvar::new()));
@@ -91,7 +272,7 @@ pub fn init_core(pager: &Pager, rm: RunMode) -> std::result::Result<(), MinusErr
 
     #[allow(unused_mut)]
     let mut ps = crate::delivery::pager::native::state::PagerState::generate_initial_state(&pager.rx)?;
-    *super::RUNMODE.lock() = rm;
+    let _run_mode = RunModeGuard::acquire(&RUNMODE, rm);
     ps.run_hooks(Hook::PrePagerStart);
 
     // Static mode checks
@@ -101,7 +282,6 @@ pub fn init_core(pager: &Pager, rm: RunMode) -> std::result::Result<(), MinusErr
         // If stdout is not a tty, write everything and quit
         if !out.is_tty() {
             write_raw_lines(&mut out, &[ps.screen.orig_text], None)?;
-            *RUNMODE.lock() = RunMode::Uninitialized;
             return Ok(());
         }
         // If number of lines of text is less than available rows, write everything and quit
@@ -109,94 +289,83 @@ pub fn init_core(pager: &Pager, rm: RunMode) -> std::result::Result<(), MinusErr
         if ps.screen.formatted_lines_count() <= ps.rows && !ps.run_no_overflow {
             write_raw_lines(&mut out, &ps.screen.formatted_lines, Some("\r"))?;
             ps.exit();
-            *RUNMODE.lock() = RunMode::Uninitialized;
             return Ok(());
         }
     }
 
-    // Setup terminal, adjust line wraps and get rows
-    #[cfg(not(test))]
-    term::setup(&mut out)?;
+    terminal.interactive(|| {
+        // The direct-output path above never acquires modes or replaces a hook.
+        #[cfg(not(test))]
+        {
+            use crossterm::tty::IsTty;
+            if !out.is_tty() {
+                return Err(crate::delivery::pager::native::error::SetupError::InvalidTerminal.into());
+            }
+            terminal.setup().map_err(MinusError::TerminalLifecycle)?;
+        }
 
-    // Has the user quit
-    let is_exited = Arc::new(AtomicBool::new(false));
-    let is_exited2 = is_exited.clone();
+        let is_exited = terminal.exited();
 
-    {
-        let panic_hook = panic::take_hook();
-        panic::set_hook(Box::new(move |pinfo| {
-            is_exited2.store(true, std::sync::atomic::Ordering::SeqCst);
-            // HACK: In test we don't care about the cleanup code so just use a separate buffer
-            // for panic handler.
+        let ps_mutex = Arc::new(Mutex::new(ps));
+
+        let evtx = pager.tx.clone();
+        let rx = pager.rx.clone();
+
+        let p1 = ps_mutex.clone();
+
+        let input_thread_running2 = input_thread_running.clone();
+
+        std::thread::scope(|s| -> crate::delivery::pager::native::Result {
+            let is_exited3 = is_exited.clone();
+            let is_exited4 = is_exited.clone();
+
             #[cfg(test)]
             let mut out2 = Vec::new();
             #[cfg(not(test))]
-            let mut out2 = stdout();
+            let mut out2 = terminal.output(stdout());
 
-            // While silently ignoring error is considered a bad practice, we are forced to do it here
-            // as we cannot use the ? and panicking here will (probably?) cause an immediate abort
-            drop(term::cleanup(&mut out2, true));
-            panic_hook(pinfo);
-        }));
-    }
+            let t1 = s.spawn(move || {
+                let res = event_reader(
+                    &evtx,
+                    &p1,
+                    &input_thread_running2,
+                    &is_exited3,
+                );
 
-    let ps_mutex = Arc::new(Mutex::new(ps));
+                if res.is_err() {
+                    is_exited3.store(true, std::sync::atomic::Ordering::SeqCst);
+                }
+                res
+            });
+            let t2 = s.spawn(move || {
+                let res = start_reactor(
+                    &rx,
+                    &ps_mutex,
+                    &mut out2,
+                    &input_thread_running,
+                    &is_exited4,
+                    terminal,
+                );
 
-    let evtx = pager.tx.clone();
-    let rx = pager.rx.clone();
+                if res.is_err() {
+                    is_exited4.store(true, std::sync::atomic::Ordering::SeqCst);
+                }
+                res
+            });
 
-    let p1 = ps_mutex.clone();
+            let r1 = t1.join().unwrap();
+            let r2 = t2.join().unwrap();
 
-    let input_thread_running2 = input_thread_running.clone();
-
-    std::thread::scope(|s| -> crate::delivery::pager::native::Result {
-        let is_exited3 = is_exited.clone();
-        let is_exited4 = is_exited.clone();
-
-        #[cfg(test)]
-        let mut out2 = Vec::new();
-        #[cfg(not(test))]
-        let mut out2 = stdout();
-
-        let t1 = s.spawn(move || {
-            let res = event_reader(
-                &evtx,
-                &p1,
-                &input_thread_running2,
-                &is_exited3,
-            );
-
-            if res.is_err() {
-                is_exited3.store(true, std::sync::atomic::Ordering::SeqCst);
+            if r1.is_err() || r2.is_err() {
+                // Keep the worker failure primary; the same lease retries any
+                // failed releases at the outer interactive boundary and Drop.
+                let _ = terminal.restore();
             }
-            res
-        });
-        let t2 = s.spawn(move || {
-            let res = start_reactor(
-                &rx,
-                &ps_mutex,
-                &mut out2,
-                &input_thread_running,
-                &is_exited4,
-            );
 
-            if res.is_err() {
-                is_exited4.store(true, std::sync::atomic::Ordering::SeqCst);
-            }
-            res
-        });
-
-        let r1 = t1.join().unwrap();
-        let r2 = t2.join().unwrap();
-
-        if r1.is_err() || r2.is_err() {
-            *RUNMODE.lock() = RunMode::Uninitialized;
-            term::cleanup(&mut out, true)?;
-        }
-
-        r1?;
-        r2?;
-        Ok(())
+            r1?;
+            r2?;
+            Ok(())
+        })
     })
 }
 
@@ -219,6 +388,7 @@ fn start_reactor(
     mut out_lock: impl Write,
     input_thread_running: &Arc<(Mutex<bool>, Condvar)>,
     is_exited: &Arc<AtomicBool>,
+    terminal: &PagerTerminal,
 ) -> Result<(), MinusError> {
     let mut command_queue = CommandQueue::new();
 
@@ -238,11 +408,8 @@ fn start_reactor(
         #[cfg(any())]
         RunMode::Dynamic => loop {
             if is_exited.load(Ordering::SeqCst) {
-                term::cleanup(&mut out_lock, true)?;
+                terminal.restore().map_err(MinusError::TerminalLifecycle)?;
                 ps.lock().run_hooks(Hook::PostPagerExit);
-                let mut rm = RUNMODE.lock();
-                *rm = RunMode::Uninitialized;
-                drop(rm);
                 break;
             }
 
@@ -262,6 +429,7 @@ fn start_reactor(
                     &mut p,
                     &mut command_queue,
                     input_thread_running,
+                    terminal,
                 )?;
             } else if let Ok(command) = next_command {
                 handle_event(command, &mut p, &mut command_queue, is_exited);
@@ -273,17 +441,13 @@ fn start_reactor(
                     // Cleanup the screen
                     //
                     // This is not needed in dynamic paging because this is already handled by handle_event
-                    term::cleanup(&mut out_lock, true)?;
+                    terminal.restore().map_err(MinusError::TerminalLifecycle)?;
                     ps.lock().run_hooks(Hook::PostPagerExit);
-
-                    let mut rm = RUNMODE.lock();
-                    *rm = RunMode::Uninitialized;
-                    drop(rm);
 
                     break;
                 }
                 let next_command = if command_queue.is_empty() {
-                    rx.recv()
+                    rx.recv_timeout(std::time::Duration::from_millis(100))
                 } else {
                     Ok(command_queue.pop_front().unwrap())
                 };
@@ -299,6 +463,7 @@ fn start_reactor(
                         &mut p,
                         &mut command_queue,
                         input_thread_running,
+                        terminal,
                     )?;
                 } else if let Ok(command) = next_command {
                     handle_event(command, &mut p, &mut command_queue, is_exited);
@@ -313,6 +478,27 @@ This is most likely a bug. Please open an issue to the developers"
     Ok(())
 }
 
+// A search pause and a poll/read pair are mutually exclusive. No PagerState or
+// stdout lock is acquired while waiting for this gate; callers release it
+// before interpreting events or drawing.
+fn read_active_event(
+    user_input_active: &Arc<(Mutex<bool>, Condvar)>,
+    is_exited: &AtomicBool,
+    read: impl FnOnce() -> Result<Option<event::Event>, MinusError>,
+) -> Result<Option<event::Event>, MinusError> {
+    let (lock, cvar) = (&user_input_active.0, &user_input_active.1);
+    let mut active = lock.lock();
+    while !*active && !is_exited.load(Ordering::SeqCst) {
+        cvar.wait_for(&mut active, std::time::Duration::from_millis(100));
+    }
+    if is_exited.load(Ordering::SeqCst) {
+        return Ok(None);
+    }
+    let event = read();
+    drop(active);
+    event
+}
+
 fn event_reader(
     evtx: &Sender<Command>,
     ps: &Arc<Mutex<PagerState>>,
@@ -324,15 +510,20 @@ fn event_reader(
             break;
         }
 
-        {
-            let (lock, cvar) = (&user_input_active.0, &user_input_active.1);
-            cvar.wait_while(&mut lock.lock(), |pending| !*pending);
-        }
+        let event = read_active_event(user_input_active, is_exited, || {
+            // Search must acquire this same gate before pausing the reader.
+            // Keep poll/read atomic with respect to that transition so search
+            // cannot consume the event that made this poll report ready.
+            let ready = event::poll(std::time::Duration::from_millis(100))
+                .map_err(|e| MinusError::HandleEvent(e.into()))?;
+            if ready {
+                Ok(Some(event::read().map_err(|e| MinusError::HandleEvent(e.into()))?))
+            } else {
+                Ok(None)
+            }
+        })?; // Release the input gate before taking PagerState (search holds it).
 
-        if event::poll(std::time::Duration::from_millis(100))
-            .map_err(|e| MinusError::HandleEvent(e.into()))?
-        {
-            let ev = event::read().map_err(|e| MinusError::HandleEvent(e.into()))?;
+        if let Some(ev) = event {
             let mut guard = ps.lock();
             // Get the events
             let input = guard.input_classifier.classify_input(ev, &guard);
