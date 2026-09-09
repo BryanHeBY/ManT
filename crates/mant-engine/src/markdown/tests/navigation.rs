@@ -23,7 +23,7 @@ fn unrelated_semantic_looking_sections_do_not_perturb_entry_ids() {
         let parsed = parse_markdown(source, None).expect("semantic ID fixture");
         let entries = crate::definitions::content_entries(&parsed.document.sections[1].blocks);
         entries[0]
-            .item
+            .owner()
             .facts()
             .expect("option identity")
             .id

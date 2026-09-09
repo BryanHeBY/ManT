@@ -273,7 +273,7 @@ pub(super) fn trail(node: &LocatedNode<'_>) -> OutlineTrail {
             breadcrumbs,
             ..
         } => {
-            let facts = entry.item.facts().expect("indexed entry");
+            let facts = entry.owner().facts().expect("indexed entry");
             (
                 breadcrumbs,
                 OutlineNodeReference::DocumentEntry {
@@ -282,7 +282,7 @@ pub(super) fn trail(node: &LocatedNode<'_>) -> OutlineTrail {
                     title: title.clone(),
                     entry_kind: facts.kind,
                     case: facts.case,
-                    names: entry.names.to_vec(),
+                    names: entry.names().to_vec(),
                 },
             )
         }

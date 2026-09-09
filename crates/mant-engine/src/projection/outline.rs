@@ -221,8 +221,8 @@ fn reference_inventory(
         crate::selectors::LocatedNode::Entry { entry, .. } => {
             scan(ReferenceScope::Owner(EntryOwnerLocationRef {
                 sections: &sections,
-                blocks: &entry.block_path,
-                item_index: u32::try_from(entry.item_index).expect("addressable item"),
+                blocks: entry.block_path(),
+                item_index: u32::try_from(entry.item_index()).expect("addressable item"),
             }))
         }
     })
@@ -523,7 +523,7 @@ fn resolve_outline_root(
         });
     };
     let mut metadata =
-        SemanticEntry::from_owner_shallow(entry.item).expect("located semantic owner");
+        SemanticEntry::from_owner_shallow(entry.owner()).expect("located semantic owner");
     if metadata.alias_of.is_some()
         && query.document.as_ref().is_some_and(|document| {
             mant_ir::entry_relation_issues(document)
@@ -553,8 +553,8 @@ fn resolve_outline_root(
                     .iter()
                     .map(|index| u32::try_from(index - 1).unwrap_or(u32::MAX))
                     .collect(),
-                blocks: entry.block_path.clone(),
-                item_index: u32::try_from(entry.item_index).unwrap_or(u32::MAX),
+                blocks: entry.block_path().to_vec(),
+                item_index: u32::try_from(entry.item_index()).unwrap_or(u32::MAX),
             })
         },
     )
@@ -567,7 +567,7 @@ fn resolve_outline_root(
     } = &mut node
     {
         *path = selected.path().to_string().into();
-        *entry_summary = borrowed_summary(entry.item.blocks(), entries);
+        *entry_summary = borrowed_summary(entry.owner().blocks(), entries);
     }
     Ok(node)
 }

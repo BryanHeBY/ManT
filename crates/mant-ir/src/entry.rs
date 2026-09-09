@@ -2,6 +2,7 @@
 mod content;
 mod facts;
 mod index;
+mod location;
 mod model;
 mod relations;
 mod walk;
@@ -14,6 +15,7 @@ pub use facts::*;
 pub use index::SemanticIndex;
 #[cfg(test)]
 use index::entry_from_definition;
+pub use location::{ContentEntry, content_entries, content_entry_locations};
 pub use model::*;
 pub(crate) use relations::relation_issues;
 pub use relations::{EntryRelationIssue, EntryRelationIssueKind, entry_relation_issues};

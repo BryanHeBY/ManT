@@ -4,7 +4,7 @@ use crate::{Block, DefinitionItem, EntryKind, EntryOwner, ListItem};
 /// Visit direct semantic children through transparent structural containers.
 /// An entry's description belongs to that child, not to the current parent.
 pub fn visit_child_entries<'a>(blocks: &'a [Block], visit: &mut impl FnMut(EntryOwner<'a>)) {
-    walk::<false>(blocks, &mut Vec::new(), &mut |owner, _, _| visit(owner));
+    walk::<false>(blocks, &mut Vec::new(), &mut |owner, _, _, _| visit(owner));
 }
 
 /// Locate direct semantic children during the same authoritative owner walk.
@@ -12,7 +12,7 @@ pub fn visit_child_entries<'a>(blocks: &'a [Block], visit: &mut impl FnMut(Entry
 pub(super) fn visit_child_entry_locations<'a>(
     blocks: &'a [Block],
     prefix: &[crate::ContentBlockStep],
-    visit: &mut impl FnMut(EntryOwner<'a>, &[crate::ContentBlockStep], u32),
+    visit: &mut impl FnMut(EntryOwner<'a>, &'a Block, &[crate::ContentBlockStep], u32),
 ) {
     walk::<true>(blocks, &mut prefix.to_vec(), visit);
 }
@@ -20,7 +20,7 @@ pub(super) fn visit_child_entry_locations<'a>(
 fn walk<'a, const LOCATE: bool>(
     blocks: &'a [Block],
     path: &mut Vec<crate::ContentBlockStep>,
-    visit: &mut impl FnMut(EntryOwner<'a>, &[crate::ContentBlockStep], u32),
+    visit: &mut impl FnMut(EntryOwner<'a>, &'a Block, &[crate::ContentBlockStep], u32),
 ) {
     use crate::ContentBlockStep as Step;
     for (block_index, block) in blocks.iter().enumerate() {
@@ -34,6 +34,7 @@ fn walk<'a, const LOCATE: bool>(
                 for (index, item) in items.iter().enumerate() {
                     visit_or_descend::<LOCATE>(
                         EntryOwner::Definition(item),
+                        block,
                         coordinate(index),
                         path,
                         visit,
@@ -44,6 +45,7 @@ fn walk<'a, const LOCATE: bool>(
                 for (index, item) in items.iter().enumerate() {
                     visit_or_descend::<LOCATE>(
                         EntryOwner::List(item),
+                        block,
                         coordinate(index),
                         path,
                         visit,
@@ -81,12 +83,13 @@ fn walk<'a, const LOCATE: bool>(
 
 fn visit_or_descend<'a, const LOCATE: bool>(
     owner: EntryOwner<'a>,
+    container: &'a Block,
     index: u32,
     path: &mut Vec<crate::ContentBlockStep>,
-    visit: &mut impl FnMut(EntryOwner<'a>, &[crate::ContentBlockStep], u32),
+    visit: &mut impl FnMut(EntryOwner<'a>, &'a Block, &[crate::ContentBlockStep], u32),
 ) {
     if owner.facts().is_some() {
-        visit(owner, path, index);
+        visit(owner, container, path, index);
     } else {
         if LOCATE {
             path.push(owner_child_step(owner, index));

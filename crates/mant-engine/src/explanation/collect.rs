@@ -72,7 +72,7 @@ impl<'a> Scan<'a, '_> {
             unreachable!("owner location")
         };
         let (matched, mut bases) =
-            super::matches::MatchPlan::collect(owner, entry.names, self.query);
+            super::matches::MatchPlan::collect(owner, entry.names(), self.query);
         if is_identity(&self.located[index], self.query) {
             let mut fields = Vec::new();
             if self.located[index].id() == self.query {

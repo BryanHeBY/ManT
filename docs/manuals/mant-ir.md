@@ -271,6 +271,8 @@ validator; explanation collection is a separate consumer of validated facts.
 
 For semantic definitions, the engine derives a role-qualified identity from the complete semantic name after source-specific parsing. Formatter navigation tags remain page-local anchors but do not become semantic IDs merely because their spelling is short or collides with a command. Collisions use a deterministic fingerprint of semantic identity and content rather than a source-order suffix; unrelated sibling insertion and reordering therefore cannot silently redirect an ID. Section and entry allocation are independent. These IDs identify the same logical content within one current document, but an independently updated host manual can change or remove that content, so consumers rediscover before reuse.
 
+`content_entries` returns borrowed `ContentEntry` locations in semantic preorder, with validated names, semantic ancestors and exact physical block/item coordinates. Transparent lists, definitions and table cells retain their physical paths without consuming semantic ordinals. `content_entry_locations` follows the same owner walk without validating names, so empty or invalid names cannot hide an addressable owner. Both scans borrow original content; serializing a location measures the same single-owner block as its explicit `content()` copy, preserving list numbering and layout without first cloning the body. The location's fields are read-only accessors, not independently constructible coordinates.
+
 `SemanticIndex` is a rebuildable sidecar over these content definitions. It
 maps each owner to one `SemanticEntry` and retains nested ownership such as
 command → option → value. The same `EntryKind` is used by facts and projections;

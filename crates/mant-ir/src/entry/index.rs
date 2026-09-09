@@ -178,7 +178,7 @@ fn entries_with_locations(
     owners: &mut BTreeMap<crate::OutlinePath, crate::ContentReveal>,
 ) -> Vec<SemanticEntry> {
     let mut entries = Vec::new();
-    visit_child_entry_locations(blocks, prefix, &mut |item, path, item_index| {
+    visit_child_entry_locations(blocks, prefix, &mut |item, _, path, item_index| {
         let Some(mut entry) = SemanticEntry::from_owner_shallow(item) else {
             return;
         };

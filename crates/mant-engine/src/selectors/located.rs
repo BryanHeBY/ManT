@@ -54,7 +54,7 @@ impl LocatedNode<'_> {
             Self::Section { section, .. } => &section.id,
             Self::Entry { entry, .. } => {
                 &entry
-                    .item
+                    .owner()
                     .facts()
                     .expect("located entries have identities")
                     .id
@@ -64,7 +64,7 @@ impl LocatedNode<'_> {
 
     pub(crate) fn facts(&self) -> Option<&EntryFacts> {
         match self {
-            Self::Entry { entry, .. } => entry.item.facts(),
+            Self::Entry { entry, .. } => entry.owner().facts(),
             Self::Section { .. } => None,
         }
     }
@@ -129,28 +129,28 @@ fn collect_sections_impl<'a, const DETAILS: bool>(
         } else {
             content_entry_locations(&section.blocks)
         } {
-            let entry = located.item;
+            let entry = located.owner();
             let mut entry_breadcrumbs = child_breadcrumbs.clone();
             if DETAILS {
                 append_entry_breadcrumbs(
                     &mut entry_breadcrumbs,
                     Some(&coordinates),
-                    &located.indices,
-                    &located.ancestors,
+                    located.indices(),
+                    located.ancestors(),
                 );
             }
             output.push(LocatedNode::Entry {
                 order: output.len(),
                 coordinates: coordinates.clone(),
-                path: OutlinePath::nested_entry(Some(&coordinates), &located.indices)
+                path: OutlinePath::nested_entry(Some(&coordinates), located.indices())
                     .expect("enumerated entry paths are one-based"),
                 title: if DETAILS {
-                    definition_title(entry, located.names)
+                    definition_title(entry, located.names())
                 } else {
                     String::new()
                 },
                 breadcrumbs: entry_breadcrumbs,
-                source: located.source,
+                source: located.source(),
                 entry: Box::new(located),
             });
         }
@@ -192,28 +192,28 @@ fn collect_root_entries_impl<'a, const DETAILS: bool>(
     } else {
         content_entry_locations(blocks)
     } {
-        let entry = located.item;
+        let entry = located.owner();
         let mut entry_breadcrumbs = breadcrumbs.clone();
         if DETAILS {
             append_entry_breadcrumbs(
                 &mut entry_breadcrumbs,
                 None,
-                &located.indices,
-                &located.ancestors,
+                located.indices(),
+                located.ancestors(),
             );
         }
         output.push(LocatedNode::Entry {
             order: output.len(),
             coordinates: Vec::new(),
-            path: OutlinePath::nested_entry(None, &located.indices)
+            path: OutlinePath::nested_entry(None, located.indices())
                 .expect("enumerated entry paths are one-based"),
             title: if DETAILS {
-                definition_title(entry, located.names)
+                definition_title(entry, located.names())
             } else {
                 String::new()
             },
             breadcrumbs: entry_breadcrumbs,
-            source: located.source,
+            source: located.source(),
             entry: Box::new(located),
         });
     }
@@ -266,9 +266,9 @@ mod selection_tests {
                 } => {
                     assert!(title.is_empty());
                     assert!(breadcrumbs.is_empty());
-                    assert!(entry.names.is_empty());
-                    assert!(!entry.block_path.is_empty());
-                    assert!(entry.item.facts().is_some());
+                    assert!(entry.names().is_empty());
+                    assert!(!entry.block_path().is_empty());
+                    assert!(entry.owner().facts().is_some());
                 }
             }
         }

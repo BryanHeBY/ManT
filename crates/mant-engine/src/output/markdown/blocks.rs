@@ -52,7 +52,7 @@ pub(super) fn render_blocks_with_entries(
     let mut entries = Vec::new();
     if options.preserve_anchors {
         for located in content_entries(blocks) {
-            let entry = located.item;
+            let entry = located.owner();
             let Some(identity) = entry.facts() else {
                 continue;
             };
@@ -62,7 +62,7 @@ pub(super) fn render_blocks_with_entries(
             let start = range.start;
             let end = range.end;
             let mut identity = identity.clone();
-            identity.names = located.names.to_vec();
+            identity.names = located.names().to_vec();
             if !identity.alias_groups.is_empty() {
                 identity.alias_groups = entry.validated_alias_groups().unwrap_or_default().to_vec();
             }
@@ -72,11 +72,11 @@ pub(super) fn render_blocks_with_entries(
                     &identity.names,
                     mant_protocol::EntryLabelMode::Compact,
                 ),
-                indices: located.indices,
+                indices: located.indices().to_vec(),
                 start,
                 end,
                 entry: identity,
-                source: located.source,
+                source: located.source(),
             });
         }
     }

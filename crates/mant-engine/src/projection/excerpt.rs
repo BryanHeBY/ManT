@@ -199,14 +199,17 @@ impl LocatedNode<'_> {
                 outline: OutlineTrail {
                     ancestors: project_breadcrumbs(breadcrumbs),
                     node: {
-                        let identity = entry.item.facts().expect("located entries have identities");
+                        let identity = entry
+                            .owner()
+                            .facts()
+                            .expect("located entries have identities");
                         OutlineNodeReference::DocumentEntry {
                             path: path.to_string().into(),
                             id: identity.id.clone(),
                             title: title.clone(),
                             entry_kind: identity.kind,
                             case: identity.case,
-                            names: entry.names.to_vec(),
+                            names: entry.names().to_vec(),
                         }
                     },
                 },

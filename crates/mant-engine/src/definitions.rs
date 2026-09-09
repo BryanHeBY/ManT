@@ -12,7 +12,6 @@ pub(crate) use normalize::normalize_definition_nesting;
 mod preparation;
 mod recognized;
 mod syntax;
-mod walk;
 
 use context::DefinitionContext;
 pub(crate) use diagnostics::manual_discovery_diagnostics;
@@ -20,6 +19,7 @@ pub(crate) use evidence::{NativeHeadEvidence, NativeHeadRole};
 pub(crate) use identity::document_id_slug;
 use identity::{document_anchor_ids, identify_item, identify_list_item};
 use mant_ir::{Block, Section};
+pub(crate) use mant_ir::{ContentEntry, content_entries, content_entry_locations};
 pub(crate) use recognized::RecognizedName;
 use std::collections::{HashMap, HashSet};
 pub(crate) use syntax::{
@@ -28,7 +28,6 @@ pub(crate) use syntax::{
 };
 #[cfg(test)]
 use syntax::{is_value_name, option_names};
-pub(crate) use walk::{ContentEntry, content_entries, content_entry_locations};
 
 /// Annotate reliably recognizable command-line options and return every
 /// inline anchor that the navigation resolver must retain.

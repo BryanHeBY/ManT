@@ -369,7 +369,7 @@ impl Group<'_> {
                     .map(|b| (&b.id, &b.title))
                     .collect::<Vec<_>>();
                 budget
-                    .fits(&(title, entry.names, ancestors))
+                    .fits(&(title, entry.names(), ancestors))
                     .then(|| trail(&located[i]))
             })
             .collect()

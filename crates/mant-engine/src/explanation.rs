@@ -200,7 +200,7 @@ fn same(left: &str, right: &str, case: NameCase) -> bool {
 
 fn owner<'a>(node: &LocatedNode<'a>) -> Option<EntryOwner<'a>> {
     match node {
-        LocatedNode::Entry { entry, .. } => Some(entry.item),
+        LocatedNode::Entry { entry, .. } => Some(entry.owner()),
         LocatedNode::Section { .. } => None,
     }
 }
