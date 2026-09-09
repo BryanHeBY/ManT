@@ -40,6 +40,11 @@ inventory. For process peak memory, run the already-built example under the
 platform's resource measurement tool. Do not compare debug and release timings
 or attribute baseline IR allocation to the new reference index.
 
+The probe also times application construction with the current document
+already present in its caller-owned scope. This is separate from the derived
+document view and resize timings: it exposes snapshot ownership/copy costs
+without charging source parsing or caller scope preparation to the reader.
+
 It reports source-token columns when a token fits on one row; a wrapped/absent
 token is not a failed search. Reuse one `DocumentView` for width changes, record
 the input hash and producer commit, and compare source-relative columns after

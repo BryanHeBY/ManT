@@ -3,7 +3,7 @@
 use std::{error::Error, hint::black_box, path::Path, time::Instant};
 
 use mant_ir::{DocumentIndex, ResolvedContent, SemanticIndex};
-use mant_ui::DocumentView;
+use mant_ui::{App, DocumentView};
 
 fn main() -> Result<(), Box<dyn Error>> {
     let args = std::env::args().skip(1).collect::<Vec<_>>();
@@ -31,6 +31,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         tldr: None,
     };
     profile_discovery(&bundle)?;
+    profile_application(&bundle);
     let start = Instant::now();
     let view = DocumentView::new(&bundle);
     println!(
@@ -71,6 +72,21 @@ fn main() -> Result<(), Box<dyn Error>> {
         black_box(rendered);
     }
     Ok(())
+}
+
+/// Keep caller-owned scope preparation outside the application timing. This
+/// exposes the cost of the reader's owning convenience constructor separately
+/// from parsing and from the derived document/viewport measurements below.
+fn profile_application(bundle: &ResolvedContent) {
+    let scope = std::slice::from_ref(bundle);
+    let start = Instant::now();
+    let app = App::with_catalog_and_scope(bundle, mant_protocol::DocumentCatalog::default(), scope);
+    println!(
+        "app_current_in_scope_ms\t{:.3}\tscope_documents={}",
+        start.elapsed().as_secs_f64() * 1000.0,
+        scope.len()
+    );
+    black_box(app);
 }
 
 fn profile_discovery(bundle: &ResolvedContent) -> Result<(), Box<dyn Error>> {
