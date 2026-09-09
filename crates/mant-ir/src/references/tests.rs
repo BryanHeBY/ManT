@@ -120,6 +120,59 @@ fn transparent_items_keep_nearest_semantic_owner_without_copying_forms() {
 }
 
 #[test]
+fn nested_owner_frames_restore_both_axes_before_visiting_siblings() {
+    let document = document(
+        vec![
+            json!({"type":"list","kind":{"kind":"bullet"},"items":[
+                {"entry":facts("outer"),"blocks":[
+                    paragraph(vec![link("before")]),
+                    {"type":"list","kind":{"kind":"bullet"},"items":[
+                        {"entry":facts("child"),"blocks":[paragraph(vec![link("child")])]},
+                        {"blocks":[paragraph(vec![link("transparent")])]}
+                    ]},
+                    paragraph(vec![link("after")])
+                ]},
+                {"blocks":[paragraph(vec![link("sibling")])]}
+            ]}),
+            paragraph(vec![link("outside")]),
+        ],
+        vec![],
+    );
+    let mut owners = Vec::new();
+    let report = scan_references(&document, ReferenceScanLimits::default(), |occurrence| {
+        let read = |owner: Option<ReferenceOwnerRef<'_, '_>>| {
+            owner.map(|owner| {
+                let resolved = owner.location.resolve(&document).unwrap();
+                assert_eq!(resolved.facts(), owner.owner.facts());
+                (
+                    owner.owner.facts().map(|facts| facts.id.to_string()),
+                    owner.location.item_index,
+                )
+            })
+        };
+        owners.push((
+            read(occurrence.content_owner),
+            read(occurrence.semantic_owner),
+        ));
+        ControlFlow::Continue(())
+    });
+    let owner = |id: &str, index| Some((Some(id.to_owned()), index));
+    assert!(report.complete());
+    assert_eq!(report.occurrences, 6);
+    assert_eq!(
+        owners,
+        [
+            (owner("outer", 0), owner("outer", 0)),
+            (owner("child", 0), owner("child", 0)),
+            (Some((None, 1)), owner("outer", 0)),
+            (owner("outer", 0), owner("outer", 0)),
+            (Some((None, 1)), None),
+            (None, None),
+        ]
+    );
+}
+
+#[test]
 fn explicit_owner_and_block_roots_preserve_ancestor_context_and_exclude_siblings() {
     let document = document(
         vec![json!({"type":"list","kind":{"kind":"bullet"},"items":[

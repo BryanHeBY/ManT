@@ -10,7 +10,9 @@ use crate::{
 };
 use std::ops::ControlFlow;
 
+mod owners;
 mod roots;
+use owners::OwnerFrames;
 
 pub(super) fn scan<'ir>(
     document: &'ir Document,
@@ -67,8 +69,7 @@ struct Scan<'ir, F> {
     sections: Vec<u32>,
     blocks: Vec<Step>,
     path: Vec<u32>,
-    owner: Option<OwnerFrame<'ir>>,
-    semantic: Option<OwnerFrame<'ir>>,
+    owners: OwnerFrames<'ir>,
 }
 
 impl<'ir, F> Scan<'ir, F>
@@ -84,8 +85,7 @@ where
             sections: Vec::new(),
             blocks: Vec::new(),
             path: Vec::new(),
-            owner: None,
-            semantic: None,
+            owners: OwnerFrames::default(),
         }
     }
 
@@ -263,17 +263,12 @@ where
 
     fn item(&mut self, owner: EntryOwner<'ir>, index: u32) -> Result<(), ReferenceScanStop> {
         self.charge(self.depth() + 1, 1, 0)?;
-        let previous = self.owner;
-        let semantic = self.semantic;
         let frame = OwnerFrame {
             owner,
             blocks_len: self.blocks.len(),
             item: index,
         };
-        self.owner = Some(frame);
-        if owner.facts().is_some() {
-            self.semantic = Some(frame);
-        }
+        let previous = self.owners.enter(frame);
         if self.options.targets
             && let Some(facts) = owner.facts()
         {
@@ -331,8 +326,7 @@ where
                 return Err(ReferenceScanStop::Visitor);
             }
         }
-        self.owner = previous;
-        self.semantic = semantic;
+        self.owners.restore(previous);
         Ok(())
     }
 
@@ -353,7 +347,8 @@ where
                 } = node
             {
                 let site = self
-                    .semantic
+                    .owners
+                    .semantic()
                     .filter(|frame| frame.owner.facts().is_some_and(|facts| facts.id == *id))
                     .map_or(TargetSite::Inline(root), TargetSite::Owner);
                 self.target(id, fragment_aliases, site)?;
@@ -402,10 +397,11 @@ where
                         target,
                         label: children,
                         location,
-                        content_owner: self.owner.map(owner),
-                        semantic_owner: self.semantic.map(owner),
-                        source: source
-                            .or_else(|| self.owner.and_then(|frame| frame.owner.source())),
+                        content_owner: self.owners.content().map(owner),
+                        semantic_owner: self.owners.semantic().map(owner),
+                        source: source.or_else(|| {
+                            self.owners.content().and_then(|frame| frame.owner.source())
+                        }),
                     }),
                     &mut self.budget,
                 )

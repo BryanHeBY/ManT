@@ -106,10 +106,7 @@ where
                     item,
                     blocks_len: self.blocks.len(),
                 };
-                self.owner = Some(frame);
-                if owner.facts().is_some() {
-                    self.semantic = Some(frame);
-                }
+                self.owners.enter(frame);
             }
             let children = crate::content_location::block_children(block, pair[0])
                 .ok_or(ReferenceScanStop::InvalidRoot)?;
