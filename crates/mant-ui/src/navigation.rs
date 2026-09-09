@@ -77,15 +77,23 @@ pub(crate) fn rows_with_references(
             let Some(badge) = badges.get(&node.id) else {
                 return lines;
             };
+            if width == 0 {
+                return vec![NavigationRow {
+                    node_index: *index,
+                    line: Line::default(),
+                }];
+            }
             let first = &lines[0].line.spans;
-            let prefix = first[0].clone();
-            let continuation = Span::styled(
-                format!(
-                    "{NODE_LEFT_PADDING}  {}",
-                    continuation_prefix(node, expanded.contains(&node.id))
-                ),
-                prefix.style,
+            let prefix = Span::styled(
+                bounded_tree_prefix(&first[0].content, width),
+                first[0].style,
             );
+            let continuation_text = format!(
+                "{NODE_LEFT_PADDING}  {}",
+                continuation_prefix(node, expanded.contains(&node.id))
+            );
+            let continuation =
+                Span::styled(bounded_tree_prefix(&continuation_text, width), prefix.style);
             let style = first[1].style;
             let available = width
                 .saturating_sub(prefix.width().max(continuation.width()))
@@ -97,24 +105,12 @@ pub(crate) fn rows_with_references(
             });
             let badge = sanitize_terminal_text(badge);
             let expanded_label = *index == selected || full_labels;
-            let title = if expanded_label {
-                title.into_owned()
-            } else {
-                truncate_middle(
-                    &title,
-                    available.saturating_sub((badge.width() + 1).min(available / 2)),
-                )
-            };
-            let badge = if expanded_label {
-                badge.into_owned()
-            } else {
-                take_prefix_columns(&badge, available.saturating_sub(title.width() + 1)).to_owned()
-            };
+            let (title, badge) = reference_title_parts(&title, &badge, available, expanded_label);
             let link_style = style.fg(theme::LINK);
             let mut current = vec![prefix.clone()];
             let mut used = 0;
             lines.clear();
-            for (text, role) in [(title, style), (format!(" {badge}"), link_style)] {
+            for (text, role) in [(title, style), (badge, link_style)] {
                 for character in text.chars() {
                     let columns = character.width().unwrap_or(0);
                     if used + columns > available && used > 0 {
@@ -136,6 +132,32 @@ pub(crate) fn rows_with_references(
             lines
         })
         .collect()
+}
+
+fn reference_title_parts(
+    title: &str,
+    badge: &str,
+    available: usize,
+    expanded: bool,
+) -> (String, String) {
+    if expanded {
+        return (title.to_owned(), format!(" {badge}"));
+    }
+    // Once a deep tree leaves fewer than three cells there is no room for
+    // owner + separator + reference marker. Preserve the explicit capability,
+    // not a second compact row containing only an invisible separator.
+    if available < 3 {
+        return (
+            String::new(),
+            take_prefix_columns(badge, available).to_owned(),
+        );
+    }
+    let title = truncate_middle(
+        title,
+        available.saturating_sub((badge.width() + 1).min(available / 2) + 1),
+    );
+    let badge = take_prefix_columns(badge, available.saturating_sub(title.width() + 1));
+    (title, format!(" {badge}"))
 }
 
 fn finish_reference_row(
@@ -173,32 +195,28 @@ fn node_lines(
     full_labels: bool,
     width: usize,
 ) -> Vec<NavigationRow> {
+    if width == 0 {
+        return vec![NavigationRow {
+            node_index,
+            line: Line::default(),
+        }];
+    }
     let selection = if selected { "› " } else { "  " };
-    let prefix = format!(
-        "{NODE_LEFT_PADDING}{selection}{}",
-        tree_prefix(node, expanded)
+    let prefix = bounded_tree_prefix(
+        &format!(
+            "{NODE_LEFT_PADDING}{selection}{}",
+            tree_prefix(node, expanded)
+        ),
+        width,
     );
-    let continuation_prefix = format!(
-        "{NODE_LEFT_PADDING}  {}",
-        continuation_prefix(node, expanded)
+    let continuation_prefix = bounded_tree_prefix(
+        &format!(
+            "{NODE_LEFT_PADDING}  {}",
+            continuation_prefix(node, expanded)
+        ),
+        width,
     );
-    let foreground = if selected {
-        if node.kind == NavKind::Tldr {
-            theme::MAUVE
-        } else {
-            theme::SELECTED_TEXT
-        }
-    } else {
-        match node.kind {
-            NavKind::Tldr => theme::MAUVE,
-            NavKind::Root | NavKind::Section if node.depth == 0 => theme::SUBTEXT_BRIGHT,
-            NavKind::Root | NavKind::Section | NavKind::ReferenceGroup => theme::BLUE,
-            NavKind::EntryGroup | NavKind::ReferenceNotice => theme::YELLOW,
-            NavKind::Entry(EntryKind::Term) => theme::STRONG,
-            NavKind::Entry(kind) => theme::entry_color(kind),
-            NavKind::Reference => theme::LINK,
-        }
-    };
+    let foreground = node_foreground(node, selected);
     let background = if selected {
         if node.kind == NavKind::Tldr {
             theme::TLDR_SELECTED
@@ -239,6 +257,13 @@ fn node_lines(
             } else {
                 continuation_prefix.clone()
             };
+            let title = if title.width() > width.saturating_sub(line_prefix.width()) {
+                // Only chrome substitutes a scalar wider than its whole cell
+                // budget; the original document/search text is unchanged.
+                "�".to_owned()
+            } else {
+                title
+            };
             let used = line_prefix.width() + title.width();
             let prefix_color = if selected {
                 if line_index == 0 {
@@ -265,6 +290,31 @@ fn node_lines(
             }
         })
         .collect()
+}
+
+fn bounded_tree_prefix(prefix: &str, width: usize) -> String {
+    // Retain the nearest branch/owner marker when ancestor columns no longer
+    // fit, always leaving one content cell for label or reference capability.
+    take_suffix_columns(prefix, width.saturating_sub(1)).to_owned()
+}
+
+fn node_foreground(node: &NavNode, selected: bool) -> ratatui::style::Color {
+    if selected {
+        return if node.kind == NavKind::Tldr {
+            theme::MAUVE
+        } else {
+            theme::SELECTED_TEXT
+        };
+    }
+    match node.kind {
+        NavKind::Tldr => theme::MAUVE,
+        NavKind::Root | NavKind::Section if node.depth == 0 => theme::SUBTEXT_BRIGHT,
+        NavKind::Root | NavKind::Section | NavKind::ReferenceGroup => theme::BLUE,
+        NavKind::EntryGroup | NavKind::ReferenceNotice => theme::YELLOW,
+        NavKind::Entry(EntryKind::Term) => theme::STRONG,
+        NavKind::Entry(kind) => theme::entry_color(kind),
+        NavKind::Reference => theme::LINK,
+    }
 }
 
 fn tree_prefix(node: &NavNode, expanded: bool) -> String {
@@ -465,6 +515,44 @@ mod tests {
                             .skip(1)
                             .all(|row| row.line.spans[0].content == expected)
                     );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn deep_associated_nodes_keep_markers_inside_tiny_viewports() {
+        let badges = [("node".to_owned(), "↗ target#part".to_owned())]
+            .into_iter()
+            .collect();
+        for depth in [4, 8] {
+            let mut owner = node("日本 command");
+            owner.depth = depth;
+            owner.has_children = true;
+            let nodes = vec![owner];
+            for width in [0, 1, 4, 8] {
+                let plain = node_lines(&nodes[0], 0, true, true, true, width);
+                assert!(plain.iter().all(|row| row.line.width() <= width));
+                for (selected, full) in [(0, false), (usize::MAX, true), (usize::MAX, false)] {
+                    let rows = super::rows_with_references(
+                        &nodes,
+                        &[0],
+                        selected,
+                        &["node".to_owned()].into_iter().collect(),
+                        full,
+                        width,
+                        &badges,
+                    );
+                    assert!(
+                        rows.iter().all(|row| row.line.width() <= width),
+                        "depth={depth}, width={width}"
+                    );
+                    if width > 0 {
+                        assert!(rows.iter().any(|row| row.line.to_string().contains('↗')));
+                    }
+                    if selected == usize::MAX && !full {
+                        assert_eq!(rows.len(), 1);
+                    }
                 }
             }
         }
