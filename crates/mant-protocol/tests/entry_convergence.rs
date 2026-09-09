@@ -52,6 +52,8 @@ fn outline_names_and_entry_kind_are_closed_at_both_projection_levels() {
         "title":"example","entryKind":{"kind":"command"},"case":"sensitive", "names":["example"]});
     let mut full_node = node.clone();
     full_node["forms"] = json!([]);
+    full_node["owner"] =
+        json!({"kind":"owner","sections":[],"blocks":[{"kind":"block","index":0}],"itemIndex":0});
     let _: OutlineNode = serde_json::from_value(full_node.clone()).unwrap();
     assert!(serde_json::from_value::<OutlineNodeReference>(node.clone()).is_ok());
     for field in ["role", "aliases", "unknown"] {

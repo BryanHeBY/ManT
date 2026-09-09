@@ -46,7 +46,7 @@ pub fn render_reference_inventory_with(
         ));
     }
     for record in &inventory.records {
-        let target = reference_target_text(&record.target);
+        let target = target_parts(&record.target).concat();
         let label = if record.label.is_empty() {
             "(empty label)"
         } else {
@@ -119,7 +119,16 @@ fn count(count: &ReferenceCount) -> String {
 /// This is also the copy-target spelling; terminal adapters sanitize it separately.
 #[must_use]
 pub fn reference_target_text(target: &mant_ir::LinkTarget) -> String {
-    target_parts(target).concat()
+    match target {
+        mant_ir::LinkTarget::Manual {
+            name,
+            manual_section,
+        } => match manual_section {
+            Some(section) => format!("man:{name}({section})"),
+            None => format!("man:{name}"),
+        },
+        _ => target_parts(target).concat(),
+    }
 }
 
 pub(super) fn target_parts(target: &mant_ir::LinkTarget) -> [&str; 5] {
@@ -144,6 +153,17 @@ pub(super) fn target_parts(target: &mant_ir::LinkTarget) -> [&str; 5] {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn copied_manual_targets_keep_the_native_scheme_without_display_annotations() {
+        for (section, expected) in [(None, "man:printf"), (Some("3"), "man:printf(3)")] {
+            let target = mant_ir::LinkTarget::Manual {
+                name: "printf".into(),
+                manual_section: section.map(str::to_owned),
+            };
+            assert_eq!(reference_target_text(&target), expected);
+        }
+    }
 
     #[test]
     fn absent_and_unchecked_fragments_remain_distinct_in_every_unloaded_stage() {
