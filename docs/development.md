@@ -32,6 +32,14 @@ index construction, immutable view construction and resize at 40/80/120 cells:
 cargo run --locked --release -p mant-ui --example layout_profile -- /path/to/manual.1.gz 'label to locate'
 ```
 
+The same probe accepts an explicit `.md` path and reports outline references
+none/summary/all and independent explanation time between loading and TUI
+construction. Record occurrence/target precision, charged steps/bytes and
+retained records alongside elapsed time; a fast truncated scan is not a full
+inventory. For process peak memory, run the already-built example under the
+platform's resource measurement tool. Do not compare debug and release timings
+or attribute baseline IR allocation to the new reference index.
+
 It reports source-token columns when a token fits on one row; a wrapped/absent
 token is not a failed search. Reuse one `DocumentView` for width changes, record
 the input hash and producer commit, and compare source-relative columns after
