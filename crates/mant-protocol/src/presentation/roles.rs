@@ -1,5 +1,5 @@
 //! Shared semantic roles, without terminal colors or widget dependencies.
-use mant_ir::{EntryKind, ParameterKind};
+use mant_ir::EntryKind;
 
 /// Palette family for a semantic entry, never importance or confidence.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -34,63 +34,46 @@ pub const fn entry_tone(kind: EntryKind) -> EntryTone {
     }
 }
 
-/// Stable human label, distinct from Rust Debug and from wire discriminators.
-#[must_use]
-pub const fn entry_kind_label(kind: EntryKind) -> &'static str {
-    match kind {
-        EntryKind::Parameter {
-            parameter_kind: ParameterKind::Option,
-        } => "option",
-        EntryKind::Parameter {
-            parameter_kind: ParameterKind::Marker,
-        } => "marker",
-        EntryKind::Parameter {
-            parameter_kind: ParameterKind::Operand,
-        } => "operand",
-        EntryKind::Command => "command",
-        EntryKind::EnvironmentVariable => "environment variable",
-        EntryKind::ConfigurationKey => "configuration key",
-        EntryKind::Variable => "variable",
-        EntryKind::Value => "value",
-        EntryKind::Term => "term",
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use mant_ir::ParameterKind;
 
     #[test]
-    fn all_nine_kinds_have_labels_without_conflating_parameters() {
+    fn all_nine_kinds_select_their_palette_family() {
         let kinds = [
             (
                 EntryKind::Parameter {
                     parameter_kind: ParameterKind::Option,
                 },
-                "option",
+                EntryTone::Parameter,
             ),
             (
                 EntryKind::Parameter {
                     parameter_kind: ParameterKind::Marker,
                 },
-                "marker",
+                EntryTone::Parameter,
             ),
             (
                 EntryKind::Parameter {
                     parameter_kind: ParameterKind::Operand,
                 },
-                "operand",
+                EntryTone::Parameter,
             ),
-            (EntryKind::Command, "command"),
-            (EntryKind::EnvironmentVariable, "environment variable"),
-            (EntryKind::ConfigurationKey, "configuration key"),
-            (EntryKind::Variable, "variable"),
-            (EntryKind::Value, "value"),
-            (EntryKind::Term, "term"),
+            (EntryKind::Command, EntryTone::Command),
+            (EntryKind::EnvironmentVariable, EntryTone::Environment),
+            (EntryKind::ConfigurationKey, EntryTone::Configuration),
+            (EntryKind::Variable, EntryTone::Variable),
+            (EntryKind::Value, EntryTone::Value),
+            (EntryKind::Term, EntryTone::Primary),
         ];
-        for (kind, label) in kinds {
-            assert_eq!(entry_kind_label(kind), label);
+        for (kind, tone) in kinds {
+            assert_eq!(entry_tone(kind), tone);
         }
+    }
+
+    #[test]
+    fn conservative_terms_and_values_keep_distinct_tones() {
         assert_eq!(entry_tone(EntryKind::Term), EntryTone::Primary);
         assert_eq!(entry_tone(EntryKind::Value), EntryTone::Value);
     }
