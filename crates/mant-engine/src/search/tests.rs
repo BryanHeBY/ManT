@@ -159,7 +159,7 @@ fn styled_identifiers_are_visible_matches_not_contiguous_markdown_source() {
         ..request("NAME_PID")
     };
     assert_eq!(search_query(&query, &raw).unwrap().total, 0);
-    let rendered = crate::render_markdown(&query);
+    let rendered = mant_codec::encode::render_markdown(&query);
     assert!(rendered.contains("*NAME*\\_PID"));
 }
 
@@ -459,7 +459,7 @@ fn root_content_search_resolves_to_an_addressable_document_root() {
 
 #[test]
 fn embedded_tldr_and_markdown_body_keep_distinct_search_owners() {
-    let query = crate::query_markdown_text(
+    let query = crate::query_fixture::markdown(
         "\
 <!-- mant:tldr:start -->
 # demo

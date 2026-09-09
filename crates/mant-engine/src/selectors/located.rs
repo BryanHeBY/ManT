@@ -249,7 +249,7 @@ mod selection_tests {
 
     #[test]
     fn address_only_locations_never_materialize_names_titles_or_breadcrumbs() {
-        let query = crate::query_markdown_text("# Heading\n\n<!-- mant:entries role=command case=sensitive -->\n- `root-command`: Root.\n\n## Section heading\n\n<!-- mant:entries role=command case=sensitive -->\n- `nested-command`: Child.\n", None).unwrap();
+        let query = crate::query_fixture::markdown("# Heading\n\n<!-- mant:entries role=command case=sensitive -->\n- `root-command`: Root.\n\n## Section heading\n\n<!-- mant:entries role=command case=sensitive -->\n- `nested-command`: Child.\n", None).unwrap();
         let document = query.document.unwrap();
         let mut located = Vec::new();
         collect_selection_root_entries(&document.blocks, &mut located);

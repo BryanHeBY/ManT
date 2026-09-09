@@ -10,7 +10,7 @@ fn loaded() -> (ResolvedDocumentScope, Vec<mant_ir::ResolvedContent>) {
         "# A\n\n--help mentioned in ordinary prose.\n",
         "# B\n\n<!-- mant:entries role=option case=sensitive -->\n- `--help`: Direct. <!-- mant:entry {\"id\":\"same\"} -->\n- `-Q`: Mentions --help.\n",
         "# C\n\n<!-- mant:entries role=option case=sensitive -->\n- `--help`: Direct. <!-- mant:entry {\"id\":\"same\"} -->\n",
-    ].map(|source| crate::query_markdown_text(source, None).unwrap()).to_vec();
+    ].map(|source| crate::query_fixture::markdown(source, None).unwrap()).to_vec();
     let sources: Vec<_> = ["a", "b", "c"]
         .into_iter()
         .map(|path| ScopedDocument {

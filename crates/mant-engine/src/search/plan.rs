@@ -157,7 +157,7 @@ mod tests {
 
     #[test]
     fn reused_plan_preserves_paging_and_validates_execution_limits() {
-        let document = crate::query_markdown_text("# Plan\n\nalpha\n\nbeta\n", None).unwrap();
+        let document = crate::query_fixture::markdown("# Plan\n\nalpha\n\nbeta\n", None).unwrap();
         let request = request();
         let plan = SearchPlan::new(&request).unwrap();
         for offset in [0, 1, 9] {
@@ -181,7 +181,8 @@ mod tests {
     fn measure_request_local_matcher_reuse() {
         use std::{hint::black_box, time::Instant};
         let document =
-            crate::query_markdown_text("# Plan\n\nalpha beta gamma delta epsilon\n", None).unwrap();
+            crate::query_fixture::markdown("# Plan\n\nalpha beta gamma delta epsilon\n", None)
+                .unwrap();
         let request = request();
         let start = Instant::now();
         for _ in 0..1000 {

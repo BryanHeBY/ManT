@@ -6,6 +6,8 @@ mod explanation;
 mod output;
 mod projection;
 mod query;
+#[cfg(test)]
+mod query_fixture;
 mod scope;
 mod scope_query;
 mod search;

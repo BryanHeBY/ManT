@@ -218,7 +218,7 @@ fn entry_anchor_sharing_identity_is_one_logical_destination_not_ambiguity() {
 
 #[test]
 fn section_filter_and_read_selector_remain_source_local() {
-    let query = crate::query_markdown_text(
+    let query = crate::query_fixture::markdown(
         "# [Catalog](catalog.md)\n\n## [One](one.md)\n\n[Body](body.md)\n\n## [Two](two.md)\n",
         None,
     )
@@ -366,59 +366,4 @@ fn repeated_targets_page_by_occurrence_and_large_offset_does_not_allocate_record
         ReferenceCount::LowerBound { .. }
     ));
     assert_eq!(limited.page.next_offset, None);
-}
-
-#[test]
-fn snapshot_relative_positions_can_remain_legal_after_an_unrelated_insertion() {
-    let before =
-        crate::query_markdown_text("# Catalog\n\n## Old\n\n[Old](old.md)\n", None).unwrap();
-    let after = crate::query_markdown_text(
-        "# Catalog\n\n## Inserted\n\n[New](new.md)\n\n## Old\n\n[Old](old.md)\n",
-        None,
-    )
-    .unwrap();
-    let old = project_references(
-        before.document.as_ref().unwrap(),
-        None,
-        ReferenceScope::Document,
-        &all(),
-    );
-    let old_record = &old.records[0];
-    let target = old_record
-        .origin
-        .resolve_link(after.document.as_ref().unwrap())
-        .unwrap();
-    assert!(matches!(target,Inline::Link{target:LinkTarget::Document{name,..},..} if name=="new"));
-    let excerpt =
-        crate::select_excerpt(&after, std::slice::from_ref(&old_record.source_read)).unwrap();
-    assert!(crate::render_excerpt_text(&excerpt).contains("New"));
-    assert_eq!(
-        old_record.source_read,
-        mant_protocol::ContentSelector::path("1")
-    );
-    // Typed paths describe the actually loaded snapshot, not caller intent in
-    // an earlier revision; no expected-snapshot token is promised this release.
-}
-
-#[test]
-fn offline_reference_rendering_uses_only_serialized_facts_and_preserves_decorated_text() {
-    let document = document(vec![
-        json!({"type":"link","target":{"kind":"document","name":"target","fragment":"Mixed.Target"},"children":[{"type":"text","value":"label\u{1b}[2J"}]}),
-    ]);
-    let inventory = project_references(&document, None, ReferenceScope::Document, &all());
-    let wire = serde_json::to_vec(&inventory).unwrap();
-    drop(inventory);
-    drop(document);
-    let rebuilt: ReferenceInventory = serde_json::from_slice(&wire).unwrap();
-    let plain = mant_protocol::render_reference_inventory(&rebuilt);
-    assert!(plain.contains("target#Mixed.Target"));
-    assert!(plain.contains("readSource=path:root"));
-    assert!(!plain.contains('\u{1b}'));
-    let decorated = mant_protocol::render_reference_inventory_with(&rebuilt, |_, text| {
-        format!("<paint>{text}</paint>")
-    });
-    assert_eq!(
-        plain,
-        decorated.replace("<paint>", "").replace("</paint>", "")
-    );
 }

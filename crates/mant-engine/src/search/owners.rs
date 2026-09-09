@@ -239,7 +239,7 @@ mod tests {
         for index in 0..1000 {
             writeln!(source, "- `--flag-{index}`: Payload{index}.").unwrap();
         }
-        let query = crate::query_markdown_text(&source, None).unwrap();
+        let query = crate::query_fixture::markdown(&source, None).unwrap();
         let artifact = mant_codec::encode::render_addressable_markdown(&query);
         let index = OwnerIndex::new(&artifact);
         assert_eq!(index.entries.len(), 1000);
