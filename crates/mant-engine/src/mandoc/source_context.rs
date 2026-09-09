@@ -4,8 +4,6 @@ use super::{
     SourceLineIndex, equation_delimiter_changes, formatter, inline,
 };
 
-type NoFillRows = std::sync::Arc<[(u32, u16)]>;
-
 pub(super) struct LoweringContext<'a> {
     pub(super) macro_set: MacroSet,
     pub(super) native_heads: RefCell<crate::definitions::NativeHeadEvidence>,
@@ -13,7 +11,6 @@ pub(super) struct LoweringContext<'a> {
     // the RefCells below are memoization and diagnostic collection only.
     pub(super) default_name: Option<&'a str>,
     pub(super) source_lines: Option<SourceLineIndex<'a>>,
-    pub(super) no_fill_rows: RefCell<Option<NoFillRows>>,
     pub(super) equation_delimiters: Vec<EquationDelimiterChange>,
     pub(super) normalized_equations: RefCell<BTreeMap<String, String>>,
     pub(super) section_ids: HashMap<String, usize>,
@@ -42,7 +39,6 @@ impl<'a> LoweringContext<'a> {
             native_heads: RefCell::default(),
             default_name,
             source_lines: source.map(SourceLineIndex::new),
-            no_fill_rows: RefCell::new(None),
             equation_delimiters: source.map_or_else(Vec::new, equation_delimiter_changes),
             normalized_equations: RefCell::new(BTreeMap::new()),
             section_ids: HashMap::new(),
@@ -170,97 +166,4 @@ impl<'a> LoweringContext<'a> {
             .first()
             .is_some_and(|head| head.contains("\\n+"))
     }
-
-    /// Return explicitly requested blank rows between two visible no-fill
-    /// source lines.
-    ///
-    /// Some structural AST forms omit blank physical input rows.  That is
-    /// normally the right tree representation, but no-fill displays make the
-    /// rows observable.  Source spans let lowering restore raw blank runs and
-    /// `.sp` requests, without mistaking comments or hidden state changes for
-    /// vertical content.  Consecutive empty input lines are one visual
-    /// separator in roff no-fill output, so they must not accumulate.
-    pub(super) fn no_fill_blank_rows_between(
-        &self,
-        previous_line: Option<u32>,
-        current_line: Option<u32>,
-    ) -> u16 {
-        let Some((previous, current)) = previous_line.zip(current_line) else {
-            return 0;
-        };
-        if current <= previous.saturating_add(1) {
-            return 0;
-        }
-        let Some(source_lines) = self.source_lines.as_ref() else {
-            return 0;
-        };
-        source_lines
-            .lines_between(previous, current)
-            .map(no_fill_vertical_rows)
-            .max()
-            .unwrap_or(0)
-    }
-
-    pub(super) fn no_fill_source_rows(&self) -> std::sync::Arc<[(u32, u16)]> {
-        if let Some(rows) = self.no_fill_rows.borrow().as_ref() {
-            return rows.clone();
-        }
-        let rows: std::sync::Arc<[(u32, u16)]> = self
-            .source_lines
-            .as_ref()
-            .map(|source| {
-                source
-                    .lines_from(1)
-                    .filter_map(|(number, line)| {
-                        let rows = no_fill_vertical_rows(line);
-                        (rows > 0).then_some((number, rows))
-                    })
-                    .collect::<Vec<_>>()
-            })
-            .unwrap_or_default()
-            .into();
-        *self.no_fill_rows.borrow_mut() = Some(rows.clone());
-        rows
-    }
-}
-
-/// Return the largest explicit vertical separation requested by one source
-/// line.  A raw blank line is a single separator; `no_fill_blank_rows_between`
-/// deliberately takes the maximum across adjacent source lines because groff
-/// collapses a run of blank input lines in a no-fill display.
-fn no_fill_vertical_rows(line: &str) -> u16 {
-    let trimmed = line.trim();
-    if trimmed.is_empty() || roff_zero_width_blank_line(trimmed) {
-        return 1;
-    }
-    let Some(request) = line.trim_start().strip_prefix(['.', '\'']) else {
-        return 0;
-    };
-    let (name, arguments) = request
-        .split_once(char::is_whitespace)
-        .unwrap_or((request, ""));
-    if name != "sp" {
-        return 0;
-    }
-    let Some(argument) = arguments.split_whitespace().next() else {
-        return 1;
-    };
-    argument.trim_end_matches('v').parse::<u16>().unwrap_or(1)
-}
-
-/// Whether a no-fill input row contains only roff's zero-width guard escape.
-///
-/// POD-generated manuals use `\&` instead of an empty physical input line.
-/// libmandoc correctly lowers that escape to no glyph, but the row itself is
-/// still observable inside a verbatim display. Keep this deliberately narrow:
-/// font switches and other state-only input do not independently request a
-/// visual row, while `\c` explicitly suppresses the line boundary.
-fn roff_zero_width_blank_line(line: &str) -> bool {
-    let mut remainder = line;
-    let mut found = false;
-    while let Some(rest) = remainder.strip_prefix(r"\&") {
-        found = true;
-        remainder = rest.trim();
-    }
-    found && remainder.is_empty()
 }

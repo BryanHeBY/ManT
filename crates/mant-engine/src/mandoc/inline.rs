@@ -84,14 +84,9 @@ pub(super) fn append_inline_node_with_next(
         append_text_node(builder, node);
         return;
     }
+    builder.begin_executed_node(node);
     if node.flags.delimiter_close {
         builder.tighten_next_boundary();
-    }
-    if matches!(
-        node.macro_name.as_deref(),
-        Some("Fl" | "Ap" | "Fn" | "Fo" | "In" | "Lk" | "Mt" | "Bx" | "Nm")
-    ) {
-        builder.begin_source_line(node.line);
     }
     match node.macro_name.as_deref() {
         Some("B" | "I" | "SB" | "R" | "BI" | "BR" | "IB" | "IR" | "RB" | "RI" | "OP") => {
@@ -183,11 +178,7 @@ pub(super) fn append_inline_node_with_next(
 }
 
 fn append_text_node(builder: &mut InlineBuilder, node: &Node) {
-    if node.flags.no_fill && node.flags.line_start && node.text.as_deref().is_none_or(str::is_empty)
-    {
-        return;
-    }
-    builder.begin_source_line(node.line);
+    builder.begin_executed_node(node);
     if node.flags.delimiter_close {
         builder.tighten_next_boundary();
     }
@@ -196,7 +187,15 @@ fn append_text_node(builder: &mut InlineBuilder, node: &Node) {
         &mut builder.font,
         !node.flags.no_fill,
     );
-    builder.append_word(inlines);
+    // mdoc_term gives an empty text node a vertical row only when the text
+    // itself begins an input line. An empty No/Em argument does not, whereas
+    // a buffered zero-width glyph (for example \&) still occupies that row.
+    let occupies_literal_row = !inlines.is_empty()
+        || (node.flags.line_start && node.text.as_deref().is_some_and(str::is_empty))
+        || decode(node.text.as_deref().unwrap_or_default())
+            .iter()
+            .any(|event| matches!(event, RoffInlineEvent::ZeroWidthGlyph));
+    builder.append_word_with_literal_row(inlines, occupies_literal_row);
     if node.flags.delimiter_open || node.flags.line_continuation {
         builder.tighten_next_boundary();
     }
@@ -348,7 +347,7 @@ fn inline_children(node: &Node) -> &[Node] {
         .map_or(&node.children, |body| &body.children)
 }
 
-fn alternating_font_pair(macro_name: Option<&str>) -> Option<(Font, Font)> {
+pub(super) fn alternating_font_pair(macro_name: Option<&str>) -> Option<(Font, Font)> {
     match macro_name {
         Some("BI") => Some((Font::Strong, Font::Emphasis)),
         Some("BR") => Some((Font::Strong, Font::Regular)),

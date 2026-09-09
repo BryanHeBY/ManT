@@ -203,7 +203,10 @@ fn lower_man_item(
             placement: crate::mandoc::layout::TermPlacement::Fit,
             gap: 1,
         },
-        spacing_enabled,
+        super::super::DefinitionFlow {
+            spacing_enabled,
+            paragraph_predecessor: false,
+        },
         formatter,
     );
     let max_width = usize::try_from(

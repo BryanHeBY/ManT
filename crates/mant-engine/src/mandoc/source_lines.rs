@@ -55,29 +55,6 @@ impl<'a> SourceLineIndex<'a> {
             })
     }
 
-    /// Return the physical lines strictly between two one-based coordinates.
-    pub(super) fn lines_between(
-        &self,
-        previous_line: u32,
-        current_line: u32,
-    ) -> impl Iterator<Item = &'a str> + '_ {
-        let (start, end) = if current_line <= previous_line.saturating_add(1) {
-            (0, 0)
-        } else {
-            let start = usize::try_from(previous_line)
-                .unwrap_or(self.starts.len())
-                .min(self.starts.len());
-            let end = usize::try_from(current_line.saturating_sub(1))
-                .unwrap_or(self.starts.len())
-                .min(self.starts.len());
-            if start < end { (start, end) } else { (0, 0) }
-        };
-        self.starts[start..end]
-            .iter()
-            .enumerate()
-            .filter_map(move |(offset, _)| self.line_at_index(start.saturating_add(offset)))
-    }
-
     fn line_at_index(&self, index: usize) -> Option<&'a str> {
         let start = usize::try_from(*self.starts.get(index)?).ok()?;
         let end = self
@@ -103,11 +80,6 @@ mod tests {
         assert_eq!(index.line(1), Some("first"));
         assert_eq!(index.line(4), Some("fourth"));
         assert_eq!(index.line(5), None);
-        assert_eq!(
-            index.lines_between(1, 4).collect::<Vec<_>>(),
-            vec!["second", "third"]
-        );
-        assert_eq!(index.lines_between(2, 3).count(), 0);
         assert_eq!(
             index.lines_from(3).collect::<Vec<_>>(),
             vec![(3, "third"), (4, "fourth")]

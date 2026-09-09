@@ -50,6 +50,9 @@ pub(super) enum PresentationKind {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(super) enum RoffInlineEvent {
     Text(String),
+    /// An invisible glyph buffered by the terminal formatter. Unlike a font
+    /// selection, it occupies a literal output row without adding text.
+    ZeroWidthGlyph,
     Font(RoffFont),
     PreviousFont,
     Link(Option<String>),
@@ -77,6 +80,7 @@ pub(super) fn visible_text(source: &str) -> String {
             RoffInlineEvent::EmptyDestination => output.push_str("<>"),
             RoffInlineEvent::LineBreak => output.push('\n'),
             RoffInlineEvent::Font(_)
+            | RoffInlineEvent::ZeroWidthGlyph
             | RoffInlineEvent::PreviousFont
             | RoffInlineEvent::Link(_)
             | RoffInlineEvent::Presentation { .. } => {}
@@ -216,8 +220,10 @@ impl Decoder {
             }
             // These requests affect formatter state or introduce zero-width
             // hints. Their trigger byte is never printable document content.
-            '!' | '?' | '%' | '&' | ')' | ',' | '/' | '^' | ':' | 'a' | 'c' | 'd' | 'r' | 't'
-            | 'u' | '{' | '|' | '}' => {
+            '%' | '&' | ')' | ',' | '/' | '^' | 'a' | 'd' | 'r' | 't' | 'u' | '{' | '|' | '}' => {
+                self.emit(RoffInlineEvent::ZeroWidthGlyph);
+            }
+            '!' | '?' | ':' | 'c' => {
                 self.emit(RoffInlineEvent::Presentation {
                     kind: PresentationKind::Spacing,
                     argument: None,
@@ -314,7 +320,7 @@ impl Decoder {
             Some(SpecialCharacter::Visible(character)) => {
                 push_terminal_safe(&mut self.text, character);
             }
-            Some(SpecialCharacter::ZeroWidth) => {}
+            Some(SpecialCharacter::ZeroWidth) => self.emit(RoffInlineEvent::ZeroWidthGlyph),
             None => self.push_unknown_special_character(name, syntax),
         }
     }

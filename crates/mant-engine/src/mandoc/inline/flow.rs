@@ -140,17 +140,15 @@ impl InlineBuilder {
         self.boundary = PendingBoundary::Tight;
     }
 
-    pub(in crate::mandoc) fn track_source_lines(&mut self, rows: std::sync::Arc<[(u32, u16)]>) {
-        self.source_cursor = Some(super::source_cursor::SourceCursor::new(rows));
+    pub(in crate::mandoc) fn track_executed_lines(&mut self) {
+        self.source_cursor = Some(super::source_cursor::SourceCursor::new());
     }
 
-    pub(in crate::mandoc) fn begin_source_line(&mut self, line: u32) {
-        if let Some(rows) = self
-            .source_cursor
-            .as_mut()
-            .and_then(|cursor| cursor.advance(line))
+    pub(in crate::mandoc) fn begin_executed_node(&mut self, node: &libmandoc_rs::Node) {
+        if node.flags.line_start
+            && let Some(cursor) = &mut self.source_cursor
         {
-            self.blank_rows(rows);
+            cursor.begin();
         }
     }
 
@@ -252,13 +250,24 @@ impl InlineBuilder {
     }
 
     pub(in crate::mandoc) fn append(&mut self, mut incoming: Vec<Inline>) {
-        self.append_at_boundary(&mut incoming, false);
+        self.append_at_boundary(&mut incoming, false, true);
     }
 
     /// A native text node is a word event even if decoding yields no glyphs.
     /// Unlike a target/control-only append, it consumes the pending boundary.
     pub(in crate::mandoc) fn append_word(&mut self, mut incoming: Vec<Inline>) {
-        self.append_at_boundary(&mut incoming, true);
+        self.append_at_boundary(&mut incoming, true, true);
+    }
+
+    /// A decoded empty word can be a real literal row, an empty macro
+    /// argument, or a pure formatter transition. Keep those execution facts
+    /// separate without changing filled-flow inter-word spacing.
+    pub(in crate::mandoc) fn append_word_with_literal_row(
+        &mut self,
+        mut incoming: Vec<Inline>,
+        occupies_row: bool,
+    ) {
+        self.append_at_boundary(&mut incoming, true, occupies_row);
     }
 
     /// Generated glyphs use the effective font just like authored text, but
@@ -299,15 +308,6 @@ impl InlineBuilder {
         self.nodes.extend(style(inner));
     }
 
-    /// Add physical blank rows without resetting font or spacing state.
-    pub(in crate::mandoc) fn blank_rows(&mut self, rows: u16) {
-        self.hard_break();
-        if self.has_printable_content {
-            self.nodes
-                .extend(std::iter::repeat_n(Inline::LineBreak, usize::from(rows)));
-        }
-    }
-
     /// Append content using the formatter-level boundary selected by the
     /// block lowering pass.
     pub(in crate::mandoc) fn append_filled(
@@ -319,7 +319,7 @@ impl InlineBuilder {
             FilledBoundary::SameLine => self.append(incoming),
             FilledBoundary::Word => {
                 let mut incoming = incoming;
-                self.append_at_boundary(&mut incoming, false);
+                self.append_at_boundary(&mut incoming, false, true);
             }
             FilledBoundary::LineBreak => {
                 self.hard_break();
@@ -328,7 +328,7 @@ impl InlineBuilder {
         }
     }
 
-    fn append_at_boundary(&mut self, incoming: &mut Vec<Inline>, word: bool) {
+    fn append_at_boundary(&mut self, incoming: &mut Vec<Inline>, word: bool, occupies_row: bool) {
         if incoming.is_empty() && !word {
             return;
         }
@@ -338,6 +338,28 @@ impl InlineBuilder {
         if incoming_first.is_none() && !incoming_has_printable && !word {
             self.nodes.append(incoming);
             return;
+        }
+        if let Some(cursor) = &mut self.source_cursor {
+            let pending = cursor.pending();
+            let empty_row = pending && incoming.is_empty() && word && occupies_row;
+            if cursor.word(occupies_row) {
+                self.nodes.push(Inline::LineBreak);
+                self.last_visible_character = Some('\n');
+                self.boundary = PendingBoundary::Ordinary;
+                self.pending_word_spaces = 0;
+                self.empty_word = false;
+            }
+            if empty_row {
+                // Empty executed rows are content, including at a display's
+                // start/end. Do not turn them into inter-word padding.
+                self.nodes.push(Inline::Text {
+                    value: String::new(),
+                });
+                return;
+            }
+            if pending && !occupies_row && incoming.is_empty() {
+                return;
+            }
         }
         let empty_word = word && incoming_first.is_none() && !incoming_has_printable;
         let add_space = if empty_word || self.empty_word {
@@ -373,6 +395,18 @@ impl InlineBuilder {
     }
 
     pub(in crate::mandoc) fn finish(mut self) -> Vec<Inline> {
+        if let Some(cursor) = &self.source_cursor {
+            if !cursor.row_occupied()
+                && let Some(last) = self
+                    .nodes
+                    .iter()
+                    .rposition(|node| !matches!(node, Inline::Anchor { .. }))
+                && matches!(self.nodes[last], Inline::LineBreak)
+            {
+                self.nodes.remove(last);
+            }
+            return self.nodes;
+        }
         while matches!(self.nodes.last(), Some(Inline::LineBreak)) {
             self.nodes.pop();
         }

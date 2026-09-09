@@ -32,6 +32,7 @@ pub(super) fn append(builder: &mut InlineBuilder, node: &Node, name: Option<&str
     if crate::mandoc::containers::walk(node, |event| {
         use crate::mandoc::containers::Event;
         match event {
+            Event::BeginNode(node) => builder.begin_executed_node(node),
             Event::Children(nodes) => append_inline_nodes(builder, nodes, name),
             Event::Glyph(value) => builder.append_text(&value),
             Event::Tight => builder.tighten_next_boundary(),

@@ -34,6 +34,12 @@ pub(super) fn function(builder: &mut InlineBuilder, node: &Node, name: Option<&s
         if argument.flags.no_print {
             append_inline_node(builder, argument, name);
         } else if !block || argument.macro_name.as_deref() == Some("Fa") {
+            if block {
+                // Fa owns NODE_LINE; its operand children normally do not.
+                // Generated comma handling must not bypass that executed
+                // wrapper event when consuming the operands directly.
+                builder.begin_executed_node(argument);
+            }
             if let Some(anchor) = navigation_anchor(argument) {
                 builder.append(vec![anchor]);
             }

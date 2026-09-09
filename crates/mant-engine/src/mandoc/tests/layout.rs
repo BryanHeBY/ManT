@@ -346,40 +346,43 @@ second line\n\
 }
 
 #[test]
-fn preserves_lines_inside_nested_literal_displays() {
+fn preserves_lines_inside_compatible_compact_nested_literal_displays() {
     let document = parse_manual_bytes(
         std::path::Path::new("nested-literal-display.7"),
         b".Dd August 21, 2026\n\
 .Dt NESTED-LITERAL-DISPLAY 7\n\
 .Os\n\
 .Sh EXAMPLE\n\
-.Bd -literal\n\
+.Bd -literal -compact\n\
 first line\n\
-.Bd -literal\n\
+.Bd -literal -compact\n\
 second line\n\
 third line\n\
+.Ed\n\
 .Ed\n",
     )
     .expect("lower nested literal display");
 
-    let [Block::Preformatted { children, .. }] = document.sections[0].blocks.as_slice() else {
-        panic!(
-            "nested literal displays must remain one preformatted block: {:?}",
-            document.sections[0].blocks
-        );
-    };
-    assert_eq!(inline_text(children), "first line\nsecond line\nthird line");
-    assert_eq!(
-        children
-            .iter()
-            .filter(|inline| matches!(inline, Inline::LineBreak))
-            .count(),
-        2
-    );
+    let texts = document.sections[0]
+        .blocks
+        .iter()
+        .map(|block| {
+            let Block::Preformatted {
+                children, layout, ..
+            } = block
+            else {
+                panic!("unexpected nested literal block: {block:?}");
+            };
+            assert_eq!(layout.indent_columns, 0);
+            assert_eq!(layout.spacing_before_lines, 0);
+            inline_text(children)
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(texts.join("\n"), "first line\nsecond line\nthird line");
 }
 
 #[test]
-fn collapses_a_no_fill_blank_line_run_to_one_visual_separator() {
+fn preserves_every_executed_no_fill_blank_row() {
     let document = parse_manual_bytes(
         std::path::Path::new("no-fill-blank-run.7"),
         b".TH NO-FILL-BLANK-RUN 7\n\
@@ -399,13 +402,13 @@ second line\n\
             document.sections[0].blocks
         );
     };
-    assert_eq!(inline_text(children), "first line\n\nsecond line");
+    assert_eq!(inline_text(children), "first line\n\n\nsecond line");
     assert_eq!(
         children
             .iter()
             .filter(|inline| matches!(inline, Inline::LineBreak))
             .count(),
-        2
+        3
     );
 }
 

@@ -12,7 +12,7 @@ use super::super::{
     layout::{block_indent, layout, layout_with_spacing, paragraph_distance_lines},
     part_child_groups, source_span, targets,
 };
-use super::{is_inline_equation, is_inline_equation_quote_artifact, lower_blocks_with_spacing};
+use super::{is_inline_equation, is_inline_equation_quote_artifact, lower_blocks_with_predecessor};
 
 mod definition;
 mod evidence;
@@ -20,7 +20,7 @@ pub(super) mod man;
 mod mdoc;
 #[cfg(test)]
 use definition::split_definition_terms;
-use definition::{definition_item, prepend_definition_heads};
+use definition::{DefinitionFlow, definition_item, prepend_definition_heads};
 #[cfg(test)]
 use man::is_ip_bullet_item;
 use man::ordered::{

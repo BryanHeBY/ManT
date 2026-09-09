@@ -1,37 +1,57 @@
-//! Physical lines follow executed leaf events, not the outer macro's span.
-use std::sync::Arc;
+//! Literal rows follow executed AST events, never gaps in physical source.
 
 pub(super) struct SourceCursor {
-    rows: Arc<[(u32, u16)]>,
-    previous: Option<u32>,
+    pending: bool,
+    row: Row,
     continued: bool,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Row {
+    Vacant,
+    Occupied,
+}
+
 impl SourceCursor {
-    pub(super) fn new(rows: Arc<[(u32, u16)]>) -> Self {
+    pub(super) const fn new() -> Self {
         Self {
-            rows,
-            previous: None,
+            pending: false,
+            row: Row::Vacant,
             continued: false,
         }
     }
 
-    pub(super) fn advance(&mut self, line: u32) -> Option<u16> {
-        let rows = self
-            .previous
-            .filter(|previous| line > *previous && !self.continued)
-            .map(|previous| {
-                let start = self.rows.partition_point(|(number, _)| *number <= previous);
-                self.rows[start..]
-                    .iter()
-                    .take_while(|(number, _)| *number < line)
-                    .map(|(_, rows)| *rows)
-                    .max()
-                    .unwrap_or(0)
-            });
-        self.previous = Some(self.previous.map_or(line, |previous| previous.max(line)));
+    pub(super) fn begin(&mut self) {
+        self.pending = true;
+    }
+
+    /// A wrapper can open a row before its first word arrives. State-only
+    /// wrappers do not create rows; an executed empty text node does.
+    pub(super) fn word(&mut self, occupies_row: bool) -> bool {
+        if !self.pending {
+            if occupies_row {
+                self.row = Row::Occupied;
+            }
+            return false;
+        }
+        let boundary = self.row == Row::Occupied && !self.continued;
+        self.pending = false;
+        if boundary {
+            self.row = Row::Vacant;
+        }
+        if occupies_row {
+            self.row = Row::Occupied;
+        }
         self.continued = false;
-        rows
+        boundary
+    }
+
+    pub(super) const fn pending(&self) -> bool {
+        self.pending
+    }
+
+    pub(super) const fn row_occupied(&self) -> bool {
+        matches!(self.row, Row::Occupied)
     }
 
     pub(super) fn continue_line(&mut self, continued: bool) {
@@ -39,7 +59,6 @@ impl SourceCursor {
     }
 
     pub(super) fn reset(&mut self) {
-        self.previous = None;
-        self.continued = false;
+        *self = Self::new();
     }
 }

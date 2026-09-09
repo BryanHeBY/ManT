@@ -1,9 +1,18 @@
 //! Shared definition content, source ownership, and head construction.
 use super::{
     DefinitionItem, Inline, InlineBuilder, LoweringContext, Node, NodeKind, first_part_children,
-    is_inline_equation, is_inline_equation_quote_artifact, lower_blocks_with_spacing, source_span,
-    targets,
+    is_inline_equation, is_inline_equation_quote_artifact, lower_blocks_with_predecessor,
+    source_span, targets,
 };
+
+#[derive(Clone, Copy)]
+/// Source flow at a detached definition body, separate from its geometry.
+/// mdoc It supplies a paragraph boundary; man TP/IP keep their existing
+/// first-body policy instead of inferring a predecessor from the head text.
+pub(super) struct DefinitionFlow {
+    pub(super) spacing_enabled: bool,
+    pub(super) paragraph_predecessor: bool,
+}
 
 pub(super) fn definition_item(
     node: &Node,
@@ -11,18 +20,18 @@ pub(super) fn definition_item(
     indent_columns: crate::mandoc::layout::SourceIndent,
     paragraph_distance: &mut u16,
     geometry: crate::mandoc::layout::DefinitionGeometry,
-    spacing_enabled: bool,
+    flow: DefinitionFlow,
     formatter: &mut crate::mandoc::formatter::FormatterState,
 ) -> DefinitionItem {
     let head = visible_definition_head(node);
     let body = first_part_children(node, NodeKind::Body);
     let (displaced_equations, body) = displaced_definition_equations(head, body);
-    let mut term_builder = InlineBuilder::with_spacing(spacing_enabled);
-    term_builder.append(context.lower_inline_with_spacing(head, spacing_enabled, formatter));
+    let mut term_builder = InlineBuilder::with_spacing(flow.spacing_enabled);
+    term_builder.append(context.lower_inline_with_spacing(head, flow.spacing_enabled, formatter));
     for equation in displaced_equations {
         term_builder.append(context.lower_inline_with_spacing(
             std::slice::from_ref(equation),
-            spacing_enabled,
+            flow.spacing_enabled,
             formatter,
         ));
     }
@@ -37,12 +46,13 @@ pub(super) fn definition_item(
         entry: None,
         layout,
         terms,
-        description: lower_blocks_with_spacing(
+        description: lower_blocks_with_predecessor(
             body,
             context,
             body_origin,
             paragraph_distance,
             formatter.spacing,
+            flow.paragraph_predecessor,
             formatter,
         ),
     };

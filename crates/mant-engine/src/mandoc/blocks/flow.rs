@@ -1,5 +1,5 @@
 //! Paragraph and literal flow own pending text, provenance and flush boundaries.
-use super::{FilledBoundary, InlineBuilder, LoweringContext, layout, targets, updated_spacing};
+use super::{FilledBoundary, InlineBuilder, layout, targets, updated_spacing};
 use mant_ir::{Block, Inline};
 
 pub(super) struct BlockState {
@@ -9,8 +9,8 @@ pub(super) struct BlockState {
     paragraph_last_line: Option<u32>,
     preformatted: Vec<Inline>,
     pre_source: Option<mant_ir::SourceSpan>,
-    preformatted_last_line: Option<u32>,
     preformatted_tight_boundary: bool,
+    preformatted_row_occupied: bool,
     pending_targets: targets::PendingTargets,
     indent_columns: crate::mandoc::layout::SourceIndent,
     hanging_origin: Option<crate::mandoc::layout::SourceIndent>,
@@ -61,8 +61,8 @@ impl BlockState {
             paragraph_last_line: None,
             preformatted: Vec::new(),
             pre_source: None,
-            preformatted_last_line: None,
             preformatted_tight_boundary: false,
+            preformatted_row_occupied: false,
             pending_targets: targets::PendingTargets::new(),
             indent_columns,
             hanging_origin: None,
@@ -198,50 +198,33 @@ impl BlockState {
 
     pub(super) fn push_preformatted(
         &mut self,
-        nodes: Vec<Inline>,
+        mut nodes: Vec<Inline>,
         source: Option<mant_ir::SourceSpan>,
         continues_line: bool,
-        context: &LoweringContext<'_>,
+        starts_line: bool,
+        occupies_row: bool,
     ) {
         self.flush_paragraph();
-        if nodes.is_empty() {
-            if continues_line {
-                self.preformatted_tight_boundary = true;
-            }
-            return;
+        if nodes.is_empty() && occupies_row {
+            nodes.push(Inline::Text {
+                value: String::new(),
+            });
         }
-        if !self.preformatted.is_empty() && !self.preformatted_tight_boundary {
-            let blank_rows = context.no_fill_blank_rows_between(
-                self.preformatted_last_line,
-                source.map(|span| span.line),
-            );
+        if starts_line && self.preformatted_row_occupied && !self.preformatted_tight_boundary {
             if self.hanging_origin.is_some() {
                 // An HP entered while already in no-fill mode still has one
                 // first line at the macro origin. Materialize that line
                 // before adopting the permanent hanging origin. A continued
                 // source line (\c) does not reach this boundary.
                 self.flush_preformatted();
-                if blank_rows > 0 {
-                    // The hard-line separator is now the block boundary;
-                    // additional blank rows remain an explicit flow gap.
-                    self.output.push(Block::VerticalSpace {
-                        lines: blank_rows,
-                        source: None,
-                    });
-                }
             } else {
                 self.preformatted.push(Inline::LineBreak);
-                self.preformatted.extend(std::iter::repeat_n(
-                    Inline::LineBreak,
-                    usize::from(blank_rows),
-                ));
             }
+            self.preformatted_row_occupied = false;
         }
         self.preformatted.extend(nodes);
+        self.preformatted_row_occupied |= occupies_row;
         self.preformatted_tight_boundary = continues_line;
-        if let Some(source_line) = source.map(|span| span.line) {
-            self.preformatted_last_line = Some(source_line);
-        }
         if self.pre_source.is_none() {
             self.pre_source = source;
         }
@@ -269,6 +252,14 @@ impl BlockState {
     }
 
     pub(super) fn flush_preformatted(&mut self) {
+        // A pure formatter word can close the preceding row without
+        // occupying another one. Literal blank rows end in an explicit
+        // empty text sentinel and are therefore not trimmed here.
+        if !self.preformatted_row_occupied
+            && matches!(self.preformatted.last(), Some(Inline::LineBreak))
+        {
+            self.preformatted.pop();
+        }
         let output_start = self.output.len();
         flush_preformatted(
             &mut self.output,
@@ -280,8 +271,8 @@ impl BlockState {
             self.consume_hanging_first_line();
         }
         self.attach_pending_to_new_output(output_start);
-        self.preformatted_last_line = None;
         self.preformatted_tight_boundary = false;
+        self.preformatted_row_occupied = false;
     }
 
     pub(super) fn finish(mut self) -> Vec<Block> {

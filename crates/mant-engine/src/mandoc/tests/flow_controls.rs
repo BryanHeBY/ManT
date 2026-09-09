@@ -1,5 +1,68 @@
 //! Native paragraph, literal-line and styling-container flow contracts.
 
+// A literal display can contain separate literal runs and executed spacing
+// requests. Verify their complete row stream rather than requiring one block
+// (which would erase the distinction needed for bounded request accounting).
+fn literal_flow(blocks: &[mant_ir::Block]) -> String {
+    let mut output = String::new();
+    let mut occupied = false;
+    let mut gap = 0usize;
+    for block in blocks {
+        match block {
+            mant_ir::Block::VerticalSpace { lines, .. } => gap += usize::from(*lines),
+            mant_ir::Block::Preformatted {
+                children, layout, ..
+            } => {
+                gap += usize::from(layout.spacing_before_lines);
+                if occupied {
+                    output.push('\n');
+                }
+                output.push_str(&"\n".repeat(gap));
+                output.push_str(&super::inline_text(children));
+                gap = 0;
+                occupied = true;
+            }
+            other => panic!("unexpected block in literal flow: {other:?}"),
+        }
+    }
+    output.push_str(&"\n".repeat(gap));
+    output
+}
+
+fn assert_markdown_literal_rows(query: &crate::ResolvedContent, expected: &str) {
+    use mant_ir::visit::{Visit, walk_block};
+    #[derive(Default)]
+    struct LiteralRows(Vec<String>);
+    impl<'a> Visit<'a> for LiteralRows {
+        fn visit_block(&mut self, block: &'a mant_ir::Block) {
+            if let mant_ir::Block::Preformatted { children, .. } = block {
+                self.0.extend(
+                    super::inline_text(children)
+                        .split('\n')
+                        .filter(|line| !line.is_empty())
+                        .map(str::to_owned),
+                );
+            }
+            walk_block(self, block);
+        }
+    }
+    let markdown = crate::render_markdown(query);
+    let reloaded = crate::query_markdown_text(&markdown, None).unwrap();
+    let mut rows = LiteralRows::default();
+    rows.visit_document(reloaded.document.as_ref().unwrap());
+    // Markdown owns fence separators: rereading may normalize inter-fence
+    // gaps, but it must retain every visible literal row in its exact order.
+    assert_eq!(
+        rows.0.join("\n"),
+        expected
+            .split('\n')
+            .filter(|line| !line.is_empty())
+            .collect::<Vec<_>>()
+            .join("\n"),
+        "{markdown}"
+    );
+}
+
 #[test]
 fn ordinary_man_paragraphs_reset_prevailing_definition_width() {
     use mant_ir::visit::{Visit, walk_definition_item};
@@ -57,11 +120,11 @@ fn literal_display_controls_preserve_physical_rows_and_continuation() {
             );
             let query = crate::query_roff_bytes(source.as_bytes()).unwrap();
             let document = query.document.as_ref().unwrap();
-            let mant_ir::Block::Preformatted { children, .. } = &document.sections[0].blocks[0]
-            else {
-                panic!("{document:?}")
-            };
-            assert_eq!(super::inline_text(children), expected, "{source}");
+            assert_eq!(
+                literal_flow(&document.sections[0].blocks),
+                expected,
+                "{source}"
+            );
             assert!(
                 crate::render_query_text(&query).contains(expected),
                 "{source}: {}",
@@ -85,14 +148,13 @@ fn literal_continuations_cross_styling_containers_without_phantom_rows() {
             ".Dd September 7, 2026\n.Dt FLOW 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal -offset left\n{body}\n.Ed\n"
         );
         let query = crate::query_roff_bytes(source.as_bytes()).unwrap();
-        let mant_ir::Block::Preformatted { children, .. } =
-            &query.document.as_ref().unwrap().sections[0].blocks[0]
-        else {
-            panic!("{query:?}")
-        };
-        assert_eq!(super::inline_text(children), "FIRSTSECONDTHIRD", "{body}");
+        assert_eq!(
+            literal_flow(&query.document.as_ref().unwrap().sections[0].blocks),
+            "FIRSTSECONDTHIRD",
+            "{body}"
+        );
         assert!(crate::render_query_text(&query).contains("FIRSTSECONDTHIRD"));
-        assert!(crate::render_markdown(&query).contains("FIRSTSECONDTHIRD"));
+        assert_markdown_literal_rows(&query, "FIRSTSECONDTHIRD");
     }
 }
 
@@ -117,31 +179,18 @@ fn styled_literal_breaks_and_eof_keep_exact_content_boundaries() {
             ".Dd September 7, 2026\n.Dt FLOW 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal -offset left\n{body}\n.Ed\n"
         );
         let query = crate::query_roff_bytes(source.as_bytes()).unwrap();
-        let mant_ir::Block::Preformatted { children, .. } =
-            &query.document.as_ref().unwrap().sections[0].blocks[0]
-        else {
-            panic!("{query:?}")
-        };
-        assert_eq!(super::inline_text(children), expected, "{body}");
+        assert_eq!(
+            literal_flow(&query.document.as_ref().unwrap().sections[0].blocks),
+            expected,
+            "{body}"
+        );
         assert!(crate::render_query_text(&query).contains(expected));
-        assert!(crate::render_markdown(&query).contains(expected));
+        assert_markdown_literal_rows(&query, expected);
     }
 }
 
 #[test]
 fn explicit_literal_breaks_are_not_repeated_at_styling_boundaries() {
-    fn line_breaks(nodes: &[mant_ir::Inline]) -> usize {
-        nodes
-            .iter()
-            .map(|node| match node {
-                mant_ir::Inline::LineBreak => 1,
-                mant_ir::Inline::Strong { children }
-                | mant_ir::Inline::Emphasis { children }
-                | mant_ir::Inline::Link { children, .. } => line_breaks(children),
-                _ => 0,
-            })
-            .sum()
-    }
     for (control, gap) in [
         (".br", "\n"),
         (".sp 0", "\n"),
@@ -186,14 +235,10 @@ fn explicit_literal_breaks_are_not_repeated_at_styling_boundaries() {
                         ".Dd September 7, 2026\n.Dt FLOW 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal -offset left\n{body}\n.Ed\n"
                     );
                     let query = crate::query_roff_bytes(source.as_bytes()).unwrap();
-                    let mant_ir::Block::Preformatted { children, .. } =
-                        &query.document.as_ref().unwrap().sections[0].blocks[0]
-                    else {
-                        panic!("{query:?}")
-                    };
-                    assert_eq!(super::inline_text(children), expected, "{body}");
+                    let flow = literal_flow(&query.document.as_ref().unwrap().sections[0].blocks);
+                    assert_eq!(flow, expected, "{body}");
                     assert_eq!(
-                        line_breaks(children),
+                        flow.matches('\n').count(),
                         expected.matches('\n').count(),
                         "{body}"
                     );
@@ -201,7 +246,7 @@ fn explicit_literal_breaks_are_not_repeated_at_styling_boundaries() {
                         crate::render_query_text(&query).contains(&expected),
                         "{body}"
                     );
-                    assert!(crate::render_markdown(&query).contains(&expected), "{body}");
+                    assert_markdown_literal_rows(&query, &expected);
                 }
             }
         }

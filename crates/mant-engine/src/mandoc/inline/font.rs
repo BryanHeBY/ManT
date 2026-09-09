@@ -135,7 +135,7 @@ pub(in crate::mandoc) fn parse_roff_text_with_state(
                     output.push(Inline::LineBreak);
                 }
             }
-            RoffInlineEvent::Presentation { .. } => {}
+            RoffInlineEvent::Presentation { .. } | RoffInlineEvent::ZeroWidthGlyph => {}
         }
     }
     flush_segment(&mut output, &mut buffer, font, link.as_deref());

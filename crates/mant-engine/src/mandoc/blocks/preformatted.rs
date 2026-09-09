@@ -4,7 +4,7 @@ use libmandoc_rs::{Node, NodeKind};
 use mant_ir::{Block, Inline};
 
 use super::super::{
-    LoweringContext, first_part_children,
+    LoweringContext,
     inline::{InlineBuilder, append_inline_node_with_next},
     layout::{layout, vertical_distance_lines},
     source_span,
@@ -16,6 +16,7 @@ pub(super) fn preformatted_blocks(
     context: &LoweringContext<'_>,
     indent_columns: crate::mandoc::layout::SourceIndent,
     spacing_enabled: bool,
+    paragraph_predecessor: bool,
     formatter: &mut crate::mandoc::formatter::FormatterState,
 ) -> Vec<Block> {
     let mut flow = DisplayFlow {
@@ -24,10 +25,12 @@ pub(super) fn preformatted_blocks(
         source: None,
         context,
         indent_columns,
+        paragraph_predecessor,
+        literal: true,
         formatter: *formatter,
     };
     flow.line.font = formatter.font;
-    flow.line.track_source_lines(context.no_fill_source_rows());
+    flow.line.track_executed_lines();
     let body_index = node
         .children
         .iter()
@@ -59,6 +62,8 @@ struct DisplayFlow<'a, 'source> {
     source: Option<mant_ir::SourceSpan>,
     context: &'a LoweringContext<'source>,
     indent_columns: crate::mandoc::layout::SourceIndent,
+    paragraph_predecessor: bool,
+    literal: bool,
     formatter: crate::mandoc::formatter::FormatterState,
 }
 
@@ -69,6 +74,7 @@ impl DisplayFlow<'_, '_> {
         crate::mandoc::containers::walk(node, |event| {
             use crate::mandoc::containers::Event;
             if !started {
+                self.line.begin_executed_node(node);
                 for target in super::targets::structural_targets(node) {
                     self.line
                         .append(vec![Inline::anchor_at(target, source_span(node))]);
@@ -76,9 +82,9 @@ impl DisplayFlow<'_, '_> {
                 started = true;
             }
             match event {
+                Event::BeginNode(node) => self.line.begin_executed_node(node),
                 Event::Children(nodes) => self.append_nodes(nodes),
                 Event::Glyph(value) => {
-                    self.line.begin_source_line(node.line);
                     self.line.append_text(&value);
                 }
                 Event::Tight => self.line.tighten_next_boundary(),
@@ -100,13 +106,33 @@ impl DisplayFlow<'_, '_> {
         self.line.transfer_source_cursor(&mut next);
         let children = std::mem::replace(&mut self.line, next).finish();
         if !children.is_empty() {
-            self.output.push(Block::Preformatted {
-                children,
-                language: None,
-                layout: layout(self.indent_columns),
-                source: self.source.take(),
+            self.output.push(if self.literal {
+                Block::Preformatted {
+                    children,
+                    language: None,
+                    layout: layout(self.indent_columns),
+                    source: self.source.take(),
+                }
+            } else {
+                Block::Paragraph {
+                    children,
+                    layout: layout(self.indent_columns),
+                    source: self.source.take(),
+                }
             });
         }
+    }
+
+    fn set_literal_mode(&mut self, literal: bool) {
+        self.flush();
+        self.literal = literal;
+        let mut next = InlineBuilder::with_spacing(self.line.spacing_enabled());
+        next.font = self.line.font;
+        if literal {
+            next.track_executed_lines();
+        }
+        self.line = next;
+        self.source = None;
     }
 
     fn append_inline(&mut self, node: &Node, next: Option<&Node>) {
@@ -114,16 +140,42 @@ impl DisplayFlow<'_, '_> {
             self.source = source_span(node);
         }
         match node.macro_name.as_deref() {
+            // Bd chooses the initial mode; actual roff requests can switch
+            // it inside the body. Both mandoc node flags and formatter
+            // execution distinguish these from another literal source row.
+            Some("fi") => self.set_literal_mode(false),
+            Some("nf") => self.set_literal_mode(true),
             Some("sp") => {
-                self.line.begin_source_line(node.line);
-                self.line
-                    .blank_rows(vertical_distance_lines(node).unwrap_or(0));
+                self.flush();
+                self.output.push(Block::VerticalSpace {
+                    lines: vertical_distance_lines(node).unwrap_or(0),
+                    source: source_span(node),
+                });
+                self.line.reset_source_cursor();
             }
             Some("br") => {
-                self.line.begin_source_line(node.line);
-                self.line.hard_break();
+                if self.literal {
+                    self.flush();
+                    self.line.reset_source_cursor();
+                } else {
+                    self.line.hard_break();
+                }
             }
             _ => {
+                if !self.literal
+                    && node.kind == NodeKind::Text
+                    && node.flags.line_start
+                    && !self.line.has_tight_boundary()
+                {
+                    // A display switched to fill uses the same authored
+                    // text-line policy as ordinary filled block flow. Macro
+                    // operands must not acquire this source-word boundary.
+                    if super::starts_indented_filled_line(node) {
+                        self.line.hard_break();
+                    } else {
+                        self.line.preserve_source_word_boundary();
+                    }
+                }
                 append_inline_node_with_next(&mut self.line, node, next, self.context.default_name);
             }
         }
@@ -141,11 +193,30 @@ impl DisplayFlow<'_, '_> {
             if node.kind == NodeKind::Block
                 && matches!(node.macro_name.as_deref(), Some("Bd" | "D1" | "Dl"))
             {
-                for target in super::targets::structural_targets(node) {
-                    self.line
-                        .append(vec![Inline::anchor_at(target, source_span(node))]);
-                }
-                self.append_nodes(first_part_children(node, NodeKind::Body));
+                // A display changes the formatter's origin and mode even
+                // inside another literal display. Re-enter structural
+                // lowering with the complete node instead of flattening its
+                // body into the outer fixed-origin inline buffer. mandoc's
+                // termp_bd_pre()/post() restore geometry at this boundary;
+                // font and spacing changes still follow their normal scope.
+                self.flush();
+                self.formatter.font = self.line.font;
+                self.formatter.spacing = self.line.spacing_enabled();
+                let nested = super::lower_blocks_with_predecessor(
+                    std::slice::from_ref(node),
+                    self.context,
+                    self.indent_columns,
+                    &mut 1,
+                    self.line.spacing_enabled(),
+                    self.paragraph_predecessor || !self.output.is_empty(),
+                    &mut self.formatter,
+                );
+                self.output.extend(nested);
+                self.paragraph_predecessor = true;
+                self.line.font = self.formatter.font;
+                self.line.inherit_spacing(self.formatter.spacing);
+                self.line.reset_source_cursor();
+                self.source = None;
             } else if node.kind == NodeKind::Table
                 || (node.kind == NodeKind::Block
                     && matches!(node.macro_name.as_deref(), Some("Bl" | "Rs")))
@@ -163,12 +234,13 @@ impl DisplayFlow<'_, '_> {
                         &mut self.formatter,
                     );
                 } else {
-                    self.output.extend(super::lower_blocks_with_spacing(
+                    self.output.extend(super::lower_blocks_with_predecessor(
                         std::slice::from_ref(node),
                         self.context,
                         self.indent_columns,
                         &mut 1,
                         self.line.spacing_enabled(),
+                        self.paragraph_predecessor || !self.output.is_empty(),
                         &mut self.formatter,
                     ));
                 }

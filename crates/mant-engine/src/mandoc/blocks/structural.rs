@@ -3,9 +3,10 @@ use super::{
     Block, DEFAULT_MAN_TAG_WIDTH, DisplayKind, Inline, LoweringContext, ManDefinitionState,
     ManListState, Node, NodeKind, TableEmbedding, add_leading_spacing,
     append_relative_continuation, append_table_row, equation_block, extend_blocks_with_spacing,
-    first_part_children, layout_with_spacing, lower_blocks_with_spacing, lower_inline_nodes,
-    lower_man_definition_block, lower_mdoc_list, lower_synopsis_head, part_child_groups,
-    plain_text, preformatted_blocks, set_block_spacing, source_span,
+    first_part_children, layout_with_spacing, lower_blocks_with_predecessor,
+    lower_blocks_with_spacing, lower_inline_nodes, lower_man_definition_block, lower_mdoc_list,
+    lower_synopsis_head, part_child_groups, plain_text, preformatted_blocks, set_block_spacing,
+    source_span,
 };
 
 pub(super) struct StructuralLowerer<'a, 'source, 'state> {
@@ -61,14 +62,16 @@ impl StructuralLowerer<'_, '_, '_> {
                     self.indent_columns,
                     self.paragraph_distance,
                     self.spacing_enabled,
+                    self.has_paragraph_predecessor(),
                     self.formatter,
                 );
-                if !self.output.is_empty() && !node.compact {
+                if self.has_paragraph_predecessor() && !node.compact {
                     set_block_spacing(&mut block, 1);
                 }
                 self.output.push(block);
             }
             Some("Bd" | "D1" | "Dl") => {
+                let has_predecessor = self.has_paragraph_predecessor();
                 let mut nested = preformatted_blocks(
                     node,
                     self.context,
@@ -78,13 +81,21 @@ impl StructuralLowerer<'_, '_, '_> {
                         self.context.display_offset(node),
                     ),
                     self.spacing_enabled,
+                    has_predecessor,
                     self.formatter,
                 );
-                if node.macro_name.as_deref() == Some("Bd")
-                    && !self.output.is_empty()
-                    && !node.compact
-                {
-                    add_leading_spacing(&mut nested, 1);
+                if node.macro_name.as_deref() == Some("Bd") && has_predecessor && !node.compact {
+                    if nested.is_empty() {
+                        // Even an empty display executes its own vertical
+                        // request. Do not lose it merely because no literal
+                        // leaf exists to carry a layout hint.
+                        nested.push(Block::VerticalSpace {
+                            lines: 1,
+                            source: source_span(node),
+                        });
+                    } else {
+                        add_leading_spacing(&mut nested, 1);
+                    }
                 }
                 self.output.extend(nested);
             }
@@ -180,8 +191,9 @@ impl StructuralLowerer<'_, '_, '_> {
         match node.macro_name.as_deref() {
             Some("PP" | "P" | "LP" | "HP") => self.lower_man_paragraph(node),
             Some("Bd") if node.display_kind == Some(DisplayKind::Filled) => {
-                let spacing_before = u16::from(!self.output.is_empty() && !node.compact);
-                let nested = lower_blocks_with_spacing(
+                let has_predecessor = self.has_paragraph_predecessor();
+                let spacing_before = u16::from(has_predecessor && !node.compact);
+                let mut nested = lower_blocks_with_predecessor(
                     first_part_children(node, NodeKind::Body),
                     self.context,
                     self.context.offset_indent(
@@ -191,9 +203,18 @@ impl StructuralLowerer<'_, '_, '_> {
                     ),
                     self.paragraph_distance,
                     self.spacing_enabled,
+                    has_predecessor,
                     self.formatter,
                 );
-                extend_blocks_with_spacing(self.output, nested, spacing_before);
+                if nested.is_empty() && spacing_before > 0 {
+                    nested.push(Block::VerticalSpace {
+                        lines: spacing_before,
+                        source: source_span(node),
+                    });
+                    self.output.extend(nested);
+                } else {
+                    extend_blocks_with_spacing(self.output, nested, spacing_before);
+                }
             }
             Some("RS") => {
                 // mandoc's print_bvspace climbs first-child RS wrappers to

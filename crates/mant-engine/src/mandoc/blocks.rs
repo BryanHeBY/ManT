@@ -66,31 +66,28 @@ fn lower_blocks_with_spacing(
     spacing_enabled: bool,
     formatter: &mut crate::mandoc::formatter::FormatterState,
 ) -> Vec<Block> {
-    lower_blocks_onto(
+    lower_blocks_with_predecessor(
         nodes,
         context,
         indent_columns,
         paragraph_distance,
         spacing_enabled,
-        Vec::new(),
+        false,
         formatter,
     )
 }
 
-/// Lower a transparent structural subtree onto already emitted blocks.
-///
-/// Relative-indent scopes change geometry without starting a paragraph. By
-/// retaining the preceding blocks while lowering their children, only an
-/// actual child paragraph/list macro can contribute its `.PD` distance. This
-/// also lets adjacent definition lists merge across generated `.RS` wrappers
-/// without reconstructing their boundary spacing after the fact.
-fn lower_blocks_onto(
+/// Lower a detached structural body without discarding its predecessor.
+/// Native display spacing walks through first-child containers to find an
+/// earlier source sibling. An empty child output buffer is not evidence that
+/// the body immediately follows a section heading.
+fn lower_blocks_with_predecessor(
     nodes: &[Node],
     context: &LoweringContext<'_>,
     indent_columns: crate::mandoc::layout::SourceIndent,
     paragraph_distance: &mut u16,
     spacing_enabled: bool,
-    output: Vec<Block>,
+    paragraph_predecessor: bool,
     formatter: &mut crate::mandoc::formatter::FormatterState,
 ) -> Vec<Block> {
     let mut lowerer = BlockLowerer::new(
@@ -98,9 +95,10 @@ fn lower_blocks_onto(
         indent_columns,
         paragraph_distance,
         spacing_enabled,
-        output,
+        Vec::new(),
         *formatter,
     );
+    lowerer.paragraph_predecessor = paragraph_predecessor;
     lowerer.push_nodes(nodes);
     lowerer.formatter.spacing = lowerer.state.spacing_enabled();
     *formatter = lowerer.formatter;
@@ -189,7 +187,15 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
         if self.push_container(node) || self.consume_control_or_empty_block(node) {
             return;
         }
+        if self.push_no_fill_synopsis(node) {
+            return;
+        }
         let structural_targets = targets::structural_targets(node);
+        if self.push_executed_spacing(node) {
+            self.state
+                .queue_targets(structural_targets, source_span(node));
+            return;
+        }
         if self.push_no_fill_lines(node) {
             self.state
                 .queue_targets(structural_targets, source_span(node));
@@ -215,15 +221,6 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
             if !self.state.output.is_empty() {
                 self.state.output.push(Block::VerticalSpace {
                     lines: 1,
-                    source: source_span(node),
-                });
-            }
-        } else if node.macro_name.as_deref() == Some("sp") {
-            self.state.flush_paragraph();
-            self.state.consume_hanging_first_line();
-            if let Some(lines) = vertical_distance_lines(node) {
-                self.state.output.push(Block::VerticalSpace {
-                    lines,
                     source: source_span(node),
                 });
             }
@@ -259,6 +256,11 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
                 formatter: &mut self.formatter,
             }
             .push(node, table_embedding);
+            // An executed display is a source sibling even when its body
+            // is empty and no visible IR block was materialized.
+            if node.kind == NodeKind::Block && node.macro_name.as_deref() == Some("Bd") {
+                self.paragraph_predecessor = true;
+            }
             if restores_macro_indent(node) {
                 self.state
                     .set_source_indent(self.indent_columns.macro_origin());
@@ -289,6 +291,9 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
                 started = true;
             }
             match event {
+                // In filled structural flow input-line wrappers alone are
+                // not paragraph breaks. Literal DisplayFlow consumes them.
+                Event::BeginNode(_) => {}
                 Event::Children(nodes) => self.push_nodes(nodes),
                 Event::EnterFont(font) => saved_font = Some(self.formatter.font.push_scope(font)),
                 Event::ExitFont => {
@@ -312,6 +317,25 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
         });
         if !handled {
             return false;
+        }
+        true
+    }
+
+    /// Consume execution requests before the no-fill word fallback can
+    /// mistake numeric operands for printable text.
+    fn push_executed_spacing(&mut self, node: &Node) -> bool {
+        let space = node.macro_name.as_deref() == Some("sp");
+        if !(space || node.flags.no_fill && node.macro_name.as_deref() == Some("br")) {
+            return false;
+        }
+        self.state.flush_preformatted();
+        self.state.flush_paragraph();
+        self.state.consume_hanging_first_line();
+        if space && let Some(lines) = vertical_distance_lines(node) {
+            self.state.output.push(Block::VerticalSpace {
+                lines,
+                source: source_span(node),
+            });
         }
         true
     }
@@ -394,9 +418,51 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
                 line.nodes,
                 line.source,
                 line.continues_line,
-                self.context,
+                line.starts_line,
+                line.occupies_row,
             );
         }
+        true
+    }
+
+    fn push_no_fill_synopsis(&mut self, node: &Node) -> bool {
+        let body = first_part_children(node, NodeKind::Body);
+        if node.macro_name.as_deref() != Some("SY") || !body.iter().any(|child| child.flags.no_fill)
+        {
+            return false;
+        }
+        self.state.flush_paragraph();
+        self.state.flush_preformatted();
+        self.state
+            .queue_targets(targets::structural_targets(node), source_span(node));
+        let head = first_part_children(node, NodeKind::Head);
+        let saved = self
+            .formatter
+            .font
+            .push_scope(crate::mandoc::roff_escape::RoffFont::Strong);
+        let nodes = lower_inline_nodes_with_font_state(
+            head,
+            self.context.default_name,
+            self.state.spacing_enabled(),
+            &mut self.formatter.font,
+        );
+        self.formatter.font.pop_scope(saved);
+        if !nodes.is_empty() {
+            self.state.push_preformatted(
+                nodes,
+                source_span(node),
+                head.last().is_some_and(ends_with_line_continuation),
+                true,
+                true,
+            );
+        }
+        // SY is a scope, not a promise that its whole body is no-fill.
+        // Execute each child through normal block dispatch so fi/nf, spacing
+        // and structural children cannot become flattened pseudo-text.
+        self.push_nodes(body);
+        self.state.flush_paragraph();
+        self.state.flush_preformatted();
+        self.formatter.font = FontState::new();
         true
     }
 
@@ -703,7 +769,7 @@ fn restores_macro_indent(node: &Node) -> bool {
 mod tests {
     use mant_ir::{Block, Inline, SourceSpan};
 
-    use super::{BlockState, LoweringContext, layout, plain_text};
+    use super::{BlockState, layout, plain_text};
 
     fn text(value: &str) -> Vec<Inline> {
         vec![Inline::Text {
@@ -755,12 +821,11 @@ mod tests {
 
     #[test]
     fn block_state_flushes_paragraph_before_tight_preformatted_lines() {
-        let context = LoweringContext::new(None, None);
         let mut state = BlockState::with_output(2.into(), true, Vec::new());
         state.push_inline(text("prose"), Some(source(1)), false, false);
-        state.push_preformatted(text("first"), Some(source(3)), false, &context);
-        state.push_preformatted(text("second"), Some(source(4)), true, &context);
-        state.push_preformatted(text("third"), Some(source(5)), false, &context);
+        state.push_preformatted(text("first"), Some(source(3)), false, true, true);
+        state.push_preformatted(text("second"), Some(source(4)), true, true, true);
+        state.push_preformatted(text("third"), Some(source(5)), false, true, true);
 
         let output = state.finish();
         let [

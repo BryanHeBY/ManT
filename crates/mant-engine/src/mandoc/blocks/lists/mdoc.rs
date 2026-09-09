@@ -1,10 +1,10 @@
 //! Lowers mdoc(7) `.Bl` and `.It` list structures.
 
 use super::{
-    AstTableAlignment, AstTableCell, Block, DefinitionItem, DefinitionListStyle, Inline, ListItem,
-    ListKind, LoweringContext, Node, NodeKind, NormalizedListKind, TableRow, definition_item,
-    first_part_children, layout, lower_blocks_with_spacing, ordinal_sequence, part_child_groups,
-    source_span, targets,
+    AstTableAlignment, AstTableCell, Block, DefinitionFlow, DefinitionItem, DefinitionListStyle,
+    Inline, ListItem, ListKind, LoweringContext, Node, NodeKind, NormalizedListKind, TableRow,
+    definition_item, first_part_children, layout, lower_blocks_with_predecessor, ordinal_sequence,
+    part_child_groups, source_span, targets,
 };
 
 pub(in crate::mandoc::blocks) fn lower_mdoc_list(
@@ -13,6 +13,7 @@ pub(in crate::mandoc::blocks) fn lower_mdoc_list(
     indent_columns: crate::mandoc::layout::SourceIndent,
     paragraph_distance: &mut u16,
     initial_spacing: bool,
+    paragraph_predecessor: bool,
     formatter: &mut crate::mandoc::formatter::FormatterState,
 ) -> Block {
     let MdocListItems {
@@ -66,6 +67,7 @@ pub(in crate::mandoc::blocks) fn lower_mdoc_list(
             context,
             list_indent,
             paragraph_distance,
+            paragraph_predecessor,
             formatter,
         )
     };
@@ -91,6 +93,7 @@ fn lower_mdoc_plain_list(
     context: &LoweringContext<'_>,
     list_indent: crate::mandoc::layout::SourceIndent,
     paragraph_distance: &mut u16,
+    paragraph_predecessor: bool,
     formatter: &mut crate::mandoc::formatter::FormatterState,
 ) -> Block {
     use crate::mandoc::layout::Distance;
@@ -146,12 +149,13 @@ fn lower_mdoc_plain_list(
                     formatter.spacing,
                     formatter,
                 );
-                let mut blocks = lower_blocks_with_spacing(
+                let mut blocks = lower_blocks_with_predecessor(
                     first_part_children(item.node, NodeKind::Body),
                     context,
                     body_origin,
                     paragraph_distance,
                     formatter.spacing,
+                    item_body_predecessor(kind == ListKind::Plain, index, paragraph_predecessor),
                     formatter,
                 );
                 attach_item_targets(&mut blocks, &item, layout(body_origin));
@@ -222,7 +226,10 @@ fn lower_mdoc_definition_list(
                 list_indent,
                 paragraph_distance,
                 geometry,
-                formatter.spacing,
+                DefinitionFlow {
+                    spacing_enabled: formatter.spacing,
+                    paragraph_predecessor: item_body_predecessor(false, 0, false),
+                },
                 formatter,
             );
             for targets::OwnedTarget {
@@ -421,12 +428,13 @@ fn lower_mdoc_column_list(
             );
             let mut cells = part_child_groups(item.node, NodeKind::Body)
                 .map(|body| AstTableCell {
-                    blocks: lower_blocks_with_spacing(
+                    blocks: lower_blocks_with_predecessor(
                         body,
                         context,
                         cell_indent.content_origin(),
                         paragraph_distance,
                         formatter.spacing,
+                        item_body_predecessor(false, 0, false),
                         formatter,
                     ),
                     column_span: 1,
@@ -461,6 +469,13 @@ fn lower_mdoc_column_list(
         layout: layout(indent_columns),
         source: source_span(node),
     }
+}
+
+/// mandoc `print_bvspace` climbs first-child wrappers, except that a non-plain
+/// It is itself a paragraph boundary even before its first body child.
+/// Plain (-item) items instead inherit a preceding sibling/outer scope.
+fn item_body_predecessor(plain: bool, index: usize, inherited: bool) -> bool {
+    !plain || index > 0 || inherited
 }
 
 fn append_list_targets(

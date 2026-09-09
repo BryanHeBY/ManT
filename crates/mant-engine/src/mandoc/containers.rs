@@ -7,6 +7,8 @@ use libmandoc_rs::{Node, NodeKind};
 use super::{first_part_children, inline::enclosure_marks, roff_escape::RoffFont};
 
 pub(super) enum Event<'a> {
+    /// An executed wrapper boundary whose children are emitted separately.
+    BeginNode(&'a Node),
     Children(&'a [Node]),
     Glyph(String),
     Tight,
@@ -41,35 +43,7 @@ pub(super) fn walk(node: &Node, mut emit: impl FnMut(Event<'_>)) -> bool {
             }
         }
         Some("Bk") => emit(Event::Children(body)),
-        Some("Eo") => {
-            let head = first_part_children(node, NodeKind::Head);
-            let tail = first_part_children(node, NodeKind::Tail);
-            for (index, child) in node.children.iter().enumerate() {
-                match child.kind {
-                    NodeKind::Head => {
-                        emit(Event::Children(&child.children));
-                        if !head.is_empty() && (!body.is_empty() || !tail.is_empty()) {
-                            emit(Event::Tight);
-                        }
-                    }
-                    NodeKind::Body => {
-                        emit(Event::Children(&child.children));
-                        if head.is_empty() && body.is_empty() && tail.is_empty() {
-                            emit(Event::EmptyWord);
-                        } else if tail.is_empty() {
-                            emit(Event::Release);
-                        }
-                    }
-                    NodeKind::Tail => {
-                        if !tail.is_empty() && (!head.is_empty() || !body.is_empty()) {
-                            emit(Event::Tight);
-                        }
-                        emit(Event::Children(&child.children));
-                    }
-                    _ => emit(Event::Children(&node.children[index..=index])),
-                }
-            }
-        }
+        Some("Eo") => authored_enclosure(node, &mut emit),
         name if super::inline::is_enclosure_macro(name) => {
             let marks = node.enclosure.as_ref().map_or_else(
                 || {
@@ -128,6 +102,42 @@ pub(super) fn walk(node: &Node, mut emit: impl FnMut(Event<'_>)) -> bool {
         _ => return false,
     }
     true
+}
+
+/// Authored delimiters can be siblings of the body wrappers. Keep wrapper
+/// execution events in that same stream even when an Ec tail has no text.
+fn authored_enclosure<'a>(node: &'a Node, emit: &mut impl FnMut(Event<'a>)) {
+    let head = first_part_children(node, NodeKind::Head);
+    let body = first_part_children(node, NodeKind::Body);
+    let tail = first_part_children(node, NodeKind::Tail);
+    for (index, child) in node.children.iter().enumerate() {
+        if matches!(child.kind, NodeKind::Head | NodeKind::Body | NodeKind::Tail) {
+            emit(Event::BeginNode(child));
+        }
+        match child.kind {
+            NodeKind::Head => {
+                emit(Event::Children(&child.children));
+                if !head.is_empty() && (!body.is_empty() || !tail.is_empty()) {
+                    emit(Event::Tight);
+                }
+            }
+            NodeKind::Body => {
+                emit(Event::Children(&child.children));
+                if head.is_empty() && body.is_empty() && tail.is_empty() {
+                    emit(Event::EmptyWord);
+                } else if tail.is_empty() {
+                    emit(Event::Release);
+                }
+            }
+            NodeKind::Tail => {
+                if !tail.is_empty() && (!head.is_empty() || !body.is_empty()) {
+                    emit(Event::Tight);
+                }
+                emit(Event::Children(&child.children));
+            }
+            _ => emit(Event::Children(&node.children[index..=index])),
+        }
+    }
 }
 
 /// A payload consumer must never flatten these nodes through inline children.
