@@ -58,6 +58,16 @@ local replay requires the same allocation, otherwise the host reloads the
 address and the reader validates the destination before committing. Tab grouping
 by address is only a display policy, never a revision cache.
 
+One private pointer owner retains the live gesture, selection and coalesced
+resize/auto-scroll timers. Replacing or ending a gesture cancels its timers;
+successful page changes also cancel any queued splitter update, while failed
+loads leave the old gesture and page intact. Reflow invalidates selection cell
+coordinates without ending the splitter that caused it. App still routes each
+input once against the last complete frame geometry and services timers using
+the host-supplied clock. Four independent pending capability slots preserve
+coexisting discovery, open, external-open and copy intents; no unbounded event
+queue or mutually exclusive effect enum is introduced.
+
 The reference overlay owns its chooser and its explicit Open or Copy purpose;
 Reveal remains an action on the selected source occurrence. Closing or replacing
 the overlay drops that chooser, including during a successful page change.

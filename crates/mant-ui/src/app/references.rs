@@ -115,7 +115,7 @@ impl App {
         }
         // URI conversion has validated/encoded every component. Terminal
         // display sanitization must never rewrite a copied destination.
-        self.pending_copy = Some(CopyRequest::Reference { text });
+        self.effects.copy(CopyRequest::Reference { text });
     }
 
     pub(super) fn show_reference_chooser(&mut self, purpose: ReferencePurpose) {

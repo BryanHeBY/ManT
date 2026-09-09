@@ -311,7 +311,7 @@ impl App {
             return Some(self.handle_reference_mouse(mouse));
         }
         if self.overlay == Overlay::DocumentFinder
-            && matches!(self.pointer_drag, super::PointerDrag::FinderScrollbar(_))
+            && matches!(self.pointer.drag(), super::PointerDrag::FinderScrollbar(_))
             && matches!(
                 mouse.kind,
                 MouseEventKind::Drag(MouseButton::Left) | MouseEventKind::Up(MouseButton::Left)
@@ -333,7 +333,7 @@ impl App {
         if let Some(id) = menu_bar_target {
             return match mouse.kind {
                 MouseEventKind::Down(MouseButton::Left) => {
-                    self.pointer_drag = super::PointerDrag::None;
+                    self.pointer.finish_drag();
                     self.overlay = if matches!(self.overlay, Overlay::Menu { id: open, .. } if open == id)
                     {
                         Overlay::None

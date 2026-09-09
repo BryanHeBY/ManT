@@ -12,7 +12,7 @@ use ratatui::{
 use unicode_width::UnicodeWidthStr;
 
 use super::{
-    App, HistoryDirection, NavigationRequest, Overlay, PointerDrag, UpdateOutcome, menu::MenuId,
+    App, HistoryDirection, NavigationRequest, Overlay, UpdateOutcome, menu::MenuId,
 };
 use crate::theme;
 
@@ -44,7 +44,7 @@ impl App {
             return UpdateOutcome::Unchanged;
         };
         if let Some(address) = location.address().cloned() {
-            self.pending_open = Some(NavigationRequest {
+            self.effects.open(NavigationRequest {
                 document: address.into(),
                 target: location.target().clone(),
                 direction: HistoryDirection::New,
@@ -92,7 +92,7 @@ impl App {
                 .map(|tab| tab.index)
                 .map(|index| self.activate_document_tab(index))
         }?;
-        self.pointer_drag = PointerDrag::None;
+        self.pointer.finish_drag();
         self.overlay = Overlay::None;
         Some(outcome)
     }

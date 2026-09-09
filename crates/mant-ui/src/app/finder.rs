@@ -364,24 +364,24 @@ impl App {
     pub(super) fn open_document_finder(&mut self) {
         self.close_search();
         self.finder.open();
-        self.pending_discovery = Some(finder_query(&self.finder.draft));
+        self.effects.discover(finder_query(&self.finder.draft));
         self.overlay = Overlay::DocumentFinder;
     }
 
     pub(super) fn handle_finder_key(&mut self, key: KeyEvent) {
         if key.code == KeyCode::Esc {
-            self.pending_discovery = None;
+            self.effects.cancel_discovery();
             self.overlay = Overlay::None;
-            self.pointer_drag = PointerDrag::None;
+            self.pointer.finish_drag();
             return;
         }
         let previous_draft = self.finder.draft.clone();
         if let Some(address) = self.finder.handle_key(key) {
             self.overlay = Overlay::None;
-            self.pointer_drag = PointerDrag::None;
+            self.pointer.finish_drag();
             self.request_open(address, None);
         } else if self.finder.draft != previous_draft {
-            self.pending_discovery = Some(finder_query(&self.finder.draft));
+            self.effects.discover(finder_query(&self.finder.draft));
         }
         self.finder
             .ensure_selected_visible(usize::from(self.geometry.finder_results.height));
@@ -399,20 +399,20 @@ impl App {
                 let scrollbar = self.geometry.finder_scrollbar.expect("guarded scrollbar");
                 let (drag, position) = scrollbar.begin_drag(mouse.row);
                 self.finder.set_scroll(position, viewport_height);
-                self.pointer_drag = PointerDrag::FinderScrollbar(drag);
+                self.pointer.start_drag(PointerDrag::FinderScrollbar(drag));
                 UpdateOutcome::Redraw
             }
             MouseEventKind::Drag(MouseButton::Left) => {
-                let PointerDrag::FinderScrollbar(drag) = self.pointer_drag else {
+                let PointerDrag::FinderScrollbar(drag) = self.pointer.drag() else {
                     return UpdateOutcome::Unchanged;
                 };
                 self.scroll_finder_to_pointer(mouse.row, drag);
                 UpdateOutcome::Redraw
             }
             MouseEventKind::Up(MouseButton::Left) => {
-                if let PointerDrag::FinderScrollbar(drag) = self.pointer_drag {
+                if let PointerDrag::FinderScrollbar(drag) = self.pointer.drag() {
                     self.scroll_finder_to_pointer(mouse.row, drag);
-                    self.pointer_drag = PointerDrag::None;
+                    self.pointer.finish_drag();
                     UpdateOutcome::Redraw
                 } else {
                     UpdateOutcome::Unchanged
@@ -464,7 +464,7 @@ impl App {
                     + usize::from(mouse.row.saturating_sub(self.geometry.finder_results.y));
                 if let Some(address) = self.finder.activate_row(row) {
                     self.overlay = Overlay::None;
-                    self.pointer_drag = PointerDrag::None;
+                    self.pointer.finish_drag();
                     self.request_open(address, None);
                 } else {
                     self.finder.ensure_selected_visible(viewport_height);
@@ -475,9 +475,9 @@ impl App {
         }
     }
 
-    fn scroll_finder_to_pointer(&mut self, row: u16, drag: super::ScrollbarDrag) {
+    fn scroll_finder_to_pointer(&mut self, row: u16, drag: crate::scrollbar::ScrollbarDrag) {
         let Some(scrollbar) = self.geometry.finder_scrollbar else {
-            self.pointer_drag = PointerDrag::None;
+            self.pointer.finish_drag();
             return;
         };
         let position = scrollbar.position_for_pointer(row, drag);

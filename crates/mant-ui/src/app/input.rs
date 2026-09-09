@@ -4,10 +4,7 @@ use std::time::Instant;
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 
-use super::{
-    App, NAVIGATION_SYNC_IDLE, Overlay, PointerDrag, SELECTION_AUTO_SCROLL_INTERVAL,
-    SelectionAutoScroll, UpdateOutcome, menu::MenuId,
-};
+use super::{App, NAVIGATION_SYNC_IDLE, Overlay, PointerDrag, UpdateOutcome, menu::MenuId};
 use crate::layout::{MIN_SIDEBAR_WIDTH, maximum_sidebar_width};
 
 impl App {
@@ -62,8 +59,7 @@ impl App {
             self.overlay = Overlay::Help;
             return UpdateOutcome::Redraw;
         }
-        if key.code == KeyCode::Esc && self.selection.take().is_some() {
-            self.selection_auto_scroll = None;
+        if key.code == KeyCode::Esc && self.pointer.clear_selection() {
             return UpdateOutcome::Redraw;
         }
         match key.code {
@@ -116,9 +112,10 @@ impl App {
         }
         match mouse.kind {
             MouseEventKind::Down(MouseButton::Right)
-                if self.pointer_drag == PointerDrag::None
+                if self.pointer.drag() == PointerDrag::None
                     && self
-                        .selection
+                        .pointer
+                        .selection()
                         .is_some_and(|selection| !selection.is_empty())
                     && self
                         .geometry
@@ -201,7 +198,7 @@ impl App {
         now: Instant,
     ) -> Option<UpdateOutcome> {
         if matches!(mouse.kind, MouseEventKind::Down(MouseButton::Left)) {
-            self.selection_auto_scroll = None;
+            self.pointer.stop_selection_scroll();
         }
         let outcome = match mouse.kind {
             MouseEventKind::Down(MouseButton::Left)
@@ -216,14 +213,14 @@ impl App {
                     .expect("guarded scrollbar");
                 let (drag, position) = scrollbar.begin_drag(mouse.row);
                 self.navigation_scroll = position;
-                self.pointer_drag = PointerDrag::NavigationScrollbar(drag);
+                self.pointer
+                    .start_drag(PointerDrag::NavigationScrollbar(drag));
                 UpdateOutcome::Redraw
             }
             MouseEventKind::Down(MouseButton::Left)
                 if self.is_sidebar_boundary(mouse.column, mouse.row) =>
             {
-                self.pointer_drag = PointerDrag::Sidebar;
-                self.sidebar_resize.begin();
+                self.pointer.start_drag(PointerDrag::Sidebar);
                 UpdateOutcome::Unchanged
             }
             MouseEventKind::Down(MouseButton::Left)
@@ -236,7 +233,7 @@ impl App {
                 let (drag, position) = scrollbar.begin_drag(mouse.row);
                 self.session.content_scroll = position;
                 self.schedule_navigation_sync();
-                self.pointer_drag = PointerDrag::ContentScrollbar(drag);
+                self.pointer.start_drag(PointerDrag::ContentScrollbar(drag));
                 UpdateOutcome::Redraw
             }
             MouseEventKind::Down(MouseButton::Left)
@@ -247,7 +244,7 @@ impl App {
             {
                 self.begin_content_selection(mouse)
             }
-            MouseEventKind::Drag(MouseButton::Left) => match self.pointer_drag {
+            MouseEventKind::Drag(MouseButton::Left) => match self.pointer.drag() {
                 PointerDrag::Sidebar => self.request_sidebar_resize(mouse.column, now),
                 PointerDrag::NavigationScrollbar(drag) => {
                     self.scroll_navigation_to_pointer(mouse.row, drag);
@@ -262,8 +259,8 @@ impl App {
                 }
                 PointerDrag::FinderScrollbar(_) | PointerDrag::None => return None,
             },
-            MouseEventKind::Up(MouseButton::Left) if self.pointer_drag != PointerDrag::None => {
-                match self.pointer_drag {
+            MouseEventKind::Up(MouseButton::Left) if self.pointer.drag() != PointerDrag::None => {
+                match self.pointer.drag() {
                     PointerDrag::Sidebar => self.finish_sidebar_resize(mouse.column),
                     PointerDrag::NavigationScrollbar(drag) => {
                         self.scroll_navigation_to_pointer(mouse.row, drag);
@@ -272,12 +269,12 @@ impl App {
                         self.scroll_content_to_pointer(mouse.row, drag);
                     }
                     PointerDrag::ContentSelection { moved } => {
-                        self.selection_auto_scroll = None;
+                        self.pointer.stop_selection_scroll();
                         self.finish_content_selection(mouse, moved);
                     }
                     PointerDrag::FinderScrollbar(_) | PointerDrag::None => {}
                 }
-                self.pointer_drag = PointerDrag::None;
+                self.pointer.finish_drag();
                 UpdateOutcome::Redraw
             }
             _ => return None,
@@ -289,20 +286,8 @@ impl App {
         let position = self
             .content_text_position(mouse.column, mouse.row, false)
             .expect("content containment guarantees a text position");
-        let extend = mouse.modifiers.contains(KeyModifiers::SHIFT) && self.selection.is_some();
-        if extend {
-            let retained_anchor = self
-                .selection
-                .expect("extension requires a retained selection")
-                .anchor;
-            self.selection = Some(crate::RenderedSelection {
-                anchor: retained_anchor,
-                focus: position,
-            });
-        } else {
-            self.selection = Some(crate::RenderedSelection::new(position));
-        }
-        self.pointer_drag = PointerDrag::ContentSelection { moved: extend };
+        let extend = mouse.modifiers.contains(KeyModifiers::SHIFT);
+        self.pointer.begin_selection(position, extend);
         UpdateOutcome::Redraw
     }
 
@@ -315,21 +300,14 @@ impl App {
         let direction = self.selection_scroll_direction(mouse.row);
         let scrolling = direction
             .is_some_and(|direction| self.advance_selection_scroll(direction, mouse.column, now));
-        self.selection_auto_scroll = if scrolling {
-            direction.map(|direction| SelectionAutoScroll {
-                direction,
-                column: mouse.column,
-                deadline: now + SELECTION_AUTO_SCROLL_INTERVAL,
-            })
-        } else {
-            None
-        };
+        self.pointer.schedule_selection_scroll(
+            direction
+                .filter(|_| scrolling)
+                .map(|direction| (direction, mouse.column)),
+            now,
+        );
         self.update_selection_focus(mouse.column, mouse.row);
-        if let Some(selection) = self.selection {
-            self.pointer_drag = PointerDrag::ContentSelection {
-                moved: moved || selection.focus != selection.anchor,
-            };
-        }
+        self.pointer.update_selection_motion(moved);
         UpdateOutcome::Redraw
     }
 
@@ -374,54 +352,46 @@ impl App {
     }
 
     fn update_selection_focus(&mut self, column: u16, row: u16) {
-        if let Some(position) = self.content_text_position(column, row, true)
-            && let Some(selection) = &mut self.selection
-        {
-            selection.focus = position;
+        if let Some(position) = self.content_text_position(column, row, true) {
+            self.pointer.focus_selection(position);
         }
     }
 
     pub(super) fn tick_selection_auto_scroll(&mut self, now: Instant) -> bool {
         let Some(scroll) = self
-            .selection_auto_scroll
+            .pointer
+            .selection_scroll()
             .filter(|scroll| scroll.deadline <= now)
         else {
             return false;
         };
-        if !matches!(self.pointer_drag, PointerDrag::ContentSelection { .. })
+        if !matches!(self.pointer.drag(), PointerDrag::ContentSelection { .. })
             || !self.advance_selection_scroll(scroll.direction, scroll.column, now)
         {
-            self.selection_auto_scroll = None;
+            self.pointer.stop_selection_scroll();
             return false;
         }
-        self.selection_auto_scroll = Some(SelectionAutoScroll {
-            deadline: now + SELECTION_AUTO_SCROLL_INTERVAL,
-            ..scroll
-        });
-        if let Some(selection) = self.selection {
-            self.pointer_drag = PointerDrag::ContentSelection {
-                moved: selection.focus != selection.anchor,
-            };
-        }
+        self.pointer
+            .schedule_selection_scroll(Some((scroll.direction, scroll.column)), now);
+        self.pointer.update_selection_motion(false);
         true
     }
 
     fn finish_content_selection(&mut self, mouse: MouseEvent, moved: bool) {
-        if let Some(position) = self.content_text_position(mouse.column, mouse.row, true)
-            && let Some(selection) = &mut self.selection
-        {
-            selection.focus = position;
+        if let Some(position) = self.content_text_position(mouse.column, mouse.row, true) {
+            self.pointer.focus_selection(position);
         }
         let activate_link = !moved
             && self
-                .selection
+                .pointer
+                .selection()
                 .is_some_and(crate::RenderedSelection::is_empty)
             && self
                 .geometry
                 .content
                 .contains((mouse.column, mouse.row).into());
         if activate_link {
-            self.selection = None;
+            self.pointer.clear_selection();
             self.activate_content_link(mouse.column, mouse.row);
         } else if moved {
             self.copy_selection();
@@ -480,7 +450,7 @@ impl App {
     }
 
     fn request_sidebar_resize(&mut self, column: u16, now: Instant) -> UpdateOutcome {
-        let Some(column) = self.sidebar_resize.request(column, now) else {
+        let Some(column) = self.pointer.request_resize(column, now) else {
             return UpdateOutcome::Unchanged;
         };
         if self.commit_sidebar_at(column) {
@@ -491,7 +461,7 @@ impl App {
     }
 
     fn finish_sidebar_resize(&mut self, column: u16) {
-        let column = self.sidebar_resize.finish(column);
+        let column = self.pointer.finish_resize(column);
         self.commit_sidebar_at(column);
     }
 }

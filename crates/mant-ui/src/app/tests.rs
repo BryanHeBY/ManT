@@ -397,7 +397,7 @@ fn right_click_in_document_content_copies_the_retained_selection() {
         .into_iter()
         .next()
         .expect("visible description");
-    app.selection = Some(RenderedSelection {
+    app.pointer.restore_selection(RenderedSelection {
         anchor: TextPosition {
             row: region.row,
             column: region.start_column,
@@ -420,7 +420,10 @@ fn right_click_in_document_content_copies_the_retained_selection() {
         panic!("visual selection emitted a semantic node");
     };
     assert_eq!(text, "Show help");
-    assert!(app.selection.is_some(), "copying must retain the selection");
+    assert!(
+        app.pointer.selection().is_some(),
+        "copying must retain the selection"
+    );
 }
 
 #[test]
@@ -450,7 +453,7 @@ fn visual_tldr_copy_omits_panel_decoration() {
     terminal.draw(|frame| app.draw(frame)).expect("draw app");
     let rendered = &app.session.rendered_cache[&app.session.content_render_width];
     let last_row = rendered.row_count.saturating_sub(1);
-    app.selection = Some(RenderedSelection {
+    app.pointer.restore_selection(RenderedSelection {
         anchor: TextPosition { row: 0, column: 0 },
         focus: TextPosition {
             row: last_row,

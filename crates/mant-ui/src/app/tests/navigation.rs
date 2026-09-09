@@ -205,7 +205,10 @@ fn document_finder_scrollbar_track_and_drag_control_the_result_viewport() {
         modifiers: KeyModifiers::NONE,
     });
     assert_eq!(app.finder.scroll, scrollbar.maximum());
-    assert!(matches!(app.pointer_drag, PointerDrag::FinderScrollbar(_)));
+    assert!(matches!(
+        app.pointer.drag(),
+        PointerDrag::FinderScrollbar(_)
+    ));
 
     app.handle_mouse(MouseEvent {
         kind: MouseEventKind::Drag(MouseButton::Left),
@@ -220,7 +223,7 @@ fn document_finder_scrollbar_track_and_drag_control_the_result_viewport() {
         row: area.y,
         modifiers: KeyModifiers::NONE,
     });
-    assert_eq!(app.pointer_drag, PointerDrag::None);
+    assert_eq!(app.pointer.drag(), PointerDrag::None);
     assert_eq!(app.overlay, Overlay::DocumentFinder);
 }
 
@@ -675,7 +678,7 @@ fn navigation_scrollbar_click_and_drag_do_not_resize_the_sidebar() {
     });
     assert_eq!(app.navigation_scroll, maximum);
     assert!(matches!(
-        app.pointer_drag,
+        app.pointer.drag(),
         PointerDrag::NavigationScrollbar(_)
     ));
     assert_eq!(app.sidebar_width, sidebar_width);
@@ -693,7 +696,7 @@ fn navigation_scrollbar_click_and_drag_do_not_resize_the_sidebar() {
         row: area.y,
         modifiers: KeyModifiers::NONE,
     });
-    assert_eq!(app.pointer_drag, PointerDrag::None);
+    assert_eq!(app.pointer.drag(), PointerDrag::None);
 }
 
 #[test]
@@ -760,7 +763,7 @@ fn shift_click_moves_the_active_endpoint_and_retains_the_true_anchor() {
         .into_iter()
         .next()
         .expect("visible description");
-    app.selection = Some(RenderedSelection {
+    app.pointer.restore_selection(RenderedSelection {
         anchor: TextPosition {
             row: region.row,
             column: region.start_column + 2,
@@ -787,7 +790,10 @@ fn shift_click_moves_the_active_endpoint_and_retains_the_true_anchor() {
         panic!("visual selection emitted a semantic node");
     };
     assert_eq!(text, "ow help");
-    let selection = app.selection.expect("retained extended selection");
+    let selection = app
+        .pointer
+        .selection()
+        .expect("retained extended selection");
     assert_eq!(selection.anchor.column, region.start_column + 2);
     assert_eq!(selection.focus.column, region.end_column - 1);
 }

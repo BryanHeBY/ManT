@@ -1,5 +1,9 @@
 //! Interactive state machine and Ratatui widget composition.
 
+mod effects;
+use effects::PendingEffects;
+mod pointer;
+use pointer::{PointerDrag, PointerState};
 mod finder;
 mod input;
 mod menu;
@@ -29,9 +33,8 @@ use unicode_width::UnicodeWidthChar;
 use self::{finder::FinderState, menu::MenuId, search::SearchState};
 
 use crate::{
-    CopyFormat, CopyRequest, DocumentView, NavKind, RenderedDocument, RenderedSelection,
-    layout::DEFAULT_SIDEBAR_WIDTH,
-    scrollbar::{ScrollbarDrag, VerticalScrollbar},
+    CopyFormat, CopyRequest, DocumentView, NavKind, RenderedDocument,
+    layout::DEFAULT_SIDEBAR_WIDTH, scrollbar::VerticalScrollbar,
 };
 
 const NAVIGATION_SYNC_IDLE: Duration = Duration::from_millis(140);
@@ -129,82 +132,6 @@ impl Overlay {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum PointerDrag {
-    None,
-    Sidebar,
-    NavigationScrollbar(ScrollbarDrag),
-    ContentScrollbar(ScrollbarDrag),
-    ContentSelection { moved: bool },
-    FinderScrollbar(ScrollbarDrag),
-}
-
-#[derive(Debug, Clone, Copy)]
-struct PendingSidebarResize {
-    column: u16,
-    deadline: Instant,
-}
-
-#[derive(Debug, Clone, Copy)]
-struct SelectionAutoScroll {
-    direction: isize,
-    column: u16,
-    deadline: Instant,
-}
-
-/// Coalesces high-frequency splitter events without turning resize into a
-/// trailing-only debounce.
-#[derive(Debug, Default)]
-struct SidebarResizeSchedule {
-    pending: Option<PendingSidebarResize>,
-    has_live_frame: bool,
-}
-
-impl SidebarResizeSchedule {
-    fn begin(&mut self) {
-        self.pending = None;
-        self.has_live_frame = false;
-    }
-
-    fn request(&mut self, column: u16, now: Instant) -> Option<u16> {
-        if !self.has_live_frame {
-            self.has_live_frame = true;
-            return Some(column);
-        }
-        if let Some(pending) = &mut self.pending {
-            // Do not postpone the deadline: events arriving during an
-            // expensive frame are collapsed into the scheduled frame.
-            pending.column = column;
-        } else {
-            self.pending = Some(PendingSidebarResize {
-                column,
-                deadline: now + SIDEBAR_RESIZE_FRAME_INTERVAL,
-            });
-        }
-        None
-    }
-
-    fn take_due(&mut self, now: Instant) -> Option<u16> {
-        let pending = self.pending.filter(|pending| pending.deadline <= now)?;
-        self.pending = None;
-        Some(pending.column)
-    }
-
-    fn finish(&mut self, column: u16) -> u16 {
-        self.cancel();
-        column
-    }
-
-    fn cancel(&mut self) {
-        self.pending = None;
-        self.has_live_frame = false;
-    }
-
-    fn deadline(&self) -> Option<Instant> {
-        self.pending.map(|pending| pending.deadline)
-    }
-}
-
 /// Geometry retained from the previous frame for pointer hit testing.
 ///
 /// Keeping these values together makes the boundary between layout/rendering
@@ -281,20 +208,14 @@ pub struct App {
     search: SearchState,
     scope_documents: Vec<Arc<ResolvedContent>>,
     finder: FinderState,
-    pending_discovery: Option<CatalogQuery>,
-    pending_open: Option<NavigationRequest>,
-    pending_external: Option<crate::ExternalUri>,
-    pending_copy: Option<CopyRequest>,
+    effects: PendingEffects,
     navigation: NavigationState,
     notice: Option<String>,
     copy_toast: Option<CopyToast>,
     overlay: Overlay,
-    pointer_drag: PointerDrag,
-    selection: Option<RenderedSelection>,
-    selection_auto_scroll: Option<SelectionAutoScroll>,
+    pointer: PointerState,
     geometry: FrameGeometry,
     navigation_sync_deadline: Option<Instant>,
-    sidebar_resize: SidebarResizeSchedule,
 }
 
 impl App {
@@ -376,10 +297,7 @@ impl App {
             search: SearchState::default(),
             scope_documents,
             finder,
-            pending_discovery: None,
-            pending_open: None,
-            pending_external: None,
-            pending_copy: None,
+            effects: PendingEffects::default(),
             navigation: NavigationState::new(
                 current_bundle.address.clone(),
                 current_bundle
@@ -391,31 +309,28 @@ impl App {
             notice: None,
             copy_toast: None,
             overlay: Overlay::None,
-            pointer_drag: PointerDrag::None,
-            selection: None,
-            selection_auto_scroll: None,
+            pointer: PointerState::default(),
             geometry: FrameGeometry::default(),
             navigation_sync_deadline: None,
-            sidebar_resize: SidebarResizeSchedule::default(),
         };
         app.sync_current_document_tab();
         app
     }
 
     pub(crate) fn take_open_request(&mut self) -> Option<NavigationRequest> {
-        self.pending_open.take()
+        self.effects.take_open()
     }
 
     pub(crate) fn take_external_request(&mut self) -> Option<crate::ExternalUri> {
-        self.pending_external.take()
+        self.effects.take_external()
     }
 
     pub(crate) fn take_copy_request(&mut self) -> Option<CopyRequest> {
-        self.pending_copy.take()
+        self.effects.take_copy()
     }
 
     pub(crate) fn take_discovery_request(&mut self) -> Option<CatalogQuery> {
-        self.pending_discovery.take()
+        self.effects.take_discovery()
     }
 
     pub(crate) fn complete_discovery(&mut self, catalog: DocumentCatalog) {
@@ -505,9 +420,7 @@ impl App {
             self.search = SearchState::default();
         }
         self.overlay = Overlay::None;
-        self.pointer_drag = PointerDrag::None;
-        self.selection = None;
-        self.selection_auto_scroll = None;
+        self.pointer.page_changed();
         self.navigation_sync_deadline = None;
         self.notice = None;
         self.copy_toast = None;
@@ -515,7 +428,7 @@ impl App {
     }
 
     pub(super) fn copy_selection(&mut self) {
-        let Some(selection) = self.selection else {
+        let Some(selection) = self.pointer.selection() else {
             self.report_notice("Drag across document text before copying".to_owned());
             return;
         };
@@ -533,7 +446,7 @@ impl App {
         } else if text.len() > crate::MAX_COPY_BYTES {
             self.report_notice("The selection exceeds the 4 MiB clipboard limit".to_owned());
         } else {
-            self.pending_copy = Some(CopyRequest::Selection { text });
+            self.effects.copy(CopyRequest::Selection { text });
         }
     }
 
@@ -552,7 +465,7 @@ impl App {
             self.report_notice("Select a complete document node before copying".to_owned());
             return;
         }
-        self.pending_copy = Some(CopyRequest::Node {
+        self.effects.copy(CopyRequest::Node {
             content: Arc::clone(&self.session.current_bundle),
             selector: if node.kind == NavKind::Tldr {
                 ContentSelector::path("0")
@@ -634,7 +547,7 @@ impl App {
             }
             return;
         }
-        self.pending_open = Some(NavigationRequest {
+        self.effects.open(NavigationRequest {
             document: address.into(),
             target: LocalTarget::from_fragment(target),
             direction: HistoryDirection::New,
@@ -648,7 +561,7 @@ impl App {
         if location.belongs_to(&self.session.current_bundle) {
             self.complete_local_history(&location, direction);
         } else if let Some(address) = location.address().cloned() {
-            self.pending_open = Some(NavigationRequest {
+            self.effects.open(NavigationRequest {
                 document: address.into(),
                 target: location.target().clone(),
                 direction,
@@ -712,7 +625,7 @@ impl App {
     /// and does not sleep; the host remains responsible for drawing and input.
     pub fn tick(&mut self, now: Instant) -> UpdateOutcome {
         let mut outcome = UpdateOutcome::Unchanged;
-        if let Some(column) = self.sidebar_resize.take_due(now)
+        if let Some(column) = self.pointer.take_resize_due(now)
             && self.commit_sidebar_at(column)
         {
             outcome = UpdateOutcome::Redraw;
@@ -745,9 +658,11 @@ impl App {
     pub fn next_wakeup(&self, now: Instant) -> Option<Duration> {
         [
             self.navigation_sync_deadline,
-            self.sidebar_resize.deadline(),
+            self.pointer.resize_deadline(),
             self.copy_toast.as_ref().map(|toast| toast.deadline),
-            self.selection_auto_scroll.map(|scroll| scroll.deadline),
+            self.pointer
+                .selection_scroll()
+                .map(|scroll| scroll.deadline),
         ]
         .into_iter()
         .flatten()

@@ -2,6 +2,64 @@
 use super::*;
 
 #[test]
+fn successful_page_change_cancels_splitter_timer_but_failed_candidate_retains_it() {
+    use crate::app::{HistoryDirection, LocalTarget};
+    use std::sync::Arc;
+    for succeeds in [false, true] {
+        let mut app = App::new(&navigation_bundle());
+        let mut terminal = Terminal::new(TestBackend::new(100, 18)).unwrap();
+        terminal.draw(|frame| app.draw(frame)).unwrap();
+        let now = Instant::now();
+        let mouse = |kind, column| MouseEvent {
+            kind,
+            column,
+            row: 8,
+            modifiers: KeyModifiers::NONE,
+        };
+        app.handle_pointer_control_at(
+            mouse(
+                MouseEventKind::Down(MouseButton::Left),
+                app.geometry.sidebar_splitter.x,
+            ),
+            now,
+        );
+        app.handle_pointer_control_at(mouse(MouseEventKind::Drag(MouseButton::Left), 40), now);
+        app.handle_pointer_control_at(
+            mouse(MouseEventKind::Drag(MouseButton::Left), 44),
+            now + Duration::from_millis(1),
+        );
+        let deadline = app.pointer.resize_deadline().expect("queued resize");
+        assert_eq!(app.sidebar_width, 40);
+        let old = Arc::clone(&app.session.current_bundle);
+        let candidate = Arc::new(manual_bundle("replacement", "1"));
+        let target = if succeeds {
+            LocalTarget::Default
+        } else {
+            LocalTarget::Fragment("absent-target".into())
+        };
+        app.complete_loaded_navigation(Arc::clone(&candidate), target, HistoryDirection::New);
+        if succeeds {
+            assert!(Arc::ptr_eq(&app.session.current_bundle, &candidate));
+            assert_eq!(app.pointer.drag(), PointerDrag::None);
+            assert!(app.pointer.resize_deadline().is_none());
+        } else {
+            assert!(Arc::ptr_eq(&app.session.current_bundle, &old));
+            assert_eq!(app.pointer.drag(), PointerDrag::Sidebar);
+            assert_eq!(app.pointer.resize_deadline(), Some(deadline));
+        }
+        app.tick(deadline);
+        assert_eq!(app.sidebar_width, if succeeds { 40 } else { 44 });
+        terminal.draw(|frame| app.draw(frame)).unwrap();
+        assert_eq!(app.geometry.content.width, app.session.content_render_width);
+        assert!(
+            app.session
+                .rendered_cache
+                .contains_key(&app.geometry.content.width)
+        );
+    }
+}
+
+#[test]
 fn settled_sidebar_resize_keeps_the_visible_code_logically_anchored() {
     let mut bundle = navigation_bundle();
     bundle.document.as_mut().expect("document").sections[0].blocks = vec![
@@ -337,7 +395,7 @@ fn dragging_the_sidebar_boundary_renders_leading_throttled_and_final_widths() {
         },
         started,
     );
-    assert_eq!(app.pointer_drag, PointerDrag::Sidebar);
+    assert_eq!(app.pointer.drag(), PointerDrag::Sidebar);
     assert_eq!(
         app.handle_pointer_control_at(
             MouseEvent {
@@ -354,8 +412,8 @@ fn dragging_the_sidebar_boundary_renders_leading_throttled_and_final_widths() {
         .draw(|frame| app.draw(frame))
         .expect("draw leading resize frame");
     assert_eq!(app.sidebar_width, 40);
-    assert!(app.sidebar_resize.pending.is_none());
-    assert_eq!(app.pointer_drag, PointerDrag::Sidebar);
+    assert!(app.pointer.pending_resize_column().is_none());
+    assert_eq!(app.pointer.drag(), PointerDrag::Sidebar);
     assert_ne!(app.geometry.content.width, initial_render_width);
     assert_eq!(
         app.session
@@ -376,11 +434,8 @@ fn dragging_the_sidebar_boundary_renders_leading_throttled_and_final_widths() {
         started + Duration::from_millis(1),
     );
     assert_eq!(app.sidebar_width, 40);
-    assert_eq!(
-        app.sidebar_resize.pending.map(|pending| pending.column),
-        Some(44)
-    );
-    let deadline = app.sidebar_resize.deadline().expect("scheduled live frame");
+    assert_eq!(app.pointer.pending_resize_column(), Some(44));
+    let deadline = app.pointer.resize_deadline().expect("scheduled live frame");
     app.handle_pointer_control_at(
         MouseEvent {
             kind: MouseEventKind::Drag(MouseButton::Left),
@@ -390,11 +445,8 @@ fn dragging_the_sidebar_boundary_renders_leading_throttled_and_final_widths() {
         },
         started + Duration::from_millis(30),
     );
-    assert_eq!(
-        app.sidebar_resize.pending.map(|pending| pending.column),
-        Some(48)
-    );
-    assert_eq!(app.sidebar_resize.deadline(), Some(deadline));
+    assert_eq!(app.pointer.pending_resize_column(), Some(48));
+    assert_eq!(app.pointer.resize_deadline(), Some(deadline));
     app.tick(
         deadline
             .checked_sub(Duration::from_millis(1))
@@ -406,7 +458,7 @@ fn dragging_the_sidebar_boundary_renders_leading_throttled_and_final_widths() {
         .draw(|frame| app.draw(frame))
         .expect("draw final live width");
     assert_eq!(app.sidebar_width, 48);
-    assert_eq!(app.pointer_drag, PointerDrag::Sidebar);
+    assert_eq!(app.pointer.drag(), PointerDrag::Sidebar);
 
     app.handle_pointer_control_at(
         MouseEvent {
@@ -419,8 +471,8 @@ fn dragging_the_sidebar_boundary_renders_leading_throttled_and_final_widths() {
     );
 
     assert_eq!(app.sidebar_width, 46);
-    assert_eq!(app.pointer_drag, PointerDrag::None);
-    assert!(app.sidebar_resize.pending.is_none());
+    assert_eq!(app.pointer.drag(), PointerDrag::None);
+    assert!(app.pointer.pending_resize_column().is_none());
 }
 
 #[test]
@@ -461,7 +513,7 @@ fn scheduled_sidebar_drag_requests_redraw_only_at_the_frame_deadline() {
         ),
         Some(UpdateOutcome::Unchanged)
     );
-    let deadline = app.sidebar_resize.deadline().expect("scheduled live frame");
+    let deadline = app.pointer.resize_deadline().expect("scheduled live frame");
     assert_eq!(
         app.tick(
             deadline
@@ -501,7 +553,10 @@ fn clicking_and_dragging_the_content_scrollbar_moves_the_document() {
         modifiers: KeyModifiers::NONE,
     });
     assert_eq!(app.session.content_scroll, maximum);
-    assert!(matches!(app.pointer_drag, PointerDrag::ContentScrollbar(_)));
+    assert!(matches!(
+        app.pointer.drag(),
+        PointerDrag::ContentScrollbar(_)
+    ));
 
     app.handle_mouse(MouseEvent {
         kind: MouseEventKind::Drag(MouseButton::Left),
@@ -516,7 +571,7 @@ fn clicking_and_dragging_the_content_scrollbar_moves_the_document() {
         row: area.y,
         modifiers: KeyModifiers::NONE,
     });
-    assert_eq!(app.pointer_drag, PointerDrag::None);
+    assert_eq!(app.pointer.drag(), PointerDrag::None);
 }
 
 #[test]
@@ -587,7 +642,8 @@ fn selection_drag_auto_scrolls_repeatedly_at_both_viewport_edges() {
     );
     assert_eq!(app.session.content_scroll, 1);
     let deadline = app
-        .selection_auto_scroll
+        .pointer
+        .selection_scroll()
         .expect("scheduled downward selection scroll")
         .deadline;
     assert_eq!(deadline, started + SELECTION_AUTO_SCROLL_INTERVAL);
@@ -601,7 +657,7 @@ fn selection_drag_auto_scrolls_repeatedly_at_both_viewport_edges() {
         pointer(MouseEventKind::Up(MouseButton::Left), area.bottom() - 1),
         deadline,
     );
-    assert!(app.selection_auto_scroll.is_none());
+    assert!(app.pointer.selection_scroll().is_none());
     assert!(app.take_copy_request().is_some());
 
     terminal
@@ -618,14 +674,16 @@ fn selection_drag_auto_scrolls_repeatedly_at_both_viewport_edges() {
     );
     assert_eq!(app.session.content_scroll, 1);
     assert_eq!(
-        app.selection_auto_scroll.map(|scroll| scroll.direction),
+        app.pointer
+            .selection_scroll()
+            .map(|scroll| scroll.direction),
         Some(-1)
     );
     app.handle_pointer_control_at(
         pointer(MouseEventKind::Drag(MouseButton::Left), area.y + 2),
         restarted + Duration::from_millis(1),
     );
-    assert!(app.selection_auto_scroll.is_none());
+    assert!(app.pointer.selection_scroll().is_none());
 }
 
 #[test]

@@ -59,11 +59,10 @@ impl App {
             self.geometry.sidebar_splitter = Rect::default();
             self.geometry.navigation_rows.clear();
             if matches!(
-                self.pointer_drag,
+                self.pointer.drag(),
                 PointerDrag::Sidebar | PointerDrag::NavigationScrollbar(_)
             ) {
-                self.sidebar_resize.cancel();
-                self.pointer_drag = PointerDrag::None;
+                self.pointer.finish_drag();
             }
             self.draw_content(frame, body_area);
         }
@@ -241,8 +240,8 @@ impl App {
             VerticalScrollbar::new(area, row_count, viewport_height, self.navigation_scroll);
         if let Some(scrollbar) = self.geometry.navigation_scrollbar {
             scrollbar.render(frame);
-        } else if matches!(self.pointer_drag, PointerDrag::NavigationScrollbar(_)) {
-            self.pointer_drag = PointerDrag::None;
+        } else if matches!(self.pointer.drag(), PointerDrag::NavigationScrollbar(_)) {
+            self.pointer.finish_drag();
         }
     }
 
@@ -283,11 +282,7 @@ impl App {
         if self.session.content_render_width != 0
             && self.session.content_render_width != render_width
         {
-            self.selection = None;
-            if matches!(self.pointer_drag, PointerDrag::ContentSelection { .. }) {
-                self.pointer_drag = PointerDrag::None;
-                self.selection_auto_scroll = None;
-            }
+            self.pointer.clear_selection();
         }
         let viewport_anchor = (self.session.content_render_width != 0
             && self.session.content_render_width != render_width)
@@ -328,7 +323,7 @@ impl App {
             viewport_height,
             matches,
             self.active_rendered_search_match(),
-            self.selection,
+            self.pointer.selection(),
         );
         frame.render_widget(
             Paragraph::new(text).style(Style::default().bg(theme::CONTENT)),
@@ -342,8 +337,8 @@ impl App {
         );
         if let Some(scrollbar) = self.geometry.content_scrollbar {
             scrollbar.render(frame);
-        } else if matches!(self.pointer_drag, PointerDrag::ContentScrollbar(_)) {
-            self.pointer_drag = PointerDrag::None;
+        } else if matches!(self.pointer.drag(), PointerDrag::ContentScrollbar(_)) {
+            self.pointer.finish_drag();
         }
         // A width-dependent rendering can be large (notably for GCC). Keeping
         // the current width hot is useful; retaining every prior terminal
@@ -612,8 +607,8 @@ impl App {
         }
         if let Some(scrollbar) = self.geometry.finder_scrollbar {
             scrollbar.render(frame);
-        } else if matches!(self.pointer_drag, PointerDrag::FinderScrollbar(_)) {
-            self.pointer_drag = PointerDrag::None;
+        } else if matches!(self.pointer.drag(), PointerDrag::FinderScrollbar(_)) {
+            self.pointer.finish_drag();
         }
     }
 
@@ -621,8 +616,8 @@ impl App {
         self.geometry.finder_query = Rect::default();
         self.geometry.finder_results = Rect::default();
         self.geometry.finder_scrollbar = None;
-        if matches!(self.pointer_drag, PointerDrag::FinderScrollbar(_)) {
-            self.pointer_drag = PointerDrag::None;
+        if matches!(self.pointer.drag(), PointerDrag::FinderScrollbar(_)) {
+            self.pointer.finish_drag();
         }
     }
 }

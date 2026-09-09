@@ -140,7 +140,7 @@ impl App {
                 name,
                 manual_section,
             } => {
-                self.pending_open = Some(super::NavigationRequest {
+                self.effects.open(super::NavigationRequest {
                     document: mant_protocol::DocumentOpenTarget::Manual {
                         name,
                         manual_section,
@@ -149,7 +149,7 @@ impl App {
                     direction: super::HistoryDirection::New,
                 });
             }
-            LinkTarget::External(uri) => self.pending_external = Some(uri),
+            LinkTarget::External(uri) => self.effects.external(uri),
         }
     }
 

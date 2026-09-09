@@ -133,6 +133,50 @@ fn explicit_capabilities_are_called_once_in_original_service_order() {
 }
 
 #[test]
+fn successful_open_keeps_already_queued_external_and_source_copy_effects() {
+    let mut app = reader();
+    click(&mut app, "OPEN_DESTINATION");
+    click(&mut app, "EXTERNAL_DESTINATION");
+    queue_copy(&mut app);
+    let calls = RefCell::new(Vec::new());
+    let mut open = |_: &DocumentOpenTarget| {
+        calls.borrow_mut().push("open");
+        let parsed = mant_codec::parse_markdown("# NEW_PAGE\n\nReplacement body.\n", None).unwrap();
+        Ok(ResolvedContent {
+            address: None,
+            label: "NEW_PAGE".into(),
+            document: Some(parsed.document),
+            tldr: parsed.tldr,
+        })
+    };
+    let mut external = |uri: &ExternalUri| {
+        calls.borrow_mut().push("external");
+        assert_eq!(uri.as_str(), "https://example.test/");
+        Ok(())
+    };
+    let mut copy = |request| {
+        calls.borrow_mut().push("copy");
+        let CopyRequest::Selection { text } = request else {
+            panic!("selection");
+        };
+        assert_eq!(text, "COPY_");
+        Ok(())
+    };
+    let mut services = ReaderServices {
+        discover_documents: None,
+        open_document: Some(&mut open),
+        open_external: Some(&mut external),
+        copy_to_clipboard: Some(&mut copy),
+    };
+    assert!(app.service_pending(&mut services));
+    assert_eq!(*calls.borrow(), ["open", "external", "copy"]);
+    assert!(!app.service_pending(&mut services));
+    let (text, _) = screen(&mut app);
+    assert!(text.contains("Replacement body."));
+    assert!(!text.contains("COPY_PAYLOAD"));
+}
+
+#[test]
 fn absent_capabilities_report_unavailable_without_fallback_or_replay() {
     for (queue, notice) in [
         (
