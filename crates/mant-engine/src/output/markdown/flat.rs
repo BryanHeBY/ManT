@@ -1,22 +1,28 @@
 //! Portable table cells flatten presentation, never semantic ownership.
 use super::{inline::flatten_inline, mapped::MappedText};
-use mant_ir::{Block, EntryOwner, TableCell, TableRow};
+use mant_ir::{Block, EntryOwner, TableCell, TableRow, TableRowPlan, bounded_table_rows};
 
 pub(super) fn rows(rows: &[TableRow], track: bool) -> Vec<MappedText> {
-    super::super::table::table_slots(rows)
+    bounded_table_rows(rows)
         .into_iter()
-        .map(|row| {
-            MappedText::join(
-                row.into_iter().map(|(label, cell)| {
-                    let mut value =
-                        cell.map_or_else(MappedText::default, |cell| plain_cell(cell, track));
-                    if let Some(column) = label {
-                        value.insert(0, &format!("column {column}: "));
-                    }
+        .map(|row| match row {
+            TableRowPlan::Dense { slots } => MappedText::join(
+                slots.into_iter().map(|cell| {
+                    cell.map_or_else(MappedText::default, |cell| plain_cell(cell, track))
+                }),
+                " | ",
+            ),
+            TableRowPlan::Sparse { cells } => MappedText::join(
+                cells.into_iter().map(|positioned| {
+                    let mut value = plain_cell(positioned.cell, track);
+                    value.insert(
+                        0,
+                        &format!("column {}: ", positioned.column.saturating_add(1)),
+                    );
                     value
                 }),
                 " | ",
-            )
+            ),
         })
         .collect()
 }
