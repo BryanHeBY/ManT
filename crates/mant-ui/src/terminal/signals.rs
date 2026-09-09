@@ -83,6 +83,12 @@ impl Drop for TerminationSignals {
 
 #[cfg(test)]
 mod tests {
+    use std::{
+        sync::atomic::Ordering,
+        thread,
+        time::{Duration, Instant},
+    };
+
     use signal_hook::consts::signal::SIGUSR1;
 
     use super::TerminationSignals;
@@ -90,9 +96,46 @@ mod tests {
     #[test]
     fn a_signal_is_deferred_until_the_event_loop_observes_it() {
         let signals = TerminationSignals::install_for(&[SIGUSR1]).expect("install signal handler");
+        assert_eq!(signals.take(), None);
+        assert!(!signals.terminating.load(Ordering::SeqCst));
         signal_hook::low_level::raise(SIGUSR1).expect("raise test signal");
 
+        // Sending a signal is not our observation barrier. In particular,
+        // Darwin CI can return from raise before this thread sees the handler's
+        // publication. Exercise the same polling contract as the event loop,
+        // with a deadline so a lost signal still fails instead of hanging.
+        let deadline = Instant::now() + Duration::from_secs(5);
+        let observed = loop {
+            if let Some(signal) = signals.take() {
+                break signal;
+            }
+            assert!(!signals.terminating.load(Ordering::SeqCst));
+            assert!(
+                Instant::now() < deadline,
+                "SIGUSR1 was not observed within 5s"
+            );
+            thread::sleep(Duration::from_millis(1));
+        };
+        assert_eq!(observed, SIGUSR1);
+        assert!(signals.terminating.load(Ordering::SeqCst));
+        assert_eq!(signals.take(), None);
+    }
+
+    #[test]
+    fn pending_signal_is_consumed_once_and_only_then_arms_termination() {
+        // No OS registrations: pin the state transitions independently of
+        // platform delivery timing and other tests' process-global handlers.
+        let signals = TerminationSignals::install_for(&[]).unwrap();
+        for _ in 0..3 {
+            assert_eq!(signals.take(), None);
+            assert!(!signals.terminating.load(Ordering::SeqCst));
+        }
+        signals
+            .pending
+            .store(usize::try_from(SIGUSR1).unwrap(), Ordering::SeqCst);
+        assert!(!signals.terminating.load(Ordering::SeqCst));
         assert_eq!(signals.take(), Some(SIGUSR1));
+        assert!(signals.terminating.load(Ordering::SeqCst));
         assert_eq!(signals.take(), None);
     }
 }
