@@ -21,7 +21,7 @@ fn run(home: &Path, args: &[&str]) -> Output {
         .unwrap()
 }
 
-fn success(output: Output) -> Value {
+fn success(output: &Output) -> Value {
     assert!(output.status.success(), "{output:?}");
     serde_json::from_slice(&output.stdout).unwrap()
 }
@@ -39,12 +39,15 @@ fn installed_manifest_supports_catalog_outline_and_explicit_reads() {
     for file in &files {
         fs::copy(source.join(file), documents.join(file)).unwrap();
     }
-    let catalog = success(run(&home, &["--list", "--kind", "markdown"]));
+    let catalog = success(&run(&home, &["--list", "--kind", "markdown"]));
     let catalog_text = catalog.to_string();
     for file in files {
         let name = file.strip_suffix(".md").unwrap();
         assert!(catalog_text.contains(name), "{name}");
-        let outline = success(run(&home, &[name, "--outline", "--outline-references=all"]));
+        let outline = success(&run(
+            &home,
+            &[name, "--outline", "--outline-references=all"],
+        ));
         assert_eq!(
             outline["references"]["coverage"]["status"]["kind"],
             "complete"
@@ -56,10 +59,10 @@ fn installed_manifest_supports_catalog_outline_and_explicit_reads() {
             );
             if record["target"]["kind"] == "document" {
                 let target = record["resolution"]["address"]["path"].as_str().unwrap();
-                success(run(&home, &[&format!("documents/{target}")]));
+                success(&run(&home, &[&format!("documents/{target}")]));
             }
         }
-        success(run(&home, &[name, "--node=1"]));
+        success(&run(&home, &[name, "--node=1"]));
     }
     // A directory containing only the shipped manuals cannot accidentally load
     // checkout-only architecture pages through relative namespace traversal.
@@ -86,7 +89,7 @@ fn native_link_discovery_does_not_require_targets_but_opening_uses_exact_section
         )
         .unwrap();
     }
-    let outline = success(run(
+    let outline = success(&run(
         &home,
         &["links", "--outline", "--outline-references=all"],
     ));
@@ -95,9 +98,9 @@ fn native_link_discovery_does_not_require_targets_but_opening_uses_exact_section
     assert_eq!(records[0]["target"]["manualSection"], "3");
     assert_eq!(records[1]["resolution"]["kind"], "not-queried");
     assert_eq!(records[2]["target"]["name"], "linkabsent");
-    let exact = success(run(&home, &["manual/3/linkprobe"]));
+    let exact = success(&run(&home, &["manual/3/linkprobe"]));
     assert!(exact.to_string().contains("test manual 3"));
-    let unqualified = success(run(&home, &["linkprobe", "--manual"]));
+    let unqualified = success(&run(&home, &["linkprobe", "--manual"]));
     assert!(
         unqualified.to_string().contains("test manual 3"),
         "unqualified opening follows configured manual section precedence, not a guessed section 1"
