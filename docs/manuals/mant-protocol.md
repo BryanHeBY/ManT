@@ -1474,7 +1474,7 @@ precede direct bodies/context; optional entry metadata/bindings and previews
 follow in the shared copy budget. Body references are committed only after the
 whole body is accepted.
 For complete field definitions and coordinate examples see the
-[explanation architecture](../architecture/semantic-explanations.md).
+[explanation architecture](https://github.com/BryanHeBY/ManT/blob/dev/docs/architecture/semantic-explanations.md).
 
 Match bases are `name` (exact documented spelling), `form` (complete authored
 form), `identity` (exact entry ID/path), `literal` (ordinary IR text),
