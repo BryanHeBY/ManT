@@ -2,11 +2,11 @@
 use super::{
     Block, DEFAULT_MAN_TAG_WIDTH, DisplayKind, Inline, LoweringContext, ManDefinitionState,
     ManListState, Node, NodeKind, TableEmbedding, add_leading_spacing,
-    append_relative_continuation, append_table_row, equation_block, extend_blocks_with_spacing,
-    first_part_children, layout_with_spacing, lower_blocks_with_predecessor,
-    lower_blocks_with_spacing, lower_inline_nodes, lower_man_definition_block, lower_mdoc_list,
-    lower_synopsis_head, part_child_groups, plain_text, preformatted_blocks, set_block_spacing,
-    source_span,
+    append_relative_continuation, append_table_row, first_part_children, layout,
+    layout_with_spacing, lower_blocks_with_predecessor, lower_blocks_with_spacing,
+    lower_inline_nodes, lower_man_definition_block, lower_mdoc_list, lower_synopsis_head,
+    part_child_groups, plain_text, preformatted_blocks, set_block_spacing, source_span,
+    visible_text,
 };
 
 pub(super) struct StructuralLowerer<'a, 'source, 'state> {
@@ -326,4 +326,24 @@ pub(super) fn parts_have_visible_text(nodes: &[Node], default_name: Option<&str>
     !plain_text(&lower_inline_nodes(nodes, default_name))
         .trim()
         .is_empty()
+}
+
+/// Retain display equation content with decoded glyphs and source geometry.
+fn equation_block(node: &Node, indent_columns: crate::mandoc::layout::SourceIndent) -> Block {
+    Block::Equation {
+        // Equation boxes carry the same named-character escapes as ordinary
+        // roff text, but they bypass inline-node lowering. Decode them here so
+        // values such as `\[*p]` and `\[mi]` cannot leak into every output
+        // projection.
+        value: visible_text(node.equation.as_deref().unwrap_or_default()),
+        display: true,
+        layout: layout(indent_columns),
+        source: source_span(node),
+    }
+}
+
+/// Attach a macro's leading distance to its first visible nested block.
+fn extend_blocks_with_spacing(output: &mut Vec<Block>, mut nested: Vec<Block>, lines: u16) {
+    add_leading_spacing(&mut nested, lines);
+    output.extend(nested);
 }

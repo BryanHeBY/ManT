@@ -2,6 +2,9 @@
 use super::{FilledBoundary, InlineBuilder, layout, targets, updated_spacing};
 use mant_ir::{Block, Inline};
 
+#[cfg(test)]
+mod tests;
+
 pub(super) struct BlockState {
     pub(super) output: Vec<Block>,
     pub(super) paragraph: InlineBuilder,

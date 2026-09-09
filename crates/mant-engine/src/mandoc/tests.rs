@@ -19,6 +19,7 @@ fn parse_manual_source(
 }
 
 mod consumer_boundaries;
+mod driver;
 mod entry_forms;
 mod flow_controls;
 mod font_boundaries;

@@ -5,13 +5,13 @@ use super::{
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(super) enum SynopsisDeclarationRole {
+enum SynopsisDeclarationRole {
     Standalone,
     ReturnType,
     Function,
 }
 
-pub(super) fn mdoc_synopsis_declaration_role(node: &Node) -> Option<SynopsisDeclarationRole> {
+fn mdoc_synopsis_declaration_role(node: &Node) -> Option<SynopsisDeclarationRole> {
     let synopsis_pretty = node.flags.synopsis_pretty
         || node
             .children
@@ -76,4 +76,49 @@ pub(super) fn lower_synopsis_head(
         source: source_span(node),
     });
     output.extend(nested);
+}
+
+impl super::BlockLowerer<'_, '_> {
+    /// Preserve declaration boundaries selected by mdoc's SYNOPSIS grammar.
+    ///
+    /// libmandoc marks the declaration-oriented `Fd`, `In`, `Ft`, `Fn`,
+    /// `Fo`, and `Vt` nodes with `synopsis_pretty`.  Their terminal layout is
+    /// intentionally richer than `ManT`'s IR, but the declaration boundary is
+    /// semantic: an include directive must not merge into the next return
+    /// type, and each function declaration must remain independently
+    /// addressable.  A return type and the immediately following function
+    /// macro form one useful IR paragraph; all other marked declarations own
+    /// a paragraph of their own.
+    pub(super) fn push_mdoc_synopsis_declaration(&mut self, node: &Node) -> bool {
+        let Some(role) = mdoc_synopsis_declaration_role(node) else {
+            if self.synopsis_return_type_open {
+                self.state.flush_paragraph();
+                self.synopsis_return_type_open = false;
+            }
+            return false;
+        };
+
+        match role {
+            SynopsisDeclarationRole::ReturnType => {
+                self.state.flush_paragraph();
+                self.push_inline_node(node, None);
+                self.synopsis_return_type_open = true;
+            }
+            SynopsisDeclarationRole::Function => {
+                if !self.synopsis_return_type_open {
+                    self.state.flush_paragraph();
+                }
+                self.push_inline_node(node, None);
+                self.state.flush_paragraph();
+                self.synopsis_return_type_open = false;
+            }
+            SynopsisDeclarationRole::Standalone => {
+                self.state.flush_paragraph();
+                self.push_inline_node(node, None);
+                self.state.flush_paragraph();
+                self.synopsis_return_type_open = false;
+            }
+        }
+        true
+    }
 }

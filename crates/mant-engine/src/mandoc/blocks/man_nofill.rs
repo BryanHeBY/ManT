@@ -1,18 +1,18 @@
 //! Man no-fill words retain executed empty rows, not formatter operands.
 use super::{
-    FontState, Inline, Node, NodeKind, ends_with_line_continuation,
-    lower_inline_nodes_with_font_state, participates_in_inline_flow, source_span,
+    FontState, Inline, Node, NodeKind, ends_with_line_continuation, first_part_children,
+    lower_inline_nodes_with_font_state, participates_in_inline_flow, source_span, targets,
 };
 
-pub(super) struct LoweredNoFillLine {
-    pub(super) nodes: Vec<Inline>,
-    pub(super) source: Option<mant_ir::SourceSpan>,
-    pub(super) continues_line: bool,
-    pub(super) starts_line: bool,
-    pub(super) occupies_row: bool,
+struct LoweredNoFillLine {
+    nodes: Vec<Inline>,
+    source: Option<mant_ir::SourceSpan>,
+    continues_line: bool,
+    starts_line: bool,
+    occupies_row: bool,
 }
 
-pub(super) fn lower_no_fill_lines(
+fn lower_no_fill_lines(
     node: &Node,
     default_name: Option<&str>,
     font: &mut FontState,
@@ -83,4 +83,65 @@ fn empty_word_rows(node: &Node) -> usize {
         }
     }
     blanks.max(usize::from(zero_width_glyph))
+}
+
+impl super::BlockLowerer<'_, '_> {
+    pub(super) fn push_no_fill_lines(&mut self, node: &Node) -> bool {
+        let Some(lines) =
+            lower_no_fill_lines(node, self.context.default_name, &mut self.formatter.font)
+        else {
+            return false;
+        };
+        for line in lines {
+            self.state.push_preformatted(
+                line.nodes,
+                line.source,
+                line.continues_line,
+                line.starts_line,
+                line.occupies_row,
+            );
+        }
+        true
+    }
+
+    pub(super) fn push_no_fill_synopsis(&mut self, node: &Node) -> bool {
+        let body = first_part_children(node, NodeKind::Body);
+        if node.macro_name.as_deref() != Some("SY") || !body.iter().any(|child| child.flags.no_fill)
+        {
+            return false;
+        }
+        self.state.flush_paragraph();
+        self.state.flush_preformatted();
+        self.state
+            .queue_targets(targets::structural_targets(node), source_span(node));
+        let head = first_part_children(node, NodeKind::Head);
+        let saved = self
+            .formatter
+            .font
+            .push_scope(crate::mandoc::roff_escape::RoffFont::Strong);
+        let nodes = lower_inline_nodes_with_font_state(
+            head,
+            self.context.default_name,
+            self.state.spacing_enabled(),
+            &mut self.formatter.font,
+        );
+        self.formatter.font.pop_scope(saved);
+        if !nodes.is_empty() {
+            self.state.push_preformatted(
+                nodes,
+                source_span(node),
+                head.last().is_some_and(ends_with_line_continuation),
+                true,
+                true,
+            );
+        }
+        // SY is a scope, not a promise that its whole body is no-fill.
+        // Execute each child through normal block dispatch so fi/nf, spacing
+        // and structural children cannot become flattened pseudo-text.
+        self.push_nodes(body);
+        self.state.flush_paragraph();
+        self.state.flush_preformatted();
+        self.formatter.font = FontState::new();
+        true
+    }
 }

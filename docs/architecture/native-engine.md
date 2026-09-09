@@ -136,6 +136,13 @@ route borrowed children to inline or structural consumers; physical-line cursors
 advance at executed words, independently of font wrappers. List controls execute
 in source order instead of being replayed by a second spacing scan.
 
+One block driver retains routing and execution order. Container scopes, control
+requests, filled flow, no-fill flow and synopsis declarations own their respective
+transitions. Control classification is read-only; execution explicitly distinguishes
+a consumed request from a boundary request whose inline content still needs to
+be lowered. Returning from nested structural content transfers the executed
+formatter state once, without replaying controls or draining pending targets early.
+
 ## Shared document model
 
 `mant-ir::Document` is the source-neutral in-memory representation. It contains
