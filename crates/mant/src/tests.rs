@@ -30,6 +30,62 @@ use crate::{
 use mant_engine::LoadPolicy;
 use mant_protocol::{CatalogQuery, DocumentAddress, DocumentCatalog};
 
+#[test]
+fn invalid_complete_views_are_rejected_before_the_cli_host_is_called() {
+    let host = FakeHost::new();
+    for view in [
+        mant_protocol::QueryView::Excerpt { selectors: vec![] },
+        mant_protocol::QueryView::Explain {
+            entry: String::new(),
+            options: mant_protocol::ExplanationOptions::default(),
+        },
+        mant_protocol::QueryView::Outline {
+            entries: mant_protocol::EntryProjection::Kinds { kinds: vec![] },
+            root: None,
+            references: mant_protocol::ReferenceProjection::default(),
+        },
+        mant_protocol::QueryView::Search {
+            pattern: "[".into(),
+            syntax: mant_protocol::SearchSyntax::Regex,
+            case: mant_protocol::SearchCase::Sensitive,
+            scope: mant_protocol::SearchScope::Visible,
+            word: false,
+            context_lines: 0,
+            limit: 10,
+            offset: 0,
+        },
+    ] {
+        let request = QueryRequest {
+            schema: mant_protocol::RequestSchema::V0Dot11,
+            input: QueryInput::Document {
+                selector: "tool".into(),
+                source: None,
+                manual_section: None,
+            },
+            view,
+        };
+        assert!(crate::application::execute_query(&request, LoadPolicy::Combined, &host).is_err());
+        assert_eq!(host.query_calls.get(), 0);
+    }
+    let scope = mant_protocol::ScopeQueryRequest {
+        schema: mant_protocol::ScopeRequestSchema::V0Dot11,
+        scope: mant_protocol::DocumentScope {
+            documents: vec![mant_protocol::DocumentSelector {
+                selector: "tool".into(),
+                source: None,
+                manual_section: None,
+            }],
+            traversal: mant_protocol::DocumentTraversal::default(),
+        },
+        view: mant_protocol::ScopeQueryView::Explain {
+            entry: String::new(),
+            options: mant_protocol::ExplanationOptions::default(),
+        },
+    };
+    assert!(crate::application::execute_scope_query(&scope, &host).is_err());
+    assert_eq!(host.query_calls.get(), 0);
+}
+
 struct FakeHost {
     query_calls: Cell<usize>,
     update_calls: Cell<usize>,
@@ -466,21 +522,33 @@ impl CliHost for FakeHost {
 
     fn query(
         &self,
-        request: &QueryRequest,
-        policy: LoadPolicy,
-    ) -> Result<ResolvedContent, Failure> {
+        prepared: &mant_engine::PreparedQueryRequest<'_>,
+    ) -> Result<mant_engine::QueryViewResult, Failure> {
+        let request = prepared.request();
         self.query_calls.set(self.query_calls.get() + 1);
-        self.last_policy.set(policy);
+        self.last_policy.set(prepared.policy());
         let label = match &request.input {
             QueryInput::Document { selector, .. } => selector.trim().to_owned(),
             QueryInput::File { path, .. } => path.clone(),
         };
-        Ok(ResolvedContent {
+        let content = ResolvedContent {
             address: None,
             label,
             document: self.document.clone(),
             tldr: self.tldr.clone(),
-        })
+        };
+        mant_engine::project_query_view(content, &request.view)
+            .map_err(crate::error::query_execution_failure)
+    }
+
+    fn query_scope(
+        &self,
+        _request: &mant_engine::PreparedScopeQuery<'_>,
+    ) -> Result<mant_protocol::ScopeQueryResponse, Failure> {
+        self.query_calls.set(self.query_calls.get() + 1);
+        Err(Failure::operational(
+            "document scope queries are unavailable in this host",
+        ))
     }
 
     fn query_markdown(&self, _source: &str) -> Result<ResolvedContent, Failure> {

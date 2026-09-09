@@ -1,23 +1,25 @@
 //! Explicit process capabilities and one application document snapshot.
 use crate::{
     doctor,
-    error::{self, Failure, query_failure},
+    error::{self, Failure, query_execution_failure},
 };
-use mant_engine::LoadPolicy;
+use mant_engine::{DocumentResolver, PreparedQueryRequest, PreparedScopeQuery, QueryViewResult};
 use mant_ir::ResolvedContent;
 use mant_protocol::{
-    CatalogQuery, DoctorReport, DocumentCatalog, QueryRequest, ScopeQueryRequest,
-    ScopeQueryResponse, TldrCacheUpdate,
+    CatalogQuery, DoctorReport, DocumentCatalog, ScopeQueryResponse, TldrCacheUpdate,
 };
 use mant_sources::{DocumentSourcesPrune, DocumentSourcesUpdate};
+use std::sync::OnceLock;
 
 pub(crate) mod maintenance;
+
+#[cfg(test)]
+mod tests;
 
 pub(crate) trait CliHost {
     fn doctor(&self) -> Result<DoctorReport, Failure>;
     fn discover(&self, query: &CatalogQuery) -> Result<DocumentCatalog, Failure>;
-    fn query(&self, request: &QueryRequest, policy: LoadPolicy)
-    -> Result<ResolvedContent, Failure>;
+    fn query(&self, request: &PreparedQueryRequest<'_>) -> Result<QueryViewResult, Failure>;
     fn query_markdown(&self, source: &str) -> Result<ResolvedContent, Failure>;
     fn resolve_scope(
         &self,
@@ -27,7 +29,10 @@ pub(crate) trait CliHost {
             "document scopes are unavailable in this host",
         ))
     }
-    fn query_scope(&self, _request: &ScopeQueryRequest) -> Result<ScopeQueryResponse, Failure> {
+    fn query_scope(
+        &self,
+        _request: &PreparedScopeQuery<'_>,
+    ) -> Result<ScopeQueryResponse, Failure> {
         Err(Failure::operational(
             "document scope queries are unavailable in this host",
         ))
@@ -37,15 +42,16 @@ pub(crate) trait CliHost {
     fn prune_docs(&self, dry_run: bool) -> Result<DocumentSourcesPrune, Failure>;
 }
 
+#[derive(Default)]
 pub(crate) struct SystemHost {
-    resolver: mant_engine::DocumentResolver,
+    resolver: OnceLock<DocumentResolver>,
 }
 
-impl Default for SystemHost {
-    fn default() -> Self {
-        Self {
-            resolver: mant_engine::DocumentResolver::from_system(),
-        }
+impl SystemHost {
+    // A host is per invocation/session, not a process-global document cache.
+    // Only callers with validated requests may initialize its environment.
+    fn resolver(&self) -> &DocumentResolver {
+        self.resolver.get_or_init(DocumentResolver::from_system)
     }
 }
 
@@ -55,17 +61,17 @@ impl CliHost for SystemHost {
     }
 
     fn discover(&self, query: &CatalogQuery) -> Result<DocumentCatalog, Failure> {
-        self.resolver.discover(query).map_err(Failure::operational)
+        let prepared =
+            mant_loader::PreparedCatalogQuery::new(query).map_err(Failure::operational)?;
+        self.resolver()
+            .discover_prepared(&prepared)
+            .map_err(Failure::operational)
     }
 
-    fn query(
-        &self,
-        request: &QueryRequest,
-        policy: LoadPolicy,
-    ) -> Result<ResolvedContent, Failure> {
-        self.resolver
-            .resolve(request, policy)
-            .map_err(query_failure)
+    fn query(&self, request: &PreparedQueryRequest<'_>) -> Result<QueryViewResult, Failure> {
+        request
+            .execute(self.resolver())
+            .map_err(query_execution_failure)
     }
 
     fn query_markdown(&self, source: &str) -> Result<ResolvedContent, Failure> {
@@ -76,14 +82,17 @@ impl CliHost for SystemHost {
         &self,
         scope: &mant_protocol::DocumentScope,
     ) -> Result<mant_engine::LoadedDocumentScope, Failure> {
-        self.resolver
+        mant_engine::validate_document_scope(scope).map_err(|error| {
+            error::scope_query_failure(mant_engine::ScopeQueryError::Load(error))
+        })?;
+        self.resolver()
             .resolve_scope(scope)
             .map_err(error::scope_query_failure)
     }
 
-    fn query_scope(&self, request: &ScopeQueryRequest) -> Result<ScopeQueryResponse, Failure> {
-        self.resolver
-            .execute_scope_query(request)
+    fn query_scope(&self, request: &PreparedScopeQuery<'_>) -> Result<ScopeQueryResponse, Failure> {
+        request
+            .execute(self.resolver())
             .map_err(error::scope_query_failure)
     }
 

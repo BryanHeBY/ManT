@@ -1,7 +1,7 @@
 //! Application adapters validate complete requests before loading or querying.
 use super::{
-    DocumentLoader, LoadPolicy, LoadSpec, QueryError, QueryExecutionError, QueryInput,
-    QueryRequest, QueryViewResult, ResolvedContent, project_query_view, validate_query_request,
+    DocumentLoader, LoadPolicy, LoadSpec, PreparedQueryRequest, QueryError, QueryExecutionError,
+    QueryInput, QueryRequest, QueryViewResult, ResolvedContent, project_query_view,
 };
 use mant_protocol::{CatalogQuery, DocumentCatalog};
 
@@ -26,8 +26,7 @@ impl DocumentResolver {
         request: &QueryRequest,
         policy: LoadPolicy,
     ) -> Result<ResolvedContent, QueryError> {
-        validate_query_request(request, policy)?;
-        self.resolve_validated(request, policy)
+        PreparedQueryRequest::new(request, policy)?.resolve(self)
     }
     pub(super) fn resolve_validated(
         &self,
@@ -47,8 +46,9 @@ impl DocumentResolver {
         request: &QueryRequest,
         policy: LoadPolicy,
     ) -> Result<QueryViewResult, QueryExecutionError> {
-        validate_query_request(request, policy).map_err(QueryExecutionError::Query)?;
-        self.execute_validated(request, policy)
+        PreparedQueryRequest::new(request, policy)
+            .map_err(QueryExecutionError::Query)?
+            .execute(self)
     }
     pub(super) fn execute_validated(
         &self,
@@ -107,7 +107,7 @@ pub(super) fn query_with(
     policy: LoadPolicy,
     load: impl FnOnce() -> Result<ResolvedContent, QueryError>,
 ) -> Result<ResolvedContent, QueryError> {
-    validate_query_request(request, policy)?;
+    PreparedQueryRequest::new(request, policy)?;
     load()
 }
 

@@ -3,6 +3,42 @@ use super::{LoadedDocumentScope, ScopeQueryError, ScopeQueryResult, SearchQuery}
 use crate::QueryScopeView;
 use mant_protocol::{ScopeQueryRequest, ScopeQueryResponse, ScopeQuerySchema, ScopeQueryView};
 
+/// A complete scope query validated before local environment capture.
+///
+/// Preparation binds the immutable request, not loaded documents or a cached
+/// search matcher. The same prepared request may use an explicit host snapshot.
+pub struct PreparedScopeQuery<'request> {
+    request: &'request ScopeQueryRequest,
+}
+
+impl<'request> PreparedScopeQuery<'request> {
+    /// Validate roots, traversal and the projection without local IO.
+    ///
+    /// # Errors
+    /// Returns scope, selector or query configuration failures.
+    pub fn new(request: &'request ScopeQueryRequest) -> Result<Self, ScopeQueryError> {
+        super::validate_scope_query_request(request)?;
+        Ok(Self { request })
+    }
+
+    /// The immutable scope request whose roots and view were validated together.
+    #[must_use]
+    pub const fn request(&self) -> &'request ScopeQueryRequest {
+        self.request
+    }
+
+    /// Load and query against the supplied snapshot using the shared pipeline.
+    ///
+    /// # Errors
+    /// Returns scope loading, mapping or pure query execution failures.
+    pub fn execute(
+        &self,
+        resolver: &crate::DocumentResolver,
+    ) -> Result<ScopeQueryResponse, ScopeQueryError> {
+        resolver.execute_validated_scope_query(self.request)
+    }
+}
+
 /// Validate a complete scope query before capturing the local source environment.
 ///
 /// # Errors
@@ -11,16 +47,17 @@ use mant_protocol::{ScopeQueryRequest, ScopeQueryResponse, ScopeQuerySchema, Sco
 pub fn execute_scope_query(
     request: &ScopeQueryRequest,
 ) -> Result<ScopeQueryResponse, ScopeQueryError> {
-    validated_scope_resolver(request, crate::DocumentResolver::from_system)?
-        .execute_validated_scope_query(request)
+    let (prepared, resolver) =
+        validated_scope_resolver(request, crate::DocumentResolver::from_system)?;
+    prepared.execute(&resolver)
 }
 
 fn validated_scope_resolver<T>(
     request: &ScopeQueryRequest,
     factory: impl FnOnce() -> T,
-) -> Result<T, ScopeQueryError> {
-    super::validate_scope_query_request(request)?;
-    Ok(factory())
+) -> Result<(PreparedScopeQuery<'_>, T), ScopeQueryError> {
+    let prepared = PreparedScopeQuery::new(request)?;
+    Ok((prepared, factory()))
 }
 
 impl crate::DocumentResolver {
@@ -34,8 +71,7 @@ impl crate::DocumentResolver {
         &self,
         request: &ScopeQueryRequest,
     ) -> Result<ScopeQueryResponse, ScopeQueryError> {
-        super::validate_scope_query_request(request)?;
-        self.execute_validated_scope_query(request)
+        PreparedScopeQuery::new(request)?.execute(self)
     }
 
     // Both public entry points validate the complete request exactly once before
@@ -185,12 +221,14 @@ mod tests {
     #[test]
     fn valid_scope_constructs_exactly_one_environment_after_validation() {
         let calls = Cell::new(0);
-        let value = validated_scope_resolver(&request(), || {
+        let request = request();
+        let (prepared, value) = validated_scope_resolver(&request, || {
             calls.set(calls.get() + 1);
             "snapshot"
         })
         .unwrap();
         assert_eq!(value, "snapshot");
         assert_eq!(calls.get(), 1);
+        assert!(std::ptr::eq(prepared.request(), &raw const request));
     }
 }

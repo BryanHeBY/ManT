@@ -1,5 +1,6 @@
 //! CLI input adaptation and presentation around complete document requests.
 use crate::{
+    application,
     arguments::{ColorMode, OutputOptions, QuerySource},
     delivery,
     error::{Failure, query_execution_failure, query_failure},
@@ -84,10 +85,7 @@ pub(super) fn execute_query(
         }
         source => {
             let request = read_query_request(source, input)?;
-            mant_engine::validate_query_request(&request, policy).map_err(query_failure)?;
-            let query = host.query(&request, policy)?;
-            mant_engine::project_query_view(query, &request.view)
-                .map_err(query_execution_failure)?
+            application::execute_query(&request, policy, host)?
         }
     };
     if policy == LoadPolicy::TldrOnly && output.presentation.format.is_none() {
@@ -147,7 +145,7 @@ fn execute_scope_request(
     output: QueryOutput,
     host: &dyn CliHost,
 ) -> Result<String, Failure> {
-    let response = host.query_scope(request)?;
+    let response = application::execute_scope_query(request, host)?;
     presentation::render_scope_query_result(&response, output.render_options())
 }
 

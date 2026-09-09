@@ -8,7 +8,7 @@ use mant_protocol::{
 use std::{error::Error, fmt};
 
 mod execute;
-pub use execute::execute_scope_query;
+pub use execute::{PreparedScopeQuery, execute_scope_query};
 
 /// Invalid query configuration, failed scope loading, or query execution failure.
 #[derive(Debug, Clone, PartialEq, Eq)]

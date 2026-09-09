@@ -1,6 +1,49 @@
-//! Source-neutral application request construction for typed document navigation.
-use mant_engine::LoadPolicy;
-use mant_protocol::{DocumentAddress, QueryInput, QueryRequest, QueryView, RequestSchema};
+//! Complete-request application calls and typed document navigation.
+use crate::{
+    error::{Failure, query_failure, scope_query_failure},
+    host::CliHost,
+};
+use mant_engine::{LoadPolicy, PreparedQueryRequest, PreparedScopeQuery, QueryViewResult};
+use mant_ir::ResolvedContent;
+use mant_protocol::{
+    DocumentAddress, QueryInput, QueryRequest, QueryView, RequestSchema, ScopeQueryRequest,
+    ScopeQueryResponse,
+};
+
+pub(crate) fn execute_query(
+    request: &QueryRequest,
+    policy: LoadPolicy,
+    host: &dyn CliHost,
+) -> Result<QueryViewResult, Failure> {
+    let prepared = PreparedQueryRequest::new(request, policy).map_err(query_failure)?;
+    host.query(&prepared)
+}
+
+pub(crate) fn execute_scope_query(
+    request: &ScopeQueryRequest,
+    host: &dyn CliHost,
+) -> Result<ScopeQueryResponse, Failure> {
+    let prepared = PreparedScopeQuery::new(request).map_err(scope_query_failure)?;
+    host.query_scope(&prepared)
+}
+
+pub(crate) fn read_full(
+    request: &QueryRequest,
+    policy: LoadPolicy,
+    host: &dyn CliHost,
+) -> Result<ResolvedContent, Failure> {
+    if !matches!(request.view, QueryView::Full {}) {
+        return Err(Failure::usage(
+            "interactive mode requires the complete document view",
+        ));
+    }
+    match execute_query(request, policy, host)? {
+        QueryViewResult::Full(content) => Ok(*content),
+        _ => Err(Failure::operational(
+            "complete document request returned a projected view",
+        )),
+    }
+}
 
 pub(crate) fn request_for_address(address: &DocumentAddress) -> (QueryRequest, LoadPolicy) {
     let policy = match address {

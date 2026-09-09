@@ -24,7 +24,7 @@ use application::request_for_navigation;
 use arguments::{Command, DisplayMode, OutputOptions, QuerySource};
 use cli::{run_command, run_with_host};
 use clipboard::SystemClipboard;
-use error::{Failure, query_failure, report_failure, report_process_argument_error};
+use error::{Failure, report_failure, report_process_argument_error};
 use external::open_uri as open_external_uri;
 use host::{CliHost, SystemHost};
 use mant_engine::LoadPolicy;
@@ -177,12 +177,7 @@ fn run_interactive(
                     diagnostics_color,
                 );
             }
-            if let Err(error) =
-                mant_engine::validate_query_request(&request, policy).map_err(query_failure)
-            {
-                return report_failure(&error, diagnostics, diagnostics_color);
-            }
-            let query = match host.query(&request, policy) {
+            let query = match application::read_full(&request, policy, host) {
                 Ok(query) => query,
                 Err(error) => return report_failure(&error, diagnostics, diagnostics_color),
             };
@@ -236,7 +231,7 @@ fn run_interactive(
         |catalog_query| host.discover(catalog_query).map_err(Failure::into_message),
         |target| {
             let (request, policy) = request_for_navigation(target);
-            host.query(&request, policy).map_err(Failure::into_message)
+            application::read_full(&request, policy, host).map_err(Failure::into_message)
         },
         open_external_uri,
         |request| clipboard.copy(request),

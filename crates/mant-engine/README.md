@@ -89,6 +89,21 @@ the native `mant` composition root, never by library queries or MCP services.
 
 ## Execution pipeline
 
+For a host that initializes its document environment lazily,
+`PreparedQueryRequest::new(&request, policy)` and
+`PreparedScopeQuery::new(&request)` validate the complete borrowed request
+without reading configuration or documents. Call `execute(&resolver)` after
+obtaining the operation's explicit `DocumentResolver` snapshot; single-document
+requests also expose `resolve(&resolver)` for full-content consumers. Their
+fields are private and their request accessors are immutable, so validation
+cannot drift from the executed request or policy. These values are validation
+proofs, not cached search matchers. Pure query APIs retain their own checks.
+
+Free execution functions prepare before constructing the system resolver.
+Explicit resolver methods follow the same prepared execution path. Catalog
+hosts can separately prepare `mant_loader::PreparedCatalogQuery` and pass it
+to `discover_prepared`; that existing catalog plan retains its compiled matcher.
+
 ```text
 logical selector / physical input
               │
@@ -318,8 +333,8 @@ projections should use `mant-query`, which does not load files or render reports
 Consumers formatting existing content or protocol values should use
 `mant-render`. The engine no longer re-exports rendering functions; its render
 dependency is only for cross-crate regression tests and doctests.
-The engine's opt-in tldr maintenance implementation remains separate from
-loader authority. Applications that only
+Explicit tldr maintenance belongs to the command host, not this engine or
+the loader. Applications that only
 need raw roff syntax should use
 [`libmandoc-rs`](https://crates.io/crates/libmandoc-rs) directly. Applications
 that need the complete command or reader should install

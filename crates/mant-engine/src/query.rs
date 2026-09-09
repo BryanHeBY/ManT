@@ -10,6 +10,8 @@ use mant_protocol::{
 use std::{error::Error, fmt};
 mod adapter;
 mod execution;
+mod prepared;
+pub use prepared::PreparedQueryRequest;
 mod validation;
 mod validation_error;
 #[cfg(feature = "roff")]
@@ -121,8 +123,8 @@ pub fn resolve_query_with_policy(
     request: &QueryRequest,
     policy: LoadPolicy,
 ) -> Result<ResolvedContent, QueryError> {
-    let resolver = validated_resolver(request, policy, DocumentResolver::from_system)?;
-    resolver.resolve_validated(request, policy)
+    let (prepared, resolver) = validated_resolver(request, policy, DocumentResolver::from_system)?;
+    prepared.resolve(&resolver)
 }
 
 /// Load and materialize the view encoded in one native request.
@@ -136,9 +138,9 @@ pub fn execute_query(
     request: &QueryRequest,
     policy: LoadPolicy,
 ) -> Result<QueryViewResult, QueryExecutionError> {
-    let resolver = validated_resolver(request, policy, DocumentResolver::from_system)
+    let (prepared, resolver) = validated_resolver(request, policy, DocumentResolver::from_system)
         .map_err(QueryExecutionError::Query)?;
-    resolver.execute_validated(request, policy)
+    prepared.execute(&resolver)
 }
 
 // Capturing a system snapshot already reads manual configuration. Validation
@@ -147,9 +149,9 @@ fn validated_resolver<T>(
     request: &QueryRequest,
     policy: LoadPolicy,
     factory: impl FnOnce() -> T,
-) -> Result<T, QueryError> {
-    validate_query_request(request, policy)?;
-    Ok(factory())
+) -> Result<(PreparedQueryRequest<'_>, T), QueryError> {
+    let prepared = PreparedQueryRequest::new(request, policy)?;
+    Ok((prepared, factory()))
 }
 
 #[cfg(test)]

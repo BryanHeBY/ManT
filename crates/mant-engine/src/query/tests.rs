@@ -93,13 +93,16 @@ fn invalid_load_selection_never_constructs_a_system_snapshot() {
 #[test]
 fn valid_query_constructs_exactly_one_snapshot_after_validation() {
     let factory_calls = std::cell::Cell::new(0);
-    let snapshot = super::validated_resolver(&request(), LoadPolicy::Combined, || {
+    let request = request();
+    let (prepared, snapshot) = super::validated_resolver(&request, LoadPolicy::Combined, || {
         factory_calls.set(factory_calls.get() + 1);
         "snapshot"
     })
     .unwrap();
     assert_eq!(snapshot, "snapshot");
     assert_eq!(factory_calls.get(), 1);
+    assert!(std::ptr::eq(prepared.request(), &raw const request));
+    assert_eq!(prepared.policy(), LoadPolicy::Combined);
 }
 
 #[test]

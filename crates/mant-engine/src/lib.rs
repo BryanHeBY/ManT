@@ -48,11 +48,13 @@ pub use mant_query::{SearchError, search_query, validate_search_query};
 #[cfg(feature = "roff")]
 pub use query::query_roff_bytes;
 pub use query::{
-    DocumentResolver, QueryError, QueryExecutionError, QueryValidationError, QueryViewResult,
-    execute_query, project_query_view, query_markdown_text, resolve_query,
+    DocumentResolver, PreparedQueryRequest, QueryError, QueryExecutionError, QueryValidationError,
+    QueryViewResult, execute_query, project_query_view, query_markdown_text, resolve_query,
     resolve_query_with_policy, validate_query_request,
 };
-pub use scope::{ScopeQueryError, execute_scope_query, validate_scope_query_request};
+pub use scope::{
+    PreparedScopeQuery, ScopeQueryError, execute_scope_query, validate_scope_query_request,
+};
 pub use tldr::{
     HostPlatform, TldrCacheError, TldrPageLocation, TldrParseError, get_system_tldr_cache_dirs,
     get_tldr_cache_dir, get_tldr_languages, get_tldr_platforms, get_tldr_read_cache_dirs,

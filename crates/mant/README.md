@@ -273,6 +273,14 @@ from typed application navigation, system services, and process delivery.
 under the host rather than in the read-only engine. Schema output is an offline
 adapter, and CLI and MCP share DTO renderers without sharing CLI format types.
 
+Creating a command host does not discover local sources. Complete requests and
+catalog filters are validated before its first document snapshot is captured;
+subsequent reads and discovery within that operation or reader session reuse
+the same snapshot. Help, schema output, malformed requests and direct stdin
+parsing do not initialize the resolver. There is no process-global document
+cache. Normal CLI requests use the engine's complete request pipeline, as MCP
+does, instead of independently combining loading and projection.
+
 The package also exposes `mant::run` for deterministic single-invocation tests
 or embedding with explicit input/output streams, and `mant::run_process` for
 the real terminal-sensitive process including MCP. Most library users should
