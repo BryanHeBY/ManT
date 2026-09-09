@@ -91,6 +91,11 @@ or opens a URI by itself. It emits typed requests to its host and keeps
 page-local jumps in memory. This makes the same component usable by the
 `mant` binary and by another Ratatui application with stricter host policy.
 
+POSIX termination handlers respect the host's signal mask; registering a
+handler does not unblock a signal. Signal tests explicitly control the test
+thread's mask, verify deferred delivery after unblocking, and restore the
+original mask on exit. Production does not silently override host masking.
+
 ## Basic use
 
 The convenience boundary owns the terminal event loop:

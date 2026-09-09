@@ -93,16 +93,24 @@ mod tests {
 
     use super::TerminationSignals;
 
+    mod mask;
+
     #[test]
     fn a_signal_is_deferred_until_the_event_loop_observes_it() {
         let signals = TerminationSignals::install_for(&[SIGUSR1]).expect("install signal handler");
+        // Signal masks are inherited independently of installed handlers. Make
+        // the blocked case explicit instead of depending on the parent runner.
+        let mask = mask::SignalMask::block(SIGUSR1);
         assert_eq!(signals.take(), None);
         assert!(!signals.terminating.load(Ordering::SeqCst));
         signal_hook::low_level::raise(SIGUSR1).expect("raise test signal");
+        assert_eq!(signals.take(), None, "blocked signal must remain pending");
+        assert!(!signals.terminating.load(Ordering::SeqCst));
+        mask.unblock();
 
-        // Sending a signal is not our observation barrier. In particular,
-        // Darwin CI can return from raise before this thread sees the handler's
-        // publication. Exercise the same polling contract as the event loop,
+        // A successful raise only queues a blocked signal; waiting alone
+        // cannot deliver it. Exercise the event loop's polling contract after
+        // explicitly unblocking this test signal on this thread,
         // with a deadline so a lost signal still fails instead of hanging.
         let deadline = Instant::now() + Duration::from_secs(5);
         let observed = loop {
@@ -112,7 +120,8 @@ mod tests {
             assert!(!signals.terminating.load(Ordering::SeqCst));
             assert!(
                 Instant::now() < deadline,
-                "SIGUSR1 was not observed within 5s"
+                "SIGUSR1 was not observed within 5s after unblocking (inherited blocked={})",
+                mask.was_blocked(SIGUSR1)
             );
             thread::sleep(Duration::from_millis(1));
         };
