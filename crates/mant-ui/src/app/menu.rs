@@ -71,6 +71,7 @@ pub(super) enum MenuAction {
     CopyNodeText,
     CopyNodeMarkdown,
     CopyReference,
+    OpenReference,
     Back,
     Forward,
     ToggleSidebar,
@@ -155,6 +156,11 @@ const VIEW_MENU: &[MenuEntry] = &[
 ];
 
 const NAVIGATE_MENU: &[MenuEntry] = &[
+    MenuEntry {
+        label: "Open Reference…",
+        shortcut: "O",
+        action: MenuAction::OpenReference,
+    },
     MenuEntry {
         label: "Back",
         shortcut: "Alt+←",
@@ -262,6 +268,7 @@ impl App {
                 }
             }
             Overlay::DocumentFinder => self.handle_finder_key(key),
+            Overlay::References => self.handle_reference_key(key),
             Overlay::Menu { id, cursor } => match key.code {
                 KeyCode::Esc | KeyCode::F(10) => self.overlay = Overlay::None,
                 KeyCode::Left | KeyCode::Right => {
@@ -300,6 +307,9 @@ impl App {
     }
 
     pub(super) fn handle_overlay_mouse(&mut self, mouse: MouseEvent) -> Option<UpdateOutcome> {
+        if self.overlay == Overlay::References {
+            return Some(self.handle_reference_mouse(mouse));
+        }
         if self.overlay == Overlay::DocumentFinder
             && matches!(self.pointer_drag, super::PointerDrag::FinderScrollbar(_))
             && matches!(
@@ -405,6 +415,7 @@ impl App {
             MenuAction::CopyNodeText => self.copy_selected_node(CopyFormat::Text),
             MenuAction::CopyNodeMarkdown => self.copy_selected_node(CopyFormat::Markdown),
             MenuAction::CopyReference => self.copy_selected_reference(),
+            MenuAction::OpenReference => self.show_reference_chooser(false),
             MenuAction::Back => self.navigate_history(true),
             MenuAction::Forward => self.navigate_history(false),
             MenuAction::ToggleSidebar => self.show_sidebar = !self.show_sidebar,
@@ -468,7 +479,7 @@ impl App {
         frame.render_widget(Block::default().style(style), area);
         let open_menu = match self.overlay {
             Overlay::Menu { id, .. } => Some(id),
-            Overlay::None | Overlay::DocumentFinder | Overlay::Help => None,
+            Overlay::None | Overlay::DocumentFinder | Overlay::Help | Overlay::References => None,
         };
         let spans = MenuId::ALL
             .into_iter()
@@ -497,6 +508,7 @@ impl App {
             Overlay::Menu { id, cursor } => self.draw_menu_overlay(frame, id, cursor),
             Overlay::DocumentFinder => self.draw_document_finder(frame),
             Overlay::Help => Self::draw_help(frame),
+            Overlay::References => self.draw_reference_chooser(frame),
         }
     }
 
@@ -599,6 +611,8 @@ impl App {
                 Line::raw("right-click   copy selected plain text"),
                 Line::raw("y / Ctrl+Shift+C  copy selected plain text"),
                 Line::raw("Shift+Y      copy selected reference target"),
+                Line::raw("O            choose associated reference to open"),
+                Line::raw("r (chooser)  reveal occurrence source; Esc returns"),
                 Line::raw("d/u          scroll content by ten rows"),
                 Line::raw("b            toggle sidebar"),
                 Line::raw("F10          open menu bar"),

@@ -12,6 +12,18 @@ that crate was not published for that change.
 
 ## Unreleased
 
+- Associated heading/form references now appear on their existing outline rows,
+  independently styled from entry names. TUI `O` opens a source-aware reference
+  chooser and `Shift+Y` copies a chosen target; content Enter/expansion stays local.
+  Body references keep their groups and the full occurrence inventory is unchanged.
+- Unpublished v0.11 outlines retain exact entry `owner` coordinates, and validated
+  form associations carry their semantic owner. Offline clients can join these
+  structural facts without guessing from IDs or labels; partial pages never prove
+  target uniqueness. Regenerate consumers from the current v0.11 schema.
+- Bundled manuals validate actual cross-document links in their installed namespace,
+  document native `man:` authoring/export rules, and distinguish current upstream
+  references from the vendored mandoc 1.14.6 contract.
+
 - `mant-ui` 0.11 adds collapsed document/manual reference groups backed by original content occurrences. Selecting a reference reveals its source; Enter opens it and Shift+Y copies its target. Wrapped headings, terms and table cells retain their source positions across resize. Failed or ambiguous destination fragments leave the current page, tabs and history unchanged. Exact catalog addresses no longer fall back to another source, and unqualified manual links retain manual-only resolution without inventing a section.
 
 - `mant-ir`/`mant-protocol`/`mant-engine` 0.11 separate content reads from link discovery. `ContentSelector` replaces string selectors: use closed path/ID objects in request JSON and MCP, and `path:...`/`id:...` in the CLI (bare canonical paths remain accepted). Names and aliases belong to explain, not read/outline-root fallback. Same-named entries remain independent evidence; duplicate IDs still report ambiguity.

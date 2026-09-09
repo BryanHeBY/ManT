@@ -86,6 +86,7 @@ impl App {
             KeyCode::Char('b') => self.show_sidebar = !self.show_sidebar,
             KeyCode::Char('y') => self.copy_selection(),
             KeyCode::Char('Y') => self.copy_selected_reference(),
+            KeyCode::Char('O') => self.show_reference_chooser(false),
             KeyCode::Char('<') => {
                 self.commit_sidebar_width(
                     self.sidebar_width.saturating_sub(2).max(MIN_SIDEBAR_WIDTH),

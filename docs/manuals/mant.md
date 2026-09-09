@@ -662,7 +662,7 @@ sections, semantic entry groups, nested parameters and values, and optional
 tldr content. A collapsed entry group shows its direct-entry count in compact
 mode; selecting it reveals the nested-entry and authored-form totals.
 Expanding it reveals the same hierarchy returned by an `all` outline
-projection. Semantic entries use their exact aliases as
+projection. Semantic entries use their exact documented names as
 compact labels, while the selected entry expands to its complete authored
 form. **View → Full Outline Labels** wraps every visible complete label for
 side-by-side review. This mode changes presentation only; entry identity,
@@ -671,16 +671,39 @@ whole-tree expansion or collapse, and Outline-width changes keep the selected
 node on the same viewport row whenever terminal bounds permit. Selecting a
 node puts its target at the top of the content pane.
 
-Document/manual links also appear under collapsed **References** groups,
-independently of semantic entries. Selecting a reference reveals its original
-source occurrence; Enter explicitly opens its typed target. Repeated links in
-different owners remain separate, while same-owner/same-target navigation may
-be grouped without altering the content or reference occurrence inventory.
+Document/manual links in headings and validated entry forms show a `↗` target
+badge on the corresponding visible Outline row. The entry keeps its semantic
+type and local content identity; shared names do not imply an alias group.
+Selecting or expanding that row still reveals or expands local content, not
+the linked document. Press `O` (**Open Reference**) to choose a target and
+explicitly open it, or `Shift+Y` (**Copy Reference Target**) to choose a target
+to copy. The chooser retains each original occurrence: `r` reveals the selected
+source occurrence without opening it, and `Esc` returns to the owner.
+
+Ordinary body references remain under collapsed **DOCUMENT REFERENCES** groups
+at their nearest visible entry, section or root. For example:
+
+```text
+Main porcelain commands
+└─ ENTRIES
+   └─ git-add  ↗ git-add(1)
+      └─ DOCUMENT REFERENCES
+         └─ ↗ gittutorial(7)
+```
+
+This illustrates separate name and body references, not an alias declaration.
+An owner with only an associated name/heading link needs no redundant reference
+subgroup. Hidden owners fall back to visible reference groups. Selecting a
+reference row reveals its original source occurrence; Enter explicitly opens
+its typed target. Repeated links and different fragments retain their original
+positions even when the badge groups equal typed targets. The complete CLI/MCP
+reference inventory still includes associated occurrences and body occurrences.
 An unqualified native manual keeps its unresolved section rather than guessing
 section 1. Missing or ambiguous destinations/fragments preserve the source
 document, selection and navigation history. Reference-target copy copies the
 target, not the surrounding node; selecting or copying never opens it.
-Bounded discovery shows a notice if it cannot cover all references.
+Bounded discovery shows a notice if it cannot cover all references. Badges and
+choosers then describe known targets, not a proved unique or exhaustive set.
 After content scrolling settles, the outline follows the first visible
 document node.
 Underlined references can be followed directly. Markdown fragments and mdoc
@@ -701,6 +724,10 @@ document and history unchanged.
 - `k`, `Up`: Select the previous visible node.
 - `h`, `Left`: Collapse the current branch or select its parent.
 - `l`, `Right`: Expand the current branch or select its first child.
+- `Enter`: Open a reference row; on a content row, toggle expansion only.
+- `Space`: Toggle the selected branch without opening a target.
+- `O`: Open Reference; choose an associated target without changing the content row's Enter behavior.
+- `Shift+Y`: Copy Reference Target; associated rows use a chooser, while a reference row copies its own target.
 - `d`, `PageDown`: Scroll the content down.
 - `u`, `PageUp`: Scroll the content up.
 - `Ctrl+O`: Open the document finder.

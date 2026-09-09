@@ -171,24 +171,26 @@ impl App {
         // When they do overflow, every label is laid out one column earlier so
         // the scrollbar never replaces its final cell (or half of a wide one).
         let gutter_width = navigation_area.width.saturating_sub(1);
-        let gutter_rows = navigation::rows(
+        let gutter_rows = navigation::rows_with_references(
             self.session.document.navigation(),
             &visible,
             self.selected,
             &self.expanded,
             self.full_outline_labels,
             usize::from(gutter_width),
+            self.session.document.reference_badges(),
         );
         let rows = if gutter_rows.len() > height {
             gutter_rows
         } else {
-            navigation::rows(
+            navigation::rows_with_references(
                 self.session.document.navigation(),
                 &visible,
                 self.selected,
                 &self.expanded,
                 self.full_outline_labels,
                 usize::from(navigation_area.width),
+                self.session.document.reference_badges(),
             )
         };
         let row_count = rows.len();
@@ -386,6 +388,19 @@ impl App {
                 self.search.query,
                 self.search.scope_matches.len()
             )
+        } else if self
+            .session
+            .document
+            .navigation()
+            .get(self.selected)
+            .is_some_and(|node| {
+                self.session
+                    .document
+                    .reference_badges()
+                    .contains_key(&node.id)
+            })
+        {
+            "O: Open Reference · Y: Copy Target ".into()
         } else if self.session.document.has_tldr() {
             format!("{} visible nodes · TLDR ", self.visible_node_count())
         } else {

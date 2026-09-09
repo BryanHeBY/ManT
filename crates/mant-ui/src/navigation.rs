@@ -5,7 +5,10 @@
 //! node expands to as many wrapped rows as required. Keeping both policies in
 //! one model also lets scrolling reason about the selected node's whole range.
 
-use std::{collections::HashSet, ops::Range};
+use std::{
+    collections::{HashMap, HashSet},
+    ops::Range,
+};
 
 use ratatui::{
     style::{Modifier, Style},
@@ -25,6 +28,7 @@ pub(crate) struct NavigationRow {
     pub(crate) line: Line<'static>,
 }
 
+#[cfg(test)]
 pub(crate) fn rows(
     nodes: &[NavNode],
     visible: &[usize],
@@ -46,6 +50,109 @@ pub(crate) fn rows(
             )
         })
         .collect()
+}
+
+/// Decorate validated owner associations without changing source labels or IDs.
+pub(crate) fn rows_with_references(
+    nodes: &[NavNode],
+    visible: &[usize],
+    selected: usize,
+    expanded: &HashSet<String>,
+    full_labels: bool,
+    width: usize,
+    badges: &HashMap<String, String>,
+) -> Vec<NavigationRow> {
+    visible
+        .iter()
+        .flat_map(|index| {
+            let node = &nodes[*index];
+            let mut lines = node_lines(
+                node,
+                *index,
+                *index == selected,
+                expanded.contains(&node.id),
+                full_labels,
+                width,
+            );
+            let Some(badge) = badges.get(&node.id) else {
+                return lines;
+            };
+            let first = &lines[0].line.spans;
+            let prefix = first[0].clone();
+            let continuation = Span::styled(
+                format!(
+                    "{NODE_LEFT_PADDING}  {}",
+                    continuation_prefix(node, expanded.contains(&node.id))
+                ),
+                prefix.style,
+            );
+            let style = first[1].style;
+            let available = width
+                .saturating_sub(prefix.width().max(continuation.width()))
+                .max(1);
+            let title = sanitize_terminal_text(if *index == selected || full_labels {
+                node.full_title.as_deref().unwrap_or(&node.title)
+            } else {
+                &node.title
+            });
+            let badge = sanitize_terminal_text(badge);
+            let expanded_label = *index == selected || full_labels;
+            let title = if expanded_label {
+                title.into_owned()
+            } else {
+                truncate_middle(
+                    &title,
+                    available.saturating_sub((badge.width() + 1).min(available / 2)),
+                )
+            };
+            let badge = if expanded_label {
+                badge.into_owned()
+            } else {
+                take_prefix_columns(&badge, available.saturating_sub(title.width() + 1)).to_owned()
+            };
+            let link_style = style.fg(theme::LINK);
+            let mut current = vec![prefix.clone()];
+            let mut used = 0;
+            lines.clear();
+            for (text, role) in [(title, style), (format!(" {badge}"), link_style)] {
+                for character in text.chars() {
+                    let columns = character.width().unwrap_or(0);
+                    if used + columns > available && used > 0 {
+                        lines.push(finish_reference_row(current, *index, width, style));
+                        current = vec![continuation.clone()];
+                        used = 0;
+                    }
+                    // A wide scalar on a one-cell sidebar must not overflow its row.
+                    let rendered = if columns > available {
+                        "�".to_owned()
+                    } else {
+                        character.to_string()
+                    };
+                    used += columns.min(available);
+                    current.push(Span::styled(rendered, role));
+                }
+            }
+            lines.push(finish_reference_row(current, *index, width, style));
+            lines
+        })
+        .collect()
+}
+
+fn finish_reference_row(
+    mut spans: Vec<Span<'static>>,
+    node_index: usize,
+    width: usize,
+    style: Style,
+) -> NavigationRow {
+    let used: usize = spans.iter().map(Span::width).sum();
+    spans.push(Span::styled(
+        " ".repeat(width.saturating_sub(used)),
+        Style::default().bg(style.bg.unwrap_or(theme::SIDEBAR)),
+    ));
+    NavigationRow {
+        node_index,
+        line: Line::from(spans),
+    }
 }
 
 /// Returns the complete half-open row range occupied by one outline node.
@@ -310,6 +417,58 @@ mod tests {
 
     use super::{node_lines, node_row_range, truncate_middle};
     use crate::{NavKind, NavNode, theme};
+
+    #[test]
+    fn associated_badges_wrap_with_reference_style_without_recoloring_the_owner() {
+        let mut owner = node("日本 command");
+        owner.kind = NavKind::Entry(mant_ir::EntryKind::Command);
+        let nodes = vec![owner];
+        let badges = [("node".to_owned(), "↗ target#section".to_owned())]
+            .into_iter()
+            .collect();
+        for width in [18, 30, 80] {
+            for selected in [0, usize::MAX] {
+                let rows = super::rows_with_references(
+                    &nodes,
+                    &[0],
+                    selected,
+                    &HashSet::new(),
+                    false,
+                    width,
+                    &badges,
+                );
+                assert!(rows.iter().all(|row| row.line.width() <= width));
+                let text = rows
+                    .iter()
+                    .map(|row| row.line.to_string())
+                    .collect::<String>();
+                assert!(text.contains('↗'), "{width}: {text}");
+                assert!(
+                    rows.iter()
+                        .flat_map(|row| &row.line.spans)
+                        .any(
+                            |span| span.content.contains('↗') && span.style.fg == Some(theme::LINK)
+                        )
+                );
+                if selected == usize::MAX {
+                    assert_eq!(rows.len(), 1);
+                    assert!(rows[0].line.spans.iter().any(|span| span.style.fg
+                        == Some(theme::entry_color(mant_ir::EntryKind::Command))));
+                } else {
+                    let expected = format!(
+                        "{}  {}",
+                        super::NODE_LEFT_PADDING,
+                        super::continuation_prefix(&nodes[0], false)
+                    );
+                    assert!(
+                        rows.iter()
+                            .skip(1)
+                            .all(|row| row.line.spans[0].content == expected)
+                    );
+                }
+            }
+        }
+    }
 
     fn node(title: &str) -> NavNode {
         NavNode {

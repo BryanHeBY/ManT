@@ -146,6 +146,14 @@ fn real_manuals_render_at_narrow_and_wide_terminal_widths() {
             !view.navigation().is_empty(),
             "{relative} has no navigation"
         );
+        if relative == "archlinux/gcc.1.gz" {
+            assert!(
+                view.navigation()
+                    .iter()
+                    .all(|node| node.kind != mant_ui::NavKind::ReferenceNotice),
+                "owner association must reuse the index without exhausting GCC's reference budget"
+            );
+        }
 
         for width in [32, 80, 132] {
             let rendered = view.render(width);
@@ -154,6 +162,13 @@ fn real_manuals_render_at_narrow_and_wide_terminal_widths() {
                 "{relative} lost content at width {width}"
             );
             for item in view.navigation() {
+                if item.kind == mant_ui::NavKind::ReferenceNotice {
+                    // Budget disclosure is chrome, not manufactured document
+                    // content or a navigable source coordinate.
+                    assert!(item.target_id.is_empty());
+                    assert!(rendered.anchor_row(&item.target_id).is_none());
+                    continue;
+                }
                 assert!(
                     rendered.anchor_row(&item.target_id).is_some(),
                     "{relative} lost anchor {} for navigation {} at width {width}",

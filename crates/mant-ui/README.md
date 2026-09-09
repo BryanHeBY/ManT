@@ -26,10 +26,12 @@ catalog, search, and cross-document interactions without serializing the IR.
   and document loading back to the host.
 - Typed Markdown/man reference activation, safe external-URI delegation, and
   bounded back/forward history.
-- Collapsed document-reference groups derived from original heading/body links,
-  independently of semantic entries. Selecting an occurrence reveals its exact
-  source row; Enter explicitly opens it, Space folds a group, and Shift+Y copies
-  its target rather than the containing item's content.
+- A visible `↗` reference badge beside linked headings and validated entry forms,
+  without a redundant reference subtree. Body links retain collapsed reference
+  groups independently of semantic entries. Selecting an occurrence reveals its
+  source row; Enter on a reference explicitly opens it while Enter/Space on an
+  owner retain folding. `O` opens the reference chooser and Shift+Y copies a
+  reference target (choosing first when invoked on an associated owner).
 - Confirmed full-document search with active and inactive match highlighting.
 - tldr quick-reference and source-document rendering through one layout model.
 - Span-aware table columns and cell-local anchors that retain their exact
@@ -148,6 +150,30 @@ original source-position markers through the same cell/table layout as links.
 References lacking a registered Markdown namespace remain inspectable, but do
 not imply permission to open arbitrary local files. Reference target copies
 emit `CopyRequest::Reference`; complete-node copy is disabled on reference rows.
+
+Associated badges use typed heading locations or completely validated, nonempty
+form associations, checked within that same IR work budget. Text resemblance is
+not association evidence. Invalid, missing or budget-limited form associations
+remain ordinary references; hidden or duplicate owners fall back to a unique
+visible section or an unresolved-owner group. A bounded census of requested
+owner identities reuses the existing semantic index and exact section metadata, so a
+hidden owner cannot lend its badge to an unrelated same-ID node. Repeated native
+anchors at one owner count once without rescanning the document's prose. This census spends the remaining shared scan
+budget; incomplete verification cannot establish owner uniqueness.
+A truncated inventory labels its
+badge as known targets, never as proof that the only returned target is unique.
+Entry labels keep their semantic color; badges use the reference color and
+retain a visible arrow without color. Resizing wraps them with the owner.
+
+`O` opens an explicit reference chooser even for one associated target, allowing
+each original occurrence to be inspected and revealed without adding permanent
+tree layers. Up/Down selects a source occurrence, Left/Right inspects long target
+and source labels, Enter opens (or copies when invoked by Shift+Y), `r` reveals
+that occurrence in the current document, and Escape returns. Mouse selection
+does not open anything: the chooser's Open/Copy and Reveal footer actions are
+explicit. Repeated targets retain separate source choices, including distinct
+fragments. Selection, badges and folding do not load destinations; opening
+continues through the existing typed host boundary and transactional validation.
 
 The upper-right document tab stack records successful loads in stable first-open
 order and deduplicates logical addresses. Selecting an addressed tab emits the

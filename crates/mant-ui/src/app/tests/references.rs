@@ -122,6 +122,119 @@ fn reference_bundle() -> ResolvedContent {
     bundle
 }
 
+fn associated_bundle() -> ResolvedContent {
+    let mut bundle = mant_engine::query_markdown_text(
+        "# Catalog\n\n## [First](target.md#first) and [Second](target.md#second) and [Again](target.md#first)\n\nBody.\n", None).unwrap();
+    bundle.address = Some(DocumentAddress::Markdown {
+        path: "catalog".into(),
+        origin: MarkdownOrigin::Documents,
+    });
+    bundle
+}
+
+#[test]
+fn associated_owner_keeps_fold_action_and_explicit_chooser_retains_every_occurrence() {
+    let mut app = App::new(&associated_bundle());
+    app.selected = app
+        .session
+        .document
+        .navigation()
+        .iter()
+        .position(|node| node.kind == NavKind::Section)
+        .unwrap();
+    let owner = app.session.document.navigation()[app.selected].id.clone();
+    assert_eq!(
+        app.session.document.reference_badges()[&owner],
+        "↗ 2 targets"
+    );
+    app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    assert!(app.take_open_request().is_none());
+    assert_eq!(app.overlay, Overlay::None);
+    app.handle_key(KeyEvent::new(KeyCode::Char('O'), KeyModifiers::SHIFT));
+    assert_eq!(app.overlay, Overlay::References);
+    assert_eq!(app.reference_chooser.as_ref().unwrap().choices.len(), 3);
+    assert!(app.take_open_request().is_none());
+    app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    assert_eq!(
+        app.take_open_request().unwrap().target.as_deref(),
+        Some("second")
+    );
+    assert_eq!(app.overlay, Overlay::None);
+    app.handle_key(KeyEvent::new(KeyCode::Char('Y'), KeyModifiers::SHIFT));
+    assert!(app.take_copy_request().is_none());
+    app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    assert!(
+        matches!(app.take_copy_request(), Some(CopyRequest::Reference { text }) if text == "target#second")
+    );
+}
+
+#[test]
+fn associated_chooser_reveals_each_source_and_mouse_selection_does_not_open() {
+    let mut app = App::new(&associated_bundle());
+    let owner = app
+        .session
+        .document
+        .navigation()
+        .iter()
+        .position(|node| node.kind == NavKind::Section)
+        .unwrap();
+    app.selected = owner;
+    for width in [100, 45, 80] {
+        let mut terminal = Terminal::new(TestBackend::new(width, 24)).unwrap();
+        app.selected = owner;
+        app.show_reference_chooser(false);
+        terminal.draw(|frame| app.draw(frame)).unwrap();
+        let chooser = app.reference_chooser.as_ref().unwrap();
+        let second_id = chooser.choices[1].0.clone();
+        let area = chooser.area;
+        app.handle_mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: area.x + 1,
+            row: area.y + 2,
+            modifiers: KeyModifiers::NONE,
+        });
+        assert!(app.take_open_request().is_none());
+        assert_eq!(app.reference_chooser.as_ref().unwrap().selected, 1);
+        app.handle_key(KeyEvent::new(KeyCode::Char('r'), KeyModifiers::NONE));
+        assert_eq!(app.overlay, Overlay::None);
+        assert_eq!(
+            app.session.content_scroll,
+            app.session.rendered_cache[&app.geometry.content.width]
+                .anchor_row(&second_id)
+                .unwrap()
+        );
+        assert!(app.take_open_request().is_none());
+    }
+}
+
+#[test]
+fn associated_chooser_cancellation_and_unopenable_targets_leave_source_intact() {
+    let mut bundle = associated_bundle();
+    bundle.address = None;
+    let mut app = App::new(&bundle);
+    app.selected = app
+        .session
+        .document
+        .navigation()
+        .iter()
+        .position(|node| node.kind == NavKind::Section)
+        .unwrap();
+    let selected = app.selected;
+    let current = Arc::clone(&app.session.current_bundle);
+    app.show_reference_chooser(false);
+    app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+    assert!(app.take_open_request().is_none());
+    assert_eq!(app.selected, selected);
+    app.show_reference_chooser(false);
+    app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    assert!(app.take_open_request().is_none());
+    assert!(app.notice.as_ref().unwrap().contains("no registered"));
+    assert!(Arc::ptr_eq(&app.session.current_bundle, &current));
+    assert!(app.back_history.is_empty());
+}
+
 #[test]
 fn reference_selection_reveals_but_only_enter_opens_and_copy_target_is_separate() {
     let bundle = reference_bundle();

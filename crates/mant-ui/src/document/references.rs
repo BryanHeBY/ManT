@@ -24,23 +24,29 @@ pub(super) struct ReferenceRecord {
     fallback_owner: String,
     pub(super) label: String,
     pub(super) target: LinkTarget,
+    attachment: mant_protocol::ReferenceAttachment,
 }
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub(super) struct ReferenceNavigation {
     pub(super) records: Vec<ReferenceRecord>,
     pub(super) origins: ReferenceOrigins,
     pub(super) limited: bool,
+    pub(super) associated: HashMap<String, Vec<usize>>,
+    source_owner_counts: HashMap<String, u8>,
+    source_owners_verified: bool,
+    remaining_budget: Option<mant_ir::ReferenceWorkBudget>,
 }
 
 impl ReferenceNavigation {
     pub(super) fn build(document: &Document) -> Self {
         let mut result = Self::default();
         let mut payload = 0usize;
-        let report = mant_ir::scan_navigation_scope(
+        let mut budget = mant_ir::ReferenceWorkBudget::new(ReferenceScanLimits::default());
+        let report = mant_ir::scan_navigation_scope_with_budget(
             document,
             mant_ir::ReferenceScope::Document,
-            ReferenceScanLimits::default(),
+            &mut budget,
             mant_ir::NavigationScanOptions {
                 links: mant_ir::ReferenceLinkFilter::DOCUMENTS,
                 targets: false,
@@ -56,16 +62,9 @@ impl ReferenceNavigation {
                 }
                 // Repeated position inspection, source-owner lookup, copying and
                 // private-key serialization are part of this same operation.
+                let depth = occurrence.location.depth();
                 if budget
-                    .consume(
-                        occurrence.location.depth(),
-                        occurrence
-                            .location
-                            .depth()
-                            .saturating_mul(8)
-                            .saturating_add(1),
-                        0,
-                    )
+                    .consume(depth, depth.saturating_mul(8).saturating_add(1), 0)
                     .is_err()
                 {
                     result.limited = true;
@@ -79,11 +78,11 @@ impl ReferenceNavigation {
                             .map_or(ROOT_ID, |section| section.id.as_str())
                     }
                 };
-                let owner = occurrence
+                let semantic_owner = occurrence
                     .semantic_owner
                     .and_then(|owner| owner.owner.facts())
-                    .filter(|facts| mant_ir::is_normalized_node_id(facts.id.as_str()))
-                    .map_or(fallback_owner, |facts| facts.id.as_str());
+                    .filter(|facts| mant_ir::is_normalized_node_id(facts.id.as_str()));
+                let owner = semantic_owner.map_or(fallback_owner, |facts| facts.id.as_str());
                 let target_len = target_bytes(occurrence.target);
                 let base = occurrence
                     .location
@@ -122,6 +121,9 @@ impl ReferenceNavigation {
                 // target, page ordinal or a rendered row. Debug spelling is private
                 // to this immutable view; it is not a public selector or wire ID.
                 let id: Arc<str> = format!("reference:{location:?}").into();
+                let (attachment, limited) =
+                    reference_attachment(occurrence, budget, &location, semantic_owner.is_some());
+                result.limited |= limited;
                 result.origins.insert(
                     std::ptr::from_ref(occurrence.target).addr(),
                     Arc::clone(&id),
@@ -133,16 +135,70 @@ impl ReferenceNavigation {
                     fallback_owner: fallback_owner.to_owned(),
                     label,
                     target: occurrence.target.clone(),
+                    attachment,
                 });
                 ControlFlow::Continue(())
             },
         );
         result.limited |= !report.complete();
+        result.remaining_budget = Some(budget);
         result
     }
 
+    pub(super) fn check_source_owners(
+        &mut self,
+        document: &Document,
+        index: &mant_ir::SemanticIndex,
+    ) {
+        // A hidden owner must not attach to an unrelated visible node with the
+        // same ID. Reuse the original semantic index and section metadata,
+        // not filtered navigation or another traversal of the entire body.
+        // The remaining shared budget bounds this small ownership census.
+        self.source_owner_counts = self
+            .records
+            .iter()
+            .flat_map(|record| [&record.owner, &record.fallback_owner])
+            .map(|id| (id.clone(), 0))
+            .collect();
+        if self.source_owner_counts.is_empty() {
+            return;
+        }
+        let Some(mut budget) = self.remaining_budget.take() else {
+            return;
+        };
+        let mut census = OwnerCensus {
+            counts: &mut self.source_owner_counts,
+            budget: &mut budget,
+        };
+        let checked = (|| {
+            if document.heading.is_some()
+                || !document.blocks.is_empty()
+                || !document.fragment_aliases.is_empty()
+            {
+                census.count(ROOT_ID, 0)?;
+            }
+            census.entries(index.root(), 0)?;
+            census.sections(&document.sections, index, &mut Vec::new())
+        })();
+        self.source_owners_verified = checked.is_ok();
+        self.limited |= checked.is_err();
+    }
+
+    pub(super) fn badges(&self) -> HashMap<String, String> {
+        self.associated
+            .iter()
+            .map(|(owner, indices)| {
+                let badge = mant_protocol::reference_badge(
+                    indices.iter().map(|index| &self.records[*index].target),
+                    !self.limited,
+                );
+                (owner.clone(), badge)
+            })
+            .collect()
+    }
+
     /// Insert orthogonal reference groups after the owner's content children.
-    pub(super) fn append_navigation(&self, nodes: &mut Vec<NavNode>) {
+    pub(super) fn append_navigation(&mut self, nodes: &mut Vec<NavNode>) {
         if self.records.is_empty() && !self.limited {
             return;
         }
@@ -161,10 +217,16 @@ impl ReferenceNavigation {
         }
         let mut by_owner: BTreeMap<&str, Vec<&ReferenceRecord>> = BTreeMap::new();
         let mut orphaned = Vec::new();
-        for record in &self.records {
-            let owner = if owner_counts.get(record.owner.as_str()) == Some(&1) {
+        for (index, record) in self.records.iter().enumerate() {
+            let owner = if self.source_owners_verified
+                && self.source_owner_counts.get(record.owner.as_str()) == Some(&1)
+                && owner_counts.get(record.owner.as_str()) == Some(&1)
+            {
                 record.owner.as_str()
-            } else if owner_counts.get(record.fallback_owner.as_str()) == Some(&1) {
+            } else if self.source_owners_verified
+                && self.source_owner_counts.get(record.fallback_owner.as_str()) == Some(&1)
+                && owner_counts.get(record.fallback_owner.as_str()) == Some(&1)
+            {
                 record.fallback_owner.as_str()
             } else {
                 // Invalid duplicate IDs must not attach every occurrence to
@@ -172,7 +234,16 @@ impl ReferenceNavigation {
                 orphaned.push(record);
                 continue;
             };
-            by_owner.entry(owner).or_default().push(record);
+            if owner == record.owner
+                && record.attachment != mant_protocol::ReferenceAttachment::Body
+            {
+                self.associated
+                    .entry(owner.to_owned())
+                    .or_default()
+                    .push(index);
+            } else {
+                by_owner.entry(owner).or_default().push(record);
+            }
         }
         let mut original = std::mem::take(nodes).into_iter().peekable();
         while original.peek().is_some() {
@@ -213,6 +284,75 @@ impl ReferenceNavigation {
                 parent_id: None,
             });
         }
+    }
+}
+
+fn reference_attachment(
+    occurrence: mant_ir::LinkOccurrenceRef<'_, '_>,
+    budget: &mut mant_ir::ReferenceWorkBudget,
+    location: &ContentLocation,
+    valid_owner: bool,
+) -> (mant_protocol::ReferenceAttachment, bool) {
+    let association = mant_ir::reference_form_associations(occurrence, budget);
+    let forms = (valid_owner
+        && association.state == mant_ir::ReferenceFormAssociationState::Complete)
+        .then_some(association.forms.as_slice());
+    (
+        mant_protocol::reference_attachment(location, forms),
+        matches!(
+            association.state,
+            mant_ir::ReferenceFormAssociationState::Limited(_)
+        ),
+    )
+}
+
+/// Count physical owners once: index entries do not repeat their native anchor
+/// events, and exact section paths retain entries hidden by ambiguous IDs.
+struct OwnerCensus<'a> {
+    counts: &'a mut HashMap<String, u8>,
+    budget: &'a mut mant_ir::ReferenceWorkBudget,
+}
+
+impl OwnerCensus<'_> {
+    fn count(&mut self, id: &str, depth: usize) -> Result<(), mant_ir::ReferenceScanStop> {
+        self.budget.consume(depth, 1, id.len())?;
+        if let Some(count) = self.counts.get_mut(id) {
+            *count = count.saturating_add(1).min(2);
+        }
+        Ok(())
+    }
+
+    fn entries(
+        &mut self,
+        entries: &[mant_ir::SemanticEntry],
+        depth: usize,
+    ) -> Result<(), mant_ir::ReferenceScanStop> {
+        for entry in entries {
+            self.count(&entry.id, depth)?;
+            self.entries(&entry.children, depth.saturating_add(1))?;
+        }
+        Ok(())
+    }
+
+    fn sections(
+        &mut self,
+        sections: &[mant_ir::Section],
+        index: &mant_ir::SemanticIndex,
+        path: &mut Vec<usize>,
+    ) -> Result<(), mant_ir::ReferenceScanStop> {
+        for (position, section) in sections.iter().enumerate() {
+            self.count(&section.id, path.len().saturating_add(1))?;
+            self.budget.consume(
+                path.len(),
+                path.len().saturating_add(1),
+                std::mem::size_of::<usize>(),
+            )?;
+            path.push(position);
+            self.entries(index.section_at(path), path.len())?;
+            self.sections(&section.children, index, path)?;
+            path.pop();
+        }
+        Ok(())
     }
 }
 
@@ -338,21 +478,7 @@ fn reference_node(record: &ReferenceRecord, depth: usize, is_last: bool, parent:
 }
 
 pub(super) fn target_text(target: &LinkTarget) -> String {
-    match target {
-        LinkTarget::Document { name, fragment } => fragment
-            .as_ref()
-            .map_or_else(|| name.clone(), |fragment| format!("{name}#{fragment}")),
-        LinkTarget::Manual {
-            name,
-            manual_section,
-        } => manual_section.as_ref().map_or_else(
-            || format!("man:{name}"),
-            |section| format!("man:{name}({section})"),
-        ),
-        LinkTarget::Section { id } => format!("#{id}"),
-        LinkTarget::External { uri } => uri.clone(),
-        LinkTarget::Email { address } => format!("mailto:{address}"),
-    }
+    mant_protocol::reference_target_text(target)
 }
 
 fn target_bytes(target: &LinkTarget) -> usize {

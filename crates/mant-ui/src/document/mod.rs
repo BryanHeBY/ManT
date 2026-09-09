@@ -56,6 +56,14 @@ const TLDR_ID: &str = "tldr";
 const ROOT_ID: &str = mant_ir::DOCUMENT_ROOT_ID;
 const TLDR_VERTICAL_PADDING_ROWS: u16 = 1;
 
+fn source_kind_label(document: &mant_ir::Document) -> &'static str {
+    if document.source.format == SourceFormat::Markdown {
+        "MARKDOWN"
+    } else {
+        "MANUAL"
+    }
+}
+
 /// One addressable node displayed in the outline sidebar.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NavNode {
@@ -114,6 +122,9 @@ pub struct DocumentView {
     navigation: Vec<NavNode>,
     anchors: HashMap<String, usize>,
     references: Vec<references::ReferenceRecord>,
+    associated_references: HashMap<String, Vec<usize>>,
+    reference_badges: HashMap<String, String>,
+    references_limited: bool,
 }
 
 /// Exact terminal rows and anchor positions for one content width.
@@ -141,6 +152,34 @@ struct RenderedLinkRegion {
 }
 
 impl DocumentView {
+    pub(crate) fn reference_badges(&self) -> &HashMap<String, String> {
+        &self.reference_badges
+    }
+
+    pub(crate) fn associated_reference_choices(&self, owner: &str) -> Vec<(String, String)> {
+        self.associated_references
+            .get(owner)
+            .into_iter()
+            .flatten()
+            .map(|index| {
+                let record = &self.references[*index];
+                (
+                    record.id.to_string(),
+                    format!(
+                        "{} → {} · {:?}",
+                        record.label,
+                        references::target_text(&record.target),
+                        record.location
+                    ),
+                )
+            })
+            .collect()
+    }
+
+    pub(crate) const fn references_limited(&self) -> bool {
+        self.references_limited
+    }
+
     pub(crate) fn reference_location(&self, id: &str) -> Option<&mant_ir::ContentLocation> {
         self.references
             .iter()
@@ -170,13 +209,7 @@ impl DocumentView {
             references::ReferenceNavigation::build,
         );
         builder.reference_origins = Arc::new(std::mem::take(&mut references.origins));
-        let source_label = bundle.document.as_ref().map_or("MANUAL", |document| {
-            if document.source.format == SourceFormat::Markdown {
-                "MARKDOWN"
-            } else {
-                "MANUAL"
-            }
-        });
+        let source_label = bundle.document.as_ref().map_or("MANUAL", source_kind_label);
         let top_level_count = bundle
             .document
             .as_ref()
@@ -207,6 +240,7 @@ impl DocumentView {
 
         if let Some(document) = &bundle.document {
             let semantic_index = SemanticIndex::build(document);
+            references.check_source_owners(document, &semantic_index);
             builder.entry_styles = Arc::new(mant_protocol::EntryStyleMap::for_document(document));
             if document.heading.is_some()
                 || !document.blocks.is_empty()
@@ -250,6 +284,7 @@ impl DocumentView {
 
         let mut built = builder.finish();
         references.append_navigation(&mut built.navigation);
+        let reference_badges = references.badges();
         Self {
             address: bundle.address.clone(),
             label: built.label,
@@ -262,6 +297,9 @@ impl DocumentView {
             navigation: built.navigation,
             anchors: built.content.anchors,
             references: references.records,
+            associated_references: references.associated,
+            reference_badges,
+            references_limited: references.limited,
         }
     }
 

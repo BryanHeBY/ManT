@@ -4,6 +4,7 @@ mod finder;
 mod input;
 mod menu;
 mod navigation;
+mod references;
 mod render;
 mod search;
 mod session;
@@ -122,6 +123,7 @@ enum Overlay {
     Menu { id: MenuId, cursor: usize },
     DocumentFinder,
     Help,
+    References,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -267,6 +269,7 @@ pub struct App {
     notice: Option<String>,
     copy_toast: Option<CopyToast>,
     overlay: Overlay,
+    reference_chooser: Option<references::ReferenceChooser>,
     pointer_drag: PointerDrag,
     selection: Option<RenderedSelection>,
     selection_auto_scroll: Option<SelectionAutoScroll>,
@@ -342,6 +345,7 @@ impl App {
             notice: None,
             copy_toast: None,
             overlay: Overlay::None,
+            reference_chooser: None,
             pointer_drag: PointerDrag::None,
             selection: None,
             selection_auto_scroll: None,
@@ -519,7 +523,7 @@ impl App {
                 text: crate::text::sanitize_terminal_text(&text).into_owned(),
             });
         } else {
-            self.report_notice("Select a document reference before copying its target".into());
+            self.show_reference_chooser(true);
         }
     }
 

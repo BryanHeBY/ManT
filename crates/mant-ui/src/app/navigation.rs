@@ -124,7 +124,7 @@ impl App {
         self.activate_link_target(target);
     }
 
-    fn activate_link_target(&mut self, target: LinkTarget) {
+    pub(super) fn activate_link_target(&mut self, target: LinkTarget) {
         match target {
             LinkTarget::Section(target) => {
                 let current = self.current_location();
