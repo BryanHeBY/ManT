@@ -143,6 +143,15 @@ a consumed request from a boundary request whose inline content still needs to
 be lowered. Returning from nested structural content transfers the executed
 formatter state once, without replaying controls or draining pending targets early.
 
+Filled text, literal rows, pending targets and hanging-paragraph origin remain
+independent state axes. Each text buffer owns its payload and source positions;
+taking it resets that buffer, not the other flow or persistent font selection.
+The block state coordinates flush order, target attachment and first-line origin
+consumption. Numbered-list progression is separate from shared declaration heads:
+new ordinals require the physical output tail, while relative-indent continuations
+retain their owner across separately emitted spacing. TQ head continuation still
+requires an immediately pending empty definition and does not imply aliases.
+
 ## Shared document model
 
 `mant-ir::Document` is the source-neutral in-memory representation. It contains

@@ -228,7 +228,7 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
         }
         if node.flags.delimiter_close
             && participates_in_inline_flow(node)
-            && self.state.paragraph.is_empty()
+            && self.state.paragraph_is_empty()
         {
             let tail = lower_inline_nodes(std::slice::from_ref(node), self.context.default_name);
             if append_to_last_inline_block(&mut self.state.output, &tail) {

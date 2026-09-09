@@ -2,18 +2,18 @@
 use super::{FilledBoundary, InlineBuilder, layout, targets, updated_spacing};
 use mant_ir::{Block, Inline};
 
+mod literal;
+mod paragraph;
 #[cfg(test)]
 mod tests;
+use literal::LiteralFlow;
+use paragraph::ParagraphFlow;
 
 pub(super) struct BlockState {
     pub(super) output: Vec<Block>,
-    pub(super) paragraph: InlineBuilder,
-    paragraph_source: Option<mant_ir::SourceSpan>,
-    paragraph_last_line: Option<u32>,
-    preformatted: Vec<Inline>,
-    pre_source: Option<mant_ir::SourceSpan>,
-    preformatted_tight_boundary: bool,
-    preformatted_row_occupied: bool,
+    // Filled and literal buffers are independent, not mutually exclusive modes.
+    paragraph: ParagraphFlow,
+    literal: LiteralFlow,
     pending_targets: targets::PendingTargets,
     indent_columns: crate::mandoc::layout::SourceIndent,
     hanging_origin: Option<crate::mandoc::layout::SourceIndent>,
@@ -59,13 +59,8 @@ impl BlockState {
     ) -> Self {
         Self {
             output,
-            paragraph: InlineBuilder::with_spacing(spacing_enabled),
-            paragraph_source: None,
-            paragraph_last_line: None,
-            preformatted: Vec::new(),
-            pre_source: None,
-            preformatted_tight_boundary: false,
-            preformatted_row_occupied: false,
+            paragraph: ParagraphFlow::new(spacing_enabled),
+            literal: LiteralFlow::new(),
             pending_targets: targets::PendingTargets::new(),
             indent_columns,
             hanging_origin: None,
@@ -134,36 +129,17 @@ impl BlockState {
         ordinary_text: bool,
         append: impl FnOnce(&mut InlineBuilder),
     ) {
-        let source_line = source.map(|span| span.line);
-        let crossed_source_line = self
-            .paragraph_last_line
-            .zip(source_line)
-            .is_some_and(|(previous, current)| current > previous);
-        let boundary = if self.paragraph.has_tight_boundary() || !crossed_source_line {
-            FilledBoundary::SameLine
-        } else if starts_indented_line {
-            FilledBoundary::LineBreak
-        } else {
-            FilledBoundary::Word
-        };
-        if boundary == FilledBoundary::LineBreak {
-            self.paragraph.hard_break();
-        } else if boundary == FilledBoundary::Word && ordinary_text {
-            self.paragraph.preserve_source_word_boundary();
-        }
-        let previous_count = self.paragraph.node_count();
-        append(&mut self.paragraph);
-        if continues_line {
-            self.paragraph.tighten_next_boundary();
-        }
-        if self.paragraph.node_count() != previous_count {
-            if self.paragraph_source.is_none() {
-                self.paragraph_source = source;
-            }
-            if source_line.is_some() {
-                self.paragraph_last_line = source_line;
-            }
-        }
+        self.paragraph.append(
+            source,
+            starts_indented_line,
+            continues_line,
+            ordinary_text,
+            append,
+        );
+    }
+
+    pub(super) fn paragraph_is_empty(&self) -> bool {
+        self.paragraph.is_empty()
     }
 
     pub(super) fn hard_break(&mut self) {
@@ -201,47 +177,30 @@ impl BlockState {
 
     pub(super) fn push_preformatted(
         &mut self,
-        mut nodes: Vec<Inline>,
+        nodes: Vec<Inline>,
         source: Option<mant_ir::SourceSpan>,
         continues_line: bool,
         starts_line: bool,
         occupies_row: bool,
     ) {
         self.flush_paragraph();
-        if nodes.is_empty() && occupies_row {
-            nodes.push(Inline::Text {
-                value: String::new(),
-            });
+        if self.hanging_origin.is_some() && self.literal.starts_new_row(starts_line) {
+            // Materialize HP's temporary first row before adopting its permanent
+            // body origin. A continued source line does not reach this boundary.
+            self.flush_preformatted();
         }
-        if starts_line && self.preformatted_row_occupied && !self.preformatted_tight_boundary {
-            if self.hanging_origin.is_some() {
-                // An HP entered while already in no-fill mode still has one
-                // first line at the macro origin. Materialize that line
-                // before adopting the permanent hanging origin. A continued
-                // source line (\c) does not reach this boundary.
-                self.flush_preformatted();
-            } else {
-                self.preformatted.push(Inline::LineBreak);
-            }
-            self.preformatted_row_occupied = false;
-        }
-        self.preformatted.extend(nodes);
-        self.preformatted_row_occupied |= occupies_row;
-        self.preformatted_tight_boundary = continues_line;
-        if self.pre_source.is_none() {
-            self.pre_source = source;
-        }
+        self.literal
+            .append(nodes, source, continues_line, starts_line, occupies_row);
     }
 
     pub(super) fn flush_paragraph(&mut self) {
         let output_start = self.output.len();
-        flush_paragraph(
-            &mut self.output,
-            &mut self.paragraph,
-            &mut self.paragraph_source,
-            self.indent_columns,
-            self.spacing_enabled,
-        );
+        if let Some(block) = self
+            .paragraph
+            .take(self.indent_columns, self.spacing_enabled)
+        {
+            self.output.push(block);
+        }
         if self.output.len() > output_start {
             if let Some(origin) = self.hanging_origin
                 && let Some(Block::Paragraph { layout, .. }) = self.output.last_mut()
@@ -251,31 +210,17 @@ impl BlockState {
             self.consume_hanging_first_line();
         }
         self.attach_pending_to_new_output(output_start);
-        self.paragraph_last_line = None;
     }
 
     pub(super) fn flush_preformatted(&mut self) {
-        // A pure formatter word can close the preceding row without
-        // occupying another one. Literal blank rows end in an explicit
-        // empty text sentinel and are therefore not trimmed here.
-        if !self.preformatted_row_occupied
-            && matches!(self.preformatted.last(), Some(Inline::LineBreak))
-        {
-            self.preformatted.pop();
-        }
         let output_start = self.output.len();
-        flush_preformatted(
-            &mut self.output,
-            &mut self.preformatted,
-            &mut self.pre_source,
-            self.indent_columns,
-        );
+        if let Some(block) = self.literal.take(self.indent_columns) {
+            self.output.push(block);
+        }
         if self.output.len() > output_start {
             self.consume_hanging_first_line();
         }
         self.attach_pending_to_new_output(output_start);
-        self.preformatted_tight_boundary = false;
-        self.preformatted_row_occupied = false;
     }
 
     /// Unlike an ordinary break, native `term_flushln` emits a row even
@@ -316,42 +261,4 @@ pub(super) fn has_flushed_row(blocks: &[Block]) -> bool {
         Block::Paragraph { children, .. } => crate::inline::has_printable_character(children),
         _ => false,
     })
-}
-
-fn flush_paragraph(
-    output: &mut Vec<Block>,
-    paragraph: &mut InlineBuilder,
-    source: &mut Option<mant_ir::SourceSpan>,
-    indent_columns: crate::mandoc::layout::SourceIndent,
-    spacing_enabled: bool,
-) {
-    let current =
-        std::mem::replace(paragraph, InlineBuilder::with_spacing(spacing_enabled)).finish();
-    if current.is_empty() {
-        *source = None;
-    } else {
-        output.push(Block::Paragraph {
-            children: current,
-            layout: layout(indent_columns),
-            source: source.take(),
-        });
-    }
-}
-
-fn flush_preformatted(
-    output: &mut Vec<Block>,
-    preformatted: &mut Vec<Inline>,
-    source: &mut Option<mant_ir::SourceSpan>,
-    indent_columns: crate::mandoc::layout::SourceIndent,
-) {
-    if preformatted.is_empty() {
-        *source = None;
-        return;
-    }
-    output.push(Block::Preformatted {
-        children: std::mem::take(preformatted),
-        language: None,
-        layout: layout(indent_columns),
-        source: source.take(),
-    });
 }
