@@ -11,10 +11,9 @@ use clap::{
     builder::styling::{AnsiColor, Styles},
     error::ErrorKind,
 };
-use mant_engine::{
-    LoadPolicy, is_manual_section, normalize_tldr_topic, parenthesized_manual_reference,
-};
+use mant_ir::is_manual_section;
 use mant_ir::{EntryKind, ParameterKind};
+use mant_loader::{LoadPolicy, normalize_tldr_topic, parenthesized_manual_reference};
 use mant_protocol::{
     CatalogDocumentKind, CatalogQuery, ContentSelector, DocumentScope, DocumentSelector,
     DocumentTraversal, EntryProjection, InputFormat, QueryInput, QueryRequest, QueryView,

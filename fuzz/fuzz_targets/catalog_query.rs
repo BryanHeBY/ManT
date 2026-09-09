@@ -3,7 +3,9 @@
 use std::path::PathBuf;
 
 use libfuzzer_sys::fuzz_target;
-use mant_engine::{AvailableDocument, AvailableDocumentKind, AvailableDocumentOrigin, query_available_documents};
+use mant_loader::{
+    AvailableDocument, AvailableDocumentKind, AvailableDocumentOrigin, query_available_documents,
+};
 use mant_protocol::{CatalogDocumentKind, CatalogQuery, DocumentAddress, SearchCase, SearchSyntax};
 
 const MAX_INPUT_BYTES: usize = 64 * 1024;
@@ -91,8 +93,8 @@ fn document(index: usize, logical_path: String) -> AvailableDocument {
         AvailableDocumentKind::Markdown if index & 1 == 0 => AvailableDocumentOrigin::Documents,
         AvailableDocumentKind::Markdown => AvailableDocumentOrigin::Source("alpha".to_owned()),
     };
-    let source_priority = matches!(origin, AvailableDocumentOrigin::Source(_))
-        .then(|| [-1, 0, 1][index % 3]);
+    let source_priority =
+        matches!(origin, AvailableDocumentOrigin::Source(_)).then(|| [-1, 0, 1][index % 3]);
     AvailableDocument {
         name,
         logical_path,

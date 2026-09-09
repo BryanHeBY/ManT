@@ -352,7 +352,7 @@ mod tests {
                 .parse_bytes("probe.1", source.as_bytes())
                 .unwrap();
             let mut document =
-                mant_engine::parse_manual_bytes(std::path::Path::new("probe.1"), source.as_bytes())
+                mant_loader::parse_manual_bytes(std::path::Path::new("probe.1"), source.as_bytes())
                     .unwrap();
             let original = profile(&native.document.root, &document);
             assert!(violations(&original).is_empty(), "{source}\n{original}");
@@ -381,7 +381,7 @@ mod tests {
                 let native = libmandoc_rs::Parser::default()
                     .parse_bytes("probe.1", source.as_bytes())
                     .unwrap();
-                let document = mant_engine::parse_manual_bytes(
+                let document = mant_loader::parse_manual_bytes(
                     std::path::Path::new("probe.1"),
                     source.as_bytes(),
                 )
@@ -403,7 +403,7 @@ mod tests {
             .parse_bytes("probe.1", source)
             .unwrap();
         let mut document =
-            mant_engine::parse_manual_bytes(std::path::Path::new("probe.1"), source).unwrap();
+            mant_loader::parse_manual_bytes(std::path::Path::new("probe.1"), source).unwrap();
         let original = profile(&native.document.root, &document);
         assert_eq!(original["observedGroups"].as_array().unwrap().len(), 2);
         assert!(violations(&original).is_empty(), "{original}");
@@ -422,7 +422,7 @@ mod tests {
         let parsed = libmandoc_rs::Parser::new(Default::default())
             .parse_bytes("probe.1", source)
             .unwrap();
-        let mut document = mant_engine::query_roff_bytes(source)
+        let mut document = mant_loader::load_roff_bytes(source)
             .unwrap()
             .document
             .unwrap();
@@ -456,7 +456,7 @@ mod tests {
         let parsed = libmandoc_rs::Parser::new(Default::default())
             .parse_bytes("probe.1", source)
             .unwrap();
-        let mut document = mant_engine::query_roff_bytes(source)
+        let mut document = mant_loader::load_roff_bytes(source)
             .unwrap()
             .document
             .unwrap();

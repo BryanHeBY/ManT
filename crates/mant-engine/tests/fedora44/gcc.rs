@@ -2,9 +2,9 @@
 
 use crate::common::{self, count_outline_entries, find_outline_entry, query_for_document};
 use crate::fixtures::fedora44_manual;
-use mant_engine::build_outline_with_detail;
 use mant_ir::{Block, ListKind, SourceFormat};
 use mant_protocol::OutlineDetail;
+use mant_query::build_outline_with_detail;
 
 /// Independent compact heads: 10 sections and 4,902 semantic entries.
 #[test]

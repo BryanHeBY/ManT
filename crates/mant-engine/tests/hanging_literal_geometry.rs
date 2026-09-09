@@ -1,12 +1,12 @@
 //! HP's temporary first line is consumed by source line boundaries, not blocks.
 
-use mant_engine::query_roff_bytes;
 use mant_ir::Block;
+use mant_loader::load_roff_bytes;
 use mant_render::render_query_text;
 
 fn render(body: &str) -> String {
     let source = format!(".TH PROBE 1\n.SH DESCRIPTION\n{body}");
-    render_query_text(&query_roff_bytes(source.as_bytes()).unwrap())
+    render_query_text(&load_roff_bytes(source.as_bytes()).unwrap())
 }
 
 fn assert_column(text: &str, token: &str, column: usize) {
@@ -71,7 +71,7 @@ fn literal_hanging_source_continuation_stays_on_one_visible_line() {
 #[test]
 fn nofill_hanging_geometry_is_preserved_in_ir_not_added_by_the_renderer() {
     let query =
-        query_roff_bytes(b".TH PROBE 1\n.SH DESCRIPTION\n.nf\n.HP 4\nFIRST\nSECOND\n.fi\nAFTER\n")
+        load_roff_bytes(b".TH PROBE 1\n.SH DESCRIPTION\n.nf\n.HP 4\nFIRST\nSECOND\n.fi\nAFTER\n")
             .unwrap();
     let blocks = &query.document.as_ref().unwrap().sections[0].blocks;
     let [

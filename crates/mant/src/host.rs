@@ -26,7 +26,7 @@ pub(crate) trait CliHost {
     fn resolve_scope(
         &self,
         _scope: &mant_protocol::DocumentScope,
-    ) -> Result<mant_engine::LoadedDocumentScope, Failure> {
+    ) -> Result<mant_loader::LoadedDocumentScope, Failure> {
         Err(Failure::operational(
             "document scopes are unavailable in this host",
         ))
@@ -77,15 +77,15 @@ impl CliHost for SystemHost {
     }
 
     fn query_markdown(&self, source: &str) -> Result<ResolvedContent, Failure> {
-        mant_engine::query_markdown_text(source, None).map_err(Failure::operational)
+        mant_loader::load_markdown_text(source, None).map_err(Failure::operational)
     }
 
     #[cfg(any(feature = "tui", test))]
     fn resolve_scope(
         &self,
         scope: &mant_protocol::DocumentScope,
-    ) -> Result<mant_engine::LoadedDocumentScope, Failure> {
-        mant_engine::validate_document_scope(scope).map_err(|error| {
+    ) -> Result<mant_loader::LoadedDocumentScope, Failure> {
+        mant_loader::validate_document_scope(scope).map_err(|error| {
             error::scope_query_failure(mant_engine::ScopeQueryError::Load(error))
         })?;
         self.resolver()

@@ -23,8 +23,8 @@ use libmandoc_rs::{
     Compression, DisplayKind, IncludePolicy, Node, NodeKind, NormalizedListKind, ParseOptions,
     Parser, SpecialCharacter, special_character,
 };
-use mant_engine::{ManualPage, parse_manual_page};
 use mant_ir::{Block, Document, Inline, LinkTarget, Section};
+use mant_loader::{ManualPage, parse_manual_page};
 use serde::Serialize;
 use serde_json::{Value, json};
 

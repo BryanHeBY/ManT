@@ -1,5 +1,5 @@
 //! Section facades and literal leaves preserve the same source row stream.
-use mant_engine::{query_markdown_text, query_roff_bytes};
+use mant_loader::{load_markdown_text, load_roff_bytes};
 use mant_render::{render_excerpt_text, render_query_text, render_query_text_with};
 
 #[test]
@@ -11,7 +11,7 @@ fn native_section_pd_and_explicit_requests_compose_once() {
                 let source = format!(
                     ".TH PROBE 1\n.PD {pd}\n.SH FIRST\nALPHA\n.sp {request}\n.{heading} SECOND\nBETA\n"
                 );
-                let content = query_roff_bytes(source.as_bytes()).unwrap();
+                let content = load_roff_bytes(source.as_bytes()).unwrap();
                 let text = render_query_text(&content);
                 let heading_indent = if heading == "SS" { "  " } else { "" };
                 assert!(
@@ -32,17 +32,16 @@ fn native_section_pd_and_explicit_requests_compose_once() {
 
 #[test]
 fn section_tail_requests_survive_document_and_excerpt_facades() {
-    let content = query_roff_bytes(b".TH PROBE 1\n.SH FIRST\nALPHA\n.sp 3\n").unwrap();
+    let content = load_roff_bytes(b".TH PROBE 1\n.SH FIRST\nALPHA\n.sp 3\n").unwrap();
     assert!(render_query_text(&content).ends_with("ALPHA\n\n\n"));
     let excerpt =
-        mant_engine::select_excerpt(&content, &[mant_protocol::ContentSelector::path("1")])
-            .unwrap();
+        mant_query::select_excerpt(&content, &[mant_protocol::ContentSelector::path("1")]).unwrap();
     assert!(render_excerpt_text(&excerpt).ends_with("ALPHA\n\n\n"));
 }
 
 #[test]
 fn fenced_literal_edges_survive_document_and_excerpt_facades() {
-    let content = query_markdown_text(
+    let content = load_markdown_text(
         "# PROBE\n\n## TEST\n\nBEFORE\n\n```text\n\nALPHA\n\n\n```\n\nAFTER\n",
         None,
     )
@@ -51,8 +50,7 @@ fn fenced_literal_edges_survive_document_and_excerpt_facades() {
     let text = render_query_text(&content);
     assert!(text.contains(expected), "{text:?}");
     let excerpt =
-        mant_engine::select_excerpt(&content, &[mant_protocol::ContentSelector::path("1")])
-            .unwrap();
+        mant_query::select_excerpt(&content, &[mant_protocol::ContentSelector::path("1")]).unwrap();
     assert!(render_excerpt_text(&excerpt).contains(expected));
     assert_eq!(
         render_query_text_with(&content, |_, value| value.into()),
@@ -62,8 +60,8 @@ fn fenced_literal_edges_survive_document_and_excerpt_facades() {
 
 #[test]
 fn definition_explain_preserves_nested_fence_blank_rows() {
-    let content = query_markdown_text("# PROBE\n\n## TEST\n\n<!-- mant:entries role=option case=sensitive -->\n- `--example`: BEFORE\n\n  ```text\n\n  ALPHA\n\n\n  ```\n\n  AFTER\n", None).unwrap();
-    let explanation = mant_engine::explain_query(
+    let content = load_markdown_text("# PROBE\n\n## TEST\n\n<!-- mant:entries role=option case=sensitive -->\n- `--example`: BEFORE\n\n  ```text\n\n  ALPHA\n\n\n  ```\n\n  AFTER\n", None).unwrap();
+    let explanation = mant_query::explain_query(
         &content,
         &mant_protocol::ExplanationQuery {
             entry: "--example".into(),
@@ -85,7 +83,7 @@ fn definition_explain_preserves_nested_fence_blank_rows() {
 #[test]
 fn empty_sections_do_not_insert_a_facade_default_gap() {
     let content =
-        query_roff_bytes(b".TH PROBE 1\n.PD 2\n.SH FIRST\nALPHA\n.SH EMPTY\n.SH LAST\nBETA\n")
+        load_roff_bytes(b".TH PROBE 1\n.PD 2\n.SH FIRST\nALPHA\n.SH EMPTY\n.SH LAST\nBETA\n")
             .unwrap();
     let text = render_query_text(&content);
     // pre_SH deliberately suppresses paragraph distance after an empty SH.

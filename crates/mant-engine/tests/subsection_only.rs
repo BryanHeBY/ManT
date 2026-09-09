@@ -9,7 +9,7 @@
 
 use std::path::PathBuf;
 
-use mant_engine::parse_manual_source;
+use mant_loader::parse_manual_source;
 
 fn fixture_path() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))

@@ -13,7 +13,7 @@ fn lowers_the_pinned_large_mdoc_fixture_without_empty_sections() {
         .join("../libmandoc-rs/vendor/mandoc-1.14.6/mandoc.1");
     // This cross-crate corpus check must actually execute in a source checkout;
     // published unit tests do not include this integration-test file.
-    let document = mant_engine::parse_manual_source(&source).expect("lower vendored mandoc manual");
+    let document = mant_loader::parse_manual_source(&source).expect("lower vendored mandoc manual");
     assert!(document.sections.len() > 5);
     assert!(
         document
@@ -34,7 +34,7 @@ thread_local! {
         const { std::cell::RefCell::new(None) };
 }
 
-fn fixture(name: &str) -> mant_engine::ResolvedContent {
+fn fixture(name: &str) -> mant_ir::ResolvedContent {
     FIXTURE_READS.with_borrow_mut(|reads| {
         if let Some(reads) = reads {
             reads.insert(format!("lowering-{name}.1"));
@@ -44,7 +44,7 @@ fn fixture(name: &str) -> mant_engine::ResolvedContent {
         .join("../../tests/fixtures/roff/real/mant-audit")
         .join(format!("lowering-{name}.1"));
     let source = std::fs::read(path).unwrap();
-    mant_engine::query_roff_bytes(&source).unwrap()
+    mant_loader::load_roff_bytes(&source).unwrap()
 }
 
 #[test]
@@ -74,13 +74,13 @@ fn every_complete_consumer_fixture_has_an_executed_behavior_check() {
     assert_eq!(files, exercised, "orphan or unregistered lowering fixture");
 }
 
-fn description(query: &mant_engine::ResolvedContent) -> String {
+fn description(query: &mant_ir::ResolvedContent) -> String {
     common::block_slice_text(
         &common::section(query.document.as_ref().unwrap(), "DESCRIPTION").blocks,
     )
 }
 
-fn style(query: &mant_engine::ResolvedContent, word: &str, expected: u8) {
+fn style(query: &mant_ir::ResolvedContent, word: &str, expected: u8) {
     struct Styles<'a> {
         word: &'a str,
         active: u8,
@@ -147,7 +147,7 @@ fn enclosure_font_scope() {
         let source = format!(
             ".Dd September 8, 2026\n.Dt FONT 1\n.Os\n.Sh DESCRIPTION\n.Oo\n.Bk -words\n.Bf -{mode}\nWORD\n.No PLAIN\n.Em EMPH\n.Ef\n.Ek\n.Oc\nTAIL\n"
         );
-        let query = mant_engine::query_roff_bytes(source.as_bytes()).unwrap();
+        let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
         style(&query, "WORD", expected);
         style(&query, "PLAIN", 0);
         style(&query, "EMPH", 2);
@@ -176,7 +176,7 @@ fn two_level_containers_preserve_each_structural_payload() {
                 if display.is_some() {
                     source.push_str(".Ed\n");
                 }
-                let query = mant_engine::query_roff_bytes(source.as_bytes()).unwrap();
+                let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
                 let text = description(&query);
                 for word in ["WORD", "CELLTWO", "[", "]"] {
                     assert_eq!(text.matches(word).count(), 1, "{source}: {text}");
@@ -226,7 +226,7 @@ fn display_final_spacing() {
             let source = format!(
                 ".Dd September 8, 2026\n.Dt SPACING 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal\n.Sm {initial}\n.Bl {kind}\n.It WORD\n.Sm {request}\n.El\n.No NEXT No TAIL\n.Sm on\n.Ed\n"
             );
-            let query = mant_engine::query_roff_bytes(source.as_bytes()).unwrap();
+            let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
             assert!(
                 description(&query).contains(expected),
                 "{kind}, {initial}, {request}: {}",
@@ -276,7 +276,7 @@ fn address_sequence_shares_one_font_scope_without_merging_email_targets() {
         let source = format!(
             ".Dd September 8, 2026\n.Dt MAIL 1\n.Os\n.Sh DESCRIPTION\n.Mt \\fBWORD@example.org {second}\nTAIL\n\\fPRESUMED\n"
         );
-        let query = mant_engine::query_roff_bytes(source.as_bytes()).unwrap();
+        let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
         style(&query, "WORD", 1);
         style(&query, "NEXT", next_style);
         style(&query, "TAIL", 0);
@@ -301,7 +301,7 @@ fn function_logical_adjacency() {
         let source = format!(
             ".Dd September 8, 2026\n.Dt FUNCTION 1\n.Os\n.Sh DESCRIPTION\n.Fo WORD\n.Fa x\n{middle}\n.Fa y\n.Fc\n"
         );
-        let query = mant_engine::query_roff_bytes(source.as_bytes()).unwrap();
+        let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
         assert_eq!(description(&query).trim(), expected, "{middle}");
     }
 }
@@ -318,7 +318,7 @@ fn plain_text_lines_keep_word_boundaries() {
         (".Sm off\nWORD\n NEXT\n.Sm on", "WORD\n NEXT"),
     ] {
         let source = format!(".Dd September 8, 2026\n.Dt WORDS 1\n.Os\n.Sh DESCRIPTION\n{body}\n");
-        let query = mant_engine::query_roff_bytes(source.as_bytes()).unwrap();
+        let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
         assert_eq!(description(&query).trim(), expected, "{body}");
     }
 }
@@ -346,7 +346,7 @@ fn real_groff_font_escape_definition_preserves_all_four_literal_terms() {
             visit::walk_definition_item(self, item);
         }
     }
-    let document = mant_engine::parse_manual_source(std::path::Path::new(concat!(
+    let document = mant_loader::parse_manual_source(std::path::Path::new(concat!(
         env!("CARGO_MANIFEST_DIR"),
         "/../../tests/fixtures/roff/real/debian/groff_man_style.7.gz"
     )))

@@ -8,7 +8,7 @@ fn source(body: &str) -> String {
 }
 
 pub(super) fn query(body: &str) -> ResolvedContent {
-    mant_engine::query_roff_bytes(source(body).as_bytes()).unwrap()
+    mant_loader::load_roff_bytes(source(body).as_bytes()).unwrap()
 }
 
 pub(super) fn assert_flow(body: &str, expected: &str) {
@@ -30,7 +30,7 @@ pub(super) fn assert_flow(body: &str, expected: &str) {
         "{body}"
     );
     let markdown = mant_codec::encode::render_markdown(&query);
-    let reparsed = mant_engine::query_markdown_text(&markdown, None).unwrap();
+    let reparsed = mant_loader::load_markdown_text(&markdown, None).unwrap();
     assert!(
         unindent(&mant_render::render_query_text(&reparsed)).contains(expected),
         "{body}: {markdown}"

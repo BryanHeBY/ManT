@@ -20,7 +20,7 @@ fn thematic_rule_rendered_gaps_match_root_section_and_nested_list_sources() {
                 .map(|line| format!("{indent}{line}"))
                 .join(separator);
             let source = format!("{prefix}{body}\n");
-            let query = crate::query_markdown_text(&source, None).unwrap();
+            let query = crate::load_markdown_text(&source, None).unwrap();
             let text = crate::render_query_text(&query);
             let lines = text.lines().collect::<Vec<_>>();
             let before = lines
@@ -75,7 +75,7 @@ fn declared_items_fail_independently_and_bind_only_visible_name_occurrences() {
 fn entry_search_sources_point_into_original_bytes_for_each_line_ending() {
     for newline in ["\n", "\r\n", "\r"] {
         let source = "# Tool\n\n## Commands\n\n`<a id=\"command-run\"></a>` OUTSIDE\n\n<!-- mant:entries role=command case=sensitive -->\n- `run`: OWNEDPAYLOAD\n".replace('\n', newline);
-        let query = crate::query_markdown_text(&source, None).unwrap();
+        let query = crate::load_markdown_text(&source, None).unwrap();
         let found = search_query(
             &query,
             &SearchQuery {

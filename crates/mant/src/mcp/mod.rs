@@ -589,16 +589,16 @@ mod tests {
     #[test]
     fn mcp_query_errors_do_not_expose_physical_paths() {
         let errors = [
-            mant_engine::LoadError::Markdown {
+            mant_loader::LoadError::Markdown {
                 path: "/home/user/private/document.md".to_owned(),
                 detail: "permission denied".to_owned(),
             },
-            mant_engine::LoadError::Manual(mant_engine::ManualLoadError::Empty {
+            mant_loader::LoadError::Manual(mant_loader::ManualLoadError::Empty {
                 name: "demo".to_owned(),
                 path: PathBuf::from(r"C:\Users\private\demo.1"),
                 diagnostics: vec!["failure at /secret/parser.cache".to_owned()],
             }),
-            mant_engine::LoadError::Registry {
+            mant_loader::LoadError::Registry {
                 detail: "invalid /home/user/.config/mant/sources.toml".to_owned(),
             },
         ];
@@ -615,7 +615,7 @@ mod tests {
     #[test]
     fn mcp_projection_errors_use_tool_native_guidance() {
         let rendered = query_error_for_mcp(mant_engine::QueryExecutionError::Projection(
-            mant_engine::ProjectionError::UnknownSelector {
+            mant_query::ProjectionError::UnknownSelector {
                 document: "bash".to_owned(),
                 selector: "missing".to_owned(),
             },
@@ -625,7 +625,7 @@ mod tests {
         assert!(!rendered.contains("as JSON"));
         assert!(!rendered.contains("--outline"));
 
-        let query = mant_engine::query_markdown_text(
+        let query = mant_loader::load_markdown_text(
             "# shell\n\n## Invocation\n\nThe option `-b` ends processing.\n",
             None,
         )

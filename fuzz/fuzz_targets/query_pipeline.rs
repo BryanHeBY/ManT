@@ -1,17 +1,24 @@
-use mant_codec::encode::{render_markdown};
-use mant_engine::{build_outline_with_detail, search_query, select_excerpt, select_explanation};
-use mant_render::{render_excerpt_json, render_excerpt_markdown, render_excerpt_text, render_outline_json, render_outline_markdown, render_outline_text, render_query_json, render_query_man, render_query_text, render_search_json, render_search_markdown, render_search_text};
-use mant_protocol::{ContentSelector, OutlineDetail, OutlineNode, ReferenceProjection, ReferenceProjectionMode, ReferenceTargetType, SearchCase, SearchQuery, SearchScope, SearchSyntax};
+use mant_codec::encode::render_markdown;
+use mant_protocol::{
+    ContentSelector, OutlineDetail, OutlineNode, ReferenceProjection, ReferenceProjectionMode,
+    ReferenceTargetType, SearchCase, SearchQuery, SearchScope, SearchSyntax,
+};
+use mant_query::{build_outline_with_detail, search_query, select_excerpt, select_explanation};
+use mant_render::{
+    render_excerpt_json, render_excerpt_markdown, render_excerpt_text, render_outline_json,
+    render_outline_markdown, render_outline_text, render_query_json, render_query_man,
+    render_query_text, render_search_json, render_search_markdown, render_search_text,
+};
 
 pub const MAX_INPUT_BYTES: usize = 64 * 1024;
 
-pub fn exercise(query: &mant_engine::ResolvedContent, pattern_seed: &str) {
+pub fn exercise(query: &mant_ir::ResolvedContent, pattern_seed: &str) {
     let _ = render_markdown(query);
     let _ = render_query_text(query);
     let _ = render_query_man(query);
     let _ = render_query_json(query, false);
     let _ = render_query_json(query, true);
-    if let Ok(outline) = mant_engine::build_outline_with_references(
+    if let Ok(outline) = mant_query::build_outline_with_references(
         query,
         mant_protocol::EntryProjection::None,
         None,

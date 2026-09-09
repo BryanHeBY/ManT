@@ -1,5 +1,5 @@
 //! Query-to-report contracts: query DTOs remain useful after source disposal.
-use mant_engine::{ResolvedContent, build_outline, project_references, select_excerpt};
+use mant_ir::ResolvedContent;
 use mant_ir::{
     Diagnostic, DiagnosticLevel, Document, DocumentMeta, DocumentSource, Inline, LinkTarget,
     ReferenceScope, Section, SourceFormat,
@@ -7,6 +7,7 @@ use mant_ir::{
 use mant_protocol::{
     ReferenceInventory, ReferenceProjection, ReferenceProjectionMode, ReferenceTargetType,
 };
+use mant_query::{build_outline, project_references, select_excerpt};
 use serde_json::{Value, json};
 
 fn section(id: &str, title: &str, children: Vec<Section>) -> Section {
@@ -171,8 +172,8 @@ fn semantic_completeness_distinguishes_rejections_from_author_warnings() {
 #[test]
 fn snapshot_relative_positions_can_remain_legal_after_an_unrelated_insertion() {
     let before =
-        mant_engine::query_markdown_text("# Catalog\n\n## Old\n\n[Old](old.md)\n", None).unwrap();
-    let after = mant_engine::query_markdown_text(
+        mant_loader::load_markdown_text("# Catalog\n\n## Old\n\n[Old](old.md)\n", None).unwrap();
+    let after = mant_loader::load_markdown_text(
         "# Catalog\n\n## Inserted\n\n[New](new.md)\n\n## Old\n\n[Old](old.md)\n",
         None,
     )
@@ -190,7 +191,7 @@ fn snapshot_relative_positions_can_remain_legal_after_an_unrelated_insertion() {
         .unwrap();
     assert!(matches!(target,Inline::Link{target:LinkTarget::Document{name,..},..} if name=="new"));
     let excerpt =
-        mant_engine::select_excerpt(&after, std::slice::from_ref(&old_record.source_read)).unwrap();
+        mant_query::select_excerpt(&after, std::slice::from_ref(&old_record.source_read)).unwrap();
     assert!(mant_render::render_excerpt_text(&excerpt).contains("New"));
     assert_eq!(
         old_record.source_read,

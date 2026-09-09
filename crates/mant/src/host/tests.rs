@@ -1,7 +1,7 @@
 //! Real host construction is lazy even when no fake service is injected.
 use super::*;
 use crate::{application, cli::run_with_host};
-use mant_engine::LoadPolicy;
+use mant_loader::LoadPolicy;
 use mant_protocol::{
     CatalogQuery, InputFormat, QueryInput, QueryRequest, QueryView, RequestSchema,
 };

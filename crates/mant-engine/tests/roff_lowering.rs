@@ -7,7 +7,7 @@ use mant_ir::{
     visit::{self, Visit},
 };
 
-use mant_engine::parse_manual_bytes;
+use mant_loader::parse_manual_bytes;
 
 #[path = "../src/semantic_test_read.rs"]
 mod semantic_test_read;

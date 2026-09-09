@@ -39,7 +39,7 @@ fn aligned_payload_and_empty_flush_rows_match_cli_at_each_viewport() {
             ] {
                 let source =
                     format!("{header}\n{open}BEFORE\n.{request} 2\n{body}\nAFTER\n{close}");
-                let query = mant_engine::query_roff_bytes(source.as_bytes()).unwrap();
+                let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
                 let before = query.clone();
                 for text in std::iter::once(mant_render::render_query_text(&query)).chain(
                     [40, 80, 120].map(|width| {

@@ -2,7 +2,8 @@
 
 use std::sync::Arc;
 
-use mant_engine::{LoadPolicy, QueryViewResult};
+use mant_engine::QueryViewResult;
+use mant_loader::LoadPolicy;
 use mant_protocol::{
     CatalogQuery, DocumentCatalog, QueryRequest, ScopeQueryRequest, ScopeQueryResponse,
 };
@@ -60,7 +61,7 @@ impl QueryService {
             .map_err(|_| "MCP query service is shutting down".to_owned())?;
         task::spawn_blocking(move || {
             let _permit = permit;
-            mant_engine::discover_documents(&query).map_err(discovery_error_for_mcp)
+            mant_loader::discover_documents(&query).map_err(discovery_error_for_mcp)
         })
         .await
         .map_err(|_| "MCP document discovery worker failed".to_owned())?
@@ -78,8 +79,8 @@ fn scope_error_for_mcp(error: mant_engine::ScopeQueryError) -> String {
         // Resolution errors can contain host paths. The individual selectors
         // remain visible in the tool input, so the aggregate result is enough
         // for this path-safe boundary.
-        ScopeQueryError::Load(mant_engine::ScopeLoadError::NoResolvedDocuments { .. })
-        | ScopeQueryError::Execution(mant_engine::ScopeExecutionError::NoReadableDocuments {
+        ScopeQueryError::Load(mant_loader::ScopeLoadError::NoResolvedDocuments { .. })
+        | ScopeQueryError::Execution(mant_query::ScopeExecutionError::NoReadableDocuments {
             ..
         }) => "none of the requested documents could be resolved".to_owned(),
         other => other.to_string(),
@@ -87,9 +88,9 @@ fn scope_error_for_mcp(error: mant_engine::ScopeQueryError) -> String {
 }
 
 pub(super) fn query_error_for_mcp(error: mant_engine::QueryExecutionError) -> String {
-    use mant_engine::{
-        LoadError, ManualLoadError, ProjectionError, QueryError, QueryExecutionError,
-    };
+    use mant_engine::{QueryError, QueryExecutionError};
+    use mant_loader::{LoadError, ManualLoadError};
+    use mant_query::ProjectionError;
 
     fn manual_error_for_mcp(error: &ManualLoadError) -> String {
         match error {
@@ -146,7 +147,7 @@ mod tests {
     #[test]
     fn unavailable_native_backend_has_actionable_path_free_guidance() {
         let error =
-            mant_engine::QueryError::Load(mant_engine::LoadError::NativeBackendUnavailable {
+            mant_engine::QueryError::Load(mant_loader::LoadError::NativeBackendUnavailable {
                 tldr_topic: Some("tool".to_owned()),
             });
         assert_eq!(
@@ -157,7 +158,9 @@ mod tests {
 
     #[test]
     fn scope_loading_errors_redact_host_paths_but_preserve_usage_guidance() {
-        use mant_engine::{ScopeExecutionError, ScopeLoadError, ScopeQueryError};
+        use mant_engine::ScopeQueryError;
+        use mant_loader::ScopeLoadError;
+        use mant_query::ScopeExecutionError;
 
         assert_eq!(
             scope_error_for_mcp(ScopeQueryError::Load(ScopeLoadError::NoResolvedDocuments {

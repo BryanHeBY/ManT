@@ -1,7 +1,8 @@
 //! Match facts and response-relative locations must survive standalone serde.
-use mant_engine::{explain_query, query_roff_bytes};
 use mant_ir::*;
+use mant_loader::load_roff_bytes;
 use mant_protocol::*;
+use mant_query::explain_query;
 
 fn query(name: &str, content_bytes: u32) -> ExplanationQuery {
     ExplanationQuery {
@@ -82,7 +83,7 @@ fn validate_positions(evidence: &ExplanationEvidence) {
 
 #[test]
 fn direct_names_other_names_and_literal_ranges_are_independent_and_remapped() {
-    let content = query_roff_bytes(include_bytes!("fixtures/entry-presentation.1")).unwrap();
+    let content = load_roff_bytes(include_bytes!("fixtures/entry-presentation.1")).unwrap();
     let result = explain_query(&content, &query("-x", 1_048_576)).unwrap();
     let decoded: QueryExplanation =
         serde_json::from_slice(&serde_json::to_vec(&result).unwrap()).unwrap();
@@ -136,7 +137,7 @@ fn direct_names_other_names_and_literal_ranges_are_independent_and_remapped() {
 }
 
 fn synthetic(names: usize, repeats: usize) -> ResolvedContent {
-    let mut content = query_roff_bytes(b".TH PROBE 1\n.SH TERMS\nText.\n").unwrap();
+    let mut content = load_roff_bytes(b".TH PROBE 1\n.SH TERMS\nText.\n").unwrap();
     let mut terms = Vec::new();
     let mut forms = Vec::new();
     let mut bindings = Vec::new();

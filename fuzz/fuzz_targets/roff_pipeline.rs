@@ -14,7 +14,7 @@ fuzz_target!(|data: &[u8]| {
             .with_max_output_bytes(128 * 1024)
             .render_bytes("fuzz.1", data);
     }
-    let Ok(query) = mant_engine::query_roff_bytes(data) else {
+    let Ok(query) = mant_loader::load_roff_bytes(data) else {
         return;
     };
     let pattern = String::from_utf8_lossy(data);

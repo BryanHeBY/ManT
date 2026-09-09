@@ -3,9 +3,10 @@ use crate::{
     error::{Failure, query_failure, scope_query_failure},
     host::CliHost,
 };
-use mant_engine::{LoadPolicy, PreparedQueryRequest, PreparedScopeQuery, QueryViewResult};
+use mant_engine::{PreparedQueryRequest, PreparedScopeQuery, QueryViewResult};
 #[cfg(feature = "tui")]
 use mant_ir::ResolvedContent;
+use mant_loader::LoadPolicy;
 #[cfg(any(feature = "tui", test))]
 use mant_protocol::{DocumentAddress, QueryInput, QueryView, RequestSchema};
 use mant_protocol::{QueryRequest, ScopeQueryRequest, ScopeQueryResponse};

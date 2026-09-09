@@ -1,8 +1,8 @@
 //! All man paragraph forms resolve native predecessor evidence before IR emission.
 #[path = "../src/semantic_test_read.rs"]
 mod semantic_read;
-use mant_engine::query_roff_bytes;
 use mant_ir::Block;
+use mant_loader::load_roff_bytes;
 use mant_render::{render_excerpt_text, render_query_text};
 
 const PARAGRAPHS: &[&str] = &[
@@ -33,7 +33,7 @@ fn first_and_preceded_paragraphs_use_one_boundary_rule_for_every_man_form() {
                     let source = format!(
                         ".TH BOUNDARY 1\n.SH DESCRIPTION\n.PD {pd}\n{prefix}{open}{body}{close}"
                     );
-                    let query = query_roff_bytes(source.as_bytes()).unwrap();
+                    let query = load_roff_bytes(source.as_bytes()).unwrap();
                     let text = render_query_text(&query);
                     // A first paragraph has no PD boundary; the section
                     // facade must not invent one after its heading either.
@@ -53,7 +53,7 @@ fn detached_ordered_continuations_keep_pd_for_every_first_paragraph_form() {
                 let source = format!(
                     ".TH BOUNDARY 1\n.SH DESCRIPTION\n.PD {pd}\n.IP 1. 4\nBEFORE\n{open}{body}{close}.PP\nOUTSIDE\n"
                 );
-                let query = query_roff_bytes(source.as_bytes()).unwrap();
+                let query = load_roff_bytes(source.as_bytes()).unwrap();
                 let text = render_query_text(&query);
                 assert_eq!(blank_rows_before(&text, "AFTER"), pd, "{source}\n{text}");
                 let document = query.document.as_ref().unwrap();
@@ -75,7 +75,7 @@ fn detached_ordered_continuations_keep_pd_for_every_first_paragraph_form() {
 
 #[test]
 fn tq_stays_zero_distance_and_nested_entry_targets_remain_addressable() {
-    let query = query_roff_bytes(b".TH BOUNDARY 1\n.SH OPTIONS\n.PD 2\n.IP 1. 4\nBEFORE\n.RS 4\n.TP 20\n.B --first\n.TQ\n.B --second\nPAYLOAD\n.RE\n.PP\nOUTSIDE\n").unwrap();
+    let query = load_roff_bytes(b".TH BOUNDARY 1\n.SH OPTIONS\n.PD 2\n.IP 1. 4\nBEFORE\n.RS 4\n.TP 20\n.B --first\n.TQ\n.B --second\nPAYLOAD\n.RE\n.PP\nOUTSIDE\n").unwrap();
     let text = render_query_text(&query);
     assert_eq!(blank_rows_before(&text, "--first"), 2, "{text}");
     assert_eq!(blank_rows_before(&text, "--second"), 0, "{text}");
@@ -94,7 +94,7 @@ fn merged_man_lists_keep_each_resolved_gap_without_a_container_copy() {
             ".TH BOUNDARY 1\n.SH DESCRIPTION\n.PD 2\n.IP {} 4\nFIRST\n.PD 0\n.IP {} 4\nSECOND\n.PD 2\n.IP {} 4\nTHIRD\n",
             markers[0], markers[1], markers[2]
         );
-        let query = query_roff_bytes(source.as_bytes()).unwrap();
+        let query = load_roff_bytes(source.as_bytes()).unwrap();
         let blocks = &query.document.as_ref().unwrap().sections[0].blocks;
         let [Block::List { items, layout, .. }] = blocks.as_slice() else {
             panic!("list grouping changed: {blocks:#?}");
@@ -124,7 +124,7 @@ fn headless_continuations_keep_pd_and_body_space_as_independent_requests() {
                 let source = format!(
                     ".TH BOUNDARY 1\n.SH OPTIONS\n.PD {pd}\n.IP --owner 12\nFIRST\n{head}\n{request}SECOND\n"
                 );
-                let query = query_roff_bytes(source.as_bytes()).unwrap();
+                let query = load_roff_bytes(source.as_bytes()).unwrap();
                 let text = render_query_text(&query);
                 // An invisible tag is not an extra content row. Preserve
                 // the authored PD and sp, not a formatter's empty-head flush.

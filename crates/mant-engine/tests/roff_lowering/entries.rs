@@ -740,7 +740,7 @@ fn man_optional_arguments_keep_brackets_and_argument_styles() {
             } else {
                 format!(".TH PROBE 1\n.SH DESCRIPTION\n{requests}\n")
             };
-            let query = mant_engine::query_roff_bytes(source.as_bytes()).unwrap();
+            let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
             let text = mant_render::render_query_text(&query);
             assert!(text.contains(expected), "{source}: {text}");
             let markdown = mant_codec::encode::render_markdown(&query);

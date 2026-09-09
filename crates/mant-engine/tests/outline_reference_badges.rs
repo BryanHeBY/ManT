@@ -1,16 +1,17 @@
 //! Associated badges are an offline view of exact returned content positions.
-use mant_engine::{build_outline_with_references, query_markdown_text};
+use mant_loader::load_markdown_text;
 use mant_protocol::{
     EntryProjection, OutlineNode, QueryOutline, ReferenceAssociation, ReferenceProjection,
     ReferenceProjectionMode,
 };
+use mant_query::build_outline_with_references;
 use mant_render::TextRole;
 use mant_render::{render_outline_text, render_outline_text_with};
 
 const SOURCE: &str = "# [Catalog](catalog.md#root)\n\n## [Commands](commands.md#all)\n\n<!-- mant:entries role=command case=sensitive -->\n- [`run`](run.md#usage): See [body](body.md).\n- [`stop`](stop.md): Stop.\n";
 
 fn outline(mode: ReferenceProjectionMode, entries: EntryProjection, limit: u32) -> QueryOutline {
-    let query = query_markdown_text(SOURCE, None).unwrap();
+    let query = load_markdown_text(SOURCE, None).unwrap();
     build_outline_with_references(
         &query,
         entries,
@@ -144,7 +145,7 @@ fn children_snapshot(outline: &QueryOutline) -> Vec<OutlineNode> {
 
 #[test]
 fn transparent_nested_item_and_selected_summary_keep_exact_owner() {
-    let query = query_markdown_text("# Nested\n\n## Commands\n\n- Transparent container.\n\n  <!-- mant:entries role=command case=sensitive -->\n  - [`run`](run.md): Execute.\n", None).unwrap();
+    let query = load_markdown_text("# Nested\n\n## Commands\n\n- Transparent container.\n\n  <!-- mant:entries role=command case=sensitive -->\n  - [`run`](run.md): Execute.\n", None).unwrap();
     let policy = ReferenceProjection {
         mode: ReferenceProjectionMode::All,
         ..Default::default()
@@ -211,7 +212,7 @@ fn required_owner_fields_reject_legacy_or_incomplete_dtos() {
 
 #[test]
 fn table_cell_and_root_semantic_owner_positions_agree_with_scanner() {
-    let mut query = query_markdown_text("# Root\n\n<!-- mant:entries role=command case=sensitive -->\n- [`run`](run.md): Execute.\n", None).unwrap();
+    let mut query = load_markdown_text("# Root\n\n<!-- mant:entries role=command case=sensitive -->\n- [`run`](run.md): Execute.\n", None).unwrap();
     let policy = ReferenceProjection {
         mode: ReferenceProjectionMode::All,
         ..Default::default()
@@ -249,7 +250,7 @@ fn table_cell_and_root_semantic_owner_positions_agree_with_scanner() {
 
 #[test]
 fn native_heading_reference_retains_qualified_manual_target() {
-    let query = mant_engine::query_roff_bytes(
+    let query = mant_loader::load_roff_bytes(
         b".Dd September 9, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.Ss Xr printf 3\nBody.\n",
     )
     .unwrap();
@@ -272,7 +273,7 @@ fn multiple_original_forms_and_aliases_keep_one_owner_capability() {
         let source = format!(
             "# Commands\n\n<!-- mant:entries role=command case=sensitive -->\n- [`run`](run.md#one), [`start`](run.md#one) | [`launch`](run.md#{second_fragment}): Execute.\n"
         );
-        let query = query_markdown_text(&source, None).unwrap();
+        let query = load_markdown_text(&source, None).unwrap();
         let outline = build_outline_with_references(
             &query,
             EntryProjection::All,

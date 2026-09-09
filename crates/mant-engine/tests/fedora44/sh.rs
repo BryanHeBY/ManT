@@ -8,7 +8,7 @@ use crate::common::{self, collect_sections, source_path_ends_with};
 use crate::fixtures::fedora44_manual;
 
 fn assert_builtin_evidence(query: &mant_ir::ResolvedContent, name: &str) {
-    let explanation = mant_engine::explain_query(
+    let explanation = mant_query::explain_query(
         query,
         &mant_protocol::ExplanationQuery {
             entry: name.into(),
@@ -33,7 +33,7 @@ fn assert_builtin_evidence(query: &mant_ir::ResolvedContent, name: &str) {
                 .iter()
                 .any(|a| a.title == "SHELL BUILTIN COMMANDS")
         );
-        let excerpt = mant_engine::select_excerpt(
+        let excerpt = mant_query::select_excerpt(
             query,
             &[mant_protocol::ContentSelector::path(
                 evidence.outline.path(),
@@ -165,7 +165,7 @@ fn preserves_complete_readline_command_names_as_selectable_aliases() {
         .expect("set-mark Readline command");
     assert_eq!(set_mark.id.as_str(), "command-set-mark");
     assert!(
-        mant_engine::select_excerpt(
+        mant_query::select_excerpt(
             &query,
             &[mant_protocol::ContentSelector::id("command-set-mark")]
         )
@@ -278,7 +278,7 @@ fn preserves_complete_readline_variable_names_without_shadowing_builtins() {
         assert_builtin_evidence(&query, builtin);
     }
     assert!(matches!(
-        mant_engine::select_excerpt(&query, &[mant_protocol::ContentSelector::id("history")])
+        mant_query::select_excerpt(&query, &[mant_protocol::ContentSelector::id("history")])
             .unwrap()
             .selections
             .as_slice(),
@@ -327,7 +327,7 @@ fn preserves_compact_invocations_without_borrowing_the_next_description() {
 #[test]
 fn explanation_preserves_history_builtin_and_nested_value_as_independent_evidence() {
     let query = crate::common::query_for_document("sh", fedora44_manual("sh"));
-    let result = mant_engine::explain_query(
+    let result = mant_query::explain_query(
         &query,
         &mant_protocol::ExplanationQuery {
             entry: "history".into(),
@@ -365,7 +365,7 @@ fn explanation_preserves_history_builtin_and_nested_value_as_independent_evidenc
     );
     for evidence in named {
         assert!(
-            mant_engine::select_excerpt(
+            mant_query::select_excerpt(
                 &query,
                 &[mant_protocol::ContentSelector::path(
                     evidence.outline.path()

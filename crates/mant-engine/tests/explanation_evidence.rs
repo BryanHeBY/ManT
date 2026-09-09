@@ -1,6 +1,7 @@
 //! Independent evidence oracle: multiple owners are not navigation ambiguity.
-use mant_engine::{explain_query, query_markdown_text};
+use mant_loader::load_markdown_text;
 use mant_protocol::{EvidenceBasis, ExplanationOptions, ExplanationOutcome, ExplanationQuery};
+use mant_query::explain_query;
 
 fn query(entry: &str) -> ExplanationQuery {
     ExplanationQuery {
@@ -12,7 +13,7 @@ fn query(entry: &str) -> ExplanationQuery {
 #[test]
 fn independent_owners_and_literal_support_survive_without_selector_shadowing() {
     let input = "# Probe\n\nUse `--help` for guidance.\n\n<!-- mant:entries role=option case=sensitive -->\n- `--help`: General help.\n- `--help=CLASS`: Class help.\n\n  <!-- mant:entries role=value case=sensitive -->\n  - `--help`: Nested value.\n";
-    let content = query_markdown_text(input, None).unwrap();
+    let content = load_markdown_text(input, None).unwrap();
     let before = content.clone();
     let found = explain_query(&content, &query("--help")).unwrap();
     assert_eq!(found.outcome, ExplanationOutcome::Evidence);
@@ -37,7 +38,7 @@ fn independent_owners_and_literal_support_survive_without_selector_shadowing() {
     assert!("--help".parse::<mant_protocol::ContentSelector>().is_err());
     for evidence in &found.evidence[..3] {
         assert!(
-            mant_engine::select_excerpt(
+            mant_query::select_excerpt(
                 &content,
                 &[mant_protocol::ContentSelector::path(
                     evidence.outline.path()
@@ -67,7 +68,7 @@ fn explicit_relationships_add_independent_content_not_inherited_domains() {
 
 - `-S`, `--since`, `-U`, `--until`: Independent bounds. <!-- mant:entry {"id":"bounds","aliasGroups":[["-S","--since"],["-U","--until"]]} -->
 "#;
-    let content = query_markdown_text(source, None).unwrap();
+    let content = load_markdown_text(source, None).unwrap();
     assert!(content.document.as_ref().unwrap().diagnostics.is_empty());
     let found = explain_query(&content, &query("--data")).unwrap();
     assert_eq!(found.total, 2);
@@ -108,7 +109,7 @@ fn explicit_relationships_add_independent_content_not_inherited_domains() {
 
 #[test]
 fn form_case_literal_and_no_evidence_are_distinct() {
-    let content = query_markdown_text("<!-- mant:entries role=option case=sensitive -->\n- `-I DIR`: Include uppercase.\n- `-i`: Lowercase.\n- `--all`: All.\n\nTOKEN only in ordinary prose.\n", None).unwrap();
+    let content = load_markdown_text("<!-- mant:entries role=option case=sensitive -->\n- `-I DIR`: Include uppercase.\n- `-i`: Lowercase.\n- `--all`: All.\n\nTOKEN only in ordinary prose.\n", None).unwrap();
     let upper = explain_query(&content, &query("-I")).unwrap();
     let lower = explain_query(&content, &query("-i")).unwrap();
     assert_ne!(
@@ -139,7 +140,7 @@ fn form_case_literal_and_no_evidence_are_distinct() {
 
 #[test]
 fn paging_and_body_omission_are_independent_of_outcome() {
-    let content = query_markdown_text("<!-- mant:entries role=option case=sensitive -->\n- `--help`: First.\n- `--help=KIND`: Second.\n", None).unwrap();
+    let content = load_markdown_text("<!-- mant:entries role=option case=sensitive -->\n- `--help`: First.\n- `--help=KIND`: Second.\n", None).unwrap();
     let mut request = query("--help");
     request.options = ExplanationOptions {
         limit: 1,
@@ -173,7 +174,7 @@ fn paging_and_body_omission_are_independent_of_outcome() {
 
 #[test]
 fn native_and_markdown_owners_share_the_same_evidence_rules() {
-    let content = mant_engine::query_roff_bytes(
+    let content = mant_loader::load_roff_bytes(
         b".TH PROBE 1\n.SH OPTIONS\n.TP\n.B --help\nGeneral.\n.TP\n.B --help=CLASS\nSpecific.\n",
     )
     .unwrap();
@@ -208,7 +209,7 @@ fn public_ir_invalid_relations_do_not_traverse_or_claim_complete_semantics() {
             visit::walk_list_item_mut(self, item);
         }
     }
-    let mut content = query_markdown_text(
+    let mut content = load_markdown_text(
         "<!-- mant:entries role=option case=sensitive -->\n- `--help`: Help.\n",
         None,
     )
@@ -243,7 +244,7 @@ fn relation_depth_and_matching_owner_caps_report_incomplete_collection() {
         .unwrap();
     }
     source.push_str("- `--n40`: Body. <!-- mant:entry {\"id\":\"n40\"} -->\n");
-    let content = query_markdown_text(&source, None).unwrap();
+    let content = load_markdown_text(&source, None).unwrap();
     assert!(content.document.as_ref().unwrap().diagnostics.is_empty());
     let result = explain_query(&content, &query("--n0")).unwrap();
     assert_eq!(result.total, 33);
@@ -251,7 +252,7 @@ fn relation_depth_and_matching_owner_caps_report_incomplete_collection() {
     assert!(result.evidence.iter().all(|e| e.bases.iter().all(
         |b| !matches!(b, EvidenceBasis::Related { declarations, .. } if declarations.len() > 32)
     )));
-    let content = query_markdown_text(&"TOKEN.\n\n".repeat(10_001), None).unwrap();
+    let content = load_markdown_text(&"TOKEN.\n\n".repeat(10_001), None).unwrap();
     let result = explain_query(&content, &query("TOKEN.")).unwrap();
     assert_eq!(result.total, 10_000);
     assert!(result.truncation.candidates);

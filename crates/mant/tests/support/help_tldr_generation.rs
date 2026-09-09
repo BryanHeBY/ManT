@@ -2,7 +2,7 @@
 
 use std::fmt::Write as _;
 
-use mant_engine::{TldrPageLocation, parse_tldr_page};
+use mant_codec::{TldrPageLocation, parse_tldr_page};
 use mant_ir::TldrCommandPart;
 
 pub fn generate(manual: &str) -> String {

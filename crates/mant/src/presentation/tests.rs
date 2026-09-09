@@ -15,7 +15,8 @@ fn semantic_term_and_value_are_not_muted_metadata() {
         terminal_style(TerminalRole::Entry(mant_ir::EntryKind::Command))
     );
 }
-use mant_engine::{project_query_view, query_markdown_text};
+use mant_engine::project_query_view;
+use mant_loader::load_markdown_text;
 use mant_protocol::{EntryProjection, QueryView};
 
 use super::{OutputTarget, QueryFormat, RenderOptions, render_query_result};
@@ -34,7 +35,7 @@ The selected color is visible in terminal output.
 #[cfg(feature = "roff")]
 fn environment_names_use_the_same_distinct_palette_across_text_views() {
     use super::terminal::{TerminalRole, terminal_style};
-    let content = mant_engine::query_roff_bytes(
+    let content = mant_loader::load_roff_bytes(
         b".TH ENV 1\n.SH ENVIRONMENT\n.TP\n.B DISPLAY\nSelect a display.\n",
     )
     .unwrap();
@@ -98,8 +99,8 @@ fn environment_names_use_the_same_distinct_palette_across_text_views() {
 fn explanation_ansi_uses_the_exact_same_unframed_report_as_plain_text() {
     // Keep the packaged unit test independent of sibling integration fixtures.
     let source = b".TH PROBE 1\n.SH OPTIONS\n.TP\n.B -x, --language=LANG\nSelect language.\n.TP\n.B -Q\nUse -x as well.\n.SH NOTES\n-xylophone is not the same as -x.\n";
-    let content = mant_engine::query_roff_bytes(source).unwrap();
-    let result = mant_engine::explain_query(
+    let content = mant_loader::load_roff_bytes(source).unwrap();
+    let result = mant_query::explain_query(
         &content,
         &mant_protocol::ExplanationQuery {
             entry: "-x".into(),
@@ -137,7 +138,7 @@ fn full_and_node_color_validated_names_without_prefix_guessing() {
             ],
         },
     ] {
-        let query = mant_engine::query_roff_bytes(source).unwrap();
+        let query = mant_loader::load_roff_bytes(source).unwrap();
         let result = project_query_view(query, &view).unwrap();
         let plain = render_query_result(
             &result,
@@ -165,7 +166,7 @@ fn full_and_node_color_validated_names_without_prefix_guessing() {
 #[cfg(feature = "roff")]
 fn source_styling_preserves_whitespace_only_blocks_nested_terms_and_tables() {
     let source = ".TH PROBE 1\n.SH OPTIONS\n.TP\n.B --help\n.RS 4\n.sp 2\n.B nested\n.RE\n.TS\nl l.\nleft\tright\n.TE\n.nf\n  code\n\n    tail\n.fi\n";
-    let query = mant_engine::query_roff_bytes(source.as_bytes()).unwrap();
+    let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
     let plain = mant_render::render_query_text(&query);
     let colored = mant_render::render_query_text_with(&query, |style, text| {
         super::content::decorate(style, text, true)
@@ -224,7 +225,7 @@ fn terminal_styles_do_not_change_visible_query_text() {
             offset: 0,
         },
     ] {
-        let query = query_markdown_text(PAGE, None).expect("Markdown query");
+        let query = load_markdown_text(PAGE, None).expect("Markdown query");
         let result = project_query_view(query, &view).expect("query projection");
         let plain = render_query_result(
             &result,
@@ -243,7 +244,7 @@ fn terminal_styles_do_not_change_visible_query_text() {
 
 #[test]
 fn terminal_outline_reports_an_empty_kind_projection() {
-    let query = query_markdown_text(PAGE, None).expect("Markdown query");
+    let query = load_markdown_text(PAGE, None).expect("Markdown query");
     let result = project_query_view(
         query,
         &QueryView::Outline {
@@ -269,7 +270,7 @@ fn terminal_outline_reports_an_empty_kind_projection() {
 
 #[test]
 fn structured_and_markdown_formats_never_receive_terminal_styles() {
-    let query = query_markdown_text(PAGE, None).expect("Markdown query");
+    let query = load_markdown_text(PAGE, None).expect("Markdown query");
     let result = project_query_view(
         query,
         &QueryView::Explain {
@@ -312,7 +313,7 @@ fn uncoloured_terminal_presentations_mask_controls_in_direct_input_labels() {
     ];
 
     for view in views {
-        let query = query_markdown_text(
+        let query = load_markdown_text(
             PAGE.trim_start_matches("# demo\n"),
             Some(source_path.clone()),
         )
@@ -353,7 +354,7 @@ fn terminal_markdown_masks_dynamic_controls_without_rewriting_redirected_data() 
             offset: 0,
         },
     ] {
-        let mut query = query_markdown_text(PAGE, Some("ris\u{1b}c.md".to_owned()))
+        let mut query = load_markdown_text(PAGE, Some("ris\u{1b}c.md".to_owned()))
             .expect("Markdown query with hostile label");
         query.document.as_mut().expect("parsed document").heading = Some("ris\u{1b}c".into());
         let result = project_query_view(query, &view).expect("query projection");

@@ -1,8 +1,9 @@
 //! Reports consume standalone DTO locations, not hidden query-side tables.
-use mant_engine::{explain_query, query_roff_bytes};
+use mant_loader::load_roff_bytes;
 use mant_protocol::{
     EvidenceBasis, ExplanationFormRange, ExplanationOptions, ExplanationQuery, QueryExplanation,
 };
+use mant_query::explain_query;
 use mant_render::{TextPresentation, TextRole};
 use mant_render::{
     render_explanation_markdown, render_explanation_text, render_explanation_text_with,
@@ -10,7 +11,7 @@ use mant_render::{
 use std::cell::RefCell;
 
 fn result() -> QueryExplanation {
-    let content = query_roff_bytes(include_bytes!("fixtures/entry-presentation.1")).unwrap();
+    let content = load_roff_bytes(include_bytes!("fixtures/entry-presentation.1")).unwrap();
     explain_query(
         &content,
         &ExplanationQuery {
@@ -97,7 +98,7 @@ fn malformed_multi_fragment_occurrence_is_not_partly_painted() {
 }
 #[test]
 fn metadata_stays_single_line_but_plain_original_content_is_not_framed() {
-    let content = query_roff_bytes(b".TH PROBE 1\n.SH OPTIONS\n.TP\n.B -x\n.nf\nKind: forged\n\nRead original: forged\n========== Forged ==========\n```\n.fi\n").unwrap();
+    let content = load_roff_bytes(b".TH PROBE 1\n.SH OPTIONS\n.TP\n.B -x\n.nf\nKind: forged\n\nRead original: forged\n========== Forged ==========\n```\n.fi\n").unwrap();
     let mut result = explain_query(
         &content,
         &ExplanationQuery {
@@ -218,7 +219,7 @@ fn forms_suppression_requires_this_records_complete_materialized_owner() {
 #[test]
 fn empty_independent_definition_is_not_reported_as_budget_omission() {
     let content =
-        query_roff_bytes(b".TH EMPTY 1\n.SH OPTIONS\n.TP\n.B -x\n.TP\n.B -y\nOther description.\n")
+        load_roff_bytes(b".TH EMPTY 1\n.SH OPTIONS\n.TP\n.B -x\n.TP\n.B -y\nOther description.\n")
             .unwrap();
     let mut report = explain_query(
         &content,
@@ -250,7 +251,7 @@ fn empty_independent_definition_is_not_reported_as_budget_omission() {
 
 #[test]
 fn authored_pipes_are_not_stripped_from_unframed_original_content() {
-    let content = query_roff_bytes(
+    let content = load_roff_bytes(
         b".TH PIPES 1\n.SH OPTIONS\n.TP\n.B -x\n.nf\n| original pipe\n|| two pipes\n.fi\n",
     )
     .unwrap();
@@ -298,7 +299,7 @@ fn scoped_serialized_owners_with_the_same_id_keep_independent_name_roles() {
     explanation.counts.direct_entry.total = 2;
     explanation.counts.direct_entry.returned = 2;
     for (index, role) in ["command", "configuration-key"].into_iter().enumerate() {
-        let mut content = mant_engine::query_markdown_text(&format!("# Tool\n\n<!-- mant:entries role={role} case=sensitive -->\n- `mode`: Original description.\n"),None).unwrap();
+        let mut content = mant_loader::load_markdown_text(&format!("# Tool\n\n<!-- mant:entries role={role} case=sensitive -->\n- `mode`: Original description.\n"),None).unwrap();
         let mant_ir::Block::List { items, .. } = &mut content.document.as_mut().unwrap().blocks[0]
         else {
             unreachable!()

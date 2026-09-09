@@ -32,7 +32,7 @@ fn excessive_display_and_list_offsets_are_bounded_without_losing_content() {
             // a body beyond the source limit must also report bounding.
             assert!(bounded);
             assert!(
-                mant_engine::query_roff_bytes(source.as_bytes())
+                mant_loader::load_roff_bytes(source.as_bytes())
                     .map(|query| mant_render::render_query_text(&query).contains("CONTENT"))
                     .unwrap()
             );
@@ -803,7 +803,7 @@ fn mdoc_header_references_require_both_synopsis_and_line_start_for_include() {
                 };
                 let source =
                     format!(".Dd September 5, 2026\n.Dt PROBE 1\n.Os\n.Sh {section}\n{body}\n");
-                let query = mant_engine::query_roff_bytes(source.as_bytes()).unwrap();
+                let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
                 let text = mant_render::render_query_text(&query);
                 assert!(text.contains("<stdio.h>"), "{source}: {text}");
                 assert_eq!(

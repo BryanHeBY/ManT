@@ -1,10 +1,11 @@
 //! Application-level scope request validation and query execution.
-use crate::{DocumentResolver, validate_search_query};
+use crate::DocumentResolver;
 use mant_loader::{LoadedDocumentScope, ScopeLoadError, validate_document_scope};
 use mant_protocol::{
     DocumentScope, MAX_SEMANTIC_ENTRY_CHARS, ScopeQueryRequest, ScopeQueryResult, ScopeQueryView,
     ScopeTextError, SearchQuery, validate_scope_text,
 };
+use mant_query::validate_search_query;
 use std::{error::Error, fmt};
 
 mod execute;
@@ -16,15 +17,15 @@ pub enum ScopeQueryError {
     /// Source selection or initial-document acquisition failed.
     Load(ScopeLoadError),
     /// Pure collection-query execution failed after loading.
-    Execution(crate::ScopeExecutionError),
+    Execution(mant_query::ScopeExecutionError),
     /// A loading result did not satisfy the collection-query mapping contract.
-    InvalidLoadedScope(crate::ScopeInputError),
+    InvalidLoadedScope(mant_query::ScopeInputError),
     /// A semantic-entry selector violated its native bound.
     EntrySelector(ScopeTextError),
     /// Invalid explanation result/content bounds.
-    Explanation(crate::ExplanationError),
+    Explanation(mant_query::ExplanationError),
     /// Search configuration was invalid.
-    Search(crate::SearchError),
+    Search(mant_query::SearchError),
 }
 impl fmt::Display for ScopeQueryError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -81,7 +82,7 @@ pub fn validate_scope_query_request(request: &ScopeQueryRequest) -> Result<(), S
         ScopeQueryView::Explain { entry, options } => {
             validate_scope_text(entry, MAX_SEMANTIC_ENTRY_CHARS)
                 .map_err(ScopeQueryError::EntrySelector)?;
-            crate::validate_explanation_query(&mant_protocol::ExplanationQuery {
+            mant_query::validate_explanation_query(&mant_protocol::ExplanationQuery {
                 entry: entry.clone(),
                 options: *options,
             })
@@ -191,7 +192,7 @@ mod tests {
                 reference_limits: Vec::new(),
             },
             documents: vec![
-                crate::query_markdown_text(
+                mant_loader::load_markdown_text(
                     "# Shell\n\n## Startup\n\nThe `VISUAL` name selects an editor.\n",
                     Some("shell.md".to_owned()),
                 )
@@ -202,8 +203,8 @@ mod tests {
         for (source, content) in loaded.scope.documents.iter().zip(&mut loaded.documents) {
             content.address = Some(source.address.clone());
         }
-        let explanation = crate::explain_scope(
-            crate::QueryScopeView::new(&loaded.scope, &loaded.documents).unwrap(),
+        let explanation = mant_query::explain_scope(
+            mant_query::QueryScopeView::new(&loaded.scope, &loaded.documents).unwrap(),
             &mant_protocol::ExplanationQuery {
                 entry: "VISUAL".to_owned(),
                 options: mant_protocol::ExplanationOptions::default(),
@@ -232,7 +233,7 @@ mod tests {
                 .map(|index| format!("needle {index}"))
                 .collect::<Vec<_>>()
                 .join("\n\n");
-            crate::query_markdown_text(&format!("# {title}\n\n{body}\n"), None)
+            mant_loader::load_markdown_text(&format!("# {title}\n\n{body}\n"), None)
                 .expect("search fixture")
         };
         let documents = ["alpha", "beta"]
@@ -272,8 +273,8 @@ mod tests {
             offset: 0,
         };
 
-        let search = crate::search_scope(
-            crate::QueryScopeView::new(&loaded.scope, &loaded.documents).unwrap(),
+        let search = mant_query::search_scope(
+            mant_query::QueryScopeView::new(&loaded.scope, &loaded.documents).unwrap(),
             &query,
         )
         .expect("scope search");
@@ -292,8 +293,8 @@ mod tests {
         );
 
         let cross_boundary_query = SearchQuery { offset: 2, ..query };
-        let search = crate::search_scope(
-            crate::QueryScopeView::new(&loaded.scope, &loaded.documents).unwrap(),
+        let search = mant_query::search_scope(
+            mant_query::QueryScopeView::new(&loaded.scope, &loaded.documents).unwrap(),
             &cross_boundary_query,
         )
         .expect("scope search");

@@ -1,10 +1,11 @@
 //! Content identity is explicit and local; explain is independent semantic discovery.
-use mant_engine::{ProjectionError, build_outline_projection, query_markdown_text, select_excerpt};
+use mant_loader::load_markdown_text;
 use mant_protocol::{ContentSelector, EntryProjection, EvidenceBasis, ExplanationQuery};
+use mant_query::{ProjectionError, build_outline_projection, select_excerpt};
 
 #[test]
 fn duplicate_section_ids_cannot_redirect_path_selected_entry_metadata() {
-    let mut query = query_markdown_text("# Tool\n\n## First\n\n<!-- mant:entries role=command case=sensitive -->\n- `first`: First body.\n\n## Second\n\n<!-- mant:entries role=command case=sensitive -->\n- `second`: Second body.\n", None).unwrap();
+    let mut query = load_markdown_text("# Tool\n\n## First\n\n<!-- mant:entries role=command case=sensitive -->\n- `first`: First body.\n\n## Second\n\n<!-- mant:entries role=command case=sensitive -->\n- `second`: Second body.\n", None).unwrap();
     let document = query.document.as_mut().unwrap();
     document.sections[1].id = document.sections[0].id.clone();
     let index = mant_ir::SemanticIndex::build(document);
@@ -44,7 +45,7 @@ fn duplicate_section_ids_cannot_redirect_path_selected_entry_metadata() {
 #[test]
 fn synthetic_root_ids_do_not_hide_conflicting_public_ir_owners() {
     for (id, path) in [(mant_ir::DOCUMENT_ROOT_ID, "root"), ("tldr", "0")] {
-        let mut query = query_markdown_text(
+        let mut query = load_markdown_text(
             "# Tool\n\nOverview.\n\n## Conflicting\n\nReal body.\n",
             None,
         )
@@ -99,7 +100,7 @@ fn synthetic_root_ids_do_not_hide_conflicting_public_ir_owners() {
 
 #[test]
 fn namespaces_do_not_fall_through_and_duplicate_ids_remain_readable_by_path() {
-    let mut query = query_markdown_text(
+    let mut query = load_markdown_text(
         "# Title\n\nOverview.\n\n## First\n\nOne.\n\n## Second\n\nTwo.\n",
         None,
     )
@@ -146,7 +147,7 @@ fn namespaces_do_not_fall_through_and_duplicate_ids_remain_readable_by_path() {
 
 #[test]
 fn names_remain_multiple_explain_evidence_not_content_selectors() {
-    let query = query_markdown_text("# Tool\n\n## force\n\nSection.\n\n## Commands\n\n<!-- mant:entries role=command case=sensitive -->\n- `force`: First.\n- `force`: Second.\n", None).unwrap();
+    let query = load_markdown_text("# Tool\n\n## force\n\nSection.\n\n## Commands\n\n<!-- mant:entries role=command case=sensitive -->\n- `force`: First.\n- `force`: Second.\n", None).unwrap();
     assert!(query.document.as_ref().unwrap().diagnostics.is_empty());
     assert_eq!(
         select_excerpt(&query, &[ContentSelector::id("force")])
@@ -157,7 +158,7 @@ fn names_remain_multiple_explain_evidence_not_content_selectors() {
         "1"
     );
     assert!("force".parse::<ContentSelector>().is_err());
-    let evidence = mant_engine::explain_query(
+    let evidence = mant_query::explain_query(
         &query,
         &ExplanationQuery {
             entry: "force".into(),
@@ -189,7 +190,7 @@ fn names_remain_multiple_explain_evidence_not_content_selectors() {
 
 #[test]
 fn direct_public_apis_reject_malformed_and_oversized_values_before_selection() {
-    let query = query_markdown_text("# Tool\n", None).unwrap();
+    let query = load_markdown_text("# Tool\n", None).unwrap();
     for selector in [
         ContentSelector::path(""),
         ContentSelector::path(" 1"),
@@ -215,7 +216,7 @@ fn direct_public_apis_reject_malformed_and_oversized_values_before_selection() {
 
 #[test]
 fn compact_summary_matches_materialized_counts_without_copying_invalid_forms() {
-    let mut query = query_markdown_text("# Tool\n\n<!-- mant:entries role=command case=sensitive -->\n- `run`: Main.\n\n  <!-- mant:entries role=option case=sensitive -->\n  - `--help`: Help.\n\n## More\n\n<!-- mant:entries role=command case=sensitive -->\n- `last`: End.\n", None).unwrap();
+    let mut query = load_markdown_text("# Tool\n\n<!-- mant:entries role=command case=sensitive -->\n- `run`: Main.\n\n  <!-- mant:entries role=option case=sensitive -->\n  - `--help`: Help.\n\n## More\n\n<!-- mant:entries role=command case=sensitive -->\n- `last`: End.\n", None).unwrap();
     for invalid in [false, true] {
         if invalid {
             let mant_ir::Block::List { items, .. } =
@@ -242,7 +243,7 @@ fn compact_summary_matches_materialized_counts_without_copying_invalid_forms() {
 
 #[test]
 fn rooted_references_use_original_owner_coordinates_independent_of_entry_visibility() {
-    let query = query_markdown_text("# [Title](title.md)\n\n[Overview](overview.md).\n\n## Group\n\n- Transparent container.\n\n  <!-- mant:entries role=command case=sensitive -->\n  - [`run`](run.md): [Body](body.md).\n\n    <!-- mant:entries role=option case=sensitive -->\n    - `--help`: [Help](help.md).\n\n  - `other`: [Sibling](sibling.md).\n", None).unwrap();
+    let query = load_markdown_text("# [Title](title.md)\n\n[Overview](overview.md).\n\n## Group\n\n- Transparent container.\n\n  <!-- mant:entries role=command case=sensitive -->\n  - [`run`](run.md): [Body](body.md).\n\n    <!-- mant:entries role=option case=sensitive -->\n    - `--help`: [Help](help.md).\n\n  - `other`: [Sibling](sibling.md).\n", None).unwrap();
     let policy = mant_protocol::ReferenceProjection {
         mode: mant_protocol::ReferenceProjectionMode::All,
         ..Default::default()
@@ -252,7 +253,7 @@ fn rooted_references_use_original_owner_coordinates_independent_of_entry_visibil
         EntryProjection::Summary,
         EntryProjection::All,
     ] {
-        let outline = mant_engine::build_outline_with_references(
+        let outline = mant_query::build_outline_with_references(
             &query,
             entries,
             Some(ContentSelector::path("1/e1")),
@@ -278,7 +279,7 @@ fn rooted_references_use_original_owner_coordinates_independent_of_entry_visibil
             );
         }
     }
-    let overview = mant_engine::build_outline_with_references(
+    let overview = mant_query::build_outline_with_references(
         &query,
         EntryProjection::None,
         Some(ContentSelector::path("root")),

@@ -1,11 +1,13 @@
 //! Full request adapters compose view-independent loading and pure queries.
-use crate::{ProjectionError, SearchError, search_query, select_excerpt, validate_search_query};
 use mant_ir::ResolvedContent;
 use mant_loader::{DocumentLoader, LoadError, LoadPolicy, LoadSpec, validate_load_spec};
 use mant_protocol::{
     EntryProjection, MAX_NODE_SELECTORS, MAX_SEMANTIC_ENTRY_CHARS, QueryExcerpt, QueryInput,
     QueryOutline, QueryRequest, QuerySearch, QueryView, ScopeTextError, SearchQuery,
     validate_scope_text,
+};
+use mant_query::{
+    ProjectionError, SearchError, search_query, select_excerpt, validate_search_query,
 };
 use std::{error::Error, fmt};
 mod adapter;
@@ -14,9 +16,7 @@ mod prepared;
 pub use prepared::PreparedQueryRequest;
 mod validation;
 mod validation_error;
-#[cfg(feature = "roff")]
-pub use adapter::query_roff_bytes;
-pub use adapter::{DocumentResolver, query_markdown_text};
+pub use adapter::DocumentResolver;
 pub use execution::project_query_view;
 pub use validation::validate_query_request;
 pub use validation_error::QueryValidationError;

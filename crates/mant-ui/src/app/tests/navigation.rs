@@ -910,7 +910,7 @@ fn clicking_a_wrapped_section_reference_opens_its_target() {
 
 #[test]
 fn clicking_a_parsed_markdown_fragment_jumps_and_participates_in_history() {
-    let bundle = mant_engine::query_markdown_text(
+    let bundle = mant_loader::load_markdown_text(
         "# Demo\n\nContinue with [the detailed section](#details).\n\n## Details\n\nDone.\n",
         Some("demo.md".to_owned()),
     )
@@ -963,7 +963,7 @@ fn missing_page_fragment_does_not_modify_history() {
 
 #[test]
 fn clicking_a_relative_markdown_link_preserves_its_source_and_fragment() {
-    let mut bundle = mant_engine::query_markdown_text(
+    let mut bundle = mant_loader::load_markdown_text(
         "# Index\n\nContinue with [Build](../commands/build.md#usage).\n",
         Some("/documents/guides/index.md".to_owned()),
     )

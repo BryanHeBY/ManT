@@ -2,12 +2,13 @@
 #[path = "../src/semantic_test_read.rs"]
 mod semantic_read;
 use mant_codec::encode::render_markdown;
-use mant_engine::{build_outline_projection, query_markdown_text};
 use mant_ir::{
     Block, EntryContentSlice, EntryFacts, EntryForm, EntryInlineRoot, EntryKind, Inline,
     LayoutHint, ListItem, ListKind, NameCase, ResolvedContent,
 };
+use mant_loader::load_markdown_text;
 use mant_protocol::{EntryProjection, ExcerptSelection, OutlineNode};
+use mant_query::build_outline_projection;
 use mant_render::{render_excerpt_markdown, render_excerpt_text, render_query_text};
 
 fn item(name: &str, payload: &str, entry: bool) -> ListItem {
@@ -55,7 +56,7 @@ fn item(name: &str, payload: &str, entry: bool) -> ListItem {
 }
 
 fn query(annotated: bool) -> ResolvedContent {
-    let mut query = query_markdown_text("# Example\n\nPlaceholder.\n", None).unwrap();
+    let mut query = load_markdown_text("# Example\n\nPlaceholder.\n", None).unwrap();
     query.document.as_mut().unwrap().blocks = vec![Block::List {
         kind: ListKind::Ordered { start: Some(7) },
         compact: false,
@@ -99,7 +100,7 @@ fn ordinary_owner_navigation_and_excerpts_preserve_the_original_item() {
         mant_protocol::ContentSelector::id("run"),
         mant_protocol::ContentSelector::path("root/e1"),
     ] {
-        let excerpt = mant_engine::select_excerpt(&query, std::slice::from_ref(&selector)).unwrap();
+        let excerpt = mant_query::select_excerpt(&query, std::slice::from_ref(&selector)).unwrap();
         let [ExcerptSelection::DocumentEntry { entry, .. }] = &excerpt.selections[..] else {
             panic!("single entry")
         };
@@ -131,7 +132,7 @@ fn ordinary_owner_navigation_and_excerpts_preserve_the_original_item() {
             "{markdown}"
         );
         assert_eq!(
-            mant_engine::select_excerpt(&query, &[selector]).unwrap(),
+            mant_query::select_excerpt(&query, &[selector]).unwrap(),
             excerpt
         );
         let roundtrip = serde_json::from_str::<mant_protocol::QueryExcerpt>(
@@ -203,7 +204,7 @@ fn nested_ordinary_owners_share_semantic_paths_without_losing_parent_content() {
     assert!(
         matches!(&children[..], [OutlineNode::DocumentEntry { path, .. }] if path.as_ref() == "root/e1/e1")
     );
-    let child = mant_engine::select_excerpt(
+    let child = mant_query::select_excerpt(
         &query,
         &[mant_protocol::ContentSelector::path("root/e1/e1")],
     )
@@ -217,7 +218,7 @@ fn nested_ordinary_owners_share_semantic_paths_without_losing_parent_content() {
 #[test]
 fn search_maps_ordinary_list_content_to_the_innermost_entry() {
     let query = query(true);
-    let search = mant_engine::search_query(
+    let search = mant_query::search_query(
         &query,
         &mant_protocol::SearchQuery {
             pattern: "SECOND".into(),
@@ -262,11 +263,11 @@ fn transparent_definition_and_table_preserve_entry_paths_and_nearest_owner() {
             matches!(&outline.nodes[..], [OutlineNode::DocumentEntry {path, ..}] if path.as_ref() == "root/e1")
         );
         let excerpt =
-            mant_engine::select_excerpt(&query, &[mant_protocol::ContentSelector::path("root/e1")])
+            mant_query::select_excerpt(&query, &[mant_protocol::ContentSelector::path("root/e1")])
                 .unwrap();
         assert!(render_excerpt_text(&excerpt).contains("SECOND"));
         assert!(!render_excerpt_text(&excerpt).contains("FIRST"));
-        let explained = mant_engine::explain_query(
+        let explained = mant_query::explain_query(
             &query,
             &mant_protocol::ExplanationQuery {
                 entry: "SECOND".into(),
@@ -276,7 +277,7 @@ fn transparent_definition_and_table_preserve_entry_paths_and_nearest_owner() {
         .unwrap();
         assert_eq!(explained.total, 1);
         assert_eq!(explained.evidence[0].outline.path(), "root/e1");
-        let search = mant_engine::search_query(
+        let search = mant_query::search_query(
             &query,
             &mant_protocol::SearchQuery {
                 pattern: "SECOND".into(),
@@ -367,7 +368,7 @@ fn table_search_tracks_independent_and_nested_owners_without_changing_text() {
                 mant_protocol::SearchScope::Visible,
                 mant_protocol::SearchScope::Markdown,
             ] {
-                let result = mant_engine::search_query(
+                let result = mant_query::search_query(
                     &query,
                     &mant_protocol::SearchQuery {
                         pattern: pattern.into(),

@@ -49,14 +49,14 @@ fn transformed_native_owners_keep_the_first_head_for_explain_and_search() {
             6,
         ),
     ] {
-        let query = mant_engine::query_roff_bytes(source.as_bytes()).unwrap();
+        let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
         let owners = owner_sources(query.document.as_ref().unwrap());
         assert_eq!(owners.len(), 1, "{source}");
         let original = owners[0].unwrap();
         assert_eq!(original.line, line, "{source}");
         assert!(original.byte_range.is_none());
         for name in names {
-            let result = mant_engine::explain_query(
+            let result = mant_query::explain_query(
                 &query,
                 &ExplanationQuery {
                     entry: name.into(),
@@ -76,7 +76,7 @@ fn transformed_native_owners_keep_the_first_head_for_explain_and_search() {
                 .unwrap();
             assert_eq!(direct.source, Some(original), "{name}");
         }
-        let search = mant_engine::search_query(
+        let search = mant_query::search_query(
             &query,
             &serde_json::from_value(serde_json::json!({"pattern":"PAYLOAD"})).unwrap(),
         )

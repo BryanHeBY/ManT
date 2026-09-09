@@ -1,11 +1,12 @@
 //! Presentation changes must preserve source facts and exact query evidence.
-use mant_engine::{explain_query, query_markdown_text, query_roff_bytes};
+use mant_loader::{load_markdown_text, load_roff_bytes};
 use mant_protocol::{EvidenceClass, ExplanationOptions, ExplanationQuery};
+use mant_query::explain_query;
 
 #[test]
 fn formatter_counterexample_has_three_correct_owners_before_decoration() {
     let source = include_bytes!("fixtures/entry-presentation.1");
-    let content = query_roff_bytes(source).unwrap();
+    let content = load_roff_bytes(source).unwrap();
     let result = explain_query(
         &content,
         &ExplanationQuery {
@@ -42,8 +43,7 @@ fn formatter_counterexample_has_three_correct_owners_before_decoration() {
 
 #[test]
 fn explicit_presentation_fixture_has_all_roles_without_diagnostics() {
-    let content =
-        query_markdown_text(include_str!("fixtures/entry-presentation.md"), None).unwrap();
+    let content = load_markdown_text(include_str!("fixtures/entry-presentation.md"), None).unwrap();
     let document = content.document.as_ref().unwrap();
     assert!(
         document.diagnostics.is_empty(),
@@ -63,9 +63,8 @@ fn explicit_presentation_fixture_has_all_roles_without_diagnostics() {
 #[test]
 fn search_keeps_a_form_label_without_inventing_a_name() {
     let content =
-        query_roff_bytes(b".TH PROBE 1\n.SH TERMS\n.TP\n.B ^find-new.*\nFind new files.\n")
-            .unwrap();
-    let search = mant_engine::search_query(
+        load_roff_bytes(b".TH PROBE 1\n.SH TERMS\n.TP\n.B ^find-new.*\nFind new files.\n").unwrap();
+    let search = mant_query::search_query(
         &content,
         &mant_protocol::SearchQuery {
             pattern: "find-new".into(),
@@ -95,7 +94,7 @@ fn singular_command_headings_share_the_plural_semantic_contract() {
         let source = format!(
             ".TH PROBE 1\n.SH {heading}\n.TP\n.B find-new <subvolume> <last_gen>\nFind new files.\n"
         );
-        let content = query_roff_bytes(source.as_bytes()).unwrap();
+        let content = load_roff_bytes(source.as_bytes()).unwrap();
         let document = content.document.as_ref().unwrap();
         let index = mant_ir::SemanticIndex::build(document);
         let entry = &index.section(&document.sections[0].id)[0];
@@ -112,9 +111,9 @@ fn outline_keeps_full_titles_on_primary_lines_and_hangs_all_metadata() {
         "# Tool\n\n## Commands\n\n<!-- mant:entries role=command case=sensitive -->\n- `command {}`: Details.\n\n## Other\nText.\n",
         "ARG".repeat(60)
     );
-    let content = query_markdown_text(&source, None).unwrap();
+    let content = load_markdown_text(&source, None).unwrap();
     let outline =
-        mant_engine::build_outline_projection(&content, mant_protocol::EntryProjection::All, None)
+        mant_query::build_outline_projection(&content, mant_protocol::EntryProjection::All, None)
             .unwrap();
     let text = mant_render::render_outline_text(&outline);
     assert_eq!(

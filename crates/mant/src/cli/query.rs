@@ -10,7 +10,7 @@ use crate::{
 };
 #[cfg(feature = "roff")]
 use crate::{error::query_failure, request_input::read_input_bytes};
-use mant_engine::LoadPolicy;
+use mant_loader::LoadPolicy;
 use mant_protocol::{InputFormat, ScopeQueryRequest, ScopeRequestSchema};
 use std::io::Read;
 
@@ -71,15 +71,16 @@ pub(super) fn execute_query(
             let query = match format {
                 InputFormat::Markdown => {
                     let source =
-                        read_utf8_input(input, mant_engine::MAX_MARKDOWN_BYTES, "Markdown input")?;
+                        read_utf8_input(input, mant_loader::MAX_MARKDOWN_BYTES, "Markdown input")?;
                     host.query_markdown(&source)?
                 }
                 InputFormat::Roff => {
                     #[cfg(feature = "roff")]
                     {
                         let source =
-                            read_input_bytes(input, mant_engine::MAX_MANUAL_BYTES, "roff input")?;
-                        mant_engine::query_roff_bytes(&source).map_err(query_failure)?
+                            read_input_bytes(input, mant_loader::MAX_MANUAL_BYTES, "roff input")?;
+                        mant_loader::load_roff_bytes(&source)
+                            .map_err(|error| query_failure(mant_engine::QueryError::Load(error)))?
                     }
                     #[cfg(not(feature = "roff"))]
                     return Err(Failure::usage(

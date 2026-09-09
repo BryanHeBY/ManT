@@ -559,7 +559,7 @@ fn clicking_a_real_git_manual_reference_requests_git_add_section_one() {
         // published UI package keeps this integration test optional.
         return;
     }
-    let document = mant_engine::parse_manual_source(&fixture).expect("parse real git manual");
+    let document = mant_loader::parse_manual_source(&fixture).expect("parse real git manual");
     let bundle = ResolvedContent {
         address: Some(DocumentAddress::Manual {
             name: "git".to_owned(),

@@ -3,9 +3,10 @@
 mod semantic_read;
 
 use mant_codec::encode::render_markdown;
-use mant_engine::{build_outline_with_detail, query_markdown_text};
 use mant_ir::{TldrCommandPart, TldrOrigin};
+use mant_loader::load_markdown_text;
 use mant_protocol::{ExcerptSelection, OutlineDetail, OutlineNode};
+use mant_query::build_outline_with_detail;
 use mant_render::render_query_text;
 use pulldown_cmark::{CodeBlockKind, Event, Parser, Tag, TagEnd};
 
@@ -31,10 +32,7 @@ fn protocol_owner_examples_are_decodable_valid_ir_not_parallel_test_copies() {
             .0;
         let value: serde_json::Value = serde_json::from_str(json).unwrap();
         let block: mant_ir::Block = serde_json::from_value(value.clone()).unwrap();
-        let mut document = query_markdown_text("Body.", None)
-            .unwrap()
-            .document
-            .unwrap();
+        let mut document = load_markdown_text("Body.", None).unwrap().document.unwrap();
         document.blocks = vec![block.clone()];
         assert!(mant_ir::validate_document(&document).is_empty(), "{label}");
         let roundtrip: mant_ir::Block =
@@ -138,7 +136,7 @@ fn protocol_outline_example_uses_current_names_and_rejects_legacy_fields() {
 #[test]
 fn shipped_manual_parses_without_lossy_fallbacks() {
     let name = "mant.md";
-    let query = query_markdown_text(MANT_MANUAL, Some(format!("docs/manuals/{name}")))
+    let query = load_markdown_text(MANT_MANUAL, Some(format!("docs/manuals/{name}")))
         .expect("self manual query");
     let document = query.document.as_ref().expect("manual body");
     let tldr = query.tldr.as_ref().expect("embedded tldr");
@@ -200,9 +198,8 @@ fn shipped_manual_parses_without_lossy_fallbacks() {
         OutlineNode::DocumentSection { path, title, .. }
             if path == "1" && title == "Name"
     ));
-    let excerpt =
-        mant_engine::select_excerpt(&query, &[mant_protocol::ContentSelector::id("tldr")])
-            .expect("TLDR alias");
+    let excerpt = mant_query::select_excerpt(&query, &[mant_protocol::ContentSelector::id("tldr")])
+        .expect("TLDR alias");
     assert!(matches!(
         excerpt.selections.as_slice(),
         [ExcerptSelection::Tldr { outline, document, .. }]
@@ -219,7 +216,7 @@ fn shipped_manual_parses_without_lossy_fallbacks() {
 
 #[test]
 fn shipped_manual_options_are_addressable_for_agents_and_the_tui() {
-    let query = query_markdown_text(MANT_MANUAL, Some("docs/manuals/mant.md".to_owned()))
+    let query = load_markdown_text(MANT_MANUAL, Some("docs/manuals/mant.md".to_owned()))
         .expect("self manual query");
     let outline =
         build_outline_with_detail(&query, OutlineDetail::Entries).expect("manual outline");
@@ -275,7 +272,7 @@ fn shipped_manual_options_are_addressable_for_agents_and_the_tui() {
 
 #[test]
 fn self_manual_option_excerpts_retain_examples_and_operational_limits() {
-    let query = query_markdown_text(MANT_MANUAL, None).expect("self manual");
+    let query = load_markdown_text(MANT_MANUAL, None).expect("self manual");
     for (selector, required) in [
         ("--document", "mant --document git --document git-lfs"),
         ("--follow-links", "breadth-first"),
@@ -348,7 +345,7 @@ fn shipped_manual_explains_hierarchical_registered_documents_and_sources() {
 
 #[test]
 fn protocol_reference_is_structured_and_its_json_examples_are_valid() {
-    let query = query_markdown_text(
+    let query = load_markdown_text(
         PROTOCOL_REFERENCE,
         Some("docs/manuals/mant-protocol.md".to_owned()),
     )
@@ -388,7 +385,7 @@ fn bundled_reference_manuals_parse_losslessly_and_cross_link() {
     ];
 
     for (name, source, title) in manuals {
-        let query = query_markdown_text(source, Some(format!("docs/manuals/{name}")))
+        let query = load_markdown_text(source, Some(format!("docs/manuals/{name}")))
             .expect("reference manual query");
         let document = query.document.as_ref().expect("reference manual body");
         assert_eq!(document.display_title().as_deref(), Some(title), "{name}");
@@ -432,7 +429,7 @@ fn json_fenced_examples(markdown: &str) -> Vec<String> {
 
 #[test]
 fn documented_semantic_entry_examples_are_executable_authoring_contracts() {
-    let query = query_markdown_text(MARKDOWN_MANUAL, None).expect("authoring manual");
+    let query = load_markdown_text(MARKDOWN_MANUAL, None).expect("authoring manual");
     assert!(
         render_query_text(&query).contains("without creating another entry"),
         "the form separator must not split or truncate its Markdown table cell"
@@ -445,7 +442,7 @@ fn documented_semantic_entry_examples_are_executable_authoring_contracts() {
             .collect::<Vec<_>>();
         assert!(examples.len() >= 5);
         for example in examples {
-            let query = query_markdown_text(&example, None).expect("authoring example");
+            let query = load_markdown_text(&example, None).expect("authoring example");
             let document = query.document.unwrap();
             assert!(
                 document.diagnostics.is_empty(),

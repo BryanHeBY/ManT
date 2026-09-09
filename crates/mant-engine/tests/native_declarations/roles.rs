@@ -4,7 +4,7 @@ use mant_ir::{EntryKind, ParameterKind};
 #[test]
 fn split_literal_command_heads_keep_the_whole_name_and_stop_before_arguments() {
     let source = b".Dd September 8, 2026\n.Dt TREE 1\n.Os\n.Sh COMMANDS\n.Bl -tag -width Ds\n.It Nm zfs Cm get Op Fl r Ns | Ns Fl d Ar depth\nGET_BODY\n.It Nm zfs Cm set Ar property Ns = Ns Ar value\nSET_BODY\n.It Sy { Ar list Ns Sy ;}\nCOMPOUND_BODY\n.El\n.Sh SESSIONS\n.Bl -tag -width Ds\n.It Ic new-session Op Fl Ad Ar name\nSESSION_BODY\n.It Ic label Ar value\nAMBIGUOUS_BODY\n.El\n";
-    let content = mant_engine::query_roff_bytes(source).unwrap();
+    let content = mant_loader::load_roff_bytes(source).unwrap();
     for (name, kind, body) in [
         ("zfs get", EntryKind::Command, "GET_BODY"),
         ("zfs set", EntryKind::Command, "SET_BODY"),
@@ -12,7 +12,7 @@ fn split_literal_command_heads_keep_the_whole_name_and_stop_before_arguments() {
         ("new-session", EntryKind::Command, "SESSION_BODY"),
         ("label", EntryKind::Term, "AMBIGUOUS_BODY"),
     ] {
-        let result = mant_engine::select_explanation(&content, name).unwrap();
+        let result = mant_query::select_explanation(&content, name).unwrap();
         let direct: Vec<_> = result
             .evidence
             .iter()
@@ -26,7 +26,7 @@ fn split_literal_command_heads_keep_the_whole_name_and_stop_before_arguments() {
     }
     for name in ["zfs", "get", "depth", "property", "{+"] {
         assert_eq!(
-            mant_engine::select_explanation(&content, name)
+            mant_query::select_explanation(&content, name)
                 .unwrap()
                 .counts
                 .direct_entry
@@ -36,8 +36,8 @@ fn split_literal_command_heads_keep_the_whole_name_and_stop_before_arguments() {
         );
     }
     let source = b".Dd September 8, 2026\n.Dt DOT 1\n.Os\n.Sh Builtins\n.Bl -tag -width Ds\n.It \\&. file\nRead commands from the file.\n.El\n";
-    let content = mant_engine::query_roff_bytes(source).unwrap();
-    let result = mant_engine::select_explanation(&content, ".").unwrap();
+    let content = mant_loader::load_roff_bytes(source).unwrap();
+    let result = mant_query::select_explanation(&content, ".").unwrap();
     assert_eq!(result.counts.direct_entry.total, 1);
     assert_eq!(result.evidence[0].entry.as_ref().unwrap().names, ["."]);
     assert!(mant_render::render_explanation_text(&result).contains("Read commands from the file"));
@@ -46,7 +46,7 @@ fn split_literal_command_heads_keep_the_whole_name_and_stop_before_arguments() {
 #[test]
 fn local_definitions_override_inherited_values_without_inventing_domains() {
     let source = b".TH PROBE 1\n.SH OPTIONS\n.TP\n.B --outer\nOUTER_BODY\n.RS 4\n.TP\n.B --inner=fast\nINNER_BODY\n.TP\n.B true\nVALUE_BODY\n.TP\n.B -42\nNEGATIVE_BODY\n.TP\n.B PROCESS_HOME\nVARIABLE_BODY\n.TP\n.B color=[yes|no]\nKEY_BODY\n.TP\n.B .*-fallthrough.*\nREGEX_BODY\n.RE\n.TP\n.B --next\nNEXT_BODY\n";
-    let query = mant_engine::query_roff_bytes(source).unwrap();
+    let query = mant_loader::load_roff_bytes(source).unwrap();
     let document = query.document.as_ref().unwrap();
     assert!(mant_ir::validate_document(document).is_empty());
     let items = definitions(document);
@@ -81,7 +81,7 @@ fn local_definitions_override_inherited_values_without_inventing_domains() {
                 .unwrap()
                 .contains(body)
         );
-        let result = mant_engine::explain_query(
+        let result = mant_query::explain_query(
             &query,
             &ExplanationQuery {
                 entry: name.into(),
@@ -140,14 +140,14 @@ fn environment_command_and_configuration_heads_use_local_family_evidence() {
         ),
     ] {
         let source = format!(".TH PROBE 1\n.SH \"{heading}\"\n.PP\n{head}\n.RS 4\nBODY\n.RE\n");
-        let query = mant_engine::query_roff_bytes(source.as_bytes()).unwrap();
+        let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
         let items = definitions(query.document.as_ref().unwrap());
         assert_eq!(items.len(), 1, "{heading}/{head}");
         assert_eq!(items[0].entry.as_ref().unwrap().kind, kind);
         assert_eq!(items[0].entry.as_ref().unwrap().names, [name]);
     }
     let source = b".Dd September 8, 2026\n.Dt PROBE 1\n.Os\n.Sh TOPIC\n.Bl -tag -width Ds\n.It Cm -\nALIGNMENT_BODY\n.El\n";
-    let query = mant_engine::query_roff_bytes(source).unwrap();
+    let query = mant_loader::load_roff_bytes(source).unwrap();
     let items = definitions(query.document.as_ref().unwrap());
     let entry = items[0].entry.as_ref().unwrap();
     assert_eq!(entry.kind, EntryKind::Term);

@@ -3,7 +3,7 @@
 
 use std::collections::HashSet;
 
-use mant_engine::ResolvedContent;
+use mant_ir::ResolvedContent;
 use mant_ir::{Block, Document, Inline, Section, SourceFormat};
 use mant_protocol::OutlineNode;
 

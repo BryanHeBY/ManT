@@ -7,7 +7,7 @@
 use std::{collections::BTreeMap, path::PathBuf};
 
 use libmandoc_rs::{Compression, IncludePolicy, Node, ParseOptions, Parser};
-use mant_engine::lower_mandoc_document;
+use mant_codec::lower_mandoc_document;
 use mant_ir::{
     Block, Document, EntryKind, Inline, ParameterKind, Section, SemanticEntry, SemanticIndex,
     ValueDomain,
@@ -95,7 +95,7 @@ fn profile_request(line: &str) -> Result<Value, String> {
         .and_then(Value::as_str)
         .unwrap_or("production");
     let (document, report) = match mode {
-        "production" => mant_engine::parse_manual_source_with_report(&path)
+        "production" => mant_loader::parse_manual_source_with_report(&path)
             .map_err(|error| error.to_string())?,
         "confined-include-parser-audit" => {
             let report = Parser::new(ParseOptions {
@@ -207,7 +207,7 @@ fn profile_document(
     violations.extend(declaration_group_violations.iter().cloned());
     let semantic_diagnostics = mant_ir::validate_document(document)
         .into_iter()
-        .filter(|diagnostic| !mant_engine::semantics_complete(std::slice::from_ref(diagnostic)))
+        .filter(|diagnostic| !mant_query::semantics_complete(std::slice::from_ref(diagnostic)))
         .map(|diagnostic| diagnostic.message)
         .collect::<std::collections::BTreeSet<_>>();
     violations.extend(semantic_diagnostics.iter().cloned());
@@ -218,7 +218,7 @@ fn profile_document(
         "entries": entries,
         "entryCounts": counts,
         "relationshipCounts": relationship_counts(&entries),
-        "semanticsComplete": mant_engine::semantics_complete(&document.diagnostics) && semantic_diagnostics.is_empty(),
+        "semanticsComplete": mant_query::semantics_complete(&document.diagnostics) && semantic_diagnostics.is_empty(),
         "semanticViolations": semantic_diagnostics,
         "ordinalEntries": ordinal_entries,
         "ordinalDefinitions": ordinal_definitions,
@@ -587,8 +587,8 @@ mod tests {
                     profile["declarationGroups"]["unexpectedGroups"],
                     serde_json::json!([])
                 );
-                let input = mant_engine::parse_manual_bytes(&path, source.as_bytes()).unwrap();
-                assert_eq!(input, mant_engine::parse_manual_source(&path).unwrap());
+                let input = mant_loader::parse_manual_bytes(&path, source.as_bytes()).unwrap();
+                assert_eq!(input, mant_loader::parse_manual_source(&path).unwrap());
                 let content = mant_ir::ResolvedContent {
                     label: "probe".into(),
                     address: None,
@@ -613,7 +613,7 @@ mod tests {
             .parse_bytes("probe.1", source)
             .unwrap();
         let mut document =
-            mant_engine::lower_mandoc_document(std::path::Path::new("probe.1"), &parsed);
+            mant_codec::lower_mandoc_document(std::path::Path::new("probe.1"), &parsed);
         let clean = super::profile_document("probe", &parsed.document.root, &document, 0);
         assert_eq!(clean["semanticViolations"], serde_json::json!([]));
         assert_eq!(clean["semanticsComplete"], true);
@@ -635,7 +635,7 @@ mod tests {
 
     #[test]
     fn shared_names_and_explicit_relationships_are_counted_separately() {
-        let query = mant_engine::query_markdown_text(
+        let query = mant_loader::load_markdown_text(
             r#"# Probe
 
 <!-- mant:entries role=option case=sensitive -->

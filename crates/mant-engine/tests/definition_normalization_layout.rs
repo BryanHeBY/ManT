@@ -1,10 +1,10 @@
 //! Source-level rendering contracts paired with codec-only normalization tests.
 
-use mant_engine::query_roff_bytes;
 use mant_ir::{
     DefinitionItem, Document, inline_plain_text,
     visit::{self, Visit},
 };
+use mant_loader::load_roff_bytes;
 use mant_render::render_query_text;
 
 fn row<'a>(text: &'a str, token: &str) -> &'a str {
@@ -51,7 +51,7 @@ fn spaced_relative_continuations_preserve_rows_columns_and_next_owner() {
             let source = format!(
                 ".TH PROBE 1\n.SH OPTIONS\n.PD 0\n.RS {origin}\n.IP \"{label}\" 4\nInitial.\n.RS 4\n.sp 1\n.sp 3\nFIRST_CONTINUATION\n.RE\n.RS 8\n.sp 2\n.IP --nested 4\nNESTED_BODY\n.RE\n.RS 4\n.sp 1\nLAST_CONTINUATION\n.RE\n.sp 2\n.IP --next 4\nOUTSIDE_BODY\n.RE\n"
             );
-            let content = query_roff_bytes(source.as_bytes()).unwrap();
+            let content = load_roff_bytes(source.as_bytes()).unwrap();
             let text = render_query_text(&content);
             for token in ["FIRST_CONTINUATION", "LAST_CONTINUATION"] {
                 assert_eq!(
@@ -86,7 +86,7 @@ fn hanging_paragraph_heads_keep_explicit_space_and_separate_body_rows() {
             let source = format!(
                 ".TH PROBE 1\n.SH OPTIONS\n.PD 0\n.PP\n.B {head}\n.sp {spacing}\n.RS 4\nDESCRIPTION_BODY\n.RE\n.PP\nOutside prose.\n"
             );
-            let content = query_roff_bytes(source.as_bytes()).unwrap();
+            let content = load_roff_bytes(source.as_bytes()).unwrap();
             let text = render_query_text(&content);
             assert_eq!(row(&text, head), head, "{source}\n{text}");
             assert_eq!(
@@ -116,7 +116,7 @@ fn hanging_heads_keep_source_offsets_without_promoting_run_in_layout() {
                 let source = format!(
                     ".TH PROBE 1\n.SH OPTIONS\n.PD 0\n.RS {origin}\n.PP\n.B {head}\n.RS {offset}\nDESCRIPTION_BODY\n.RE\n.RE\n"
                 );
-                let content = query_roff_bytes(source.as_bytes()).unwrap();
+                let content = load_roff_bytes(source.as_bytes()).unwrap();
                 let text = render_query_text(&content);
                 assert_eq!(
                     row(&text, head),

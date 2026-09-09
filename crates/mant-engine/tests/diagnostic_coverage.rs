@@ -1,14 +1,14 @@
 //! Semantic export consumes public producer coverage, not parser code names.
 use mant_codec::encode::{MarkdownOptions, render_markdown_with_options};
-use mant_engine::query_markdown_text;
 use mant_ir::{Diagnostic, DiagnosticImpact, DiagnosticLevel};
+use mant_loader::load_markdown_text;
 
 #[test]
 fn custom_coverage_failure_disables_annotations_without_changing_plain_markdown() {
     let source =
         "# Tool\n\n<!-- mant:entries role=command case=sensitive -->\n- `probe`: Inspect data.\n";
     for impact in [DiagnosticImpact::None, DiagnosticImpact::SemanticCoverage] {
-        let mut content = query_markdown_text(source, None).unwrap();
+        let mut content = load_markdown_text(source, None).unwrap();
         let plain = render_markdown_with_options(&content, MarkdownOptions::default());
         content
             .document

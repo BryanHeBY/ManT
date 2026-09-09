@@ -7,7 +7,7 @@ use mant_ir::Block;
 #[test]
 fn explanation_retains_both_help_definitions_and_the_qualified_tail() {
     let query = common::query_for_document("gcc", archlinux_manual("gcc"));
-    let result = mant_engine::select_explanation(&query, "--help").unwrap();
+    let result = mant_query::select_explanation(&query, "--help").unwrap();
     assert_eq!(result.outcome, mant_protocol::ExplanationOutcome::Evidence);
     let named = result
         .evidence
@@ -58,7 +58,7 @@ fn help_classes_qualifiers_and_tail_examples_share_one_owner() {
     let document = archlinux_manual("gcc");
     let query = common::query_for_document("gcc", document);
     let outline =
-        mant_engine::build_outline_projection(&query, mant_protocol::EntryProjection::All, None)
+        mant_query::build_outline_projection(&query, mant_protocol::EntryProjection::All, None)
             .unwrap();
     let help = help(&outline.nodes).expect("help with classes");
     for qualifier in ["undocumented", "joined", "separate"] {
@@ -69,7 +69,7 @@ fn help_classes_qualifiers_and_tail_examples_share_one_owner() {
     }
     assert_eq!(help.children().len(), 9);
     let excerpt =
-        mant_engine::select_excerpt(&query, &[mant_protocol::ContentSelector::path(help.path())])
+        mant_query::select_excerpt(&query, &[mant_protocol::ContentSelector::path(help.path())])
             .unwrap();
     let text = mant_render::render_excerpt_text(&excerpt);
     for retained in [

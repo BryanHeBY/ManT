@@ -34,7 +34,7 @@ pub fn project_query_view(
         QueryView::Excerpt { selectors } => select_excerpt(&query, selectors)
             .map(QueryViewResult::Excerpt)
             .map_err(QueryExecutionError::Projection),
-        QueryView::Explain { entry, options } => crate::explain_query(
+        QueryView::Explain { entry, options } => mant_query::explain_query(
             &query,
             &mant_protocol::ExplanationQuery {
                 entry: entry.clone(),

@@ -92,7 +92,7 @@ pub(crate) fn inspect_system() -> DoctorReport {
 #[cfg(feature = "roff")]
 fn inspect_libmandoc(builder: &mut DoctorBuilder) {
     let probe = b".TH MANT-DOCTOR 1\n.SH NAME\nmant-doctor \\- installation probe\n";
-    match mant_engine::parse_manual_bytes(Path::new("mant-doctor.1"), probe) {
+    match mant_loader::parse_manual_bytes(Path::new("mant-doctor.1"), probe) {
         Ok(document) if !document.sections.is_empty() => {
             builder.push(
                 "runtime.libmandoc",
@@ -202,7 +202,7 @@ fn inspect_sources(builder: &mut DoctorBuilder) {
         });
     }
     if git_required && cfg!(feature = "update") {
-        if let Some(path) = mant_engine::find_host_executable("git") {
+        if let Some(path) = mant_loader::find_host_executable("git") {
             let check = builder.push(
                 "tools.git",
                 DoctorCheckStatus::Ok,
@@ -344,7 +344,7 @@ fn push_configured_source(builder: &mut DoctorBuilder, source: &ConfiguredSource
 }
 
 fn inspect_manuals(builder: &mut DoctorBuilder) {
-    let discovery = mant_engine::inspect_manual_roots();
+    let discovery = mant_loader::inspect_manual_roots();
     for diagnostic in &discovery.diagnostics {
         push_manual_path_diagnostic(builder, diagnostic);
     }
@@ -354,7 +354,7 @@ fn inspect_manuals(builder: &mut DoctorBuilder) {
         .map(|root| root.to_string_lossy().into_owned())
         .collect();
     let existing = roots.iter().filter(|root| root.is_dir()).count();
-    let index = mant_engine::ManualIndex::from_roots(roots);
+    let index = mant_loader::ManualIndex::from_roots(roots);
     let pages = index.pages().len();
     let sections = index
         .pages()
@@ -383,7 +383,7 @@ fn inspect_manuals(builder: &mut DoctorBuilder) {
 
 fn push_manual_path_diagnostic(
     builder: &mut DoctorBuilder,
-    diagnostic: &mant_engine::ManualPathDiagnostic,
+    diagnostic: &mant_loader::ManualPathDiagnostic,
 ) {
     let check = builder.push(
         "manuals.configuration",
@@ -399,7 +399,7 @@ fn push_manual_path_diagnostic(
 
 fn inspect_tldr(builder: &mut DoctorBuilder) {
     let environment = std::env::vars().collect::<std::collections::BTreeMap<_, _>>();
-    let platform = match mant_engine::HostPlatform::current() {
+    let platform = match mant_loader::HostPlatform::current() {
         Ok(platform) => platform,
         Err(error) => {
             let check = builder.push(
@@ -411,9 +411,9 @@ fn inspect_tldr(builder: &mut DoctorBuilder) {
             return;
         }
     };
-    let client = mant_engine::find_host_executable("tldr");
+    let client = mant_loader::find_host_executable("tldr");
     let roots =
-        match mant_engine::get_tldr_read_cache_dirs(&environment, platform, client.is_some()) {
+        match mant_loader::get_tldr_read_cache_dirs(&environment, platform, client.is_some()) {
             Ok(roots) => roots,
             Err(error) => {
                 let check = builder.push(
@@ -649,7 +649,7 @@ mod tests {
         let mut builder = DoctorBuilder::new();
         push_manual_path_diagnostic(
             &mut builder,
-            &mant_engine::ManualPathDiagnostic {
+            &mant_loader::ManualPathDiagnostic {
                 config_path: std::path::PathBuf::from(r"C:\Users\demo\man.conf"),
                 line: Some(7),
                 message: "manual path must be absolute".to_owned(),

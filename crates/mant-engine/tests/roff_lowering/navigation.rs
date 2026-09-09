@@ -691,7 +691,7 @@ Sean\n\
 .ME .\n";
 
     for pattern in ["bug reports to Sean", "docs@example.test"] {
-        let query = mant_engine::query_roff_bytes(source).expect("query link fixture");
+        let query = mant_loader::load_roff_bytes(source).expect("query link fixture");
         let result = mant_engine::project_query_view(
             query,
             &mant_protocol::QueryView::Search {

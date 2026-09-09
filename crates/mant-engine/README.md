@@ -70,8 +70,8 @@ with `mant-render`.
   subprocess-backed updates belong to the `mant` process host, not this library.
 
 For already-loaded tldr text, `mant-codec::parse_tldr_page` and
-`mant-codec::parse_tldr_command` are pure parsing entry points, also re-exported
-here as read-only helpers. `TldrPageLocation` supplies
+`mant-codec::parse_tldr_command` are pure parsing entry points owned by that
+crate, not engine re-exports. `TldrPageLocation` supplies
 identity metadata only: it does not trigger a cache read, host/platform lookup,
 or URL fetch. `TldrParseError` reports syntax failure; the separate
 `TldrCacheError` adds read/location context. The updater and its process/filesystem
@@ -81,7 +81,7 @@ Process argument parsing, MCP transport, and interactive presentation remain
 outside this crate.
 
 The default `roff` feature preserves native-manual support and explicitly
-forwards to `mant-loader/roff` and `mant-codec/roff`. Disable default features
+forwards to `mant-loader/roff`, which enables `mant-codec/roff`. Disable default features
 for Markdown/tldr-only production use without native parsing or decompression.
 Every engine feature remains read-only with respect to tldr data. The old
 `tldr-update` feature and updater exports are removed: maintenance is owned by
@@ -153,10 +153,10 @@ macros, rebuild entry facts, or duplicate selection and evidence algorithms.
 | Resolve a bounded multi-document scope without querying | `mant_loader::DocumentLoader::resolve_scope` |
 | Resolve and project a scope request | `execute_scope_query` or `DocumentResolver::execute_scope_query` |
 | Query caller-owned document snapshots without loading | `mant_query::QueryScopeView::new`, `mant_query::search_scope`, `mant_query::explain_scope` |
-| Parse in-memory Markdown without query composition | `mant_codec::parse_markdown` (also re-exported here) |
-| Compose a query from in-memory Markdown | `query_markdown_text` |
+| Parse in-memory Markdown without query composition | `mant_codec::parse_markdown` |
+| Prepare in-memory Markdown and project a requested view | `mant_loader::load_markdown_text`, then `project_query_view` |
 | Parse prepared plain roff without loading or decompression | `mant_codec::parse_roff_bytes` (`roff` feature) |
-| Apply standalone-input policy to prepared plain roff bytes | `mant_loader::parse_manual_bytes` or engine `query_roff_bytes` (`roff`) |
+| Apply standalone-input policy to prepared plain roff bytes | `mant_loader::parse_manual_bytes` or `mant_loader::load_roff_bytes` (`roff`) |
 | Audit production file lowering against its exact native witness | `mant_loader::parse_manual_source_with_report` (`roff`) |
 | Build a focused result from existing content | `mant_query::build_outline_projection`, `mant_query::select_excerpt`, `mant_query::search_query` |
 | Collect bounded independent semantic evidence | `mant_query::explain_query`, `mant_query::validate_explanation_query` |
@@ -168,16 +168,23 @@ The in-memory Markdown path is deterministic and works on every supported
 platform:
 
 ```rust
-use mant_protocol::EntryProjection;
-use mant_engine::query_markdown_text;
+use mant_engine::{project_query_view, QueryViewResult};
+use mant_protocol::{EntryProjection, QueryView};
+use mant_loader::load_markdown_text;
 use mant_render::render_outline_text;
-use mant_query::build_outline_projection;
 
-let query = query_markdown_text(
+let query = load_markdown_text(
     "# Demo\n\n## Options\n\n- `--verbose`: Show more detail.\n",
     Some("demo.md".to_owned()),
 )?;
-let outline = build_outline_projection(&query, EntryProjection::All, None)?;
+let result = project_query_view(query, &QueryView::Outline {
+    entries: EntryProjection::All,
+    root: None,
+    references: Default::default(),
+})?;
+let QueryViewResult::Outline(outline) = result else {
+    unreachable!("the requested view is an outline");
+};
 
 println!("{}", render_outline_text(&outline));
 # Ok::<(), Box<dyn std::error::Error>>(())
@@ -261,8 +268,8 @@ verbatim fenced code. Outline text likewise has one plain/decorated tree through
 `render_outline_text_with`, with complete IDs on hanging metadata lines.
 
 ```rust
-let query = mant_engine::query_markdown_text("# Demo\n\n- `--help`: Usage.\n", None)?;
-let evidence = mant_engine::select_explanation(&query, "--help")?;
+let query = mant_loader::load_markdown_text("# Demo\n\n- `--help`: Usage.\n", None)?;
+let evidence = mant_query::select_explanation(&query, "--help")?;
 assert_eq!(evidence.outcome, mant_protocol::ExplanationOutcome::Evidence);
 assert!(evidence.evidence.iter().any(|owner| owner.bases.iter().any(|basis| matches!(basis, mant_protocol::EvidenceBasis::Name { .. }))));
 # Ok::<(), Box<dyn std::error::Error>>(())
@@ -323,16 +330,21 @@ not synthesize visible placeholder text. This policy is implemented once in
 use and owned `mant-protocol` values at versioned integration boundaries. It does not expose
 libmandoc C structures. It owns application request validation and composition;
 it is not merely a forwarding facade. Pure query execution belongs
-to `mant-query`. Parser/encoder, loader and query re-exports are transitional
-conveniences, not duplicate implementations.
+to `mant-query`. Parser/encoder, loader, query and IR APIs are not re-exported:
+callers import the crate that owns each operation and type. The public engine
+surface consists of complete-request preparation, resolver workflows,
+view dispatch and their application error types. In-memory inputs use the
+loader directly before optional engine view dispatch; they do not need a
+second engine-owned loading wrapper.
 Consumers needing only source-to-IR conversion or portable document Markdown
 should depend on `mant-codec` directly; consumers needing source discovery,
 loading, read-only caches or owned scopes should use `mant-loader`. Consumers
 with existing IR that need selection, search, explanation or reference
 projections should use `mant-query`, which does not load files or render reports.
 Consumers formatting existing content or protocol values should use
-`mant-render`. The engine no longer re-exports rendering functions; its render
-dependency is only for cross-crate regression tests and doctests.
+`mant-render`. The engine's codec and render dependencies exist only for
+cross-crate regression tests, profiler examples and doctests; production
+decoding is reached exclusively through the loader.
 Explicit tldr maintenance belongs to the command host, not this engine or
 the loader. Applications that only
 need raw roff syntax should use

@@ -11,7 +11,7 @@
 use std::{collections::BTreeSet, path::PathBuf};
 
 use libmandoc_rs::{Compression, IncludePolicy, ParseOptions, Parser};
-use mant_engine::lower_mandoc_document;
+use mant_codec::lower_mandoc_document;
 use mant_ir::Document;
 use serde::Serialize;
 use serde_json::{Value, json};

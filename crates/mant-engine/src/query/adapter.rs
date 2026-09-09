@@ -110,23 +110,3 @@ pub(super) fn query_with(
     PreparedQueryRequest::new(request, policy)?;
     load()
 }
-
-/// Prepare in-memory Markdown for an application query without source discovery.
-///
-/// # Errors
-/// Returns a loading error for malformed or empty document content.
-pub fn query_markdown_text(
-    source: &str,
-    source_path: Option<String>,
-) -> Result<ResolvedContent, QueryError> {
-    mant_loader::load_markdown_text(source, source_path).map_err(QueryError::Load)
-}
-
-/// Prepare bounded standalone roff bytes without MANPATH or include traversal.
-///
-/// # Errors
-/// Returns a loading error for invalid or empty document content.
-#[cfg(feature = "roff")]
-pub fn query_roff_bytes(source: &[u8]) -> Result<ResolvedContent, QueryError> {
-    mant_loader::load_roff_bytes(source).map_err(QueryError::Load)
-}

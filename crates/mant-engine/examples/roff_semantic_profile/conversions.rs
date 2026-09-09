@@ -280,7 +280,7 @@ mod tests {
     use std::path::Path;
 
     use libmandoc_rs::Parser;
-    use mant_engine::lower_mandoc_document;
+    use mant_codec::lower_mandoc_document;
     use mant_ir::{Block, LayoutHint, ListKind};
 
     use super::{conversion_violations, ordinal_conversions};

@@ -59,7 +59,7 @@ fn all_entry_roles_color_only_bound_source_text_not_markers_or_body_mentions() {
         let source = format!(
             "# Probe\n\n## Entries\n\n<!-- mant:entries role={role} case=sensitive -->\n- `{name}`: Body mentions {name} without a binding.\n\n## Prose\n\nalphabet and -xylophone remain ordinary.\n"
         );
-        let content = mant_engine::query_markdown_text(&source, None).unwrap();
+        let content = mant_loader::load_markdown_text(&source, None).unwrap();
         assert!(
             content.document.as_ref().unwrap().diagnostics.is_empty(),
             "{role}"
@@ -107,7 +107,7 @@ fn bound_link_name_keeps_type_and_modifiers_through_code_surface_and_wrapping() 
         origin: mant_ir::MarkdownOrigin::Documents,
     });
     let source = "# Probe\n\n## Options\n\n<!-- mant:entries role=option case=sensitive -->\n- [`--help`](other.md): description\n";
-    let parsed = mant_engine::query_markdown_text(source, None).unwrap();
+    let parsed = mant_loader::load_markdown_text(source, None).unwrap();
     assert!(
         parsed.document.as_ref().unwrap().diagnostics.is_empty(),
         "{:?}",

@@ -1,6 +1,7 @@
 //! Match windows carry real final-IR locations and Unicode scalar ranges.
-use mant_engine::{explain_query, query_markdown_text, resolve_explanation_block};
+use mant_loader::load_markdown_text;
 use mant_protocol::{EvidenceClass, ExplanationOptions, ExplanationQuery};
+use mant_query::{explain_query, resolve_explanation_block};
 
 #[test]
 fn previews_keep_two_original_blocks_complete_matches_and_atomic_body() {
@@ -9,7 +10,7 @@ fn previews_keep_two_original_blocks_complete_matches_and_atomic_body() {
     let source = format!(
         "# Tool\n\n## Options\n\n<!-- mant:entries role=option case=sensitive -->\n- `-Q`: {long}\n\n  Second {needle} match.\n\n  Third {needle} match.\n\n  No match, unrelated full body.\n"
     );
-    let content = query_markdown_text(&source, None).unwrap();
+    let content = load_markdown_text(&source, None).unwrap();
     let mut query = ExplanationQuery {
         entry: needle.clone(),
         options: ExplanationOptions::default(),
@@ -61,7 +62,7 @@ fn previews_keep_two_original_blocks_complete_matches_and_atomic_body() {
 
 #[test]
 fn safe_projection_coordinates_resolve_nested_items_and_cells() {
-    let content = query_markdown_text("# Tool\n\n## Outer\n\n### Inner\n\n- Plain\n\n  - Nested TOKEN.\n\n| Title |\n| --- |\n| TOKEN |\n\n```\ncontrol\u{1b} TOKEN\n```\n", None).unwrap();
+    let content = load_markdown_text("# Tool\n\n## Outer\n\n### Inner\n\n- Plain\n\n  - Nested TOKEN.\n\n| Title |\n| --- |\n| TOKEN |\n\n```\ncontrol\u{1b} TOKEN\n```\n", None).unwrap();
     let result = explain_query(
         &content,
         &ExplanationQuery {
@@ -113,7 +114,7 @@ fn safe_projection_coordinates_resolve_nested_items_and_cells() {
 
 #[test]
 fn markdown_metadata_is_escaped_and_mentions_are_not_definitions() {
-    let content = query_markdown_text("# Tool\n\n<!-- mant:entries role=option case=sensitive -->\n- `-Q`: The literal `[TOKEN](evil)` occurs here.\n\n  PRIVATE_UNRELATED_TEXT\n", None).unwrap();
+    let content = load_markdown_text("# Tool\n\n<!-- mant:entries role=option case=sensitive -->\n- `-Q`: The literal `[TOKEN](evil)` occurs here.\n\n  PRIVATE_UNRELATED_TEXT\n", None).unwrap();
     let found = explain_query(
         &content,
         &ExplanationQuery {

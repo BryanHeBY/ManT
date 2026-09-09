@@ -126,9 +126,9 @@ fn load_document(path: &str) -> Result<mant_ir::Document, Box<dyn Error>> {
         .extension()
         .is_some_and(|extension| extension == "md")
     {
-        Ok(mant_engine::parse_markdown(&std::fs::read_to_string(path)?, None)?.document)
+        Ok(mant_codec::parse_markdown(&std::fs::read_to_string(path)?, None)?.document)
     } else {
-        Ok(mant_engine::parse_manual_source(Path::new(path))?)
+        Ok(mant_loader::parse_manual_source(Path::new(path))?)
     }
 }
 
@@ -153,7 +153,7 @@ fn profile_discovery(bundle: &ResolvedContent) -> Result<(), Box<dyn Error>> {
         mant_protocol::ReferenceProjectionMode::All,
     ] {
         let start = Instant::now();
-        let outline = mant_engine::build_outline_with_references(
+        let outline = mant_query::build_outline_with_references(
             bundle,
             mant_protocol::EntryProjection::Summary,
             None,
@@ -174,7 +174,7 @@ fn profile_discovery(bundle: &ResolvedContent) -> Result<(), Box<dyn Error>> {
         black_box(outline);
     }
     let start = Instant::now();
-    let explanation = mant_engine::explain_query(
+    let explanation = mant_query::explain_query(
         bundle,
         &mant_protocol::ExplanationQuery {
             entry: "--help".into(),

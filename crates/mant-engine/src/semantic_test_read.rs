@@ -1,7 +1,8 @@
 //! Test bridge: discover exact semantic names with explain, then explicitly read paths.
 //! This deliberately does not implement the removed selector alias/shorthand fallback.
-use mant_engine::{ProjectionError, ResolvedContent};
+use mant_ir::ResolvedContent;
 use mant_protocol::{ContentSelector, EvidenceBasis, ExplanationQuery, QueryExcerpt};
+use mant_query::ProjectionError;
 
 pub fn semantic_excerpt<S: AsRef<str>>(
     content: &ResolvedContent,
@@ -14,7 +15,7 @@ pub fn semantic_excerpt<S: AsRef<str>>(
             options: mant_protocol::ExplanationOptions::default(),
         };
         let response =
-            mant_engine::explain_query(content, &query).expect("valid semantic test query");
+            mant_query::explain_query(content, &query).expect("valid semantic test query");
         let before = selectors.len();
         selectors.extend(
             response
@@ -35,5 +36,5 @@ pub fn semantic_excerpt<S: AsRef<str>>(
             });
         }
     }
-    mant_engine::select_excerpt(content, &selectors)
+    mant_query::select_excerpt(content, &selectors)
 }

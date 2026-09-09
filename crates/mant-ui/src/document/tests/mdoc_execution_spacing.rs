@@ -2,7 +2,7 @@
 use super::*;
 
 fn query(body: &str) -> ResolvedContent {
-    mant_engine::query_roff_bytes(
+    mant_loader::load_roff_bytes(
         format!(".Dd September 9, 2026\n.Dt PROBE 1\n.Os\n.Sh TEST\n{body}\n").as_bytes(),
     )
     .unwrap()

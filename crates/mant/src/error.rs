@@ -3,10 +3,9 @@
 use std::io::Write;
 
 use anstyle::{AnsiColor, Style};
-use mant_engine::{
-    LoadError, ProjectionError, QueryError, QueryExecutionError, QueryValidationError,
-    ScopeExecutionError, ScopeLoadError, ScopeQueryError, SearchError,
-};
+use mant_engine::{QueryError, QueryExecutionError, QueryValidationError, ScopeQueryError};
+use mant_loader::{LoadError, ScopeLoadError};
+use mant_query::{ProjectionError, ScopeExecutionError, SearchError};
 use mant_render::sanitize_terminal_text;
 
 const ERROR_STYLE: Style = AnsiColor::Red.on_default().bold();
@@ -141,7 +140,7 @@ fn query_validation_failure(error: QueryValidationError) -> Failure {
         | QueryValidationError::EmptyEntry
         | QueryValidationError::InvalidViewSelector { .. } => Failure::usage(error),
         QueryValidationError::InvalidSearch(error) => search_failure(&error),
-        QueryValidationError::InvalidExplanation(mant_engine::ExplanationError::MissingContent) => {
+        QueryValidationError::InvalidExplanation(mant_query::ExplanationError::MissingContent) => {
             Failure::operational("explanation requires readable content")
         }
         QueryValidationError::InvalidExplanation(error) => Failure::usage(error),
@@ -288,13 +287,14 @@ pub(super) fn report_process_argument_error(error: &clap::Error) -> u8 {
 
 #[cfg(test)]
 mod tests {
-    use mant_engine::SearchError;
+    use mant_query::SearchError;
 
     use super::{Failure, report_failure, search_failure};
 
     #[test]
     fn loading_and_query_validation_errors_keep_their_exit_categories() {
-        use mant_engine::{LoadError, QueryError, QueryValidationError};
+        use mant_engine::{QueryError, QueryValidationError};
+        use mant_loader::LoadError;
         for (error, expected_status, expected_message) in [
             (
                 QueryError::Load(LoadError::NativeBackendUnavailable { tldr_topic: None }),
@@ -321,7 +321,7 @@ mod tests {
             ),
             (
                 QueryError::QueryValidation(QueryValidationError::InvalidExplanation(
-                    mant_engine::ExplanationError::MissingContent,
+                    mant_query::ExplanationError::MissingContent,
                 )),
                 1,
                 "explanation requires readable content",
@@ -346,7 +346,8 @@ mod tests {
 
     #[test]
     fn scope_loading_errors_keep_their_exit_categories_and_messages() {
-        use mant_engine::{ScopeLoadError, ScopeQueryError};
+        use mant_engine::ScopeQueryError;
+        use mant_loader::ScopeLoadError;
 
         for (error, expected_status, expected_message) in [
             (
@@ -378,7 +379,8 @@ mod tests {
 
     #[test]
     fn scope_execution_errors_keep_their_presentation_without_becoming_load_errors() {
-        use mant_engine::{ExplanationError, ScopeExecutionError, ScopeQueryError};
+        use mant_engine::ScopeQueryError;
+        use mant_query::{ExplanationError, ScopeExecutionError};
 
         for (error, expected_status, expected_message) in [
             (

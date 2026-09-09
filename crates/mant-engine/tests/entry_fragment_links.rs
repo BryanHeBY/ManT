@@ -1,12 +1,12 @@
 //! Every indexed content owner is a local navigation destination.
 use mant_codec::encode::{MarkdownOptions, render_markdown_with_options};
-use mant_engine::query_markdown_text;
 use mant_ir::{Block, DefinitionItem, DocumentIndex, Inline, LayoutHint, LinkTarget};
+use mant_loader::load_markdown_text;
 
 #[test]
 fn entry_fragments_validate_without_inserting_a_head_anchor() {
     for definition_owner in [false, true] {
-        let mut query = query_markdown_text("# Probe\n\nSee [option](#option-help).\n\n<!-- mant:entries role=option case=sensitive -->\n- `--help`: Help.\n", None).unwrap();
+        let mut query = load_markdown_text("# Probe\n\nSee [option](#option-help).\n\n<!-- mant:entries role=option case=sensitive -->\n- `--help`: Help.\n", None).unwrap();
         let doc = query.document.as_mut().unwrap();
         assert!(doc.diagnostics.is_empty(), "{:?}", doc.diagnostics);
         if definition_owner {
@@ -54,7 +54,7 @@ fn entry_fragments_validate_without_inserting_a_head_anchor() {
 
 #[test]
 fn missing_ids_and_identity_collisions_remain_diagnostics() {
-    let mut query = query_markdown_text("# Probe\n\n[missing](#absent)\n\n<!-- mant:entries role=option case=sensitive -->\n- `--help`: Help.\n", None).unwrap();
+    let mut query = load_markdown_text("# Probe\n\n[missing](#absent)\n\n<!-- mant:entries role=option case=sensitive -->\n- `--help`: Help.\n", None).unwrap();
     let doc = query.document.as_mut().unwrap();
     assert!(
         doc.diagnostics

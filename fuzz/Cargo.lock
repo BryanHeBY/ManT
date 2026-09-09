@@ -252,25 +252,16 @@ dependencies = [
 ]
 
 [[package]]
-name = "mant-engine"
-version = "0.11.0"
-dependencies = [
- "mant-codec",
- "mant-ir",
- "mant-loader",
- "mant-protocol",
- "mant-query",
-]
-
-[[package]]
 name = "mant-fuzz"
 version = "0.0.0"
 dependencies = [
  "libfuzzer-sys",
  "libmandoc-rs",
  "mant-codec",
- "mant-engine",
+ "mant-ir",
+ "mant-loader",
  "mant-protocol",
+ "mant-query",
  "mant-render",
 ]
 

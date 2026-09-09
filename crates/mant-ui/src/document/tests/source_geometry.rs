@@ -12,7 +12,7 @@ fn column(text: &str, token: &str) -> usize {
 fn relative_definition_geometry_matches_text_and_all_normal_viewports() {
     // Original minimal shape of btrfs-subvolume's nested INDENT/TP regions.
     // mandoc CVS HEAD 1.250 and groff 1.24.1 agree on these relative columns.
-    let query = mant_engine::query_roff_bytes(b".TH GEOMETRY 1\n.SH SUBCOMMAND\n.RS 0\n.TP\n.B create\nCREATE_BODY\n.sp\nOPTIONS_BODY\n.RS 7\n.TP\n.B -i QGROUP\nINNER_BODY\n.RE\n.TP\n.B delete\nDELETE_BODY\n.RE\n").unwrap();
+    let query = mant_loader::load_roff_bytes(b".TH GEOMETRY 1\n.SH SUBCOMMAND\n.RS 0\n.TP\n.B create\nCREATE_BODY\n.sp\nOPTIONS_BODY\n.RS 7\n.TP\n.B -i QGROUP\nINNER_BODY\n.RE\n.TP\n.B delete\nDELETE_BODY\n.RE\n").unwrap();
     let before = query.clone();
     let text = mant_render::render_query_text(&query);
     let expected = [
@@ -62,8 +62,8 @@ fn markdown_semantic_annotation_does_not_change_translated_content_geometry() {
             "# Demo\n\n## Commands\n\n- `run`: First.{separator}- `stop`: Second.\n\n  ```text\n  CODE\n  ```\n"
         );
         let annotated = plain.replace("- `run`", "<!-- mant:entries role=command -->\n- `run`");
-        let plain = mant_engine::query_markdown_text(&plain, None).unwrap();
-        let annotated = mant_engine::query_markdown_text(&annotated, None).unwrap();
+        let plain = mant_loader::load_markdown_text(&plain, None).unwrap();
+        let annotated = mant_loader::load_markdown_text(&annotated, None).unwrap();
         assert_eq!(
             mant_render::render_query_text(&plain),
             mant_render::render_query_text(&annotated)
@@ -128,7 +128,7 @@ fn tq_run_in_uses_only_the_final_label_and_preserves_one_source_owner() {
             writeln!(source, ".TQ\n.B {label}").unwrap();
         }
         source.push_str("BODY\n.br\nTAIL\n");
-        let query = mant_engine::query_roff_bytes(source.as_bytes()).unwrap();
+        let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
         let document = query.document.as_ref().unwrap();
         let items = document.sections[0]
             .blocks
@@ -147,7 +147,7 @@ fn tq_run_in_uses_only_the_final_label_and_preserves_one_source_owner() {
             let facts = items[0].entry.as_ref().unwrap();
             assert_eq!(facts.names, labels, "{source}");
             for name in &labels {
-                let excerpt = mant_engine::select_excerpt(
+                let excerpt = mant_query::select_excerpt(
                     &query,
                     &[mant_protocol::ContentSelector::id(facts.id.clone())],
                 )
@@ -155,7 +155,7 @@ fn tq_run_in_uses_only_the_final_label_and_preserves_one_source_owner() {
                 let text = mant_render::render_excerpt_text(&excerpt);
                 let body = text.lines().find(|line| line.contains("BODY")).unwrap();
                 assert_eq!(body.contains(last), runs_in, "{source}\n{text}");
-                let explained = mant_engine::explain_query(
+                let explained = mant_query::explain_query(
                     &query,
                     &mant_protocol::ExplanationQuery {
                         entry: (*name).into(),
@@ -215,7 +215,7 @@ fn nested_literal_display_origins_and_targets_survive_tui_lowering() {
         let source = format!(
             ".Dd September 9, 2026\n.Dt PROBE 1\n.Os\n.Sh TEST\nBASE\n.Tg outer-target\n.Bd -literal -offset 2n\nALPHA\n.Tg inner-target\n{inner}\nGAMMA\n.Ed\nAFTER\n"
         );
-        let query = mant_engine::query_roff_bytes(source.as_bytes()).unwrap();
+        let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
         let before = query.clone();
         let blocks = &query.document.as_ref().unwrap().sections[0].blocks;
         let mut builder = DocumentBuilder::new("probe".into(), None);
@@ -274,7 +274,7 @@ fn literal_source(mode: &str, body: &str) -> String {
 }
 
 fn tui_blank_rows(source: &str, first: &str, second: &str) -> usize {
-    let query = mant_engine::query_roff_bytes(source.as_bytes()).unwrap();
+    let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
     let rendered = DocumentView::new(&query).render(80);
     let rows: Vec<_> = rendered
         .text

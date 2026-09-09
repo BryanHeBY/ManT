@@ -1,7 +1,8 @@
 use super::{
     LoadError, LoadPolicy, QueryError, QueryExecutionError, QueryValidationError,
-    project_query_view, query_markdown_text, validate_query_request,
+    project_query_view, validate_query_request,
 };
+use mant_loader::load_markdown_text;
 use mant_protocol::{
     MAX_NODE_SELECTORS, MAX_SEMANTIC_ENTRY_CHARS, QueryInput, QueryRequest, QueryView,
     RequestSchema, ScopeTextError,
@@ -151,7 +152,7 @@ fn every_single_document_selector_obeys_the_shared_native_bound() {
 
 #[test]
 fn focused_projection_enforces_view_bounds_without_a_request_producer() {
-    let query = query_markdown_text("# Demo\n\nBody.\n", None).expect("Markdown query");
+    let query = load_markdown_text("# Demo\n\nBody.\n", None).expect("Markdown query");
     let oversized = "x".repeat(MAX_SEMANTIC_ENTRY_CHARS + 1);
     assert_eq!(
         project_query_view(
@@ -186,7 +187,7 @@ fn focused_projection_enforces_view_bounds_without_a_request_producer() {
 
 #[test]
 fn explanation_misses_distinguish_visible_prose_from_absent_text() {
-    let query = query_markdown_text(
+    let query = load_markdown_text(
         "# shell\n\n## Invocation\n\nThe option `-b` ends option processing.\n",
         None,
     )

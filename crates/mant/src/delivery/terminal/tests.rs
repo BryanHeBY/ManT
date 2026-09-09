@@ -6,7 +6,7 @@ fn recovery_child() {
     let Ok(case) = std::env::var("MANT_RECOVERY_TEST_CASE") else {
         return;
     };
-    let content = mant_engine::query_markdown_text("# Recovery\n\nBody.\n", None).unwrap();
+    let content = mant_loader::load_markdown_text("# Recovery\n\nBody.\n", None).unwrap();
     if case == "panic" {
         let mut discover = |_: &mant_protocol::CatalogQuery| panic!("injected host callback panic");
         super::run_reader(

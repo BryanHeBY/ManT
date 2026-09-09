@@ -7,7 +7,7 @@ fn numbered_glyphs_retain_visible_content_in_every_consumer() {
         assert_flow(&body, "AAB");
     }
     let content =
-        mant_engine::query_roff_bytes(b".TH PROBE 1\n.SH DESCRIPTION\n.B A\\N'65'B\n").unwrap();
+        mant_loader::load_roff_bytes(b".TH PROBE 1\n.SH DESCRIPTION\n.B A\\N'65'B\n").unwrap();
     assert!(mant_render::render_query_text(&content).contains("AAB"));
     super::font_boundaries::assert_style(&content, "AAB", 1);
 }
@@ -23,7 +23,7 @@ fn man_literal_synopsis_preserves_font_state_across_lines() {
     ] {
         let source =
             format!(".TH PROBE 1\n.SH DESCRIPTION\n.EX\n.SY command\n{body}\n.YS\n.EE\nTAIL\n");
-        let content = mant_engine::query_roff_bytes(source.as_bytes()).unwrap();
+        let content = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
         assert_style(&content, "WORD", style);
         assert_style(&content, "NEXT", style);
         assert_style(&content, "TAIL", 0);
@@ -40,7 +40,7 @@ fn prose_function_blocks_are_inline_but_synopsis_declarations_remain_separate() 
         ".No before\n.Fo WORD\n.Fa arg\n.Fc )\n.No after",
         "before WORD(arg)) after",
     );
-    let doc = mant_engine::query_roff_bytes(b".Dd Sep 8, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.Fo FIRST\n.Fa arg\n.Fc\n.Fo SECOND\n.Fa arg\n.Fc\n").unwrap();
+    let doc = mant_loader::load_roff_bytes(b".Dd Sep 8, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.Fo FIRST\n.Fa arg\n.Fc\n.Fo SECOND\n.Fa arg\n.Fc\n").unwrap();
     assert_eq!(doc.document.unwrap().sections[0].blocks.len(), 2);
 }
 
@@ -175,7 +175,7 @@ fn zero_width_words_consume_boundaries_without_fabricating_names() {
     let body = ".Bl -tag -width Ds\n.It Fl a Ns No \\& Fl b\nBODY\n.El";
     assert_flow(body, "-a -b");
     let query = query(body);
-    let explained = mant_engine::explain_query(
+    let explained = mant_query::explain_query(
         &query,
         &mant_protocol::ExplanationQuery {
             entry: "-a-b".into(),
@@ -201,6 +201,6 @@ fn decoded_literal_font_spellings_are_content_in_every_font() {
             }
         }
     }
-    let query = mant_engine::query_roff_bytes(b".TH PROBE 1\n.SH DESCRIPTION\n.B \\efB\n").unwrap();
+    let query = mant_loader::load_roff_bytes(b".TH PROBE 1\n.SH DESCRIPTION\n.B \\efB\n").unwrap();
     assert!(mant_render::render_query_text(&query).contains(r"\fB"));
 }

@@ -131,7 +131,7 @@ fn parsed_h1_local_link_reveals_the_canonical_root_after_tldr() {
     for body in ["", "\n\n[Return](#catalog)\n"] {
         for tldr in [false, true] {
             let mut query =
-                mant_engine::query_markdown_text(&format!("# [Catalog](#catalog){body}\n"), None)
+                mant_loader::load_markdown_text(&format!("# [Catalog](#catalog){body}\n"), None)
                     .unwrap();
             if tldr {
                 query.tldr = geometry_bundle().tldr;

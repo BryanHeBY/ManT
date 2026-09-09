@@ -1,10 +1,11 @@
 //! Check the shipped link graph, not filenames mentioned in prose or examples.
-use mant_engine::{project_references, query_markdown_text};
 use mant_ir::{
     DocumentAddress, DocumentIndex, DocumentReference, LinkTarget, MarkdownOrigin, ReferenceScope,
     ReferenceTargetType,
 };
+use mant_loader::load_markdown_text;
 use mant_protocol::{ReferenceCoverageStatus, ReferenceProjection, ReferenceProjectionMode};
+use mant_query::project_references;
 use std::{collections::BTreeMap, fs, path::Path};
 
 #[test]
@@ -20,7 +21,7 @@ fn manifest_manual_links_close_inside_the_installed_namespace() {
                 .expect("Markdown manifest member")
                 .to_owned();
             let query =
-                query_markdown_text(&fs::read_to_string(root.join(file)).unwrap(), None).unwrap();
+                load_markdown_text(&fs::read_to_string(root.join(file)).unwrap(), None).unwrap();
             (name, query.document.unwrap())
         })
         .collect();
@@ -109,7 +110,7 @@ fn manifest_manual_links_close_inside_the_installed_namespace() {
 
 #[test]
 fn fenced_link_examples_are_not_link_occurrences() {
-    let document = query_markdown_text(
+    let document = load_markdown_text(
         "```markdown\n[not shipped](missing.md)\n```\n\n[real](other.md#part)",
         None,
     )

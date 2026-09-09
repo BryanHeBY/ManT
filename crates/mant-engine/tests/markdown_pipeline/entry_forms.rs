@@ -6,7 +6,7 @@ fn slash_option_aliases_preserve_forms_and_query_identity() {
     for declaration in ["", "<!-- mant:entries role=option case=sensitive -->\n"] {
         for form in ["-h/--help", "-h, --help", "-h|--help"] {
             let source = format!("# Probe\n\n{declaration}- `{form}`: Help payload.\n");
-            let query = crate::query_markdown_text(&source, None).unwrap();
+            let query = crate::load_markdown_text(&source, None).unwrap();
             let index = mant_ir::SemanticIndex::build(query.document.as_ref().unwrap());
             assert_eq!(index.root()[0].names, ["-h", "--help"], "{source}");
             assert_eq!(index.root()[0].forms, [form]);
@@ -44,7 +44,7 @@ fn slash_option_aliases_preserve_forms_and_query_identity() {
             vec!["/help"],
         ),
     ] {
-        let query = crate::query_markdown_text(
+        let query = crate::load_markdown_text(
             &format!("# Probe\n\n{declaration}- `{form}`: Payload.\n"),
             None,
         )

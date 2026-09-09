@@ -1,9 +1,10 @@
 //! A producer's rejected child cannot leave a false local exhaustive claim.
 #[path = "../src/semantic_test_read.rs"]
 mod semantic_read;
-use mant_engine::{build_outline_projection, query_markdown_text};
 use mant_ir::{Block, Document, SemanticIndex, ValueDomain};
+use mant_loader::load_markdown_text;
 use mant_protocol::{EntryProjection, ExcerptSelection, OutlineNode};
+use mant_query::build_outline_projection;
 use std::fmt::Write;
 
 fn source(children: &str) -> String {
@@ -28,7 +29,7 @@ fn every_rejected_position_invalidates_only_the_local_exhaustive_claim() {
             )
             .unwrap();
         }
-        let query = query_markdown_text(
+        let query = load_markdown_text(
             &source(&format!(
                 "  <!-- mant:entries role=value case=sensitive -->\n{children}"
             )),
@@ -94,7 +95,7 @@ fn every_rejected_position_invalidates_only_the_local_exhaustive_claim() {
 
 #[test]
 fn independent_lists_and_nested_owners_do_not_share_rejection_state() {
-    let query = query_markdown_text(&source("  <!-- mant:entries role=value case=sensitive -->\n  - `auto`: Automatic.\n\n  <!-- mant:entries role=value case=sensitive -->\n  - `manual`\n"), None).unwrap();
+    let query = load_markdown_text(&source("  <!-- mant:entries role=value case=sensitive -->\n  - `auto`: Automatic.\n\n  <!-- mant:entries role=value case=sensitive -->\n  - `manual`\n"), None).unwrap();
     let index = SemanticIndex::build(query.document.as_ref().unwrap());
     assert!(!matches!(
         index.root()[0].value_domain,
@@ -105,7 +106,7 @@ fn independent_lists_and_nested_owners_do_not_share_rejection_state() {
         "{}\n<!-- mant:entries role=value case=sensitive -->\n- `unrelated`\n",
         source("  <!-- mant:entries role=value case=sensitive -->\n  - `auto`: Automatic.")
     );
-    let query = query_markdown_text(&independent, None).unwrap();
+    let query = load_markdown_text(&independent, None).unwrap();
     let index = SemanticIndex::build(query.document.as_ref().unwrap());
     assert_eq!(
         index.root()[0].value_domain,
@@ -115,7 +116,7 @@ fn independent_lists_and_nested_owners_do_not_share_rejection_state() {
     let nested = source(
         "  <!-- mant:entries role=value case=sensitive -->\n  - `auto`: Automatic.\n\n    <!-- mant:entries role=value case=sensitive -->\n    - `deeper`\n",
     );
-    let query = query_markdown_text(&nested, None).unwrap();
+    let query = load_markdown_text(&nested, None).unwrap();
     assert_eq!(
         SemanticIndex::build(query.document.as_ref().unwrap()).root()[0].value_domain,
         Some(ValueDomain::Choices { exhaustive: true })
@@ -133,7 +134,7 @@ fn empty_and_rejected_declarations_cannot_complete_a_partial_enumeration() {
         let source = source(&format!(
             "  <!-- mant:entries role=value case=sensitive -->\n  - `auto`: Automatic.\n\n{suffix}"
         ));
-        let query = query_markdown_text(&source, None).unwrap();
+        let query = load_markdown_text(&source, None).unwrap();
         let index = SemanticIndex::build(query.document.as_ref().unwrap());
         assert!(
             !matches!(
@@ -152,7 +153,7 @@ fn explicitly_open_choices_can_retain_successful_partial_evidence() {
         "  <!-- mant:entries role=value case=sensitive -->\n  - `auto`: Automatic.\n  - `manual`\n",
     )
     .replace("choices=exhaustive", "choices=open");
-    let query = query_markdown_text(&source, None).unwrap();
+    let query = load_markdown_text(&source, None).unwrap();
     let index = SemanticIndex::build(query.document.as_ref().unwrap());
     assert_eq!(
         index.root()[0].value_domain,
@@ -192,7 +193,7 @@ fn rejected_declarations_flow_through_ordinary_containers_to_the_semantic_owner(
                 };
                 // The control proves that the nested manual value belongs to
                 // this parent's enumeration, not to the ordinary containers.
-                let control = query_markdown_text(&make_source(valid), None).unwrap();
+                let control = load_markdown_text(&make_source(valid), None).unwrap();
                 let index = SemanticIndex::build(control.document.as_ref().unwrap());
                 assert!(
                     control.document.as_ref().unwrap().diagnostics.is_empty(),
@@ -214,7 +215,7 @@ fn rejected_declarations_flow_through_ordinary_containers_to_the_semantic_owner(
                     "<!-- mant:entries role=value case=sensitive -->\n\nInterrupting paragraph.\n\n- `manual`: Manual mode.\n",
                 ] {
                     let input = make_source(rejected);
-                    let query = query_markdown_text(&input, None).unwrap();
+                    let query = load_markdown_text(&input, None).unwrap();
                     let doc = query.document.as_ref().unwrap();
                     let Block::List { items, .. } = &doc.blocks[0] else {
                         panic!("parent list")
@@ -285,7 +286,7 @@ fn recognized_children_stop_rejections_from_their_ordinary_descendants() {
             indent(&rejected, 2)
         );
         let input = source(&indent(&ordinary_containers(&child, marker, 2), 2));
-        let query = query_markdown_text(&input, None).unwrap();
+        let query = load_markdown_text(&input, None).unwrap();
         let index = SemanticIndex::build(query.document.as_ref().unwrap());
         let parent = &index.root()[0];
         assert_eq!(parent.children.len(), 1);
@@ -311,7 +312,7 @@ fn leading_removed_comments_do_not_change_item_ownership() {
                     "  <!-- mant:entries role=value case=sensitive -->\n  - `auto`: Automatic.\n\n  Other values:\n\n  {marker}\n{}",
                     indent(&format!("<!-- mant:entries role={role} case=sensitive -->\n- `manual`: Manual mode.\n"), marker.len() + 3)
                 )).replace('\n', newline);
-                let query = query_markdown_text(&input, None).unwrap();
+                let query = load_markdown_text(&input, None).unwrap();
                 let doc = query.document.as_ref().unwrap();
                 let index = SemanticIndex::build(doc);
                 let parent = &index.root()[0];

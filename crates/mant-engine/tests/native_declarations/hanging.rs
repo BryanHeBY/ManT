@@ -47,7 +47,7 @@ fn complete_hanging_heads_share_spacing_and_owner_rules_across_roles() {
             let source = format!(
                 ".TH PROBE 1\n.SH {section}\n.na\n.PP\n{head}\n{spacing}.RS 4n\nOWNER_BODY\n.RE\n.ad\n.PP\nNormal explanatory text follows.\n.SH NEXT\nOUTSIDE_BODY\n"
             );
-            let query = mant_engine::query_roff_bytes(source.as_bytes()).unwrap();
+            let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
             let document = query.document.as_ref().unwrap();
             assert!(mant_ir::validate_document(document).is_empty());
             let items = definitions(document);
@@ -57,7 +57,7 @@ fn complete_hanging_heads_share_spacing_and_owner_rules_across_roles() {
             assert_eq!(entry.names, [name], "{source}");
             let body = serde_json::to_string(&items[0].description).unwrap();
             assert!(body.contains("OWNER_BODY") && !body.contains("OUTSIDE_BODY"));
-            let result = mant_engine::explain_query(
+            let result = mant_query::explain_query(
                 &query,
                 &ExplanationQuery {
                     entry: name.into(),
@@ -85,7 +85,7 @@ fn hanging_heads_cannot_cross_prose_new_heads_outer_content_or_eof() {
         ".PP\n.B --next\n.RS 4\nNEXT_BODY\n.RE\n",
     ] {
         let source = format!(".TH PROBE 1\n.SH OPTIONS\n.PP\n.B --orphan\n.sp\n.sp 2\n{tail}");
-        let query = mant_engine::query_roff_bytes(source.as_bytes()).unwrap();
+        let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
         let items = definitions(query.document.as_ref().unwrap());
         assert!(items.iter().all(|item| {
             item.entry
@@ -97,7 +97,7 @@ fn hanging_heads_cannot_cross_prose_new_heads_outer_content_or_eof() {
         let source = format!(
             ".TH PROBE 1\n.SH {section}\n.PP\nThis ordinary paragraph explains an example, otherwise it continues.\n.sp\n.RS 4\nEXAMPLE_BODY\n.RE\n"
         );
-        let query = mant_engine::query_roff_bytes(source.as_bytes()).unwrap();
+        let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
         assert!(definitions(query.document.as_ref().unwrap()).is_empty());
     }
 }
@@ -111,14 +111,14 @@ fn finite_short_long_pairs_bind_names_without_rescanning_argument_tokens() {
         "-a, --ascii",
     ] {
         let source = format!(".TH PROBE 1\n.SH OPTIONS\n.TP\n.B {head}\nBODY\n");
-        let query = mant_engine::query_roff_bytes(source.as_bytes()).unwrap();
+        let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
         let document = query.document.as_ref().unwrap();
         let items = definitions(document);
         let entry = items[0].entry.as_ref().unwrap();
         assert_eq!(entry.names, ["-a", "--ascii"], "{head}");
         assert!(entry.alias_groups.is_empty());
         assert!(mant_ir::validate_document(document).is_empty());
-        let result = mant_engine::explain_query(
+        let result = mant_query::explain_query(
             &query,
             &ExplanationQuery {
                 entry: "--ascii".into(),
@@ -142,20 +142,20 @@ fn finite_short_long_pairs_bind_names_without_rescanning_argument_tokens() {
         "--opt=value/with/path",
     ] {
         let source = format!(".TH PROBE 1\n.SH OPTIONS\n.TP\n.B {head}\nBODY\n");
-        let query = mant_engine::query_roff_bytes(source.as_bytes()).unwrap();
+        let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
         let items = definitions(query.document.as_ref().unwrap());
         let names = &items[0].entry.as_ref().unwrap().names;
         assert_eq!(names.len(), 1, "{head}: {names:?}");
         assert!(mant_ir::validate_document(query.document.as_ref().unwrap()).is_empty());
     }
     let source = b".TH PROBE 1\n.SH OPTIONS\n.PP\n.B -a --ascii\n.I FILE\ncontains an ordinary explanation of an example.\n.RS 4\nEXAMPLE\n.RE\n";
-    let query = mant_engine::query_roff_bytes(source).unwrap();
+    let query = mant_loader::load_roff_bytes(source).unwrap();
     assert!(definitions(query.document.as_ref().unwrap()).is_empty());
 }
 #[test]
 fn unstyled_dotted_keys_italic_settings_and_repeated_arguments_keep_owners() {
     let source = b".TH LOCAL 1\n.SH VARIABLES\n.PP\ncore.editor\n.RS 4\nThe chosen editor.\n.RE\n.PP\nuser.name, user.email\n.RS 4\nIdentity settings.\n.RE\n.SH PATHS\n.PP\n.I WorkingDirectory=\n.RS 4\nSet the working directory.\n.RE\n.SH OPTIONS\n.PP\n.B -O, --test-opts\n.I option\n...\n.RS 4\nTest the supplied options.\n.RE\n";
-    let content = mant_engine::query_roff_bytes(source).unwrap();
+    let content = mant_loader::load_roff_bytes(source).unwrap();
     for (name, kind, body) in [
         (
             "core.editor",
@@ -180,7 +180,7 @@ fn unstyled_dotted_keys_italic_settings_and_repeated_arguments_keep_owners() {
             "Test the supplied options",
         ),
     ] {
-        let result = mant_engine::select_explanation(&content, name).unwrap();
+        let result = mant_query::select_explanation(&content, name).unwrap();
         let direct: Vec<_> = result
             .evidence
             .iter()
@@ -190,9 +190,9 @@ fn unstyled_dotted_keys_italic_settings_and_repeated_arguments_keep_owners() {
         assert_eq!(direct[0].entry.as_ref().unwrap().kind, kind);
         assert!(mant_render::render_explanation_text(&result).contains(body));
     }
-    let negative = mant_engine::query_roff_bytes(b".TH NO 1\n.SH NOTES\n.PP\nfile.md\n.RS 4\nA file example, not a configuration declaration.\n.RE\n").unwrap();
+    let negative = mant_loader::load_roff_bytes(b".TH NO 1\n.SH NOTES\n.PP\nfile.md\n.RS 4\nA file example, not a configuration declaration.\n.RE\n").unwrap();
     assert_eq!(
-        mant_engine::select_explanation(&negative, "file.md")
+        mant_query::select_explanation(&negative, "file.md")
             .unwrap()
             .counts
             .direct_entry
@@ -256,7 +256,7 @@ PROSE_BODY
 ";
 #[test]
 fn compact_parameter_grammar_and_opaque_environment_templates_remain_declarations() {
-    let content = mant_engine::query_roff_bytes(COMPACT_DECLARATIONS).unwrap();
+    let content = mant_loader::load_roff_bytes(COMPACT_DECLARATIONS).unwrap();
     for (query, total, body) in [
         ("-L", 1, "RANGE_BODY"),
         ("--max-count", 1, "COUNT_BODY"),
@@ -267,7 +267,7 @@ fn compact_parameter_grammar_and_opaque_environment_templates_remain_declaration
         ("--sd-id", 1, "IDENTIFIER_BODY"),
         ("--trailer", 1, "TRAILER_BODY"),
     ] {
-        let result = mant_engine::select_explanation(&content, query).unwrap();
+        let result = mant_query::select_explanation(&content, query).unwrap();
         assert_eq!(
             result.counts.direct_entry.total, total,
             "{query}: {result:?}"
@@ -284,7 +284,7 @@ fn compact_parameter_grammar_and_opaque_environment_templates_remain_declaration
         "funcname",
     ] {
         assert_eq!(
-            mant_engine::select_explanation(&content, query)
+            mant_query::select_explanation(&content, query)
                 .unwrap()
                 .counts
                 .direct_entry
@@ -293,7 +293,7 @@ fn compact_parameter_grammar_and_opaque_environment_templates_remain_declaration
             "{query}"
         );
     }
-    let env = mant_engine::select_explanation(&content, "GIT_CONFIG_COUNT").unwrap();
+    let env = mant_query::select_explanation(&content, "GIT_CONFIG_COUNT").unwrap();
     let direct = env
         .evidence
         .iter()

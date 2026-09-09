@@ -32,7 +32,7 @@ fn compact_independent_heads_do_not_share_explain_bodies_or_sources() {
         ".TH PROBE 1\n.SH OPTIONS\n.TP\n.B --first\n.PD 0\n.TP\n.B --second\n.PD\nSECOND_BODY\n.TP\n.B --last\n",
         ".Dd September 8, 2026\n.Dt PROBE 1\n.Os\n.Sh OPTIONS\n.Bl -tag -width Ds\n.Tg First.Target\n.It Fl -first\n.Tg Second.Target\n.It Fl -second\nSECOND_BODY\n.Tg Last.Target\n.It Fl -last\n.El\n",
     ] {
-        let query = mant_engine::query_roff_bytes(source.as_bytes()).unwrap();
+        let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
         let document = query.document.as_ref().unwrap();
         assert!(mant_ir::validate_document(document).is_empty());
         let items = definitions(document);
@@ -42,7 +42,7 @@ fn compact_independent_heads_do_not_share_explain_bodies_or_sources() {
             let entry = items[index].entry.as_ref().unwrap();
             assert_eq!(entry.names, [*name]);
             assert!(entry.alias_groups.is_empty());
-            let result = mant_engine::explain_query(
+            let result = mant_query::explain_query(
                 &query,
                 &ExplanationQuery {
                     entry: (*name).into(),
@@ -57,7 +57,7 @@ fn compact_independent_heads_do_not_share_explain_bodies_or_sources() {
                 .collect::<Vec<_>>();
             assert_eq!(direct.len(), 1);
             assert_eq!(direct[0].source, items[index].source);
-            let excerpt = mant_engine::select_excerpt(
+            let excerpt = mant_query::select_excerpt(
                 &query,
                 &[mant_protocol::ContentSelector::path(
                     direct[0].outline.path(),
@@ -82,7 +82,7 @@ fn explicit_tq_groups_only_the_immediately_preceding_empty_head() {
         let source = format!(
             ".TH PROBE 1\n.SH OPTIONS\n.TP\n.B --orphan\n.TP\n.B --first\n.TQ\n.B --second\n.TQ\n.B --third\n{tail}"
         );
-        let query = mant_engine::query_roff_bytes(source.as_bytes()).unwrap();
+        let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
         let items = definitions(query.document.as_ref().unwrap());
         assert_eq!(items.len(), 2);
         assert!(items[0].description.is_empty());
@@ -100,7 +100,7 @@ fn explicit_tq_groups_only_the_immediately_preceding_empty_head() {
 fn an_explicit_tq_after_a_body_does_not_steal_that_body() {
     let source =
         b".TH PROBE 1\n.SH OPTIONS\n.TP\n.B --first\nFIRST_BODY\n.TQ\n.B --second\nSECOND_BODY\n";
-    let query = mant_engine::query_roff_bytes(source).unwrap();
+    let query = mant_loader::load_roff_bytes(source).unwrap();
     let items = definitions(query.document.as_ref().unwrap());
     assert_eq!(items.len(), 2);
     for (item, expected) in items.iter().zip(["FIRST_BODY", "SECOND_BODY"]) {
@@ -117,7 +117,7 @@ fn named_roff_bullets_are_lists_but_literal_operator_definitions_survive() {
         let source = format!(
             ".TH PROBE 1\n.SH TOPIC\n.PD 0\n.TP 4\n{marker}\nFIRST\n.TP 4\n{marker}\nSECOND\n.RS 4\nNested continuation.\n.RE\n.TP 4\n.B *\nAn operator.\n.TP 4\n.B -\nStandard input.\n.TP 4\n.B +\nAnother operator.\n"
         );
-        let query = mant_engine::query_roff_bytes(source.as_bytes()).unwrap();
+        let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
         let document = query.document.as_ref().unwrap();
         let items = definitions(document);
         assert_eq!(items.len(), 3, "{items:?}");
@@ -150,7 +150,7 @@ fn explicit_tp_and_ip_bullets_keep_equivalent_rendered_layout() {
     let body = "BODY\n.RS 4\nCONTINUATION\n.RE\n";
     let outputs = [".TP 4\n\\(bu", ".IP \\(bu 4"].map(|head| {
         let source = format!(".TH PROBE 1\n.SH TOPIC\n{head}\n{body}");
-        let query = mant_engine::query_roff_bytes(source.as_bytes()).unwrap();
+        let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
         (
             mant_render::render_query_text(&query),
             mant_codec::encode::render_markdown(&query),
@@ -177,14 +177,14 @@ fn parameter_alternations_never_become_declared_command_names() {
         (r"\fB:\fP", ":"),
     ] {
         let source = format!(".TH PROBE 1\n.SH COMMANDS\n.TP\n{head}\nBODY\n");
-        let query = mant_engine::query_roff_bytes(source.as_bytes()).unwrap();
+        let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
         let document = query.document.as_ref().unwrap();
         assert!(mant_ir::validate_document(document).is_empty());
         let items = definitions(document);
         assert_eq!(items.len(), 1);
         assert_eq!(items[0].entry.as_ref().unwrap().names, [expected], "{head}");
         for fake in ["{+", "<uuid>", "[<dest>/]<name>"] {
-            let result = mant_engine::explain_query(
+            let result = mant_query::explain_query(
                 &query,
                 &ExplanationQuery {
                     entry: fake.into(),
@@ -204,7 +204,7 @@ fn inferred_heads_require_whole_declarations_not_words_inside_prose() {
         ".TH PROBE 1\n.SH ENVIRONMENT\n.PP\nThe line number is reported, as\n.RS 4\nprogram --line 1\n.RE\n",
         ".Dd September 8, 2026\n.Dt PROBE 1\n.Os\n.Sh OPTIONS\n.Pp\n.Fl T\nselects a terminal type for the next client.\n.Bd -literal -offset indent\nprogram -T EXAMPLE\n.Ed\n",
     ] {
-        let query = mant_engine::query_roff_bytes(source.as_bytes()).unwrap();
+        let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
         assert!(
             definitions(query.document.as_ref().unwrap()).is_empty(),
             "{source}"
@@ -213,7 +213,7 @@ fn inferred_heads_require_whole_declarations_not_words_inside_prose() {
         assert!(text.contains("program"));
         assert!(mant_ir::validate_document(query.document.as_ref().unwrap()).is_empty());
         for name in ["otherwise", "as", "-T"] {
-            let result = mant_engine::explain_query(
+            let result = mant_query::explain_query(
                 &query,
                 &ExplanationQuery {
                     entry: name.into(),
@@ -244,7 +244,7 @@ fn inferred_heads_require_whole_declarations_not_words_inside_prose() {
     ] {
         let source =
             format!(".TH PROBE 1\n.SH {section}\n.PP\n{head}\n.RS 4\nDESCRIPTION_BODY\n.RE\n");
-        let query = mant_engine::query_roff_bytes(source.as_bytes()).unwrap();
+        let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
         let items = definitions(query.document.as_ref().unwrap());
         assert_eq!(items.len(), 1, "{source}");
         assert_eq!(items[0].entry.as_ref().unwrap().names, expected);
@@ -255,7 +255,7 @@ fn inferred_heads_require_whole_declarations_not_words_inside_prose() {
 #[test]
 fn explicit_diagnostic_labels_remain_definitions_without_prose_fragment_names() {
     let source = b".TH PROBE 1\n.SH ENVIRONMENT\n.TP\nPermission denied, otherwise\nBODY\n";
-    let query = mant_engine::query_roff_bytes(source).unwrap();
+    let query = mant_loader::load_roff_bytes(source).unwrap();
     let items = definitions(query.document.as_ref().unwrap());
     assert_eq!(items.len(), 1);
     let entry = items[0].entry.as_ref().unwrap();
@@ -267,7 +267,7 @@ fn explicit_diagnostic_labels_remain_definitions_without_prose_fragment_names() 
 #[test]
 fn native_head_evidence_survives_nesting_without_promoting_body_macros() {
     let source = b".Dd September 8, 2026\n.Dt PROBE 1\n.Os\n.Sh COMMANDS\n.Bl -tag -width Ds\n.It Ic launch\nLAUNCH_BODY\n.Bl -tag -width Ds\n.It Ev NATIVE_PATH\nENVIRONMENT_BODY\n.It Fl @\nAT_BODY\n.It Fl %\nPERCENT_BODY\n.It Fl ,\nCOMMA_BODY\n.It Ic local-key\nKEY_BODY\n.El\n.It Ic NATIVE_PATH\nLITERAL_BODY\n.Pp\n.Ev BODY_ONLY\nis only mentioned here.\n.El\n";
-    let query = mant_engine::query_roff_bytes(source).unwrap();
+    let query = mant_loader::load_roff_bytes(source).unwrap();
     let document = query.document.as_ref().unwrap();
     assert!(
         mant_ir::validate_document(document).is_empty(),
@@ -342,7 +342,7 @@ fn native_head_evidence_survives_nesting_without_promoting_body_macros() {
 #[test]
 fn native_environment_role_and_names_are_independent_of_placeholder_support() {
     let source = b".Dd September 8, 2026\n.Dt PROBE 1\n.Os\n.Sh TOPIC\n.Bl -tag -width Ds\n.It Ev DEMO_HOME Ar directory\nHOME_BODY\n.It Ev [protocol]_PROXY\nTEMPLATE_BODY\n.El\n";
-    let query = mant_engine::query_roff_bytes(source).unwrap();
+    let query = mant_loader::load_roff_bytes(source).unwrap();
     let items = definitions(query.document.as_ref().unwrap());
     assert_eq!(items.len(), 2);
     assert!(
@@ -433,7 +433,7 @@ fn named_declarations_keep_placeholders_annotations_and_assignment_values_in_for
         ),
     ] {
         let source = format!(".TH PROBE 1\n.SH {section}\n.TP\n{head}\nBODY\n");
-        let query = mant_engine::query_roff_bytes(source.as_bytes()).unwrap();
+        let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
         let items = definitions(query.document.as_ref().unwrap());
         assert_eq!(items.len(), 1);
         let facts = items[0].entry.as_ref().unwrap();
@@ -452,7 +452,7 @@ fn named_declarations_keep_placeholders_annotations_and_assignment_values_in_for
         "NAME=one OTHER=two",
     ] {
         let source = format!(".TH PROBE 1\n.SH ENVIRONMENT\n.TP\n{head}\nBODY\n");
-        let query = mant_engine::query_roff_bytes(source.as_bytes()).unwrap();
+        let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
         let items = definitions(query.document.as_ref().unwrap());
         assert!(items[0].entry.as_ref().unwrap().names.is_empty(), "{head}");
     }

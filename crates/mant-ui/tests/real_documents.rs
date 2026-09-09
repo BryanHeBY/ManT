@@ -47,7 +47,7 @@ fn project_file(relative: &str) -> PathBuf {
 
 fn view(relative: &str) -> DocumentView {
     let document =
-        mant_engine::parse_manual_source(&fixture(relative)).expect("parse real fixture");
+        mant_loader::parse_manual_source(&fixture(relative)).expect("parse real fixture");
     DocumentView::new(&ResolvedContent {
         address: None,
         label: relative.to_owned(),
@@ -65,7 +65,7 @@ fn visible_characters(value: &str) -> String {
 
 #[test]
 fn inline_roff_continuations_use_block_coordinates_not_the_label_width() {
-    let query = mant_engine::query_roff_bytes(include_bytes!(
+    let query = mant_loader::load_roff_bytes(include_bytes!(
         "../../../tests/fixtures/roff/inline-definition-continuations.1"
     ))
     .unwrap();
@@ -92,7 +92,7 @@ fn inline_roff_continuations_use_block_coordinates_not_the_label_width() {
 #[test]
 fn literal_scope_continuations_remain_searchable_after_terminal_wrapping() {
     let source = b".Dd September 7, 2026\n.Dt FLOW 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal -offset left\nFIRST\\c\n.Bf -emphasis\nSECOND\\c\n.Ef\nTHIRD\n.Ed\n";
-    let query = mant_engine::query_roff_bytes(source).unwrap();
+    let query = mant_loader::load_roff_bytes(source).unwrap();
     let view = DocumentView::new(&query);
     for width in [4, 16, 80] {
         let rendered = view.render(width);
@@ -106,7 +106,7 @@ fn literal_scope_continuations_remain_searchable_after_terminal_wrapping() {
 
 #[test]
 fn empty_cells_and_span_owners_keep_payloads_in_every_terminal_width() {
-    let query = mant_engine::query_roff_bytes(
+    let query = mant_loader::load_roff_bytes(
         b".TH GRID 1\n.SH DESCRIPTION\n.TS\nl s l\nl l l.\nWIDE\tRIGHT\nLEFT\t\tEND\n.TE\nAFTER\n",
     )
     .unwrap();
@@ -200,7 +200,7 @@ fn real_manuals_render_at_narrow_and_wide_terminal_widths() {
 
 #[test]
 fn semantic_definition_anchors_survive_real_tar_lowering() {
-    let document = mant_engine::parse_manual_source(&fixture("fedora44/tar.1.zst"))
+    let document = mant_loader::parse_manual_source(&fixture("fedora44/tar.1.zst"))
         .expect("parse Fedora tar fixture");
     let acls_id = document
         .sections
@@ -300,7 +300,7 @@ fn real_git_command_references_are_visibly_clickable() {
 fn real_manual_lowering_preserves_every_substantial_text_fragment() {
     for &relative in REAL_MANUALS {
         let document =
-            mant_engine::parse_manual_source(&fixture(relative)).expect("parse real fixture");
+            mant_loader::parse_manual_source(&fixture(relative)).expect("parse real fixture");
         let mut fragments = Vec::new();
         collect_document_fragments(&document, &mut fragments);
         let view = DocumentView::new(&ResolvedContent {

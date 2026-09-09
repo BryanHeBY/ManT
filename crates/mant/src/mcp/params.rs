@@ -440,7 +440,7 @@ impl ExplainParams {
             "entry",
             mant_protocol::MAX_SEMANTIC_ENTRY_CHARS,
         )?;
-        mant_engine::validate_explanation_query(&mant_protocol::ExplanationQuery {
+        mant_query::validate_explanation_query(&mant_protocol::ExplanationQuery {
             entry: entry.clone(),
             options,
         })

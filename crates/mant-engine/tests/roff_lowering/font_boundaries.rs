@@ -61,7 +61,7 @@ fn mdoc_operand_font_escapes_do_not_escape_their_scope() {
             // Literal/code projections intentionally carry code presentation,
             // not individual font runs. For prose, check the actual export.
             if input == body {
-                let reparsed = mant_engine::query_markdown_text(&markdown, None).unwrap();
+                let reparsed = mant_loader::load_markdown_text(&markdown, None).unwrap();
                 assert_style(&reparsed, "NEXT", expected);
             }
         }
@@ -97,7 +97,7 @@ fn mdoc_bf_and_man_persistent_fonts_keep_their_existing_lifetimes() {
         assert_style(&query, "NEXT", 0);
         assert_style(&query, "LAST", 0);
     }
-    let query = mant_engine::query_roff_bytes(
+    let query = mant_loader::load_roff_bytes(
         b".TH PROBE 1\n.SH DESCRIPTION\n\\fBWORD\nNEXT\n.ft I\nITALIC\n.ft P\nBACK\n.PP\nRESET\n",
     )
     .unwrap();
@@ -122,7 +122,7 @@ fn mdoc_macros_select_fonts_instead_of_adding_to_the_outer_font() {
         assert_style(&query, "WORD", word);
         assert_style(&query, "TAIL", tail);
         let exported = mant_codec::encode::render_markdown(&query);
-        let reparsed = mant_engine::query_markdown_text(&exported, None).unwrap();
+        let reparsed = mant_loader::load_markdown_text(&exported, None).unwrap();
         assert_style(&reparsed, "WORD", word);
         assert_style(&reparsed, "TAIL", tail);
     }

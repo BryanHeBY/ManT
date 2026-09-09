@@ -1,7 +1,7 @@
 //! A transparent RS keeps paragraph predecessor evidence across IR ownership.
 
-use mant_engine::query_roff_bytes;
 use mant_ir::{Block, Inline, LayoutHint};
+use mant_loader::load_roff_bytes;
 use mant_render::render_query_text;
 
 fn paragraph_layout<'a>(blocks: &'a [Block], text: &str) -> Option<&'a LayoutHint> {
@@ -29,7 +29,7 @@ fn paragraph_layout<'a>(blocks: &'a [Block], text: &str) -> Option<&'a LayoutHin
 }
 
 fn check(source: &str, expected: &[(&str, u16)]) {
-    let query = query_roff_bytes(source.as_bytes()).unwrap();
+    let query = load_roff_bytes(source.as_bytes()).unwrap();
     let document = query.document.as_ref().unwrap();
     let text = render_query_text(&query);
     if source.contains(".IP 1.") {
@@ -100,7 +100,7 @@ fn ordinary_relative_scopes_retain_the_same_paragraph_boundary_contract() {
 #[test]
 fn a_first_paragraph_in_a_first_relative_scope_does_not_invent_a_predecessor() {
     let source = ".TH PROBE 1\n.SH DESCRIPTION\n.PD 2\n.RS 4\n.RS 2\n.PP\nSECOND\n.RE\n.RE\n";
-    let query = query_roff_bytes(source.as_bytes()).unwrap();
+    let query = load_roff_bytes(source.as_bytes()).unwrap();
     let document = query.document.as_ref().unwrap();
     assert_eq!(
         paragraph_layout(&document.sections[0].blocks, "SECOND")

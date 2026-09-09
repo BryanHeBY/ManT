@@ -6,7 +6,7 @@ fn roff_manual_name_link_excludes_surrounding_prose_after_wrapping() {
     // Keep packaged unit tests self-contained. The engine's repository-level
     // self_manual_authoring test separately checks the actual shipped labels.
     let source = "The following [man(7)](https://mandoc.bsd.lv/man/man.7.html) macros documented by mandoc have dedicated lowering behavior:";
-    let query = mant_engine::query_markdown_text(source, None).unwrap();
+    let query = mant_loader::load_markdown_text(source, None).unwrap();
     let view = DocumentView::new(&query);
     let target = LinkTarget::External(
         model::ExternalUri::parse("https://mandoc.bsd.lv/man/man.7.html").unwrap(),
@@ -55,7 +55,7 @@ fn linked_block(prefix: &str, label: &str) -> Block {
 
 #[test]
 fn associated_heading_and_forms_do_not_create_redundant_reference_groups() {
-    let query = mant_engine::query_markdown_text(
+    let query = mant_loader::load_markdown_text(
         "# [Catalog](catalog.md)\n\n## [Commands](commands.md)\n\n<!-- mant:entries role=command case=sensitive -->\n- [`git-add`](git-add.md): See [tutorial](tutorial.md).\n",
         None,
     ).unwrap();
@@ -92,7 +92,7 @@ fn associated_heading_and_forms_do_not_create_redundant_reference_groups() {
 
 #[test]
 fn native_command_form_and_body_references_share_inventory_not_presentation() {
-    let query = mant_engine::query_roff_bytes(b".Dd September 9, 2026\n.Dt PROBE 1\n.Os\n.Sh COMMANDS\n.Bl -tag -width Ds\n.It Xr git-add 1\nSee\n.Xr git-add 1\nand\n.Xr gittutorial 7 .\n.El\n").unwrap();
+    let query = mant_loader::load_roff_bytes(b".Dd September 9, 2026\n.Dt PROBE 1\n.Os\n.Sh COMMANDS\n.Bl -tag -width Ds\n.It Xr git-add 1\nSee\n.Xr git-add 1\nand\n.Xr gittutorial 7 .\n.El\n").unwrap();
     let view = DocumentView::new(&query);
     assert_eq!(view.references.len(), 3);
     assert_eq!(
@@ -123,7 +123,7 @@ fn native_command_form_and_body_references_share_inventory_not_presentation() {
 
 #[test]
 fn invalid_form_association_falls_back_without_hiding_any_source() {
-    let mut query = mant_engine::query_markdown_text(
+    let mut query = mant_loader::load_markdown_text(
         "# Demo\n\n## Commands\n\n<!-- mant:entries role=command case=sensitive -->\n- [`command`](command.md): Description.\n", None).unwrap();
     let document = query.document.as_mut().unwrap();
     let Block::List { items, .. } = &mut document.sections[0].blocks[0] else {
@@ -144,7 +144,7 @@ fn invalid_form_association_falls_back_without_hiding_any_source() {
 
 #[test]
 fn hidden_or_invalid_form_owner_uses_body_fallback_not_section_badge() {
-    let original = mant_engine::query_markdown_text(
+    let original = mant_loader::load_markdown_text(
         "# Demo\n\n## Commands\n\n<!-- mant:entries role=command case=sensitive -->\n- [`command`](command.md): Description.\n", None).unwrap();
     let mut view = DocumentView::new(&original);
     view.navigation
@@ -184,7 +184,7 @@ fn hidden_or_invalid_form_owner_uses_body_fallback_not_section_badge() {
 
 #[test]
 fn hidden_owner_cannot_lend_its_badge_to_an_unrelated_visible_same_id() {
-    let mut query = mant_engine::query_markdown_text(
+    let mut query = mant_loader::load_markdown_text(
         "# Demo\n\n## Commands\n\n<!-- mant:entries role=command case=sensitive -->\n- [`first`](first.md): First.\n- `second`: Unlinked.\n", None).unwrap();
     let Block::List { items, .. } = &mut query.document.as_mut().unwrap().sections[0].blocks[0]
     else {

@@ -3,14 +3,15 @@
 mod semantic_read;
 use std::path::Path;
 
-use mant_engine::{build_outline_projection, parse_manual_bytes, query_markdown_text};
 use mant_ir::Block;
+use mant_loader::{load_markdown_text, parse_manual_bytes};
 use mant_protocol::{EntryProjection, ExcerptSelection, OutlineNode};
+use mant_query::build_outline_projection;
 use mant_render::render_excerpt_text;
 
 #[test]
 fn inline_definition_continuations_keep_the_structural_description_origin() {
-    let query = mant_engine::query_roff_bytes(include_bytes!(
+    let query = mant_loader::load_roff_bytes(include_bytes!(
         "../../../tests/fixtures/roff/inline-definition-continuations.1"
     ))
     .unwrap();
@@ -40,7 +41,7 @@ fn leading_spacing_and_code_do_not_become_an_inline_description() {
     for label in ["-a", "--long-option"] {
         for body in [".sp 2\nCONTENT", ".nf\nCONTENT\n.fi"] {
             let source = format!(".TH PROBE 1\n.SH OPTIONS\n.IP \"{label}\" 4\n{body}\n");
-            let query = mant_engine::query_roff_bytes(source.as_bytes()).unwrap();
+            let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
             let text = mant_render::render_query_text(&query);
             assert!(text.lines().any(|line| line == label), "{text}");
             assert!(text.lines().any(|line| line == "    CONTENT"), "{text}");
@@ -61,7 +62,7 @@ fn spaced_relative_scopes_stay_with_their_definition_across_query_surfaces() {
         include_bytes!("../../../tests/fixtures/roff/definition-spaced-continuations.1"),
     )
     .unwrap();
-    let mut query = query_markdown_text("# Placeholder\n\nBody.\n", None).unwrap();
+    let mut query = load_markdown_text("# Placeholder\n\nBody.\n", None).unwrap();
     query.document = Some(doc);
     let excerpt = semantic_read::semantic_excerpt(&query, &["--help"]).unwrap();
     let text = render_excerpt_text(&excerpt);
@@ -116,7 +117,7 @@ fn spaced_relative_scopes_stay_with_their_definition_across_query_surfaces() {
     {
         assert!(
             render_excerpt_text(
-                &mant_engine::select_excerpt(
+                &mant_query::select_excerpt(
                     &query,
                     &[mant_protocol::ContentSelector::path(child.path())]
                 )
@@ -126,7 +127,7 @@ fn spaced_relative_scopes_stay_with_their_definition_across_query_surfaces() {
         );
     }
     assert_eq!(
-        mant_engine::select_excerpt(
+        mant_query::select_excerpt(
             &query,
             &[mant_protocol::ContentSelector::path(path.as_ref())]
         )

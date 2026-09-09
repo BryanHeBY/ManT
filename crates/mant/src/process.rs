@@ -26,7 +26,7 @@ use external::open_uri as open_external_uri;
 use host::CliHost;
 use host::SystemHost;
 #[cfg(feature = "tui")]
-use mant_engine::LoadPolicy;
+use mant_loader::LoadPolicy;
 #[cfg(feature = "tui")]
 use mant_protocol::{CatalogQuery, QueryView};
 use output_policy::{TerminalCapabilities, TerminalKind, resolve_process_presentation};

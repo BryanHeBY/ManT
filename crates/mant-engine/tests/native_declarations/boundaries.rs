@@ -2,7 +2,7 @@
 use super::*;
 
 fn names(source: &str) -> Vec<String> {
-    let content = mant_engine::query_roff_bytes(source.as_bytes()).unwrap();
+    let content = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
     let item = definitions(content.document.as_ref().unwrap())[0];
     item.entry.as_ref().unwrap().names.clone()
 }
@@ -32,7 +32,7 @@ fn native_environment_templates_are_not_exact_prefix_names() {
         let source = format!(
             ".Dd September 8, 2026\n.Dt PROBE 1\n.Os\n.Sh ENVIRONMENT\n.Bl -tag -width Ds\n.It {head}\nDocumented body.\n.El\n"
         );
-        let content = mant_engine::query_roff_bytes(source.as_bytes()).unwrap();
+        let content = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
         let item = definitions(content.document.as_ref().unwrap())[0];
         let entry = item.entry.as_ref().unwrap();
         assert_eq!(entry.kind, mant_ir::EntryKind::EnvironmentVariable);

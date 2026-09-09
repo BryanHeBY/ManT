@@ -1,5 +1,5 @@
 //! Original regressions: execution, not raw source adjacency, owns literal rows.
-use mant_engine::query_roff_bytes;
+use mant_loader::load_roff_bytes;
 use mant_render::render_query_text;
 
 fn rendered(mode: &str, body: &str) -> String {
@@ -11,7 +11,7 @@ fn rendered(mode: &str, body: &str) -> String {
             ".Dd September 9, 2026\n.Dt PROBE 1\n.Os\n.Sh TEST\n.Bd -{mode} -compact\n{body}\n.Ed\nAFTER\n"
         ),
     };
-    let query = query_roff_bytes(source.as_bytes()).unwrap();
+    let query = load_roff_bytes(source.as_bytes()).unwrap();
     assert!(mant_ir::validate_document(query.document.as_ref().unwrap()).is_empty());
     render_query_text(&query)
 }
@@ -139,7 +139,7 @@ fn detached_native_ast_keeps_executed_rows_without_source_or_line_numbers() {
                 clear_lines(&mut native.document.root);
             }
             let document =
-                mant_engine::lower_mandoc_document(std::path::Path::new("probe.1"), &native);
+                mant_codec::lower_mandoc_document(std::path::Path::new("probe.1"), &native);
             let text = render_query_text(&mant_ir::ResolvedContent {
                 label: "probe".into(),
                 address: None,
@@ -203,7 +203,7 @@ fn leading_and_all_blank_literal_rows_are_content_after_a_predecessor() {
                     "{header}\nBEFORE\n{open}\n{}{middle}{close}\nAFTER\n",
                     "\n".repeat(rows)
                 );
-                let text = render_query_text(&query_roff_bytes(source.as_bytes()).unwrap());
+                let text = render_query_text(&load_roff_bytes(source.as_bytes()).unwrap());
                 let next = if middle.is_empty() { "AFTER" } else { "ALPHA" };
                 assert!(
                     text.contains(&format!("BEFORE{}{next}", "\n".repeat(rows + 1))),
@@ -236,7 +236,7 @@ fn explicit_literal_spacing_retains_start_end_and_empty_display_boundaries() {
             ("ALPHA\\c\n\n\nBETA", "ALPHA\n\nBETA"),
         ] {
             let source = format!("{header}\nBEFORE\n{open}\n{body}\n{close}\nAFTER\n");
-            let text = render_query_text(&query_roff_bytes(source.as_bytes()).unwrap());
+            let text = render_query_text(&load_roff_bytes(source.as_bytes()).unwrap());
             assert!(text.contains(expected), "{mode} {body}: {text:?}");
         }
     }
@@ -258,7 +258,7 @@ fn explicit_request_budgets_do_not_turn_into_unbounded_literal_content() {
             "{header}\n{open}\nALPHA\n{}BETA\n{close}\n",
             ".sp 65\n".repeat(100)
         );
-        let query = query_roff_bytes(source.as_bytes()).unwrap();
+        let query = load_roff_bytes(source.as_bytes()).unwrap();
         let text = render_query_text(&query);
         assert!(
             text.contains(&format!("ALPHA{}BETA", "\n".repeat(4097))),
@@ -302,7 +302,7 @@ fn font_and_target_survive_literal_request_splits() {
             walk_inline(self, inline);
         }
     }
-    let query = query_roff_bytes(b".Dd September 9, 2026\n.Dt PROBE 1\n.Os\n.Sh TEST\n.Bd -literal -compact\n.Bf -emphasis\nALPHA\n.sp 2\n.Tg destination\n.Em BETA\n.Ef\nGAMMA\n.Ed\n").unwrap();
+    let query = load_roff_bytes(b".Dd September 9, 2026\n.Dt PROBE 1\n.Os\n.Sh TEST\n.Bd -literal -compact\n.Bf -emphasis\nALPHA\n.sp 2\n.Tg destination\n.Em BETA\n.Ef\nGAMMA\n.Ed\n").unwrap();
     let document = query.document.as_ref().unwrap();
     let mut styled = Emphasized::default();
     styled.visit_document(document);

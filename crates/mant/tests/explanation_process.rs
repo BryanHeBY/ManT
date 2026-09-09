@@ -72,8 +72,8 @@ fn cli_file_stdin_and_public_production_api_agree_on_executed_boundaries() {
             .write_all(source.as_bytes())
             .unwrap();
         let stdin = success(&child.wait_with_output().unwrap());
-        let document = mant_engine::parse_manual_source(&path).unwrap();
-        let api = mant_engine::explain_query(
+        let document = mant_loader::parse_manual_source(&path).unwrap();
+        let api = mant_query::explain_query(
             &mant_ir::ResolvedContent {
                 label: "probe".into(),
                 address: None,

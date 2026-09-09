@@ -4,9 +4,9 @@ use super::*;
 #[test]
 fn empty_native_list_target_adds_navigation_without_an_extra_row() {
     let source = ".Dd September 9, 2026\n.Dt TARGET 1\n.Os\n.Sh DESCRIPTION\nBEFORE\n.Bl -tag -width Ds\n.Tg empty-target\n.El\n.Pp\nAFTER\n";
-    let annotated = mant_engine::query_roff_bytes(source.as_bytes()).unwrap();
+    let annotated = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
     let plain =
-        mant_engine::query_roff_bytes(source.replace(".Tg empty-target\n", "").as_bytes()).unwrap();
+        mant_loader::load_roff_bytes(source.replace(".Tg empty-target\n", "").as_bytes()).unwrap();
     let annotated = DocumentView::new(&annotated).render(80);
     let plain = DocumentView::new(&plain).render(80);
     assert_eq!(annotated.text, plain.text);

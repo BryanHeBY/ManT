@@ -3,18 +3,18 @@
 //! restores the parent offset at exit. Nested Bd is supported with a native
 //! portability warning, independently of its source geometry.
 
-use mant_engine::query_roff_bytes;
 use mant_ir::{
     Block, Inline,
     visit::{self, Visit},
 };
+use mant_loader::load_roff_bytes;
 use mant_render::render_query_text;
 
-fn query(body: &str) -> mant_engine::ResolvedContent {
+fn query(body: &str) -> mant_ir::ResolvedContent {
     let source = format!(
         ".Dd September 9, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd exercise display scopes\n.Sh DESCRIPTION\nBASE\n{body}\nAFTER\n"
     );
-    query_roff_bytes(source.as_bytes()).unwrap()
+    load_roff_bytes(source.as_bytes()).unwrap()
 }
 
 fn assert_column(text: &str, token: &str, column: usize) {
@@ -246,7 +246,7 @@ fn first_child_displays_inherit_only_real_predecessors_across_parent_scopes() {
                     let source = format!(
                         ".Dd September 9, 2026\n.Dt PROBE 1\n.Os\n.Sh TEST\n{before}.Bd -{outer}{flag}\n.Bd -{inner}\nINNER\n.Ed\n.Ed\nAFTER\n"
                     );
-                    let content = query_roff_bytes(source.as_bytes()).unwrap();
+                    let content = load_roff_bytes(source.as_bytes()).unwrap();
                     let text = render_query_text(&content);
                     let expected_gap = u16::from(predecessor) * (2 - u16::from(compact));
                     if predecessor {
@@ -291,7 +291,7 @@ fn empty_displays_preserve_their_independent_requests_without_visible_leaves() {
                     let source = format!(
                         ".Dd September 9, 2026\n.Dt PROBE 1\n.Os\n.Sh TEST\n{before}.Bd -{outer}\n.Bd -{empty}{flag}\n.Ed\n.Bd -literal\nINNER\n.Ed\n.Ed\nAFTER\n"
                     );
-                    let content = query_roff_bytes(source.as_bytes()).unwrap();
+                    let content = load_roff_bytes(source.as_bytes()).unwrap();
                     let text = render_query_text(&content);
                     // The second inner Bd has an earlier sibling even when
                     // that empty sibling generated no printable content.
@@ -350,7 +350,7 @@ fn first_item_display_boundaries_follow_the_native_list_kind() {
             let source = format!(
                 ".Dd September 9, 2026\n.Dt PROBE 1\n.Os\n.Sh TEST\n{before}.Bl {list} -compact\n.It{head}\n.Bd -literal\nINNER\n.Ed\n.El\nAFTER\n"
             );
-            let content = query_roff_bytes(source.as_bytes()).unwrap();
+            let content = load_roff_bytes(source.as_bytes()).unwrap();
             let mut gap = Gap(None);
             gap.visit_document(content.document.as_ref().unwrap());
             assert_eq!(
@@ -364,6 +364,6 @@ fn first_item_display_boundaries_follow_the_native_list_kind() {
     // LIST_item inherits outer predecessors through the detached list body.
     let content = query(".Bd -literal\n.Bl -item\n.It\n.Bd -literal\nINNER\n.Ed\n.El\n.Ed");
     assert!(render_query_text(&content).contains("BASE\n\n\n\nINNER\nAFTER"));
-    let content = query_roff_bytes(b".Dd September 9, 2026\n.Dt PROBE 1\n.Os\n.Sh TEST\n.Bl -item -compact\n.It\nFIRST\n.It\n.Bd -literal\nINNER\n.Ed\n.El\nAFTER\n").unwrap();
+    let content = load_roff_bytes(b".Dd September 9, 2026\n.Dt PROBE 1\n.Os\n.Sh TEST\n.Bl -item -compact\n.It\nFIRST\n.It\n.Bd -literal\nINNER\n.Ed\n.El\nAFTER\n").unwrap();
     assert!(render_query_text(&content).contains("FIRST\n\nINNER\nAFTER"));
 }

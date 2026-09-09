@@ -60,7 +60,7 @@ impl DisplayCapabilities {
                 Self {
                     reader: cfg!(feature = "tui")
                         && full
-                        && *policy != mant_engine::LoadPolicy::TldrOnly,
+                        && *policy != mant_loader::LoadPolicy::TldrOnly,
                     pager: cfg!(feature = "pager") && !stdin,
                     auto_page: cfg!(feature = "pager") && !stdin,
                 }

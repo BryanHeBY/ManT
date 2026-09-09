@@ -27,7 +27,7 @@ use crate::{
     output_policy::{TerminalCapabilities, TerminalKind, resolve_process_presentation},
     request_input::read_native_request,
 };
-use mant_engine::LoadPolicy;
+use mant_loader::LoadPolicy;
 use mant_protocol::{CatalogQuery, DocumentAddress, DocumentCatalog};
 
 #[test]
@@ -766,7 +766,7 @@ fn explainable_manual() -> Document {
 }
 
 fn semantic_markdown() -> Document {
-    mant_engine::parse_markdown(
+    mant_codec::parse_markdown(
             "# Tool\n\n## Query\n\nGeneral query behavior.\n\n<!-- mant:entries role=option case=insensitive -->\n- `/f`: Force a query.\n\n## Commands\n\n<!-- mant:entries role=command case=insensitive -->\n- `query`: Query registry data.\n\n## Options\n\n<!-- mant:entries role=option case=insensitive -->\n- `/S COMPUTER`: Select a remote computer.\n\n## Environment\n\n<!-- mant:entries role=environment-variable case=insensitive -->\n- `PATH`, `$env:PATH`: Control executable discovery.\n\n## Delete\n\n<!-- mant:entries role=option case=insensitive -->\n- `/F`: Force deletion.\n",
             Some("semantic.md".to_owned()),
         )

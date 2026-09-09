@@ -12,8 +12,8 @@
 use std::path::PathBuf;
 
 use mant_codec::encode::render_markdown;
-use mant_engine::parse_manual_source;
 use mant_ir::{Block, Document};
+use mant_loader::parse_manual_source;
 use mant_render::{render_query_man, render_query_text};
 
 #[path = "common/mod.rs"]
@@ -204,7 +204,7 @@ fn explicit_tp_widths_control_layout_and_persist() {
 // Text / --format man rendering
 // ---------------------------------------------------------------------------
 
-fn query() -> mant_engine::ResolvedContent {
+fn query() -> mant_ir::ResolvedContent {
     common::query_for_document("inline-terms", document())
 }
 

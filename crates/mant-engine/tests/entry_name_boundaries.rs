@@ -3,8 +3,8 @@
 mod semantic_read;
 use std::path::Path;
 
-use mant_engine::parse_manual_bytes;
 use mant_ir::SemanticIndex;
+use mant_loader::parse_manual_bytes;
 
 fn inline_text(inlines: &[mant_ir::Inline]) -> String {
     inlines
@@ -37,7 +37,7 @@ fn assert_direct_names(query: &mant_ir::ResolvedContent, names: &[&str], form: &
         document.diagnostics
     );
     for name in names {
-        let explained = mant_engine::explain_query(
+        let explained = mant_query::explain_query(
             query,
             &ExplanationQuery {
                 entry: (*name).into(),
@@ -66,7 +66,7 @@ fn assert_direct_names(query: &mant_ir::ResolvedContent, names: &[&str], form: &
                 .collect::<Vec<_>>(),
             [form]
         );
-        let excerpt = mant_engine::select_excerpt(
+        let excerpt = mant_query::select_excerpt(
             query,
             &[mant_protocol::ContentSelector::path(direct.outline.path())],
         )
@@ -94,7 +94,7 @@ fn local_mdoc_fonts_keep_name_bindings_and_complete_forms() {
         let source = format!(
             ".Dd September 8, 2026\n.Dt PROBE 1\n.Os\n.Sh OPTIONS\n.Bl -tag -width Ds\n.It {head}\nPAYLOAD.\n.El\n"
         );
-        let query = mant_engine::query_roff_bytes(source.as_bytes()).unwrap();
+        let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
         assert_direct_names(&query, &["-x"], "-x ARG NEXT");
     }
 }
@@ -105,7 +105,7 @@ fn enclosure_spacing_preserves_option_forms_names_and_explanation_sources() {
         let source = format!(
             ".Dd September 8, 2026\n.Dt PROBE 1\n.Os\n.Sh OPTIONS\n.Bl -tag -width Ds\n.Tg Exact.Target\n.It {head}\nPAYLOAD.\n.El\n"
         );
-        let query = mant_engine::query_roff_bytes(source.as_bytes()).unwrap();
+        let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
         assert_direct_names(&query, &["-x"], "-x [arg] tail");
         let document = query.document.as_ref().unwrap();
         let mant_ir::Block::DefinitionList { items, .. } = &document.sections[0].blocks[0] else {
@@ -147,7 +147,7 @@ fn grammar_selected_ranges_survive_wrappers_arguments_and_styles() {
         (".BI \"{-n/\" -NUM", vec!["-n"], "{-n/-NUM"),
     ] {
         let source = format!(".TH PROBE 1\n.SH OPTIONS\n.TP\n{head}\nPAYLOAD.\n");
-        let query = mant_engine::query_roff_bytes(source.as_bytes()).unwrap();
+        let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
         assert_direct_names(&query, &names, form);
     }
 }
@@ -161,7 +161,7 @@ fn marker_prefixes_do_not_widen_the_existing_native_admission_grammar() {
         ("- FILE", vec![]),
     ] {
         let source = format!(".TH PROBE 1\n.SH OPTIONS\n.TP\n.B {form}\nPAYLOAD.\n");
-        let query = mant_engine::query_roff_bytes(source.as_bytes()).unwrap();
+        let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
         let index = SemanticIndex::build(query.document.as_ref().unwrap());
         assert_eq!(index.section("options")[0].names, expected, "{form}");
     }
@@ -176,7 +176,7 @@ fn inferred_markdown_uses_its_recognizer_evidence_not_declaration_boundaries() {
         ("-a/--all", vec!["-a", "--all"]),
     ] {
         let query =
-            mant_engine::query_markdown_text(&format!("# Options\n\n- `{form}`: PAYLOAD.\n"), None)
+            mant_loader::load_markdown_text(&format!("# Options\n\n- `{form}`: PAYLOAD.\n"), None)
                 .unwrap();
         assert_direct_names(&query, &names, form);
     }
@@ -247,7 +247,7 @@ fn plus_signs_inside_executable_options_are_not_argument_boundaries() {
                 &name[1..]
             ),
         ] {
-            let query = mant_engine::query_roff_bytes(source.as_bytes()).unwrap();
+            let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
             let doc = query.document.as_ref().unwrap();
             assert!(
                 !doc.diagnostics
@@ -275,7 +275,7 @@ fn recognized_option_prefixes_bind_before_angle_delimited_arguments() {
         ("-fno-builtin-std-<function>", "-fno-builtin-std-"),
     ] {
         let source = format!(".TH CLANG 1 2026-09-08\n.SH OPTIONS\n.TP\n.B {form}\nDescription.\n");
-        let query = mant_engine::query_roff_bytes(source.as_bytes()).unwrap();
+        let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
         let doc = query.document.as_ref().unwrap();
         assert!(doc.diagnostics.is_empty(), "{form}: {:?}", doc.diagnostics);
         let index = SemanticIndex::build(doc);
@@ -288,7 +288,7 @@ fn recognized_option_prefixes_bind_before_angle_delimited_arguments() {
         let path = Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../../tests/fixtures/roff/real")
             .join(fixture);
-        let doc = mant_engine::parse_manual_source(&path).unwrap();
+        let doc = mant_loader::parse_manual_source(&path).unwrap();
         assert!(
             !doc.diagnostics
                 .iter()

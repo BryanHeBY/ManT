@@ -110,7 +110,7 @@ fn a_real_tldr_fragment_does_not_silently_jump_to_the_quick_reference_panel() {
 }
 
 fn reference_bundle() -> ResolvedContent {
-    let mut bundle = mant_engine::query_markdown_text(
+    let mut bundle = mant_loader::load_markdown_text(
         "# Catalog\n\n## Links\n\n[ALPHA](target.md#details) and [BETA](target.md#details).\n",
         None,
     )
@@ -123,7 +123,7 @@ fn reference_bundle() -> ResolvedContent {
 }
 
 fn associated_bundle() -> ResolvedContent {
-    let mut bundle = mant_engine::query_markdown_text(
+    let mut bundle = mant_loader::load_markdown_text(
         "# Catalog\n\n## [First](target.md#first) and [Second](target.md#second) and [Again](target.md#first)\n\nBody.\n", None).unwrap();
     bundle.address = Some(DocumentAddress::Markdown {
         path: "catalog".into(),
@@ -140,7 +140,7 @@ fn direct_and_picker_copy_keep_encoded_native_topics_distinct_from_sections() {
         } else {
             "# Catalog\n\n## Native\n\n[Native](man:demo%281%29)\n"
         };
-        let bundle = mant_engine::query_markdown_text(source, None).unwrap();
+        let bundle = mant_loader::load_markdown_text(source, None).unwrap();
         let mut app = App::new(&bundle);
         app.selected = app
             .session
@@ -521,7 +521,7 @@ fn valid_destination_fragment_commits_once_and_back_returns_to_reference_occurre
     app.open_selected_reference();
     let request = app.take_open_request().unwrap();
     let mut target =
-        mant_engine::query_markdown_text("# Target\n\n## Details\n\nTARGET BODY\n", None).unwrap();
+        mant_loader::load_markdown_text("# Target\n\n## Details\n\nTARGET BODY\n", None).unwrap();
     target.address = Some(DocumentAddress::Markdown {
         path: "target".into(),
         origin: MarkdownOrigin::Documents,

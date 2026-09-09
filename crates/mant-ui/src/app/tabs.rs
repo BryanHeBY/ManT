@@ -11,9 +11,7 @@ use ratatui::{
 };
 use unicode_width::UnicodeWidthStr;
 
-use super::{
-    App, HistoryDirection, NavigationRequest, Overlay, UpdateOutcome, menu::MenuId,
-};
+use super::{App, HistoryDirection, NavigationRequest, Overlay, UpdateOutcome, menu::MenuId};
 use crate::theme;
 
 const MAX_DOCUMENT_TAB_WIDTH: u16 = 28;

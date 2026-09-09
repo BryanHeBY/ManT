@@ -3,8 +3,8 @@
 
 use std::{path::PathBuf, sync::OnceLock};
 
-use mant_engine::parse_manual_source;
 use mant_ir::Document;
+use mant_loader::parse_manual_source;
 
 static CLANG: OnceLock<Document> = OnceLock::new();
 static GCC: OnceLock<Document> = OnceLock::new();

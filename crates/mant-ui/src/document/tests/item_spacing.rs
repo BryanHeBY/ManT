@@ -31,7 +31,7 @@ fn row(lines: &[String], token: &str) -> usize {
 
 #[test]
 fn native_pd_two_zero_two_matches_text_and_tui_item_boundaries() {
-    let query = mant_engine::query_roff_bytes(b".TH GAPS 1\n.SH DESCRIPTION\nBEFORE\n.PD 2\n.IP 1. 4\nFIRST\n.PD 0\n.IP 2. 4\nSECOND\n.PD 2\n.IP 3. 4\nTHIRD\n").unwrap();
+    let query = mant_loader::load_roff_bytes(b".TH GAPS 1\n.SH DESCRIPTION\nBEFORE\n.PD 2\n.IP 1. 4\nFIRST\n.PD 0\n.IP 2. 4\nSECOND\n.PD 2\n.IP 3. 4\nTHIRD\n").unwrap();
     let document = query.document.as_ref().unwrap();
     let Block::List { items, .. } = document.sections[0]
         .blocks

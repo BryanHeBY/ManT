@@ -3,9 +3,10 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use clap::CommandFactory;
-use mant_engine::{build_outline_with_detail, query_markdown_text, select_explanation};
 use mant_ir::{EntryKind, NameCase, ParameterKind};
+use mant_loader::load_markdown_text;
 use mant_protocol::{EvidenceBasis, OutlineDetail, OutlineNode};
+use mant_query::{build_outline_with_detail, select_explanation};
 
 fn public_flags(command: &mut clap::Command) -> Vec<BTreeSet<String>> {
     // Include generated help/version switches as well as authored arguments.
@@ -61,7 +62,7 @@ fn check_manual_coverage(
     exact: bool,
 ) -> Result<(), String> {
     let groups = public_flags(command);
-    let query = query_markdown_text(manual, None).map_err(|error| error.to_string())?;
+    let query = load_markdown_text(manual, None).map_err(|error| error.to_string())?;
     let document = query.document.as_ref().ok_or("missing manual document")?;
     if !document.diagnostics.is_empty() {
         return Err(format!("manual diagnostics: {:?}", document.diagnostics));

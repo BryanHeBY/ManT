@@ -7,7 +7,7 @@
 
 use std::path::PathBuf;
 
-use mant_engine::parse_manual_source;
+use mant_loader::parse_manual_source;
 
 #[path = "common/mod.rs"]
 #[allow(dead_code)]

@@ -1,7 +1,8 @@
 //! Execute the authored example rather than validating only its JSON syntax.
-use mant_engine::{build_outline_with_references, query_markdown_text};
 use mant_ir::{DocumentAddress, MarkdownOrigin};
+use mant_loader::load_markdown_text;
 use mant_protocol::{EntryProjection, QueryOutline, ReferenceProjection, ReferenceProjectionMode};
+use mant_query::build_outline_with_references;
 use pulldown_cmark::{CodeBlockKind, Event, Parser, Tag};
 
 fn first_fence(source: &str, language: &str) -> String {
@@ -29,7 +30,7 @@ fn reference_inventory_manual_example_matches_real_producer() {
         manual.split_once("Reference inventory input:").unwrap().1,
         "markdown",
     );
-    let mut query = query_markdown_text(&source, Some("linked.md".into())).unwrap();
+    let mut query = load_markdown_text(&source, Some("linked.md".into())).unwrap();
     query.address = Some(DocumentAddress::Markdown {
         path: "linked".into(),
         origin: MarkdownOrigin::Documents,

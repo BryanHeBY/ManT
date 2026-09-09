@@ -1,10 +1,12 @@
 //! Headings are authoritative inline content, not labels reconstructed as text.
 use mant_codec::encode::render_markdown;
-use mant_engine::{parse_markdown, query_markdown_text, query_roff_bytes, search_query};
+use mant_codec::parse_markdown;
 use mant_ir::{
     Document, Inline, LinkTarget,
     visit::{self, Visit},
 };
+use mant_loader::{load_markdown_text, load_roff_bytes};
+use mant_query::search_query;
 use mant_render::render_query_text;
 
 fn links(document: &Document) -> Vec<LinkTarget> {
@@ -29,7 +31,7 @@ fn atx_and_setext_headings_preserve_links_styles_and_source_once() {
         "# [Catalog](index.md)\n\n## **[Get-Item](Get-Item.md)** and `code`\n\nBody.\n",
         "[Catalog](index.md)\n===================\n\n**[Get-Item](Get-Item.md)** and `code`\n-------------------------------------\n\nBody.\n",
     ] {
-        let query = query_markdown_text(source, None).unwrap();
+        let query = load_markdown_text(source, None).unwrap();
         let document = query.document.as_ref().unwrap();
         assert!(document.meta.title.is_none());
         assert_eq!(document.display_title().as_deref(), Some("Catalog"));
@@ -69,7 +71,7 @@ fn atx_and_setext_headings_preserve_links_styles_and_source_once() {
 
 #[test]
 fn extracted_heading_is_readable_without_body_and_keeps_its_own_fragments() {
-    let query = query_markdown_text("# [Catalog](index.md) {#Mixed.Target}\n", None).unwrap();
+    let query = load_markdown_text("# [Catalog](index.md) {#Mixed.Target}\n", None).unwrap();
     let document = query.document.as_ref().unwrap();
     assert!(document.blocks.is_empty() && document.sections.is_empty());
     assert_eq!(links(document).len(), 1);
@@ -80,10 +82,10 @@ fn extracted_heading_is_readable_without_body_and_keeps_its_own_fragments() {
         Some(mant_ir::DOCUMENT_ROOT_ID)
     );
     let excerpt =
-        mant_engine::select_excerpt(&query, &[mant_protocol::ContentSelector::path("root")])
+        mant_query::select_excerpt(&query, &[mant_protocol::ContentSelector::path("root")])
             .unwrap();
     assert!(mant_render::render_excerpt_markdown(&excerpt).contains("[Catalog](index.md)"));
-    let outline = mant_engine::build_outline_projection(
+    let outline = mant_query::build_outline_projection(
         &query,
         mant_protocol::EntryProjection::All,
         Some(mant_protocol::ContentSelector::path("root")),
@@ -108,7 +110,7 @@ fn extracted_heading_is_readable_without_body_and_keeps_its_own_fragments() {
 
 #[test]
 fn native_section_references_survive_heading_lowering_without_fake_document_heading() {
-    let query = query_roff_bytes(b".Dd September 9, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd heading reference\n.Sh DESCRIPTION\n.Ss Xr printf 3\nBody.\n").unwrap();
+    let query = load_roff_bytes(b".Dd September 9, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd heading reference\n.Sh DESCRIPTION\n.Ss Xr printf 3\nBody.\n").unwrap();
     let document = query.document.as_ref().unwrap();
     assert!(document.heading.is_none());
     assert_eq!(document.meta.title.as_deref(), Some("PROBE"));
@@ -162,7 +164,7 @@ fn heading_manual_uris_have_explicit_bounded_grammar_and_decode_once() {
 
 #[test]
 fn heading_all_target_kinds_and_local_fragments_round_trip_in_addressable_mode() {
-    let query = query_markdown_text("# [Catalog](index.md)\n\n## [External](https://example.test) [Mail](mailto:user@example.test) [Local](#Mixed.Target)\n\n## Target {#Mixed.Target}\n", None).unwrap();
+    let query = load_markdown_text("# [Catalog](index.md)\n\n## [External](https://example.test) [Mail](mailto:user@example.test) [Local](#Mixed.Target)\n\n## Target {#Mixed.Target}\n", None).unwrap();
     let before = links(query.document.as_ref().unwrap());
     let markdown = mant_codec::encode::render_markdown_with_options(
         &query,
@@ -206,7 +208,7 @@ fn heading_targets_do_not_change_ids_or_infer_entries() {
 
 #[test]
 fn setext_heading_breaks_preserve_inline_structure_in_markdown() {
-    let query = query_markdown_text("[First](first.md)  \n[Second](second.md)\n===\n\n[Third](third.md)  \n[Fourth](fourth.md)\n---\n\nBody.\n", None).unwrap();
+    let query = load_markdown_text("[First](first.md)  \n[Second](second.md)\n===\n\n[Third](third.md)  \n[Fourth](fourth.md)\n---\n\nBody.\n", None).unwrap();
     let original = query.document.as_ref().unwrap();
     let markdown = render_markdown(&query);
     let reparsed = parse_markdown(&markdown, None).unwrap().document;
@@ -224,7 +226,7 @@ fn setext_heading_breaks_preserve_inline_structure_in_markdown() {
 
 #[test]
 fn deep_multiline_headings_keep_hierarchy_and_links_in_portable_markdown() {
-    let mut query = query_markdown_text("# Catalog\n\n## Parent\n\n### Child\n", None).unwrap();
+    let mut query = load_markdown_text("# Catalog\n\n## Parent\n\n### Child\n", None).unwrap();
     let child = &mut query.document.as_mut().unwrap().sections[0].children[0];
     let link = |name: &str| Inline::Link {
         target: LinkTarget::Document {
@@ -253,7 +255,7 @@ fn deep_multiline_headings_keep_hierarchy_and_links_in_portable_markdown() {
 
 #[test]
 fn local_heading_links_force_addressable_export_even_when_semantics_were_requested() {
-    let query = query_markdown_text("# [Catalog](#catalog)\n\n## [Run](#command-run)\n\n<!-- mant:entries role=command case=sensitive -->\n- `run`: Run the program.\n", None).unwrap();
+    let query = load_markdown_text("# [Catalog](#catalog)\n\n## [Run](#command-run)\n\n<!-- mant:entries role=command case=sensitive -->\n- `run`: Run the program.\n", None).unwrap();
     let before = links(query.document.as_ref().unwrap());
     for options in [
         mant_codec::encode::MarkdownOptions::default(),
@@ -287,7 +289,7 @@ fn local_heading_links_force_addressable_export_even_when_semantics_were_request
             }
         }
     }
-    let plain = query_markdown_text("# Catalog\n\n## Topic\n\nBody.\n", None).unwrap();
+    let plain = load_markdown_text("# Catalog\n\n## Topic\n\nBody.\n", None).unwrap();
     assert!(!render_markdown(&plain).contains("<a "));
 }
 
@@ -297,7 +299,7 @@ fn root_anchor_precedes_the_real_heading_and_never_moves_after_tldr() {
         let source = format!(
             "<!-- mant:tldr:start -->\n# tool\n\n> Quick help.\n\n- Show help:\n\n`tool --help`\n<!-- mant:tldr:end -->\n\n# [Catalog](#catalog){body}\n"
         );
-        let query = query_markdown_text(&source, None).unwrap();
+        let query = load_markdown_text(&source, None).unwrap();
         let markdown = render_markdown(&query);
         assert!(
             markdown.find("<a id=\"document-overview\"").unwrap()
@@ -323,7 +325,7 @@ fn root_anchor_precedes_the_real_heading_and_never_moves_after_tldr() {
 
 #[test]
 fn heading_links_to_inline_anchors_preserve_both_destination_and_occurrence() {
-    let mut query = query_markdown_text("# Catalog\n\n## Local\n", None).unwrap();
+    let mut query = load_markdown_text("# Catalog\n\n## Local\n", None).unwrap();
     let section = &mut query.document.as_mut().unwrap().sections[0];
     section.heading.content = vec![Inline::Link {
         target: LinkTarget::Section {

@@ -5,11 +5,11 @@ use crate::common::{
     self, count_outline_entries, find_outline_entry, query_for_document, semantic_definition_items,
 };
 use crate::fixtures::fedora44_manual;
-use mant_engine::{build_outline_with_detail, search_query};
 use mant_ir::SourceFormat;
 use mant_protocol::{
     ExcerptSelection, OutlineDetail, SearchCase, SearchQuery, SearchScope, SearchSyntax,
 };
+use mant_query::{build_outline_with_detail, search_query};
 
 /// 9 sections, `os = "TAR"`, 219 semantic entries.
 #[test]
@@ -101,7 +101,7 @@ fn search_maps_long_options_to_markdown_lines_and_selectable_nodes() {
     assert!(option.occurrences[0].markdown.start_column > 0);
     assert!(option.preview.contains("--acls"));
 
-    let excerpt = mant_engine::select_excerpt(
+    let excerpt = mant_query::select_excerpt(
         &query,
         &[mant_protocol::ContentSelector::path(
             option.outline.node.path().to_owned(),

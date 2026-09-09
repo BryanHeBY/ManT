@@ -45,7 +45,7 @@ pub(super) fn validate_query_view(view: &QueryView) -> Result<(), QueryValidatio
                     }
                 }
             })?;
-            crate::validate_explanation_query(&mant_protocol::ExplanationQuery {
+            mant_query::validate_explanation_query(&mant_protocol::ExplanationQuery {
                 entry: entry.clone(),
                 options: *options,
             })

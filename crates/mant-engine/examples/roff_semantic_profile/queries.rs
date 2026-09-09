@@ -14,7 +14,7 @@ pub(super) fn profile(
     }
     queries.iter().map(|query| {
         let query = query.as_str().ok_or("query probe must be a string")?;
-        let explanation = mant_engine::explain_query(content, &ExplanationQuery {
+        let explanation = mant_query::explain_query(content, &ExplanationQuery {
             entry: query.into(), options: ExplanationOptions { limit: 256, content_bytes: 4 * 1024 * 1024, ..Default::default() },
         }).map_err(|error| error.to_string())?;
         let witnesses: Vec<_> = explanation.evidence.iter().filter_map(|evidence| {
@@ -57,7 +57,7 @@ mod tests {
         let report = libmandoc_rs::Parser::new(Default::default())
             .parse_bytes("probe.1", raw)
             .unwrap();
-        let content = mant_engine::query_roff_bytes(raw).unwrap();
+        let content = mant_loader::load_roff_bytes(raw).unwrap();
         let rows = profile(Some(&report.document.root), &content, &[json!("-x")]).unwrap();
         assert_eq!(rows[0]["explanation"]["counts"]["directEntry"]["total"], 2);
         let evidence = rows[0]["explanation"]["evidence"].as_array().unwrap();

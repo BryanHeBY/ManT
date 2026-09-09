@@ -1,5 +1,5 @@
 //! `ce`/`rj` counts are control operands; their captured lines remain content.
-use mant_engine::query_roff_bytes;
+use mant_loader::load_roff_bytes;
 use mant_render::render_query_text;
 
 fn source_for(mode: &str, body: &str) -> String {
@@ -33,7 +33,7 @@ fn alignment_control_counts_never_replace_their_captured_numeric_lines() {
         for request in ["ce", "rj"] {
             for operand in ["2", "", "0", "invalid-count"] {
                 let source = source_for(mode, &format!(".{request} {operand}\n17\n23"));
-                let query = query_roff_bytes(source.as_bytes()).unwrap();
+                let query = load_roff_bytes(source.as_bytes()).unwrap();
                 let text = render_query_text(&query);
                 assert!(
                     text.lines().any(|line| line.trim() == "BEFORE"),
@@ -60,10 +60,10 @@ fn alignment_flushes_override_continuations_and_stop_at_native_payload_boundarie
     for mode in ["man", "nf", "EX", "mdoc", "literal", "unfilled"] {
         for request in ["ce", "rj"] {
             let source = source_for(mode, &format!(".{request} 2\nALPHA\\c\nBETA"));
-            let text = render_query_text(&query_roff_bytes(source.as_bytes()).unwrap());
+            let text = render_query_text(&load_roff_bytes(source.as_bytes()).unwrap());
             assert!(text.contains("ALPHA\nBETA\nAFTER"), "{source}\n{text}");
             let source = source_for(mode, ".rj 2\nALPHA\n.ce 1\nBETA");
-            let text = render_query_text(&query_roff_bytes(source.as_bytes()).unwrap());
+            let text = render_query_text(&load_roff_bytes(source.as_bytes()).unwrap());
             assert!(
                 text.contains("BEFORE\nALPHA\nBETA\nAFTER"),
                 "{source}\n{text}"
@@ -77,7 +77,7 @@ fn alignment_payload_preserves_font_and_independent_spacing_requests() {
     for mode in ["man", "nf", "EX", "mdoc", "literal", "unfilled"] {
         for request in ["ce", "rj"] {
             let source = source_for(mode, &format!(".{request} 2\n.ft B\n17\n23"));
-            let query = query_roff_bytes(source.as_bytes()).unwrap();
+            let query = load_roff_bytes(source.as_bytes()).unwrap();
             let text = render_query_text(&query);
             assert!(text.contains("BEFORE\n\n17\n23\nAFTER"), "{source}\n{text}");
             assert!(
@@ -87,7 +87,7 @@ fn alignment_payload_preserves_font_and_independent_spacing_requests() {
             let json = serde_json::to_string(query.document.as_ref().unwrap()).unwrap();
             assert!(json.contains("strong"), "font was not preserved: {json}");
             let source = source_for(mode, &format!(".{request} 2\nALPHA\n.sp 1\nBETA"));
-            let text = render_query_text(&query_roff_bytes(source.as_bytes()).unwrap());
+            let text = render_query_text(&load_roff_bytes(source.as_bytes()).unwrap());
             assert!(text.contains("ALPHA\n\n\nBETA"), "{source}\n{text}");
         }
     }
@@ -101,7 +101,7 @@ fn captured_breaks_flush_before_the_group_end_in_every_fill_mode() {
                 for word in ["ALPHA", "ALPHA\\c"] {
                     let source =
                         source_for(mode, &format!(".{alignment} 2\n{word}\n{request}\nBETA"));
-                    let query = query_roff_bytes(source.as_bytes()).unwrap();
+                    let query = load_roff_bytes(source.as_bytes()).unwrap();
                     let text = render_query_text(&query);
                     assert!(text.contains("ALPHA\n\nBETA"), "{source}\n{text}");
                     assert!(!text.contains("ALPHA\n\n\nBETA"), "{source}\n{text}");
@@ -118,7 +118,7 @@ fn captured_empty_requests_and_last_line_flush_do_not_escape_the_capture() {
             for request in [".br", ".fi", ".nf", ".ti 3n"] {
                 // A request-only group still has its own unconditional flush.
                 let source = source_for(mode, &format!(".{alignment} 2\n{request}\nALPHA\nBETA"));
-                let text = render_query_text(&query_roff_bytes(source.as_bytes()).unwrap());
+                let text = render_query_text(&load_roff_bytes(source.as_bytes()).unwrap());
                 assert!(
                     text.contains("BEFORE\n\nALPHA\nBETA\nAFTER"),
                     "{source}\n{text}"
@@ -129,7 +129,7 @@ fn captured_empty_requests_and_last_line_flush_do_not_escape_the_capture() {
                     mode,
                     &format!(".{alignment} 1\nALPHA\n.{alignment} 0\n.br\nBETA"),
                 );
-                let text = render_query_text(&query_roff_bytes(source.as_bytes()).unwrap());
+                let text = render_query_text(&load_roff_bytes(source.as_bytes()).unwrap());
                 assert!(text.contains("ALPHA\nBETA"), "{source}\n{text}");
             }
         }
@@ -140,7 +140,7 @@ fn captured_empty_requests_and_last_line_flush_do_not_escape_the_capture() {
 fn ordinary_breaks_do_not_acquire_alignment_group_spacing() {
     for mode in ["man", "nf", "EX", "mdoc", "literal", "unfilled"] {
         let source = source_for(mode, "ALPHA\n.br\n.br\nBETA");
-        let text = render_query_text(&query_roff_bytes(source.as_bytes()).unwrap());
+        let text = render_query_text(&load_roff_bytes(source.as_bytes()).unwrap());
         assert!(text.contains("ALPHA\nBETA"), "{source}\n{text}");
     }
 }

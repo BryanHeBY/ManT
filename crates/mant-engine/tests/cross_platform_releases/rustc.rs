@@ -1,7 +1,7 @@
 //! Tests for rustc's byte-identical Windows and Linux release manual.
 
-use mant_engine::build_outline_with_detail;
 use mant_protocol::OutlineDetail;
+use mant_query::build_outline_with_detail;
 
 use crate::common::{self, count_outline_entries, find_outline_entry};
 use crate::fixtures::{cross_platform_release_manual, cross_platform_release_query};

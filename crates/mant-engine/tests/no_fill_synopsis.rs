@@ -3,11 +3,12 @@
 //! preserves an empty macro parameter or a font-only row that mandoc does
 //! not, these tests deliberately select mandoc rather than mix both policies.
 
-use mant_engine::{ResolvedContent, query_roff_bytes};
+use mant_ir::ResolvedContent;
 use mant_ir::{
     Block, Inline,
     visit::{self, Visit},
 };
+use mant_loader::load_roff_bytes;
 use mant_render::render_query_text;
 
 #[test]
@@ -30,7 +31,7 @@ fn query(mode: &str, body: &str) -> ResolvedContent {
         "SY" => format!(".TH PROBE 1\n.SH TEST\n.SY probe\n.nf\n{body}\n.fi\n.YS\nAFTER\n"),
         _ => format!(".TH PROBE 1\n.SH TEST\n.nf\n{body}\n.fi\nAFTER\n"),
     };
-    query_roff_bytes(source.as_bytes()).unwrap()
+    load_roff_bytes(source.as_bytes()).unwrap()
 }
 
 #[test]

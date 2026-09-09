@@ -1,7 +1,7 @@
 //! Application adapters join a loading report to a pure collection query.
 use super::{LoadedDocumentScope, ScopeQueryError, ScopeQueryResult, SearchQuery};
-use crate::QueryScopeView;
 use mant_protocol::{ScopeQueryRequest, ScopeQueryResponse, ScopeQuerySchema, ScopeQueryView};
+use mant_query::QueryScopeView;
 
 /// A complete scope query validated before local environment capture.
 ///
@@ -126,7 +126,7 @@ pub(super) fn execute_scope_explain(
 ) -> Result<ScopeQueryResult, ScopeQueryError> {
     let input = QueryScopeView::new(loaded.scope(), loaded.documents())
         .map_err(ScopeQueryError::InvalidLoadedScope)?;
-    crate::explain_scope(input, query)
+    mant_query::explain_scope(input, query)
         .map(|explanation| ScopeQueryResult::Explain { explanation })
         .map_err(ScopeQueryError::Execution)
 }
@@ -137,7 +137,7 @@ pub(super) fn execute_scope_search(
 ) -> Result<ScopeQueryResult, ScopeQueryError> {
     let input = QueryScopeView::new(loaded.scope(), loaded.documents())
         .map_err(ScopeQueryError::InvalidLoadedScope)?;
-    crate::search_scope(input, query)
+    mant_query::search_scope(input, query)
         .map(|search| ScopeQueryResult::Search { search })
         .map_err(ScopeQueryError::Execution)
 }

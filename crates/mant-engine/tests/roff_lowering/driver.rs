@@ -2,8 +2,8 @@
 use super::{anchor_owner_lines, font_boundaries::assert_style};
 use mant_ir::{DocumentIndex, NodeId};
 
-fn mdoc(body: &str) -> mant_engine::ResolvedContent {
-    mant_engine::query_roff_bytes(
+fn mdoc(body: &str) -> mant_ir::ResolvedContent {
+    mant_loader::load_roff_bytes(
         format!(".Dd September 9, 2026\n.Dt DRIVER 1\n.Os\n.Sh DESCRIPTION\n{body}\n").as_bytes(),
     )
     .unwrap()
@@ -55,7 +55,7 @@ fn driver_empty_mode_changes_consume_hp_first_line_only_once() {
         let source = format!(
             ".TH DRIVER 1\n.SH DESCRIPTION\n.HP 12\n{boundary}\nFIRST\n.br\nSECOND\n.PP\nRESET\n"
         );
-        let query = mant_engine::query_roff_bytes(source.as_bytes()).unwrap();
+        let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
         let text = mant_render::render_query_text(&query);
         for (word, expected) in [("FIRST", 12), ("SECOND", 12), ("RESET", 0)] {
             let column = text.lines().find_map(|line| line.find(word));

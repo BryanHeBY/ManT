@@ -1,10 +1,11 @@
 //! Classification is an owner fact, never inferred from budgeted details.
 #[path = "../src/semantic_test_read.rs"]
 mod semantic_read;
-use mant_engine::{explain_query, query_markdown_text};
+use mant_loader::load_markdown_text;
 use mant_protocol::{
     EvidenceBasis, EvidenceClass, EvidenceOrder, ExplanationOptions, ExplanationQuery,
 };
+use mant_query::explain_query;
 
 fn query() -> ExplanationQuery {
     ExplanationQuery {
@@ -15,7 +16,7 @@ fn query() -> ExplanationQuery {
 
 #[test]
 fn classes_merge_bases_but_not_independent_owners() {
-    let content = query_markdown_text(
+    let content = load_markdown_text(
         r#"# Probe
 
 Context mentioning --help.
@@ -84,7 +85,7 @@ Context mentioning --help.
 fn late_direct_and_related_evidence_displace_earlier_mentions_at_the_cap() {
     let mut source = "--help mentioned.\n\n".repeat(10_001);
     source.push_str("<!-- mant:entries role=option case=sensitive -->\n- `--assist`: Related. <!-- mant:entry {\"id\":\"assist\",\"aliasOf\":\"help\"} -->\n- `--help`: Actual help. <!-- mant:entry {\"id\":\"help\"} -->\n");
-    let content = query_markdown_text(&source, None).unwrap();
+    let content = load_markdown_text(&source, None).unwrap();
     let result = explain_query(&content, &query()).unwrap();
     assert_eq!(result.total, 10_000);
     assert!(result.truncation.candidates);
@@ -116,7 +117,7 @@ fn empty_names_still_have_a_real_owner_and_invalid_bindings_never_match_names() 
             visit::walk_definition_item_mut(self, item);
         }
     }
-    let mut content = query_markdown_text(
+    let mut content = load_markdown_text(
         "<!-- mant:entries role=option case=sensitive -->\n- `--help`: Read --help.\n",
         None,
     )
@@ -130,7 +131,7 @@ fn empty_names_still_have_a_real_owner_and_invalid_bindings_never_match_names() 
         if matches.len() == 1 && matches[0].text == "--help")
     );
     assert!(result.evidence[0].entry.as_ref().unwrap().names.is_empty());
-    let mut content = mant_engine::query_roff_bytes(
+    let mut content = mant_loader::load_roff_bytes(
         b".TH PROBE 1\n.SH DESCRIPTION\n.TP\n.B A\nRead --help here.\n",
     )
     .unwrap();
@@ -144,7 +145,7 @@ fn empty_names_still_have_a_real_owner_and_invalid_bindings_never_match_names() 
 fn unrecorded_or_invalid_forms_preserve_literal_ownership_and_nested_entries() {
     use mant_ir::{Block, EntryForms, EntryOwner};
     for invalid in [false, true] {
-        let mut content = query_markdown_text(
+        let mut content = load_markdown_text(
             "<!-- mant:entries role=command case=sensitive -->\n- `run`: Read TOKEN here.\n\n  <!-- mant:entries role=value case=sensitive -->\n  - `auto`: CHILD.\n", None,
         ).unwrap();
         let Block::List { items, .. } = &mut content.document.as_mut().unwrap().blocks[0] else {
@@ -163,7 +164,7 @@ fn unrecorded_or_invalid_forms_preserve_literal_ownership_and_nested_entries() {
         if !invalid {
             assert!(matches!(owner.forms(), Some(EntryForms::Unrecorded)));
         }
-        let evidence = mant_engine::select_explanation(&content, "TOKEN").unwrap();
+        let evidence = mant_query::select_explanation(&content, "TOKEN").unwrap();
         assert_eq!(evidence.total, 1);
         assert_eq!(evidence.evidence[0].outline.node.id(), id.as_str());
         assert!(
@@ -183,7 +184,7 @@ fn unrecorded_or_invalid_forms_preserve_literal_ownership_and_nested_entries() {
                 .is_empty()
         );
         assert!(
-            mant_engine::select_excerpt(
+            mant_query::select_excerpt(
                 &content,
                 &[mant_protocol::ContentSelector::id(id.as_str())]
             )
@@ -191,7 +192,7 @@ fn unrecorded_or_invalid_forms_preserve_literal_ownership_and_nested_entries() {
         );
         assert!(semantic_read::semantic_excerpt(&content, &["run"]).is_err());
         assert!(
-            mant_engine::select_excerpt(
+            mant_query::select_excerpt(
                 &content,
                 &[mant_protocol::ContentSelector::path("root/e1/e1")]
             )

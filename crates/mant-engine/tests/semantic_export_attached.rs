@@ -1,9 +1,9 @@
 use mant_codec::encode::{MarkdownOptions, render_markdown_with_options};
-use mant_engine::query_markdown_text;
 use mant_ir::{
     Document, EntryFacts, ListItem,
     visit::{self, Visit},
 };
+use mant_loader::load_markdown_text;
 use std::fmt::Write as _;
 
 fn facts(doc: &Document) -> Vec<EntryFacts> {
@@ -47,11 +47,11 @@ fn attached_policy_is_proven_for_the_whole_list() {
             )
             .unwrap();
         }
-        let query = query_markdown_text(&source, None).unwrap();
+        let query = load_markdown_text(&source, None).unwrap();
         assert!(query.document.as_ref().unwrap().diagnostics.is_empty());
         let exported = export(&query);
         assert_eq!(exported.contains("attached=fixed"), !policy.is_empty());
-        let document = query_markdown_text(&exported, None)
+        let document = load_markdown_text(&exported, None)
             .unwrap()
             .document
             .unwrap();
@@ -78,10 +78,10 @@ fn fixed_groups_relations_and_nested_choices_survive_reimport() {
   - `fast`: Fast.
   - `slow`: Slow.
 "#;
-    let query = query_markdown_text(source, None).unwrap();
+    let query = load_markdown_text(source, None).unwrap();
     assert!(query.document.as_ref().unwrap().diagnostics.is_empty());
     let exported = export(&query);
-    let document = query_markdown_text(&exported, None)
+    let document = load_markdown_text(&exported, None)
         .unwrap()
         .document
         .unwrap();
@@ -96,8 +96,8 @@ fn fixed_groups_relations_and_nested_choices_survive_reimport() {
 
 #[test]
 fn incompatible_item_policies_fall_back_without_misleading_annotations() {
-    let mut query = query_markdown_text("<!-- mant:entries role=option case=sensitive attached=fixed -->\n- `/F:Y`: Fixed.\n- `/G:X`: Placeholder.\n", None).unwrap();
-    let inferred = query_markdown_text(
+    let mut query = load_markdown_text("<!-- mant:entries role=option case=sensitive attached=fixed -->\n- `/F:Y`: Fixed.\n- `/G:X`: Placeholder.\n", None).unwrap();
+    let inferred = load_markdown_text(
         "<!-- mant:entries role=option case=sensitive -->\n- `/G:X`: Placeholder.\n",
         None,
     )

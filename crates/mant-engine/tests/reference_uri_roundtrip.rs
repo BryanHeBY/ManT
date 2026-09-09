@@ -1,11 +1,12 @@
 //! Copy and Markdown export share one URI boundary without host resolution.
 use mant_codec::encode::{MarkdownOptions, render_markdown_with_options};
-use mant_engine::{project_references, query_markdown_text};
 use mant_ir::{LinkTarget, ReferenceScope, ReferenceTargetType};
+use mant_loader::load_markdown_text;
 use mant_protocol::{ReferenceProjection, ReferenceProjectionMode};
+use mant_query::project_references;
 
 fn targets(source: &str) -> (mant_ir::ResolvedContent, Vec<LinkTarget>) {
-    let query = query_markdown_text(source, None).unwrap();
+    let query = load_markdown_text(source, None).unwrap();
     let document = query.document.as_ref().unwrap();
     let inventory = project_references(
         document,

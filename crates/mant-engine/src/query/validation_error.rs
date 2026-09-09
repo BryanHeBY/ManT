@@ -1,6 +1,6 @@
 //! Query validation failures cannot carry host acquisition errors.
-use crate::SearchError;
 use mant_protocol::ScopeTextError;
+use mant_query::SearchError;
 use std::{error::Error, fmt};
 
 /// Invalid query view, independent of source acquisition.
@@ -33,7 +33,7 @@ pub enum QueryValidationError {
     /// Search configuration failed validation.
     InvalidSearch(SearchError),
     /// Explanation configuration failed validation or had no readable content.
-    InvalidExplanation(crate::ExplanationError),
+    InvalidExplanation(mant_query::ExplanationError),
 }
 
 impl fmt::Display for QueryValidationError {

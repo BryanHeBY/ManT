@@ -3,10 +3,10 @@ use super::semantic_read;
 
 use crate::common::{self, GIT_SECTIONS};
 use crate::fixtures::{archlinux_manual, archlinux_manual_query};
-use mant_engine::{build_outline, build_outline_projection, build_outline_with_detail};
 use mant_ir::{Block, EntryKind, Inline};
 use mant_protocol::EntryProjection;
 use mant_protocol::{ExcerptSelection, OutlineDetail};
+use mant_query::{build_outline, build_outline_projection, build_outline_with_detail};
 
 /// Section topology (24 sections), nested children in ENVIRONMENT VARIABLES,
 /// preformatted blocks in SYNOPSIS and OPTIONS, semantic `--help` option,
@@ -143,7 +143,7 @@ fn supports_outline_discovery_and_targeted_excerpts() {
     assert_eq!(git_diffs.id(), "git-diffs");
     assert_eq!(git_diffs.title(), "Git Diffs");
 
-    let excerpt = mant_engine::select_excerpt(
+    let excerpt = mant_query::select_excerpt(
         &query,
         &[
             mant_protocol::ContentSelector::id("git-diffs"),

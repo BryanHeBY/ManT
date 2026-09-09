@@ -1,10 +1,11 @@
 //! A physical owner and its useful explanation are independent contracts.
-use mant_engine::{explain_query, query_roff_bytes};
+use mant_loader::load_roff_bytes;
 use mant_protocol::{EvidenceClass, ExplanationOptions, ExplanationQuery};
+use mant_query::explain_query;
 
 fn explained(source: &str, name: &str) -> mant_protocol::QueryExplanation {
     explain_query(
-        &query_roff_bytes(source.as_bytes()).unwrap(),
+        &load_roff_bytes(source.as_bytes()).unwrap(),
         &ExplanationQuery {
             entry: name.into(),
             options: ExplanationOptions::default(),
@@ -37,7 +38,7 @@ fn declaration_boundaries_follow_executed_requests_not_physical_source_lines() {
         let native = libmandoc_rs::Parser::default()
             .parse_bytes("probe.1", source.as_bytes())
             .unwrap();
-        let detached = mant_engine::lower_mandoc_document(std::path::Path::new("probe.1"), &native);
+        let detached = mant_codec::lower_mandoc_document(std::path::Path::new("probe.1"), &native);
         let detached = mant_ir::ResolvedContent {
             label: "probe".into(),
             address: None,
@@ -66,7 +67,7 @@ fn nested_group_context_is_a_source_reference_not_a_second_body_copy() {
     let source = format!(
         ".Dd September 8, 2026\n.Dt PROBE 1\n.Os\n.Sh OPTIONS\n.Bl -tag -width Ds\n.It Fl a\n.It Fl b\nOuter description.\n.Bl -tag -width Ds\n.It Fl a\n.It Fl c\n{body}\n.El\n.El\n"
     );
-    let content = query_roff_bytes(source.as_bytes()).unwrap();
+    let content = load_roff_bytes(source.as_bytes()).unwrap();
     for bytes in [32768, 40000, 65536] {
         let response = explain_query(
             &content,
@@ -206,7 +207,7 @@ fn deep_shared_fragments_are_deterministic_at_small_copy_budgets() {
     }
     source.push_str("Unique leaf café 日本.\n");
     source.push_str(&".El\n".repeat(12));
-    let content = query_roff_bytes(source.as_bytes()).unwrap();
+    let content = load_roff_bytes(source.as_bytes()).unwrap();
     for bytes in [600, 2000, 5000, 12000, 32768, 65536] {
         let query = ExplanationQuery {
             entry: "-a".into(),
@@ -295,7 +296,7 @@ fn provider_fallback_is_reused_when_its_complete_declaration_group_does_not_fit(
         ".Dd September 8, 2026\n.Dt PROBE 1\n.Os\n.Sh OPTIONS\n.Bl -tag -width Ds\n.It Fl b Ar {}\n.It Fl a\nOuter description.\n.Bl -tag -width Ds\n.It Fl a\n.It Fl c\n{body}\n.El\n.El\n",
         "X".repeat(15000)
     );
-    let content = query_roff_bytes(source.as_bytes()).unwrap();
+    let content = load_roff_bytes(source.as_bytes()).unwrap();
     for bytes in [12000, 18000, 20000, 24000, 30000] {
         let response = explain_query(
             &content,
@@ -377,7 +378,7 @@ fn group_highlights_only_the_matched_member_in_offline_presentation() {
 fn invalid_group_heads_and_overlapping_ranges_are_not_semantically_complete() {
     let source = ".TH PROBE 1\n.SH OPTIONS\n.TP\n.B --first\n.TP\n.B --last\nBody.\n";
     for empty_head in [false, true] {
-        let mut content = query_roff_bytes(source.as_bytes()).unwrap();
+        let mut content = load_roff_bytes(source.as_bytes()).unwrap();
         let document = content.document.as_mut().unwrap();
         let mant_ir::Block::DefinitionList {
             items,
@@ -418,7 +419,7 @@ fn large_context_is_omitted_atomically_without_retrying_each_match() {
         writeln!(source, ".TP\n.B --mode={index}").unwrap();
     }
     source.push_str(&"Large original context.\n".repeat(4000));
-    let content = query_roff_bytes(source.as_bytes()).unwrap();
+    let content = load_roff_bytes(source.as_bytes()).unwrap();
     for bytes in [1, 1024, 4_194_304] {
         let result = explain_query(
             &content,
@@ -587,7 +588,7 @@ fn consecutive_declarations_supply_context_without_borrowing_ownership() {
         } else {
             "-2"
         };
-        let mut content = query_roff_bytes(source.as_bytes()).unwrap();
+        let mut content = load_roff_bytes(source.as_bytes()).unwrap();
         // Query after an IR wire round trip: support must not depend on native
         // pointers or the engine's operation-local recognition witnesses.
         content.document = Some(
@@ -708,7 +709,7 @@ fn shared_context_is_copied_once_with_valid_owner_local_positions() {
 #[test]
 fn support_omission_is_explicit_and_each_page_carries_its_context() {
     let source = ".TH PROBE 1\n.SH OPTIONS\n.TP\n.B --mode=A\n.TP\n.B --mode=B\nShared context.\n";
-    let content = query_roff_bytes(source.as_bytes()).unwrap();
+    let content = load_roff_bytes(source.as_bytes()).unwrap();
     for offset in 0..2 {
         for bytes in [1, 200, 2000, 16_384] {
             let response = explain_query(
@@ -785,14 +786,14 @@ fn prose_bullets_and_independent_markdown_items_do_not_gain_context() {
         ".TH PROBE 1\n.SH DESCRIPTION\n.TP\nThis is a complete prose sentence.\n.TP\nAnother ordinary sentence.\nBody.\n",
         ".TH PROBE 1\n.SH DESCRIPTION\n.IP \\(bu\n.IP \\(bu\nBody.\n",
     ] {
-        let content = query_roff_bytes(source.as_bytes()).unwrap();
+        let content = load_roff_bytes(source.as_bytes()).unwrap();
         assert!(
             !serde_json::to_string(content.document.as_ref().unwrap())
                 .unwrap()
                 .contains("declarationGroups")
         );
     }
-    let content = mant_engine::query_markdown_text("# Probe\n## Options\n<!-- mant:entries role=option -->\n- `--first`\n- `--second`: Second body.\n", None).unwrap();
+    let content = mant_loader::load_markdown_text("# Probe\n## Options\n<!-- mant:entries role=option -->\n- `--first`\n- `--second`: Second body.\n", None).unwrap();
     assert!(
         !serde_json::to_string(content.document.as_ref().unwrap())
             .unwrap()

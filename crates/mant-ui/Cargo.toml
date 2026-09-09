@@ -25,6 +25,8 @@ unicode-width.workspace = true
 [dev-dependencies]
 mant-codec = { path = "../mant-codec", version = "^0.11.0", default-features = false }
 mant-engine = { path = "../mant-engine", version = "^0.11.0" }
+mant-loader = { path = "../mant-loader", version = "^0.11.0", features = ["roff"] }
+mant-query = { path = "../mant-query", version = "^0.11.0", default-features = false }
 tokio = { version = "^1", features = ["rt"] }
 
 [lints]

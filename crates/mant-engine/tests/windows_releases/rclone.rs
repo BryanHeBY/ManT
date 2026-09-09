@@ -112,7 +112,7 @@ fn keeps_tier_table_text_blocks_in_their_own_columns() {
 #[test]
 fn renders_the_reviewed_windows_path_section_without_losing_backslashes() {
     let query = windows_release_query("rclone");
-    let excerpt = mant_engine::select_excerpt(
+    let excerpt = mant_query::select_excerpt(
         &query,
         &[mant_protocol::ContentSelector::id("paths-on-windows")],
     )

@@ -12,7 +12,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .ok_or("expected gzip fixture path")?;
     let mut source = Vec::new();
     flate2::read::GzDecoder::new(File::open(&path)?).read_to_end(&mut source)?;
-    let load = || mant_engine::parse_manual_bytes(Path::new(&path), &source);
+    let load = || mant_loader::parse_manual_bytes(Path::new(&path), &source);
     let mode = std::env::args().nth(2).unwrap_or_else(|| "load".into());
     let query = mant_protocol::ExplanationQuery {
         entry: std::env::args().nth(3).unwrap_or_else(|| "-x".into()),
@@ -37,10 +37,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let value: Box<dyn std::any::Any> = match mode.as_str() {
             "load" => Box::new(load()?),
             "index" => Box::new(content.as_ref().expect("loaded content").semantic_index()),
-            "outline" => Box::new(mant_engine::build_outline(
+            "outline" => Box::new(mant_query::build_outline(
                 content.as_ref().expect("loaded content"),
             )?),
-            "explain" => Box::new(mant_engine::explain_query(
+            "explain" => Box::new(mant_query::explain_query(
                 content.as_ref().expect("loaded content"),
                 &query,
             )?),

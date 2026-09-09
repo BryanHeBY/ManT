@@ -1,5 +1,5 @@
 //! Original regressions for control operands versus printable source words.
-use mant_engine::query_roff_bytes;
+use mant_loader::load_roff_bytes;
 use mant_render::render_query_text;
 
 fn source(mode: &str, body: &str) -> String {
@@ -28,7 +28,7 @@ fn operands_never_become_text_in_filled_and_literal_flows() {
             (".mc", ""),
         ] {
             let input = source(mode, &format!("BEFORE\n{request}\nBODY\nAFTER"));
-            let query = query_roff_bytes(input.as_bytes()).unwrap();
+            let query = load_roff_bytes(input.as_bytes()).unwrap();
             let text = render_query_text(&query);
             if !operand.is_empty() {
                 assert!(!text.contains(operand), "{input}\n{text}");
@@ -64,7 +64,7 @@ fn omitted_page_controls_preserve_continuations_and_font_state() {
             mode,
             "ALPHA\\c\n.ll 50n\n.po 0n\nBETA\n.ft B\nGAMMA\n.ft R\nDELTA",
         );
-        let query = query_roff_bytes(input.as_bytes()).unwrap();
+        let query = load_roff_bytes(input.as_bytes()).unwrap();
         let text = render_query_text(&query);
         assert!(text.contains("ALPHABETA"), "{input}\n{text}");
         let mut bold = BoldWords::default();
@@ -79,7 +79,7 @@ fn omitted_page_controls_preserve_continuations_and_font_state() {
 fn control_spellings_and_numbers_remain_visible_when_authored_as_words() {
     for mode in ["man", "nf", "EX"] {
         let input = source(mode, ".B \"ll 50n po 0n mc ti\"\nAFTER");
-        let query = query_roff_bytes(input.as_bytes()).unwrap();
+        let query = load_roff_bytes(input.as_bytes()).unwrap();
         assert!(render_query_text(&query).contains("ll 50n po 0n mc ti"));
     }
 }
@@ -95,7 +95,7 @@ fn table_inline_recovery_consumes_controls_without_discarding_real_words() {
         let body =
             format!(".TS\nl.\nT{{\n.ll 50n\n.po 0n\n.mc |\n.ft B\n{word}\n.ft R\nTAIL\nT}}\n.TE");
         let input = source(dialect, &body);
-        let query = query_roff_bytes(input.as_bytes()).unwrap();
+        let query = load_roff_bytes(input.as_bytes()).unwrap();
         let text = render_query_text(&query);
         assert!(
             text.contains("BODY") && text.contains("TAIL"),

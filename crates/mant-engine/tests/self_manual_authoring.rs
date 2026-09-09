@@ -1,11 +1,12 @@
 //! Executable native-link authoring and upstream-reference contracts.
-use mant_engine::{project_references, query_markdown_text};
 use mant_ir::{LinkTarget, ReferenceScope, ReferenceTargetType};
+use mant_loader::load_markdown_text;
 use mant_protocol::{ReferenceProjection, ReferenceProjectionMode};
+use mant_query::project_references;
 
 #[test]
 fn native_manual_links_work_in_heading_body_and_linked_code_terms() {
-    let query = query_markdown_text("# [Heading](man:linkprobe(3))\n\n[Body](man:linkprobe)\n\n<!-- mant:entries role=command case=sensitive -->\n- [`linkprobe`](man:linkprobe(3)): Read its manual.\n", None).unwrap();
+    let query = load_markdown_text("# [Heading](man:linkprobe(3))\n\n[Body](man:linkprobe)\n\n<!-- mant:entries role=command case=sensitive -->\n- [`linkprobe`](man:linkprobe(3)): Read its manual.\n", None).unwrap();
     let document = query.document.as_ref().unwrap();
     assert!(
         document.diagnostics.is_empty(),
@@ -51,12 +52,11 @@ fn native_manual_links_work_in_heading_body_and_linked_code_terms() {
 
 #[test]
 fn authoring_manuals_expose_real_local_and_implementation_specific_references() {
-    let markdown =
-        query_markdown_text(include_str!("../../../docs/manuals/mant-markdown.md"), None)
-            .unwrap()
-            .document
-            .unwrap();
-    let roff = query_markdown_text(include_str!("../../../docs/manuals/mant-roff.md"), None)
+    let markdown = load_markdown_text(include_str!("../../../docs/manuals/mant-markdown.md"), None)
+        .unwrap()
+        .document
+        .unwrap();
+    let roff = load_markdown_text(include_str!("../../../docs/manuals/mant-roff.md"), None)
         .unwrap()
         .document
         .unwrap();

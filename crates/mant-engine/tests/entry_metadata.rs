@@ -1,13 +1,13 @@
 //! Independent authoring expectations: relations annotate, never rewrite content.
-use mant_engine::query_markdown_text;
 use mant_ir::{
     Document, EntryFacts, ListItem,
     visit::{self, Visit},
 };
+use mant_loader::load_markdown_text;
 use std::collections::BTreeMap;
 
 fn parse(body: &str) -> Document {
-    query_markdown_text(
+    load_markdown_text(
         &format!("# Probe\n\n<!-- mant:entries role=option case=sensitive -->\n{body}\n"),
         None,
     )
@@ -162,7 +162,7 @@ fn block_and_inline_metadata_use_structural_item_ownership() {
         assert!(!facts(&doc).contains_key("wrong"), "{body}");
         assert!(!doc.diagnostics.is_empty(), "{body}");
     }
-    let doc = query_markdown_text(
+    let doc = load_markdown_text(
         "- `--help`: Help. <!-- mant:entry {\"id\":\"wrong\"} -->",
         None,
     )
@@ -193,7 +193,7 @@ fn partial_groups_case_roles_and_literal_commands_remain_distinct() {
                 "--other"
             }
         );
-        let doc = query_markdown_text(&body, None).unwrap().document.unwrap();
+        let doc = load_markdown_text(&body, None).unwrap().document.unwrap();
         assert!(facts(&doc)["one"].alias_of.is_none());
         assert!(
             doc.diagnostics
@@ -201,7 +201,7 @@ fn partial_groups_case_roles_and_literal_commands_remain_distinct() {
                 .any(|d| d.code.as_deref() == Some("ir.invalid-entry-alias-of"))
         );
     }
-    let doc = query_markdown_text("<!-- mant:entries role=command case=sensitive -->\n- `[`: Test. <!-- mant:entry {\"id\":\"test-open\"} -->\n- `:`: No operation. <!-- mant:entry {\"id\":\"noop\"} -->", None).unwrap().document.unwrap();
+    let doc = load_markdown_text("<!-- mant:entries role=command case=sensitive -->\n- `[`: Test. <!-- mant:entry {\"id\":\"test-open\"} -->\n- `:`: No operation. <!-- mant:entry {\"id\":\"noop\"} -->", None).unwrap().document.unwrap();
     assert!(doc.diagnostics.is_empty(), "{:?}", doc.diagnostics);
     assert_eq!(facts(&doc)["test-open"].names, ["["]);
     assert_eq!(facts(&doc)["noop"].names, [":"]);

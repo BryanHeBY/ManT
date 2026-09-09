@@ -151,7 +151,7 @@ fn render_copy_request(request: CopyRequest) -> Result<String, String> {
             selector,
             format,
         } => {
-            let excerpt = mant_engine::select_excerpt(content.as_ref(), &[selector])
+            let excerpt = mant_query::select_excerpt(content.as_ref(), &[selector])
                 .map_err(|error| format!("could not select the current node: {error}"))?;
             Ok(match format {
                 CopyFormat::Text => mant_render::render_excerpt_text(&excerpt),
@@ -176,7 +176,7 @@ mod tests {
     #[test]
     fn requests_reuse_deterministic_semantic_renderers() {
         let content = Arc::new(
-            mant_engine::query_markdown_text(
+            mant_loader::load_markdown_text(
                 "# Demo\n\n## Options\n\nUse `--help` for details.\n",
                 Some("demo.md".to_owned()),
             )

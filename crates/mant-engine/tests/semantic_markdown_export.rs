@@ -1,10 +1,10 @@
 //! Semantic export is an opt-in subset, not a lossless Markdown serializer.
 use mant_codec::encode::{MarkdownOptions, render_markdown_with_options};
-use mant_engine::query_markdown_text;
 use mant_ir::{
     Document, EntryFacts, ListItem,
     visit::{self, Visit},
 };
+use mant_loader::load_markdown_text;
 
 fn facts(doc: &Document) -> Vec<EntryFacts> {
     struct Entries(Vec<EntryFacts>);
@@ -40,7 +40,7 @@ fn ordinary_declared_entries_reimport_names_groups_relations_and_domains() {
 
   <!-- mant:domain entries=manual/5/ssh_config roles=configuration-key -->
 "#;
-    let query = query_markdown_text(source, None).unwrap();
+    let query = load_markdown_text(source, None).unwrap();
     assert!(query.document.as_ref().unwrap().diagnostics.is_empty());
     let original = facts(query.document.as_ref().unwrap());
     for preserve_anchors in [false, true] {
@@ -52,7 +52,7 @@ fn ordinary_declared_entries_reimport_names_groups_relations_and_domains() {
             },
         );
         assert!(markdown.contains("mant:entry"), "{markdown}");
-        let reparsed = query_markdown_text(&markdown, None).unwrap();
+        let reparsed = load_markdown_text(&markdown, None).unwrap();
         let document = reparsed.document.unwrap();
         assert!(
             document.diagnostics.is_empty(),
@@ -100,7 +100,7 @@ fn unsupported_partial_or_native_owners_keep_content_without_invented_relations(
         "<!-- mant:entries role=option case=sensitive -->\n- `--good`: Good.\n- `--bad`\n",
         "- `--implicit`: An inferred option.\n",
     ] {
-        let query = query_markdown_text(source, None).unwrap();
+        let query = load_markdown_text(source, None).unwrap();
         let markdown = render_markdown_with_options(
             &query,
             MarkdownOptions {
@@ -112,7 +112,7 @@ fn unsupported_partial_or_native_owners_keep_content_without_invented_relations(
         assert!(markdown.contains("--"));
     }
     let query =
-        mant_engine::query_roff_bytes(b".TH PROBE 1\n.SH OPTIONS\n.TP\n.B -h, --help\nHelp.\n")
+        mant_loader::load_roff_bytes(b".TH PROBE 1\n.SH OPTIONS\n.TP\n.B -h, --help\nHelp.\n")
             .unwrap();
     let markdown = render_markdown_with_options(
         &query,
@@ -165,7 +165,7 @@ fn metadata_representation_limits_are_shared_by_import_and_export() {
             .join(", ");
         let source =
             format!("<!-- mant:entries role=option case=sensitive -->\n- {head}: Kept body.\n");
-        let mut query = query_markdown_text(&source, None).unwrap();
+        let mut query = load_markdown_text(&source, None).unwrap();
         let document = query.document.as_mut().unwrap();
         assert!(
             document.diagnostics.is_empty(),
@@ -185,7 +185,7 @@ fn metadata_representation_limits_are_shared_by_import_and_export() {
             "aliasGroups": original[0].alias_groups,
         });
         let authored = format!("{} <!-- mant:entry {json} -->\n", source.trim_end());
-        let imported = query_markdown_text(&authored, None)
+        let imported = load_markdown_text(&authored, None)
             .unwrap()
             .document
             .unwrap();
@@ -209,7 +209,7 @@ fn metadata_representation_limits_are_shared_by_import_and_export() {
                 "groups={group_count}, members={members}, id={id_length}, padding={name_padding}"
             );
             if supported {
-                let document = query_markdown_text(&markdown, None)
+                let document = load_markdown_text(&markdown, None)
                     .unwrap()
                     .document
                     .unwrap();

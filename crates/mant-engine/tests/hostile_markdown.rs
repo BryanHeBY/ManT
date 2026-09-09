@@ -9,14 +9,14 @@
 use std::{fs, path::PathBuf};
 
 use mant_codec::encode::{MarkdownOptions, render_markdown, render_markdown_with_options};
-use mant_engine::{
-    build_outline_with_detail, parse_markdown, query_markdown_text, search_query, select_excerpt,
-};
+use mant_codec::parse_markdown;
 use mant_ir::{Block, Section};
+use mant_loader::load_markdown_text;
 use mant_protocol::{
     OutlineDetail, OutlineNode, SearchCase, SearchQuery, SearchScope, SearchSyntax,
     default_search_limit,
 };
+use mant_query::{build_outline_with_detail, search_query, select_excerpt};
 use mant_render::{
     render_excerpt_markdown, render_excerpt_text, render_outline_text, render_query_json,
     render_query_man, render_query_text, render_search_text,
@@ -32,7 +32,7 @@ fn hostile_fixture_dir() -> PathBuf {
 /// Run one source through every projection and renderer, asserting result
 /// invariants along the way; controlled errors are the only accepted failure.
 fn exercise(label: &str, source: &str) {
-    let query = match query_markdown_text(source, Some(format!("hostile/{label}"))) {
+    let query = match load_markdown_text(source, Some(format!("hostile/{label}"))) {
         Ok(query) => query,
         Err(error) => {
             assert!(
@@ -149,7 +149,7 @@ fn exercise(label: &str, source: &str) {
 /// successful reparse is insufficient: accidental setext headings and
 /// malformed fences are valid `CommonMark` that silently change the document
 /// topology. Compare the structural events with the IR that was serialized.
-fn verify_commonmark_topology(label: &str, query: &mant_engine::ResolvedContent, markdown: &str) {
+fn verify_commonmark_topology(label: &str, query: &mant_ir::ResolvedContent, markdown: &str) {
     let Some(document) = &query.document else {
         return;
     };
@@ -220,7 +220,7 @@ fn fenced_block_count(blocks: &[Block]) -> usize {
 
 fn verify_search_result(
     label: &str,
-    query: &mant_engine::ResolvedContent,
+    query: &mant_ir::ResolvedContent,
     result: &mant_protocol::QuerySearch,
     addressable: &str,
     scope: SearchScope,

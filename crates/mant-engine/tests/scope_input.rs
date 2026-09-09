@@ -1,5 +1,4 @@
 //! Collection query input is caller-owned IR, not a resolver or loading service.
-use mant_engine::{QueryScopeView, ScopeInputError, explain_scope, search_scope};
 use mant_ir::{
     Block, Document, DocumentAddress, DocumentMeta, DocumentSource, Inline, LayoutHint,
     MarkdownOrigin, ResolvedContent, SourceFormat,
@@ -9,6 +8,7 @@ use mant_protocol::{
     ExplanationOptions, ExplanationQuery, ResolvedDocumentScope, ScopedDocument, SearchCase,
     SearchQuery, SearchScope, SearchSyntax,
 };
+use mant_query::{QueryScopeView, ScopeInputError, explain_scope, search_scope};
 
 fn address(path: &str) -> DocumentAddress {
     DocumentAddress::Markdown {
