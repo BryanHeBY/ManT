@@ -2,7 +2,9 @@
 
 *.html text eol=lf
 *.svg text eol=lf
-*.patch text eol=lf
+# Unified diffs encode an empty context line as one space, not source whitespace.
+# Their replay verifiers still compare the resulting source bytes exactly.
+*.patch text eol=lf whitespace=-blank-at-eol
 *.sh text eol=lf
 # Compared byte-for-byte with the platform-independent manual generator.
 crates/mant/src/arguments/help_tldr_generated.rs text eol=lf
