@@ -67,6 +67,17 @@ impl DocumentResolver {
     pub fn discover(&self, query: &CatalogQuery) -> Result<DocumentCatalog, String> {
         self.loader.discover(query)
     }
+
+    /// Discover with a query prepared before this environment was captured.
+    ///
+    /// # Errors
+    /// Returns source configuration or catalog acquisition failures.
+    pub fn discover_prepared(
+        &self,
+        query: &mant_loader::PreparedCatalogQuery<'_>,
+    ) -> Result<DocumentCatalog, String> {
+        self.loader.discover_prepared(query)
+    }
     pub(crate) fn loader(&self) -> &DocumentLoader {
         &self.loader
     }

@@ -22,6 +22,12 @@ when discovery and loading must share precedence; construct another to refresh
 local discovery. Snapshot reuse does not freeze external file contents or make
 the filesystem transactional.
 
+For an on-demand host, prepare `PreparedCatalogQuery` before constructing the
+loader. It validates filters and compiles the matcher without discovery;
+`DocumentLoader::discover_prepared` then reuses that matcher and the loader's
+snapshot. Applying a prepared query to an already materialized catalog also
+performs no IO. Neither preparation nor reuse refreshes the host environment.
+
 `LoadSpec` borrows an explicit logical selector or input path. It carries no
 serialized query schema, search expression, output format or query view.
 Loading errors are separate from the application's view-validation errors.

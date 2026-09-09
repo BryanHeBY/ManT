@@ -69,7 +69,22 @@ impl DocumentLoader {
     /// Returns source-configuration or catalog-query failures as one host
     /// boundary diagnostic.
     pub fn discover(&self, query: &CatalogQuery) -> Result<DocumentCatalog, String> {
-        let plan = crate::catalog::CatalogPlan::new(query).map_err(|error| error.to_string())?;
+        let plan =
+            crate::catalog::PreparedCatalogQuery::new(query).map_err(|error| error.to_string())?;
+        self.discover_prepared(&plan)
+    }
+
+    /// Discover using an already validated and compiled catalog query.
+    ///
+    /// This reuses both the supplied matcher and this loader's environment
+    /// snapshot. No source lookup occurs while the query is being prepared.
+    ///
+    /// # Errors
+    /// Returns source configuration or catalog acquisition failures.
+    pub fn discover_prepared(
+        &self,
+        plan: &crate::PreparedCatalogQuery<'_>,
+    ) -> Result<DocumentCatalog, String> {
         let registered = self
             .registered
             .get_or_init(RegisteredDocumentIndex::load)

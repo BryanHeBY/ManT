@@ -19,17 +19,26 @@ pub fn query_available_documents(
     documents: &[AvailableDocument],
     query: &CatalogQuery,
 ) -> Result<DocumentCatalog, CatalogError> {
-    Ok(CatalogPlan::new(query)?.apply(documents))
+    Ok(PreparedCatalogQuery::new(query)?.apply(documents))
 }
 
-/// Validated filters and one compiled matcher, prepared before source discovery.
-pub(crate) struct CatalogPlan<'query> {
+/// Validated filters and one compiled matcher, prepared without source discovery.
+///
+/// Prepare this borrowed query before creating a system loader when invalid
+/// requests must perform no configuration reads. It can be applied repeatedly
+/// to the same explicit catalog or passed to a loader without compiling the
+/// matcher again. This type neither owns nor refreshes a document snapshot.
+pub struct PreparedCatalogQuery<'query> {
     query: &'query CatalogQuery,
     compiled_pattern: Option<grep_regex::RegexMatcher>,
 }
 
-impl<'query> CatalogPlan<'query> {
-    pub(crate) fn new(query: &'query CatalogQuery) -> Result<Self, CatalogError> {
+impl<'query> PreparedCatalogQuery<'query> {
+    /// Validate bounds and compile the optional literal or regular expression.
+    ///
+    /// # Errors
+    /// Returns invalid filters, bounds or pattern syntax without source IO.
+    pub fn new(query: &'query CatalogQuery) -> Result<Self, CatalogError> {
         validate_catalog_query(query)?;
         let compiled_pattern = query
             .pattern
@@ -42,7 +51,9 @@ impl<'query> CatalogPlan<'query> {
         })
     }
 
-    pub(crate) fn apply(&self, documents: &[AvailableDocument]) -> DocumentCatalog {
+    /// Filter, rank and page an already materialized catalog without IO.
+    #[must_use]
+    pub fn apply(&self, documents: &[AvailableDocument]) -> DocumentCatalog {
         let query = self.query;
         let in_scope = |document: &&AvailableDocument| catalog_scope_matches(document, query);
         let scope_total = documents.iter().filter(in_scope).count();

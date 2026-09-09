@@ -15,7 +15,7 @@ mod tldr;
 
 pub use catalog::{
     AvailableDocument, AvailableDocumentKind, AvailableDocumentOrigin, CatalogError,
-    discover_documents, list_available_documents, query_available_documents,
+    PreparedCatalogQuery, discover_documents, list_available_documents, query_available_documents,
 };
 pub use executable::{ExecutableLookup, find_host_executable};
 #[cfg(feature = "roff")]

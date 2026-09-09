@@ -101,6 +101,44 @@ fn catalog_pages_an_immutable_inventory_without_losing_scope_coverage() {
 }
 
 #[test]
+fn prepared_catalog_query_reuses_filters_without_loading_or_recompiling() {
+    let documents = ["beta", "ALPHA", "other"]
+        .into_iter()
+        .map(|name| AvailableDocument {
+            name: name.to_owned(),
+            logical_path: name.to_owned(),
+            kind: AvailableDocumentKind::Markdown,
+            manual_section: None,
+            path: PathBuf::from(format!("/never-opened/{name}.md")),
+            origin: AvailableDocumentOrigin::Documents,
+            source_priority: None,
+        })
+        .collect::<Vec<_>>();
+    let query = CatalogQuery {
+        pattern: Some("^(alpha|beta)$".to_owned()),
+        syntax: SearchSyntax::Regex,
+        case: SearchCase::Insensitive,
+        limit: 1,
+        ..CatalogQuery::default()
+    };
+    let prepared = crate::PreparedCatalogQuery::new(&query).expect("prepare without IO");
+    let first = prepared.apply(&documents);
+    let second = prepared.apply(&documents);
+    assert_eq!(first, second);
+    assert_eq!(
+        first,
+        query_available_documents(&documents, &query).unwrap()
+    );
+    assert_eq!(first.documents[0].address.name(), "ALPHA");
+    assert_eq!(
+        (first.total, first.returned, first.next_offset),
+        (2, 1, Some(1))
+    );
+    assert_eq!(first.coverage.scope_total, 3);
+    assert_eq!(prepared.apply(&[]).total, 0);
+}
+
+#[test]
 fn merges_both_namespaces_without_hiding_manual_sections() {
     let documents = list_available_documents_from(
         vec![RegisteredDocument {
