@@ -197,6 +197,11 @@ impl DocumentView {
         self.reference_target(id).map(references::target_text)
     }
 
+    pub(crate) fn reference_uri(&self, id: &str) -> Option<String> {
+        self.reference_target(id)
+            .and_then(mant_protocol::reference_target_uri)
+    }
+
     pub(crate) fn activation_target(&self, target: &mant_ir::LinkTarget) -> Option<LinkTarget> {
         inline::local_link_target(target, self.address.as_ref())
     }

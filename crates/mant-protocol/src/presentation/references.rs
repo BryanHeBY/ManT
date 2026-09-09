@@ -116,7 +116,8 @@ fn count(count: &ReferenceCount) -> String {
 }
 
 /// Display the original typed reference without resolving it or dropping fragments.
-/// This is also the copy-target spelling; terminal adapters sanitize it separately.
+/// This readable label is not a reusable URI. Use [`reference_target_uri`] for
+/// copying; terminal adapters sanitize display text separately.
 #[must_use]
 pub fn reference_target_text(target: &mant_ir::LinkTarget) -> String {
     match target {
@@ -129,6 +130,13 @@ pub fn reference_target_text(target: &mant_ir::LinkTarget) -> String {
         },
         _ => target_parts(target).concat(),
     }
+}
+
+/// Return an exact, reusable link address without resolving its destination.
+/// Unsupported or malformed targets return `None`, never a repaired address.
+#[must_use]
+pub fn reference_target_uri(target: &mant_ir::LinkTarget) -> Option<String> {
+    target.to_uri()
 }
 
 pub(super) fn target_parts(target: &mant_ir::LinkTarget) -> [&str; 5] {
@@ -161,7 +169,7 @@ mod tests {
                 name: "printf".into(),
                 manual_section: section.map(str::to_owned),
             };
-            assert_eq!(reference_target_text(&target), expected);
+            assert_eq!(reference_target_uri(&target).as_deref(), Some(expected));
         }
     }
 

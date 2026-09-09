@@ -680,6 +680,14 @@ explicitly open it, or `Shift+Y` (**Copy Reference Target**) to choose a target
 to copy. The chooser retains each original occurrence: `r` reveals the selected
 source occurrence without opening it, and `Esc` returns to the owner.
 
+Copy Reference Target copies a reusable link destination, not the compact
+display label: for example, `target.md#details` or `man:printf(3)`. Decoded
+components are percent-encoded so literal parentheses, percent signs and
+fragments keep their meaning. Relative document addresses still use the
+original document's namespace and location; copying does not resolve them
+to host paths or verify that the target exists. A target that cannot be
+represented without changing its meaning is not copied.
+
 Ordinary body references remain under collapsed **DOCUMENT REFERENCES** groups
 at their nearest visible entry, section or root. For example:
 

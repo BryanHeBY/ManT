@@ -396,28 +396,13 @@ fn render_typed_link(
     options: MarkdownOptions,
     manual_links: bool,
 ) -> String {
-    use crate::markdown::link_destination::{
-        document_destination, encode_fragment, manual_destination,
-    };
-    let destination: Option<Cow<'_, str>> = match target {
-        LinkTarget::External { uri } => Some(Cow::Borrowed(uri)),
-        LinkTarget::Email { address } => {
-            mant_ir::mailto_uri_for_email_address(address).map(Cow::Owned)
-        }
-        LinkTarget::Document { name, fragment } => {
-            Some(Cow::Owned(document_destination(name, fragment.as_deref())))
-        }
-        LinkTarget::Section { id } if options.preserve_anchors => {
-            Some(Cow::Owned(format!("#{}", encode_fragment(id.as_str()))))
-        }
-        LinkTarget::Manual {
-            name,
-            manual_section,
-        } if manual_links => Some(Cow::Owned(manual_destination(
-            name,
-            manual_section.as_deref(),
-        ))),
-        LinkTarget::Manual { .. } | LinkTarget::Section { .. } => None,
+    let destination = match target {
+        // Keep existing external-source representation policy; invalid source
+        // references remain visible and diagnosed rather than silently erased.
+        LinkTarget::External { uri } => Some(uri.clone()),
+        LinkTarget::Manual { .. } if !manual_links => None,
+        LinkTarget::Section { .. } if !options.preserve_anchors => None,
+        _ => target.to_uri(),
     };
     destination.map_or_else(
         || render_inline_raw(children, options, manual_links),

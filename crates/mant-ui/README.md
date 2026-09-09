@@ -150,6 +150,10 @@ original source-position markers through the same cell/table layout as links.
 References lacking a registered Markdown namespace remain inspectable, but do
 not imply permission to open arbitrary local files. Reference target copies
 emit `CopyRequest::Reference`; complete-node copy is disabled on reference rows.
+The copied text is a reusable URI destination from the shared IR codec, not
+the display label. Document suffixes and encoded components preserve the typed
+target; relative references retain their original document context. Invalid or
+unrepresentable targets are refused rather than sanitized into another address.
 
 Associated badges use typed heading locations or completely validated, nonempty
 form associations, checked within that same IR work budget. Text resemblance is

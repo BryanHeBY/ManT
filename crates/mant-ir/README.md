@@ -238,6 +238,15 @@ their registered source; a `Manual` target still requires catalog lookup and
 explicit ambiguity handling. Renderers that cannot activate a target should
 preserve the link's visible children.
 
+`LinkTarget::from_uri` and `LinkTarget::to_uri` share the single-pass URI boundary
+used by Markdown and reference copying. Display labels are not link addresses:
+serialization restores the equivalent `.md` suffix, encodes decoded components,
+and distinguishes a manual topic containing parentheses from an explicit section.
+Relative document addresses still refer to the original source namespace, not an
+absolute catalog identity. Unrepresentable targets return `None` instead of a
+modified destination; parsing preserves invalid input for ordinary IR diagnostics.
+These helpers neither resolve a target nor authorize opening it.
+
 `DocumentReference` is the document/manual subset shared by independent
 entry-set relationships and scope traversal. It is not a second visible-link
 store. `scan_navigation_scope` traverses original heading/body content under

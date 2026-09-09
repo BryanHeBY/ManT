@@ -133,6 +133,99 @@ fn associated_bundle() -> ResolvedContent {
 }
 
 #[test]
+fn direct_and_picker_copy_keep_encoded_native_topics_distinct_from_sections() {
+    for heading in [false, true] {
+        let source = if heading {
+            "# Catalog\n\n## [Native](man:demo%281%29)\n"
+        } else {
+            "# Catalog\n\n## Native\n\n[Native](man:demo%281%29)\n"
+        };
+        let bundle = mant_engine::query_markdown_text(source, None).unwrap();
+        let mut app = App::new(&bundle);
+        app.selected = app
+            .session
+            .document
+            .navigation()
+            .iter()
+            .position(|node| {
+                node.kind
+                    == if heading {
+                        NavKind::Section
+                    } else {
+                        NavKind::Reference
+                    }
+            })
+            .unwrap();
+        app.copy_selected_reference();
+        if heading {
+            assert_eq!(app.overlay, Overlay::References);
+            let choice = &app.reference_chooser.as_ref().unwrap().choices[0].1;
+            assert!(
+                choice.contains("man:demo(1)"),
+                "picker remains readable: {choice}"
+            );
+            app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+        }
+        let Some(CopyRequest::Reference { text }) = app.take_copy_request() else {
+            panic!("explicit copy must provide a reusable URI");
+        };
+        assert_eq!(text, "man:demo%281%29");
+        assert_eq!(
+            mant_ir::LinkTarget::from_uri(&text),
+            mant_ir::LinkTarget::Manual {
+                name: "demo(1)".into(),
+                manual_section: None,
+            }
+        );
+        assert!(app.take_open_request().is_none());
+    }
+}
+
+#[test]
+fn malformed_reference_copy_reports_failure_without_repairing_the_address() {
+    let mut bundle = navigation_bundle();
+    bundle.document.as_mut().unwrap().sections[0].blocks = vec![AstBlock::Paragraph {
+        children: vec![Inline::Link {
+            target: mant_ir::LinkTarget::Manual {
+                name: "bad\nname".into(),
+                manual_section: None,
+            },
+            title: None,
+            children: vec![Inline::Text {
+                value: "BAD".into(),
+            }],
+        }],
+        layout: LayoutHint::default(),
+        source: None,
+    }];
+    let mut app = App::new(&bundle);
+    app.selected = app
+        .session
+        .document
+        .navigation()
+        .iter()
+        .position(|node| node.kind == NavKind::Reference)
+        .unwrap();
+    app.copy_selected_reference();
+    assert!(app.take_copy_request().is_none());
+    assert!(
+        app.notice
+            .as_deref()
+            .unwrap()
+            .contains("no reusable link address")
+    );
+    app.show_reference_chooser(true);
+    app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    assert!(app.take_copy_request().is_none());
+    assert!(
+        app.notice
+            .as_deref()
+            .unwrap()
+            .contains("no reusable link address")
+    );
+}
+
+#[test]
 fn associated_owner_keeps_fold_action_and_explicit_chooser_retains_every_occurrence() {
     let mut app = App::new(&associated_bundle());
     app.selected = app
@@ -166,7 +259,7 @@ fn associated_owner_keeps_fold_action_and_explicit_chooser_retains_every_occurre
     app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     assert!(
-        matches!(app.take_copy_request(), Some(CopyRequest::Reference { text }) if text == "target#second")
+        matches!(app.take_copy_request(), Some(CopyRequest::Reference { text }) if text == "target.md#second")
     );
 }
 
@@ -236,6 +329,56 @@ fn associated_chooser_cancellation_and_unopenable_targets_leave_source_intact() 
 }
 
 #[test]
+fn reference_chooser_renders_and_scrolls_whole_graphemes_in_narrow_terminals() {
+    let mut app = App::new(&associated_bundle());
+    app.selected = app
+        .session
+        .document
+        .navigation()
+        .iter()
+        .position(|node| node.kind == NavKind::Section)
+        .unwrap();
+    for width in [8, 10, 12, 20, 80] {
+        let mut terminal = Terminal::new(TestBackend::new(width, 20)).unwrap();
+        app.show_reference_chooser(false);
+        app.reference_chooser.as_mut().unwrap().choices[0].1 = "Cafe\u{301} 👩‍💻".into();
+        terminal.draw(|frame| app.draw(frame)).unwrap();
+        let area = app.reference_chooser.as_ref().unwrap().area;
+        let symbols: Vec<_> = (area.x + 1..area.right() - 1)
+            .map(|x| terminal.backend().buffer()[(x, area.y + 1)].symbol())
+            .collect();
+        for symbol in &symbols {
+            if symbol.contains('\u{301}') {
+                assert_eq!(*symbol, "e\u{301}");
+            }
+            if symbol.contains(['👩', '💻', '\u{200d}']) {
+                assert_eq!(*symbol, "👩‍💻");
+            }
+        }
+        if width >= 20 {
+            assert!(symbols.contains(&"e\u{301}"));
+            assert!(symbols.contains(&"👩‍💻"));
+        }
+
+        // Twelve graphemes end after the complete e + accent. Scalar-based
+        // scrolling used to start on the accent instead of the emoji.
+        app.reference_chooser.as_mut().unwrap().choices[0].1 = "12345678901e\u{301}👩‍💻TAIL".into();
+        app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE));
+        terminal.draw(|frame| app.draw(frame)).unwrap();
+        assert_eq!(
+            terminal.backend().buffer()[(area.x + 3, area.y + 1)].symbol(),
+            "👩‍💻"
+        );
+        app.handle_key(KeyEvent::new(KeyCode::Left, KeyModifiers::NONE));
+        terminal.draw(|frame| app.draw(frame)).unwrap();
+        assert_eq!(
+            terminal.backend().buffer()[(area.x + 3, area.y + 1)].symbol(),
+            "1"
+        );
+    }
+}
+
+#[test]
 fn reference_selection_reveals_but_only_enter_opens_and_copy_target_is_separate() {
     let bundle = reference_bundle();
     let mut app = App::new(&bundle);
@@ -273,7 +416,7 @@ fn reference_selection_reveals_but_only_enter_opens_and_copy_target_is_separate(
     assert!(app.take_copy_request().is_none());
     app.handle_key(KeyEvent::new(KeyCode::Char('Y'), KeyModifiers::SHIFT));
     assert!(
-        matches!(app.take_copy_request(), Some(CopyRequest::Reference { text }) if text == "target#details")
+        matches!(app.take_copy_request(), Some(CopyRequest::Reference { text }) if text == "target.md#details")
     );
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     let request = app.take_open_request().unwrap();

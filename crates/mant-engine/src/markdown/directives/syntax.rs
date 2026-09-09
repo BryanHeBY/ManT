@@ -198,7 +198,7 @@ fn parse_domain_reference(value: &str) -> Result<DocumentReference, String> {
         }
         return Ok(reference);
     }
-    let Some((name, fragment)) = super::super::inline::markdown_document_reference(value) else {
+    let Some((name, fragment)) = mant_ir::markdown_document_reference(value) else {
         return Err(
             "entry domains require a relative Markdown path or manual/<section>/<name>".to_owned(),
         );

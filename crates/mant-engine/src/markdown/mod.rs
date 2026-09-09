@@ -10,7 +10,6 @@ mod directives;
 mod entries;
 mod inline;
 mod layout;
-pub(crate) mod link_destination;
 mod metadata;
 mod source;
 

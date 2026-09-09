@@ -4,9 +4,10 @@ use ratatui::{
     Frame,
     layout::Rect,
     style::Style,
-    text::Line,
+    text::{Line, Span},
     widgets::{Block, Borders, Clear, Paragraph},
 };
+use unicode_width::UnicodeWidthStr;
 
 use super::{App, Overlay, UpdateOutcome, fit_to_width};
 use crate::{CopyRequest, theme};
@@ -17,6 +18,7 @@ pub(super) struct ReferenceChooser {
     copy: bool,
     pub(super) area: Rect,
     first: usize,
+    /// Extended-grapheme offset into the selected label, never a scalar offset.
     horizontal: usize,
 }
 
@@ -43,6 +45,20 @@ impl ReferenceChooser {
 }
 
 impl App {
+    pub(super) fn queue_reference_copy(&mut self, id: &str) {
+        let Some(text) = self.session.document.reference_uri(id) else {
+            self.report_notice("Reference target has no reusable link address".into());
+            return;
+        };
+        if text.len() > crate::MAX_COPY_BYTES {
+            self.report_notice("The reference exceeds the 4 MiB clipboard limit".into());
+            return;
+        }
+        // URI conversion has validated/encoded every component. Terminal
+        // display sanitization must never rewrite a copied destination.
+        self.pending_copy = Some(CopyRequest::Reference { text });
+    }
+
     pub(super) fn show_reference_chooser(&mut self, copy: bool) {
         let Some(node) = self.session.document.navigation().get(self.selected) else {
             return;
@@ -80,9 +96,11 @@ impl App {
             KeyCode::Up | KeyCode::Char('k') => self.move_reference_choice(-1),
             KeyCode::Left | KeyCode::Right => {
                 if let Some(chooser) = &mut self.reference_chooser {
-                    let limit = chooser.choices[chooser.selected]
-                        .1
-                        .chars()
+                    let label =
+                        crate::text::sanitize_terminal_text(&chooser.choices[chooser.selected].1);
+                    let span = Span::raw(label);
+                    let limit = span
+                        .styled_graphemes(Style::default())
                         .count()
                         .saturating_sub(1);
                     chooser.horizontal = if key.code == KeyCode::Left {
@@ -125,11 +143,7 @@ impl App {
                 self.set_selected_index(owner);
             }
         } else if chooser.copy {
-            if let Some(text) = self.session.document.reference_text(id) {
-                self.pending_copy = Some(CopyRequest::Reference {
-                    text: crate::text::sanitize_terminal_text(&text).into_owned(),
-                });
-            }
+            self.queue_reference_copy(id);
         } else if let Some(target) = self.session.document.reference_target(id) {
             if let Some(target) = self.session.document.activation_target(target) {
                 self.activate_link_target(target);
@@ -197,26 +211,15 @@ impl App {
             .skip(chooser.first)
             .take(rows)
             .map(|(index, (_, label))| {
-                let text = crate::text::sanitize_terminal_text(label);
-                let text: String = text
-                    .chars()
-                    .skip(if index == chooser.selected {
-                        chooser.horizontal
-                    } else {
-                        0
-                    })
-                    .take(content_width)
-                    .collect();
                 Line::styled(
-                    fit_to_width(
-                        &format!(
-                            "{} {text}",
-                            if index == chooser.selected {
-                                "›"
-                            } else {
-                                " "
-                            }
-                        ),
+                    reference_choice_text(
+                        label,
+                        index == chooser.selected,
+                        if index == chooser.selected {
+                            chooser.horizontal
+                        } else {
+                            0
+                        },
                         content_width,
                     ),
                     if index == chooser.selected {
@@ -259,4 +262,27 @@ impl App {
             );
         }
     }
+}
+
+fn reference_choice_text(label: &str, selected: bool, horizontal: usize, width: usize) -> String {
+    let mut text = String::new();
+    if width > 0 {
+        text.push(if selected { '›' } else { ' ' });
+    }
+    if width > 1 {
+        text.push(' ');
+    }
+    let mut used = width.min(2);
+    let label = crate::text::sanitize_terminal_text(label);
+    let span = Span::raw(label);
+    for grapheme in span.styled_graphemes(Style::default()).skip(horizontal) {
+        let columns = grapheme.symbol.width();
+        if used + columns > width {
+            break;
+        }
+        text.push_str(grapheme.symbol);
+        used += columns;
+    }
+    text.push_str(&" ".repeat(width.saturating_sub(used)));
+    text
 }

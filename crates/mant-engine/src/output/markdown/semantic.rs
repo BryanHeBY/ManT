@@ -77,7 +77,11 @@ pub(super) fn domain(value: &ValueDomain) -> Option<String> {
                 DocumentReference::Document {
                     name,
                     fragment: None,
-                } => crate::markdown::link_destination::document_destination(name, None),
+                } => mant_ir::LinkTarget::Document {
+                    name: name.clone(),
+                    fragment: None,
+                }
+                .to_uri()?,
                 DocumentReference::Manual {
                     name,
                     manual_section: Some(section),

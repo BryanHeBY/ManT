@@ -107,7 +107,7 @@ fn parse_inline_sequence(
                 let destination = dest_url.into_string();
                 let title = (!title.is_empty()).then(|| title.into_string());
                 output.push(Inline::Link {
-                    target: link_target(destination),
+                    target: mant_ir::LinkTarget::from_uri(&destination),
                     title,
                     children,
                 });
@@ -138,23 +138,6 @@ fn parse_inline_sequence(
     (output, end_offset)
 }
 
-fn link_target(destination: String) -> mant_ir::LinkTarget {
-    if let Some(target) = destination
-        .strip_prefix('#')
-        .and_then(super::link_destination::decode_fragment)
-    {
-        mant_ir::LinkTarget::Section { id: target.into() }
-    } else if let Some(target) = super::link_destination::manual_reference(&destination) {
-        target
-    } else if let Some(address) = mant_ir::email_address_from_mailto_uri(&destination) {
-        mant_ir::LinkTarget::Email { address }
-    } else if let Some((name, fragment)) = markdown_document_reference(&destination) {
-        mant_ir::LinkTarget::Document { name, fragment }
-    } else {
-        mant_ir::LinkTarget::External { uri: destination }
-    }
-}
-
 fn unescape_commonmark_punctuation(value: &str) -> String {
     let mut output = String::with_capacity(value.len());
     let mut characters = value.chars().peekable();
@@ -166,56 +149,6 @@ fn unescape_commonmark_punctuation(value: &str) -> String {
         }
     }
     output
-}
-
-pub(super) fn markdown_document_reference(destination: &str) -> Option<(String, Option<String>)> {
-    // URI classification precedes extension recognition: a host named
-    // example.md or a URI ending in .md is never a local document. The first
-    // path component of a relative URI cannot contain a scheme separator.
-    if destination.split(['/', '#', '?']).next()?.contains(':') {
-        return None;
-    }
-    let (path, fragment) = if let Some((path, fragment)) = destination.split_once('#') {
-        (
-            path,
-            if fragment.is_empty() {
-                None
-            } else {
-                Some(super::link_destination::decode_fragment(fragment)?)
-            },
-        )
-    } else {
-        (destination, None)
-    };
-    let path = super::link_destination::decode_path(path)?;
-    if path.split('/').next()?.contains(':') {
-        return None;
-    }
-    if path.contains(['\\', '?']) || path.starts_with('/') || path.chars().any(char::is_control) {
-        return None;
-    }
-    // Document addresses use URI/POSIX separators on every host, not Path's
-    // platform-specific interpretation of drive prefixes and components.
-    let (parent, leaf) = path
-        .rsplit_once('/')
-        .map_or(("", path.as_str()), |(parent, leaf)| (parent, leaf));
-    let (filename, extension) = leaf.rsplit_once('.')?;
-    if !extension.eq_ignore_ascii_case("md") && !extension.eq_ignore_ascii_case("markdown") {
-        return None;
-    }
-    if filename.is_empty() {
-        return None;
-    }
-    let logical = if parent.is_empty() {
-        filename.to_owned()
-    } else {
-        format!("{parent}/{filename}")
-    };
-    let valid = logical.split('/').all(|component| {
-        !component.is_empty()
-            && (matches!(component, "." | "..") || !component.chars().any(char::is_control))
-    });
-    valid.then_some((logical, fragment))
 }
 
 fn supported_link(link_type: LinkType) -> bool {

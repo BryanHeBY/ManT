@@ -512,16 +512,15 @@ impl App {
     }
 
     pub(super) fn copy_selected_reference(&mut self) {
-        let text = self
+        let reference = self
             .session
             .document
             .navigation()
             .get(self.selected)
-            .and_then(|node| self.session.document.reference_text(&node.id));
-        if let Some(text) = text {
-            self.pending_copy = Some(CopyRequest::Reference {
-                text: crate::text::sanitize_terminal_text(&text).into_owned(),
-            });
+            .filter(|node| self.session.document.reference_target(&node.id).is_some())
+            .map(|node| node.id.clone());
+        if let Some(id) = reference {
+            self.queue_reference_copy(&id);
         } else {
             self.show_reference_chooser(true);
         }

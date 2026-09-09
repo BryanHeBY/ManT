@@ -12,6 +12,11 @@ that crate was not published for that change.
 
 ## Unreleased
 
+- Reference target copying now emits reusable link destinations rather than
+  display labels. Shared IR URI conversion preserves Markdown document suffixes,
+  literal manual-name parentheses, percent signs and fragments; unsupported
+  representations are rejected instead of silently changing the target.
+
 - `mant-ui` keeps combining marks and joined emoji intact in associated outline
   labels, including wrapping and narrow-sidebar clipping. Reference badge limits
   also stop at complete grapheme boundaries without increasing the scan budget.
