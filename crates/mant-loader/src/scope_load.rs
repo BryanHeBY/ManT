@@ -1,5 +1,5 @@
 //! Bounded, view-independent loading of typed document scopes.
-use crate::{DocumentLoader, LoadError, LoadSpec, QueryPolicy};
+use crate::{DocumentLoader, LoadError, LoadPolicy, LoadSpec};
 use mant_ir::{DocumentAddress, DocumentReference, ResolvedContent};
 use mant_protocol::{
     DocumentEdge, DocumentEdgeKind, DocumentFrontier, DocumentScope, DocumentSelector,

@@ -1,6 +1,6 @@
 //! Application-level scope request validation and query execution.
-use crate::scope_load::validate_document_scope;
-use crate::{DocumentResolver, LoadedDocumentScope, ScopeLoadError, validate_search_query};
+use crate::{DocumentResolver, validate_search_query};
+use mant_loader::{LoadedDocumentScope, ScopeLoadError, validate_document_scope};
 use mant_protocol::{
     DocumentScope, MAX_SEMANTIC_ENTRY_CHARS, ScopeQueryRequest, ScopeQueryResult, ScopeQueryView,
     ScopeTextError, SearchQuery, validate_scope_text,

@@ -42,7 +42,7 @@ pub const MAX_MARKDOWN_BYTES: u64 = 16 * 1024 * 1024;
 
 /// Closed content-resolution policy kept outside the serialized request contract.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub enum QueryPolicy {
+pub enum LoadPolicy {
     /// Resolve a full document and attach a compatible quick reference.
     #[default]
     Combined,
@@ -72,7 +72,7 @@ pub(super) struct NamedResolutionPlan {
     pub(super) quick_reference: QuickReferenceMode,
 }
 
-impl QueryPolicy {
+impl LoadPolicy {
     pub(super) fn named_resolution_plan(self, has_manual_section: bool) -> NamedResolutionPlan {
         match self {
             Self::Combined => NamedResolutionPlan {
@@ -96,6 +96,9 @@ impl QueryPolicy {
 }
 
 pub(super) trait LoadHost {
+    fn native_available(&self) -> bool {
+        true
+    }
     fn name_candidates(&self, name: &str) -> Vec<String>;
     fn locate_registered_document(
         &self,
@@ -159,7 +162,7 @@ pub(crate) fn read_capped_utf8_io(reader: impl Read, limit: u64) -> io::Result<S
 ///
 /// # Errors
 /// Returns the precise loading input violation; no query view is inspected.
-pub fn validate_load_spec(spec: LoadSpec<'_>, policy: QueryPolicy) -> Result<(), LoadError> {
+pub fn validate_load_spec(spec: LoadSpec<'_>, policy: LoadPolicy) -> Result<(), LoadError> {
     match spec {
         LoadSpec::Document {
             selector,
@@ -191,7 +194,7 @@ pub fn validate_load_spec(spec: LoadSpec<'_>, policy: QueryPolicy) -> Result<(),
             if manual_section.is_some_and(|value| !crate::is_manual_section(value.trim())) {
                 return Err(LoadError::InvalidManualSection);
             }
-            if policy == QueryPolicy::TldrOnly
+            if policy == LoadPolicy::TldrOnly
                 && let Some(section) = manual_section
                 && !crate::is_command_manual_section(section.trim())
             {
@@ -199,7 +202,7 @@ pub fn validate_load_spec(spec: LoadSpec<'_>, policy: QueryPolicy) -> Result<(),
                     section: section.trim().to_owned(),
                 });
             }
-            if source.is_some() && (manual_section.is_some() || policy == QueryPolicy::ManualOnly) {
+            if source.is_some() && (manual_section.is_some() || policy == LoadPolicy::ManualOnly) {
                 return Err(LoadError::ConflictingSourceSelectors);
             }
         }
@@ -207,7 +210,7 @@ pub fn validate_load_spec(spec: LoadSpec<'_>, policy: QueryPolicy) -> Result<(),
             if path.trim().is_empty() {
                 return Err(LoadError::EmptyMarkdownPath);
             }
-            if policy != QueryPolicy::Combined {
+            if policy != LoadPolicy::Combined {
                 return Err(LoadError::Markdown {
                     path: path.trim().to_owned(),
                     detail: "content-only policies do not apply to direct input".to_owned(),

@@ -5,6 +5,11 @@ use std::{error::Error, fmt, path::PathBuf};
 /// Invalid loading input or failure to acquire readable local content.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LoadError {
+    /// Native input was selected but this build does not enable the roff backend.
+    NativeBackendUnavailable {
+        /// Optional cached quick reference available through explicit tldr policy.
+        tldr_topic: Option<String>,
+    },
     /// A document selector was empty after trimming.
     EmptyName,
     /// A native manual category was empty or malformed.
@@ -108,6 +113,16 @@ pub enum ManualLoadError {
 impl fmt::Display for LoadError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::NativeBackendUnavailable { tldr_topic } => {
+                formatter.write_str("native manual loading requires the 'roff' feature")?;
+                if let Some(topic) = tldr_topic {
+                    write!(
+                        formatter,
+                        "\nhint: a tldr entry is available; run `mant {topic} --tldr`"
+                    )?;
+                }
+                Ok(())
+            }
             Self::EmptyName => formatter.write_str("name must not be empty"),
             Self::InvalidManualSection => formatter.write_str(
                 "manual section must be a conventional number or the single letter 'l' or 'n'",

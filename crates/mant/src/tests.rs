@@ -19,7 +19,7 @@ use mant_protocol::{
 
 use super::{
     CLI_PROTOCOL_VERSION, CatalogQuery, CliHost, DocumentAddress, DocumentCatalog, Failure,
-    QueryPolicy, TerminalCapabilities, TerminalKind,
+    LoadPolicy, TerminalCapabilities, TerminalKind,
     arguments::{self, ColorMode, Command, DisplayMode, OutputOptions},
     read_native_request, request_for_address, resolve_process_presentation, run_command,
     run_with_host,
@@ -28,7 +28,7 @@ use super::{
 struct FakeHost {
     query_calls: Cell<usize>,
     update_calls: Cell<usize>,
-    last_policy: Cell<QueryPolicy>,
+    last_policy: Cell<LoadPolicy>,
     document: Option<Document>,
     tldr: Option<TldrDocument>,
     doctor_error: bool,
@@ -50,7 +50,7 @@ fn catalog_addresses_reopen_the_exact_source_or_manual_section() {
             manual_section: None,
         }
     );
-    assert_eq!(policy, QueryPolicy::Combined);
+    assert_eq!(policy, LoadPolicy::Combined);
 
     let (request, policy) = request_for_address(&DocumentAddress::Manual {
         name: "printf".to_owned(),
@@ -64,13 +64,13 @@ fn catalog_addresses_reopen_the_exact_source_or_manual_section() {
             manual_section: None,
         }
     );
-    assert_eq!(policy, QueryPolicy::ManualOnly);
+    assert_eq!(policy, LoadPolicy::ManualOnly);
 
     let (request, policy) = request_for_address(&DocumentAddress::Markdown {
         path: "en/tool".into(),
         origin: MarkdownOrigin::Documents,
     });
-    assert_eq!(policy, QueryPolicy::Combined);
+    assert_eq!(policy, LoadPolicy::Combined);
     assert_eq!(
         request.input,
         QueryInput::Document {
@@ -88,7 +88,7 @@ fn unqualified_manual_navigation_preserves_native_resolution_without_a_default_s
             name: "printf".into(),
             manual_section: None,
         });
-    assert_eq!(policy, QueryPolicy::ManualOnly);
+    assert_eq!(policy, LoadPolicy::ManualOnly);
     assert_eq!(
         request.input,
         QueryInput::Document {
@@ -346,7 +346,7 @@ impl FakeHost {
         Self {
             query_calls: Cell::new(0),
             update_calls: Cell::new(0),
-            last_policy: Cell::new(QueryPolicy::default()),
+            last_policy: Cell::new(LoadPolicy::default()),
             document: None,
             tldr: None,
             doctor_error: false,
@@ -462,7 +462,7 @@ impl CliHost for FakeHost {
     fn query(
         &self,
         request: &QueryRequest,
-        policy: QueryPolicy,
+        policy: LoadPolicy,
     ) -> Result<ResolvedContent, Failure> {
         self.query_calls.set(self.query_calls.get() + 1);
         self.last_policy.set(policy);
@@ -1077,7 +1077,7 @@ fn manual_option_reaches_the_resolution_policy_without_stderr_noise() {
     assert_eq!(status, 0);
     assert!(output.contains("1 NAME\n│    ID: name-1"));
     assert!(diagnostics.is_empty());
-    assert_eq!(host.last_policy.get(), QueryPolicy::ManualOnly);
+    assert_eq!(host.last_policy.get(), LoadPolicy::ManualOnly);
 }
 
 #[test]

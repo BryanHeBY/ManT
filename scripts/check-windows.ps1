@@ -32,6 +32,7 @@ $Packages = @(
     "--package", "mant-protocol",
     "--package", "mant-sources",
     "--package", "mant-codec",
+    "--package", "mant-loader",
     "--package", "mant-engine",
     "--package", "mant-ui",
     "--package", "mant"
@@ -100,6 +101,12 @@ Invoke-Native -Label "test portable Rust packages" -Program "cargo" `
     -Arguments (@("test", "--locked") + $Packages)
 Invoke-Native -Label "test optional libmandoc features" -Program "cargo" `
     -Arguments @("test", "--locked", "--package", "libmandoc-rs", "--all-features")
+foreach ($BoundaryPackage in @("mant-codec", "mant-loader")) {
+    Invoke-Native -Label "test Markdown-only $BoundaryPackage" -Program "cargo" `
+        -Arguments @("test", "--locked", "--package", $BoundaryPackage, "--no-default-features")
+    Invoke-Native -Label "test native $BoundaryPackage" -Program "cargo" `
+        -Arguments @("test", "--locked", "--package", $BoundaryPackage, "--no-default-features", "--features", "roff")
+}
 Invoke-Native -Label "lint portable Rust packages" -Program "cargo" `
     -Arguments (@("clippy", "--locked") + $Packages + @("--all-targets", "--all-features", "--", "-D", "warnings"))
 & (Join-Path $PSScriptRoot "build-and-smoke.ps1") -BuildProfile $BuildProfile

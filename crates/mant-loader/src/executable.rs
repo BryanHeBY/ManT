@@ -5,6 +5,43 @@ use std::{collections::BTreeMap, env, ffi::OsStr, path::PathBuf};
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 
+/// Read-only executable lookup against a caller-owned environment snapshot.
+///
+/// Construction borrows the map without reading the process environment.
+/// Lookup applies the native `PATH`/`PATHEXT` rules and inspects candidate file
+/// metadata; it never starts a program or creates cache state. The snapshot
+/// does not freeze the filesystem, and a returned path grants no execution
+/// authority to a caller.
+pub struct ExecutableLookup<'env> {
+    environment: &'env BTreeMap<String, String>,
+}
+
+impl<'env> ExecutableLookup<'env> {
+    /// Borrow an existing environment without copying or refreshing it.
+    #[must_use]
+    pub const fn new(environment: &'env BTreeMap<String, String>) -> Self {
+        Self { environment }
+    }
+
+    /// Read one borrowed value with native environment-name case rules.
+    ///
+    /// Exact spelling wins. Windows additionally accepts ASCII case variants;
+    /// other platforms retain case-sensitive lookup.
+    #[must_use]
+    pub fn environment_value(&self, name: &str) -> Option<&'env str> {
+        environment_value(self.environment, name)
+    }
+
+    /// Find the first directly runnable candidate without executing it.
+    ///
+    /// Candidate precedence and executable checks use the current platform's
+    /// conventions. A missing `PATH` or eligible file returns `None`.
+    #[must_use]
+    pub fn find(&self, name: &str) -> Option<PathBuf> {
+        find_executable(name, self.environment)
+    }
+}
+
 /// Look up an environment value while respecting Windows' case-insensitive
 /// variable names.
 pub(crate) fn environment_value<'a>(
@@ -45,7 +82,7 @@ pub(crate) fn find_executable(
 #[must_use]
 pub fn find_host_executable(name: &str) -> Option<PathBuf> {
     let environment = env::vars().collect::<BTreeMap<_, _>>();
-    find_executable(name, &environment)
+    ExecutableLookup::new(&environment).find(name)
 }
 
 #[cfg(unix)]
@@ -130,6 +167,86 @@ fn windows_name_candidates(name: &str, pathext: Option<&str>) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::windows_name_candidates;
+
+    #[test]
+    fn lookup_borrows_values_and_keeps_native_environment_case_rules() {
+        use std::collections::BTreeMap;
+
+        let mut environment = BTreeMap::from([("Path".to_owned(), "mixed".to_owned())]);
+        let lookup = super::ExecutableLookup::new(&environment);
+        let value = lookup.environment_value("Path").unwrap();
+        assert!(std::ptr::eq(value.as_ptr(), environment["Path"].as_ptr()));
+        assert_eq!(
+            lookup.environment_value("PATH"),
+            cfg!(windows).then_some("mixed")
+        );
+        assert_eq!(lookup.environment_value("missing"), None);
+
+        environment.insert("PATH".to_owned(), "exact".to_owned());
+        assert_eq!(
+            super::ExecutableLookup::new(&environment).environment_value("PATH"),
+            Some("exact"),
+            "exact spelling retains precedence even with a case-colliding map"
+        );
+        assert_eq!(
+            super::ExecutableLookup::new(&BTreeMap::new()).find("tool"),
+            None,
+            "lookup must not fall back to the process PATH"
+        );
+    }
+
+    #[cfg(any(unix, windows))]
+    #[test]
+    fn executable_probe_inspects_candidates_without_running_them() {
+        use std::{collections::BTreeMap, fs, path::PathBuf, time::SystemTime};
+
+        struct Fixture(PathBuf);
+        impl Drop for Fixture {
+            fn drop(&mut self) {
+                let _ = fs::remove_dir_all(&self.0);
+            }
+        }
+
+        let nonce = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let target = std::env::var_os("CARGO_TARGET_DIR").map_or_else(
+            || PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target"),
+            PathBuf::from,
+        );
+        fs::create_dir_all(&target).unwrap();
+        let directory = target.join(format!("executable-probe-{}-{nonce}", std::process::id()));
+        fs::create_dir(&directory).unwrap();
+        let fixture = Fixture(directory);
+        #[cfg(unix)]
+        let (name, script) = ("probe", "#!/bin/sh\n: > \"$0.was-run\"\nexit 1\n");
+        #[cfg(windows)]
+        let (name, script) = (
+            "probe.CMD",
+            "@echo off\r\necho ran>\"%~f0.was-run\"\r\nexit /b 1\r\n",
+        );
+        let candidate = fixture.0.join(name);
+        fs::write(&candidate, script).unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(&candidate, fs::Permissions::from_mode(0o700)).unwrap();
+        }
+        let environment = BTreeMap::from([(
+            "PATH".to_owned(),
+            std::env::join_paths([&fixture.0])
+                .unwrap()
+                .into_string()
+                .unwrap(),
+        )]);
+        assert_eq!(
+            super::ExecutableLookup::new(&environment).find(name),
+            Some(candidate.clone())
+        );
+        assert!(!fixture.0.join(format!("{name}.was-run")).exists());
+        assert_eq!(fs::read_to_string(candidate).unwrap(), script);
+    }
 
     #[test]
     fn windows_candidates_keep_exact_names_before_pathext_order() {

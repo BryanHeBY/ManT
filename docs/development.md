@@ -101,7 +101,7 @@ On Windows, run the native product boundary from PowerShell:
 .\scripts\check-windows.ps1
 ```
 
-It tests `libmandoc-rs`, `mant-ir`, `mant-protocol`, `mant-sources`, `mant-codec`, `mant-engine`, `mant-ui`, and `mant`,
+It tests `libmandoc-rs`, `mant-ir`, `mant-protocol`, `mant-sources`, `mant-codec`, `mant-loader`, `mant-engine`, `mant-ui`, and `mant`,
 including the shared roff fixture suites.
 
 The product crates are workspace `default-members`, so a bare `cargo build`,
@@ -118,6 +118,13 @@ engine or frontend dependencies in its normal/build graph. This is distinct
 from workspace tests, where the product enables the codec's `roff` feature.
 Both packaged codec feature surfaces are tested as well. All consumer build
 products use the repository `target/` directory, not a temporary build directory.
+
+`scripts/check-loader-consumer.sh` independently exercises read-only Markdown
+file loading with `mant-loader`'s default features. Its normal/build dependency
+graph excludes native parsers, compression, source acquisition, engine queries,
+and frontends. The default and `roff` loader surfaces also run as separate test
+and packaged-source checks; workspace feature unification is not evidence for
+the default-only boundary.
 
 The script checks formatting and installer syntax, runs every workspace test,
 runs clippy with all targets and features, builds the optimized executable,
@@ -261,6 +268,7 @@ crates/mant-ir/               Semantic IR, ResolvedContent, paths, visitors, val
 crates/mant-protocol/         Versioned request/response DTOs and JSON Schema
 crates/mant-sources/          Local Markdown registry and transactional source updates
 crates/mant-codec/            In-memory Markdown/tldr, optional roff lowering, document Markdown
+crates/mant-loader/           Read-only catalogs, native roots, bounded inputs and linked scopes
 crates/mant-engine/           Loading, codec integration, projections, queries, report rendering
 crates/mant-ui/               Ratatui reader, navigation, search, and terminal styling
 crates/mant/                  Mode selection, CLI, request JSON, and MCP stdio boundary

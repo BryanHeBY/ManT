@@ -1,57 +1,23 @@
-//! Resolves local manuals, registered Markdown, and tldr content into one query.
-
-use std::{
-    error::Error,
-    ffi::OsStr,
-    fmt, fs,
-    path::{Path, PathBuf},
-    sync::OnceLock,
-};
-
-use mant_ir::{Document, DocumentAddress, MarkdownOrigin, ResolvedContent, TldrDocument};
+//! Full request adapters compose view-independent loading and pure queries.
+use crate::{ProjectionError, SearchError, search_query, select_excerpt, validate_search_query};
+use mant_ir::ResolvedContent;
+use mant_loader::{DocumentLoader, LoadError, LoadPolicy, LoadSpec, validate_load_spec};
 use mant_protocol::{
-    CatalogQuery, DocumentCatalog, EntryProjection, InputFormat, MAX_NODE_SELECTORS,
-    MAX_SEMANTIC_ENTRY_CHARS, QueryExcerpt, QueryInput, QueryOutline, QueryRequest, QuerySearch,
-    QueryView, ScopeTextError, SearchQuery, validate_scope_text,
+    EntryProjection, MAX_NODE_SELECTORS, MAX_SEMANTIC_ENTRY_CHARS, QueryExcerpt, QueryInput,
+    QueryOutline, QueryRequest, QuerySearch, QueryView, ScopeTextError, SearchQuery,
+    validate_scope_text,
 };
-use mant_sources::{RegisteredDocumentIndex, RegisteredDocumentOrigin, SourceConfigError};
-
-use crate::{
-    ManualIndex, ManualPage, ManualRequest, ProjectionError, SearchError, discover_manual_roots,
-    executable::query_name_candidates, locate_manual_source_in, parse_manual_bytes,
-    parse_manual_page, parse_manual_source, read_cached_tldr_page, search_query, select_excerpt,
-    validate_search_query,
-};
-
+use std::{error::Error, fmt};
 mod adapter;
 mod execution;
-mod input;
-mod load;
-mod load_error;
-mod named;
-mod resolver;
 mod validation;
 mod validation_error;
-pub use adapter::DocumentResolver;
+#[cfg(feature = "roff")]
+pub use adapter::query_roff_bytes;
+pub use adapter::{DocumentResolver, query_markdown_text};
 pub use execution::project_query_view;
-use load::{
-    FullDocumentMode, LoadHost, LoadedManual, QuickReferenceMode, RegisteredLookupPhase,
-    RegisteredSelection, RegisteredSelectionGroup, read_capped_utf8,
-};
-pub use load::{LoadSpec, MAX_MARKDOWN_BYTES, QueryPolicy, validate_load_spec};
-pub use load_error::{LoadError, ManualLoadError};
-pub use resolver::DocumentLoader;
 pub use validation::validate_query_request;
 pub use validation_error::QueryValidationError;
-
-#[cfg(test)]
-use adapter::query_with;
-pub use adapter::{query_markdown_text, query_roff_bytes};
-use input::{load_markdown_text, load_roff_bytes, load_with};
-#[cfg(test)]
-use load::read_capped_utf8_io;
-use named::query_named_document;
-
 /// Complete-request validation or local loading failure.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum QueryError {
@@ -141,7 +107,7 @@ impl Error for QueryExecutionError {
 /// Returns [`QueryError`] for invalid input or when neither source can produce
 /// readable content.
 pub fn resolve_query(request: &QueryRequest) -> Result<ResolvedContent, QueryError> {
-    resolve_query_with_policy(request, QueryPolicy::default())
+    resolve_query_with_policy(request, LoadPolicy::default())
 }
 
 /// Query with an explicit input-resolution policy.
@@ -153,7 +119,7 @@ pub fn resolve_query(request: &QueryRequest) -> Result<ResolvedContent, QueryErr
 /// Returns [`QueryError`] under the same conditions as [`resolve_query`].
 pub fn resolve_query_with_policy(
     request: &QueryRequest,
-    policy: QueryPolicy,
+    policy: LoadPolicy,
 ) -> Result<ResolvedContent, QueryError> {
     let resolver = validated_resolver(request, policy, DocumentResolver::from_system)?;
     resolver.resolve_validated(request, policy)
@@ -168,7 +134,7 @@ pub fn resolve_query_with_policy(
 /// Returns a typed loading, projection, or search failure.
 pub fn execute_query(
     request: &QueryRequest,
-    policy: QueryPolicy,
+    policy: LoadPolicy,
 ) -> Result<QueryViewResult, QueryExecutionError> {
     let resolver = validated_resolver(request, policy, DocumentResolver::from_system)
         .map_err(QueryExecutionError::Query)?;
@@ -179,7 +145,7 @@ pub fn execute_query(
 // therefore precedes construction, not merely the loader's first lookup.
 fn validated_resolver<T>(
     request: &QueryRequest,
-    policy: QueryPolicy,
+    policy: LoadPolicy,
     factory: impl FnOnce() -> T,
 ) -> Result<T, QueryError> {
     validate_query_request(request, policy)?;

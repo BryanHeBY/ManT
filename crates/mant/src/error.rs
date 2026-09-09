@@ -97,6 +97,14 @@ pub(super) fn query_failure(error: QueryError) -> Failure {
 
 fn load_failure(error: LoadError) -> Failure {
     match error {
+        LoadError::NativeBackendUnavailable {
+            tldr_topic: Some(topic),
+        } => Failure::operational_lines(
+            LoadError::NativeBackendUnavailable { tldr_topic: None },
+            [format!(
+                "hint: a tldr entry is available; run `mant {topic} --tldr`"
+            )],
+        ),
         LoadError::EmptyName
         | LoadError::InvalidManualSection
         | LoadError::TldrManualSection { .. }
@@ -112,6 +120,7 @@ fn load_failure(error: LoadError) -> Failure {
             )],
         ),
         LoadError::Markdown { .. }
+        | LoadError::NativeBackendUnavailable { tldr_topic: None }
         | LoadError::EmptyMarkdown { .. }
         | LoadError::Registry { .. }
         | LoadError::Manual(_)
@@ -287,6 +296,11 @@ mod tests {
     fn loading_and_query_validation_errors_keep_their_exit_categories() {
         use mant_engine::{LoadError, QueryError, QueryValidationError};
         for (error, expected_status, expected_message) in [
+            (
+                QueryError::Load(LoadError::NativeBackendUnavailable { tldr_topic: None }),
+                1,
+                "native manual loading requires the 'roff' feature",
+            ),
             (
                 QueryError::Load(LoadError::EmptyName),
                 2,

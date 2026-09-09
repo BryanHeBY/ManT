@@ -20,6 +20,7 @@ impl std::fmt::Display for LimitExceeded {
 
 impl std::error::Error for LimitExceeded {}
 
+#[cfg(feature = "roff")]
 pub(crate) fn is_limit_exceeded(error: &io::Error) -> bool {
     error
         .get_ref()

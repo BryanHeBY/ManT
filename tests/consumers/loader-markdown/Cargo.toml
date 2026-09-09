@@ -1,0 +1,14 @@
+[package]
+name = "mant-loader-markdown-consumer"
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.88"
+publish = false
+
+# Resolve features without the product workspace's native parser or updater.
+[workspace]
+resolver = "3"
+
+[dependencies]
+mant-loader = { path = "../../../crates/mant-loader", default-features = false }
+mant-protocol = { path = "../../../crates/mant-protocol" }

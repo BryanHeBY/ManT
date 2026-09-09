@@ -966,12 +966,11 @@ dependencies = [
  "flate2",
  "grep-matcher",
  "grep-regex",
- "libc",
  "libmandoc-rs",
  "mant-codec",
  "mant-ir",
+ "mant-loader",
  "mant-protocol",
- "mant-sources",
  "pulldown-cmark",
  "regex-syntax",
  "serde",
@@ -987,6 +986,23 @@ dependencies = [
  "serde",
  "serde_json",
  "unicode-width",
+]
+
+[[package]]
+name = "mant-loader"
+version = "0.11.0"
+dependencies = [
+ "flate2",
+ "grep-matcher",
+ "grep-regex",
+ "libc",
+ "libmandoc-rs",
+ "mant-codec",
+ "mant-ir",
+ "mant-protocol",
+ "mant-sources",
+ "serde_json",
+ "zstd",
 ]
 
 [[package]]

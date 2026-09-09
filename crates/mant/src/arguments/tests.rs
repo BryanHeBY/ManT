@@ -6,7 +6,7 @@ use mant_protocol::{
 };
 
 use super::{
-    ColorMode, Command, DisplayMode, OutputOptions, QueryFormat, QueryPolicy, QuerySource,
+    ColorMode, Command, DisplayMode, LoadPolicy, OutputOptions, QueryFormat, QuerySource,
     SchemaContract, parse, parse_process, requested_color,
 };
 
@@ -32,7 +32,7 @@ fn defaults_direct_queries_to_automatic_text_reading() {
             }),
             presentation: OutputOptions::default(),
             pretty: true,
-            policy: QueryPolicy::Combined,
+            policy: LoadPolicy::Combined,
             preserve_anchors: false,
         }
     );
@@ -251,7 +251,7 @@ fn parses_bounded_multi_document_queries_without_changing_single_document_syntax
                 display: DisplayMode::Auto
             },
             pretty: true,
-            policy: QueryPolicy::Combined,
+            policy: LoadPolicy::Combined,
             preserve_anchors: false,
         }
     );
@@ -382,7 +382,7 @@ fn parses_format_man_section_and_compact_json_options() {
                 display: DisplayMode::Auto
             },
             pretty: false,
-            policy: QueryPolicy::Combined,
+            policy: LoadPolicy::Combined,
             preserve_anchors: false,
         }
     );
@@ -618,7 +618,7 @@ fn tldr_joins_multiword_topics_and_keeps_explicit_formats() {
                     },
                     ..
                 }),
-                policy: QueryPolicy::TldrOnly,
+                policy: LoadPolicy::TldrOnly,
                 ..
             } if selector == "tar" && manual_section == "1"
         ));
@@ -636,7 +636,7 @@ fn tldr_joins_multiword_topics_and_keeps_explicit_formats() {
                 },
                 ..
             }),
-            policy: QueryPolicy::TldrOnly,
+            policy: LoadPolicy::TldrOnly,
             ..
         } if selector == "command.1"
     ));
@@ -654,7 +654,7 @@ fn parses_the_closed_stdin_request_mode_used_by_the_tui() {
                 display: DisplayMode::Auto
             },
             pretty: false,
-            policy: QueryPolicy::Combined,
+            policy: LoadPolicy::Combined,
             preserve_anchors: false,
         }
     );
@@ -665,7 +665,7 @@ fn parses_explicit_manual_and_tldr_selections() {
     assert!(matches!(
         parse(&args(&["tar", "--manual", "--format", "json"])).expect("manual-only query"),
         Command::Query {
-            policy: QueryPolicy::ManualOnly,
+            policy: LoadPolicy::ManualOnly,
             ..
         }
     ));
@@ -677,7 +677,7 @@ fn parses_explicit_manual_and_tldr_selections() {
                 ..
             }),
             presentation: OutputOptions { format: None, color: ColorMode::Auto, .. },
-            policy: QueryPolicy::TldrOnly,
+            policy: LoadPolicy::TldrOnly,
             ..
         } if selectors == &[mant_protocol::ContentSelector::id("tldr")]
     ));
@@ -707,7 +707,7 @@ fn parses_outline_and_repeatable_node_views_with_contextual_defaults() {
                 display: DisplayMode::Auto
             },
             pretty: true,
-            policy: QueryPolicy::Combined,
+            policy: LoadPolicy::Combined,
             preserve_anchors: false,
         }
     );
@@ -801,7 +801,7 @@ fn parses_filtered_outlines_and_repeatable_nodes() {
                 display: DisplayMode::Auto
             },
             pretty: true,
-            policy: QueryPolicy::Combined,
+            policy: LoadPolicy::Combined,
             preserve_anchors: false,
         }
     );
@@ -837,7 +837,7 @@ fn parses_filtered_outlines_and_repeatable_nodes() {
                 display: DisplayMode::Auto
             },
             pretty: true,
-            policy: QueryPolicy::Combined,
+            policy: LoadPolicy::Combined,
             preserve_anchors: false,
         }
     );
@@ -871,7 +871,7 @@ fn parses_explain_as_a_first_class_semantic_view() {
                     display: DisplayMode::Auto
                 },
                 pretty: true,
-                policy: QueryPolicy::Combined,
+                policy: LoadPolicy::Combined,
                 preserve_anchors: false,
             }
         );
@@ -928,7 +928,7 @@ fn parses_literal_and_regex_searches_with_text_as_the_default() {
                 display: DisplayMode::Auto
             },
             pretty: true,
-            policy: QueryPolicy::Combined,
+            policy: LoadPolicy::Combined,
             preserve_anchors: false,
         }
     );
@@ -978,7 +978,7 @@ fn parses_literal_and_regex_searches_with_text_as_the_default() {
                 display: DisplayMode::Auto
             },
             pretty: true,
-            policy: QueryPolicy::Combined,
+            policy: LoadPolicy::Combined,
             preserve_anchors: false,
         }
     );
@@ -1138,7 +1138,7 @@ fn help_is_side_effect_free_and_the_option_terminator_preserves_a_name() {
             }),
             presentation: OutputOptions::default(),
             pretty: true,
-            policy: QueryPolicy::Combined,
+            policy: LoadPolicy::Combined,
             preserve_anchors: false,
         }
     );

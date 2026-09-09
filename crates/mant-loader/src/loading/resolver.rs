@@ -1,12 +1,15 @@
 //! Explicit local-environment snapshot for view-independent acquisition.
 use super::{
-    CatalogQuery, Document, DocumentAddress, DocumentCatalog, LoadError, LoadHost, LoadSpec,
-    MAX_MARKDOWN_BYTES, ManualIndex, ManualPage, ManualRequest, MarkdownOrigin, OnceLock, Path,
-    PathBuf, QueryPolicy, RegisteredDocumentIndex, RegisteredDocumentOrigin, RegisteredLookupPhase,
+    CatalogQuery, Document, DocumentAddress, DocumentCatalog, LoadError, LoadHost, LoadPolicy,
+    LoadSpec, MAX_MARKDOWN_BYTES, ManualIndex, ManualPage, ManualRequest, MarkdownOrigin, OnceLock,
+    Path, PathBuf, RegisteredDocumentIndex, RegisteredDocumentOrigin, RegisteredLookupPhase,
     RegisteredSelection, RegisteredSelectionGroup, SourceConfigError, TldrDocument,
-    discover_manual_roots, fs, load_with, locate_manual_source_in, parse_manual_page,
-    parse_manual_source, query_name_candidates, read_cached_tldr_page, read_capped_utf8,
+    discover_manual_roots, fs, load_with, locate_manual_source_in, query_name_candidates,
+    read_cached_tldr_page, read_capped_utf8,
 };
+#[cfg(feature = "roff")]
+use super::{parse_manual_page, parse_manual_source};
+use mant_ir::ResolvedContent;
 
 fn registered_selection(document: &mant_sources::RegisteredDocument) -> RegisteredSelection {
     RegisteredSelection {
@@ -53,7 +56,7 @@ impl DocumentLoader {
     pub fn load(
         &self,
         spec: LoadSpec<'_>,
-        policy: QueryPolicy,
+        policy: LoadPolicy,
     ) -> Result<ResolvedContent, LoadError> {
         load_with(spec, policy, self)
     }
@@ -86,6 +89,9 @@ impl DocumentLoader {
 }
 
 impl LoadHost for DocumentLoader {
+    fn native_available(&self) -> bool {
+        cfg!(feature = "roff")
+    }
     fn name_candidates(&self, name: &str) -> Vec<String> {
         query_name_candidates(name)
     }
@@ -177,11 +183,27 @@ impl LoadHost for DocumentLoader {
     }
 
     fn parse_manual(&self, page: &ManualPage) -> Result<Document, String> {
-        parse_manual_page(page).map_err(|error| error.to_string())
+        #[cfg(feature = "roff")]
+        {
+            parse_manual_page(page).map_err(|error| error.to_string())
+        }
+        #[cfg(not(feature = "roff"))]
+        {
+            let _ = page;
+            Err(LoadError::NativeBackendUnavailable { tldr_topic: None }.to_string())
+        }
     }
 
     fn parse_manual_input(&self, path: &Path) -> Result<Document, String> {
-        parse_manual_source(path).map_err(|error| error.to_string())
+        #[cfg(feature = "roff")]
+        {
+            parse_manual_source(path).map_err(|error| error.to_string())
+        }
+        #[cfg(not(feature = "roff"))]
+        {
+            let _ = path;
+            Err(LoadError::NativeBackendUnavailable { tldr_topic: None }.to_string())
+        }
     }
 
     fn read_tldr(&self, name: &str) -> Result<Option<TldrDocument>, String> {
@@ -193,7 +215,39 @@ impl LoadHost for DocumentLoader {
         read_capped_utf8(file, MAX_MARKDOWN_BYTES)
     }
 }
-use super::ResolvedContent;
+
+#[cfg(all(test, not(feature = "roff")))]
+mod no_roff_tests {
+    use super::*;
+
+    #[test]
+    fn markdown_only_loader_never_opens_selected_native_inputs() {
+        let loader = DocumentLoader {
+            registered: OnceLock::new(),
+            manual_roots: Vec::new(),
+            manuals: OnceLock::new(),
+            available: OnceLock::new(),
+        };
+        for spec in [
+            LoadSpec::File {
+                path: "does-not-exist.1",
+                format: mant_protocol::InputFormat::Auto,
+            },
+            LoadSpec::Document {
+                selector: "manual/1/does-not-exist",
+                source: None,
+                manual_section: None,
+            },
+        ] {
+            assert_eq!(
+                loader.load(spec, LoadPolicy::Combined),
+                Err(LoadError::NativeBackendUnavailable { tldr_topic: None })
+            );
+        }
+        assert!(loader.manuals.get().is_none());
+        assert!(loader.registered.get().is_none());
+    }
+}
 
 #[cfg(test)]
 mod tests {

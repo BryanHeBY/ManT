@@ -51,6 +51,9 @@ run "test Rust workspace" cargo test --locked --workspace
 run "test Markdown-only codec" cargo test --locked --package mant-codec --no-default-features
 run "test roff codec" cargo test --locked --package mant-codec --features roff
 run "check independent Markdown codec consumer" bash scripts/check-codec-consumer.sh
+run "test Markdown-only loader" cargo test --locked --package mant-loader --no-default-features
+run "test native manual loader" cargo test --locked --package mant-loader --features roff
+run "check independent Markdown loader consumer" bash scripts/check-loader-consumer.sh
 run "test roff audit profilers" \
   cargo test --locked --package mant-engine --examples
 run "test optional libmandoc features" \

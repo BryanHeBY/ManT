@@ -11,7 +11,7 @@ use std::{
 
 use mant_ir::TldrDocument;
 
-use crate::executable::{environment_value, find_executable};
+use crate::executable::{ExecutableLookup, environment_value};
 
 use mant_codec::{TldrPageLocation, TldrParseError, parse_tldr_page};
 
@@ -322,7 +322,7 @@ pub fn read_cached_tldr_page(topic: &str) -> Result<Option<TldrDocument>, TldrCa
     let cache_dirs = get_tldr_read_cache_dirs(
         &environment,
         platform,
-        find_executable("tldr", &environment).is_some(),
+        ExecutableLookup::new(&environment).find("tldr").is_some(),
     )?;
     read_cached_tldr_page_with(
         topic,
@@ -350,7 +350,7 @@ impl TldrFileReader for SystemFileReader {
         // other markdown source. Reading unbounded here lets a corrupt cache
         // entry or a device file streamed in its place exhaust memory.
         let file = fs::File::open(path)?;
-        crate::bounded::read_utf8(file, crate::query::MAX_MARKDOWN_BYTES, "Markdown document")
+        crate::bounded::read_utf8(file, crate::MAX_MARKDOWN_BYTES, "Markdown document")
     }
 }
 
@@ -473,7 +473,7 @@ mod tests {
         get_tldr_cache_dir, get_tldr_languages, get_tldr_platforms, get_tldr_read_cache_dirs,
         normalize_tldr_topic, read_cached_tldr_page_with,
     };
-    use crate::query::MAX_MARKDOWN_BYTES;
+    use crate::MAX_MARKDOWN_BYTES;
 
     const PAGE: &str = "# tar\n\n> Archiving utility.\n\n- List: `tar --list`\n";
 

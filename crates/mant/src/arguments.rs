@@ -12,7 +12,7 @@ use clap::{
     error::ErrorKind,
 };
 use mant_engine::{
-    QueryPolicy, is_manual_section, normalize_tldr_topic, parenthesized_manual_reference,
+    LoadPolicy, is_manual_section, normalize_tldr_topic, parenthesized_manual_reference,
 };
 use mant_ir::{EntryKind, ParameterKind};
 use mant_protocol::{
@@ -269,7 +269,7 @@ pub(crate) enum Command {
         source: QuerySource,
         presentation: OutputOptions,
         pretty: bool,
-        policy: QueryPolicy,
+        policy: LoadPolicy,
         preserve_anchors: bool,
     },
     Catalog {

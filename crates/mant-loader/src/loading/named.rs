@@ -1,8 +1,8 @@
 //! Resolves logical document names across registered sources, manuals, and tldr.
 
 use super::{
-    DocumentAddress, FullDocumentMode, LoadError, LoadHost, LoadedManual, ManualLoadError,
-    ManualRequest, QueryPolicy, QuickReferenceMode, RegisteredLookupPhase, RegisteredSelection,
+    DocumentAddress, FullDocumentMode, LoadError, LoadHost, LoadPolicy, LoadedManual,
+    ManualLoadError, ManualRequest, QuickReferenceMode, RegisteredLookupPhase, RegisteredSelection,
     RegisteredSelectionGroup, ResolvedContent, TldrDocument, load_markdown_text,
 };
 
@@ -10,7 +10,7 @@ pub(super) fn query_named_document(
     name: &str,
     requested_source: Option<&str>,
     requested_manual_section: Option<&str>,
-    policy: QueryPolicy,
+    policy: LoadPolicy,
     host: &dyn LoadHost,
 ) -> Result<ResolvedContent, LoadError> {
     let name = name.trim();
@@ -67,7 +67,14 @@ pub(super) fn query_named_document(
         }
     }
 
-    let mut manual = load_manual(name, &candidates, section.as_deref(), host);
+    if plan.document == FullDocumentMode::NativeManual && !host.native_available() {
+        return Err(LoadError::NativeBackendUnavailable { tldr_topic: None });
+    }
+    let mut manual = if host.native_available() {
+        load_manual(name, &candidates, section.as_deref(), host).map_err(LoadError::Manual)
+    } else {
+        Err(LoadError::NativeBackendUnavailable { tldr_topic: None })
+    };
 
     // A malformed page may omit its own section metadata. Preserve the
     // requested section so labels stay `name(N)`.
@@ -112,11 +119,11 @@ fn manual_accepts_tldr(manual: &LoadedManual) -> bool {
 fn query_catalog_address(
     selector: &str,
     address: &DocumentAddress,
-    policy: QueryPolicy,
+    policy: LoadPolicy,
     host: &dyn LoadHost,
 ) -> Result<ResolvedContent, LoadError> {
     match address {
-        DocumentAddress::Markdown { .. } if policy == QueryPolicy::TldrOnly => {
+        DocumentAddress::Markdown { .. } if policy == LoadPolicy::TldrOnly => {
             let registered = host
                 .locate_registered_address(address)
                 .map_err(|detail| LoadError::Registry { detail })?
@@ -129,7 +136,7 @@ fn query_catalog_address(
                 }
             })
         }
-        DocumentAddress::Markdown { .. } if policy == QueryPolicy::ManualOnly => {
+        DocumentAddress::Markdown { .. } if policy == LoadPolicy::ManualOnly => {
             Err(LoadError::ConflictingSourceSelectors)
         }
         DocumentAddress::Markdown { .. } => {
@@ -238,7 +245,7 @@ fn query_registered_tldr(
 
 fn finish_selected_manual(
     name: &str,
-    manual: Result<LoadedManual, ManualLoadError>,
+    manual: Result<LoadedManual, LoadError>,
     tldr: Option<TldrDocument>,
 ) -> Result<ResolvedContent, LoadError> {
     match manual {
@@ -248,18 +255,15 @@ fn finish_selected_manual(
             document: Some(manual.document),
             tldr,
         }),
-        Err(error) if tldr.is_some() => Err(LoadError::ManualWithTldr {
-            error,
-            topic: name.to_owned(),
-        }),
-        Err(error) => Err(LoadError::Manual(error)),
+        Err(error) if tldr.is_some() => Err(with_tldr_hint(error, name)),
+        Err(error) => Err(error),
     }
 }
 
 fn finish_unqualified_manual(
     name: &str,
     candidates: &[String],
-    manual: Result<LoadedManual, ManualLoadError>,
+    manual: Result<LoadedManual, LoadError>,
     tldr: Option<TldrDocument>,
     host: &dyn LoadHost,
 ) -> Result<ResolvedContent, LoadError> {
@@ -277,14 +281,24 @@ fn finish_unqualified_manual(
             if let Some(registered) = registered {
                 query_registered_document(name, &registered, host)
             } else if tldr.is_some() {
-                Err(LoadError::ManualWithTldr {
-                    error,
-                    topic: name.to_owned(),
-                })
+                Err(with_tldr_hint(error, name))
             } else {
-                Err(LoadError::Manual(error))
+                Err(error)
             }
         }
+    }
+}
+
+fn with_tldr_hint(error: LoadError, topic: &str) -> LoadError {
+    match error {
+        LoadError::Manual(error) => LoadError::ManualWithTldr {
+            error,
+            topic: topic.to_owned(),
+        },
+        LoadError::NativeBackendUnavailable { .. } => LoadError::NativeBackendUnavailable {
+            tldr_topic: Some(topic.to_owned()),
+        },
+        other => other,
     }
 }
 

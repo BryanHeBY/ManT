@@ -1,6 +1,6 @@
 //! Full requests compose independent loading and query-view validation.
 use super::{
-    EntryProjection, MAX_NODE_SELECTORS, MAX_SEMANTIC_ENTRY_CHARS, QueryError, QueryPolicy,
+    EntryProjection, LoadPolicy, MAX_NODE_SELECTORS, MAX_SEMANTIC_ENTRY_CHARS, QueryError,
     QueryRequest, QueryValidationError, QueryView, ScopeTextError, SearchQuery,
     validate_scope_text, validate_search_query,
 };
@@ -11,7 +11,7 @@ use super::{
 /// Returns the originating loading or query-view validation error.
 pub fn validate_query_request(
     request: &QueryRequest,
-    policy: QueryPolicy,
+    policy: LoadPolicy,
 ) -> Result<(), QueryError> {
     super::validate_load_spec(super::adapter::load_spec(&request.input), policy)?;
     validate_query_view(&request.view).map_err(QueryError::QueryValidation)

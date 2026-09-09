@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use mant_engine::{QueryPolicy, QueryViewResult};
+use mant_engine::{LoadPolicy, QueryViewResult};
 use mant_protocol::{
     CatalogQuery, DocumentCatalog, QueryRequest, ScopeQueryRequest, ScopeQueryResponse,
 };
@@ -31,8 +31,7 @@ impl QueryService {
             .map_err(|_| "MCP query service is shutting down".to_owned())?;
         task::spawn_blocking(move || {
             let _permit = permit;
-            mant_engine::execute_query(&request, QueryPolicy::default())
-                .map_err(query_error_for_mcp)
+            mant_engine::execute_query(&request, LoadPolicy::default()).map_err(query_error_for_mcp)
         })
         .await
         .map_err(|_| "MCP query worker failed".to_owned())?
@@ -117,6 +116,10 @@ pub(super) fn query_error_for_mcp(error: mant_engine::QueryExecutionError) -> St
         return error.to_string();
     };
     match error {
+        LoadError::NativeBackendUnavailable { tldr_topic } => tldr_topic.map_or_else(
+            || "native manual loading is unavailable in this build".to_owned(),
+            |topic| format!("native manual loading is unavailable in this build; a tldr entry is available for '{topic}'"),
+        ),
         LoadError::Markdown { .. } => {
             "could not load or parse the selected Markdown document".to_owned()
         }
@@ -139,6 +142,18 @@ pub(super) fn query_error_for_mcp(error: mant_engine::QueryExecutionError) -> St
 #[cfg(test)]
 mod tests {
     use super::{discovery_error_for_mcp, scope_error_for_mcp};
+
+    #[test]
+    fn unavailable_native_backend_has_actionable_path_free_guidance() {
+        let error =
+            mant_engine::QueryError::Load(mant_engine::LoadError::NativeBackendUnavailable {
+                tldr_topic: Some("tool".to_owned()),
+            });
+        assert_eq!(
+            super::query_error_for_mcp(mant_engine::QueryExecutionError::Query(error)),
+            "native manual loading is unavailable in this build; a tldr entry is available for 'tool'"
+        );
+    }
 
     #[test]
     fn scope_loading_errors_redact_host_paths_but_preserve_usage_guidance() {

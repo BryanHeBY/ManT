@@ -1,0 +1,39 @@
+[package]
+name = "mant-loader"
+version = "0.11.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "Read-only local document discovery and bounded loading for ManT"
+repository.workspace = true
+homepage.workspace = true
+readme = "README.md"
+keywords = ["man", "mdoc", "roff", "markdown", "documentation"]
+categories = ["filesystem", "text-processing"]
+include = ["/Cargo.toml", "/LICENSE", "/README.md", "/src/**"]
+
+[package.metadata.docs.rs]
+all-features = true
+
+[features]
+default = []
+roff = ["mant-codec/roff", "dep:libmandoc-rs", "dep:flate2", "dep:zstd"]
+
+[dependencies]
+mant-ir = { path = "../mant-ir", version = "^0.11.0" }
+mant-protocol = { path = "../mant-protocol", version = "^0.11.0" }
+mant-codec = { path = "../mant-codec", version = "^0.11.0", default-features = false }
+mant-sources = { path = "../mant-sources", version = "^0.9.3", default-features = false }
+grep-matcher.workspace = true
+grep-regex.workspace = true
+serde_json.workspace = true
+libmandoc-rs = { path = "../libmandoc-rs", version = "^0.10.0", optional = true }
+flate2 = { workspace = true, optional = true }
+zstd = { workspace = true, optional = true }
+
+[target.'cfg(unix)'.dependencies]
+libc.workspace = true
+
+[lints]
+workspace = true

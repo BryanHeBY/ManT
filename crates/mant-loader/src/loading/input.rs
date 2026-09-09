@@ -1,14 +1,16 @@
 //! Resolves bounded direct files and in-memory document inputs.
 
+#[cfg(feature = "roff")]
+use super::parse_manual_bytes;
 use super::{
-    InputFormat, LoadError, LoadHost, LoadSpec, ManualLoadError, OsStr, Path, QueryPolicy,
-    ResolvedContent, parse_manual_bytes, query_named_document,
+    InputFormat, LoadError, LoadHost, LoadPolicy, LoadSpec, ManualLoadError, OsStr, Path,
+    ResolvedContent, query_named_document,
 };
 use mant_codec::parse_markdown;
 
 pub(super) fn load_with(
     spec: LoadSpec<'_>,
-    policy: QueryPolicy,
+    policy: LoadPolicy,
     host: &dyn LoadHost,
 ) -> Result<ResolvedContent, LoadError> {
     super::validate_load_spec(spec, policy)?;
@@ -25,7 +27,7 @@ pub(super) fn load_with(
 fn query_input_file(
     requested_path: &str,
     format: InputFormat,
-    policy: QueryPolicy,
+    policy: LoadPolicy,
     host: &dyn LoadHost,
 ) -> Result<ResolvedContent, LoadError> {
     let path = requested_path.trim();
@@ -43,8 +45,11 @@ fn query_input_file(
     match format {
         InputFormat::Markdown => query_markdown_file(path, policy, host),
         InputFormat::Roff => {
-            if policy != QueryPolicy::Combined {
+            if policy != LoadPolicy::Combined {
                 return Err(LoadError::ConflictingSourceSelectors);
+            }
+            if !host.native_available() {
+                return Err(LoadError::NativeBackendUnavailable { tldr_topic: None });
             }
             let document = host.parse_manual_input(Path::new(path)).map_err(|detail| {
                 LoadError::Manual(ManualLoadError::Parse {
@@ -106,14 +111,14 @@ fn input_file_label(path: &str) -> String {
 
 fn query_markdown_file(
     requested_path: &str,
-    policy: QueryPolicy,
+    policy: LoadPolicy,
     host: &dyn LoadHost,
 ) -> Result<ResolvedContent, LoadError> {
     let path = requested_path.trim();
     if path.is_empty() {
         return Err(LoadError::EmptyMarkdownPath);
     }
-    if policy != QueryPolicy::Combined {
+    if policy != LoadPolicy::Combined {
         return Err(LoadError::Markdown {
             path: path.to_owned(),
             detail: "content-only policies do not apply to direct input".to_owned(),
@@ -177,6 +182,7 @@ pub fn load_markdown_text(
 /// # Errors
 ///
 /// Returns a native parse error or an empty-document error.
+#[cfg(feature = "roff")]
 pub fn load_roff_bytes(source: &[u8]) -> Result<ResolvedContent, LoadError> {
     if u64::try_from(source.len()).unwrap_or(u64::MAX) > crate::MAX_MANUAL_BYTES {
         return Err(LoadError::Manual(ManualLoadError::Parse {

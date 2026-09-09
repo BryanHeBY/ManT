@@ -1,15 +1,6 @@
 //! Shared native-manual selector semantics.
 
-/// Return whether a value is a conventional native manual section.
-///
-/// Numeric sections may carry an ASCII-alphanumeric extension such as `1p`
-/// or `3type`; the historical single-letter `l` and `n` sections are also
-/// accepted. The length bound keeps selectors finite and matches the public
-/// request boundary.
-#[must_use]
-pub fn is_manual_section(value: &str) -> bool {
-    mant_ir::is_manual_section(value)
-}
+use mant_ir::is_manual_section;
 
 /// Return whether a manual section belongs to a command-page family.
 ///

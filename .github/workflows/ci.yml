@@ -183,6 +183,10 @@ jobs:
         run: |
           cargo test --locked --workspace
           cargo test --locked --package libmandoc-rs --all-features
+          for package in mant-codec mant-loader; do
+            cargo test --locked --package "$package" --no-default-features
+            cargo test --locked --package "$package" --no-default-features --features roff
+          done
 
   windows-native:
     # Windows builds the same memory-only libmandoc parser and manual fixtures

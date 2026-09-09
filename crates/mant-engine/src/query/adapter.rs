@@ -1,9 +1,9 @@
 //! Application adapters validate complete requests before loading or querying.
 use super::{
-    CatalogQuery, DocumentCatalog, DocumentLoader, LoadHost, LoadSpec, QueryError,
-    QueryExecutionError, QueryInput, QueryPolicy, QueryRequest, QueryViewResult, ResolvedContent,
-    load_with, project_query_view, validate_query_request,
+    DocumentLoader, LoadPolicy, LoadSpec, QueryError, QueryExecutionError, QueryInput,
+    QueryRequest, QueryViewResult, ResolvedContent, project_query_view, validate_query_request,
 };
+use mant_protocol::{CatalogQuery, DocumentCatalog};
 
 /// Application composition over an explicit local document snapshot.
 pub struct DocumentResolver {
@@ -24,7 +24,7 @@ impl DocumentResolver {
     pub fn resolve(
         &self,
         request: &QueryRequest,
-        policy: QueryPolicy,
+        policy: LoadPolicy,
     ) -> Result<ResolvedContent, QueryError> {
         validate_query_request(request, policy)?;
         self.resolve_validated(request, policy)
@@ -32,9 +32,11 @@ impl DocumentResolver {
     pub(super) fn resolve_validated(
         &self,
         request: &QueryRequest,
-        policy: QueryPolicy,
+        policy: LoadPolicy,
     ) -> Result<ResolvedContent, QueryError> {
-        load_validated_request(request, policy, &self.loader)
+        self.loader
+            .load(load_spec(&request.input), policy)
+            .map_err(QueryError::Load)
     }
     /// Load and materialize the view encoded by a complete request.
     ///
@@ -43,7 +45,7 @@ impl DocumentResolver {
     pub fn execute(
         &self,
         request: &QueryRequest,
-        policy: QueryPolicy,
+        policy: LoadPolicy,
     ) -> Result<QueryViewResult, QueryExecutionError> {
         validate_query_request(request, policy).map_err(QueryExecutionError::Query)?;
         self.execute_validated(request, policy)
@@ -51,7 +53,7 @@ impl DocumentResolver {
     pub(super) fn execute_validated(
         &self,
         request: &QueryRequest,
-        policy: QueryPolicy,
+        policy: LoadPolicy,
     ) -> Result<QueryViewResult, QueryExecutionError> {
         let content = self
             .resolve_validated(request, policy)
@@ -91,19 +93,11 @@ pub(super) fn load_spec(input: &QueryInput) -> LoadSpec<'_> {
 #[cfg(test)]
 pub(super) fn query_with(
     request: &QueryRequest,
-    policy: QueryPolicy,
-    host: &dyn LoadHost,
+    policy: LoadPolicy,
+    load: impl FnOnce() -> Result<ResolvedContent, QueryError>,
 ) -> Result<ResolvedContent, QueryError> {
     validate_query_request(request, policy)?;
-    load_validated_request(request, policy, host)
-}
-
-fn load_validated_request(
-    request: &QueryRequest,
-    policy: QueryPolicy,
-    host: &dyn LoadHost,
-) -> Result<ResolvedContent, QueryError> {
-    load_with(load_spec(&request.input), policy, host).map_err(QueryError::Load)
+    load()
 }
 
 /// Prepare in-memory Markdown for an application query without source discovery.
@@ -114,13 +108,14 @@ pub fn query_markdown_text(
     source: &str,
     source_path: Option<String>,
 ) -> Result<ResolvedContent, QueryError> {
-    super::load_markdown_text(source, source_path).map_err(QueryError::Load)
+    mant_loader::load_markdown_text(source, source_path).map_err(QueryError::Load)
 }
 
 /// Prepare bounded standalone roff bytes without MANPATH or include traversal.
 ///
 /// # Errors
 /// Returns a loading error for invalid or empty document content.
+#[cfg(feature = "roff")]
 pub fn query_roff_bytes(source: &[u8]) -> Result<ResolvedContent, QueryError> {
-    super::load_roff_bytes(source).map_err(QueryError::Load)
+    mant_loader::load_roff_bytes(source).map_err(QueryError::Load)
 }

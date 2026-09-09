@@ -13,9 +13,9 @@ use std::{
 
 use mant_protocol::{TldrCacheAction, TldrCacheUpdate};
 
-use crate::executable::{environment_value, find_executable};
+use mant_loader::ExecutableLookup;
 
-use super::cache::{HostPlatform, TldrCacheError, get_tldr_cache_dir};
+use super::{HostPlatform, TldrCacheError, get_tldr_cache_dir};
 
 const DEFAULT_REPOSITORY: &str = "https://github.com/tldr-pages/tldr.git";
 static TEMP_SEQUENCE: AtomicU64 = AtomicU64::new(0);
@@ -154,7 +154,7 @@ impl TldrUpdateHost for SystemUpdateHost {
         name: &str,
         environment: &BTreeMap<String, String>,
     ) -> Option<PathBuf> {
-        find_executable(name, environment)
+        ExecutableLookup::new(environment).find(name)
     }
 
     fn exists(&self, path: &Path) -> bool {
@@ -229,7 +229,9 @@ fn update_tldr_cache_with(
     repository: &str,
     host: &dyn TldrUpdateHost,
 ) -> Result<TldrCacheUpdate, TldrUpdateError> {
-    if environment_value(environment, "MANT_TLDR_DIR").is_none()
+    if ExecutableLookup::new(environment)
+        .environment_value("MANT_TLDR_DIR")
+        .is_none()
         && let Some(client) = host.find_executable("tldr", environment)
     {
         let output = run_checked(host, &client, &[OsString::from("--update")])?;

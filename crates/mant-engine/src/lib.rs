@@ -1,43 +1,46 @@
 #![doc = include_str!("../README.md")]
 #![warn(missing_docs)]
 
-mod bounded;
-mod catalog;
 mod entry_presentation;
-mod executable;
 mod explanation;
-mod manual;
-mod manual_input;
-mod manual_paths;
 mod output;
 mod projection;
 mod query;
 mod scope;
-mod scope_load;
 mod scope_query;
 mod search;
 mod selectors;
-mod source;
 mod tldr;
 
-pub use catalog::{
-    AvailableDocument, AvailableDocumentKind, AvailableDocumentOrigin, CatalogError,
-    discover_documents, list_available_documents, query_available_documents,
-};
-pub use executable::find_host_executable;
 pub use explanation::{
     ExplanationError, explain_query, resolve_explanation_block, validate_explanation_query,
 };
+#[cfg(feature = "roff")]
 pub use mant_codec::lower_mandoc_document;
 pub use mant_codec::{MarkdownParseError, ParsedMarkdown, TldrDirectiveError, parse_markdown};
 pub use mant_ir::ResolvedContent;
-pub use manual::{is_command_manual_section, is_manual_section, parenthesized_manual_reference};
-pub use manual_input::{
+pub use mant_loader::find_host_executable;
+pub use mant_loader::{
+    AvailableDocument, AvailableDocumentKind, AvailableDocumentOrigin, CatalogError,
+    discover_documents, list_available_documents, query_available_documents,
+};
+pub use mant_loader::{
+    DocumentLoader, LoadError, LoadPolicy, LoadSpec, MAX_MARKDOWN_BYTES, ManualLoadError,
+};
+pub use mant_loader::{LoadedDocumentScope, ScopeLoadError, validate_document_scope};
+pub use mant_loader::{
+    LocateError, ManualIndex, ManualPage, ManualRequest, locate_manual_source_in,
+};
+#[cfg(feature = "roff")]
+pub use mant_loader::{
     MAX_MANUAL_BYTES, ManualError, ManualErrorKind, parse_manual_bytes, parse_manual_page,
     parse_manual_source, parse_manual_source_with_report,
 };
-pub use manual_paths::{
+pub use mant_loader::{
     ManualPathDiagnostic, ManualRootDiscovery, discover_manual_roots, inspect_manual_roots,
+};
+pub use mant_loader::{
+    is_command_manual_section, is_manual_section, parenthesized_manual_reference,
 };
 pub use output::{
     MarkdownFragmentOptions, MarkdownOptions, SearchTextRole, render_excerpt_json,
@@ -56,19 +59,18 @@ pub use projection::{
     project_references, project_references_with_limits, select_excerpt, select_explanation,
     semantics_complete,
 };
+#[cfg(feature = "roff")]
+pub use query::query_roff_bytes;
 pub use query::{
-    DocumentLoader, DocumentResolver, LoadError, LoadSpec, MAX_MARKDOWN_BYTES, ManualLoadError,
-    QueryError, QueryExecutionError, QueryPolicy, QueryValidationError, QueryViewResult,
-    execute_query, project_query_view, query_markdown_text, query_roff_bytes, resolve_query,
+    DocumentResolver, QueryError, QueryExecutionError, QueryValidationError, QueryViewResult,
+    execute_query, project_query_view, query_markdown_text, resolve_query,
     resolve_query_with_policy, validate_query_request,
 };
 pub use scope::{ScopeQueryError, execute_scope_query, validate_scope_query_request};
-pub use scope_load::{LoadedDocumentScope, ScopeLoadError, validate_document_scope};
 pub use scope_query::{
     QueryScopeView, ScopeExecutionError, ScopeInputError, explain_scope, search_scope,
 };
 pub use search::{SearchError, search_query, validate_search_query};
-pub use source::{LocateError, ManualIndex, ManualPage, ManualRequest, locate_manual_source_in};
 pub use tldr::{
     HostPlatform, TldrCacheError, TldrPageLocation, TldrParseError, get_system_tldr_cache_dirs,
     get_tldr_cache_dir, get_tldr_languages, get_tldr_platforms, get_tldr_read_cache_dirs,

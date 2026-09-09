@@ -390,10 +390,15 @@ queries and interactive cross-document search use the same scope model.
 
 ## Architecture
 
-![ManT architecture: source adapters enter mant-engine around the mant-ir semantic center; the TUI consumes document IR directly, while mant-protocol supplies shared logical projections to host callbacks, CLI and request JSON, and compact MCP presentation](docs/assets/architecture.svg)
+![ManT architecture: mant-loader acquires local sources and mant-codec produces semantic IR for mant-engine; the TUI consumes document IR directly, while mant-protocol supplies shared logical projections to host callbacks, CLI and request JSON, and compact MCP presentation](docs/assets/architecture.svg)
 
-`mant-ir` is the semantic center nested inside the `mant-engine` execution
-layer. Interactive use passes its in-memory `ResolvedContent` directly to
+`mant-ir` is the shared semantic center. `mant-loader` owns local discovery,
+bounded source reads, linked-document scopes, and read-only tldr caches;
+`mant-codec` owns in-memory parsing and document encoding. `mant-engine`
+composes loading with queries and report rendering. Loader and codec default
+to Markdown/tldr support; their explicit `roff` features add native manuals,
+and the engine enables them by default. Interactive use passes the in-memory
+`ResolvedContent` directly to
 `mant-ui`, and human renderers operate on the same model. Structured host and
 process interactions share the `mant-protocol` contract layer. Catalog
 callbacks, CLI JSON, request JSON, and MCP therefore use the same logical

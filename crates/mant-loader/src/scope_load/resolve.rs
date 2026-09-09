@@ -4,9 +4,10 @@ mod tests;
 use super::references::{ScopeReference, document_references};
 use super::{
     BTreeMap, BTreeSet, DocumentAddress, DocumentEdge, DocumentEdgeKind, DocumentFrontier,
-    DocumentLoader, DocumentScope, DocumentSelector, LoadError, LoadSpec, LoadedDocumentScope,
-    MAX_SCOPE_CONTENT_BYTES, QueryPolicy, ResolvedContent, ResolvedDocumentScope, ScopeLoadError,
-    ScopedDocument, TraversalLimit, UnresolvedDocument, VecDeque, Write, validate_document_scope,
+    DocumentLoader, DocumentScope, DocumentSelector, LoadError, LoadPolicy, LoadSpec,
+    LoadedDocumentScope, MAX_SCOPE_CONTENT_BYTES, ResolvedContent, ResolvedDocumentScope,
+    ScopeLoadError, ScopedDocument, TraversalLimit, UnresolvedDocument, VecDeque, Write,
+    validate_document_scope,
 };
 
 impl DocumentLoader {
@@ -42,7 +43,7 @@ impl DocumentLoader {
     fn resolve_selector(
         &self,
         selector: &DocumentSelector,
-        policy: QueryPolicy,
+        policy: LoadPolicy,
     ) -> Result<ResolvedContent, LoadError> {
         self.load(
             LoadSpec::Document {
@@ -90,14 +91,14 @@ impl ResolutionFailures {
     fn resolve<T>(
         &mut self,
         selector: &DocumentSelector,
-        policy: QueryPolicy,
+        policy: LoadPolicy,
         load: impl FnOnce() -> Result<T, String>,
     ) -> Result<T, String> {
         let key = ResolutionKey {
             policy: match policy {
-                QueryPolicy::Combined => 0,
-                QueryPolicy::ManualOnly => 1,
-                QueryPolicy::TldrOnly => 2,
+                LoadPolicy::Combined => 0,
+                LoadPolicy::ManualOnly => 1,
+                LoadPolicy::TldrOnly => 2,
             },
             selector: selector.selector.clone(),
             source: selector.source.clone(),
@@ -136,9 +137,9 @@ impl ScopeResolution {
 
     fn resolve_roots(&mut self, resolver: &DocumentLoader) {
         for (root_index, selector) in self.graph.query.documents.clone().iter().enumerate() {
-            match self.failures.resolve(selector, QueryPolicy::Combined, || {
+            match self.failures.resolve(selector, LoadPolicy::Combined, || {
                 resolver
-                    .resolve_selector(selector, QueryPolicy::Combined)
+                    .resolve_selector(selector, LoadPolicy::Combined)
                     .map_err(|error| error.to_string())
             }) {
                 Ok(bundle) => {
@@ -275,9 +276,9 @@ impl ScopeResolution {
             return;
         };
         let policy = if reference.kind == DocumentEdgeKind::Manual {
-            QueryPolicy::ManualOnly
+            LoadPolicy::ManualOnly
         } else {
-            QueryPolicy::Combined
+            LoadPolicy::Combined
         };
         let bundle = match self.failures.resolve(&selector, policy, || {
             resolver

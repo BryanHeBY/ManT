@@ -192,6 +192,7 @@ fn manual_release_retries_require_an_explicit_crates_publish_choice() {
         "libmandoc-rs-v*.*.*",
         "mant-sources-v*.*.*",
         "mant-codec-v*.*.*",
+        "mant-loader-v*.*.*",
         "mant-engine-v*.*.*",
         "mant-ui-v*.*.*",
     ] {
@@ -372,6 +373,7 @@ fn workspace_crates_own_their_versions_and_use_explicit_caret_dependencies() {
             include_str!("../../mant-sources/Cargo.toml"),
         ),
         ("mant-codec", include_str!("../../mant-codec/Cargo.toml")),
+        ("mant-loader", include_str!("../../mant-loader/Cargo.toml")),
         ("mant-engine", include_str!("../../mant-engine/Cargo.toml")),
         ("mant-ui", include_str!("../../mant-ui/Cargo.toml")),
         ("mant", include_str!("../Cargo.toml")),
@@ -403,7 +405,7 @@ fn workspace_crates_own_their_versions_and_use_explicit_caret_dependencies() {
 #[test]
 fn source_consumers_require_the_integrity_patch_baseline() {
     for (name, manifest) in [
-        ("mant-engine", include_str!("../../mant-engine/Cargo.toml")),
+        ("mant-loader", include_str!("../../mant-loader/Cargo.toml")),
         ("mant", include_str!("../Cargo.toml")),
     ] {
         assert!(
@@ -436,13 +438,13 @@ fn mcp_sdk_and_generated_macros_use_the_same_exact_release() {
 fn selected_crates_are_published_in_dependency_order_at_their_own_versions() {
     let publish = include_str!("../../../scripts/publish-crates.sh").replace("\r\n", "\n");
     assert!(publish.contains(
-        "ALL_PACKAGES=(mant-ir mant-protocol libmandoc-rs mant-sources mant-codec mant-engine mant-ui mant)"
+        "ALL_PACKAGES=(mant-ir mant-protocol libmandoc-rs mant-sources mant-codec mant-loader mant-engine mant-ui mant)"
     ));
     assert!(publish.contains(
-        "CRATE_TAG_PACKAGES=(mant-ir mant-protocol libmandoc-rs mant-sources mant-codec mant-engine mant-ui)"
+        "CRATE_TAG_PACKAGES=(mant-ir mant-protocol libmandoc-rs mant-sources mant-codec mant-loader mant-engine mant-ui)"
     ));
     assert!(include_str!("../../../.github/workflows/release.yml").contains(
-        "packages=(mant-ir mant-protocol libmandoc-rs mant-sources mant-codec mant-engine mant-ui)"
+        "packages=(mant-ir mant-protocol libmandoc-rs mant-sources mant-codec mant-loader mant-engine mant-ui)"
     ));
     assert!(publish.contains("publish_package=${MANT_PUBLISH_PACKAGE:-}"));
     assert!(publish.contains(r#"[[ $tag == "$publish_package-v$version" ]]"#));
@@ -464,24 +466,38 @@ fn selected_crates_are_published_in_dependency_order_at_their_own_versions() {
 }
 
 #[test]
-fn packaged_and_windows_checks_include_the_codec_test_surface() {
+fn packaged_and_windows_checks_include_codec_and_loader_test_surfaces() {
     let packaged = include_str!("../../../scripts/check-packaged-crates.sh").replace("\r\n", "\n");
     assert!(packaged.contains(
-        "PACKAGES=(mant-ir mant-protocol libmandoc-rs mant-sources mant-codec mant-engine mant-ui mant)"
+        "PACKAGES=(mant-ir mant-protocol libmandoc-rs mant-sources mant-codec mant-loader mant-engine mant-ui mant)"
     ));
     assert!(packaged.contains("mant-codec) dependencies=(libmandoc-rs mant-ir)"));
+    assert!(packaged.contains(
+        "mant-loader) dependencies=(libmandoc-rs mant-ir mant-protocol mant-sources mant-codec)"
+    ));
     for package in ["mant-engine", "mant-ui", "mant"] {
         let dependency_line = packaged
             .lines()
             .find(|line| line.trim_start().starts_with(&format!("{package}) ")))
             .expect("package patch dependencies");
         assert!(dependency_line.contains("mant-codec"), "{dependency_line}");
+        assert!(dependency_line.contains("mant-loader"), "{dependency_line}");
     }
     assert!(packaged.contains("--package mant-codec --no-default-features\n"));
     assert!(packaged.contains("--package mant-codec --no-default-features --features roff\n"));
+    assert!(packaged.contains("--package mant-loader --no-default-features\n"));
+    assert!(packaged.contains("--package mant-loader --no-default-features --features roff\n"));
 
     let windows = include_str!("../../../scripts/check-windows.ps1");
     assert!(windows.contains("\"--package\", \"mant-codec\""));
+    assert!(windows.contains("\"--package\", \"mant-loader\""));
+    assert!(windows.contains("foreach ($BoundaryPackage in @(\"mant-codec\", \"mant-loader\"))"));
+    assert!(
+        windows.contains("$BoundaryPackage, \"--no-default-features\", \"--features\", \"roff\"")
+    );
+
+    let check = include_str!("../../../scripts/check.sh");
+    assert!(check.contains("bash scripts/check-loader-consumer.sh"));
 }
 
 #[cfg(unix)]
@@ -497,11 +513,19 @@ fn publication_tags_are_validated_before_registry_authentication() {
         .lines()
         .find_map(|line| line.strip_prefix("version = \"")?.strip_suffix('"'))
         .expect("mant-codec version");
+    let loader_version = include_str!("../../mant-loader/Cargo.toml")
+        .lines()
+        .find_map(|line| line.strip_prefix("version = \"")?.strip_suffix('"'))
+        .expect("mant-loader version");
 
     for (tag, package) in [
         (format!("v{}", env!("CARGO_PKG_VERSION")), None),
         (format!("mant-ir-v{ir_version}"), Some("mant-ir")),
         (format!("mant-codec-v{codec_version}"), Some("mant-codec")),
+        (
+            format!("mant-loader-v{loader_version}"),
+            Some("mant-loader"),
+        ),
     ] {
         let mut command = Command::new("bash");
         command

@@ -11,18 +11,18 @@ fn failed_resolution_is_cached_by_policy_and_qualified_selector_only_for_one_req
         manual_section: None,
     };
     for (policy, selector) in [
-        (QueryPolicy::Combined, base.clone()),
-        (QueryPolicy::Combined, base.clone()),
-        (QueryPolicy::ManualOnly, base.clone()),
+        (LoadPolicy::Combined, base.clone()),
+        (LoadPolicy::Combined, base.clone()),
+        (LoadPolicy::ManualOnly, base.clone()),
         (
-            QueryPolicy::Combined,
+            LoadPolicy::Combined,
             DocumentSelector {
                 source: Some("other".into()),
                 ..base.clone()
             },
         ),
         (
-            QueryPolicy::Combined,
+            LoadPolicy::Combined,
             DocumentSelector {
                 manual_section: Some("7".into()),
                 ..base.clone()
@@ -38,7 +38,7 @@ fn failed_resolution_is_cached_by_policy_and_qualified_selector_only_for_one_req
     assert_eq!(calls, 4);
     assert!(
         ResolutionFailures::default()
-            .resolve(&base, QueryPolicy::Combined, || Ok::<_, String>(()))
+            .resolve(&base, LoadPolicy::Combined, || Ok::<_, String>(()))
             .is_ok()
     );
 }

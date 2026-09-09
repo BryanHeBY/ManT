@@ -23,17 +23,13 @@ that migration is implemented.
 ## Layer model
 
 ```text
-source adapters
-└─ mant-engine          loading, composition, query, report rendering
-   ├─ mant-sources      local Markdown registry and optional updates
-   ├─ mant-codec        decoding, semantic production, document Markdown
-   │  └─ libmandoc-rs  owned native parser boundary (codec roff feature)
-   └─ mant-ir           semantic center: ResolvedContent and document IR
-      ├───────────────> mant-ui and human renderers (direct semantic use)
-      └─ projection ──> mant-protocol ──┬─> host callbacks and JSON
-                                       └─> compact MCP presentation
+local sources ─> mant-loader ─> mant-codec ─> mant-ir
+                    │              └─ libmandoc-rs (roff)
+                    └─ mant-sources
 
-mant                    composes modes, policies, updates, terminal, and stdio
+mant-ir ─> mant-engine (queries, projections, reports)
+             ├─ IR ─> mant-ui / human renderers
+             └─ mant-protocol ─> host callbacks / CLI / MCP
 ```
 
 That diagram describes data ownership. The compile-time workspace dependency
@@ -41,26 +37,26 @@ direction is related but not identical:
 
 ```text
 mant
-├─ mant-ui
-│  ├─ mant-ir
-│  └─ mant-protocol ─> mant-ir
+├─ mant-ui ─> mant-ir / mant-protocol
 ├─ mant-engine
-│  ├─ mant-ir
-│  ├─ mant-protocol
-│  ├─ mant-sources
-│  ├─ mant-codec
-│  │  ├─ mant-ir
-│  │  └─ libmandoc-rs (roff)
-│  └─ libmandoc-rs
+│  ├─ mant-ir / mant-protocol
+│  ├─ mant-loader
+│  │  ├─ mant-ir / mant-protocol / mant-sources
+│  │  ├─ mant-codec ─> mant-ir
+│  │  │  └─ libmandoc-rs (roff)
+│  │  └─ libmandoc-rs (roff report/error types)
+│  └─ mant-codec (document/report encoding)
 ├─ mant-sources (update feature)
-├─ mant-protocol
-└─ mant-ir
+└─ mant-ir / mant-protocol
 ```
 
 Arrows show production dependencies; they do not imply serialization. `mant-ui`
 deliberately depends on both the direct IR and the stable catalog DTOs it
-exchanges with its host. The engine enables the codec's optional `roff` feature;
-standalone default codec consumers need neither libmandoc nor a C compiler.
+exchanges with its host. The engine's default `roff` feature explicitly enables the loader and codec
+native paths. Standalone loader and codec default consumers need neither
+libmandoc, native zstd, nor a C compiler. The loader's `roff` feature owns
+optional source decompression and native report/error types. Engine-only native
+audit dependencies are development dependencies, not another production loader.
 `mant-engine` owns human report renderers and delegates complete document
 Markdown encoding to `mant-codec`, while `mant-ui` owns interactive terminal
 presentation. The `mant` crate is the composition root and the only crate that
@@ -75,17 +71,19 @@ The crates have deliberately asymmetric responsibilities:
 | `libmandoc-rs` | An owned libmandoc parse tree, diagnostics, parser lifecycle, C build boundary, and default-off bounded upstream reference renderers | ManT types, source discovery, or ManT's semantic presentation |
 | `mant-sources` | Registered Markdown discovery and optional transactional Git/archive installation | Native manuals, rendering, or MCP |
 | `mant-codec` | In-memory Markdown/tldr decoding; optional libmandoc lowering; semantic annotation and identity production; portable document Markdown and source-bound artifacts | Source acquisition, discovery, query execution, protocol DTOs, terminal policy, or source updates |
-| `mant-engine` | Source resolution and loading, codec integration, tldr composition, query execution, projections, and report renderers | Its own parser, CLI policy, terminal lifecycle, or MCP transport |
+| `mant-loader` | Read-only discovery, configuration and source I/O; optional native decompression/redirect policy; tldr composition; bounded BFS and owned loaded scopes | Query execution, report rendering, subprocesses, downloads, or cache updates |
+| `mant-engine` | Complete-request validation, loader/query composition, query execution, projections, report renderers, and opt-in tldr maintenance | Its own parser or source loader, CLI policy, terminal lifecycle, or MCP transport |
 | `mant-ui` | Interactive navigation, document tabs, discovery, links, history, search, selection, typed copy requests, layout, and terminal lifecycle | Filesystem lookup, source mutation, or system clipboard access |
 | `mant` | User-facing modes, terminal detection, native/OSC 52 clipboard delivery, source updates, request JSON, schemas, and MCP stdio | A second parser or frontend-specific document model |
 
 `mant-ir` is deliberately the semantic center, while `mant-engine` is the
-execution layer that loads codec-produced content and operates on it. Codec
+execution layer that queries content acquired by `mant-loader`. Codec
 inputs are caller-owned text/bytes and metadata labels; decoding never grants
 access to paths named by those labels. Parsing, annotation and document encoding
-have one implementation in `mant-codec`. Loading, queries and report rendering
-still have concrete implementations in the engine, not separate workspace
-crates. Interactive queries pass an in-memory `ResolvedContent` directly to
+have one implementation in `mant-codec`. Source I/O and scope acquisition have one owner in `mant-loader`; queries
+and report rendering still have concrete implementations in the engine.
+These nine workspace crates are actual boundaries, not a claim that query and
+report rendering already live in separate packages. Interactive queries pass an in-memory `ResolvedContent` directly to
 `mant-ui`; human renderers also consume
 the in-memory model. They do not serialize through JSON or spawn a child
 process. Structured host and process interactions instead use
@@ -97,7 +95,7 @@ AST.
 Source update and prune commands use their own schema-marked maintenance
 reports owned by `mant-sources`; they do not become document protocol variants.
 
-Multi-document operations use `mant-protocol::DocumentScope` as a host-neutral input. `mant-engine::DocumentResolver` resolves its ordered roots, follows only typed IR `Document` and `Manual` edges, and returns one bounded breadth-first graph plus the loaded documents in matching order. Search, explanation, CLI JSON, and interactive search consume that same scope; they do not infer families from filename prefixes or merge independent document trees into one AST. The TUI receives the already loaded scope in memory, while its ordinary catalog finder remains a separate global host callback.
+Multi-document operations use `mant-protocol::DocumentScope` as a host-neutral input. `mant-loader::DocumentLoader` resolves its ordered roots, follows only typed IR `Document` and `Manual` edges, and returns one bounded breadth-first graph plus the loaded documents in matching order. Search, explanation, CLI JSON, and interactive search consume that same scope; they do not infer families from filename prefixes or merge independent document trees into one AST. The TUI receives the already loaded scope in memory, while its ordinary catalog finder remains a separate global host callback.
 
 Scope loading has one private admission point for a new snapshot. It checks the
 aggregate retained-content budget before committing the paired graph/content
@@ -134,7 +132,8 @@ a second parser, selector resolver, or audit oracle.
 | Engine explanation | An independent collector visits immutable IR owners and explicit relationships, preserving name/form/literal/relationship bases. Global scope pagination and content budgets do not alter strict navigation or source authority. |
 | Codec lowering | Prepared Markdown pairs original events with source declarations. Roff flow state, target provenance, and table recovery plans preserve their distinct physical-line and owner policies. |
 | Codec encoding | Complete document encoding owns canonical bytes and borrowed owner mappings; report fragments expose decoration without semantic declaration metadata. |
-| Engine search and discovery | A validated matcher is reused within one scope request. Markdown artifacts own final anchor ranges; source-coordinate mapping remains separate from result collection. Discovery captures environment/configuration inputs at the host boundary. |
+| Engine search | A validated matcher is reused within one scope request. Markdown artifacts own final anchor ranges; source-coordinate mapping remains separate from result collection. |
+| Loader discovery and scope | One explicit loader snapshots registry/manual indexes. Admission pairs graph/content, address positions and budgets; readonly probes never launch a process or update a cache. |
 | CLI and MCP | Native request decoding is separate from execution; rendered CLI data travels with its business status. Owned MCP presentations perform preparation before rendering, sanitization and character paging. |
 | Sources | Read-only installation probes collect lazy facts, while callers retain their own trust policy. Selection precedes staging; only synced metadata produces a prepared installation for controlled activation. |
 | UI | Logical fragments carry text and anchors together. A document session owns its view, viewport and width cache; explicit switch reasons preserve search only when appropriate. Terminal acquisition/restoration remains separate from host callbacks. |
@@ -268,9 +267,10 @@ The complete compatibility rules and field-level contracts live in the
 
 ## Source resolution
 
-A `DocumentResolver` creates one lazy snapshot of registered Markdown and the
-native manual index. Reusing it keeps discovery and lookup consistent across a
-TUI session; constructing a new resolver observes current local state.
+`mant-loader::DocumentLoader` owns one lazy snapshot of registered Markdown and
+the native manual index. Reusing it keeps discovery and lookup consistent across
+a TUI session; constructing a new loader observes current local state. The engine's
+`DocumentResolver` owns a loader and combines its results with query execution.
 
 Logical catalog addresses have three roots:
 
@@ -314,7 +314,7 @@ explicitly indexed leaf symlink may identify an external file, but every `.so`
 target must remain inside the logical manual root. Direct `--input` pages have
 no collection root and therefore reject redirect-only aliases.
 
-The engine's `manual_input` boundary owns these loading policies, cumulative
+The loader's `manual_input` boundary owns these loading policies, cumulative
 16 MiB stored/decoded budgets, the 16-redirect cap and `ManualError` categories.
 The `mant-codec` roff byte API returns native parse errors, not loader errors. Its
 standalone-alias recognizer is pure syntax: it does not validate or authorize
@@ -407,8 +407,8 @@ attribution. Projection path `0` and selector `tldr` expose this channel
 without renumbering ordinary document sections. Explicit tldr resolution uses
 the registered-document precedence groups, filters each group by actual
 embedded content, and places the cache at the shared built-in priority-zero
-boundary. This keeps source ranking in `mant-sources` and content policy in the
-engine instead of duplicating either rule in the CLI.
+boundary. This keeps source ranking in `mant-sources` and content policy in
+`mant-loader` instead of duplicating either rule in the CLI.
 
 Named lookup plans the full-document source and quick-reference policy as
 orthogonal decisions. An explicit manual section fixes the full document to one
@@ -417,7 +417,10 @@ the combined policy. Manual-only excludes it, and tldr-only omits the full
 document. The CLI recognizes only explicit section forms; dotted logical names
 are never reinterpreted after a failed lookup.
 
-The engine's default tldr feature set is read-only. Subprocess-backed updates
+Cache locations, platform/language selection, reads and readonly executable
+probes live in `mant-loader`; syntax parsing lives in `mant-codec`. Loader
+never spawns an updater or creates a missing cache. The engine's default tldr
+feature set is read-only. Subprocess-backed updates
 through an installed tldr client or Git are compiled only by the opt-in
 `tldr-update` feature, which the native `mant` composition root enables. This
 matches `mant-sources`: reusable engine consumers receive local discovery and

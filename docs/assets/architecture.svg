@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="900" height="740" viewBox="0 0 900 740" role="img" aria-labelledby="title description">
   <title id="title">ManT architecture</title>
-  <desc id="description">mant-engine resolves local sources and delegates memory-only Markdown, tldr and optional native manual decoding to mant-codec around the mant-ir semantic center. The mant-protocol interaction layer supplies logical projections to TUI host interactions, CLI and request JSON, and compact MCP presentation. Separate direct paths carry document IR to the TUI and human renderers.</desc>
+  <desc id="description">mant-loader resolves and reads local sources, while mant-codec decodes Markdown, tldr and optional native manuals into mant-ir. mant-engine queries the resulting content and produces reports. The mant-protocol interaction layer supplies logical projections to TUI host interactions, CLI and request JSON, and compact MCP presentation. Separate direct paths carry document IR to the TUI and human renderers.</desc>
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
       <path d="M 0 0 L 10 5 L 0 10 z" class="arrow-head"/>
@@ -50,11 +50,11 @@
     <rect x="615" y="45" width="250" height="80" rx="12" class="card"/>
   </g>
   <text x="160" y="77" text-anchor="middle" class="title">Native manuals</text>
-  <text x="160" y="103" text-anchor="middle" class="detail">ManualIndex · libmandoc-rs</text>
+  <text x="160" y="103" text-anchor="middle" class="detail">indexed files · optional roff</text>
   <text x="450" y="77" text-anchor="middle" class="title">Markdown</text>
-  <text x="450" y="103" text-anchor="middle" class="detail">mant-sources · parser</text>
+  <text x="450" y="103" text-anchor="middle" class="detail">mant-sources · local files</text>
   <text x="740" y="77" text-anchor="middle" class="title">tldr caches</text>
-  <text x="740" y="103" text-anchor="middle" class="detail">tldr parser · attribution</text>
+  <text x="740" y="103" text-anchor="middle" class="detail">read-only local pages</text>
 
   <g filter="url(#shadow)">
     <rect x="75" y="165" width="750" height="310" rx="18" class="engine"/>
@@ -64,21 +64,22 @@
   <path d="M 450 125 L 450 165" class="connector"/>
   <path d="M 740 125 L 740 165" class="connector"/>
 
-  <text x="105" y="199" class="engine-title">mant-engine</text>
-  <text x="795" y="198" text-anchor="end" class="detail">execution layer</text>
+  <text x="105" y="199" class="engine-title">Document pipeline</text>
+  <text x="795" y="198" text-anchor="end" class="detail">local acquisition · semantic queries</text>
 
   <g>
     <rect x="110" y="215" width="200" height="62" rx="10" class="stage"/>
     <rect x="350" y="215" width="200" height="62" rx="10" class="stage"/>
     <rect x="590" y="215" width="200" height="62" rx="10" class="stage"/>
   </g>
-  <text x="210" y="241" text-anchor="middle" class="title">Resolve</text>
-  <text x="210" y="261" text-anchor="middle" class="detail">bounded local sources</text>
+  <text x="210" y="241" text-anchor="middle" class="title">mant-loader</text>
+  <text x="210" y="261" text-anchor="middle" class="detail">read · scope · cache</text>
   <text x="450" y="241" text-anchor="middle" class="title">mant-codec</text>
   <text x="450" y="261" text-anchor="middle" class="detail">memory-only formats</text>
-  <text x="690" y="241" text-anchor="middle" class="title">Compose</text>
-  <text x="690" y="261" text-anchor="middle" class="detail">manual · tldr</text>
+  <text x="690" y="241" text-anchor="middle" class="title">mant-engine</text>
+  <text x="690" y="261" text-anchor="middle" class="detail">queries · reports</text>
 
+  <path d="M 310 246 L 350 246" class="connector"/>
   <path d="M 210 277 L 300 310" class="connector"/>
   <path d="M 450 277 L 450 310" class="connector"/>
   <path d="M 690 277 L 600 310" class="connector"/>

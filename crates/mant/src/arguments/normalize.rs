@@ -3,10 +3,9 @@
 use super::{
     CatalogKindMode, CatalogQuery, Cli, ColorMode, Command, CommandFactory, ContentSelector,
     DisplayMode, DocumentScope, DocumentSelector, DocumentTraversal, EntryProjection, ErrorKind,
-    InputFormat, InputFormatMode, OutputOptions, QueryFormat, QueryInput, QueryPolicy,
-    QueryRequest, QuerySource, QueryView, RequestSchema, ScopeQueryView, SearchCase, SearchScope,
-    SearchSyntax, default_search_limit, is_manual_section, normalize_tldr_topic,
-    parenthesized_manual_reference,
+    InputFormat, InputFormatMode, LoadPolicy, OutputOptions, QueryFormat, QueryInput, QueryRequest,
+    QuerySource, QueryView, RequestSchema, ScopeQueryView, SearchCase, SearchScope, SearchSyntax,
+    default_search_limit, is_manual_section, normalize_tldr_topic, parenthesized_manual_reference,
 };
 
 pub(super) fn normalize(parsed: Cli, color: ColorMode) -> Result<Command, clap::Error> {
@@ -101,11 +100,11 @@ fn normalize_command(mut parsed: Cli, color: ColorMode) -> Result<Command, clap:
         presentation,
         pretty: !parsed.compact,
         policy: if parsed.manual {
-            QueryPolicy::ManualOnly
+            LoadPolicy::ManualOnly
         } else if parsed.tldr {
-            QueryPolicy::TldrOnly
+            LoadPolicy::TldrOnly
         } else {
-            QueryPolicy::Combined
+            LoadPolicy::Combined
         },
         preserve_anchors: parsed.preserve_anchors,
     })

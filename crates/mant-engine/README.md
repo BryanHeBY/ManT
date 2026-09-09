@@ -1,23 +1,23 @@
 # mant-engine
 
 `mant-engine` is `ManT`'s document execution layer. It resolves local documents
-through `mant-sources`, delegates decoding and lowering to `mant-codec` into
+through `mant-loader`, which delegates decoding and lowering to `mant-codec` into
 the semantic center in `mant-ir`, builds in-memory and versioned protocol
 projections, and produces
 deterministic output without owning a terminal or command-line process.
 
 ## What this crate provides
 
-- Registered Markdown lookup through the read-only `mant-sources` boundary.
+- Registered Markdown lookup through the read-only `mant-loader` / `mant-sources` boundary.
 - Integration with `mant-codec`'s source-positioned Markdown parser, explicit
   loss diagnostics and optional embedded tldr content.
 - Source-neutral inline headings: Markdown ATX/Setext and native section
   headings retain styles and typed links. An extracted first H1 is real
   document-heading content, not duplicated metadata or a synthetic paragraph.
-- Bounded native manual loading, explicit leaf-file symlink support,
+- Integration with the loader's bounded native input policy: explicit leaf-file symlink support,
   root-constrained `.so` alias resolution, and delegated `man(7)`/`mdoc(7)`
   lowering through `mant-codec` on every supported platform.
-- Shared regular-file-only manual-path configuration reads. Unix nonblocking
+- Loader-owned regular-file-only manual-path configuration reads. Unix nonblocking
   opens and handle checks reject FIFOs without waiting for a writer, while
   retaining symlinks to regular configuration files and bounded UTF-8 reads.
 - Semantic outlines with compact scope summaries, role filters, nested entry
@@ -64,7 +64,7 @@ deterministic output without owning a terminal or command-line process.
 - Source-aware `render_query_text_with` / `render_excerpt_text_with` callbacks
   over the same plain-text block layout, with composable source markup and
   validated owner-local name roles rather than rendered-line name matching.
-- Installed-client and private tldr cache discovery. Explicit subprocess-backed
+- Loader-owned installed-client and private tldr cache discovery. Explicit subprocess-backed
   updates are available only with the opt-in `tldr-update` feature.
 
 For already-loaded tldr text, `mant-codec::parse_tldr_page` and
@@ -78,7 +78,10 @@ explicit maintenance operation.
 Process argument parsing, MCP transport, and interactive presentation remain
 outside this crate.
 
-The default feature set is read-only with respect to tldr data. The native
+The default `roff` feature preserves native-manual support and explicitly
+forwards to `mant-loader/roff` and `mant-codec/roff`. Disable default features
+for Markdown/tldr-only production use without native parsing or decompression.
+The default feature set remains read-only with respect to tldr data. The native
 `mant` composition root enables `tldr-update`; library consumers, renderers,
 and MCP-oriented embeddings do not receive subprocess update authority unless
 they request it explicitly.
@@ -89,7 +92,7 @@ they request it explicitly.
 logical selector / physical input
               │
               v
-DocumentResolver ──> mant-codec (Markdown / tldr / roff)
+DocumentResolver ──> mant-loader ──> mant-codec (Markdown / tldr / roff)
               │
               v
       mant_ir::ResolvedContent
@@ -118,25 +121,26 @@ with rendered text even when table cells flatten for portable Markdown.
 `mant-codec` owns native lowering, Markdown parsing, semantic annotation and
 portable document encoding. Its [native ownership map](https://github.com/BryanHeBY/ManT/blob/dev/crates/mant-codec/README.md#native-lowering-ownership)
 documents formatter state, source geometry, target retention and transactional
-table recovery. The engine prepares inputs and composes queries over that one
-implementation; it does not reinterpret source macros or rebuild entry facts.
+table recovery. `mant-loader` prepares inputs; the engine composes queries over
+that one implementation; it does not reinterpret source macros or rebuild entry facts.
 
 ### Public entry points
 
 | Need | Preferred API |
 | --- | --- |
-| Reuse one stable discovery snapshot | `DocumentResolver` |
-| Load a borrowed source specification without a query view | `DocumentLoader::load`, `LoadSpec` |
+| Reuse a read-only discovery/loading snapshot | `mant_loader::DocumentLoader` |
+| Reuse an application loading/query snapshot | `DocumentResolver` |
+| Load a borrowed source specification without a query view | `mant_loader::DocumentLoader::load`, `mant_loader::LoadSpec`, `mant_loader::LoadPolicy` |
 | Resolve a complete typed request | `resolve_query_with_policy` |
 | Resolve and project its requested view | `execute_query` |
-| Resolve a bounded multi-document scope | `DocumentResolver::resolve_scope` |
-| Resolve and project a scope request | `DocumentResolver::execute_scope_query` |
+| Resolve a bounded multi-document scope without querying | `mant_loader::DocumentLoader::resolve_scope` |
+| Resolve and project a scope request | `execute_scope_query` or `DocumentResolver::execute_scope_query` |
 | Query caller-owned document snapshots without loading | `QueryScopeView::new`, `search_scope`, `explain_scope` |
 | Parse in-memory Markdown without query composition | `mant_codec::parse_markdown` (also re-exported here) |
 | Compose a query from in-memory Markdown | `query_markdown_text` |
 | Parse prepared plain roff without loading or decompression | `mant_codec::parse_roff_bytes` (`roff` feature) |
-| Apply standalone-input policy to prepared plain roff bytes | `parse_manual_bytes` or `query_roff_bytes` |
-| Audit production file lowering against its exact native witness | `parse_manual_source_with_report` |
+| Apply standalone-input policy to prepared plain roff bytes | `mant_loader::parse_manual_bytes` or engine `query_roff_bytes` (`roff`) |
+| Audit production file lowering against its exact native witness | `mant_loader::parse_manual_source_with_report` (`roff`) |
 | Build a focused result from existing content | `build_outline_projection`, `select_excerpt`, `search_query` |
 | Collect bounded independent semantic evidence | `explain_query`, `validate_explanation_query` |
 | Produce human or JSON output | The `render_*` functions |
@@ -170,8 +174,8 @@ that function is implemented and exported by `mant-codec`.
 `DocumentResolver` can be reused when several operations must share one lazy
 filesystem snapshot; constructing a new resolver refreshes discovery.
 
-Loading and view validation have distinct error owners. `DocumentLoader` accepts
-a borrowed `LoadSpec` and content policy, never a serialized request or query
+Loading and view validation have distinct error owners. `mant_loader::DocumentLoader`
+accepts a borrowed `LoadSpec` and `LoadPolicy`, never a serialized request or query
 view; failures are `LoadError`. The application `DocumentResolver` validates a
 complete request and joins loading with query execution. `QueryError::Load` and
 `QueryError::QueryValidation` preserve the originating category and error chain
@@ -185,9 +189,9 @@ resolver methods reuse their caller-owned snapshot; the validated execution
 path does not repeat the application validation merely because a snapshot was
 created by a convenience function.
 
-`resolve_scope` and `execute_scope_query` keep linked-document traversal,
-aggregate content budgets, and breadth-first projections at that same engine
-boundary. Process and MCP adapters should pass a `ScopeQueryRequest` rather
+`mant_loader::DocumentLoader::resolve_scope` owns linked-document traversal and
+aggregate content budgets. Engine `execute_scope_query` joins that acquisition
+with breadth-first query results at one application boundary. Process and MCP adapters should pass a `ScopeQueryRequest` rather
 than reimplementing scope traversal.
 
 For already-loaded or caller-produced content, construct `QueryScopeView` from
@@ -250,7 +254,7 @@ assert!(evidence.evidence.iter().any(|owner| owner.bases.iter().any(|basis| matc
 Named resolution treats the full document and command quick reference as two
 orthogonal facets. A manual section selects an exact native full document; it
 does not by itself disable a compatible section `1` or `8` tldr attachment.
-`QueryPolicy::ManualOnly` excludes that facet, while `TldrOnly` requests it
+`mant_loader::LoadPolicy::ManualOnly` excludes that facet, while `TldrOnly` requests it
 without requiring a full document. Dotted names are never split heuristically.
 
 The engine returns `mant_ir::ResolvedContent` to direct semantic consumers and
@@ -267,9 +271,9 @@ for those versioned DTOs.
 | macOS | Yes | Bundled `libmandoc-rs` |
 | Windows | Yes | Bundled `libmandoc-rs` |
 
-Every supported target compiles `libmandoc-rs`. Windows uses its memory-only C
+With the default `roff` feature, every supported target compiles `libmandoc-rs`. Windows uses its memory-only C
 transport while Rust owns file I/O, decompression, paths, and `.so` redirects.
-Within the engine, `manual_input` owns that product input policy and its
+Within `mant-loader`, `manual_input` owns that product input policy and its
 `ManualError` failures. `mant-codec` accepts prepared plain bytes and a
 source label, with includes denied; it never opens that label or a redirect.
 Standalone alias syntax is recognized once by a pure codec helper, while only
@@ -278,7 +282,7 @@ the indexed loader may resolve it. Stored and decoded bytes each share a
 The report-bearing file API lowers the same owned native parse witness rather
 than reopening or reparsing the input. Indexed alias metadata is attached by
 the loader after parsing, not used to authorize codec IO.
-Native root discovery is also Rust-owned: Linux reads man-db mappings or
+Native root discovery is also loader-owned Rust code: Linux reads man-db mappings or
 mandoc `man.conf`, macOS reads its PATH, active developer selection, and
 `MANPATH`/`MANCONFIG` configuration, and Windows optionally reads `ManT`'s own
 `man.conf`. The Windows subset supports direct and mandatory roots, bounded
@@ -300,10 +304,13 @@ not synthesize visible placeholder text. This policy is implemented once in
 
 `mant-engine` returns an owned `mant_ir::ResolvedContent` for direct semantic
 use and owned `mant-protocol` values at versioned integration boundaries. It does not expose
-libmandoc C structures. It still owns loading, query execution and report
-rendering; it is not merely a forwarding facade. Its parser re-exports delegate
-to `mant-codec`; consumers needing only source-to-IR conversion or portable
-document Markdown should depend on that crate directly. Applications that only
+libmandoc C structures. It owns application composition, query execution and
+report rendering; it is not merely a forwarding facade. Parser/encoder and
+loader re-exports are transitional conveniences, not duplicate implementations.
+Consumers needing only source-to-IR conversion or portable document Markdown
+should depend on `mant-codec` directly; consumers needing source discovery,
+loading, read-only caches or owned scopes should use `mant-loader`. The engine's
+opt-in tldr maintenance implementation remains separate from loader authority. Applications that only
 need raw roff syntax should use
 [`libmandoc-rs`](https://crates.io/crates/libmandoc-rs) directly. Applications
 that need the complete command or reader should install

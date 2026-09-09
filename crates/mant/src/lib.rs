@@ -24,7 +24,7 @@ use error::{
     report_process_argument_error,
 };
 use external::open_uri as open_external_uri;
-use mant_engine::QueryPolicy;
+use mant_engine::LoadPolicy;
 use mant_ir::ResolvedContent;
 use mant_protocol::{
     CatalogQuery, CatalogSchema, DoctorReport, DocumentAddress, DocumentCatalog, DocumentSchema,
@@ -66,7 +66,7 @@ struct ProtocolDescription<'a> {
 /// Normalized fields of a conventional CLI document query.
 struct QueryExecution {
     source: QuerySource,
-    policy: QueryPolicy,
+    policy: LoadPolicy,
     output: QueryOutput,
 }
 
@@ -102,11 +102,8 @@ struct CommandOutcome {
 trait CliHost {
     fn doctor(&self) -> Result<DoctorReport, Failure>;
     fn discover(&self, query: &CatalogQuery) -> Result<DocumentCatalog, Failure>;
-    fn query(
-        &self,
-        request: &QueryRequest,
-        policy: QueryPolicy,
-    ) -> Result<ResolvedContent, Failure>;
+    fn query(&self, request: &QueryRequest, policy: LoadPolicy)
+    -> Result<ResolvedContent, Failure>;
     fn query_markdown(&self, source: &str) -> Result<ResolvedContent, Failure>;
     fn resolve_scope(
         &self,
@@ -150,7 +147,7 @@ impl CliHost for SystemHost {
     fn query(
         &self,
         request: &QueryRequest,
-        policy: QueryPolicy,
+        policy: LoadPolicy,
     ) -> Result<ResolvedContent, Failure> {
         self.resolver
             .resolve(request, policy)
@@ -589,7 +586,7 @@ fn execute_query(
                 .map_err(query_execution_failure)?
         }
     };
-    if policy == QueryPolicy::TldrOnly && output.presentation.format.is_none() {
+    if policy == LoadPolicy::TldrOnly && output.presentation.format.is_none() {
         let color = output.presentation.color;
         let mant_engine::QueryViewResult::Excerpt(mant_protocol::QueryExcerpt {
             selections, ..
@@ -620,7 +617,7 @@ fn execute_scope_arguments(
     scope: mant_protocol::DocumentScope,
     view: Option<mant_protocol::ScopeQueryView>,
     output: QueryOutput,
-    policy: QueryPolicy,
+    policy: LoadPolicy,
     host: &dyn CliHost,
 ) -> Result<String, Failure> {
     let Some(view) = view else {
@@ -628,7 +625,7 @@ fn execute_scope_arguments(
             "multi-document output requires --search or --explain; use --display tui for interactive reading",
         ));
     };
-    if policy != QueryPolicy::Combined {
+    if policy != LoadPolicy::Combined {
         return Err(Failure::usage(
             "--manual and --tldr do not apply to multi-document scopes",
         ));
@@ -695,7 +692,7 @@ fn run_interactive(
             (query.clone(), vec![query])
         }
         QuerySource::ScopeArguments { scope, view: None } => {
-            if policy != QueryPolicy::Combined {
+            if policy != LoadPolicy::Combined {
                 return report_failure(
                     &Failure::usage("--manual and --tldr do not apply to document scopes"),
                     diagnostics,
@@ -752,10 +749,10 @@ fn run_interactive(
     }
 }
 
-fn request_for_address(address: &DocumentAddress) -> (QueryRequest, QueryPolicy) {
+fn request_for_address(address: &DocumentAddress) -> (QueryRequest, LoadPolicy) {
     let policy = match address {
-        DocumentAddress::Markdown { .. } => QueryPolicy::Combined,
-        DocumentAddress::Manual { .. } => QueryPolicy::ManualOnly,
+        DocumentAddress::Markdown { .. } => LoadPolicy::Combined,
+        DocumentAddress::Manual { .. } => LoadPolicy::ManualOnly,
     };
     (
         QueryRequest {
@@ -775,7 +772,7 @@ fn request_for_address(address: &DocumentAddress) -> (QueryRequest, QueryPolicy)
 
 fn request_for_navigation(
     target: &mant_protocol::DocumentOpenTarget,
-) -> (QueryRequest, QueryPolicy) {
+) -> (QueryRequest, LoadPolicy) {
     match target {
         mant_protocol::DocumentOpenTarget::Address { address } => request_for_address(address),
         mant_protocol::DocumentOpenTarget::Manual {
@@ -791,13 +788,13 @@ fn request_for_navigation(
                 },
                 view: QueryView::Full {},
             },
-            QueryPolicy::ManualOnly,
+            LoadPolicy::ManualOnly,
         ),
     }
 }
 
-fn validate_markdown_policy(policy: QueryPolicy) -> Result<(), Failure> {
-    if policy != QueryPolicy::Combined {
+fn validate_markdown_policy(policy: LoadPolicy) -> Result<(), Failure> {
+    if policy != LoadPolicy::Combined {
         return Err(Failure::usage(
             "content-only policies do not apply to Markdown input",
         ));

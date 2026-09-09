@@ -6,8 +6,8 @@ set -euo pipefail
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$ROOT"
 
-ALL_PACKAGES=(mant-ir mant-protocol libmandoc-rs mant-sources mant-codec mant-engine mant-ui mant)
-CRATE_TAG_PACKAGES=(mant-ir mant-protocol libmandoc-rs mant-sources mant-codec mant-engine mant-ui)
+ALL_PACKAGES=(mant-ir mant-protocol libmandoc-rs mant-sources mant-codec mant-loader mant-engine mant-ui mant)
+CRATE_TAG_PACKAGES=(mant-ir mant-protocol libmandoc-rs mant-sources mant-codec mant-loader mant-engine mant-ui)
 
 fail() {
   printf 'crates.io publication failed: %s\n' "$1" >&2

@@ -22,26 +22,27 @@ include = [
 all-features = true
 
 [features]
-default = []
+default = ["roff"]
+roff = ["mant-loader/roff", "mant-codec/roff"]
 tldr-update = []
 
 [dependencies]
 grep-matcher.workspace = true
 grep-regex.workspace = true
-flate2.workspace = true
-libmandoc-rs = { path = "../libmandoc-rs", version = "^0.10.0" }
 mant-ir = { path = "../mant-ir", version = "^0.11.0" }
-mant-codec = { path = "../mant-codec", version = "^0.11.0", features = ["roff"] }
+mant-codec = { path = "../mant-codec", version = "^0.11.0", default-features = false }
+mant-loader = { path = "../mant-loader", version = "^0.11.0", default-features = false }
 mant-protocol = { path = "../mant-protocol", version = "^0.11.0" }
-mant-sources = { path = "../mant-sources", version = "^0.9.3" }
 pulldown-cmark.workspace = true
 regex-syntax.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-zstd.workspace = true
 
-[target.'cfg(unix)'.dependencies]
-libc.workspace = true
+[dev-dependencies]
+# Cross-pipeline native audit examples remain outside the production loader API.
+libmandoc-rs = { path = "../libmandoc-rs", version = "^0.10.0" }
+flate2.workspace = true
+zstd.workspace = true
 
 [lints]
 workspace = true

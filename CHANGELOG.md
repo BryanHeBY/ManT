@@ -12,6 +12,18 @@ that crate was not published for that change.
 
 ## Unreleased
 
+### mant-loader 0.11.0
+
+- New read-only loading boundary owns installed-document discovery, bounded
+  local inputs, manual roots, cached quick references, and ordered scope
+  traversal. It accepts `LoadSpec` and `LoadPolicy`, independently of query views.
+  `mant-engine` composes this loader with request validation and query execution.
+- Default features support Markdown without compiling a native parser or source
+  acquisition backend. The explicit `roff` feature enables native manual loading;
+  unsupported native inputs return a capability error before native acquisition.
+  Source updates remain explicit host operations. Existing engine consumers use
+  `LoadPolicy` in place of the former `QueryPolicy` name.
+
 ### mant-codec 0.11.0
 
 - New independently usable memory-only codec: Markdown and tldr are available

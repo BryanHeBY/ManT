@@ -58,7 +58,7 @@ impl DisplayCapabilities {
                     }) | QuerySource::ScopeArguments { view: None, .. }
                 );
                 Self {
-                    reader: full && *policy != mant_engine::QueryPolicy::TldrOnly,
+                    reader: full && *policy != mant_engine::LoadPolicy::TldrOnly,
                     pager: !stdin,
                     auto_page: !stdin,
                 }
