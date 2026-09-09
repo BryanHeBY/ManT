@@ -1,7 +1,9 @@
 //! Entry projections must borrow ordinary content, not reconstruct definitions.
+#[path = "../src/semantic_test_read.rs"]
+mod semantic_read;
 use mant_engine::{
     build_outline_projection, query_markdown_text, render_excerpt_markdown, render_excerpt_text,
-    render_markdown, render_query_text, select_excerpt,
+    render_markdown, render_query_text,
 };
 use mant_ir::{
     Block, EntryContentSlice, EntryFacts, EntryForm, EntryInlineRoot, EntryKind, Inline,
@@ -84,14 +86,21 @@ fn ordinary_owner_navigation_and_excerpts_preserve_the_original_item() {
         render_markdown(&query),
         render_markdown(&self::query(false))
     );
-    let outline =
-        build_outline_projection(&query, EntryProjection::All, Some("run".into())).unwrap();
+    let outline = build_outline_projection(
+        &query,
+        EntryProjection::All,
+        Some(mant_protocol::ContentSelector::id("run")),
+    )
+    .unwrap();
     assert!(
         matches!(&outline.nodes[..], [OutlineNode::DocumentEntry { path, id, .. }]
         if id == "run" && path.as_ref() == "root/e1")
     );
-    for selector in ["run", "root/e1"] {
-        let excerpt = select_excerpt(&query, &[selector]).unwrap();
+    for selector in [
+        mant_protocol::ContentSelector::id("run"),
+        mant_protocol::ContentSelector::path("root/e1"),
+    ] {
+        let excerpt = mant_engine::select_excerpt(&query, std::slice::from_ref(&selector)).unwrap();
         let [ExcerptSelection::DocumentEntry { entry, .. }] = &excerpt.selections[..] else {
             panic!("single entry")
         };
@@ -122,7 +131,10 @@ fn ordinary_owner_navigation_and_excerpts_preserve_the_original_item() {
             markdown.contains(r"8. `run` — SECOND\: punctuation \| stays."),
             "{markdown}"
         );
-        assert_eq!(select_excerpt(&query, &[selector]).unwrap(), excerpt);
+        assert_eq!(
+            mant_engine::select_excerpt(&query, &[selector]).unwrap(),
+            excerpt
+        );
         let roundtrip = serde_json::from_str::<mant_protocol::QueryExcerpt>(
             &serde_json::to_string(&excerpt).unwrap(),
         )
@@ -143,7 +155,7 @@ fn excerpt_ordinals_preserve_unknown_zero_and_saturated_source_starts() {
         *kind = ListKind::Ordered { start };
         items.push(item("last", "THIRD", true));
         let original = query.document.as_ref().unwrap().clone();
-        let excerpt = select_excerpt(&query, &["run", "last"]).unwrap();
+        let excerpt = semantic_read::semantic_excerpt(&query, &["run", "last"]).unwrap();
         for (index, selection) in excerpt.selections.iter().enumerate() {
             let expected = start.unwrap_or(1).saturating_add(index as u64 + 1);
             let ExcerptSelection::DocumentEntry {
@@ -180,18 +192,26 @@ fn nested_ordinary_owners_share_semantic_paths_without_losing_parent_content() {
         layout: LayoutHint::default(),
         source: None,
     });
-    let outline =
-        build_outline_projection(&query, EntryProjection::All, Some("run".into())).unwrap();
+    let outline = build_outline_projection(
+        &query,
+        EntryProjection::All,
+        Some(mant_protocol::ContentSelector::id("run")),
+    )
+    .unwrap();
     let [OutlineNode::DocumentEntry { children, .. }] = &outline.nodes[..] else {
         panic!("parent")
     };
     assert!(
         matches!(&children[..], [OutlineNode::DocumentEntry { path, .. }] if path.as_ref() == "root/e1/e1")
     );
-    let child = select_excerpt(&query, &["root/e1/e1"]).unwrap();
+    let child = mant_engine::select_excerpt(
+        &query,
+        &[mant_protocol::ContentSelector::path("root/e1/e1")],
+    )
+    .unwrap();
     assert!(render_excerpt_text(&child).contains("child — CHILD: punctuation | stays."));
     assert!(!render_excerpt_text(&child).contains("SECOND"));
-    let parent = select_excerpt(&query, &["run"]).unwrap();
+    let parent = semantic_read::semantic_excerpt(&query, &["run"]).unwrap();
     assert!(render_excerpt_text(&parent).contains("CHILD"));
 }
 
@@ -233,12 +253,18 @@ fn transparent_definition_and_table_preserve_entry_paths_and_nearest_owner() {
         }))
         .unwrap();
         document.blocks.push(transparent);
-        let outline =
-            build_outline_projection(&query, EntryProjection::All, Some("run".into())).unwrap();
+        let outline = build_outline_projection(
+            &query,
+            EntryProjection::All,
+            Some(mant_protocol::ContentSelector::id("run")),
+        )
+        .unwrap();
         assert!(
             matches!(&outline.nodes[..], [OutlineNode::DocumentEntry {path, ..}] if path.as_ref() == "root/e1")
         );
-        let excerpt = select_excerpt(&query, &["root/e1"]).unwrap();
+        let excerpt =
+            mant_engine::select_excerpt(&query, &[mant_protocol::ContentSelector::path("root/e1")])
+                .unwrap();
         assert!(render_excerpt_text(&excerpt).contains("SECOND"));
         assert!(!render_excerpt_text(&excerpt).contains("FIRST"));
         let explained = mant_engine::explain_query(

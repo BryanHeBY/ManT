@@ -55,7 +55,9 @@ names, aliases, or definitions from ordinary links.
 `all`, with target types (default document/manual), occurrence offset and limit.
 `QueryOutline.references` contains policy, scan coverage, occurrence/target
 counts, page metadata and records. Records include structural origin, label,
-typed target, optional validated form association and resolution state.
+typed target, optional validated form association and resolution state. A
+`sourceRead` selector identifies a containing readable source subtree; it is
+not the occurrence position and does not follow the target.
 Entry-kind filtering does not prune the source range of reference traversal;
 an explicit outline root does. Pagination counts occurrences, not groups.
 
@@ -113,10 +115,13 @@ Occurrence positions likewise must not be reused as cross-version identities.
 Reference resolution is a closed staged union: external/email are
 `not-applicable`; local targets are checked against the loaded source document;
 cross-document targets begin `not-queried`, `missing-context` or
-`logical-address`. Explicit catalog lookup can report `located`, `missing`,
-`ambiguous` or `restricted`, but located does not mean loaded. Only a loaded
+`logical-address`; forbidden namespace/address syntax is `restricted`.
+Outline does not perform catalog existence lookup. A later explicit host open
+can fail because the document is missing or ambiguous; those are host errors,
+not invented reference-inventory states. Only a loaded
 target can contain a fragment result of `absent`, `valid`, `missing` or
-`ambiguous`; unloaded targets with a fragment remain `unchecked`.
+`ambiguous` (or `limited` when the target scan is incomplete); unloaded targets
+with a fragment remain `unchecked`.
 Read failure is not fragment absence. Valid results carry an exact reveal
 location in that loaded document. Original typed targets and fragments are
 never replaced with guesses. A section-less manual goes through the resolver;
@@ -131,6 +136,8 @@ TUI content selection keeps local preview/reveal behavior. Reference groups
 are collapsed by default; selecting a reference reveals its source, and Enter
 explicitly opens it. Failure or ambiguity retains the source page/selection.
 Copy content copies local source content; copy reference copies its target.
+On a reference row, Shift+Y copies the target. Resolved catalog addresses are
+opened exactly, without falling back to another source or a suffix match.
 Back/forward and resize use content positions, never screen-row identities.
 
 MCP remains read-only: it returns references, local resolution information and

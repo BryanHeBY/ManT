@@ -11,7 +11,7 @@ use mant_protocol::{
 
 use crate::{
     ProjectionError, ResolvedContent, build_outline_projection, build_outline_with_detail,
-    render_outline_text, search_query, select_excerpt,
+    render_outline_text, search_query,
 };
 
 use super::{parse_document, parse_markdown};
@@ -469,19 +469,17 @@ fn reserved_selectors_never_shadow_section_ids() {
 }
 
 #[test]
-fn normalized_shorthand_collisions_are_reported_before_selection() {
+fn exact_names_do_not_create_shorthands_or_selector_diagnostics() {
     let parsed = parse_markdown(
         "# Tool\n\n## Options\n\n<!-- mant:entries role=option case=sensitive -->\n- `-help`: Short help spelling.\n- `--help`: Long help spelling.\n",
         Some("shorthand-collision.md".to_owned()),
     )
     .expect("shorthand collision fixture");
-    assert!(parsed.document.diagnostics.iter().any(|diagnostic| {
-        diagnostic.code.as_deref() == Some("markdown.semantic-entry.ambiguous-selector")
-            && diagnostic.message.contains("semantic selector 'help'")
-            && diagnostic.message.contains("normalized shorthand")
-            && diagnostic.message.contains("1/e1 (option-help-")
-            && diagnostic.message.contains("1/e2 (option-help-")
-    }));
+    assert!(
+        parsed.document.diagnostics.is_empty(),
+        "{:?}",
+        parsed.document.diagnostics
+    );
     let query = ResolvedContent {
         address: None,
         label: "shorthand-collision.md".to_owned(),
@@ -489,11 +487,11 @@ fn normalized_shorthand_collisions_are_reported_before_selection() {
         tldr: None,
     };
     for selector in ["-help", "--help"] {
-        assert!(select_excerpt(&query, &[selector]).is_ok());
+        assert!(crate::semantic_test_read::semantic_excerpt(&query, &[selector]).is_ok());
     }
     assert!(matches!(
-        select_excerpt(&query, &["help"]),
-        Err(ProjectionError::AmbiguousSelector { .. })
+        crate::semantic_test_read::semantic_excerpt(&query, &["help"]),
+        Err(ProjectionError::UnknownSelector { .. })
     ));
 }
 
@@ -540,7 +538,8 @@ fn declared_fixed_attached_values_keep_their_official_identity() {
             && equals_names == &["perf=default"]
     ));
     for selector in ["/F", "/F:Y", "/f:y", "perf=default"] {
-        select_excerpt(&query, &[selector]).expect("fixed attached value selector");
+        crate::semantic_test_read::semantic_excerpt(&query, &[selector])
+            .expect("fixed attached value selector");
     }
 }
 

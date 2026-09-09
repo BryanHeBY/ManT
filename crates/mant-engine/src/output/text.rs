@@ -593,10 +593,11 @@ mod tests {
         let outline = build_outline(&query).expect("outline");
         assert_eq!(
             render_outline_text(&outline),
-            "demo(1)\n└─ 1 OPTIONS\n     ID: options-1\n  └─ 1.1 Common options\n       ID: common-2"
+            "demo(1)\n└─ 1 OPTIONS\n     ID: options-1\n  └─ 1.1 Common options\n       ID: common-2\nReferences: occurrences=exact(0), targets=exact(0); coverage=Complete; offset=0, returned=0"
         );
 
-        let excerpt = select_excerpt(&query, &["1.1".to_owned()]).expect("excerpt");
+        let excerpt = select_excerpt(&query, &[mant_protocol::ContentSelector::path("1.1")])
+            .expect("excerpt");
         let output = render_excerpt_text(&excerpt);
         assert!(output.contains("Outline 1.1: OPTIONS > Common options"));
         assert!(output.contains("child details"));
@@ -616,7 +617,7 @@ mod tests {
 
         assert_eq!(
             render_outline_text(&outline),
-            "demo(1)\n0 matching semantic entries for: environment variables"
+            "demo(1)\n0 matching semantic entries for: environment variables\nReferences: occurrences=exact(0), targets=exact(0); coverage=Complete; offset=0, returned=0"
         );
         assert!(
             render_outline_markdown(&outline)
@@ -642,7 +643,8 @@ mod tests {
         assert!(outline.contains("├─ 0 TLDR QUICK REFERENCE\n│    ID: tldr"));
         assert!(outline.contains("└─ 1 OPTIONS\n     ID: options-1"));
 
-        let excerpt = select_excerpt(&query, &["tldr".to_owned()]).expect("tldr excerpt");
+        let excerpt = select_excerpt(&query, &[mant_protocol::ContentSelector::id("tldr")])
+            .expect("tldr excerpt");
         assert_eq!(
             render_excerpt_text(&excerpt),
             "demo\n\nOutline 0: TLDR QUICK REFERENCE\n\nTLDR\n\nA small demonstration.\n\ntldr-pages · CC BY 4.0 · common · en"

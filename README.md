@@ -182,7 +182,7 @@ mant gcc --outline
 mant ssh --outline --outline-entries all --outline-root=-L
 mant git --tldr
 mant gcc --node 4.2 --format markdown
-mant tar --node acls --format json
+mant tar --node id:acls --format json
 mant tar --explain=--exclude
 ```
 

@@ -1,9 +1,6 @@
 //! Rebuild an operation-local semantic index from finalized identities.
 use super::{
-    model::{
-        DocumentReference, EntryKind, EntrySummary, SemanticDocumentTarget, SemanticEntry,
-        ValueDomain,
-    },
+    model::{DocumentReference, EntrySummary, SemanticDocumentTarget, SemanticEntry, ValueDomain},
     walk::visit_child_entries,
 };
 use crate::{Block, Document, EntryOwner, Inline, NodeId};
@@ -17,7 +14,8 @@ use std::collections::BTreeMap;
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct SemanticIndex {
     root: Vec<SemanticEntry>,
-    sections: BTreeMap<NodeId, Vec<SemanticEntry>>,
+    sections: BTreeMap<Vec<usize>, Vec<SemanticEntry>>,
+    section_paths: BTreeMap<NodeId, Option<Vec<usize>>>,
 }
 
 impl SemanticIndex {
@@ -26,8 +24,13 @@ impl SemanticIndex {
     pub fn build(document: &Document) -> Self {
         let root = entries_in_blocks(&document.blocks);
         let mut sections = BTreeMap::new();
-        collect_section_entries(&document.sections, &mut sections);
-        let mut result = Self { root, sections };
+        let mut section_paths = BTreeMap::new();
+        collect_section_entries(&document.sections, &[], &mut sections, &mut section_paths);
+        let mut result = Self {
+            root,
+            sections,
+            section_paths,
+        };
         if result
             .root
             .iter()
@@ -59,10 +62,22 @@ impl SemanticIndex {
         &self.root
     }
 
-    /// Entries directly owned by one section.
+    /// Entries directly owned by a uniquely identified section.
+    ///
+    /// Missing or duplicate IDs return no entries. Use [`Self::section_at`] to
+    /// address a specific source owner even when public IR has duplicate IDs.
     #[must_use]
     pub fn section(&self, id: &str) -> &[SemanticEntry] {
-        self.sections.get(id).map_or(&[], Vec::as_slice)
+        self.section_paths
+            .get(id)
+            .and_then(Option::as_deref)
+            .map_or(&[], |path| self.section_at(path))
+    }
+
+    /// Entries owned by an exact section at zero-based source-tree coordinates.
+    #[must_use]
+    pub fn section_at(&self, path: &[usize]) -> &[SemanticEntry] {
+        self.sections.get(path).map_or(&[], Vec::as_slice)
     }
 
     /// Summary for content before the first section.
@@ -96,11 +111,19 @@ fn clear_rejected_relations(
 
 fn collect_section_entries(
     sections: &[crate::Section],
-    output: &mut BTreeMap<NodeId, Vec<SemanticEntry>>,
+    parent: &[usize],
+    output: &mut BTreeMap<Vec<usize>, Vec<SemanticEntry>>,
+    paths: &mut BTreeMap<NodeId, Option<Vec<usize>>>,
 ) {
-    for section in sections {
-        output.insert(section.id.clone(), entries_in_blocks(&section.blocks));
-        collect_section_entries(&section.children, output);
+    for (index, section) in sections.iter().enumerate() {
+        let mut path = parent.to_vec();
+        path.push(index);
+        paths
+            .entry(section.id.clone())
+            .and_modify(|path| *path = None)
+            .or_insert_with(|| Some(path.clone()));
+        output.insert(path.clone(), entries_in_blocks(&section.blocks));
+        collect_section_entries(&section.children, &path, output, paths);
     }
 }
 
@@ -120,31 +143,43 @@ pub(super) fn entry_from_definition(item: &crate::DefinitionItem) -> Option<Sema
 }
 
 fn entry_from_owner(item: EntryOwner<'_>) -> Option<SemanticEntry> {
-    let identity = item.facts()?;
-    let forms = item.forms().unwrap_or_default();
-    let children = entries_in_blocks(item.blocks());
-    let value_domain = identity.value_domain.clone().or_else(|| {
-        (!children.is_empty() && children.iter().all(|child| child.kind == EntryKind::Value))
-            .then_some(ValueDomain::Choices { exhaustive: false })
-    });
-    Some(SemanticEntry {
-        id: identity.id.clone(),
-        kind: identity.kind,
-        names: item.validated_names().unwrap_or_default().to_vec(),
-        // An absent relationship has nothing to project. Native manuals usually
-        // have no authored groups: do not revalidate all names a second time.
-        alias_groups: if identity.alias_groups.is_empty() {
-            Vec::new()
-        } else {
-            item.validated_alias_groups().unwrap_or_default().to_vec()
-        },
-        alias_of: identity.alias_of.clone(),
-        case: identity.case,
-        forms: forms.iter().map(inline_text).collect(),
-        document_targets: document_targets(&forms),
-        children,
-        value_domain,
-    })
+    let mut entry = SemanticEntry::from_owner_shallow(item)?;
+    entry.children = entries_in_blocks(item.blocks());
+    Some(entry)
+}
+
+impl SemanticEntry {
+    /// Project this owner's metadata only, without copying content or indexing descendants.
+    ///
+    /// Document-wide alias-of validity is a separate operation; consumers must
+    /// consult [`crate::entry_relation_issues`] before exposing that relation.
+    #[must_use]
+    pub fn from_owner_shallow(item: EntryOwner<'_>) -> Option<Self> {
+        let identity = item.facts()?;
+        let forms = item.forms().unwrap_or_default();
+        let value_domain = identity.value_domain.clone().or_else(|| {
+            item.has_value_choices()
+                .then_some(ValueDomain::Choices { exhaustive: false })
+        });
+        Some(SemanticEntry {
+            id: identity.id.clone(),
+            kind: identity.kind,
+            names: item.validated_names().unwrap_or_default().to_vec(),
+            // An absent relationship has nothing to project. Native manuals usually
+            // have no authored groups: do not revalidate all names a second time.
+            alias_groups: if identity.alias_groups.is_empty() {
+                Vec::new()
+            } else {
+                item.validated_alias_groups().unwrap_or_default().to_vec()
+            },
+            alias_of: identity.alias_of.clone(),
+            case: identity.case,
+            forms: forms.iter().map(inline_text).collect(),
+            document_targets: document_targets(&forms),
+            children: Vec::new(),
+            value_domain,
+        })
+    }
 }
 
 fn document_targets(terms: &crate::EntryForms<'_>) -> Vec<SemanticDocumentTarget> {

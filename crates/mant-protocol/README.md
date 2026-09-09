@@ -213,12 +213,26 @@ This separation lets summary and role-filtered outlines omit entries without
 changing the document or inventing another semantic model.
 
 This supports stateless agent exploration: inspect the compact summary, reuse
-a path or ID from that current response as the next request's root, expand all
-or selected entry kinds below it, then read the chosen node. Exact path and ID
-resolution precedes aliases and shorthands in strict navigation. Paths remain
-source-order coordinates; clients rediscover after the source manual changes.
+a path or ID from that current response as the next request's explicit
+`ContentSelector` root, expand all or selected entry kinds below it, then read
+the chosen local node. The closed wire forms are `{"kind":"path","path":"2/e1"}`
+and `{"kind":"id","id":"option-help"}`. Names, aliases, fragments and reference
+positions never fall back into content selection; use explanation for semantic
+discovery. Paths remain source-order coordinates without cross-call stale
+detection; clients rediscover after source edits or reordering.
 A kind filter with no matches returns an empty node set rather than the
 unrelated section topology.
+
+`QueryOutline.references` is independent from that content tree. `ReferenceProjection`
+selects none/summary/all, original target kinds and an occurrence page. Counts
+retain exact/lower-bound/unknown precision; scan coverage, target-validation
+coverage and retained-page limits are separate. `ReferenceRecord` points to the
+original content location and carries a containing `sourceRead` selector; it is
+not a semantic entry or an implicit cross-document read. Logical address
+derivation never proves a destination exists or an unloaded fragment is valid.
+The shared presentation remains usable after serialization without a parser,
+resolver or filesystem. `DocumentOpenTarget` is an explicit interactive host
+request, not authority for MCP or a reference inventory to execute an opener.
 
 Normalized document content is defined separately by
 [`mant-ir`](https://crates.io/crates/mant-ir). Parsing, lookup, projection, and

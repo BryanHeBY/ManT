@@ -319,6 +319,7 @@ fn dispatches_explicit_files_and_direct_stdin_without_embedding_content() {
                 view: QueryView::Outline {
                     entries: EntryProjection::Summary,
                     root: None,
+                    references: _,
                 }
             },
             presentation: OutputOptions {
@@ -678,7 +679,7 @@ fn parses_explicit_manual_and_tldr_selections() {
             presentation: OutputOptions { format: None, color: ColorMode::Auto, .. },
             policy: QueryPolicy::TldrOnly,
             ..
-        } if selectors == &["tldr"]
+        } if selectors == &[mant_protocol::ContentSelector::id("tldr")]
     ));
 }
 
@@ -697,6 +698,7 @@ fn parses_outline_and_repeatable_node_views_with_contextual_defaults() {
                 view: QueryView::Outline {
                     entries: EntryProjection::Summary,
                     root: None,
+                    references: mant_protocol::ReferenceProjection::default(),
                 },
             }),
             presentation: OutputOptions {
@@ -715,7 +717,7 @@ fn parses_outline_and_repeatable_node_views_with_contextual_defaults() {
             "--outline",
             "--outline-entries",
             "all",
-            "--outline-root=-L",
+            "--outline-root=path:1/e1",
         ]))
         .expect("rooted full outline"),
         Command::Query {
@@ -723,11 +725,12 @@ fn parses_outline_and_repeatable_node_views_with_contextual_defaults() {
                 view: QueryView::Outline {
                     entries: EntryProjection::All,
                     root: Some(ref root),
+                    ..
                 },
                 ..
             }),
             ..
-        } if root.as_str() == "-L"
+        } if root == &mant_protocol::ContentSelector::path("1/e1")
     ));
     assert!(matches!(
         parse(&args(&[
@@ -742,6 +745,7 @@ fn parses_outline_and_repeatable_node_views_with_contextual_defaults() {
                 view: QueryView::Outline {
                     entries: EntryProjection::Kinds { ref kinds },
                     root: None,
+                    ..
                 },
                 ..
             }),
@@ -788,6 +792,7 @@ fn parses_filtered_outlines_and_repeatable_nodes() {
                         }],
                     },
                     root: None,
+                    references: mant_protocol::ReferenceProjection::default(),
                 },
             }),
             presentation: OutputOptions {
@@ -802,7 +807,13 @@ fn parses_filtered_outlines_and_repeatable_nodes() {
     );
     assert_eq!(
         parse(&args(&[
-            "gcc", "--node", "4.2", "--node", "files-8", "--format", "text",
+            "gcc",
+            "--node",
+            "4.2",
+            "--node",
+            "id:files-8",
+            "--format",
+            "text",
         ]))
         .expect("excerpt"),
         Command::Query {
@@ -814,7 +825,10 @@ fn parses_filtered_outlines_and_repeatable_nodes() {
                     manual_section: None,
                 },
                 view: QueryView::Excerpt {
-                    selectors: vec!["4.2".into(), "files-8".into()],
+                    selectors: vec![
+                        mant_protocol::ContentSelector::path("4.2"),
+                        mant_protocol::ContentSelector::id("files-8")
+                    ],
                 },
             }),
             presentation: OutputOptions {

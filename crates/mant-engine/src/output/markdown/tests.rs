@@ -269,7 +269,8 @@ fn renders_tldr_before_manual_and_resolves_placeholders() {
     assert!(outline.contains("- `0` (`tldr`) TLDR QUICK REFERENCE"));
     assert!(outline.contains("- `1` (`name`) NAME"));
 
-    let excerpt = select_excerpt(&query, &["0".to_owned()]).expect("tldr excerpt");
+    let excerpt =
+        select_excerpt(&query, &[mant_protocol::ContentSelector::path("0")]).expect("tldr excerpt");
     let excerpt = render_excerpt_markdown(&excerpt);
     assert!(excerpt.contains("*Outline `0`: TLDR QUICK REFERENCE*"));
     assert!(excerpt.contains("## TLDR"));
@@ -302,7 +303,8 @@ fn renders_and_selects_content_before_the_first_heading() {
     assert_eq!(outline.nodes[0].path(), "root");
     assert_eq!(outline.nodes[1].path(), "1");
 
-    let excerpt = select_excerpt(&query, &["root".to_owned()]).expect("root excerpt");
+    let excerpt = select_excerpt(&query, &[mant_protocol::ContentSelector::path("root")])
+        .expect("root excerpt");
     let excerpt = render_excerpt_markdown(&excerpt);
     assert!(excerpt.contains("*Outline `root`: OVERVIEW*"));
     assert!(excerpt.contains("Document preface."));
@@ -1206,7 +1208,8 @@ fn uses_markdown_document_title_without_changing_its_logical_label() {
         "{outline}"
     );
     let excerpt = render_excerpt_markdown(
-        &select_excerpt(&query, &["root".to_owned()]).expect("root excerpt"),
+        &select_excerpt(&query, &[mant_protocol::ContentSelector::path("root")])
+            .expect("root excerpt"),
     );
     assert!(excerpt.starts_with("# Actual Doc Title"), "{excerpt}");
 }
@@ -1244,7 +1247,8 @@ fn renders_selectable_outline_paths_and_excerpt_breadcrumbs() {
     assert!(outline_markdown.contains("- `1` (`options`) OPTIONS"));
     assert!(outline_markdown.contains("  - `1.1` (`common options`) Common options"));
 
-    let excerpt = select_excerpt(&query, &["1.1".to_owned()]).expect("excerpt");
+    let excerpt =
+        select_excerpt(&query, &[mant_protocol::ContentSelector::path("1.1")]).expect("excerpt");
     let excerpt_markdown = render_excerpt_markdown(&excerpt);
     assert!(excerpt_markdown.starts_with("# demo(1)"));
     assert!(excerpt_markdown.contains("*Outline `1.1`: OPTIONS → Common options*"));

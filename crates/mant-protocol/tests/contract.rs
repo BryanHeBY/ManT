@@ -124,7 +124,10 @@ fn shared_query_fixture_round_trips_without_shape_changes() {
 #[test]
 fn v0_11_breaking_projection_shapes_have_cross_language_golden_examples() {
     let outline: QueryOutline = serde_json::from_str(ROOTED_OUTLINE).expect("rooted outline");
-    assert_eq!(outline.root.as_deref(), Some("options"));
+    assert_eq!(
+        outline.root,
+        Some(mant_protocol::ContentSelector::id("options"))
+    );
     assert!(matches!(outline.entries, EntryProjection::Kinds { .. }));
     assert_eq!(
         serde_json::to_value(outline).expect("outline value"),
@@ -194,17 +197,18 @@ fn native_query_request_covers_every_projection_and_rejects_unknown_fields() {
         QueryView::Outline {
             entries: EntryProjection::All,
             root: None,
+            references: mant_protocol::ReferenceProjection::default(),
         }
     );
 
     let excerpt: QueryRequest = serde_json::from_str(
-        r#"{"schema":"mant.request/v0.11","input":{"kind":"document","selector":"tar"},"view":{"kind":"excerpt","selectors":["acls"]}}"#,
+        r#"{"schema":"mant.request/v0.11","input":{"kind":"document","selector":"tar"},"view":{"kind":"excerpt","selectors":[{"kind":"id","id":"acls"}]}}"#,
     )
     .expect("valid excerpt request");
     assert_eq!(
         excerpt.view,
         QueryView::Excerpt {
-            selectors: vec!["acls".into()],
+            selectors: vec![mant_protocol::ContentSelector::id("acls")],
         }
     );
 
@@ -219,7 +223,10 @@ fn native_query_request_covers_every_projection_and_rejects_unknown_fields() {
             options: mant_protocol::ExplanationOptions::default()
         }
     );
+}
 
+#[test]
+fn native_search_defaults_and_closed_request_fields_are_enforced() {
     let search: QueryRequest = serde_json::from_str(
         r#"{"schema":"mant.request/v0.11","input":{"kind":"document","selector":"tar"},"view":{"kind":"search","pattern":"--acls","syntax":"literal","case":"insensitive","scope":"visible","word":false,"contextLines":2,"limit":20,"offset":0}}"#,
     )

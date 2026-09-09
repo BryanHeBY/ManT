@@ -326,9 +326,64 @@ impl<'a> EntryOwner<'a> {
             .map(EntryForms::Projected)
     }
 
+    /// Count complete valid form bindings without copying inline content or names.
+    ///
+    /// This has the same atomic validity rule as [`Self::forms`]; invalid bindings
+    /// yield `None`, and an explicitly unrecorded form set yields zero.
+    #[must_use]
+    pub fn validated_form_count(self) -> Option<usize> {
+        let forms = &self.facts()?.forms;
+        forms
+            .iter()
+            .all(|form| self.form_is_valid(form))
+            .then_some(forms.len())
+    }
+
+    fn form_is_valid(self, form: &EntryForm) -> bool {
+        !form.parts.is_empty()
+            && form.parts.windows(2).all(|pair| pair[0].precedes(&pair[1]))
+            && form.parts.iter().all(|part| self.slice_is_valid(part))
+    }
+
+    fn slice_is_valid(self, slice: &EntryContentSlice) -> bool {
+        let Some(mut nodes) = self.inline_root(&slice.root) else {
+            return false;
+        };
+        let Some((&last, parents)) = slice.path.split_last() else {
+            return slice.bytes.is_none();
+        };
+        for &index in parents {
+            let Some(
+                Inline::Strong { children }
+                | Inline::Emphasis { children }
+                | Inline::Link { children, .. },
+            ) = nodes.get(index)
+            else {
+                return false;
+            };
+            nodes = children;
+        }
+        let Some(node) = nodes.get(last) else {
+            return false;
+        };
+        match &slice.bytes {
+            None => true,
+            Some(range) if range.start < range.end => match node {
+                Inline::Text { value } | Inline::Code { value } => {
+                    value.get(range.clone()).is_some()
+                }
+                _ => false,
+            },
+            Some(_) => false,
+        }
+    }
+
     /// Project one ordered form without accepting a partial binding.
     #[must_use]
     pub fn form(self, form: &EntryForm) -> Option<Cow<'a, [Inline]>> {
+        if !self.form_is_valid(form) {
+            return None;
+        }
         if let [
             EntryContentSlice {
                 root,
@@ -344,9 +399,6 @@ impl<'a> EntryOwner<'a> {
             if let [index] = path[..] {
                 return nodes.get(index..index.checked_add(1)?).map(Cow::Borrowed);
             }
-        }
-        if form.parts.is_empty() || !form.parts.windows(2).all(|pair| pair[0].precedes(&pair[1])) {
-            return None;
         }
         let parts = form
             .parts
@@ -520,6 +572,50 @@ mod tests {
         let mut unannotated = items[0].clone();
         unannotated.entry = None;
         assert_eq!(unannotated.blocks, items[0].blocks);
+    }
+
+    #[test]
+    fn borrowed_form_count_agrees_with_atomic_projection_for_valid_and_invalid_bindings() {
+        let original = item("term-name", EntryKind::Term, "é名");
+        for parts in [
+            vec![],
+            vec![EntryContentSlice {
+                root: EntryInlineRoot::Block { index: 0 },
+                path: vec![0],
+                bytes: None,
+            }],
+            vec![EntryContentSlice {
+                root: EntryInlineRoot::Block { index: 0 },
+                path: vec![0],
+                bytes: Some(0..2),
+            }],
+            vec![EntryContentSlice {
+                root: EntryInlineRoot::Block { index: 0 },
+                path: vec![0],
+                bytes: Some(1..2),
+            }],
+            vec![EntryContentSlice {
+                root: EntryInlineRoot::Block { index: 99 },
+                path: vec![],
+                bytes: None,
+            }],
+            vec![EntryContentSlice {
+                root: EntryInlineRoot::Block { index: 0 },
+                path: vec![],
+                bytes: Some(0..2),
+            }],
+        ] {
+            let mut item = original.clone();
+            item.entry.as_mut().unwrap().forms = vec![EntryForm { parts }];
+            let owner = EntryOwner::List(&item);
+            assert_eq!(
+                owner.validated_form_count(),
+                owner.forms().map(|forms| forms.iter().count())
+            );
+        }
+        let mut item = original;
+        item.entry.as_mut().unwrap().forms.clear();
+        assert_eq!(EntryOwner::List(&item).validated_form_count(), Some(0));
     }
 
     #[test]

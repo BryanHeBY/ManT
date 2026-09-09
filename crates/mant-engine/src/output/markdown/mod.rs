@@ -394,6 +394,20 @@ pub fn render_outline_markdown(outline: &QueryOutline) -> String {
     } else if !outline.nodes.is_empty() {
         blocks.push(outline_list(&outline.nodes, 0));
     }
+    let references = mant_protocol::render_reference_inventory(&outline.references);
+    if !references.is_empty() {
+        // Reference facts are plain data, never executable Markdown links.
+        let fence = "`".repeat(
+            references
+                .split(|c| c != '`')
+                .map(str::len)
+                .max()
+                .unwrap_or(0)
+                .max(2)
+                + 1,
+        );
+        blocks.push(format!("{fence}text\n{references}\n{fence}"));
+    }
     blocks.join("\n\n").trim_end().to_owned()
 }
 

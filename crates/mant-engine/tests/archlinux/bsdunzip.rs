@@ -1,6 +1,7 @@
 //! Regressions from Arch Linux libarchive's `bsdunzip(1)` page.
+use super::semantic_read;
 
-use mant_engine::{render_excerpt_markdown, select_excerpt};
+use mant_engine::render_excerpt_markdown;
 use mant_ir::{Block, EntryKind};
 
 use crate::{
@@ -48,7 +49,7 @@ fn distinct_option_heads_do_not_borrow_the_following_mdoc_description() {
     );
     let query = archlinux_manual_query("bsdunzip");
     for selector in ["-I", "-O"] {
-        let excerpt = select_excerpt(&query, &[selector])
+        let excerpt = semantic_read::semantic_excerpt(&query, &[selector])
             .unwrap_or_else(|error| panic!("explain {selector}: {error}"));
         assert_eq!(
             render_excerpt_markdown(&excerpt)

@@ -1,7 +1,7 @@
 //! Section facades and literal leaves preserve the same source row stream.
 use mant_engine::{
     query_markdown_text, query_roff_bytes, render_excerpt_text, render_query_text,
-    render_query_text_with, select_excerpt,
+    render_query_text_with,
 };
 
 #[test]
@@ -36,7 +36,9 @@ fn native_section_pd_and_explicit_requests_compose_once() {
 fn section_tail_requests_survive_document_and_excerpt_facades() {
     let content = query_roff_bytes(b".TH PROBE 1\n.SH FIRST\nALPHA\n.sp 3\n").unwrap();
     assert!(render_query_text(&content).ends_with("ALPHA\n\n\n"));
-    let excerpt = select_excerpt(&content, &["1"]).unwrap();
+    let excerpt =
+        mant_engine::select_excerpt(&content, &[mant_protocol::ContentSelector::path("1")])
+            .unwrap();
     assert!(render_excerpt_text(&excerpt).ends_with("ALPHA\n\n\n"));
 }
 
@@ -50,7 +52,9 @@ fn fenced_literal_edges_survive_document_and_excerpt_facades() {
     let expected = "BEFORE\n\n\nALPHA\n\n\n\nAFTER";
     let text = render_query_text(&content);
     assert!(text.contains(expected), "{text:?}");
-    let excerpt = select_excerpt(&content, &["1"]).unwrap();
+    let excerpt =
+        mant_engine::select_excerpt(&content, &[mant_protocol::ContentSelector::path("1")])
+            .unwrap();
     assert!(render_excerpt_text(&excerpt).contains(expected));
     assert_eq!(
         render_query_text_with(&content, |_, value| value.into()),

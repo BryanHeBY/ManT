@@ -1,10 +1,11 @@
 //! Tests for the Fedora Linux 44 `tar(1)` zstd fixture.
+use super::semantic_read;
 
 use crate::common::{
     self, count_outline_entries, find_outline_entry, query_for_document, semantic_definition_items,
 };
 use crate::fixtures::fedora44_manual;
-use mant_engine::{build_outline_with_detail, search_query, select_excerpt};
+use mant_engine::{build_outline_with_detail, search_query};
 use mant_ir::SourceFormat;
 use mant_protocol::{
     ExcerptSelection, OutlineDetail, SearchCase, SearchQuery, SearchScope, SearchSyntax,
@@ -56,7 +57,8 @@ fn options_are_addressable_in_v0_11_outlines_and_excerpts() {
     let outlined = find_outline_entry(&outline.nodes, "--acls").expect("outlined --acls");
     assert_eq!(identity.id, outlined.id());
 
-    let excerpt = select_excerpt(&query, &["acls".to_owned()]).expect("--acls excerpt by alias");
+    let excerpt =
+        semantic_read::semantic_excerpt(&query, &["--acls"]).expect("--acls excerpt by alias");
     assert!(matches!(
         excerpt.selections.as_slice(),
         [ExcerptSelection::DocumentEntry { entry, .. }]
@@ -99,8 +101,13 @@ fn search_maps_long_options_to_markdown_lines_and_selectable_nodes() {
     assert!(option.occurrences[0].markdown.start_column > 0);
     assert!(option.preview.contains("--acls"));
 
-    let excerpt = select_excerpt(&query, &[option.outline.node.path().to_owned()])
-        .expect("search node can be passed directly to --node");
+    let excerpt = mant_engine::select_excerpt(
+        &query,
+        &[mant_protocol::ContentSelector::path(
+            option.outline.node.path().to_owned(),
+        )],
+    )
+    .expect("search node can be passed directly to --node");
     assert!(matches!(
         excerpt.selections.as_slice(),
         [ExcerptSelection::DocumentEntry { entry, .. }]

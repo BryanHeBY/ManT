@@ -1,67 +1,11 @@
-//! Shared exact path, ID, alias and shorthand resolution.
-use super::{LocatedNode, ProjectionError, ambiguous_selector, semantic_name_shorthand};
-use mant_ir::{NameCase, OutlinePath};
+//! Exact, explicitly namespaced local path and identity lookup.
+use super::{LocatedNode, ProjectionError, ambiguous_selector};
+use mant_protocol::ContentSelector;
 use std::collections::{BTreeMap, HashMap};
 
-#[derive(Clone, Copy)]
-pub(super) enum AliasMatchKind {
-    Exact,
-    Shorthand,
-}
-
-impl AliasMatchKind {
-    pub(super) const fn label(self) -> &'static str {
-        match self {
-            Self::Exact => "exact alias",
-            Self::Shorthand => "normalized shorthand",
-        }
-    }
-}
-
-#[derive(Default)]
-struct AliasIndex<'a> {
-    sensitive: HashMap<&'a str, Vec<&'a LocatedNode<'a>>>,
-    insensitive: HashMap<String, Vec<&'a LocatedNode<'a>>>,
-}
-
-impl<'a> AliasIndex<'a> {
-    fn insert(&mut self, case: NameCase, alias: &'a str, candidate: &'a LocatedNode<'a>) {
-        let bucket = match case {
-            NameCase::Sensitive => self.sensitive.entry(alias).or_default(),
-            NameCase::Insensitive => self
-                .insensitive
-                .entry(alias.to_ascii_lowercase())
-                .or_default(),
-        };
-        if bucket
-            .last()
-            .is_none_or(|existing| existing.order() != candidate.order())
-        {
-            bucket.push(candidate);
-        }
-    }
-
-    fn matches(&self, selector: &str) -> Vec<&'a LocatedNode<'a>> {
-        let mut matches = self.sensitive.get(selector).cloned().unwrap_or_default();
-        if let Some(insensitive) = self.insensitive.get(&selector.to_ascii_lowercase()) {
-            matches.extend(insensitive.iter().copied());
-        }
-        matches.sort_unstable_by_key(|candidate| candidate.order());
-        matches.dedup_by_key(|candidate| candidate.order());
-        matches
-    }
-}
-
-/// One immutable lookup policy shared by excerpts, explanations, outline-root
-/// selection, and producer diagnostics.
-///
-/// Keeping path, ID, exact-alias, and shorthand precedence in this one index
-/// prevents a diagnostic from promising a selector that a query surface
-/// resolves differently.
+/// Content addressing deliberately excludes semantic names and link activation.
 pub(crate) struct DocumentSelectorIndex<'a> {
     paths: HashMap<String, &'a LocatedNode<'a>>,
-    exact_aliases: AliasIndex<'a>,
-    shorthand_aliases: AliasIndex<'a>,
     pub(super) ids: BTreeMap<&'a str, Vec<&'a LocatedNode<'a>>>,
 }
 
@@ -69,70 +13,72 @@ impl<'a> DocumentSelectorIndex<'a> {
     pub(crate) fn new(located: &'a [LocatedNode<'a>]) -> Self {
         let mut index = Self {
             paths: HashMap::new(),
-            exact_aliases: AliasIndex::default(),
-            shorthand_aliases: AliasIndex::default(),
             ids: BTreeMap::new(),
         };
         for candidate in located {
             index.paths.insert(candidate.path().to_string(), candidate);
             index.ids.entry(candidate.id()).or_default().push(candidate);
-            let Some(identity) = candidate.facts() else {
-                continue;
-            };
-            let LocatedNode::Entry { entry, .. } = candidate else {
-                continue;
-            };
-            for name in entry.names {
-                index.exact_aliases.insert(identity.case, name, candidate);
-                if let Some(shorthand) = semantic_name_shorthand(identity.kind, name) {
-                    index
-                        .shorthand_aliases
-                        .insert(identity.case, shorthand, candidate);
-                }
-            }
         }
         index
+    }
+
+    /// Synthetic roots must not silently shadow malformed public IR owners.
+    pub(crate) fn validate_synthetic_identity(
+        &self,
+        document: &str,
+        selector: &ContentSelector,
+        synthetic_id: &str,
+        synthetic_path: &str,
+    ) -> Result<(), ProjectionError> {
+        let ContentSelector::Id { id } = selector else {
+            return Ok(());
+        };
+        if id.as_str() != synthetic_id {
+            return Ok(());
+        }
+        let Some(real_owners) = self.ids.get(synthetic_id) else {
+            return Ok(());
+        };
+        let mut candidates = vec![super::SelectorCandidate {
+            path: synthetic_path.to_owned(),
+            id: synthetic_id.to_owned(),
+        }];
+        candidates.extend(real_owners.iter().map(|owner| super::SelectorCandidate {
+            path: owner.path().to_string(),
+            id: owner.id().to_owned(),
+        }));
+        Err(ProjectionError::AmbiguousSelector {
+            document: document.to_owned(),
+            selector: selector.to_string(),
+            candidates,
+        })
     }
 
     pub(crate) fn resolve(
         &self,
         document: &str,
-        selector: &str,
+        selector: &ContentSelector,
     ) -> Result<&'a LocatedNode<'a>, ProjectionError> {
-        if let Ok(path) = selector.parse::<OutlinePath>()
-            && let Some(candidate) = self.paths.get(&path.to_string())
-        {
-            return Ok(candidate);
-        }
-        let ids = self.ids.get(selector).cloned().unwrap_or_default();
-        match ids.as_slice() {
-            [candidate] => return Ok(candidate),
-            [] => {}
-            _ => return Err(ambiguous_selector(document, selector, ids)),
-        }
-
-        let matches = self.matching_aliases(selector).1;
-        match matches.as_slice() {
-            [] => Err(ProjectionError::UnknownSelector {
-                document: document.to_owned(),
-                selector: selector.to_owned(),
-            }),
-            [candidate] => Ok(candidate),
-            _ => Err(ambiguous_selector(document, selector, matches)),
-        }
-    }
-
-    pub(super) fn matching_aliases(
-        &self,
-        selector: &str,
-    ) -> (AliasMatchKind, Vec<&'a LocatedNode<'a>>) {
-        let exact = self.exact_aliases.matches(selector);
-        if !exact.is_empty() {
-            return (AliasMatchKind::Exact, exact);
-        }
-        (
-            AliasMatchKind::Shorthand,
-            self.shorthand_aliases.matches(selector),
-        )
+        selector
+            .validate()
+            .map_err(|_| ProjectionError::InvalidSelector)?;
+        let candidate = match selector {
+            ContentSelector::Path { path } => self.paths.get(path.as_str()).copied(),
+            ContentSelector::Id { id } => match self.ids.get(id.as_str()).map(Vec::as_slice) {
+                Some([candidate]) => Some(*candidate),
+                Some(candidates) if candidates.len() > 1 => {
+                    return Err(ambiguous_selector(
+                        document,
+                        &selector.to_string(),
+                        candidates.to_vec(),
+                    ));
+                }
+                _ => None,
+            },
+        };
+        candidate.ok_or_else(|| ProjectionError::UnknownSelector {
+            document: document.to_owned(),
+            selector: selector.to_string(),
+        })
     }
 }

@@ -1,20 +1,20 @@
 //! Existing regressions grouped by navigation behavior; expected values remain independent.
 use super::*;
+use crate::select_excerpt;
 
 #[test]
-fn section_ids_that_shadow_entry_aliases_are_reported() {
+fn section_ids_do_not_shadow_independent_semantic_names() {
     let parsed = parse_markdown(
         "# Tool\n\n## force\n\nStructural prose.\n\n## Commands\n\n<!-- mant:entries role=command case=sensitive -->\n- `force`: Force an operation.\n",
         None,
     )
     .expect("section and entry selector collision remains readable");
 
-    assert!(parsed.document.diagnostics.iter().any(|diagnostic| {
-        diagnostic.code.as_deref() == Some("markdown.semantic-entry.shadowed-selector")
-            && diagnostic.message.contains("semantic selector 'force'")
-            && diagnostic.message.contains("1 (force)")
-            && diagnostic.message.contains("2/e1 (command-force)")
-    }));
+    assert!(
+        parsed.document.diagnostics.is_empty(),
+        "{:?}",
+        parsed.document.diagnostics
+    );
 }
 
 #[test]
@@ -224,13 +224,15 @@ Root body.
         document: Some(document),
         tldr: None,
     };
-    let entry = select_excerpt(&query, &["1/e1".to_owned()]).expect("entry path");
+    let entry = select_excerpt(&query, &[mant_protocol::ContentSelector::path("1/e1")])
+        .expect("entry path");
     assert!(matches!(
         entry.selections.as_slice(),
         [selection @ ExcerptSelection::DocumentEntry { .. }]
             if selection.outline().title().contains("--help")
     ));
-    let child = select_excerpt(&query, &["3.1".to_owned()]).expect("child path");
+    let child =
+        select_excerpt(&query, &[mant_protocol::ContentSelector::path("3.1")]).expect("child path");
     assert!(matches!(
         child.selections.as_slice(),
         [selection @ ExcerptSelection::DocumentSection { .. }]

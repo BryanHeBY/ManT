@@ -1,5 +1,7 @@
 //! All man paragraph forms resolve native predecessor evidence before IR emission.
-use mant_engine::{query_roff_bytes, render_excerpt_text, render_query_text, select_excerpt};
+#[path = "../src/semantic_test_read.rs"]
+mod semantic_read;
+use mant_engine::{query_roff_bytes, render_excerpt_text, render_query_text};
 use mant_ir::Block;
 
 const PARAGRAPHS: &[&str] = &[
@@ -77,7 +79,7 @@ fn tq_stays_zero_distance_and_nested_entry_targets_remain_addressable() {
     assert_eq!(blank_rows_before(&text, "--first"), 2, "{text}");
     assert_eq!(blank_rows_before(&text, "--second"), 0, "{text}");
     for selector in ["--first", "--second"] {
-        let excerpt = select_excerpt(&query, &[selector]).unwrap();
+        let excerpt = semantic_read::semantic_excerpt(&query, &[selector]).unwrap();
         let excerpt_text = render_excerpt_text(&excerpt);
         assert!(excerpt_text.contains("PAYLOAD"), "{excerpt_text}");
         assert!(!excerpt_text.contains("OUTSIDE"), "{excerpt_text}");
@@ -131,8 +133,9 @@ fn headless_continuations_keep_pd_and_body_space_as_independent_requests() {
                     "{source}\n{text}"
                 );
                 if head.starts_with(".IP") {
-                    let excerpt =
-                        render_excerpt_text(&select_excerpt(&query, &["--owner"]).unwrap());
+                    let excerpt = render_excerpt_text(
+                        &semantic_read::semantic_excerpt(&query, &["--owner"]).unwrap(),
+                    );
                     assert!(
                         excerpt.contains("FIRST") && excerpt.contains("SECOND"),
                         "{excerpt}"

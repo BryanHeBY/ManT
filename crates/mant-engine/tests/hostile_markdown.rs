@@ -72,10 +72,17 @@ fn exercise(label: &str, source: &str) {
             selectors.iter().all(|selector| !selector.is_empty()),
             "{label}: outline paths must be non-empty"
         );
-        let excerpt = select_excerpt(&query, &selectors)
-            .unwrap_or_else(|error| panic!("{label}: outline path must be selectable: {error}"));
-        let _ = render_excerpt_markdown(&excerpt);
-        let _ = render_excerpt_text(&excerpt);
+        let selectors = selectors
+            .into_iter()
+            .map(mant_protocol::ContentSelector::path)
+            .collect::<Vec<_>>();
+        for chunk in selectors.chunks(mant_protocol::MAX_NODE_SELECTORS) {
+            let excerpt = select_excerpt(&query, chunk).unwrap_or_else(|error| {
+                panic!("{label}: outline path must be selectable: {error}")
+            });
+            let _ = render_excerpt_markdown(&excerpt);
+            let _ = render_excerpt_text(&excerpt);
+        }
     }
 
     let addressable = render_markdown_with_options(&query, MarkdownOptions::ADDRESSABLE);
@@ -250,7 +257,9 @@ fn verify_search_result(
                 "{label}: match line must exist in the render"
             );
         }
-        let selector = vec![found.outline.node.path().to_owned()];
+        let selector = vec![mant_protocol::ContentSelector::path(
+            found.outline.node.path(),
+        )];
         select_excerpt(query, &selector).unwrap_or_else(|error| {
             panic!("{label}: match node {selector:?} must be selectable: {error}")
         });

@@ -34,8 +34,9 @@ deterministic output without owning a terminal or command-line process.
 - Typed local and cross-document navigation: only logical document and manual
   links become bounded scope edges; external, email, and page-local targets do
   not expand a query.
-- One strict selector resolver for outline roots and excerpts: exact
-  path, exact ID, exact alias, then normalized shorthand.
+- One strict selector resolver for outline roots and excerpts: explicit local
+  `ContentSelector::Path` or `ContentSelector::Id`, without names, aliases,
+  shorthand, fragment activation or document-link following.
 - Independent bounded explanation evidence: exact names/forms, literal content
   and validated alias relationships. Multiple owners and no-evidence are normal;
   ordinary support retains its section and block path without becoming an entry.
@@ -95,8 +96,12 @@ replaces their blocks. Markdown binds declarations and coverage to original
 item positions before consuming comments, then binds forms to final content.
 Native lowering records explicit term forms while styled macro evidence is
 still available. Shared validation independently filters invalid forms, names
-and relationships without erasing owners or their children. Derived selectors
-reuse a single immutable location snapshot, and search composes byte ownership
+and relationships without erasing owners or their children. Content selectors
+reuse a single immutable location snapshot; semantic names belong to independent
+explanation evidence. Compact outline summaries count borrowed facts and validated
+form bindings without constructing a full semantic index or copying form text.
+Reference inventories independently scan the exact original owner, regardless of
+entry display filters. Search composes byte ownership
 with rendered text even when table cells flatten for portable Markdown.
 
 ### Native lowering ownership

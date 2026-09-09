@@ -7,7 +7,9 @@ use mant_ir::{DocumentAddress, MarkdownOrigin};
 use crate::DocumentCatalog;
 
 mod evidence;
+mod references;
 pub use evidence::render_evidence_counts;
+pub use references::{render_reference_inventory, render_reference_inventory_with};
 mod labels;
 pub use labels::{EntryLabelMode, entry_label};
 mod roles;

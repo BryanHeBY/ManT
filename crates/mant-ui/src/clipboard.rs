@@ -3,7 +3,7 @@
 use std::sync::Arc;
 
 use mant_ir::ResolvedContent;
-use mant_protocol::NodeSelector;
+use mant_protocol::ContentSelector;
 
 /// Maximum clipboard payload accepted by the reader and its standard host.
 pub const MAX_COPY_BYTES: usize = 4 * 1024 * 1024;
@@ -30,7 +30,7 @@ pub enum CopyRequest {
         /// Exact in-memory content currently displayed by the reader.
         content: Arc<ResolvedContent>,
         /// Stable node identity from the document outline.
-        selector: NodeSelector,
+        selector: ContentSelector,
         /// Requested deterministic presentation.
         format: CopyFormat,
     },

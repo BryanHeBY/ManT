@@ -533,8 +533,11 @@ fn check_section_excerpts(
             .map(usize::to_string)
             .collect::<Vec<_>>()
             .join(".");
-        let excerpt =
-            select_excerpt(query, &[selector.as_str()]).map_err(|error| error.to_string())?;
+        let excerpt = select_excerpt(
+            query,
+            &[mant_protocol::ContentSelector::path(selector.as_str())],
+        )
+        .map_err(|error| error.to_string())?;
         let markdown = render_excerpt_markdown(&excerpt);
         let reparsed = parse_markdown(&markdown, None).map_err(|error| error.to_string())?;
         let expected_document = Document {

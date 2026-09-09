@@ -1,5 +1,7 @@
 //! A producer's rejected child cannot leave a false local exhaustive claim.
-use mant_engine::{build_outline_projection, query_markdown_text, select_excerpt};
+#[path = "../src/semantic_test_read.rs"]
+mod semantic_read;
+use mant_engine::{build_outline_projection, query_markdown_text};
 use mant_ir::{Block, Document, SemanticIndex, ValueDomain};
 use mant_protocol::{EntryProjection, ExcerptSelection, OutlineNode};
 use std::fmt::Write;
@@ -49,8 +51,12 @@ fn every_rejected_position_invalidates_only_the_local_exhaustive_claim() {
             index.root()[0].value_domain,
             Some(ValueDomain::Choices { exhaustive: true })
         ));
-        let outline =
-            build_outline_projection(&query, EntryProjection::All, Some("--mode".into())).unwrap();
+        let outline = build_outline_projection(
+            &query,
+            EntryProjection::All,
+            Some(mant_protocol::ContentSelector::path("root/e1")),
+        )
+        .unwrap();
         assert!(!outline.semantics_complete);
         let OutlineNode::DocumentEntry {
             value_domain,
@@ -66,7 +72,7 @@ fn every_rejected_position_invalidates_only_the_local_exhaustive_claim() {
                 .unwrap()
                 .contains("\"exhaustive\":true")
         );
-        let excerpt = select_excerpt(&query, &["--mode"]).unwrap();
+        let excerpt = semantic_read::semantic_excerpt(&query, &["--mode"]).unwrap();
         let [ExcerptSelection::DocumentEntry { entry, .. }] = &excerpt.selections[..] else {
             panic!("entry")
         };
@@ -234,7 +240,7 @@ fn rejected_declarations_flow_through_ordinary_containers_to_the_semantic_owner(
                     let outline = build_outline_projection(
                         &query,
                         EntryProjection::All,
-                        Some("--mode".into()),
+                        Some(mant_protocol::ContentSelector::path("root/e1")),
                     )
                     .unwrap();
                     assert!(!outline.semantics_complete);
@@ -243,7 +249,7 @@ fn rejected_declarations_flow_through_ordinary_containers_to_the_semantic_owner(
                             .unwrap()
                             .contains("\"exhaustive\":true")
                     );
-                    let excerpt = select_excerpt(&query, &["--mode"]).unwrap();
+                    let excerpt = semantic_read::semantic_excerpt(&query, &["--mode"]).unwrap();
                     let [ExcerptSelection::DocumentEntry { entry, .. }] = &excerpt.selections[..]
                     else {
                         panic!("parent entry")

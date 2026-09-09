@@ -20,8 +20,8 @@ fn slash_option_aliases_preserve_forms_and_query_identity() {
             };
             assert_eq!(names, &["-h", "--help"]);
             assert_eq!(forms, &[form]);
-            let short = crate::select_excerpt(&query, &["-h"]).unwrap();
-            let long = crate::select_excerpt(&query, &["--help"]).unwrap();
+            let short = crate::semantic_test_read::semantic_excerpt(&query, &["-h"]).unwrap();
+            let long = crate::semantic_test_read::semantic_excerpt(&query, &["--help"]).unwrap();
             assert_eq!(short.selections, long.selections);
         }
     }
@@ -52,7 +52,7 @@ fn slash_option_aliases_preserve_forms_and_query_identity() {
         let index = mant_ir::SemanticIndex::build(query.document.as_ref().unwrap());
         assert_eq!(index.root()[0].names, names, "{form}");
         assert_eq!(index.root()[0].forms, [form]);
-        assert!(crate::select_excerpt(&query, &["--help"]).is_err());
+        assert!(crate::semantic_test_read::semantic_excerpt(&query, &["--help"]).is_err());
     }
 }
 

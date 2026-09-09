@@ -1,4 +1,6 @@
 //! Classification is an owner fact, never inferred from budgeted details.
+#[path = "../src/semantic_test_read.rs"]
+mod semantic_read;
 use mant_engine::{explain_query, query_markdown_text};
 use mant_protocol::{
     EvidenceBasis, EvidenceClass, EvidenceOrder, ExplanationOptions, ExplanationQuery,
@@ -180,9 +182,21 @@ fn unrecorded_or_invalid_forms_preserve_literal_ownership_and_nested_entries() {
                 .names
                 .is_empty()
         );
-        assert!(mant_engine::select_excerpt(&content, &[id.as_str()]).is_ok());
-        assert!(mant_engine::select_excerpt(&content, &["run"]).is_err());
-        assert!(mant_engine::select_excerpt(&content, &["root/e1/e1"]).is_ok());
+        assert!(
+            mant_engine::select_excerpt(
+                &content,
+                &[mant_protocol::ContentSelector::id(id.as_str())]
+            )
+            .is_ok()
+        );
+        assert!(semantic_read::semantic_excerpt(&content, &["run"]).is_err());
+        assert!(
+            mant_engine::select_excerpt(
+                &content,
+                &[mant_protocol::ContentSelector::path("root/e1/e1")]
+            )
+            .is_ok()
+        );
         let index = mant_ir::SemanticIndex::build(content.document.as_ref().unwrap());
         assert_eq!(index.root()[0].children.len(), 1);
     }

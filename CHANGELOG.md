@@ -12,6 +12,10 @@ that crate was not published for that change.
 
 ## Unreleased
 
+- `mant-ir`/`mant-protocol`/`mant-engine` 0.11 separate content reads from link discovery. `ContentSelector` replaces string selectors: use closed path/ID objects in request JSON and MCP, and `path:...`/`id:...` in the CLI (bare canonical paths remain accepted). Names and aliases belong to explain, not read/outline-root fallback. Same-named entries remain independent evidence; duplicate IDs still report ambiguity.
+- Outlines expose an independent bounded reference inventory with exact/lower-bound/unknown counts, occurrence paging, source-read coordinates and staged target resolution. Default summaries select document/manual links without cloning all labels/forms or loading target pages; `none` skips traversal. `DocumentReference` is shared by semantic relationships and scope; scope uses the same walk, preserves relation source order and discloses incomplete outbound scans.
+- The unreleased v0.11 request/response schema changes in place, including authoritative heading content, typed selectors, reference records and scope scan coverage. Consumers must regenerate from the current v0.11 schema; paths/positions remain snapshot-local and do not detect stale coordinates across edits. No published protocol snapshot is changed.
+
 - Pager search indexes visible physical rows rather than ANSI escape bytes,
   including colon-form colors. A query with no matches preserves the viewport
   instead of panicking; wrapped-row regex anchors retain physical-row semantics.

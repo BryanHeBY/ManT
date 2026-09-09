@@ -791,14 +791,15 @@ fn every_single_document_selector_obeys_the_shared_native_bound() {
         (
             "outline node",
             QueryView::Excerpt {
-                selectors: vec![oversized.clone().into()],
+                selectors: vec![mant_protocol::ContentSelector::id(oversized.clone())],
             },
         ),
         (
             "outline root",
             QueryView::Outline {
+                references: mant_protocol::ReferenceProjection::default(),
                 entries: mant_protocol::EntryProjection::Summary,
-                root: Some(oversized.clone().into()),
+                root: Some(mant_protocol::ContentSelector::id(oversized.clone())),
             },
         ),
     ] {
@@ -806,11 +807,15 @@ fn every_single_document_selector_obeys_the_shared_native_bound() {
         request.view = view;
         assert_eq!(
             validate_query_request(&request, QueryPolicy::default()),
-            Err(QueryError::InvalidViewSelector {
-                field,
-                error: ScopeTextError::TooLong {
-                    maximum: MAX_SEMANTIC_ENTRY_CHARS,
-                },
+            Err(if field == "semantic entry" {
+                QueryError::InvalidViewSelector {
+                    field,
+                    error: ScopeTextError::TooLong {
+                        maximum: MAX_SEMANTIC_ENTRY_CHARS,
+                    },
+                }
+            } else {
+                QueryError::InvalidContentSelector
             })
         );
     }
@@ -839,7 +844,7 @@ fn focused_projection_enforces_view_bounds_without_a_request_producer() {
     );
 
     let selectors = (0..=MAX_NODE_SELECTORS)
-        .map(|index| format!("node-{index}").into())
+        .map(|index| mant_protocol::ContentSelector::id(format!("node-{index}")))
         .collect();
     assert_eq!(
         project_query_view(query, &QueryView::Excerpt { selectors }),

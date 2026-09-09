@@ -336,6 +336,23 @@ pub struct ResolvedDocumentScope {
     /// Seeds and edges that could not resolve to a readable document.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub unresolved: Vec<UnresolvedDocument>,
+    /// Documents whose outbound reference scan was incomplete. Missing edges
+    /// are unknown, not proof that these documents have no further links.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub reference_limits: Vec<ScopeReferenceLimit>,
+}
+
+/// A bounded outbound scan that could not establish the complete edge set.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ScopeReferenceLimit {
+    /// Loaded logical source document, never a host filesystem path.
+    pub document: DocumentAddress,
+    /// Shared traversal accounting and first stop condition.
+    pub coverage: crate::ReferenceCoverage,
+    /// Distinct reference retention cap, when it caused the stop.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub retention_limit: Option<crate::ReferencePageLimit>,
 }
 
 /// One document's search hits inside a globally paginated scope result.

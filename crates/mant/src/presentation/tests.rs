@@ -42,9 +42,10 @@ fn environment_names_use_the_same_distinct_palette_across_text_views() {
         QueryView::Outline {
             entries: EntryProjection::All,
             root: None,
+            references: mant_protocol::ReferenceProjection::default(),
         },
         QueryView::Excerpt {
-            selectors: vec!["1".into()],
+            selectors: vec![mant_protocol::ContentSelector::path("1")],
         },
         QueryView::Explain {
             entry: "DISPLAY".into(),
@@ -127,7 +128,10 @@ fn full_and_node_color_validated_names_without_prefix_guessing() {
     for view in [
         QueryView::Full {},
         QueryView::Excerpt {
-            selectors: vec!["1".into(), "2".into()],
+            selectors: vec![
+                mant_protocol::ContentSelector::path("1"),
+                mant_protocol::ContentSelector::path("2"),
+            ],
         },
     ] {
         let query = mant_engine::query_roff_bytes(source).unwrap();
@@ -198,6 +202,7 @@ fn terminal_styles_do_not_change_visible_query_text() {
         QueryView::Outline {
             entries: EntryProjection::All,
             root: None,
+            references: mant_protocol::ReferenceProjection::default(),
         },
         QueryView::Explain {
             entry: "--color".to_owned(),
@@ -241,6 +246,7 @@ fn terminal_outline_reports_an_empty_kind_projection() {
                 kinds: vec![mant_ir::EntryKind::EnvironmentVariable],
             },
             root: None,
+            references: mant_protocol::ReferenceProjection::default(),
         },
     )
     .expect("empty environment outline");
@@ -252,7 +258,7 @@ fn terminal_outline_reports_an_empty_kind_projection() {
     .expect("terminal outline");
     assert_eq!(
         strip_ansi(&rendered),
-        "stdin\n0 matching semantic entries for: environment variables"
+        "stdin\n0 matching semantic entries for: environment variables\nReferences: occurrences=exact(0), targets=exact(0); coverage=Complete; offset=0, returned=0"
     );
 }
 
@@ -282,6 +288,7 @@ fn uncoloured_terminal_presentations_mask_controls_in_direct_input_labels() {
         QueryView::Outline {
             entries: EntryProjection::All,
             root: None,
+            references: mant_protocol::ReferenceProjection::default(),
         },
         QueryView::Explain {
             entry: "--color".to_owned(),
@@ -324,6 +331,7 @@ fn terminal_markdown_masks_dynamic_controls_without_rewriting_redirected_data() 
         QueryView::Outline {
             entries: EntryProjection::All,
             root: None,
+            references: mant_protocol::ReferenceProjection::default(),
         },
         QueryView::Explain {
             entry: "--color".to_owned(),

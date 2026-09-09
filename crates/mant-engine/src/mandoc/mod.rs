@@ -191,7 +191,7 @@ fn lower_mandoc_document_with_source(
         parsed.metadata.name.as_deref(),
         &context.native_heads.borrow(),
     ));
-    diagnostics.extend(crate::selectors::semantic_selector_diagnostics(
+    diagnostics.extend(crate::selectors::outline_identity_diagnostics(
         &root_blocks,
         &sections,
         "manual",

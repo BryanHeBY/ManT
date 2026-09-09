@@ -1,6 +1,8 @@
 //! Tests for ripgrep's official MSVC Windows release manual.
+#[path = "../../src/semantic_test_read.rs"]
+mod semantic_read;
 
-use mant_engine::{build_outline_with_detail, render_excerpt_markdown, select_excerpt};
+use mant_engine::{build_outline_with_detail, render_excerpt_markdown};
 use mant_ir::{Block, ListKind};
 use mant_protocol::OutlineDetail;
 
@@ -57,7 +59,8 @@ fn keeps_release_metadata_sections_and_semantic_options() {
 #[test]
 fn renders_the_reviewed_glob_option_as_a_targeted_excerpt() {
     let query = windows_release_query("rg");
-    let excerpt = select_excerpt(&query, &["--glob".to_owned()]).expect("select rg --glob");
+    let excerpt =
+        semantic_read::semantic_excerpt(&query, &["--glob".to_owned()]).expect("select rg --glob");
     let markdown = render_excerpt_markdown(&excerpt);
 
     assert!(markdown.contains("-g, --glob"));

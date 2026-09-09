@@ -141,7 +141,7 @@ fn multiple_owners_relations_and_strict_navigation_remain_independent() {
     let strict = run(&root, &["first", "--node=--help"]);
     assert_eq!(strict.status.code(), Some(2));
     for id in ["brief", "class-help", "assist"] {
-        let read = success(&run(&root, &["first", &format!("--node={id}")]));
+        let read = success(&run(&root, &["first", &format!("--node=id:{id}")]));
         assert_eq!(read["schema"], "mant.excerpt/v0.11");
         assert_eq!(read["selections"].as_array().unwrap().len(), 1);
     }

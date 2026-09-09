@@ -16,9 +16,9 @@ use mant_engine::{
 };
 use mant_ir::{EntryKind, ParameterKind};
 use mant_protocol::{
-    CatalogDocumentKind, CatalogQuery, DocumentScope, DocumentSelector, DocumentTraversal,
-    EntryProjection, InputFormat, NodeSelector, QueryInput, QueryRequest, QueryView, RequestSchema,
-    ScopeQueryView, SearchCase, SearchScope, SearchSyntax, default_search_limit,
+    CatalogDocumentKind, CatalogQuery, ContentSelector, DocumentScope, DocumentSelector,
+    DocumentTraversal, EntryProjection, InputFormat, QueryInput, QueryRequest, QueryView,
+    RequestSchema, ScopeQueryView, SearchCase, SearchScope, SearchSyntax, default_search_limit,
 };
 
 mod normalize;
@@ -129,6 +129,26 @@ pub(crate) enum SchemaContract {
 /// Semantic entries included beneath the ordinary section outline.
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct OutlineEntries(EntryProjection);
+
+fn parse_reference_mode(value: &str) -> Result<mant_protocol::ReferenceProjectionMode, String> {
+    match value {
+        "none" => Ok(mant_protocol::ReferenceProjectionMode::None),
+        "summary" => Ok(mant_protocol::ReferenceProjectionMode::Summary),
+        "all" => Ok(mant_protocol::ReferenceProjectionMode::All),
+        _ => Err("expected none, summary, or all".to_owned()),
+    }
+}
+
+fn parse_reference_type(value: &str) -> Result<mant_protocol::ReferenceTargetType, String> {
+    match value {
+        "document" => Ok(mant_protocol::ReferenceTargetType::Document),
+        "manual" => Ok(mant_protocol::ReferenceTargetType::Manual),
+        "local" => Ok(mant_protocol::ReferenceTargetType::Local),
+        "external" => Ok(mant_protocol::ReferenceTargetType::External),
+        "email" => Ok(mant_protocol::ReferenceTargetType::Email),
+        _ => Err("expected document, manual, local, external, or email".to_owned()),
+    }
+}
 
 impl FromStr for OutlineEntries {
     type Err = String;
@@ -434,26 +454,45 @@ struct Cli {
     )]
     outline_entries: Option<OutlineEntries>,
 
-    /// Start the outline at one section or semantic entry selector.
+    /// Discover references independently of entries: none, summary (default), or all.
+    #[arg(long = "outline-references", value_name = "MODE", requires = "outline", value_parser = parse_reference_mode, help_heading = "Document selection")]
+    outline_references: Option<mant_protocol::ReferenceProjectionMode>,
+
+    /// Select reference kinds: document,manual (default),local,external,email.
+    #[arg(long = "reference-types", value_name = "KINDS", requires = "outline", value_delimiter = ',', value_parser = parse_reference_type, help_heading = "Document selection")]
+    reference_types: Vec<mant_protocol::ReferenceTargetType>,
+
+    /// Skip selected link occurrences before the reference page; work remains bounded.
+    #[arg(
+        long = "reference-offset",
+        value_name = "N",
+        requires = "outline",
+        help_heading = "Document selection"
+    )]
+    reference_offset: Option<u32>,
+
+    /// Maximum reference records with --outline-references all (default 100, maximum 1000).
+    #[arg(long = "reference-limit", value_name = "N", requires = "outline", value_parser = clap::value_parser!(u32).range(1..=1000), help_heading = "Document selection")]
+    reference_limit: Option<u32>,
+
+    /// Start at an exact local node: path:1.2/e3, id:node-id, or a bare canonical path.
     #[arg(
         long,
         value_name = "SELECTOR",
-        value_parser = non_empty,
         allow_hyphen_values = true,
         requires = "outline",
         help_heading = "Document selection"
     )]
-    outline_root: Option<String>,
+    outline_root: Option<ContentSelector>,
 
-    /// Print an outline node selected by path, stable ID, or semantic-entry alias; repeatable.
+    /// Read exact local content by path:1.2/e3, id:node-id, or a bare canonical path; repeatable.
     #[arg(
         long,
         value_name = "SELECTOR",
-        value_parser = non_empty,
         conflicts_with = "explain",
         help_heading = "Document selection"
     )]
-    node: Vec<String>,
+    node: Vec<ContentSelector>,
 
     /// Collect definitions, declared relations, then literal mentions; use --node for full content.
     #[arg(

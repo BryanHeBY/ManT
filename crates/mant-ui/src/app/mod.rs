@@ -17,7 +17,7 @@ use std::{
 };
 
 use mant_ir::ResolvedContent;
-use mant_protocol::{CatalogQuery, DocumentAddress, DocumentCatalog, NodeSelector};
+use mant_protocol::{CatalogQuery, ContentSelector, DocumentAddress, DocumentCatalog};
 use ratatui::layout::Rect;
 use unicode_width::UnicodeWidthChar;
 
@@ -441,7 +441,11 @@ impl App {
         }
         self.pending_copy = Some(CopyRequest::Node {
             content: Arc::clone(&self.session.current_bundle),
-            selector: NodeSelector::new(node.id.clone()),
+            selector: if node.kind == NavKind::Tldr {
+                ContentSelector::path("0")
+            } else {
+                ContentSelector::id(node.id.clone())
+            },
             format,
         });
     }

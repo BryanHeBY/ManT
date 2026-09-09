@@ -1,6 +1,7 @@
 //! Tests for Fedora Linux 44's `sh(1)` alias of the Bash manual.
+use super::semantic_read;
 
-use mant_engine::{ProjectionError, render_excerpt_markdown, select_excerpt};
+use mant_engine::render_excerpt_markdown;
 use mant_ir::{EntryKind, ParameterKind, SemanticEntry, SemanticIndex, SourceFormat, ValueDomain};
 
 use crate::common::{self, collect_sections, source_path_ends_with};
@@ -32,7 +33,13 @@ fn assert_builtin_evidence(query: &mant_ir::ResolvedContent, name: &str) {
                 .iter()
                 .any(|a| a.title == "SHELL BUILTIN COMMANDS")
         );
-        let excerpt = select_excerpt(query, &[evidence.outline.path()]).unwrap();
+        let excerpt = mant_engine::select_excerpt(
+            query,
+            &[mant_protocol::ContentSelector::path(
+                evidence.outline.path(),
+            )],
+        )
+        .unwrap();
         assert!(!render_excerpt_markdown(&excerpt).contains("set-mark (C-@"));
     }
 }
@@ -145,7 +152,7 @@ fn preserves_complete_readline_command_names_as_selectable_aliases() {
     }
 
     let query = common::query_for_document("sh", document);
-    let excerpt = select_excerpt(&query, &["operate-and-get-next"])
+    let excerpt = semantic_read::semantic_excerpt(&query, &["operate-and-get-next"])
         .expect("full Readline command alias is explainable");
     let markdown = render_excerpt_markdown(&excerpt);
     assert!(markdown.contains("operate-and-get-next"));
@@ -158,7 +165,11 @@ fn preserves_complete_readline_command_names_as_selectable_aliases() {
         .expect("set-mark Readline command");
     assert_eq!(set_mark.id.as_str(), "command-set-mark");
     assert!(
-        select_excerpt(&query, &["command-set-mark"]).is_ok(),
+        mant_engine::select_excerpt(
+            &query,
+            &[mant_protocol::ContentSelector::id("command-set-mark")]
+        )
+        .is_ok(),
         "generated role-qualified ID must select set-mark"
     );
 
@@ -193,7 +204,7 @@ fn discovers_styled_builtin_names_without_promoting_argument_prose() {
 
     let query = common::query_for_document("sh", document);
     for name in ["let", "test", "getopts"] {
-        let excerpt = select_excerpt(&query, &[name])
+        let excerpt = semantic_read::semantic_excerpt(&query, &[name])
             .unwrap_or_else(|error| panic!("builtin {name} must be explainable: {error}"));
         assert!(
             render_excerpt_markdown(&excerpt).contains("SHELL BUILTIN COMMANDS"),
@@ -201,11 +212,12 @@ fn discovers_styled_builtin_names_without_promoting_argument_prose() {
         );
     }
     assert!(
-        matches!(
-            select_excerpt(&query, &["builtin"]),
-            Err(ProjectionError::AmbiguousSelector { .. })
-        ),
-        "a command/value collision must be explicit instead of silently choosing one entry"
+        semantic_read::semantic_excerpt(&query, &["builtin"])
+            .unwrap()
+            .selections
+            .len()
+            >= 2,
+        "explain retains every independent owner"
     );
 }
 
@@ -258,7 +270,7 @@ fn preserves_complete_readline_variable_names_without_shadowing_builtins() {
         "keyseq-timeout",
     ] {
         assert!(
-            select_excerpt(&query, &[name]).is_ok(),
+            semantic_read::semantic_excerpt(&query, &[name]).is_ok(),
             "complete Readline variable {name} must be explainable"
         );
     }
@@ -266,16 +278,19 @@ fn preserves_complete_readline_variable_names_without_shadowing_builtins() {
         assert_builtin_evidence(&query, builtin);
     }
     assert!(matches!(
-        select_excerpt(&query, &["history"])
+        mant_engine::select_excerpt(&query, &[mant_protocol::ContentSelector::id("history")])
             .unwrap()
             .selections
             .as_slice(),
         [mant_protocol::ExcerptSelection::DocumentSection { .. }]
     ));
-    assert!(matches!(
-        select_excerpt(&query, &["complete"]),
-        Err(ProjectionError::AmbiguousSelector { .. })
-    ));
+    assert!(
+        semantic_read::semantic_excerpt(&query, &["complete"])
+            .unwrap()
+            .selections
+            .len()
+            >= 2
+    );
 }
 
 #[test]
@@ -297,7 +312,7 @@ fn preserves_compact_invocations_without_borrowing_the_next_description() {
 
     let query = common::query_for_document("sh", document);
     for alias in aliases {
-        let excerpt = select_excerpt(&query, &[alias])
+        let excerpt = semantic_read::semantic_excerpt(&query, &[alias])
             .unwrap_or_else(|error| panic!("{alias} must be explainable: {error}"));
         let rendered = render_excerpt_markdown(&excerpt);
         assert!(rendered.contains(alias), "{rendered}");
@@ -349,7 +364,15 @@ fn explanation_preserves_history_builtin_and_nested_value_as_independent_evidenc
         "shared native names are not declared equivalence"
     );
     for evidence in named {
-        assert!(mant_engine::select_excerpt(&query, &[evidence.outline.path()]).is_ok());
+        assert!(
+            mant_engine::select_excerpt(
+                &query,
+                &[mant_protocol::ContentSelector::path(
+                    evidence.outline.path()
+                )]
+            )
+            .is_ok()
+        );
     }
 }
 

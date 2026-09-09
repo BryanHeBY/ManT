@@ -75,7 +75,17 @@ fn render_find(catalog: &DocumentCatalog, page: PageRequest) -> TextPage {
 }
 
 fn render_outline(outline: &QueryOutline, page: PageRequest) -> TextPage {
-    page_text(&mant_engine::render_outline_text(outline), page)
+    let mut text = mant_engine::render_outline_text(outline);
+    if let Some(address) = &outline.address {
+        let mut sources = std::collections::BTreeSet::new();
+        for record in &outline.references.records {
+            if sources.insert(&record.source_read) {
+                text.push('\n');
+                text.push_str(&read_hint_selector(address, &record.source_read));
+            }
+        }
+    }
+    page_text(&text, page)
 }
 
 fn render_excerpt(excerpt: &QueryExcerpt, page: PageRequest) -> TextPage {
@@ -136,8 +146,15 @@ fn render_scope_explain(
 
 /// JSON-quoted arguments inside a delimiter that cannot be closed by source text.
 fn read_hint(address: &mant_ir::DocumentAddress, path: &str) -> String {
+    read_hint_selector(address, &mant_protocol::ContentSelector::path(path))
+}
+
+fn read_hint_selector(
+    address: &mant_ir::DocumentAddress,
+    selector: &mant_protocol::ContentSelector,
+) -> String {
     let document = serde_json::to_string(&address.catalog_path()).expect("String serialization");
-    let selector = serde_json::to_string(path).expect("String serialization");
+    let selector = serde_json::to_string(selector).expect("selector serialization");
     let call = format!("mant_read(document={document}, selectors=[{selector}])");
     let longest = call.split(|c| c != '`').map(str::len).max().unwrap_or(0);
     let delimiter = "`".repeat(longest + 1);
@@ -224,8 +241,9 @@ fn append_scope_status(text: &mut String, response: &ScopeQueryResponse) {
     append_status_line(
         text,
         &format!(
-            "[scope: documents={}, unresolved-roots={unresolved_roots}, unresolved-links={unresolved_links}, depth-frontier={depth_frontier}, document-frontier={document_frontier}, content-frontier={content_frontier}]",
-            response.scope.documents.len()
+            "[scope: documents={}, unresolved-roots={unresolved_roots}, unresolved-links={unresolved_links}, depth-frontier={depth_frontier}, document-frontier={document_frontier}, content-frontier={content_frontier}, incomplete-reference-scans={}]",
+            response.scope.documents.len(),
+            response.scope.reference_limits.len()
         ),
     );
 }
@@ -464,7 +482,7 @@ mod tests {
         };
         assert_eq!(
             super::read_hint(&address, "1/e2"),
-            "Read original: call ``mant_read(document=\"documents/odd`[label]\", selectors=[\"1/e2\"])``."
+            "Read original: call ``mant_read(document=\"documents/odd`[label]\", selectors=[{\"kind\":\"path\",\"path\":\"1/e2\"}])``."
         );
     }
 
@@ -500,6 +518,7 @@ mod tests {
                 edges: Vec::new(),
                 frontier: Vec::new(),
                 unresolved: Vec::new(),
+                reference_limits: Vec::new(),
             },
             result: ScopeQueryResult::Explain {
                 explanation: mant_protocol::ScopeExplanation {

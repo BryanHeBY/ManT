@@ -3,6 +3,8 @@
 //! These tests exercise `ManT`'s in-process zstd decoder and verify
 //! independently packaged generator output against semantic assertions
 //! (section counts, option outlines, metadata, search).
+#[path = "../../src/semantic_test_read.rs"]
+mod semantic_read;
 
 #[path = "../common/mod.rs"]
 #[allow(dead_code)]

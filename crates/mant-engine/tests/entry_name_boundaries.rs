@@ -1,4 +1,6 @@
 //! Original, redistributable regressions for styled names versus parameters.
+#[path = "../src/semantic_test_read.rs"]
+mod semantic_read;
 use std::path::Path;
 
 use mant_engine::parse_manual_bytes;
@@ -64,7 +66,11 @@ fn assert_direct_names(query: &mant_ir::ResolvedContent, names: &[&str], form: &
                 .collect::<Vec<_>>(),
             [form]
         );
-        let excerpt = mant_engine::select_excerpt(query, &[direct.outline.path()]).unwrap();
+        let excerpt = mant_engine::select_excerpt(
+            query,
+            &[mant_protocol::ContentSelector::path(direct.outline.path())],
+        )
+        .unwrap();
         assert!(mant_engine::render_excerpt_text(&excerpt).contains("PAYLOAD"));
     }
     mant_ir::visit::Visit::visit_document(&mut Bindings, document);
@@ -252,8 +258,8 @@ fn plus_signs_inside_executable_options_are_not_argument_boundaries() {
             );
             let index = SemanticIndex::build(doc);
             assert_eq!(index.section("options")[0].names, [name]);
-            assert!(mant_engine::select_excerpt(&query, &[name]).is_ok());
-            assert!(mant_engine::select_excerpt(&query, &[truncated]).is_err());
+            assert!(semantic_read::semantic_excerpt(&query, &[name]).is_ok());
+            assert!(semantic_read::semantic_excerpt(&query, &[truncated]).is_err());
         }
     }
 }
@@ -275,7 +281,7 @@ fn recognized_option_prefixes_bind_before_angle_delimited_arguments() {
         let index = SemanticIndex::build(doc);
         assert_eq!(index.section("options")[0].names, [name]);
         assert_eq!(index.section("options")[0].forms, [form]);
-        assert!(mant_engine::select_excerpt(&query, &[name]).is_ok());
+        assert!(semantic_read::semantic_excerpt(&query, &[name]).is_ok());
     }
     // Existing licensed real inputs must not silently lose those names.
     for fixture in ["archlinux/clang.1.gz", "fedora44/clang.1.zst"] {

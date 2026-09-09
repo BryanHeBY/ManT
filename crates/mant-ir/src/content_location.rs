@@ -124,7 +124,7 @@ pub enum ContentLocation {
 
 /// Borrowed position over a traversal's reusable path stacks.
 /// This view must be copied explicitly to retain it beyond the callback.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ContentLocationRef<'a> {
     /// Visible document heading.
     DocumentHeading {
@@ -481,7 +481,7 @@ pub(crate) fn inline_children(node: &Inline) -> Option<&[Inline]> {
 }
 
 /// An entry owner's actual item address, independent of its names or IDs.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct EntryOwnerLocationRef<'a> {
     /// Section path; empty denotes document-root content.
     pub sections: &'a [u32],

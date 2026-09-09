@@ -35,6 +35,10 @@ pub fn render_outline_text_with(
     } else {
         nodes(&outline.nodes, "", &paint, &mut lines);
     }
+    let references = mant_protocol::render_reference_inventory_with(&outline.references, &decorate);
+    if !references.is_empty() {
+        lines.push(references);
+    }
     lines.join("\n")
 }
 

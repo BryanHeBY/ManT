@@ -180,6 +180,7 @@ impl ScopeResolution {
                 edges: Vec::new(),
                 frontier: Vec::new(),
                 unresolved: Vec::new(),
+                reference_limits: Vec::new(),
             },
             documents: Vec::new(),
             positions: BTreeMap::new(),
@@ -262,7 +263,7 @@ impl ScopeResolution {
                 continue;
             }
             let from = self.graph.documents[position].address.clone();
-            for reference in document_references(&self.documents[position]) {
+            for reference in self.collect_outbound_references(position) {
                 self.follow_reference(resolver, &from, depth, &reference);
             }
         }
@@ -270,7 +271,7 @@ impl ScopeResolution {
 
     pub(super) fn record_depth_frontier(&mut self, position: usize) {
         let from = self.graph.documents[position].address.clone();
-        for reference in document_references(&self.documents[position]) {
+        for reference in self.collect_outbound_references(position) {
             if let Some(address) = reference.exact_address(&from) {
                 let edge = DocumentEdge {
                     from: from.clone(),
@@ -283,6 +284,20 @@ impl ScopeResolution {
             }
             self.record_frontier(&from, &reference, TraversalLimit::MaxDepth);
         }
+    }
+
+    fn collect_outbound_references(&mut self, position: usize) -> Vec<ScopeReference> {
+        let collected = document_references(&self.documents[position]);
+        if !collected.report.complete() {
+            self.graph
+                .reference_limits
+                .push(mant_protocol::ScopeReferenceLimit {
+                    document: self.graph.documents[position].address.clone(),
+                    coverage: mant_protocol::ReferenceCoverage::from_report(collected.report),
+                    retention_limit: collected.retention_limit,
+                });
+        }
+        collected.references
     }
 
     pub(super) fn follow_reference(

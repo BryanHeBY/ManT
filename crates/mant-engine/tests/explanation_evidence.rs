@@ -34,9 +34,17 @@ fn independent_owners_and_literal_support_survive_without_selector_shadowing() {
             .iter()
             .any(|basis| matches!(basis, EvidenceBasis::Form { .. }))
     );
-    assert!(mant_engine::select_excerpt(&content, &["--help"]).is_err());
+    assert!("--help".parse::<mant_protocol::ContentSelector>().is_err());
     for evidence in &found.evidence[..3] {
-        assert!(mant_engine::select_excerpt(&content, &[evidence.outline.path()]).is_ok());
+        assert!(
+            mant_engine::select_excerpt(
+                &content,
+                &[mant_protocol::ContentSelector::path(
+                    evidence.outline.path()
+                )]
+            )
+            .is_ok()
+        );
     }
     assert_eq!(before, content);
     assert_eq!(

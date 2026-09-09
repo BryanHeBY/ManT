@@ -6379,11 +6379,15 @@
           "$ref": "#/$defs/OutlineNode"
         }
       },
+      "references": {
+        "description": "Real reference inventory, independent of entry visibility and grouping.",
+        "$ref": "#/$defs/ReferenceInventory"
+      },
       "root": {
         "description": "Optional section or entry selector used as the projection root.",
         "anyOf": [
           {
-            "$ref": "#/$defs/NodeSelector"
+            "$ref": "#/$defs/ContentSelector"
           },
           {
             "type": "null"
@@ -6414,10 +6418,408 @@
     "required": [
       "schema",
       "entries",
+      "references",
       "label",
       "nodes"
     ],
     "$defs": {
+      "ContentBlockStep": {
+        "description": "A checked transition through block arrays and their containing items/cells.",
+        "oneOf": [
+          {
+            "description": "One ordinary list item's block array.",
+            "type": "object",
+            "properties": {
+              "index": {
+                "description": "Zero-based item index.",
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 0
+              },
+              "kind": {
+                "type": "string",
+                "const": "list-item"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "index"
+            ]
+          },
+          {
+            "description": "One definition item's description block array.",
+            "type": "object",
+            "properties": {
+              "index": {
+                "description": "Zero-based item index.",
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 0
+              },
+              "kind": {
+                "type": "string",
+                "const": "definition-item"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "index"
+            ]
+          },
+          {
+            "description": "One original table cell, independent of visual spans.",
+            "type": "object",
+            "properties": {
+              "column": {
+                "description": "Zero-based original cell.",
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 0
+              },
+              "kind": {
+                "type": "string",
+                "const": "table-cell"
+              },
+              "row": {
+                "description": "Zero-based original row.",
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 0
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "row",
+              "column"
+            ]
+          },
+          {
+            "description": "One block in the current block array.",
+            "type": "object",
+            "properties": {
+              "index": {
+                "description": "Zero-based block index.",
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 0
+              },
+              "kind": {
+                "type": "string",
+                "const": "block"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "index"
+            ]
+          }
+        ]
+      },
+      "ContentInlineRoot": {
+        "description": "Inline root within the addressed final block.",
+        "oneOf": [
+          {
+            "description": "Paragraph or preformatted content.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "inlines"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "description": "A term in a definition list, whether or not it has semantic facts.",
+            "type": "object",
+            "properties": {
+              "itemIndex": {
+                "description": "Zero-based item in the addressed definition list.",
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 0
+              },
+              "kind": {
+                "type": "string",
+                "const": "definition-term"
+              },
+              "termIndex": {
+                "description": "Zero-based term in the selected item.",
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 0
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "itemIndex",
+              "termIndex"
+            ]
+          }
+        ]
+      },
+      "ContentLocation": {
+        "description": "Exact final-IR inline position, valid only in the document being addressed.\n\nAn empty inline path denotes the whole inline root; a link occurrence always\nuses a nonempty path to its actual `Inline::Link`. Source bytes, visible\nscalar ranges and terminal cells are not represented by this type.",
+        "oneOf": [
+          {
+            "description": "Original visible document heading, not native bibliographic metadata.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "document-heading"
+              },
+              "path": {
+                "description": "Zero-based inline child indices.",
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                }
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "path"
+            ]
+          },
+          {
+            "description": "Original visible heading of a structurally addressed section.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "section-heading"
+              },
+              "path": {
+                "description": "Zero-based inline child indices.",
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                }
+              },
+              "sections": {
+                "description": "Zero-based nested section indices, nonempty for a section heading.",
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                }
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "sections",
+              "path"
+            ]
+          },
+          {
+            "description": "Content before sections or within one section.",
+            "type": "object",
+            "properties": {
+              "blocks": {
+                "description": "Typed path beginning with a block step.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/ContentBlockStep"
+                }
+              },
+              "kind": {
+                "type": "string",
+                "const": "content"
+              },
+              "path": {
+                "description": "Zero-based inline child indices.",
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                }
+              },
+              "root": {
+                "description": "Inline container within the addressed block.",
+                "$ref": "#/$defs/ContentInlineRoot"
+              },
+              "sections": {
+                "description": "Zero-based nested section indices; empty selects root content.",
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                }
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "sections",
+              "blocks",
+              "root",
+              "path"
+            ]
+          }
+        ]
+      },
+      "ContentReveal": {
+        "description": "Exact destination in an already loaded document, not a readable selector.",
+        "oneOf": [
+          {
+            "description": "Document origin, including heading-only or alias-only documents.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "document"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "description": "Section start, independent of semantic entries.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "section"
+              },
+              "sections": {
+                "description": "Zero-based section path.",
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                }
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "sections"
+            ]
+          },
+          {
+            "description": "Original list/definition item; not its remote document target.",
+            "type": "object",
+            "properties": {
+              "blocks": {
+                "description": "Exact containing list/definition-list path.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/ContentBlockStep"
+                }
+              },
+              "itemIndex": {
+                "description": "Zero-based item index.",
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 0
+              },
+              "kind": {
+                "type": "string",
+                "const": "owner"
+              },
+              "sections": {
+                "description": "Zero-based section path.",
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                }
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "sections",
+              "blocks",
+              "itemIndex"
+            ]
+          },
+          {
+            "description": "Exact inline destination, including zero-width anchors.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "inline"
+              },
+              "location": {
+                "description": "Snapshot-local inline node position.",
+                "$ref": "#/$defs/ContentLocation"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "location"
+            ]
+          }
+        ]
+      },
+      "ContentSelector": {
+        "description": "One exact local owner in the document actually loaded for this operation.\n\nPaths are snapshot-relative: after edits a still-valid path can denote a\ndifferent owner. Neither variant provides cross-call stale detection.",
+        "oneOf": [
+          {
+            "description": "Exact canonical structural path, including `root` and tldr path `0`.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "path"
+              },
+              "path": {
+                "description": "A path returned by the selected document's outline.",
+                "$ref": "#/$defs/NodePath"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "path"
+            ]
+          },
+          {
+            "description": "Exact canonical content ID, not an authored fragment or semantic name.",
+            "type": "object",
+            "properties": {
+              "id": {
+                "description": "An ID returned by the selected document's outline.",
+                "$ref": "#/$defs/NodeId"
+              },
+              "kind": {
+                "type": "string",
+                "const": "id"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "id"
+            ]
+          }
+        ]
+      },
       "Diagnostic": {
         "description": "Recoverable parser or IR validation finding attached to the document.",
         "type": "object",
@@ -7003,6 +7405,200 @@
           }
         ]
       },
+      "LinkTarget": {
+        "description": "Typed destination kind for [`Inline::Link`].\n\nThis enum records navigation intent, not host resolution state. The query\nengine resolves [`LinkTarget::Document`] and [`LinkTarget::Manual`] against\nthe catalog; consumers must not infer equivalent edges from rendered text.",
+        "oneOf": [
+          {
+            "description": "An external URI from mdoc `Lk`, man `UR`, or Markdown links.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "external"
+              },
+              "uri": {
+                "description": "Absolute URI.",
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "uri"
+            ]
+          },
+          {
+            "description": "An email address without a `mailto:` prefix.",
+            "type": "object",
+            "properties": {
+              "address": {
+                "description": "Mailbox address without a URI scheme.",
+                "type": "string"
+              },
+              "kind": {
+                "type": "string",
+                "const": "email"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "address"
+            ]
+          },
+          {
+            "description": "A relative Markdown link to another document in the current source.\n\nThis is a logical cross-document graph edge, not a physical path.",
+            "type": "object",
+            "properties": {
+              "fragment": {
+                "description": "Optional document-local destination.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "kind": {
+                "type": "string",
+                "const": "document"
+              },
+              "name": {
+                "description": "Extension-free relative document path.",
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "name"
+            ]
+          },
+          {
+            "description": "A typed reference to another installed manual page.\n\nThis is a logical cross-document graph edge resolved through the manual\ncatalog and its normal ambiguity rules.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "manual"
+              },
+              "manualSection": {
+                "description": "Native manual category, when specified by the source.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "name": {
+                "description": "Manual topic without a section suffix.",
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "name"
+            ]
+          },
+          {
+            "description": "A reference to addressable content in this document, including a\nsection, entry-backed owner, or inline anchor (such as mdoc `Sx`).\n\nThe target is a canonical document-local identity in [`crate::DocumentIndex`],\nnot a rendered heading slug or unresolved authored fragment.",
+            "type": "object",
+            "properties": {
+              "id": {
+                "description": "Canonical target identity in the current document.",
+                "$ref": "#/$defs/NodeId"
+              },
+              "kind": {
+                "type": "string",
+                "const": "section"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "id"
+            ]
+          }
+        ]
+      },
+      "LoadedFragment": {
+        "description": "Fragment outcome in an actually loaded target snapshot.",
+        "oneOf": [
+          {
+            "description": "Original target did not specify a fragment.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "absent"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "description": "Exactly one logical content destination was found.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "valid"
+              },
+              "reveal": {
+                "description": "Precise reveal destination, not a fabricated readable subtree.",
+                "$ref": "#/$defs/ContentReveal"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "reveal"
+            ]
+          },
+          {
+            "description": "A complete target scan found no destination.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "missing"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "description": "More than one logical destination matches.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "ambiguous"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "description": "Limits prevented a complete destination check; this is not absence.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "limited"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
+          }
+        ]
+      },
       "MarkdownOrigin": {
         "description": "Storage identity of one registered Markdown document.",
         "oneOf": [
@@ -7061,12 +7657,6 @@
       "NodePath": {
         "description": "Canonical structural address emitted for a node in a projected outline.",
         "type": "string"
-      },
-      "NodeSelector": {
-        "description": "User-supplied outline selector interpreted as a path, node ID, or entry alias.\n\nResolution remains an engine concern; this wire type prevents an input\nselector from being confused with a canonical [`NodePath`].",
-        "type": "string",
-        "maxLength": 512,
-        "minLength": 1
       },
       "OutlineNode": {
         "description": "One uniquely addressable node in a query outline.",
@@ -7339,6 +7929,677 @@
           }
         ]
       },
+      "ReferenceAssociation": {
+        "description": "Validation state of optional original form bindings.",
+        "oneOf": [
+          {
+            "description": "No attached semantic owner or no recorded forms.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "unrecorded"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "description": "Entire original form set was validated; indices refer to that owner.",
+            "type": "object",
+            "properties": {
+              "forms": {
+                "description": "Zero-based original form indices sharing this occurrence.",
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "format": "uint32",
+                  "minimum": 0
+                }
+              },
+              "kind": {
+                "type": "string",
+                "const": "valid"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "forms"
+            ]
+          },
+          {
+            "description": "Invalid bindings are not partially projected.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "invalid"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "description": "Association inspection hit a shared operation limit.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "limited"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
+          }
+        ]
+      },
+      "ReferenceCount": {
+        "description": "Precision of an occurrence or distinct-target count.",
+        "oneOf": [
+          {
+            "description": "A complete count of the selected population.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "exact"
+              },
+              "value": {
+                "description": "Exact count.",
+                "type": "integer",
+                "format": "uint64",
+                "minimum": 0
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "value"
+            ]
+          },
+          {
+            "description": "A proven lower bound; unseen targets are not guessed.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "lower-bound"
+              },
+              "value": {
+                "description": "Number certainly observed.",
+                "type": "integer",
+                "format": "uint64",
+                "minimum": 0
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "value"
+            ]
+          },
+          {
+            "description": "Counting was not attempted.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "unknown"
+              },
+              "reason": {
+                "description": "Why no count was established.",
+                "$ref": "#/$defs/ReferenceUnknownReason"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "reason"
+            ]
+          }
+        ]
+      },
+      "ReferenceCoverage": {
+        "description": "Accounted work and actual content coverage for one scan.",
+        "type": "object",
+        "properties": {
+          "bytes": {
+            "description": "Charged target, label and form inspection bytes.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          },
+          "status": {
+            "description": "Whether all selected source content was inspected.",
+            "$ref": "#/$defs/ReferenceCoverageStatus"
+          },
+          "steps": {
+            "description": "Charged traversal and optional validation steps.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "steps",
+          "bytes",
+          "status"
+        ]
+      },
+      "ReferenceCoverageStatus": {
+        "description": "Coverage is independent of target-set precision and returned-page truncation.",
+        "oneOf": [
+          {
+            "description": "Every selected content root was traversed.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "complete"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "description": "Traversal stopped at a resource or structural boundary.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "limited"
+              },
+              "reason": {
+                "description": "First limit reached.",
+                "$ref": "#/$defs/ReferenceLimitReason"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "reason"
+            ]
+          },
+          {
+            "description": "Reference projection was disabled.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "not-scanned"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
+          }
+        ]
+      },
+      "ReferenceInventory": {
+        "description": "Independent reference output embedded alongside an outline's content tree.",
+        "type": "object",
+        "properties": {
+          "coverage": {
+            "description": "Source content scan coverage.",
+            "$ref": "#/$defs/ReferenceCoverage"
+          },
+          "occurrences": {
+            "description": "Occurrences within source root and selected target types.",
+            "$ref": "#/$defs/ReferenceCount"
+          },
+          "page": {
+            "description": "Occurrence-based return window.",
+            "$ref": "#/$defs/ReferencePage"
+          },
+          "policy": {
+            "description": "Effective request policy.",
+            "$ref": "#/$defs/ReferenceProjection"
+          },
+          "records": {
+            "description": "Bounded records, empty for summary/none.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/ReferenceRecord"
+            }
+          },
+          "targetCoverage": {
+            "description": "Separate local-destination validation pass, sharing the operation budget.\nA limited target pass does not make an already exact occurrence count inexact.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/ReferenceCoverage"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "targets": {
+            "description": "Distinct complete typed targets, including fragments.",
+            "$ref": "#/$defs/ReferenceCount"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "policy",
+          "coverage",
+          "targetCoverage",
+          "occurrences",
+          "targets",
+          "page",
+          "records"
+        ]
+      },
+      "ReferenceLimitReason": {
+        "description": "Why bounded traversal could not inspect all selected source content.",
+        "oneOf": [
+          {
+            "description": "Shared work-unit ceiling.",
+            "type": "string",
+            "const": "steps"
+          },
+          {
+            "description": "Structural/inline nesting ceiling.",
+            "type": "string",
+            "const": "depth"
+          },
+          {
+            "description": "Inspected target/label/form byte ceiling.",
+            "type": "string",
+            "const": "bytes"
+          },
+          {
+            "description": "A position cannot be represented within its encoded-size ceiling.",
+            "type": "string",
+            "const": "position"
+          },
+          {
+            "description": "Selected source root is invalid for the loaded snapshot.",
+            "type": "string",
+            "const": "invalid-root"
+          },
+          {
+            "description": "Consumer deliberately stopped the traversal.",
+            "type": "string",
+            "const": "consumer-stop"
+          }
+        ]
+      },
+      "ReferencePage": {
+        "description": "A bounded page over original link occurrences in source order.",
+        "type": "object",
+        "properties": {
+          "limited": {
+            "description": "Why additional requested records were not retained, if applicable.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/ReferencePageLimit"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "nextOffset": {
+            "description": "Offered only when a fresh bounded scan has proven it can reach another occurrence.",
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint32",
+            "minimum": 0
+          },
+          "offset": {
+            "description": "Requested selected-occurrence offset.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          },
+          "returned": {
+            "description": "Number of retained records.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "offset",
+          "returned",
+          "limited",
+          "nextOffset"
+        ]
+      },
+      "ReferencePageLimit": {
+        "description": "A return-page cap, not a scan-coverage claim.",
+        "oneOf": [
+          {
+            "description": "Requested occurrence limit.",
+            "type": "string",
+            "const": "records"
+          },
+          {
+            "description": "Total retained labels, positions, targets and metadata budget.",
+            "type": "string",
+            "const": "materialization-bytes"
+          },
+          {
+            "description": "Exact position cannot fit its independent bound.",
+            "type": "string",
+            "const": "position"
+          },
+          {
+            "description": "Traversal or optional association work was exhausted.",
+            "type": "string",
+            "const": "scan"
+          }
+        ]
+      },
+      "ReferenceProjection": {
+        "description": "Independent reference selection policy; entry filtering never changes it.",
+        "type": "object",
+        "properties": {
+          "limit": {
+            "description": "Maximum materialized occurrences, between 1 and 1,000.",
+            "type": "integer",
+            "format": "uint32",
+            "default": 100,
+            "minimum": 0
+          },
+          "mode": {
+            "description": "Projection mode.",
+            "$ref": "#/$defs/ReferenceProjectionMode",
+            "default": "summary"
+          },
+          "offset": {
+            "description": "Zero-based selected occurrence offset, not distinct-target offset.",
+            "type": "integer",
+            "format": "uint32",
+            "default": 0,
+            "minimum": 0
+          },
+          "targetTypes": {
+            "description": "Original typed target kinds, defaulting to document/manual.",
+            "type": "array",
+            "default": [
+              "document",
+              "manual"
+            ],
+            "items": {
+              "$ref": "#/$defs/ReferenceTargetType"
+            }
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "mode",
+          "targetTypes",
+          "offset",
+          "limit"
+        ]
+      },
+      "ReferenceProjectionMode": {
+        "description": "Whether reference facts are omitted, counted, or materialized.",
+        "oneOf": [
+          {
+            "description": "Do not traverse reference content.",
+            "type": "string",
+            "const": "none"
+          },
+          {
+            "description": "Count references without cloning labels or positions.",
+            "type": "string",
+            "const": "summary"
+          },
+          {
+            "description": "Return a bounded occurrence page as well as counts.",
+            "type": "string",
+            "const": "all"
+          }
+        ]
+      },
+      "ReferenceRecord": {
+        "description": "One occurrence, not a grouped or deduplicated navigation row.",
+        "type": "object",
+        "properties": {
+          "association": {
+            "description": "Atomic validation outcome of original form bindings.",
+            "$ref": "#/$defs/ReferenceAssociation"
+          },
+          "label": {
+            "description": "Visible plain label from original children; may be empty.",
+            "type": "string"
+          },
+          "labelTruncated": {
+            "description": "Whether the UTF-8-safe label prefix was bounded.",
+            "type": "boolean"
+          },
+          "origin": {
+            "description": "Snapshot-local location of the original `Inline::Link`.",
+            "$ref": "#/$defs/ContentLocation"
+          },
+          "owner": {
+            "description": "Nearest original content item, when present.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/ContentReveal"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "resolution": {
+            "description": "Facts established without loading other documents or probing external URIs.",
+            "$ref": "#/$defs/ReferenceResolution"
+          },
+          "sourceRead": {
+            "description": "Explicit containing readable source subtree. This is not the occurrence\nitself and never follows the reference's destination.",
+            "$ref": "#/$defs/ContentSelector"
+          },
+          "target": {
+            "description": "Complete original typed target, including its fragment.",
+            "$ref": "#/$defs/LinkTarget"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "origin",
+          "sourceRead",
+          "owner",
+          "label",
+          "labelTruncated",
+          "target",
+          "association",
+          "resolution"
+        ]
+      },
+      "ReferenceResolution": {
+        "description": "Staged resolution; locating an address never implies loading or validating it.",
+        "oneOf": [
+          {
+            "description": "External/email targets are not probed.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "not-applicable"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "description": "Catalog lookup is required, such as a manual without a section.",
+            "type": "object",
+            "properties": {
+              "fragment": {
+                "description": "Only unloaded fragment facts may be stated.",
+                "$ref": "#/$defs/UnloadedFragment"
+              },
+              "kind": {
+                "type": "string",
+                "const": "not-queried"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "fragment"
+            ]
+          },
+          {
+            "description": "A direct-file source has no registered namespace for relative resolution.",
+            "type": "object",
+            "properties": {
+              "fragment": {
+                "description": "Original fragment remains unchecked.",
+                "$ref": "#/$defs/UnloadedFragment"
+              },
+              "kind": {
+                "type": "string",
+                "const": "missing-context"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "fragment"
+            ]
+          },
+          {
+            "description": "Namespace rules derive this logical address; existence is not established.",
+            "type": "object",
+            "properties": {
+              "address": {
+                "description": "Namespace-confined logical destination.",
+                "$ref": "#/$defs/DocumentAddress"
+              },
+              "fragment": {
+                "description": "No target document has been loaded.",
+                "$ref": "#/$defs/UnloadedFragment"
+              },
+              "kind": {
+                "type": "string",
+                "const": "logical-address"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "address",
+              "fragment"
+            ]
+          },
+          {
+            "description": "The target is the already loaded source document; no extra I/O occurred.",
+            "type": "object",
+            "properties": {
+              "address": {
+                "description": "Logical address when the source is registered; never a host path.",
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/DocumentAddress"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "fragment": {
+                "description": "Result based on that exact loaded snapshot.",
+                "$ref": "#/$defs/LoadedFragment"
+              },
+              "kind": {
+                "type": "string",
+                "const": "loaded"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "address",
+              "fragment"
+            ]
+          },
+          {
+            "description": "Namespace/address grammar does not permit this logical reference.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "restricted"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
+          }
+        ]
+      },
+      "ReferenceTargetType": {
+        "description": "Kind of the original typed link, before any destination lookup.",
+        "oneOf": [
+          {
+            "description": "Registered Markdown document reference.",
+            "type": "string",
+            "const": "document"
+          },
+          {
+            "description": "Native manual reference, with or without a section.",
+            "type": "string",
+            "const": "manual"
+          },
+          {
+            "description": "Same-document content identity or authored fragment.",
+            "type": "string",
+            "const": "local"
+          },
+          {
+            "description": "External URI; no existence probing is implied.",
+            "type": "string",
+            "const": "external"
+          },
+          {
+            "description": "Email address; no existence probing is implied.",
+            "type": "string",
+            "const": "email"
+          }
+        ]
+      },
+      "ReferenceUnknownReason": {
+        "description": "Why a requested quantity has no observation.",
+        "oneOf": [
+          {
+            "description": "The caller selected references=none.",
+            "type": "string",
+            "const": "disabled"
+          },
+          {
+            "description": "No authoritative document content was available for scanning.",
+            "type": "string",
+            "const": "not-scanned"
+          },
+          {
+            "description": "The caller supplied an invalid projection policy.",
+            "type": "string",
+            "const": "invalid-policy"
+          }
+        ]
+      },
       "SourceFormat": {
         "description": "Source format consumed by the normalization engine.",
         "oneOf": [
@@ -7433,6 +8694,39 @@
         "type": "integer",
         "format": "uint32",
         "minimum": 0
+      },
+      "UnloadedFragment": {
+        "description": "Fragment facts permitted before a target document is loaded.",
+        "oneOf": [
+          {
+            "description": "Original target did not specify a fragment.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "absent"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "description": "Original fragment is retained in the target, but has not been checked.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "unchecked"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
+          }
+        ]
       }
     }
   },
@@ -9686,6 +10980,49 @@
       "view"
     ],
     "$defs": {
+      "ContentSelector": {
+        "description": "One exact local owner in the document actually loaded for this operation.\n\nPaths are snapshot-relative: after edits a still-valid path can denote a\ndifferent owner. Neither variant provides cross-call stale detection.",
+        "oneOf": [
+          {
+            "description": "Exact canonical structural path, including `root` and tldr path `0`.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "path"
+              },
+              "path": {
+                "description": "A path returned by the selected document's outline.",
+                "$ref": "#/$defs/NodePath"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "path"
+            ]
+          },
+          {
+            "description": "Exact canonical content ID, not an authored fragment or semantic name.",
+            "type": "object",
+            "properties": {
+              "id": {
+                "description": "An ID returned by the selected document's outline.",
+                "$ref": "#/$defs/NodeId"
+              },
+              "kind": {
+                "type": "string",
+                "const": "id"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "id"
+            ]
+          }
+        ]
+      },
       "EntryKind": {
         "description": "Semantic category used for outline filtering and nested presentation.",
         "oneOf": [
@@ -9915,11 +11252,13 @@
           }
         ]
       },
-      "NodeSelector": {
-        "description": "User-supplied outline selector interpreted as a path, node ID, or entry alias.\n\nResolution remains an engine concern; this wire type prevents an input\nselector from being confused with a canonical [`NodePath`].",
-        "type": "string",
-        "maxLength": 512,
-        "minLength": 1
+      "NodeId": {
+        "description": "Document-local identity shared by sections, anchors, and entries.\n\nLowering layers normalize these values; [`crate::validate_document`] reports\nany invalid value introduced through deserialization or custom producers.",
+        "type": "string"
+      },
+      "NodePath": {
+        "description": "Canonical structural address emitted for a node in a projected outline.",
+        "type": "string"
       },
       "ParameterKind": {
         "description": "Semantic behavior of one command parameter.",
@@ -10041,11 +11380,24 @@
                 "type": "string",
                 "const": "outline"
               },
+              "references": {
+                "description": "Independent bounded inventory of real inline link occurrences.",
+                "$ref": "#/$defs/ReferenceProjection",
+                "default": {
+                  "limit": 100,
+                  "mode": "summary",
+                  "offset": 0,
+                  "targetTypes": [
+                    "document",
+                    "manual"
+                  ]
+                }
+              },
               "root": {
                 "description": "Optional section or entry used as the outline root.",
                 "anyOf": [
                   {
-                    "$ref": "#/$defs/NodeSelector"
+                    "$ref": "#/$defs/ContentSelector"
                   },
                   {
                     "type": "null"
@@ -10059,7 +11411,7 @@
             ]
           },
           {
-            "description": "Return content selected by one or more node paths, IDs, or aliases.",
+            "description": "Return content selected by one or more explicit local node paths or IDs.",
             "type": "object",
             "properties": {
               "kind": {
@@ -10070,7 +11422,7 @@
                 "description": "Ordered selectors resolved by the engine.",
                 "type": "array",
                 "items": {
-                  "$ref": "#/$defs/NodeSelector"
+                  "$ref": "#/$defs/ContentSelector"
                 },
                 "maxItems": 16,
                 "minItems": 1
@@ -10175,6 +11527,93 @@
               "kind",
               "pattern"
             ]
+          }
+        ]
+      },
+      "ReferenceProjection": {
+        "description": "Independent reference selection policy; entry filtering never changes it.",
+        "type": "object",
+        "properties": {
+          "limit": {
+            "description": "Maximum materialized occurrences, between 1 and 1,000.",
+            "type": "integer",
+            "format": "uint32",
+            "default": 100,
+            "minimum": 0
+          },
+          "mode": {
+            "description": "Projection mode.",
+            "$ref": "#/$defs/ReferenceProjectionMode",
+            "default": "summary"
+          },
+          "offset": {
+            "description": "Zero-based selected occurrence offset, not distinct-target offset.",
+            "type": "integer",
+            "format": "uint32",
+            "default": 0,
+            "minimum": 0
+          },
+          "targetTypes": {
+            "description": "Original typed target kinds, defaulting to document/manual.",
+            "type": "array",
+            "default": [
+              "document",
+              "manual"
+            ],
+            "items": {
+              "$ref": "#/$defs/ReferenceTargetType"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "ReferenceProjectionMode": {
+        "description": "Whether reference facts are omitted, counted, or materialized.",
+        "oneOf": [
+          {
+            "description": "Do not traverse reference content.",
+            "type": "string",
+            "const": "none"
+          },
+          {
+            "description": "Count references without cloning labels or positions.",
+            "type": "string",
+            "const": "summary"
+          },
+          {
+            "description": "Return a bounded occurrence page as well as counts.",
+            "type": "string",
+            "const": "all"
+          }
+        ]
+      },
+      "ReferenceTargetType": {
+        "description": "Kind of the original typed link, before any destination lookup.",
+        "oneOf": [
+          {
+            "description": "Registered Markdown document reference.",
+            "type": "string",
+            "const": "document"
+          },
+          {
+            "description": "Native manual reference, with or without a section.",
+            "type": "string",
+            "const": "manual"
+          },
+          {
+            "description": "Same-document content identity or authored fragment.",
+            "type": "string",
+            "const": "local"
+          },
+          {
+            "description": "External URI; no existence probing is implied.",
+            "type": "string",
+            "const": "external"
+          },
+          {
+            "description": "Email address; no existence probing is implied.",
+            "type": "string",
+            "const": "email"
           }
         ]
       },
@@ -13298,6 +14737,146 @@
           "end"
         ]
       },
+      "ReferenceCoverage": {
+        "description": "Accounted work and actual content coverage for one scan.",
+        "type": "object",
+        "properties": {
+          "bytes": {
+            "description": "Charged target, label and form inspection bytes.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          },
+          "status": {
+            "description": "Whether all selected source content was inspected.",
+            "$ref": "#/$defs/ReferenceCoverageStatus"
+          },
+          "steps": {
+            "description": "Charged traversal and optional validation steps.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "steps",
+          "bytes",
+          "status"
+        ]
+      },
+      "ReferenceCoverageStatus": {
+        "description": "Coverage is independent of target-set precision and returned-page truncation.",
+        "oneOf": [
+          {
+            "description": "Every selected content root was traversed.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "complete"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "description": "Traversal stopped at a resource or structural boundary.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "limited"
+              },
+              "reason": {
+                "description": "First limit reached.",
+                "$ref": "#/$defs/ReferenceLimitReason"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "reason"
+            ]
+          },
+          {
+            "description": "Reference projection was disabled.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "not-scanned"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
+          }
+        ]
+      },
+      "ReferenceLimitReason": {
+        "description": "Why bounded traversal could not inspect all selected source content.",
+        "oneOf": [
+          {
+            "description": "Shared work-unit ceiling.",
+            "type": "string",
+            "const": "steps"
+          },
+          {
+            "description": "Structural/inline nesting ceiling.",
+            "type": "string",
+            "const": "depth"
+          },
+          {
+            "description": "Inspected target/label/form byte ceiling.",
+            "type": "string",
+            "const": "bytes"
+          },
+          {
+            "description": "A position cannot be represented within its encoded-size ceiling.",
+            "type": "string",
+            "const": "position"
+          },
+          {
+            "description": "Selected source root is invalid for the loaded snapshot.",
+            "type": "string",
+            "const": "invalid-root"
+          },
+          {
+            "description": "Consumer deliberately stopped the traversal.",
+            "type": "string",
+            "const": "consumer-stop"
+          }
+        ]
+      },
+      "ReferencePageLimit": {
+        "description": "A return-page cap, not a scan-coverage claim.",
+        "oneOf": [
+          {
+            "description": "Requested occurrence limit.",
+            "type": "string",
+            "const": "records"
+          },
+          {
+            "description": "Total retained labels, positions, targets and metadata budget.",
+            "type": "string",
+            "const": "materialization-bytes"
+          },
+          {
+            "description": "Exact position cannot fit its independent bound.",
+            "type": "string",
+            "const": "position"
+          },
+          {
+            "description": "Traversal or optional association work was exhausted.",
+            "type": "string",
+            "const": "scan"
+          }
+        ]
+      },
       "ResolvedDocumentScope": {
         "description": "Logical graph produced before applying a projection.",
         "type": "object",
@@ -13326,6 +14905,13 @@
           "query": {
             "description": "Original normalized scope request.",
             "$ref": "#/$defs/DocumentScope"
+          },
+          "referenceLimits": {
+            "description": "Documents whose outbound reference scan was incomplete. Missing edges\nare unknown, not proof that these documents have no further links.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/ScopeReferenceLimit"
+            }
           },
           "unresolved": {
             "description": "Seeds and edges that could not resolve to a readable document.",
@@ -13471,6 +15057,36 @@
             "type": "string",
             "const": "mant.scope-query/v0.11"
           }
+        ]
+      },
+      "ScopeReferenceLimit": {
+        "description": "A bounded outbound scan that could not establish the complete edge set.",
+        "type": "object",
+        "properties": {
+          "coverage": {
+            "description": "Shared traversal accounting and first stop condition.",
+            "$ref": "#/$defs/ReferenceCoverage"
+          },
+          "document": {
+            "description": "Loaded logical source document, never a host filesystem path.",
+            "$ref": "#/$defs/DocumentAddress"
+          },
+          "retentionLimit": {
+            "description": "Distinct reference retention cap, when it caused the stop.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/ReferencePageLimit"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "document",
+          "coverage"
         ]
       },
       "ScopeSearch": {

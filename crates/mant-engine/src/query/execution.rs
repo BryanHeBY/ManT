@@ -16,11 +16,20 @@ pub fn project_query_view(
     validate_query_view(view).map_err(QueryExecutionError::Query)?;
     match view {
         QueryView::Full {} => Ok(QueryViewResult::Full(Box::new(query))),
-        QueryView::Outline { entries, root } => {
-            { crate::projection::build_outline_projection(&query, entries.clone(), root.clone()) }
-                .map(QueryViewResult::Outline)
-                .map_err(QueryExecutionError::Projection)
+        QueryView::Outline {
+            entries,
+            root,
+            references,
+        } => {
+            crate::projection::build_outline_with_references(
+                &query,
+                entries.clone(),
+                root.clone(),
+                references,
+            )
         }
+        .map(QueryViewResult::Outline)
+        .map_err(QueryExecutionError::Projection),
         QueryView::Excerpt { selectors } => select_excerpt(&query, selectors)
             .map(QueryViewResult::Excerpt)
             .map_err(QueryExecutionError::Projection),

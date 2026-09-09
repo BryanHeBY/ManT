@@ -8,7 +8,7 @@ use mant_ir::{
     EntrySummary, NameCase, NodeId, Section, TldrDocument,
 };
 
-use crate::{NodePath, NodeSelector, Producer};
+use crate::{ContentSelector, NodePath, Producer};
 
 /// Exact schema marker for a query outline response.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -104,7 +104,9 @@ pub struct QueryOutline {
     pub entries: EntryProjection,
     /// Optional section or entry selector used as the projection root.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub root: Option<NodeSelector>,
+    pub root: Option<ContentSelector>,
+    /// Real reference inventory, independent of entry visibility and grouping.
+    pub references: crate::ReferenceInventory,
     /// Human-readable selected-document label.
     pub label: String,
     /// Plain display title derived from authoritative heading or native metadata.

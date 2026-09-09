@@ -57,7 +57,13 @@ fn compact_independent_heads_do_not_share_explain_bodies_or_sources() {
                 .collect::<Vec<_>>();
             assert_eq!(direct.len(), 1);
             assert_eq!(direct[0].source, items[index].source);
-            let excerpt = mant_engine::select_excerpt(&query, &[direct[0].outline.path()]).unwrap();
+            let excerpt = mant_engine::select_excerpt(
+                &query,
+                &[mant_protocol::ContentSelector::path(
+                    direct[0].outline.path(),
+                )],
+            )
+            .unwrap();
             let text = mant_engine::render_excerpt_text(&excerpt);
             assert_eq!(text.contains("SECOND_BODY"), index == 1, "{name}: {text}");
         }

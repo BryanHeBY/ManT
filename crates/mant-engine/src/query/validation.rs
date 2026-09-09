@@ -87,16 +87,9 @@ pub(super) fn validate_query_view(view: &QueryView) -> Result<(), QueryError> {
                 });
             }
             for selector in selectors {
-                validate_scope_text(selector, MAX_SEMANTIC_ENTRY_CHARS).map_err(|error| {
-                    if error == ScopeTextError::Empty {
-                        QueryError::EmptySelector
-                    } else {
-                        QueryError::InvalidViewSelector {
-                            field: "outline node",
-                            error,
-                        }
-                    }
-                })?;
+                selector
+                    .validate()
+                    .map_err(|_| QueryError::InvalidContentSelector)?;
             }
         }
         QueryView::Explain { entry, options } => {
@@ -136,18 +129,18 @@ pub(super) fn validate_query_view(view: &QueryView) -> Result<(), QueryError> {
             offset: *offset,
         })
         .map_err(QueryError::InvalidSearch)?,
-        QueryView::Outline { entries, root } => {
+        QueryView::Outline {
+            entries,
+            root,
+            references,
+        } => {
+            references
+                .validate()
+                .map_err(QueryError::InvalidReferenceProjection)?;
             if let Some(selector) = root {
-                validate_scope_text(selector, MAX_SEMANTIC_ENTRY_CHARS).map_err(|error| {
-                    if error == ScopeTextError::Empty {
-                        QueryError::EmptySelector
-                    } else {
-                        QueryError::InvalidViewSelector {
-                            field: "outline root",
-                            error,
-                        }
-                    }
-                })?;
+                selector
+                    .validate()
+                    .map_err(|_| QueryError::InvalidContentSelector)?;
             }
             if let EntryProjection::Kinds { kinds } = entries
                 && (kinds.is_empty() || kinds.len() > 9)

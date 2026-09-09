@@ -1,5 +1,5 @@
 //! Source-order semantic coordinates over unchanged native and Markdown owners.
-use mant_ir::{Block, EntryOwner, SourceSpan};
+use mant_ir::{Block, ContentBlockStep, EntryOwner, SourceSpan};
 
 /// One identified owner, retaining enough context to excerpt its original item.
 pub(crate) struct ContentEntry<'a> {
@@ -10,7 +10,8 @@ pub(crate) struct ContentEntry<'a> {
     pub(crate) indices: Vec<usize>,
     pub(crate) ancestors: Vec<EntryOwner<'a>>,
     container: &'a Block,
-    item_index: usize,
+    pub(crate) item_index: usize,
+    pub(crate) block_path: Vec<ContentBlockStep>,
 }
 
 impl ContentEntry<'_> {
@@ -99,83 +100,121 @@ impl serde::Serialize for ContentEntry<'_> {
 /// Same semantic pre-order as `SemanticIndex`, with source presentation retained.
 pub(crate) fn content_entries(blocks: &[Block]) -> Vec<ContentEntry<'_>> {
     let mut entries = Vec::new();
-    collect_scope(blocks, &[], &mut Vec::new(), &mut entries);
+    collect_scope::<true>(blocks, &[], &mut Vec::new(), &mut Vec::new(), &mut entries);
     entries
 }
 
-fn collect_scope<'a>(
-    blocks: &'a [Block],
-    parent_indices: &[usize],
-    ancestors: &mut Vec<EntryOwner<'a>>,
-    output: &mut Vec<ContentEntry<'a>>,
-) {
-    collect_direct(blocks, parent_indices, ancestors, &mut 0, output);
+pub(crate) fn content_entry_locations(blocks: &[Block]) -> Vec<ContentEntry<'_>> {
+    let mut entries = Vec::new();
+    collect_scope::<false>(blocks, &[], &mut Vec::new(), &mut Vec::new(), &mut entries);
+    entries
 }
 
-fn collect_direct<'a>(
+fn collect_scope<'a, const NAMES: bool>(
     blocks: &'a [Block],
     parent_indices: &[usize],
     ancestors: &mut Vec<EntryOwner<'a>>,
+    block_path: &mut Vec<ContentBlockStep>,
+    output: &mut Vec<ContentEntry<'a>>,
+) {
+    collect_direct::<NAMES>(
+        blocks,
+        parent_indices,
+        ancestors,
+        block_path,
+        &mut 0,
+        output,
+    );
+}
+
+fn collect_direct<'a, const NAMES: bool>(
+    blocks: &'a [Block],
+    parent_indices: &[usize],
+    ancestors: &mut Vec<EntryOwner<'a>>,
+    block_path: &mut Vec<ContentBlockStep>,
     direct_index: &mut usize,
     output: &mut Vec<ContentEntry<'a>>,
 ) {
-    for block in blocks {
+    for (block_index, block) in blocks.iter().enumerate() {
+        block_path.push(ContentBlockStep::Block {
+            index: u32::try_from(block_index).expect("addressable block index"),
+        });
         match block {
             Block::List { items, .. } => {
                 for (index, item) in items.iter().enumerate() {
                     if item.entry.is_some() {
-                        collect_owner(
+                        collect_owner::<NAMES>(
                             block,
                             index,
                             EntryOwner::List(item),
                             parent_indices,
                             ancestors,
+                            block_path,
                             direct_index,
                             output,
                         );
                     } else {
-                        collect_direct(
+                        block_path.push(ContentBlockStep::ListItem {
+                            index: u32::try_from(index).expect("addressable item"),
+                        });
+                        collect_direct::<NAMES>(
                             &item.blocks,
                             parent_indices,
                             ancestors,
+                            block_path,
                             direct_index,
                             output,
                         );
+                        block_path.pop();
                     }
                 }
             }
             Block::DefinitionList { items, .. } => {
                 for (index, item) in items.iter().enumerate() {
                     if item.entry.is_some() {
-                        collect_owner(
+                        collect_owner::<NAMES>(
                             block,
                             index,
                             EntryOwner::Definition(item),
                             parent_indices,
                             ancestors,
+                            block_path,
                             direct_index,
                             output,
                         );
                     } else {
-                        collect_direct(
+                        block_path.push(ContentBlockStep::DefinitionItem {
+                            index: u32::try_from(index).expect("addressable item"),
+                        });
+                        collect_direct::<NAMES>(
                             &item.description,
                             parent_indices,
                             ancestors,
+                            block_path,
                             direct_index,
                             output,
                         );
+                        block_path.pop();
                     }
                 }
             }
             Block::Table { rows, .. } => {
-                for cell in rows.iter().flat_map(|row| &row.cells) {
-                    collect_direct(
-                        &cell.blocks,
-                        parent_indices,
-                        ancestors,
-                        direct_index,
-                        output,
-                    );
+                for (row, cells) in rows.iter().enumerate() {
+                    for (column, cell) in cells.cells.iter().enumerate() {
+                        block_path.push(ContentBlockStep::TableCell {
+                            row: u32::try_from(row).expect("addressable row"),
+                            column: u32::try_from(column).expect("addressable column"),
+                        });
+                        collect_direct::<NAMES>(
+                            &cell.blocks,
+                            parent_indices,
+                            ancestors,
+                            block_path,
+                            direct_index,
+                            output,
+                        );
+                        block_path.pop();
+                    }
                 }
             }
             Block::Paragraph { .. }
@@ -185,15 +224,18 @@ fn collect_direct<'a>(
             | Block::ThematicBreak { .. }
             | Block::Unsupported { .. } => {}
         }
+        block_path.pop();
     }
 }
 
-fn collect_owner<'a>(
+#[allow(clippy::too_many_arguments)] // Parallel semantic and physical ancestry are deliberately distinct.
+fn collect_owner<'a, const NAMES: bool>(
     container: &'a Block,
     item_index: usize,
     item: EntryOwner<'a>,
     parent_indices: &[usize],
     ancestors: &mut Vec<EntryOwner<'a>>,
+    block_path: &mut Vec<ContentBlockStep>,
     direct_index: &mut usize,
     output: &mut Vec<ContentEntry<'a>>,
 ) {
@@ -202,15 +244,29 @@ fn collect_owner<'a>(
     indices.push(*direct_index);
     output.push(ContentEntry {
         item,
-        names: item.validated_names().unwrap_or_default(),
+        names: if NAMES {
+            item.validated_names().unwrap_or_default()
+        } else {
+            &[]
+        },
         source: item.source(),
         indices: indices.clone(),
         ancestors: ancestors.clone(),
         container,
         item_index,
+        block_path: block_path.clone(),
     });
     ancestors.push(item);
-    collect_scope(item.blocks(), &indices, ancestors, output);
+    block_path.push(match item {
+        EntryOwner::List(_) => ContentBlockStep::ListItem {
+            index: u32::try_from(item_index).expect("addressable item"),
+        },
+        EntryOwner::Definition(_) => ContentBlockStep::DefinitionItem {
+            index: u32::try_from(item_index).expect("addressable item"),
+        },
+    });
+    collect_scope::<NAMES>(item.blocks(), &indices, ancestors, block_path, output);
+    block_path.pop();
     ancestors.pop();
 }
 

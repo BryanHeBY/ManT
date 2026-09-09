@@ -21,6 +21,7 @@ fn source() -> DocumentSource {
 #[test]
 fn outline_contract_exposes_both_human_paths_and_document_ids() {
     let outline = QueryOutline {
+        references: mant_protocol::ReferenceInventory::default(),
         display_title: None,
         schema: OutlineSchema::V0Dot11,
         entries: EntryProjection::All,
@@ -102,6 +103,7 @@ fn outline_contract_exposes_both_human_paths_and_document_ids() {
 fn outline_optional_diagnostic_fields_default_to_a_complete_result() {
     let outline: QueryOutline = serde_json::from_value(serde_json::json!({
         "schema": "mant.outline/v0.11",
+        "references": mant_protocol::ReferenceInventory::default(),
         "entries": {"kind": "summary"},
         "label": "demo",
         "nodes": [],
@@ -243,6 +245,7 @@ fn document_root_contract_addresses_content_before_the_first_heading() {
         source: None,
     }];
     let outline = QueryOutline {
+        references: mant_protocol::ReferenceInventory::default(),
         display_title: None,
         schema: OutlineSchema::V0Dot11,
         entries: EntryProjection::None,
@@ -312,6 +315,7 @@ fn tldr_uses_the_reserved_zero_path_in_outline_and_excerpt_contracts() {
         origin: TldrOrigin::TldrPages,
     };
     let outline = QueryOutline {
+        references: mant_protocol::ReferenceInventory::default(),
         display_title: None,
         schema: OutlineSchema::V0Dot11,
         entries: EntryProjection::None,

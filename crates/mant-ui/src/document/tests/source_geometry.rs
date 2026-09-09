@@ -147,7 +147,11 @@ fn tq_run_in_uses_only_the_final_label_and_preserves_one_source_owner() {
             let facts = items[0].entry.as_ref().unwrap();
             assert_eq!(facts.names, labels, "{source}");
             for name in &labels {
-                let excerpt = mant_engine::select_excerpt(&query, &[*name]).unwrap();
+                let excerpt = mant_engine::select_excerpt(
+                    &query,
+                    &[mant_protocol::ContentSelector::id(facts.id.clone())],
+                )
+                .unwrap();
                 let text = mant_engine::render_excerpt_text(&excerpt);
                 let body = text.lines().find(|line| line.contains("BODY")).unwrap();
                 assert_eq!(body.contains(last), runs_in, "{source}\n{text}");

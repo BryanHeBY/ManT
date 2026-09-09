@@ -26,6 +26,7 @@ fn loaded() -> crate::LoadedDocumentScope {
     crate::LoadedDocumentScope {
         documents,
         scope: ResolvedDocumentScope {
+            reference_limits: Vec::new(),
             query: DocumentScope {
                 documents: vec![],
                 traversal: mant_protocol::DocumentTraversal::default(),

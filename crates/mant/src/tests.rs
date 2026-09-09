@@ -746,7 +746,7 @@ fn stdin_requests_select_outline_and_excerpt_projections() {
 
     let (status, output, diagnostics) = invoke(
             &["--request-json", "--format", "json", "--compact"],
-            br#"{"schema":"mant.request/v0.11","input":{"kind":"document","selector":"demo"},"view":{"kind":"excerpt","selectors":["2.1"]}}"#,
+            br#"{"schema":"mant.request/v0.11","input":{"kind":"document","selector":"demo"},"view":{"kind":"excerpt","selectors":[{"kind":"path","path":"2.1"}]}}"#,
             &host,
         );
     assert_eq!(status, 0);
@@ -950,7 +950,7 @@ fn semantic_entry_selectors_work_through_cli_and_request_json() {
     assert_eq!(excerpt["evidence"][0]["entry"]["kind"]["kind"], "command");
 
     let (status, output, _) = invoke(
-        &["demo", "--node=query", "--format", "json", "--compact"],
+        &["demo", "--node=id:query", "--format", "json", "--compact"],
         b"",
         &host,
     );
@@ -1136,7 +1136,7 @@ fn unknown_nodes_are_concise_usage_failures() {
 
     assert_eq!(status, 2);
     assert!(output.is_empty());
-    assert!(diagnostics.contains("document 'demo' has no outline node '9'"));
+    assert!(diagnostics.contains("document 'demo' has no outline node 'path:9'"));
     assert!(diagnostics.contains("mant demo --outline --outline-entries all --format json"));
 }
 

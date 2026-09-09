@@ -1,7 +1,7 @@
 //! Headings are authoritative inline content, not labels reconstructed as text.
 use mant_engine::{
     parse_markdown, query_markdown_text, query_roff_bytes, render_markdown, render_query_text,
-    search_query, select_excerpt,
+    search_query,
 };
 use mant_ir::{
     Document, Inline, LinkTarget,
@@ -80,12 +80,14 @@ fn extracted_heading_is_readable_without_body_and_keeps_its_own_fragments() {
             .map(mant_ir::NodeId::as_str),
         Some(mant_ir::DOCUMENT_ROOT_ID)
     );
-    let excerpt = select_excerpt(&query, &["root"]).unwrap();
+    let excerpt =
+        mant_engine::select_excerpt(&query, &[mant_protocol::ContentSelector::path("root")])
+            .unwrap();
     assert!(mant_engine::render_excerpt_markdown(&excerpt).contains("[Catalog](index.md)"));
     let outline = mant_engine::build_outline_projection(
         &query,
         mant_protocol::EntryProjection::All,
-        Some("root".into()),
+        Some(mant_protocol::ContentSelector::path("root")),
     )
     .unwrap();
     assert_eq!(outline.nodes.len(), 1);

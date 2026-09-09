@@ -1,10 +1,9 @@
 //! Tests for the Arch Linux `git(1)` gzip fixture.
+use super::semantic_read;
 
 use crate::common::{self, GIT_SECTIONS};
 use crate::fixtures::{archlinux_manual, archlinux_manual_query};
-use mant_engine::{
-    build_outline, build_outline_projection, build_outline_with_detail, select_excerpt,
-};
+use mant_engine::{build_outline, build_outline_projection, build_outline_with_detail};
 use mant_ir::{Block, EntryKind, Inline};
 use mant_protocol::EntryProjection;
 use mant_protocol::{ExcerptSelection, OutlineDetail};
@@ -144,8 +143,14 @@ fn supports_outline_discovery_and_targeted_excerpts() {
     assert_eq!(git_diffs.id(), "git-diffs");
     assert_eq!(git_diffs.title(), "Git Diffs");
 
-    let excerpt = select_excerpt(&query, &["git-diffs".to_owned(), "16.4".to_owned()])
-        .expect("Git Diffs excerpt");
+    let excerpt = mant_engine::select_excerpt(
+        &query,
+        &[
+            mant_protocol::ContentSelector::id("git-diffs"),
+            mant_protocol::ContentSelector::path("16.4"),
+        ],
+    )
+    .expect("Git Diffs excerpt");
     assert_eq!(excerpt.selections.len(), 1);
     let ExcerptSelection::DocumentSection {
         outline, section, ..
@@ -161,7 +166,8 @@ fn supports_outline_discovery_and_targeted_excerpts() {
 #[test]
 fn identifies_git_environment_variables_from_hanging_definitions() {
     let query = archlinux_manual_query("git");
-    let explanation = select_excerpt(&query, &["GIT_DIR"]).expect("GIT_DIR environment entry");
+    let explanation =
+        semantic_read::semantic_excerpt(&query, &["GIT_DIR"]).expect("GIT_DIR environment entry");
     assert!(matches!(
         explanation.selections.as_slice(),
         [ExcerptSelection::DocumentEntry { outline, entry }]

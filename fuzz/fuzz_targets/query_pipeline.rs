@@ -5,7 +5,8 @@ use mant_engine::{
     render_search_markdown, render_search_text, search_query, select_excerpt, select_explanation,
 };
 use mant_protocol::{
-    OutlineDetail, OutlineNode, SearchCase, SearchQuery, SearchScope, SearchSyntax,
+    ContentSelector, OutlineDetail, OutlineNode, ReferenceProjection, ReferenceProjectionMode,
+    ReferenceTargetType, SearchCase, SearchQuery, SearchScope, SearchSyntax,
 };
 
 pub const MAX_INPUT_BYTES: usize = 64 * 1024;
@@ -16,6 +17,25 @@ pub fn exercise(query: &mant_engine::ResolvedContent, pattern_seed: &str) {
     let _ = render_query_man(query);
     let _ = render_query_json(query, false);
     let _ = render_query_json(query, true);
+    if let Ok(outline) = mant_engine::build_outline_with_references(
+        query,
+        mant_protocol::EntryProjection::None,
+        None,
+        &ReferenceProjection {
+            mode: ReferenceProjectionMode::All,
+            target_types: vec![
+                ReferenceTargetType::Document,
+                ReferenceTargetType::Manual,
+                ReferenceTargetType::Local,
+                ReferenceTargetType::External,
+                ReferenceTargetType::Email,
+            ],
+            limit: 16,
+            ..ReferenceProjection::default()
+        },
+    ) {
+        let _ = mant_protocol::render_reference_inventory(&outline.references);
+    }
 
     for detail in [OutlineDetail::Sections, OutlineDetail::Entries] {
         let Ok(outline) = build_outline_with_detail(query, detail) else {
@@ -38,7 +58,7 @@ pub fn exercise(query: &mant_engine::ResolvedContent, pattern_seed: &str) {
         let _ = render_excerpt_json(&excerpt, true);
 
         for selector in selectors.iter().take(8) {
-            let _ = select_explanation(query, selector);
+            let _ = select_explanation(query, selector.value());
         }
     }
 
@@ -67,9 +87,12 @@ pub fn exercise(query: &mant_engine::ResolvedContent, pattern_seed: &str) {
     }
 }
 
-fn collect_paths(nodes: &[OutlineNode], selectors: &mut Vec<String>) {
+fn collect_paths(nodes: &[OutlineNode], selectors: &mut Vec<ContentSelector>) {
     for node in nodes {
-        selectors.push(node.path().to_owned());
+        if selectors.len() == 16 {
+            return;
+        }
+        selectors.push(ContentSelector::path(node.path()));
         collect_paths(node.children(), selectors);
     }
 }

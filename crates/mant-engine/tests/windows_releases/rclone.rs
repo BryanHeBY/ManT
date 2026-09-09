@@ -3,7 +3,7 @@
 //! The Pandoc-generated page exercises GNU verbatim font extensions that the
 //! native parser compatibility layer must preserve without diagnostics.
 
-use mant_engine::{render_excerpt_markdown, select_excerpt};
+use mant_engine::render_excerpt_markdown;
 use mant_ir::Inline;
 
 use crate::common::{self, block_slice_text, collect_sections, source_path_ends_with};
@@ -112,8 +112,11 @@ fn keeps_tier_table_text_blocks_in_their_own_columns() {
 #[test]
 fn renders_the_reviewed_windows_path_section_without_losing_backslashes() {
     let query = windows_release_query("rclone");
-    let excerpt = select_excerpt(&query, &["paths-on-windows".to_owned()])
-        .expect("select rclone Paths on Windows");
+    let excerpt = mant_engine::select_excerpt(
+        &query,
+        &[mant_protocol::ContentSelector::id("paths-on-windows")],
+    )
+    .expect("select rclone Paths on Windows");
     let markdown = render_excerpt_markdown(&excerpt);
     assert!(markdown.contains(r"`C:\path\to\wherever`"));
     assert!(markdown.contains(r"`\\server\share`"));

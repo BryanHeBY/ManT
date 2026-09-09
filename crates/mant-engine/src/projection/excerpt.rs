@@ -9,10 +9,17 @@ use crate::{
 };
 use mant_ir::{DOCUMENT_ROOT_ID, OutlinePath};
 use mant_protocol::{
-    ExcerptSchema, ExcerptSelection, OutlineNodeReference, OutlineReference, OutlineTrail,
-    QueryExcerpt,
+    ContentSelector, ExcerptSchema, ExcerptSelection, MAX_NODE_SELECTORS, OutlineNodeReference,
+    OutlineReference, OutlineTrail, QueryExcerpt,
 };
 use std::collections::HashSet;
+
+pub(super) fn selector_matches(selector: &ContentSelector, path: &OutlinePath, id: &str) -> bool {
+    match selector {
+        ContentSelector::Path { path: selected } => selected.as_str() == path.to_string(),
+        ContentSelector::Id { id: selected } => selected.as_str() == id,
+    }
+}
 
 /// Select tldr, document-root content, or complete section subtrees by path or ID.
 ///
@@ -22,12 +29,22 @@ use std::collections::HashSet;
 /// # Errors
 ///
 /// Returns an error when no content exists or any selector is empty or unknown.
-pub fn select_excerpt<S: AsRef<str>>(
+pub fn select_excerpt(
     query: &ResolvedContent,
-    selectors: &[S],
+    selectors: &[ContentSelector],
 ) -> Result<QueryExcerpt, ProjectionError> {
     if selectors.is_empty() {
         return Err(ProjectionError::EmptySelection);
+    }
+    if selectors.len() > MAX_NODE_SELECTORS {
+        return Err(ProjectionError::TooManySelections {
+            maximum: MAX_NODE_SELECTORS,
+        });
+    }
+    for selector in selectors {
+        selector
+            .validate()
+            .map_err(|_| ProjectionError::InvalidSelector)?;
     }
     if query.tldr.is_none() && query.document.is_none() {
         return Err(ProjectionError::MissingContent {
@@ -120,37 +137,33 @@ pub fn select_excerpt<S: AsRef<str>>(
     })
 }
 
-fn resolve_excerpt_candidates<'a, S: AsRef<str>>(
+fn resolve_excerpt_candidates<'a>(
     query: &ResolvedContent,
-    selectors: &[S],
+    selectors: &[ContentSelector],
     index: &DocumentSelectorIndex<'a>,
 ) -> Result<(bool, bool, Vec<&'a LocatedNode<'a>>), ProjectionError> {
     let mut tldr_selected = false;
     let mut document_root_selected = false;
-    let mut selected_ids = HashSet::new();
+    let mut selected_paths = HashSet::new();
     let mut selected = Vec::new();
-    for raw_selector in selectors {
-        let selector = raw_selector.as_ref().trim();
-        if selector.is_empty() {
-            return Err(ProjectionError::EmptySelector);
-        }
-        if (selector == TLDR_ID || selector.parse() == Ok(OutlinePath::Tldr))
-            && query.tldr.is_some()
-        {
+    for selector in selectors {
+        if selector_matches(selector, &OutlinePath::Tldr, TLDR_ID) && query.tldr.is_some() {
+            index.validate_synthetic_identity(&query.label, selector, TLDR_ID, "0")?;
             tldr_selected = true;
             continue;
         }
-        if (selector == DOCUMENT_ROOT_ID || selector.parse() == Ok(OutlinePath::DocumentRoot))
+        if selector_matches(selector, &OutlinePath::DocumentRoot, DOCUMENT_ROOT_ID)
             && query
                 .document
                 .as_ref()
                 .is_some_and(|document| document.heading.is_some() || !document.blocks.is_empty())
         {
+            index.validate_synthetic_identity(&query.label, selector, DOCUMENT_ROOT_ID, "root")?;
             document_root_selected = true;
             continue;
         }
         let candidate = index.resolve(&query.label, selector)?;
-        if selected_ids.insert(candidate.id()) {
+        if selected_paths.insert(candidate.path().clone()) {
             selected.push(candidate);
         }
     }

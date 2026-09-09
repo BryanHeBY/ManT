@@ -590,15 +590,12 @@ always retain the canonical spelling written by the author.
 Unknown fields, missing policies, and malformed declared lists produce a
 source-located recoverable diagnostic without dropping or reordering content.
 
-Recognized entries receive role-specific stable IDs and aliases, appear
-beneath their owning section in `--outline`, and are selectable through
-`--node` and `--explain`. A mixed ordinary/option list remains an ordinary list
-rather than being guessed. Paths and IDs resolve first, followed by exact
-aliases and then normalized conveniences such as omitting leading dashes. This
-lets an exact command `?` coexist with option spelling `-?`. When aliases at
-the same precedence remain ambiguous, or a structural ID shadows an entry
-alias, the outline carries a source diagnostic and selection returns or points
-to candidate paths and IDs for exact qualification. `semanticsComplete: false`
+Recognized entries receive role-specific IDs and declared names, appear
+beneath their owning section in `--outline`, and can be read by exact path/ID
+or queried by name through `--explain`. A mixed ordinary/option list remains
+ordinary rather than being guessed. Read selectors never infer omitted dashes
+or environment wrappers. Repeated names remain separate explanation evidence;
+duplicate content IDs still require an exact path. `semanticsComplete: false`
 is reserved for rejected declarations or native definitions that could not be
 classified without guessing.
 
@@ -673,6 +670,17 @@ folding, selection, and document targets remain unchanged. Full-label changes,
 whole-tree expansion or collapse, and Outline-width changes keep the selected
 node on the same viewport row whenever terminal bounds permit. Selecting a
 node puts its target at the top of the content pane.
+
+Document/manual links also appear under collapsed **References** groups,
+independently of semantic entries. Selecting a reference reveals its original
+source occurrence; Enter explicitly opens its typed target. Repeated links in
+different owners remain separate, while same-owner/same-target navigation may
+be grouped without altering the content or reference occurrence inventory.
+An unqualified native manual keeps its unresolved section rather than guessing
+section 1. Missing or ambiguous destinations/fragments preserve the source
+document, selection and navigation history. Reference-target copy copies the
+target, not the surrounding node; selecting or copying never opens it.
+Bounded discovery shows a notice if it cannot cover all references.
 After content scrolling settles, the outline follows the first visible
 document node.
 Underlined references can be followed directly. Markdown fragments and mdoc
@@ -810,14 +818,17 @@ Multi-document deterministic output supports `--search` and `--explain`. Outline
   ancestors. With no matches it reports an explicit zero result instead of an
   empty-looking copy of the complete section tree.
 - `--outline-root SELECTOR`: Start the projection at one exact section or entry
-  path, stable ID, or unambiguous semantic alias.
-- `--node SELECTOR`: Return an outline node selected by path, stable ID, or
-  semantic-entry alias; repeat the option to select several nodes.
+  using `path:2.3/e4`, `id:node-id`, or a bare canonical path.
+- `--outline-references MODE`: Independently select `none`, `summary` (the default), or `all`. Summary counts real document/manual link occurrences and distinct complete targets; all returns a bounded occurrence page, not additional content nodes.
+- `--reference-types KINDS`: Select comma-separated `document`, `manual`, `local`, `external`, or `email` targets. The default is `document,manual`; changing entry filters does not change reference selection.
+- `--reference-offset N`: Skip selected link occurrences before materialization. This is independent of search/explanation offsets and MCP character paging; skipped work still consumes the scan budget.
+- `--reference-limit N`: Return at most this many reference records with `--outline-references all` (default 100, range 1–1000). Coverage, count precision, page limits and a proven next offset are reported separately.
+- `--node SELECTOR`: Read exact local content using `path:2.3/e4`, `id:node-id`, or a bare canonical path; repeat to select several nodes. Names, aliases, URIs and link occurrences are not read selectors and never cause implicit navigation.
 - `--explain ENTRY`: Collect independent evidence for a documented name, complete form, exact entry ID/path, or bounded literal. Multiple owners and no evidence are normal results (exit 0). Names/forms follow the owner's case policy; literal supporting content is case-sensitive and is not promoted to a definition. Results show four category counts and retain separate owners. Direct and explicitly related entries show complete original content when the budget allows; mentions show bounded original match windows and read coordinates. For example, GCC's `-Q` mentioning `--help` is not another `--help` definition. Use `--node` for strict navigation or to read the complete mentioned entry.
 - `--explain-content-bytes BYTES`: Bound aggregate original forms/facts, match previews and body copies in an explanation page. The default is 1 MiB, the maximum 4 MiB, and the minimum one byte. An oversized body is omitted atomically with its location retained; increase the budget or read that node separately.
 
 For progressive agent exploration, begin with the default summary, then reuse
-the bracketed ID of a relevant section as `--outline-root` and request
+the bracketed ID of a relevant section with `id:` as `--outline-root` and request
 only the needed entry kinds. A second rooted outline can expand one returned
 entry before `--node` reads its complete content. The IDs below illustrate
 values returned by one installed `bash(1)`; callers reuse the values from their
@@ -825,9 +836,9 @@ own preceding response:
 
 ```sh
 mant bash --outline
-mant bash --outline --outline-root shell-builtin-commands --outline-entries command
-mant bash --outline --outline-root command-set --outline-entries all
-mant bash --node command-set --format markdown
+mant bash --outline --outline-root id:shell-builtin-commands --outline-entries command
+mant bash --outline --outline-root id:command-set --outline-entries all
+mant bash --node id:command-set --format markdown
 ```
 
 Rooting changes only the returned tree boundary. Paths and IDs remain unchanged
@@ -842,7 +853,7 @@ marked tldr preface. It is not a native manual section. Remaining headings use
 one-based paths such as `2.3`, and semantic entries use paths such as `2.3/e4`.
 Nested entries append another component, for example `2.3/e4/e2`. One semantic
 entry may retain several author-written forms without creating duplicate
-nodes; aliases remain exact selectable spellings rather than display forms.
+nodes; declared names and aliases remain searchable by `--explain`, not `--node`.
 Paths are source-order coordinates and can move when an installed manual
 changes; `2.3/e4` is not a stable ID. The separately printed bracketed ID is a
 document-local selector derived from semantic identity. Automatically inferred
@@ -861,10 +872,14 @@ uses the normal document priority chain, but considers only Markdown documents
 that actually contain an embedded tldr preface; cached tldr occupies the same
 priority-zero built-in position as native manuals.
 
-`--node` and `--outline-root` share strict resolution: exact path, exact ID,
-exact semantic alias, then normalized entry shorthand. Duplicate matches at
-one precedence return candidate paths and IDs. A structural ID can shadow an
-entry alias in strict navigation; the entry remains reachable by its path/ID.
+`--node`, `--outline-root`, protocol excerpts and MCP reads share one closed
+content-selector contract: an exact path or an explicitly selected exact ID.
+Duplicate IDs report ambiguity rather than choosing the first owner; exact
+paths can still read each original item. No name, alias, shorthand, URI or
+authored-fragment fallback occurs. Anchors and reference rows are reveal
+positions, not fabricated readable subtrees. A still-valid path can point to
+different content after an edit; this release does not detect stale selectors
+across calls. Rediscover from the current document instead of caching paths.
 
 `--explain` is independent evidence collection. Exact names, complete authored
 forms, entry IDs/paths, literal content and validated explicit alias relations
@@ -874,8 +889,8 @@ whose ID equals a documented name cannot hide the name's evidence. Name/form
 matching follows the entry's declared case; literal content is case-sensitive
 with token boundaries (`-a` does not match `--all`, and `-I` differs from `-i`).
 There is no shorthand, fuzzy search, inferred synonym or command execution.
-All three inputs reject controls and values over 512 Unicode scalars before
-document resolution.
+Explanation input rejects controls and values over 512 Unicode scalars before
+document resolution; structural selector values are limited to 512 UTF-8 bytes.
 
 Explanation JSON is `mant.explanation/v0.11`, not an excerpt. Check `outcome`
 (`evidence` or `no-evidence`), `total`, `returned`, `nextOffset`, independent

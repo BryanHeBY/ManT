@@ -6,7 +6,16 @@
       { "kind": "parameter", "parameterKind": "option" }
     ]
   },
-  "root": "options",
+  "root": {"kind": "id", "id": "options"},
+  "references": {
+    "policy": {"mode": "summary", "targetTypes": ["document", "manual"], "offset": 0, "limit": 100},
+    "coverage": {"steps": 0, "bytes": 0, "status": {"kind": "not-scanned"}},
+    "targetCoverage": null,
+    "occurrences": {"kind": "unknown", "reason": "not-scanned"},
+    "targets": {"kind": "unknown", "reason": "not-scanned"},
+    "page": {"offset": 0, "returned": 0, "limited": null, "nextOffset": null},
+    "records": []
+  },
   "label": "tool(1)",
   "nodes": [
     {

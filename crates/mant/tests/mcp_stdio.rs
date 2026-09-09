@@ -105,8 +105,9 @@ fn stdio_mode_exposes_compact_text_first_document_tools() {
     let tools_reply = parse_reply(lines.next().expect("tools list reply"));
     assert_eq!(tools_reply["id"], 2);
     assert!(
-        tools_reply.to_string().len() < 16_000,
-        "tool schemas grew unexpectedly"
+        tools_reply.to_string().len() < 24_000,
+        "tool schemas exceed the closed selector/reference budget: {} bytes",
+        tools_reply.to_string().len()
     );
     assert_tool_catalog(
         tools_reply["result"]["tools"]
@@ -247,7 +248,7 @@ fn request_document_tools(input: &mut impl Write) {
         "mant_read",
         &json!({
             "document": "documents/mcp-registered",
-            "selectors": ["root"]
+            "selectors": [{"kind":"path", "path":"root"}]
         }),
     );
     call_tool(
@@ -364,7 +365,7 @@ fn request_compatibility_and_page_tools(input: &mut impl Write) {
         "mant_read",
         &json!({
             "document": "documents/mcp-registered",
-            "selectors": "[\"root\",\"1\"]"
+            "selectors": "[{\"kind\":\"path\",\"path\":\"root\"},{\"kind\":\"path\",\"path\":\"1\"}]"
         }),
     );
     call_tool(
@@ -382,7 +383,7 @@ fn request_compatibility_and_page_tools(input: &mut impl Write) {
         "mant_read",
         &json!({
             "document": "documents/mcp-registered",
-            "selectors": ["root"],
+            "selectors": [{"kind":"path", "path":"root"}],
             "startChar": 3,
             "maxChars": 7
         }),
@@ -486,7 +487,7 @@ fn assert_tool_replies(replies: &[Value]) {
 
     let bounded = successful_text(reply(replies, 10));
     assert!(
-        bounded.contains("[scope: documents=1, unresolved-roots=0, unresolved-links=0, depth-frontier=1, document-frontier=0, content-frontier=0]"),
+        bounded.contains("[scope: documents=1, unresolved-roots=0, unresolved-links=0, depth-frontier=1, document-frontier=0, content-frontier=0, incomplete-reference-scans=0]"),
         "{bounded}"
     );
 
@@ -572,7 +573,7 @@ fn assert_explanation_paging(replies: &[Value]) {
     assert!(complete.contains("bodyOmitted=true"), "{complete}");
     assert!(
         complete.contains(
-            "call `mant_read(document=\"documents/mcp-registered\", selectors=[\"5/e1\"])"
+            "call `mant_read(document=\"documents/mcp-registered\", selectors=[{\"kind\":\"path\",\"path\":\"5/e1\"}])"
         ),
         "{complete}"
     );
@@ -757,7 +758,7 @@ fn assert_classified_explanations(replies: &[Value]) {
         "{probe}"
     );
     assert!(
-        probe.contains("mant_read(document=\"documents/mcp-registered\", selectors=[\"1\"])"),
+        probe.contains("mant_read(document=\"documents/mcp-registered\", selectors=[{\"kind\":\"path\",\"path\":\"1\"}])"),
         "{probe}"
     );
     assert!(probe.contains("evidence; owners=1, returned=1"), "{probe}");

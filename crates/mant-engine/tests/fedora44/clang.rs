@@ -1,4 +1,5 @@
 //! Tests for the Fedora Linux 44 `clang(1)` zstd fixture.
+use super::semantic_read;
 
 use crate::common::{
     self, count_outline_entries, find_outline_entry, query_for_document, source_path_ends_with,
@@ -32,7 +33,7 @@ fn keeps_complete_sections_and_semantic_option_outlines() {
     // alias remains on the optimization-level definition with its whole body.
     let optimization = find_outline_entry(&outline.nodes, "-O4").unwrap();
     assert_eq!(optimization.id(), "option-o0");
-    let explanation = mant_engine::select_excerpt(&query, &["-O4"]).unwrap();
+    let explanation = semantic_read::semantic_excerpt(&query, &["-O4"]).unwrap();
     let text = mant_engine::render_excerpt_text(&explanation);
     assert!(text.contains("-O4 and higher"), "{text}");
     assert!(text.contains("Currently equivalent to -O3"), "{text}");

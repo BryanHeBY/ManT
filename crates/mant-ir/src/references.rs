@@ -8,6 +8,10 @@ use std::ops::ControlFlow;
 
 mod association;
 pub use association::*;
+mod events;
+pub use events::*;
+mod label;
+pub use label::*;
 
 use crate::{
     Block, ContentBlockStep as Step, ContentInlineRoot, ContentLocationRef, Document, EntryOwner,
@@ -95,7 +99,10 @@ pub struct ReferenceWorkBudget {
 }
 
 impl ReferenceWorkBudget {
-    fn new(mut limits: ReferenceScanLimits) -> Self {
+    /// Start one bounded operation. All subsequent scans and callbacks may
+    /// share this account rather than resetting work at each resolution phase.
+    #[must_use]
+    pub fn new(mut limits: ReferenceScanLimits) -> Self {
         limits.steps = limits.steps.min(MAX_REFERENCE_SCAN_STEPS);
         limits.bytes = limits.bytes.min(MAX_REFERENCE_SCAN_BYTES);
         limits.depth = limits.depth.min(MAX_CONTENT_DEPTH);
@@ -117,6 +124,18 @@ impl ReferenceWorkBudget {
     #[must_use]
     pub fn remaining_bytes(&self) -> usize {
         self.limits.bytes.saturating_sub(self.bytes)
+    }
+
+    /// Work units already consumed across every phase of this operation.
+    #[must_use]
+    pub const fn used_steps(&self) -> usize {
+        self.steps
+    }
+
+    /// Inspection bytes already consumed across every phase of this operation.
+    #[must_use]
+    pub const fn used_bytes(&self) -> usize {
+        self.bytes
     }
 
     /// The first failed charge, retained even if the consumer requests a stop.
@@ -231,12 +250,64 @@ pub fn scan_reference_scope<'ir>(
     document: &'ir Document,
     scope: ReferenceScope<'_>,
     limits: ReferenceScanLimits,
-    visit: impl for<'path> FnMut(
+    mut visit: impl for<'path> FnMut(
         LinkOccurrenceRef<'ir, 'path>,
         &mut ReferenceWorkBudget,
     ) -> ControlFlow<()>,
 ) -> ReferenceScanReport {
-    let mut scan = Scan::new(limits, visit);
+    scan_navigation_scope(
+        document,
+        scope,
+        limits,
+        NavigationScanOptions::default(),
+        |event, budget| {
+            if let NavigationEvent::Link(occurrence) = event {
+                visit(occurrence, budget)
+            } else {
+                ControlFlow::Continue(())
+            }
+        },
+    )
+}
+
+/// Scan requested navigation facts with a single shared work account and DFS.
+/// Unrequested target aliases and semantic relations are never inspected.
+pub fn scan_navigation_scope<'ir>(
+    document: &'ir Document,
+    scope: ReferenceScope<'_>,
+    limits: ReferenceScanLimits,
+    options: NavigationScanOptions,
+    visit: impl for<'path> FnMut(
+        NavigationEvent<'ir, 'path>,
+        &mut ReferenceWorkBudget,
+    ) -> ControlFlow<()>,
+) -> ReferenceScanReport {
+    let mut budget = ReferenceWorkBudget::new(limits);
+    scan_navigation_scope_with_budget(document, scope, &mut budget, options, visit)
+}
+
+/// Continue an operation's existing budget, for example a single bounded local
+/// target check after collecting a reference page. Coverage steps/bytes are
+/// cumulative; occurrences belong only to this scan.
+pub fn scan_navigation_scope_with_budget<'ir>(
+    document: &'ir Document,
+    scope: ReferenceScope<'_>,
+    budget: &mut ReferenceWorkBudget,
+    options: NavigationScanOptions,
+    visit: impl for<'path> FnMut(
+        NavigationEvent<'ir, 'path>,
+        &mut ReferenceWorkBudget,
+    ) -> ControlFlow<()>,
+) -> ReferenceScanReport {
+    let pending = std::mem::replace(
+        budget,
+        ReferenceWorkBudget::new(ReferenceScanLimits {
+            steps: 0,
+            depth: 0,
+            bytes: 0,
+        }),
+    );
+    let mut scan = Scan::new(pending, options, visit);
     let result = (|| match scope {
         ReferenceScope::Document => scan.document(document),
         ReferenceScope::Overview => scan.overview(document),
@@ -273,7 +344,9 @@ pub fn scan_reference_scope<'ir>(
             scan.item(item, owner.item_index)
         }
     })();
-    scan.finish(result)
+    let report = scan.finish(result);
+    *budget = scan.budget;
+    report
 }
 
 /// Scan one explicit section subtree, independent of entry filters.
@@ -339,10 +412,19 @@ enum Root {
     Content(ContentInlineRoot),
 }
 
+#[derive(Clone, Copy)]
+enum TargetSite<'a> {
+    Document,
+    Section,
+    Owner(OwnerFrame<'a>),
+    Inline(Root),
+}
+
 struct Scan<'ir, F> {
     budget: ReferenceWorkBudget,
     report: ReferenceScanReport,
     visit: F,
+    options: NavigationScanOptions,
     sections: Vec<u32>,
     blocks: Vec<Step>,
     path: Vec<u32>,
@@ -352,13 +434,14 @@ struct Scan<'ir, F> {
 
 impl<'ir, F> Scan<'ir, F>
 where
-    F: for<'path> FnMut(LinkOccurrenceRef<'ir, 'path>, &mut ReferenceWorkBudget) -> ControlFlow<()>,
+    F: for<'path> FnMut(NavigationEvent<'ir, 'path>, &mut ReferenceWorkBudget) -> ControlFlow<()>,
 {
-    fn new(limits: ReferenceScanLimits, visit: F) -> Self {
+    fn new(budget: ReferenceWorkBudget, options: NavigationScanOptions, visit: F) -> Self {
         Self {
-            budget: ReferenceWorkBudget::new(limits),
+            budget,
             report: ReferenceScanReport::default(),
             visit,
+            options,
             sections: Vec::new(),
             blocks: Vec::new(),
             path: Vec::new(),
@@ -367,7 +450,7 @@ where
         }
     }
 
-    fn finish(mut self, result: Result<(), ReferenceScanStop>) -> ReferenceScanReport {
+    fn finish(&mut self, result: Result<(), ReferenceScanStop>) -> ReferenceScanReport {
         self.report.stopped = self.budget.stopped.or(result.err());
         self.report.steps = self.budget.steps;
         self.report.bytes = self.budget.bytes;
@@ -460,6 +543,57 @@ where
         self.budget.consume(depth, steps, bytes)
     }
 
+    fn target(
+        &mut self,
+        id: &'ir crate::NodeId,
+        aliases: &'ir [crate::FragmentAlias],
+        site: TargetSite<'ir>,
+    ) -> Result<(), ReferenceScanStop> {
+        self.charge(
+            self.depth(),
+            self.depth().saturating_add(1),
+            id.as_str().len(),
+        )?;
+        for alias in aliases {
+            self.charge(self.depth(), 1, alias.as_str().len())?;
+        }
+        let reveal = match site {
+            TargetSite::Document => ContentRevealRef::Document,
+            TargetSite::Section => ContentRevealRef::Section(&self.sections),
+            TargetSite::Owner(frame) => ContentRevealRef::Owner(EntryOwnerLocationRef {
+                sections: &self.sections,
+                blocks: &self.blocks[..frame.blocks_len],
+                item_index: frame.item,
+            }),
+            TargetSite::Inline(root) => ContentRevealRef::Inline(match root {
+                Root::DocumentHeading => ContentLocationRef::DocumentHeading { path: &self.path },
+                Root::SectionHeading => ContentLocationRef::SectionHeading {
+                    sections: &self.sections,
+                    path: &self.path,
+                },
+                Root::Content(root) => ContentLocationRef::Content {
+                    sections: &self.sections,
+                    blocks: &self.blocks,
+                    root,
+                    path: &self.path,
+                },
+            }),
+        };
+        if (self.visit)(
+            NavigationEvent::Target(NavigationTargetRef {
+                id,
+                aliases,
+                reveal,
+            }),
+            &mut self.budget,
+        )
+        .is_break()
+        {
+            return Err(ReferenceScanStop::Visitor);
+        }
+        Ok(())
+    }
+
     fn document(&mut self, document: &'ir Document) -> Result<(), ReferenceScanStop> {
         self.overview(document)?;
         self.section_array(&document.sections)
@@ -467,6 +601,15 @@ where
 
     fn overview(&mut self, document: &'ir Document) -> Result<(), ReferenceScanStop> {
         self.charge(0, 1, 0)?;
+        if self.options.targets
+            && (document.heading.is_some()
+                || !document.blocks.is_empty()
+                || !document.fragment_aliases.is_empty())
+        {
+            static ROOT: std::sync::LazyLock<crate::NodeId> =
+                std::sync::LazyLock::new(|| crate::NodeId::from(crate::DOCUMENT_ROOT_ID));
+            self.target(&ROOT, &document.fragment_aliases, TargetSite::Document)?;
+        }
         if let Some(heading) = &document.heading {
             self.charge(self.depth(), 1, 0)?;
             self.inlines(&heading.content, Root::DocumentHeading, heading.source)?;
@@ -486,6 +629,9 @@ where
 
     fn section(&mut self, section: &'ir Section) -> Result<(), ReferenceScanStop> {
         self.charge(self.depth(), 1, 0)?;
+        if self.options.targets {
+            self.target(&section.id, &section.fragment_aliases, TargetSite::Section)?;
+        }
         self.inlines(
             &section.heading.content,
             Root::SectionHeading,
@@ -562,6 +708,11 @@ where
         if owner.facts().is_some() {
             self.semantic = Some(frame);
         }
+        if self.options.targets
+            && let Some(facts) = owner.facts()
+        {
+            self.target(&facts.id, &[], TargetSite::Owner(frame))?;
+        }
         if let EntryOwner::Definition(item) = owner {
             for (term, nodes) in item.terms.iter().enumerate() {
                 self.charge(self.depth(), 1, 0)?;
@@ -581,6 +732,39 @@ where
         });
         self.block_array(owner.blocks())?;
         self.blocks.pop();
+        if self.options.entry_sets
+            && let Some(crate::ValueDomain::EntrySet {
+                reference, source, ..
+            }) = owner.facts().and_then(|facts| facts.value_domain.as_ref())
+        {
+            let bytes = match reference {
+                crate::DocumentReference::Document { name, fragment } => name
+                    .len()
+                    .saturating_add(fragment.as_ref().map_or(0, String::len)),
+                crate::DocumentReference::Manual {
+                    name,
+                    manual_section,
+                } => name
+                    .len()
+                    .saturating_add(manual_section.as_ref().map_or(0, String::len)),
+            };
+            self.charge(self.depth(), self.depth().saturating_add(1), bytes)?;
+            let relation = EntrySetReferenceRef {
+                reference,
+                owner: ReferenceOwnerRef {
+                    owner,
+                    location: EntryOwnerLocationRef {
+                        sections: &self.sections,
+                        blocks: &self.blocks,
+                        item_index: index,
+                    },
+                },
+                source: *source,
+            };
+            if (self.visit)(NavigationEvent::EntrySet(relation), &mut self.budget).is_break() {
+                return Err(ReferenceScanStop::Visitor);
+            }
+        }
         self.owner = previous;
         self.semantic = semantic;
         Ok(())
@@ -595,9 +779,23 @@ where
         for (index, node) in nodes.iter().enumerate() {
             self.charge(self.depth() + 1, 1, 0)?;
             self.path.push(coordinate(index)?);
+            if self.options.targets
+                && let Inline::Anchor {
+                    id,
+                    fragment_aliases,
+                    ..
+                } = node
+            {
+                let site = self
+                    .semantic
+                    .filter(|frame| frame.owner.facts().is_some_and(|facts| facts.id == *id))
+                    .map_or(TargetSite::Inline(root), TargetSite::Owner);
+                self.target(id, fragment_aliases, site)?;
+            }
             if let Inline::Link {
                 target, children, ..
             } = node
+                && self.options.links.contains(target)
             {
                 self.charge(self.depth(), 0, target_bytes(target))?;
                 // Summary does not inspect labels. A materializing callback
@@ -633,7 +831,7 @@ where
                 };
                 self.report.occurrences += 1;
                 if (self.visit)(
-                    LinkOccurrenceRef {
+                    NavigationEvent::Link(LinkOccurrenceRef {
                         link: node,
                         target,
                         label: children,
@@ -642,7 +840,7 @@ where
                         semantic_owner: self.semantic.map(owner),
                         source: source
                             .or_else(|| self.owner.and_then(|frame| frame.owner.source())),
-                    },
+                    }),
                     &mut self.budget,
                 )
                 .is_break()
@@ -1045,5 +1243,117 @@ mod tests {
         assert!(report.occurrences > 0 && report.occurrences < 4);
         assert!(inspected_coordinates <= report.steps);
         assert!(report.steps <= 200);
+    }
+
+    #[test]
+    fn optional_navigation_events_share_locations_without_becoming_links() {
+        let mut document = document(
+            vec![paragraph(vec![
+                link("target"),
+                json!({"type":"anchor","id":"anchor","fragmentAliases":["Mixed.Target"]}),
+            ])],
+            vec![],
+        );
+        document.fragment_aliases.push("Document.Alias".into());
+        let mut links = 0;
+        let mut targets = Vec::new();
+        let report = scan_navigation_scope(
+            &document,
+            ReferenceScope::Document,
+            ReferenceScanLimits::default(),
+            NavigationScanOptions {
+                targets: true,
+                ..Default::default()
+            },
+            |event, _| {
+                match event {
+                    NavigationEvent::Link(_) => links += 1,
+                    NavigationEvent::Target(target) => targets.push((
+                        target.id.as_str().to_owned(),
+                        target.reveal.to_owned().unwrap(),
+                    )),
+                    NavigationEvent::EntrySet(_) => panic!("no relation declared"),
+                }
+                ControlFlow::Continue(())
+            },
+        );
+        assert!(report.complete());
+        assert_eq!(report.occurrences, 1);
+        assert_eq!(links, 1);
+        assert_eq!(targets.len(), 2);
+        assert!(matches!(targets[0].1, ContentReveal::Document {}));
+        let ContentReveal::Inline { location } = &targets[1].1 else {
+            panic!("anchor must be exact inline")
+        };
+        assert!(
+            matches!(location.resolve(&document),Some([Inline::Anchor{id,..}]) if id.as_str()=="anchor")
+        );
+    }
+
+    #[test]
+    fn unrequested_aliases_and_targets_do_not_spend_summary_inspection_budget() {
+        let document = document(
+            vec![paragraph(vec![
+                json!({"type":"anchor","id":"anchor","fragmentAliases":["X".repeat(10000)]}),
+                json!({"type":"link","target":{"kind":"external","uri":"X".repeat(10000)},"children":[]}),
+                link("ok"),
+            ])],
+            vec![],
+        );
+        let options = NavigationScanOptions {
+            links: ReferenceLinkFilter::DOCUMENTS,
+            ..Default::default()
+        };
+        let limits = ReferenceScanLimits {
+            bytes: 2,
+            ..Default::default()
+        };
+        let report = scan_navigation_scope(
+            &document,
+            ReferenceScope::Document,
+            limits,
+            options,
+            |_, _| ControlFlow::Continue(()),
+        );
+        assert!(report.complete());
+        assert_eq!(report.occurrences, 1);
+        assert_eq!(report.bytes, 2);
+        let report = scan_navigation_scope(
+            &document,
+            ReferenceScope::Document,
+            limits,
+            NavigationScanOptions {
+                targets: true,
+                ..options
+            },
+            |_, _| ControlFlow::Continue(()),
+        );
+        assert_eq!(report.stopped, Some(ReferenceScanStop::Bytes));
+    }
+
+    #[test]
+    fn separate_navigation_phases_cannot_reset_shared_operation_budget() {
+        let document = document(vec![paragraph(vec![link("ok")])], vec![]);
+        let mut budget = ReferenceWorkBudget::new(ReferenceScanLimits {
+            bytes: 2,
+            ..Default::default()
+        });
+        let first = scan_navigation_scope_with_budget(
+            &document,
+            ReferenceScope::Document,
+            &mut budget,
+            NavigationScanOptions::default(),
+            |_, _| ControlFlow::Continue(()),
+        );
+        assert!(first.complete());
+        let second = scan_navigation_scope_with_budget(
+            &document,
+            ReferenceScope::Document,
+            &mut budget,
+            NavigationScanOptions::default(),
+            |_, _| panic!("second phase bypassed bytes"),
+        );
+        assert_eq!(second.stopped, Some(ReferenceScanStop::Bytes));
+        assert_eq!(second.bytes, 2);
     }
 }

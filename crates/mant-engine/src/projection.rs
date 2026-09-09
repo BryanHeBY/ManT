@@ -1,13 +1,20 @@
 //! Project documents through shared selector policy into outline and excerpt DTOs.
 pub(crate) mod excerpt;
 mod outline;
+pub mod references;
 pub use crate::explanation::select_explanation;
 #[cfg(test)]
-use crate::selectors::semantic_selector_diagnostics;
+use crate::selectors::outline_identity_diagnostics;
 pub use crate::selectors::{ProjectionError, SelectorCandidate};
 pub use excerpt::select_excerpt;
 use mant_ir::Diagnostic;
-pub use outline::{build_outline, build_outline_projection, build_outline_with_detail};
+pub use outline::{
+    build_outline, build_outline_projection, build_outline_with_detail,
+    build_outline_with_references,
+};
+pub use references::{
+    ReferenceProjectionLimits, project_references, project_references_with_limits,
+};
 const TLDR_TITLE: &str = "TLDR QUICK REFERENCE";
 
 /// Whether diagnostics permit semantic projections to claim extraction completeness.
@@ -31,11 +38,11 @@ mod tests {
         EntryFacts, EntryKind, Inline, LayoutHint, NameCase, ParameterKind, Section, SourceFormat,
         TldrDocument, TldrOrigin,
     };
-    use mant_protocol::{EntryProjection, ExcerptSelection, NodeSelector, OutlineNode};
+    use mant_protocol::{ContentSelector, EntryProjection, ExcerptSelection, OutlineNode};
 
     use super::{
-        ProjectionError, build_outline, build_outline_projection, select_excerpt,
-        semantic_selector_diagnostics,
+        ProjectionError, build_outline, build_outline_projection, outline_identity_diagnostics,
+        select_excerpt,
     };
 
     fn section(id: &str, title: &str, children: Vec<Section>) -> Section {
@@ -201,7 +208,7 @@ mod tests {
     }
 
     #[test]
-    fn indexed_selector_diagnostics_preserve_case_policy_and_deduplicate_aliases() {
+    fn repeated_names_do_not_create_content_identity_diagnostics() {
         let sensitive = definition(
             "command-sensitive-mode",
             EntryKind::Command,
@@ -226,25 +233,8 @@ mod tests {
         }];
         let sections = vec![section("mode", "Mode", Vec::new())];
 
-        let diagnostics = semantic_selector_diagnostics(&blocks, &sections, "manual");
-        assert_eq!(
-            diagnostics
-                .iter()
-                .filter(|diagnostic| {
-                    diagnostic.code.as_deref() == Some("manual.semantic-entry.ambiguous-selector")
-                })
-                .count(),
-            1
-        );
-        assert!(diagnostics.iter().any(|diagnostic| {
-            diagnostic.code.as_deref() == Some("manual.semantic-entry.shadowed-selector")
-                && diagnostic.message.contains("semantic selector 'mode'")
-                && diagnostic
-                    .message
-                    .matches("command-insensitive-mode")
-                    .count()
-                    == 1
-        }));
+        let diagnostics = outline_identity_diagnostics(&blocks, &sections, "manual");
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
     }
 
     #[test]
@@ -413,7 +403,7 @@ mod tests {
         assert_eq!(paths, ["2/e1", "2/e1/e1", "2/e2", "2.1/e1"]);
 
         for path in paths {
-            let excerpt = select_excerpt(&query, std::slice::from_ref(&path))
+            let excerpt = select_excerpt(&query, &[ContentSelector::path(path.as_str())])
                 .unwrap_or_else(|error| panic!("read must accept projected path {path}: {error}"));
             assert!(matches!(
                 excerpt.selections.as_slice(),
@@ -432,12 +422,12 @@ mod tests {
     }
 
     #[test]
-    fn outline_root_preserves_identity_excludes_siblings_and_rejects_ambiguous_aliases() {
+    fn outline_root_preserves_identity_excludes_siblings_and_rejects_names() {
         let mut query = query_with_semantic_entries();
         let section_rooted = build_outline_projection(
             &query,
             EntryProjection::All,
-            Some(NodeSelector::new("options-2")),
+            Some(ContentSelector::id("options-2")),
         )
         .expect("section-rooted outline");
         let [
@@ -468,7 +458,7 @@ mod tests {
         let rooted = build_outline_projection(
             &query,
             EntryProjection::Summary,
-            Some(NodeSelector::new("option-local-forward")),
+            Some(ContentSelector::id("option-local-forward")),
         )
         .expect("entry-rooted outline");
         assert!(matches!(
@@ -494,19 +484,17 @@ mod tests {
                 layout: LayoutHint::default(),
                 source: None,
             });
-        let error =
-            build_outline_projection(&query, EntryProjection::All, Some(NodeSelector::new("-L")))
-                .expect_err("ambiguous names must require qualification");
-        let ProjectionError::AmbiguousSelector { candidates, .. } = error else {
-            panic!("expected ambiguous selector");
-        };
-        assert_eq!(candidates.len(), 2);
-        assert_eq!(candidates[0].path, "2/e1");
-        assert_eq!(candidates[1].path, "3/e1");
+        let error = build_outline_projection(
+            &query,
+            EntryProjection::All,
+            Some(ContentSelector::id("-L")),
+        )
+        .expect_err("ambiguous names must require qualification");
+        assert_eq!(error, ProjectionError::InvalidSelector);
     }
 
     #[test]
-    fn section_ids_win_consistently_before_entry_aliases() {
+    fn explicit_section_ids_are_independent_from_semantic_explanations() {
         let mut query = query();
         query.document.as_mut().expect("document").sections[0] = Section {
             id: "force".into(),
@@ -533,7 +521,8 @@ mod tests {
                 source: None,
             });
 
-        let excerpt = select_excerpt(&query, &["force"]).expect("exact section ID");
+        let excerpt =
+            select_excerpt(&query, &[ContentSelector::id("force")]).expect("exact section ID");
         assert!(matches!(
             excerpt.selections.as_slice(),
             [ExcerptSelection::DocumentSection { outline, .. }] if outline.path() == "1"
@@ -548,7 +537,7 @@ mod tests {
         let outline = build_outline_projection(
             &query,
             EntryProjection::All,
-            Some(NodeSelector::new("force")),
+            Some(ContentSelector::id("force")),
         )
         .expect("outline root uses the same exact-ID precedence");
         assert!(matches!(
@@ -580,7 +569,7 @@ mod tests {
             let document = markdown_query.document.as_mut().expect("document");
             document.diagnostics.push(Diagnostic {
                 level: DiagnosticLevel::Warning,
-                code: Some("markdown.semantic-entry.ambiguous-selector".to_owned()),
+                code: Some("markdown.unsupported-html".to_owned()),
                 message: "author warning".to_owned(),
                 source: None,
             });
@@ -646,8 +635,8 @@ mod tests {
             name: "demo".into(),
             manual_section: "1".into(),
         });
-        let excerpt =
-            select_excerpt(&ir_query, &["1"]).expect("excerpt with invalid producer semantics");
+        let excerpt = select_excerpt(&ir_query, &[mant_protocol::ContentSelector::path("1")])
+            .expect("excerpt with invalid producer semantics");
         assert!(!excerpt.semantics_complete);
         assert_eq!(excerpt.address, ir_query.address);
         assert!(crate::render_excerpt_text(&excerpt).contains("Semantic entries are incomplete"));
@@ -684,8 +673,14 @@ mod tests {
         // Heading paths remain stable and independent from the synthetic root.
         assert_eq!(outline.nodes[1].path(), "1");
 
-        let excerpt = select_excerpt(&query, &["document-overview".to_owned(), "root".to_owned()])
-            .expect("root excerpt");
+        let excerpt = select_excerpt(
+            &query,
+            &[
+                mant_protocol::ContentSelector::id("document-overview"),
+                mant_protocol::ContentSelector::path("root"),
+            ],
+        )
+        .expect("root excerpt");
         assert!(matches!(
             excerpt.selections.as_slice(),
             [ExcerptSelection::DocumentRoot { outline, blocks, .. }]
@@ -702,10 +697,10 @@ mod tests {
         let excerpt = select_excerpt(
             &query(),
             &[
-                "files-5".to_owned(),
-                "2.1".to_owned(),
-                "2".to_owned(),
-                "options-2".to_owned(),
+                ContentSelector::id("files-5"),
+                ContentSelector::path("2.1"),
+                ContentSelector::path("2"),
+                ContentSelector::id("options-2"),
             ],
         )
         .expect("excerpt");
@@ -728,7 +723,8 @@ mod tests {
 
     #[test]
     fn child_selection_retains_ancestor_breadcrumbs() {
-        let excerpt = select_excerpt(&query(), &["2.2".to_owned()]).expect("excerpt");
+        let excerpt = select_excerpt(&query(), &[mant_protocol::ContentSelector::path("2.2")])
+            .expect("excerpt");
 
         let ExcerptSelection::DocumentSection { outline, .. } = &excerpt.selections[0] else {
             panic!("expected manual selection");
@@ -775,7 +771,8 @@ mod tests {
                 source: None,
             });
 
-        let excerpt = select_excerpt(&query, &["3"]).expect("section path wins");
+        let excerpt = select_excerpt(&query, &[mant_protocol::ContentSelector::path("3")])
+            .expect("section path wins");
         assert!(matches!(
             excerpt.selections.as_slice(),
             [ExcerptSelection::DocumentSection { outline, .. }] if outline.path() == "3"
@@ -798,7 +795,11 @@ mod tests {
         combined.tldr = Some(tldr());
         let excerpt = select_excerpt(
             &combined,
-            &["2".to_owned(), "tldr".to_owned(), "0".to_owned()],
+            &[
+                ContentSelector::path("2"),
+                ContentSelector::id("tldr"),
+                ContentSelector::path("0"),
+            ],
         )
         .expect("combined excerpt");
         assert!(matches!(
@@ -825,15 +826,15 @@ mod tests {
             Err(ProjectionError::MissingContent { .. })
         ));
         assert_eq!(
-            select_excerpt(&query(), &[] as &[String]),
+            select_excerpt(&query(), &[] as &[mant_protocol::ContentSelector]),
             Err(ProjectionError::EmptySelection)
         );
         assert_eq!(
-            select_excerpt(&query(), &[" ".to_owned()]),
-            Err(ProjectionError::EmptySelector)
+            select_excerpt(&query(), &[mant_protocol::ContentSelector::id(" ")]),
+            Err(ProjectionError::InvalidSelector)
         );
         assert!(matches!(
-            select_excerpt(&query(), &["9".to_owned()]),
+            select_excerpt(&query(), &[mant_protocol::ContentSelector::path("9")]),
             Err(ProjectionError::UnknownSelector { .. })
         ));
     }

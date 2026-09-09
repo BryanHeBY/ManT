@@ -6,9 +6,9 @@ use serde::{Deserialize, Serialize};
 use mant_ir::{ResolvedContent, TldrDocument};
 
 use crate::{
-    DocumentAddress, DocumentResponse, EntryProjection, MAX_DOCUMENT_SELECTOR_CHARS,
-    MAX_MANUAL_SECTION_CHARS, MAX_SEMANTIC_ENTRY_CHARS, MAX_SOURCE_SELECTOR_CHARS, NodeSelector,
-    SearchCase, SearchScope, SearchSyntax, default_search_limit,
+    ContentSelector, DocumentAddress, DocumentResponse, EntryProjection,
+    MAX_DOCUMENT_SELECTOR_CHARS, MAX_MANUAL_SECTION_CHARS, MAX_SEMANTIC_ENTRY_CHARS,
+    MAX_SOURCE_SELECTOR_CHARS, SearchCase, SearchScope, SearchSyntax, default_search_limit,
 };
 
 /// Maximum outline selectors accepted by one focused read request.
@@ -103,15 +103,17 @@ pub enum QueryView {
         #[serde(default)]
         entries: EntryProjection,
         /// Optional section or entry used as the outline root.
-        #[schemars(length(min = 1, max = MAX_SEMANTIC_ENTRY_CHARS))]
         #[serde(skip_serializing_if = "Option::is_none")]
-        root: Option<NodeSelector>,
+        root: Option<ContentSelector>,
+        /// Independent bounded inventory of real inline link occurrences.
+        #[serde(default)]
+        references: crate::ReferenceProjection,
     },
-    /// Return content selected by one or more node paths, IDs, or aliases.
+    /// Return content selected by one or more explicit local node paths or IDs.
     Excerpt {
         /// Ordered selectors resolved by the engine.
         #[schemars(length(min = 1, max = MAX_NODE_SELECTORS))]
-        selectors: Vec<NodeSelector>,
+        selectors: Vec<ContentSelector>,
     },
     /// Collect independent semantic and bounded literal evidence.
     Explain {

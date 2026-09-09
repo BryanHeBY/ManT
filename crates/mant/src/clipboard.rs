@@ -166,7 +166,7 @@ mod tests {
     use std::{cell::Cell, ffi::OsStr, io, sync::Arc};
 
     use mant_ir::ResolvedContent;
-    use mant_protocol::NodeSelector;
+    use mant_protocol::ContentSelector;
 
     use super::{
         CopyFormat, CopyRequest, MAX_OSC52_COPY_BYTES, deliver_clipboard, is_wsl_for_env,
@@ -185,13 +185,13 @@ mod tests {
 
         let text = render_copy_request(CopyRequest::Node {
             content: Arc::clone(&content),
-            selector: NodeSelector::new("options"),
+            selector: ContentSelector::id("options"),
             format: CopyFormat::Text,
         })
         .expect("text node");
         let markdown = render_copy_request(CopyRequest::Node {
             content,
-            selector: NodeSelector::new("options"),
+            selector: ContentSelector::id("options"),
             format: CopyFormat::Markdown,
         })
         .expect("Markdown node");
@@ -221,7 +221,7 @@ mod tests {
         });
         let error = render_copy_request(CopyRequest::Node {
             content,
-            selector: NodeSelector::new("missing"),
+            selector: ContentSelector::id("missing"),
             format: CopyFormat::Text,
         })
         .expect_err("unknown node");

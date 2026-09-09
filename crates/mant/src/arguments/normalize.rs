@@ -1,9 +1,9 @@
 //! Converts clap's syntax model into `ManT`'s validated command model.
 
 use super::{
-    CatalogKindMode, CatalogQuery, Cli, ColorMode, Command, CommandFactory, DisplayMode,
-    DocumentScope, DocumentSelector, DocumentTraversal, EntryProjection, ErrorKind, InputFormat,
-    InputFormatMode, NodeSelector, OutputOptions, QueryFormat, QueryInput, QueryPolicy,
+    CatalogKindMode, CatalogQuery, Cli, ColorMode, Command, CommandFactory, ContentSelector,
+    DisplayMode, DocumentScope, DocumentSelector, DocumentTraversal, EntryProjection, ErrorKind,
+    InputFormat, InputFormatMode, OutputOptions, QueryFormat, QueryInput, QueryPolicy,
     QueryRequest, QuerySource, QueryView, RequestSchema, ScopeQueryView, SearchCase, SearchScope,
     SearchSyntax, default_search_limit, is_manual_section, normalize_tldr_topic,
     parenthesized_manual_reference,
@@ -58,6 +58,11 @@ fn normalize_command(mut parsed: Cli, color: ColorMode) -> Result<Command, clap:
     validate_query_search_options(&parsed, color)?;
 
     let view = normalize_query_view(&mut parsed);
+    if let QueryView::Outline { references, .. } = &view {
+        references
+            .validate()
+            .map_err(|message| command_error(ErrorKind::InvalidValue, message, color))?;
+    }
     validate_output_options(
         parsed.compact,
         parsed.format,
@@ -299,7 +304,7 @@ fn validate_query_search_options(parsed: &Cli, color: ColorMode) -> Result<(), c
 fn normalize_query_view(parsed: &mut Cli) -> QueryView {
     if parsed.tldr {
         QueryView::Excerpt {
-            selectors: vec![NodeSelector::from("tldr")],
+            selectors: vec![ContentSelector::id("tldr")],
         }
     } else if parsed.outline {
         QueryView::Outline {
@@ -307,7 +312,17 @@ fn normalize_query_view(parsed: &mut Cli) -> QueryView {
                 .outline_entries
                 .take()
                 .map_or(EntryProjection::Summary, |entries| entries.0),
-            root: parsed.outline_root.take().map(NodeSelector::new),
+            root: parsed.outline_root.take(),
+            references: mant_protocol::ReferenceProjection {
+                mode: parsed.outline_references.unwrap_or_default(),
+                target_types: if parsed.reference_types.is_empty() {
+                    mant_protocol::ReferenceProjection::default().target_types
+                } else {
+                    std::mem::take(&mut parsed.reference_types)
+                },
+                offset: parsed.reference_offset.unwrap_or(0),
+                limit: parsed.reference_limit.unwrap_or(100),
+            },
         }
     } else if let Some(pattern) = parsed.search.take() {
         QueryView::Search {
@@ -349,10 +364,7 @@ fn normalize_query_view(parsed: &mut Cli) -> QueryView {
         QueryView::Full {}
     } else {
         QueryView::Excerpt {
-            selectors: std::mem::take(&mut parsed.node)
-                .into_iter()
-                .map(NodeSelector::from)
-                .collect(),
+            selectors: std::mem::take(&mut parsed.node),
         }
     }
 }

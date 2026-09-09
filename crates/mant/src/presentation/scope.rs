@@ -80,6 +80,17 @@ pub(crate) fn render_scope_query_result(
             }
         }
     }
+    for limited in &response.scope.reference_limits {
+        let _ = write!(
+            output,
+            "\nReference scan incomplete for {}: {:?}",
+            sanitize_terminal_text(&limited.document.catalog_path()),
+            limited.coverage.status
+        );
+        if let Some(limit) = limited.retention_limit {
+            let _ = write!(output, " ({limit:?})");
+        }
+    }
     Ok(output)
 }
 

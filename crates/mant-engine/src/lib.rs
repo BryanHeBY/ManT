@@ -54,8 +54,10 @@ pub use output::{
     render_search_markdown, render_search_text, render_search_text_with, render_update_json,
 };
 pub use projection::{
-    ProjectionError, SelectorCandidate, build_outline, build_outline_projection,
-    build_outline_with_detail, select_excerpt, select_explanation, semantics_complete,
+    ProjectionError, ReferenceProjectionLimits, SelectorCandidate, build_outline,
+    build_outline_projection, build_outline_with_detail, build_outline_with_references,
+    project_references, project_references_with_limits, select_excerpt, select_explanation,
+    semantics_complete,
 };
 pub use query::{
     DocumentResolver, MAX_MARKDOWN_BYTES, ManualLoadError, QueryError, QueryExecutionError,
@@ -88,3 +90,8 @@ mod tests {
         assert_eq!(native_api_version(), "0.11");
     }
 }
+
+#[cfg(test)]
+extern crate self as mant_engine;
+#[cfg(test)]
+mod semantic_test_read;

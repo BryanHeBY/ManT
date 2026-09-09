@@ -262,7 +262,7 @@ fn parse_document_with_entries(
         ids.targets.retain(|_, target| *target != old);
         ids.targets.insert(new.clone(), new);
     }
-    entry_diagnostics.extend(crate::selectors::semantic_selector_diagnostics(
+    entry_diagnostics.extend(crate::selectors::outline_identity_diagnostics(
         &document.blocks,
         &document.sections,
         "markdown",

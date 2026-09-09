@@ -3,10 +3,9 @@
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::{error::Error, fmt, io::Write};
 
-use mant_ir::visit::{Visit, walk_block, walk_definition_item, walk_inline};
-use mant_ir::{
-    Block, DefinitionItem, DocumentAddress, DocumentReference, Inline, ResolvedContent, ValueDomain,
-};
+#[cfg(test)]
+use mant_ir::{Block, Inline};
+use mant_ir::{DocumentAddress, DocumentReference, ResolvedContent};
 use mant_protocol::{
     DocumentEdge, DocumentEdgeKind, DocumentFrontier, DocumentScope, DocumentSelector,
     MAX_DOCUMENT_SELECTOR_CHARS, MAX_SCOPE_CONTENT_BYTES, MAX_SCOPE_DEPTH,
@@ -299,7 +298,8 @@ mod tests {
             }),
             document: Some(parsed.document),
             tldr: None,
-        });
+        })
+        .references;
 
         assert!(matches!(
             references.as_slice(),
@@ -329,7 +329,8 @@ mod tests {
             }),
             document: Some(parsed.document),
             tldr: None,
-        });
+        })
+        .references;
 
         assert!(references.is_empty());
     }
@@ -349,7 +350,8 @@ mod tests {
             }),
             document: Some(parsed.document),
             tldr: None,
-        });
+        })
+        .references;
 
         assert_eq!(
             references
@@ -495,6 +497,7 @@ mod tests {
                 edges: Vec::new(),
                 frontier: Vec::new(),
                 unresolved: Vec::new(),
+                reference_limits: Vec::new(),
             },
             documents: vec![
                 crate::query_markdown_text(
@@ -559,6 +562,7 @@ mod tests {
                 edges: Vec::new(),
                 frontier: Vec::new(),
                 unresolved: Vec::new(),
+                reference_limits: Vec::new(),
             },
             documents: vec![markdown("Alpha", 3), markdown("Beta", 10)],
         };

@@ -181,10 +181,11 @@ fn declared_entries_cover_windows_options_commands_and_environment_variables() {
         Some("tool.md".to_owned()),
     )
     .expect("declared semantic entries");
-    assert!(parsed.document.diagnostics.iter().any(|diagnostic| {
-        diagnostic.code.as_deref() == Some("markdown.semantic-entry.shadowed-selector")
-            && diagnostic.message.contains("semantic selector 'query'")
-    }));
+    assert!(
+        parsed.document.diagnostics.is_empty(),
+        "{:?}",
+        parsed.document.diagnostics
+    );
 
     let Block::List {
         items: option_items,
@@ -216,50 +217,49 @@ fn declared_entries_cover_windows_options_commands_and_environment_variables() {
         document: Some(parsed.document),
         tldr: None,
     };
-    let explanation = select_excerpt(&query, &["/QUERY"]).expect("case-insensitive option");
+    let explanation = crate::semantic_test_read::semantic_excerpt(&query, &["/QUERY"])
+        .expect("case-insensitive option");
     assert!(matches!(
         explanation.selections.as_slice(),
         [ExcerptSelection::DocumentEntry { entry, .. }]
             if entry.entry_owner().and_then(mant_ir::EntryOwner::facts).is_some_and(|identity| identity.names == ["/query"])
     ));
     assert!(matches!(
-        select_excerpt(&query, &["query"])
+        crate::select_excerpt(&query, &[mant_protocol::ContentSelector::id("query")])
             .unwrap()
             .selections
             .as_slice(),
         [ExcerptSelection::DocumentSection { .. }]
     ));
-    let command = select_excerpt(&query, &["QUERY"])
+    let command = crate::semantic_test_read::semantic_excerpt(&query, &["QUERY"])
         .expect("a differently cased alias does not equal the case-sensitive section ID");
     assert!(matches!(
         command.selections.as_slice(),
         [ExcerptSelection::DocumentEntry { entry, .. }]
             if entry.entry_owner().and_then(mant_ir::EntryOwner::facts).is_some_and(|identity| identity.kind == EntryKind::Command)
     ));
-    for selector in ["3", "environment"] {
+    for selector in [
+        mant_protocol::ContentSelector::path("3"),
+        mant_protocol::ContentSelector::id("environment"),
+    ] {
         assert!(matches!(
-            select_excerpt(&query, &[selector])
+            crate::select_excerpt(&query, &[selector])
                 .unwrap()
                 .selections
                 .as_slice(),
             [ExcerptSelection::DocumentSection { .. }]
         ));
     }
-    let environment = select_excerpt(&query, &["path"]).expect("environment alias");
+    let environment =
+        crate::semantic_test_read::semantic_excerpt(&query, &["path"]).expect("environment alias");
     assert!(matches!(
         environment.selections.as_slice(),
         [ExcerptSelection::DocumentEntry { entry, .. }]
             if entry.entry_owner().and_then(mant_ir::EntryOwner::facts).is_some_and(|identity| identity.kind == EntryKind::EnvironmentVariable)
     ));
-    for selector in [
-        "ProgramFiles(x86)",
-        "%ProgramFiles(x86)%",
-        "ProgramData",
-        "${Env:ProgramData}",
-        "RUST_LOG",
-    ] {
+    for selector in ["%ProgramFiles(x86)%", "${Env:ProgramData}", "RUST_LOG"] {
         assert!(
-            select_excerpt(&query, &[selector]).is_ok(),
+            crate::semantic_test_read::semantic_excerpt(&query, &[selector]).is_ok(),
             "environment selector {selector}"
         );
     }
@@ -308,7 +308,7 @@ fn declared_entries_expose_every_protocol_semantic_role() {
     };
     for selector in ["--", "FILE", "authorizedkeysfile", "ALWAYS", "exit status"] {
         assert!(
-            select_excerpt(&content, &[selector]).is_ok(),
+            crate::semantic_test_read::semantic_excerpt(&content, &[selector]).is_ok(),
             "semantic selector {selector}"
         );
     }
@@ -348,13 +348,13 @@ fn declared_non_option_code_spans_are_atomic_names() {
     };
     for selector in ["Send, Env", "A | B", "alpha|beta", "cd", "chdir"] {
         assert!(
-            select_excerpt(&content, &[selector]).is_ok(),
+            crate::semantic_test_read::semantic_excerpt(&content, &[selector]).is_ok(),
             "semantic selector {selector}"
         );
     }
     for truncated in ["Send", "Env", "A", "B", "alpha", "beta"] {
         assert!(
-            select_excerpt(&content, &[truncated]).is_err(),
+            crate::semantic_test_read::semantic_excerpt(&content, &[truncated]).is_err(),
             "truncated selector {truncated} must not resolve"
         );
     }
@@ -405,7 +405,8 @@ fn declared_dotted_dash_options_preserve_their_exact_names() {
         "--config.file",
         "--output.name",
     ] {
-        let explanation = select_excerpt(&query, &[selector]).expect("exact dotted selector");
+        let explanation = crate::semantic_test_read::semantic_excerpt(&query, &[selector])
+            .expect("exact dotted selector");
         assert!(matches!(
             explanation.selections.as_slice(),
             [ExcerptSelection::DocumentEntry { entry, .. }]
@@ -472,7 +473,8 @@ fn declared_variables_keep_shell_and_powershell_automatic_names() {
             if id == "variable-question-mark" && names == &["$?"]
     ));
     for selector in ["$?", "$$", "$^", "$_", "$lastexitcode", "$PSVersionTable"] {
-        let explanation = select_excerpt(&query, &[selector]).expect("variable selector");
+        let explanation = crate::semantic_test_read::semantic_excerpt(&query, &[selector])
+            .expect("variable selector");
         assert!(matches!(
             explanation.selections.as_slice(),
             [ExcerptSelection::DocumentEntry { entry, .. }]
@@ -480,7 +482,7 @@ fn declared_variables_keep_shell_and_powershell_automatic_names() {
         ));
     }
     assert!(matches!(
-        select_excerpt(&query, &["$env:PATH"])
+        crate::semantic_test_read::semantic_excerpt(&query, &["$env:PATH"])
             .expect("environment variable selector")
             .selections
             .as_slice(),
@@ -488,7 +490,7 @@ fn declared_variables_keep_shell_and_powershell_automatic_names() {
             if entry.entry_owner().and_then(mant_ir::EntryOwner::facts).is_some_and(|identity| identity.kind == EntryKind::EnvironmentVariable)
     ));
     assert!(matches!(
-        select_excerpt(&query, &["$PATH"])
+        crate::semantic_test_read::semantic_excerpt(&query, &["$PATH"])
             .expect("ordinary variable selector")
             .selections
             .as_slice(),
@@ -513,7 +515,7 @@ fn variable_declarations_reject_environment_provider_names_per_item() {
 }
 
 #[test]
-fn exact_aliases_win_before_normalized_option_shorthands() {
+fn punctuation_bearing_names_remain_distinct_without_shorthand_fallback() {
     let parsed = parse_markdown(
         "# Tool\n\n## Commands\n\n<!-- mant:entries role=command case=insensitive -->\n- `?`: Display positional help.\n\n## Options\n\n<!-- mant:entries role=option case=insensitive -->\n- `/?`, `-?`: Display option help.\n",
         Some("help-spellings.md".to_owned()),
@@ -527,7 +529,8 @@ fn exact_aliases_win_before_normalized_option_shorthands() {
         tldr: None,
     };
 
-    let command = select_excerpt(&query, &["?"]).expect("exact command spelling");
+    let command = crate::semantic_test_read::semantic_excerpt(&query, &["?"])
+        .expect("exact command spelling");
     assert!(matches!(
         command.selections.as_slice(),
         [ExcerptSelection::DocumentEntry { entry, .. }]
@@ -535,7 +538,8 @@ fn exact_aliases_win_before_normalized_option_shorthands() {
                 identity.kind == EntryKind::Command && identity.names == ["?"]
             })
     ));
-    let command_node = select_excerpt(&query, &["?".to_owned()]).expect("exact command node");
+    let command_node = crate::semantic_test_read::semantic_excerpt(&query, &["?".to_owned()])
+        .expect("exact command node");
     assert!(matches!(
         command_node.selections.as_slice(),
         [ExcerptSelection::DocumentEntry { entry, .. }]
@@ -544,7 +548,8 @@ fn exact_aliases_win_before_normalized_option_shorthands() {
             })
     ));
     for selector in ["/?", "-?"] {
-        let option = select_excerpt(&query, &[selector]).expect("exact option spelling");
+        let option = crate::semantic_test_read::semantic_excerpt(&query, &[selector])
+            .expect("exact option spelling");
         assert!(matches!(
             option.selections.as_slice(),
             [ExcerptSelection::DocumentEntry { entry, .. }]
@@ -557,7 +562,7 @@ fn exact_aliases_win_before_normalized_option_shorthands() {
 }
 
 #[test]
-fn the_same_alias_in_different_roles_is_ambiguous() {
+fn the_same_name_in_different_roles_retains_multiple_evidence_owners() {
     let parsed = parse_markdown(
         "# Tool\n\n## Commands\n\n<!-- mant:entries role=command case=sensitive -->\n- `PATH`: Run a command.\n\n## Environment\n\n<!-- mant:entries role=environment-variable case=sensitive -->\n- `PATH`: Configure discovery.\n",
         None,
@@ -570,14 +575,12 @@ fn the_same_alias_in_different_roles_is_ambiguous() {
         tldr: None,
     };
 
-    let error = select_excerpt(&query, &["PATH"]).expect_err("cross-role alias is ambiguous");
-    let ProjectionError::AmbiguousSelector { candidates, .. } = error else {
-        panic!("expected structured ambiguity");
-    };
+    let found = crate::semantic_test_read::semantic_excerpt(&query, &["PATH"]).unwrap();
     assert_eq!(
-        candidates
+        found
+            .selections
             .iter()
-            .map(|candidate| candidate.id.as_str())
+            .map(|selection| selection.outline().node.id())
             .collect::<Vec<_>>(),
         ["command-path", "environment-path"]
     );
@@ -597,7 +600,11 @@ fn exact_entry_id_takes_precedence_over_another_entry_alias() {
         tldr: None,
     };
 
-    let explanation = select_excerpt(&query, &["command-query"]).expect("exact entry ID");
+    let explanation = crate::select_excerpt(
+        &query,
+        &[mant_protocol::ContentSelector::id("command-query")],
+    )
+    .expect("exact entry ID");
     assert!(matches!(
         explanation.selections.as_slice(),
         [ExcerptSelection::DocumentEntry { entry, .. }]
@@ -621,8 +628,9 @@ fn declared_case_policy_preserves_distinct_sensitive_aliases() {
         tldr: None,
     };
 
-    for (selector, expected) in [("p", "-p"), ("P", "-P")] {
-        let explanation = select_excerpt(&query, &[selector]).expect("case-sensitive alias");
+    for (selector, expected) in [("-p", "-p"), ("-P", "-P")] {
+        let explanation = crate::semantic_test_read::semantic_excerpt(&query, &[selector])
+            .expect("case-sensitive alias");
         assert!(matches!(
             explanation.selections.as_slice(),
             [ExcerptSelection::DocumentEntry { entry, .. }]
@@ -732,10 +740,13 @@ fn declared_option_entries_cover_windows_native_token_families() {
     );
 
     for selector in ["START=", "//b", "//e", "/DRIVER.EXCLUDE", "+R", "/+n"] {
-        select_excerpt(&query, &[selector]).expect("case-insensitive Windows entry selector");
+        crate::semantic_test_read::semantic_excerpt(&query, &[selector])
+            .expect("case-insensitive Windows entry selector");
     }
-    let option = select_excerpt(&query, &["start="]).expect("equals-bearing option selector");
-    let command = select_excerpt(&query, &["start"]).expect("command selector");
+    let option = crate::semantic_test_read::semantic_excerpt(&query, &["start="])
+        .expect("equals-bearing option selector");
+    let command =
+        crate::semantic_test_read::semantic_excerpt(&query, &["start"]).expect("command selector");
     assert!(matches!(
         option.selections.as_slice(),
         [ExcerptSelection::DocumentEntry { entry, .. }]
@@ -1301,22 +1312,24 @@ fn declared_negated_dash_options_preserve_their_executable_spelling() {
         document: Some(parsed.document),
         tldr: None,
     };
-    assert!(select_excerpt(&content, &["!--reloadEnvironment"]).is_ok());
-    assert!(select_excerpt(&content, &["!--profile"]).is_ok());
+    assert!(
+        crate::semantic_test_read::semantic_excerpt(&content, &["!--reloadEnvironment"]).is_ok()
+    );
+    assert!(crate::semantic_test_read::semantic_excerpt(&content, &["!--profile"]).is_ok());
 }
 
 #[test]
-fn duplicate_entry_aliases_require_a_stable_path_or_id() {
+fn duplicate_names_explain_independently_and_read_by_exact_path() {
     let parsed = parse_markdown(
         "# tool\n\n## Query\n\n<!-- mant:entries role=option case=insensitive -->\n- `/f`: Force query.\n\n## Delete\n\n<!-- mant:entries role=option case=insensitive -->\n- `/F`: Force deletion.\n",
         None,
     )
     .expect("duplicate entries remain valid input");
-    assert!(parsed.document.diagnostics.iter().any(|diagnostic| {
-        diagnostic.code.as_deref() == Some("markdown.semantic-entry.ambiguous-selector")
-            && diagnostic.message.contains("1/e1 (option-f-")
-            && diagnostic.message.contains("2/e1 (option-f-")
-    }));
+    assert!(
+        parsed.document.diagnostics.is_empty(),
+        "{:?}",
+        parsed.document.diagnostics
+    );
     let query = ResolvedContent {
         address: None,
         label: "tool".to_owned(),
@@ -1324,19 +1337,17 @@ fn duplicate_entry_aliases_require_a_stable_path_or_id() {
         tldr: None,
     };
 
-    let error = select_excerpt(&query, &["/F"]).expect_err("bare alias must be ambiguous");
-    let ProjectionError::AmbiguousSelector { candidates, .. } = error else {
-        panic!("expected a structured ambiguity");
-    };
+    let found = crate::semantic_test_read::semantic_excerpt(&query, &["/F"]).unwrap();
     assert_eq!(
-        candidates
+        found
+            .selections
             .iter()
-            .map(|candidate| candidate.path.as_str())
+            .map(|selection| selection.outline().path())
             .collect::<Vec<_>>(),
         ["1/e1", "2/e1"]
     );
     assert_eq!(
-        select_excerpt(&query, &["2/e1"])
+        crate::select_excerpt(&query, &[mant_protocol::ContentSelector::path("2/e1")])
             .expect("qualified path")
             .selections
             .len(),

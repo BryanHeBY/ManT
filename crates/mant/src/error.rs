@@ -97,6 +97,8 @@ pub(super) fn query_failure(error: QueryError) -> Failure {
         | QueryError::EmptySelection
         | QueryError::TooManySelections { .. }
         | QueryError::EmptySelector
+        | QueryError::InvalidContentSelector
+        | QueryError::InvalidReferenceProjection(_)
         | QueryError::InvalidEntryKinds
         | QueryError::EmptyEntry
         | QueryError::InvalidViewSelector { .. } => Failure::usage(error),
@@ -132,6 +134,9 @@ fn projection_failure(error: ProjectionError) -> Failure {
         ),
         ProjectionError::EmptySelection
         | ProjectionError::EmptySelector
+        | ProjectionError::InvalidSelector
+        | ProjectionError::InvalidReferenceProjection(_)
+        | ProjectionError::TooManySelections { .. }
         | ProjectionError::AmbiguousSelector { .. } => Failure::usage(error),
     }
 }

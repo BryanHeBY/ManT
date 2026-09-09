@@ -2,12 +2,15 @@
 #![warn(missing_docs)]
 
 mod catalog;
+mod content_selector;
 mod doctor;
 mod document;
 mod explanation;
+mod navigation;
 mod outline;
 mod presentation;
 mod query;
+mod references;
 mod schema;
 mod scope;
 mod search;
@@ -15,12 +18,15 @@ mod selector;
 mod update;
 
 pub use catalog::*;
+pub use content_selector::*;
 pub use doctor::*;
 pub use document::*;
 pub use explanation::*;
+pub use navigation::DocumentOpenTarget;
 pub use outline::*;
 pub use presentation::*;
 pub use query::*;
+pub use references::*;
 pub use schema::*;
 pub use scope::*;
 pub use search::*;

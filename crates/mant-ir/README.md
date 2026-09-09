@@ -232,6 +232,16 @@ their registered source; a `Manual` target still requires catalog lookup and
 explicit ambiguity handling. Renderers that cannot activate a target should
 preserve the link's visible children.
 
+`DocumentReference` is the document/manual subset shared by independent
+entry-set relationships and scope traversal. It is not a second visible-link
+store. `scan_navigation_scope` traverses original heading/body content under
+one `ReferenceWorkBudget`, emitting selected link occurrences, optional exact
+targets and independent entry-set relations. `ContentLocation` resolves original
+inline paths; `ContentReveal` can also identify zero-width destinations without
+pretending they are readable semantic entries. Consumers charge optional labels,
+associations and materialization before copying, and must not report incomplete
+scans as complete inventories. No visitor opens files or activates links.
+
 `NodeId` is always the normalized internal identity used by indexes and typed
 local links. A document root, section, or inline anchor may additionally carry
 exact `FragmentAlias` values contributed by source syntax such as mdoc `.Tg`

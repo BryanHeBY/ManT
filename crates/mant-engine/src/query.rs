@@ -78,6 +78,10 @@ pub enum QueryError {
     },
     /// An excerpt selector was empty.
     EmptySelector,
+    /// An explicit local selector violated its path/ID grammar or byte limit.
+    InvalidContentSelector,
+    /// Reference inventory policy violated its closed bounds.
+    InvalidReferenceProjection(&'static str),
     /// A role-filtered outline contained no kinds or exceeded the closed kind family.
     InvalidEntryKinds,
     /// An explanation entry name was empty.
@@ -275,6 +279,8 @@ impl fmt::Display for QueryError {
                 )
             }
             Self::EmptySelector => formatter.write_str("outline node must not be empty"),
+            Self::InvalidContentSelector => mant_protocol::InvalidContentSelector.fmt(formatter),
+            Self::InvalidReferenceProjection(reason) => formatter.write_str(reason),
             Self::InvalidEntryKinds => {
                 formatter.write_str("outline entry kinds must contain between 1 and 9 values")
             }
@@ -337,6 +343,8 @@ impl Error for QueryError {
             | Self::EmptySelection
             | Self::TooManySelections { .. }
             | Self::EmptySelector
+            | Self::InvalidContentSelector
+            | Self::InvalidReferenceProjection(_)
             | Self::InvalidEntryKinds
             | Self::EmptyEntry
             | Self::InvalidViewSelector { .. }

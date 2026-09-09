@@ -1,8 +1,9 @@
 //! Closed, compact input schemas exposed by the agent-facing MCP tools.
 
 use mant_protocol::{
-    CatalogDocumentKind, CatalogQuery, DocumentScope, DocumentSelector, DocumentTraversal,
-    EntryProjection, NodeSelector, QueryInput, QueryRequest, QueryView, SearchCase, SearchSyntax,
+    CatalogDocumentKind, CatalogQuery, ContentSelector, DocumentScope, DocumentSelector,
+    DocumentTraversal, EntryProjection, QueryInput, QueryRequest, QueryView, SearchCase,
+    SearchSyntax,
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, de::DeserializeOwned};
@@ -30,7 +31,6 @@ pub(super) const MAX_PAGE_CHARS: u32 = 32 * 1024;
 pub(super) const MAX_FIND_QUERY_CHARS: usize = 1024;
 const MAX_SOURCE_CHARS: usize = 128;
 pub(super) const MAX_MANUAL_SECTION_CHARS: usize = 32;
-const MAX_SELECTOR_CHARS: usize = 512;
 const MAX_PATTERN_CHARS: usize = mant_protocol::MAX_SEARCH_PATTERN_CHARS;
 
 /// Discover logical document identities in the local catalog.
@@ -78,10 +78,11 @@ pub(super) struct OutlineParams {
     /// Include no entries, compact summaries (the default), all entries, or selected kinds.
     /// Start compact, then expand a relevant returned root with all or selected kinds.
     pub(super) entries: Option<EntryProjection>,
-    /// Returned section or entry path, stable ID, or unambiguous alias used as the tree root.
-    /// Stable IDs are preferred for stateless follow-up calls.
-    #[schemars(length(min = 1, max = 512))]
-    pub(super) root: Option<String>,
+    /// Exact local path or ID object returned by the outline; never a semantic name or link.
+    pub(super) root: Option<ContentSelector>,
+    /// Independent bounded reference discovery; summary of document/manual links by default.
+    #[serde(default)]
+    pub(super) references: mant_protocol::ReferenceProjection,
     /// Zero-based Unicode scalar offset into the canonical result text.
     #[serde(default, deserialize_with = "deserialize_compat_scalar")]
     pub(super) start_char: u32,
@@ -98,10 +99,10 @@ pub(super) struct ReadParams {
     /// Unqualified name or canonical catalog path returned by `mant_find`.
     #[schemars(length(min = 1, max = 1024))]
     pub(super) document: String,
-    /// Outline paths, stable IDs, or semantic aliases.
+    /// Explicit local path or ID objects; names, aliases and link targets are not selectors.
     #[schemars(length(min = 1, max = 16))]
     #[serde(deserialize_with = "deserialize_selectors")]
-    pub(super) selectors: Vec<NodeSelector>,
+    pub(super) selectors: Vec<ContentSelector>,
     /// Zero-based Unicode scalar offset into the canonical result text.
     #[serde(default, deserialize_with = "deserialize_compat_scalar")]
     pub(super) start_char: u32,
@@ -231,13 +232,14 @@ pub(super) struct ValidatedFindParams {
 pub(super) struct ValidatedOutlineParams {
     pub(super) document: String,
     pub(super) entries: EntryProjection,
-    pub(super) root: Option<NodeSelector>,
+    pub(super) root: Option<ContentSelector>,
+    pub(super) references: mant_protocol::ReferenceProjection,
     pub(super) page: PageRequest,
 }
 
 pub(super) struct ValidatedReadParams {
     pub(super) document: String,
-    pub(super) selectors: Vec<NodeSelector>,
+    pub(super) selectors: Vec<ContentSelector>,
     pub(super) page: PageRequest,
 }
 
@@ -272,7 +274,7 @@ where
 
 /// Preserve the canonical array schema while accepting one selector or a
 /// stringified selector array from an MCP client.
-fn deserialize_selectors<'de, D>(deserializer: D) -> Result<Vec<NodeSelector>, D::Error>
+fn deserialize_selectors<'de, D>(deserializer: D) -> Result<Vec<ContentSelector>, D::Error>
 where
     D: serde::Deserializer<'de>,
 {
@@ -292,11 +294,17 @@ where
             Ok(parsed @ serde_json::Value::Array(_)) => parsed,
             _ => serde_json::Value::Array(vec![serde_json::Value::String(text)]),
         },
-        other => other,
+        array @ serde_json::Value::Array(_) => array,
+        item => serde_json::Value::Array(vec![item]),
     };
     serde_json::from_value(value).map_err(|error| {
         D::Error::custom(format!(
-            "invalid {field}: {error}; use a JSON array such as [\"manual/1/git\"]"
+            "invalid {field}: {error}; use a JSON array of {}",
+            if field == "selectors" {
+                "closed path/id selector objects"
+            } else {
+                "document selector strings"
+            }
         ))
     })
 }
@@ -384,14 +392,20 @@ impl FindParams {
 
 impl OutlineParams {
     pub(super) fn validate(self) -> Result<ValidatedOutlineParams, String> {
+        self.references.validate().map_err(str::to_owned)?;
         Ok(ValidatedOutlineParams {
             document: bounded_normalized(&self.document, "document", MAX_DOCUMENT_CHARS)?,
             entries: self.entries.unwrap_or_default(),
-            root: optional_normalized(self.root, "root", MAX_SELECTOR_CHARS)?
-                .map(NodeSelector::new),
+            root: self.root.map(validate_selector).transpose()?,
+            references: self.references,
             page: validate_page(self.start_char, self.max_chars)?,
         })
     }
+}
+
+fn validate_selector(selector: ContentSelector) -> Result<ContentSelector, String> {
+    selector.validate().map_err(|error| error.to_string())?;
+    Ok(selector)
 }
 
 impl ReadParams {
@@ -404,10 +418,7 @@ impl ReadParams {
         let selectors = self
             .selectors
             .into_iter()
-            .map(|selector| {
-                bounded_normalized(selector.as_str(), "selector", MAX_SELECTOR_CHARS)
-                    .map(NodeSelector::new)
-            })
+            .map(validate_selector)
             .collect::<Result<_, _>>()?;
         Ok(ValidatedReadParams {
             document: bounded_normalized(&self.document, "document", MAX_DOCUMENT_CHARS)?,

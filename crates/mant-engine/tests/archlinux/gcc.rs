@@ -31,7 +31,7 @@ fn explanation_retains_both_help_definitions_and_the_qualified_tail() {
                 .bases
                 .contains(&mant_protocol::EvidenceBasis::Literal)
     }));
-    assert!(mant_engine::select_excerpt(&query, &["--help"]).is_err());
+    assert!("--help".parse::<mant_protocol::ContentSelector>().is_err());
     let full = mant_engine::render_explanation_text(&result);
     for text in [
         "undocumented",
@@ -68,7 +68,9 @@ fn help_classes_qualifiers_and_tail_examples_share_one_owner() {
         );
     }
     assert_eq!(help.children().len(), 9);
-    let excerpt = mant_engine::select_excerpt(&query, &[help.path()]).unwrap();
+    let excerpt =
+        mant_engine::select_excerpt(&query, &[mant_protocol::ContentSelector::path(help.path())])
+            .unwrap();
     let text = mant_engine::render_excerpt_text(&excerpt);
     for retained in [
         "These are the supported qualifiers",

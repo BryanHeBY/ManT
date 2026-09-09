@@ -23,12 +23,12 @@ use mant_ir::{Block, Section};
 pub(crate) use recognized::RecognizedName;
 use std::collections::{HashMap, HashSet};
 pub(crate) use syntax::{
-    environment_variable_alias, environment_variable_body, option_names_from_terms,
-    option_occurrences_from_terms, option_prefix, slash_option_forms,
+    environment_variable_alias, option_names_from_terms, option_occurrences_from_terms,
+    option_prefix, slash_option_forms,
 };
 #[cfg(test)]
 use syntax::{is_value_name, option_names};
-pub(crate) use walk::{ContentEntry, content_entries};
+pub(crate) use walk::{ContentEntry, content_entries, content_entry_locations};
 
 /// Annotate reliably recognizable command-line options and return every
 /// inline anchor that the navigation resolver must retain.
