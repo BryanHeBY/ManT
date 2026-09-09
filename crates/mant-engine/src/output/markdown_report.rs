@@ -1,5 +1,8 @@
 //! `CommonMark` presentation of query reports, separate from document encoding.
 
+#[cfg(test)]
+mod tests;
+
 use mant_ir::DOCUMENT_ROOT_ID;
 use mant_protocol::{ExcerptSelection, OutlineNode, QueryExcerpt, QueryOutline};
 
