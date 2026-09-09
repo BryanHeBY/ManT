@@ -603,8 +603,9 @@ mod tests {
             nodes.push(owner);
             let plan = TreePlan::new(&nodes);
             for width in [0, 1, 4, 8] {
-                let plain = super::planned_node_lines(&plan, depth, true, true, true, width);
-                assert!(plain.iter().all(|row| row.line.width() <= width));
+                let ordinary_rows =
+                    super::planned_node_lines(&plan, depth, true, true, true, width);
+                assert!(ordinary_rows.iter().all(|row| row.line.width() <= width));
                 for (selected, full) in [(depth, false), (usize::MAX, true), (usize::MAX, false)] {
                     let rows = super::rows_with_references(
                         &plan,

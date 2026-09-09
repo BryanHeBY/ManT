@@ -95,6 +95,11 @@ fn mixed_tree_guides_reach_the_expected_terminal_cells() {
         "     ╰─· LINK",
         "   · NEXT",
     ];
+    assert_eq!(
+        rows.len(),
+        expected.len(),
+        "every logical row must be rendered"
+    );
     for (index, (row, expected)) in rows.iter().zip(expected).enumerate() {
         let y = u16::try_from(index).unwrap();
         row.line.clone().render(Rect::new(0, y, 40, 1), &mut buffer);
