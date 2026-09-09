@@ -26,7 +26,6 @@ all-features = true
 [features]
 default = ["roff"]
 roff = ["mant-loader/roff", "mant-codec/roff"]
-tldr-update = []
 
 [dependencies]
 mant-ir = { path = "../mant-ir", version = "^0.11.0" }

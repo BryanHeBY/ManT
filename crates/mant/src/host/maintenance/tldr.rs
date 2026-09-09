@@ -13,9 +13,7 @@ use std::{
 
 use mant_protocol::{TldrCacheAction, TldrCacheUpdate};
 
-use mant_loader::ExecutableLookup;
-
-use super::{HostPlatform, TldrCacheError, get_tldr_cache_dir};
+use mant_loader::{ExecutableLookup, HostPlatform, TldrCacheError, get_tldr_cache_dir};
 
 const DEFAULT_REPOSITORY: &str = "https://github.com/tldr-pages/tldr.git";
 static TEMP_SEQUENCE: AtomicU64 = AtomicU64::new(0);
@@ -29,7 +27,7 @@ struct CommandOutput {
 
 /// Failure to refresh an installed client or `ManT`'s private checkout.
 #[derive(Debug)]
-pub enum TldrUpdateError {
+pub(crate) enum TldrUpdateError {
     /// Cache path discovery failed.
     Cache(TldrCacheError),
     /// Neither a supported tldr client nor Git was available.
@@ -122,7 +120,7 @@ impl From<TldrCacheError> for TldrUpdateError {
 ///
 /// Returns [`TldrUpdateError`] when no updater is installed, a subprocess
 /// fails, or the private cache cannot be changed transactionally.
-pub fn update_tldr_cache() -> Result<TldrCacheUpdate, TldrUpdateError> {
+pub(crate) fn update_tldr_cache() -> Result<TldrCacheUpdate, TldrUpdateError> {
     let environment = env::vars().collect::<BTreeMap<_, _>>();
     update_tldr_cache_with(
         &environment,

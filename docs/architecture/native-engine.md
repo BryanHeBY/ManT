@@ -450,13 +450,14 @@ are never reinterpreted after a failed lookup.
 
 Cache locations, platform/language selection, reads and readonly executable
 probes live in `mant-loader`; syntax parsing lives in `mant-codec`. Loader
-never spawns an updater or creates a missing cache. The engine's default tldr
-feature set is read-only. Subprocess-backed updates
-through an installed tldr client or Git are compiled only by the opt-in
-`tldr-update` feature, which the native `mant` composition root enables. This
-matches `mant-sources`: reusable engine consumers receive local discovery and
-parsing without implicit update authority, while MCP exposes no update entry
-point even in the full executable.
+never spawns an updater or creates a missing cache. Every engine feature is
+read-only. Subprocess-backed updates through an installed tldr client or Git
+live in the `mant` host maintenance module; the old engine `tldr-update` feature
+and updater exports are removed. The host explicitly invokes maintenance, as
+it does `mant-sources` acquisition. Reusable engine consumers receive discovery
+and querying without update authority, while MCP exposes no update entry point
+even in the full executable. Update staging, activation, failure reporting and
+Windows command-interpreter handling retain the same implementation and tests.
 
 ## Presentation boundaries
 

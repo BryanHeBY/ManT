@@ -936,6 +936,7 @@ dependencies = [
  "mant-codec",
  "mant-engine",
  "mant-ir",
+ "mant-loader",
  "mant-protocol",
  "mant-render",
  "mant-sources",

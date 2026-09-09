@@ -12,6 +12,11 @@ that crate was not published for that change.
 
 ## Unreleased
 
+- Explicit tldr update implementation moves from `mant-engine` to the `mant`
+  host. The engine's former `tldr-update` feature and updater exports are
+  removed; all library feature combinations remain read-only. CLI maintenance
+  behavior and the independent update response schema are unchanged.
+
 ### mant-render 0.11.0
 
 - New independently usable presentation boundary formats existing IR and

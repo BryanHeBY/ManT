@@ -66,16 +66,16 @@ with `mant-render`.
 - Source-aware `mant_render::render_query_text_with` / `mant_render::render_excerpt_text_with` callbacks
   over the same plain-text block layout, with composable source markup and
   validated owner-local name roles rather than rendered-line name matching.
-- Loader-owned installed-client and private tldr cache discovery. Explicit subprocess-backed
-  updates are available only with the opt-in `tldr-update` feature.
+- Loader-owned installed-client and private tldr cache discovery. Explicit
+  subprocess-backed updates belong to the `mant` process host, not this library.
 
 For already-loaded tldr text, `mant-codec::parse_tldr_page` and
 `mant-codec::parse_tldr_command` are pure parsing entry points, also re-exported
-here without `tldr-update`. `TldrPageLocation` supplies
+here as read-only helpers. `TldrPageLocation` supplies
 identity metadata only: it does not trigger a cache read, host/platform lookup,
 or URL fetch. `TldrParseError` reports syntax failure; the separate
-`TldrCacheError` adds read/location context, and `TldrUpdateError` belongs to the
-explicit maintenance operation.
+`TldrCacheError` adds read/location context. The updater and its process/filesystem
+errors are private to the application's explicit maintenance operation.
 
 Process argument parsing, MCP transport, and interactive presentation remain
 outside this crate.
@@ -83,10 +83,9 @@ outside this crate.
 The default `roff` feature preserves native-manual support and explicitly
 forwards to `mant-loader/roff` and `mant-codec/roff`. Disable default features
 for Markdown/tldr-only production use without native parsing or decompression.
-The default feature set remains read-only with respect to tldr data. The native
-`mant` composition root enables `tldr-update`; library consumers, renderers,
-and MCP-oriented embeddings do not receive subprocess update authority unless
-they request it explicitly.
+Every engine feature remains read-only with respect to tldr data. The old
+`tldr-update` feature and updater exports are removed: maintenance is owned by
+the native `mant` composition root, never by library queries or MCP services.
 
 ## Execution pipeline
 

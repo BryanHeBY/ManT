@@ -6,6 +6,7 @@ mod clipboard;
 mod doctor;
 mod error;
 mod external;
+mod host;
 mod json_boundary;
 mod mcp;
 mod output_policy;
@@ -174,7 +175,7 @@ impl CliHost for SystemHost {
     }
 
     fn update_tldr(&self) -> Result<TldrCacheUpdate, Failure> {
-        mant_engine::update_tldr_cache().map_err(Failure::operational)
+        host::maintenance::tldr::update_tldr_cache().map_err(Failure::operational)
     }
 
     fn update_docs(&self) -> Result<DocumentSourcesUpdate, Failure> {

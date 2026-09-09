@@ -1,7 +1,4 @@
-//! Application tldr maintenance composed with read-only loader discovery.
-
-#[cfg(feature = "tldr-update")]
-mod update;
+//! Read-only tldr parsing and loading adapters.
 
 pub use mant_codec::{TldrPageLocation, TldrParseError, parse_tldr_command, parse_tldr_page};
 pub use mant_loader::{
@@ -9,5 +6,3 @@ pub use mant_loader::{
     get_tldr_languages, get_tldr_platforms, get_tldr_read_cache_dirs, normalize_tldr_topic,
     read_cached_tldr_page,
 };
-#[cfg(feature = "tldr-update")]
-pub use update::{TldrUpdateError, update_tldr_cache};
