@@ -38,6 +38,11 @@ that crate was not published for that change.
 
 ### mant-ui 0.11.0
 
+- Sidebar siblings now align independently of whether they contain entries,
+  references or subsections. Tree guides use the final parent-linked forest;
+  expanded last siblings and wrapped title/badge rows no longer suggest false
+  nesting. Scrollbar reflow retains the final row-to-node hit mapping without
+  changing document structure, selectors or reference targets.
 - The reader is an embedded component with explicit grouped host services;
   native terminal acquisition, clipboard/open delivery and static paging move
   into `mant`. It can be driven from an existing event loop without creating

@@ -32,6 +32,22 @@ width. Plain and ANSI share that tree projection and keep continuation guides.
 TUI compact labels use Compact; expanded labels use Forms. This difference is
 intentional and does not imply different names or semantic identities.
 
+The TUI derives tree guides from the final navigation forest, after entry and
+reference groups have been appended. A private linear topology plan stores
+parent indices and following-sibling facts; builder-time last-item hints,
+folding and the scroll window do not determine these relationships. Each node
+keeps fixed-size topology metadata, and prefix generation visits only the
+nearest ancestors that can fit the sidebar width. The two candidate widths
+used when deciding whether a scrollbar is needed share the same topology plan.
+
+At the same effective width, sibling labels start in the same column whether
+they are leaves, expanded parents or folded groups. Title and reference-badge
+continuations reuse that prefix width; child guides occupy existing marker
+slots rather than shifting continuation text. Width changes may reflow or
+clip distant ancestor columns at grapheme boundaries. Final physical rows own
+selection ranges, scroll limits and mouse hit mapping; decoration never creates
+new document identities or changes a reference's target.
+
 Terms are primary content, not muted metadata. Values use the blue family;
 parameters green; commands warm; environment variables Magenta (TUI MAUVE);
 configuration keys yellow; variables BrightMagenta (TUI PINK). Environment

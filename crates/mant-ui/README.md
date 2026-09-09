@@ -14,6 +14,10 @@ catalog, search, and cross-document interactions without serializing the IR.
   names preserve browsing density while an optional full-label mode wraps
   every authored form. Row-topology changes retain the selected node's viewport
   position whenever terminal bounds permit.
+- Sidebar guides follow the final parent-linked navigation forest, including
+  synthetic entry/reference groups. Siblings share a label column at the same
+  effective width regardless of expansion; wrapped titles and reference badges
+  retain that column. Folding changes visibility, not parent or sibling identity.
 - Settled-scroll navigation following and selectable Markdown/mdoc page-local
   references.
 - A live, bounded catalog finder that delegates complete-snapshot discovery
