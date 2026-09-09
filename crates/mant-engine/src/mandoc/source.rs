@@ -712,3 +712,6 @@ mod tests {
         assert!(error.to_string().contains("exceeds"));
     }
 }
+
+#[cfg(test)]
+mod compression_tests;
