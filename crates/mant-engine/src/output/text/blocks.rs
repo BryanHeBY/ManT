@@ -2,8 +2,8 @@
 //! Decorators must preserve visible content and boundary whitespace.
 use super::flow::Flow;
 use super::indent_lines;
+use mant_ir::geometry::{compose_origin, coordinate, marker_run_in_gap, padding, text_width};
 use mant_ir::{Block, DefinitionItem, Inline, ListItem, ListKind, Section, TableCell};
-use mant_protocol::geometry::{compose_origin, coordinate, marker_run_in_gap, padding, text_width};
 use mant_protocol::{EntryStyleMap, TextPresentation, TextRole, visit_inline_text};
 
 mod lists;
@@ -83,7 +83,7 @@ impl BlockRenderer<'_> {
     pub(super) fn block_flow(&self, blocks: &[Block], base_indent: i32) -> Flow {
         let mut output = Flow::default();
         for block in blocks {
-            output.gap(mant_protocol::geometry::block_gap(block));
+            output.gap(mant_ir::geometry::block_gap(block));
             output.extend(self.render_block(block, base_indent));
         }
         output
@@ -96,7 +96,7 @@ impl BlockRenderer<'_> {
             children, layout, ..
         } = block
         {
-            if !mant_protocol::geometry::has_literal_rows(children) {
+            if !mant_ir::geometry::has_literal_rows(children) {
                 return Flow::default();
             }
             return Flow::literal(indent_lines(
@@ -168,7 +168,7 @@ impl BlockRenderer<'_> {
             }
             Block::Table { rows, layout, .. } => {
                 let origin = compose_origin(base_indent, layout.indent_columns);
-                if mant_protocol::geometry::table_requires_origin_preserving_stack(rows, origin) {
+                if mant_ir::geometry::table_requires_origin_preserving_stack(rows, origin) {
                     return self.stacked_table_flow(rows, origin);
                 }
                 (
@@ -391,7 +391,7 @@ mod tests {
             layout.spacing_before_lines = 3000;
         }
         let blocks = [paragraph("BEFORE", 0), container];
-        assert!(mant_protocol::geometry::has_bounded_gap(&blocks));
+        assert!(mant_ir::geometry::has_bounded_gap(&blocks));
         assert_eq!(
             renderer.render_blocks(&blocks, 0),
             format!("BEFORE{}AFTER", "\n".repeat(4097))

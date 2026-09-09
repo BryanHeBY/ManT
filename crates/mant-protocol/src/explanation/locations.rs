@@ -37,11 +37,7 @@ impl ExplanationTextRoot<'_> {
     fn scalar_len(self) -> usize {
         match self {
             Self::Text(value) => value.chars().count(),
-            Self::Inline(nodes) => {
-                let mut count = 0;
-                crate::visit_inline_text(nodes, &[], |_, _, value| count += value.chars().count());
-                count
-            }
+            Self::Inline(nodes) => mant_ir::inline_scalar_len(nodes),
         }
     }
 }

@@ -26,8 +26,8 @@ impl crate::mandoc::LoweringContext<'_> {
         }
         let visible =
             crate::mandoc::inline::plain_text(&crate::mandoc::inline::parse_roff_text(text));
-        Distance::cells(mant_protocol::geometry::coordinate(
-            mant_protocol::geometry::text_width(&visible),
+        Distance::cells(mant_ir::geometry::coordinate(
+            mant_ir::geometry::text_width(&visible),
         ))
     }
 

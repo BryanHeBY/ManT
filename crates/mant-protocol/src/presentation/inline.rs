@@ -36,7 +36,7 @@ pub fn visit_inline_text<'a>(
     let length = if names.is_empty() {
         0
     } else {
-        super::bindings::scalar_len(nodes)
+        mant_ir::inline_scalar_len(nodes)
     };
     let names = if names
         .iter()

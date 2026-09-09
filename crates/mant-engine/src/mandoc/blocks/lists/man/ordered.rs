@@ -247,7 +247,7 @@ pub(in crate::mandoc::blocks) fn append_relative_continuation(
 }
 
 fn ordinal_width(value: u64) -> i32 {
-    mant_protocol::geometry::coordinate(mant_protocol::geometry::text_width(&format!("{value}. ")))
+    mant_ir::geometry::coordinate(mant_ir::geometry::text_width(&format!("{value}. ")))
 }
 
 /// The tagged paragraph's leading boundary precedes its marker, not its

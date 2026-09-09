@@ -3,7 +3,8 @@ use super::{
     GapPlan, block_gap, compose_origin, coordinate, marker_run_in_gap,
     table_requires_origin_preserving_stack,
 };
-use mant_ir::{Block, Inline, ListKind};
+use crate::visit::Visit;
+use crate::{Block, Inline, ListKind};
 
 /// Whether any resolved content boundary exceeds the presentation gap budget.
 /// Transparent containers and zero-width anchors do not reset the boundary;
@@ -16,9 +17,33 @@ pub fn has_bounded_gap(blocks: &[Block]) -> bool {
 }
 
 fn visible(nodes: &[Inline]) -> bool {
-    let mut visible = false;
-    crate::visit_inline_text(nodes, &[], |_, _, text| visible |= !text.trim().is_empty());
-    visible
+    let mut visitor = VisibleText(false);
+    nodes.iter().any(|node| {
+        visitor.visit_inline(node);
+        visitor.0
+    })
+}
+
+// Style and semantic-name decoration cannot change whether a boundary has
+// original visible text. Reuse the IR wrapper traversal without requesting
+// presentation roles or allocating a rendered intermediate string.
+struct VisibleText(bool);
+
+impl<'ir> Visit<'ir> for VisibleText {
+    fn visit_inline(&mut self, inline: &'ir Inline) {
+        if self.0 {
+            return;
+        }
+        match inline {
+            Inline::Text { value } | Inline::Code { value } => {
+                self.0 = !value.trim().is_empty();
+            }
+            Inline::Strong { .. } | Inline::Emphasis { .. } | Inline::Link { .. } => {
+                crate::visit::walk_inline(self, inline);
+            }
+            Inline::LineBreak | Inline::Anchor { .. } => {}
+        }
+    }
 }
 
 fn add(gap: &mut GapPlan, rows: u16) -> bool {
@@ -163,7 +188,7 @@ fn walk(blocks: &[Block], gap: &mut GapPlan, depth: usize, origin: i32) -> bool 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use mant_ir::{LayoutHint, ListItem, TableCell, TableRow};
+    use crate::{LayoutHint, ListItem, TableCell, TableRow};
 
     fn paragraph(indent: i32, gap: u16, children: Vec<Inline>) -> Block {
         Block::Paragraph {
@@ -181,6 +206,83 @@ mod tests {
         vec![Inline::Text {
             value: "BODY".into(),
         }]
+    }
+
+    #[test]
+    fn paragraph_gap_boundaries_depend_on_original_text_not_inline_decoration() {
+        for (children, bounded) in [
+            (
+                vec![Inline::Text {
+                    value: String::new(),
+                }],
+                true,
+            ),
+            (
+                vec![Inline::Code {
+                    value: "\u{2003}\t".into(),
+                }],
+                true,
+            ),
+            (vec![Inline::LineBreak, Inline::anchor("target")], true),
+            (
+                vec![Inline::Strong {
+                    children: Vec::new(),
+                }],
+                true,
+            ),
+            (
+                vec![Inline::Emphasis {
+                    children: vec![Inline::LineBreak],
+                }],
+                true,
+            ),
+            (
+                vec![Inline::Link {
+                    title: None,
+                    target: crate::LinkTarget::External {
+                        uri: "https://example.test".into(),
+                    },
+                    children: vec![Inline::Strong {
+                        children: vec![Inline::Text { value: " ".into() }],
+                    }],
+                }],
+                true,
+            ),
+            (
+                vec![Inline::Strong {
+                    children: vec![Inline::Link {
+                        title: None,
+                        target: crate::LinkTarget::External {
+                            uri: "https://example.test".into(),
+                        },
+                        children: vec![Inline::Emphasis {
+                            children: vec![Inline::Text {
+                                value: "Cafe\u{301} 👩‍💻".into(),
+                            }],
+                        }],
+                    }],
+                }],
+                false,
+            ),
+        ] {
+            let description = format!("{children:?}");
+            assert_eq!(
+                has_bounded_gap(&[
+                    Block::VerticalSpace {
+                        lines: 3000,
+                        source: None
+                    },
+                    paragraph(0, 0, children),
+                    Block::VerticalSpace {
+                        lines: 3000,
+                        source: None
+                    },
+                    paragraph(0, 0, text()),
+                ]),
+                bounded,
+                "{description}"
+            );
+        }
     }
 
     #[test]
@@ -243,7 +345,7 @@ mod tests {
             kind: ListKind::Bullet,
             compact: true,
             items: vec![ListItem {
-                layout: mant_ir::ListItemLayout::default(),
+                layout: crate::ListItemLayout::default(),
                 blocks,
                 entry: None,
                 source: None,

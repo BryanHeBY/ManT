@@ -54,11 +54,8 @@ pub(crate) const fn block_source(block: &Block) -> Option<SourceSpan> {
 pub(crate) fn rebase_roots(blocks: &mut [mant_ir::Block], old_parent: i32, new_parent: i32) {
     for block in blocks {
         if let Some(layout) = block_layout_mut(block) {
-            layout.indent_columns = mant_protocol::geometry::rebase_origin(
-                layout.indent_columns,
-                old_parent,
-                new_parent,
-            );
+            layout.indent_columns =
+                mant_ir::geometry::rebase_origin(layout.indent_columns, old_parent, new_parent);
         }
     }
 }

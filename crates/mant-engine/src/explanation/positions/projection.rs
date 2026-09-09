@@ -1,9 +1,9 @@
 //! Coordinate translation from source slices into an excerpted owner.
 use super::Domain;
-use mant_ir::{Block, EntryForm, EntryInlineRoot, EntryOwner};
+use mant_ir::{Block, EntryForm, EntryInlineRoot, EntryOwner, project_content_slice};
 use mant_protocol::{
     ExplanationBlockStep as Step, ExplanationContentRange as ContentRange, ExplanationFormRange,
-    ExplanationOccurrence, MAX_EXPLANATION_FRAGMENTS, project_content_slice,
+    ExplanationOccurrence, MAX_EXPLANATION_FRAGMENTS,
 };
 
 pub(super) fn occurrence(

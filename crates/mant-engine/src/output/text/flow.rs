@@ -1,7 +1,7 @@
 //! Keep resolved gaps separate from literal line breaks until the entire
 //! content flow is assembled. Transparent containers must not create a new
 //! gap budget, and literal blank lines must not be mistaken for requests.
-use mant_protocol::geometry::GapPlan;
+use mant_ir::geometry::GapPlan;
 
 #[derive(Default)]
 pub(super) struct Flow {

@@ -2,79 +2,9 @@
 use std::{collections::HashMap, marker::PhantomData, ops::Range};
 
 use mant_ir::{
-    Block, Document, EntryContentSlice, EntryInlineRoot, EntryKind, EntryOwner, Inline,
+    Block, Document, EntryKind, EntryOwner, Inline, project_content_slice,
     visit::{self, Visit},
 };
-
-/// A half-open Unicode scalar range within one original owner-local inline root.
-/// Styling wrappers and zero-width anchors consume no positions; `LineBreak`
-/// consumes one. Replacing a control scalar by U+FFFD preserves these positions.
-/// Renderer-generated indentation, separators and quoting are not in this domain.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RootTextRange {
-    /// Original term or direct paragraph/preformatted block, not a form ordinal.
-    pub root: EntryInlineRoot,
-    /// Scalar offsets within this root's visible text.
-    pub chars: Range<usize>,
-}
-
-/// Project a checked UTF-8 source slice without cloning its text or wrappers.
-/// Invalid paths, split UTF-8 scalars and out-of-range references return None.
-/// This performs coordinate validation, not semantic name validation; callers
-/// must first obtain validated names before treating a slice as a name binding.
-#[must_use]
-pub fn project_content_slice(
-    owner: EntryOwner<'_>,
-    slice: &EntryContentSlice,
-) -> Option<RootTextRange> {
-    let mut nodes = owner.inline_root(&slice.root)?;
-    let mut start = 0;
-    for (depth, &index) in slice.path.iter().enumerate() {
-        start += scalar_len(nodes.get(..index)?);
-        let node = nodes.get(index)?;
-        nodes = if depth + 1 == slice.path.len() {
-            std::slice::from_ref(node)
-        } else {
-            match node {
-                Inline::Strong { children }
-                | Inline::Emphasis { children }
-                | Inline::Link { children, .. } => children,
-                _ => return None,
-            }
-        };
-    }
-    let length = if let Some(bytes) = &slice.bytes {
-        if slice.path.is_empty() || bytes.start >= bytes.end {
-            return None;
-        }
-        let [Inline::Text { value } | Inline::Code { value }] = nodes else {
-            return None;
-        };
-        let selected = value.get(bytes.clone())?;
-        start += value.get(..bytes.start)?.chars().count();
-        selected.chars().count()
-    } else {
-        scalar_len(nodes)
-    };
-    Some(RootTextRange {
-        root: slice.root.clone(),
-        chars: start..start + length,
-    })
-}
-
-pub(super) fn scalar_len(nodes: &[Inline]) -> usize {
-    nodes
-        .iter()
-        .map(|node| match node {
-            Inline::Text { value } | Inline::Code { value } => value.chars().count(),
-            Inline::Strong { children }
-            | Inline::Emphasis { children }
-            | Inline::Link { children, .. } => scalar_len(children),
-            Inline::LineBreak => 1,
-            Inline::Anchor { .. } => 0,
-        })
-        .sum()
-}
 
 /// One validated semantic-name span in an original inline root.
 /// No query match or equivalence is implied by this ordinary display binding.
@@ -212,7 +142,8 @@ impl<'a> Visit<'a> for EntryStyleMap<'a> {
 mod tests {
     use super::*;
     use mant_ir::{
-        EntryFacts, EntryForm, EntryNameBinding, EntryNameEvidence, LayoutHint, ListItem, NameCase,
+        EntryContentSlice, EntryFacts, EntryForm, EntryInlineRoot, EntryNameBinding,
+        EntryNameEvidence, LayoutHint, ListItem, NameCase,
     };
 
     fn item() -> ListItem {

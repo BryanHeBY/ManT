@@ -147,7 +147,7 @@ fn container_and_item_boundary_share_one_bounded_gap_before_marker() {
                 vec![item(Some(inner), vec![paragraph("AFTER")])],
             ),
         ];
-        assert_eq!(mant_protocol::geometry::has_bounded_gap(&blocks), bounded);
+        assert_eq!(mant_ir::geometry::has_bounded_gap(&blocks), bounded);
         let mut builder = DocumentBuilder::new("bounded item".into(), None);
         builder.blocks(&blocks, 0);
         assert_eq!(builder.lines.len(), 4098);

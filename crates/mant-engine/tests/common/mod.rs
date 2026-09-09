@@ -345,7 +345,7 @@ pub fn assert_bounded_vertical_spacing(sections: &[Section], fixture: &str) {
         // ownership/one-consumption is tested by the explicit request matrix;
         // the broad fixture guard checks the resolved geometry's bound.
         assert!(
-            !mant_protocol::geometry::has_bounded_gap(&section.blocks),
+            !mant_ir::geometry::has_bounded_gap(&section.blocks),
             "fixture {fixture} section {} exceeds a resolved gap boundary",
             section.heading.plain_text()
         );

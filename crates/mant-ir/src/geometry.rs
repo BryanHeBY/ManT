@@ -1,8 +1,11 @@
-//! Pure text geometry shared by document frontends.
+//! Source-neutral geometry of resolved document content.
 //!
 //! Distances here are resolved display cells, never byte/scalar match offsets,
 //! source requests, terminal styling, or viewport rows. A parent origin is
 //! composed before rendering a leaf, not applied to an already placed subtree.
+//! Producers and renderers share these bounded calculations so diagnostics
+//! observe the same content boundaries as rendering, without rendering text.
+//! Operation-local gap identities are not serialized document identities.
 
 use std::collections::BTreeMap;
 use unicode_width::UnicodeWidthStr;
@@ -19,15 +22,13 @@ pub use terms::definition_run_in_width;
 /// Whether a literal inline stream contains an authored row, even an empty
 /// text row. Empty wrappers and zero-width targets alone are not blank lines.
 #[must_use]
-pub fn has_literal_rows(nodes: &[mant_ir::Inline]) -> bool {
+pub fn has_literal_rows(nodes: &[crate::Inline]) -> bool {
     nodes.iter().any(|node| match node {
-        mant_ir::Inline::Text { .. }
-        | mant_ir::Inline::Code { .. }
-        | mant_ir::Inline::LineBreak => true,
-        mant_ir::Inline::Strong { children }
-        | mant_ir::Inline::Emphasis { children }
-        | mant_ir::Inline::Link { children, .. } => has_literal_rows(children),
-        mant_ir::Inline::Anchor { .. } => false,
+        crate::Inline::Text { .. } | crate::Inline::Code { .. } | crate::Inline::LineBreak => true,
+        crate::Inline::Strong { children }
+        | crate::Inline::Emphasis { children }
+        | crate::Inline::Link { children, .. } => has_literal_rows(children),
+        crate::Inline::Anchor { .. } => false,
     })
 }
 
@@ -175,8 +176,8 @@ impl GapPlan {
 /// tight boundary, not an instruction for a renderer to invent paragraph
 /// spacing. Source and Markdown producers resolve their defaults before IR.
 #[must_use]
-pub const fn block_gap(block: &mant_ir::Block) -> u16 {
-    use mant_ir::Block;
+pub const fn block_gap(block: &crate::Block) -> u16 {
+    use crate::Block;
     match block {
         Block::Paragraph { layout, .. }
         | Block::Preformatted { layout, .. }

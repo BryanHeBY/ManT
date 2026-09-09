@@ -29,11 +29,16 @@ tldr-update results, local doctor reports, deterministic catalog presentation,
 and JSON Schema generation. The `mant` crate separately composes host
 callbacks, process framing, terminal policy, and MCP transport.
 
-The `geometry` presentation module provides pure display-cell measurement,
-signed origin composition/reparenting and bounded gap composition. Its cell
-coordinates are not the byte/scalar positions used by semantic bindings or
-explanation evidence. Gap identities are operation-local projection facts,
-not persistent document IDs; independent equal-sized gaps still add.
+Resolved document geometry belongs to `mant-ir::geometry`: pure display-cell
+measurement, signed origin composition/reparenting and bounded gap composition.
+Protocol presentation consumes those rules without owning document geometry or
+terminal viewport state. Cell coordinates remain distinct from the byte/scalar
+positions used by semantic bindings and explanation evidence.
+
+Original owner slice-to-scalar conversion belongs to `mant-ir` through
+`project_content_slice` and `RootTextRange`. Protocol response locations remain
+relative to their returned payload; presentation bindings reuse the IR rule
+rather than maintaining another interpretation of source bytes and scalars.
 
 Use this crate whenever a Rust host or process consumer needs stable inputs,
 projections, or deterministic non-terminal presentation. The same DTO may

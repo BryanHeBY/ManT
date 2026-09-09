@@ -2,11 +2,11 @@
 use super::super::{Arc, LogicalLine, LogicalTableCell, LogicalTableLayout};
 use super::DocumentBuilder;
 use mant_ir::TableRow;
-use mant_protocol::geometry::padding;
+use mant_ir::geometry::padding;
 
 impl DocumentBuilder<'_> {
     pub(super) fn table(&mut self, rows: &[TableRow], indent: i32) {
-        if mant_protocol::geometry::table_requires_origin_preserving_stack(rows, indent) {
+        if mant_ir::geometry::table_requires_origin_preserving_stack(rows, indent) {
             for cell in rows.iter().flat_map(|row| &row.cells) {
                 self.blocks(&cell.blocks, indent);
             }

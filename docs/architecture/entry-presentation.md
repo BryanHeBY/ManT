@@ -49,8 +49,10 @@ equal words in another owner, a body mention, a list marker, or a longer word
 do not acquire a semantic name role. Rejected bindings leave the original text
 and source markup readable without guessing.
 
-`project_content_slice` translates an owner-local inline path and optional
+`mant_ir::project_content_slice` translates an owner-local inline path and optional
 UTF-8 byte slice to half-open Unicode scalar positions in that same root.
+Its `RootTextRange` and the shared `inline_scalar_len` rule belong to the IR
+content-coordinate boundary, not to report styling or query execution.
 Terms are separate roots from paragraphs; term indices are not form indices.
 Anchors occupy zero positions, a source newline one, and replacing an unsafe
 control scalar with U+FFFD does not move subsequent positions. Generated

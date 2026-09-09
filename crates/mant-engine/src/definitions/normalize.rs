@@ -145,7 +145,7 @@ pub(super) fn normalize_hanging_definitions(blocks: &mut Vec<Block>, context: De
                     // This is an ownership change, not a request to join two
                     // originally distinct source paragraphs into one line.
                     inline_term: false,
-                    body_indent_columns: mant_protocol::geometry::rebase_origin(
+                    body_indent_columns: mant_ir::geometry::rebase_origin(
                         description_origin,
                         0,
                         term_indent,
@@ -182,8 +182,7 @@ fn hanging_term_indent(block: &Block, context: DefinitionContext) -> Option<i32>
 
 fn shift_block_indent(block: &mut Block, origin: i32) {
     if let Some(layout) = block_layout_mut(block) {
-        layout.indent_columns =
-            mant_protocol::geometry::rebase_origin(layout.indent_columns, 0, origin);
+        layout.indent_columns = mant_ir::geometry::rebase_origin(layout.indent_columns, 0, origin);
     }
 }
 

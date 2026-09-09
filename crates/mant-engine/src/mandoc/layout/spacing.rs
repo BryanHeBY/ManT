@@ -22,7 +22,7 @@ pub(in crate::mandoc) const fn man_paragraph_spacing(
 
 impl crate::mandoc::LoweringContext<'_> {
     pub(in crate::mandoc) fn check_gap_bounds(&self, blocks: &[Block]) {
-        if mant_protocol::geometry::has_bounded_gap(blocks) {
+        if mant_ir::geometry::has_bounded_gap(blocks) {
             let mut diagnostics = self.diagnostics.borrow_mut();
             if !diagnostics
                 .iter()

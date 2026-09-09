@@ -1,5 +1,5 @@
 //! Measure the open final label row, independently of preceding label rows.
-use mant_ir::Inline;
+use crate::Inline;
 
 /// Display cells occupied by the final open definition-label row.
 ///
@@ -109,7 +109,7 @@ mod tests {
                 children: vec![text("日")],
             },
             Inline::Link {
-                target: mant_ir::LinkTarget::External {
+                target: crate::LinkTarget::External {
                     uri: "https://example.org".into(),
                 },
                 title: None,

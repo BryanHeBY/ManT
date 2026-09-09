@@ -1,6 +1,6 @@
 //! Decide when cell-local column rendering cannot preserve resolved origins.
 use super::{compose_origin, coordinate, padding};
-use mant_ir::{Block, ListKind, TableRow};
+use crate::{Block, ListKind, TableRow};
 
 /// Whether a table must render its cells in source order at the real parent
 /// origin, rather than first laying each cell out at local column zero.
@@ -86,7 +86,7 @@ fn clips(origin: i32) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use mant_ir::{LayoutHint, TableCell};
+    use crate::{LayoutHint, TableCell};
 
     fn rows(block: Block) -> Vec<TableRow> {
         vec![TableRow {
@@ -163,8 +163,8 @@ mod tests {
             let list = rows(Block::List {
                 kind,
                 compact: true,
-                items: vec![mant_ir::ListItem {
-                    layout: mant_ir::ListItemLayout::default(),
+                items: vec![crate::ListItem {
+                    layout: crate::ListItemLayout::default(),
                     blocks: vec![paragraph(0, 0)],
                     entry: None,
                     source: None,
@@ -177,12 +177,12 @@ mod tests {
         }
         let definitions = rows(Block::DefinitionList {
             declaration_groups: vec![],
-            items: vec![mant_ir::DefinitionItem {
+            items: vec![crate::DefinitionItem {
                 terms: vec![],
                 description: vec![paragraph(0, 0)],
                 entry: None,
                 source: None,
-                layout: mant_ir::DefinitionLayout {
+                layout: crate::DefinitionLayout {
                     body_indent_columns: 10,
                     ..Default::default()
                 },

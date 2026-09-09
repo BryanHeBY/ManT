@@ -5,8 +5,8 @@ use super::super::{
     spans_width, theme,
 };
 use super::DocumentBuilder;
+use mant_ir::geometry::{compose_origin, coordinate, marker_run_in_gap, padding};
 use mant_ir::{DefinitionItem, ListItem};
-use mant_protocol::geometry::{compose_origin, coordinate, marker_run_in_gap, padding};
 
 impl DocumentBuilder<'_> {
     pub(super) fn list(&mut self, kind: ListKind, compact: bool, items: &[ListItem], indent: i32) {
@@ -25,7 +25,7 @@ impl DocumentBuilder<'_> {
                 ListKind::Plain => String::new(),
             };
             let has_marker = !marker.is_empty();
-            let marker_width = mant_protocol::geometry::text_width(&marker);
+            let marker_width = mant_ir::geometry::text_width(&marker);
             if has_marker
                 && let Some(Block::Paragraph {
                     children, layout, ..
@@ -178,7 +178,7 @@ impl DocumentBuilder<'_> {
         let mut term_spans = last.spans;
         let mut term_links = last.links;
         let mut term_marks = last.reference_marks;
-        let term_width = mant_protocol::geometry::definition_run_in_width(&item.terms).unwrap_or(0);
+        let term_width = mant_ir::geometry::definition_run_in_width(&item.terms).unwrap_or(0);
         if let Some((children, layout)) = item.inline_description() {
             for (id, row) in inline_anchor_rows(children) {
                 self.anchors.entry(id).or_insert(self.lines.len() + row);

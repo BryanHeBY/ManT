@@ -427,8 +427,10 @@ Native source distances and man macro bases remain private, bounded formatter
 state. They retain basic-unit precision until converted to signed offsets from
 the actual IR content parent. Definition ownership recovery rebases only moved
 roots; it does not reinterpret those offsets as cumulative margins.
-`mant-protocol::geometry` owns cell measurement, signed origin composition,
-marker collision and gap rules. CLI text keeps gap events separate from literal
+`mant-ir::geometry` owns the small source-neutral core for cell measurement,
+signed origin composition, marker collision and gap rules. Its visibility walk
+uses original IR inlines, not protocol styling; it adds no serialized fields.
+CLI text keeps gap events separate from literal
 text until the complete flow is assembled; TUI uses the same boundary budget
 while building logical rows. Empty containers cannot start a second budget.
 The source producer gives each request one consumption point, rather than

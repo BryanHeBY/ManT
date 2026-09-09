@@ -275,6 +275,7 @@ version = "0.11.0"
 dependencies = [
  "schemars",
  "serde",
+ "unicode-width",
 ]
 
 [[package]]

@@ -309,7 +309,7 @@ impl BlockState {
 /// Zero-width target blocks remain available without masquerading as rows.
 pub(super) fn has_flushed_row(blocks: &[Block]) -> bool {
     blocks.iter().any(|block| match block {
-        Block::Preformatted { children, .. } => mant_protocol::geometry::has_literal_rows(children),
+        Block::Preformatted { children, .. } => mant_ir::geometry::has_literal_rows(children),
         Block::Paragraph { children, .. } => crate::inline::has_printable_character(children),
         _ => false,
     })

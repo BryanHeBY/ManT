@@ -92,6 +92,15 @@ scalar offsets or terminal cells. They can be rebuilt after serde but have no
 cross-edit stability guarantee. Explanation block positions reuse the same
 checked item/cell traversal while remaining relative to their returned block.
 
+`project_content_slice` converts a checked owner-local UTF-8 slice into a
+`RootTextRange` within that original inline root. `inline_scalar_len` supplies
+the common scalar-counting rule: wrappers and anchors have no width in this
+coordinate space, while an authored hard break occupies one position. Queries
+and renderers share this conversion without a presentation dependency. It
+validates coordinates, not semantic names; a valid slice alone does not prove
+that its text is a bound executable name. Display cells and generated padding
+are deliberately excluded.
+
 `DocumentMeta::manual_section` is a native manual category such as `1` or
 `3p`. A `Section` is a heading-backed content subtree. The names are kept
 deliberately separate so consumers cannot confuse storage lookup with
@@ -104,6 +113,14 @@ offsets are relative to the actual content parent; compose them once and clamp
 only at the displayed leaf. A definition resolves its label/body displacement,
 and a paragraph can separately displace continuation lines. Reparent only the
 moved root, preserving the descendants' coordinates and source text.
+
+`geometry` supplies the shared small core for display-cell measurement, signed
+origin composition, definition run-in width, table outdent preservation and
+bounded gap composition. These operations inspect resolved content without
+allocating a rendered document. They do not choose a viewport, terminal style
+or output format. Display cells are distinct from source bytes and semantic
+scalar coordinates; gap request identities are operation-local, not serialized
+document identities.
 
 Block spacing is resolved before IR: zero is tight. Independent explicit gaps
 add across transparent containers; repeated projections of one request belong

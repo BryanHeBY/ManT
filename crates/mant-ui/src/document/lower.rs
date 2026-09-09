@@ -6,7 +6,7 @@ use super::{
     TLDR_ID, TLDR_VERTICAL_PADDING_ROWS, TldrDocument, UnicodeWidthStr, WrapMode,
     inline_anchor_rows, theme, tldr_style,
 };
-use mant_protocol::geometry::{compose_origin, coordinate, padding};
+use mant_ir::geometry::{compose_origin, coordinate, padding};
 
 mod lists;
 mod table;
@@ -19,7 +19,7 @@ pub(super) struct DocumentBuilder<'a> {
     pub(super) anchors: HashMap<String, usize>,
     pub(super) reference_origins: Arc<super::references::ReferenceOrigins>,
     pending_anchors: Vec<String>,
-    pending_gap: mant_protocol::geometry::GapPlan,
+    pending_gap: mant_ir::geometry::GapPlan,
 }
 
 /// Logical payload and its anchors must cross layout boundaries together.
@@ -58,13 +58,13 @@ impl DocumentBuilder<'_> {
             anchors: HashMap::new(),
             reference_origins: Arc::default(),
             pending_anchors: Vec::new(),
-            pending_gap: mant_protocol::geometry::GapPlan::default(),
+            pending_gap: mant_ir::geometry::GapPlan::default(),
         }
     }
 
     pub(super) fn push(&mut self, line: LogicalLine) {
         self.resolve_pending_anchors();
-        self.pending_gap = mant_protocol::geometry::GapPlan::default();
+        self.pending_gap = mant_ir::geometry::GapPlan::default();
         self.lines.push(line);
     }
 
@@ -239,14 +239,14 @@ impl DocumentBuilder<'_> {
     }
 
     pub(super) fn blocks(&mut self, blocks: &[Block], base_indent: i32) {
-        let mut gap = mant_protocol::geometry::GapPlan::default();
+        let mut gap = mant_ir::geometry::GapPlan::default();
         for block in blocks {
-            gap.append_resolved(mant_protocol::geometry::block_gap(block));
+            gap.append_resolved(mant_ir::geometry::block_gap(block));
             if matches!(block, Block::VerticalSpace { .. }) {
                 continue;
             }
             self.spacing(gap.rows(0));
-            gap = mant_protocol::geometry::GapPlan::default();
+            gap = mant_ir::geometry::GapPlan::default();
             self.block(block, base_indent);
         }
         self.spacing(gap.rows(0));
@@ -376,7 +376,7 @@ impl DocumentBuilder<'_> {
         );
         if lines.len() == 1
             && lines[0].spans.is_empty()
-            && !(surface == LineSurface::Code && mant_protocol::geometry::has_literal_rows(nodes))
+            && !(surface == LineSurface::Code && mant_ir::geometry::has_literal_rows(nodes))
         {
             self.defer_anchors(targets.into_iter().map(|(id, _)| id));
             self.defer_anchors(

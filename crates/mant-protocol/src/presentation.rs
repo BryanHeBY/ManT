@@ -20,12 +20,11 @@ pub use labels::{EntryLabelMode, entry_label};
 mod roles;
 pub use roles::{EntryTone, entry_kind_label, entry_tone};
 mod bindings;
-pub use bindings::{EntryStyleMap, InlineNameRange, RootTextRange, project_content_slice};
+pub use bindings::{EntryStyleMap, InlineNameRange};
 mod inline;
 pub use inline::{InlinePresentation, visit_inline_text};
 mod text;
 pub use text::{TextPresentation, TextRole};
-pub mod geometry;
 
 /// Transport-neutral evidence outcome and paging/coverage labels.
 #[must_use]

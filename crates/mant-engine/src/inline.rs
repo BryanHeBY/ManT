@@ -65,7 +65,7 @@ fn last_character(node: &Inline) -> Option<char> {
 
 /// Decide whether definition terms fit beside their first description line.
 pub(crate) fn terms_fit_inline(terms: &[Vec<Inline>], max_width: usize) -> bool {
-    mant_protocol::geometry::definition_run_in_width(terms)
+    mant_ir::geometry::definition_run_in_width(terms)
         .is_some_and(|width| (1..=max_width).contains(&width))
 }
 

@@ -122,9 +122,10 @@ fn lower_mdoc_plain_list(
                     ListKind::Plain => 0,
                     ListKind::Bullet => 2,
                     ListKind::Ordered { .. } => {
-                        mant_protocol::geometry::coordinate(mant_protocol::geometry::text_width(
-                            &format!("{}. ", kind.ordinal(index).unwrap_or(u64::MAX)),
-                        ))
+                        mant_ir::geometry::coordinate(mant_ir::geometry::text_width(&format!(
+                            "{}. ",
+                            kind.ordinal(index).unwrap_or(u64::MAX)
+                        )))
                     }
                 };
                 let body_origin = context.offset_indent(item.node, list_indent, width);
@@ -259,8 +260,8 @@ fn lower_mdoc_definition_list(
                     }
                     .ordinal(index)
                     .unwrap_or(u64::MAX);
-                    let marker_width = mant_protocol::geometry::coordinate(
-                        mant_protocol::geometry::text_width(&format!("{ordinal}. ")),
+                    let marker_width = mant_ir::geometry::coordinate(
+                        mant_ir::geometry::text_width(&format!("{ordinal}. ")),
                     );
                     mdoc_list_item_from_definition(item, marker_width, source_span(node))
                 })

@@ -124,7 +124,7 @@ parent and man macro base. Conversion produces signed relative offsets;
 ownership normalization rebases only transferred roots. Text presentation
 composes each parent once. It keeps resolved gap requests separate from literal
 newlines through nested flow composition, sharing cell/marker/gap rules with
-the UI through `mant-protocol::geometry`. Zero block spacing is tight, not a
+the UI through `mant-ir::geometry`. Zero block spacing is tight, not a
 frontend default; each source request has one consumption point.
 | Speculative recovery | Table-cell candidates retain output, final formatter state and diagnostics until ownership acceptance. Rejection rolls back all three, unlike a normal font-scope exit. |
 
