@@ -1,29 +1,16 @@
 //! Native terminal acquisition, event loop and restoration in original order.
-use super::host::{
-    route_event, service_copy_request, service_discovery_request, service_external_request,
-    service_open_request,
-};
 use super::{
-    App, CatalogQuery, CopyRequest, CrosstermBackend, DisableMouseCapture, DocumentCatalog,
-    DocumentOpenTarget, EnableMouseCapture, EnterAlternateScreen, Instant, LeaveAlternateScreen,
-    ResolvedContent, TERMINATION_POLL_INTERVAL, Terminal, TerminationSignals, disable_raw_mode,
-    enable_raw_mode, event, execute, io, panic,
+    App, CrosstermBackend, DisableMouseCapture, DocumentCatalog, EnableMouseCapture,
+    EnterAlternateScreen, Instant, LeaveAlternateScreen, ReaderServices, ResolvedContent,
+    TERMINATION_POLL_INTERVAL, Terminal, TerminationSignals, disable_raw_mode, enable_raw_mode,
+    event, execute, io, panic,
 };
-pub(super) fn run<D, F, E, C>(
+pub(super) fn run(
     bundle: &ResolvedContent,
     catalog: DocumentCatalog,
     scope: &[ResolvedContent],
-    mut discover_documents: D,
-    mut open_document: F,
-    mut open_external: E,
-    mut copy_to_clipboard: C,
-) -> io::Result<()>
-where
-    D: FnMut(&CatalogQuery) -> Result<DocumentCatalog, String>,
-    F: FnMut(&DocumentOpenTarget) -> Result<ResolvedContent, String>,
-    E: FnMut(&crate::ExternalUri) -> Result<(), String>,
-    C: FnMut(CopyRequest) -> Result<(), String>,
-{
+    services: &mut ReaderServices<'_>,
+) -> io::Result<()> {
     let termination = TerminationSignals::install()?;
     let mut stdout = io::stdout();
     enable_raw_mode()?;
@@ -59,11 +46,8 @@ where
             if !event::poll(timeout)? {
                 continue;
             }
-            redraw |= route_event(&mut app, &event::read()?).needs_redraw();
-            redraw |= service_discovery_request(&mut app, &mut discover_documents);
-            redraw |= service_open_request(&mut app, &mut open_document);
-            redraw |= service_external_request(&mut app, &mut open_external);
-            redraw |= service_copy_request(&mut app, &mut copy_to_clipboard);
+            redraw |= app.handle_event(&event::read()?).needs_redraw();
+            redraw |= app.service_pending(services);
         }
     }));
 

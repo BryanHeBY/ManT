@@ -6,27 +6,22 @@ use std::{
 };
 
 use crossterm::{
-    event::{self, DisableMouseCapture, EnableMouseCapture, Event},
+    event::{self, DisableMouseCapture, EnableMouseCapture},
     execute,
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
 use mant_ir::ResolvedContent;
-#[cfg(test)]
-use mant_protocol::DocumentAddress;
 use mant_protocol::{CatalogQuery, DocumentCatalog, DocumentOpenTarget};
 use ratatui::{Terminal, backend::CrosstermBackend};
 
-use crate::{App, CopyRequest, UpdateOutcome};
+use crate::{App, CopyRequest, ReaderServices};
 
 #[cfg(unix)]
 pub(crate) mod signals;
 #[cfg(unix)]
 use signals::TerminationSignals;
 
-mod host;
 mod session;
-#[cfg(test)]
-use host::discover_catalog_pages;
 
 const TERMINATION_POLL_INTERVAL: Duration = Duration::from_millis(50);
 
@@ -150,10 +145,10 @@ pub fn run_with_catalog_and_scope_and_copy<D, F, E, C>(
     bundle: &ResolvedContent,
     catalog: DocumentCatalog,
     scope: &[ResolvedContent],
-    discover_documents: D,
-    open_document: F,
-    open_external: E,
-    copy_to_clipboard: C,
+    mut discover_documents: D,
+    mut open_document: F,
+    mut open_external: E,
+    mut copy_to_clipboard: C,
 ) -> io::Result<()>
 where
     D: FnMut(&CatalogQuery) -> Result<DocumentCatalog, String>,
@@ -165,90 +160,11 @@ where
         bundle,
         catalog,
         scope,
-        discover_documents,
-        open_document,
-        open_external,
-        copy_to_clipboard,
+        &mut ReaderServices {
+            discover_documents: Some(&mut discover_documents),
+            open_document: Some(&mut open_document),
+            open_external: Some(&mut open_external),
+            copy_to_clipboard: Some(&mut copy_to_clipboard),
+        },
     )
-}
-
-#[cfg(test)]
-mod tests {
-    use mant_protocol::{CatalogSchema, DocumentSummary};
-
-    use super::*;
-
-    #[test]
-    fn empty_finder_queries_collect_every_catalog_page() {
-        let mut offsets = Vec::new();
-        let catalog = discover_catalog_pages(&CatalogQuery::default(), &mut |query| {
-            offsets.push(query.offset);
-            let next_offset = (query.offset == 0).then_some(1);
-            Ok(DocumentCatalog {
-                schema: CatalogSchema::V0Dot11,
-                query: query.clone(),
-                coverage: mant_protocol::CatalogCoverage::default(),
-                total: 2,
-                returned: 1,
-                offset: query.offset,
-                truncated: next_offset.is_some(),
-                next_offset,
-                documents: vec![manual_summary(if query.offset == 0 {
-                    "git"
-                } else {
-                    "man"
-                })],
-            })
-        })
-        .expect("collect catalog");
-
-        assert_eq!(offsets, [0, 1]);
-        assert_eq!(catalog.returned, 2);
-        assert!(!catalog.truncated);
-        assert_eq!(
-            catalog
-                .documents
-                .iter()
-                .map(|document| document.address.name())
-                .collect::<Vec<_>>(),
-            ["git", "man"]
-        );
-    }
-
-    #[test]
-    fn live_finder_queries_keep_the_bounded_ranked_page() {
-        let mut calls = 0;
-        let query = CatalogQuery {
-            pattern: Some("man".to_owned()),
-            ..CatalogQuery::default()
-        };
-        let catalog = discover_catalog_pages(&query, &mut |_| {
-            calls += 1;
-            Ok(DocumentCatalog {
-                schema: CatalogSchema::V0Dot11,
-                query: query.clone(),
-                coverage: mant_protocol::CatalogCoverage::default(),
-                total: 20_000,
-                returned: 1,
-                offset: 0,
-                truncated: true,
-                next_offset: Some(1),
-                documents: vec![manual_summary("man")],
-            })
-        })
-        .expect("load ranked page");
-
-        assert_eq!(calls, 1);
-        assert_eq!(catalog.returned, 1);
-        assert!(catalog.truncated);
-    }
-
-    fn manual_summary(name: &str) -> DocumentSummary {
-        DocumentSummary {
-            address: DocumentAddress::Manual {
-                name: name.to_owned(),
-                manual_section: "1".to_owned(),
-            },
-        }
-    }
 }
