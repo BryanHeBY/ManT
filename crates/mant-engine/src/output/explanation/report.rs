@@ -120,9 +120,9 @@ impl Report<'_> {
                         }),
                     );
                     let text = if self.markdown {
-                        super::super::markdown::blocks::render_located_blocks(
+                        mant_codec::encode::render_located_blocks_fragment(
                             std::slice::from_ref(block),
-                            super::super::MarkdownOptions::default(),
+                            super::super::MarkdownFragmentOptions::default(),
                             Some(&locations),
                         )
                         .join("\n\n")
@@ -263,7 +263,8 @@ impl Report<'_> {
             self.line(output, TextRole::Metadata, "Forms:");
             for form in &entry.forms {
                 let text = if self.markdown {
-                    locations.markdown_inline(form, super::super::MarkdownOptions::default())
+                    locations
+                        .markdown_inline(form, super::super::MarkdownFragmentOptions::default())
                 } else {
                     locations.inline(form, TextRole::Body, &|p, t| {
                         (self.decorate)(p, &metadata::safe(t))
@@ -322,9 +323,9 @@ impl Report<'_> {
                 let block = display.block;
                 self.line(output, TextRole::Metadata, "Definition:");
                 let body = if self.markdown {
-                    super::super::markdown::blocks::render_located_blocks(
+                    mant_codec::encode::render_located_blocks_fragment(
                         std::slice::from_ref(block),
-                        super::super::MarkdownOptions::default(),
+                        super::super::MarkdownFragmentOptions::default(),
                         Some(locations),
                     )
                     .join("\n\n")

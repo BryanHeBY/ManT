@@ -3,19 +3,13 @@
 
 mod bounded;
 mod catalog;
-mod definitions;
 mod entry_presentation;
 mod executable;
 mod explanation;
-mod inline;
-mod mandoc;
 mod manual;
 mod manual_input;
 mod manual_paths;
-mod markdown;
-mod markdown_mapping;
 mod output;
-mod producer_identity;
 mod projection;
 mod query;
 mod scope;
@@ -23,7 +17,6 @@ mod scope_query;
 mod search;
 mod selectors;
 mod source;
-mod text_safety;
 mod tldr;
 
 pub use catalog::{
@@ -34,7 +27,8 @@ pub use executable::find_host_executable;
 pub use explanation::{
     ExplanationError, explain_query, resolve_explanation_block, validate_explanation_query,
 };
-pub use mandoc::lower_mandoc_document;
+pub use mant_codec::lower_mandoc_document;
+pub use mant_codec::{MarkdownParseError, ParsedMarkdown, TldrDirectiveError, parse_markdown};
 pub use mant_ir::ResolvedContent;
 pub use manual::{is_command_manual_section, is_manual_section, parenthesized_manual_reference};
 pub use manual_input::{
@@ -44,15 +38,14 @@ pub use manual_input::{
 pub use manual_paths::{
     ManualPathDiagnostic, ManualRootDiscovery, discover_manual_roots, inspect_manual_roots,
 };
-pub use markdown::{MarkdownParseError, ParsedMarkdown, TldrDirectiveError, parse_markdown};
 pub use output::{
-    MarkdownOptions, SearchTextRole, render_excerpt_json, render_excerpt_markdown,
-    render_excerpt_markdown_with_options, render_excerpt_text, render_excerpt_text_with,
-    render_explanation_markdown, render_explanation_text, render_explanation_text_with,
-    render_markdown, render_markdown_with_options, render_outline_entry_summary,
-    render_outline_json, render_outline_markdown, render_outline_relationships,
-    render_outline_text, render_outline_text_with, render_query_json, render_query_man,
-    render_query_text, render_query_text_with, render_scope_explanation_markdown,
+    MarkdownFragmentOptions, MarkdownOptions, SearchTextRole, render_excerpt_json,
+    render_excerpt_markdown, render_excerpt_markdown_with_options, render_excerpt_text,
+    render_excerpt_text_with, render_explanation_markdown, render_explanation_text,
+    render_explanation_text_with, render_markdown, render_markdown_with_options,
+    render_outline_entry_summary, render_outline_json, render_outline_markdown,
+    render_outline_relationships, render_outline_text, render_outline_text_with, render_query_json,
+    render_query_man, render_query_text, render_query_text_with, render_scope_explanation_markdown,
     render_scope_explanation_text, render_scope_explanation_text_with, render_search_json,
     render_search_markdown, render_search_text, render_search_text_with, render_update_json,
 };

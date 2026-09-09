@@ -1,5 +1,5 @@
 //! Map canonical Markdown bytes to visible text and presentation coordinates.
-use crate::markdown_mapping::{InlineMappingKind, map_inline_characters};
+use mant_codec::markdown_mapping::{InlineMappingKind, map_inline_characters};
 use mant_protocol::SearchScope;
 use pulldown_cmark::{Event, Parser, TagEnd};
 use std::ops::Range;
@@ -78,13 +78,7 @@ pub(super) struct LineIndex {
 impl LineIndex {
     #[cfg(test)]
     pub(super) fn new(text: &str) -> Self {
-        Self::with_anchors(
-            text,
-            crate::output::anchor_markers(text)
-                .into_iter()
-                .map(|marker| marker.range)
-                .collect(),
-        )
+        Self::with_anchors(text, Vec::new())
     }
 
     pub(super) fn with_anchors(text: &str, anchors: Vec<Range<usize>>) -> Self {

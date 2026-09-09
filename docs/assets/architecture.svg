@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="900" height="740" viewBox="0 0 900 740" role="img" aria-labelledby="title description">
   <title id="title">ManT architecture</title>
-  <desc id="description">Native manuals, Markdown, and tldr enter mant-engine around its mant-ir semantic center. A thin mant-protocol interaction layer supplies logical projections to TUI host interactions, CLI and request JSON, and compact MCP presentation. Separate direct paths carry document IR to the TUI and human renderers.</desc>
+  <desc id="description">mant-engine resolves local sources and delegates memory-only Markdown, tldr and optional native manual decoding to mant-codec around the mant-ir semantic center. The mant-protocol interaction layer supplies logical projections to TUI host interactions, CLI and request JSON, and compact MCP presentation. Separate direct paths carry document IR to the TUI and human renderers.</desc>
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
       <path d="M 0 0 L 10 5 L 0 10 z" class="arrow-head"/>
@@ -74,8 +74,8 @@
   </g>
   <text x="210" y="241" text-anchor="middle" class="title">Resolve</text>
   <text x="210" y="261" text-anchor="middle" class="detail">bounded local sources</text>
-  <text x="450" y="241" text-anchor="middle" class="title">Lower</text>
-  <text x="450" y="261" text-anchor="middle" class="detail">normalize all syntax</text>
+  <text x="450" y="241" text-anchor="middle" class="title">mant-codec</text>
+  <text x="450" y="261" text-anchor="middle" class="detail">memory-only formats</text>
   <text x="690" y="241" text-anchor="middle" class="title">Compose</text>
   <text x="690" y="261" text-anchor="middle" class="detail">manual · tldr</text>
 

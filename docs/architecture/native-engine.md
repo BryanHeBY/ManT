@@ -24,9 +24,10 @@ that migration is implemented.
 
 ```text
 source adapters
-└─ mant-engine          resolution, lowering, composition, query, rendering
+└─ mant-engine          loading, composition, query, report rendering
    ├─ mant-sources      local Markdown registry and optional updates
-   ├─ libmandoc-rs     owned native parser boundary
+   ├─ mant-codec        decoding, semantic production, document Markdown
+   │  └─ libmandoc-rs  owned native parser boundary (codec roff feature)
    └─ mant-ir           semantic center: ResolvedContent and document IR
       ├───────────────> mant-ui and human renderers (direct semantic use)
       └─ projection ──> mant-protocol ──┬─> host callbacks and JSON
@@ -40,21 +41,28 @@ direction is related but not identical:
 
 ```text
 mant
-├── mant-ui ───────────────┬──> mant-ir
-│                          └──> mant-protocol ──> mant-ir
-├── mant-engine ───────────┬──> mant-ir
-│                          ├──> mant-protocol
-│                          ├──> mant-sources
-│                          └──> libmandoc-rs
-├── mant-sources (update feature)
-├── mant-protocol
-└── mant-ir
+├─ mant-ui
+│  ├─ mant-ir
+│  └─ mant-protocol ─> mant-ir
+├─ mant-engine
+│  ├─ mant-ir
+│  ├─ mant-protocol
+│  ├─ mant-sources
+│  ├─ mant-codec
+│  │  ├─ mant-ir
+│  │  └─ libmandoc-rs (roff)
+│  └─ libmandoc-rs
+├─ mant-sources (update feature)
+├─ mant-protocol
+└─ mant-ir
 ```
 
-Arrows mean “depends on”; they do not imply serialization. `mant-ui`
+Arrows show production dependencies; they do not imply serialization. `mant-ui`
 deliberately depends on both the direct IR and the stable catalog DTOs it
-exchanges with its host. `mant-engine` owns human
-renderers as query operations, while `mant-ui` owns interactive terminal
+exchanges with its host. The engine enables the codec's optional `roff` feature;
+standalone default codec consumers need neither libmandoc nor a C compiler.
+`mant-engine` owns human report renderers and delegates complete document
+Markdown encoding to `mant-codec`, while `mant-ui` owns interactive terminal
 presentation. The `mant` crate is the composition root and the only crate that
 turns those components into the user-facing process.
 
@@ -66,13 +74,19 @@ The crates have deliberately asymmetric responsibilities:
 | `mant-protocol` | Shared query contracts, logical projections, versioned JSON DTOs, and deterministic compact presentation | Parsing, files, query execution, terminal policy, transports, or processes |
 | `libmandoc-rs` | An owned libmandoc parse tree, diagnostics, parser lifecycle, C build boundary, and default-off bounded upstream reference renderers | ManT types, source discovery, or ManT's semantic presentation |
 | `mant-sources` | Registered Markdown discovery and optional transactional Git/archive installation | Native manuals, rendering, or MCP |
-| `mant-engine` | Source resolution, Markdown parsing, libmandoc lowering, tldr composition, projections, and renderers | CLI policy, terminal lifecycle, or MCP transport |
+| `mant-codec` | In-memory Markdown/tldr decoding; optional libmandoc lowering; semantic annotation and identity production; portable document Markdown and source-bound artifacts | Source acquisition, discovery, query execution, protocol DTOs, terminal policy, or source updates |
+| `mant-engine` | Source resolution and loading, codec integration, tldr composition, query execution, projections, and report renderers | Its own parser, CLI policy, terminal lifecycle, or MCP transport |
 | `mant-ui` | Interactive navigation, document tabs, discovery, links, history, search, selection, typed copy requests, layout, and terminal lifecycle | Filesystem lookup, source mutation, or system clipboard access |
 | `mant` | User-facing modes, terminal detection, native/OSC 52 clipboard delivery, source updates, request JSON, schemas, and MCP stdio | A second parser or frontend-specific document model |
 
 `mant-ir` is deliberately the semantic center, while `mant-engine` is the
-execution layer that creates and operates on it. Interactive queries pass an
-in-memory `ResolvedContent` directly to `mant-ui`; human renderers also consume
+execution layer that loads codec-produced content and operates on it. Codec
+inputs are caller-owned text/bytes and metadata labels; decoding never grants
+access to paths named by those labels. Parsing, annotation and document encoding
+have one implementation in `mant-codec`. Loading, queries and report rendering
+still have concrete implementations in the engine, not separate workspace
+crates. Interactive queries pass an in-memory `ResolvedContent` directly to
+`mant-ui`; human renderers also consume
 the in-memory model. They do not serialize through JSON or spawn a child
 process. Structured host and process interactions instead use
 `mant-protocol`: the TUI catalog callbacks, one-shot request JSON, CLI query
@@ -115,9 +129,11 @@ a second parser, selector resolver, or audit oracle.
 
 | Owner | Handoff and invariant |
 | --- | --- |
-| Engine definitions and selectors | Styled form candidates retain parameter evidence; topology/context preparation precedes identity allocation, then one selector policy serves projections and producer diagnostics. |
+| Codec definitions | Styled form candidates retain parameter evidence; topology/context preparation precedes producer identity allocation. Shared IR validation and local navigation policy are not duplicated by the codec. |
+| Engine selectors | Typed paths and IDs resolve immutable content; producer recognition is not repeated during navigation. |
 | Engine explanation | An independent collector visits immutable IR owners and explicit relationships, preserving name/form/literal/relationship bases. Global scope pagination and content budgets do not alter strict navigation or source authority. |
-| Engine lowering | Prepared Markdown pairs original events with source declarations. Roff flow state, target provenance, and table recovery plans preserve their distinct physical-line and owner policies. |
+| Codec lowering | Prepared Markdown pairs original events with source declarations. Roff flow state, target provenance, and table recovery plans preserve their distinct physical-line and owner policies. |
+| Codec encoding | Complete document encoding owns canonical bytes and borrowed owner mappings; report fragments expose decoration without semantic declaration metadata. |
 | Engine search and discovery | A validated matcher is reused within one scope request. Markdown artifacts own final anchor ranges; source-coordinate mapping remains separate from result collection. Discovery captures environment/configuration inputs at the host boundary. |
 | CLI and MCP | Native request decoding is separate from execution; rendered CLI data travels with its business status. Owned MCP presentations perform preparation before rendering, sanitization and character paging. |
 | Sources | Read-only installation probes collect lazy facts, while callers retain their own trust policy. Selection precedes staging; only synced metadata produces a prepared installation for controlled activation. |
@@ -300,20 +316,23 @@ no collection root and therefore reject redirect-only aliases.
 
 The engine's `manual_input` boundary owns these loading policies, cumulative
 16 MiB stored/decoded budgets, the 16-redirect cap and `ManualError` categories.
-The `mandoc` byte codec returns native parse errors, not loader errors. Its
+The `mant-codec` roff byte API returns native parse errors, not loader errors. Its
 standalone-alias recognizer is pure syntax: it does not validate or authorize
 filesystem paths. Loading calls that recognizer before applying root policy,
 then passes one borrowed prepared byte buffer to parsing/lowering. The source
 label is metadata only, includes remain denied, and the loader attaches the
 resolved alias metadata after success. Report-bearing calls return the same
 owned native witness used for lowering, without a second parse or source copy.
+This is a source-access boundary, not a claim of zero operating-system calls:
+the native wrapper may allocate a private diagnostic capture file. Neither that
+capture nor the metadata label authorizes loading another source.
 
 `libmandoc-rs` wraps the bundled C parser behind a small private shim. Parser
 calls retain the completed native session only while shallow borrowed node
 snapshots are copied directly into owned Rust data; the session is released
 before the fully owned result returns, and there is no intermediate owned C
 AST. Reference-renderer calls instead format the tree in the same native
-session without building the Rust AST. `mant-engine` alone lowers the owned
+session without building the Rust AST. `mant-codec` alone lowers the owned
 tree into `mant-ir`. Linux, macOS, and Windows use the same parser version;
 Windows supplies bytes through a
 checked memory-only configuration instead of exposing POSIX file transport to
@@ -329,8 +348,8 @@ and the opened handle's final path is checked against the approved root. Its
 default-off `render` feature exposes
 libmandoc's ASCII, locale-independent UTF-8, and HTML reference formatters
 through a per-call output sink. These are library capabilities, not a second
-ManT rendering path: `mant-engine` continues to consume the owned parser tree
-and render the shared source-neutral IR.
+ManT rendering path: `mant-codec` consumes the owned parser tree, while engine
+reports and the UI render the resulting shared source-neutral IR.
 
 The pinned libmandoc 1.14.6 snapshot originally kept character, diagnostic,
 tag, roff-request, formatter-tab, HTML-ID, and recursion state in process
@@ -347,7 +366,7 @@ finite truncated tree remains successful and carries a typed parser finding;
 native construction beyond 512 parent levels instead fails before finalization
 or validation. Reference renderers preflight both syntax and equation depth
 at 256 levels, and native cleanup is iterative. For truncated successful reports,
-the engine projects those findings as `manual.syntax-depth-truncated` and
+the codec lowers those findings as `manual.syntax-depth-truncated` and
 `manual.equation-depth-truncated`. A
 mixed Rust/C ThreadSanitizer runner guards this boundary locally because
 instrumenting only Rust would miss races inside the vendored parser and
@@ -355,7 +374,8 @@ optional formatters.
 
 ### Markdown and installed sources
 
-Local Markdown uses `pulldown-cmark` with source positions. ManT lowers a
+`mant-codec` parses supplied Markdown through `pulldown-cmark` with source
+positions. It lowers a
 deliberate structural subset—headings, prose, emphasis, code, links, code
 blocks, lists, tables, hard breaks, and thematic breaks—into the shared IR.
 Unsupported blocks retain their exact visible source with diagnostics instead
@@ -382,7 +402,7 @@ metadata, precedence, and cleanup behavior live in the
 
 Tldr content remains a distinct `QueryBundle` channel rather than a special
 document section. Cached tldr-pages data and a Markdown-owned tldr preface use
-the same parser and presentation model, with origin metadata controlling
+the same pure codec parser and presentation model, with origin metadata controlling
 attribution. Projection path `0` and selector `tldr` expose this channel
 without renumbering ordinary document sections. Explicit tldr resolution uses
 the registered-document precedence groups, filters each group by actual

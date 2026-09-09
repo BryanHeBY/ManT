@@ -1,21 +1,22 @@
 # mant-engine
 
 `mant-engine` is `ManT`'s document execution layer. It resolves local documents
-through `mant-sources`, lowers every source into the semantic center in
-`mant-ir`, builds in-memory and versioned protocol projections, and produces
+through `mant-sources`, delegates decoding and lowering to `mant-codec` into
+the semantic center in `mant-ir`, builds in-memory and versioned protocol
+projections, and produces
 deterministic output without owning a terminal or command-line process.
 
 ## What this crate provides
 
 - Registered Markdown lookup through the read-only `mant-sources` boundary.
-- A conservative, source-positioned Markdown parser with explicit loss
-  diagnostics and optional embedded tldr content.
+- Integration with `mant-codec`'s source-positioned Markdown parser, explicit
+  loss diagnostics and optional embedded tldr content.
 - Source-neutral inline headings: Markdown ATX/Setext and native section
   headings retain styles and typed links. An extracted first H1 is real
   document-heading content, not duplicated metadata or a synthetic paragraph.
 - Bounded native manual loading, explicit leaf-file symlink support,
-  root-constrained `.so` alias resolution, and `man(7)`/`mdoc(7)` lowering on
-  every supported platform.
+  root-constrained `.so` alias resolution, and delegated `man(7)`/`mdoc(7)`
+  lowering through `mant-codec` on every supported platform.
 - Shared regular-file-only manual-path configuration reads. Unix nonblocking
   opens and handle checks reject FIFOs without waiting for a writer, while
   retaining symlinks to regular configuration files and bounded UTF-8 reads.
@@ -66,8 +67,9 @@ deterministic output without owning a terminal or command-line process.
 - Installed-client and private tldr cache discovery. Explicit subprocess-backed
   updates are available only with the opt-in `tldr-update` feature.
 
-For already-loaded tldr text, `parse_tldr_page` and `parse_tldr_command` are pure
-parsing entry points available without `tldr-update`. `TldrPageLocation` supplies
+For already-loaded tldr text, `mant-codec::parse_tldr_page` and
+`mant-codec::parse_tldr_command` are pure parsing entry points, also re-exported
+here without `tldr-update`. `TldrPageLocation` supplies
 identity metadata only: it does not trigger a cache read, host/platform lookup,
 or URL fetch. `TldrParseError` reports syntax failure; the separate
 `TldrCacheError` adds read/location context, and `TldrUpdateError` belongs to the
@@ -87,7 +89,7 @@ they request it explicitly.
 logical selector / physical input
               │
               v
-DocumentResolver ──> Markdown parser or libmandoc lowering
+DocumentResolver ──> mant-codec (Markdown / tldr / roff)
               │
               v
       mant_ir::ResolvedContent
@@ -111,34 +113,13 @@ Reference inventories independently scan the exact original owner, regardless of
 entry display filters. Search composes byte ownership
 with rendered text even when table cells flatten for portable Markdown.
 
-### Native lowering ownership
+### Native source interpretation
 
-Native lowering is private implementation, not a second public document API.
-The following boundaries keep source interpretation shared across prose,
-literal displays, lists and table recovery:
-
-| Responsibility | Owner and lifetime |
-| --- | --- |
-| Stage composition | `mandoc/mod.rs` resolves the parsed document and runs lowering, navigation and validation. |
-| Source lookup | `source_context.rs`, `ast.rs` and `equations.rs` provide source/AST services and bounded operation-local memoization; diagnostics use their own collector. They do not store a hidden formatter register. |
-| Formatter state | `FormatterState` carries current font, previous font and spacing explicitly between consumers. A normal font-scope exit restores current font but retains previous-font effects. |
-| Container routing | `containers.rs` streams borrowed children and scope boundaries; structural payloads remain tables/lists. Logical punctuation adjacency is a separate, non-executing classification in `adjacency.rs`. |
-| Inline and physical lines | `InlineBuilder` executes word/control events; `source_cursor.rs` places source-visible events on physical lines. No-fill changes layout, not macro interpretation. |
-| Structural layout | Block drivers own pending paragraphs and list state; section, synopsis, man no-fill and dialect-specific list consumers remain separate. Shared definition helpers do not own formatter state. |
-
-Source geometry retains bounded basic-unit positions independently of the IR
-parent and man macro base. Conversion produces signed relative offsets;
-ownership normalization rebases only transferred roots. Text presentation
-composes each parent once. It keeps resolved gap requests separate from literal
-newlines through nested flow composition, sharing cell/marker/gap rules with
-the UI through `mant-ir::geometry`. Zero block spacing is tight, not a
-frontend default; each source request has one consumption point.
-| Speculative recovery | Table-cell candidates retain output, final formatter state and diagnostics until ownership acceptance. Rejection rolls back all three, unlike a normal font-scope exit. |
-
-Complete corpus regressions live in the repository integration tests, outside
-the published `src/**` source set. Packaged unit tests remain self-contained.
-Target and topology audits complement these exact text/font/line assertions;
-a clean target ledger alone does not establish rendering fidelity.
+`mant-codec` owns native lowering, Markdown parsing, semantic annotation and
+portable document encoding. Its [native ownership map](https://github.com/BryanHeBY/ManT/blob/dev/crates/mant-codec/README.md#native-lowering-ownership)
+documents formatter state, source geometry, target retention and transactional
+table recovery. The engine prepares inputs and composes queries over that one
+implementation; it does not reinterpret source macros or rebuild entry facts.
 
 ### Public entry points
 
@@ -150,8 +131,10 @@ a clean target ledger alone does not establish rendering fidelity.
 | Resolve a bounded multi-document scope | `DocumentResolver::resolve_scope` |
 | Resolve and project a scope request | `DocumentResolver::execute_scope_query` |
 | Query caller-owned document snapshots without loading | `QueryScopeView::new`, `search_scope`, `explain_scope` |
-| Parse in-memory Markdown without discovery | `parse_markdown` or `query_markdown_text` |
-| Parse in-memory roff without discovery | `parse_manual_bytes` or `query_roff_bytes` |
+| Parse in-memory Markdown without query composition | `mant_codec::parse_markdown` (also re-exported here) |
+| Compose a query from in-memory Markdown | `query_markdown_text` |
+| Parse prepared plain roff without loading or decompression | `mant_codec::parse_roff_bytes` (`roff` feature) |
+| Load/decode supplied manual bytes, optionally composing a query | `parse_manual_bytes` or `query_roff_bytes` |
 | Audit production file lowering against its exact native witness | `parse_manual_source_with_report` |
 | Build a focused result from existing content | `build_outline_projection`, `select_excerpt`, `search_query` |
 | Collect bounded independent semantic evidence | `explain_query`, `validate_explanation_query` |
@@ -181,7 +164,8 @@ println!("{}", render_outline_text(&outline));
 Use `resolve_query` or `resolve_query_with_policy` when a caller needs the full
 document bundle. Use `execute_query` to validate, resolve, and materialize the
 request's `view` through one engine boundary. Use `parse_markdown` when the
-caller needs the parsed document and tldr preface without query composition.
+caller needs the parsed document and tldr preface without query composition;
+that function is implemented and exported by `mant-codec`.
 `DocumentResolver` can be reused when several operations must share one lazy
 filesystem snapshot; constructing a new resolver refreshes discovery.
 
@@ -270,7 +254,7 @@ for those versioned DTOs.
 Every supported target compiles `libmandoc-rs`. Windows uses its memory-only C
 transport while Rust owns file I/O, decompression, paths, and `.so` redirects.
 Within the engine, `manual_input` owns that product input policy and its
-`ManualError` failures. The `mandoc` codec accepts prepared plain bytes and a
+`ManualError` failures. `mant-codec` accepts prepared plain bytes and a
 source label, with includes denied; it never opens that label or a redirect.
 Standalone alias syntax is recognized once by a pure codec helper, while only
 the indexed loader may resolve it. Stored and decoded bytes each share a
@@ -293,13 +277,18 @@ manual utility.
 Native lowering conserves validated zero-width navigation targets as section,
 semantic-entry, or inline identities. This includes targets libmandoc moves
 onto structural paragraph, display, list, item, and function wrappers; it does
-not synthesize visible placeholder text.
+not synthesize visible placeholder text. This policy is implemented once in
+`mant-codec`, not in an engine-specific parser.
 
 ## Layering
 
 `mant-engine` returns an owned `mant_ir::ResolvedContent` for direct semantic
 use and owned `mant-protocol` values at versioned integration boundaries. It does not expose
-libmandoc C structures. Applications that only need raw roff syntax should use
+libmandoc C structures. It still owns loading, query execution and report
+rendering; it is not merely a forwarding facade. Its parser re-exports delegate
+to `mant-codec`; consumers needing only source-to-IR conversion or portable
+document Markdown should depend on that crate directly. Applications that only
+need raw roff syntax should use
 [`libmandoc-rs`](https://crates.io/crates/libmandoc-rs) directly. Applications
 that need the complete command or reader should install
 [`mant`](https://crates.io/crates/mant).

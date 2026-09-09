@@ -13,7 +13,8 @@ use mant_protocol::{
     SearchRenderFormat, SearchRenderScope, SearchSchema,
 };
 
-use crate::{ResolvedContent, output::render_addressable_markdown};
+use crate::ResolvedContent;
+use mant_codec::encode::render_addressable_markdown;
 
 mod mapping;
 mod owners;

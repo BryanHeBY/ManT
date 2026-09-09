@@ -3,7 +3,7 @@
 use mant_ir::SourceSpan;
 use mant_protocol::{OutlineNodeReference, OutlineTrail};
 
-use crate::output::{MarkdownArtifact, MarkdownNode, MarkdownNodeRange, MarkdownSection};
+use mant_codec::encode::{MarkdownArtifact, MarkdownNode, MarkdownNodeRange, MarkdownSection};
 
 #[derive(Clone, Copy)]
 pub(super) struct Owner {
@@ -36,7 +36,7 @@ impl<'map, 'src> OwnerIndex<'map, 'src> {
 
         for (key, mapped) in artifact.nodes().iter().enumerate() {
             let owner = owner_from_range(key, mapped);
-            match mapped.node {
+            match mapped.node() {
                 MarkdownNode::Tldr => tldr = Some(owner),
                 MarkdownNode::DocumentRoot => root = Some(owner),
                 MarkdownNode::DocumentHeading { .. } => heading = Some(owner),
@@ -72,7 +72,7 @@ impl<'map, 'src> OwnerIndex<'map, 'src> {
     pub(super) fn trail(&self, key: usize) -> OutlineTrail {
         #[cfg(test)]
         self.materialized.set(self.materialized.get() + 1);
-        trail(self.artifact, &self.artifact.nodes()[key].node)
+        trail(self.artifact, self.artifact.nodes()[key].node())
     }
 
     pub(super) fn owner(&self, offset: usize) -> Option<&Owner> {
@@ -123,7 +123,7 @@ impl<'map, 'src> OwnerIndex<'map, 'src> {
 }
 
 fn owner_from_range(key: usize, mapped: &MarkdownNodeRange<'_>) -> Owner {
-    let source = match &mapped.node {
+    let source = match &mapped.node() {
         MarkdownNode::Tldr | MarkdownNode::DocumentRoot => None,
         MarkdownNode::DocumentHeading { source }
         | MarkdownNode::DocumentSection { source, .. }
@@ -131,8 +131,8 @@ fn owner_from_range(key: usize, mapped: &MarkdownNodeRange<'_>) -> Owner {
     };
     Owner {
         key,
-        start: mapped.range.start,
-        end: mapped.range.end,
+        start: mapped.range().start,
+        end: mapped.range().end,
         source,
     }
 }
@@ -156,13 +156,15 @@ fn trail(artifact: &MarkdownArtifact<'_>, node: &MarkdownNode<'_>) -> OutlineTra
             },
         },
         MarkdownNode::DocumentSection { section, .. } => {
-            let section = artifact.section(*section);
+            let section = artifact
+                .section(*section)
+                .expect("artifact-owned section slot");
             OutlineTrail {
-                ancestors: section_ancestors(artifact, section.parent),
+                ancestors: section_ancestors(artifact, section.parent()),
                 node: OutlineNodeReference::DocumentSection {
-                    path: section.path.to_string().into(),
-                    id: section.section.id.clone(),
-                    title: section.section.heading.plain_text(),
+                    path: section.path().to_string().into(),
+                    id: section.section().id.clone(),
+                    title: section.section().heading.plain_text(),
                 },
             }
         }
@@ -208,9 +210,11 @@ fn section_ancestors(
 ) -> Vec<mant_protocol::OutlineReference> {
     let mut ancestors = Vec::new();
     while let Some(current) = slot {
-        let section = artifact.section(current);
+        let section = artifact
+            .section(current)
+            .expect("artifact-owned parent slot");
         ancestors.push(section_reference(section));
-        slot = section.parent;
+        slot = section.parent();
     }
     ancestors.reverse();
     ancestors
@@ -218,9 +222,9 @@ fn section_ancestors(
 
 fn section_reference(section: &MarkdownSection<'_>) -> mant_protocol::OutlineReference {
     mant_protocol::OutlineReference {
-        path: section.path.to_string().into(),
-        id: section.section.id.clone(),
-        title: section.section.heading.plain_text(),
+        path: section.path().to_string().into(),
+        id: section.section().id.clone(),
+        title: section.section().heading.plain_text(),
     }
 }
 
@@ -236,7 +240,7 @@ mod tests {
             writeln!(source, "- `--flag-{index}`: Payload{index}.").unwrap();
         }
         let query = crate::query_markdown_text(&source, None).unwrap();
-        let artifact = crate::output::render_addressable_markdown(&query);
+        let artifact = mant_codec::encode::render_addressable_markdown(&query);
         let index = OwnerIndex::new(&artifact);
         assert_eq!(index.entries.len(), 1000);
         assert_eq!(index.materialized.get(), 0);

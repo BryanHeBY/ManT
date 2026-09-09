@@ -101,7 +101,7 @@ On Windows, run the native product boundary from PowerShell:
 .\scripts\check-windows.ps1
 ```
 
-It tests `libmandoc-rs`, `mant-ir`, `mant-protocol`, `mant-sources`, `mant-engine`, `mant-ui`, and `mant`,
+It tests `libmandoc-rs`, `mant-ir`, `mant-protocol`, `mant-sources`, `mant-codec`, `mant-engine`, `mant-ui`, and `mant`,
 including the shared roff fixture suites.
 
 The product crates are workspace `default-members`, so a bare `cargo build`,
@@ -110,6 +110,14 @@ scripts include the standalone `libmandoc-rs` package and native parser tests.
 They also run that package with `--all-features`, as does native macOS CI, so
 its default-off reference renderers and Serde contract execute on every
 supported target without enabling unrelated workspace maintenance features.
+
+The default `mant-codec` feature set is independently checked by
+`scripts/check-codec-consumer.sh`. Its separate consumer workspace exercises
+the public Markdown/tldr/encoding APIs and rejects enabled native, protocol,
+engine or frontend dependencies in its normal/build graph. This is distinct
+from workspace tests, where the product enables the codec's `roff` feature.
+Both packaged codec feature surfaces are tested as well. All consumer build
+products use the repository `target/` directory, not a temporary build directory.
 
 The script checks formatting and installer syntax, runs every workspace test,
 runs clippy with all targets and features, builds the optimized executable,
@@ -252,17 +260,20 @@ SECURITY.md                   Supported versions and private reporting policy
 crates/mant-ir/               Semantic IR, ResolvedContent, paths, visitors, validation, indexes
 crates/mant-protocol/         Versioned request/response DTOs and JSON Schema
 crates/mant-sources/          Local Markdown registry and transactional source updates
-crates/mant-engine/           Resolution, lowering, projections, search, and rendering
+crates/mant-codec/            In-memory Markdown/tldr, optional roff lowering, document Markdown
+crates/mant-engine/           Loading, codec integration, projections, queries, report rendering
 crates/mant-ui/               Ratatui reader, navigation, search, and terminal styling
 crates/mant/                  Mode selection, CLI, request JSON, and MCP stdio boundary
 crates/libmandoc-rs/          Owned libmandoc parse/render API, private C shim, vendored source
 fuzz/                        Standalone cargo-fuzz workspace
 tests/contracts/             Stable JSON contract fixtures consumed by Rust tests
 tests/fixtures/              Fixed Markdown and real roff integration sources
+tests/consumers/codec-markdown/  Independent default-codec consumer and feature resolver
 scripts/check.sh             Canonical local and CI verification sequence
 scripts/check-windows.ps1    Native Windows verification sequence
 scripts/check-libmandoc-symbols.sh  Reject downstream-visible unprefixed C symbols
 scripts/check-packaged-crates.sh  Build and test exact published crate source sets
+scripts/check-codec-consumer.sh  Verify the standalone codec's pure-Rust dependency boundary
 scripts/build-and-smoke.sh   Unix debug/release product build and smoke test
 scripts/build-and-smoke.ps1 Windows debug/release product build and smoke test
 scripts/find-successful-ci.sh  Exact-commit full CI verification for automation

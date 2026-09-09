@@ -9,6 +9,7 @@ use std::{
 const APACHE_CRATES: &[&str] = &[
     "mant-ir",
     "mant-protocol",
+    "mant-codec",
     "mant-engine",
     "mant-sources",
     "mant-ui",
@@ -191,6 +192,7 @@ fn rust_dependency_notice_is_generated_from_the_locked_product_graph() {
             "mant-sources",
             include_str!("../../mant-sources/Cargo.toml"),
         ),
+        ("mant-codec", include_str!("../../mant-codec/Cargo.toml")),
         ("mant-engine", include_str!("../../mant-engine/Cargo.toml")),
         ("mant-ui", include_str!("../../mant-ui/Cargo.toml")),
         ("mant", include_str!("../Cargo.toml")),

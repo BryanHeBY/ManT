@@ -4,7 +4,7 @@
 set -euo pipefail
 
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-PACKAGES=(mant-ir mant-protocol libmandoc-rs mant-sources mant-engine mant-ui mant)
+PACKAGES=(mant-ir mant-protocol libmandoc-rs mant-sources mant-codec mant-engine mant-ui mant)
 mkdir -p "$ROOT/target"
 PACKAGE_CHECK_ROOT=$(mktemp -d "$ROOT/target/mant-package-check.XXXXXX")
 trap 'rm -rf "$PACKAGE_CHECK_ROOT"' EXIT
@@ -20,9 +20,10 @@ for package in "${PACKAGES[@]}"; do
   dependencies=()
   case "$package" in
     mant-protocol) dependencies=(mant-ir) ;;
-    mant-engine) dependencies=(libmandoc-rs mant-ir mant-protocol mant-sources) ;;
-    mant-ui) dependencies=(mant-engine mant-ir mant-protocol) ;;
-    mant) dependencies=(mant-engine mant-ir mant-protocol mant-sources mant-ui) ;;
+    mant-codec) dependencies=(libmandoc-rs mant-ir) ;;
+    mant-engine) dependencies=(libmandoc-rs mant-ir mant-protocol mant-sources mant-codec) ;;
+    mant-ui) dependencies=(libmandoc-rs mant-ir mant-protocol mant-sources mant-codec mant-engine) ;;
+    mant) dependencies=(libmandoc-rs mant-ir mant-protocol mant-sources mant-codec mant-engine mant-ui) ;;
   esac
   package_patches=()
   for dependency in "${dependencies[@]}"; do
@@ -45,6 +46,12 @@ done
 # (not a temporary filesystem); third-party dependency artifacts can be reused.
 export CARGO_TARGET_DIR="$ROOT/target"
 cargo test --manifest-path "$PACKAGE_CHECK_ROOT/Cargo.toml" --locked --workspace
+# Exercise both packaged codec surfaces separately. This checks packaged tests,
+# not native dependency exclusion: that requires an isolated minimal consumer.
+cargo test --manifest-path "$PACKAGE_CHECK_ROOT/Cargo.toml" --locked \
+  --package mant-codec --no-default-features
+cargo test --manifest-path "$PACKAGE_CHECK_ROOT/Cargo.toml" --locked \
+  --package mant-codec --no-default-features --features roff
 cargo test --manifest-path "$PACKAGE_CHECK_ROOT/Cargo.toml" --locked \
   --package libmandoc-rs --all-features
 

@@ -37,7 +37,7 @@ impl MatchPlan {
         let mut has_form = false;
         if let Some(forms) = owner.forms() {
             for (index, form) in forms.iter().enumerate() {
-                if super::same(&crate::inline::plain_text(form), query, case) {
+                if super::same(&mant_ir::inline_plain_text(form), query, case) {
                     has_form = true;
                     if plan.names.len() + plan.forms.len() < MAX_EXPLANATION_MATCH_RECORDS {
                         plan.forms.push(index);

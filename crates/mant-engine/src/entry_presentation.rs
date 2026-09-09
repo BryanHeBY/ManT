@@ -9,5 +9,10 @@ pub(crate) fn owner_label(owner: EntryOwner<'_>, names: &[String], mode: EntryLa
         return entry_label(mode, id, names, std::iter::empty::<&str>());
     }
     let forms = owner.forms().unwrap_or_default();
-    entry_label(mode, id, names, forms.iter().map(crate::inline::plain_text))
+    entry_label(
+        mode,
+        id,
+        names,
+        forms.iter().map(mant_ir::inline_plain_text),
+    )
 }

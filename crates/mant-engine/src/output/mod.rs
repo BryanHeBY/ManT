@@ -7,7 +7,6 @@ pub use explanation::{
     render_scope_explanation_markdown, render_scope_explanation_text,
     render_scope_explanation_text_with,
 };
-mod markdown;
 mod markdown_report;
 mod outline;
 mod search;
@@ -21,12 +20,9 @@ pub use json::{
     render_excerpt_json, render_outline_json, render_query_json, render_search_json,
     render_update_json,
 };
-#[cfg(test)]
-pub(crate) use markdown::anchor_markers;
-pub(crate) use markdown::{
-    MarkdownArtifact, MarkdownNode, MarkdownNodeRange, MarkdownSection, render_addressable_markdown,
+pub use mant_codec::encode::{
+    MarkdownFragmentOptions, MarkdownOptions, render_markdown, render_markdown_with_options,
 };
-pub use markdown::{MarkdownOptions, render_markdown, render_markdown_with_options};
 pub use markdown_report::{
     render_excerpt_markdown, render_excerpt_markdown_with_options, render_outline_markdown,
 };

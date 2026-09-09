@@ -12,7 +12,8 @@ use std::{ffi::OsStr, os::unix::ffi::OsStrExt};
 
 use flate2::read::MultiGzDecoder;
 
-use crate::{ManualPage, mandoc::redirect_target};
+use crate::ManualPage;
+use mant_codec::redirect_target;
 
 use super::error::ManualError;
 

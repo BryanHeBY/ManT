@@ -31,13 +31,13 @@ grep-regex.workspace = true
 flate2.workspace = true
 libmandoc-rs = { path = "../libmandoc-rs", version = "^0.10.0" }
 mant-ir = { path = "../mant-ir", version = "^0.11.0" }
+mant-codec = { path = "../mant-codec", version = "^0.11.0", features = ["roff"] }
 mant-protocol = { path = "../mant-protocol", version = "^0.11.0" }
 mant-sources = { path = "../mant-sources", version = "^0.9.3" }
 pulldown-cmark.workspace = true
 regex-syntax.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-sha2.workspace = true
 zstd.workspace = true
 
 [target.'cfg(unix)'.dependencies]

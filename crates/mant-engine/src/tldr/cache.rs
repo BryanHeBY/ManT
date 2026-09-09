@@ -13,7 +13,7 @@ use mant_ir::TldrDocument;
 
 use crate::executable::{environment_value, find_executable};
 
-use super::parser::{TldrPageLocation, TldrParseError, parse_tldr_page};
+use mant_codec::{TldrPageLocation, TldrParseError, parse_tldr_page};
 
 const ALL_PLATFORMS: &[&str] = &[
     "common",

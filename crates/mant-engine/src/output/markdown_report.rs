@@ -6,13 +6,14 @@ mod tests;
 use mant_ir::DOCUMENT_ROOT_ID;
 use mant_protocol::{ExcerptSelection, OutlineNode, QueryExcerpt, QueryOutline};
 
-use super::markdown::{
-    MarkdownOptions, heading, heading_has_local_link, render_heading, render_sections, render_tldr,
-    section_headings_have_local_links,
+use mant_codec::encode::{
+    MarkdownFragmentOptions, heading, heading_has_local_link,
+    render_heading_fragment as render_heading, render_sections_fragment as render_sections,
+    render_tldr, section_headings_have_local_links,
 };
-use super::markdown::{
-    blocks::render_blocks,
-    inline::{self, code_span, escape_text},
+use mant_codec::encode::{
+    commonmark_code_span as code_span, escape_commonmark as escape_text, html_anchor,
+    render_blocks_fragment as render_blocks,
 };
 
 /// Render a complete query outline as a nested `CommonMark` list.
@@ -51,14 +52,14 @@ pub fn render_outline_markdown(outline: &QueryOutline) -> String {
 /// Render selected query nodes with their outline context.
 #[must_use]
 pub fn render_excerpt_markdown(excerpt: &QueryExcerpt) -> String {
-    render_excerpt_markdown_with_options(excerpt, MarkdownOptions::default())
+    render_excerpt_markdown_with_options(excerpt, MarkdownFragmentOptions::default())
 }
 
 /// Render selected nodes using explicit presentation-only options.
 #[must_use]
 pub fn render_excerpt_markdown_with_options(
     excerpt: &QueryExcerpt,
-    mut options: MarkdownOptions,
+    mut options: MarkdownFragmentOptions,
 ) -> String {
     let heading_links = excerpt.selections.iter().any(|selection| match selection {
         ExcerptSelection::DocumentRoot { heading, .. } => {
@@ -71,7 +72,6 @@ pub fn render_excerpt_markdown_with_options(
     });
     if heading_links {
         options.preserve_anchors = true;
-        options.preserve_semantics = false;
     }
     let label = document_label(
         excerpt.display_title.as_deref().unwrap_or(&excerpt.label),
@@ -96,7 +96,7 @@ pub fn render_excerpt_markdown_with_options(
             } => {
                 if let Some(heading) = heading {
                     if options.preserve_anchors {
-                        output.push(inline::html_anchor(DOCUMENT_ROOT_ID));
+                        output.push(html_anchor(DOCUMENT_ROOT_ID));
                     }
                     output.push(render_heading(2, heading, options));
                 }

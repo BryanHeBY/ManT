@@ -12,6 +12,18 @@ that crate was not published for that change.
 
 ## Unreleased
 
+### mant-codec 0.11.0
+
+- New independently usable memory-only codec: Markdown and tldr are available
+  by default; `roff` explicitly enables native man/mdoc lowering. Source labels
+  do not authorize file reads or includes. Semantic recognition and Markdown
+  annotation import/export share one implementation, separate from loading,
+  querying, and report presentation.
+- Canonical Markdown artifacts borrow source IR and keep text, owner ranges,
+  and lazy anchor maps together. Detached report fragments use
+  `MarkdownFragmentOptions`, which cannot request unchecked semantic metadata;
+  whole-document semantic export retains its representability checks.
+
 ### mant-sources 0.9.3
 
 - Tar source updates now validate the entire remaining gzip/zstd transport

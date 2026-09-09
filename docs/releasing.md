@@ -10,7 +10,7 @@ integrators must act.
 
 ## Before tagging
 
-1. Version the seven crates independently in their own `Cargo.toml` files.
+1. Version the eight crates independently in their own `Cargo.toml` files.
    A product release always bumps `crates/mant/Cargo.toml`; also bump every
    crate whose published source or public contract changed. Internal path
    dependencies use explicit caret requirements such as `^0.9.0`. Raise that
@@ -74,15 +74,15 @@ integrators must act.
    the evidence shows that ManT preserves the source semantics more usefully
    than that exact reference renderer.
 
-5. Inspect the publishable file list for all seven crates. Each package must
+5. Inspect the publishable file list for all eight crates. Each package must
    contain its applicable complete license texts and no unexpected fixture or
    documentation assets. The canonical `scripts/check.sh` path also packages
-   all seven crates and tests their exact source sets in an isolated temporary
+   all eight crates and tests their exact source sets in an isolated temporary
    workspace, so repository-only fixtures cannot silently break downstream
    packager tests:
 
    ```sh
-   for package in mant-ir mant-protocol libmandoc-rs mant-sources mant-engine mant-ui mant; do
+   for package in mant-ir mant-protocol libmandoc-rs mant-sources mant-codec mant-engine mant-ui mant; do
      cargo package --locked --list -p "$package"
    done
    ```
@@ -101,12 +101,14 @@ version; `mant-sources` joined the same graph in `0.6.0`. Version `0.7.0`
 replaces the mixed `mant-ast` package with separate `mant-ir` and
 `mant-protocol` packages, and renames `mant-core` to `mant-engine`, under the
 same lockstep policy. Version `0.9.0` is the final lockstep release; later
-development assigns each crate its own semver while retaining this publication
-order:
+development assigns each crate its own semver. `mant-codec` owns source decoding
+and portable document encoding, with libmandoc available through its optional
+`roff` feature. The current publication dependencies are:
 
 ```text
 mant-ir ─> mant-protocol
-mant-ir + mant-protocol + mant-sources + libmandoc-rs ─> mant-engine
+mant-ir + libmandoc-rs (optional roff) ─> mant-codec
+mant-ir + mant-protocol + mant-sources + mant-codec + libmandoc-rs ─> mant-engine
 mant-ir + mant-protocol + mant-engine (dev) ─> mant-ui
 mant-ir + mant-protocol + mant-sources + mant-engine + mant-ui ─> mant
 ```
@@ -116,7 +118,9 @@ the package on the right is validated. The `mant-engine` edge into `mant-ui` is
 a development dependency used by doctests and integration tests, not a runtime
 frontend dependency. `scripts/publish-crates.sh` encodes the complete linear
 order: `mant-ir`, `mant-protocol`, `libmandoc-rs`, `mant-sources`,
-`mant-engine`, `mant-ui`, then `mant`.
+`mant-codec`, `mant-engine`, `mant-ui`, then `mant`. Optional registry
+dependencies must also be available before a package manifest can be published;
+the codec's default pure-Rust build does not remove that publication edge.
 
 Each previously published package must configure the same crates.io Trusted
 Publisher:
@@ -177,7 +181,7 @@ git push origin mant-ir-v0.9.1
 ```
 
 Valid package prefixes are `mant-ir`, `mant-protocol`, `libmandoc-rs`,
-`mant-sources`, `mant-engine`, and `mant-ui`. The tag version must exactly match
+`mant-sources`, `mant-codec`, `mant-engine`, and `mant-ui`. The tag version must exactly match
 that package's manifest. The same `release.yml` workflow verifies full CI for
 the tagged SHA, skips native product archives and the GitHub Release, pauses at
 the protected `crates-io` Environment, and publishes only the tagged package.

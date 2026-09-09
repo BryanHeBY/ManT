@@ -205,11 +205,10 @@ fn searches_contiguous_text_across_an_unsafe_style_boundary() {
 }
 
 #[test]
-fn source_map_stripping_accepts_only_complete_empty_anchors() {
-    assert_eq!(
-        display_markdown_line("before<a id=\"node\"></a>after"),
-        "beforeafter"
-    );
+fn source_map_stripping_uses_codec_supplied_anchor_ranges() {
+    let source = "before<a id=\"node\"></a>after";
+    let lines = LineIndex::with_anchors(source, std::iter::once(6..23).collect());
+    assert_eq!(lines.presented_line(source, 0).text, "beforeafter");
     assert_eq!(
         display_markdown_line("before<a id=\"node\">payload</a>after"),
         "before<a id=\"node\">payload</a>after"

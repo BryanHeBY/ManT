@@ -6,10 +6,7 @@ use mant_ir::{
 };
 use mant_protocol::{ContentSelector, EntryProjection, ExcerptSelection, OutlineNode};
 
-use super::{
-    ProjectionError, build_outline, build_outline_projection, outline_identity_diagnostics,
-    select_excerpt,
-};
+use super::{ProjectionError, build_outline, build_outline_projection, select_excerpt};
 
 fn section(id: &str, title: &str, children: Vec<Section>) -> Section {
     Section {
@@ -171,36 +168,6 @@ fn query_with_semantic_entries() -> ResolvedContent {
             source: None,
         });
     query
-}
-
-#[test]
-fn repeated_names_do_not_create_content_identity_diagnostics() {
-    let sensitive = definition(
-        "command-sensitive-mode",
-        EntryKind::Command,
-        &["Mode"],
-        &["Mode"],
-        Vec::new(),
-    );
-    let mut insensitive = definition(
-        "command-insensitive-mode",
-        EntryKind::Command,
-        &["MODE", "mode"],
-        &["MODE", "mode"],
-        Vec::new(),
-    );
-    insensitive.entry.as_mut().expect("identity").case = NameCase::Insensitive;
-    let blocks = vec![Block::DefinitionList {
-        declaration_groups: Vec::new(),
-        items: vec![sensitive, insensitive],
-        compact: true,
-        layout: LayoutHint::default(),
-        source: None,
-    }];
-    let sections = vec![section("mode", "Mode", Vec::new())];
-
-    let diagnostics = outline_identity_diagnostics(&blocks, &sections, "manual");
-    assert!(diagnostics.is_empty(), "{diagnostics:?}");
 }
 
 #[test]

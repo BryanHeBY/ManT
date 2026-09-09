@@ -59,7 +59,7 @@ fn complete_forms(owner: EntryOwner<'_>, evidence: &ExplanationEvidence) -> bool
     if forms.iter().next().is_none()
         || forms
             .iter()
-            .any(|form| crate::inline::plain_text(form).trim().is_empty())
+            .any(|form| mant_ir::inline_plain_text(form).trim().is_empty())
     {
         return false;
     }

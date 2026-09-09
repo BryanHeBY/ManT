@@ -107,10 +107,7 @@ fn render_excerpt(
             let terminal_copy = output_terminal.then(|| terminal_excerpt(excerpt));
             Ok(mant_engine::render_excerpt_markdown_with_options(
                 terminal_copy.as_ref().unwrap_or(excerpt),
-                mant_engine::MarkdownOptions {
-                    preserve_anchors,
-                    ..Default::default()
-                },
+                mant_engine::MarkdownFragmentOptions { preserve_anchors },
             ))
         }
         QueryFormat::Text => Ok(render_terminal_excerpt(excerpt, color)),

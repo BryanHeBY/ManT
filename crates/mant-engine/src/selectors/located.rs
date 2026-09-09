@@ -1,8 +1,8 @@
 //! Borrowed semantic locations and source-order breadcrumbs, without DTOs.
 use super::DOCUMENT_ROOT_TITLE;
-use crate::definitions::{ContentEntry, content_entries, content_entry_locations};
 use mant_ir::{
-    Block, DOCUMENT_ROOT_ID, EntryFacts, EntryOwner, NodeId, OutlinePath, Section, SourceSpan,
+    Block, ContentEntry, DOCUMENT_ROOT_ID, EntryFacts, EntryOwner, NodeId, OutlinePath, Section,
+    SourceSpan, content_entries, content_entry_locations,
 };
 #[derive(Clone)]
 pub(crate) struct LocatedBreadcrumb {

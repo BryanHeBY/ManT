@@ -3,11 +3,9 @@
 mod error;
 mod source;
 
-use crate::{
-    ManualPage,
-    mandoc::{parse_plain_manual, parse_plain_manual_report, redirect_target},
-};
+use crate::ManualPage;
 use libmandoc_rs::ParseReport;
+use mant_codec::{parse_roff_bytes, parse_roff_bytes_with_report, redirect_target};
 use mant_ir::Document;
 use source::{load_manual_source, resolve_manual_redirects};
 use std::path::Path;
@@ -43,7 +41,7 @@ pub fn parse_manual_source_with_report(
 ) -> Result<(Document, ParseReport), ManualError> {
     let loaded = load_manual_source(path)?;
     reject_standalone_redirect(path, &loaded.source)?;
-    parse_plain_manual_report(path, &loaded.source).map_err(ManualError::from)
+    parse_roff_bytes_with_report(path, &loaded.source).map_err(ManualError::from)
 }
 
 /// Parse one already bounded, uncompressed standalone roff input.
@@ -56,7 +54,7 @@ pub fn parse_manual_source_with_report(
 /// Returns [`ManualError`] when libmandoc rejects the input.
 pub fn parse_manual_bytes(path: &Path, source: &[u8]) -> Result<Document, ManualError> {
     reject_standalone_redirect(path, source)?;
-    parse_plain_manual(path, source).map_err(ManualError::from)
+    parse_roff_bytes(path, source).map_err(ManualError::from)
 }
 
 fn reject_standalone_redirect(path: &Path, source: &[u8]) -> Result<(), ManualError> {
@@ -80,7 +78,7 @@ fn reject_standalone_redirect(path: &Path, source: &[u8]) -> Result<(), ManualEr
 /// Returns [`ManualError`] when the source cannot be opened, decoded, or parsed.
 pub fn parse_manual_page(page: &ManualPage) -> Result<Document, ManualError> {
     let resolved = resolve_manual_redirects(page)?;
-    let mut document = parse_plain_manual(&page.path, &resolved.source)?;
+    let mut document = parse_roff_bytes(&page.path, &resolved.source)?;
     if let Some(alias_target) = resolved.alias_target {
         document.meta.alias_target = Some(alias_target);
     }

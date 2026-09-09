@@ -21,8 +21,8 @@ use mant_sources::{RegisteredDocumentIndex, RegisteredDocumentOrigin, SourceConf
 use crate::{
     ManualIndex, ManualPage, ManualRequest, ProjectionError, SearchError, discover_manual_roots,
     executable::query_name_candidates, locate_manual_source_in, parse_manual_bytes,
-    parse_manual_page, parse_manual_source, parse_markdown, read_cached_tldr_page, search_query,
-    select_excerpt, validate_search_query,
+    parse_manual_page, parse_manual_source, read_cached_tldr_page, search_query, select_excerpt,
+    validate_search_query,
 };
 
 mod execution;

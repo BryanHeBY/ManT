@@ -6,8 +6,8 @@ use std::{collections::BTreeMap, ops::Range};
 use mant_protocol::{OutlineNodeReference, OutlineTrail, QuerySearch, SearchHit, SearchScope};
 use pulldown_cmark::{Event, Parser};
 
-use super::markdown::{commonmark_code_span as code_span, escape_commonmark as escape_text};
-use crate::markdown_mapping::{InlineMappingKind, map_inline_characters};
+use mant_codec::encode::{commonmark_code_span as code_span, escape_commonmark as escape_text};
+use mant_codec::markdown_mapping::{InlineMappingKind, map_inline_characters};
 
 /// Semantic roles in the grep-like search presentation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

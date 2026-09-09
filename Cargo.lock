@@ -948,6 +948,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "mant-codec"
+version = "0.11.0"
+dependencies = [
+ "libmandoc-rs",
+ "mant-ir",
+ "pulldown-cmark",
+ "serde",
+ "serde_json",
+ "sha2",
+]
+
+[[package]]
 name = "mant-engine"
 version = "0.11.0"
 dependencies = [
@@ -956,6 +968,7 @@ dependencies = [
  "grep-regex",
  "libc",
  "libmandoc-rs",
+ "mant-codec",
  "mant-ir",
  "mant-protocol",
  "mant-sources",
@@ -963,7 +976,6 @@ dependencies = [
  "regex-syntax",
  "serde",
  "serde_json",
- "sha2",
  "zstd",
 ]
 

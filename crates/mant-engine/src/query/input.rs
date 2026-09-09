@@ -2,8 +2,9 @@
 
 use super::{
     InputFormat, ManualLoadError, OsStr, Path, QueryError, QueryHost, QueryInput, QueryPolicy,
-    QueryRequest, ResolvedContent, parse_manual_bytes, parse_markdown, query_named_document,
+    QueryRequest, ResolvedContent, parse_manual_bytes, query_named_document,
 };
+use mant_codec::parse_markdown;
 
 pub(super) fn query_with(
     request: &QueryRequest,

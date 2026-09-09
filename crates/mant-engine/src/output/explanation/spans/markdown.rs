@@ -1,7 +1,7 @@
 //! CommonMark-only emphasis of exact inline matches before escaping/layout.
 //! Fenced displays remain verbatim; inserting Markdown inside them would lie.
 use super::{LocatedStyles, Span, key, pieces};
-use crate::output::markdown::MarkdownInlineProjection;
+use mant_codec::encode::MarkdownInlineProjection;
 use mant_ir::Inline;
 use mant_protocol::{ExplanationTextRoot, TextPresentation};
 use std::borrow::Cow;
@@ -10,9 +10,9 @@ impl LocatedStyles<'_> {
     pub(crate) fn markdown_inline(
         &self,
         nodes: &[Inline],
-        options: crate::MarkdownOptions,
+        options: crate::MarkdownFragmentOptions,
     ) -> String {
-        crate::output::markdown::inline::render_inline(&self.project(nodes), options)
+        mant_codec::encode::render_inline_fragment(&self.project(nodes), options)
     }
 }
 
@@ -115,11 +115,11 @@ mod tests {
         );
         assert!(matches!(styles.project(&nodes), Cow::Owned(_)));
         assert!(matches!(styles.project(&other), Cow::Borrowed(_)));
-        let options = crate::MarkdownOptions::default();
+        let options = crate::MarkdownFragmentOptions::default();
         assert_eq!(styles.markdown_inline(&nodes, options), "A**LPH**A");
         assert_eq!(styles.markdown_inline(&other, options), "ALPHA");
         assert_eq!(
-            crate::output::markdown::inline::render_inline(&nodes, options),
+            mant_codec::encode::render_inline_fragment(&nodes, options),
             "ALPHA"
         );
     }
@@ -145,13 +145,13 @@ mod tests {
                 matched: true,
             }],
         );
-        let options = crate::MarkdownOptions::default();
+        let options = crate::MarkdownFragmentOptions::default();
         assert_eq!(
-            crate::output::markdown::blocks::render_located_blocks(&blocks, options, Some(&styles)),
+            mant_codec::encode::render_located_blocks_fragment(&blocks, options, Some(&styles)),
             ["A**LPH**A"]
         );
         assert_eq!(
-            crate::output::markdown::blocks::render_blocks(&blocks, options),
+            mant_codec::encode::render_blocks_fragment(&blocks, options),
             ["ALPHA"]
         );
     }

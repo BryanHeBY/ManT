@@ -3,8 +3,6 @@ pub(crate) mod excerpt;
 mod outline;
 pub mod references;
 pub use crate::explanation::select_explanation;
-#[cfg(test)]
-use crate::producer_identity::outline_identity_diagnostics;
 pub use crate::selectors::{ProjectionError, SelectorCandidate};
 pub use excerpt::select_excerpt;
 pub use mant_ir::semantics_complete;

@@ -38,7 +38,7 @@ pub(super) fn matched(
                     };
                     let record = ExplanationFormMatch {
                         source_form_index,
-                        text: crate::inline::plain_text(&form),
+                        text: mant_ir::inline_plain_text(&form),
                         occurrences: Vec::new(),
                     };
                     omitted |= !append(matches, record, budget);

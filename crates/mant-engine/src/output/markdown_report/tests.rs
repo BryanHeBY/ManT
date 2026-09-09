@@ -7,8 +7,8 @@ use mant_ir::{
 use mant_protocol::QueryBundle;
 
 use super::{render_excerpt_markdown, render_outline_markdown};
-use crate::output::markdown::{MarkdownOptions, render_markdown, render_markdown_with_options};
 use crate::{build_outline, select_excerpt};
+use mant_codec::encode::{MarkdownOptions, render_markdown, render_markdown_with_options};
 
 fn paragraph(children: Vec<Inline>) -> Block {
     Block::Paragraph {
