@@ -134,10 +134,12 @@ fn check_manual(command: &mut clap::Command, manual: &str) -> Result<(), String>
 #[test]
 fn self_manual_covers_every_public_clap_option_and_alias() {
     let manifest = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-    // Published source sets intentionally omit repository integration tests and
-    // manuals. Like the engine's self_manuals suite, the real-document audit is
-    // checkout-only; the checker fixtures below also run in packaged crates.
-    if !manifest.join("tests").is_dir() {
+    // Published source sets include a terminal test helper under tests/support,
+    // but intentionally omit the repository's integration suites and manuals.
+    // Detect the actual checkout-only suite, not merely a tests directory. A
+    // checkout missing its authoritative manual must still fail below.
+    // The checker fixtures below also run in every packaged crate.
+    if !manifest.join("tests/self_manual_links.rs").is_file() {
         return;
     }
     let manual = std::fs::read_to_string(manifest.join("../../docs/manuals/mant.md"))
