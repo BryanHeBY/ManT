@@ -18,7 +18,7 @@ impl LiteralHit<'_> {
         let end = total.min(start + 1024);
         ExplanationPreview {
             block_path: self.path.clone(),
-            source: crate::block::block_source(self.block),
+            source: mant_ir::geometry::block_source(self.block),
             text: text.chars().skip(start).take(end - start).collect(),
             match_start_char: u32::try_from(match_start - start).expect("bounded preview"),
             match_end_char: u32::try_from(match_start - start + match_len)

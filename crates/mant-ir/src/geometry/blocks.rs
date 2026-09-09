@@ -1,14 +1,13 @@
 //! Shared access to fields carried by most renderer-neutral block variants.
 //!
-//! Keeping these exhaustive matches in one module prevents Markdown and roff
-//! normalization from drifting when the IR gains another block variant. They
-//! remain internal so the engine continues to compile against every compatible
-//! `mant-ir` patch release in its declared dependency range.
+//! Exhaustive accessors keep producers and consumers aligned as block variants
+//! evolve. Reparenting mutates only moved roots, never descendant coordinates.
 
-use mant_ir::{Block, LayoutHint, SourceSpan};
+use crate::{Block, LayoutHint, SourceSpan};
 
 /// Return a block's layout hint when its representation carries one.
-pub(crate) const fn block_layout(block: &Block) -> Option<&LayoutHint> {
+#[must_use]
+pub const fn block_layout(block: &Block) -> Option<&LayoutHint> {
     match block {
         Block::Paragraph { layout, .. }
         | Block::Preformatted { layout, .. }
@@ -22,7 +21,8 @@ pub(crate) const fn block_layout(block: &Block) -> Option<&LayoutHint> {
 }
 
 /// Return a mutable block layout hint when its representation carries one.
-pub(crate) const fn block_layout_mut(block: &mut Block) -> Option<&mut LayoutHint> {
+#[must_use]
+pub const fn block_layout_mut(block: &mut Block) -> Option<&mut LayoutHint> {
     match block {
         Block::Paragraph { layout, .. }
         | Block::Preformatted { layout, .. }
@@ -36,7 +36,8 @@ pub(crate) const fn block_layout_mut(block: &mut Block) -> Option<&mut LayoutHin
 }
 
 /// Return the original source location attached to a block.
-pub(crate) const fn block_source(block: &Block) -> Option<SourceSpan> {
+#[must_use]
+pub const fn block_source(block: &Block) -> Option<SourceSpan> {
     match block {
         Block::Paragraph { source, .. }
         | Block::Preformatted { source, .. }
@@ -49,13 +50,19 @@ pub(crate) const fn block_source(block: &Block) -> Option<SourceSpan> {
         | Block::Unsupported { source, .. } => *source,
     }
 }
+
 /// Move already-relative roots between actual content origins. Descendants
 /// remain relative to those roots and must never receive this translation.
-pub(crate) fn rebase_roots(blocks: &mut [mant_ir::Block], old_parent: i32, new_parent: i32) {
+/// Non-layout blocks, source spans, spacing and continuation offsets are unchanged.
+/// Arithmetic saturates at the signed coordinate limits, without wrapping.
+pub fn rebase_roots(blocks: &mut [Block], old_parent: i32, new_parent: i32) {
     for block in blocks {
         if let Some(layout) = block_layout_mut(block) {
             layout.indent_columns =
-                mant_ir::geometry::rebase_origin(layout.indent_columns, old_parent, new_parent);
+                super::rebase_origin(layout.indent_columns, old_parent, new_parent);
         }
     }
 }
+
+#[cfg(test)]
+mod tests;

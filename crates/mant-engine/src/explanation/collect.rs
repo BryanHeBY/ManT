@@ -184,7 +184,7 @@ impl<'a> Scan<'a, '_> {
                             ordinary: Some(block),
                             section,
                             block_path: Some(block_path),
-                            source: crate::block::block_source(block),
+                            source: mant_ir::geometry::block_source(block),
                             bases: vec![EvidenceBasis::Literal],
                             matched: super::matches::MatchPlan::default(),
                             hits: vec![hit],

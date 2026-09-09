@@ -2,12 +2,12 @@
 
 use mant_ir::{Block, DefinitionItem, ListItem, ListKind, SourceSpan};
 
-use crate::block::rebase_roots;
 use crate::mandoc::{
     inline::plain_text,
     layout::{layout, layout_with_spacing},
     targets,
 };
+use mant_ir::geometry::rebase_roots;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(in crate::mandoc::blocks) struct DefinitionLocation {

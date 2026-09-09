@@ -19,6 +19,9 @@ pub use gaps::has_bounded_gap;
 mod terms;
 pub use terms::definition_run_in_width;
 
+mod blocks;
+pub use blocks::{block_layout, block_layout_mut, block_source, rebase_roots};
+
 /// Whether a literal inline stream contains an authored row, even an empty
 /// text row. Empty wrappers and zero-width targets alone are not blank lines.
 #[must_use]

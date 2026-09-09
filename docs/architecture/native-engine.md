@@ -430,6 +430,10 @@ roots; it does not reinterpret those offsets as cumulative margins.
 `mant-ir::geometry` owns the small source-neutral core for cell measurement,
 signed origin composition, marker collision and gap rules. Its visibility walk
 uses original IR inlines, not protocol styling; it adds no serialized fields.
+Shared block layout/source access and root-only reparenting also belong to this
+IR core. Producers choose ownership and source distances; the shared operation
+translates only moved roots and leaves descendant coordinates and source spans
+intact.
 CLI text keeps gap events separate from literal
 text until the complete flow is assembled; TUI uses the same boundary budget
 while building logical rows. Empty containers cannot start a second budget.

@@ -122,6 +122,12 @@ or output format. Display cells are distinct from source bytes and semantic
 scalar coordinates; gap request identities are operation-local, not serialized
 document identities.
 
+`geometry::block_layout`, `block_layout_mut` and `block_source` provide exhaustive
+access to the optional fields on block variants. `geometry::rebase_roots` moves
+only the supplied roots between resolved parent origins; descendants, source
+spans, continuation offsets and spacing remain unchanged. Source macro/unit
+interpretation stays in the producer, not in these helpers.
+
 Block spacing is resolved before IR: zero is tight. Independent explicit gaps
 add across transparent containers; repeated projections of one request belong
 at only one consumption point. List-item and definition-item absent spacing instead inherits

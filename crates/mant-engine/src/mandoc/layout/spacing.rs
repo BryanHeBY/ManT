@@ -3,7 +3,7 @@ use libmandoc_rs::Node;
 use mant_ir::Block;
 
 use super::first_text;
-use crate::block::block_layout_mut;
+use mant_ir::geometry::block_layout_mut;
 
 /// Resolve man(7)'s `print_bvspace` prerequisite before materializing IR.
 /// Transparent RS scopes may carry a predecessor outside a detached output
@@ -32,7 +32,7 @@ impl crate::mandoc::LoweringContext<'_> {
                         level: mant_ir::DiagnosticLevel::Warning,
                         code: Some("manual.vertical-spacing-limit".into()),
                         message: "vertical spacing exceeds the 4096-row boundary limit; presentation is bounded".into(),
-                        source: blocks.first().and_then(crate::block::block_source),
+                        source: blocks.first().and_then(mant_ir::geometry::block_source),
                     });
             }
         }

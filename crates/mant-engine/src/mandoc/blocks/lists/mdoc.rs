@@ -160,7 +160,7 @@ fn lower_mdoc_plain_list(
                     formatter,
                 );
                 attach_item_targets(&mut blocks, &item, layout(body_origin));
-                crate::block::rebase_roots(&mut blocks, body_columns, marker_width);
+                mant_ir::geometry::rebase_roots(&mut blocks, body_columns, marker_width);
                 ListItem {
                     layout: mant_ir::ListItemLayout::default(),
                     source: source_span(item.node),
@@ -294,7 +294,7 @@ fn mdoc_list_item_from_definition(
         layout: definition_layout,
         ..
     } = item;
-    crate::block::rebase_roots(
+    mant_ir::geometry::rebase_roots(
         &mut description,
         definition_layout.body_indent_columns,
         marker_width,

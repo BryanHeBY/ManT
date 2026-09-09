@@ -6,7 +6,7 @@ fn excessive_display_and_list_offsets_are_bounded_without_losing_content() {
     struct LayoutBounds;
     impl<'ir> Visit<'ir> for LayoutBounds {
         fn visit_block(&mut self, block: &'ir Block) {
-            if let Some(layout) = crate::block::block_layout(block) {
+            if let Some(layout) = mant_ir::geometry::block_layout(block) {
                 assert!(layout.indent_columns <= 4096);
             }
             visit::walk_block(self, block);

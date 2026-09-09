@@ -7,7 +7,7 @@
 use libmandoc_rs::Node;
 use mant_ir::{Block, LayoutHint};
 
-use crate::block::block_layout;
+use mant_ir::geometry::block_layout;
 
 mod definition;
 mod distance;

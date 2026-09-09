@@ -1,6 +1,6 @@
 //! Definition normalize policy; coordinated by the parent discovery passes.
 use super::{context::DefinitionContext, syntax::is_inferred_head};
-use crate::block::{block_layout, block_layout_mut};
+use mant_ir::geometry::{block_layout, block_layout_mut};
 use mant_ir::{Block, DefinitionItem, LayoutHint};
 use std::{collections::VecDeque, mem};
 
@@ -35,7 +35,7 @@ pub(super) fn normalize_definition_nesting_with_boundaries(
         let description_origin = base_indent.saturating_add(last_item.layout.body_indent_columns);
         while let Some(length) = indented_continuation_len(&pending, base_indent) {
             if pending.iter().take(length).any(|block| {
-                crate::block::block_source(block)
+                mant_ir::geometry::block_source(block)
                     .is_some_and(|s| boundaries.contains(&(s.line, s.column)))
             }) {
                 break;

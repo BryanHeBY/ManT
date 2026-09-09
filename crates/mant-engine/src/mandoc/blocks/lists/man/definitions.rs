@@ -69,7 +69,7 @@ pub(in crate::mandoc::blocks) fn lower_man_definition(
     let continuation_sources = item
         .description
         .iter()
-        .filter_map(crate::block::block_source)
+        .filter_map(mant_ir::geometry::block_source)
         .map(|s| (s.line, s.column))
         .collect::<Vec<_>>();
     if node.macro_name.as_deref() == Some("IP")
@@ -323,7 +323,7 @@ fn append_ip_continuation(
         // with an explicit VerticalSpace rather than a layout-bearing block.
         crate::mandoc::layout::set_block_spacing(first, paragraph_distance);
     }
-    crate::block::rebase_roots(
+    mant_ir::geometry::rebase_roots(
         &mut item.description,
         item.layout.body_indent_columns,
         previous.layout.body_indent_columns,

@@ -4,7 +4,7 @@ use super::{
     diagnostics::{EntryRejection, EntryRejectionReason},
     names::entry_names,
 };
-use crate::block::block_source;
+use mant_ir::geometry::block_source;
 use mant_ir::{Block, EntryKind, Inline, LinkTarget, ListItem};
 #[derive(Clone)]
 pub(super) struct EntrySignature {

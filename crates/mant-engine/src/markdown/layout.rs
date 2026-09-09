@@ -7,7 +7,7 @@
 use mant_ir::{Block, Inline, Section};
 
 use super::source::MarkdownSource;
-use crate::block::{block_layout_mut, block_source};
+use mant_ir::geometry::{block_layout_mut, block_source};
 
 /// Apply source-derived block spacing to the normalized document.
 pub(super) fn normalize_markdown_layout(
