@@ -202,6 +202,14 @@ This archive-only rule does not constrain native configuration paths.
 These checks apply before activation, so malformed or hostile input
 leaves the previous source installed.
 
+Reaching a tar end marker does not finish validating its transport. ManT reads
+the remaining gzip/zstd members or frames to EOF under the same expanded-byte
+budget, so corrupt or truncated compression trailers cannot activate a partial
+installation. Only zero padding is allowed after the tar end marker; nonzero
+suffixes and concatenated independent tar archives are rejected. Splitting one
+tar stream across compression members/frames remains supported. This does not
+otherwise replace the tar parser's existing format-tolerance rules.
+
 An update lock prevents two native CLI updates from writing the source store
 at once. A failed source leaves its prior installed directory untouched. If a
 process is killed and leaves `.update.lock`, verify that no update is running

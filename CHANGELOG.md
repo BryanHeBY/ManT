@@ -12,6 +12,18 @@ that crate was not published for that change.
 
 ## Unreleased
 
+### mant-sources 0.9.3
+
+- Tar source updates now validate the entire remaining gzip/zstd transport
+  after the tar end marker, including checksums, truncated trailers and
+  concatenated compression members. Trailing zero padding consumes the same
+  expanded-byte budget; nonzero suffixes and concatenated independent tar
+  archives are rejected before activation. One tar stream split across
+  compression members/frames remains supported. Previously, stopping at the
+  tar marker could accept an invalid compression trailer or unchecked tail.
+
+### Ongoing v0.11 development
+
 - Reference target copying now emits reusable link destinations rather than
   display labels. Shared IR URI conversion preserves Markdown document suffixes,
   literal manual-name parentheses, percent signs and fragments; unsupported

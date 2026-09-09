@@ -406,7 +406,7 @@ fn source_consumers_require_the_integrity_patch_baseline() {
     ] {
         assert!(
             manifest.lines().any(|line| {
-                line.starts_with("mant-sources = ") && line.contains("version = \"^0.9.2\"")
+                line.starts_with("mant-sources = ") && line.contains("version = \"^0.9.3\"")
             }),
             "{name} does not require the mant-sources integrity baseline"
         );

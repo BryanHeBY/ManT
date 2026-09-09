@@ -127,6 +127,29 @@ fn extract_zip(path: &Path, destination: &Path) -> Result<(), String> {
     Ok(())
 }
 
+fn validate_tar_end(mut reader: impl Read) -> Result<(), String> {
+    // tar-rs stops at the first zero header, before necessarily reaching the
+    // compression checksum/footer or the next member/frame. Read the complete
+    // transport through the same expanded-byte gate, allowing only tar's zero
+    // record padding. A second archive or other nonzero suffix must not hide
+    // behind a successful first archive. Decoder `finish()` is deliberately
+    // not used: its errors and any additional reads must remain observable.
+    let mut buffer = [0_u8; 8_192];
+    loop {
+        let count = match reader.read(&mut buffer) {
+            Ok(count) => count,
+            Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
+            Err(error) => return Err(format!("could not finish tar archive stream: {error}")),
+        };
+        if count == 0 {
+            return Ok(());
+        }
+        if buffer[..count].iter().any(|byte| *byte != 0) {
+            return Err("tar archive contains nonzero data after its end marker".to_owned());
+        }
+    }
+}
+
 fn extract_tar(reader: impl Read, destination: &Path) -> Result<(), String> {
     extract_tar_with_budget(reader, destination, MAX_SOURCE_BYTES)
 }
@@ -188,7 +211,7 @@ fn extract_tar_with_budget(
         documents = charge_document(documents, size, &path)?;
         write_archive_file(destination, &path, &mut entry, size, &mut paths)?;
     }
-    Ok(())
+    validate_tar_end(archive.into_inner())
 }
 
 struct ExpandedArchiveReader<R> {
@@ -416,6 +439,8 @@ fn is_markdown(path: &Path) -> bool {
 
 #[cfg(test)]
 mod tests {
+    mod compression;
+
     use std::{
         collections::BTreeSet,
         fs,

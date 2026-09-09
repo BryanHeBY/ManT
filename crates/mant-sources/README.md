@@ -82,6 +82,11 @@ directories are owned by an RAII workspace and cleaned on every exit path.
 Every tar entry is charged before its type is interpreted, including directory
 and metadata payloads. Explicit `./` components are normalized, while parent
 traversal, host separators, controls, and non-UTF-8 components are rejected.
+After the tar end marker, extraction validates the remaining compression
+stream under the same expanded-byte budget. Only zero record padding may
+follow; corrupt/truncated gzip or zstd trailers, nonzero suffixes and concatenated
+independent tar archives are rejected before activation. Compression members
+or frames may still split one tar stream or carry valid zero padding.
 Provider metadata is a strict tagged value, so Git-only and archive-only fields
 cannot form invalid combinations.
 
