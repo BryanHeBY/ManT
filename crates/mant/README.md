@@ -269,6 +269,8 @@ remains an exact logical name and is never guessed to be a manual shorthand.
 
 Within the command host, CLI input adaptation and output dispatch are separate
 from typed application navigation, system services, and process delivery.
+The crate root exposes stream and native-process entry points; the private
+process adapter alone chooses terminal delivery and owns native stdio policy.
 `CliHost`/`SystemHost` retain the injectable service boundary; maintenance lives
 under the host rather than in the read-only engine. Schema output is an offline
 adapter, and CLI and MCP share DTO renderers without sharing CLI format types.
