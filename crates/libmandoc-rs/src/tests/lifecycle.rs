@@ -4,6 +4,53 @@ use super::*;
 use std::fmt::Write as _;
 
 #[test]
+fn owned_bundle_report_survives_released_inputs_and_later_failed_sessions() {
+    let parser = Parser::default();
+    let retained = {
+        let mut bundle = SourceBundle::new();
+        bundle
+            .insert("man1/root.1", b".so owned.1\n".to_vec())
+            .unwrap();
+        bundle
+            .insert(
+                "man1/owned.1",
+                b".TH OWNED 1\n.SH BODY\nretained original bytes\n".to_vec(),
+            )
+            .unwrap();
+        parser.parse_bundle("man1/root.1", &bundle).unwrap()
+    };
+    let expected_diagnostics = retained.diagnostics.clone();
+
+    // Exercise an actual native rejection rather than a synthetic allocation
+    // failure. Releasing the failed native session must not affect old reports.
+    let rejected = format!(
+        ".TH REJECTED 1\n.SH BODY\n{}too deep\n",
+        ".RS 0\n".repeat(1_000)
+    );
+    let error = parser
+        .parse_bytes("rejected.1", rejected.as_bytes())
+        .unwrap_err();
+    assert!(error.message.contains("nesting limit"), "{error}");
+    let next = parser
+        .parse_bytes("next.1", b".TH NEXT 1\n.SH BODY\nnew session\n")
+        .unwrap();
+    assert_eq!(next.document.metadata.title.as_deref(), Some("NEXT"));
+
+    // Neither the input bundle, native parser nor calling thread owns any
+    // storage borrowed by the returned public report.
+    std::thread::spawn(move || {
+        assert_eq!(retained.document.metadata.title.as_deref(), Some("OWNED"));
+        let mut visible = Vec::new();
+        collect_visible_text(&retained.document.root, &mut visible);
+        assert!(visible.contains(&"retained original bytes"));
+        assert!(!visible.contains(&"new session"));
+        assert_eq!(retained.diagnostics, expected_diagnostics);
+    })
+    .join()
+    .expect("owned report remains readable on another thread");
+}
+
+#[test]
 fn parser_session_returns_an_owned_man_tree() {
     let path = source_path("mandoc-session");
     fs::write(

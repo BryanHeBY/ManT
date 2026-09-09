@@ -72,6 +72,14 @@ escapes the call and no intermediate heap-owned C AST is materialized. The
 private parser handle is destroyed on the calling thread before `Parser`
 returns, while the returned report remains fully owned and freely movable.
 
+Within that private boundary, `ffi::session` owns the native document drop
+guard and keeps bundle paths and source bytes alive for the call;
+`ffi::owned` transfers the syntax tree, while `ffi::render` copies bounded
+reference output using the same guard. A failed native call releases its own
+session without invalidating previously returned reports. Raw declarations
+and the Windows root callback remain private to the FFI boundary; none of
+these internal modules is a consumer-facing API.
+
 Table cells expose their effective `TableCellKind`: layout rules override data,
 and connecting/isolated single/double rules remain distinguishable. A rule may
 retain a native text payload for inspection; consumers must not print it or
