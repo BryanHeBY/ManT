@@ -91,3 +91,55 @@ fn alignment_payload_preserves_font_and_independent_spacing_requests() {
         }
     }
 }
+
+#[test]
+fn captured_breaks_flush_before_the_group_end_in_every_fill_mode() {
+    for mode in ["man", "nf", "EX", "mdoc", "literal", "unfilled"] {
+        for alignment in ["ce", "rj"] {
+            for request in [".br", ".fi", ".nf", ".ti 3n", ".ti", ".br\n.br", ".fi\n.nf"] {
+                for word in ["ALPHA", "ALPHA\\c"] {
+                    let source =
+                        source_for(mode, &format!(".{alignment} 2\n{word}\n{request}\nBETA"));
+                    let query = query_roff_bytes(source.as_bytes()).unwrap();
+                    let text = render_query_text(&query);
+                    assert!(text.contains("ALPHA\n\nBETA"), "{source}\n{text}");
+                    assert!(!text.contains("ALPHA\n\n\nBETA"), "{source}\n{text}");
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn captured_empty_requests_and_last_line_flush_do_not_escape_the_capture() {
+    for mode in ["man", "nf", "EX", "mdoc", "literal", "unfilled"] {
+        for alignment in ["ce", "rj"] {
+            for request in [".br", ".fi", ".nf", ".ti 3n"] {
+                // A request-only group still has its own unconditional flush.
+                let source = source_for(mode, &format!(".{alignment} 2\n{request}\nALPHA\nBETA"));
+                let text = render_query_text(&query_roff_bytes(source.as_bytes()).unwrap());
+                assert!(
+                    text.contains("BEFORE\n\nALPHA\nBETA\nAFTER"),
+                    "{source}\n{text}"
+                );
+                // Explicitly end the capture. Native can retain controls
+                // after its final text line until the next text is parsed.
+                let source = source_for(
+                    mode,
+                    &format!(".{alignment} 1\nALPHA\n.{alignment} 0\n.br\nBETA"),
+                );
+                let text = render_query_text(&query_roff_bytes(source.as_bytes()).unwrap());
+                assert!(text.contains("ALPHA\nBETA"), "{source}\n{text}");
+            }
+        }
+    }
+}
+
+#[test]
+fn ordinary_breaks_do_not_acquire_alignment_group_spacing() {
+    for mode in ["man", "nf", "EX", "mdoc", "literal", "unfilled"] {
+        let source = source_for(mode, "ALPHA\n.br\n.br\nBETA");
+        let text = render_query_text(&query_roff_bytes(source.as_bytes()).unwrap());
+        assert!(text.contains("ALPHA\nBETA"), "{source}\n{text}");
+    }
+}

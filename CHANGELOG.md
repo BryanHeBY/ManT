@@ -18,6 +18,10 @@ that crate was not published for that change.
 
 ### Parent-relative document geometry (unreleased v0.11)
 
+- Captured `ce`/`rj` requests now execute embedded line breaks before their
+  group-end flush in every fill mode, matching the selected mandoc behavior.
+  Ordinary `br` remains unchanged; font and fill state still propagate.
+
 - Roff control operands no longer leak into body text or create phantom
   paragraphs in filled, no-fill and nested display paths. Shared control
   classification preserves supported state changes. `ce`/`rj` retain their

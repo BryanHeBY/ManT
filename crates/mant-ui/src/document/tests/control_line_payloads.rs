@@ -28,6 +28,14 @@ fn aligned_payload_and_empty_flush_rows_match_cli_at_each_viewport() {
                 (".ft B\n17\n23", "BEFORE\n\n17\n23\nAFTER"),
                 ("ALPHA\n.sp 1\nBETA", "BEFORE\nALPHA\n\n\nBETA\nAFTER"),
                 ("ALPHA\\c\nBETA", "BEFORE\nALPHA\nBETA\nAFTER"),
+                ("ALPHA\n.br\nBETA", "BEFORE\nALPHA\n\nBETA\nAFTER"),
+                ("ALPHA\n.fi\nBETA", "BEFORE\nALPHA\n\nBETA\nAFTER"),
+                ("ALPHA\n.nf\nBETA", "BEFORE\nALPHA\n\nBETA\nAFTER"),
+                ("ALPHA\n.br\n.br\nBETA", "BEFORE\nALPHA\n\nBETA\nAFTER"),
+                ("ALPHA\n.fi\n.nf\nBETA", "BEFORE\nALPHA\n\nBETA\nAFTER"),
+                ("ALPHA\\c\n.br\nBETA", "BEFORE\nALPHA\n\nBETA\nAFTER"),
+                ("ALPHA\n.ti 3n\nBETA", "BEFORE\nALPHA\n\nBETA\nAFTER"),
+                (".br\nALPHA\nBETA", "BEFORE\n\nALPHA\nBETA\nAFTER"),
             ] {
                 let source =
                     format!("{header}\n{open}BEFORE\n.{request} 2\n{body}\nAFTER\n{close}");

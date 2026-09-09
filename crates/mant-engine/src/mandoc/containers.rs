@@ -122,7 +122,26 @@ fn aligned_line_payload<'a>(node: &'a Node, emit: &mut impl FnMut(Event<'a>)) {
             .iter()
             .position(|child| child.kind == NodeKind::Text && child.flags.line_start)
             .map_or(children.len(), |relative| start + 1 + relative);
-        emit(Event::Children(&children[start..end]));
+        let mut pending = start;
+        for index in start..end {
+            // roff_term_pre_ce executes these through roff_term_pre_br
+            // (ti calls it before applying its omitted device geometry),
+            // irrespective of NODE_NOFILL. An inline hard-break marker is
+            // not enough: the group-end flush must see the emptied row.
+            // Still dispatch the original request afterwards, preserving
+            // fill-state transitions and any source/target handling.
+            if matches!(
+                children[index].macro_name.as_deref(),
+                Some("br" | "fi" | "nf" | "ti")
+            ) {
+                if pending < index {
+                    emit(Event::Children(&children[pending..index]));
+                }
+                emit(Event::Break);
+                pending = index;
+            }
+        }
+        emit(Event::Children(&children[pending..end]));
         emit(Event::FlushLine);
         start = end;
     }
