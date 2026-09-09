@@ -155,6 +155,12 @@ macOS adds native compile and test coverage without repeating the Linux lint
 pass. Windows retains its full native verification boundary for Windows-only
 path, shell, packaging, and parser behavior.
 
+After pushing `dev`, monitor the run for that exact commit with `gh run watch`.
+CI monitoring ends only when the full aggregate gate is green, not when a
+failure has merely been reported. Inspect failed job logs, fix and test the
+cause, add focused follow-up commits, push, and follow the new run. Preserve
+already-pushed history; do not rewrite commits to hide failed iterations.
+
 Project verification and release builds set
 `LIBMANDOC_RS_DENY_WARNINGS=1`, which promotes warnings from libmandoc's C
 build to errors on GCC, Apple Clang, and MSVC. Pinned upstream 1.14.6 retains a
