@@ -71,6 +71,21 @@ fn authoring_manuals_expose_real_local_and_implementation_specific_references() 
         assert!(markdown.records.iter().any(|record| matches!(&record.target, LinkTarget::Manual { name, manual_section } if name == "git" && manual_section.as_deref() == section)));
     }
     let roff = project_references(&roff, None, ReferenceScope::Document, &policy);
+    for (page, labels) in [
+        ("man", &["man(7)", "mandoc man(7)"][..]),
+        ("mdoc", &["mdoc(7)", "mandoc mdoc(7)"][..]),
+    ] {
+        let uri = format!("https://mandoc.bsd.lv/man/{page}.7.html");
+        for record in &roff.records {
+            if matches!(&record.target, LinkTarget::External { uri: actual } if actual == &uri) {
+                assert!(
+                    labels.contains(&record.label.as_str()),
+                    "prose must not become part of the linked manual name: {}",
+                    record.label
+                );
+            }
+        }
+    }
     for page in ["man", "mdoc", "roff", "tbl", "eqn"] {
         let uri = format!("https://mandoc.bsd.lv/man/{page}.7.html");
         assert!(roff.records.iter().any(|record| matches!(&record.target, LinkTarget::External { uri: actual } if actual == &uri)), "real upstream reference for {page}");

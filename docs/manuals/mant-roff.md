@@ -56,7 +56,7 @@ different. The complete shared model is defined by [mant-ir(7)](mant-ir.md).
 
 ## man Language
 
-The following [man(7) macros documented by mandoc](https://mandoc.bsd.lv/man/man.7.html) have dedicated lowering behavior:
+The following [man(7)](https://mandoc.bsd.lv/man/man.7.html) macros documented by mandoc have dedicated lowering behavior:
 
 | Macros | ManT result |
 | --- | --- |
@@ -467,7 +467,7 @@ Terminal-unsafe control bytes are masked before native parsing. Roff comments an
 
 For manuals intended to work across mandoc, groff, and ManT:
 
-1. Prefer standard [mdoc(7) semantic macros](https://mandoc.bsd.lv/man/mdoc.7.html) or the portable core of [man(7)](https://mandoc.bsd.lv/man/man.7.html).
+1. Prefer standard [mdoc(7)](https://mandoc.bsd.lv/man/mdoc.7.html) semantic macros or the portable core of [man(7)](https://mandoc.bsd.lv/man/man.7.html).
 2. Use `Xr` or `MR` for cross-manual links, `Sx` for mdoc section links, and `Lk`/`UR` for external links.
 3. Use `Bl`/`It`, `TP`/`IP`, `Bd`, `EX`/`EE`, `tbl`, and `eqn` only where their retained structure matters.
 4. Avoid relying on device geometry, page traps, custom diversions, color, point size, or arbitrary file inclusion.

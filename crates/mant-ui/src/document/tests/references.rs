@@ -1,6 +1,33 @@
 //! Reference inventory and exact source-row geometry remain independent of entries.
 use super::*;
 
+#[test]
+fn roff_manual_name_link_excludes_surrounding_prose_after_wrapping() {
+    let source = include_str!("../../../../../docs/manuals/mant-roff.md")
+        .lines()
+        .find(|line| line.starts_with("The following "))
+        .expect("man macro introduction");
+    let query = mant_engine::query_markdown_text(source, None).unwrap();
+    let view = DocumentView::new(&query);
+    let target = LinkTarget::External(
+        model::ExternalUri::parse("https://mandoc.bsd.lv/man/man.7.html").unwrap(),
+    );
+    for width in [4, 12, 40, 120] {
+        let rendered = view.render(width);
+        let mut clickable = String::new();
+        for (row, line) in rendered.text.lines.iter().enumerate() {
+            let mut column = 0;
+            for character in line.to_string().chars() {
+                if rendered.link_target_at(row, column) == Some(&target) {
+                    clickable.push(character);
+                }
+                column += character.to_string().width();
+            }
+        }
+        assert_eq!(clickable, "man(7)", "width={width}");
+    }
+}
+
 fn document_link(label: &str, fragment: Option<&str>) -> Inline {
     Inline::Link {
         target: mant_ir::LinkTarget::Document {
