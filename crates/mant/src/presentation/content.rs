@@ -51,6 +51,7 @@ fn span_style(presentation: TextPresentation) -> Style {
         TextRole::Body | TextRole::DefinitionTerm => Style::new(),
         TextRole::Document => terminal_style(TerminalRole::Document),
         TextRole::Heading | TextRole::EvidenceClass(_) => terminal_style(TerminalRole::Heading),
+        TextRole::Reference => AnsiColor::BrightBlue.on_default().underline(),
         TextRole::EntryLabel(kind) => terminal_style(TerminalRole::Entry(kind)),
         TextRole::Coordinate => terminal_style(TerminalRole::Coordinate),
         TextRole::Path => terminal_style(TerminalRole::Path),

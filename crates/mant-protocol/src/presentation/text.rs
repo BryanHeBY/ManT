@@ -15,6 +15,8 @@ pub enum TextRole {
     Document,
     /// Source section title.
     Heading,
+    /// A real reference or generated reference capability, independent of its owner role.
+    Reference,
     /// A semantic outline/title label, not a body name binding.
     EntryLabel(EntryKind),
     /// Structural coordinate or opaque ID.

@@ -46,7 +46,7 @@ pub fn render_reference_inventory_with(
         ));
     }
     for record in &inventory.records {
-        let target = target_text(&record.target);
+        let target = reference_target_text(&record.target);
         let label = if record.label.is_empty() {
             "(empty label)"
         } else {
@@ -54,9 +54,9 @@ pub fn render_reference_inventory_with(
         };
         lines.push(format!(
             "- {}{} → {}",
-            paint(TextRole::Heading, label),
+            paint(TextRole::Reference, label),
             if record.label_truncated { "…" } else { "" },
-            paint(TextRole::Path, &target)
+            paint(TextRole::Reference, &target)
         ));
         let position = format!("{:?}", record.origin);
         lines.push(format!(
@@ -115,22 +115,29 @@ fn count(count: &ReferenceCount) -> String {
     }
 }
 
-fn target_text(target: &mant_ir::LinkTarget) -> String {
+/// Display the original typed reference without resolving it or dropping fragments.
+/// This is also the copy-target spelling; terminal adapters sanitize it separately.
+#[must_use]
+pub fn reference_target_text(target: &mant_ir::LinkTarget) -> String {
+    target_parts(target).concat()
+}
+
+pub(super) fn target_parts(target: &mant_ir::LinkTarget) -> [&str; 5] {
     match target {
         mant_ir::LinkTarget::Document { name, fragment } => match fragment {
-            Some(fragment) => format!("{name}#{fragment}"),
-            None => name.clone(),
+            Some(fragment) => [name, "#", fragment, "", ""],
+            None => [name, "", "", "", ""],
         },
         mant_ir::LinkTarget::Manual {
             name,
             manual_section,
         } => match manual_section {
-            Some(section) => format!("{name}({section})"),
-            None => format!("man:{name} (section not selected)"),
+            Some(section) => [name, "(", section, ")", ""],
+            None => ["man:", name, " (section not selected)", "", ""],
         },
-        mant_ir::LinkTarget::Section { id } => format!("#{id}"),
-        mant_ir::LinkTarget::External { uri } => uri.clone(),
-        mant_ir::LinkTarget::Email { address } => format!("mailto:{address}"),
+        mant_ir::LinkTarget::Section { id } => ["#", id.as_str(), "", "", ""],
+        mant_ir::LinkTarget::External { uri } => [uri, "", "", "", ""],
+        mant_ir::LinkTarget::Email { address } => ["mailto:", address, "", "", ""],
     }
 }
 

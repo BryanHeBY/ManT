@@ -9,7 +9,11 @@ use crate::DocumentCatalog;
 mod evidence;
 mod references;
 pub use evidence::render_evidence_counts;
-pub use references::{render_reference_inventory, render_reference_inventory_with};
+pub use references::{
+    reference_target_text, render_reference_inventory, render_reference_inventory_with,
+};
+mod reference_navigation;
+pub use reference_navigation::{ReferenceAttachment, reference_attachment, reference_badge};
 mod labels;
 pub use labels::{EntryLabelMode, entry_label};
 mod roles;
