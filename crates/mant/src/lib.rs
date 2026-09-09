@@ -13,13 +13,12 @@ mod mcp;
 mod output_policy;
 mod presentation;
 mod request_input;
+mod schema_output;
 mod terminal;
 
 use std::io::{self, IsTerminal, Read, Write};
 
-use arguments::{
-    ColorMode, Command, DisplayMode, OutputOptions, QueryFormat, QuerySource, SchemaContract,
-};
+use arguments::{ColorMode, Command, DisplayMode, OutputOptions, QueryFormat, QuerySource};
 use clipboard::SystemClipboard;
 use error::{
     Failure, query_execution_failure, query_failure, report_argument_error, report_failure,
@@ -29,15 +28,13 @@ use external::open_uri as open_external_uri;
 use mant_engine::LoadPolicy;
 use mant_ir::ResolvedContent;
 use mant_protocol::{
-    CatalogQuery, CatalogSchema, DoctorReport, DocumentAddress, DocumentCatalog, DocumentSchema,
-    ExcerptSchema, InputFormat, OutlineSchema, QueryInput, QueryRequest, QuerySchema, QueryView,
-    RequestSchema, ScopeQueryRequest, ScopeQueryResponse, ScopeQuerySchema, ScopeRequestSchema,
-    SearchSchema, TldrCacheUpdate,
+    CatalogQuery, DoctorReport, DocumentAddress, DocumentCatalog, InputFormat, QueryInput,
+    QueryRequest, QueryView, RequestSchema, ScopeQueryRequest, ScopeQueryResponse,
+    ScopeRequestSchema, TldrCacheUpdate,
 };
 use mant_sources::{DocumentSourcesPrune, DocumentSourcesUpdate};
 use output_policy::{TerminalCapabilities, TerminalKind, resolve_process_presentation};
 use presentation::{render_json, render_query_result};
-use serde::Serialize;
 
 // ── Stable process protocol ────────────────────────────────────────────────
 
@@ -47,23 +44,6 @@ pub use mant_protocol::CLI_PROTOCOL_VERSION;
 use request_input::{
     NativeRequest, read_input_bytes, read_native_request, read_query_request, read_utf8_input,
 };
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct ProtocolDescription<'a> {
-    protocol: &'a str,
-    native_api_version: &'a str,
-    request_schema: &'a str,
-    query_schema: &'a str,
-    document_schema: &'a str,
-    outline_schema: &'a str,
-    excerpt_schema: &'a str,
-    explanation_schema: &'a str,
-    search_schema: &'a str,
-    scope_request_schema: &'a str,
-    scope_query_schema: &'a str,
-    catalog_schema: &'a str,
-}
 
 /// Normalized fields of a conventional CLI document query.
 struct QueryExecution {
@@ -436,24 +416,8 @@ fn execute(
 ) -> Result<String, Failure> {
     match command {
         Command::Help(help) => Ok(help),
-        Command::ProtocolVersion { pretty } => render_json(
-            &ProtocolDescription {
-                protocol: CLI_PROTOCOL_VERSION,
-                native_api_version: mant_engine::native_api_version(),
-                request_schema: RequestSchema::ID,
-                query_schema: QuerySchema::ID,
-                document_schema: DocumentSchema::ID,
-                outline_schema: OutlineSchema::ID,
-                excerpt_schema: ExcerptSchema::ID,
-                explanation_schema: mant_protocol::ExplanationSchema::ID,
-                search_schema: SearchSchema::ID,
-                scope_request_schema: ScopeRequestSchema::ID,
-                scope_query_schema: ScopeQuerySchema::ID,
-                catalog_schema: CatalogSchema::ID,
-            },
-            pretty,
-        ),
-        Command::Schema { contract, pretty } => render_schema(contract, pretty),
+        Command::ProtocolVersion { pretty } => schema_output::render_protocol_description(pretty),
+        Command::Schema { contract, pretty } => schema_output::render_schema(contract, pretty),
         Command::Catalog {
             query,
             grouped,
@@ -509,33 +473,6 @@ fn execute(
             input,
             host,
         ),
-    }
-}
-
-fn render_schema(contract: SchemaContract, pretty: bool) -> Result<String, Failure> {
-    match contract {
-        SchemaContract::Doctor => render_json(&mant_protocol::doctor_report_json_schema(), pretty),
-        SchemaContract::TldrUpdate => {
-            render_json(&mant_protocol::tldr_cache_update_json_schema(), pretty)
-        }
-        SchemaContract::Request => render_json(&mant_protocol::query_request_json_schema(), pretty),
-        SchemaContract::Query => render_json(&mant_protocol::query_bundle_json_schema(), pretty),
-        SchemaContract::Outline => render_json(&mant_protocol::query_outline_json_schema(), pretty),
-        SchemaContract::Excerpt => render_json(&mant_protocol::query_excerpt_json_schema(), pretty),
-        SchemaContract::Explanation => {
-            render_json(&mant_protocol::query_explanation_json_schema(), pretty)
-        }
-        SchemaContract::Search => render_json(&mant_protocol::query_search_json_schema(), pretty),
-        SchemaContract::ScopeRequest => {
-            render_json(&mant_protocol::scope_query_request_json_schema(), pretty)
-        }
-        SchemaContract::ScopeQuery => {
-            render_json(&mant_protocol::scope_query_response_json_schema(), pretty)
-        }
-        SchemaContract::Catalog => {
-            render_json(&mant_protocol::document_catalog_json_schema(), pretty)
-        }
-        SchemaContract::All => render_json(&mant_protocol::query_json_schema_catalog(), pretty),
     }
 }
 
