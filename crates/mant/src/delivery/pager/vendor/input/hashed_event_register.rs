@@ -5,7 +5,7 @@
 //! If their is a match related to that event, the associated callback is called
 
 use super::{InputClassifier, InputEvent};
-use crate::pager::native::PagerState;
+use crate::delivery::pager::native::PagerState;
 use crossterm::event::{Event, MouseEvent};
 use std::{
     collections::HashMap, collections::hash_map::RandomState, hash::BuildHasher, hash::Hash,
@@ -112,7 +112,7 @@ impl<S> InputClassifier for HashedEventRegister<S>
 where
     S: BuildHasher,
 {
-    fn classify_input(&self, ev: Event, ps: &crate::pager::native::PagerState) -> Option<InputEvent> {
+    fn classify_input(&self, ev: Event, ps: &crate::delivery::pager::native::PagerState) -> Option<InputEvent> {
         self.get(&ev).map(|c| c(ev, ps))
     }
 }

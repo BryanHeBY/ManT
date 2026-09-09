@@ -1,7 +1,7 @@
 #![allow(clippy::shadow_unrelated)]
 #![allow(clippy::cast_possible_truncation)]
 use super::{draw_for_change, draw_full, write_from_pagerstate, write_prompt};
-use crate::pager::native::{LineNumbers, PagerState};
+use crate::delivery::pager::native::{LineNumbers, PagerState};
 use std::fmt::Write;
 
 // * In some places, where test lines are close to the row, 1 should be added
@@ -448,7 +448,7 @@ fn draw_help_message() {
     draw_full(&mut out, &mut pager).expect("Should have written");
 
     let res = String::from_utf8(out).expect("Should have written valid UTF-8");
-    assert!(res.contains("mant_ui"));
+    assert!(res.contains("mant"));
 }
 
 #[test]
@@ -469,7 +469,7 @@ fn test_draw_no_overflow() {
 #[cfg(test)]
 mod draw_for_change_tests {
     use super::{draw_for_change, write_prompt};
-    use crate::pager::native::state::PagerState;
+    use crate::delivery::pager::native::state::PagerState;
     use crossterm::{
         cursor::MoveTo,
         terminal::{Clear, ClearType, ScrollDown, ScrollUp},

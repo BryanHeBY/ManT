@@ -5,14 +5,14 @@
 
 use std::fmt::Debug;
 
-use crate::pager::native::{
+use crate::delivery::pager::native::{
     ExitStrategy, LineNumbers,
     hooks::{Hook, HookCallback},
     input::{InputClassifier, InputEvent},
     minus_core::utils::display::AppendStyle,
 };
 
-use crate::pager::native::search::SearchOpts;
+use crate::delivery::pager::native::search::SearchOpts;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum IoCommand {

@@ -19,19 +19,8 @@ crossterm.workspace = true
 mant-ir = { path = "../mant-ir", version = "^0.11.0" }
 mant-protocol = { path = "../mant-protocol", version = "^0.11.0" }
 mant-render = { path = "../mant-render", version = "^0.11.0" }
-crossbeam-channel = "^0.5"
-parking_lot = "^0.12.1"
-regex = "^1"
-textwrap = { version = "~0.16", default-features = false, features = ["unicode-width"] }
-thiserror = "^2"
 ratatui.workspace = true
 unicode-width.workspace = true
-
-[target.'cfg(unix)'.dependencies]
-signal-hook.workspace = true
-
-[target.'cfg(unix)'.dev-dependencies]
-libc.workspace = true
 
 [dev-dependencies]
 mant-codec = { path = "../mant-codec", version = "^0.11.0", default-features = false }

@@ -9,13 +9,13 @@ const [source, flag] = process.argv.slice(2);
 if (!source || !['--verify', '--patch'].includes(flag)) throw new Error('usage: sync-minus-vendor.mjs EXTRACTED_MINUS_5_7_2 --verify|--patch');
 const manifest = fs.readFileSync(path.join(source, 'Cargo.toml'), 'utf8');
 if (!manifest.includes('version = "5.7.2"')) throw new Error('expected minus 5.7.2');
-const destination = path.join(root, 'crates/mant-ui/src/pager/vendor');
+const destination = path.join(root, 'crates/mant/src/delivery/pager/vendor');
 
 export function adapted(name, input) {
   let text = input.replaceAll('crate::', 'crate::pager::native::');
   // These examples describe the upstream public minus crate, not our private
   // embedding. Preserve them as documentation without compiling nonexistent
-  // minus imports as mant-ui consumer examples. Native unit/PTY tests still run.
+  // minus imports as mant consumer examples. Native unit/PTY tests still run.
   let codeFence = false;
   text = text.split('\n').map(line => {
     const comment = /^([ \t]*\/\/[/!][ \t]*)(.*)$/.exec(line);
@@ -48,14 +48,16 @@ export function adapted(name, input) {
     if (!text.includes(end)) throw new Error('upstream row iterator changed');
     text = text.replace(end, '    };\n    let enumerated_rows = crate::pager::sgr::independent_rows(wrapped_rows).into_iter().enumerate();');
   }
-  if (name === 'core/utils/display/tests.rs') text = text.replace('let res = Vec::new();', 'let res: Vec<u8> = Vec::new();').replace('res.contains("minus")', 'res.contains("mant_ui")');
-  return applySearchPatch(name, text);
+  if (name === 'core/utils/display/tests.rs') text = text.replace('let res = Vec::new();', 'let res: Vec<u8> = Vec::new();').replace('res.contains("minus")', 'res.contains("mant")');
+  // Apply the original behavioral patch byte-for-byte before relocating its
+  // crate-local paths; ownership changes do not rewrite the patch history.
+  return applySearchPatch(name, text).replaceAll('crate::pager::', 'crate::delivery::pager::');
 }
 
 // Exact-context local behavioral patch. Fail closed on upstream drift; this
 // includes the corrected upstream test expectations as well as production code.
 function applySearchPatch(name, text) {
-  const patch = fs.readFileSync(path.join(root, 'crates/mant-ui/src/pager/patches/0001-visible-search.patch'), 'utf8');
+  const patch = fs.readFileSync(path.join(root, 'crates/mant/src/delivery/pager/patches/0001-visible-search.patch'), 'utf8');
   let selected = false, before = [], after = [];
   function flush() {
     if (!before.length && !after.length) return;

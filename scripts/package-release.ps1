@@ -52,8 +52,8 @@ Remove-Item $Staging -Recurse -Force -ErrorAction SilentlyContinue
 New-Item $Dist -ItemType Directory -Force | Out-Null
 New-Item $Package -ItemType Directory -Force | Out-Null
 New-Item (Join-Path $Package "LICENSES") -ItemType Directory -Force | Out-Null
-Copy-Item (Join-Path $Root "crates/mant-ui/src/pager/vendor/LICENSE-MIT") (Join-Path $Package "LICENSES/MINUS-MIT")
-Copy-Item (Join-Path $Root "crates/mant-ui/src/pager/vendor/LICENSE-APACHE") (Join-Path $Package "LICENSES/MINUS-APACHE")
+Copy-Item (Join-Path $Root "crates/mant/src/delivery/pager/vendor/LICENSE-MIT") (Join-Path $Package "LICENSES/MINUS-MIT")
+Copy-Item (Join-Path $Root "crates/mant/src/delivery/pager/vendor/LICENSE-APACHE") (Join-Path $Package "LICENSES/MINUS-APACHE")
 New-Item (Join-Path $Package "manuals") -ItemType Directory -Force | Out-Null
 Copy-Item $Binary (Join-Path $Package "mant.exe")
 Copy-Item `

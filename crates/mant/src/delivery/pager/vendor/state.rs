@@ -1,9 +1,9 @@
 //! Contains types that hold run-time information of the pager.
 
 #![allow(dead_code)]
-use crate::pager::native::search::{SearchMode, SearchOpts, next_nth_match};
+use crate::delivery::pager::native::search::{SearchMode, SearchOpts, next_nth_match};
 
-use crate::pager::native::{
+use crate::delivery::pager::native::{
     LineNumbers,
     error::{MinusError, TermError},
     hooks::{Hook, Hooks},
@@ -28,7 +28,7 @@ use std::{
     sync::{Arc, atomic::AtomicBool},
 };
 
-use crate::pager::native::minus_core::{commands::Command, ev_handler::handle_event};
+use crate::delivery::pager::native::minus_core::{commands::Command, ev_handler::handle_event};
 use crossbeam_channel::Receiver;
 
 #[allow(clippy::module_name_repetitions)]
@@ -129,7 +129,7 @@ pub struct PagerState {
     /// until any of `j`, `k`, `G`, `Up` or `Down` is pressed
     pub prefix_num: String,
     /// Describes whether minus is running and in which mode
-    pub running: &'static Mutex<crate::pager::native::RunMode>,
+    pub running: &'static Mutex<crate::delivery::pager::native::RunMode>,
     #[cfg_attr(docsrs, cfg(all()))]
     pub search_state: SearchState,
     pub screen: Screen,
@@ -152,7 +152,7 @@ pub struct PagerState {
     pub(crate) run_no_overflow: bool,
     pub(crate) lines_to_row_map: LinesRowMap,
     /// Value for follow mode.
-    /// See [`follow_output`](crate::pager::native::pager::Pager::follow_output) for more info on follow mode.
+    /// See [`follow_output`](crate::delivery::pager::native::pager::Pager::follow_output) for more info on follow mode.
     pub(crate) follow_output: bool,
     pub(crate) selection_anchor: Option<Selection>,
 }
@@ -221,7 +221,7 @@ impl PagerState {
 
     /// Generate the initial [`PagerState`]
     ///
-    /// [`init_core`](crate::pager::native::minus_core::init::init_core) calls this functions for creating the
+    /// [`init_core`](crate::delivery::pager::native::minus_core::init::init_core) calls this functions for creating the
     /// `PagerState`.
     ///
     /// This function creates a default [`PagerState`] and fetches all events present in the receiver
@@ -360,7 +360,7 @@ impl PagerState {
         self.displayed_prompt = format_string;
     }
 
-    pub(crate) fn run_hooks(&mut self, hook: crate::pager::native::hooks::Hook) {
+    pub(crate) fn run_hooks(&mut self, hook: crate::delivery::pager::native::hooks::Hook) {
         let mut hooks = std::mem::take(&mut self.hooks);
         hooks.run_hooks(hook, self);
         self.hooks = hooks;
@@ -654,7 +654,7 @@ fn highlight_visible_range(line: Cow<str>, start: usize, end: usize) -> Cow<str>
 #[cfg(test)]
 mod tests {
     use super::{PagerState, Selection};
-    use crate::pager::native::LineNumbers;
+    use crate::delivery::pager::native::LineNumbers;
 
     #[test]
     #[allow(clippy::cast_possible_truncation)]

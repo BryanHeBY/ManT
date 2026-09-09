@@ -9,9 +9,9 @@ use parking_lot::{Condvar, Mutex};
 use super::CommandQueue;
 use super::commands::{Command, IoCommand};
 use super::utils::display::{self, AppendStyle};
-use crate::pager::native::ExitStrategy;
-use crate::pager::native::search;
-use crate::pager::native::{PagerState, error::MinusError, hooks::Hook, input::InputEvent};
+use crate::delivery::pager::native::ExitStrategy;
+use crate::delivery::pager::native::search;
+use crate::delivery::pager::native::{PagerState, error::MinusError, hooks::Hook, input::InputEvent};
 
 /// Respond based on the type of command
 ///
@@ -46,8 +46,8 @@ pub fn handle_event(
         }
         Command::UserInput(InputEvent::UpdateLeftMark(lm)) if !p.screen.line_wrapping => {
             let padding = if p.line_numbers.is_on() {
-                crate::pager::native::minus_core::utils::digits(p.screen.line_count())
-                    + crate::pager::native::LineNumbers::EXTRA_PADDING
+                crate::delivery::pager::native::minus_core::utils::digits(p.screen.line_count())
+                    + crate::delivery::pager::native::LineNumbers::EXTRA_PADDING
                     + 2
             } else {
                 0
@@ -446,7 +446,7 @@ pub fn handle_io_command(
 mod tests {
     use super::super::commands::{Command, IoCommand};
     use super::handle_event;
-    use crate::pager::native::{PagerState, input::InputEvent, minus_core::CommandQueue, state::Selection};
+    use crate::delivery::pager::native::{PagerState, input::InputEvent, minus_core::CommandQueue, state::Selection};
     use std::fmt::Write;
     use std::sync::{Arc, atomic::AtomicBool};
 

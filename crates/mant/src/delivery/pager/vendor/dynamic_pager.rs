@@ -1,6 +1,6 @@
-use crate::pager::native::Pager;
-use crate::pager::native::error::MinusError;
-use crate::pager::native::minus_core::init;
+use crate::delivery::pager::native::Pager;
+use crate::delivery::pager::native::error::MinusError;
+use crate::delivery::pager::native::minus_core::init;
 
 /// Starts a asynchronously running pager
 ///
@@ -15,5 +15,5 @@ use crate::pager::native::minus_core::init;
 /// The function will return with an error if it encounters a error during paging.
 #[allow(clippy::needless_pass_by_value)]
 pub fn dynamic_paging(pager: Pager) -> Result<(), MinusError> {
-    init::init_core(&pager, crate::pager::native::RunMode::Dynamic)
+    init::init_core(&pager, crate::delivery::pager::native::RunMode::Dynamic)
 }

@@ -9,7 +9,7 @@ use crossterm::{
 use std::{cmp::Ordering, convert::TryInto, fmt::Display, io::Write};
 
 use super::term;
-use crate::pager::native::{LineNumbers, PagerState, error::MinusError, minus_core};
+use crate::delivery::pager::native::{LineNumbers, PagerState, error::MinusError, minus_core};
 
 /// How should the incoming text be drawn on the screen
 #[derive(Debug, PartialEq, Eq)]
@@ -287,7 +287,7 @@ pub fn write_lines<L: Display + AsRef<str>>(
     left_mark: usize,
     line_numbers: bool,
     line_count: usize,
-) -> crate::pager::native::Result {
+) -> crate::delivery::pager::native::Result {
     if line_wrapping {
         write_raw_lines(out, lines, Some("\r"))
     } else {
@@ -302,7 +302,7 @@ pub fn write_lines_in_horizontal_scroll<L: Display + AsRef<str>>(
     start: usize,
     line_numbers: bool,
     line_count: usize,
-) -> crate::pager::native::Result {
+) -> crate::delivery::pager::native::Result {
     for line in lines {
         let line_str = line.as_ref();
         let (first_end, second_start, second_end) =

@@ -2,7 +2,7 @@
 
 #![allow(dead_code)]
 
-use crate::pager::native::error::{CleanupError, MinusError, SetupError};
+use crate::delivery::pager::native::error::{CleanupError, MinusError, SetupError};
 use crossterm::{
     cursor, event, execute, queue,
     terminal::{self, Clear},
@@ -86,7 +86,7 @@ pub fn move_cursor(
     Ok(())
 }
 
-pub fn clear_entire_screen(out: &mut impl io::Write, flush: bool) -> crate::pager::native::Result {
+pub fn clear_entire_screen(out: &mut impl io::Write, flush: bool) -> crate::delivery::pager::native::Result {
     queue!(out, Clear(terminal::ClearType::All))?;
     if flush {
         out.flush()?;

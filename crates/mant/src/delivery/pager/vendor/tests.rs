@@ -1,6 +1,6 @@
 // Test the implementation of std::fmt::Write on Pager
 mod fmt_write {
-    use crate::pager::native::{Pager, minus_core::commands::Command};
+    use crate::delivery::pager::native::{Pager, minus_core::commands::Command};
     use std::fmt::Write;
 
     #[test]
@@ -27,7 +27,7 @@ mod fmt_write {
 }
 
 mod pager_append_str {
-    use crate::pager::native::PagerState;
+    use crate::delivery::pager::native::PagerState;
 
     #[test]
     fn sequential_append_str() {
@@ -265,7 +265,7 @@ mod pager_append_str {
 #[cfg(any())]
 #[test]
 fn exit_callback() {
-    use crate::pager::native::PagerState;
+    use crate::delivery::pager::native::PagerState;
     use std::sync::atomic::Ordering;
     use std::sync::{Arc, atomic::AtomicBool};
 
@@ -282,7 +282,7 @@ fn exit_callback() {
 
 mod emit_events {
     // Check functions emit correct events on function calls
-    use crate::pager::native::{LineNumbers, Pager, minus_core::commands::Command};
+    use crate::delivery::pager::native::{LineNumbers, Pager, minus_core::commands::Command};
 
     const TEST_STR: &str = "This is sample text";
     #[test]

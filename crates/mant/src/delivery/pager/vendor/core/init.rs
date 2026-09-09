@@ -8,7 +8,7 @@
 //! * The [`start_reactor`] function displays the displays the output and also polls
 //!   the [`Receiver`] held inside the [`Pager`] for events. Whenever a event is
 //!   detected, it reacts to it accordingly.
-use crate::pager::native::{
+use crate::delivery::pager::native::{
     Pager, PagerState,
     error::MinusError,
     hooks::Hook,
@@ -42,8 +42,8 @@ use super::{CommandQueue, RUNMODE, utils::display::draw_for_change};
 
 /// The main entry point of minus
 ///
-/// This is called by both [`dynamic_paging`](crate::pager::native::dynamic_paging) and
-/// [`page_all`](crate::pager::native::page_all) functions.
+/// This is called by both [`dynamic_paging`](crate::delivery::pager::native::dynamic_paging) and
+/// [`page_all`](crate::delivery::pager::native::page_all) functions.
 ///
 /// It first receives all events present inside the [`Pager`]'s receiver
 /// and creates the initial state that to be stored inside the [`PagerState`]
@@ -90,7 +90,7 @@ pub fn init_core(pager: &Pager, rm: RunMode) -> std::result::Result<(), MinusErr
     );
 
     #[allow(unused_mut)]
-    let mut ps = crate::pager::native::state::PagerState::generate_initial_state(&pager.rx)?;
+    let mut ps = crate::delivery::pager::native::state::PagerState::generate_initial_state(&pager.rx)?;
     *super::RUNMODE.lock() = rm;
     ps.run_hooks(Hook::PrePagerStart);
 
@@ -149,7 +149,7 @@ pub fn init_core(pager: &Pager, rm: RunMode) -> std::result::Result<(), MinusErr
 
     let input_thread_running2 = input_thread_running.clone();
 
-    std::thread::scope(|s| -> crate::pager::native::Result {
+    std::thread::scope(|s| -> crate::delivery::pager::native::Result {
         let is_exited3 = is_exited.clone();
         let is_exited4 = is_exited.clone();
 
@@ -254,7 +254,7 @@ fn start_reactor(
 
             let mut p = ps.lock();
             if let Ok(Command::Io(ic)) = next_command {
-                use crate::pager::native::minus_core::ev_handler::handle_io_command;
+                use crate::delivery::pager::native::minus_core::ev_handler::handle_io_command;
 
                 handle_io_command(
                     ic,
@@ -291,7 +291,7 @@ fn start_reactor(
                 let mut p = ps.lock();
 
                 if let Ok(Command::Io(ic)) = next_command {
-                    use crate::pager::native::minus_core::ev_handler::handle_io_command;
+                    use crate::delivery::pager::native::minus_core::ev_handler::handle_io_command;
 
                     handle_io_command(
                         ic,

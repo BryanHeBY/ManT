@@ -24,7 +24,7 @@
 //! mapped to a single row on the terminal) is greater than 5000.
 //!
 //! Applications can override this condition with the help of
-//! [`Pager::set_incremental_search_condition`](crate::pager::native::pager::Pager::set_incremental_search_condition) function.
+//! [`Pager::set_incremental_search_condition`](crate::delivery::pager::native::pager::Pager::set_incremental_search_condition) function.
 //!
 //! Here is a an example to demonstrate on its usage. Here we set the condition to run incremental
 //! search only when the length of the search query is greater than 1.
@@ -50,10 +50,10 @@
 //! ```
 
 #![allow(unused_imports)]
-use crate::pager::native::minus_core::utils::{LinesRowMap, display, term};
-use crate::pager::native::screen::Screen;
-use crate::pager::native::{LineNumbers, PagerState};
-use crate::pager::native::{error::MinusError, input::HashedEventRegister, minus_core::utils, screen};
+use crate::delivery::pager::native::minus_core::utils::{LinesRowMap, display, term};
+use crate::delivery::pager::native::screen::Screen;
+use crate::delivery::pager::native::{LineNumbers, PagerState};
+use crate::delivery::pager::native::{error::MinusError, input::HashedEventRegister, minus_core::utils, screen};
 use crossterm::{
     cursor::{self, MoveTo},
     event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers},
@@ -410,7 +410,7 @@ fn run_incremental_search<'a, F, O>(
     out: &mut O,
     so: &'a SearchOpts<'a>,
     incremental_search_condition: F,
-) -> crate::pager::native::Result<()>
+) -> crate::delivery::pager::native::Result<()>
 where
     O: Write,
     F: Fn(&'a SearchOpts) -> bool,
@@ -430,7 +430,7 @@ where
     // This is an important bit when running incremental search.It reset the terminal screen to
     // display the lines from the same location and in the same way as before the search even
     // started. Basically print it exactly how it looked before pressing `/` or `?`,
-    let reset_screen = |out: &mut O, so: &SearchOpts<'_>| -> crate::pager::native::Result {
+    let reset_screen = |out: &mut O, so: &SearchOpts<'_>| -> crate::delivery::pager::native::Result {
         display::write_text_checked(
             out,
             &screen.formatted_lines,
@@ -484,7 +484,7 @@ fn handle_key_press<O, F>(
     out: &mut O,
     so: &mut SearchOpts<'_>,
     incremental_search_condition: F,
-) -> crate::pager::native::Result
+) -> crate::delivery::pager::native::Result
 where
     O: Write,
     F: Fn(&SearchOpts<'_>) -> bool,
@@ -752,7 +752,7 @@ pub(crate) fn highlight_matches_args<'a, 'b>(
 }
 
 fn highlight_line_matches_ansi(line: &str, query: &regex::Regex, _accurate: bool) -> String {
-    crate::pager::search_overlay::highlight(line, query, &ANSI_REGEX)
+    crate::delivery::pager::search_overlay::highlight(line, query, &ANSI_REGEX)
 }
 
 /// Highlights the search match
@@ -848,7 +848,7 @@ pub(crate) fn next_nth_match(
 #[cfg(test)]
 mod tests {
     mod input_handling {
-        use crate::pager::native::{
+        use crate::delivery::pager::native::{
             SearchMode,
             search::{InputStatus, SearchOpts, handle_key_press},
         };
@@ -1151,8 +1151,8 @@ mod tests {
     mod highlighting {
         use std::collections::BTreeSet;
 
-        use crate::pager::native::PagerState;
-        use crate::pager::native::search::{INVERT, NORMAL, highlight_line_matches, next_nth_match};
+        use crate::delivery::pager::native::PagerState;
+        use crate::delivery::pager::native::search::{INVERT, NORMAL, highlight_line_matches, next_nth_match};
         use crossterm::style::Attribute;
         use regex::Regex;
 

@@ -183,8 +183,8 @@ pub(crate) mod hashed_event_register;
 
 pub use crossterm::event as crossterm_event;
 
-use crate::pager::native::search::SearchMode;
-use crate::pager::native::{LineNumbers, PagerState};
+use crate::delivery::pager::native::search::SearchMode;
+use crate::delivery::pager::native::{LineNumbers, PagerState};
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers, MouseEvent, MouseEventKind};
 
 #[cfg_attr(
@@ -256,7 +256,7 @@ pub enum InputEvent {
     /// When set to true, minus ensures that the user's screen always follows the end part of the
     /// output. By default it is turned off.
     ///
-    /// This is similar to [`Pager::follow_output`](crate::pager::native::pager::Pager::follow_output) except that
+    /// This is similar to [`Pager::follow_output`](crate::delivery::pager::native::pager::Pager::follow_output) except that
     /// this is used to control it from the user's side.
     FollowOutput(bool),
 }

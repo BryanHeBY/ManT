@@ -1,5 +1,5 @@
-use crate::pager::native::SearchMode;
-use crate::pager::native::{LineNumbers, PagerState, input::InputEvent};
+use crate::delivery::pager::native::SearchMode;
+use crate::delivery::pager::native::{LineNumbers, PagerState, input::InputEvent};
 use crossterm::event::{
     Event, KeyCode, KeyEvent, KeyEventState, KeyModifiers, MouseEvent, MouseEventKind,
 };

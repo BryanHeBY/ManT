@@ -1,5 +1,5 @@
 mod unterminated {
-    use crate::pager::native::screen::{FormatOpts, Rows, format_text_block};
+    use crate::delivery::pager::native::screen::{FormatOpts, Rows, format_text_block};
 
     const fn get_append_opts_template(text: &'_ str) -> FormatOpts<'_, Rows> {
         FormatOpts {
@@ -10,7 +10,7 @@ mod unterminated {
             lines_count: 0,
             formatted_lines_count: 0,
             cols: 80,
-            line_numbers: crate::pager::native::LineNumbers::Disabled,
+            line_numbers: crate::delivery::pager::native::LineNumbers::Disabled,
             prev_unterminated: 0,
             line_wrapping: true,
         }

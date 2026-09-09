@@ -1,11 +1,5 @@
 # mant-ui
 
-The less-like static pager embeds the pinned minus 5.7.2 static/search engine
-privately, with a physical-row SGR restoration adapter. The implementation and
-complete upstream MIT/Apache-2.0 licenses are packaged under `src/pager/vendor`;
-the source inventory and reproducible adaptation are documented there. This
-keeps the fix effective for crates.io consumers without exposing another API.
-
 `mant-ui` is the Ratatui frontend component used by the `mant` executable. It
 renders `ManT`'s in-memory `mant_ir::ResolvedContent` directly and owns
 interactive navigation, search, scrolling, links, menus, mouse input, and
@@ -39,17 +33,12 @@ catalog, search, and cross-document interactions without serializing the IR.
 - Keyboard, mouse, scrollbar, and resizable-pane interaction.
 - Width-aware visual text selection plus typed requests for plain-text and
   complete-node Text/Markdown clipboard content.
-- A Crossterm lifecycle boundary that restores raw mode and the alternate
-  screen after normal exit, setup failure, panic, or a handled POSIX
-  termination signal before the signal's default action resumes.
-- A static, less-like pager for process-owned textual query and catalog output;
-  short results print directly. The CLI owns display/colour policy and bypasses
-  the pager entirely for redirected automatic output and machine protocols.
 - Public `App` and `DocumentView` layers for callers embedding the frontend in
   an existing Ratatui host.
 
-Command-line parsing and document loading deliberately remain outside this
-crate.
+Command-line parsing, document loading, terminal acquisition/restoration,
+signal handling and static paging remain in the executable host, outside this
+crate. The reader performs no process or terminal IO itself.
 
 Navigation plans do not consume history or activate a tab until the candidate
 document and destination have been validated. One private navigation ledger
@@ -77,9 +66,9 @@ the resulting immutable styled lines. Resizing only reflows those lines;
 search and selection overlay their own state without rewriting the base styles,
 link targets or source coordinates.
 Block indentation is a signed displacement from its parent's content origin.
-The UI shares cell measurement, origin composition and marker collision rules
-with the plain-text frontend through `mant-protocol`; only visible leaves are
-bounded for padding. Source term roots keep their hard lines and zero-width
+The UI shares origin composition and marker collision rules with the plain-text
+frontend through `mant-ir`, and grapheme-safe cell primitives through
+`mant-render`; only visible leaves are bounded for padding. Source term roots keep their hard lines and zero-width
 targets do not manufacture blank rows.
 
 Width reduction is a view policy, not source layout. When indentation would
@@ -108,37 +97,29 @@ or opens a URI by itself. It emits typed requests to its host and keeps
 page-local jumps in memory. This makes the same component usable by the
 `mant` binary and by another Ratatui application with stricter host policy.
 
-POSIX termination handlers respect the host's signal mask; registering a
-handler does not unblock a signal. Signal tests explicitly control the test
-thread's mask, verify deferred delivery after unblocking, and restore the
-original mask on exit. Production does not silently override host masking.
-Signal registrations have an owner from the first successful acquisition:
-partial setup failures unregister earlier handlers, and explicit cleanup
-followed by destruction does not unregister a token twice.
-
 ## Basic use
 
-The convenience boundary owns the terminal event loop:
+The host supplies resolved IR and owns the terminal event loop:
 
 ```rust,no_run
-let query = mant_engine::query_markdown_text(
-    "# Demo\n\n## Overview\n\nHello from ManT.\n",
-    Some("demo.md".to_owned()),
-)?;
+use mant_ui::{App, ReaderServices};
 
-mant_ui::run(&query)?;
-# Ok::<(), Box<dyn std::error::Error>>(())
+# fn reader(content: &mant_ir::ResolvedContent) {
+let mut app = App::new(content);
+let mut services = ReaderServices::default();
+// Route host input through app.handle_event(), draw with app.draw(frame),
+// and service queued capabilities after drawing:
+app.service_pending(&mut services);
+# }
 ```
 
-`run` requires an interactive terminal. Callers that already own a Ratatui
-event loop can construct `mant_ui::App`, route input through its handlers, and
-invoke `App::draw` from their frame callback instead.
-
-Use `run_with_catalog` when cross-document discovery and navigation are
-required. Use `run_with_catalog_and_scope` when interactive search must begin
-with an already-resolved document set; its first bundle remains the initial
-page while catalog discovery stays global. Embedders that provide a system
-clipboard use `run_with_catalog_and_scope_and_copy`. Its copy callback receives
+The host routes events through `handle_event`, invokes `draw` from its Ratatui
+frame callback, and supplies the clock to `tick` and `next_wakeup`. These methods
+neither sleep nor acquire the terminal. `ReaderServices` independently supplies
+discovery, document opening, external-URI opening and clipboard callbacks. Missing
+capabilities produce notices without hidden filesystem or process fallbacks;
+queued effects are serviced in that fixed order without skipping later effects
+when an earlier capability fails. Its copy callback receives
 a `CopyRequest`: visual selections already contain plain text, while semantic
 node requests carry the complete resolved content, explicit content selector, and
 requested format. The callbacks otherwise receive versioned catalog queries,

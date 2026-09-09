@@ -1,6 +1,6 @@
 //! Proivdes the [Pager] type
 
-use crate::pager::native::{
+use crate::delivery::pager::native::{
     ExitStrategy, LineNumbers,
     error::MinusError,
     hooks::{Hook, HookCallback},
@@ -10,7 +10,7 @@ use crate::pager::native::{
 use crossbeam_channel::{Receiver, Sender};
 use std::fmt;
 
-use crate::pager::native::search::SearchOpts;
+use crate::delivery::pager::native::search::SearchOpts;
 
 /// A communication bridge between the main application and the pager.
 ///
@@ -189,7 +189,7 @@ impl Pager {
     /// ```
     #[deprecated(
         since = "5.7.0",
-        note = "Add a callback for [`PostPagerExit`](crate::pager::native::hooks::Hook::PostPagerExit) hook. See [`hooks`](crate::pager::native::hooks) for more info."
+        note = "Add a callback for [`PostPagerExit`](crate::delivery::pager::native::hooks::Hook::PostPagerExit) hook. See [`hooks`](crate::delivery::pager::native::hooks) for more info."
     )]
     pub fn set_exit_strategy(&self, es: ExitStrategy) -> Result<(), MinusError> {
         Ok(self.tx.send(Command::SetExitStrategy(es))?)
@@ -274,7 +274,7 @@ impl Pager {
     /// [`HashedEventRegister::add_key_events`]: input::HashedEventRegister::add_key_events
     /// [`HashedEventRegister::add_mouse_events`]: input::HashedEventRegister::add_mouse_events
     /// [`HashMap`]: std::collections::HashMap
-    /// [`PagerState`]: crate::pager::native::state::PagerState
+    /// [`PagerState`]: crate::delivery::pager::native::state::PagerState
     /// [`InputEvent`]: input::InputEvent
     /// [`InputClassifier`]: input::InputClassifier
     /// [`InputClassifier::classify_input`]: input::InputClassifier
@@ -309,7 +309,7 @@ impl Pager {
     /// ```
     #[deprecated(
         since = "5.7.0",
-        note = "Add a callback for [PostPagerExit](crate::pager::native::hooks::Hook::PostPagerExit) hook. See [hooks](crate::pager::native::hooks) for more info."
+        note = "Add a callback for [PostPagerExit](crate::delivery::pager::native::hooks::Hook::PostPagerExit) hook. See [hooks](crate::delivery::pager::native::hooks) for more info."
     )]
     pub fn add_exit_callback(
         &self,
@@ -357,7 +357,7 @@ impl Pager {
     pub fn set_incremental_search_condition(
         &self,
         cb: Box<dyn Fn(&SearchOpts) -> bool + Send + Sync + 'static>,
-    ) -> crate::pager::native::Result {
+    ) -> crate::delivery::pager::native::Result {
         self.tx.send(Command::IncrementalSearchCondition(cb))?;
         Ok(())
     }
@@ -383,7 +383,7 @@ impl Pager {
     /// let pager = Pager::new();
     /// pager.show_prompt(false).unwrap();
     /// ```
-    pub fn show_prompt(&self, show: bool) -> crate::pager::native::Result {
+    pub fn show_prompt(&self, show: bool) -> crate::delivery::pager::native::Result {
         self.tx.send(Command::ShowPrompt(show))?;
         Ok(())
     }
@@ -393,7 +393,7 @@ impl Pager {
     /// When set to true, minus ensures that the user's screen always follows the end part of the
     /// output. By default it is turned off.
     ///
-    /// This is similar to [`InputEvent::FollowOutput`](crate::pager::native::input::InputEvent::FollowOutput) except that
+    /// This is similar to [`InputEvent::FollowOutput`](crate::delivery::pager::native::input::InputEvent::FollowOutput) except that
     /// this is used to control it from the application's side.
     ///
     /// # Errors
@@ -407,7 +407,7 @@ impl Pager {
     /// let pager = Pager::new();
     /// pager.follow_output(true).unwrap();
     /// ```
-    pub fn follow_output(&self, follow_output: bool) -> crate::pager::native::Result {
+    pub fn follow_output(&self, follow_output: bool) -> crate::delivery::pager::native::Result {
         self.tx.send(Command::FollowOutput(follow_output))?;
         Ok(())
     }
@@ -431,7 +431,7 @@ mod tests {
     #[test]
     fn basic_dynamic_paging() {
         use super::*;
-        use crate::pager::native::{RunMode, input::InputEvent, minus_core::RUNMODE};
+        use crate::delivery::pager::native::{RunMode, input::InputEvent, minus_core::RUNMODE};
 
         // Need to reset this since this test is run in the same process as other tests and they
         // change the runmode, which causes this test to fail since everything assumes the runmode
@@ -444,7 +444,7 @@ mod tests {
         let pager2 = pager.clone();
 
         std::thread::scope(|s| {
-            s.spawn(move || crate::pager::native::dynamic_pager::dynamic_paging(pager2));
+            s.spawn(move || crate::delivery::pager::native::dynamic_pager::dynamic_paging(pager2));
             s.spawn(move || {
                 // Let the pager to initialize before sending a **USER INPUT**.
                 std::thread::sleep(std::time::Duration::from_millis(50));

@@ -14,7 +14,7 @@ use mant_ir::ResolvedContent;
 use mant_protocol::{CatalogQuery, DocumentCatalog, DocumentOpenTarget};
 use ratatui::{Terminal, backend::CrosstermBackend};
 
-use crate::{App, CopyRequest, ReaderServices};
+use mant_ui::{App, CopyRequest, ExternalUri, ReaderServices};
 
 #[cfg(unix)]
 pub(crate) mod signals;
@@ -52,7 +52,8 @@ impl TerminationSignals {
 /// # Errors
 ///
 /// Returns terminal setup, event, drawing, or restoration errors.
-pub fn run(bundle: &ResolvedContent) -> io::Result<()> {
+#[cfg(all(test, unix))]
+pub(crate) fn run(bundle: &ResolvedContent) -> io::Result<()> {
     run_with_catalog(
         bundle,
         DocumentCatalog::default(),
@@ -77,7 +78,8 @@ pub fn run(bundle: &ResolvedContent) -> io::Result<()> {
 ///
 /// Returns terminal setup, event, drawing, or restoration errors. Document
 /// loading failures are shown inside the UI and leave the current page open.
-pub fn run_with_catalog<D, F, E>(
+#[cfg(all(test, unix))]
+pub(crate) fn run_with_catalog<D, F, E>(
     bundle: &ResolvedContent,
     catalog: DocumentCatalog,
     discover_documents: D,
@@ -87,7 +89,7 @@ pub fn run_with_catalog<D, F, E>(
 where
     D: FnMut(&CatalogQuery) -> Result<DocumentCatalog, String>,
     F: FnMut(&DocumentOpenTarget) -> Result<ResolvedContent, String>,
-    E: FnMut(&crate::ExternalUri) -> Result<(), String>,
+    E: FnMut(&ExternalUri) -> Result<(), String>,
 {
     run_with_catalog_and_scope(
         bundle,
@@ -106,7 +108,8 @@ where
 /// # Errors
 ///
 /// Returns terminal setup, input, drawing, or restoration failures.
-pub fn run_with_catalog_and_scope<D, F, E>(
+#[cfg(all(test, unix))]
+pub(crate) fn run_with_catalog_and_scope<D, F, E>(
     bundle: &ResolvedContent,
     catalog: DocumentCatalog,
     scope: &[ResolvedContent],
@@ -117,7 +120,7 @@ pub fn run_with_catalog_and_scope<D, F, E>(
 where
     D: FnMut(&CatalogQuery) -> Result<DocumentCatalog, String>,
     F: FnMut(&DocumentOpenTarget) -> Result<ResolvedContent, String>,
-    E: FnMut(&crate::ExternalUri) -> Result<(), String>,
+    E: FnMut(&ExternalUri) -> Result<(), String>,
 {
     run_with_catalog_and_scope_and_copy(
         bundle,
@@ -141,7 +144,7 @@ where
 ///
 /// Returns terminal setup, input, drawing, or restoration failures. Clipboard
 /// failures are shown inside the UI and leave the current selection intact.
-pub fn run_with_catalog_and_scope_and_copy<D, F, E, C>(
+pub(crate) fn run_with_catalog_and_scope_and_copy<D, F, E, C>(
     bundle: &ResolvedContent,
     catalog: DocumentCatalog,
     scope: &[ResolvedContent],
@@ -153,7 +156,7 @@ pub fn run_with_catalog_and_scope_and_copy<D, F, E, C>(
 where
     D: FnMut(&CatalogQuery) -> Result<DocumentCatalog, String>,
     F: FnMut(&DocumentOpenTarget) -> Result<ResolvedContent, String>,
-    E: FnMut(&crate::ExternalUri) -> Result<(), String>,
+    E: FnMut(&ExternalUri) -> Result<(), String>,
     C: FnMut(CopyRequest) -> Result<(), String>,
 {
     session::run(
@@ -168,3 +171,6 @@ where
         },
     )
 }
+
+#[cfg(all(test, unix))]
+mod tests;

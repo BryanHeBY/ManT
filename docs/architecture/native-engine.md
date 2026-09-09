@@ -79,9 +79,9 @@ The crates have deliberately asymmetric responsibilities:
 | `mant-loader` | Read-only discovery, configuration and source I/O; optional native decompression/redirect policy; tldr composition; bounded BFS and owned loaded scopes | Query execution, report rendering, subprocesses, downloads, or cache updates |
 | `mant-query` | Bounded strict selection, outline/excerpt/reference projections, search and independent explanation over existing IR; borrowed scope queries | Source discovery or loading, report rendering, native parsing, or input mutation |
 | `mant-render` | Existing IR/DTO body and report formatting, semantic style composition, reference presentation, borrowed grapheme-safe cell primitives | Source loading, query execution, native parsing, terminal I/O, viewport state, or link activation |
-| `mant-engine` | Complete-request validation, loader/query composition, and opt-in tldr maintenance | Its own parser, source loader, query algorithms or report renderers; CLI policy, terminal lifecycle, or MCP transport |
-| `mant-ui` | Interactive navigation, document tabs, discovery, links, history, search, selection, typed copy requests, layout, and terminal lifecycle | Filesystem lookup, source mutation, or system clipboard access |
-| `mant` | User-facing modes, terminal detection, native/OSC 52 clipboard delivery, source updates, request JSON, schemas, and MCP stdio | A second parser or frontend-specific document model |
+| `mant-engine` | Complete-request validation and loader/query composition | Its own parser, source loader, query algorithms or report renderers; maintenance, CLI policy, terminal lifecycle, or MCP transport |
+| `mant-ui` | Interactive navigation, document tabs, discovery requests, links, history, search, selection, typed copy requests, and widget layout | Filesystem lookup, source mutation, system clipboard access, or terminal acquisition/restoration |
+| `mant` | User-facing modes, terminal detection and lifecycle, pager delivery, native/OSC 52 clipboard delivery, tldr/source updates, request JSON, schemas, and MCP stdio | A second parser or frontend-specific document model |
 
 `mant-ir` is deliberately the semantic center, while `mant-engine` is the
 execution layer that queries content acquired by `mant-loader`. Codec
@@ -489,9 +489,12 @@ The composition root's `output_policy` separates content format, text colour,
 and display mode. It resolves command capabilities and a once-sampled terminal
 environment before execution; parsers and the IR do not inspect terminal state.
 Automatic full reading uses the TUI, terminal-owned text projections may page,
-and redirected or stdin-protocol queries remain direct. The `mant-ui` pager
+and redirected or stdin-protocol queries remain direct. The process host's pager
 receives already rendered, terminal-sanitized content, owns overflow/wrapping
-and terminal restoration, and never queries documents itself. Shared command
+and terminal restoration, and never queries documents itself. Its pinned vendor
+implementation and complete licenses ship inside `mant`; they are not a reader
+dependency. The embedded reader receives events, time and explicit capabilities
+without acquiring raw mode, an alternate screen or signal handlers. Shared command
 execution retains result status and stderr across direct and paged delivery.
 
 Search renders one canonical CommonMark projection together with structured

@@ -42,6 +42,13 @@ for package in "${PACKAGES[@]}"; do
   if [[ -f $destination/Cargo.toml.orig ]]; then
     mv "$destination/Cargo.toml.orig" "$destination/Cargo.toml"
   fi
+  if [[ $package == mant ]]; then
+    # Private unit tests exercise the production terminal boundary. Their shared
+    # PTY harness and the embedded pager's complete licenses must ship too.
+    test -f "$destination/tests/support/display_pty.py"
+    test -f "$destination/src/delivery/pager/vendor/LICENSE-APACHE"
+    test -f "$destination/src/delivery/pager/vendor/LICENSE-MIT"
+  fi
 done
 
 # The unique extracted source path invalidates workspace fingerprints even for

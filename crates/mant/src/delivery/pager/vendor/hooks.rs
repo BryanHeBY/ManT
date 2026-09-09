@@ -10,7 +10,7 @@
 
 use std::collections::HashMap;
 
-use crate::pager::native::PagerState;
+use crate::delivery::pager::native::PagerState;
 
 /// Events that can have callbacks registered
 #[derive(Debug, Eq, PartialEq, Hash, Clone, Copy)]
@@ -21,12 +21,12 @@ pub enum Hook {
     PostPagerStart,
     /// Fired when the user hits the end of the page
     EofReached,
-    /// Fired just before the pager exits due to [`InputEvent::Exit`](crate::pager::native::input::InputEvent::Exit).
+    /// Fired just before the pager exits due to [`InputEvent::Exit`](crate::delivery::pager::native::input::InputEvent::Exit).
     PrePagerExit,
     /// Fired after the terminal UI is cleared up and main screen is restored.
     ///
     /// For this hook, start your IDs from 2 because 1 is occupied for the
-    /// [`ExitStrategy`](crate::pager::native::ExitStrategy).
+    /// [`ExitStrategy`](crate::delivery::pager::native::ExitStrategy).
     PostPagerExit,
 }
 

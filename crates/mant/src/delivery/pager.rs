@@ -4,7 +4,7 @@ use std::io;
 
 // The upstream API cannot replace physical rows. Keep the pinned static/search
 // implementation private and packaged, rather than shipping a Cargo patch that
-// silently disappears when mant-ui is installed from crates.io.
+// silently disappears when mant is installed from crates.io.
 #[path = "pager/vendor/lib.rs"]
 #[rustfmt::skip]
 #[allow(dead_code, unused_imports, missing_docs, clippy::all, clippy::pedantic, clippy::nursery)]
@@ -23,7 +23,7 @@ use native as minus;
 /// # Errors
 ///
 /// Returns terminal setup, rendering, input, or restoration errors.
-pub fn page_text(text: String, prompt: &str) -> io::Result<()> {
+pub(crate) fn page_text(text: String, prompt: &str) -> io::Result<()> {
     let pager = Pager::new();
     pager.set_text(text).map_err(pager_error)?;
     pager.set_prompt(prompt).map_err(pager_error)?;
@@ -47,7 +47,7 @@ fn run(pager: Pager) -> io::Result<()> {
 
 #[cfg(unix)]
 fn run(pager: Pager) -> io::Result<()> {
-    use crate::terminal::signals::TerminationSignals;
+    use crate::delivery::terminal::signals::TerminationSignals;
     use std::sync::{
         Arc,
         atomic::{AtomicBool, Ordering},

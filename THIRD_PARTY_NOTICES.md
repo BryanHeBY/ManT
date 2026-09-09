@@ -14,10 +14,10 @@ locked multi-platform graph.
 
 ## Bundled pager
 
-`crates/mant-ui/src/pager/vendor/` contains minus 5.7.2, privately adapted for
+`crates/mant/src/delivery/pager/vendor/` contains minus 5.7.2, privately adapted for
 static/search paging and independent styled-row redraw. It is licensed under
 MIT OR Apache-2.0; both complete texts and the exact adaptation/verification
-instructions accompany the sources. It is included in the mant-ui crate, not
+instructions accompany the sources. It is included in the mant crate, not
 listed as a separate registry dependency. Native archives carry its licenses as
 `LICENSES/MINUS-MIT` and `LICENSES/MINUS-APACHE`.
 

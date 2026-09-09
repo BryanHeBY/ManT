@@ -1,7 +1,7 @@
 //! Provides functions for getting analysis of the text data inside minus.
 //!
 //! This module is still a work is progress and is subject to change.
-use crate::pager::native::{
+use crate::delivery::pager::native::{
     LineNumbers,
     minus_core::{self, utils::LinesRowMap},
 };
@@ -9,7 +9,7 @@ use regex::Regex;
 
 use std::{borrow::Cow, fmt};
 
-use {crate::pager::native::search, std::collections::BTreeSet};
+use {crate::delivery::pager::native::search, std::collections::BTreeSet};
 
 // |||||||||||||||||||||||||||||||||||||||||||||||||||||||
 //  TYPES TO BETTER DESCRIBE THE PURPOSE OF STRINGS
@@ -259,7 +259,7 @@ impl Default for Screen {
 // Simple! printing an entire page on the terminal is slow and this approach allows minus to reprint only the
 // parts that are required without having to redraw everything
 //
-// [`PagerState::lines`]: crate::pager::native::state::PagerState::lines
+// [`PagerState::lines`]: crate::delivery::pager::native::state::PagerState::lines
 
 pub(crate) trait AppendableBuffer {
     fn push_fmt<D>(&mut self, row: D)
@@ -466,7 +466,7 @@ where
     // Whenever a line is formatted, this will be incremented to te number of rows that the formatted line has occupied
     let mut formatted_row_count = opts.formatted_lines_count;
 
-    let mut sgr = crate::pager::sgr::SgrState::default();
+    let mut sgr = crate::delivery::pager::sgr::SgrState::default();
     let (last_idx, last_line_text) = lines.last().copied().unwrap();
     for (idx, line) in lines.iter().take(lines.len().saturating_sub(1)) {
         fr.lines_to_row_map.insert(formatted_row_count, true);
@@ -578,7 +578,7 @@ pub(crate) fn format_line(
     } else {
         vec![Cow::from(line)]
     };
-    let enumerated_rows = crate::pager::sgr::independent_rows(wrapped_rows).into_iter().enumerate();
+    let enumerated_rows = crate::delivery::pager::sgr::independent_rows(wrapped_rows).into_iter().enumerate();
 
     enumerated_rows.map(move |(i, row)| FormattedRow {
         row,

@@ -8,7 +8,7 @@ Complete upstream MIT and Apache-2.0 licenses accompany the sources. Upstream
 copyright and documentation are retained; EOF whitespace is normalized.
 
 This is a private module, not a new published crate or public ManT API. Packaging
-the implementation inside mant-ui ensures crates.io consumers receive the fix;
+the implementation inside mant ensures crates.io consumers receive the fix;
 a workspace-only Cargo patch would silently disappear from their build.
 
 Mechanical adaptation qualifies upstream `crate::` paths, fixes features to

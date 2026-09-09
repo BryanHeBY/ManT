@@ -8,7 +8,7 @@ fn recovery_child() {
     };
     let content = mant_engine::query_markdown_text("# Recovery\n\nBody.\n", None).unwrap();
     if case == "panic" {
-        mant_ui::run_with_catalog(
+        super::run_with_catalog(
             &content,
             mant_protocol::DocumentCatalog::default(),
             |_| panic!("injected host callback panic"),
@@ -25,7 +25,7 @@ fn recovery_child() {
 
 #[test]
 fn panic_and_initialization_failure_restore_a_real_pty() {
-    let harness = include_str!("../../mant/tests/support/display_pty.py");
+    let harness = include_str!("../../../tests/support/display_pty.py");
     let program = format!(
         "__name__ = 'recovery_harness'\n{harness}\n{}",
         r#"
@@ -33,7 +33,7 @@ environment = dict(os.environ, TERM="xterm-256color", NO_COLOR="1")
 for case in ["panic", "initialization"]:
     env = dict(environment, MANT_RECOVERY_TEST_CASE=case)
     in_session(lambda: check_in_session(
-        [sys.argv[1], "--exact", "recovery_child", "--nocapture"], True, env,
+        [sys.argv[1], "--exact", "delivery::terminal::tests::recovery_child", "--nocapture"], True, env,
         action=lambda _process, master: os.write(master, b"\x0f") if case == "panic" else None,
         returncodes=(101,) if case == "panic" else (0,),
         diagnostic=b"injected host callback panic" if case == "panic" else None,
@@ -79,7 +79,7 @@ fn initialization_failure(content: &mant_ir::ResolvedContent) {
     // Use EPIPE, not EBADF: Rust stdout deliberately treats a closed/invalid
     // descriptor as a sink, so a read-only fd would not test an I/O error.
     assert_eq!(unsafe { dup2(broken.as_raw_fd(), 1) }, 1);
-    let result = mant_ui::run(content);
+    let result = super::run(content);
     assert_eq!(unsafe { dup2(tty.as_raw_fd(), 1) }, 1);
     // Stdout retains failed buffered sequences until fd restoration; the
     // harness sees both enter/leave commands and verifies final termios too.

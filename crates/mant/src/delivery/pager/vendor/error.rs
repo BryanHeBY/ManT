@@ -3,7 +3,7 @@
 //! Some types provided are just present there to avoid leaking
 //! upstream error types
 
-use crate::pager::native::minus_core::commands::Command;
+use crate::delivery::pager::native::minus_core::commands::Command;
 use std::io;
 
 /// An operation on the terminal failed, for example resizing it.

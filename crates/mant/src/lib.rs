@@ -138,7 +138,7 @@ fn run_paged(
             return report_failure(&Failure::operational(error), diagnostics, diagnostics_color);
         }
     };
-    match mant_ui::page_text(rendered, "mant") {
+    match delivery::pager::page_text(rendered, "mant") {
         Ok(()) => status,
         Err(error) => report_failure(&Failure::operational(error), diagnostics, diagnostics_color),
     }
@@ -224,7 +224,7 @@ fn run_interactive(
         Err(error) => return report_failure(&error, diagnostics, diagnostics_color),
     };
     let mut clipboard = SystemClipboard::default();
-    match mant_ui::run_with_catalog_and_scope_and_copy(
+    match delivery::terminal::run_with_catalog_and_scope_and_copy(
         &query,
         catalog,
         &scope_documents,

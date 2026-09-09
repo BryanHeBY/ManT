@@ -7,10 +7,8 @@ mod code;
 mod document;
 mod layout;
 mod navigation;
-mod pager;
 mod reader;
 mod scrollbar;
-mod terminal;
 mod text;
 mod theme;
 
@@ -20,8 +18,4 @@ pub use document::{
     DocumentView, ExternalUri, NavKind, NavNode, RenderedDocument, RenderedSearchMatch,
 };
 pub(crate) use document::{RenderedSelection, TextPosition};
-pub use pager::page_text;
 pub use reader::{CopyToClipboard, DiscoverDocuments, OpenDocument, OpenExternal, ReaderServices};
-pub use terminal::{
-    run, run_with_catalog, run_with_catalog_and_scope, run_with_catalog_and_scope_and_copy,
-};

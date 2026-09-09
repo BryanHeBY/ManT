@@ -641,7 +641,9 @@ impl App {
         self.quit
     }
 
-    pub(crate) fn tick(&mut self, now: Instant) -> UpdateOutcome {
+    /// Advance due interaction timers using the host's clock. Performs no IO
+    /// and does not sleep; the host remains responsible for drawing and input.
+    pub fn tick(&mut self, now: Instant) -> UpdateOutcome {
         let mut outcome = UpdateOutcome::Unchanged;
         if let Some(column) = self.sidebar_resize.take_due(now)
             && self.commit_sidebar_at(column)
@@ -670,7 +672,9 @@ impl App {
         outcome
     }
 
-    pub(crate) fn next_wakeup(&self, now: Instant) -> Option<Duration> {
+    /// Return the next interaction deadline relative to the supplied host clock.
+    /// This only calculates a delay; the host owns polling and sleeping.
+    pub fn next_wakeup(&self, now: Instant) -> Option<Duration> {
         [
             self.navigation_sync_deadline,
             self.sidebar_resize.deadline(),
