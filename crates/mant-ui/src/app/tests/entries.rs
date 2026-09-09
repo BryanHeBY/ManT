@@ -29,7 +29,9 @@ fn edit_actions_copy_complete_semantic_nodes_only() {
             assert_eq!(selector, mant_protocol::ContentSelector::id("options"));
             assert_eq!(format, CopyFormat::Markdown);
         }
-        CopyRequest::Selection { .. } => panic!("semantic action emitted visual text"),
+        CopyRequest::Selection { .. } | CopyRequest::Reference { .. } => {
+            panic!("semantic action emitted non-node text")
+        }
     }
 
     app.selected = app

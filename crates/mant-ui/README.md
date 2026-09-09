@@ -26,6 +26,10 @@ catalog, search, and cross-document interactions without serializing the IR.
   and document loading back to the host.
 - Typed Markdown/man reference activation, safe external-URI delegation, and
   bounded back/forward history.
+- Collapsed document-reference groups derived from original heading/body links,
+  independently of semantic entries. Selecting an occurrence reveals its exact
+  source row; Enter explicitly opens it, Space folds a group, and Shift+Y copies
+  its target rather than the containing item's content.
 - Confirmed full-document search with active and inactive match highlighting.
 - tldr quick-reference and source-document rendering through one layout model.
 - Span-aware table columns and cell-local anchors that retain their exact
@@ -77,9 +81,9 @@ for label modes, source binding coordinates and style precedence.
 mant host
 ├─ supplies ResolvedContent ───────────────> App / DocumentView
 ├─ answers CatalogQuery ──────────────────> live finder
-├─ resolves an exact DocumentAddress <──── cross-document activation
+├─ resolves a DocumentOpenTarget <──────── cross-document activation
 ├─ decides whether to open HTTP(S)/mailto < external-link request
-└─ renders/stores a typed CopyRequest <──── selection or semantic node
+└─ renders/stores a typed CopyRequest <──── selection, node or reference target
 ```
 
 The UI never scans the filesystem, interprets a source path, downloads data,
@@ -111,15 +115,34 @@ with an already-resolved document set; its first bundle remains the initial
 page while catalog discovery stays global. Embedders that provide a system
 clipboard use `run_with_catalog_and_scope_and_copy`. Its copy callback receives
 a `CopyRequest`: visual selections already contain plain text, while semantic
-node requests carry the complete resolved content, stable node selector, and
+node requests carry the complete resolved content, explicit content selector, and
 requested format. The callbacks otherwise receive versioned catalog queries,
-exact logical document addresses, and an `ExternalUri` that has already passed
+typed `DocumentOpenTarget` values, and an `ExternalUri` that has already passed
 the shared HTTP(S)/mailto activation policy; rejected URI schemes remain
 visible document text but never reach the callback. Callback failures return
 to the UI as notices rather than giving the frontend hidden authority.
 Typed email links use the IR-owned mailto serializer, so URI-sensitive mailbox
 characters are encoded before the resulting `ExternalUri` crosses that same
 activation boundary.
+
+`DocumentOpenTarget::Address` identifies an exact logical source. Its `Manual`
+variant preserves an optional manual section: an unqualified `printf` manual
+must be resolved with manual-only policy, without inventing section 1 or falling
+back to a Markdown document. A destination fragment is validated against the
+actual returned IR before changing the displayed page, tab or history. Missing,
+ambiguous or budget-unverifiable targets leave the source view intact.
+
+Reference groups retain distinct source occurrences and full typed targets,
+including fragments; repeated destinations are grouped without merging their
+labels or source positions. They never promote prose into entries. The shared
+IR scan uses a bounded work budget, and the UI additionally retains at most
+1,000 records and 1 MiB of reference payload. A visible limited-inventory notice
+discloses truncation. Empty labels still have a source reveal location and a
+bounded sidebar fallback, without adding text to the body. Resizing reflows
+original source-position markers through the same cell/table layout as links.
+References lacking a registered Markdown namespace remain inspectable, but do
+not imply permission to open arbitrary local files. Reference target copies
+emit `CopyRequest::Reference`; complete-node copy is disabled on reference rows.
 
 The upper-right document tab stack records successful loads in stable first-open
 order and deduplicates logical addresses. Selecting an addressed tab emits the

@@ -13,12 +13,13 @@ use mant_ir::{
 };
 use mant_protocol::{
     CatalogSchema, DoctorCheck, DoctorCheckStatus, DoctorEnvironment, DoctorReport,
-    DocumentSummary, Producer, QueryInput, QueryRequest, TldrCacheAction, TldrCacheUpdate,
+    DocumentSummary, MarkdownOrigin, Producer, QueryInput, QueryRequest, TldrCacheAction,
+    TldrCacheUpdate,
 };
 
 use super::{
     CLI_PROTOCOL_VERSION, CatalogQuery, CliHost, DocumentAddress, DocumentCatalog, Failure,
-    MarkdownOrigin, QueryPolicy, TerminalCapabilities, TerminalKind,
+    QueryPolicy, TerminalCapabilities, TerminalKind,
     arguments::{self, ColorMode, Command, DisplayMode, OutputOptions},
     read_native_request, request_for_address, resolve_process_presentation, run_command,
     run_with_host,
@@ -44,8 +45,8 @@ fn catalog_addresses_reopen_the_exact_source_or_manual_section() {
     assert_eq!(
         request.input,
         QueryInput::Document {
-            selector: "Start-Process".to_owned(),
-            source: Some("pwsh7".to_owned()),
+            selector: "sources/pwsh7/Start-Process".to_owned(),
+            source: None,
             manual_section: None,
         }
     );
@@ -58,12 +59,44 @@ fn catalog_addresses_reopen_the_exact_source_or_manual_section() {
     assert_eq!(
         request.input,
         QueryInput::Document {
-            selector: "printf".to_owned(),
+            selector: "manual/3/printf".to_owned(),
             source: None,
-            manual_section: Some("3".to_owned()),
+            manual_section: None,
         }
     );
+    assert_eq!(policy, QueryPolicy::ManualOnly);
+
+    let (request, policy) = request_for_address(&DocumentAddress::Markdown {
+        path: "en/tool".into(),
+        origin: MarkdownOrigin::Documents,
+    });
     assert_eq!(policy, QueryPolicy::Combined);
+    assert_eq!(
+        request.input,
+        QueryInput::Document {
+            selector: "documents/en/tool".into(),
+            source: None,
+            manual_section: None,
+        }
+    );
+}
+
+#[test]
+fn unqualified_manual_navigation_preserves_native_resolution_without_a_default_section() {
+    let (request, policy) =
+        super::request_for_navigation(&mant_protocol::DocumentOpenTarget::Manual {
+            name: "printf".into(),
+            manual_section: None,
+        });
+    assert_eq!(policy, QueryPolicy::ManualOnly);
+    assert_eq!(
+        request.input,
+        QueryInput::Document {
+            selector: "printf".into(),
+            source: None,
+            manual_section: None,
+        }
+    );
 }
 
 #[test]

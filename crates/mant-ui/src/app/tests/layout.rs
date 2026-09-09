@@ -551,7 +551,9 @@ fn dragging_document_text_emits_a_plain_text_copy_request() {
     }
     match app.take_copy_request().expect("copy request") {
         CopyRequest::Selection { text } => assert_eq!(text, "Show help"),
-        CopyRequest::Node { .. } => panic!("visual selection emitted a semantic node"),
+        CopyRequest::Node { .. } | CopyRequest::Reference { .. } => {
+            panic!("visual selection emitted non-selection content")
+        }
     }
 }
 

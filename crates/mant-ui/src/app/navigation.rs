@@ -103,6 +103,28 @@ impl App {
         else {
             return;
         };
+        self.activate_link_target(target);
+    }
+
+    pub(super) fn open_selected_reference(&mut self) {
+        let Some(node) = self.session.document.navigation().get(self.selected) else {
+            return;
+        };
+        let Some(target) = self.session.document.reference_target(&node.id) else {
+            self.toggle_selected();
+            return;
+        };
+        let Some(target) = self.session.document.activation_target(target) else {
+            self.report_notice(
+                "This reference has no registered document context; its target was not opened"
+                    .into(),
+            );
+            return;
+        };
+        self.activate_link_target(target);
+    }
+
+    fn activate_link_target(&mut self, target: LinkTarget) {
         match target {
             LinkTarget::Section(target) => {
                 let current = self.current_location();
@@ -114,11 +136,33 @@ impl App {
             LinkTarget::Document { address, fragment } => {
                 self.request_open(address, fragment);
             }
+            LinkTarget::Manual {
+                name,
+                manual_section,
+            } => {
+                self.pending_open = Some(super::NavigationRequest {
+                    document: mant_protocol::DocumentOpenTarget::Manual {
+                        name,
+                        manual_section,
+                    },
+                    target: None,
+                    reference: false,
+                    direction: super::HistoryDirection::New,
+                });
+            }
             LinkTarget::External(uri) => self.pending_external = Some(uri),
         }
     }
 
     pub(super) fn jump_to_anchor(&mut self, target: &str) -> bool {
+        if let Err(message) = super::validate_fragment(&self.session.current_bundle, target) {
+            self.report_open_error(message);
+            return false;
+        }
+        self.reveal_anchor(target)
+    }
+
+    pub(super) fn reveal_anchor(&mut self, target: &str) -> bool {
         let width = self.geometry.content.width.max(1);
         let rendered = self
             .session

@@ -70,6 +70,7 @@ pub(super) enum MenuAction {
     CopySelection,
     CopyNodeText,
     CopyNodeMarkdown,
+    CopyReference,
     Back,
     Forward,
     ToggleSidebar,
@@ -117,6 +118,11 @@ const EDIT_MENU: &[MenuEntry] = &[
         label: "Copy Current Node as Markdown",
         shortcut: "",
         action: MenuAction::CopyNodeMarkdown,
+    },
+    MenuEntry {
+        label: "Copy Reference Target",
+        shortcut: "Y",
+        action: MenuAction::CopyReference,
     },
 ];
 
@@ -398,6 +404,7 @@ impl App {
             MenuAction::CopySelection => self.copy_selection(),
             MenuAction::CopyNodeText => self.copy_selected_node(CopyFormat::Text),
             MenuAction::CopyNodeMarkdown => self.copy_selected_node(CopyFormat::Markdown),
+            MenuAction::CopyReference => self.copy_selected_reference(),
             MenuAction::Back => self.navigate_history(true),
             MenuAction::Forward => self.navigate_history(false),
             MenuAction::ToggleSidebar => self.show_sidebar = !self.show_sidebar,
@@ -551,7 +558,7 @@ impl App {
 
     fn draw_help(frame: &mut Frame<'_>) {
         let width = 58.min(frame.area().width.saturating_sub(2));
-        let height = 21.min(frame.area().height);
+        let height = 23.min(frame.area().height);
         if width < 4 || height < 3 {
             return;
         }
@@ -581,7 +588,8 @@ impl App {
                 ),
                 Line::raw("↑/↓ or j/k  select outline node"),
                 Line::raw("←/→ or h/l  move through the outline tree"),
-                Line::raw("Enter        fold or unfold selected node"),
+                Line::raw("Enter        open reference / fold node"),
+                Line::raw("Space        fold or unfold selected node"),
                 Line::raw("Ctrl+O       find and open a document"),
                 Line::raw("top tabs     switch opened documents"),
                 Line::raw("Alt+←/→      back / forward"),
@@ -590,6 +598,7 @@ impl App {
                 Line::raw("drag / Shift+click  select+copy / extend"),
                 Line::raw("right-click   copy selected plain text"),
                 Line::raw("y / Ctrl+Shift+C  copy selected plain text"),
+                Line::raw("Shift+Y      copy selected reference target"),
                 Line::raw("d/u          scroll content by ten rows"),
                 Line::raw("b            toggle sidebar"),
                 Line::raw("F10          open menu bar"),

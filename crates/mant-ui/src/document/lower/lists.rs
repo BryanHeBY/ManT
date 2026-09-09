@@ -1,5 +1,5 @@
 //! List markers, definition heads, and their shared content/anchor ownership.
-use super::super::inline::styled_bound_inline_lines;
+use super::super::inline::shifted_reference_marks;
 use super::super::{
     Block, ListKind, LogicalLine, Span, Style, StyledInlineLine, inline_anchor_rows, shifted_links,
     spans_width, theme,
@@ -42,12 +42,8 @@ impl DocumentBuilder<'_> {
                 );
                 let continuation_indent =
                     compose_origin(content_indent, layout.continuation_indent_columns);
-                let mut inline_lines = styled_bound_inline_lines(
-                    children,
-                    Style::default().fg(theme::TEXT),
-                    self.address.as_ref(),
-                    self.entry_styles.ranges(children),
-                );
+                let mut inline_lines =
+                    self.styled_inlines(children, Style::default().fg(theme::TEXT));
                 let first = inline_lines
                     .first_mut()
                     .map_or_else(StyledInlineLine::default, std::mem::take);
@@ -56,7 +52,11 @@ impl DocumentBuilder<'_> {
                 spans.extend(first.spans);
                 self.push(
                     LogicalLine::hanging(padding(indent), padding(continuation_indent), spans)
-                        .with_links(shifted_links(first.links, marker_width.saturating_add(gap))),
+                        .with_links(shifted_links(first.links, marker_width.saturating_add(gap)))
+                        .with_reference_marks(shifted_reference_marks(
+                            first.reference_marks,
+                            marker_width.saturating_add(gap),
+                        )),
                 );
                 for line in inline_lines.into_iter().skip(1) {
                     self.push(
@@ -65,7 +65,8 @@ impl DocumentBuilder<'_> {
                             padding(continuation_indent),
                             line.spans,
                         )
-                        .with_links(line.links),
+                        .with_links(line.links)
+                        .with_reference_marks(line.reference_marks),
                     );
                 }
                 self.blocks(
@@ -121,23 +122,33 @@ impl DocumentBuilder<'_> {
         }
     }
 
-    fn inline_definition(&mut self, item: &mant_ir::DefinitionItem, indent: i32) {
+    fn definition_head(
+        &self,
+        item: &mant_ir::DefinitionItem,
+    ) -> (Vec<StyledInlineLine>, Vec<(String, usize)>) {
         let mut head_lines = Vec::new();
         let mut head_targets = Vec::new();
         for term in &item.terms {
             for (id, row) in inline_anchor_rows(term) {
                 head_targets.push((id, head_lines.len() + row));
             }
-            let lines = styled_bound_inline_lines(
-                term,
-                Style::default().fg(theme::TEXT),
-                self.address.as_ref(),
-                self.entry_styles.ranges(term),
-            );
+            let lines = self.styled_inlines(term, Style::default().fg(theme::TEXT));
             if lines.len() != 1 || !lines[0].spans.is_empty() {
                 head_lines.extend(lines);
+            } else {
+                head_targets.extend(
+                    lines[0]
+                        .reference_marks
+                        .iter()
+                        .map(|mark| (mark.id.to_string(), head_lines.len())),
+                );
             }
         }
+        (head_lines, head_targets)
+    }
+
+    fn inline_definition(&mut self, item: &mant_ir::DefinitionItem, indent: i32) {
+        let (mut head_lines, head_targets) = self.definition_head(item);
         let block_origin = compose_origin(indent, item.layout.body_indent_columns);
         if head_lines.is_empty() {
             self.defer_anchors(head_targets.into_iter().map(|(id, _)| id));
@@ -160,11 +171,13 @@ impl DocumentBuilder<'_> {
         for line in head_lines {
             self.push(
                 LogicalLine::hanging(padding(indent), padding(indent), line.spans)
-                    .with_links(line.links),
+                    .with_links(line.links)
+                    .with_reference_marks(line.reference_marks),
             );
         }
         let mut term_spans = last.spans;
         let mut term_links = last.links;
+        let mut term_marks = last.reference_marks;
         let term_width = mant_protocol::geometry::definition_run_in_width(&item.terms).unwrap_or(0);
         if let Some((children, layout)) = item.inline_description() {
             for (id, row) in inline_anchor_rows(children) {
@@ -186,21 +199,26 @@ impl DocumentBuilder<'_> {
                         .max(usize::from(item.layout.min_term_gap_columns)),
                 ),
             ));
-            let mut description_lines = styled_bound_inline_lines(
-                children,
-                Style::default().fg(theme::TEXT),
-                self.address.as_ref(),
-                self.entry_styles.ranges(children),
-            );
+            let mut description_lines =
+                self.styled_inlines(children, Style::default().fg(theme::TEXT));
             let first = description_lines
                 .first_mut()
                 .map_or_else(StyledInlineLine::default, std::mem::take);
             let description_offset = spans_width(&term_spans);
+            let description_scalar_offset = term_spans
+                .iter()
+                .map(|span| span.content.chars().count())
+                .sum();
             term_links.extend(shifted_links(first.links, description_offset));
+            term_marks.extend(shifted_reference_marks(
+                first.reference_marks,
+                description_scalar_offset,
+            ));
             term_spans.extend(first.spans);
             self.push(
                 LogicalLine::hanging(padding(indent), padding(continuation_indent), term_spans)
-                    .with_links(term_links),
+                    .with_links(term_links)
+                    .with_reference_marks(term_marks),
             );
             for line in description_lines.into_iter().skip(1) {
                 self.push(
@@ -209,14 +227,16 @@ impl DocumentBuilder<'_> {
                         padding(continuation_indent),
                         line.spans,
                     )
-                    .with_links(line.links),
+                    .with_links(line.links)
+                    .with_reference_marks(line.reference_marks),
                 );
             }
             self.blocks(&item.description[1..], block_origin);
         } else {
             self.push(
                 LogicalLine::hanging(padding(indent), padding(indent), term_spans)
-                    .with_links(term_links),
+                    .with_links(term_links)
+                    .with_reference_marks(term_marks),
             );
             self.blocks(&item.description, block_origin);
         }

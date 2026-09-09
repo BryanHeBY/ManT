@@ -595,4 +595,5 @@ fn clicking_a_real_git_manual_reference_requests_git_add_section_one() {
 mod entries;
 mod layout;
 mod navigation;
+mod references;
 mod search;

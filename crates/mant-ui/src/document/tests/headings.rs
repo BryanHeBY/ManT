@@ -43,7 +43,13 @@ fn heading_only_root_retains_links_styles_anchors_and_hard_lines_once() {
     });
     let original = document.clone();
     let view = DocumentView::new(&query);
-    assert_eq!(view.navigation().len(), 1);
+    assert_eq!(
+        view.navigation()
+            .iter()
+            .filter(|node| node.kind == NavKind::Root)
+            .count(),
+        1
+    );
     assert_eq!(view.navigation()[0].kind, NavKind::Root);
     for width in [12, 40, 80] {
         let rendered = view.render(width);

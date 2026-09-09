@@ -77,13 +77,15 @@ impl App {
             KeyCode::Char('k') | KeyCode::Up => self.select_relative(-1),
             KeyCode::Char('h') | KeyCode::Left => self.collapse_or_select_parent(),
             KeyCode::Char('l') | KeyCode::Right => self.expand_or_select_child(),
-            KeyCode::Enter | KeyCode::Char(' ') => self.toggle_selected(),
+            KeyCode::Enter => self.open_selected_reference(),
+            KeyCode::Char(' ') => self.toggle_selected(),
             KeyCode::PageDown | KeyCode::Char('d') => self.scroll_content(10),
             KeyCode::PageUp | KeyCode::Char('u') => self.scroll_content(-10),
             KeyCode::Home => self.jump_content(false),
             KeyCode::End => self.jump_content(true),
             KeyCode::Char('b') => self.show_sidebar = !self.show_sidebar,
             KeyCode::Char('y') => self.copy_selection(),
+            KeyCode::Char('Y') => self.copy_selected_reference(),
             KeyCode::Char('<') => {
                 self.commit_sidebar_width(
                     self.sidebar_width.saturating_sub(2).max(MIN_SIDEBAR_WIDTH),

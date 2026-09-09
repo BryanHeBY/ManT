@@ -11,6 +11,7 @@ pub(super) fn render_table_row_with_links(
 ) -> Vec<WrappedLine> {
     if table.cells.is_empty() {
         return vec![WrappedLine {
+            source_end: None,
             anchors: Vec::new(),
             line: Line::default(),
             links: Vec::new(),
@@ -37,6 +38,7 @@ fn stack_table_cells(indent: usize, table: &LogicalTableRow, width: usize) -> Ve
         .collect::<Vec<_>>();
     if rows.is_empty() {
         rows.push(WrappedLine {
+            source_end: None,
             anchors: Vec::new(),
             line: Line::default(),
             links: Vec::new(),
@@ -73,6 +75,7 @@ fn wrap_table_cell(
     }
     if rendered.is_empty() && !cell.anchors.is_empty() {
         rendered.push(WrappedLine {
+            source_end: None,
             anchors: Vec::new(),
             line: Line::default(),
             links: Vec::new(),
@@ -169,6 +172,7 @@ fn render_table_columns(
                 }
             }
             WrappedLine {
+                source_end: None,
                 anchors,
                 line: Line::from(spans),
                 links,

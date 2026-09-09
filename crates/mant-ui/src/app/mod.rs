@@ -17,7 +17,9 @@ use std::{
 };
 
 use mant_ir::ResolvedContent;
-use mant_protocol::{CatalogQuery, ContentSelector, DocumentAddress, DocumentCatalog};
+use mant_protocol::{
+    CatalogQuery, ContentSelector, DocumentAddress, DocumentCatalog, DocumentOpenTarget,
+};
 use ratatui::layout::Rect;
 use unicode_width::UnicodeWidthChar;
 
@@ -64,6 +66,7 @@ struct HistoryLocation {
     address: Option<DocumentAddress>,
     fallback: Option<Arc<ResolvedContent>>,
     target: Option<String>,
+    reference: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -72,6 +75,7 @@ struct DocumentTab {
     fallback: Option<Arc<ResolvedContent>>,
     label: String,
     target: Option<String>,
+    reference: bool,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -88,14 +92,19 @@ struct CopyToast {
 
 #[derive(Debug, Clone)]
 pub(crate) struct NavigationRequest {
-    address: DocumentAddress,
+    pub(crate) document: DocumentOpenTarget,
     target: Option<String>,
+    reference: bool,
     direction: HistoryDirection,
 }
 
 impl NavigationRequest {
+    #[cfg(test)]
     pub(crate) const fn address(&self) -> &DocumentAddress {
-        &self.address
+        match &self.document {
+            DocumentOpenTarget::Address { address } => address,
+            DocumentOpenTarget::Manual { .. } => panic!("request has no qualified address"),
+        }
     }
 }
 
@@ -370,16 +379,58 @@ impl App {
     }
 
     pub(crate) fn complete_open(&mut self, bundle: &ResolvedContent, request: NavigationRequest) {
-        self.commit_history(request.direction);
-        self.replace_document(bundle, DocumentChangeReason::from(request.direction));
-        if let Some(target) = request.target {
-            self.jump_to_anchor(&target);
+        self.complete_loaded_navigation(
+            bundle,
+            request.target,
+            request.reference,
+            request.direction,
+        );
+    }
+
+    fn complete_loaded_navigation(
+        &mut self,
+        bundle: &ResolvedContent,
+        target: Option<String>,
+        reference: bool,
+        direction: HistoryDirection,
+    ) {
+        if !reference
+            && let Some(target) = target.as_deref()
+            && let Err(message) = validate_fragment(bundle, target)
+        {
+            self.report_open_error(message);
+            return;
+        }
+        let candidate = DocumentView::new(bundle);
+        if let Some(target) = target.as_deref()
+            && ((reference && candidate.reference_target(target).is_none())
+                || candidate
+                    .render(self.geometry.content.width.max(1))
+                    .anchor_row(target)
+                    .is_none())
+        {
+            self.report_open_error("The destination has no available reveal location; the current document was retained".into());
+            return;
+        }
+        self.commit_history(direction);
+        self.replace_document_view(bundle, DocumentChangeReason::from(direction), candidate);
+        if let Some(target) = target {
+            self.reveal_anchor(&target);
         }
     }
 
     fn replace_document(&mut self, bundle: &ResolvedContent, reason: DocumentChangeReason) {
+        self.replace_document_view(bundle, reason, DocumentView::new(bundle));
+    }
+
+    fn replace_document_view(
+        &mut self,
+        bundle: &ResolvedContent,
+        reason: DocumentChangeReason,
+        view: DocumentView,
+    ) {
         self.remember_current_document_tab();
-        self.session = DocumentSession::new(Arc::new(bundle.clone()), DocumentView::new(bundle));
+        self.session = DocumentSession::new(Arc::new(bundle.clone()), view);
         self.current_address.clone_from(&bundle.address);
         self.fallback_bundle = bundle.address.is_none().then(|| Arc::new(bundle.clone()));
         self.selected = 0;
@@ -435,7 +486,13 @@ impl App {
             self.report_notice("No document node is selected".to_owned());
             return;
         };
-        if node.kind == NavKind::EntryGroup {
+        if matches!(
+            node.kind,
+            NavKind::EntryGroup
+                | NavKind::ReferenceGroup
+                | NavKind::Reference
+                | NavKind::ReferenceNotice
+        ) {
             self.report_notice("Select a complete document node before copying".to_owned());
             return;
         }
@@ -448,6 +505,22 @@ impl App {
             },
             format,
         });
+    }
+
+    pub(super) fn copy_selected_reference(&mut self) {
+        let text = self
+            .session
+            .document
+            .navigation()
+            .get(self.selected)
+            .and_then(|node| self.session.document.reference_text(&node.id));
+        if let Some(text) = text {
+            self.pending_copy = Some(CopyRequest::Reference {
+                text: crate::text::sanitize_terminal_text(&text).into_owned(),
+            });
+        } else {
+            self.report_notice("Select a document reference before copying its target".into());
+        }
     }
 
     pub(crate) fn report_open_error(&mut self, message: String) {
@@ -472,15 +545,20 @@ impl App {
     }
 
     fn current_location(&self) -> HistoryLocation {
+        let target = self
+            .session
+            .document
+            .navigation()
+            .get(self.selected)
+            .map(|item| item.target_id.clone());
+        let reference = target
+            .as_deref()
+            .is_some_and(|target| self.session.document.reference_target(target).is_some());
         HistoryLocation {
             address: self.current_address.clone(),
             fallback: self.fallback_bundle.clone(),
-            target: self
-                .session
-                .document
-                .navigation()
-                .get(self.selected)
-                .map(|item| item.target_id.clone()),
+            target,
+            reference,
         }
     }
 
@@ -500,8 +578,9 @@ impl App {
             return;
         }
         self.pending_open = Some(NavigationRequest {
-            address,
+            document: address.into(),
             target,
+            reference: false,
             direction: HistoryDirection::New,
         });
     }
@@ -525,20 +604,44 @@ impl App {
             self.complete_local_history(location, direction);
         } else if let Some(address) = location.address.clone() {
             self.pending_open = Some(NavigationRequest {
-                address,
+                document: address.into(),
                 target: location.target,
+                reference: location.reference,
                 direction,
             });
         } else if let Some(bundle) = location.fallback.as_deref() {
             let bundle = bundle.clone();
-            self.complete_local_bundle(&bundle, location.target, direction);
+            self.complete_local_bundle(&bundle, location.target, location.reference, direction);
         }
     }
 
     fn complete_local_history(&mut self, location: HistoryLocation, direction: HistoryDirection) {
+        if let Some(target) = location.target.as_deref() {
+            if location.reference {
+                if self.session.document.reference_location(target).is_none() {
+                    self.report_notice(
+                        "The historical reference location is no longer available".into(),
+                    );
+                    return;
+                }
+            } else if let Err(message) = validate_fragment(&self.session.current_bundle, target) {
+                self.report_notice(message);
+                return;
+            }
+            if self
+                .session
+                .document
+                .render(self.geometry.content.width.max(1))
+                .anchor_row(target)
+                .is_none()
+            {
+                self.report_notice("The historical target has no rendered content location".into());
+                return;
+            }
+        }
         self.commit_history(direction);
         if let Some(target) = location.target {
-            self.jump_to_anchor(&target);
+            self.reveal_anchor(&target);
         }
     }
 
@@ -546,13 +649,10 @@ impl App {
         &mut self,
         bundle: &ResolvedContent,
         target: Option<String>,
+        reference: bool,
         direction: HistoryDirection,
     ) {
-        self.commit_history(direction);
-        self.replace_document(bundle, DocumentChangeReason::from(direction));
-        if let Some(target) = target {
-            self.jump_to_anchor(&target);
-        }
+        self.complete_loaded_navigation(bundle, target, reference, direction);
     }
 
     fn commit_history(&mut self, direction: HistoryDirection) {
@@ -627,6 +727,85 @@ fn push_history(history: &mut Vec<HistoryLocation>, location: HistoryLocation) {
         history.remove(0);
     }
     history.push(location);
+}
+
+/// Validate against the candidate snapshot before changing any navigation state.
+/// The shared target stream merges an entry's own anchor with its item, while
+/// two independent owners remain ambiguous even when their spelling is equal.
+fn validate_fragment(bundle: &ResolvedContent, fragment: &str) -> Result<(), String> {
+    use mant_ir::{
+        NavigationEvent, NavigationScanOptions, ReferenceLinkFilter, ReferenceScanLimits,
+        ReferenceScope, scan_navigation_scope,
+    };
+    use std::ops::ControlFlow;
+    let tldr = fragment == "tldr" && bundle.tldr.is_some();
+    let Some(document) = bundle.document.as_ref() else {
+        return if tldr {
+            Ok(())
+        } else {
+            Err(format!("No outline node matches #{fragment}"))
+        };
+    };
+    let mut found: Option<mant_ir::ContentReveal> = None;
+    let mut ambiguous = false;
+    let mut position_limited = false;
+    let report = scan_navigation_scope(
+        document,
+        ReferenceScope::Document,
+        ReferenceScanLimits::default(),
+        NavigationScanOptions {
+            links: ReferenceLinkFilter::NONE,
+            targets: true,
+            entry_sets: false,
+        },
+        |event, budget| {
+            if let NavigationEvent::Target(target) = event
+                && (target.id.as_str() == fragment
+                    || target
+                        .aliases
+                        .iter()
+                        .any(|alias| alias.as_str() == fragment))
+            {
+                if tldr {
+                    ambiguous = true;
+                    return ControlFlow::Break(());
+                }
+                if budget
+                    .consume(
+                        target.reveal.depth(),
+                        target.reveal.depth().saturating_mul(3),
+                        0,
+                    )
+                    .is_err()
+                {
+                    return ControlFlow::Break(());
+                }
+                if let Some(previous) = found.as_ref() {
+                    if previous.as_ref() != target.reveal {
+                        ambiguous = true;
+                        return ControlFlow::Break(());
+                    }
+                } else if let Some(reveal) = target.reveal.to_owned() {
+                    found = Some(reveal);
+                } else {
+                    position_limited = true;
+                    return ControlFlow::Break(());
+                }
+            }
+            ControlFlow::Continue(())
+        },
+    );
+    if ambiguous {
+        Err(format!("Ambiguous local target #{fragment}"))
+    } else if position_limited || !report.complete() {
+        Err(format!(
+            "Local target #{fragment} was not verified within the navigation budget"
+        ))
+    } else if found.is_none() && !tldr {
+        Err(format!("No outline node matches #{fragment}"))
+    } else {
+        Ok(())
+    }
 }
 
 fn fit_to_width(value: &str, width: usize) -> String {

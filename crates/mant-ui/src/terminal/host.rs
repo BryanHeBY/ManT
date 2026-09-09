@@ -1,6 +1,6 @@
 //! Explicit host callbacks; UI state never acquires filesystem or clipboard authority.
 use super::{
-    App, CatalogQuery, CopyRequest, DocumentAddress, DocumentCatalog, Event, ResolvedContent,
+    App, CatalogQuery, CopyRequest, DocumentCatalog, DocumentOpenTarget, Event, ResolvedContent,
     UpdateOutcome,
 };
 pub(super) fn service_copy_request<C>(app: &mut App, copy_to_clipboard: &mut C) -> bool
@@ -82,12 +82,12 @@ where
 
 pub(super) fn service_open_request<F>(app: &mut App, open_document: &mut F) -> bool
 where
-    F: FnMut(&DocumentAddress) -> Result<ResolvedContent, String>,
+    F: FnMut(&DocumentOpenTarget) -> Result<ResolvedContent, String>,
 {
     let Some(address) = app.take_open_request() else {
         return false;
     };
-    match open_document(address.address()) {
+    match open_document(&address.document) {
         Ok(bundle) => app.complete_open(&bundle, address),
         Err(message) => app.report_open_error(message),
     }

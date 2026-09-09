@@ -11,7 +11,9 @@ use crossterm::{
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
 use mant_ir::ResolvedContent;
-use mant_protocol::{CatalogQuery, DocumentAddress, DocumentCatalog};
+#[cfg(test)]
+use mant_protocol::DocumentAddress;
+use mant_protocol::{CatalogQuery, DocumentCatalog, DocumentOpenTarget};
 use ratatui::{Terminal, backend::CrosstermBackend};
 
 use crate::{App, CopyRequest, UpdateOutcome};
@@ -69,8 +71,10 @@ pub fn run(bundle: &ResolvedContent) -> io::Result<()> {
 /// document loading.
 ///
 /// The UI never reads source configuration, manual paths, or Markdown files;
-/// it sends bounded catalog queries through `discover_documents` and stable
-/// catalog addresses through `open_document`. Safe external URI activation is
+/// it sends bounded catalog queries through `discover_documents` and typed
+/// local document targets through `open_document`. Unqualified manual targets
+/// retain their absent section and require manual-only host resolution.
+/// Safe external URI activation is
 /// delegated through `open_external`, so the embedding host retains control of
 /// platform integration and policy.
 ///
@@ -87,7 +91,7 @@ pub fn run_with_catalog<D, F, E>(
 ) -> io::Result<()>
 where
     D: FnMut(&CatalogQuery) -> Result<DocumentCatalog, String>,
-    F: FnMut(&DocumentAddress) -> Result<ResolvedContent, String>,
+    F: FnMut(&DocumentOpenTarget) -> Result<ResolvedContent, String>,
     E: FnMut(&crate::ExternalUri) -> Result<(), String>,
 {
     run_with_catalog_and_scope(
@@ -117,7 +121,7 @@ pub fn run_with_catalog_and_scope<D, F, E>(
 ) -> io::Result<()>
 where
     D: FnMut(&CatalogQuery) -> Result<DocumentCatalog, String>,
-    F: FnMut(&DocumentAddress) -> Result<ResolvedContent, String>,
+    F: FnMut(&DocumentOpenTarget) -> Result<ResolvedContent, String>,
     E: FnMut(&crate::ExternalUri) -> Result<(), String>,
 {
     run_with_catalog_and_scope_and_copy(
@@ -153,7 +157,7 @@ pub fn run_with_catalog_and_scope_and_copy<D, F, E, C>(
 ) -> io::Result<()>
 where
     D: FnMut(&CatalogQuery) -> Result<DocumentCatalog, String>,
-    F: FnMut(&DocumentAddress) -> Result<ResolvedContent, String>,
+    F: FnMut(&DocumentOpenTarget) -> Result<ResolvedContent, String>,
     E: FnMut(&crate::ExternalUri) -> Result<(), String>,
     C: FnMut(CopyRequest) -> Result<(), String>,
 {

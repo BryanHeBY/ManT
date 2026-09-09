@@ -4,8 +4,8 @@ use super::host::{
     service_open_request,
 };
 use super::{
-    App, CatalogQuery, CopyRequest, CrosstermBackend, DisableMouseCapture, DocumentAddress,
-    DocumentCatalog, EnableMouseCapture, EnterAlternateScreen, Instant, LeaveAlternateScreen,
+    App, CatalogQuery, CopyRequest, CrosstermBackend, DisableMouseCapture, DocumentCatalog,
+    DocumentOpenTarget, EnableMouseCapture, EnterAlternateScreen, Instant, LeaveAlternateScreen,
     ResolvedContent, TERMINATION_POLL_INTERVAL, Terminal, TerminationSignals, disable_raw_mode,
     enable_raw_mode, event, execute, io, panic,
 };
@@ -20,7 +20,7 @@ pub(super) fn run<D, F, E, C>(
 ) -> io::Result<()>
 where
     D: FnMut(&CatalogQuery) -> Result<DocumentCatalog, String>,
-    F: FnMut(&DocumentAddress) -> Result<ResolvedContent, String>,
+    F: FnMut(&DocumentOpenTarget) -> Result<ResolvedContent, String>,
     E: FnMut(&crate::ExternalUri) -> Result<(), String>,
     C: FnMut(CopyRequest) -> Result<(), String>,
 {

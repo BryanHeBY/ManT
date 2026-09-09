@@ -26,6 +26,7 @@ impl DocumentBuilder<'_> {
                     .map(|cell| {
                         let mut builder = Self::new(String::new(), self.address.clone());
                         builder.entry_styles = Arc::clone(&self.entry_styles);
+                        builder.reference_origins = Arc::clone(&self.reference_origins);
                         if let Some(cell) = cell {
                             builder.blocks(&cell.blocks, 0);
                         }

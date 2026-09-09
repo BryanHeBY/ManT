@@ -5,6 +5,7 @@ use super::{
 };
 #[derive(Clone, Copy)]
 pub(super) struct StyledCell {
+    pub(super) source_index: usize,
     pub(super) character: char,
     pub(super) display_character: char,
     pub(super) width: usize,
@@ -18,6 +19,7 @@ pub(super) fn styled_cells(line: &LogicalLine) -> Vec<StyledCell> {
     let mut cells = Vec::new();
     let mut column = line.indent;
     let mut source_column = 0;
+    let mut source_index = 0;
     for span in &line.spans {
         for character in span.content.chars() {
             let source_width = character.width().unwrap_or(0);
@@ -27,6 +29,7 @@ pub(super) fn styled_cells(line: &LogicalLine) -> Vec<StyledCell> {
             if character == '\t' {
                 let spaces = TAB_STOP - column % TAB_STOP;
                 cells.extend((0..spaces).map(|_| StyledCell {
+                    source_index,
                     character: ' ',
                     display_character: ' ',
                     width: 1,
@@ -35,6 +38,7 @@ pub(super) fn styled_cells(line: &LogicalLine) -> Vec<StyledCell> {
                 }));
                 column += spaces;
                 source_column += spaces;
+                source_index += 1;
                 continue;
             }
             let character = if character.is_control() {
@@ -44,6 +48,7 @@ pub(super) fn styled_cells(line: &LogicalLine) -> Vec<StyledCell> {
             };
             let cell_width = character.width().unwrap_or(0);
             cells.push(StyledCell {
+                source_index,
                 character,
                 display_character: character,
                 width: cell_width,
@@ -52,6 +57,7 @@ pub(super) fn styled_cells(line: &LogicalLine) -> Vec<StyledCell> {
             });
             column += cell_width;
             source_column += source_width;
+            source_index += 1;
         }
     }
     cells
@@ -195,6 +201,7 @@ pub(super) fn wrapped_cells_to_line(
         });
     }
     WrappedLine {
+        source_end: cells.last().map(|cell| cell.source_index + 1),
         anchors: Vec::new(),
         line: cells_to_line(line, width, indent, cells),
         links,

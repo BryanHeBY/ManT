@@ -145,7 +145,7 @@ fn should_prefer_terminal_clipboard() -> bool {
 
 fn render_copy_request(request: CopyRequest) -> Result<String, String> {
     match request {
-        CopyRequest::Selection { text } => Ok(text),
+        CopyRequest::Selection { text } | CopyRequest::Reference { text } => Ok(text),
         CopyRequest::Node {
             content,
             selector,

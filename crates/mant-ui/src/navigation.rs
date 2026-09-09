@@ -85,10 +85,11 @@ fn node_lines(
         match node.kind {
             NavKind::Tldr => theme::MAUVE,
             NavKind::Root | NavKind::Section if node.depth == 0 => theme::SUBTEXT_BRIGHT,
-            NavKind::Root | NavKind::Section => theme::BLUE,
-            NavKind::EntryGroup => theme::YELLOW,
+            NavKind::Root | NavKind::Section | NavKind::ReferenceGroup => theme::BLUE,
+            NavKind::EntryGroup | NavKind::ReferenceNotice => theme::YELLOW,
             NavKind::Entry(EntryKind::Term) => theme::STRONG,
             NavKind::Entry(kind) => theme::entry_color(kind),
+            NavKind::Reference => theme::LINK,
         }
     };
     let background = if selected {

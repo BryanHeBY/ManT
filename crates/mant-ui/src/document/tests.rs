@@ -451,6 +451,7 @@ mod item_spacing;
 mod layout;
 mod mdoc_execution_spacing;
 mod navigation;
+mod references;
 mod search;
 mod source_geometry;
 mod tables;

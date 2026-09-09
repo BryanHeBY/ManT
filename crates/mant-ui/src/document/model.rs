@@ -51,6 +51,10 @@ pub(crate) enum LinkTarget {
         address: DocumentAddress,
         fragment: Option<String>,
     },
+    Manual {
+        name: String,
+        manual_section: Option<String>,
+    },
     External(ExternalUri),
 }
 
@@ -63,6 +67,14 @@ pub(super) struct LogicalLine {
     pub(super) wrap_mode: WrapMode,
     pub(super) table_row: Option<LogicalTableRow>,
     pub(super) links: Vec<LogicalLinkRange>,
+    pub(super) reference_marks: Vec<ReferenceMark>,
+}
+
+#[derive(Debug, Clone)]
+pub(super) struct ReferenceMark {
+    pub(super) id: Arc<str>,
+    /// Scalar offset in this logical row, before tabs expand into cells.
+    pub(super) scalar_offset: usize,
 }
 
 #[derive(Debug, Clone)]
@@ -139,6 +151,7 @@ impl LogicalTableCell {
 pub(super) struct StyledInlineLine {
     pub(super) spans: Vec<Span<'static>>,
     pub(super) links: Vec<LogicalLinkRange>,
+    pub(super) reference_marks: Vec<ReferenceMark>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -168,6 +181,7 @@ impl LogicalLine {
             wrap_mode: WrapMode::Word,
             table_row: None,
             links: Vec::new(),
+            reference_marks: Vec::new(),
         }
     }
 
@@ -180,6 +194,7 @@ impl LogicalLine {
             wrap_mode: WrapMode::Word,
             table_row: None,
             links: Vec::new(),
+            reference_marks: Vec::new(),
         }
     }
 
@@ -198,6 +213,11 @@ impl LogicalLine {
         self
     }
 
+    pub(super) fn with_reference_marks(mut self, marks: Vec<ReferenceMark>) -> Self {
+        self.reference_marks = marks;
+        self
+    }
+
     pub(super) fn hanging(
         indent: usize,
         continuation_indent: usize,
@@ -211,6 +231,7 @@ impl LogicalLine {
             wrap_mode: WrapMode::Word,
             table_row: None,
             links: Vec::new(),
+            reference_marks: Vec::new(),
         }
     }
 
@@ -227,6 +248,7 @@ impl LogicalLine {
             wrap_mode: WrapMode::Word,
             table_row: Some(LogicalTableRow { cells, layout }),
             links: Vec::new(),
+            reference_marks: Vec::new(),
         }
     }
 

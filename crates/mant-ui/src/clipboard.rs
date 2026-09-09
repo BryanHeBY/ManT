@@ -20,6 +20,11 @@ pub enum CopyFormat {
 /// Clipboard content selected by the interactive reader.
 #[derive(Debug, Clone)]
 pub enum CopyRequest {
+    /// A reference's original typed target, not the source item's body.
+    Reference {
+        /// Bounded terminal-safe target text selected by an explicit action.
+        text: String,
+    },
     /// Plain text extracted from an exact visual selection.
     Selection {
         /// Terminal-safe selected text.
@@ -41,6 +46,7 @@ impl CopyRequest {
     #[must_use]
     pub const fn label(&self) -> &'static str {
         match self {
+            Self::Reference { .. } => "reference target",
             Self::Selection { .. } => "selection",
             Self::Node {
                 format: CopyFormat::Text,

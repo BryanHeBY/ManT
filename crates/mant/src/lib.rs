@@ -28,9 +28,9 @@ use mant_engine::QueryPolicy;
 use mant_ir::ResolvedContent;
 use mant_protocol::{
     CatalogQuery, CatalogSchema, DoctorReport, DocumentAddress, DocumentCatalog, DocumentSchema,
-    ExcerptSchema, InputFormat, MarkdownOrigin, OutlineSchema, QueryInput, QueryRequest,
-    QuerySchema, QueryView, RequestSchema, ScopeQueryRequest, ScopeQueryResponse, ScopeQuerySchema,
-    ScopeRequestSchema, SearchSchema, TldrCacheUpdate,
+    ExcerptSchema, InputFormat, OutlineSchema, QueryInput, QueryRequest, QuerySchema, QueryView,
+    RequestSchema, ScopeQueryRequest, ScopeQueryResponse, ScopeQuerySchema, ScopeRequestSchema,
+    SearchSchema, TldrCacheUpdate,
 };
 use mant_sources::{DocumentSourcesPrune, DocumentSourcesUpdate};
 use output_policy::{TerminalCapabilities, TerminalKind, resolve_process_presentation};
@@ -740,8 +740,8 @@ fn run_interactive(
         catalog,
         &scope_documents,
         |catalog_query| host.discover(catalog_query).map_err(Failure::into_message),
-        |address| {
-            let (request, policy) = request_for_address(address);
+        |target| {
+            let (request, policy) = request_for_navigation(target);
             host.query(&request, policy).map_err(Failure::into_message)
         },
         open_external_uri,
@@ -753,38 +753,47 @@ fn run_interactive(
 }
 
 fn request_for_address(address: &DocumentAddress) -> (QueryRequest, QueryPolicy) {
-    let (name, source, manual_section, policy) = match address {
-        DocumentAddress::Markdown { path, origin } => (
-            path.clone(),
-            match origin {
-                MarkdownOrigin::Documents => None,
-                MarkdownOrigin::Source { name } => Some(name.clone()),
-            },
-            None,
-            QueryPolicy::Combined,
-        ),
-        DocumentAddress::Manual {
-            name,
-            manual_section,
-        } => (
-            name.clone(),
-            None,
-            Some(manual_section.clone()),
-            QueryPolicy::Combined,
-        ),
+    let policy = match address {
+        DocumentAddress::Markdown { .. } => QueryPolicy::Combined,
+        DocumentAddress::Manual { .. } => QueryPolicy::ManualOnly,
     };
     (
         QueryRequest {
             schema: RequestSchema::V0Dot11,
             input: QueryInput::Document {
-                selector: name,
-                source,
-                manual_section,
+                // A resolved address must never degrade into source precedence or
+                // suffix discovery when its exact destination is missing.
+                selector: address.catalog_path(),
+                source: None,
+                manual_section: None,
             },
             view: QueryView::Full {},
         },
         policy,
     )
+}
+
+fn request_for_navigation(
+    target: &mant_protocol::DocumentOpenTarget,
+) -> (QueryRequest, QueryPolicy) {
+    match target {
+        mant_protocol::DocumentOpenTarget::Address { address } => request_for_address(address),
+        mant_protocol::DocumentOpenTarget::Manual {
+            name,
+            manual_section,
+        } => (
+            QueryRequest {
+                schema: RequestSchema::V0Dot11,
+                input: QueryInput::Document {
+                    selector: name.clone(),
+                    source: None,
+                    manual_section: manual_section.clone(),
+                },
+                view: QueryView::Full {},
+            },
+            QueryPolicy::ManualOnly,
+        ),
+    }
 }
 
 fn validate_markdown_policy(policy: QueryPolicy) -> Result<(), Failure> {

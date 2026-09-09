@@ -52,6 +52,7 @@ impl App {
                 fallback,
                 label,
                 target: None,
+                reference: false,
             });
             self.document_tabs.len() - 1
         };
@@ -67,6 +68,9 @@ impl App {
             .get(self.selected)
             .map(|item| item.target_id.clone());
         if let Some(tab) = self.document_tabs.get_mut(self.active_document_tab) {
+            tab.reference = target
+                .as_deref()
+                .is_some_and(|target| self.session.document.reference_target(target).is_some());
             tab.target = target;
         }
     }
@@ -75,17 +79,17 @@ impl App {
         if index == self.active_document_tab || index >= self.document_tabs.len() {
             return UpdateOutcome::Unchanged;
         }
-        self.remember_current_document_tab();
         let tab = self.document_tabs[index].clone();
         if let Some(address) = tab.address {
             self.pending_open = Some(NavigationRequest {
-                address,
+                document: address.into(),
                 target: tab.target,
+                reference: tab.reference,
                 direction: HistoryDirection::New,
             });
         } else if let Some(bundle) = tab.fallback.as_deref() {
             let bundle = bundle.clone();
-            self.complete_local_bundle(&bundle, tab.target, HistoryDirection::New);
+            self.complete_local_bundle(&bundle, tab.target, tab.reference, HistoryDirection::New);
         } else {
             return UpdateOutcome::Unchanged;
         }

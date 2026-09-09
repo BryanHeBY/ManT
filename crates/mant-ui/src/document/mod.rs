@@ -9,6 +9,7 @@ mod lower;
 mod navigation;
 use lower::DocumentBuilder;
 mod model;
+mod references;
 mod search;
 mod selection;
 mod wrap;
@@ -91,11 +92,18 @@ pub enum NavKind {
     EntryGroup,
     /// Addressable semantic definition of the contained role.
     Entry(EntryKind),
+    /// Collapsed orthogonal document-reference grouping, not source content.
+    ReferenceGroup,
+    /// One real, structurally located link occurrence.
+    Reference,
+    /// Honest disclosure that bounded discovery did not cover every reference.
+    ReferenceNotice,
 }
 
 /// Renderer-independent terminal view before width-dependent wrapping.
 #[derive(Debug, Clone)]
 pub struct DocumentView {
+    address: Option<DocumentAddress>,
     label: String,
     terminal_label: String,
     source_label: &'static str,
@@ -105,6 +113,7 @@ pub struct DocumentView {
     lines: Vec<LogicalLine>,
     navigation: Vec<NavNode>,
     anchors: HashMap<String, usize>,
+    references: Vec<references::ReferenceRecord>,
 }
 
 /// Exact terminal rows and anchor positions for one content width.
@@ -132,10 +141,35 @@ struct RenderedLinkRegion {
 }
 
 impl DocumentView {
+    pub(crate) fn reference_location(&self, id: &str) -> Option<&mant_ir::ContentLocation> {
+        self.references
+            .iter()
+            .find(|reference| reference.id.as_ref() == id)
+            .map(|reference| &reference.location)
+    }
+    pub(crate) fn reference_target(&self, id: &str) -> Option<&mant_ir::LinkTarget> {
+        self.references
+            .iter()
+            .find(|reference| reference.id.as_ref() == id)
+            .map(|reference| &reference.target)
+    }
+
+    pub(crate) fn reference_text(&self, id: &str) -> Option<String> {
+        self.reference_target(id).map(references::target_text)
+    }
+
+    pub(crate) fn activation_target(&self, target: &mant_ir::LinkTarget) -> Option<LinkTarget> {
+        inline::local_link_target(target, self.address.as_ref())
+    }
     /// Build one immutable view from the normalized query contract.
     #[must_use]
     pub fn new(bundle: &ResolvedContent) -> Self {
         let mut builder = DocumentBuilder::new(bundle.label.clone(), bundle.address.clone());
+        let mut references = bundle.document.as_ref().map_or_else(
+            references::ReferenceNavigation::default,
+            references::ReferenceNavigation::build,
+        );
+        builder.reference_origins = Arc::new(std::mem::take(&mut references.origins));
         let source_label = bundle.document.as_ref().map_or("MANUAL", |document| {
             if document.source.format == SourceFormat::Markdown {
                 "MARKDOWN"
@@ -214,8 +248,10 @@ impl DocumentView {
             }
         }
 
-        let built = builder.finish();
+        let mut built = builder.finish();
+        references.append_navigation(&mut built.navigation);
         Self {
+            address: bundle.address.clone(),
             label: built.label,
             terminal_label,
             source_label,
@@ -225,6 +261,7 @@ impl DocumentView {
             lines: built.content.lines,
             navigation: built.navigation,
             anchors: built.content.anchors,
+            references: references.records,
         }
     }
 

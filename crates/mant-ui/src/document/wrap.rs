@@ -46,6 +46,7 @@ fn readable_origins(first: usize, continuation: usize, available: usize) -> (usi
 }
 
 pub(super) struct WrappedLine {
+    pub(super) source_end: Option<usize>,
     pub(super) anchors: Vec<String>,
     pub(super) line: Line<'static>,
     pub(super) links: Vec<WrappedLink>,
@@ -77,12 +78,28 @@ pub(super) fn wrap_line(line: &LogicalLine, width: usize) -> Vec<Line<'static>> 
 
 #[allow(clippy::too_many_lines)]
 pub(super) fn wrap_line_with_links(line: &LogicalLine, width: usize) -> Vec<WrappedLine> {
+    let mut rows = wrap_logical_line(line, width);
+    for mark in &line.reference_marks {
+        let index = rows
+            .iter()
+            .position(|row| row.source_end.is_some_and(|end| mark.scalar_offset < end))
+            .unwrap_or_else(|| rows.len().saturating_sub(1));
+        if let Some(row) = rows.get_mut(index) {
+            row.anchors.push(mark.id.to_string());
+        }
+    }
+    rows
+}
+
+#[allow(clippy::too_many_lines)]
+fn wrap_logical_line(line: &LogicalLine, width: usize) -> Vec<WrappedLine> {
     if let Some(table) = &line.table_row {
         return render_table_row_with_links(line.indent, table, width);
     }
     match line.surface {
         LineSurface::TldrTop => {
             return vec![WrappedLine {
+                source_end: None,
                 anchors: Vec::new(),
                 line: panel_border(width, '┌', '┐'),
                 links: Vec::new(),
@@ -91,6 +108,7 @@ pub(super) fn wrap_line_with_links(line: &LogicalLine, width: usize) -> Vec<Wrap
         }
         LineSurface::TldrBottom => {
             return vec![WrappedLine {
+                source_end: None,
                 anchors: Vec::new(),
                 line: panel_border(width, '└', '┘'),
                 links: Vec::new(),
@@ -99,6 +117,7 @@ pub(super) fn wrap_line_with_links(line: &LogicalLine, width: usize) -> Vec<Wrap
         }
         LineSurface::Divider => {
             return vec![WrappedLine {
+                source_end: None,
                 anchors: Vec::new(),
                 line: Line::from(Span::styled(
                     "─".repeat(width),
@@ -111,6 +130,7 @@ pub(super) fn wrap_line_with_links(line: &LogicalLine, width: usize) -> Vec<Wrap
         LineSurface::Rule => {
             let indent = readable_origins(line.indent, line.indent, width).0;
             return vec![WrappedLine {
+                source_end: None,
                 anchors: Vec::new(),
                 line: Line::from(vec![
                     Span::raw(" ".repeat(indent)),

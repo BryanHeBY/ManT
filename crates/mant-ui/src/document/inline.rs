@@ -64,6 +64,7 @@ pub(super) fn styled_inline_lines(
     styled_bound_inline_lines(nodes, style, current_address, &[])
 }
 
+#[cfg(test)]
 pub(super) fn styled_bound_inline_lines(
     nodes: &[Inline],
     style: Style,
@@ -73,6 +74,7 @@ pub(super) fn styled_bound_inline_lines(
     styled_display_inline_lines(nodes, style, current_address, names, false)
 }
 
+#[cfg(test)]
 pub(super) fn styled_display_inline_lines(
     nodes: &[Inline],
     style: Style,
@@ -80,9 +82,83 @@ pub(super) fn styled_display_inline_lines(
     names: &[mant_protocol::InlineNameRange],
     code: bool,
 ) -> Vec<StyledInlineLine> {
+    styled_reference_inline_lines(
+        nodes,
+        style,
+        current_address,
+        names,
+        code,
+        &std::collections::HashMap::default(),
+    )
+}
+
+pub(super) fn styled_reference_inline_lines(
+    nodes: &[Inline],
+    style: Style,
+    current_address: Option<&DocumentAddress>,
+    names: &[mant_protocol::InlineNameRange],
+    code: bool,
+    origins: &super::references::ReferenceOrigins,
+) -> Vec<StyledInlineLine> {
     let mut lines = vec![StyledInlineLine::default()];
     append_inline(nodes, style, current_address, names, code, &mut lines);
+    if !origins.is_empty() {
+        reference_marks(nodes, origins, &mut lines, &mut 0, &mut 0);
+    }
     lines
+}
+
+fn reference_marks(
+    nodes: &[Inline],
+    origins: &super::references::ReferenceOrigins,
+    lines: &mut [StyledInlineLine],
+    row: &mut usize,
+    column: &mut usize,
+) {
+    for node in nodes {
+        match node {
+            Inline::Link {
+                target, children, ..
+            } => {
+                if let Some(id) = origins.get(&std::ptr::from_ref(target).addr())
+                    && let Some(line) = lines.get_mut(*row)
+                {
+                    line.reference_marks.push(super::model::ReferenceMark {
+                        id: std::sync::Arc::clone(id),
+                        scalar_offset: *column,
+                    });
+                }
+                reference_marks(children, origins, lines, row, column);
+            }
+            Inline::Strong { children } | Inline::Emphasis { children } => {
+                reference_marks(children, origins, lines, row, column);
+            }
+            Inline::LineBreak => {
+                *row += 1;
+                *column = 0;
+            }
+            Inline::Text { value } | Inline::Code { value } => {
+                for (index, part) in value.split('\n').enumerate() {
+                    if index > 0 {
+                        *row += 1;
+                        *column = 0;
+                    }
+                    *column += part.chars().count();
+                }
+            }
+            Inline::Anchor { .. } => {}
+        }
+    }
+}
+
+pub(super) fn shifted_reference_marks(
+    mut marks: Vec<super::model::ReferenceMark>,
+    scalars: usize,
+) -> Vec<super::model::ReferenceMark> {
+    for mark in &mut marks {
+        mark.scalar_offset += scalars;
+    }
+    marks
 }
 
 pub(super) fn spans_width(spans: &[Span<'_>]) -> usize {
@@ -170,7 +246,7 @@ fn source_style(
     style
 }
 
-fn local_link_target(
+pub(super) fn local_link_target(
     target: &mant_ir::LinkTarget,
     current: Option<&DocumentAddress>,
 ) -> Option<LinkTarget> {
@@ -189,15 +265,19 @@ fn local_link_target(
         mant_ir::LinkTarget::Manual {
             name,
             manual_section,
-        } => manual_section
-            .as_ref()
-            .map(|manual_section| LinkTarget::Document {
+        } => Some(manual_section.as_ref().map_or_else(
+            || LinkTarget::Manual {
+                name: name.clone(),
+                manual_section: None,
+            },
+            |manual_section| LinkTarget::Document {
                 address: DocumentAddress::Manual {
                     name: name.clone(),
                     manual_section: manual_section.clone(),
                 },
                 fragment: None,
-            }),
+            },
+        )),
         mant_ir::LinkTarget::Section { id } => Some(LinkTarget::Section(id.to_string())),
     }
 }

@@ -1,5 +1,5 @@
 //! IR to logical terminal content and anchors.
-use super::inline::styled_display_inline_lines;
+use super::inline::styled_reference_inline_lines;
 use super::{
     Arc, Block, DocumentAddress, ExternalUri, HashMap, Inline, LineSurface, LinkTarget,
     LogicalLine, LogicalLinkRange, Modifier, NavKind, NavNode, Section, SemanticIndex, Span, Style,
@@ -17,6 +17,7 @@ pub(super) struct DocumentBuilder<'a> {
     pub(super) lines: Vec<LogicalLine>,
     pub(super) navigation: Vec<NavNode>,
     pub(super) anchors: HashMap<String, usize>,
+    pub(super) reference_origins: Arc<super::references::ReferenceOrigins>,
     pending_anchors: Vec<String>,
     pending_gap: mant_protocol::geometry::GapPlan,
 }
@@ -55,6 +56,7 @@ impl DocumentBuilder<'_> {
             lines: Vec::new(),
             navigation: Vec::new(),
             anchors: HashMap::new(),
+            reference_origins: Arc::default(),
             pending_anchors: Vec::new(),
             pending_gap: mant_protocol::geometry::GapPlan::default(),
         }
@@ -137,6 +139,7 @@ impl DocumentBuilder<'_> {
                 },
                 table_row: None,
                 links,
+                reference_marks: Vec::new(),
             });
         }
         for _ in 0..TLDR_VERTICAL_PADDING_ROWS {
@@ -344,6 +347,17 @@ impl DocumentBuilder<'_> {
         self.inline_lines_with_surface(nodes, indent, base_style, LineSurface::Normal);
     }
 
+    fn styled_inlines(&self, nodes: &[Inline], style: Style) -> Vec<super::StyledInlineLine> {
+        styled_reference_inline_lines(
+            nodes,
+            style,
+            self.address.as_ref(),
+            self.entry_styles.ranges(nodes),
+            false,
+            &self.reference_origins,
+        )
+    }
+
     pub(super) fn inline_lines_with_surface(
         &mut self,
         nodes: &[Inline],
@@ -352,18 +366,25 @@ impl DocumentBuilder<'_> {
         surface: LineSurface,
     ) {
         let targets = inline_anchor_rows(nodes);
-        let lines = styled_display_inline_lines(
+        let lines = styled_reference_inline_lines(
             nodes,
             base_style,
             self.address.as_ref(),
             self.entry_styles.ranges(nodes),
             surface == LineSurface::Code,
+            &self.reference_origins,
         );
         if lines.len() == 1
             && lines[0].spans.is_empty()
             && !(surface == LineSurface::Code && mant_protocol::geometry::has_literal_rows(nodes))
         {
             self.defer_anchors(targets.into_iter().map(|(id, _)| id));
+            self.defer_anchors(
+                lines[0]
+                    .reference_marks
+                    .iter()
+                    .map(|mark| mark.id.to_string()),
+            );
             return;
         }
         for (id, row) in targets {
@@ -383,6 +404,7 @@ impl DocumentBuilder<'_> {
                 },
                 table_row: None,
                 links: line.links,
+                reference_marks: line.reference_marks,
             })
             .collect::<Vec<_>>();
 
