@@ -14,6 +14,7 @@ mod installed;
 mod limits;
 mod metadata;
 mod registry;
+mod reports;
 #[cfg(feature = "update")]
 mod update;
 
@@ -29,11 +30,12 @@ pub use registry::{
     BUILTIN_CONTENT_PRIORITY, RegisteredDocument, RegisteredDocumentIndex, RegisteredDocumentMatch,
     RegisteredDocumentOrigin, find_registered_document_candidates, list_registered_documents,
 };
-#[cfg(feature = "update")]
-pub use update::{
+pub use reports::{
     DocumentSourcesPrune, DocumentSourcesPruneSchema, DocumentSourcesUpdate,
     DocumentSourcesUpdateSchema, OrphanedSource, SourcePruneAction, SourcePruneResult,
-    SourceUpdateAction, SourceUpdateResult, prune_document_sources, update_document_sources,
+    SourceUpdateAction, SourceUpdateResult,
 };
+#[cfg(feature = "update")]
+pub use update::{prune_document_sources, update_document_sources};
 
 pub(crate) use config::{SOURCE_METADATA_FILE, is_source_name};

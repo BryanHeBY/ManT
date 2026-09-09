@@ -16,9 +16,15 @@ mutation, process execution, and network policy.
 | Resolve platform data paths and parse `sources.toml` | Yes | Yes |
 | Build a bounded snapshot of registered Markdown | Yes | Yes |
 | Resolve exact and component-suffix document selectors | Yes | Yes |
+| Construct and serialize update/prune reports | Yes | Yes |
 | Shallow-clone configured Git branches | No | Yes |
 | Download and extract bounded HTTP archives | No | Yes |
 | Transactionally activate or prune installed sources | No | Yes |
+
+Update/prune report types and their schema discriminators are pure data and
+remain available in read-only builds. Constructing or serializing a report does
+not grant filesystem or network capabilities; only the execution functions
+`update_document_sources` and `prune_document_sources` require `update`.
 
 ```text
 personal documents/ ────────────────┐

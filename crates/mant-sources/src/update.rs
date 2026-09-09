@@ -6,8 +6,6 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use serde::Serialize;
-
 mod archive;
 mod git;
 mod prune;
@@ -27,85 +25,22 @@ use crate::limits::{
     MAX_SOURCE_ENTRIES,
 };
 use crate::{
+    DocumentSourcesUpdate, DocumentSourcesUpdateSchema, SourceUpdateAction, SourceUpdateResult,
+};
+use crate::{
     document_path::{markdown_extension_priority, normalize_relative_document_path},
     metadata::{SourceMetadata, source_fingerprint},
 };
 use prune::discover_orphaned_sources;
+pub use prune::prune_document_sources;
 #[cfg(test)]
 use prune::prune_document_sources_from;
-pub use prune::{
-    DocumentSourcesPrune, DocumentSourcesPruneSchema, OrphanedSource, SourcePruneAction,
-    SourcePruneResult, prune_document_sources,
-};
 use workspace::UpdateWorkspace;
 
 use super::config::{
     ConfiguredSource, DocumentPaths, SOURCE_METADATA_FILE, SourceConfigError, SourceLocation,
     load_source_config,
 };
-
-/// Outcome for one configured repository.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "kebab-case")]
-pub enum SourceUpdateAction {
-    /// New content was installed atomically.
-    Updated,
-    /// The installed revision and configuration fingerprint were current.
-    Unchanged,
-    /// This source failed without aborting updates for other sources.
-    Failed,
-}
-
-/// Stable per-source update result printed by the native CLI.
-#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SourceUpdateResult {
-    /// Configured source name.
-    pub source: String,
-    /// Outcome of this source update.
-    pub action: SourceUpdateAction,
-    /// Installed or observed source revision.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub revision: Option<String>,
-    /// Number of installed Markdown documents.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub documents: Option<u32>,
-    /// Human-readable failure detail for [`SourceUpdateAction::Failed`].
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub error: Option<String>,
-}
-
-/// Exact schema marker for a document-source update report.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
-pub enum DocumentSourcesUpdateSchema {
-    /// Version 2 of the native source-update report.
-    #[serde(rename = "mant.sources-update/v2")]
-    V2,
-}
-
-/// Complete result of one `--update-docs` run.
-#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct DocumentSourcesUpdate {
-    /// Exact report schema discriminator.
-    pub schema: DocumentSourcesUpdateSchema,
-    /// Platform-native path of the configuration used by this run.
-    pub config: String,
-    /// Per-source results in source-name order, independently of lookup priority.
-    pub sources: Vec<SourceUpdateResult>,
-    /// Updater-owned directories no longer present in configuration.
-    pub orphaned: Vec<OrphanedSource>,
-}
-
-impl DocumentSourcesUpdate {
-    /// Return whether at least one configured source failed.
-    #[must_use]
-    pub fn has_failures(&self) -> bool {
-        self.sources
-            .iter()
-            .any(|source| source.action == SourceUpdateAction::Failed)
-    }
-}
 
 /// Update every configured source without exposing this operation to MCP.
 ///
@@ -293,12 +228,12 @@ mod tests {
     #[cfg(any(unix, windows))]
     use super::sync_file;
     use super::{
-        ConfiguredSource, DocumentPaths, SourceLocation, SourceMetadata, SourcePruneAction,
-        SourceUpdateAction, SourceUpdateContext, UpdateLock, discover_orphaned_sources,
-        install_selected_documents, markdown_logical_path, prune_document_sources_from,
-        recover_directory, source_fingerprint, try_update_one_source,
+        ConfiguredSource, DocumentPaths, SourceLocation, SourceMetadata, SourceUpdateAction,
+        SourceUpdateContext, UpdateLock, discover_orphaned_sources, install_selected_documents,
+        markdown_logical_path, prune_document_sources_from, recover_directory, source_fingerprint,
+        try_update_one_source,
     };
-    use crate::config::load_source_config_from;
+    use crate::{SourcePruneAction, config::load_source_config_from};
 
     fn temp(label: &str) -> std::path::PathBuf {
         std::env::temp_dir().join(format!("mant-sources-{label}-{}", std::process::id()))
