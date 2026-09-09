@@ -40,7 +40,7 @@ pub(super) fn supported(document: &Document) -> bool {
     }
     let mut check = Check(
         mant_ir::validate_document(document).is_empty()
-            && crate::projection::semantics_complete(&document.diagnostics),
+            && mant_ir::semantics_complete(&document.diagnostics),
     );
     check.visit_document(document);
     check.0

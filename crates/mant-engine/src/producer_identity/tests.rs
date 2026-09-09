@@ -81,6 +81,7 @@ fn duplicate_identity_diagnostics_preserve_source_order_paths_and_first_span() {
     assert_eq!(diagnostics.len(), 1);
     let diagnostic = &diagnostics[0];
     assert_eq!(diagnostic.level, DiagnosticLevel::Warning);
+    assert_eq!(diagnostic.impact, mant_ir::DiagnosticImpact::None);
     assert_eq!(
         diagnostic.code.as_deref(),
         Some("markdown.outline.duplicate-id")

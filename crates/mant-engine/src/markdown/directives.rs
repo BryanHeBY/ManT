@@ -322,6 +322,7 @@ pub(super) fn semantic_diagnostic(
     message: String,
 ) {
     diagnostics.push(Diagnostic {
+        impact: mant_ir::DiagnosticImpact::SemanticCoverage,
         level: DiagnosticLevel::Warning,
         code: Some("markdown.semantic-entry-list".to_owned()),
         message,
@@ -335,6 +336,7 @@ pub(super) fn domain_diagnostic(
     message: String,
 ) {
     diagnostics.push(Diagnostic {
+        impact: mant_ir::DiagnosticImpact::SemanticCoverage,
         level: DiagnosticLevel::Warning,
         code: Some("markdown.semantic-value-domain".to_owned()),
         message,

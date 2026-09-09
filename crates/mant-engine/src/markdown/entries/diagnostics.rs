@@ -1,4 +1,4 @@
-//! Typed rejection reasons shared by entry recognition and completeness.
+//! Typed source-specific rejection reasons with explicit coverage impact.
 use mant_ir::{Diagnostic, DiagnosticLevel, SourceSpan};
 #[derive(Debug, Clone, Copy)]
 pub(super) enum EntryRejectionReason {
@@ -14,18 +14,6 @@ pub(super) enum EntryRejectionReason {
 }
 
 impl EntryRejectionReason {
-    const ALL: [Self; 9] = [
-        Self::MissingLeadingParagraph,
-        Self::MissingLeadingCode,
-        Self::UnsupportedOptionPrefix,
-        Self::InvalidOptionName,
-        Self::InvalidEntryName,
-        Self::InvalidPlaceholder,
-        Self::InvalidAliasSeparator,
-        Self::MissingDescription,
-        Self::UnsupportedInline,
-    ];
-
     const fn code(self) -> &'static str {
         match self {
             Self::MissingLeadingParagraph => "markdown.semantic-entry.missing-leading-paragraph",
@@ -59,15 +47,6 @@ impl EntryRejectionReason {
     }
 }
 
-pub(crate) fn is_semantic_entry_rejection_code(code: &str) -> bool {
-    code == "markdown.semantic-entry-list"
-        || code == "markdown.semantic-entry-metadata"
-        || code == "markdown.semantic-value-domain"
-        || EntryRejectionReason::ALL
-            .iter()
-            .any(|reason| reason.code() == code)
-}
-
 #[derive(Debug, Clone)]
 pub(super) struct EntryRejection {
     reason: EntryRejectionReason,
@@ -94,6 +73,7 @@ impl EntryRejection {
             |term| format!("semantic-entry term '{term}'"),
         );
         diagnostics.push(Diagnostic {
+            impact: mant_ir::DiagnosticImpact::SemanticCoverage,
             level: DiagnosticLevel::Warning,
             code: Some(self.reason.code().to_owned()),
             message: format!(

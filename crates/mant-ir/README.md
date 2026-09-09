@@ -178,6 +178,14 @@ Entries owned by a heading are available through `SemanticIndex::section`.
 Nested entries remain under their parent `SemanticEntry`; callers should not
 flatten that hierarchy when ownership affects interpretation.
 
+Every `Diagnostic` carries a required `DiagnosticImpact`, independently of
+severity and optional producer-defined codes. Rejected semantic declarations
+or incomplete facts use `SemanticCoverage`; ordinary findings use `None`.
+`semantics_complete` reads these effects directly, so custom producers need no
+shared code naming convention. Preserve findings returned by IR validation.
+Missing or unknown wire impacts are rejected rather than defaulting to complete.
+This is validation coverage, not a guarantee of exhaustive discovery or fidelity.
+
 ### Construct either owner without changing content
 
 This complete example starts with an ordinary item, adds facts to an identical

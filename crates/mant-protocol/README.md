@@ -167,7 +167,10 @@ and necessary contexts precede optional details/windows and weaker evidence
 in the shared budget. Clipping is not omission; an omitted window sets
 `previewsOmitted` and content truncation, never replaces atomic `content`. Normal multiple results and no-evidence are not failures;
 check `outcome`, source coverage, truncation and diagnostics separately.
-`semanticsComplete` is validation coverage, not exhaustive recall.
+`semanticsComplete` is validation coverage, not exhaustive recall. It is
+derived from IR diagnostic `impact` (`none` or `semantic-coverage`), independently
+of severity or producer-specific code names. Every serialized diagnostic
+requires this field; missing or unknown impacts are rejected.
 
 An independently declared empty definition is a real direct record, not a
 missing-body result: it must not borrow the following owner's description.

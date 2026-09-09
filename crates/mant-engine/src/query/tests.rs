@@ -185,6 +185,7 @@ fn document(format: SourceFormat, unsupported: bool, readable: bool) -> Document
         fragment_aliases: Vec::new(),
         diagnostics: unsupported
             .then_some(Diagnostic {
+                impact: mant_ir::DiagnosticImpact::None,
                 level: DiagnosticLevel::Unsupported,
                 code: None,
                 message: "unsupported request".to_owned(),

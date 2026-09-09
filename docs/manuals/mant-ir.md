@@ -367,7 +367,9 @@ These addresses are valid within the actual loaded snapshot and rebuild after IR
 
 ## Diagnostics
 
-Diagnostics have `style`, `warning`, `error`, or `unsupported` severity, an optional stable code, a message, and an optional source span. They describe recoverable source findings; fatal I/O, decompression, parsing, request, or transport failures remain ordinary errors outside the document.
+Diagnostics have `style`, `warning`, `error`, or `unsupported` severity, a required `impact`, an optional stable code, a message, and an optional source span. They describe recoverable source findings; fatal I/O, decompression, parsing, request, or transport failures remain ordinary errors outside the document.
+
+`DiagnosticImpact::SemanticCoverage` (`semantic-coverage`) records rejected or incomplete semantic declarations, facts or extraction coverage. `None` (`none`) means this finding does not invalidate that coverage. Producers set the effect explicitly; consumers use `semantics_complete` without matching source-specific codes or guessing from severity. Shared IR validation supplies the same effect for identity, binding and relationship failures. Custom producers must retain these findings after validation. An absent or unknown `impact` is rejected during deserialization, not silently treated as complete. This signal does not claim exhaustive discovery, rendering fidelity or complete behavioral knowledge.
 
 `Block::Unsupported` and an `unsupported` diagnostic are used when ManT can safely keep visible source but cannot represent its semantics. Consumers should display the retained content and may surface the diagnostic separately.
 

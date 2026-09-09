@@ -120,13 +120,9 @@ pub(super) fn validate_with_index(
     diagnostics
 }
 
-/// Return whether a shared IR invariant diagnostic makes semantic projection incomplete.
-///
-/// Producers may add source-specific diagnostics, but consumers should use
-/// this classification for source-neutral identity and relationship failures
-/// instead of maintaining their own subsets of `ir.*` codes.
-#[must_use]
-pub fn is_semantic_completeness_diagnostic(code: &str) -> bool {
+// Internal classification of this validator's own findings. Consumers read
+// Diagnostic::impact, never these codes or another producer's private list.
+fn is_semantic_completeness_diagnostic(code: &str) -> bool {
     matches!(
         code,
         "ir.empty-identity"
@@ -171,6 +167,7 @@ pub fn is_normalized_node_id(id: &str) -> bool {
 
 fn invariant(code: &str, message: String) -> Diagnostic {
     Diagnostic {
+        impact: invariant_impact(code),
         level: DiagnosticLevel::Warning,
         code: Some(code.to_owned()),
         message,
@@ -180,10 +177,19 @@ fn invariant(code: &str, message: String) -> Diagnostic {
 
 pub(super) fn invariant_at(code: &str, message: String, source: SourceSpan) -> Diagnostic {
     Diagnostic {
+        impact: invariant_impact(code),
         level: DiagnosticLevel::Warning,
         code: Some(code.to_owned()),
         message,
         source: Some(source),
+    }
+}
+
+fn invariant_impact(code: &str) -> crate::DiagnosticImpact {
+    if is_semantic_completeness_diagnostic(code) {
+        crate::DiagnosticImpact::SemanticCoverage
+    } else {
+        crate::DiagnosticImpact::None
     }
 }
 
@@ -709,6 +715,7 @@ mod tests {
         };
         let mut document = document(Vec::new(), Vec::new());
         document.diagnostics.push(Diagnostic {
+            impact: crate::DiagnosticImpact::None,
             level: DiagnosticLevel::Warning,
             code: Some("producer.finding".to_owned()),
             message: "producer finding".to_owned(),

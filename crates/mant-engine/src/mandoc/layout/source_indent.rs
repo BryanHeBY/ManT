@@ -125,6 +125,7 @@ impl crate::mandoc::LoweringContext<'_> {
             return;
         }
         diagnostics.push(mant_ir::Diagnostic {
+            impact: mant_ir::DiagnosticImpact::None,
             level: mant_ir::DiagnosticLevel::Warning,
             code: Some("manual.indentation-limit".into()),
             message: "unsupported or excessive indentation was bounded; invalid offsets use the default and cumulative indentation is limited to 4096 columns".into(),

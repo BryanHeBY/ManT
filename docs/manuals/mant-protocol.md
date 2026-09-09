@@ -828,6 +828,10 @@ paths never replace the original `source.path`.
 Diagnostic levels are `style`, `warning`, `error`, and `unsupported`.
 A diagnostic can include a stable code and an original `SourceSpan`.
 Recoverable diagnostics do not imply that the returned document is unusable.
+Every diagnostic requires `impact`: `none` or `semantic-coverage`. The latter
+marks rejected or incomplete semantic coverage independently of severity and
+producer-specific codes. Missing or unknown impacts are rejected, including
+when a third-party producer supplies the document.
 
 ### Sections and Source Locations
 
@@ -1062,7 +1066,8 @@ hierarchy. Empty summaries are omitted. A missing `semanticsComplete` field mean
 `true`; the exceptional `false` value distinguishes a genuinely empty index
 from one made incomplete by rejected source declarations.
 
-This is a diagnostic-derived validation signal, not proof that every
+This signal is derived from explicit diagnostic `impact`, not a list of parser
+codes. It is a validation signal, not proof that every
 documented name was discovered, every relationship is known or every behavior
 was modeled correctly. It is distinct from result limits and source coverage;
 an omitted or true value does not establish complete semantic recall.

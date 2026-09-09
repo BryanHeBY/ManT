@@ -24,6 +24,13 @@ that crate was not published for that change.
 
 ### Ongoing v0.11 development
 
+- Unpublished v0.11 diagnostics now require explicit `impact` (`none` or
+  `semantic-coverage`). Producers and IR validation declare coverage failures;
+  queries and semantic Markdown export consume the same source-neutral signal
+  instead of recognizing private parser codes. Custom producers must populate
+  the field; missing or unknown impacts are rejected. This deliberately changes
+  only the unreleased v0.11 schema and does not imply exhaustive semantic recall.
+
 - Terminal setup now releases already registered signal handlers if a later
   handler registration fails. Normal teardown and explicit signal termination
   share the same single-owner cleanup path without changing inherited masks.

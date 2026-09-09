@@ -105,6 +105,7 @@ fn report_unclassified_definition(
         return;
     }
     output.push(mant_ir::Diagnostic {
+        impact: mant_ir::DiagnosticImpact::SemanticCoverage,
         level: mant_ir::DiagnosticLevel::Warning,
         code: Some("manual.semantic-entry.unclassified-definition".to_owned()),
         message: format!(

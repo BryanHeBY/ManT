@@ -18,7 +18,6 @@ mod tests;
 
 pub use container::TldrDirectiveError;
 pub(crate) use entries::export_attached_policy;
-pub(crate) use entries::is_semantic_entry_rejection_code;
 pub(crate) use metadata::export_entry_metadata;
 
 use mant_ir::DOCUMENT_ROOT_ID;
@@ -158,6 +157,7 @@ fn sanitize_source(source_text: &str, diagnostics: &mut Vec<Diagnostic>) -> Opti
 
     if bom {
         diagnostics.push(Diagnostic {
+            impact: mant_ir::DiagnosticImpact::None,
             level: DiagnosticLevel::Warning,
             code: Some("markdown.byte-order-mark".to_owned()),
             message: "masked a leading byte-order mark".to_owned(),
@@ -166,6 +166,7 @@ fn sanitize_source(source_text: &str, diagnostics: &mut Vec<Diagnostic>) -> Opti
     }
     if controls > 0 {
         diagnostics.push(Diagnostic {
+            impact: mant_ir::DiagnosticImpact::None,
             level: DiagnosticLevel::Warning,
             code: Some("markdown.control-characters".to_owned()),
             message: format!("masked {controls} terminal-unsafe control character(s)"),
@@ -317,6 +318,7 @@ fn lower_document_structure(
             let heading = inline_text(&children);
             if heading.is_empty() {
                 diagnostics.push(Diagnostic {
+                    impact: mant_ir::DiagnosticImpact::None,
                     level: DiagnosticLevel::Warning,
                     code: Some("markdown.empty-heading".to_owned()),
                     message: "preserved a Markdown heading without visible text".to_owned(),
@@ -531,7 +533,8 @@ impl SectionIds {
             .as_deref()
             .zip(normalized_explicit.as_deref())
             .filter(|(authored, normalized)| {
-                *authored == *normalized && !crate::producer_identity::is_reserved_selector(authored)
+                *authored == *normalized
+                    && !crate::producer_identity::is_reserved_selector(authored)
             })
             .map_or_else(|| slug(title), |(_, normalized)| normalized.to_owned());
         let base = if base.is_empty() {

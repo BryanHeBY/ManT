@@ -53,6 +53,7 @@ pub(crate) fn outline_identity_diagnostics(
                 .join(", ");
             Some(Diagnostic {
                 level: DiagnosticLevel::Warning,
+                impact: mant_ir::DiagnosticImpact::None,
                 code: Some(format!("{source_family}.outline.duplicate-id")),
                 message: format!(
                     "outline ID '{id}' belongs to multiple nodes: {candidates}; select by path"

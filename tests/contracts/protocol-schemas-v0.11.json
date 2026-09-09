@@ -1195,6 +1195,10 @@
               "null"
             ]
           },
+          "impact": {
+            "description": "Explicit effect on semantic extraction, independent of severity or code.\nRequired on the wire: missing producer coverage must never mean complete.",
+            "$ref": "#/$defs/DiagnosticImpact"
+          },
           "level": {
             "description": "Severity of the finding.",
             "$ref": "#/$defs/DiagnosticLevel"
@@ -1217,7 +1221,23 @@
         },
         "required": [
           "level",
+          "impact",
           "message"
+        ]
+      },
+      "DiagnosticImpact": {
+        "description": "Producer-declared effect of a finding on semantic extraction completeness.\nThis is not a measure of rendering fidelity or proof of exhaustive recall.",
+        "oneOf": [
+          {
+            "description": "This finding does not invalidate semantic extraction coverage.",
+            "type": "string",
+            "const": "none"
+          },
+          {
+            "description": "Semantic declarations, facts or coverage were rejected or incomplete.",
+            "type": "string",
+            "const": "semantic-coverage"
+          }
         ]
       },
       "DiagnosticLevel": {
@@ -3804,6 +3824,10 @@
               "null"
             ]
           },
+          "impact": {
+            "description": "Explicit effect on semantic extraction, independent of severity or code.\nRequired on the wire: missing producer coverage must never mean complete.",
+            "$ref": "#/$defs/DiagnosticImpact"
+          },
           "level": {
             "description": "Severity of the finding.",
             "$ref": "#/$defs/DiagnosticLevel"
@@ -3826,7 +3850,23 @@
         },
         "required": [
           "level",
+          "impact",
           "message"
+        ]
+      },
+      "DiagnosticImpact": {
+        "description": "Producer-declared effect of a finding on semantic extraction completeness.\nThis is not a measure of rendering fidelity or proof of exhaustive recall.",
+        "oneOf": [
+          {
+            "description": "This finding does not invalidate semantic extraction coverage.",
+            "type": "string",
+            "const": "none"
+          },
+          {
+            "description": "Semantic declarations, facts or coverage were rejected or incomplete.",
+            "type": "string",
+            "const": "semantic-coverage"
+          }
         ]
       },
       "DiagnosticLevel": {
@@ -6831,6 +6871,10 @@
               "null"
             ]
           },
+          "impact": {
+            "description": "Explicit effect on semantic extraction, independent of severity or code.\nRequired on the wire: missing producer coverage must never mean complete.",
+            "$ref": "#/$defs/DiagnosticImpact"
+          },
           "level": {
             "description": "Severity of the finding.",
             "$ref": "#/$defs/DiagnosticLevel"
@@ -6853,7 +6897,23 @@
         },
         "required": [
           "level",
+          "impact",
           "message"
+        ]
+      },
+      "DiagnosticImpact": {
+        "description": "Producer-declared effect of a finding on semantic extraction completeness.\nThis is not a measure of rendering fidelity or proof of exhaustive recall.",
+        "oneOf": [
+          {
+            "description": "This finding does not invalidate semantic extraction coverage.",
+            "type": "string",
+            "const": "none"
+          },
+          {
+            "description": "Semantic declarations, facts or coverage were rejected or incomplete.",
+            "type": "string",
+            "const": "semantic-coverage"
+          }
         ]
       },
       "DiagnosticLevel": {
@@ -9270,6 +9330,10 @@
               "null"
             ]
           },
+          "impact": {
+            "description": "Explicit effect on semantic extraction, independent of severity or code.\nRequired on the wire: missing producer coverage must never mean complete.",
+            "$ref": "#/$defs/DiagnosticImpact"
+          },
           "level": {
             "description": "Severity of the finding.",
             "$ref": "#/$defs/DiagnosticLevel"
@@ -9292,7 +9356,23 @@
         },
         "required": [
           "level",
+          "impact",
           "message"
+        ]
+      },
+      "DiagnosticImpact": {
+        "description": "Producer-declared effect of a finding on semantic extraction completeness.\nThis is not a measure of rendering fidelity or proof of exhaustive recall.",
+        "oneOf": [
+          {
+            "description": "This finding does not invalidate semantic extraction coverage.",
+            "type": "string",
+            "const": "none"
+          },
+          {
+            "description": "Semantic declarations, facts or coverage were rejected or incomplete.",
+            "type": "string",
+            "const": "semantic-coverage"
+          }
         ]
       },
       "DiagnosticLevel": {
@@ -12286,6 +12366,10 @@
               "null"
             ]
           },
+          "impact": {
+            "description": "Explicit effect on semantic extraction, independent of severity or code.\nRequired on the wire: missing producer coverage must never mean complete.",
+            "$ref": "#/$defs/DiagnosticImpact"
+          },
           "level": {
             "description": "Severity of the finding.",
             "$ref": "#/$defs/DiagnosticLevel"
@@ -12308,7 +12392,23 @@
         },
         "required": [
           "level",
+          "impact",
           "message"
+        ]
+      },
+      "DiagnosticImpact": {
+        "description": "Producer-declared effect of a finding on semantic extraction completeness.\nThis is not a measure of rendering fidelity or proof of exhaustive recall.",
+        "oneOf": [
+          {
+            "description": "This finding does not invalidate semantic extraction coverage.",
+            "type": "string",
+            "const": "none"
+          },
+          {
+            "description": "Semantic declarations, facts or coverage were rejected or incomplete.",
+            "type": "string",
+            "const": "semantic-coverage"
+          }
         ]
       },
       "DiagnosticLevel": {

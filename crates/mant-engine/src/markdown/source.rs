@@ -159,6 +159,7 @@ impl<'a> MarkdownSource<'a> {
         diagnostics: &mut Vec<Diagnostic>,
     ) {
         diagnostics.push(Diagnostic {
+            impact: mant_ir::DiagnosticImpact::None,
             level: DiagnosticLevel::Unsupported,
             code: Some("markdown.unsupported".to_owned()),
             message: format!("preserved unsupported Markdown {name} as source text"),

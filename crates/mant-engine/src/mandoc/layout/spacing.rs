@@ -29,6 +29,7 @@ impl crate::mandoc::LoweringContext<'_> {
                 .any(|d| d.code.as_deref() == Some("manual.vertical-spacing-limit"))
             {
                 diagnostics.push(mant_ir::Diagnostic {
+                        impact: mant_ir::DiagnosticImpact::None,
                         level: mant_ir::DiagnosticLevel::Warning,
                         code: Some("manual.vertical-spacing-limit".into()),
                         message: "vertical spacing exceeds the 4096-row boundary limit; presentation is bounded".into(),

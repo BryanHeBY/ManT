@@ -56,6 +56,7 @@ impl EntryRelationIssue {
             ),
         };
         Diagnostic {
+            impact: crate::DiagnosticImpact::SemanticCoverage,
             level: DiagnosticLevel::Warning,
             code: Some(code.into()),
             message: format!("entry '{}': {message}", self.owner),

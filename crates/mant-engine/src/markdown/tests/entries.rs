@@ -83,9 +83,7 @@ fn shared_ir_validation_rejects_a_producer_choices_claim_without_values() {
             .iter()
             .any(|finding| finding.code.as_deref() == Some("ir.invalid-entry-choices"))
     );
-    assert!(mant_ir::is_semantic_completeness_diagnostic(
-        "ir.invalid-entry-choices"
-    ));
+    assert!(!mant_ir::semantics_complete(&findings));
 }
 
 #[test]

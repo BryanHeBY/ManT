@@ -11,6 +11,7 @@ pub(super) fn lower_diagnostics(input: &[MandocDiagnostic]) -> Vec<Diagnostic> {
     input
         .iter()
         .map(|diagnostic| Diagnostic {
+            impact: mant_ir::DiagnosticImpact::None,
             level: match diagnostic.level {
                 MandocDiagnosticLevel::Unsupported => DiagnosticLevel::Unsupported,
                 MandocDiagnosticLevel::Error => DiagnosticLevel::Error,
@@ -44,6 +45,7 @@ impl LoweringContext<'_> {
     pub(super) fn warn_unhandled_structural_parts(&self, node: &Node) {
         let macro_name = node.macro_name.as_deref().unwrap_or("unknown");
         self.diagnostics.borrow_mut().push(Diagnostic {
+            impact: mant_ir::DiagnosticImpact::None,
             level: DiagnosticLevel::Warning,
             code: Some("manual.unhandled-structural-parts".to_owned()),
             message: format!(
@@ -55,6 +57,7 @@ impl LoweringContext<'_> {
 
     pub(super) fn warn_unhandled_table_text_block(&self, node: &Node) {
         self.diagnostics.borrow_mut().push(Diagnostic {
+            impact: mant_ir::DiagnosticImpact::None,
             level: DiagnosticLevel::Warning,
             code: Some("manual.unhandled-table-text-block".to_owned()),
             message: "tbl text block contains semantic roff that could not be retained".to_owned(),
@@ -64,6 +67,7 @@ impl LoweringContext<'_> {
 
     pub(super) fn warn_unhandled_table_text_block_line(&self, line: u32) {
         self.diagnostics.borrow_mut().push(Diagnostic {
+            impact: mant_ir::DiagnosticImpact::None,
             level: DiagnosticLevel::Warning,
             code: Some("manual.unhandled-table-text-block".to_owned()),
             message: "tbl inline semantics could not be reconstructed completely; complete native cell text or source spelling was retained".to_owned(),
@@ -86,6 +90,7 @@ impl LoweringContext<'_> {
             return;
         }
         diagnostics.push(Diagnostic {
+            impact: mant_ir::DiagnosticImpact::None,
             level: DiagnosticLevel::Unsupported,
             code: Some("manual.unexpanded-table-cell".to_owned()),
             message: "one or more tbl cells contain formatter strings that could not be expanded; their source spellings were preserved".to_owned(),
@@ -108,6 +113,7 @@ impl LoweringContext<'_> {
             return;
         }
         diagnostics.push(Diagnostic {
+            impact: mant_ir::DiagnosticImpact::None,
             level: DiagnosticLevel::Unsupported,
             code: Some("manual.inline-equation-budget".to_owned()),
             message: format!(

@@ -16,6 +16,30 @@ fn document(item: &Value) -> Value {
 }
 
 #[test]
+fn nested_diagnostic_impact_is_required_at_document_and_query_boundaries() {
+    for impact in [
+        None,
+        Some("none"),
+        Some("semantic-coverage"),
+        Some("unknown"),
+    ] {
+        let mut payload = document(&definition());
+        let mut diagnostic = json!({"level":"warning","message":"custom producer finding"});
+        if let Some(impact) = impact {
+            diagnostic["impact"] = json!(impact);
+        }
+        payload["diagnostics"] = json!([diagnostic]);
+        let valid = matches!(impact, Some("none" | "semantic-coverage"));
+        assert_eq!(
+            serde_json::from_value::<DocumentResponse>(payload.clone()).is_ok(),
+            valid
+        );
+        let query = json!({"schema":"mant.query/v0.11","label":"test","document":payload});
+        assert_eq!(serde_json::from_value::<QueryBundle>(query).is_ok(), valid);
+    }
+}
+
+#[test]
 fn document_and_query_envelopes_reject_legacy_nested_facts() {
     for legacy in [
         None,

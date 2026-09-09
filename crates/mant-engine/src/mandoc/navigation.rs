@@ -327,6 +327,7 @@ fn resolve_inlines(
                     });
                 } else {
                     diagnostics.push(Diagnostic {
+                        impact: mant_ir::DiagnosticImpact::None,
                         level: DiagnosticLevel::Warning,
                         code: Some("unresolved-section-reference".to_owned()),
                         message: format!("cannot resolve section reference: {id}"),

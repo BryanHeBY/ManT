@@ -692,19 +692,17 @@ mod tests {
                 })
                 .collect();
             let doc = document(vec![list(vec![entry])]);
-            assert!(
-                crate::validate_document(&doc)
-                    .iter()
-                    .any(|d| d.code.as_deref() == Some("ir.invalid-entry-content"))
-            );
+            let diagnostics = crate::validate_document(&doc);
+            assert!(diagnostics.iter().any(|d| {
+                d.code.as_deref() == Some("ir.invalid-entry-content")
+                    && d.impact == crate::DiagnosticImpact::SemanticCoverage
+            }));
+            assert!(!crate::semantics_complete(&diagnostics));
             let index = SemanticIndex::build(&doc);
             assert_eq!(index.root().len(), 1);
             assert!(index.root()[0].forms.is_empty());
             assert!(index.root()[0].names.is_empty());
         }
-        assert!(crate::is_semantic_completeness_diagnostic(
-            "ir.invalid-entry-content"
-        ));
     }
 
     #[test]

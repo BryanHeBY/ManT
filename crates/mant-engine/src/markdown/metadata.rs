@@ -264,6 +264,7 @@ fn read(raw: &str, source: SourceSpan, diagnostics: &mut Vec<Diagnostic>) -> Opt
 
 pub(super) fn diagnostic(diagnostics: &mut Vec<Diagnostic>, source: SourceSpan, message: &str) {
     diagnostics.push(Diagnostic {
+        impact: mant_ir::DiagnosticImpact::SemanticCoverage,
         level: DiagnosticLevel::Warning,
         code: Some("markdown.semantic-entry-metadata".into()),
         message: message.into(),

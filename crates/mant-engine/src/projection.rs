@@ -7,7 +7,7 @@ pub use crate::explanation::select_explanation;
 use crate::producer_identity::outline_identity_diagnostics;
 pub use crate::selectors::{ProjectionError, SelectorCandidate};
 pub use excerpt::select_excerpt;
-use mant_ir::Diagnostic;
+pub use mant_ir::semantics_complete;
 pub use outline::{
     build_outline, build_outline_projection, build_outline_with_detail,
     build_outline_with_references,
@@ -16,19 +16,6 @@ pub use references::{
     ReferenceProjectionLimits, project_references, project_references_with_limits,
 };
 const TLDR_TITLE: &str = "TLDR QUICK REFERENCE";
-
-/// Whether diagnostics permit semantic projections to claim extraction completeness.
-/// This is validation/producer coverage, never proof of exhaustive recall.
-#[must_use]
-pub fn semantics_complete(diagnostics: &[Diagnostic]) -> bool {
-    diagnostics.iter().all(|diagnostic| {
-        !diagnostic.code.as_deref().is_some_and(|code| {
-            crate::markdown::is_semantic_entry_rejection_code(code)
-                || code == "manual.semantic-entry.unclassified-definition"
-                || mant_ir::is_semantic_completeness_diagnostic(code)
-        })
-    })
-}
 
 #[cfg(test)]
 mod tests {
@@ -563,11 +550,45 @@ mod tests {
     }
 
     #[test]
+    fn custom_producer_impact_reaches_outline_and_excerpt_without_known_codes() {
+        for impact in [
+            mant_ir::DiagnosticImpact::None,
+            mant_ir::DiagnosticImpact::SemanticCoverage,
+        ] {
+            let mut content = query();
+            content
+                .document
+                .as_mut()
+                .unwrap()
+                .diagnostics
+                .push(Diagnostic {
+                    impact,
+                    level: DiagnosticLevel::Style,
+                    code: Some("custom-producer.rejected-binding".into()),
+                    message: "producer coverage".into(),
+                    source: None,
+                });
+            let complete = impact == mant_ir::DiagnosticImpact::None;
+            assert_eq!(
+                build_outline(&content).unwrap().semantics_complete,
+                complete
+            );
+            assert_eq!(
+                select_excerpt(&content, &[ContentSelector::path("1")])
+                    .unwrap()
+                    .semantics_complete,
+                complete
+            );
+        }
+    }
+
+    #[test]
     fn semantic_completeness_distinguishes_rejections_from_author_warnings() {
         let mut markdown_query = query();
         {
             let document = markdown_query.document.as_mut().expect("document");
             document.diagnostics.push(Diagnostic {
+                impact: mant_ir::DiagnosticImpact::None,
                 level: DiagnosticLevel::Warning,
                 code: Some("markdown.unsupported-html".to_owned()),
                 message: "author warning".to_owned(),
@@ -586,6 +607,7 @@ mod tests {
             .expect("document")
             .diagnostics
             .push(Diagnostic {
+                impact: mant_ir::DiagnosticImpact::SemanticCoverage,
                 level: DiagnosticLevel::Warning,
                 code: Some("markdown.semantic-entry-list".to_owned()),
                 message: "rejected declaration".to_owned(),
@@ -603,6 +625,7 @@ mod tests {
             .expect("document")
             .diagnostics
             .push(Diagnostic {
+                impact: mant_ir::DiagnosticImpact::SemanticCoverage,
                 level: DiagnosticLevel::Warning,
                 code: Some("markdown.semantic-entry.invalid-entry-name".to_owned()),
                 message: "rejected entry".to_owned(),
@@ -621,6 +644,7 @@ mod tests {
             .expect("document")
             .diagnostics
             .push(Diagnostic {
+                impact: mant_ir::DiagnosticImpact::SemanticCoverage,
                 level: DiagnosticLevel::Warning,
                 code: Some("ir.invalid-semantic-document-reference".to_owned()),
                 message: "invalid producer relationship".to_owned(),
