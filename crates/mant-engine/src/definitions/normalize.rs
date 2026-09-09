@@ -236,10 +236,58 @@ mod tests {
         }
     }
 
-    fn text(blocks: Vec<Block>) -> String {
-        let mut query = crate::query_markdown_text("Body.\n", None).unwrap();
-        query.document.as_mut().unwrap().blocks = blocks;
-        crate::render_query_text(&query)
+    #[derive(Debug, PartialEq, Eq)]
+    enum GeometryAtom {
+        Content {
+            children: Vec<Inline>,
+            absolute_indent: i32,
+            spacing_before_lines: u16,
+        },
+        Space(u16),
+    }
+
+    // Inspect only stored IR fields. This does not run normalization, reuse its
+    // rebase helper, or model rendered rows/run-in placement. Public rendering
+    // is checked separately in definition_normalization_layout integration tests.
+    fn absolute_geometry(blocks: &[Block]) -> Vec<GeometryAtom> {
+        fn collect(blocks: &[Block], origin: i32, output: &mut Vec<GeometryAtom>) {
+            for block in blocks {
+                match block {
+                    Block::Paragraph {
+                        children, layout, ..
+                    } => output.push(GeometryAtom::Content {
+                        children: children.clone(),
+                        absolute_indent: origin + layout.indent_columns,
+                        spacing_before_lines: layout.spacing_before_lines,
+                    }),
+                    Block::VerticalSpace { lines, .. } => output.push(GeometryAtom::Space(*lines)),
+                    Block::DefinitionList { items, layout, .. } => {
+                        let term_origin = origin + layout.indent_columns;
+                        for item in items {
+                            for term in &item.terms {
+                                output.push(GeometryAtom::Content {
+                                    children: term.clone(),
+                                    absolute_indent: term_origin,
+                                    spacing_before_lines: item
+                                        .layout
+                                        .spacing_before_lines
+                                        .unwrap_or(layout.spacing_before_lines),
+                                });
+                            }
+                            collect(
+                                &item.description,
+                                term_origin + item.layout.body_indent_columns,
+                                output,
+                            );
+                        }
+                    }
+                    _ => panic!("unexpected fixture block: {block:?}"),
+                }
+            }
+        }
+        let mut result = Vec::new();
+        collect(blocks, 0, &mut result);
+        result
     }
 
     #[test]
@@ -267,15 +315,22 @@ mod tests {
                         space(2),
                         paragraph("Outside.", base),
                     ];
-                    let before = text(blocks.clone());
+                    let before = absolute_geometry(&blocks);
                     let outside = blocks[8..].to_vec();
                     normalize_definition_nesting(&mut blocks);
-                    assert_eq!(text(blocks.clone()), before, "base indent {base}");
+                    assert_eq!(absolute_geometry(&blocks), before, "base indent {base}");
                     assert_eq!(&blocks[1..], outside);
                     let Block::DefinitionList { items, .. } = &blocks[0] else {
                         unreachable!()
                     };
                     assert_eq!(items[0].description.len(), 8);
+                    assert_eq!(items[0].layout.inline_term, inline_term);
+                    assert_eq!(
+                        items[0].terms,
+                        [vec![Inline::Text {
+                            value: label.into()
+                        }]]
+                    );
                     let once = blocks.clone();
                     normalize_definition_nesting(&mut blocks);
                     assert_eq!(blocks, once);
@@ -331,9 +386,15 @@ mod tests {
         for spacing in [0, 1, 3] {
             let mut blocks = vec![paragraph("--option", 0), space(spacing)];
             blocks.push(paragraph("Description.", 4));
-            let before = text(blocks.clone());
+            let before = absolute_geometry(&blocks);
             normalize_hanging_definitions(&mut blocks, DefinitionContext::Parameters);
-            assert_eq!(text(blocks), before, "spacing={spacing}");
+            assert_eq!(absolute_geometry(&blocks), before, "spacing={spacing}");
+            let Block::DefinitionList { items, .. } = &blocks[0] else {
+                panic!("inferred definition")
+            };
+            assert!(!items[0].layout.inline_term);
+            assert_eq!(items[0].layout.spacing_before_lines, Some(0));
+            assert_eq!(items[0].description[0], space(spacing));
         }
     }
 
@@ -346,14 +407,18 @@ mod tests {
                         paragraph(head, origin),
                         paragraph("Description.", origin + offset),
                     ];
-                    let before = text(blocks.clone());
+                    let before = absolute_geometry(&blocks);
                     normalize_hanging_definitions(&mut blocks, DefinitionContext::Parameters);
                     let Block::DefinitionList { items, .. } = &blocks[0] else {
                         panic!("inferred definition")
                     };
                     assert!(!items[0].layout.inline_term);
                     assert_eq!(items[0].layout.body_indent_columns, offset);
-                    assert_eq!(text(blocks), before, "origin={origin} offset={offset}");
+                    assert_eq!(
+                        absolute_geometry(&blocks),
+                        before,
+                        "origin={origin} offset={offset}"
+                    );
                 }
             }
         }
