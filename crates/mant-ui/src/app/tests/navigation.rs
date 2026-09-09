@@ -395,7 +395,7 @@ fn history_restores_an_initial_direct_markdown_without_a_host_request() {
 
     assert!(app.take_open_request().is_none());
     assert_eq!(app.session.document.label(), "demo");
-    assert!(app.current_address.is_none());
+    assert!(app.navigation.address().cloned().is_none());
 }
 
 #[test]
@@ -431,13 +431,14 @@ fn document_tabs_keep_first_open_order_and_reuse_existing_documents() {
     open_manual(&mut app, "printf", "3");
 
     assert_eq!(
-        app.document_tabs
+        app.navigation
+            .tabs()
             .iter()
-            .map(|tab| tab.label.as_str())
+            .map(super::super::navigation_state::DocumentTab::label)
             .collect::<Vec<_>>(),
         ["git(1)", "man(1)", "printf(3)"]
     );
-    assert_eq!(app.active_document_tab, 2);
+    assert_eq!(app.navigation.active_tab(), 2);
 
     assert_eq!(app.activate_document_tab(1), UpdateOutcome::Redraw);
     let request = app.take_open_request().expect("existing tab request");
@@ -448,19 +449,21 @@ fn document_tabs_keep_first_open_order_and_reuse_existing_documents() {
             manual_section: "1".to_owned(),
         }
     );
-    assert_eq!(request.target.as_deref(), Some("details"));
+    assert_eq!(request.target.id(), Some("details"));
     assert_eq!(
-        app.active_document_tab, 2,
+        app.navigation.active_tab(),
+        2,
         "requesting a tab does not activate it before the host succeeds"
     );
     app.complete_open(&manual_bundle("man", "1"), request);
 
-    assert_eq!(app.active_document_tab, 1);
-    assert_eq!(app.document_tabs.len(), 3);
+    assert_eq!(app.navigation.active_tab(), 1);
+    assert_eq!(app.navigation.tabs().len(), 3);
     assert_eq!(
-        app.document_tabs
+        app.navigation
+            .tabs()
             .iter()
-            .map(|tab| tab.label.as_str())
+            .map(super::super::navigation_state::DocumentTab::label)
             .collect::<Vec<_>>(),
         ["git(1)", "man(1)", "printf(3)"]
     );
@@ -491,7 +494,7 @@ fn overflowing_document_tabs_keep_the_active_tab_visible_and_clickable() {
         app.geometry
             .document_tabs
             .iter()
-            .any(|tab| tab.index == app.active_document_tab),
+            .any(|tab| tab.index == app.navigation.active_tab()),
         "the newly activated tab remains inside the visible window"
     );
     assert_ne!(app.geometry.previous_document_tabs, Rect::default());
@@ -515,7 +518,7 @@ fn overflowing_document_tabs_keep_the_active_tab_visible_and_clickable() {
         .geometry
         .document_tabs
         .iter()
-        .find(|tab| tab.index == app.active_document_tab)
+        .find(|tab| tab.index == app.navigation.active_tab())
         .copied()
         .expect("active tab geometry");
     assert_eq!(
@@ -544,7 +547,7 @@ fn overflowing_document_tabs_keep_the_active_tab_visible_and_clickable() {
         .first()
         .copied()
         .expect("visible earlier tab");
-    assert!(target.index < app.active_document_tab);
+    assert!(target.index < app.navigation.active_tab());
     app.handle_mouse(MouseEvent {
         kind: MouseEventKind::Down(MouseButton::Left),
         column: target.area.x + 1,
@@ -554,7 +557,7 @@ fn overflowing_document_tabs_keep_the_active_tab_visible_and_clickable() {
     assert_eq!(
         app.take_open_request()
             .map(|request| request.address().clone()),
-        app.document_tabs[target.index].address
+        app.navigation.tabs()[target.index].address().cloned()
     );
 }
 
@@ -923,7 +926,7 @@ fn clicking_a_parsed_markdown_fragment_jumps_and_participates_in_history() {
         app.session.document.navigation()[app.selected].id,
         "details"
     );
-    assert_eq!(app.back_history.len(), 1);
+    assert_eq!(app.navigation.history_lengths().0, 1);
     app.navigate_history(true);
     assert_ne!(
         app.session.document.navigation()[app.selected].id,
@@ -944,8 +947,8 @@ fn missing_page_fragment_does_not_modify_history() {
 
     app.request_open(address, Some("missing".to_owned()));
 
-    assert!(app.back_history.is_empty());
-    assert!(app.forward_history.is_empty());
+    assert_eq!(app.navigation.history_lengths().0, 0);
+    assert_eq!(app.navigation.history_lengths().1, 0);
     assert_eq!(
         app.notice.as_deref(),
         Some("No outline node matches #missing")
@@ -988,7 +991,7 @@ fn clicking_a_relative_markdown_link_preserves_its_source_and_fragment() {
             },
         }
     );
-    assert_eq!(request.target.as_deref(), Some("usage"));
+    assert_eq!(request.target.id(), Some("usage"));
 }
 
 #[test]

@@ -126,14 +126,14 @@ fn confirmed_search_moves_across_a_pre_resolved_document_scope() {
 
     assert_eq!(app.search.scope_matches.len(), 1);
     assert_eq!(
-        app.current_address,
+        app.navigation.address().cloned(),
         Some(DocumentAddress::Markdown {
             path: "beta".to_owned(),
             origin: MarkdownOrigin::Documents,
         })
     );
     assert_eq!(app.search.matches.len(), 1);
-    assert_eq!(app.back_history.len(), 1);
+    assert_eq!(app.navigation.history_lengths().0, 1);
 }
 
 #[test]

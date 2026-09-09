@@ -27,7 +27,7 @@ fn unqualified_manual_link_preserves_manual_only_intent_for_the_host() {
     click_document_cell(&mut app, region.start_column, region.row);
     assert!(matches!(app.take_open_request().unwrap().document,
         mant_protocol::DocumentOpenTarget::Manual { name, manual_section: None } if name == "printf"));
-    assert!(app.back_history.is_empty());
+    assert_eq!(app.navigation.history_lengths().0, 0);
     assert_eq!(app.session.current_bundle.label, "demo");
 }
 
@@ -50,10 +50,10 @@ fn invalid_loaded_fragments_preserve_source_session_history_selection_and_tabs()
         let before = (
             app.selected,
             app.session.content_scroll,
-            app.back_history.len(),
-            app.forward_history.len(),
-            app.document_tabs.len(),
-            app.active_document_tab,
+            app.navigation.history_lengths().0,
+            app.navigation.history_lengths().1,
+            app.navigation.tabs().len(),
+            app.navigation.active_tab(),
         );
         let current = Arc::clone(&app.session.current_bundle);
         app.request_open(
@@ -68,10 +68,10 @@ fn invalid_loaded_fragments_preserve_source_session_history_selection_and_tabs()
             (
                 app.selected,
                 app.session.content_scroll,
-                app.back_history.len(),
-                app.forward_history.len(),
-                app.document_tabs.len(),
-                app.active_document_tab,
+                app.navigation.history_lengths().0,
+                app.navigation.history_lengths().1,
+                app.navigation.tabs().len(),
+                app.navigation.active_tab(),
             )
         );
         assert!(app.notice.as_ref().unwrap().contains(if ambiguous {
@@ -249,10 +249,7 @@ fn associated_owner_keeps_fold_action_and_explicit_chooser_retains_every_occurre
     assert!(app.take_open_request().is_none());
     app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-    assert_eq!(
-        app.take_open_request().unwrap().target.as_deref(),
-        Some("second")
-    );
+    assert_eq!(app.take_open_request().unwrap().target.id(), Some("second"));
     assert_eq!(app.overlay, Overlay::None);
     app.handle_key(KeyEvent::new(KeyCode::Char('Y'), KeyModifiers::SHIFT));
     assert!(app.take_copy_request().is_none());
@@ -325,7 +322,7 @@ fn associated_chooser_cancellation_and_unopenable_targets_leave_source_intact() 
     assert!(app.take_open_request().is_none());
     assert!(app.notice.as_ref().unwrap().contains("no registered"));
     assert!(Arc::ptr_eq(&app.session.current_bundle, &current));
-    assert!(app.back_history.is_empty());
+    assert_eq!(app.navigation.history_lengths().0, 0);
 }
 
 #[test]
@@ -420,11 +417,11 @@ fn reference_selection_reveals_but_only_enter_opens_and_copy_target_is_separate(
     );
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     let request = app.take_open_request().unwrap();
-    assert_eq!(request.target.as_deref(), Some("details"));
+    assert_eq!(request.target.id(), Some("details"));
     assert!(
         matches!(request.document, mant_protocol::DocumentOpenTarget::Address { address: DocumentAddress::Markdown { path, .. } } if path == "target")
     );
-    assert!(app.back_history.is_empty());
+    assert_eq!(app.navigation.history_lengths().0, 0);
 }
 
 #[test]
@@ -524,21 +521,103 @@ fn valid_destination_fragment_commits_once_and_back_returns_to_reference_occurre
         origin: MarkdownOrigin::Documents,
     });
     app.complete_open(&target, request);
-    assert_eq!(app.back_history.len(), 1);
-    assert_eq!(app.document_tabs.len(), 2);
+    assert_eq!(app.navigation.history_lengths().0, 1);
+    assert_eq!(app.navigation.tabs().len(), 2);
     assert_eq!(
         app.session.document.navigation()[app.selected].target_id,
         "details"
     );
     app.navigate_history(true);
     let request = app.take_open_request().unwrap();
-    assert!(request.reference);
-    assert_eq!(request.target.as_deref(), Some(id.as_str()));
+    assert!(matches!(
+        request.target,
+        super::super::LocalTarget::ReferenceOccurrence(_)
+    ));
+    assert_eq!(request.target.id(), Some(id.as_str()));
     app.complete_open(&bundle, request);
     assert_eq!(
         app.session.document.navigation()[app.selected].target_id,
         id
     );
-    assert!(app.back_history.is_empty());
-    assert_eq!(app.forward_history.len(), 1);
+    assert_eq!(app.navigation.history_lengths().0, 0);
+    assert_eq!(app.navigation.history_lengths().1, 1);
+}
+
+#[test]
+fn failed_history_and_tab_reloads_preserve_typed_targets_and_the_current_page() {
+    for reference in [false, true] {
+        let source = reference_bundle();
+        let mut app = App::new(&source);
+        app.selected = app
+            .session
+            .document
+            .navigation()
+            .iter()
+            .position(|node| {
+                if reference {
+                    node.kind == NavKind::Reference && node.title.contains("BETA")
+                } else {
+                    node.kind == NavKind::Section && node.id == "links"
+                }
+            })
+            .unwrap();
+        let expected = app.current_local_target();
+        assert_eq!(
+            matches!(&expected, super::super::LocalTarget::ReferenceOccurrence(_)),
+            reference
+        );
+        open_manual(&mut app, "destination", "1");
+        let current = Arc::clone(&app.session.current_bundle);
+        let before = (
+            app.navigation.history_lengths(),
+            app.navigation.active_tab(),
+            app.navigation.tabs().len(),
+            app.selected,
+            app.session.content_scroll,
+        );
+        let mut missing = empty_bundle();
+        missing.address.clone_from(&source.address);
+
+        app.navigate_history(true);
+        let request = app.take_open_request().unwrap();
+        assert_eq!(request.target, expected);
+        app.complete_open(&missing, request);
+        assert!(Arc::ptr_eq(&current, &app.session.current_bundle));
+        assert_eq!(
+            before,
+            (
+                app.navigation.history_lengths(),
+                app.navigation.active_tab(),
+                app.navigation.tabs().len(),
+                app.selected,
+                app.session.content_scroll
+            )
+        );
+        assert!(app.notice.is_some());
+
+        app.activate_document_tab(0);
+        let request = app.take_open_request().unwrap();
+        assert_eq!(request.target, expected);
+        app.complete_open(&missing, request);
+        assert!(Arc::ptr_eq(&current, &app.session.current_bundle));
+        assert_eq!(
+            before,
+            (
+                app.navigation.history_lengths(),
+                app.navigation.active_tab(),
+                app.navigation.tabs().len(),
+                app.selected,
+                app.session.content_scroll
+            )
+        );
+
+        // The failed back request is still retryable and commits exactly once.
+        app.navigate_history(true);
+        let request = app.take_open_request().unwrap();
+        assert_eq!(request.target, expected);
+        app.complete_open(&source, request);
+        assert_eq!(app.navigation.history_lengths(), (0, 1));
+        assert_eq!(app.navigation.active_tab(), 0);
+        assert_eq!(app.current_local_target(), expected);
+    }
 }

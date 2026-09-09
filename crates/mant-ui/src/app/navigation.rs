@@ -129,8 +129,8 @@ impl App {
             LinkTarget::Section(target) => {
                 let current = self.current_location();
                 if self.jump_to_anchor(&target) {
-                    super::push_history(&mut self.back_history, current);
-                    self.forward_history.clear();
+                    self.navigation
+                        .commit(super::HistoryDirection::New, current);
                 }
             }
             LinkTarget::Document { address, fragment } => {
@@ -145,8 +145,7 @@ impl App {
                         name,
                         manual_section,
                     },
-                    target: None,
-                    reference: false,
+                    target: super::LocalTarget::Default,
                     direction: super::HistoryDirection::New,
                 });
             }

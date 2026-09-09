@@ -4,6 +4,8 @@ mod finder;
 mod input;
 mod menu;
 mod navigation;
+mod navigation_state;
+use navigation_state::{HistoryDirection, HistoryLocation, LocalTarget, NavigationState};
 mod references;
 mod render;
 mod search;
@@ -55,30 +57,6 @@ pub enum UpdateOutcome {
     Redraw,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum HistoryDirection {
-    New,
-    Back,
-    Forward,
-}
-
-#[derive(Debug, Clone)]
-struct HistoryLocation {
-    address: Option<DocumentAddress>,
-    fallback: Option<Arc<ResolvedContent>>,
-    target: Option<String>,
-    reference: bool,
-}
-
-#[derive(Debug, Clone)]
-struct DocumentTab {
-    address: Option<DocumentAddress>,
-    fallback: Option<Arc<ResolvedContent>>,
-    label: String,
-    target: Option<String>,
-    reference: bool,
-}
-
 #[derive(Debug, Clone, Copy)]
 struct DocumentTabHit {
     area: Rect,
@@ -94,8 +72,7 @@ struct CopyToast {
 #[derive(Debug, Clone)]
 pub(crate) struct NavigationRequest {
     pub(crate) document: DocumentOpenTarget,
-    target: Option<String>,
-    reference: bool,
+    target: LocalTarget,
     direction: HistoryDirection,
 }
 
@@ -257,15 +234,7 @@ pub struct App {
     pending_open: Option<NavigationRequest>,
     pending_external: Option<crate::ExternalUri>,
     pending_copy: Option<CopyRequest>,
-    current_address: Option<DocumentAddress>,
-    fallback_bundle: Option<Arc<ResolvedContent>>,
-    back_history: Vec<HistoryLocation>,
-    forward_history: Vec<HistoryLocation>,
-    document_tabs: Vec<DocumentTab>,
-    active_document_tab: usize,
-    document_tab_scroll: usize,
-    document_tab_visibility_target: Option<usize>,
-    document_tab_view_width: u16,
+    navigation: NavigationState,
     notice: Option<String>,
     copy_toast: Option<CopyToast>,
     overlay: Overlay,
@@ -333,15 +302,10 @@ impl App {
             pending_open: None,
             pending_external: None,
             pending_copy: None,
-            current_address: bundle.address.clone(),
-            fallback_bundle: bundle.address.is_none().then_some(current_bundle),
-            back_history: Vec::new(),
-            forward_history: Vec::new(),
-            document_tabs: Vec::new(),
-            active_document_tab: 0,
-            document_tab_scroll: 0,
-            document_tab_visibility_target: Some(0),
-            document_tab_view_width: 0,
+            navigation: NavigationState::new(
+                bundle.address.clone(),
+                bundle.address.is_none().then_some(current_bundle),
+            ),
             notice: None,
             copy_toast: None,
             overlay: Overlay::None,
@@ -383,34 +347,28 @@ impl App {
     }
 
     pub(crate) fn complete_open(&mut self, bundle: &ResolvedContent, request: NavigationRequest) {
-        self.complete_loaded_navigation(
-            bundle,
-            request.target,
-            request.reference,
-            request.direction,
-        );
+        self.complete_loaded_navigation(bundle, request.target, request.direction);
     }
 
     fn complete_loaded_navigation(
         &mut self,
         bundle: &ResolvedContent,
-        target: Option<String>,
-        reference: bool,
+        target: LocalTarget,
         direction: HistoryDirection,
     ) {
-        if !reference
-            && let Some(target) = target.as_deref()
+        if let LocalTarget::Fragment(target) = &target
             && let Err(message) = validate_fragment(bundle, target)
         {
             self.report_open_error(message);
             return;
         }
         let candidate = DocumentView::new(bundle);
-        if let Some(target) = target.as_deref()
-            && ((reference && candidate.reference_target(target).is_none())
+        if let Some(id) = target.id()
+            && ((matches!(target, LocalTarget::ReferenceOccurrence(_))
+                && candidate.reference_target(id).is_none())
                 || candidate
                     .render(self.geometry.content.width.max(1))
-                    .anchor_row(target)
+                    .anchor_row(id)
                     .is_none())
         {
             self.report_open_error("The destination has no available reveal location; the current document was retained".into());
@@ -418,7 +376,7 @@ impl App {
         }
         self.commit_history(direction);
         self.replace_document_view(bundle, DocumentChangeReason::from(direction), candidate);
-        if let Some(target) = target {
+        if let LocalTarget::Fragment(target) | LocalTarget::ReferenceOccurrence(target) = target {
             self.reveal_anchor(&target);
         }
     }
@@ -435,8 +393,10 @@ impl App {
     ) {
         self.remember_current_document_tab();
         self.session = DocumentSession::new(Arc::new(bundle.clone()), view);
-        self.current_address.clone_from(&bundle.address);
-        self.fallback_bundle = bundle.address.is_none().then(|| Arc::new(bundle.clone()));
+        self.navigation.replace_current(
+            bundle.address.clone(),
+            bundle.address.is_none().then(|| Arc::new(bundle.clone())),
+        );
         self.selected = 0;
         self.expanded = self
             .session
@@ -548,25 +508,28 @@ impl App {
     }
 
     fn current_location(&self) -> HistoryLocation {
-        let target = self
+        self.navigation.location(self.current_local_target())
+    }
+
+    fn current_local_target(&self) -> LocalTarget {
+        let Some(target) = self
             .session
             .document
             .navigation()
             .get(self.selected)
-            .map(|item| item.target_id.clone());
-        let reference = target
-            .as_deref()
-            .is_some_and(|target| self.session.document.reference_target(target).is_some());
-        HistoryLocation {
-            address: self.current_address.clone(),
-            fallback: self.fallback_bundle.clone(),
-            target,
-            reference,
+            .map(|item| item.target_id.clone())
+        else {
+            return LocalTarget::Default;
+        };
+        if self.session.document.reference_target(&target).is_some() {
+            LocalTarget::ReferenceOccurrence(target)
+        } else {
+            LocalTarget::Fragment(target)
         }
     }
 
     pub(super) fn request_open(&mut self, address: DocumentAddress, target: Option<String>) {
-        if self.current_address.as_ref() == Some(&address) {
+        if self.navigation.address() == Some(&address) {
             let current = self.current_location();
             let moved = if let Some(target) = target {
                 self.jump_to_anchor(&target)
@@ -575,52 +538,38 @@ impl App {
                 true
             };
             if moved {
-                push_history(&mut self.back_history, current);
-                self.forward_history.clear();
+                self.navigation.commit(HistoryDirection::New, current);
             }
             return;
         }
         self.pending_open = Some(NavigationRequest {
             document: address.into(),
-            target,
-            reference: false,
+            target: LocalTarget::from_fragment(target),
             direction: HistoryDirection::New,
         });
     }
 
     pub(super) fn navigate_history(&mut self, back: bool) {
-        let location = if back {
-            self.back_history.last()
-        } else {
-            self.forward_history.last()
-        }
-        .cloned();
-        let Some(location) = location else {
+        let Some((location, direction)) = self.navigation.plan_history(back) else {
             return;
         };
-        let direction = if back {
-            HistoryDirection::Back
-        } else {
-            HistoryDirection::Forward
-        };
-        if location.address == self.current_address {
-            self.complete_local_history(location, direction);
-        } else if let Some(address) = location.address.clone() {
+        if location.address() == self.navigation.address() {
+            self.complete_local_history(&location, direction);
+        } else if let Some(address) = location.address().cloned() {
             self.pending_open = Some(NavigationRequest {
                 document: address.into(),
-                target: location.target,
-                reference: location.reference,
+                target: location.target().clone(),
                 direction,
             });
-        } else if let Some(bundle) = location.fallback.as_deref() {
-            let bundle = bundle.clone();
-            self.complete_local_bundle(&bundle, location.target, location.reference, direction);
+        } else if let Some(bundle) = location.fallback() {
+            let bundle = bundle.as_ref().clone();
+            self.complete_local_bundle(&bundle, location.target().clone(), direction);
         }
     }
 
-    fn complete_local_history(&mut self, location: HistoryLocation, direction: HistoryDirection) {
-        if let Some(target) = location.target.as_deref() {
-            if location.reference {
+    fn complete_local_history(&mut self, location: &HistoryLocation, direction: HistoryDirection) {
+        if let Some(target) = location.target().id() {
+            if matches!(location.target(), LocalTarget::ReferenceOccurrence(_)) {
                 if self.session.document.reference_location(target).is_none() {
                     self.report_notice(
                         "The historical reference location is no longer available".into(),
@@ -643,37 +592,23 @@ impl App {
             }
         }
         self.commit_history(direction);
-        if let Some(target) = location.target {
-            self.reveal_anchor(&target);
+        if let Some(target) = location.target().id() {
+            self.reveal_anchor(target);
         }
     }
 
     fn complete_local_bundle(
         &mut self,
         bundle: &ResolvedContent,
-        target: Option<String>,
-        reference: bool,
+        target: LocalTarget,
         direction: HistoryDirection,
     ) {
-        self.complete_loaded_navigation(bundle, target, reference, direction);
+        self.complete_loaded_navigation(bundle, target, direction);
     }
 
     fn commit_history(&mut self, direction: HistoryDirection) {
         let current = self.current_location();
-        match direction {
-            HistoryDirection::New => {
-                push_history(&mut self.back_history, current);
-                self.forward_history.clear();
-            }
-            HistoryDirection::Back => {
-                self.back_history.pop();
-                push_history(&mut self.forward_history, current);
-            }
-            HistoryDirection::Forward => {
-                self.forward_history.pop();
-                push_history(&mut self.back_history, current);
-            }
-        }
+        self.navigation.commit(direction, current);
     }
 
     #[must_use]
@@ -723,13 +658,6 @@ impl App {
         .map(|deadline| deadline.saturating_duration_since(now))
         .min()
     }
-}
-
-fn push_history(history: &mut Vec<HistoryLocation>, location: HistoryLocation) {
-    if history.len() == HISTORY_LIMIT {
-        history.remove(0);
-    }
-    history.push(location);
 }
 
 /// Validate against the candidate snapshot before changing any navigation state.

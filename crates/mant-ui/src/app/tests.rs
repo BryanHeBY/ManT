@@ -274,10 +274,10 @@ fn document_tab_stack_evicts_the_oldest_identity_at_its_bound() {
         open_manual(&mut app, &format!("tool-{index}"), "1");
     }
 
-    assert_eq!(app.document_tabs.len(), 64);
-    assert_eq!(app.document_tabs[0].label, "tool-1(1)");
-    assert_eq!(app.document_tabs[63].label, "tool-64(1)");
-    assert_eq!(app.active_document_tab, 63);
+    assert_eq!(app.navigation.tabs().len(), 64);
+    assert_eq!(app.navigation.tabs()[0].label(), "tool-1(1)");
+    assert_eq!(app.navigation.tabs()[63].label(), "tool-64(1)");
+    assert_eq!(app.navigation.active_tab(), 63);
 }
 
 #[test]
@@ -299,7 +299,7 @@ fn document_tab_width_matrix_is_terminal_safe_and_keeps_the_active_identity() {
             app.geometry
                 .document_tabs
                 .iter()
-                .any(|tab| tab.index == app.active_document_tab),
+                .any(|tab| tab.index == app.navigation.active_tab()),
             "active tab is visible at width {width}"
         );
         assert!(

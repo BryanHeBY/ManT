@@ -233,7 +233,7 @@ impl App {
         else {
             return;
         };
-        if self.current_address != search_match.address {
+        if self.navigation.address() != search_match.address.as_ref() {
             let current = self.current_location();
             let Some(bundle) = self
                 .scope_documents
@@ -242,8 +242,8 @@ impl App {
             else {
                 return;
             };
-            super::push_history(&mut self.back_history, current);
-            self.forward_history.clear();
+            self.navigation
+                .commit(super::HistoryDirection::New, current);
             self.replace_document(&bundle, super::DocumentChangeReason::SearchResult);
         }
         self.sync_current_search_matches();
@@ -253,7 +253,7 @@ impl App {
 
     pub(super) fn active_rendered_search_match(&self) -> Option<usize> {
         let active = self.search.scope_matches.get(self.search.active_match)?;
-        if active.address != self.current_address {
+        if active.address.as_ref() != self.navigation.address() {
             return None;
         }
         Some(
@@ -261,7 +261,7 @@ impl App {
                 .scope_matches
                 .iter()
                 .take(self.search.active_match)
-                .filter(|candidate| candidate.address == self.current_address)
+                .filter(|candidate| candidate.address.as_ref() == self.navigation.address())
                 .count(),
         )
     }
@@ -275,7 +275,7 @@ impl App {
             .search
             .scope_matches
             .iter()
-            .filter(|candidate| candidate.address == self.current_address)
+            .filter(|candidate| candidate.address.as_ref() == self.navigation.address())
             .map(|candidate| candidate.rendered.clone())
             .collect();
     }

@@ -51,6 +51,14 @@ catalog, search, and cross-document interactions without serializing the IR.
 Command-line parsing and document loading deliberately remain outside this
 crate.
 
+Navigation plans do not consume history or activate a tab until the candidate
+document and destination have been validated. One private navigation ledger
+owns bounded back/forward history and first-opened tabs; the application commits
+the page and its ledger together. Default positions, authored fragments and
+already-scanned reference occurrences are distinct local targets. Occurrence
+handles are not public selectors or persistent revision identities: a reloaded
+document still requires candidate-view and rendered-location validation.
+
 Entry title colors reflect source-neutral roles, not importance, confidence or
 alias equivalence. Generic terms remain primary text. The body applies type
 color only at validated name bindings; identical prose and list markers do not

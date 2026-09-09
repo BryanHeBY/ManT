@@ -3,7 +3,6 @@
 use std::sync::Arc;
 
 use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
-use mant_protocol::DocumentAddress;
 use ratatui::{
     Frame,
     layout::{Alignment, Rect},
@@ -13,8 +12,7 @@ use ratatui::{
 use unicode_width::UnicodeWidthStr;
 
 use super::{
-    App, DocumentTab, HISTORY_LIMIT, HistoryDirection, NavigationRequest, Overlay, PointerDrag,
-    UpdateOutcome, menu::MenuId,
+    App, HistoryDirection, NavigationRequest, Overlay, PointerDrag, UpdateOutcome, menu::MenuId,
 };
 use crate::theme;
 
@@ -28,68 +26,32 @@ struct VisibleDocumentTab {
 
 impl App {
     pub(super) fn sync_current_document_tab(&mut self) {
-        let existing = self.document_tabs.iter().position(|tab| {
-            document_identity_matches(tab.address.as_ref(), self.current_address.as_ref())
-        });
         let fallback = self
-            .current_address
+            .navigation
+            .address()
             .is_none()
             .then(|| Arc::clone(&self.session.current_bundle));
         let label = self.session.document.terminal_label().to_owned();
-        let index = if let Some(index) = existing {
-            let tab = &mut self.document_tabs[index];
-            tab.label = label;
-            tab.fallback = fallback;
-            index
-        } else {
-            if self.document_tabs.len() == HISTORY_LIMIT {
-                self.document_tabs.remove(0);
-                self.active_document_tab = self.active_document_tab.saturating_sub(1);
-                self.document_tab_scroll = self.document_tab_scroll.saturating_sub(1);
-            }
-            self.document_tabs.push(DocumentTab {
-                address: self.current_address.clone(),
-                fallback,
-                label,
-                target: None,
-                reference: false,
-            });
-            self.document_tabs.len() - 1
-        };
-        self.active_document_tab = index;
-        self.document_tab_visibility_target = Some(index);
+        self.navigation.sync_tab(label, fallback);
     }
 
     pub(super) fn remember_current_document_tab(&mut self) {
-        let target = self
-            .session
-            .document
-            .navigation()
-            .get(self.selected)
-            .map(|item| item.target_id.clone());
-        if let Some(tab) = self.document_tabs.get_mut(self.active_document_tab) {
-            tab.reference = target
-                .as_deref()
-                .is_some_and(|target| self.session.document.reference_target(target).is_some());
-            tab.target = target;
-        }
+        self.navigation.remember_tab(self.current_local_target());
     }
 
     pub(super) fn activate_document_tab(&mut self, index: usize) -> UpdateOutcome {
-        if index == self.active_document_tab || index >= self.document_tabs.len() {
+        let Some(location) = self.navigation.plan_tab(index) else {
             return UpdateOutcome::Unchanged;
-        }
-        let tab = self.document_tabs[index].clone();
-        if let Some(address) = tab.address {
+        };
+        if let Some(address) = location.address().cloned() {
             self.pending_open = Some(NavigationRequest {
                 document: address.into(),
-                target: tab.target,
-                reference: tab.reference,
+                target: location.target().clone(),
                 direction: HistoryDirection::New,
             });
-        } else if let Some(bundle) = tab.fallback.as_deref() {
-            let bundle = bundle.clone();
-            self.complete_local_bundle(&bundle, tab.target, tab.reference, HistoryDirection::New);
+        } else if let Some(bundle) = location.fallback() {
+            let bundle = bundle.as_ref().clone();
+            self.complete_local_bundle(&bundle, location.target().clone(), HistoryDirection::New);
         } else {
             return UpdateOutcome::Unchanged;
         }
@@ -97,16 +59,9 @@ impl App {
     }
 
     pub(super) fn scroll_document_tabs(&mut self, direction: isize) -> UpdateOutcome {
-        let maximum = self.document_tabs.len().saturating_sub(1);
-        let next = self
-            .document_tab_scroll
-            .saturating_add_signed(direction)
-            .min(maximum);
-        if next == self.document_tab_scroll {
+        if !self.navigation.scroll_tabs(direction) {
             return UpdateOutcome::Unchanged;
         }
-        self.document_tab_scroll = next;
-        self.document_tab_visibility_target = None;
         UpdateOutcome::Redraw
     }
 
@@ -143,21 +98,19 @@ impl App {
         self.clear_document_tab_geometry();
         let left = area.x.saturating_add(menu_bar_width().min(area.width));
         let available = area.right().saturating_sub(left);
-        if available == 0 || self.document_tabs.is_empty() {
+        if available == 0 || self.navigation.tabs().is_empty() {
             return;
         }
-        if self.document_tab_view_width != available {
-            self.document_tab_view_width = available;
-            self.document_tab_visibility_target = Some(self.active_document_tab);
-        }
+        let (tab_scroll, visibility_target) = self.navigation.prepare_tab_view(available);
 
         let widths = self
-            .document_tabs
+            .navigation
+            .tabs()
             .iter()
-            .map(|tab| document_tab_width(&tab.label))
+            .map(|tab| document_tab_width(tab.label()))
             .collect::<Vec<_>>();
         let total_width = widths.iter().copied().fold(0_u16, u16::saturating_add);
-        let overflowing = self.document_tabs.len() > 1 && total_width > available;
+        let overflowing = self.navigation.tabs().len() > 1 && total_width > available;
         let show_controls = overflowing && available >= 5;
         let viewport_width = available.saturating_sub(u16::from(show_controls) * 2);
         if viewport_width == 0 {
@@ -165,16 +118,15 @@ impl App {
         }
 
         let mut start = if overflowing {
-            self.document_tab_scroll
-                .min(self.document_tabs.len().saturating_sub(1))
+            tab_scroll.min(self.navigation.tabs().len().saturating_sub(1))
         } else {
             0
         };
-        if let Some(target) = self.document_tab_visibility_target.take() {
+        if let Some(target) = visibility_target {
             start = start_for_visible_target(&widths, start, target, viewport_width);
         }
         let visible = visible_document_tabs(&widths, start, viewport_width);
-        self.document_tab_scroll = start;
+        self.navigation.commit_tab_scroll(start);
         let end = visible.last().map_or(start, |tab| tab.index + 1);
         let used_width = visible
             .iter()
@@ -229,7 +181,7 @@ impl App {
         let previous = Rect::new(area.x + menu_bar_width(), area.y, 1, 1);
         let next = Rect::new(area.right().saturating_sub(1), area.y, 1, 1);
         let has_previous = start > 0;
-        let has_next = end < self.document_tabs.len();
+        let has_next = end < self.navigation.tabs().len();
         for (control, symbol, enabled) in [(previous, "‹", has_previous), (next, "›", has_next)]
         {
             frame.render_widget(
@@ -284,7 +236,7 @@ impl App {
         index: usize,
     ) {
         let area = Rect::new(tab_area.x + 1, tab_area.y, tab_area.width - 1, 1);
-        let style = if index == self.active_document_tab {
+        let style = if index == self.navigation.active_tab() {
             Style::default()
                 .fg(theme::SELECTED_TEXT)
                 .bg(theme::SELECTED)
@@ -294,7 +246,7 @@ impl App {
         };
         frame.render_widget(
             Paragraph::new(document_tab_label(
-                &self.document_tabs[index].label,
+                self.navigation.tabs()[index].label(),
                 area.width,
             ))
             .style(style),
@@ -379,15 +331,4 @@ fn start_for_visible_target(
         start -= 1;
     }
     start
-}
-
-fn document_identity_matches(
-    left: Option<&DocumentAddress>,
-    right: Option<&DocumentAddress>,
-) -> bool {
-    match (left, right) {
-        (Some(left), Some(right)) => left == right,
-        (None, None) => true,
-        (Some(_), None) | (None, Some(_)) => false,
-    }
 }
