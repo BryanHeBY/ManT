@@ -1,8 +1,10 @@
 //! CommonMark-only emphasis of exact inline matches before escaping/layout.
 //! Fenced displays remain verbatim; inserting Markdown inside them would lie.
 use super::{LocatedStyles, Span, key, pieces};
+use crate::output::markdown::MarkdownInlineProjection;
 use mant_ir::Inline;
 use mant_protocol::{ExplanationTextRoot, TextPresentation};
+use std::borrow::Cow;
 
 impl LocatedStyles<'_> {
     pub(crate) fn markdown_inline(
@@ -10,6 +12,12 @@ impl LocatedStyles<'_> {
         nodes: &[Inline],
         options: crate::MarkdownOptions,
     ) -> String {
+        crate::output::markdown::inline::render_inline(&self.project(nodes), options)
+    }
+}
+
+impl MarkdownInlineProjection for LocatedStyles<'_> {
+    fn project<'a>(&self, nodes: &'a [Inline]) -> Cow<'a, [Inline]> {
         let spans = self
             .roots
             .get(&key(ExplanationTextRoot::Inline(nodes)))
@@ -17,10 +25,9 @@ impl LocatedStyles<'_> {
         // Borrow the overwhelmingly common unmarked root unchanged. Only one
         // marked root is projected at a time, never the complete response/AST.
         if !spans.iter().any(|s| s.matched) {
-            return crate::output::markdown::inline::render_inline(nodes, options);
+            return Cow::Borrowed(nodes);
         }
-        let marked = mark(nodes, &mut 0, spans, false);
-        crate::output::markdown::inline::render_inline(&marked, options)
+        Cow::Owned(mark(nodes, &mut 0, spans, false))
     }
 }
 
@@ -73,4 +80,79 @@ fn mark(nodes: &[Inline], cursor: &mut usize, spans: &[Span], strong: bool) -> V
         }
     }
     output
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn projection_borrows_unmarked_roots_without_copying_inline_content() {
+        let nodes = [Inline::Text {
+            value: "ALPHA".into(),
+        }];
+        let styles = LocatedStyles::default();
+        let Cow::Borrowed(projected) = styles.project(&nodes) else {
+            panic!("unmarked inline roots must stay borrowed");
+        };
+        assert!(std::ptr::eq(projected.as_ptr(), nodes.as_ptr()));
+    }
+
+    #[test]
+    fn projection_marks_only_the_borrowed_root_and_preserves_source() {
+        let nodes = [Inline::Text {
+            value: "ALPHA".into(),
+        }];
+        let other = nodes.clone();
+        let mut styles = LocatedStyles::default();
+        styles.roots.insert(
+            key(ExplanationTextRoot::Inline(&nodes)),
+            vec![Span {
+                chars: 1..4,
+                kind: None,
+                matched: true,
+            }],
+        );
+        assert!(matches!(styles.project(&nodes), Cow::Owned(_)));
+        assert!(matches!(styles.project(&other), Cow::Borrowed(_)));
+        let options = crate::MarkdownOptions::default();
+        assert_eq!(styles.markdown_inline(&nodes, options), "A**LPH**A");
+        assert_eq!(styles.markdown_inline(&other, options), "ALPHA");
+        assert_eq!(
+            crate::output::markdown::inline::render_inline(&nodes, options),
+            "ALPHA"
+        );
+    }
+
+    #[test]
+    fn block_report_decoration_does_not_change_canonical_document_encoding() {
+        let blocks = [mant_ir::Block::Paragraph {
+            children: vec![Inline::Text {
+                value: "ALPHA".into(),
+            }],
+            layout: mant_ir::LayoutHint::default(),
+            source: None,
+        }];
+        let mant_ir::Block::Paragraph { children, .. } = &blocks[0] else {
+            unreachable!();
+        };
+        let mut styles = LocatedStyles::default();
+        styles.roots.insert(
+            key(ExplanationTextRoot::Inline(children)),
+            vec![Span {
+                chars: 1..4,
+                kind: None,
+                matched: true,
+            }],
+        );
+        let options = crate::MarkdownOptions::default();
+        assert_eq!(
+            crate::output::markdown::blocks::render_located_blocks(&blocks, options, Some(&styles)),
+            ["A**LPH**A"]
+        );
+        assert_eq!(
+            crate::output::markdown::blocks::render_blocks(&blocks, options),
+            ["ALPHA"]
+        );
+    }
 }

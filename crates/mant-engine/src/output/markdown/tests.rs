@@ -10,9 +10,10 @@ use mant_protocol::QueryBundle;
 use pulldown_cmark::{Event, Parser, Tag, TagEnd};
 
 use super::{
-    MarkdownNode, MarkdownOptions, render_addressable_markdown, render_excerpt_markdown,
-    render_markdown, render_markdown_with_options, render_outline_markdown,
+    MarkdownNode, MarkdownOptions, render_addressable_markdown, render_markdown,
+    render_markdown_with_options,
 };
+use crate::output::markdown_report::{render_excerpt_markdown, render_outline_markdown};
 use crate::{ResolvedContent, build_outline, select_excerpt};
 
 #[test]

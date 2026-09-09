@@ -4,14 +4,13 @@ use mant_ir::{
     Block, DefinitionItem, EntryFacts, EntryOwner, ListItem, ListKind, SourceSpan, TableRow,
 };
 
-use super::MarkdownOptions;
 use super::inline::{
     block_prefix_escape_position, code_span, escape_text, fenced_code, flatten_inline, html_anchor,
     protect_block_prefix, render_inline,
 };
 use super::mapped::MappedText;
+use super::{MarkdownInlineProjection, MarkdownOptions};
 use crate::definitions::content_entries;
-use crate::output::explanation::spans::LocatedStyles;
 
 pub(super) struct RenderedBlocks {
     pub(super) text: String,
@@ -33,7 +32,7 @@ pub(crate) fn render_blocks(blocks: &[Block], options: MarkdownOptions) -> Vec<S
 pub(crate) fn render_located_blocks(
     blocks: &[Block],
     options: MarkdownOptions,
-    locations: Option<&LocatedStyles<'_>>,
+    locations: Option<&dyn MarkdownInlineProjection>,
 ) -> Vec<String> {
     blocks
         .iter()
@@ -86,7 +85,7 @@ pub(super) fn render_blocks_with_entries(
 fn mapped_blocks(
     blocks: &[Block],
     options: MarkdownOptions,
-    locations: Option<&LocatedStyles<'_>>,
+    locations: Option<&dyn MarkdownInlineProjection>,
 ) -> MappedText {
     MappedText::join(
         blocks
@@ -99,7 +98,7 @@ fn mapped_blocks(
 fn render_block(
     block: &Block,
     options: MarkdownOptions,
-    locations: Option<&LocatedStyles<'_>>,
+    locations: Option<&dyn MarkdownInlineProjection>,
 ) -> Option<MappedText> {
     match block {
         Block::Paragraph { children, .. } => nonempty(inline(children, options, locations)),
@@ -151,7 +150,7 @@ fn render_list(
     compact: bool,
     items: &[ListItem],
     options: MarkdownOptions,
-    locations: Option<&LocatedStyles<'_>>,
+    locations: Option<&dyn MarkdownInlineProjection>,
 ) -> Option<MappedText> {
     let rendered = items
         .iter()
@@ -213,7 +212,7 @@ fn render_definition_list(
     items: &[DefinitionItem],
     compact: bool,
     options: MarkdownOptions,
-    locations: Option<&LocatedStyles<'_>>,
+    locations: Option<&dyn MarkdownInlineProjection>,
 ) -> Option<MappedText> {
     let rendered = items
         .iter()
@@ -306,10 +305,10 @@ fn nonempty(value: String) -> Option<MappedText> {
 fn inline(
     nodes: &[mant_ir::Inline],
     options: MarkdownOptions,
-    locations: Option<&LocatedStyles<'_>>,
+    locations: Option<&dyn MarkdownInlineProjection>,
 ) -> String {
     locations.map_or_else(
         || render_inline(nodes, options),
-        |map| map.markdown_inline(nodes, options),
+        |map| render_inline(&map.project(nodes), options),
     )
 }

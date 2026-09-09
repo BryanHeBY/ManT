@@ -8,6 +8,7 @@ pub use explanation::{
     render_scope_explanation_text_with,
 };
 mod markdown;
+mod markdown_report;
 mod outline;
 mod search;
 mod table;
@@ -25,9 +26,9 @@ pub(crate) use markdown::anchor_markers;
 pub(crate) use markdown::{
     MarkdownArtifact, MarkdownNode, MarkdownNodeRange, MarkdownSection, render_addressable_markdown,
 };
-pub use markdown::{
-    MarkdownOptions, render_excerpt_markdown, render_excerpt_markdown_with_options,
-    render_markdown, render_markdown_with_options, render_outline_markdown,
+pub use markdown::{MarkdownOptions, render_markdown, render_markdown_with_options};
+pub use markdown_report::{
+    render_excerpt_markdown, render_excerpt_markdown_with_options, render_outline_markdown,
 };
 pub use search::{
     SearchTextRole, render_search_markdown, render_search_text, render_search_text_with,
