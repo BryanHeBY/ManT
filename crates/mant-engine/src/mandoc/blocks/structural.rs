@@ -48,7 +48,7 @@ impl StructuralLowerer<'_, '_, '_> {
         let continues_ip_item =
             node.macro_name.as_deref() == Some("RS") && self.man_list_state.is_active();
         if !matches!(node.macro_name.as_deref(), Some("IP" | "TP")) && !continues_ip_item {
-            *self.man_list_state = ManListState::None;
+            self.man_list_state.reset();
         }
         if self.lower_transparent_container(node) {
             return;
@@ -254,7 +254,7 @@ impl StructuralLowerer<'_, '_, '_> {
                     ) {
                         return true;
                     }
-                    *self.man_list_state = ManListState::None;
+                    self.man_list_state.reset();
                     self.output.append(&mut nested);
                     return true;
                 }

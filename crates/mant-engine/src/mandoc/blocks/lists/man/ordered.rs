@@ -9,24 +9,52 @@ use crate::mandoc::{
 };
 use mant_ir::geometry::rebase_roots;
 
+/// The handle belongs to this driver's output container, never to a detached subtree.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(in crate::mandoc::blocks) struct DefinitionLocation {
-    pub(in crate::mandoc::blocks) block: usize,
-    pub(in crate::mandoc::blocks) item: usize,
+pub(in crate::mandoc::blocks) struct ManListState {
+    active: Option<ActiveOrdinal>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(in crate::mandoc::blocks) enum ManListState {
-    None,
-    Ordered {
-        block: usize,
-        marker: ManOrdinalMarker,
-    },
+struct ActiveOrdinal {
+    block: usize,
+    marker: ManOrdinalMarker,
 }
 
 impl ManListState {
+    pub(in crate::mandoc::blocks) const fn new() -> Self {
+        Self { active: None }
+    }
     pub(in crate::mandoc::blocks) const fn is_active(self) -> bool {
-        !matches!(self, Self::None)
+        self.active.is_some()
+    }
+    pub(in crate::mandoc::blocks) fn reset(&mut self) {
+        self.active = None;
+    }
+}
+
+impl ActiveOrdinal {
+    /// A new ordinal joins only the physical tail, not an earlier list.
+    fn last_list(self, output: &mut [Block]) -> Option<(&mut bool, &mut Vec<ListItem>)> {
+        if output.len().checked_sub(1) != Some(self.block) {
+            return None;
+        }
+        self.owned_list(output)
+    }
+
+    /// Continuation ownership survives separately emitted spacing requests.
+    /// The driver resets this handle at structural boundaries; an output-tail
+    /// check here would invent a new ownership boundary for `.sp`.
+    fn owned_list(self, output: &mut [Block]) -> Option<(&mut bool, &mut Vec<ListItem>)> {
+        match output.get_mut(self.block)? {
+            Block::List {
+                kind: ListKind::Ordered { .. },
+                compact,
+                items,
+                ..
+            } => Some((compact, items)),
+            _ => None,
+        }
     }
 }
 
@@ -132,54 +160,33 @@ pub(in crate::mandoc::blocks) fn append_ordered(
     marker: ManOrdinalMarker,
     state: &mut ManListState,
 ) {
-    match *state {
-        ManListState::Ordered {
-            block,
-            marker: previous,
-        } if previous.style == marker.style
-            && previous.value.checked_add(1) == Some(marker.value)
-            && block == output.len().saturating_sub(1) =>
-        {
-            let Some(Block::List {
-                kind: ListKind::Ordered { .. },
-                compact,
-                items,
-                ..
-            }) = output.get_mut(block)
-            else {
-                *state = ManListState::None;
-                append_new_ordered(
-                    output,
-                    item,
-                    indent_columns,
-                    paragraph_distance,
-                    source,
-                    marker,
-                    state,
-                );
-                return;
-            };
-            *compact = *compact && paragraph_distance == 0;
-            items.push(spaced_man_list_item(
-                item,
-                ordinal_width(marker.value),
-                source,
-                paragraph_distance,
-            ));
-            *state = ManListState::Ordered { block, marker };
-        }
-        ManListState::None | ManListState::Ordered { .. } => {
-            append_new_ordered(
-                output,
-                item,
-                indent_columns,
-                paragraph_distance,
-                source,
-                marker,
-                state,
-            );
-        }
+    if let Some(previous) = state.active
+        && previous.marker.style == marker.style
+        && previous.marker.value.checked_add(1) == Some(marker.value)
+        && let Some((compact, items)) = previous.last_list(output)
+    {
+        *compact = *compact && paragraph_distance == 0;
+        items.push(spaced_man_list_item(
+            item,
+            ordinal_width(marker.value),
+            source,
+            paragraph_distance,
+        ));
+        state.active = Some(ActiveOrdinal {
+            block: previous.block,
+            marker,
+        });
+        return;
     }
+    append_new_ordered(
+        output,
+        item,
+        indent_columns,
+        paragraph_distance,
+        source,
+        marker,
+        state,
+    );
 }
 
 fn append_new_ordered(
@@ -206,7 +213,7 @@ fn append_new_ordered(
         layout: layout_with_spacing(indent_columns, 0),
         source,
     });
-    *state = ManListState::Ordered { block, marker };
+    state.active = Some(ActiveOrdinal { block, marker });
 }
 
 /// Attach a transparent relative-indent scope to the current `.IP` item.
@@ -222,28 +229,21 @@ pub(in crate::mandoc::blocks) fn append_relative_continuation(
     indent_columns: crate::mandoc::layout::SourceIndent,
     state: ManListState,
 ) -> bool {
-    match state {
-        ManListState::Ordered { block, marker } => {
-            let origin = indent_columns
-                .relative_columns()
-                .saturating_add(ordinal_width(marker.value));
-            let Some(Block::List {
-                kind: ListKind::Ordered { .. },
-                items,
-                ..
-            }) = output.get_mut(block)
-            else {
-                return false;
-            };
-            let Some(item) = items.last_mut() else {
-                return false;
-            };
-            rebase_roots(nested, 0, origin);
-            item.blocks.append(nested);
-            true
-        }
-        ManListState::None => false,
-    }
+    let Some(active) = state.active else {
+        return false;
+    };
+    let origin = indent_columns
+        .relative_columns()
+        .saturating_add(ordinal_width(active.marker.value));
+    let Some((_, items)) = active.owned_list(output) else {
+        return false;
+    };
+    let Some(item) = items.last_mut() else {
+        return false;
+    };
+    rebase_roots(nested, 0, origin);
+    item.blocks.append(nested);
+    true
 }
 
 fn ordinal_width(value: u64) -> i32 {
@@ -373,7 +373,7 @@ mod tests {
         item.terms[0].insert(0, Inline::anchor("native-target"));
         let marker = super::ordinal_marker(&item, false).expect("punctuated ordinal");
         let mut output = Vec::new();
-        let mut state = super::ManListState::None;
+        let mut state = super::ManListState::new();
 
         super::append_ordered(
             &mut output,
@@ -400,5 +400,168 @@ mod tests {
             Block::Paragraph { ref children, .. }
                 if matches!(children.first(), Some(Inline::Anchor { id, .. }) if id == "native-target")
         ));
+    }
+
+    fn append(output: &mut Vec<Block>, state: &mut super::ManListState, term: &str, distance: u16) {
+        let item = definition(term, term);
+        let marker = super::ordinal_marker(&item, false).unwrap();
+        super::append_ordered(output, item, 0.into(), distance, None, marker, state);
+    }
+
+    #[test]
+    fn ordinal_state_rejects_removed_or_wrong_role_owner_without_consuming_continuation() {
+        for removed in [false, true] {
+            let mut output = Vec::new();
+            let mut state = super::ManListState::new();
+            append(&mut output, &mut state, "1.", 0);
+            let paragraph = definition("plain", "paragraph").description.pop().unwrap();
+            if removed {
+                output.clear();
+            } else {
+                output[0] = paragraph;
+            }
+            let before = output.clone();
+            let mut continuation = definition("continuation", "tail").description;
+            let expected = continuation.clone();
+            assert!(!super::append_relative_continuation(
+                &mut output,
+                &mut continuation,
+                0.into(),
+                state
+            ));
+            assert_eq!(output, before);
+            assert_eq!(continuation, expected);
+            append(&mut output, &mut state, "2.", 0);
+            assert!(
+                matches!(output.last(), Some(Block::List { kind: ListKind::Ordered { start: Some(2) }, items, .. }) if items.len() == 1)
+            );
+        }
+    }
+
+    #[test]
+    fn ordinal_continuation_keeps_its_owner_across_separate_spacing_output() {
+        let mut output = Vec::new();
+        let mut state = super::ManListState::new();
+        append(&mut output, &mut state, "1.", 0);
+        let spacing = Block::VerticalSpace {
+            lines: 2,
+            source: None,
+        };
+        output.push(spacing.clone());
+        let mut continuation = definition("continuation", "tail").description;
+        assert!(super::append_relative_continuation(
+            &mut output,
+            &mut continuation,
+            0.into(),
+            state
+        ));
+        assert!(continuation.is_empty());
+        assert_eq!(output[1], spacing);
+        assert!(matches!(&output[0], Block::List { items, .. } if items[0].blocks.len() == 2));
+        // In contrast, the next ordinal cannot join across that physical gap.
+        append(&mut output, &mut state, "2.", 0);
+        assert_eq!(output.len(), 3);
+    }
+
+    #[test]
+    fn native_spacing_between_relative_scopes_does_not_detach_item_contents() {
+        #[derive(Default)]
+        struct Text(String);
+        impl<'ir> mant_ir::visit::Visit<'ir> for Text {
+            fn visit_inline(&mut self, inline: &'ir Inline) {
+                if let Inline::Text { value } | Inline::Code { value } = inline {
+                    self.0.push_str(value);
+                }
+                mant_ir::visit::walk_inline(self, inline);
+            }
+        }
+        for spacing in [".sp 1", ".PD 0", ".sp 2\n.PD 2"] {
+            let source = format!(
+                ".TH STATE 1\n.SH DESCRIPTION\n.IP 1.\nFIRST\n{spacing}\n.RS 4\nLEFT\n.RE\n{spacing}\n.RS 4\nRIGHT\n.RE\n.IP 2.\nSECOND\n"
+            );
+            let document = crate::mandoc::parse_plain_manual(
+                std::path::Path::new("ordinal-spacing.1"),
+                source.as_bytes(),
+            )
+            .unwrap();
+            let first = document.sections[0]
+                .blocks
+                .iter()
+                .find_map(|block| match block {
+                    Block::List { items, .. } => items.first(),
+                    _ => None,
+                })
+                .unwrap();
+            let mut text = Text::default();
+            for block in &first.blocks {
+                mant_ir::visit::Visit::visit_block(&mut text, block);
+            }
+            let text = text.0;
+            assert!(
+                text.contains("FIRST") && text.contains("LEFT") && text.contains("RIGHT"),
+                "{source}\n{document:?}"
+            );
+            assert!(!text.contains("SECOND"), "{source}\n{document:?}");
+        }
+    }
+
+    #[test]
+    fn ordinal_state_reset_and_empty_output_cannot_reuse_an_old_item() {
+        let mut output = Vec::new();
+        let mut state = super::ManListState::new();
+        append(&mut output, &mut state, "1.", 0);
+        let mut continuation = definition("continuation", "tail").description;
+        assert!(!super::append_relative_continuation(
+            &mut [],
+            &mut continuation,
+            0.into(),
+            state
+        ));
+        state.reset();
+        assert!(!state.is_active());
+        assert!(!super::append_relative_continuation(
+            &mut output,
+            &mut continuation,
+            0.into(),
+            state
+        ));
+        append(&mut output, &mut state, "2.", 0);
+        assert_eq!(output.len(), 2);
+    }
+
+    #[test]
+    fn paragraph_distance_does_not_reset_ordered_progression() {
+        let mut output = Vec::new();
+        let mut state = super::ManListState::new();
+        append(&mut output, &mut state, "1.", 0);
+        append(&mut output, &mut state, "2.", 2);
+        let [Block::List { items, compact, .. }] = output.as_slice() else {
+            panic!("one sequence: {output:?}");
+        };
+        assert!(!compact);
+        assert_eq!(items.len(), 2);
+        assert_eq!(items[0].layout.spacing_before_lines, Some(0));
+        assert_eq!(items[1].layout.spacing_before_lines, Some(2));
+    }
+
+    #[test]
+    fn native_pd_keeps_sequence_but_plain_paragraph_stops_it() {
+        let document = crate::mandoc::parse_plain_manual(
+            std::path::Path::new("ordinal-state.1"),
+            b".TH STATE 1\n.SH DESCRIPTION\n.PD 0\n.IP 1.\nFIRST\n.PD 2\n.IP 2.\nSECOND\n.PP\nBOUNDARY\n.IP 3.\nTHIRD\n",
+        ).unwrap();
+        let lists: Vec<_> = document.sections[0]
+            .blocks
+            .iter()
+            .filter_map(|block| match block {
+                Block::List {
+                    kind: ListKind::Ordered { start },
+                    items,
+                    ..
+                } => Some((*start, items.len())),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(lists, [(Some(1), 2), (Some(3), 1)]);
     }
 }

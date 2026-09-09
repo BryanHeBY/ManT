@@ -23,9 +23,7 @@ use definition::split_definition_terms;
 use definition::{DefinitionFlow, definition_item, prepend_definition_heads};
 #[cfg(test)]
 use man::is_ip_bullet_item;
-use man::ordered::{
-    DefinitionLocation, ManListState, append_ordered, ordinal_marker, ordinal_sequence,
-};
+use man::ordered::{ManListState, append_ordered, ordinal_marker, ordinal_sequence};
 pub(super) use man::{ManDefinitionState, lower_man_definition};
 
 pub(super) use mdoc::lower_mdoc_list;

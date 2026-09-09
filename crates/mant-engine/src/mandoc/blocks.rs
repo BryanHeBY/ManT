@@ -159,7 +159,7 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
             definition_hanging_width: crate::mandoc::layout::Distance::cells(DEFAULT_MAN_TAG_WIDTH),
             split_authors: false,
             synopsis_return_type_open: false,
-            man_list_state: ManListState::None,
+            man_list_state: ManListState::new(),
             paragraph_predecessor: false,
         }
     }

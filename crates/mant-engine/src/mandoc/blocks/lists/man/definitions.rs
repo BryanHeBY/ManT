@@ -1,9 +1,8 @@
 //! Man tagged paragraphs: independent owners and explicit TQ head continuation.
 use super::super::{
-    Block, DefinitionItem, DefinitionLocation, ListKind, LoweringContext, ManListState, Node,
-    NodeKind, append_ordered, block_indent, definition_item, first_part_children,
-    layout_with_spacing, ordinal_marker, paragraph_distance_lines, plain_text,
-    prepend_definition_heads, source_span, terms_fit_inline,
+    Block, DefinitionItem, ListKind, LoweringContext, ManListState, Node, NodeKind, append_ordered,
+    block_indent, definition_item, first_part_children, layout_with_spacing, ordinal_marker,
+    paragraph_distance_lines, plain_text, prepend_definition_heads, source_span, terms_fit_inline,
 };
 
 fn is_bullet_glyph(text: &str) -> bool {
@@ -136,7 +135,7 @@ fn emit_man_definition(
         bullet,
     } = emission;
     if bullet {
-        *list_state = ManListState::None;
+        list_state.reset();
         append_ip_bullet(output, item, indent_columns, spacing_before, source);
     } else {
         if let Some(marker) = ordinal {
@@ -160,7 +159,7 @@ fn emit_man_definition(
             max_width,
             merge,
         );
-        *list_state = ManListState::None;
+        list_state.reset();
     }
 }
 
@@ -228,6 +227,12 @@ pub(in crate::mandoc::blocks) struct ManDefinitionState<'a> {
     pub(in crate::mandoc::blocks) definition_hanging_width: &'a mut crate::mandoc::layout::Distance,
     pub(in crate::mandoc::blocks) list_state: &'a mut ManListState,
     pub(in crate::mandoc::blocks) has_predecessor: bool,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct DefinitionLocation {
+    block: usize,
+    item: usize,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -478,4 +483,44 @@ fn is_explicit_tp_bullet(node: &Node, item: &DefinitionItem) -> bool {
         && super::super::definition::visible_definition_head(node)
             .iter()
             .any(contains_bullet_escape)
+}
+
+#[cfg(test)]
+mod tests {
+    use mant_ir::{Block, DefinitionItem};
+
+    #[test]
+    fn native_tq_merges_only_an_immediately_pending_empty_definition() {
+        for (first_body, separator, expected_terms) in [
+            ("", ".PD 0\n", vec![2]),
+            ("FIRST BODY\n", "", vec![1, 1]),
+            ("", ".PP\nBOUNDARY\n", vec![1, 1]),
+        ] {
+            let source = format!(
+                ".TH STATE 1\n.SH DESCRIPTION\n.TP\n.B FIRST\n{first_body}{separator}.TQ\n.B SECOND\nSECOND BODY\n"
+            );
+            let document = crate::mandoc::parse_plain_manual(
+                std::path::Path::new("tq-state.1"),
+                source.as_bytes(),
+            )
+            .unwrap();
+            let items: Vec<&DefinitionItem> = document.sections[0]
+                .blocks
+                .iter()
+                .filter_map(|block| match block {
+                    Block::DefinitionList { items, .. } => Some(items),
+                    _ => None,
+                })
+                .flatten()
+                .collect();
+            assert_eq!(
+                items
+                    .iter()
+                    .map(|item| item.terms.len())
+                    .collect::<Vec<_>>(),
+                expected_terms,
+                "{source}\n{document:?}"
+            );
+        }
+    }
 }
