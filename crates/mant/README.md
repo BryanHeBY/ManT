@@ -256,12 +256,22 @@ remains an exact logical name and is never guessed to be a manual shorthand.
 ## Crate architecture
 
 - `mant-ir` defines the source-neutral in-memory document and quick-reference model.
-- `mant-protocol` defines shared query contracts, logical projections, versioned JSON DTOs, and deterministic compact presentation.
+- `mant-protocol` defines shared query contracts, logical projections, versioned JSON DTOs, and stable semantic labels.
 - `libmandoc-rs` owns the cross-platform libmandoc parser boundary.
 - `mant-sources` owns local Markdown discovery and optional source updates.
-- `mant-engine` performs document lookup, lowering, projections, search, and output.
+- `mant-codec` parses Markdown and optional native roff and encodes document Markdown.
+- `mant-loader` owns bounded local acquisition, catalogs, caches, and linked-document snapshots.
+- `mant-query` projects and searches already loaded IR without loading or rendering.
+- `mant-render` formats content and DTO reports without querying or controlling a terminal.
+- `mant-engine` composes complete validated requests over loading and pure queries.
 - `mant-ui` provides the source-neutral Ratatui frontend.
 - `mant` owns command-line, terminal-selection, and MCP process boundaries.
+
+Within the command host, CLI input adaptation and output dispatch are separate
+from typed application navigation, system services, and process delivery.
+`CliHost`/`SystemHost` retain the injectable service boundary; maintenance lives
+under the host rather than in the read-only engine. Schema output is an offline
+adapter, and CLI and MCP share DTO renderers without sharing CLI format types.
 
 The package also exposes `mant::run` for deterministic single-invocation tests
 or embedding with explicit input/output streams, and `mant::run_process` for

@@ -1,8 +1,6 @@
 //! Bounded native request decoding; no query execution or output policy.
-use super::{
-    Failure, QueryRequest, QuerySource, RequestSchema, ScopeQueryRequest, ScopeRequestSchema,
-    json_boundary,
-};
+use crate::{arguments::QuerySource, error::Failure, json_boundary};
+use mant_protocol::{QueryRequest, RequestSchema, ScopeQueryRequest, ScopeRequestSchema};
 use std::io::Read;
 pub(super) const MAX_REQUEST_BYTES: u64 = 64 * 1024;
 

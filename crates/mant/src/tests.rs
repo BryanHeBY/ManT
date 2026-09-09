@@ -17,13 +17,18 @@ use mant_protocol::{
     TldrCacheUpdate,
 };
 
-use super::{
-    CLI_PROTOCOL_VERSION, CatalogQuery, CliHost, DocumentAddress, DocumentCatalog, Failure,
-    LoadPolicy, TerminalCapabilities, TerminalKind,
+use crate::{
+    CLI_PROTOCOL_VERSION,
+    application::request_for_address,
     arguments::{self, ColorMode, Command, DisplayMode, OutputOptions},
-    read_native_request, request_for_address, resolve_process_presentation, run_command,
-    run_with_host,
+    cli::{run_command, run_with_host},
+    error::Failure,
+    host::CliHost,
+    output_policy::{TerminalCapabilities, TerminalKind, resolve_process_presentation},
+    request_input::read_native_request,
 };
+use mant_engine::LoadPolicy;
+use mant_protocol::{CatalogQuery, DocumentAddress, DocumentCatalog};
 
 struct FakeHost {
     query_calls: Cell<usize>,
@@ -84,7 +89,7 @@ fn catalog_addresses_reopen_the_exact_source_or_manual_section() {
 #[test]
 fn unqualified_manual_navigation_preserves_native_resolution_without_a_default_section() {
     let (request, policy) =
-        super::request_for_navigation(&mant_protocol::DocumentOpenTarget::Manual {
+        crate::application::request_for_navigation(&mant_protocol::DocumentOpenTarget::Manual {
             name: "printf".into(),
             manual_section: None,
         });
