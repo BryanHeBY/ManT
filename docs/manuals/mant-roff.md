@@ -6,7 +6,7 @@ mant-roff — native man, mdoc, tbl, eqn, and roff compatibility in ManT
 
 ## Description
 
-ManT reads native manual pages through a vendored `libmandoc` 1.14.6 parser and lowers its validated owned syntax tree into [mant-ir(7)](mant-ir.md). The supported authoring languages are `man(7)` and `mdoc(7)` with the subset of roff requests, escapes, `tbl(7)`, and `eqn(7)` that occur inside those manuals.
+ManT reads native manual pages through a vendored `libmandoc` 1.14.6 parser and lowers its validated owned syntax tree into [mant-ir(7)](mant-ir.md). The supported authoring languages are mandoc's [man(7)](https://mandoc.bsd.lv/man/man.7.html) and [mdoc(7)](https://mandoc.bsd.lv/man/mdoc.7.html), with the subset of roff requests, escapes, [tbl(7)](https://mandoc.bsd.lv/man/tbl.7.html), and [eqn(7)](https://mandoc.bsd.lv/man/eqn.7.html) that occur inside those manuals.
 
 ManT is a semantic manual reader, not a general troff formatter. Device geometry, page headers and footers, traps, diversions, arbitrary postprocessor commands, and print-specific typography are outside its output model.
 
@@ -56,7 +56,7 @@ different. The complete shared model is defined by [mant-ir(7)](mant-ir.md).
 
 ## man Language
 
-The following `man(7)` macros have dedicated lowering behavior:
+The following [man(7) macros documented by mandoc](https://mandoc.bsd.lv/man/man.7.html) have dedicated lowering behavior:
 
 | Macros | ManT result |
 | --- | --- |
@@ -379,7 +379,7 @@ Man paragraph distance depends on source predecessors, including predecessors ou
 
 Man `nf`/`fi` and `EX`/`EE` boundaries consume a pending `HP` first line even before text is emitted. If `HP` starts inside an existing no-fill region, its first physical line keeps the first-line origin and later lines use the hanging origin; `\c` continuations do not consume that boundary. This preserves significant literal rows without splitting ordinary adjacent no-fill regions unnecessarily.
 
-`TS`/`TE` and `EQ`/`EN` are handled as structured preprocessors, described below. For the complete distinction between requests implemented, ignored, unsupported, and insecure in the pinned parser, consult upstream `roff(7)` for mandoc 1.14.6. ManT adds the stricter source and include boundary described in this manual.
+`TS`/`TE` and `EQ`/`EN` are handled as structured preprocessors, described below. For the distinction between requests implemented, ignored, unsupported, and insecure in the pinned upstream parser, consult `mandoc-1.14.6/roff.7` in the [official mandoc 1.14.6 source archive](https://mandoc.bsd.lv/snapshots/mandoc-1.14.6.tar.gz). The [online mandoc roff(7) reference](https://mandoc.bsd.lv/man/roff.7.html) tracks a different, evolving revision rather than fixing the 1.14.6 contract. ManT's local patches and stricter source/include boundary are described in this manual.
 
 ## Escapes
 
@@ -436,7 +436,7 @@ Separate native tables remain separate IR blocks even when adjacent. A `T&` layo
 
 Rule cells retain their column positions but no printable body. Both layout rules and data rules suppress their payload; source recovery never resurrects that intentionally hidden text. Escaped literal underscores remain ordinary text.
 
-`tbl(7)` rows become IR tables, including tables nested inside an mdoc literal or unfilled display. ManT retains cell text, left/center/right alignment, column spans, and row spans supplied by libmandoc. It does not reproduce line drawing, exact column widths, vertical positioning, tbl-specific font directives, or device-specific rules.
+[mandoc tbl(7)](https://mandoc.bsd.lv/man/tbl.7.html) rows become IR tables, including tables nested inside an mdoc literal or unfilled display. ManT retains cell text, left/center/right alignment, column spans, and row spans supplied by libmandoc. It does not reproduce line drawing, exact column widths, vertical positioning, tbl-specific font directives, or device-specific rules.
 
 Cell text passes through the same roff inline decoder as ordinary prose. For source-backed `T{`/`T}` text blocks, supported inline requests are parsed together using the document's man/mdoc dialect and lowered through the ordinary inline path. This preserves callable macro nesting, enclosure closure, links, and spacing state across lines; an argument-less `.Nm` resolves to the validated document name. The private parse accepts no includes or nested block/table requests and does not invent navigation targets. Recovery is bounded to 64 requests and 64 callable tokens per cell; exceeding either limit retains complete native cell text or source spelling with `manual.unhandled-table-text-block`. Other complex nested block markup may flatten to the visible cell payload exposed by libmandoc. If an empty semantic text block cannot be recovered from the bounded input source, ManT emits the same diagnostic instead of claiming silent fidelity.
 
@@ -446,7 +446,7 @@ Some formatter-specific strings disappear before libmandoc exposes a cell. For o
 
 ## Equations
 
-Display `eqn(7)` input becomes an `equation` block containing libmandoc's normalized expression text. Delimiter-selected equations inside filled prose remain inline symbolic tokens rather than splitting the paragraph. The same active delimiters are applied to ordinary `tbl(7)` cells, whose opaque cell strings are normalized through the pinned eqn parser. Configuration-only `EQ`/`EN` blocks emit no empty equation. The common GNU `ldots` macro is normalized to `...`.
+Display [mandoc eqn(7)](https://mandoc.bsd.lv/man/eqn.7.html) input becomes an `equation` block containing libmandoc's normalized expression text. Delimiter-selected equations inside filled prose remain inline symbolic tokens rather than splitting the paragraph. The same active delimiters are applied to ordinary `tbl(7)` cells, whose opaque cell strings are normalized through the pinned eqn parser. Configuration-only `EQ`/`EN` blocks emit no empty equation. The common GNU `ldots` macro is normalized to `...`.
 
 ManT preserves these expressions for text, Markdown, JSON, and TUI consumers; it does not typeset mathematical layout or execute an external `eqn` preprocessor. At most 256 distinct opaque table expressions are reparsed per document. Later expressions remain visible in their source spelling and produce `manual.inline-equation-budget`, preventing adversarial tables from turning semantic recovery into unbounded parser work.
 
@@ -467,7 +467,7 @@ Terminal-unsafe control bytes are masked before native parsing. Roff comments an
 
 For manuals intended to work across mandoc, groff, and ManT:
 
-1. Prefer standard `mdoc(7)` semantic macros or the portable core of `man(7)`.
+1. Prefer standard [mdoc(7) semantic macros](https://mandoc.bsd.lv/man/mdoc.7.html) or the portable core of [man(7)](https://mandoc.bsd.lv/man/man.7.html).
 2. Use `Xr` or `MR` for cross-manual links, `Sx` for mdoc section links, and `Lk`/`UR` for external links.
 3. Use `Bl`/`It`, `TP`/`IP`, `Bd`, `EX`/`EE`, `tbl`, and `eqn` only where their retained structure matters.
 4. Avoid relying on device geometry, page traps, custom diversions, color, point size, or arbitrary file inclusion.
@@ -483,6 +483,20 @@ The upstream references define the source languages; this manual defines ManT's 
 - [mandoc roff(7)](https://mandoc.bsd.lv/man/roff.7.html)
 - [mandoc_char(7)](https://mandoc.bsd.lv/man/mandoc_char.7.html)
 - [GNU troff manual](https://www.gnu.org/software/groff/manual/groff.html)
+
+The online mandoc manuals and GNU troff manual describe separate implementations;
+neither is a promise that every feature exists in the pinned parser or ManT's
+lowering. For fixed upstream version evidence use the 1.14.6 archive above.
+An [installed roff(7) manual](man:roff(7)) is a convenient local reading entry,
+but its implementation and version depend on the system. It may describe groff,
+not mandoc. Some distributions rename mandoc's pages; ManT does not guess those
+names or redirect a missing topic to another implementation.
+
+The HTTPS references are typed external links. Include them in an outline with
+`--outline-references all --reference-types external`; the default
+document/manual filter intentionally excludes them. The See Also links below
+instead address shipped Markdown manuals: their `(7)` or `(5)` labels do not
+turn them into native manual destinations.
 
 ## See Also
 

@@ -92,12 +92,32 @@ Decoded fragments match exact authored aliases or normalized IDs. Resolution doe
 
 Wiki links are not part of the supported link contract.
 
-The explicit `man:` destination preserves typed native references when heading
-content is exported back to Markdown. The name and optional parenthesized
-section use the shared manual-reference validation rules; URI components are
-decoded once. Omitting a section does not select section 1 implicitly. Heading
-export retains these links; ordinary body presentation keeps its existing
-compact manual-reference policy.
+Native manual links use the same syntax in ordinary body content, headings,
+and valid linked-code semantic terms:
+
+```markdown
+[Git manual](man:git(1))
+[Git manual, section resolved when opened](man:git)
+```
+
+Try the [installed Git manual](man:git(1)) or the
+[unqualified Git topic](man:git). These are local reading examples, not a
+requirement to install Git before reading this guide. The destination names a
+logical topic and optional section in the installed manual catalog, not a
+physical `.1`, `.gz`, or `file:` path. The name and section use shared
+manual-reference validation, with URI components decoded once. Missing or
+ambiguous targets are reported when explicitly opened; an omitted section uses
+the catalog's manual-section precedence, not an invented section 1. Reading a link does not install documents
+or fetch them from the network. Link labels alone never infer semantic entries.
+
+The CLI document selector `manual/1/git` is not the Markdown destination syntax;
+write `man:git(1)` in a link. A `mant://` scheme is not implemented.
+
+Input parsing and export are separate contracts. Text and TUI retain the
+visible label and typed navigation target. Markdown export retains explicit
+`man:` links in headings, but ordinary body export emits only their labels,
+omitting the native-manual link wrapper. Consequently body Markdown reimport
+does not recover these targets; use IR JSON when full link fidelity is needed.
 
 ## Semantic Entry Lists
 
@@ -165,7 +185,17 @@ A term may instead be one document link wrapping exactly one code span:
 - [`winget.exe`](winget.exe.md): Open the Windows package manager manual.
 ```
 
-The linked code remains the selectable name and the relative Markdown target becomes an explicit semantic document destination. A link in the description remains ordinary reference material; it does not change the entry destination. External links, section links, linked prose, and links wrapping mixed inline content are not accepted as semantic terms.
+The linked code remains the selectable name. Either a relative Markdown link
+or a native `man:` link supplies an explicit semantic document destination:
+
+```markdown
+<!-- mant:entries role=command case=sensitive -->
+- [`git`](man:git(1)): Open the installed Git manual.
+```
+
+A link in the description remains ordinary reference material; it does not
+change the entry destination. External links, section links, linked prose,
+and links wrapping mixed inline content are not accepted as semantic terms.
 
 Declared entry lists may nest at any Markdown list depth within the parser's 64-level structural budget. Every nested list that needs a semantic role has its own immediately preceding `mant:entries` directive; the derived index preserves parent → child ownership rather than flattening it.
 
