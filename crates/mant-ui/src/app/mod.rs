@@ -94,13 +94,39 @@ impl UpdateOutcome {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq)]
 enum Overlay {
     None,
     Menu { id: MenuId, cursor: usize },
     DocumentFinder,
     Help,
-    References,
+    References(references::ReferenceChooser),
+}
+
+impl Overlay {
+    fn references(&self) -> Option<&references::ReferenceChooser> {
+        match self {
+            Self::References(chooser) => Some(chooser),
+            _ => None,
+        }
+    }
+
+    fn references_mut(&mut self) -> Option<&mut references::ReferenceChooser> {
+        match self {
+            Self::References(chooser) => Some(chooser),
+            _ => None,
+        }
+    }
+
+    fn take_references(&mut self) -> Option<references::ReferenceChooser> {
+        if !matches!(self, Self::References(_)) {
+            return None;
+        }
+        match std::mem::replace(self, Self::None) {
+            Self::References(chooser) => Some(chooser),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -238,7 +264,6 @@ pub struct App {
     notice: Option<String>,
     copy_toast: Option<CopyToast>,
     overlay: Overlay,
-    reference_chooser: Option<references::ReferenceChooser>,
     pointer_drag: PointerDrag,
     selection: Option<RenderedSelection>,
     selection_auto_scroll: Option<SelectionAutoScroll>,
@@ -309,7 +334,6 @@ impl App {
             notice: None,
             copy_toast: None,
             overlay: Overlay::None,
-            reference_chooser: None,
             pointer_drag: PointerDrag::None,
             selection: None,
             selection_auto_scroll: None,
@@ -482,7 +506,7 @@ impl App {
         if let Some(id) = reference {
             self.queue_reference_copy(&id);
         } else {
-            self.show_reference_chooser(true);
+            self.show_reference_chooser(references::ReferencePurpose::Copy);
         }
     }
 

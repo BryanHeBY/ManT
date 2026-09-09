@@ -158,8 +158,8 @@ fn direct_and_picker_copy_keep_encoded_native_topics_distinct_from_sections() {
             .unwrap();
         app.copy_selected_reference();
         if heading {
-            assert_eq!(app.overlay, Overlay::References);
-            let choice = &app.reference_chooser.as_ref().unwrap().choices[0].1;
+            assert!(matches!(app.overlay, Overlay::References(_)));
+            let choice = &app.overlay.references().unwrap().choices()[0].1;
             assert!(
                 choice.contains("man:demo(1)"),
                 "picker remains readable: {choice}"
@@ -214,7 +214,7 @@ fn malformed_reference_copy_reports_failure_without_repairing_the_address() {
             .unwrap()
             .contains("no reusable link address")
     );
-    app.show_reference_chooser(true);
+    app.show_reference_chooser(super::super::references::ReferencePurpose::Copy);
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     assert!(app.take_copy_request().is_none());
     assert!(
@@ -244,8 +244,8 @@ fn associated_owner_keeps_fold_action_and_explicit_chooser_retains_every_occurre
     assert!(app.take_open_request().is_none());
     assert_eq!(app.overlay, Overlay::None);
     app.handle_key(KeyEvent::new(KeyCode::Char('O'), KeyModifiers::SHIFT));
-    assert_eq!(app.overlay, Overlay::References);
-    assert_eq!(app.reference_chooser.as_ref().unwrap().choices.len(), 3);
+    assert!(matches!(app.overlay, Overlay::References(_)));
+    assert_eq!(app.overlay.references().unwrap().choices().len(), 3);
     assert!(app.take_open_request().is_none());
     app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
@@ -274,11 +274,11 @@ fn associated_chooser_reveals_each_source_and_mouse_selection_does_not_open() {
     for width in [100, 45, 80] {
         let mut terminal = Terminal::new(TestBackend::new(width, 24)).unwrap();
         app.selected = owner;
-        app.show_reference_chooser(false);
+        app.show_reference_chooser(super::super::references::ReferencePurpose::Open);
         terminal.draw(|frame| app.draw(frame)).unwrap();
-        let chooser = app.reference_chooser.as_ref().unwrap();
-        let second_id = chooser.choices[1].0.clone();
-        let area = chooser.area;
+        let chooser = app.overlay.references().unwrap();
+        let second_id = chooser.choices()[1].0.clone();
+        let area = chooser.area();
         app.handle_mouse(MouseEvent {
             kind: MouseEventKind::Down(MouseButton::Left),
             column: area.x + 1,
@@ -286,7 +286,7 @@ fn associated_chooser_reveals_each_source_and_mouse_selection_does_not_open() {
             modifiers: KeyModifiers::NONE,
         });
         assert!(app.take_open_request().is_none());
-        assert_eq!(app.reference_chooser.as_ref().unwrap().selected, 1);
+        assert_eq!(app.overlay.references().unwrap().selected(), 1);
         app.handle_key(KeyEvent::new(KeyCode::Char('r'), KeyModifiers::NONE));
         assert_eq!(app.overlay, Overlay::None);
         assert_eq!(
@@ -313,11 +313,11 @@ fn associated_chooser_cancellation_and_unopenable_targets_leave_source_intact() 
         .unwrap();
     let selected = app.selected;
     let current = Arc::clone(&app.session.current_bundle);
-    app.show_reference_chooser(false);
+    app.show_reference_chooser(super::super::references::ReferencePurpose::Open);
     app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
     assert!(app.take_open_request().is_none());
     assert_eq!(app.selected, selected);
-    app.show_reference_chooser(false);
+    app.show_reference_chooser(super::super::references::ReferencePurpose::Open);
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     assert!(app.take_open_request().is_none());
     assert!(app.notice.as_ref().unwrap().contains("no registered"));
@@ -337,10 +337,13 @@ fn reference_chooser_renders_and_scrolls_whole_graphemes_in_narrow_terminals() {
         .unwrap();
     for width in [8, 10, 12, 20, 80] {
         let mut terminal = Terminal::new(TestBackend::new(width, 20)).unwrap();
-        app.show_reference_chooser(false);
-        app.reference_chooser.as_mut().unwrap().choices[0].1 = "Cafe\u{301} 👩‍💻".into();
+        app.show_reference_chooser(super::super::references::ReferencePurpose::Open);
+        app.overlay
+            .references_mut()
+            .unwrap()
+            .set_label(0, "Cafe\u{301} 👩‍💻".into());
         terminal.draw(|frame| app.draw(frame)).unwrap();
-        let area = app.reference_chooser.as_ref().unwrap().area;
+        let area = app.overlay.references().unwrap().area();
         let symbols: Vec<_> = (area.x + 1..area.right() - 1)
             .map(|x| terminal.backend().buffer()[(x, area.y + 1)].symbol())
             .collect();
@@ -359,7 +362,10 @@ fn reference_chooser_renders_and_scrolls_whole_graphemes_in_narrow_terminals() {
 
         // Twelve graphemes end after the complete e + accent. Scalar-based
         // scrolling used to start on the accent instead of the emoji.
-        app.reference_chooser.as_mut().unwrap().choices[0].1 = "12345678901e\u{301}👩‍💻TAIL".into();
+        app.overlay
+            .references_mut()
+            .unwrap()
+            .set_label(0, "12345678901e\u{301}👩‍💻TAIL".into());
         app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE));
         terminal.draw(|frame| app.draw(frame)).unwrap();
         assert_eq!(
@@ -619,5 +625,155 @@ fn failed_history_and_tab_reloads_preserve_typed_targets_and_the_current_page() 
         assert_eq!(app.navigation.history_lengths(), (0, 1));
         assert_eq!(app.navigation.active_tab(), 0);
         assert_eq!(app.current_local_target(), expected);
+    }
+}
+
+#[test]
+fn chooser_keyboard_and_footer_use_the_same_open_copy_and_reveal_actions() {
+    use super::super::references::ReferencePurpose;
+    for purpose in [ReferencePurpose::Open, ReferencePurpose::Copy] {
+        for reveal in [false, true] {
+            for mouse in [false, true] {
+                let mut app = App::new(&associated_bundle());
+                let owner = app
+                    .session
+                    .document
+                    .navigation()
+                    .iter()
+                    .position(|node| node.kind == NavKind::Section)
+                    .unwrap();
+                app.selected = owner;
+                let current = Arc::clone(&app.session.current_bundle);
+                app.show_reference_chooser(purpose);
+                let mut terminal = Terminal::new(TestBackend::new(100, 24)).unwrap();
+                terminal.draw(|frame| app.draw(frame)).unwrap();
+                let chooser = app.overlay.references().unwrap();
+                let id = chooser.choices()[0].0.clone();
+                let area = chooser.area();
+                if mouse {
+                    app.handle_mouse(MouseEvent {
+                        kind: MouseEventKind::Down(MouseButton::Left),
+                        column: area.x + if reveal { area.width / 2 + 1 } else { 1 },
+                        row: area.bottom() - 2,
+                        modifiers: KeyModifiers::NONE,
+                    });
+                } else {
+                    app.handle_key(KeyEvent::new(
+                        if reveal {
+                            KeyCode::Char('r')
+                        } else {
+                            KeyCode::Enter
+                        },
+                        KeyModifiers::NONE,
+                    ));
+                }
+                assert_eq!(app.overlay, Overlay::None);
+                assert!(Arc::ptr_eq(&app.session.current_bundle, &current));
+                if reveal {
+                    assert_eq!(app.selected, owner);
+                    assert_eq!(
+                        app.session.content_scroll,
+                        app.session.rendered_cache[&app.geometry.content.width]
+                            .anchor_row(&id)
+                            .unwrap()
+                    );
+                    assert!(app.take_open_request().is_none());
+                    assert!(app.take_copy_request().is_none());
+                } else if purpose == ReferencePurpose::Copy {
+                    let Some(CopyRequest::Reference { text }) = app.take_copy_request() else {
+                        panic!("copy action")
+                    };
+                    assert_eq!(text, "target.md#first");
+                    assert!(app.take_open_request().is_none());
+                } else {
+                    let request = app.take_open_request().expect("open action");
+                    assert_eq!(request.target.id(), Some("first"));
+                    assert!(app.take_copy_request().is_none());
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn chooser_dismissal_or_replacement_drops_its_data_without_click_through() {
+    use super::super::references::ReferencePurpose;
+    for purpose in [ReferencePurpose::Open, ReferencePurpose::Copy] {
+        let mut app = App::new(&associated_bundle());
+        let owner = app
+            .session
+            .document
+            .navigation()
+            .iter()
+            .position(|node| node.kind == NavKind::Section)
+            .unwrap();
+        app.selected = owner;
+        let current = Arc::clone(&app.session.current_bundle);
+        let mut terminal = Terminal::new(TestBackend::new(100, 24)).unwrap();
+        for replacement in 0..4 {
+            app.show_reference_chooser(purpose);
+            terminal.draw(|frame| app.draw(frame)).unwrap();
+            assert!(app.overlay.references().is_some());
+            match replacement {
+                0 => {
+                    app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+                }
+                1 => {
+                    // A menu-bar click would normally open a menu. The modal
+                    // closes instead and does not forward that same event.
+                    app.handle_mouse(MouseEvent {
+                        kind: MouseEventKind::Down(MouseButton::Left),
+                        column: 1,
+                        row: 0,
+                        modifiers: KeyModifiers::NONE,
+                    });
+                    assert_eq!(app.overlay, Overlay::None);
+                }
+                2 => app.open_menu(MenuId::Manual),
+                3 => app.open_document_finder(),
+                _ => unreachable!(),
+            }
+            assert!(app.overlay.references().is_none());
+            assert!(Arc::ptr_eq(&app.session.current_bundle, &current));
+            assert!(app.take_open_request().is_none());
+            assert!(app.take_copy_request().is_none());
+            assert_eq!(app.navigation.history_lengths(), (0, 0));
+        }
+
+        app.show_reference_chooser(purpose);
+        open_manual(&mut app, "destination", "1");
+        assert_eq!(app.overlay, Overlay::None);
+        assert!(app.overlay.references().is_none());
+        assert_eq!(app.session.current_bundle.label, "destination");
+        // A later cancellation/action cannot resurrect the previous page's
+        // chooser or emit a stale occurrence against the new document.
+        app.handle_reference_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+        assert!(app.take_open_request().is_none());
+        assert!(app.take_copy_request().is_none());
+
+        app.navigate_history(true);
+        let request = app.take_open_request().unwrap();
+        app.complete_open(&current, request);
+        app.show_reference_chooser(purpose);
+        terminal.draw(|frame| app.draw(frame)).unwrap();
+        let tab = app
+            .geometry
+            .document_tabs
+            .iter()
+            .find(|tab| tab.index == 1)
+            .unwrap();
+        let (column, row) = (tab.area.x + 1, tab.area.y);
+        app.handle_mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column,
+            row,
+            modifiers: KeyModifiers::NONE,
+        });
+        assert_eq!(app.overlay, Overlay::None);
+        assert_eq!(app.navigation.active_tab(), 0);
+        assert!(
+            app.take_open_request().is_none(),
+            "dismissing over another tab must not activate it"
+        );
     }
 }

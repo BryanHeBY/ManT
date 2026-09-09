@@ -59,6 +59,13 @@ already-scanned reference occurrences are distinct local targets. Occurrence
 handles are not public selectors or persistent revision identities: a reloaded
 document still requires candidate-view and rendered-location validation.
 
+The reference overlay owns its chooser and its explicit Open or Copy purpose;
+Reveal remains an action on the selected source occurrence. Closing or replacing
+the overlay drops that chooser, including during a successful page change.
+An outside left click dismisses the chooser without also activating the menu,
+tab or document behind it. Keyboard confirmation and footer clicks share the
+same action path; no pending host operation runs merely by selecting a row.
+
 Entry title colors reflect source-neutral roles, not importance, confidence or
 alias equivalence. Generic terms remain primary text. The body applies type
 color only at validated name bindings; identical prose and list markers do not

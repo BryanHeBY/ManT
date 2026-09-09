@@ -12,17 +12,76 @@ use ratatui::{
 use super::{App, Overlay, UpdateOutcome, fit_to_width};
 use crate::{CopyRequest, theme};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum ReferencePurpose {
+    Open,
+    Copy,
+}
+
+#[derive(Clone, Copy)]
+enum ReferenceCommand {
+    Confirm,
+    Reveal,
+}
+
+enum ReferenceAction {
+    Open(String),
+    Copy(String),
+    Reveal(String),
+}
+
+#[derive(Debug, PartialEq, Eq)]
 pub(super) struct ReferenceChooser {
-    pub(super) choices: Vec<(String, String)>,
-    pub(super) selected: usize,
-    copy: bool,
-    pub(super) area: Rect,
+    choices: Vec<(String, String)>,
+    selected: usize,
+    purpose: ReferencePurpose,
+    area: Rect,
     first: usize,
     /// Extended-grapheme offset into the selected label, never a scalar offset.
     horizontal: usize,
 }
 
 impl ReferenceChooser {
+    fn new(choices: Vec<(String, String)>, purpose: ReferencePurpose) -> Option<Self> {
+        (!choices.is_empty()).then_some(Self {
+            choices,
+            selected: 0,
+            purpose,
+            area: Rect::default(),
+            first: 0,
+            horizontal: 0,
+        })
+    }
+
+    fn finish(self, command: ReferenceCommand) -> Option<ReferenceAction> {
+        let (id, _) = self.choices.into_iter().nth(self.selected)?;
+        Some(match (command, self.purpose) {
+            (ReferenceCommand::Reveal, _) => ReferenceAction::Reveal(id),
+            (ReferenceCommand::Confirm, ReferencePurpose::Open) => ReferenceAction::Open(id),
+            (ReferenceCommand::Confirm, ReferencePurpose::Copy) => ReferenceAction::Copy(id),
+        })
+    }
+
+    #[cfg(test)]
+    pub(super) fn choices(&self) -> &[(String, String)] {
+        &self.choices
+    }
+
+    #[cfg(test)]
+    pub(super) const fn selected(&self) -> usize {
+        self.selected
+    }
+
+    #[cfg(test)]
+    pub(super) const fn area(&self) -> Rect {
+        self.area
+    }
+
+    #[cfg(test)]
+    pub(super) fn set_label(&mut self, index: usize, label: String) {
+        self.choices[index].1 = label;
+    }
+
     fn layout(&mut self, size: Rect) -> Rect {
         let width = size.width.saturating_sub(2).min(110);
         let height = size
@@ -59,7 +118,7 @@ impl App {
         self.pending_copy = Some(CopyRequest::Reference { text });
     }
 
-    pub(super) fn show_reference_chooser(&mut self, copy: bool) {
+    pub(super) fn show_reference_chooser(&mut self, purpose: ReferencePurpose) {
         let Some(node) = self.session.document.navigation().get(self.selected) else {
             return;
         };
@@ -69,33 +128,24 @@ impl App {
         {
             choices.push((node.id.clone(), text));
         }
-        if choices.is_empty() {
+        let Some(chooser) = ReferenceChooser::new(choices, purpose) else {
             self.report_notice("Select a linked heading, entry, or document reference".into());
             return;
-        }
-        self.reference_chooser = Some(ReferenceChooser {
-            choices,
-            selected: 0,
-            copy,
-            area: Rect::default(),
-            first: 0,
-            horizontal: 0,
-        });
-        self.overlay = Overlay::References;
+        };
+        self.overlay = Overlay::References(chooser);
     }
 
     pub(super) fn handle_reference_key(&mut self, key: KeyEvent) {
         match key.code {
             KeyCode::Esc => {
                 self.overlay = Overlay::None;
-                self.reference_chooser = None;
             }
-            KeyCode::Enter => self.choose_reference(false),
-            KeyCode::Char('r') => self.choose_reference(true),
+            KeyCode::Enter => self.choose_reference(ReferenceCommand::Confirm),
+            KeyCode::Char('r') => self.choose_reference(ReferenceCommand::Reveal),
             KeyCode::Down | KeyCode::Char('j') => self.move_reference_choice(1),
             KeyCode::Up | KeyCode::Char('k') => self.move_reference_choice(-1),
             KeyCode::Left | KeyCode::Right => {
-                if let Some(chooser) = &mut self.reference_chooser {
+                if let Some(chooser) = self.overlay.references_mut() {
                     let label =
                         crate::text::sanitize_terminal_text(&chooser.choices[chooser.selected].1);
                     let limit = graphemes(&label).count().saturating_sub(1);
@@ -111,7 +161,7 @@ impl App {
     }
 
     fn move_reference_choice(&mut self, delta: isize) {
-        if let Some(chooser) = &mut self.reference_chooser {
+        if let Some(chooser) = self.overlay.references_mut() {
             chooser.selected = chooser
                 .selected
                 .saturating_add_signed(delta)
@@ -120,34 +170,38 @@ impl App {
         }
     }
 
-    fn choose_reference(&mut self, reveal: bool) {
-        let Some(chooser) = self.reference_chooser.take() else {
+    fn choose_reference(&mut self, command: ReferenceCommand) {
+        let Some(action) = self
+            .overlay
+            .take_references()
+            .and_then(|chooser| chooser.finish(command))
+        else {
             return;
         };
-        let Some((id, _)) = chooser.choices.get(chooser.selected) else {
-            return;
-        };
-        self.overlay = Overlay::None;
-        if reveal {
-            // This is a private, already scanned source coordinate, not a
-            // public fragment selector requiring another identity lookup.
-            let owner = self.selected;
-            if self.reveal_anchor(id) {
-                // Associated occurrences intentionally have no permanent tree
-                // row. Revealing their source must not jump selection outward
-                // to the containing section merely because that row is absent.
-                self.set_selected_index(owner);
+        match action {
+            ReferenceAction::Reveal(id) => {
+                // This is a private, already scanned source coordinate, not a
+                // public fragment selector requiring another identity lookup.
+                let owner = self.selected;
+                if self.reveal_anchor(&id) {
+                    // Associated occurrences intentionally have no permanent tree
+                    // row. Revealing their source must not jump selection outward
+                    // to the containing section merely because that row is absent.
+                    self.set_selected_index(owner);
+                }
             }
-        } else if chooser.copy {
-            self.queue_reference_copy(id);
-        } else if let Some(target) = self.session.document.reference_target(id) {
-            if let Some(target) = self.session.document.activation_target(target) {
-                self.activate_link_target(target);
-            } else {
-                self.report_notice(
+            ReferenceAction::Copy(id) => self.queue_reference_copy(&id),
+            ReferenceAction::Open(id) => {
+                if let Some(target) = self.session.document.reference_target(&id) {
+                    if let Some(target) = self.session.document.activation_target(target) {
+                        self.activate_link_target(target);
+                    } else {
+                        self.report_notice(
                     "This reference has no registered document context; its target was not opened"
                         .into(),
                 );
+                    }
+                }
             }
         }
     }
@@ -159,27 +213,35 @@ impl App {
         if mouse.kind == MouseEventKind::ScrollUp {
             self.move_reference_choice(-1);
         }
-        let Some(chooser) = &mut self.reference_chooser else {
+        let Some(chooser) = self.overlay.references_mut() else {
             return UpdateOutcome::Unchanged;
         };
-        if mouse.kind == MouseEventKind::Down(MouseButton::Left)
-            && chooser.area.contains((mouse.column, mouse.row).into())
-        {
+        if mouse.kind == MouseEventKind::Down(MouseButton::Left) {
+            if !chooser.area.contains((mouse.column, mouse.row).into()) {
+                // Dismiss the modal but consume this click. It must not also
+                // activate a link, tab or menu behind the chooser.
+                self.overlay = Overlay::None;
+                return UpdateOutcome::Redraw;
+            }
             let row = mouse.row.saturating_sub(chooser.area.y);
             if row > 0 && row < chooser.area.height.saturating_sub(2) {
                 chooser.selected =
                     (chooser.first + usize::from(row - 1)).min(chooser.choices.len() - 1);
                 chooser.horizontal = 0;
             } else if row == chooser.area.height.saturating_sub(2) {
-                let reveal = mouse.column >= chooser.area.x + chooser.area.width / 2;
-                self.choose_reference(reveal);
+                let command = if mouse.column >= chooser.area.x + chooser.area.width / 2 {
+                    ReferenceCommand::Reveal
+                } else {
+                    ReferenceCommand::Confirm
+                };
+                self.choose_reference(command);
             }
         }
         UpdateOutcome::Redraw
     }
 
     pub(super) fn draw_reference_chooser(&mut self, frame: &mut Frame<'_>) {
-        let Some(chooser) = &mut self.reference_chooser else {
+        let Some(chooser) = self.overlay.references_mut() else {
             return;
         };
         let area = chooser.layout(frame.area());
@@ -236,10 +298,9 @@ impl App {
             ),
         );
         if height >= 3 {
-            let action = if chooser.copy {
-                "Enter: Copy"
-            } else {
-                "Enter: Open"
+            let action = match chooser.purpose {
+                ReferencePurpose::Copy => "Enter: Copy",
+                ReferencePurpose::Open => "Enter: Open",
             };
             let half = content_width / 2;
             let footer = format!(
@@ -280,4 +341,48 @@ fn reference_choice_text(label: &str, selected: bool, horizontal: usize, width: 
     }
     text.push_str(&" ".repeat(width.saturating_sub(used)));
     text
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_reference_overlay_requires_choices_and_reveal_is_independent_of_purpose() {
+        for purpose in [ReferencePurpose::Open, ReferencePurpose::Copy] {
+            assert!(ReferenceChooser::new(Vec::new(), purpose).is_none());
+            for command in [ReferenceCommand::Confirm, ReferenceCommand::Reveal] {
+                let mut chooser = ReferenceChooser::new(
+                    vec![
+                        ("first".into(), "Same target".into()),
+                        ("second".into(), "Same target".into()),
+                    ],
+                    purpose,
+                )
+                .unwrap();
+                assert_eq!(
+                    chooser.choices.len(),
+                    2,
+                    "occurrences are not target deduplication"
+                );
+                chooser.selected = 1;
+                match (command, purpose, chooser.finish(command).unwrap()) {
+                    (ReferenceCommand::Reveal, _, ReferenceAction::Reveal(id))
+                    | (
+                        ReferenceCommand::Confirm,
+                        ReferencePurpose::Copy,
+                        ReferenceAction::Copy(id),
+                    )
+                    | (
+                        ReferenceCommand::Confirm,
+                        ReferencePurpose::Open,
+                        ReferenceAction::Open(id),
+                    ) => assert_eq!(id, "second"),
+                    _ => panic!(
+                        "purpose/command must yield the corresponding selected occurrence action"
+                    ),
+                }
+            }
+        }
+    }
 }
