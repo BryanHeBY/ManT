@@ -101,6 +101,7 @@ let request = QueryRequest {
         manual_section: None,
     },
     view: QueryView::Outline {
+        references: Default::default(),
         entries: EntryProjection::Summary,
         root: None,
     },

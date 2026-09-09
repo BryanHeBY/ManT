@@ -517,7 +517,8 @@ Discover all sections and semantic entries:
 ```
 
 Discover option and value entries below one command without materializing
-unrelated branches:
+unrelated branches. Substitute the command ID returned by the current outline
+for the illustrative `command-set` below:
 
 ```json
 {
@@ -535,7 +536,7 @@ unrelated branches:
         {"kind": "value"}
       ]
     },
-    "root": "set"
+    "root": {"kind":"id","id":"command-set"}
   }
 }
 ```
@@ -1694,7 +1695,7 @@ tools. Outputs intentionally remain text-first:
 | Tool | Required input | Optional input | Output |
 | --- | --- | --- | --- |
 | `mant_find` | None | `query`, `syntax`, `case`, `kind`, `source`, `manualSection`, `maxResults`, `offset`, `startChar`, `maxChars` | Flat catalog text with canonical document IDs |
-| `mant_outline` | `document` | `entries`, default `summary`; `root`, `startChar`, `maxChars` | Selectable plain-text hierarchy |
+| `mant_outline` | `document` | `entries`, default `summary`; `references`, default summary of document/manual links; `root`, `startChar`, `maxChars` | Content hierarchy and independent reference inventory |
 | `mant_read` | `document`, 1–16 `selectors` | `startChar`, `maxChars` | CommonMark excerpts |
 | `mant_explain` | 1–16 `documents`, `entry` | `followLinks`, `maxDepth`, `maxDocuments`, `maxResults`, `offset`, `contentBytes`, `startChar`, `maxChars` | CommonMark class-first evidence with source-qualified read targets |
 | `mant_search` | 1–16 `documents`, `pattern` | `followLinks`, `maxDepth`, `maxDocuments`, `syntax`, `case`, `scope`, `word`, `contextLines`, `maxMatches`, `offset`, `startChar`, `maxChars` | Grep-like visible-text or generated-CommonMark matches grouped by document |
