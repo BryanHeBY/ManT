@@ -1,9 +1,9 @@
 //! Local source/layout acceptance probe. No host-dependent inputs in CI.
 //! Run with an explicit manual path and optional source tokens to locate.
-use std::{error::Error, hint::black_box, path::Path, time::Instant};
+use std::{error::Error, hint::black_box, path::Path, sync::Arc, time::Instant};
 
 use mant_ir::{DocumentIndex, ResolvedContent, SemanticIndex};
-use mant_ui::{App, DocumentView};
+use mant_ui::{App, DocumentView, ReaderOptions};
 
 fn main() -> Result<(), Box<dyn Error>> {
     let args = std::env::args().skip(1).collect::<Vec<_>>();
@@ -41,8 +41,19 @@ fn main() -> Result<(), Box<dyn Error>> {
         start.elapsed().as_secs_f64() * 1000.0,
         scope.len()
     );
-    let bundle = &scope[0];
-    profile_application(bundle, &scope);
+    if options.shared {
+        // Transfer ownership before timing: this path never clones source IR.
+        let scope = scope.into_iter().map(Arc::new).collect::<Vec<_>>();
+        profile_shared_application(&scope);
+        profile_view(&scope[0], &options.tokens);
+    } else {
+        profile_application(&scope[0], &scope);
+        profile_view(&scope[0], &options.tokens);
+    }
+    Ok(())
+}
+
+fn profile_view(bundle: &ResolvedContent, tokens: &[&str]) {
     let start = Instant::now();
     let view = DocumentView::new(bundle);
     println!(
@@ -57,7 +68,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             rendered.row_count,
             start.elapsed().as_secs_f64() * 1000.0
         );
-        for &token in &options.tokens {
+        for &token in tokens {
             if let Some((row, column)) =
                 rendered
                     .text
@@ -82,29 +93,32 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
         black_box(rendered);
     }
-    Ok(())
 }
 
 struct ProbeArgs<'a> {
     path: &'a str,
     tokens: Vec<&'a str>,
     scope_paths: Vec<&'a str>,
+    shared: bool,
 }
 
 impl<'a> ProbeArgs<'a> {
     fn parse(args: &'a [String]) -> Result<Self, &'static str> {
         let Some(path) = args.first() else {
-            return Err("usage: layout_profile MANUAL [--scope=PATH ...] [TOKEN ...]");
+            return Err("usage: layout_profile MANUAL [--shared] [--scope=PATH ...] [TOKEN ...]");
         };
         let mut options = Self {
             path,
             tokens: Vec::new(),
             scope_paths: Vec::new(),
+            shared: false,
         };
         let mut literal_tokens = false;
         for argument in &args[1..] {
             if !literal_tokens && argument == "--" {
                 literal_tokens = true;
+            } else if !literal_tokens && argument == "--shared" {
+                options.shared = true;
             } else if let Some(path) = argument
                 .strip_prefix("--scope=")
                 .filter(|_| !literal_tokens)
@@ -140,6 +154,24 @@ fn profile_application(bundle: &ResolvedContent, scope: &[ResolvedContent]) {
     let app = App::with_catalog_and_scope(bundle, mant_protocol::DocumentCatalog::default(), scope);
     println!(
         "app_current_in_scope_ms\t{:.3}\tscope_documents={}",
+        start.elapsed().as_secs_f64() * 1000.0,
+        scope.len()
+    );
+    black_box(app);
+}
+
+/// Host-owned snapshots enter the reader by handle; view construction still
+/// does all normal work. Keep this an alternate probe, not additional work in
+/// the legacy default process/RSS measurement.
+fn profile_shared_application(scope: &[Arc<ResolvedContent>]) {
+    let start = Instant::now();
+    let app = App::from_shared(ReaderOptions {
+        current: Arc::clone(&scope[0]),
+        scope: scope.to_vec(),
+        catalog: mant_protocol::DocumentCatalog::default(),
+    });
+    println!(
+        "app_shared_scope_ms\t{:.3}\tscope_documents={}",
         start.elapsed().as_secs_f64() * 1000.0,
         scope.len()
     );
@@ -215,5 +247,15 @@ mod tests {
     fn missing_primary_or_empty_scope_path_is_rejected() {
         assert!(ProbeArgs::parse(&[]).is_err());
         assert!(ProbeArgs::parse(&["primary.md".into(), "--scope=".into()]).is_err());
+    }
+
+    #[test]
+    fn shared_startup_is_explicit_and_double_dash_keeps_literal_tokens() {
+        let args = ["primary.md", "--shared", "--", "--shared"].map(str::to_owned);
+        let options = ProbeArgs::parse(&args).expect("shared probe");
+        assert!(options.shared);
+        assert_eq!(options.tokens, ["--shared"]);
+        let ordinary = ProbeArgs::parse(&args[..1]).expect("ordinary probe");
+        assert!(!ordinary.shared, "legacy measurement remains unchanged");
     }
 }
