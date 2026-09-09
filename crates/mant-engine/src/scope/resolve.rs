@@ -1,4 +1,6 @@
 //! Scope resolve: preserve request-local ownership and source order.
+#[cfg(test)]
+mod tests;
 use super::references::{ScopeReference, document_references};
 use super::{
     BTreeMap, BTreeSet, DocumentAddress, DocumentEdge, DocumentEdgeKind, DocumentFrontier,
@@ -58,14 +60,14 @@ impl DocumentResolver {
     }
 }
 
-pub(super) struct ScopeResolution {
-    pub(super) graph: ResolvedDocumentScope,
-    pub(super) documents: Vec<ResolvedContent>,
-    pub(super) positions: BTreeMap<DocumentAddress, usize>,
-    pub(super) queue: VecDeque<usize>,
-    pub(super) content_bytes: u64,
-    pub(super) failures: ResolutionFailures,
-    pub(super) unresolved_keys: BTreeSet<UnresolvedKey>,
+struct ScopeResolution {
+    graph: ResolvedDocumentScope,
+    documents: Vec<ResolvedContent>,
+    positions: BTreeMap<DocumentAddress, usize>,
+    queue: VecDeque<usize>,
+    content_bytes: u64,
+    failures: ResolutionFailures,
+    unresolved_keys: BTreeSet<UnresolvedKey>,
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord)]
@@ -76,7 +78,7 @@ struct ResolutionKey {
     manual_section: Option<String>,
 }
 #[derive(PartialEq, Eq, PartialOrd, Ord)]
-pub(super) struct UnresolvedKey {
+struct UnresolvedKey {
     from: Option<DocumentAddress>,
     selector: String,
     source: Option<String>,
@@ -87,10 +89,10 @@ pub(super) struct UnresolvedKey {
 /// Request-local negative cache. Keys include policy and the fully qualified
 /// selector, never a bare link label. Nothing survives into the next request.
 #[derive(Default)]
-pub(super) struct ResolutionFailures(BTreeMap<ResolutionKey, String>);
+struct ResolutionFailures(BTreeMap<ResolutionKey, String>);
 
 impl ResolutionFailures {
-    pub(super) fn resolve<T>(
+    fn resolve<T>(
         &mut self,
         selector: &DocumentSelector,
         policy: QueryPolicy,
@@ -118,7 +120,7 @@ impl ResolutionFailures {
 }
 
 impl ScopeResolution {
-    pub(super) fn new(query: &DocumentScope) -> Self {
+    fn new(query: &DocumentScope) -> Self {
         Self {
             graph: ResolvedDocumentScope {
                 query: query.clone(),
@@ -137,7 +139,7 @@ impl ScopeResolution {
         }
     }
 
-    pub(super) fn resolve_roots(&mut self, resolver: &DocumentResolver) {
+    fn resolve_roots(&mut self, resolver: &DocumentResolver) {
         for (root_index, selector) in self.graph.query.documents.clone().iter().enumerate() {
             match self.failures.resolve(selector, QueryPolicy::Combined, || {
                 resolver
@@ -156,7 +158,7 @@ impl ScopeResolution {
         }
     }
 
-    pub(super) fn insert_root(
+    fn insert_root(
         &mut self,
         bundle: ResolvedContent,
         selector: &DocumentSelector,
@@ -178,7 +180,16 @@ impl ScopeResolution {
             }
             return;
         }
-        if !self.reserve_content_bytes(&bundle) {
+        if !self.commit_document(
+            bundle,
+            ScopedDocument {
+                address,
+                depth: 0,
+                root_indices: vec![root_index],
+                reached_from: Vec::new(),
+            },
+            None,
+        ) {
             self.record_unresolved(UnresolvedDocument {
                 from: None,
                 selector: selector.clone(),
@@ -187,21 +198,10 @@ impl ScopeResolution {
                     MAX_SCOPE_CONTENT_BYTES / (1024 * 1024)
                 ),
             });
-            return;
         }
-        let position = self.documents.len();
-        self.positions.insert(address.clone(), position);
-        self.documents.push(bundle);
-        self.graph.documents.push(ScopedDocument {
-            address,
-            depth: 0,
-            root_indices: vec![root_index],
-            reached_from: Vec::new(),
-        });
-        self.queue.push_back(position);
     }
 
-    pub(super) fn follow_links(&mut self, resolver: &DocumentResolver) {
+    fn follow_links(&mut self, resolver: &DocumentResolver) {
         while let Some(position) = self.queue.pop_front() {
             let depth = self.graph.documents[position].depth;
             if depth >= self.graph.query.traversal.effective_max_depth() {
@@ -215,7 +215,7 @@ impl ScopeResolution {
         }
     }
 
-    pub(super) fn record_depth_frontier(&mut self, position: usize) {
+    fn record_depth_frontier(&mut self, position: usize) {
         let from = self.graph.documents[position].address.clone();
         for reference in self.collect_outbound_references(position) {
             if let Some(address) = reference.exact_address(&from) {
@@ -246,7 +246,7 @@ impl ScopeResolution {
         collected.references
     }
 
-    pub(super) fn follow_reference(
+    fn follow_reference(
         &mut self,
         resolver: &DocumentResolver,
         from: &DocumentAddress,
@@ -324,7 +324,7 @@ impl ScopeResolution {
         }
     }
 
-    pub(super) fn record_existing_edge(&mut self, edge: &DocumentEdge) -> bool {
+    fn record_existing_edge(&mut self, edge: &DocumentEdge) -> bool {
         let Some(position) = self.positions.get(&edge.to).copied() else {
             return false;
         };
@@ -343,7 +343,7 @@ impl ScopeResolution {
         true
     }
 
-    pub(super) fn record_unresolved(&mut self, failure: UnresolvedDocument) {
+    fn record_unresolved(&mut self, failure: UnresolvedDocument) {
         let key = UnresolvedKey {
             from: failure.from.clone(),
             selector: failure.selector.selector.clone(),
@@ -356,7 +356,7 @@ impl ScopeResolution {
         }
     }
 
-    pub(super) fn insert_linked(
+    fn insert_linked(
         &mut self,
         bundle: ResolvedContent,
         address: DocumentAddress,
@@ -364,43 +364,58 @@ impl ScopeResolution {
         depth: u16,
         edge: DocumentEdge,
     ) -> bool {
-        if !self.reserve_content_bytes(&bundle) {
-            return false;
-        }
-        if !self.graph.edges.contains(&edge) {
-            self.graph.edges.push(edge);
-        }
-        let position = self.documents.len();
-        self.positions.insert(address.clone(), position);
-        self.documents.push(bundle);
-        self.graph.documents.push(ScopedDocument {
-            address,
-            depth,
-            root_indices: Vec::new(),
-            reached_from: vec![from.clone()],
-        });
-        self.queue.push_back(position);
-        true
+        self.commit_document(
+            bundle,
+            ScopedDocument {
+                address,
+                depth,
+                root_indices: Vec::new(),
+                reached_from: vec![from.clone()],
+            },
+            Some(edge),
+        )
     }
 
-    pub(super) fn reserve_content_bytes(&mut self, bundle: &ResolvedContent) -> bool {
-        let bytes = normalized_content_bytes(bundle);
+    /// The only admission point for a new snapshot. The BFS driver has already
+    /// checked identity deduplication and the document limit. Compute the byte
+    /// budget before changing any retained state; rejection leaves the graph,
+    /// paired content, address ledger, queue and accounting unchanged.
+    /// This is atomic with respect to controlled rejection, not allocation panic.
+    fn commit_document(
+        &mut self,
+        bundle: ResolvedContent,
+        source: ScopedDocument,
+        edge: Option<DocumentEdge>,
+    ) -> bool {
+        debug_assert_eq!(bundle.address.as_ref(), Some(&source.address));
+        debug_assert!(!self.positions.contains_key(&source.address));
+        let bytes = normalized_content_bytes(&bundle);
         let Some(total) = self.content_bytes.checked_add(bytes) else {
             return false;
         };
         if total > MAX_SCOPE_CONTENT_BYTES {
             return false;
         }
+        let position = self.documents.len();
+        self.positions.insert(source.address.clone(), position);
+        self.documents.push(bundle);
+        self.graph.documents.push(source);
+        self.queue.push_back(position);
+        if let Some(edge) = edge
+            && !self.graph.edges.contains(&edge)
+        {
+            self.graph.edges.push(edge);
+        }
         self.content_bytes = total;
         true
     }
 
-    pub(super) fn at_document_limit(&self) -> bool {
+    fn at_document_limit(&self) -> bool {
         u32::try_from(self.documents.len()).unwrap_or(u32::MAX)
             >= self.graph.query.traversal.effective_max_documents()
     }
 
-    pub(super) fn record_frontier(
+    fn record_frontier(
         &mut self,
         from: &DocumentAddress,
         reference: &ScopeReference,
@@ -419,7 +434,7 @@ impl ScopeResolution {
         }
     }
 
-    pub(super) fn finish(self) -> LoadedDocumentScope {
+    fn finish(self) -> LoadedDocumentScope {
         LoadedDocumentScope {
             scope: self.graph,
             documents: self.documents,
@@ -431,7 +446,7 @@ impl ScopeResolution {
 /// serialized copy. The count intentionally follows the normalized IR rather
 /// than compressed or on-disk source bytes: the IR is what scope resolution
 /// retains for all later projections.
-pub(super) fn normalized_content_bytes(content: &ResolvedContent) -> u64 {
+fn normalized_content_bytes(content: &ResolvedContent) -> u64 {
     let mut counter = ByteCounter::default();
     if let Some(document) = &content.document {
         serde_json::to_writer(&mut counter, document)

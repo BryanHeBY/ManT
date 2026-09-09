@@ -85,6 +85,13 @@ reports owned by `mant-sources`; they do not become document protocol variants.
 
 Multi-document operations use `mant-protocol::DocumentScope` as a host-neutral input. `mant-engine::DocumentResolver` resolves its ordered roots, follows only typed IR `Document` and `Manual` edges, and returns one bounded breadth-first graph plus the loaded documents in matching order. Search, explanation, CLI JSON, and interactive search consume that same scope; they do not infer families from filename prefixes or merge independent document trees into one AST. The TUI receives the already loaded scope in memory, while its ordinary catalog finder remains a separate global host callback.
 
+Scope loading has one private admission point for a new snapshot. It checks the
+aggregate retained-content budget before committing the paired graph/content
+records, address index, queue and byte count. A budget rejection leaves those
+records unchanged; its caller records the appropriate unresolved root or frontier
+reason. Duplicate roots and already loaded links update provenance without
+retaining or charging for a second content snapshot.
+
 The loading result keeps its graph and content private with immutable accessors
 and a joint ownership-transfer operation. Pure collection queries instead accept
 `QueryScopeView`: borrowed IR plus a logical graph, never a loader service or a

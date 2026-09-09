@@ -24,8 +24,6 @@ mod resolve;
 use execute::{execute_scope_explain, execute_scope_search};
 #[cfg(test)]
 use references::{ScopeReference, document_references};
-#[cfg(test)]
-use resolve::{ResolutionFailures, ScopeResolution, normalized_content_bytes};
 
 /// A logical scope together with the loaded documents in matching order.
 #[derive(Debug, Clone)]
@@ -232,77 +230,6 @@ mod tests {
     use mant_ir::{DocumentAddress, MarkdownOrigin};
 
     use super::*;
-
-    #[test]
-    fn failed_resolution_is_cached_by_policy_and_qualified_selector_only_for_one_request() {
-        let mut cache = ResolutionFailures::default();
-        let mut calls = 0;
-        let base = DocumentSelector {
-            selector: "missing".into(),
-            source: None,
-            manual_section: None,
-        };
-        for (policy, selector) in [
-            (QueryPolicy::Combined, base.clone()),
-            (QueryPolicy::Combined, base.clone()),
-            (QueryPolicy::ManualOnly, base.clone()),
-            (
-                QueryPolicy::Combined,
-                DocumentSelector {
-                    source: Some("other".into()),
-                    ..base.clone()
-                },
-            ),
-            (
-                QueryPolicy::Combined,
-                DocumentSelector {
-                    manual_section: Some("7".into()),
-                    ..base.clone()
-                },
-            ),
-        ] {
-            let result: Result<(), String> = cache.resolve(&selector, policy, || {
-                calls += 1;
-                Err("not found".into())
-            });
-            assert!(result.is_err());
-        }
-        assert_eq!(calls, 4);
-        assert!(
-            ResolutionFailures::default()
-                .resolve(&base, QueryPolicy::Combined, || Ok::<_, String>(()))
-                .is_ok()
-        );
-    }
-
-    #[test]
-    fn unresolved_records_keep_distinct_origins_without_repeating_the_same_edge() {
-        let scope = DocumentScope {
-            documents: vec![],
-            traversal: mant_protocol::DocumentTraversal::default(),
-        };
-        let mut resolution = ScopeResolution::new(&scope);
-        let failure = UnresolvedDocument {
-            from: None,
-            selector: DocumentSelector {
-                selector: "missing".into(),
-                source: None,
-                manual_section: None,
-            },
-            reason: "not found".into(),
-        };
-        resolution.record_unresolved(failure.clone());
-        resolution.record_unresolved(failure.clone());
-        resolution.record_unresolved(UnresolvedDocument {
-            from: Some(DocumentAddress::Manual {
-                name: "other".into(),
-                manual_section: "1".into(),
-            }),
-            ..failure
-        });
-        assert_eq!(resolution.graph.unresolved.len(), 2);
-        assert!(resolution.graph.unresolved[0].from.is_none());
-    }
 
     #[test]
     fn entry_domains_participate_in_typed_document_traversal() {
@@ -695,101 +622,6 @@ mod tests {
         assert_eq!(
             reference.selector(&from).map(|selector| selector.selector),
             Some("documents/other".to_owned())
-        );
-    }
-
-    #[test]
-    fn frontier_retains_unresolved_manual_targets_without_inventing_an_address() {
-        let scope = DocumentScope {
-            documents: vec![DocumentSelector {
-                selector: "root".to_owned(),
-                source: None,
-                manual_section: Some("1".to_owned()),
-            }],
-            traversal: mant_protocol::DocumentTraversal {
-                follow_links: true,
-                max_depth: None,
-                max_documents: Some(1),
-            },
-        };
-        let from = DocumentAddress::Manual {
-            name: "root".to_owned(),
-            manual_section: "1".to_owned(),
-        };
-        let reference = ScopeReference {
-            target: DocumentReference::Manual {
-                name: "child".to_owned(),
-                manual_section: None,
-            },
-            kind: DocumentEdgeKind::Manual,
-            source_offset: None,
-            sequence: 0,
-        };
-        let mut resolution = ScopeResolution::new(&scope);
-        resolution.record_frontier(&from, &reference, TraversalLimit::MaxDocuments);
-
-        assert_eq!(resolution.graph.frontier.len(), 1);
-        assert_eq!(resolution.graph.frontier[0].target.selector, "child");
-        assert_eq!(resolution.graph.frontier[0].target.manual_section, None);
-        assert_eq!(
-            resolution.graph.frontier[0].limit,
-            TraversalLimit::MaxDocuments
-        );
-    }
-
-    #[test]
-    fn normalized_content_budget_refuses_another_document_before_retaining_it() {
-        let scope = DocumentScope {
-            documents: vec![DocumentSelector {
-                selector: "root".to_owned(),
-                source: None,
-                manual_section: None,
-            }],
-            traversal: mant_protocol::DocumentTraversal::default(),
-        };
-        let content =
-            crate::query_markdown_text("# Child\n\nBody.\n", None).expect("fixture content");
-        let bytes = normalized_content_bytes(&content);
-        assert!(bytes > 0 && bytes <= MAX_SCOPE_CONTENT_BYTES);
-
-        let mut resolution = ScopeResolution::new(&scope);
-        resolution.content_bytes = MAX_SCOPE_CONTENT_BYTES - bytes + 1;
-
-        assert!(!resolution.reserve_content_bytes(&content));
-        assert_eq!(
-            resolution.content_bytes,
-            MAX_SCOPE_CONTENT_BYTES - bytes + 1
-        );
-    }
-
-    #[test]
-    fn root_content_budget_is_reported_as_an_unresolved_root() {
-        let selector = DocumentSelector {
-            selector: "root".to_owned(),
-            source: None,
-            manual_section: None,
-        };
-        let scope = DocumentScope {
-            documents: vec![selector.clone()],
-            traversal: mant_protocol::DocumentTraversal::default(),
-        };
-        let mut content =
-            crate::query_markdown_text("# Root\n\nBody.\n", None).expect("fixture content");
-        content.address = Some(DocumentAddress::Markdown {
-            path: "root".to_owned(),
-            origin: MarkdownOrigin::Documents,
-        });
-        let mut resolution = ScopeResolution::new(&scope);
-        resolution.content_bytes = MAX_SCOPE_CONTENT_BYTES;
-
-        resolution.insert_root(content, &selector, 0);
-
-        assert!(resolution.documents.is_empty());
-        assert_eq!(resolution.graph.unresolved.len(), 1);
-        assert!(
-            resolution.graph.unresolved[0]
-                .reason
-                .contains("aggregate scope content budget")
         );
     }
 }
