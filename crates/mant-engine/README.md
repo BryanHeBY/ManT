@@ -66,6 +66,13 @@ deterministic output without owning a terminal or command-line process.
 - Installed-client and private tldr cache discovery. Explicit subprocess-backed
   updates are available only with the opt-in `tldr-update` feature.
 
+For already-loaded tldr text, `parse_tldr_page` and `parse_tldr_command` are pure
+parsing entry points available without `tldr-update`. `TldrPageLocation` supplies
+identity metadata only: it does not trigger a cache read, host/platform lookup,
+or URL fetch. `TldrParseError` reports syntax failure; the separate
+`TldrCacheError` adds read/location context, and `TldrUpdateError` belongs to the
+explicit maintenance operation.
+
 Process argument parsing, MCP transport, and interactive presentation remain
 outside this crate.
 

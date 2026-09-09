@@ -1,4 +1,9 @@
 //! Parses the constrained tldr-pages Markdown dialect into the shared IR.
+//!
+//! This is the byte/text codec boundary: source identity is supplied by the
+//! caller and is never interpreted as a path, URL, locale, or host probe.
+//! Cache selection and reads belong to `cache`; explicit process execution and
+//! cache writes belong to the feature-gated `update` module.
 
 use std::{error::Error, fmt};
 
@@ -6,7 +11,11 @@ use mant_ir::{TldrCommandPart, TldrDocument, TldrExample, TldrOrigin};
 
 use crate::text_safety::mask_terminal_controls;
 
-/// Source identity attached to a parsed tldr page.
+/// Caller-supplied source identity attached to a parsed tldr page.
+///
+/// These strings are retained as metadata, not resolved against the host.
+/// A caller reading a cache is responsible for selecting and loading that page
+/// before passing its text and identity to [`parse_tldr_page`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TldrPageLocation {
     /// tldr platform bucket containing the page.
@@ -77,6 +86,8 @@ pub fn parse_tldr_command(command: &str) -> Vec<TldrCommandPart> {
 }
 
 /// Parse one tldr Markdown page without performing any I/O.
+/// Only `markdown` supplies page contents; `location` is copied into the
+/// resulting IR without filesystem access, environment lookup or URL fetching.
 ///
 /// # Errors
 ///
@@ -331,6 +342,49 @@ mod tests {
             language: "en".to_owned(),
             source_path: "/cache/pages/linux/tar.md".to_owned(),
         }
+    }
+
+    #[test]
+    fn caller_source_identity_is_not_an_input_location_or_host_selection() {
+        for source_path in [
+            "memory:generated-page",
+            "https://example.invalid/pages/demo.md",
+            r"Z:\not-a-mounted-cache\pages\demo.md",
+            "not\0a-filesystem-path",
+        ] {
+            let location = TldrPageLocation {
+                platform: "caller-platform-not-a-host-bucket".into(),
+                language: "caller-language-not-a-locale".into(),
+                source_path: source_path.into(),
+            };
+            let page = parse_tldr_page(
+                "# memory-only\n- Run: `memory-only {{VALUE}}`\n",
+                location.clone(),
+            )
+            .expect("source identity is metadata, not a file to open");
+            assert_eq!(page.title, "memory-only");
+            assert_eq!(page.examples[0].command, "memory-only {{VALUE}}");
+            assert_eq!(page.platform, location.platform);
+            assert_eq!(page.language, location.language);
+            assert_eq!(page.source_path, location.source_path);
+        }
+    }
+
+    #[test]
+    fn supplied_text_alone_determines_parser_success_and_contents() {
+        let first = parse_tldr_page("# first\r\n- Run: `first`\r\n", location()).unwrap();
+        let second = parse_tldr_page("# second\n- Run: `second`\n", location()).unwrap();
+        assert_eq!(first.title, "first");
+        assert_eq!(second.title, "second");
+        assert_eq!(first.source_path, second.source_path);
+        assert_eq!(
+            parse_tldr_page("- There is no heading: `first`\n", location()),
+            Err(TldrParseError::MissingCommandHeading),
+        );
+        assert_eq!(
+            parse_tldr_page("# first\r\n- Run: `first`\r\n", location()),
+            Ok(first),
+        );
     }
 
     #[test]
