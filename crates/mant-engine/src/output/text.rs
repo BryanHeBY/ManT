@@ -70,12 +70,13 @@ fn render_query_body_with(
         .document
         .as_ref()
         .and_then(|document| document.meta.manual_section.as_deref());
-    let mut parts = vec![decorate(
+    let mut output = flow::Flow::text(decorate(
         TextRole::Document.into(),
         &document_label(&query.label, section),
-    )];
+    ));
     if include_tldr && let Some(tldr) = &query.tldr {
-        parts.push(render_tldr_text(tldr));
+        output.gap(1);
+        output.push_text(render_tldr_text(tldr));
     }
     if let Some(document) = &query.document {
         let renderer = blocks::BlockRenderer {
@@ -83,10 +84,16 @@ fn render_query_body_with(
             decorate,
             locations: None,
         };
-        parts.push(renderer.render_blocks(&document.blocks, 0));
-        parts.push(renderer.render_sections(&document.sections, 0));
+        let mut content = renderer.block_flow(&document.blocks, 0);
+        content.extend(renderer.sections_flow(&document.sections, 0));
+        if !content.is_empty() {
+            // Page furniture has one explicit presentation separator. All
+            // source-owned section/block gaps remain in the same flow.
+            output.gap(1);
+            output.extend(content);
+        }
     }
-    join_parts(parts)
+    output.finish(false)
 }
 
 /// Render selected query nodes as unstyled text with outline context.
@@ -424,7 +431,7 @@ fn indent_lines(value: &str, columns: usize) -> String {
     }
     let prefix = " ".repeat(columns);
     value
-        .lines()
+        .split('\n')
         .map(|line| {
             if line.is_empty() {
                 String::new()
@@ -443,14 +450,14 @@ pub(super) fn document_label(document: &str, section: Option<&str>) -> String {
     )
 }
 
+// Excerpt metadata panels have a presentation separator. Their rendered
+// source bodies are opaque here: never trim literal rows or resolved gaps.
 fn join_parts(parts: Vec<String>) -> String {
     parts
         .into_iter()
-        .filter(|part| !part.trim().is_empty())
+        .filter(|part| !part.is_empty())
         .collect::<Vec<_>>()
         .join("\n\n")
-        .trim_end()
-        .to_owned()
 }
 
 #[cfg(test)]
@@ -748,11 +755,11 @@ mod tests {
         ]));
         assert!(wide.contains("first\n\n\nsecond"), "got: {wide:?}");
 
-        // A source-owned leading gap remains distinct from the heading's
-        // presentation separator. Final CLI framing trims trailing whitespace.
+        // Heading/content and trailing gaps are source-owned. Only the page
+        // title receives an independent presentation separator.
         let edges = render_query_text(&document_with(vec![vspace(2), para("only"), vspace(3)]));
-        assert!(edges.ends_with("only"), "got: {edges:?}");
-        assert!(edges.contains("S\n\n\n\nonly"), "got: {edges:?}");
+        assert!(edges.ends_with("only\n\n\n"), "got: {edges:?}");
+        assert!(edges.contains("S\n\n\nonly"), "got: {edges:?}");
     }
 
     #[test]

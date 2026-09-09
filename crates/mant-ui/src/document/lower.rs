@@ -353,7 +353,10 @@ impl DocumentBuilder<'_> {
             self.entry_styles.ranges(nodes),
             surface == LineSurface::Code,
         );
-        if lines.len() == 1 && lines[0].spans.is_empty() {
+        if lines.len() == 1
+            && lines[0].spans.is_empty()
+            && !(surface == LineSurface::Code && mant_protocol::geometry::has_literal_rows(nodes))
+        {
             self.defer_anchors(targets.into_iter().map(|(id, _)| id));
             return;
         }

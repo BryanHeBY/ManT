@@ -1,7 +1,7 @@
 //! One source-aware block layout for plain and decorated text.
 //! Decorators must preserve visible content and boundary whitespace.
 use super::flow::Flow;
-use super::{indent_lines, join_parts};
+use super::indent_lines;
 use mant_ir::{Block, DefinitionItem, Inline, ListItem, ListKind, Section, TableCell};
 use mant_protocol::geometry::{compose_origin, coordinate, marker_run_in_gap, padding, text_width};
 use mant_protocol::{EntryStyleMap, TextPresentation, TextRole, visit_inline_text};
@@ -41,30 +41,29 @@ impl BlockRenderer<'_> {
         text
     }
 
-    pub(super) fn render_sections(&self, sections: &[Section], depth: usize) -> String {
-        sections
-            .iter()
-            .map(|section| self.render_section(section, depth))
-            .filter(|section| !section.is_empty())
-            .collect::<Vec<_>>()
-            .join("\n\n")
+    pub(super) fn sections_flow(&self, sections: &[Section], depth: usize) -> Flow {
+        let mut output = Flow::default();
+        for section in sections {
+            output.extend(self.section_flow(section, depth));
+        }
+        output
     }
 
     pub(super) fn render_section(&self, section: &Section, depth: usize) -> String {
+        self.section_flow(section, depth).finish(false)
+    }
+
+    fn section_flow(&self, section: &Section, depth: usize) -> Flow {
         let heading_indent = "  ".repeat(depth);
-        let mut parts = vec![format!(
+        let mut output = Flow::default();
+        output.gap(section.spacing_before_lines);
+        output.push_text(format!(
             "{heading_indent}{}",
             self.paint(TextRole::Heading, &section.title)
-        )];
-        let blocks = self.render_blocks(&section.blocks, coordinate(depth.saturating_mul(2)));
-        if !blocks.is_empty() {
-            parts.push(blocks);
-        }
-        let children = self.render_sections(&section.children, depth + 1);
-        if !children.is_empty() {
-            parts.push(children);
-        }
-        join_parts(parts)
+        ));
+        output.extend(self.block_flow(&section.blocks, coordinate(depth.saturating_mul(2))));
+        output.extend(self.sections_flow(&section.children, depth + 1));
+        output
     }
 
     pub(super) fn render_blocks(&self, blocks: &[Block], base_indent: i32) -> String {
@@ -81,7 +80,7 @@ impl BlockRenderer<'_> {
             .finish(leading_gap.is_some())
     }
 
-    fn block_flow(&self, blocks: &[Block], base_indent: i32) -> Flow {
+    pub(super) fn block_flow(&self, blocks: &[Block], base_indent: i32) -> Flow {
         let mut output = Flow::default();
         for block in blocks {
             output.gap(mant_protocol::geometry::block_gap(block));
@@ -91,6 +90,20 @@ impl BlockRenderer<'_> {
     }
 
     fn render_block(&self, block: &Block, base_indent: i32) -> Flow {
+        // Literal newlines and whitespace are content, not layout requests.
+        // They must survive even when the entire block contains only blanks.
+        if let Block::Preformatted {
+            children, layout, ..
+        } = block
+        {
+            if !mant_protocol::geometry::has_literal_rows(children) {
+                return Flow::default();
+            }
+            return Flow::literal(indent_lines(
+                &self.inline_text(children, TextRole::Body),
+                padding(compose_origin(base_indent, layout.indent_columns)),
+            ));
+        }
         if let Block::Paragraph {
             children, layout, ..
         } = block
@@ -180,14 +193,15 @@ impl BlockRenderer<'_> {
             Block::VerticalSpace { .. } => return Flow::default(),
             Block::ThematicBreak { .. } => ("---".to_owned(), 0),
         };
+        Self::nonliteral_leaf(&value, compose_origin(base_indent, layout_indent))
+    }
+
+    fn nonliteral_leaf(value: &str, origin: i32) -> Flow {
         let value = value.trim_matches('\n');
         if value.trim().is_empty() {
             Flow::default()
         } else {
-            Flow::text(indent_lines(
-                value,
-                padding(compose_origin(base_indent, layout_indent)),
-            ))
+            Flow::text(indent_lines(value, padding(origin)))
         }
     }
 
@@ -208,6 +222,38 @@ impl BlockRenderer<'_> {
 mod tests {
     use super::*;
     use mant_ir::LayoutHint;
+
+    #[test]
+    fn literal_whitespace_is_content_even_at_indented_and_document_edges() {
+        let renderer = super::super::plain_renderer();
+        for value in ["", " ", "\n", "\n\n", "\nALPHA\n\n", "  \n \n"] {
+            for origin in [0, 3] {
+                let block = Block::Preformatted {
+                    language: None,
+                    children: vec![Inline::Text {
+                        value: value.into(),
+                    }],
+                    layout: LayoutHint::default(),
+                    source: None,
+                };
+                let expected = value
+                    .split('\n')
+                    .map(|line| {
+                        if line.is_empty() {
+                            String::new()
+                        } else {
+                            format!("{}{line}", " ".repeat(origin))
+                        }
+                    })
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                assert_eq!(
+                    renderer.render_blocks(&[block], i32::try_from(origin).unwrap()),
+                    expected
+                );
+            }
+        }
+    }
 
     #[test]
     fn signed_table_cells_compose_parent_origins_before_clipping() {

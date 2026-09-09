@@ -16,6 +16,21 @@ pub use gaps::has_bounded_gap;
 mod terms;
 pub use terms::definition_run_in_width;
 
+/// Whether a literal inline stream contains an authored row, even an empty
+/// text row. Empty wrappers and zero-width targets alone are not blank lines.
+#[must_use]
+pub fn has_literal_rows(nodes: &[mant_ir::Inline]) -> bool {
+    nodes.iter().any(|node| match node {
+        mant_ir::Inline::Text { .. }
+        | mant_ir::Inline::Code { .. }
+        | mant_ir::Inline::LineBreak => true,
+        mant_ir::Inline::Strong { children }
+        | mant_ir::Inline::Emphasis { children }
+        | mant_ir::Inline::Link { children, .. } => has_literal_rows(children),
+        mant_ir::Inline::Anchor { .. } => false,
+    })
+}
+
 /// Maximum explicit gap in one logical block boundary. The producer can report
 /// saturation through [`GapPlan::is_bounded`] without allocating blank rows.
 pub const MAX_GAP_ROWS: u16 = 4096;

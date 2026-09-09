@@ -109,5 +109,5 @@ fn a_first_paragraph_in_a_first_relative_scope_does_not_invent_a_predecessor() {
     );
     // The heading owns its own single blank row; this first paragraph must
     // not introduce a PD=2 boundary on top of that heading presentation.
-    assert!(render_query_text(&query).contains("DESCRIPTION\n\n      SECOND"));
+    assert!(render_query_text(&query).contains("DESCRIPTION\n      SECOND"));
 }

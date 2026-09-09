@@ -101,6 +101,81 @@ fn inline_roff_continuations_retain_indent_and_explicit_blank_lines() {
 }
 
 #[test]
+fn source_rows_survive_plain_and_ansi_process_facades() {
+    fn unstyle(text: &str) -> String {
+        let mut parts = text.split('\u{1b}');
+        let mut plain = parts.next().unwrap_or_default().to_owned();
+        for part in parts {
+            let (parameters, suffix) = part.strip_prefix('[').unwrap().split_once('m').unwrap();
+            assert!(
+                parameters
+                    .chars()
+                    .all(|character| character.is_ascii_digit() || character == ';')
+            );
+            plain.push_str(suffix);
+        }
+        plain
+    }
+    for (format, source, expected) in [
+        (
+            "roff",
+            ".TH PROBE 1\n.PD 2\n.SH FIRST\nALPHA\n.sp 3\n.SH SECOND\nBETA\n",
+            "ALPHA\n\n\n\n\n\nSECOND\nBETA",
+        ),
+        (
+            "roff",
+            ".TH PROBE 1\n.SH TEST\n.nf\nALPHA\n.sp 1\n.sp 2\nBETA\n.fi\n",
+            "ALPHA\n\n\n\nBETA",
+        ),
+        (
+            "markdown",
+            "# PROBE\n\n## TEST\n\nBEFORE\n\n```text\n\nALPHA\n\n\n```\n\nAFTER\n",
+            "BEFORE\n\n\nALPHA\n\n\n\nAFTER",
+        ),
+    ] {
+        for node in [false, true] {
+            let mut args = vec![
+                "--input",
+                "-",
+                "--input-format",
+                format,
+                "--format",
+                "text",
+                "--display",
+                "direct",
+                "--color",
+                "never",
+            ];
+            if node {
+                args.extend(["--node", "1"]);
+            }
+            let plain = run_text_input(&args, source);
+            assert!(
+                plain.status.success(),
+                "{}",
+                String::from_utf8_lossy(&plain.stderr)
+            );
+            let plain = String::from_utf8(plain.stdout).unwrap();
+            // The first section excerpt deliberately excludes SECOND.
+            if !(format == "roff" && source.contains(".SH SECOND") && node) {
+                assert!(plain.contains(expected), "{source}\n{plain:?}");
+            }
+            let color = args.iter_mut().find(|value| **value == "never").unwrap();
+            *color = "always";
+            let colored = run_text_input(&args, source);
+            assert!(
+                colored.status.success(),
+                "{}",
+                String::from_utf8_lossy(&colored.stderr)
+            );
+            let colored = String::from_utf8(colored.stdout).unwrap();
+            assert!(colored.contains('\u{1b}'));
+            assert_eq!(unstyle(&colored), plain);
+        }
+    }
+}
+
+#[test]
 fn default_file_stdin_and_request_outputs_are_text() {
     let path = std::env::temp_dir().join(format!("mant-text-default-{}.md", std::process::id()));
     let source = "# Text Default\n\n## Options\n\n<!-- mant:entries role=option -->\n- `--flag`: A **strong** description.\n\n```sh\necho example\n```\n";

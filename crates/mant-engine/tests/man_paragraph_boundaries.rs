@@ -32,9 +32,9 @@ fn first_and_preceded_paragraphs_use_one_boundary_rule_for_every_man_form() {
                     );
                     let query = query_roff_bytes(source.as_bytes()).unwrap();
                     let text = render_query_text(&query);
-                    // A first paragraph has no PD boundary. The heading's
-                    // one blank row is independent of its first child's form.
-                    let gap = if prefix.is_empty() { 1 } else { pd };
+                    // A first paragraph has no PD boundary; the section
+                    // facade must not invent one after its heading either.
+                    let gap = if prefix.is_empty() { 0 } else { pd };
                     assert_eq!(blank_rows_before(&text, "AFTER"), gap, "{source}\n{text}");
                 }
             }
@@ -102,7 +102,7 @@ fn merged_man_lists_keep_each_resolved_gap_without_a_container_copy() {
             assert_eq!(item.layout.spacing_before_lines, Some(gap));
         }
         let text = render_query_text(&query);
-        assert_eq!(blank_rows_before(&text, "FIRST"), 1, "{text}");
+        assert_eq!(blank_rows_before(&text, "FIRST"), 0, "{text}");
         assert_eq!(blank_rows_before(&text, "SECOND"), 0, "{text}");
         assert_eq!(blank_rows_before(&text, "THIRD"), 2, "{text}");
     }

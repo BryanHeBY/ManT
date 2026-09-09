@@ -14,10 +14,19 @@ enum Part {
 }
 
 impl Flow {
+    pub(super) fn is_empty(&self) -> bool {
+        self.parts.is_empty()
+    }
     pub(super) fn text(value: String) -> Self {
         let mut result = Self::default();
         result.push_text(value);
         result
+    }
+
+    pub(super) fn literal(value: String) -> Self {
+        Self {
+            parts: vec![Part::Text(value)],
+        }
     }
 
     pub(super) fn push_text(&mut self, value: String) {

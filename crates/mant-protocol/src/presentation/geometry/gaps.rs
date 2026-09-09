@@ -139,7 +139,12 @@ fn walk(blocks: &[Block], gap: &mut GapPlan, depth: usize, origin: i32) -> bool 
                     *gap = GapPlan::default();
                 }
             }
-            Block::Paragraph { children, .. } | Block::Preformatted { children, .. } => {
+            Block::Preformatted { children, .. } => {
+                if super::has_literal_rows(children) {
+                    *gap = GapPlan::default();
+                }
+            }
+            Block::Paragraph { children, .. } => {
                 if visible(children) {
                     *gap = GapPlan::default();
                 }
@@ -176,6 +181,61 @@ mod tests {
         vec![Inline::Text {
             value: "BODY".into(),
         }]
+    }
+
+    #[test]
+    fn a_literal_empty_row_resets_requests_but_a_target_does_not() {
+        for (children, bounded) in [
+            (
+                vec![Inline::Text {
+                    value: String::new(),
+                }],
+                false,
+            ),
+            (
+                vec![Inline::Code {
+                    value: String::new(),
+                }],
+                false,
+            ),
+            (
+                vec![Inline::Emphasis {
+                    children: vec![Inline::Text {
+                        value: String::new(),
+                    }],
+                }],
+                false,
+            ),
+            (vec![Inline::anchor("target")], true),
+            (
+                vec![Inline::Strong {
+                    children: Vec::new(),
+                }],
+                true,
+            ),
+            (Vec::new(), true),
+        ] {
+            assert_eq!(
+                has_bounded_gap(&[
+                    Block::VerticalSpace {
+                        lines: 3000,
+                        source: None
+                    },
+                    Block::Preformatted {
+                        children,
+                        language: None,
+                        layout: LayoutHint::default(),
+                        source: None
+                    },
+                    Block::VerticalSpace {
+                        lines: 3000,
+                        source: None
+                    },
+                    paragraph(0, 0, text()),
+                ]),
+                bounded
+            );
+        }
     }
 
     fn bullet(gap: u16, blocks: Vec<Block>) -> Block {
