@@ -18,9 +18,10 @@ use mant_sources::BUILTIN_CONTENT_PRIORITY;
 use crate::{ManualPage, ManualRequest};
 
 use super::{
-    MAX_MARKDOWN_BYTES, QueryError, QueryExecutionError, QueryHost, QueryPolicy,
-    RegisteredLookupPhase, RegisteredSelection, RegisteredSelectionGroup, project_query_view,
-    query_markdown_text, query_with, read_capped_utf8, read_capped_utf8_io, validate_query_request,
+    LoadError, LoadHost, LoadSpec, MAX_MARKDOWN_BYTES, QueryError, QueryExecutionError,
+    QueryPolicy, QueryValidationError, RegisteredLookupPhase, RegisteredSelection,
+    RegisteredSelectionGroup, project_query_view, query_markdown_text, query_with,
+    read_capped_utf8, read_capped_utf8_io, validate_query_request,
 };
 
 #[derive(Clone)]
@@ -37,7 +38,7 @@ struct StubHost {
     calls: std::sync::Arc<Mutex<Vec<&'static str>>>,
 }
 
-impl QueryHost for StubHost {
+impl LoadHost for StubHost {
     fn name_candidates(&self, name: &str) -> Vec<String> {
         self.name_candidates
             .clone()
@@ -411,9 +412,9 @@ fn tldr_only_accepts_command_sections_and_rejects_other_categories() {
 
     assert_eq!(
         query_with(&request_for("5"), QueryPolicy::TldrOnly, &host),
-        Err(QueryError::TldrManualSection {
+        Err(QueryError::Load(LoadError::TldrManualSection {
             section: "5".to_owned(),
-        })
+        }))
     );
 }
 
@@ -549,7 +550,7 @@ fn manual_only_failure_is_not_hidden_by_tldr() {
     let error = query_with(&request(), QueryPolicy::ManualOnly, &host)
         .expect_err("an optional tldr page must not hide native parser failure");
 
-    let QueryError::Manual(detail) = error else {
+    let QueryError::Load(LoadError::Manual(detail)) = error else {
         panic!("expected the native parser diagnostic");
     };
     assert!(detail.to_string().contains("/man/tool.1"));
@@ -579,7 +580,7 @@ fn requested_manual_section_failure_is_not_hidden_by_tldr() {
     let error = query_with(&request, QueryPolicy::default(), &host)
         .expect_err("an explicit section must require a native manual");
 
-    assert!(matches!(&error, QueryError::Manual(_)));
+    assert!(matches!(&error, QueryError::Load(LoadError::Manual(_))));
     assert!(error.to_string().contains("section not found"));
     assert_eq!(*host.calls.lock().expect("calls lock"), ["locate"]);
 }
@@ -588,8 +589,9 @@ fn requested_manual_section_failure_is_not_hidden_by_tldr() {
 fn truncated_unsupported_document_is_an_error_by_default() {
     let host = host(Ok(document(SourceFormat::Man, true, false)));
 
-    let QueryError::Manual(detail) = query_with(&request(), QueryPolicy::default(), &host)
-        .expect_err("empty-section document must error by default")
+    let QueryError::Load(LoadError::Manual(detail)) =
+        query_with(&request(), QueryPolicy::default(), &host)
+            .expect_err("empty-section document must error by default")
     else {
         panic!("expected Manual error");
     };
@@ -632,7 +634,10 @@ fn ordinary_query_reports_a_tldr_hint_after_total_document_failure() {
     let error = query_with(&request(), QueryPolicy::default(), &host)
         .expect_err("ordinary query must require a full document");
 
-    assert!(matches!(error, QueryError::ManualWithTldr { .. }));
+    assert!(matches!(
+        error,
+        QueryError::Load(LoadError::ManualWithTldr { .. })
+    ));
     assert_eq!(
         error.to_string(),
         "could not load manual 'tool': source not found\nhint: a tldr entry is available; run `mant tool --tldr`"
@@ -757,6 +762,85 @@ fn reports_both_manual_paths_when_no_content_exists() {
 }
 
 #[test]
+fn borrowed_load_specs_execute_without_request_schema_or_query_view() {
+    let loading_host = host(Ok(document(SourceFormat::Man, false, true)));
+    let selector = String::from("tool");
+    let spec = LoadSpec::Document {
+        selector: &selector,
+        source: None,
+        manual_section: Some("1"),
+    };
+    let loaded = super::load_with(spec, QueryPolicy::ManualOnly, &loading_host).unwrap();
+    assert_eq!(loaded.label, "tool");
+    assert!(loaded.document.is_some());
+    assert!(loaded.tldr.is_none());
+    assert_eq!(
+        *loading_host.calls.lock().unwrap(),
+        ["locate", "parse"],
+        "manual-only loading does not inspect registered names or tldr"
+    );
+
+    let invalid_host = host(Ok(document(SourceFormat::Man, false, true)));
+    assert!(matches!(
+        super::load_with(
+            LoadSpec::Document {
+                selector: "bad\nname",
+                source: None,
+                manual_section: None
+            },
+            QueryPolicy::Combined,
+            &invalid_host,
+        ),
+        Err(LoadError::InvalidSelector {
+            field: "document selector",
+            ..
+        })
+    ));
+    assert!(invalid_host.calls.lock().unwrap().is_empty());
+}
+
+#[test]
+fn invalid_query_views_never_touch_the_loading_host() {
+    for view in [
+        QueryView::Excerpt {
+            selectors: Vec::new(),
+        },
+        QueryView::Explain {
+            entry: String::new(),
+            options: mant_protocol::ExplanationOptions::default(),
+        },
+        QueryView::Outline {
+            entries: mant_protocol::EntryProjection::Kinds { kinds: Vec::new() },
+            root: None,
+            references: mant_protocol::ReferenceProjection::default(),
+        },
+        QueryView::Search {
+            pattern: "body".into(),
+            syntax: mant_protocol::SearchSyntax::Literal,
+            case: mant_protocol::SearchCase::Sensitive,
+            scope: mant_protocol::SearchScope::Visible,
+            word: false,
+            context_lines: 0,
+            limit: 0,
+            offset: 0,
+        },
+    ] {
+        let host = host(Ok(document(SourceFormat::Man, false, true)));
+        let mut request = request();
+        request.view = view;
+        assert!(
+            matches!(
+                query_with(&request, QueryPolicy::Combined, &host),
+                Err(QueryError::QueryValidation(_))
+            ),
+            "{:?}",
+            request.view
+        );
+        assert!(host.calls.lock().unwrap().is_empty(), "{:?}", request.view);
+    }
+}
+
+#[test]
 fn validates_before_touching_host_state() {
     let host = host(Ok(document(SourceFormat::Man, false, true)));
     assert_eq!(
@@ -773,7 +857,7 @@ fn validates_before_touching_host_state() {
             QueryPolicy::default(),
             &host
         ),
-        Err(QueryError::EmptyName)
+        Err(QueryError::Load(LoadError::EmptyName))
     );
     assert!(host.calls.lock().expect("calls lock").is_empty());
 }
@@ -809,14 +893,14 @@ fn every_single_document_selector_obeys_the_shared_native_bound() {
         assert_eq!(
             validate_query_request(&request, QueryPolicy::default()),
             Err(if field == "semantic entry" {
-                QueryError::InvalidViewSelector {
+                QueryError::QueryValidation(QueryValidationError::InvalidViewSelector {
                     field,
                     error: ScopeTextError::TooLong {
                         maximum: MAX_SEMANTIC_ENTRY_CHARS,
                     },
-                }
+                })
             } else {
-                QueryError::InvalidContentSelector
+                QueryError::QueryValidation(QueryValidationError::InvalidContentSelector)
             })
         );
     }
@@ -834,14 +918,14 @@ fn focused_projection_enforces_view_bounds_without_a_request_producer() {
                 options: mant_protocol::ExplanationOptions::default()
             }
         ),
-        Err(QueryExecutionError::Query(
-            QueryError::InvalidViewSelector {
+        Err(QueryExecutionError::Query(QueryError::QueryValidation(
+            QueryValidationError::InvalidViewSelector {
                 field: "semantic entry",
                 error: ScopeTextError::TooLong {
                     maximum: MAX_SEMANTIC_ENTRY_CHARS,
                 },
             }
-        ))
+        )))
     );
 
     let selectors = (0..=MAX_NODE_SELECTORS)
@@ -849,9 +933,11 @@ fn focused_projection_enforces_view_bounds_without_a_request_producer() {
         .collect();
     assert_eq!(
         project_query_view(query, &QueryView::Excerpt { selectors }),
-        Err(QueryExecutionError::Query(QueryError::TooManySelections {
-            maximum: MAX_NODE_SELECTORS,
-        }))
+        Err(QueryExecutionError::Query(QueryError::QueryValidation(
+            QueryValidationError::TooManySelections {
+                maximum: MAX_NODE_SELECTORS,
+            }
+        )))
     );
 }
 
@@ -865,12 +951,12 @@ fn document_input_selector_obeys_the_shared_native_bound() {
     };
     assert_eq!(
         validate_query_request(&request, QueryPolicy::default()),
-        Err(QueryError::InvalidViewSelector {
+        Err(QueryError::Load(LoadError::InvalidSelector {
             field: "document selector",
             error: ScopeTextError::TooLong {
                 maximum: MAX_DOCUMENT_SELECTOR_CHARS,
             },
-        })
+        }))
     );
 
     let QueryInput::Document { selector, .. } = &mut request.input else {
@@ -879,10 +965,10 @@ fn document_input_selector_obeys_the_shared_native_bound() {
     *selector = "bad\nselector".to_owned();
     assert_eq!(
         validate_query_request(&request, QueryPolicy::default()),
-        Err(QueryError::InvalidViewSelector {
+        Err(QueryError::Load(LoadError::InvalidSelector {
             field: "document selector",
             error: ScopeTextError::ControlCharacter,
-        })
+        }))
     );
 }
 

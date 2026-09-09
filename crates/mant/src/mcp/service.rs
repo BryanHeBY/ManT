@@ -89,7 +89,9 @@ fn scope_error_for_mcp(error: mant_engine::ScopeQueryError) -> String {
 }
 
 pub(super) fn query_error_for_mcp(error: mant_engine::QueryExecutionError) -> String {
-    use mant_engine::{ManualLoadError, ProjectionError, QueryError, QueryExecutionError};
+    use mant_engine::{
+        LoadError, ManualLoadError, ProjectionError, QueryError, QueryExecutionError,
+    };
 
     fn manual_error_for_mcp(error: &ManualLoadError) -> String {
         match error {
@@ -112,20 +114,23 @@ pub(super) fn query_error_for_mcp(error: mant_engine::QueryExecutionError) -> St
             other => other.to_string(),
         };
     };
+    let QueryError::Load(error) = error else {
+        return error.to_string();
+    };
     match error {
-        QueryError::Markdown { .. } => {
+        LoadError::Markdown { .. } => {
             "could not load or parse the selected Markdown document".to_owned()
         }
-        QueryError::EmptyMarkdown { .. } => {
+        LoadError::EmptyMarkdown { .. } => {
             "the selected Markdown document has no readable content".to_owned()
         }
-        QueryError::Registry { .. } => "registered document discovery failed".to_owned(),
-        QueryError::Manual(error) => manual_error_for_mcp(&error),
-        QueryError::ManualWithTldr { error, topic } => format!(
+        LoadError::Registry { .. } => "registered document discovery failed".to_owned(),
+        LoadError::Manual(error) => manual_error_for_mcp(&error),
+        LoadError::ManualWithTldr { error, topic } => format!(
             "{}; a tldr entry is available for '{topic}'",
             manual_error_for_mcp(&error)
         ),
-        QueryError::Tldr { topic, .. } => {
+        LoadError::Tldr { topic, .. } => {
             format!("could not load the tldr entry for '{topic}'")
         }
         other => other.to_string(),

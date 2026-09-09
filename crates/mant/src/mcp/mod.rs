@@ -589,21 +589,23 @@ mod tests {
     #[test]
     fn mcp_query_errors_do_not_expose_physical_paths() {
         let errors = [
-            mant_engine::QueryError::Markdown {
+            mant_engine::LoadError::Markdown {
                 path: "/home/user/private/document.md".to_owned(),
                 detail: "permission denied".to_owned(),
             },
-            mant_engine::QueryError::Manual(mant_engine::ManualLoadError::Empty {
+            mant_engine::LoadError::Manual(mant_engine::ManualLoadError::Empty {
                 name: "demo".to_owned(),
                 path: PathBuf::from(r"C:\Users\private\demo.1"),
                 diagnostics: vec!["failure at /secret/parser.cache".to_owned()],
             }),
-            mant_engine::QueryError::Registry {
+            mant_engine::LoadError::Registry {
                 detail: "invalid /home/user/.config/mant/sources.toml".to_owned(),
             },
         ];
         for error in errors {
-            let rendered = query_error_for_mcp(mant_engine::QueryExecutionError::Query(error));
+            let rendered = query_error_for_mcp(mant_engine::QueryExecutionError::Query(
+                mant_engine::QueryError::Load(error),
+            ));
             assert!(!rendered.contains("/home/"), "{rendered}");
             assert!(!rendered.contains(r"C:\Users"), "{rendered}");
             assert!(!rendered.contains("/secret/"), "{rendered}");

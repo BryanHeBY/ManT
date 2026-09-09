@@ -126,6 +126,7 @@ implementation; it does not reinterpret source macros or rebuild entry facts.
 | Need | Preferred API |
 | --- | --- |
 | Reuse one stable discovery snapshot | `DocumentResolver` |
+| Load a borrowed source specification without a query view | `DocumentLoader::load`, `LoadSpec` |
 | Resolve a complete typed request | `resolve_query_with_policy` |
 | Resolve and project its requested view | `execute_query` |
 | Resolve a bounded multi-document scope | `DocumentResolver::resolve_scope` |
@@ -134,7 +135,7 @@ implementation; it does not reinterpret source macros or rebuild entry facts.
 | Parse in-memory Markdown without query composition | `mant_codec::parse_markdown` (also re-exported here) |
 | Compose a query from in-memory Markdown | `query_markdown_text` |
 | Parse prepared plain roff without loading or decompression | `mant_codec::parse_roff_bytes` (`roff` feature) |
-| Load/decode supplied manual bytes, optionally composing a query | `parse_manual_bytes` or `query_roff_bytes` |
+| Apply standalone-input policy to prepared plain roff bytes | `parse_manual_bytes` or `query_roff_bytes` |
 | Audit production file lowering against its exact native witness | `parse_manual_source_with_report` |
 | Build a focused result from existing content | `build_outline_projection`, `select_excerpt`, `search_query` |
 | Collect bounded independent semantic evidence | `explain_query`, `validate_explanation_query` |
@@ -168,6 +169,13 @@ caller needs the parsed document and tldr preface without query composition;
 that function is implemented and exported by `mant-codec`.
 `DocumentResolver` can be reused when several operations must share one lazy
 filesystem snapshot; constructing a new resolver refreshes discovery.
+
+Loading and view validation have distinct error owners. `DocumentLoader` accepts
+a borrowed `LoadSpec` and content policy, never a serialized request or query
+view; failures are `LoadError`. The application `DocumentResolver` validates a
+complete request and joins loading with query execution. `QueryError::Load` and
+`QueryError::QueryValidation` preserve the originating category and error chain
+without giving acquisition code access to search or projection behavior.
 
 `resolve_scope` and `execute_scope_query` keep linked-document traversal,
 aggregate content budgets, and breadth-first projections at that same engine

@@ -56,9 +56,10 @@ pub use projection::{
     semantics_complete,
 };
 pub use query::{
-    DocumentResolver, MAX_MARKDOWN_BYTES, ManualLoadError, QueryError, QueryExecutionError,
-    QueryPolicy, QueryViewResult, execute_query, project_query_view, query_markdown_text,
-    query_roff_bytes, resolve_query, resolve_query_with_policy, validate_query_request,
+    DocumentLoader, DocumentResolver, LoadError, LoadSpec, MAX_MARKDOWN_BYTES, ManualLoadError,
+    QueryError, QueryExecutionError, QueryPolicy, QueryValidationError, QueryViewResult,
+    execute_query, project_query_view, query_markdown_text, query_roff_bytes, resolve_query,
+    resolve_query_with_policy, validate_query_request,
 };
 pub use scope::{LoadedDocumentScope, ScopeQueryError, validate_scope_query_request};
 pub use scope_query::{

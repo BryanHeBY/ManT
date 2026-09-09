@@ -1,13 +1,11 @@
-//! Query resolver boundary; public entry points remain validated.
+//! Explicit local-environment snapshot for view-independent acquisition.
 use super::{
-    CatalogQuery, Document, DocumentAddress, DocumentCatalog, MAX_MARKDOWN_BYTES, ManualIndex,
-    ManualPage, ManualRequest, MarkdownOrigin, OnceLock, Path, PathBuf, QueryError,
-    QueryExecutionError, QueryHost, QueryPolicy, QueryRequest, QueryViewResult,
-    RegisteredDocumentIndex, RegisteredDocumentOrigin, RegisteredLookupPhase, RegisteredSelection,
-    RegisteredSelectionGroup, SourceConfigError, TldrDocument, discover_manual_roots, fs,
-    locate_manual_source_in, parse_manual_page, parse_manual_source, project_query_view,
-    query_name_candidates, query_with, read_cached_tldr_page, read_capped_utf8,
-    validate_query_request,
+    CatalogQuery, Document, DocumentAddress, DocumentCatalog, LoadError, LoadHost, LoadSpec,
+    MAX_MARKDOWN_BYTES, ManualIndex, ManualPage, ManualRequest, MarkdownOrigin, OnceLock, Path,
+    PathBuf, QueryPolicy, RegisteredDocumentIndex, RegisteredDocumentOrigin, RegisteredLookupPhase,
+    RegisteredSelection, RegisteredSelectionGroup, SourceConfigError, TldrDocument,
+    discover_manual_roots, fs, load_with, locate_manual_source_in, parse_manual_page,
+    parse_manual_source, query_name_candidates, read_cached_tldr_page, read_capped_utf8,
 };
 
 fn registered_selection(document: &mant_sources::RegisteredDocument) -> RegisteredSelection {
@@ -26,14 +24,14 @@ fn registered_selection(document: &mant_sources::RegisteredDocument) -> Register
 }
 
 /// One explicit local document-environment snapshot.
-pub struct DocumentResolver {
+pub struct DocumentLoader {
     registered: OnceLock<Result<RegisteredDocumentIndex, SourceConfigError>>,
     manual_roots: Vec<PathBuf>,
     manuals: OnceLock<ManualIndex>,
     available: OnceLock<Vec<crate::catalog::AvailableDocument>>,
 }
 
-impl DocumentResolver {
+impl DocumentLoader {
     /// Capture native manual roots and lazily snapshot the manual index and
     /// Markdown registration.
     #[must_use]
@@ -46,42 +44,22 @@ impl DocumentResolver {
         }
     }
 
-    /// Validate and resolve one request against this environment snapshot.
-    ///
-    /// Reusing a resolver keeps manual and registered-document precedence
-    /// stable across related operations. Construct a new resolver to refresh
-    /// filesystem discovery.
+    /// Load one borrowed source specification against this environment snapshot.
+    /// Reusing a loader preserves manual and registered-document precedence.
+    /// Construct a new loader to refresh discovery.
     ///
     /// # Errors
-    ///
-    /// Returns [`QueryError`] for invalid input or unreadable local content.
-    pub fn resolve(
+    /// Returns invalid source-selection input or unreadable local content.
+    pub fn load(
         &self,
-        request: &QueryRequest,
+        spec: LoadSpec<'_>,
         policy: QueryPolicy,
-    ) -> Result<ResolvedContent, QueryError> {
-        validate_query_request(request, policy)?;
-        query_with(request, policy, self)
-    }
-
-    /// Resolve and materialize the request's encoded view.
-    ///
-    /// # Errors
-    ///
-    /// Returns a typed loading, projection, or search failure.
-    pub fn execute(
-        &self,
-        request: &QueryRequest,
-        policy: QueryPolicy,
-    ) -> Result<QueryViewResult, QueryExecutionError> {
-        let query = self
-            .resolve(request, policy)
-            .map_err(QueryExecutionError::Query)?;
-        project_query_view(query, &request.view)
+    ) -> Result<ResolvedContent, LoadError> {
+        load_with(spec, policy, self)
     }
 
     /// Filter the same registered-document and manual snapshots used by
-    /// [`Self::resolve`].
+    /// [`Self::load`].
     ///
     /// # Errors
     ///
@@ -107,7 +85,7 @@ impl DocumentResolver {
     }
 }
 
-impl QueryHost for DocumentResolver {
+impl LoadHost for DocumentLoader {
     fn name_candidates(&self, name: &str) -> Vec<String> {
         query_name_candidates(name)
     }

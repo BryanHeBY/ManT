@@ -1,29 +1,24 @@
 //! Resolves bounded direct files and in-memory document inputs.
 
 use super::{
-    InputFormat, ManualLoadError, OsStr, Path, QueryError, QueryHost, QueryInput, QueryPolicy,
-    QueryRequest, ResolvedContent, parse_manual_bytes, query_named_document,
+    InputFormat, LoadError, LoadHost, LoadSpec, ManualLoadError, OsStr, Path, QueryPolicy,
+    ResolvedContent, parse_manual_bytes, query_named_document,
 };
 use mant_codec::parse_markdown;
 
-pub(super) fn query_with(
-    request: &QueryRequest,
+pub(super) fn load_with(
+    spec: LoadSpec<'_>,
     policy: QueryPolicy,
-    host: &dyn QueryHost,
-) -> Result<ResolvedContent, QueryError> {
-    match &request.input {
-        QueryInput::Document {
+    host: &dyn LoadHost,
+) -> Result<ResolvedContent, LoadError> {
+    super::validate_load_spec(spec, policy)?;
+    match spec {
+        LoadSpec::Document {
             selector,
             source,
             manual_section,
-        } => query_named_document(
-            selector,
-            source.as_deref(),
-            manual_section.as_deref(),
-            policy,
-            host,
-        ),
-        QueryInput::File { path, format } => query_input_file(path, *format, policy, host),
+        } => query_named_document(selector, source, manual_section, policy, host),
+        LoadSpec::File { path, format } => query_input_file(path, format, policy, host),
     }
 }
 
@@ -31,15 +26,15 @@ fn query_input_file(
     requested_path: &str,
     format: InputFormat,
     policy: QueryPolicy,
-    host: &dyn QueryHost,
-) -> Result<ResolvedContent, QueryError> {
+    host: &dyn LoadHost,
+) -> Result<ResolvedContent, LoadError> {
     let path = requested_path.trim();
     if path.is_empty() {
-        return Err(QueryError::EmptyMarkdownPath);
+        return Err(LoadError::EmptyMarkdownPath);
     }
     let format = match format {
         InputFormat::Auto => {
-            detect_input_format(path).ok_or_else(|| QueryError::UnsupportedInputFormat {
+            detect_input_format(path).ok_or_else(|| LoadError::UnsupportedInputFormat {
                 path: path.to_owned(),
             })?
         }
@@ -49,16 +44,16 @@ fn query_input_file(
         InputFormat::Markdown => query_markdown_file(path, policy, host),
         InputFormat::Roff => {
             if policy != QueryPolicy::Combined {
-                return Err(QueryError::ConflictingSourceSelectors);
+                return Err(LoadError::ConflictingSourceSelectors);
             }
             let document = host.parse_manual_input(Path::new(path)).map_err(|detail| {
-                QueryError::Manual(ManualLoadError::Parse {
+                LoadError::Manual(ManualLoadError::Parse {
                     name: path.to_owned(),
                     detail,
                 })
             })?;
             if document.sections.is_empty() && document.blocks.is_empty() {
-                return Err(QueryError::NoReadableContent {
+                return Err(LoadError::NoReadableContent {
                     name: path.to_owned(),
                 });
             }
@@ -112,40 +107,40 @@ fn input_file_label(path: &str) -> String {
 fn query_markdown_file(
     requested_path: &str,
     policy: QueryPolicy,
-    host: &dyn QueryHost,
-) -> Result<ResolvedContent, QueryError> {
+    host: &dyn LoadHost,
+) -> Result<ResolvedContent, LoadError> {
     let path = requested_path.trim();
     if path.is_empty() {
-        return Err(QueryError::EmptyMarkdownPath);
+        return Err(LoadError::EmptyMarkdownPath);
     }
     if policy != QueryPolicy::Combined {
-        return Err(QueryError::Markdown {
+        return Err(LoadError::Markdown {
             path: path.to_owned(),
             detail: "content-only policies do not apply to direct input".to_owned(),
         });
     }
     let source = host
         .read_markdown(Path::new(path))
-        .map_err(|detail| QueryError::Markdown {
+        .map_err(|detail| LoadError::Markdown {
             path: path.to_owned(),
             detail,
         })?;
-    query_markdown_text(&source, Some(path.to_owned()))
+    load_markdown_text(&source, Some(path.to_owned()))
 }
 
 /// Parse in-memory Markdown for the direct `mant -` command.
 ///
-/// This helper intentionally sits outside [`QueryRequest`]: public protocol
-/// requests reference local files and never embed arbitrary document content.
+/// This helper accepts only caller-supplied text and labels; it has no request
+/// schema or query view, and never resolves another document.
 ///
 /// # Errors
 ///
-/// Returns [`QueryError::EmptyMarkdown`] when parsing yields no document heading,
+/// Returns [`LoadError::EmptyMarkdown`] when parsing yields no document heading,
 /// blocks, sections, or quick reference.
-pub fn query_markdown_text(
+pub fn load_markdown_text(
     source: &str,
     source_path: Option<String>,
-) -> Result<ResolvedContent, QueryError> {
+) -> Result<ResolvedContent, LoadError> {
     let label = source_path.as_deref().map_or_else(
         || "stdin".to_owned(),
         |path| {
@@ -157,7 +152,7 @@ pub fn query_markdown_text(
         },
     );
     let error_path = source_path.clone().unwrap_or_else(|| "stdin".to_owned());
-    let parsed = parse_markdown(source, source_path).map_err(|error| QueryError::Markdown {
+    let parsed = parse_markdown(source, source_path).map_err(|error| LoadError::Markdown {
         path: error_path,
         detail: error.to_string(),
     })?;
@@ -165,7 +160,7 @@ pub fn query_markdown_text(
         && parsed.document.blocks.is_empty()
         && parsed.document.sections.is_empty();
     if document_is_empty && parsed.tldr.is_none() {
-        return Err(QueryError::EmptyMarkdown {
+        return Err(LoadError::EmptyMarkdown {
             label: label.clone(),
         });
     }
@@ -182,9 +177,9 @@ pub fn query_markdown_text(
 /// # Errors
 ///
 /// Returns a native parse error or an empty-document error.
-pub fn query_roff_bytes(source: &[u8]) -> Result<ResolvedContent, QueryError> {
+pub fn load_roff_bytes(source: &[u8]) -> Result<ResolvedContent, LoadError> {
     if u64::try_from(source.len()).unwrap_or(u64::MAX) > crate::MAX_MANUAL_BYTES {
-        return Err(QueryError::Manual(ManualLoadError::Parse {
+        return Err(LoadError::Manual(ManualLoadError::Parse {
             name: "stdin".to_owned(),
             detail: format!(
                 "roff input exceeds the {}-byte limit",
@@ -193,13 +188,13 @@ pub fn query_roff_bytes(source: &[u8]) -> Result<ResolvedContent, QueryError> {
         }));
     }
     let document = parse_manual_bytes(Path::new("stdin"), source).map_err(|error| {
-        QueryError::Manual(ManualLoadError::Parse {
+        LoadError::Manual(ManualLoadError::Parse {
             name: "stdin".to_owned(),
             detail: error.to_string(),
         })
     })?;
     if document.sections.is_empty() && document.blocks.is_empty() {
-        return Err(QueryError::NoReadableContent {
+        return Err(LoadError::NoReadableContent {
             name: "stdin".to_owned(),
         });
     }

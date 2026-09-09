@@ -4,10 +4,9 @@ mod tests;
 use super::references::{ScopeReference, document_references};
 use super::{
     BTreeMap, BTreeSet, DocumentAddress, DocumentEdge, DocumentEdgeKind, DocumentFrontier,
-    DocumentResolver, DocumentScope, DocumentSelector, LoadedDocumentScope,
-    MAX_SCOPE_CONTENT_BYTES, QueryError, QueryInput, QueryPolicy, QueryRequest, RequestSchema,
-    ResolvedContent, ResolvedDocumentScope, ScopeQueryError, ScopedDocument, TraversalLimit,
-    UnresolvedDocument, VecDeque, Write, validate_document_scope,
+    DocumentResolver, DocumentScope, DocumentSelector, LoadError, LoadSpec, LoadedDocumentScope,
+    MAX_SCOPE_CONTENT_BYTES, QueryPolicy, ResolvedContent, ResolvedDocumentScope, ScopeQueryError,
+    ScopedDocument, TraversalLimit, UnresolvedDocument, VecDeque, Write, validate_document_scope,
 };
 
 impl DocumentResolver {
@@ -44,16 +43,12 @@ impl DocumentResolver {
         &self,
         selector: &DocumentSelector,
         policy: QueryPolicy,
-    ) -> Result<ResolvedContent, QueryError> {
-        self.resolve(
-            &QueryRequest {
-                schema: RequestSchema::V0Dot11,
-                input: QueryInput::Document {
-                    selector: selector.selector.clone(),
-                    source: selector.source.clone(),
-                    manual_section: selector.manual_section.clone(),
-                },
-                view: mant_protocol::QueryView::Full {},
+    ) -> Result<ResolvedContent, LoadError> {
+        self.load(
+            LoadSpec::Document {
+                selector: &selector.selector,
+                source: selector.source.as_deref(),
+                manual_section: selector.manual_section.as_deref(),
             },
             policy,
         )

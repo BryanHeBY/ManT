@@ -1,9 +1,9 @@
 //! Resolves logical document names across registered sources, manuals, and tldr.
 
 use super::{
-    DocumentAddress, FullDocumentMode, LoadedManual, ManualLoadError, ManualRequest, QueryError,
-    QueryHost, QueryPolicy, QuickReferenceMode, RegisteredLookupPhase, RegisteredSelection,
-    RegisteredSelectionGroup, ResolvedContent, TldrDocument, query_markdown_text,
+    DocumentAddress, FullDocumentMode, LoadError, LoadHost, LoadedManual, ManualLoadError,
+    ManualRequest, QueryPolicy, QuickReferenceMode, RegisteredLookupPhase, RegisteredSelection,
+    RegisteredSelectionGroup, ResolvedContent, TldrDocument, load_markdown_text,
 };
 
 pub(super) fn query_named_document(
@@ -11,30 +11,30 @@ pub(super) fn query_named_document(
     requested_source: Option<&str>,
     requested_manual_section: Option<&str>,
     policy: QueryPolicy,
-    host: &dyn QueryHost,
-) -> Result<ResolvedContent, QueryError> {
+    host: &dyn LoadHost,
+) -> Result<ResolvedContent, LoadError> {
     let name = name.trim();
     if name.is_empty() {
-        return Err(QueryError::EmptyName);
+        return Err(LoadError::EmptyName);
     }
     if let Some(address) = DocumentAddress::parse_catalog_path(name) {
         if requested_source.is_some() || requested_manual_section.is_some() {
-            return Err(QueryError::ConflictingSourceSelectors);
+            return Err(LoadError::ConflictingSourceSelectors);
         }
         return query_catalog_address(name, &address, policy, host);
     }
     let section = requested_manual_section.map(str::trim);
     if section.is_some_and(|section| !crate::is_manual_section(section)) {
-        return Err(QueryError::InvalidManualSection);
+        return Err(LoadError::InvalidManualSection);
     }
     let section = section.map(ToOwned::to_owned);
     let source = requested_source.map(str::trim);
     if source.is_some_and(str::is_empty) {
-        return Err(QueryError::InvalidSource);
+        return Err(LoadError::InvalidSource);
     }
     let plan = policy.named_resolution_plan(section.is_some());
     if source.is_some() && (section.is_some() || plan.document == FullDocumentMode::NativeManual) {
-        return Err(QueryError::ConflictingSourceSelectors);
+        return Err(LoadError::ConflictingSourceSelectors);
     }
     let candidates = host.name_candidates(name);
 
@@ -42,7 +42,7 @@ pub(super) fn query_named_document(
         if let Some(section) = section.as_deref()
             && !crate::is_command_manual_section(section)
         {
-            return Err(QueryError::TldrManualSection {
+            return Err(LoadError::TldrManualSection {
                 section: section.to_owned(),
             });
         }
@@ -56,12 +56,12 @@ pub(super) fn query_named_document(
     if plan.document == FullDocumentMode::Priority {
         let registered = host
             .locate_registered_document(&candidates, source, RegisteredLookupPhase::BeforeBuiltin)
-            .map_err(|detail| QueryError::Registry { detail })?;
+            .map_err(|detail| LoadError::Registry { detail })?;
         if let Some(registered) = registered {
             return query_registered_document(name, &registered, host);
         }
         if source.is_some() {
-            return Err(QueryError::NoReadableContent {
+            return Err(LoadError::NoReadableContent {
                 name: name.to_owned(),
             });
         }
@@ -113,30 +113,30 @@ fn query_catalog_address(
     selector: &str,
     address: &DocumentAddress,
     policy: QueryPolicy,
-    host: &dyn QueryHost,
-) -> Result<ResolvedContent, QueryError> {
+    host: &dyn LoadHost,
+) -> Result<ResolvedContent, LoadError> {
     match address {
         DocumentAddress::Markdown { .. } if policy == QueryPolicy::TldrOnly => {
             let registered = host
                 .locate_registered_address(address)
-                .map_err(|detail| QueryError::Registry { detail })?
-                .ok_or_else(|| QueryError::TldrNotFound {
+                .map_err(|detail| LoadError::Registry { detail })?
+                .ok_or_else(|| LoadError::TldrNotFound {
                     topic: selector.to_owned(),
                 })?;
             query_registered_tldr(selector, &registered, host)?.ok_or_else(|| {
-                QueryError::TldrNotFound {
+                LoadError::TldrNotFound {
                     topic: selector.to_owned(),
                 }
             })
         }
         DocumentAddress::Markdown { .. } if policy == QueryPolicy::ManualOnly => {
-            Err(QueryError::ConflictingSourceSelectors)
+            Err(LoadError::ConflictingSourceSelectors)
         }
         DocumentAddress::Markdown { .. } => {
             let registered = host
                 .locate_registered_address(address)
-                .map_err(|detail| QueryError::Registry { detail })?
-                .ok_or_else(|| QueryError::NoReadableContent {
+                .map_err(|detail| LoadError::Registry { detail })?
+                .ok_or_else(|| LoadError::NoReadableContent {
                     name: selector.to_owned(),
                 })?;
             query_registered_document(selector, &registered, host)
@@ -152,21 +152,21 @@ fn query_tldr_only(
     name: &str,
     candidates: &[String],
     source: Option<&str>,
-    host: &dyn QueryHost,
-) -> Result<ResolvedContent, QueryError> {
+    host: &dyn LoadHost,
+) -> Result<ResolvedContent, LoadError> {
     let before = host
         .locate_registered_document_groups(candidates, source, RegisteredLookupPhase::BeforeBuiltin)
-        .map_err(|detail| QueryError::Registry { detail })?;
+        .map_err(|detail| LoadError::Registry { detail })?;
     if let Some(tldr) = first_registered_tldr(name, before, host)? {
         return Ok(tldr);
     }
     if source.is_some() {
-        return Err(QueryError::TldrNotFound {
+        return Err(LoadError::TldrNotFound {
             topic: name.to_owned(),
         });
     }
 
-    if let Some(tldr) = host.read_tldr(name).map_err(|detail| QueryError::Tldr {
+    if let Some(tldr) = host.read_tldr(name).map_err(|detail| LoadError::Tldr {
         topic: name.to_owned(),
         detail,
     })? {
@@ -180,8 +180,8 @@ fn query_tldr_only(
 
     let after = host
         .locate_registered_document_groups(candidates, None, RegisteredLookupPhase::AfterBuiltin)
-        .map_err(|detail| QueryError::Registry { detail })?;
-    first_registered_tldr(name, after, host)?.ok_or_else(|| QueryError::TldrNotFound {
+        .map_err(|detail| LoadError::Registry { detail })?;
+    first_registered_tldr(name, after, host)?.ok_or_else(|| LoadError::TldrNotFound {
         topic: name.to_owned(),
     })
 }
@@ -189,8 +189,8 @@ fn query_tldr_only(
 fn first_registered_tldr(
     name: &str,
     groups: Vec<RegisteredSelectionGroup>,
-    host: &dyn QueryHost,
-) -> Result<Option<ResolvedContent>, QueryError> {
+    host: &dyn LoadHost,
+) -> Result<Option<ResolvedContent>, LoadError> {
     for group in groups {
         let mut matches = Vec::new();
         for registered in group.documents {
@@ -208,7 +208,7 @@ fn first_registered_tldr(
                     .map(DocumentAddress::catalog_path)
                     .collect::<Vec<_>>()
                     .join("', '");
-                return Err(QueryError::Registry {
+                return Err(LoadError::Registry {
                     detail: format!(
                         "tldr selector '{name}' is ambiguous at one document priority: '{choices}'"
                     ),
@@ -222,8 +222,8 @@ fn first_registered_tldr(
 fn query_registered_tldr(
     name: &str,
     registered: &RegisteredSelection,
-    host: &dyn QueryHost,
-) -> Result<Option<ResolvedContent>, QueryError> {
+    host: &dyn LoadHost,
+) -> Result<Option<ResolvedContent>, LoadError> {
     let resolved = query_registered_document(name, registered, host)?;
     let Some(tldr) = resolved.tldr else {
         return Ok(None);
@@ -240,7 +240,7 @@ fn finish_selected_manual(
     name: &str,
     manual: Result<LoadedManual, ManualLoadError>,
     tldr: Option<TldrDocument>,
-) -> Result<ResolvedContent, QueryError> {
+) -> Result<ResolvedContent, LoadError> {
     match manual {
         Ok(manual) => Ok(ResolvedContent {
             address: Some(manual.address),
@@ -248,11 +248,11 @@ fn finish_selected_manual(
             document: Some(manual.document),
             tldr,
         }),
-        Err(error) if tldr.is_some() => Err(QueryError::ManualWithTldr {
+        Err(error) if tldr.is_some() => Err(LoadError::ManualWithTldr {
             error,
             topic: name.to_owned(),
         }),
-        Err(error) => Err(QueryError::Manual(error)),
+        Err(error) => Err(LoadError::Manual(error)),
     }
 }
 
@@ -261,8 +261,8 @@ fn finish_unqualified_manual(
     candidates: &[String],
     manual: Result<LoadedManual, ManualLoadError>,
     tldr: Option<TldrDocument>,
-    host: &dyn QueryHost,
-) -> Result<ResolvedContent, QueryError> {
+    host: &dyn LoadHost,
+) -> Result<ResolvedContent, LoadError> {
     match manual {
         Ok(manual) => Ok(ResolvedContent {
             address: Some(manual.address),
@@ -273,16 +273,16 @@ fn finish_unqualified_manual(
         Err(error) => {
             let registered = host
                 .locate_registered_document(candidates, None, RegisteredLookupPhase::AfterBuiltin)
-                .map_err(|detail| QueryError::Registry { detail })?;
+                .map_err(|detail| LoadError::Registry { detail })?;
             if let Some(registered) = registered {
                 query_registered_document(name, &registered, host)
             } else if tldr.is_some() {
-                Err(QueryError::ManualWithTldr {
+                Err(LoadError::ManualWithTldr {
                     error,
                     topic: name.to_owned(),
                 })
             } else {
-                Err(QueryError::Manual(error))
+                Err(LoadError::Manual(error))
             }
         }
     }
@@ -291,17 +291,17 @@ fn finish_unqualified_manual(
 fn query_registered_document(
     name: &str,
     registered: &RegisteredSelection,
-    host: &dyn QueryHost,
-) -> Result<ResolvedContent, QueryError> {
+    host: &dyn LoadHost,
+) -> Result<ResolvedContent, LoadError> {
     let path = &registered.path;
     let source_path = path.to_string_lossy().into_owned();
     let source = host
         .read_markdown(path)
-        .map_err(|detail| QueryError::Markdown {
+        .map_err(|detail| LoadError::Markdown {
             path: source_path.clone(),
             detail,
         })?;
-    let mut query = query_markdown_text(&source, Some(source_path))?;
+    let mut query = load_markdown_text(&source, Some(source_path))?;
     name.clone_into(&mut query.label);
     query.address = Some(registered.address.clone());
     Ok(query)
@@ -311,7 +311,7 @@ fn load_manual(
     requested_name: &str,
     candidates: &[String],
     section: Option<&str>,
-    host: &dyn QueryHost,
+    host: &dyn LoadHost,
 ) -> Result<LoadedManual, ManualLoadError> {
     let mut first_locate_error = None;
     let mut located = None;

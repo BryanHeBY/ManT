@@ -9,13 +9,12 @@ use mant_ir::{DocumentAddress, DocumentReference, ResolvedContent};
 use mant_protocol::{
     DocumentEdge, DocumentEdgeKind, DocumentFrontier, DocumentScope, DocumentSelector,
     MAX_DOCUMENT_SELECTOR_CHARS, MAX_SCOPE_CONTENT_BYTES, MAX_SCOPE_DEPTH,
-    MAX_SCOPE_DOCUMENT_LIMIT, MAX_SCOPE_DOCUMENTS, MAX_SEMANTIC_ENTRY_CHARS, QueryInput,
-    QueryRequest, RequestSchema, ResolvedDocumentScope, ScopeQueryRequest, ScopeQueryResult,
-    ScopeQueryView, ScopeTextError, ScopedDocument, SearchQuery, TraversalLimit,
-    UnresolvedDocument, validate_scope_text,
+    MAX_SCOPE_DOCUMENT_LIMIT, MAX_SCOPE_DOCUMENTS, MAX_SEMANTIC_ENTRY_CHARS, ResolvedDocumentScope,
+    ScopeQueryRequest, ScopeQueryResult, ScopeQueryView, ScopeTextError, ScopedDocument,
+    SearchQuery, TraversalLimit, UnresolvedDocument, validate_scope_text,
 };
 
-use crate::{DocumentResolver, QueryError, QueryPolicy, validate_search_query};
+use crate::{DocumentResolver, LoadError, LoadSpec, QueryPolicy, validate_search_query};
 
 mod execute;
 mod references;

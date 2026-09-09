@@ -3,7 +3,10 @@
 use std::io::Write;
 
 use anstyle::{AnsiColor, Style};
-use mant_engine::{ProjectionError, QueryError, QueryExecutionError, ScopeQueryError, SearchError};
+use mant_engine::{
+    LoadError, ProjectionError, QueryError, QueryExecutionError, QueryValidationError,
+    ScopeQueryError, SearchError,
+};
 use mant_protocol::sanitize_terminal_text;
 
 const ERROR_STYLE: Style = AnsiColor::Red.on_default().bold();
@@ -87,39 +90,52 @@ fn sanitized_message(message: impl std::fmt::Display) -> String {
 
 pub(super) fn query_failure(error: QueryError) -> Failure {
     match error {
-        QueryError::EmptyName
-        | QueryError::InvalidManualSection
-        | QueryError::TldrManualSection { .. }
-        | QueryError::InvalidSource
-        | QueryError::ConflictingSourceSelectors
-        | QueryError::EmptyMarkdownPath
-        | QueryError::UnsupportedInputFormat { .. }
-        | QueryError::EmptySelection
-        | QueryError::TooManySelections { .. }
-        | QueryError::EmptySelector
-        | QueryError::InvalidContentSelector
-        | QueryError::InvalidReferenceProjection(_)
-        | QueryError::InvalidEntryKinds
-        | QueryError::EmptyEntry
-        | QueryError::InvalidViewSelector { .. } => Failure::usage(error),
-        QueryError::InvalidSearch(error) => search_failure(&error),
-        QueryError::InvalidExplanation(mant_engine::ExplanationError::MissingContent) => {
-            Failure::operational("explanation requires readable content")
-        }
-        QueryError::InvalidExplanation(error) => Failure::usage(error),
-        QueryError::ManualWithTldr { error, topic } => Failure::operational_lines(
+        QueryError::Load(error) => load_failure(error),
+        QueryError::QueryValidation(error) => query_validation_failure(error),
+    }
+}
+
+fn load_failure(error: LoadError) -> Failure {
+    match error {
+        LoadError::EmptyName
+        | LoadError::InvalidManualSection
+        | LoadError::TldrManualSection { .. }
+        | LoadError::InvalidSource
+        | LoadError::ConflictingSourceSelectors
+        | LoadError::EmptyMarkdownPath
+        | LoadError::UnsupportedInputFormat { .. }
+        | LoadError::InvalidSelector { .. } => Failure::usage(error),
+        LoadError::ManualWithTldr { error, topic } => Failure::operational_lines(
             error,
             [format!(
                 "hint: a tldr entry is available; run `mant {topic} --tldr`"
             )],
         ),
-        QueryError::Markdown { .. }
-        | QueryError::EmptyMarkdown { .. }
-        | QueryError::Registry { .. }
-        | QueryError::Manual(_)
-        | QueryError::TldrNotFound { .. }
-        | QueryError::Tldr { .. }
-        | QueryError::NoReadableContent { .. } => Failure::operational(error),
+        LoadError::Markdown { .. }
+        | LoadError::EmptyMarkdown { .. }
+        | LoadError::Registry { .. }
+        | LoadError::Manual(_)
+        | LoadError::TldrNotFound { .. }
+        | LoadError::Tldr { .. }
+        | LoadError::NoReadableContent { .. } => Failure::operational(error),
+    }
+}
+
+fn query_validation_failure(error: QueryValidationError) -> Failure {
+    match error {
+        QueryValidationError::EmptySelection
+        | QueryValidationError::TooManySelections { .. }
+        | QueryValidationError::EmptySelector
+        | QueryValidationError::InvalidContentSelector
+        | QueryValidationError::InvalidReferenceProjection(_)
+        | QueryValidationError::InvalidEntryKinds
+        | QueryValidationError::EmptyEntry
+        | QueryValidationError::InvalidViewSelector { .. } => Failure::usage(error),
+        QueryValidationError::InvalidSearch(error) => search_failure(&error),
+        QueryValidationError::InvalidExplanation(mant_engine::ExplanationError::MissingContent) => {
+            Failure::operational("explanation requires readable content")
+        }
+        QueryValidationError::InvalidExplanation(error) => Failure::usage(error),
     }
 }
 
@@ -243,6 +259,53 @@ mod tests {
     use mant_engine::SearchError;
 
     use super::{Failure, report_failure, search_failure};
+
+    #[test]
+    fn loading_and_query_validation_errors_keep_their_exit_categories() {
+        use mant_engine::{LoadError, QueryError, QueryValidationError};
+        for (error, expected_status, expected_message) in [
+            (
+                QueryError::Load(LoadError::EmptyName),
+                2,
+                "name must not be empty",
+            ),
+            (
+                QueryError::Load(LoadError::InvalidSelector {
+                    field: "document source",
+                    error: mant_protocol::ScopeTextError::ControlCharacter,
+                }),
+                2,
+                "document source must not contain control characters",
+            ),
+            (
+                QueryError::QueryValidation(QueryValidationError::EmptyEntry),
+                2,
+                "semantic entry must not be empty",
+            ),
+            (
+                QueryError::QueryValidation(QueryValidationError::InvalidExplanation(
+                    mant_engine::ExplanationError::MissingContent,
+                )),
+                1,
+                "explanation requires readable content",
+            ),
+            (
+                QueryError::Load(LoadError::Markdown {
+                    path: "demo.md".into(),
+                    detail: "permission denied".into(),
+                }),
+                1,
+                "could not load Markdown document 'demo.md': permission denied",
+            ),
+        ] {
+            let failure = super::query_failure(error);
+            assert_eq!(failure.message(), expected_message);
+            assert_eq!(
+                report_failure(&failure, &mut Vec::new(), false),
+                expected_status
+            );
+        }
+    }
 
     #[test]
     fn failure_messages_mask_dynamic_terminal_controls() {

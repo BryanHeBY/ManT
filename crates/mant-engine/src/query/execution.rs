@@ -13,7 +13,8 @@ pub fn project_query_view(
     query: ResolvedContent,
     view: &QueryView,
 ) -> Result<QueryViewResult, QueryExecutionError> {
-    validate_query_view(view).map_err(QueryExecutionError::Query)?;
+    validate_query_view(view)
+        .map_err(|error| QueryExecutionError::Query(super::QueryError::QueryValidation(error)))?;
     match view {
         QueryView::Full {} => Ok(QueryViewResult::Full(Box::new(query))),
         QueryView::Outline {
@@ -41,7 +42,11 @@ pub fn project_query_view(
             },
         )
         .map(QueryViewResult::Explanation)
-        .map_err(|error| QueryExecutionError::Query(super::QueryError::InvalidExplanation(error))),
+        .map_err(|error| {
+            QueryExecutionError::Query(super::QueryError::QueryValidation(
+                super::QueryValidationError::InvalidExplanation(error),
+            ))
+        }),
         QueryView::Search {
             pattern,
             syntax,
