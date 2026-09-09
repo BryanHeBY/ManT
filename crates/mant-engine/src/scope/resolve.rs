@@ -1,15 +1,11 @@
 //! Scope resolve: preserve request-local ownership and source order.
+use super::references::{ScopeReference, document_references};
 use super::{
     BTreeMap, BTreeSet, DocumentAddress, DocumentEdge, DocumentEdgeKind, DocumentFrontier,
     DocumentResolver, DocumentScope, DocumentSelector, LoadedDocumentScope,
     MAX_SCOPE_CONTENT_BYTES, QueryError, QueryInput, QueryPolicy, QueryRequest, RequestSchema,
-    ResolvedContent, ResolvedDocumentScope, ScopeQueryError, ScopeQueryRequest, ScopeQueryResponse,
-    ScopeQuerySchema, ScopeQueryView, ScopedDocument, SearchQuery, TraversalLimit,
-    UnresolvedDocument, VecDeque, Write, validate_document_scope, validate_scope_query_request,
-};
-use super::{
-    execute::{execute_scope_explain, execute_scope_search},
-    references::{ScopeReference, document_references},
+    ResolvedContent, ResolvedDocumentScope, ScopeQueryError, ScopedDocument, TraversalLimit,
+    UnresolvedDocument, VecDeque, Write, validate_document_scope,
 };
 
 impl DocumentResolver {
@@ -40,56 +36,6 @@ impl DocumentResolver {
             resolution.follow_links(self);
         }
         Ok(resolution.finish())
-    }
-
-    /// Resolve a scope and apply its closed multi-document projection.
-    ///
-    /// # Errors
-    ///
-    /// Returns request validation, resolution, or search errors. Ordinary
-    /// per-document explanation misses do not fail the aggregate query.
-    pub fn execute_scope_query(
-        &self,
-        request: &ScopeQueryRequest,
-    ) -> Result<ScopeQueryResponse, ScopeQueryError> {
-        validate_scope_query_request(request)?;
-        let loaded = self.resolve_scope(&request.scope)?;
-        let result = match &request.view {
-            ScopeQueryView::Explain { entry, options } => execute_scope_explain(
-                &loaded,
-                &mant_protocol::ExplanationQuery {
-                    entry: entry.clone(),
-                    options: *options,
-                },
-            )?,
-            ScopeQueryView::Search {
-                pattern,
-                syntax,
-                case,
-                scope,
-                word,
-                context_lines,
-                limit,
-                offset,
-            } => execute_scope_search(
-                &loaded,
-                &SearchQuery {
-                    pattern: pattern.clone(),
-                    syntax: *syntax,
-                    case: *case,
-                    scope: *scope,
-                    word: *word,
-                    context_lines: *context_lines,
-                    limit: *limit,
-                    offset: *offset,
-                },
-            )?,
-        };
-        Ok(ScopeQueryResponse {
-            schema: ScopeQuerySchema::V0Dot11,
-            scope: loaded.scope,
-            result,
-        })
     }
 
     fn resolve_selector(

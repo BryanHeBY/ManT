@@ -5,13 +5,13 @@ use mant_protocol::{
     ScopedDocument,
 };
 
-fn loaded() -> crate::LoadedDocumentScope {
-    let documents = [
+fn loaded() -> (ResolvedDocumentScope, Vec<mant_ir::ResolvedContent>) {
+    let mut documents = [
         "# A\n\n--help mentioned in ordinary prose.\n",
         "# B\n\n<!-- mant:entries role=option case=sensitive -->\n- `--help`: Direct. <!-- mant:entry {\"id\":\"same\"} -->\n- `-Q`: Mentions --help.\n",
         "# C\n\n<!-- mant:entries role=option case=sensitive -->\n- `--help`: Direct. <!-- mant:entry {\"id\":\"same\"} -->\n",
     ].map(|source| crate::query_markdown_text(source, None).unwrap()).to_vec();
-    let sources = ["a", "b", "c"]
+    let sources: Vec<_> = ["a", "b", "c"]
         .into_iter()
         .map(|path| ScopedDocument {
             address: DocumentAddress::Markdown {
@@ -23,30 +23,32 @@ fn loaded() -> crate::LoadedDocumentScope {
             reached_from: vec![],
         })
         .collect();
-    crate::LoadedDocumentScope {
-        documents,
-        scope: ResolvedDocumentScope {
-            reference_limits: Vec::new(),
-            query: DocumentScope {
-                documents: vec![],
-                traversal: mant_protocol::DocumentTraversal::default(),
-            },
-            documents: sources,
-            edges: vec![],
-            frontier: vec![],
-            unresolved: vec![],
-        },
+    for (source, content) in sources.iter().zip(&mut documents) {
+        content.address = Some(source.address.clone());
     }
+    let graph = ResolvedDocumentScope {
+        reference_limits: Vec::new(),
+        query: DocumentScope {
+            documents: vec![],
+            traversal: mant_protocol::DocumentTraversal::default(),
+        },
+        documents: sources,
+        edges: vec![],
+        frontier: vec![],
+        unresolved: vec![],
+    };
+    (graph, documents)
 }
 
 #[test]
 fn global_classification_paging_and_source_report_counts_are_consistent() {
-    let loaded = loaded();
+    let (graph, documents) = loaded();
+    let input = crate::QueryScopeView::new(&graph, &documents).unwrap();
     let mut query = ExplanationQuery {
         entry: "--help".into(),
         options: ExplanationOptions::default(),
     };
-    let full = super::explain(&loaded, &query).unwrap();
+    let full = super::explain(input, &query).unwrap();
     assert_eq!(full.total, 4);
     assert_eq!(
         full.evidence
@@ -78,7 +80,7 @@ fn global_classification_paging_and_source_report_counts_are_consistent() {
     query.options.limit = 1;
     let mut paged = Vec::new();
     loop {
-        let page = super::explain(&loaded, &query).unwrap();
+        let page = super::explain(input, &query).unwrap();
         assert_eq!(page.returned, 1);
         assert_eq!(page.documents.iter().map(|d| d.returned).sum::<u32>(), 1);
         for class in EvidenceClass::ALL {
@@ -101,7 +103,7 @@ fn global_classification_paging_and_source_report_counts_are_consistent() {
     assert_eq!(paged, full.evidence);
     query.options.offset = 0;
     query.options.content_bytes = 1;
-    let bounded = super::explain(&loaded, &query).unwrap();
+    let bounded = super::explain(input, &query).unwrap();
     assert_eq!(bounded.evidence[0].document_index, 1);
     assert_eq!(
         bounded.evidence[0].evidence.class,
@@ -121,14 +123,18 @@ fn global_classification_paging_and_source_report_counts_are_consistent() {
 
 #[test]
 fn source_indices_refer_to_readable_reports_not_the_loading_graph() {
-    let mut loaded = loaded();
-    loaded.documents[0].document = None;
-    loaded.documents[0].tldr = None;
+    let (graph, mut documents) = loaded();
+    documents[0].document = None;
+    documents[0].tldr = None;
     let query = ExplanationQuery {
         entry: "--help".into(),
         options: ExplanationOptions::default(),
     };
-    let result = super::explain(&loaded, &query).unwrap();
+    let result = super::explain(
+        crate::QueryScopeView::new(&graph, &documents).unwrap(),
+        &query,
+    )
+    .unwrap();
     assert_eq!(result.failures.len(), 1);
     assert_eq!(result.documents.len(), 2);
     assert_eq!(result.evidence[0].document_index, 0);

@@ -142,6 +142,7 @@ a clean target ledger alone does not establish rendering fidelity.
 | Resolve and project its requested view | `execute_query` |
 | Resolve a bounded multi-document scope | `DocumentResolver::resolve_scope` |
 | Resolve and project a scope request | `DocumentResolver::execute_scope_query` |
+| Query caller-owned document snapshots without loading | `QueryScopeView::new`, `search_scope`, `explain_scope` |
 | Parse in-memory Markdown without discovery | `parse_markdown` or `query_markdown_text` |
 | Parse in-memory roff without discovery | `parse_manual_bytes` or `query_roff_bytes` |
 | Audit production file lowering against its exact native witness | `parse_manual_source_with_report` |
@@ -181,6 +182,23 @@ filesystem snapshot; constructing a new resolver refreshes discovery.
 aggregate content budgets, and breadth-first projections at that same engine
 boundary. Process and MCP adapters should pass a `ScopeQueryRequest` rather
 than reimplementing scope traversal.
+
+For already-loaded or caller-produced content, construct `QueryScopeView` from
+the borrowed logical graph and the matching `ResolvedContent` slice, then use
+`search_scope` or `explain_scope`. The view checks lengths, exact addresses,
+unique source slots, BFS depth/order and graph provenance before execution;
+it cannot silently truncate mismatched collections. It borrows the original
+content and permits repeated queries without loading, parsing or serialization.
+The caller remains responsible for supplying one coherent provenance snapshot,
+not merely equal addresses from unrelated revisions. Loading coverage and
+frontier records remain accessible through the same borrowed graph; an absent
+target is not proof of nonexistence. Query errors are `ScopeExecutionError`,
+separate from source acquisition errors.
+
+`LoadedDocumentScope` exposes immutable `scope()` and `documents()` accessors;
+`into_parts()` transfers both owned components without cloning content. The
+engine's complete workflow constructs the validated view from this loading
+result and retains global classification, paging and shared copy budgets.
 
 `explain_query` returns `QueryExplanation`, not a unique excerpt. Its options
 bound returned owners (default 50, maximum 256), a zero-based offset, and copied

@@ -19,6 +19,7 @@ mod producer_identity;
 mod projection;
 mod query;
 mod scope;
+mod scope_query;
 mod search;
 mod selectors;
 mod source;
@@ -67,6 +68,9 @@ pub use query::{
     query_roff_bytes, resolve_query, resolve_query_with_policy, validate_query_request,
 };
 pub use scope::{LoadedDocumentScope, ScopeQueryError, validate_scope_query_request};
+pub use scope_query::{
+    QueryScopeView, ScopeExecutionError, ScopeInputError, explain_scope, search_scope,
+};
 pub use search::{SearchError, search_query, validate_search_query};
 pub use source::{LocateError, ManualIndex, ManualPage, ManualRequest, locate_manual_source_in};
 pub use tldr::{

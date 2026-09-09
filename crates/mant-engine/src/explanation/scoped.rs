@@ -11,14 +11,14 @@ use mant_protocol::{
 mod tests;
 
 pub(crate) fn explain(
-    loaded: &crate::scope::LoadedDocumentScope,
+    input: crate::QueryScopeView<'_>,
     query: &mant_protocol::ExplanationQuery,
-) -> Result<ScopeExplanation, crate::ScopeQueryError> {
-    super::validate_explanation_query(query).map_err(crate::ScopeQueryError::Explanation)?;
+) -> Result<ScopeExplanation, crate::ScopeExecutionError> {
+    super::validate_explanation_query(query).map_err(crate::ScopeExecutionError::Explanation)?;
     let mut plans = Vec::new();
     let mut sources = Vec::new();
     let mut failures = Vec::new();
-    for (source, content) in loaded.scope.documents.iter().zip(&loaded.documents) {
+    for (source, content) in input.iter() {
         match collection_plan(content, query.entry.trim()) {
             Ok(plan) => {
                 sources.push(source);
@@ -31,7 +31,7 @@ pub(crate) fn explain(
         }
     }
     if plans.is_empty() {
-        return Err(crate::ScopeQueryError::NoResolvedDocuments {
+        return Err(crate::ScopeExecutionError::NoReadableDocuments {
             reasons: failures.iter().map(|f| f.reason.clone()).collect(),
         });
     }

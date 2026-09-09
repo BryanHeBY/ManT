@@ -85,6 +85,16 @@ reports owned by `mant-sources`; they do not become document protocol variants.
 
 Multi-document operations use `mant-protocol::DocumentScope` as a host-neutral input. `mant-engine::DocumentResolver` resolves its ordered roots, follows only typed IR `Document` and `Manual` edges, and returns one bounded breadth-first graph plus the loaded documents in matching order. Search, explanation, CLI JSON, and interactive search consume that same scope; they do not infer families from filename prefixes or merge independent document trees into one AST. The TUI receives the already loaded scope in memory, while its ordinary catalog finder remains a separate global host callback.
 
+The loading result keeps its graph and content private with immutable accessors
+and a joint ownership-transfer operation. Pure collection queries instead accept
+`QueryScopeView`: borrowed IR plus a logical graph, never a loader service or a
+callback capable of acquiring missing content. View construction validates exact
+address/length/order alignment and graph provenance; the caller supplies one
+coherent snapshot and retains responsibility for freshness. Query execution does
+not serialize or clone entire documents. The application workflow joins loading
+and querying and maps their errors, while global evidence order, source reports,
+pagination and copy budgets remain in the query implementation.
+
 This separation also explains why `mant-protocol` depends on `mant-ir`: its
 DTOs project selected semantic types and provide explicit conversions,
 but the IR never depends on a protocol version. Dependency direction therefore

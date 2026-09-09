@@ -706,14 +706,14 @@ fn run_interactive(
                 Ok(loaded) => loaded,
                 Err(error) => return report_failure(&error, diagnostics, diagnostics_color),
             };
-            let Some(query) = loaded.documents.first().cloned() else {
+            let Some(query) = loaded.documents().first().cloned() else {
                 return report_failure(
                     &Failure::operational("document scope resolved no readable documents"),
                     diagnostics,
                     diagnostics_color,
                 );
             };
-            (query, loaded.documents)
+            (query, loaded.into_parts().1)
         }
         QuerySource::ScopeArguments { view: Some(_), .. } => {
             return report_failure(

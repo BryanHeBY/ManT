@@ -10,10 +10,9 @@ use mant_protocol::{
     DocumentEdge, DocumentEdgeKind, DocumentFrontier, DocumentScope, DocumentSelector,
     MAX_DOCUMENT_SELECTOR_CHARS, MAX_SCOPE_CONTENT_BYTES, MAX_SCOPE_DEPTH,
     MAX_SCOPE_DOCUMENT_LIMIT, MAX_SCOPE_DOCUMENTS, MAX_SEMANTIC_ENTRY_CHARS, QueryInput,
-    QueryRequest, RequestSchema, ResolvedDocumentScope, ScopeQueryRequest, ScopeQueryResponse,
-    ScopeQueryResult, ScopeQuerySchema, ScopeQueryView, ScopeSearch, ScopeTextError,
-    ScopedDocument, ScopedSearchDocument, SearchQuery, TraversalLimit, UnresolvedDocument,
-    validate_scope_text,
+    QueryRequest, RequestSchema, ResolvedDocumentScope, ScopeQueryRequest, ScopeQueryResult,
+    ScopeQueryView, ScopeTextError, ScopedDocument, SearchQuery, TraversalLimit,
+    UnresolvedDocument, validate_scope_text,
 };
 
 use crate::{DocumentResolver, QueryError, QueryPolicy, validate_search_query};
@@ -32,14 +31,34 @@ use resolve::{ResolutionFailures, ScopeResolution, normalized_content_bytes};
 #[derive(Debug, Clone)]
 pub struct LoadedDocumentScope {
     /// Transport-neutral logical graph.
-    pub scope: ResolvedDocumentScope,
+    scope: ResolvedDocumentScope,
     /// Loaded documents in the same order as [`ResolvedDocumentScope::documents`].
-    pub documents: Vec<ResolvedContent>,
+    documents: Vec<ResolvedContent>,
+}
+
+impl LoadedDocumentScope {
+    /// Logical graph and source coverage in the loader's stable order.
+    #[must_use]
+    pub const fn scope(&self) -> &ResolvedDocumentScope {
+        &self.scope
+    }
+    /// Immutable original content paired with the logical graph.
+    #[must_use]
+    pub fn documents(&self) -> &[ResolvedContent] {
+        &self.documents
+    }
+    /// Transfer ownership together, without cloning documents.
+    #[must_use]
+    pub fn into_parts(self) -> (ResolvedDocumentScope, Vec<ResolvedContent>) {
+        (self.scope, self.documents)
+    }
 }
 
 /// Invalid scope configuration or failure to resolve any initial document.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ScopeQueryError {
+    /// A loading result did not satisfy the collection-query mapping contract.
+    InvalidLoadedScope(crate::ScopeInputError),
     /// No initial document was supplied.
     EmptyScope,
     /// The initial document count exceeded the native bound.
@@ -68,6 +87,7 @@ pub enum ScopeQueryError {
 impl fmt::Display for ScopeQueryError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::InvalidLoadedScope(error) => error.fmt(formatter),
             Self::EmptyScope => formatter.write_str("at least one document is required"),
             Self::TooManyDocuments => write!(
                 formatter,
@@ -114,6 +134,7 @@ impl fmt::Display for ScopeQueryError {
 impl Error for ScopeQueryError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
+            Self::InvalidLoadedScope(error) => Some(error),
             Self::Search(error) => Some(error),
             Self::Explanation(error) => Some(error),
             Self::EmptyScope
@@ -478,7 +499,7 @@ mod tests {
             path: "shell".to_owned(),
             origin: MarkdownOrigin::Documents,
         };
-        let loaded = LoadedDocumentScope {
+        let mut loaded = LoadedDocumentScope {
             scope: ResolvedDocumentScope {
                 query: DocumentScope {
                     documents: vec![DocumentSelector {
@@ -508,6 +529,9 @@ mod tests {
             ],
         };
 
+        for (source, content) in loaded.scope.documents.iter().zip(&mut loaded.documents) {
+            content.address = Some(source.address.clone());
+        }
         let ScopeQueryResult::Explain { explanation } = execute_scope_explain(
             &loaded,
             &mant_protocol::ExplanationQuery {
@@ -552,7 +576,7 @@ mod tests {
                 reached_from: Vec::new(),
             })
             .collect::<Vec<_>>();
-        let loaded = LoadedDocumentScope {
+        let mut loaded = LoadedDocumentScope {
             scope: ResolvedDocumentScope {
                 query: DocumentScope {
                     documents: Vec::new(),
@@ -566,6 +590,9 @@ mod tests {
             },
             documents: vec![markdown("Alpha", 3), markdown("Beta", 10)],
         };
+        for (source, content) in loaded.scope.documents.iter().zip(&mut loaded.documents) {
+            content.address = Some(source.address.clone());
+        }
         let query = SearchQuery {
             pattern: "needle".to_owned(),
             syntax: mant_protocol::SearchSyntax::Literal,
