@@ -11,11 +11,59 @@ updates:
           - "*"
 
   - package-ecosystem: cargo
-    directory: /
+    # One job covers both independent lockfiles; do not add overlapping Cargo
+    # jobs for workspace member manifests or another /fuzz entry.
+    directories:
+      - /
+      - /fuzz
     target-branch: dev
     schedule:
       interval: weekly
     groups:
-      rust-dependencies:
+      # Grouping coordinates PRs, not release equality or generated licenses.
+      # Keep the SDK/macros exact-version test and license-generation gate.
+      mcp-sdk:
+        patterns:
+          - "rmcp"
+          - "rmcp-macros"
+      rust-compression:
+        patterns:
+          - "flate2"
+          - "miniz_oxide"
+          - "zip"
+          - "zstd*"
+      rust-native-build:
+        patterns:
+          - "cc"
+          - "find-msvc-tools"
+      rust-terminal:
+        patterns:
+          - "crossterm*"
+          - "signal-hook*"
+          - "crossbeam-channel"
+      rust-patches:
         patterns:
           - "*"
+        exclude-patterns:
+          - "rmcp"
+          - "rmcp-macros"
+          - "flate2"
+          - "miniz_oxide"
+          - "zip"
+          - "zstd*"
+          - "cc"
+          - "find-msvc-tools"
+          - "crossterm*"
+          - "signal-hook*"
+          - "crossbeam-channel"
+        update-types:
+          - "patch"
+      # Ordinary minor/major updates stay separate by dependency, but combine
+      # compatible updates of that dependency across root and fuzz lockfiles.
+      rust-individual:
+        group-by: dependency-name
+        patterns:
+          - "*"
+    # These are version-update groups (the default applies-to). Security
+    # updates remain enabled under the repository's default-branch policy;
+    # no ignore/allow restriction or security-update suppression is added.
