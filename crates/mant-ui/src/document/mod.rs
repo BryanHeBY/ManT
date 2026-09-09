@@ -81,7 +81,8 @@ pub struct NavNode {
     pub kind: NavKind,
     /// Whether collapse/expand behavior applies.
     pub has_children: bool,
-    /// Whether this is the final sibling at its depth.
+    /// Builder-time final-sibling hint. Sidebar guides derive sibling order
+    /// from the final parent-linked forest after synthetic groups are appended.
     pub is_last: bool,
     /// Parent sidebar identity, when nested.
     pub parent_id: Option<String>,

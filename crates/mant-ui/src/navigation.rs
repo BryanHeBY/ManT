@@ -21,7 +21,10 @@ use mant_render::cells::{graphemes, prefix_columns, suffix_columns};
 
 use crate::{NavKind, NavNode, text::sanitize_terminal_text, theme};
 
-const NODE_LEFT_PADDING: &str = " ";
+mod tree;
+pub(crate) use tree::TreePlan;
+#[cfg(test)]
+pub(crate) use tree::{start_layout_trace, take_layout_trace};
 const TRUNCATION_MARKER: &str = "...";
 
 pub(crate) struct NavigationRow {
@@ -38,11 +41,12 @@ pub(crate) fn rows(
     full_labels: bool,
     width: usize,
 ) -> Vec<NavigationRow> {
+    let plan = TreePlan::new(nodes);
     visible
         .iter()
         .flat_map(|index| {
-            node_lines(
-                &nodes[*index],
+            planned_node_lines(
+                &plan,
                 *index,
                 *index == selected,
                 expanded.contains(&nodes[*index].id),
@@ -55,7 +59,7 @@ pub(crate) fn rows(
 
 /// Decorate validated owner associations without changing source labels or IDs.
 pub(crate) fn rows_with_references(
-    nodes: &[NavNode],
+    plan: &TreePlan<'_>,
     visible: &[usize],
     selected: usize,
     expanded: &HashSet<String>,
@@ -63,17 +67,25 @@ pub(crate) fn rows_with_references(
     width: usize,
     badges: &HashMap<String, String>,
 ) -> Vec<NavigationRow> {
+    #[cfg(test)]
+    plan.record_layout(width);
     visible
         .iter()
         .flat_map(|index| {
-            let node = &nodes[*index];
-            let mut lines = node_lines(
-                node,
+            let node = &plan.nodes[*index];
+            let prefixes = plan.prefixes(
                 *index,
                 *index == selected,
                 expanded.contains(&node.id),
+                width,
+            );
+            let mut lines = node_lines_with_prefixes(
+                node,
+                *index,
+                *index == selected,
                 full_labels,
                 width,
+                &prefixes,
             );
             let Some(badge) = badges.get(&node.id) else {
                 return lines;
@@ -89,12 +101,7 @@ pub(crate) fn rows_with_references(
                 bounded_tree_prefix(&first[0].content, width),
                 first[0].style,
             );
-            let continuation_text = format!(
-                "{NODE_LEFT_PADDING}  {}",
-                continuation_prefix(node, expanded.contains(&node.id))
-            );
-            let continuation =
-                Span::styled(bounded_tree_prefix(&continuation_text, width), prefix.style);
+            let continuation = Span::styled(prefixes.continuation, prefix.style);
             let style = first[1].style;
             let available = width
                 .saturating_sub(prefix.width().max(continuation.width()))
@@ -196,13 +203,33 @@ pub(crate) fn node_row_range(rows: &[NavigationRow], node_index: usize) -> Optio
     Some(start..end)
 }
 
-fn node_lines(
-    node: &NavNode,
+#[cfg(test)]
+fn planned_node_lines(
+    plan: &TreePlan<'_>,
     node_index: usize,
     selected: bool,
     expanded: bool,
     full_labels: bool,
     width: usize,
+) -> Vec<NavigationRow> {
+    let prefixes = plan.prefixes(node_index, selected, expanded, width);
+    node_lines_with_prefixes(
+        &plan.nodes[node_index],
+        node_index,
+        selected,
+        full_labels,
+        width,
+        &prefixes,
+    )
+}
+
+fn node_lines_with_prefixes(
+    node: &NavNode,
+    node_index: usize,
+    selected: bool,
+    full_labels: bool,
+    width: usize,
+    prefixes: &tree::Prefixes,
 ) -> Vec<NavigationRow> {
     if width == 0 {
         return vec![NavigationRow {
@@ -210,21 +237,8 @@ fn node_lines(
             line: Line::default(),
         }];
     }
-    let selection = if selected { "› " } else { "  " };
-    let prefix = bounded_tree_prefix(
-        &format!(
-            "{NODE_LEFT_PADDING}{selection}{}",
-            tree_prefix(node, expanded)
-        ),
-        width,
-    );
-    let continuation_prefix = bounded_tree_prefix(
-        &format!(
-            "{NODE_LEFT_PADDING}  {}",
-            continuation_prefix(node, expanded)
-        ),
-        width,
-    );
+    let prefix = &prefixes.first;
+    let continuation_prefix = &prefixes.continuation;
     let foreground = node_foreground(node, selected);
     let background = if selected {
         if node.kind == NavKind::Tldr {
@@ -326,53 +340,6 @@ fn node_foreground(node: &NavNode, selected: bool) -> ratatui::style::Color {
     }
 }
 
-fn tree_prefix(node: &NavNode, expanded: bool) -> String {
-    if node.kind == NavKind::Tldr {
-        return "◆ ".to_owned();
-    }
-    let mut prefix = "│ ".repeat(node.depth);
-    if node.depth == 0 {
-        if node.has_children {
-            prefix.push_str("│ ");
-        }
-    } else {
-        prefix.push_str(if node.is_last && !expanded {
-            "╰─"
-        } else {
-            "├─"
-        });
-    }
-    prefix.push_str(if node.has_children {
-        if expanded { "▾ " } else { "▸ " }
-    } else if matches!(node.kind, NavKind::Entry(_)) {
-        "◇ "
-    } else {
-        "· "
-    });
-    prefix
-}
-
-fn continuation_prefix(node: &NavNode, expanded: bool) -> String {
-    if node.kind == NavKind::Tldr {
-        return "  ".to_owned();
-    }
-    let mut prefix = "│ ".repeat(node.depth);
-    if node.depth > 0 {
-        prefix.push_str(if node.is_last && !expanded {
-            "  "
-        } else {
-            "│ "
-        });
-    } else if node.has_children {
-        prefix.push_str("│ ");
-    }
-    if node.has_children && expanded {
-        prefix.push_str("│ ");
-    }
-    prefix.push_str("  ");
-    prefix
-}
-
 pub(crate) fn truncate_middle(value: &str, width: usize) -> String {
     if value.width() <= width {
         return value.to_owned();
@@ -446,8 +413,27 @@ mod tests {
     use ratatui::{buffer::Buffer, layout::Rect, widgets::Widget};
     use unicode_width::UnicodeWidthStr;
 
-    use super::{node_lines, node_row_range, truncate_middle};
+    use super::{TreePlan, node_row_range, truncate_middle};
     use crate::{NavKind, NavNode, theme};
+
+    fn node_lines(
+        node: &NavNode,
+        index: usize,
+        selected: bool,
+        expanded: bool,
+        full: bool,
+        width: usize,
+    ) -> Vec<super::NavigationRow> {
+        assert_eq!(index, 0);
+        super::planned_node_lines(
+            &TreePlan::new(std::slice::from_ref(node)),
+            0,
+            selected,
+            expanded,
+            full,
+            width,
+        )
+    }
 
     fn rendered_symbols(rows: &[super::NavigationRow], width: u16) -> Vec<String> {
         let height = u16::try_from(rows.len()).expect("test rows fit a terminal");
@@ -474,7 +460,7 @@ mod tests {
         for width in [11_u16, 12, 16, 80] {
             for (selected, full) in [(0, false), (usize::MAX, true), (usize::MAX, false)] {
                 let rows = super::rows_with_references(
-                    &nodes,
+                    &TreePlan::new(&nodes),
                     &[0],
                     selected,
                     &HashSet::new(),
@@ -510,7 +496,7 @@ mod tests {
 
     #[test]
     fn ordinary_navigation_uses_the_same_grapheme_safe_width_boundaries() {
-        for width in [10_u16, 11, 12, 16, 80] {
+        for width in [6_u16, 7, 12, 16, 80] {
             let rows = node_lines(
                 &node("Cafe\u{301}👩‍💻Suffix"),
                 0,
@@ -521,7 +507,7 @@ mod tests {
             );
             let symbols = rendered_symbols(&rows, width);
             assert!(symbols.iter().any(|symbol| symbol == "e\u{301}"));
-            if width > 10 {
+            if width > 6 {
                 assert!(symbols.iter().any(|symbol| symbol == "👩‍💻"));
             } else {
                 assert!(symbols.iter().any(|symbol| symbol == "�"));
@@ -554,7 +540,7 @@ mod tests {
         for width in [18, 30, 80] {
             for selected in [0, usize::MAX] {
                 let rows = super::rows_with_references(
-                    &nodes,
+                    &TreePlan::new(&nodes),
                     &[0],
                     selected,
                     &HashSet::new(),
@@ -580,11 +566,9 @@ mod tests {
                     assert!(rows[0].line.spans.iter().any(|span| span.style.fg
                         == Some(theme::entry_color(mant_ir::EntryKind::Command))));
                 } else {
-                    let expected = format!(
-                        "{}  {}",
-                        super::NODE_LEFT_PADDING,
-                        super::continuation_prefix(&nodes[0], false)
-                    );
+                    let expected = TreePlan::new(&nodes)
+                        .prefixes(0, true, false, width)
+                        .continuation;
                     assert!(
                         rows.iter()
                             .skip(1)
@@ -604,14 +588,27 @@ mod tests {
             let mut owner = node("日本 command");
             owner.depth = depth;
             owner.has_children = true;
-            let nodes = vec![owner];
+            owner.parent_id = Some(format!("ancestor-{}", depth - 1));
+            let mut nodes = Vec::new();
+            for level in 0..depth {
+                let mut ancestor = node("Ancestor");
+                ancestor.id = format!("ancestor-{level}");
+                ancestor.depth = level;
+                ancestor.parent_id = level
+                    .checked_sub(1)
+                    .map(|parent| format!("ancestor-{parent}"));
+                ancestor.has_children = true;
+                nodes.push(ancestor);
+            }
+            nodes.push(owner);
+            let plan = TreePlan::new(&nodes);
             for width in [0, 1, 4, 8] {
-                let plain = node_lines(&nodes[0], 0, true, true, true, width);
+                let plain = super::planned_node_lines(&plan, depth, true, true, true, width);
                 assert!(plain.iter().all(|row| row.line.width() <= width));
-                for (selected, full) in [(0, false), (usize::MAX, true), (usize::MAX, false)] {
+                for (selected, full) in [(depth, false), (usize::MAX, true), (usize::MAX, false)] {
                     let rows = super::rows_with_references(
-                        &nodes,
-                        &[0],
+                        &plan,
+                        &[depth],
                         selected,
                         &["node".to_owned()].into_iter().collect(),
                         full,
@@ -639,11 +636,11 @@ mod tests {
             target_id: "node".to_owned(),
             title: title.to_owned(),
             full_title: None,
-            depth: 1,
+            depth: 0,
             kind: NavKind::Section,
             has_children: false,
             is_last: true,
-            parent_id: Some("parent".to_owned()),
+            parent_id: None,
         }
     }
 
@@ -659,7 +656,7 @@ mod tests {
         );
 
         assert_eq!(rows.len(), 1);
-        assert_eq!(rows[0].line.to_string(), "   │ ╰─· Option...ind of Output");
+        assert_eq!(rows[0].line.to_string(), "   · Options...e Kind of Output");
         assert_eq!(rows[0].line.width(), 31);
     }
 
@@ -675,13 +672,12 @@ mod tests {
         );
         let visible_title = rows
             .iter()
-            .map(|row| row.line.to_string())
+            .map(|row| row.line.spans[1].content.as_ref())
             .collect::<Vec<_>>()
             .join(" ");
 
         assert_eq!(rows.len(), 2);
-        assert!(visible_title.contains("Options Controlling"));
-        assert!(visible_title.contains("the Kind of Output"));
+        assert_eq!(visible_title, "Options Controlling the Kind of Output");
         assert!(rows.iter().all(|row| row.line.width() == 31));
         assert!(rows.iter().all(|row| {
             row.line
@@ -734,9 +730,9 @@ mod tests {
             .collect::<Vec<_>>();
 
         assert!(text.len() > 1);
-        assert!(text[0].starts_with(" › │ ╰─· "));
-        assert!(text[1].starts_with("   │     "));
-        assert!(!text[1].starts_with("   │ │   "));
+        assert!(text[0].starts_with(" › · "));
+        assert!(text[1].starts_with("     "));
+        assert!(!text[1].contains('│'));
     }
 
     #[test]
@@ -775,8 +771,9 @@ mod tests {
             .collect::<Vec<_>>();
 
         assert!(text.len() > 1);
-        assert!(text[0].starts_with(" › │ ▾ "));
-        assert!(text[1].starts_with("   │ │   "));
+        assert!(text[0].starts_with(" › ▾ "));
+        assert!(text[1].starts_with("   │ "));
+        assert_eq!(rows[0].line.spans[0].width(), rows[1].line.spans[0].width());
         assert!(
             rows[1]
                 .line
@@ -789,14 +786,20 @@ mod tests {
     #[test]
     fn nested_rows_keep_two_column_tree_guides() {
         let mut leaf = node("Leaf");
+        leaf.depth = 1;
+        leaf.parent_id = Some("parent".to_owned());
         leaf.is_last = false;
-
-        let row = node_lines(&leaf, 0, false, false, false, 24)
+        let mut parent = node("Parent");
+        parent.id = "parent".to_owned();
+        parent.has_children = true;
+        let nodes = [parent, leaf];
+        let row = super::planned_node_lines(&TreePlan::new(&nodes), 1, false, false, false, 24)
             .remove(0)
             .line
             .to_string();
 
-        assert!(row.starts_with("   │ ├─· Leaf"));
+        // Final topology, not the deliberately stale is_last flag, wins.
+        assert!(row.starts_with("   ╰─· Leaf"));
     }
 
     #[test]

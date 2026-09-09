@@ -131,31 +131,7 @@ impl App {
         ])
         .areas(area);
 
-        let metadata = sidebar_metadata(
-            self.session.document.navigation().len(),
-            self.session.document.has_tldr(),
-            navigation_area.width,
-        );
-        frame.render_widget(
-            Paragraph::new(vec![
-                Line::from(Span::styled(
-                    format!(
-                        " {} · {}",
-                        sanitize_terminal_text(self.session.document.source_label()),
-                        sanitize_terminal_text(self.session.document.label())
-                    ),
-                    Style::default().fg(theme::SUBTEXT_BRIGHT),
-                )),
-                Line::from(Span::styled(metadata, Style::default().fg(theme::SUBTEXT))),
-            ])
-            .block(
-                Block::default()
-                    .borders(Borders::BOTTOM)
-                    .border_style(Style::default().fg(theme::BORDER)),
-            )
-            .style(Style::default().bg(theme::SIDEBAR)),
-            header_area,
-        );
+        self.draw_navigation_header(frame, header_area);
         frame.render_widget(
             Paragraph::new(" OUTLINE")
                 .style(Style::default().fg(theme::SUBTEXT).bg(theme::SIDEBAR)),
@@ -165,13 +141,14 @@ impl App {
         self.geometry.navigation = navigation_area;
         let visible = self.visible_navigation_indices();
         let height = usize::from(navigation_area.height);
+        let tree = navigation::TreePlan::new(self.session.document.navigation());
         // Build against the scrollbar-bearing width first. If those rows fit,
         // the full-width layout cannot overflow and no gutter is necessary.
         // When they do overflow, every label is laid out one column earlier so
         // the scrollbar never replaces its final cell (or half of a wide one).
         let gutter_width = navigation_area.width.saturating_sub(1);
         let gutter_rows = navigation::rows_with_references(
-            self.session.document.navigation(),
+            &tree,
             &visible,
             self.selected,
             &self.expanded,
@@ -183,7 +160,7 @@ impl App {
             gutter_rows
         } else {
             navigation::rows_with_references(
-                self.session.document.navigation(),
+                &tree,
                 &visible,
                 self.selected,
                 &self.expanded,
@@ -227,6 +204,34 @@ impl App {
             navigation_area,
         );
         self.draw_navigation_scrollbar(frame, navigation_area, row_count, height);
+    }
+
+    fn draw_navigation_header(&self, frame: &mut Frame<'_>, area: Rect) {
+        let metadata = sidebar_metadata(
+            self.session.document.navigation().len(),
+            self.session.document.has_tldr(),
+            area.width,
+        );
+        frame.render_widget(
+            Paragraph::new(vec![
+                Line::from(Span::styled(
+                    format!(
+                        " {} · {}",
+                        sanitize_terminal_text(self.session.document.source_label()),
+                        sanitize_terminal_text(self.session.document.label())
+                    ),
+                    Style::default().fg(theme::SUBTEXT_BRIGHT),
+                )),
+                Line::from(Span::styled(metadata, Style::default().fg(theme::SUBTEXT))),
+            ])
+            .block(
+                Block::default()
+                    .borders(Borders::BOTTOM)
+                    .border_style(Style::default().fg(theme::BORDER)),
+            )
+            .style(Style::default().bg(theme::SIDEBAR)),
+            area,
+        );
     }
 
     fn draw_navigation_scrollbar(
