@@ -237,6 +237,9 @@ pub enum OutlineNode {
     },
     /// One source-neutral semantic definition.
     DocumentEntry {
+        /// Exact original list/definition item in the loaded document, independent
+        /// of semantic IDs, display labels and filtered outline paths.
+        owner: Box<mant_ir::ContentReveal>,
         /// Canonical structural outline path.
         path: NodePath,
         /// Stable document-local entry identity.

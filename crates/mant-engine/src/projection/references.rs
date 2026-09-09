@@ -227,6 +227,9 @@ fn materialize(
     let owner = occurrence
         .content_owner
         .map(|owner| ContentRevealRef::Owner(owner.location));
+    let semantic_owner = occurrence
+        .semantic_owner
+        .map(|owner| ContentRevealRef::Owner(owner.location));
     budget
         .consume(
             occurrence.location.depth(),
@@ -234,6 +237,7 @@ fn materialize(
                 .location
                 .depth()
                 .saturating_add(owner.map_or(0, ContentRevealRef::depth))
+                .saturating_add(semantic_owner.map_or(0, ContentRevealRef::depth))
                 .saturating_mul(4),
             source_bytes,
         )
@@ -254,6 +258,7 @@ fn materialize(
         .encoded_len()
         .saturating_mul(2)
         .saturating_add(owner_bytes)
+        .saturating_add(semantic_owner.map_or(0, ContentRevealRef::encoded_size_bound))
         .saturating_add(target_size(occurrence.target).saturating_mul(3))
         .saturating_add(source_bytes.saturating_mul(2))
         .saturating_add(forms_reservation)
@@ -283,6 +288,9 @@ fn materialize(
         ReferenceFormAssociationState::Unrecorded => ReferenceAssociation::Unrecorded {},
         ReferenceFormAssociationState::Complete => ReferenceAssociation::Valid {
             forms: association.forms,
+            owner: semantic_owner
+                .and_then(ContentRevealRef::to_owned)
+                .ok_or(ReferencePageLimit::Position)?,
         },
         ReferenceFormAssociationState::Invalid => ReferenceAssociation::Invalid {},
         ReferenceFormAssociationState::Limited(_)

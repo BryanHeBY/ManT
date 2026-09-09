@@ -104,6 +104,7 @@ pub fn build_outline_with_references(
                 &[],
                 &materialized_entries,
                 query.address.as_ref(),
+                &|path| index.as_ref()?.owner_at(path).cloned(),
             );
             let root = OutlineNode::DocumentRoot {
                 path: OutlinePath::DocumentRoot.to_string().into(),
@@ -255,6 +256,7 @@ fn outline_nodes(
                 &[],
                 entries,
                 current_address,
+                &|path| index?.owner_at(path).cloned(),
             );
             children.extend(outline_nodes(
                 &section.children,
@@ -367,6 +369,7 @@ fn project_entries(
     parent: &[usize],
     projection: &EntryProjection,
     current_address: Option<&mant_ir::DocumentAddress>,
+    owner_at: &dyn Fn(&OutlinePath) -> Option<mant_ir::ContentReveal>,
 ) -> Vec<OutlineNode> {
     if matches!(projection, EntryProjection::None | EntryProjection::Summary) {
         return Vec::new();
@@ -383,6 +386,7 @@ fn project_entries(
                 &coordinates,
                 projection,
                 current_address,
+                owner_at,
             );
             let selected = match projection {
                 EntryProjection::All => true,
@@ -398,10 +402,11 @@ fn project_entries(
                 &entry.names,
                 &entry.forms,
             );
+            let path = OutlinePath::nested_entry(section, &coordinates)?;
+            let owner = owner_at(&path)?;
             Some(OutlineNode::DocumentEntry {
-                path: OutlinePath::nested_entry(section, &coordinates)?
-                    .to_string()
-                    .into(),
+                owner: Box::new(owner),
+                path: path.to_string().into(),
                 id: entry.id.clone(),
                 title,
                 entry_kind: entry.kind,
@@ -541,6 +546,17 @@ fn resolve_outline_root(
         &[],
         &EntryProjection::All,
         query.address.as_ref(),
+        &|_| {
+            Some(mant_ir::ContentReveal::Owner {
+                sections: selected
+                    .coordinates()
+                    .iter()
+                    .map(|index| u32::try_from(index - 1).unwrap_or(u32::MAX))
+                    .collect(),
+                blocks: entry.block_path.clone(),
+                item_index: u32::try_from(entry.item_index).unwrap_or(u32::MAX),
+            })
+        },
     )
     .pop()
     .expect("projected selected owner");

@@ -42,6 +42,12 @@ description. Nested entries record content ownership, not automatically a
 complete runtime value domain. Configuration keys may describe fields inside
 an option's argument. Only explicit `valueDomain` facts make that relationship.
 
+`SemanticIndex::owner_at` maps a semantic outline path back to its exact
+original list/definition item, including transparent nested containers and
+table cells. This operation-local sidecar is built during the same owner walk,
+not reconstructed by matching IDs or names. It does not add rendering facts to
+the document, and compact summary traversal does not need to materialize it.
+
 `Block::DefinitionList.declaration_groups` optionally records recovered reading
 context: consecutive empty declaration heads followed by one described item.
 Each `DeclarationGroup` is a checked half-open range in its containing list.

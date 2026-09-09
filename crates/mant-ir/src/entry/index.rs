@@ -1,7 +1,7 @@
 //! Rebuild an operation-local semantic index from finalized identities.
 use super::{
     model::{DocumentReference, EntrySummary, SemanticDocumentTarget, SemanticEntry, ValueDomain},
-    walk::visit_child_entries,
+    walk::{owner_child_step, visit_child_entry_locations},
 };
 use crate::{Block, Document, EntryOwner, Inline, NodeId};
 use std::collections::BTreeMap;
@@ -16,20 +16,29 @@ pub struct SemanticIndex {
     root: Vec<SemanticEntry>,
     sections: BTreeMap<Vec<usize>, Vec<SemanticEntry>>,
     section_paths: BTreeMap<NodeId, Option<Vec<usize>>>,
+    owner_locations: BTreeMap<crate::OutlinePath, crate::ContentReveal>,
 }
 
 impl SemanticIndex {
     /// Build the semantic index from finalized facts on either content shape.
     #[must_use]
     pub fn build(document: &Document) -> Self {
-        let root = entries_in_blocks(&document.blocks);
+        let mut owner_locations = BTreeMap::new();
+        let root = entries_with_locations(&document.blocks, &[], &[], &[], &mut owner_locations);
         let mut sections = BTreeMap::new();
         let mut section_paths = BTreeMap::new();
-        collect_section_entries(&document.sections, &[], &mut sections, &mut section_paths);
+        collect_section_entries(
+            &document.sections,
+            &[],
+            &mut sections,
+            &mut section_paths,
+            &mut owner_locations,
+        );
         let mut result = Self {
             root,
             sections,
             section_paths,
+            owner_locations,
         };
         if result
             .root
@@ -80,6 +89,13 @@ impl SemanticIndex {
         self.sections.get(path).map_or(&[], Vec::as_slice)
     }
 
+    /// Exact original item for one indexed semantic path, independent of IDs.
+    /// Built together with entries; querying it does not rescan document content.
+    #[must_use]
+    pub fn owner_at(&self, path: &crate::OutlinePath) -> Option<&crate::ContentReveal> {
+        self.owner_locations.get(path)
+    }
+
     /// Summary for content before the first section.
     #[must_use]
     pub fn root_summary(&self) -> EntrySummary {
@@ -114,6 +130,7 @@ fn collect_section_entries(
     parent: &[usize],
     output: &mut BTreeMap<Vec<usize>, Vec<SemanticEntry>>,
     paths: &mut BTreeMap<NodeId, Option<Vec<usize>>>,
+    owners: &mut BTreeMap<crate::OutlinePath, crate::ContentReveal>,
 ) {
     for (index, section) in sections.iter().enumerate() {
         let mut path = parent.to_vec();
@@ -122,14 +139,18 @@ fn collect_section_entries(
             .entry(section.id.clone())
             .and_modify(|path| *path = None)
             .or_insert_with(|| Some(path.clone()));
-        output.insert(path.clone(), entries_in_blocks(&section.blocks));
-        collect_section_entries(&section.children, &path, output, paths);
+        output.insert(
+            path.clone(),
+            entries_with_locations(&section.blocks, &path, &[], &[], owners),
+        );
+        collect_section_entries(&section.children, &path, output, paths, owners);
     }
 }
 
+#[cfg(test)]
 fn entries_in_blocks(blocks: &[Block]) -> Vec<SemanticEntry> {
     let mut entries = Vec::new();
-    visit_child_entries(blocks, &mut |item| {
+    super::walk::visit_child_entries(blocks, &mut |item| {
         if let Some(entry) = entry_from_owner(item) {
             entries.push(entry);
         }
@@ -142,10 +163,51 @@ pub(super) fn entry_from_definition(item: &crate::DefinitionItem) -> Option<Sema
     entry_from_owner(EntryOwner::Definition(item))
 }
 
+#[cfg(test)]
 fn entry_from_owner(item: EntryOwner<'_>) -> Option<SemanticEntry> {
     let mut entry = SemanticEntry::from_owner_shallow(item)?;
     entry.children = entries_in_blocks(item.blocks());
     Some(entry)
+}
+
+fn entries_with_locations(
+    blocks: &[Block],
+    sections: &[usize],
+    parent: &[usize],
+    prefix: &[crate::ContentBlockStep],
+    owners: &mut BTreeMap<crate::OutlinePath, crate::ContentReveal>,
+) -> Vec<SemanticEntry> {
+    let mut entries = Vec::new();
+    visit_child_entry_locations(blocks, prefix, &mut |item, path, item_index| {
+        let Some(mut entry) = SemanticEntry::from_owner_shallow(item) else {
+            return;
+        };
+        let mut coordinates = parent.to_vec();
+        coordinates.push(entries.len() + 1);
+        let section_path: Vec<_> = sections.iter().map(|index| index + 1).collect();
+        if let Some(key) = crate::OutlinePath::nested_entry(
+            (!section_path.is_empty()).then_some(section_path.as_slice()),
+            &coordinates,
+        ) {
+            owners.insert(
+                key,
+                crate::ContentReveal::Owner {
+                    sections: sections
+                        .iter()
+                        .map(|index| u32::try_from(*index).unwrap_or(u32::MAX))
+                        .collect(),
+                    blocks: path.to_vec(),
+                    item_index,
+                },
+            );
+        }
+        let mut child_path = path.to_vec();
+        child_path.push(owner_child_step(item, item_index));
+        entry.children =
+            entries_with_locations(item.blocks(), sections, &coordinates, &child_path, owners);
+        entries.push(entry);
+    });
+    entries
 }
 
 impl SemanticEntry {

@@ -84,7 +84,11 @@ fn protocol_outline_example_uses_current_names_and_rejects_legacy_fields() {
             .expect("next section")
             .0;
         let examples = json_fenced_examples(section);
-        assert_eq!(examples.len(), 1, "one complete outline example");
+        assert_eq!(
+            examples.len(),
+            2,
+            "disabled and actual reference inventory examples"
+        );
         let outline: mant_protocol::QueryOutline =
             serde_json::from_str(&examples[0]).expect("documented outline decodes as its DTO");
         let OutlineNode::DocumentEntry {
@@ -403,28 +407,9 @@ fn bundled_reference_manuals_parse_losslessly_and_cross_link() {
         );
     }
 
-    for name in [
-        "mant.md",
-        "mant-ir.md",
-        "mant-markdown.md",
-        "mant-protocol.md",
-        "mant-roff.md",
-    ] {
-        assert!(
-            [
-                MANT_MANUAL,
-                IR_MANUAL,
-                MARKDOWN_MANUAL,
-                PROTOCOL_REFERENCE,
-                ROFF_MANUAL
-            ]
-            .iter()
-            .filter(|source| source.contains(name))
-            .count()
-                >= 2,
-            "{name} should participate in the bundled manual cross-link graph"
-        );
-    }
+    // The manifest-driven self_manual_links integration test validates actual
+    // IR occurrences and destinations in the installed namespace. Filenames in
+    // prose or fenced examples are not evidence of a working link graph.
 }
 
 #[test]

@@ -224,8 +224,16 @@ detection; clients rediscover after source edits or reordering.
 A kind filter with no matches returns an empty node set rather than the
 unrelated section topology.
 
-`QueryOutline.references` is independent from that content tree. `ReferenceProjection`
-selects none/summary/all, original target kinds and an occurrence page. Counts
+`QueryOutline.references` is independent from that content tree. Its policy
+and occurrence records also supply associated navigation without changing
+source content. Entry outline nodes retain their exact original `owner`;
+validated form associations retain the semantic owner whose bindings were
+checked. Join these structural positions, not similarly named labels or IDs.
+Heading/form badges use the shared `reference_attachment` and `reference_badge`
+presentation helpers, with the independent `TextRole::Reference` role. A partial
+record page describes known targets only and never establishes uniqueness.
+
+`ReferenceProjection` selects none/summary/all, original target kinds and an occurrence page. Counts
 retain exact/lower-bound/unknown precision; scan coverage, target-validation
 coverage and retained-page limits are separate. `ReferenceRecord` points to the
 original content location and carries a containing `sourceRead` selector; it is

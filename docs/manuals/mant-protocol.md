@@ -1037,20 +1037,22 @@ before an agent requests content:
 | `entries` | Echoed `none`, `summary`, `all`, or role-filtered projection |
 | `root` | Optional selector used as the returned tree root |
 | `label` | Query label |
+| `displayTitle` | Optional derived visible title; authoritative heading content remains in the IR |
 | `address` | Exact logical address, omitted for direct-file input |
 | `source`, `meta` | Optional document identity |
 | `diagnostics` | Optional recoverable parser findings |
 | `semanticsComplete` | Present as `false` when semantic declarations were rejected, native definitions could not be classified without guessing, or shared IR validation found an identity or relationship violation |
 | `nodes` | Recursive addressable tree |
+| `references` | Independent bounded occurrence inventory, policy, counts, source locations and resolution stages |
 
 Node kinds are:
 
 | `kind` | Path convention | Additional fields |
 | --- | --- | --- |
 | `tldr` | `0` | Reserved quick reference |
-| `document-root` | `root` | Content before the first heading; optional `entrySummary` |
+| `document-root` | `root` | Optional document heading and content before the first section; a heading-only root is readable; optional `entrySummary` |
 | `document-section` | `1`, `1.2`, `1.2.1` | Recursive `children`; optional `entrySummary` |
-| `document-entry` | `1.2/e3`, `1.2/e3/e2` | `entryKind`, selectable `names`, forms, explicit `aliasGroups` / `aliasOf`, optional `documentTargets`, value domain and nested children |
+| `document-entry` | `1.2/e3`, `1.2/e3/e2` | Exact original `owner` coordinates, `entryKind`, selectable `names`, forms, explicit `aliasGroups` / `aliasOf`, optional `documentTargets`, value domain and nested children |
 
 The default `summary` projection emits no individual entries. Instead, each
 non-empty root or section scope carries recursive counts for direct entries,
@@ -1144,9 +1146,8 @@ An illustrative response is:
     "format": "markdown",
     "path": "tool.md"
   },
-  "meta": {
-    "title": "Tool"
-  },
+  "meta": {},
+  "displayTitle": "Tool",
   "nodes": [
     {
       "kind": "tldr",
@@ -1175,6 +1176,7 @@ An illustrative response is:
           "kind": "document-entry",
           "path": "1/e1",
           "id": "option-help",
+          "owner": {"kind": "owner", "sections": [0], "blocks": [{"kind": "block", "index": 0}], "itemIndex": 0},
           "title": "-h, --help",
           "entryKind": {"kind": "parameter", "parameterKind": "option"},
           "case": "sensitive",
@@ -1189,78 +1191,6 @@ An illustrative response is:
   ]
 }
 ```
-
-## Excerpt Projection
-
-`mant.excerpt/v0.11` returns complete selected content without returning unrelated
-sections:
-
-| Field | Meaning |
-| --- | --- |
-| `schema` | `mant.excerpt/v0.11` |
-| `label` | Query label |
-| `address` | Optional logical namespace for references in selected content |
-| `semanticsComplete` | Same document-wide completeness signal as outline; omitted when true |
-| `producer`, `source`, `meta` | Optional document identity |
-| `diagnostics` | Relevant recoverable findings |
-| `selections` | Selected content in source order |
-
-Selection kinds are:
-
-- `tldr`, containing one complete `TldrDocument`;
-- `document-root`, containing root `blocks`;
-- `document-section`, containing a complete section subtree;
-- `document-entry`, whose `entry` is a single-item `list` or `definition-list`
-  block containing the original owner and its complete descendants. Preserve
-  the block's layout and compactness; an ordered list starts at the selected
-  item's original ordinal, including when earlier siblings are omitted.
-
-The unreleased v0.11 entry payload is a block, not the former standalone
-definition item. Read shared facts from its sole list item's `entry` or native
-definition's `entry`. In-process consumers can use `Block::entry_owner()`;
-renderers consume the original block instead of converting ordinary items into
-term-and-description content.
-
-Selections retain source-neutral IR: an entry-set `valueDomain` carries its
-authored reference and source span, not a catalog lookup result. Outline uses
-the protocol-owned summary with a namespace-resolved `address` instead.
-Excerpt clients can use the excerpt's `address` with
-`DocumentReference::resolve_from`, or request the corresponding outline
-node for its resolved relationship summary. Direct-file inputs have no logical
-namespace; an address never proves that a target document is installed.
-
-The completeness signal also travels inside single- and multi-document
-explanations. Text and MCP excerpts retain a concise incomplete-semantics notice
-even when ordinary parser diagnostics are hidden. Full raw document responses
-carry diagnostics rather than an outline-completeness claim. Search responses
-make no semantic-index completeness claim: search examines rendered content,
-not just recognized entries. In-process producers must run
-`mant_ir::validate_document` and attach its
-findings before handing documents to projection APIs; projections reuse those
-findings rather than revalidating the whole tree for every selected node.
-
-Every selection has an `outline` trail. Its `ancestors` array contains compact
-`path`, `id`, and `title` references from the outermost section to the direct
-parent. Its typed terminal `node` contains the selected node's `kind`, `path`,
-`id`, and `title`; a `document-entry` node additionally retains `role`, `case`,
-and normalized `names`. Empty ancestor arrays are omitted.
-
-An excerpt accepts from 1 through 16 closed path/ID selector objects. The schema, native request boundary, MCP,
-and direct in-process projection all enforce the same bound. Overlapping
-selections are deduplicated, and source order is preserved. Selecting a section
-includes its descendants. The outline trail identifies ancestors without
-copying their blocks.
-
-The `excerpt` and `outline.root` views use one exact structural resolver.
-An ID cannot fall back to a same-named entry alias, and a failed path cannot
-activate a fragment or another document. Duplicate IDs return candidates;
-exact paths keep distinct source owners independently readable. Names may
-repeat without a navigation-only ambiguity diagnostic: explain returns their
-evidence separately. Genuine invalid/duplicate identities, bindings and explicit
-alias-relation conflicts remain validation errors. Anchors and reference
-occurrences are reveal positions, not synthetic readable content nodes.
-All paths and positions apply to the loaded document only. An edit may make a
-previous path point somewhere else; this release has no cross-call stale check.
 
 ### Independent Reference Inventory
 
@@ -1318,6 +1248,412 @@ relations in source order, and deduplicates document addresses separately.
 `scope.referenceLimits` lists loaded documents whose outbound scan could not
 finish; it is distinct from known depth/document/content `frontier` edges.
 An incomplete scan cannot establish absence of further links.
+
+#### Associated navigation
+
+Heading origins and nonempty validated form associations can add an inline
+reference badge to a visible content node. `document-entry.owner` is the exact
+original item coordinate; `association.owner` identifies the semantic owner
+whose forms were checked, which can differ from the nearest content `owner`
+through an unannotated nested item. Clients must compare these structural
+coordinates, not labels, IDs or target names. Invalid/limited bindings never
+authorize a form badge. Hidden or ambiguous owners retain ordinary references.
+
+Plain and ANSI outline output show these badges only from returned `all`
+records; `summary` remains a global bounded count, and `none` does not scan.
+The independent inventory retains every occurrence, including a form link and
+a body link with the same target. A badge may group exact typed targets,
+including fragments, but a partial page only describes known targets and must
+not claim uniqueness. A badge never opens a target or creates a read selector.
+Reference/link styling is independent from heading and semantic-entry styling.
+
+Reference inventory input:
+
+```markdown
+# Linked tool
+
+## Commands
+
+<!-- mant:entries role=command case=sensitive -->
+- [`tool`](other.md#part): See [details](other.md#part).
+```
+
+Complete reference inventory example (registered as `documents/linked`):
+
+```json
+{
+  "schema": "mant.outline/v0.11",
+  "entries": {
+    "kind": "all"
+  },
+  "references": {
+    "policy": {
+      "mode": "all",
+      "targetTypes": [
+        "document",
+        "manual"
+      ],
+      "offset": 0,
+      "limit": 100
+    },
+    "coverage": {
+      "steps": 133,
+      "bytes": 425,
+      "status": {
+        "kind": "complete"
+      }
+    },
+    "targetCoverage": null,
+    "occurrences": {
+      "kind": "exact",
+      "value": 2
+    },
+    "targets": {
+      "kind": "exact",
+      "value": 1
+    },
+    "page": {
+      "offset": 0,
+      "returned": 2,
+      "limited": null,
+      "nextOffset": null
+    },
+    "records": [
+      {
+        "origin": {
+          "kind": "content",
+          "sections": [
+            0
+          ],
+          "blocks": [
+            {
+              "kind": "block",
+              "index": 0
+            },
+            {
+              "kind": "list-item",
+              "index": 0
+            },
+            {
+              "kind": "block",
+              "index": 0
+            }
+          ],
+          "root": {
+            "kind": "inlines"
+          },
+          "path": [
+            0
+          ]
+        },
+        "sourceRead": {
+          "kind": "path",
+          "path": "1"
+        },
+        "owner": {
+          "kind": "owner",
+          "sections": [
+            0
+          ],
+          "blocks": [
+            {
+              "kind": "block",
+              "index": 0
+            }
+          ],
+          "itemIndex": 0
+        },
+        "label": "tool",
+        "labelTruncated": false,
+        "target": {
+          "kind": "document",
+          "name": "other",
+          "fragment": "part"
+        },
+        "association": {
+          "kind": "valid",
+          "owner": {
+            "kind": "owner",
+            "sections": [
+              0
+            ],
+            "blocks": [
+              {
+                "kind": "block",
+                "index": 0
+              }
+            ],
+            "itemIndex": 0
+          },
+          "forms": [
+            0
+          ]
+        },
+        "resolution": {
+          "kind": "logical-address",
+          "address": {
+            "kind": "markdown",
+            "path": "other",
+            "origin": {
+              "kind": "documents"
+            }
+          },
+          "fragment": {
+            "kind": "unchecked"
+          }
+        }
+      },
+      {
+        "origin": {
+          "kind": "content",
+          "sections": [
+            0
+          ],
+          "blocks": [
+            {
+              "kind": "block",
+              "index": 0
+            },
+            {
+              "kind": "list-item",
+              "index": 0
+            },
+            {
+              "kind": "block",
+              "index": 0
+            }
+          ],
+          "root": {
+            "kind": "inlines"
+          },
+          "path": [
+            2
+          ]
+        },
+        "sourceRead": {
+          "kind": "path",
+          "path": "1"
+        },
+        "owner": {
+          "kind": "owner",
+          "sections": [
+            0
+          ],
+          "blocks": [
+            {
+              "kind": "block",
+              "index": 0
+            }
+          ],
+          "itemIndex": 0
+        },
+        "label": "details",
+        "labelTruncated": false,
+        "target": {
+          "kind": "document",
+          "name": "other",
+          "fragment": "part"
+        },
+        "association": {
+          "kind": "valid",
+          "owner": {
+            "kind": "owner",
+            "sections": [
+              0
+            ],
+            "blocks": [
+              {
+                "kind": "block",
+                "index": 0
+              }
+            ],
+            "itemIndex": 0
+          },
+          "forms": []
+        },
+        "resolution": {
+          "kind": "logical-address",
+          "address": {
+            "kind": "markdown",
+            "path": "other",
+            "origin": {
+              "kind": "documents"
+            }
+          },
+          "fragment": {
+            "kind": "unchecked"
+          }
+        }
+      }
+    ]
+  },
+  "label": "linked.md",
+  "displayTitle": "Linked tool",
+  "address": {
+    "kind": "markdown",
+    "path": "linked",
+    "origin": {
+      "kind": "documents"
+    }
+  },
+  "source": {
+    "format": "markdown",
+    "path": "linked.md"
+  },
+  "meta": {},
+  "nodes": [
+    {
+      "kind": "document-root",
+      "path": "root",
+      "id": "document-overview",
+      "title": "OVERVIEW"
+    },
+    {
+      "kind": "document-section",
+      "path": "1",
+      "id": "commands",
+      "title": "Commands",
+      "entrySummary": {
+        "direct": 1,
+        "descendants": 0,
+        "forms": 1,
+        "byKind": [
+          {
+            "kind": {
+              "kind": "command"
+            },
+            "count": 1
+          }
+        ]
+      },
+      "children": [
+        {
+          "kind": "document-entry",
+          "owner": {
+            "kind": "owner",
+            "sections": [
+              0
+            ],
+            "blocks": [
+              {
+                "kind": "block",
+                "index": 0
+              }
+            ],
+            "itemIndex": 0
+          },
+          "path": "1/e1",
+          "id": "command-tool",
+          "title": "tool",
+          "entryKind": {
+            "kind": "command"
+          },
+          "case": "sensitive",
+          "names": [
+            "tool"
+          ],
+          "forms": [
+            "tool"
+          ],
+          "documentTargets": [
+            {
+              "label": "tool",
+              "reference": {
+                "kind": "document",
+                "name": "other",
+                "fragment": "part"
+              },
+              "address": {
+                "kind": "markdown",
+                "path": "other",
+                "origin": {
+                  "kind": "documents"
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
+```
+
+This response is checked against the actual Markdown producer and projection.
+The two source locations resolve independently in the original IR; their one
+destination is only namespace-resolved, with its fragment still unchecked.
+
+## Excerpt Projection
+
+`mant.excerpt/v0.11` returns complete selected content without returning unrelated
+sections:
+
+| Field | Meaning |
+| --- | --- |
+| `schema` | `mant.excerpt/v0.11` |
+| `label` | Query label |
+| `address` | Optional logical namespace for references in selected content |
+| `semanticsComplete` | Same document-wide completeness signal as outline; omitted when true |
+| `producer`, `source`, `meta` | Optional document identity |
+| `diagnostics` | Relevant recoverable findings |
+| `selections` | Selected content in source order |
+
+Selection kinds are:
+
+- `tldr`, containing one complete `TldrDocument`;
+- `document-root`, containing an optional authoritative `heading` and root `blocks`; a heading-only result may have no blocks;
+- `document-section`, containing a complete section subtree;
+- `document-entry`, whose `entry` is a single-item `list` or `definition-list`
+  block containing the original owner and its complete descendants. Preserve
+  the block's layout and compactness; an ordered list starts at the selected
+  item's original ordinal, including when earlier siblings are omitted.
+
+The unreleased v0.11 entry payload is a block, not the former standalone
+definition item. Read shared facts from its sole list item's `entry` or native
+definition's `entry`. In-process consumers can use `Block::entry_owner()`;
+renderers consume the original block instead of converting ordinary items into
+term-and-description content.
+
+Selections retain source-neutral IR: an entry-set `valueDomain` carries its
+authored reference and source span, not a catalog lookup result. Outline uses
+the protocol-owned summary with a namespace-resolved `address` instead.
+Excerpt clients can use the excerpt's `address` with
+`DocumentReference::resolve_from`, or request the corresponding outline
+node for its resolved relationship summary. Direct-file inputs have no logical
+namespace; an address never proves that a target document is installed.
+
+The completeness signal also travels inside single- and multi-document
+explanations. Text and MCP excerpts retain a concise incomplete-semantics notice
+even when ordinary parser diagnostics are hidden. Full raw document responses
+carry diagnostics rather than an outline-completeness claim. Search responses
+make no semantic-index completeness claim: search examines rendered content,
+not just recognized entries. In-process producers must run
+`mant_ir::validate_document` and attach its
+findings before handing documents to projection APIs; projections reuse those
+findings rather than revalidating the whole tree for every selected node.
+
+Every selection has an `outline` trail. Its `ancestors` array contains compact
+`path`, `id`, and `title` references from the outermost section to the direct
+parent. Its typed terminal `node` contains the selected node's `kind`, `path`,
+`id`, and `title`; a `document-entry` node additionally retains `role`, `case`,
+and normalized `names`. Empty ancestor arrays are omitted.
+
+An excerpt accepts from 1 through 16 closed path/ID selector objects. The schema, native request boundary, MCP,
+and direct in-process projection all enforce the same bound. Overlapping
+selections are deduplicated, and source order is preserved. Selecting a section
+includes its descendants. The outline trail identifies ancestors without
+copying their blocks.
+
+The `excerpt` and `outline.root` views use one exact structural resolver.
+An ID cannot fall back to a same-named entry alias, and a failed path cannot
+activate a fragment or another document. Duplicate IDs return candidates;
+exact paths keep distinct source owners independently readable. Names may
+repeat without a navigation-only ambiguity diagnostic: explain returns their
+evidence separately. Genuine invalid/duplicate identities, bindings and explicit
+alias-relation conflicts remain validation errors. Anchors and reference
+occurrences are reveal positions, not synthetic readable content nodes.
+All paths and positions apply to the loaded document only. An edit may make a
+previous path point somewhere else; this release has no cross-call stale check.
 
 ## Explanation Evidence
 

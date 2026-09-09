@@ -41,6 +41,11 @@ fn outline_contract_exposes_both_human_paths_and_document_ids() {
             title: "OPTIONS".to_owned(),
             entry_summary: Some(EntrySummary::default()),
             children: vec![OutlineNode::DocumentEntry {
+                owner: Box::new(mant_ir::ContentReveal::Owner {
+                    sections: vec![0],
+                    blocks: vec![mant_ir::ContentBlockStep::Block { index: 0 }],
+                    item_index: 0,
+                }),
                 path: "2/e1".to_owned().into(),
                 id: "all".to_owned().into(),
                 title: "-a, --all".to_owned(),

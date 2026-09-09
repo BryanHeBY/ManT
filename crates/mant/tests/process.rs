@@ -71,6 +71,40 @@ fn run_text_input(arguments: &[&str], input: &str) -> std::process::Output {
 }
 
 #[test]
+fn outline_reference_badges_survive_cli_color_policy() {
+    let source = "# [Catalog](catalog.md#root)\n\n<!-- mant:entries role=command case=sensitive -->\n- [`run`](run.md#usage): [Body](body.md).\n";
+    for color in ["never", "always"] {
+        let output = run_text_input(
+            &[
+                "--input",
+                "-",
+                "--input-format",
+                "markdown",
+                "--outline",
+                "--outline-entries",
+                "all",
+                "--outline-references",
+                "all",
+                "--format",
+                "text",
+                "--color",
+                color,
+            ],
+            source,
+        );
+        assert!(output.status.success(), "{output:?}");
+        let text = String::from_utf8(output.stdout).unwrap();
+        assert!(text.contains("↗ catalog#root"), "{text}");
+        assert!(text.contains("↗ run#usage"), "{text}");
+        assert!(
+            !text.contains("↗ body"),
+            "body inventory is not a form capability"
+        );
+        assert_eq!(text.contains('\u{1b}'), color == "always");
+    }
+}
+
+#[test]
 fn inline_roff_continuations_retain_indent_and_explicit_blank_lines() {
     let output = run_text_input(
         &[

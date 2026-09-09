@@ -223,6 +223,9 @@ pub enum ReferenceAssociation {
     Unrecorded {},
     /// Entire original form set was validated; indices refer to that owner.
     Valid {
+        /// Exact semantic owner whose full form set was validated. This can be
+        /// an ancestor of the nearest ordinary content item in `record.owner`.
+        owner: ContentReveal,
         /// Zero-based original form indices sharing this occurrence.
         forms: Vec<u32>,
     },

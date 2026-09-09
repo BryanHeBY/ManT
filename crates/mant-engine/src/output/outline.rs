@@ -1,4 +1,5 @@
 //! A single plain/decorated tree with primary titles and hanging metadata.
+mod references;
 use super::text::{
     document_label, outline_summary, render_outline_entry_summary, render_outline_relationships,
 };
@@ -33,7 +34,8 @@ pub fn render_outline_text_with(
     if let Some(message) = super::outline_empty_message(outline) {
         lines.push(paint(TextRole::Notice, &message));
     } else {
-        nodes(&outline.nodes, "", &paint, &mut lines);
+        let badges = references::Badges::build(outline);
+        nodes(&outline.nodes, "", &paint, &badges, &mut lines);
     }
     let references = mant_protocol::render_reference_inventory_with(&outline.references, &decorate);
     if !references.is_empty() {
@@ -46,6 +48,7 @@ fn nodes(
     items: &[OutlineNode],
     prefix: &str,
     paint: &dyn Fn(TextRole, &str) -> String,
+    badges: &references::Badges,
     lines: &mut Vec<String>,
 ) {
     for (index, node) in items.iter().enumerate() {
@@ -55,13 +58,17 @@ fn nodes(
             _ => TextRole::Heading,
         };
         lines.push(format!(
-            "{} {} {}",
+            "{} {} {}{}",
             paint(
                 TextRole::Guide,
                 &format!("{prefix}{}", if last { "└─" } else { "├─" })
             ),
             paint(TextRole::Path, node.path()),
-            paint(kind, node.title())
+            paint(kind, node.title()),
+            badges.get(node).map_or_else(String::new, |badge| format!(
+                " {}",
+                paint(TextRole::Reference, badge)
+            ))
         ));
         let child_prefix = format!("{prefix}{}", if last { "  " } else { "│ " });
         let hang = paint(TextRole::Guide, &format!("{child_prefix}   "));
@@ -86,6 +93,6 @@ fn nodes(
                 paint(TextRole::Metadata, &format!("Relationships: {value}"))
             ));
         }
-        nodes(node.children(), &child_prefix, paint, lines);
+        nodes(node.children(), &child_prefix, paint, badges, lines);
     }
 }

@@ -7865,6 +7865,10 @@
                   "type": "string"
                 }
               },
+              "owner": {
+                "description": "Exact original list/definition item in the loaded document, independent\nof semantic IDs, display labels and filtered outline paths.",
+                "$ref": "#/$defs/ContentReveal"
+              },
               "path": {
                 "description": "Canonical structural outline path.",
                 "$ref": "#/$defs/NodePath"
@@ -7888,6 +7892,7 @@
             "additionalProperties": false,
             "required": [
               "kind",
+              "owner",
               "path",
               "id",
               "title",
@@ -7962,11 +7967,16 @@
               "kind": {
                 "type": "string",
                 "const": "valid"
+              },
+              "owner": {
+                "description": "Exact semantic owner whose full form set was validated. This can be\nan ancestor of the nearest ordinary content item in `record.owner`.",
+                "$ref": "#/$defs/ContentReveal"
               }
             },
             "additionalProperties": false,
             "required": [
               "kind",
+              "owner",
               "forms"
             ]
           },

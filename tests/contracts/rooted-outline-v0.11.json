@@ -26,6 +26,7 @@
       "children": [
         {
           "kind": "document-entry",
+          "owner": {"kind": "owner", "sections": [1], "blocks": [{"kind": "block", "index": 0}], "itemIndex": 0},
           "path": "2/e1",
           "id": "option-help",
           "title": "--help",
