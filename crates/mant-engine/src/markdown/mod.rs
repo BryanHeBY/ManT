@@ -8,10 +8,13 @@ mod blocks;
 mod container;
 mod directives;
 mod entries;
+mod events;
+mod headings;
 mod inline;
 mod layout;
 mod metadata;
 mod source;
+mod structure;
 
 #[cfg(test)]
 mod tests;
@@ -21,35 +24,27 @@ pub(crate) use entries::export_attached_policy;
 pub(crate) use metadata::export_entry_metadata;
 
 use mant_ir::DOCUMENT_ROOT_ID;
-use std::{
-    collections::{HashMap, HashSet},
-    error::Error,
-    fmt,
-    ops::Range,
-};
+use std::{error::Error, fmt};
 
 use mant_ir::{
-    Block, Diagnostic, DiagnosticLevel, Document, DocumentMeta, DocumentSource, Heading, Inline,
-    ParserInfo, Section, SourceFormat, TldrDocument, TldrOrigin, validate_document,
-    visit::{self, VisitMut},
+    Diagnostic, DiagnosticLevel, Document, DocumentMeta, DocumentSource, ParserInfo, Section,
+    SourceFormat, TldrDocument, TldrOrigin, validate_document,
 };
 #[cfg(test)]
 use pulldown_cmark::Parser;
-use pulldown_cmark::{Event, HeadingLevel, Options, Tag, TagEnd};
 
 use self::{
-    blocks::parse_block,
     container::split_markdown,
     directives::PreparedMarkdown,
     entries::normalize_entry_lists,
-    inline::{inline_text, parse_inlines},
+    events::{EventCursor, SpannedEvent, markdown_options},
+    headings::{extract_document_title, nest_sections},
     layout::normalize_markdown_layout,
     source::MarkdownSource,
+    structure::{ParsedDocumentStructure, lower_document_structure},
 };
 use crate::text_safety::mask_terminal_controls;
 use crate::tldr::{TldrPageLocation, TldrParseError, parse_tldr_page};
-
-type SpannedEvent<'a> = (Event<'a>, Range<usize>);
 
 /// Complete result of parsing one `ManT`-flavoured Markdown input.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -239,12 +234,10 @@ fn parse_document_with_entries(
         // Link aliases are selectors, not physical anchors. Reserve only the
         // final section destinations so an unrelated heading alias cannot
         // perturb a semantic entry's inferred ID.
-        &ids.targets.values().cloned().collect(),
+        &ids.reserved_targets(),
         source_path.as_deref(),
     );
-    for target in retained_targets {
-        ids.targets.insert(target.clone(), target);
-    }
+    ids.retain_targets(retained_targets);
     let mut document = Document {
         parser: Some(markdown_parser()),
         source: DocumentSource {
@@ -259,119 +252,16 @@ fn parse_document_with_entries(
         sections,
     };
     for (old, new) in metadata::apply(&mut document, declarations.bindings) {
-        ids.targets.retain(|_, target| *target != old);
-        ids.targets.insert(new.clone(), new);
+        ids.replace_target(&old, new);
     }
     entry_diagnostics.extend(crate::producer_identity::outline_identity_diagnostics(
         &document.blocks,
         &document.sections,
         "markdown",
     ));
-    LocalLinkResolver::new(&ids.targets).visit_document_mut(&mut document);
+    ids.resolve_links(&mut document);
     document.diagnostics.extend(validate_document(&document));
     document
-}
-
-struct ParsedDocumentStructure {
-    diagnostics: Vec<Diagnostic>,
-    root_blocks: Vec<Block>,
-    flat_sections: Vec<FlatSection>,
-    ids: SectionIds,
-    document_title_id: Option<String>,
-}
-
-/// Lower the Markdown event stream without imposing final document layout.
-fn lower_document_structure(
-    events: Vec<SpannedEvent<'_>>,
-    source: &MarkdownSource<'_>,
-) -> ParsedDocumentStructure {
-    let mut cursor = EventCursor::new(events);
-    let mut diagnostics = Vec::new();
-    let mut root_blocks = Vec::new();
-    let mut flat_sections = Vec::new();
-    let mut ids = SectionIds::default();
-    let mut document_title_id = None;
-    let mut saw_heading = false;
-
-    while let Some((event, range)) = cursor.peek().cloned() {
-        if let Event::Start(Tag::Heading {
-            level,
-            id: explicit_id,
-            ..
-        }) = event
-        {
-            let _ = cursor.next();
-            let (mut children, end) = parse_inlines(
-                &mut cursor,
-                source,
-                &mut diagnostics,
-                TagEnd::Heading(level),
-            );
-            // `pulldown-cmark` treats every trailing brace group as heading
-            // attributes and removes it before reporting whether it contains
-            // a useful attribute.  ManT only consumes one explicit `#id`, so
-            // recognize that narrow extension ourselves and leave ordinary
-            // API paths such as `/users/{id}` in the title.
-            let explicit_id = explicit_id
-                .map(pulldown_cmark::CowStr::into_string)
-                .or_else(|| take_explicit_heading_id(&mut children));
-            let heading = inline_text(&children);
-            if heading.is_empty() {
-                diagnostics.push(Diagnostic {
-                    impact: mant_ir::DiagnosticImpact::None,
-                    level: DiagnosticLevel::Warning,
-                    code: Some("markdown.empty-heading".to_owned()),
-                    message: "preserved a Markdown heading without visible text".to_owned(),
-                    source: Some(source.span(&(range.start..end))),
-                });
-            }
-            let is_document_title = !saw_heading && level == HeadingLevel::H1;
-            saw_heading = true;
-            let id = ids.allocate(&heading, explicit_id.as_deref());
-            let fragment_aliases = explicit_id
-                .as_deref()
-                .map(mant_ir::FragmentAlias::from)
-                .into_iter()
-                .collect();
-            if is_document_title {
-                document_title_id = Some(id.clone());
-            }
-            flat_sections.push(FlatSection {
-                level: heading_level(level),
-                is_document_title,
-                section: Section {
-                    id: id.into(),
-                    fragment_aliases,
-                    heading: Heading {
-                        content: children,
-                        source: Some(source.span(&(range.start..end))),
-                    },
-                    spacing_before_lines: u16::from(!flat_sections.is_empty()),
-                    blocks: Vec::new(),
-                    children: Vec::new(),
-                    source: Some(source.span(&(range.start..end))),
-                },
-            });
-            continue;
-        }
-
-        let Some(block) = parse_block(&mut cursor, source, &mut diagnostics) else {
-            continue;
-        };
-        if let Some(current) = flat_sections.last_mut() {
-            current.section.blocks.push(block);
-        } else {
-            root_blocks.push(block);
-        }
-    }
-
-    ParsedDocumentStructure {
-        diagnostics,
-        root_blocks,
-        flat_sections,
-        ids,
-        document_title_id,
-    }
 }
 
 fn markdown_parser() -> ParserInfo {
@@ -389,355 +279,5 @@ fn normalize_section_entries(
     for section in sections {
         normalize_entry_lists(&mut section.blocks, declarations, diagnostics);
         normalize_section_entries(&mut section.children, declarations, diagnostics);
-    }
-}
-
-fn markdown_options() -> Options {
-    Options::ENABLE_TABLES
-        | Options::ENABLE_FOOTNOTES
-        | Options::ENABLE_STRIKETHROUGH
-        | Options::ENABLE_TASKLISTS
-        | Options::ENABLE_YAML_STYLE_METADATA_BLOCKS
-        | Options::ENABLE_PLUSES_DELIMITED_METADATA_BLOCKS
-        | Options::ENABLE_MATH
-        | Options::ENABLE_GFM
-        | Options::ENABLE_DEFINITION_LIST
-        | Options::ENABLE_SUPERSCRIPT
-        | Options::ENABLE_SUBSCRIPT
-        | Options::ENABLE_WIKILINKS
-}
-
-fn take_explicit_heading_id(children: &mut Vec<Inline>) -> Option<String> {
-    let (id, empty) = {
-        let Inline::Text { value } = children.last_mut()? else {
-            return None;
-        };
-        let trimmed = value.trim_end();
-        let opening = trimmed.rfind("{#")?;
-        if !trimmed.ends_with('}') {
-            return None;
-        }
-        if opening != 0
-            && !trimmed[..opening]
-                .chars()
-                .next_back()
-                .is_some_and(char::is_whitespace)
-        {
-            return None;
-        }
-        let id = trimmed
-            .get(opening + 2..trimmed.len().checked_sub(1)?)?
-            .to_owned();
-        if id.is_empty()
-            || id.bytes().any(|byte| {
-                byte.is_ascii_whitespace() || matches!(byte, b'{' | b'}' | b'\\' | b'<' | b'>')
-            })
-        {
-            return None;
-        }
-        let title_end = trimmed[..opening].trim_end().len();
-        value.truncate(title_end);
-        (id, value.is_empty())
-    };
-    if empty {
-        children.pop();
-    }
-    Some(id)
-}
-
-fn heading_level(level: HeadingLevel) -> u8 {
-    match level {
-        HeadingLevel::H1 => 1,
-        HeadingLevel::H2 => 2,
-        HeadingLevel::H3 => 3,
-        HeadingLevel::H4 => 4,
-        HeadingLevel::H5 => 5,
-        HeadingLevel::H6 => 6,
-    }
-}
-
-/// Move a leading H1 into the real document-heading root without duplicating it.
-fn extract_document_title(
-    root_blocks: &mut Vec<Block>,
-    sections: &mut Vec<Section>,
-    document_title_id: Option<&str>,
-) -> Option<(Heading, Vec<mant_ir::FragmentAlias>)> {
-    let document_title_id = document_title_id?;
-    if sections.first().map(|section| section.id.as_str()) != Some(document_title_id) {
-        return None;
-    }
-    let title = sections.remove(0);
-    root_blocks.extend(title.blocks);
-    sections.splice(0..0, title.children);
-    let mut aliases = title.fragment_aliases;
-    if !aliases
-        .iter()
-        .any(|alias| alias.as_str() == title.id.as_str())
-    {
-        aliases.push(title.id.to_string().into());
-    }
-    Some((title.heading, aliases))
-}
-
-struct FlatSection {
-    level: u8,
-    is_document_title: bool,
-    section: Section,
-}
-
-fn nest_sections(flat: Vec<FlatSection>) -> Vec<Section> {
-    let mut roots = Vec::new();
-    let mut stack: Vec<FlatSection> = Vec::new();
-
-    for next in flat {
-        while stack
-            .last()
-            .is_some_and(|current| current.is_document_title || current.level >= next.level)
-        {
-            attach_completed(&mut stack, &mut roots);
-        }
-        stack.push(next);
-    }
-    while !stack.is_empty() {
-        attach_completed(&mut stack, &mut roots);
-    }
-    roots
-}
-
-fn attach_completed(stack: &mut Vec<FlatSection>, roots: &mut Vec<Section>) {
-    let completed = stack.pop().expect("caller checks non-empty stack").section;
-    if let Some(parent) = stack.last_mut() {
-        parent.section.children.push(completed);
-    } else {
-        roots.push(completed);
-    }
-}
-
-#[derive(Default)]
-struct SectionIds {
-    counts: HashMap<String, usize>,
-    assigned: HashSet<String>,
-    targets: HashMap<String, String>,
-}
-
-impl SectionIds {
-    fn allocate(&mut self, title: &str, explicit: Option<&str>) -> String {
-        let explicit = explicit
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-            .map(ToOwned::to_owned);
-        let normalized_explicit = explicit
-            .as_deref()
-            .map(crate::definitions::document_id_slug);
-        let base = explicit
-            .as_deref()
-            .zip(normalized_explicit.as_deref())
-            .filter(|(authored, normalized)| {
-                *authored == *normalized
-                    && !crate::producer_identity::is_reserved_selector(authored)
-            })
-            .map_or_else(|| slug(title), |(_, normalized)| normalized.to_owned());
-        let base = if base.is_empty() {
-            "section".to_owned()
-        } else if crate::producer_identity::is_reserved_selector(&base) {
-            // Reserved selectors and bare tree paths would shadow this
-            // heading in excerpt selection; keep it addressable instead.
-            format!("{base}-section")
-        } else {
-            base
-        };
-        // Disambiguate on the final id, not the per-base count: `# Foo 2`
-        // slugs to base `foo-2`, which collides with the `foo-2` a second
-        // `# Foo` produces. Counting per base alone would hand both the same
-        // id, silently misattributing search ownership between them.
-        let count = self.counts.entry(base.clone()).or_default();
-        let id = loop {
-            *count += 1;
-            let candidate = if *count == 1 {
-                base.clone()
-            } else {
-                format!("{base}-{}", *count)
-            };
-            if self.assigned.insert(candidate.clone()) {
-                break candidate;
-            }
-        };
-        // Ambiguous human-facing keys resolve to the first section that
-        // claimed them, matching the bare slug this heading renders as its
-        // anchor. A later duplicate owns only its own disambiguated id.
-        self.targets
-            .entry(base.clone())
-            .or_insert_with(|| id.clone());
-        // Heading attributes are source-level link aliases. Preserve the
-        // original alias even when its final section ID had to move out of the
-        // selector namespace (`{#root}`, `{#2.1}`, or `{#2.1/e3}`).
-        if let Some(explicit) = explicit {
-            self.targets.entry(explicit).or_insert_with(|| id.clone());
-        }
-        self.targets
-            .entry(slug(title))
-            .or_insert_with(|| id.clone());
-        self.targets.insert(id.clone(), id.clone());
-        id
-    }
-
-    fn remap_target(&mut self, current: Option<&str>, replacement: Option<&str>) {
-        let Some(current) = current else {
-            return;
-        };
-        if let Some(replacement) = replacement {
-            for target in self.targets.values_mut() {
-                if target == current {
-                    replacement.clone_into(target);
-                }
-            }
-        } else {
-            self.targets.retain(|_, target| target != current);
-        }
-    }
-}
-
-fn slug(value: &str) -> String {
-    let mut output = String::new();
-    let mut separator = false;
-    for character in value.chars().flat_map(char::to_lowercase) {
-        if character.is_alphanumeric() || character == '_' {
-            if separator && !output.is_empty() {
-                output.push('-');
-            }
-            separator = false;
-            output.push(character);
-        } else {
-            separator = true;
-        }
-    }
-    output.trim_matches('-').to_owned()
-}
-
-struct LocalLinkResolver<'targets> {
-    targets: &'targets HashMap<String, String>,
-}
-
-impl<'targets> LocalLinkResolver<'targets> {
-    fn new(targets: &'targets HashMap<String, String>) -> Self {
-        Self { targets }
-    }
-}
-
-impl VisitMut for LocalLinkResolver<'_> {
-    fn visit_inline_mut(&mut self, inline: &mut Inline) {
-        if let Inline::Link {
-            target: mant_ir::LinkTarget::Section { id },
-            ..
-        } = inline
-        {
-            // URI syntax and percent decoding were consumed by link_target.
-            // The remaining fragment is an exact identity, not another URI
-            // or a heading title to trim/slug into a different destination.
-            if let Some(resolved) = self.targets.get(id.as_str()) {
-                *id = resolved.as_str().into();
-            }
-        }
-        visit::walk_inline_mut(self, inline);
-    }
-}
-
-pub(super) struct EventCursor<'a> {
-    events: Vec<SpannedEvent<'a>>,
-    position: usize,
-    depth: usize,
-}
-
-/// Recursion budget shared by nested block containers and inline spans.
-///
-/// Parsing recurses once per nesting level, so unbounded input depth would
-/// overflow the stack before any allocation limit applies. Subtrees beyond
-/// this depth are preserved as unsupported source text with a diagnostic.
-const MAX_NESTING_DEPTH: usize = 64;
-
-impl<'a> EventCursor<'a> {
-    fn new(events: Vec<SpannedEvent<'a>>) -> Self {
-        Self {
-            events,
-            position: 0,
-            depth: 0,
-        }
-    }
-
-    /// Reserve one nesting level; callers must pair with [`Self::ascend`].
-    pub(super) fn try_descend(&mut self) -> bool {
-        if self.depth >= MAX_NESTING_DEPTH {
-            return false;
-        }
-        self.depth += 1;
-        true
-    }
-
-    pub(super) fn ascend(&mut self) {
-        self.depth = self.depth.saturating_sub(1);
-    }
-
-    pub(super) fn peek(&self) -> Option<&SpannedEvent<'a>> {
-        self.events.get(self.position)
-    }
-
-    /// The parser wraps direct item paragraphs only in loose lists. Nested
-    /// containers have their own tightness and must not influence this list.
-    pub(super) fn item_has_direct_paragraph(&self) -> bool {
-        let mut depth = 0usize;
-        for (event, _) in &self.events[self.position..] {
-            match event {
-                Event::Start(Tag::Paragraph) if depth == 0 => return true,
-                Event::Start(_) => depth += 1,
-                Event::End(_) if depth == 0 => break,
-                Event::End(_) => depth -= 1,
-                _ => {}
-            }
-        }
-        false
-    }
-
-    pub(super) fn next(&mut self) -> Option<SpannedEvent<'a>> {
-        let event = self.events.get(self.position)?.clone();
-        self.position += 1;
-        Some(event)
-    }
-
-    /// Consume the remainder of a just-opened tag, including nested tags.
-    pub(super) fn consume_balanced(&mut self, start: Range<usize>) -> Range<usize> {
-        let mut depth = 1usize;
-        let mut end = start.end;
-        while let Some((event, range)) = self.next() {
-            end = range.end;
-            match event {
-                Event::Start(_) => depth = depth.saturating_add(1),
-                Event::End(_) => {
-                    depth = depth.saturating_sub(1);
-                    if depth == 0 {
-                        break;
-                    }
-                }
-                _ => {}
-            }
-        }
-        start.start..end
-    }
-
-    pub(super) fn subtree_contains_task_marker(&self) -> bool {
-        let mut depth = 1usize;
-        for (event, _) in &self.events[self.position..] {
-            match event {
-                Event::TaskListMarker(_) => return true,
-                Event::Start(_) => depth = depth.saturating_add(1),
-                Event::End(_) => {
-                    depth = depth.saturating_sub(1);
-                    if depth == 0 {
-                        return false;
-                    }
-                }
-                _ => {}
-            }
-        }
-        false
     }
 }

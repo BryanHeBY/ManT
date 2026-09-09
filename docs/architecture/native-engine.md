@@ -124,6 +124,12 @@ a second parser, selector resolver, or audit oracle.
 | UI | Logical fragments carry text and anchors together. A document session owns its view, viewport and width cache; explicit switch reasons preserve search only when appropriate. Terminal acquisition/restoration remains separate from host callbacks. |
 | Native wrapper | Raw ABI views, synchronous session ownership, immediate owned transfer and optional renderer output are private boundaries. Bundle arguments retain their path allocations and borrowed source bytes for the complete call. |
 
+The Markdown event cursor owns nesting accounting and original offsets. A
+separate heading identity ledger allocates destinations and remaps exact fragment
+aliases; the root/section driver preserves source order before title extraction
+and entry annotation. Removing invisible declarations does not replace original
+item identities with the position of their first remaining content block.
+
 Developer profilers share JSON-lines framing only. Their schemas, expected
 owners, observed structure and matching policies remain independent of
 product lowering. Test modules are grouped by behavior rather than by the
