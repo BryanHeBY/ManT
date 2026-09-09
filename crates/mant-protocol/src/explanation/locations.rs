@@ -27,7 +27,7 @@ impl ExplanationTextRoot<'_> {
         };
         match self {
             Self::Inline(nodes) => {
-                crate::visit_inline_text(nodes, &[], |_, _, value| append(value));
+                mant_ir::visit_inline_plain_text(nodes, &mut append);
             }
             Self::Text(value) => append(value),
         }
@@ -109,4 +109,63 @@ impl ExplanationFormRange {
 
 pub(super) fn block_at<'a>(block: &'a Block, path: &[Step]) -> Option<&'a Block> {
     mant_ir::resolve_block_descendant(block, path)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn safe_text_preserves_scalar_positions_and_layout_controls() {
+        let raw = "\0A\r\x1b\t\n\u{85}e\u{301}👩‍💻";
+        let expected = "\u{fffd}A\u{fffd}\u{fffd}\t\n\u{fffd}e\u{301}👩‍💻";
+        let root = ExplanationTextRoot::Text(raw);
+        assert_eq!(root.safe_text(), expected);
+        assert_eq!(root.scalar_len(), expected.chars().count());
+        assert_eq!(raw.chars().count(), expected.chars().count());
+    }
+
+    #[test]
+    fn safe_inline_text_uses_only_original_visible_leaves() {
+        let nodes = vec![
+            Inline::anchor("invisible-target"),
+            Inline::Strong {
+                children: vec![
+                    Inline::Text {
+                        value: String::new(),
+                    },
+                    Inline::Emphasis {
+                        children: vec![Inline::Link {
+                            target: mant_ir::LinkTarget::External {
+                                uri: "https://not-visible.test".into(),
+                            },
+                            title: Some("not visible".into()),
+                            children: vec![Inline::Code {
+                                value: "e\u{301}👩‍💻\r".into(),
+                            }],
+                        }],
+                    },
+                ],
+            },
+            Inline::LineBreak,
+            Inline::Text {
+                value: "尾\t\0".into(),
+            },
+            Inline::Emphasis { children: vec![] },
+        ];
+        let expected = "e\u{301}👩‍💻\u{fffd}\n尾\t\u{fffd}";
+        let root = ExplanationTextRoot::Inline(&nodes);
+        assert_eq!(root.safe_text(), expected);
+        assert_eq!(root.scalar_len(), expected.chars().count());
+
+        let form_range = ExplanationFormRange {
+            form_index: 0,
+            start_char: 0,
+            end_char: u32::try_from(expected.chars().count()).expect("small fixture"),
+        };
+        let forms = vec![nodes];
+        let resolved = form_range.resolve(&forms).expect("unchanged scalar domain");
+        assert!(std::ptr::eq(resolved, forms[0].as_slice()));
+        assert_eq!(ExplanationTextRoot::Inline(resolved).safe_text(), expected);
+    }
 }

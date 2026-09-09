@@ -8,21 +8,31 @@ use crate::Inline;
 /// whitespace normalizer, or bounded reference-label projection.
 #[must_use]
 pub fn inline_plain_text(nodes: &[Inline]) -> String {
-    fn append(nodes: &[Inline], output: &mut String) {
+    let mut output = String::new();
+    visit_inline_plain_text(nodes, |text| output.push_str(text));
+    output
+}
+
+/// Visit borrowed visible text leaves in source order, without decoration.
+///
+/// Styles and links contribute their children, anchors are empty, and hard
+/// breaks contribute a newline. This shares the exact content domain of
+/// [`inline_plain_text`] without allocating an intermediate flattened string.
+/// No sanitization, name matching or presentation roles are applied.
+pub fn visit_inline_plain_text<'a>(nodes: &'a [Inline], mut emit: impl FnMut(&'a str)) {
+    fn append<'a>(nodes: &'a [Inline], emit: &mut impl FnMut(&'a str)) {
         for node in nodes {
             match node {
-                Inline::Text { value } | Inline::Code { value } => output.push_str(value),
+                Inline::Text { value } | Inline::Code { value } => emit(value),
                 Inline::Strong { children }
                 | Inline::Emphasis { children }
-                | Inline::Link { children, .. } => append(children, output),
+                | Inline::Link { children, .. } => append(children, emit),
                 Inline::Anchor { .. } => {}
-                Inline::LineBreak => output.push('\n'),
+                Inline::LineBreak => emit("\n"),
             }
         }
     }
-    let mut output = String::new();
-    append(nodes, &mut output);
-    output
+    append(nodes, &mut emit);
 }
 
 /// First character visible to a renderer without allocating flattened text.
@@ -117,6 +127,10 @@ mod tests {
             Inline::anchor("end"),
         ];
         assert_eq!(inline_plain_text(&nodes), "é👩‍💻\n尾\t ");
+        let mut pieces = Vec::new();
+        visit_inline_plain_text(&nodes, |text| pieces.push(text));
+        assert_eq!(pieces, ["", "é👩‍💻", "\n", "尾\t "]);
+        assert_eq!(pieces.concat(), inline_plain_text(&nodes));
         assert_eq!(first_visible_character(&nodes), Some('é'));
         assert_eq!(last_visible_character(&nodes), Some(' '));
         assert!(has_printable_character(&nodes));
