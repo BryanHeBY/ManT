@@ -25,7 +25,11 @@ fn screen(app: &mut App) -> (String, ratatui::buffer::Buffer) {
     let mut terminal = Terminal::new(TestBackend::new(140, 28)).unwrap();
     terminal.draw(|frame| app.draw(frame)).unwrap();
     let buffer = terminal.backend().buffer().clone();
-    let text = buffer.content().iter().map(|cell| cell.symbol()).collect();
+    let text = buffer
+        .content()
+        .iter()
+        .map(ratatui::buffer::Cell::symbol)
+        .collect();
     (text, buffer)
 }
 

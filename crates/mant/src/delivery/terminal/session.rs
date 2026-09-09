@@ -1,16 +1,10 @@
 //! Native terminal acquisition, event loop and restoration in original order.
 use super::{
-    App, CrosstermBackend, DisableMouseCapture, DocumentCatalog, EnableMouseCapture,
-    EnterAlternateScreen, Instant, LeaveAlternateScreen, ReaderServices, ResolvedContent,
-    TERMINATION_POLL_INTERVAL, Terminal, TerminationSignals, disable_raw_mode, enable_raw_mode,
-    event, execute, io, panic,
+    App, CrosstermBackend, DisableMouseCapture, EnableMouseCapture, EnterAlternateScreen, Instant,
+    LeaveAlternateScreen, ReaderOptions, ReaderServices, TERMINATION_POLL_INTERVAL, Terminal,
+    TerminationSignals, disable_raw_mode, enable_raw_mode, event, execute, io, panic,
 };
-pub(super) fn run(
-    bundle: &ResolvedContent,
-    catalog: DocumentCatalog,
-    scope: &[ResolvedContent],
-    services: &mut ReaderServices<'_>,
-) -> io::Result<()> {
+pub(super) fn run(options: ReaderOptions, services: &mut ReaderServices<'_>) -> io::Result<()> {
     let termination = TerminationSignals::install()?;
     let mut stdout = io::stdout();
     enable_raw_mode()?;
@@ -21,7 +15,7 @@ pub(super) fn run(
     execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
-    let mut app = App::with_catalog_and_scope(bundle, catalog, scope);
+    let mut app = App::from_shared(options);
 
     let result = panic::catch_unwind(panic::AssertUnwindSafe(|| -> io::Result<Option<i32>> {
         let mut redraw = true;

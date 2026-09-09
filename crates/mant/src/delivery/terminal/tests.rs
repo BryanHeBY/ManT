@@ -8,12 +8,13 @@ fn recovery_child() {
     };
     let content = mant_engine::query_markdown_text("# Recovery\n\nBody.\n", None).unwrap();
     if case == "panic" {
-        super::run_with_catalog(
-            &content,
-            mant_protocol::DocumentCatalog::default(),
-            |_| panic!("injected host callback panic"),
-            |_| Err("unused".into()),
-            |_| Err("unused".into()),
+        let mut discover = |_: &mant_protocol::CatalogQuery| panic!("injected host callback panic");
+        super::run_reader(
+            mant_ui::ReaderOptions::new(std::sync::Arc::new(content)),
+            &mut mant_ui::ReaderServices {
+                discover_documents: Some(&mut discover),
+                ..Default::default()
+            },
         )
         .unwrap();
         panic!("expected discovery callback to panic");
@@ -79,7 +80,10 @@ fn initialization_failure(content: &mant_ir::ResolvedContent) {
     // Use EPIPE, not EBADF: Rust stdout deliberately treats a closed/invalid
     // descriptor as a sink, so a read-only fd would not test an I/O error.
     assert_eq!(unsafe { dup2(broken.as_raw_fd(), 1) }, 1);
-    let result = super::run(content);
+    let result = super::run_reader(
+        mant_ui::ReaderOptions::new(std::sync::Arc::new(content.clone())),
+        &mut mant_ui::ReaderServices::default(),
+    );
     assert_eq!(unsafe { dup2(tty.as_raw_fd(), 1) }, 1);
     // Stdout retains failed buffered sequences until fd restoration; the
     // harness sees both enter/leave commands and verifies final termios too.

@@ -48,6 +48,16 @@ already-scanned reference occurrences are distinct local targets. Occurrence
 handles are not public selectors or persistent revision identities: a reloaded
 document still requires candidate-view and rendered-location validation.
 
+`ReaderOptions` supplies an `Arc<ResolvedContent>` for the initial page and an
+ordered vector of shared scope handles. `App::from_shared` retains those exact
+allocations, as do node-copy requests and direct-file history fallbacks. Search
+rows belong to their scope snapshot, not merely its address: two revisions of
+the same document, or two unregistered direct files, remain distinct. Qualified
+history keeps weak provenance instead of retaining every old document body;
+local replay requires the same allocation, otherwise the host reloads the
+address and the reader validates the destination before committing. Tab grouping
+by address is only a display policy, never a revision cache.
+
 The reference overlay owns its chooser and its explicit Open or Copy purpose;
 Reveal remains an action on the selected source occurrence. Closing or replacing
 the overlay drops that chooser, including during a successful page change.
@@ -102,16 +112,22 @@ page-local jumps in memory. This makes the same component usable by the
 The host supplies resolved IR and owns the terminal event loop:
 
 ```rust,no_run
-use mant_ui::{App, ReaderServices};
+use std::sync::Arc;
+use mant_ui::{App, ReaderOptions, ReaderServices};
 
-# fn reader(content: &mant_ir::ResolvedContent) {
-let mut app = App::new(content);
+# fn reader(content: Arc<mant_ir::ResolvedContent>) {
+let mut app = App::from_shared(ReaderOptions::new(content));
 let mut services = ReaderServices::default();
 // Route host input through app.handle_event(), draw with app.draw(frame),
 // and service queued capabilities after drawing:
 app.service_pending(&mut services);
 # }
 ```
+
+`App::new`, `with_catalog` and `with_catalog_and_scope` are borrowing convenience
+constructors: they copy the supplied IR into reader-owned handles. Prefer
+`from_shared` when the host already owns immutable snapshots. The reader never
+merges different allocations because their addresses happen to match.
 
 The host routes events through `handle_event`, invokes `draw` from its Ratatui
 frame callback, and supplies the clock to `tick` and `next_wakeup`. These methods

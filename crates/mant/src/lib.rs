@@ -18,7 +18,10 @@ mod request_input;
 mod schema_output;
 mod terminal;
 
-use std::io::{self, IsTerminal, Read, Write};
+use std::{
+    io::{self, IsTerminal, Read, Write},
+    sync::Arc,
+};
 
 use application::request_for_navigation;
 use arguments::{Command, DisplayMode, OutputOptions, QuerySource};
@@ -168,7 +171,7 @@ fn run_interactive(
             diagnostics_color,
         );
     };
-    let (query, scope_documents) = match source {
+    let scope_documents = match source {
         QuerySource::Arguments(request) => {
             if !matches!(request.view, QueryView::Full {}) {
                 return report_failure(
@@ -181,7 +184,7 @@ fn run_interactive(
                 Ok(query) => query,
                 Err(error) => return report_failure(&error, diagnostics, diagnostics_color),
             };
-            (query.clone(), vec![query])
+            vec![Arc::new(query)]
         }
         QuerySource::ScopeArguments { scope, view: None } => {
             if policy != LoadPolicy::Combined {
@@ -195,14 +198,7 @@ fn run_interactive(
                 Ok(loaded) => loaded,
                 Err(error) => return report_failure(&error, diagnostics, diagnostics_color),
             };
-            let Some(query) = loaded.documents().first().cloned() else {
-                return report_failure(
-                    &Failure::operational("document scope resolved no readable documents"),
-                    diagnostics,
-                    diagnostics_color,
-                );
-            };
-            (query, loaded.into_parts().1)
+            loaded.into_parts().1.into_iter().map(Arc::new).collect()
         }
         QuerySource::ScopeArguments { view: Some(_), .. } => {
             return report_failure(
@@ -219,22 +215,38 @@ fn run_interactive(
             );
         }
     };
+    let Some(query) = scope_documents.first().cloned() else {
+        return report_failure(
+            &Failure::operational("document scope resolved no readable documents"),
+            diagnostics,
+            diagnostics_color,
+        );
+    };
     let catalog = match host.discover(&CatalogQuery::default()) {
         Ok(catalog) => catalog,
         Err(error) => return report_failure(&error, diagnostics, diagnostics_color),
     };
     let mut clipboard = SystemClipboard::default();
-    match delivery::terminal::run_with_catalog_and_scope_and_copy(
-        &query,
-        catalog,
-        &scope_documents,
-        |catalog_query| host.discover(catalog_query).map_err(Failure::into_message),
-        |target| {
-            let (request, policy) = request_for_navigation(target);
-            application::read_full(&request, policy, host).map_err(Failure::into_message)
+    let mut discover =
+        |catalog_query: &CatalogQuery| host.discover(catalog_query).map_err(Failure::into_message);
+    let mut open = |target: &mant_protocol::DocumentOpenTarget| {
+        let (request, policy) = request_for_navigation(target);
+        application::read_full(&request, policy, host).map_err(Failure::into_message)
+    };
+    let mut external = open_external_uri;
+    let mut copy = |request| clipboard.copy(request);
+    match delivery::terminal::run_reader(
+        mant_ui::ReaderOptions {
+            current: query,
+            catalog,
+            scope: scope_documents,
         },
-        open_external_uri,
-        |request| clipboard.copy(request),
+        &mut mant_ui::ReaderServices {
+            discover_documents: Some(&mut discover),
+            open_document: Some(&mut open),
+            open_external: Some(&mut external),
+            copy_to_clipboard: Some(&mut copy),
+        },
     ) {
         Ok(()) => 0,
         Err(error) => report_failure(&Failure::operational(error), diagnostics, diagnostics_color),

@@ -1,0 +1,16 @@
+[package]
+name = "mant-ui-ir-consumer"
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.88"
+publish = false
+
+[workspace]
+resolver = "3"
+
+[dependencies]
+mant-ui = { path = "../../../crates/mant-ui", default-features = false }
+mant-ir = { path = "../../../crates/mant-ir" }
+mant-protocol = { path = "../../../crates/mant-protocol" }
+ratatui = { version = "0.30.2", default-features = false, features = ["crossterm"] }
+crossterm = "0.29.0"

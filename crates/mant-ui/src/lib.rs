@@ -12,7 +12,7 @@ mod scrollbar;
 mod text;
 mod theme;
 
-pub use app::{App, UpdateOutcome};
+pub use app::{App, ReaderOptions, UpdateOutcome};
 pub use clipboard::{CopyFormat, CopyRequest, MAX_COPY_BYTES};
 pub use document::{
     DocumentView, ExternalUri, NavKind, NavNode, RenderedDocument, RenderedSearchMatch,

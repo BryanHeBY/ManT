@@ -1,7 +1,7 @@
 //! Document navigation ledger. Plans borrow/clone locations; only a verified
 //! page transition commits history and tab state.
 
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 
 use mant_ir::ResolvedContent;
 use mant_protocol::DocumentAddress;
@@ -44,9 +44,14 @@ pub(super) struct HistoryLocation {
     address: Option<DocumentAddress>,
     fallback: Option<Arc<ResolvedContent>>,
     target: LocalTarget,
+    origin: Weak<ResolvedContent>,
 }
 
 impl HistoryLocation {
+    pub(super) fn belongs_to(&self, current: &Arc<ResolvedContent>) -> bool {
+        self.origin.ptr_eq(&Arc::downgrade(current))
+    }
+
     pub(super) fn address(&self) -> Option<&DocumentAddress> {
         self.address.as_ref()
     }
@@ -80,6 +85,7 @@ impl DocumentTab {
 pub(super) struct NavigationState {
     address: Option<DocumentAddress>,
     fallback: Option<Arc<ResolvedContent>>,
+    origin: Weak<ResolvedContent>,
     back: Vec<HistoryLocation>,
     forward: Vec<HistoryLocation>,
     tabs: Vec<DocumentTab>,
@@ -93,10 +99,12 @@ impl NavigationState {
     pub(super) fn new(
         address: Option<DocumentAddress>,
         fallback: Option<Arc<ResolvedContent>>,
+        origin: Weak<ResolvedContent>,
     ) -> Self {
         Self {
             address,
             fallback,
+            origin,
             back: Vec::new(),
             forward: Vec::new(),
             tabs: Vec::new(),
@@ -116,6 +124,7 @@ impl NavigationState {
             address: self.address.clone(),
             fallback: self.fallback.clone(),
             target,
+            origin: self.origin.clone(),
         }
     }
 
@@ -160,9 +169,11 @@ impl NavigationState {
         &mut self,
         address: Option<DocumentAddress>,
         fallback: Option<Arc<ResolvedContent>>,
+        origin: Weak<ResolvedContent>,
     ) {
         self.address = address;
         self.fallback = fallback;
+        self.origin = origin;
     }
 
     pub(super) fn sync_tab(&mut self, label: String, fallback: Option<Arc<ResolvedContent>>) {
@@ -174,6 +185,10 @@ impl NavigationState {
             let tab = &mut self.tabs[index];
             tab.label = label;
             tab.location.fallback = fallback;
+            if !tab.location.origin.ptr_eq(&self.origin) {
+                tab.location.target = LocalTarget::Default;
+            }
+            tab.location.origin = self.origin.clone();
             index
         } else {
             if self.tabs.len() == HISTORY_LIMIT {
@@ -186,6 +201,7 @@ impl NavigationState {
                     address: self.address.clone(),
                     fallback,
                     target: LocalTarget::Default,
+                    origin: self.origin.clone(),
                 },
                 label,
             });
@@ -265,11 +281,11 @@ mod tests {
             LocalTarget::Fragment("Mixed.Target".into()),
             LocalTarget::ReferenceOccurrence("private-occurrence-2".into()),
         ] {
-            let mut state = NavigationState::new(Some(address("first")), None);
+            let mut state = NavigationState::new(Some(address("first")), None, Weak::new());
             state.sync_tab("First".into(), None);
             state.remember_tab(target.clone());
             state.commit(HistoryDirection::New, state.location(target.clone()));
-            state.replace_current(Some(address("second")), None);
+            state.replace_current(Some(address("second")), None, Weak::new());
             state.sync_tab("Second".into(), None);
 
             // Repeated plans, including abandoned host requests, are read-only.

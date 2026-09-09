@@ -173,7 +173,7 @@ where
         return false;
     };
     match open_document(&address.document) {
-        Ok(bundle) => app.complete_open(&bundle, address),
+        Ok(bundle) => app.complete_open_shared(std::sync::Arc::new(bundle), address),
         Err(message) => app.report_open_error(message),
     }
     true

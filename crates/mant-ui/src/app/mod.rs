@@ -242,6 +242,31 @@ impl NavigationViewportRequest {
     }
 }
 
+/// Immutable snapshots supplied by the host at reader startup.
+///
+/// Handles are shared without copying document bodies. Equal document addresses
+/// do not imply equal revisions; scope membership uses allocation identity.
+pub struct ReaderOptions {
+    /// Initially displayed snapshot.
+    pub current: Arc<ResolvedContent>,
+    /// Initial read-only document-finder inventory.
+    pub catalog: DocumentCatalog,
+    /// Ordered, pre-resolved snapshots searched by the reader.
+    pub scope: Vec<Arc<ResolvedContent>>,
+}
+
+impl ReaderOptions {
+    /// Start with only the current snapshot and an empty finder inventory.
+    #[must_use]
+    pub fn new(current: Arc<ResolvedContent>) -> Self {
+        Self {
+            scope: vec![Arc::clone(&current)],
+            current,
+            catalog: DocumentCatalog::default(),
+        }
+    }
+}
+
 /// All mutable interaction state for one `ManT` reader session.
 pub struct App {
     session: DocumentSession,
@@ -274,12 +299,14 @@ pub struct App {
 
 impl App {
     /// Construct an application without preloaded discovery rows.
+    /// Copies the borrowed snapshot; use [`Self::from_shared`] to share it.
     #[must_use]
     pub fn new(bundle: &ResolvedContent) -> Self {
         Self::with_catalog(bundle, DocumentCatalog::default())
     }
 
     /// Construct an application with a snapshot for the document finder.
+    /// Copies the borrowed document; use [`Self::from_shared`] to share it.
     #[must_use]
     pub fn with_catalog(bundle: &ResolvedContent, catalog: DocumentCatalog) -> Self {
         Self::with_catalog_and_scope(bundle, catalog, std::slice::from_ref(bundle))
@@ -287,14 +314,41 @@ impl App {
 
     /// Construct an application whose in-document search spans a bounded,
     /// pre-resolved document scope.
+    ///
+    /// Copies each borrowed scope member once, reusing its new handle when
+    /// `bundle` is that exact member. Equal addresses are not merged.
     #[must_use]
     pub fn with_catalog_and_scope(
         bundle: &ResolvedContent,
         catalog: DocumentCatalog,
         scope: &[ResolvedContent],
     ) -> Self {
-        let document = DocumentView::new(bundle);
-        let current_bundle = Arc::new(bundle.clone());
+        let scope_documents = scope.iter().cloned().map(Arc::new).collect::<Vec<_>>();
+        let current = scope
+            .iter()
+            .position(|candidate| std::ptr::eq(candidate, bundle))
+            .map_or_else(
+                || Arc::new(bundle.clone()),
+                |index| Arc::clone(&scope_documents[index]),
+            );
+        Self::from_shared(ReaderOptions {
+            current,
+            catalog,
+            scope: scope_documents,
+        })
+    }
+
+    /// Construct a reader from host-owned immutable snapshots without copying
+    /// their document bodies. If absent by pointer identity, the current
+    /// snapshot is prepended to the supplied search scope.
+    #[must_use]
+    pub fn from_shared(options: ReaderOptions) -> Self {
+        let ReaderOptions {
+            current: current_bundle,
+            catalog,
+            scope: mut scope_documents,
+        } = options;
+        let document = DocumentView::new(&current_bundle);
         let mut finder = FinderState::default();
         finder.replace_catalog(catalog);
         let expanded = document
@@ -303,12 +357,11 @@ impl App {
             .filter(|item| item.kind == NavKind::Section && item.depth == 0)
             .map(|item| item.id.clone())
             .collect();
-        let mut scope_documents = scope.iter().cloned().map(Arc::new).collect::<Vec<_>>();
         if !scope_documents
             .iter()
-            .any(|candidate| candidate.address == bundle.address)
+            .any(|candidate| Arc::ptr_eq(candidate, &current_bundle))
         {
-            scope_documents.insert(0, Arc::new(bundle.clone()));
+            scope_documents.insert(0, Arc::clone(&current_bundle));
         }
         let mut app = Self {
             session: DocumentSession::new(Arc::clone(&current_bundle), document),
@@ -328,8 +381,12 @@ impl App {
             pending_external: None,
             pending_copy: None,
             navigation: NavigationState::new(
-                bundle.address.clone(),
-                bundle.address.is_none().then_some(current_bundle),
+                current_bundle.address.clone(),
+                current_bundle
+                    .address
+                    .is_none()
+                    .then(|| Arc::clone(&current_bundle)),
+                Arc::downgrade(&current_bundle),
             ),
             notice: None,
             copy_toast: None,
@@ -370,23 +427,32 @@ impl App {
         self.report_notice(message);
     }
 
+    #[cfg(test)]
     pub(crate) fn complete_open(&mut self, bundle: &ResolvedContent, request: NavigationRequest) {
+        self.complete_open_shared(Arc::new(bundle.clone()), request);
+    }
+
+    pub(crate) fn complete_open_shared(
+        &mut self,
+        bundle: Arc<ResolvedContent>,
+        request: NavigationRequest,
+    ) {
         self.complete_loaded_navigation(bundle, request.target, request.direction);
     }
 
     fn complete_loaded_navigation(
         &mut self,
-        bundle: &ResolvedContent,
+        bundle: Arc<ResolvedContent>,
         target: LocalTarget,
         direction: HistoryDirection,
     ) {
         if let LocalTarget::Fragment(target) = &target
-            && let Err(message) = validate_fragment(bundle, target)
+            && let Err(message) = validate_fragment(&bundle, target)
         {
             self.report_open_error(message);
             return;
         }
-        let candidate = DocumentView::new(bundle);
+        let candidate = DocumentView::new(&bundle);
         if let Some(id) = target.id()
             && ((matches!(target, LocalTarget::ReferenceOccurrence(_))
                 && candidate.reference_target(id).is_none())
@@ -405,22 +471,24 @@ impl App {
         }
     }
 
-    fn replace_document(&mut self, bundle: &ResolvedContent, reason: DocumentChangeReason) {
-        self.replace_document_view(bundle, reason, DocumentView::new(bundle));
+    fn replace_document(&mut self, bundle: Arc<ResolvedContent>, reason: DocumentChangeReason) {
+        let view = DocumentView::new(&bundle);
+        self.replace_document_view(bundle, reason, view);
     }
 
     fn replace_document_view(
         &mut self,
-        bundle: &ResolvedContent,
+        bundle: Arc<ResolvedContent>,
         reason: DocumentChangeReason,
         view: DocumentView,
     ) {
         self.remember_current_document_tab();
-        self.session = DocumentSession::new(Arc::new(bundle.clone()), view);
         self.navigation.replace_current(
             bundle.address.clone(),
-            bundle.address.is_none().then(|| Arc::new(bundle.clone())),
+            bundle.address.is_none().then(|| Arc::clone(&bundle)),
+            Arc::downgrade(&bundle),
         );
+        self.session = DocumentSession::new(bundle, view);
         self.selected = 0;
         self.expanded = self
             .session
@@ -577,7 +645,7 @@ impl App {
         let Some((location, direction)) = self.navigation.plan_history(back) else {
             return;
         };
-        if location.address() == self.navigation.address() {
+        if location.belongs_to(&self.session.current_bundle) {
             self.complete_local_history(&location, direction);
         } else if let Some(address) = location.address().cloned() {
             self.pending_open = Some(NavigationRequest {
@@ -586,8 +654,7 @@ impl App {
                 direction,
             });
         } else if let Some(bundle) = location.fallback() {
-            let bundle = bundle.as_ref().clone();
-            self.complete_local_bundle(&bundle, location.target().clone(), direction);
+            self.complete_local_bundle(Arc::clone(bundle), location.target().clone(), direction);
         }
     }
 
@@ -623,7 +690,7 @@ impl App {
 
     fn complete_local_bundle(
         &mut self,
-        bundle: &ResolvedContent,
+        bundle: Arc<ResolvedContent>,
         target: LocalTarget,
         direction: HistoryDirection,
     ) {
@@ -672,8 +739,9 @@ impl App {
         outcome
     }
 
-    /// Return the next interaction deadline relative to the supplied host clock.
-    /// This only calculates a delay; the host owns polling and sleeping.
+    /// Return the next timer delay relative to the host's clock, without
+    /// waiting or reading terminal state.
+    #[must_use]
     pub fn next_wakeup(&self, now: Instant) -> Option<Duration> {
         [
             self.navigation_sync_deadline,

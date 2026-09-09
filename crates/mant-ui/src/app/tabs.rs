@@ -50,8 +50,11 @@ impl App {
                 direction: HistoryDirection::New,
             });
         } else if let Some(bundle) = location.fallback() {
-            let bundle = bundle.as_ref().clone();
-            self.complete_local_bundle(&bundle, location.target().clone(), HistoryDirection::New);
+            self.complete_local_bundle(
+                Arc::clone(bundle),
+                location.target().clone(),
+                HistoryDirection::New,
+            );
         } else {
             return UpdateOutcome::Unchanged;
         }

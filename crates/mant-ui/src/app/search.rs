@@ -3,7 +3,7 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use unicode_width::UnicodeWidthChar;
 
-use mant_protocol::DocumentAddress;
+use std::sync::Arc;
 
 use super::App;
 use crate::RenderedSearchMatch;
@@ -11,7 +11,6 @@ use crate::RenderedSearchMatch;
 #[derive(Debug, Clone)]
 pub(super) struct ScopedRenderedSearchMatch {
     pub(super) document_index: usize,
-    pub(super) address: Option<DocumentAddress>,
     pub(super) rendered: RenderedSearchMatch,
 }
 
@@ -194,12 +193,10 @@ impl App {
                 .iter()
                 .enumerate()
                 .flat_map(|(document_index, bundle)| {
-                    let address = bundle.address.clone();
                     let rendered = crate::DocumentView::new(bundle).render(width);
                     rendered.search(&query).into_iter().map(move |rendered| {
                         ScopedRenderedSearchMatch {
                             document_index,
-                            address: address.clone(),
                             rendered,
                         }
                     })
@@ -233,7 +230,7 @@ impl App {
         else {
             return;
         };
-        if self.navigation.address() != search_match.address.as_ref() {
+        if !self.is_current_search_document(search_match.document_index) {
             let current = self.current_location();
             let Some(bundle) = self
                 .scope_documents
@@ -244,7 +241,7 @@ impl App {
             };
             self.navigation
                 .commit(super::HistoryDirection::New, current);
-            self.replace_document(&bundle, super::DocumentChangeReason::SearchResult);
+            self.replace_document(bundle, super::DocumentChangeReason::SearchResult);
         }
         self.sync_current_search_matches();
         self.session.content_scroll = search_match.rendered.row;
@@ -253,7 +250,7 @@ impl App {
 
     pub(super) fn active_rendered_search_match(&self) -> Option<usize> {
         let active = self.search.scope_matches.get(self.search.active_match)?;
-        if active.address.as_ref() != self.navigation.address() {
+        if !self.is_current_search_document(active.document_index) {
             return None;
         }
         Some(
@@ -261,7 +258,7 @@ impl App {
                 .scope_matches
                 .iter()
                 .take(self.search.active_match)
-                .filter(|candidate| candidate.address.as_ref() == self.navigation.address())
+                .filter(|candidate| self.is_current_search_document(candidate.document_index))
                 .count(),
         )
     }
@@ -275,9 +272,15 @@ impl App {
             .search
             .scope_matches
             .iter()
-            .filter(|candidate| candidate.address.as_ref() == self.navigation.address())
+            .filter(|candidate| self.is_current_search_document(candidate.document_index))
             .map(|candidate| candidate.rendered.clone())
             .collect();
+    }
+
+    fn is_current_search_document(&self, index: usize) -> bool {
+        self.scope_documents
+            .get(index)
+            .is_some_and(|bundle| Arc::ptr_eq(bundle, &self.session.current_bundle))
     }
 
     pub(super) fn move_search_cursor_to(&mut self, column: u16) {
