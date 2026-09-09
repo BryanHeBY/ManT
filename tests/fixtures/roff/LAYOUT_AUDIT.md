@@ -108,3 +108,25 @@ fidelity and structure replays produced byte-identical CSVs to the existing
 reviewed ledgers. This includes the known groff recursion failure and reviewed
 layout/content signals; it does not reclassify them as clean. No new 45,036-page
 sweep or native Windows/macOS run is claimed by this record.
+
+### Execution-row and facade follow-up
+
+`LAYOUT_FOLLOWUP_ACCEPTANCE.json` records the R01–R06 follow-up at producer
+`0779e2be`. It retains 15 additional original source inputs, reference versions,
+binary/source hashes, regression boundaries and the exact verification scope.
+The earlier acceptance record is unchanged rather than relabeled as new proof.
+
+The full local gate, all-feature workspace tests and all 199 source-bound query
+cases passed. The 51-page fixture replays retained the previous layout/fidelity
+review candidates and reference recursion failure; their CSVs, and the
+structure CSV, are byte-identical to the reviewed ledgers. All 46 prior reduced
+inputs plus the 15 new inputs were executed with the final producer, the pinned
+mandoc snapshot and groff 1.24.1. Reference comparisons use executed row events,
+blank-row counts and relative origins, not formatter page furniture equality.
+
+Regression tests additionally cover empty font operands versus zero-width
+glyphs, explicit `fi`/`nf` inside displays and synopses, empty display/list-item
+predecessors, bounded gaps separated by an empty literal row, and CLI/ANSI/TUI
+row conservation. The source-based tests are independent of the local review
+directory. This follow-up does not claim a new full-corpus or native
+Windows/macOS run.

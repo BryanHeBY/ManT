@@ -79,6 +79,12 @@ at only one consumption point. List-item and definition-item absent spacing inst
 compactness. Frontends cap a resolved boundary at 4096 rows, without merging
 literal blank lines. Visual wrapping never changes source lines or entry facts.
 
+Literal rows are content: an explicit empty text row in `Preformatted` is
+different from an anchor-only block and ends the preceding gap boundary.
+Frontends retain leading, trailing and entirely blank literal rows. For a
+multi-line definition term, run-in fitting measures the final open label row,
+not the longest earlier row; explicit hard breaks close that row.
+
 `DocumentIndex` addresses content nodes. `SemanticIndex` separately groups
 identified content owners into commands, parameter families, configuration keys,
 variables, values, and terms. A semantic entry keeps exact selectable names,

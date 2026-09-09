@@ -76,7 +76,9 @@ The following `man(7)` macros have dedicated lowering behavior:
 | `MT`, `ME` | Inline email link; a label and its address both remain visible without splitting the surrounding sentence |
 | `MR` | Typed manual-page reference |
 
-`br` inside a flow becomes an inline line break. `sp` becomes explicit vertical space. Filled source lines normally join with spaces; an indented input line and no-fill input preserve line boundaries. In a no-fill display, a run of raw blank input lines is one visual separator, while an explicit `sp` retains its requested separation. A final unescaped `\c` suppresses that implicit space or line break and joins the next input line directly.
+`br` inside a flow becomes an inline line break. `sp` becomes explicit vertical space. Filled source lines normally join with spaces; an indented input line and no-fill input preserve line boundaries. No-fill rows follow executed AST events: executed empty-row events are retained, including leading and trailing rows, and independent `sp` requests accumulate. Skipped conditions and uncalled macro definitions do not contribute rows. Leading empty literal rows follow mandoc's terminal behavior; groff may suppress them in no-space contexts. A final unescaped `\c` suppresses the next implicit space or line break and joins the next input line directly.
+
+An empty macro parameter is not automatically a physical blank line: ManT follows mandoc's macro-set-specific word behavior, preserving zero-width row glyphs such as `\&` separately from pure font state. Executed `fi`/`nf` inside `SY` or a display switch the actual content mode; a filled run resumes ordinary source-word and indented-line handling. Explicit argument and enclosure wrapper boundaries remain observable even when their child text shares one macro call-site line number.
 
 Display offsets use terminal-column unit conversion. Unsupported or excessive
 offsets use the default indentation; cumulative indentation is capped at 4096
@@ -103,7 +105,11 @@ When indented continuation blocks are reattached to a preceding definition, expl
 
 For an inline definition, only the initial paragraph is attached to the label's line. Subsequent paragraphs, code and nested blocks retain the same structural origin as a non-inline description, independently of label width. Explicit leading vertical space is kept between the term and description rather than trimmed away to force an inline presentation.
 
+For multi-tag `TP`/`TQ` heads, only the final open label line participates in run-in width fitting. Earlier completed labels cannot force a short final label onto a separate body line. Explicit hard breaks close a label line; zero-width targets do not reopen it or create another line.
+
 Paragraph distance is resolved at its source boundary. A first paragraph inside `RS` checks predecessors through enclosing relative scopes, including an ordered-item continuation; `RS` without a paragraph request adds no default gap. Independent requests add: `.sp 1` followed by `.sp 2` produces three blank rows, while `.sp 0` still breaks flow without adding a row. Renderers do not erase a following `PP` distance just because explicit spacing precedes it. A boundary exceeding 4096 rows is bounded with `manual.vertical-spacing-limit`; literal blank lines remain separate content. Text, node and explain output preserve hard lines and these gaps without imposing a soft-wrap width; the TUI reflows its immutable logical lines for the current viewport.
+
+Document and section text facades consume the same source gaps, including spacing before subsections and explicit spacing at the end of a node. The page title has a separate one-line presentation separator. Preformatted content retains leading, trailing and entirely blank rows; an explicit empty text row is content, unlike an anchor-only block. Executed spacing requests remain bounded layout events rather than being converted into unbounded literal rows.
 
 `OP` retains its optional-argument brackets, bold option name, and emphasized metavariable both inside and outside a `SY` synopsis; it does not create a separate IR variant. `AT`, `DT`, `SM`, `UC`, and other libmandoc-recognized man macros retain printable children where available but do not currently have a dedicated ManT semantic variant. For example, `SM` does not preserve point size.
 
@@ -256,6 +262,10 @@ The line cursor follows executed descendant words, not just the outer macro. Thu
 Styling wrappers such as `Bf` are not line boundaries. Continuation and pending spacing pass through their opening and closing nodes, including a body containing only state requests. An explicit break inside a wrapper still terminates the current logical line.
 
 No-fill changes line layout, not content reachability: nested tables and lists retain their cells, terms, bodies and targets even inside font scopes. Such structural payloads interrupt the current preformatted run rather than being flattened into partial inline text.
+
+Nested displays likewise retain their own fill mode, offset, leading gap, targets, and source positions. Entering an inner `Bd`, `D1`, or `Dl` ends the current preformatted run; leaving it restores the outer origin. For example, nested offsets of `2n` and `3n` produce origins of 2, 5, then 2 cells, while an inner `D1` or `Dl` adds its own six-cell displacement. A first-child display retains predecessor context through outer displays: independent non-compact gaps accumulate when earlier content exists, but do not appear directly after a section heading. This follows ManT's selected mandoc behavior, not a claim that nested displays are portable: libmandoc's “nested displays are not portable” warning remains observable.
+
+An empty `Bd` still retains an executed spacing request and its role as a predecessor for the following source block. A non-plain mdoc `It` itself establishes a paragraph boundary for a first-child display; plain `-item` lists instead inherit the preceding sibling or outer context. This applies to definition and column bodies as well as marked lists, without changing their semantic ownership.
 
 ## mdoc Inline Semantics
 

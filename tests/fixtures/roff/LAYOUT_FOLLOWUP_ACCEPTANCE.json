@@ -1,0 +1,266 @@
+{
+  "recordVersion": 1,
+  "producerCommit": "0779e2bee72bf458a6d52d122bbf56686a9e1cb4",
+  "recordedAt": "2026-09-09T03:55:06.444332+00:00",
+  "scope": "R01–R06 follow-up to LAYOUT_ACCEPTANCE.json. Local Linux/WSL execution-row, scoped-display, final-label-row and text-facade acceptance; no wire-shape change.",
+  "commits": [
+    "c68c6e55",
+    "03965be5",
+    "0779e2be"
+  ],
+  "sources": {
+    "mandoc": {
+      "reference": "CVS HEAD snapshot",
+      "url": "https://cvsweb.bsd.lv/mandoc/",
+      "files": [
+        {
+          "path": "man_term.c",
+          "revision": "1.250",
+          "sha256": "2b3e57e7052e9a1346715a8228595b2ddb2309fe52545b684ed50f8fe87dd197"
+        },
+        {
+          "path": "mdoc_term.c",
+          "revision": "1.388",
+          "sha256": "dcea0f8b2eaad6d8bc1661693d3b9940f8dbc37cf31d1004706f8164eb6df89b"
+        },
+        {
+          "path": "term.c",
+          "revision": "1.295",
+          "sha256": "9517a9c29c2693dc75f13a071e09b80d009d04c232dd99f20e2757e7539ee595"
+        },
+        {
+          "path": "roff_term.c",
+          "revision": "1.27",
+          "sha256": "3b05b226f57780ff91ed07d8db29c2d2d99ca7a8494c8e71255fed9452bd6129"
+        }
+      ],
+      "inspectedMechanisms": [
+        "man.c/man_term.c empty text and no-fill word execution",
+        "mdoc.c/mdoc_term.c NODE_LINE, empty word and print_bvspace predecessor handling",
+        "nested Bd/D1/Dl offset/mode restoration",
+        "TP/TQ final open head line"
+      ]
+    },
+    "groff": {
+      "version": "1.24.1",
+      "role": "Independent source/behavior check; no copied implementation or third-party tests"
+    },
+    "hostManuals": [
+      {
+        "path": "/usr/share/man/man1/gcc.1.gz",
+        "compressedSha256": "df3b6a9da8c70559bb4df49050137faa0022fecae965674326ce4fe65d5488e8",
+        "sourceSha256": "f31a9ae03e8e20baad471d47c4e17391038d852e32719c101001da6eb52b3083"
+      },
+      {
+        "path": "/usr/share/man/man8/btrfs-subvolume.8.gz",
+        "compressedSha256": "c00ade46fa983503b4fe2f0457f719142d00c2e4a09a9d69054538a2032d7a78",
+        "sourceSha256": "7aad0096c8fa69c22b8487f45ace7e38f820d4b7dc1a5877b2e95ebd9a28ae96"
+      }
+    ]
+  },
+  "verification": {
+    "completeLocalGate": {
+      "command": "bash scripts/check.sh",
+      "result": "passed"
+    },
+    "allFeatures": {
+      "command": "cargo test --locked --workspace --all-features --quiet",
+      "result": "passed"
+    },
+    "sourceBoundQueries": {
+      "command": "python3 scripts/audit-roff-semantics.py --profiler target/debug/examples/roff_semantic_profile --query-gold tests/fixtures/roff/ENTRY_QUERY_GOLD.json --verify",
+      "passed": 199,
+      "sourceCount": 125,
+      "uniqueSourceCount": 122
+    },
+    "fixtures": {
+      "pages": 51,
+      "projection": {
+        "clean": 51,
+        "excerpts": 134
+      },
+      "targets": {
+        "clean": 51
+      },
+      "semantics": {
+        "clean": 51
+      },
+      "structure": {
+        "clean": 51
+      },
+      "layout": {
+        "clean": 49,
+        "review": 1,
+        "referenceFailure": 1
+      },
+      "fidelity": {
+        "clean": 46,
+        "review": 4,
+        "referenceFailure": 1
+      },
+      "ledgerComparison": "Layout, fidelity and structure replays are byte-identical to the checked-in reviewed CSVs. Retained rclone layout candidate and content candidates, and expected groff macro-recursion failure, are not new clean results.",
+      "replayCommands": [
+        "python3 scripts/audit-roff-layout.py --fixtures --recheck-recorded --audit-db <copy-of-LAYOUT_AUDIT.csv> --findings-only",
+        "python3 scripts/audit-roff-fidelity.py --fixtures --recheck-recorded --audit-db <copy-of-FIDELITY_AUDIT.csv> --findings-only",
+        "python3 scripts/audit-roff-structure.py --fixtures --recheck-recorded --audit-db <copy-of-STRUCTURE_AUDIT.csv> --findings-only"
+      ]
+    },
+    "directedManualChecks": {
+      "gcc": {
+        "explain": "--explain=--help returned two direct owners plus seven other evidence owners; exit 0. Existing incomplete-semantics diagnostics remain visible.",
+        "node": "--node 4.2/e84 retains undocumented, joined, separate, both following examples and the final inverted-qualifier restriction.",
+        "widths": [
+          40,
+          80,
+          120
+        ]
+      },
+      "btrfs": {
+        "explain": "--explain=create returned the command body, Options, -i <qgroupid> and its description; exit 0.",
+        "widths": [
+          40,
+          80,
+          120
+        ],
+        "optionsColumn": 10,
+        "qgroupOptionColumn": 10
+      }
+    },
+    "crossReview": "Three parallel implementation/review passes; adjacent empty-literal gap reset, empty display predecessor, list-kind boundaries, fi/nf transitions, empty font operands and Fo/Fa/Eo/Ec execution boundaries received fixes and regressions. Final documentation reviewed independently.",
+    "exclusions": [
+      "No native Windows/macOS execution in this pass.",
+      "No new full-host or 45,036-source canonical sweep.",
+      "Reference page furniture, soft wrapping, justification and documented no-space differences are not byte-equality assertions.",
+      "Local logs are supplementary hashes, not required inputs for reproducing the committed source/test matrix."
+    ]
+  },
+  "regressionBoundaries": {
+    "R01_R02": [
+      "crates/mant-engine/tests/executed_literal_rows.rs",
+      "crates/mant-engine/tests/no_fill_synopsis.rs",
+      "crates/mant-engine/src/mandoc/tests/flow_controls.rs"
+    ],
+    "R03": [
+      "crates/mant-engine/tests/nested_display_geometry.rs",
+      "crates/mant-engine/tests/no_fill_synopsis.rs",
+      "crates/mant-engine/tests/roff_consumers.rs"
+    ],
+    "R04": [
+      "crates/mant-protocol/src/presentation/geometry/terms.rs",
+      "crates/mant-ui/src/document/tests/source_geometry.rs"
+    ],
+    "R05_R06": [
+      "crates/mant-engine/tests/text_source_flow.rs",
+      "crates/mant/tests/process.rs",
+      "crates/mant-ui/src/document/tests/source_geometry.rs",
+      "crates/mant-protocol/src/presentation/geometry/gaps.rs"
+    ]
+  },
+  "probes": {
+    "priorCases": "All 46 original cases in LAYOUT_ACCEPTANCE.json replayed against the final producer and both references.",
+    "additionalCases": 15,
+    "totalRendererInvocations": 183,
+    "nonzeroExitCodes": 0,
+    "review": "Compared the 15 reduced follow-up cases by source-token rows, blank-row counts and relative origins. Preserved the previous record's intentional formatter differences; successful execution of the 46-case replay is not an assertion of byte-identical output.",
+    "commands": {
+      "mant": "target/debug/mant --input - --input-format roff --format text --display direct --color never",
+      "mandoc": "<pinned-mandoc> -Tutf8 -O width=80",
+      "groff": "GROFF_NO_SGR=1 groff -k -Tutf8 -man|-mdoc -rLL=80n -rLT=80n",
+      "referenceCleanup": "col -b -x"
+    },
+    "caseLicense": "Original reduced inputs authored for ManT; Apache-2.0.",
+    "cases": [
+      {
+        "name": "R01-nf-sp",
+        "macroSet": "man",
+        "source": ".TH PROBE 1\n.SH TEST\nBASE\n.nf\nALPHA\n.sp 2\nBETA\n.fi\nAFTER\n"
+      },
+      {
+        "name": "R01-repeated-sp",
+        "macroSet": "man",
+        "source": ".TH PROBE 1\n.SH TEST\nBASE\n.EX\nALPHA\n.sp 1\n.sp 2\nBETA\n.EE\nAFTER\n"
+      },
+      {
+        "name": "R02-skipped-conditional",
+        "macroSet": "man",
+        "source": ".TH PROBE 1\n.SH TEST\nBASE\n.nf\nALPHA\n.if 0 \\{\\\n.sp 2\n.\\}\nBETA\n.fi\nAFTER\n"
+      },
+      {
+        "name": "R02-unused-macro",
+        "macroSet": "man",
+        "source": ".TH PROBE 1\n.SH TEST\nBASE\n.nf\nALPHA\n.de UNUSED\n.sp 2\n..\nBETA\n.fi\nAFTER\n"
+      },
+      {
+        "name": "R02-raw-tail",
+        "macroSet": "man",
+        "source": ".TH PROBE 1\n.SH TEST\nBASE\n.EX\nALPHA\n\n\nBETA\n\n\n.EE\nAFTER\n"
+      },
+      {
+        "name": "R02-expansion",
+        "macroSet": "man",
+        "source": ".TH PROBE 1\n.SH TEST\nBASE\n.nf\n.de ZZ\nALPHA\n\n\nBETA\n..\n.ZZ\n.ZZ\n.fi\nAFTER\n"
+      },
+      {
+        "name": "R02-single-empty",
+        "macroSet": "man",
+        "source": ".TH PROBE 1\n.SH TEST\nBASE\n.nf\n\n.fi\nAFTER\n"
+      },
+      {
+        "name": "R02-mdoc-raw-tail",
+        "macroSet": "mdoc",
+        "source": ".Dd September 9, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test literal flow\n.Sh TEST\nBASE\n.Bd -literal -compact\nALPHA\n\n\nBETA\n\n\n.Ed\nAFTER\n"
+      },
+      {
+        "name": "R02-mdoc-sp",
+        "macroSet": "mdoc",
+        "source": ".Dd September 9, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test literal flow\n.Sh TEST\nBASE\n.Bd -literal -compact\nALPHA\n.sp 1\n.sp 2\nBETA\n.Ed\nAFTER\n"
+      },
+      {
+        "name": "R03-offset-restore",
+        "macroSet": "mdoc",
+        "source": ".Dd September 9, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test literal flow\n.Sh TEST\nBASE\n.Bd -literal -offset 2n\nALPHA\n.Bd -literal -offset 3n\nBETA\n.Ed\nGAMMA\n.Ed\nAFTER\n"
+      },
+      {
+        "name": "R03-D1",
+        "macroSet": "mdoc",
+        "source": ".Dd September 9, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test literal flow\n.Sh TEST\nBASE\n.Bd -literal -offset 2n\nALPHA\n.D1 BETA\nGAMMA\n.Ed\nAFTER\n"
+      },
+      {
+        "name": "R03-empty-display",
+        "macroSet": "mdoc",
+        "source": ".Dd September 9, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test literal flow\n.Sh TEST\nBASE\n.Bd -literal\n.Bd -literal\n.Ed\n.Bd -literal\nINNER\n.Ed\n.Ed\nAFTER\n"
+      },
+      {
+        "name": "R03-list-item",
+        "macroSet": "mdoc",
+        "source": ".Dd September 9, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test literal flow\n.Sh TEST\nBASE\n.Bd -literal\n.Bl -item\n.It\n.Bd -literal\nINNER\n.Ed\n.El\n.Ed\nAFTER\n"
+      },
+      {
+        "name": "R04-long-short",
+        "macroSet": "man",
+        "source": ".TH PROBE 1\n.SH TEST\nBASE\n.TP 7\n.B --long-first-label\n.TQ\n.B -b\nBODY\n.br\nTAIL\nAFTER\n"
+      },
+      {
+        "name": "R05-section-PD-sp",
+        "macroSet": "man",
+        "source": ".TH PROBE 1\n.SH TEST\nBASE\n.PD 2\nALPHA\n.sp 3\n.SH SECOND\nBETA\nAFTER\n"
+      }
+    ]
+  },
+  "binarySha256": {
+    "target/debug/mant": "9cf2601e93f3667784648fa57bf73c97e58bd579b0bac3fe80ae6a055f1f57e5",
+    "target/release/mant": "4675419c83e508f1a7d9a18545b3c2a0d65e99a0865176c6744e53079092e502",
+    "target/debug/examples/roff_semantic_profile": "cea53d1ff0ae0703f0f5e68f99c1730aaa8801284b34f157048020300dd58b54",
+    "target/debug/examples/layout_profile": "f8f7f82cd5058de292ce7341b7c34c143990605c9989611595d47833e783de15",
+    "target/review-probes/mandoc-cvs-head-dygGR7/mandoc": "c8f2805bc51a32958de11528b5089f103922679af36e90c9dc366e63b4c9500e"
+  },
+  "supplementaryArtifactSha256": {
+    "layout-followup-check.log": "77f3aa62f5abf474bf18ca40d4686bdf7a9cf1227b5540569ca19773c8926eab",
+    "layout-review-allfeatures.log": "ba0913905635c3c25d920600b177170a5b934f6cb57b249050ffe4cec89bb405",
+    "layout-followup-query-gold.json": "5fa10bed3f8c3aa0432271f3cfb280705fb045b5b47a42b6699af65b146873af",
+    "layout-followup-reference.json": "f2f785afa28454143390ea4b1651b24f9b4f75d81cfe11669215b0205597387b",
+    "layout-followup-layout.json": "43bd8dde9c8929b2420487c678d05d689a5fa74d6f3040a29507ff992d5238c1",
+    "layout-followup-fidelity.json": "c9c869c071bdde801a6fa2a5677d7cc6e07340e3f7962f9dd32605dbc98e5ffc",
+    "layout-followup-structure.json": "b59b40005e72ddfe5ba91d8971a71bcec402426887cbd6019409a53b56536a4a"
+  }
+}

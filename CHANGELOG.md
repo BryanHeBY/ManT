@@ -18,6 +18,19 @@ that crate was not published for that change.
 
 ### Parent-relative document geometry (unreleased v0.11)
 
+- No-fill rows now follow executed native AST events, not source-line gaps:
+  skipped conditionals and unused macros cannot invent whitespace, repeated
+  and trailing empty rows survive, and `sp` operands never become body text.
+  Explicit requests retain the shared gap limit. Literal content containing
+  just one empty row is distinguished from an anchor-only block.
+- Nested mdoc displays preserve their own offset, mode, targets and inherited
+  predecessor spacing, then restore the outer origin. Native nested-display
+  portability warnings remain visible. TP/TQ run-in fitting uses only the final
+  open label row, consistently in CLI and TUI.
+- CLI document/section/node facades preserve source section spacing and tail
+  requests. Literal first/last blank rows are no longer trimmed, including
+  Markdown fences and excerpts; page-title furniture remains a separate gap.
+
 - TUI narrow views reduce excessive first/continuation indentation together
   to preserve a readable content area. Resize does not rebuild semantic
   indexes or alter source positions; links, search and visual-cell selection
