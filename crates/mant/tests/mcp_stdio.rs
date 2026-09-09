@@ -1,5 +1,7 @@
 //! Verifies the compact MCP tool surface over the real stdio transport.
 
+#[path = "mcp_stdio/lifecycle.rs"]
+mod lifecycle;
 mod support;
 
 use std::{
