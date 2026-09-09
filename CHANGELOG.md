@@ -12,6 +12,15 @@ that crate was not published for that change.
 
 ## Unreleased
 
+- `mant` exposes independent `roff`, `tui`, `pager`, `mcp`, and `update` Cargo
+  features, all enabled by default. Minimal builds retain direct Markdown and
+  cached-tldr queries, schemas and offline inspection; disabled execution flags
+  are omitted from help. Native catalogs remain read-only metadata even without
+  a parser. Protocol schemas continue describing the complete contract.
+- The unpublished `mant::run_process` entry is synchronous; remove `.await` at
+  native process call sites. Only an explicit MCP session creates its runtime.
+  `mant::run` and the component crates remain the embedding interfaces.
+
 - Explicit tldr update implementation moves from `mant-engine` to the `mant`
   host. The engine's former `tldr-update` feature and updater exports are
   removed; all library feature combinations remain read-only. CLI maintenance

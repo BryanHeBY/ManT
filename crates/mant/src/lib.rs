@@ -4,13 +4,16 @@
 mod application;
 mod arguments;
 mod cli;
+#[cfg(feature = "tui")]
 mod clipboard;
 mod delivery;
 mod doctor;
 mod error;
+#[cfg(feature = "tui")]
 mod external;
 mod host;
 mod json_boundary;
+#[cfg(feature = "mcp")]
 mod mcp;
 mod output_policy;
 mod presentation;

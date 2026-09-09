@@ -255,6 +255,31 @@ remains an exact logical name and is never guessed to be a manual shorthand.
 
 ## Crate architecture
 
+Official/default builds enable all five capabilities. Custom Cargo builds can
+disable them with `--no-default-features` and opt in individually:
+
+| Feature | Capability |
+| --- | --- |
+| `roff` | Native manual parsing through engine → loader → codec |
+| `tui` | Interactive reader and its clipboard/external-link host services |
+| `pager` | Static terminal pager, without the reader dependency |
+| `mcp` | Read-only stdio server and its async runtime |
+| `update` | Explicit source and tldr maintenance |
+
+The minimal build retains Markdown, cached quick references, pure queries,
+direct text/JSON output, schema output and offline inspection. Native manual
+catalogs are read-only metadata and remain discoverable without `roff`; their
+presence does not promise that this build can parse those pages. A native read
+then returns an explicit capability error. CLI flags and display values for
+disabled execution capabilities are omitted, while versioned schemas continue
+describing the complete contract. Automatic display only chooses compiled
+capabilities; without an applicable reader or pager it writes directly.
+
+`mant::run_process` is now synchronous and owns a runtime only for an explicitly
+selected MCP session. Native-process callers no longer await it; callers already
+inside an async runtime should use the narrower libraries rather than nesting
+the process entry point. `mant::run` remains the injectable stream interface.
+
 - `mant-ir` defines the source-neutral in-memory document and quick-reference model.
 - `mant-protocol` defines shared query contracts, logical projections, versioned JSON DTOs, and stable semantic labels.
 - `libmandoc-rs` owns the cross-platform libmandoc parser boundary.

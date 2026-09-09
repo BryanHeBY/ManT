@@ -11,6 +11,7 @@ use mant_protocol::{
 use mant_sources::{DocumentSourcesPrune, DocumentSourcesUpdate};
 use std::sync::OnceLock;
 
+#[cfg(feature = "update")]
 pub(crate) mod maintenance;
 
 #[cfg(test)]
@@ -21,6 +22,7 @@ pub(crate) trait CliHost {
     fn discover(&self, query: &CatalogQuery) -> Result<DocumentCatalog, Failure>;
     fn query(&self, request: &PreparedQueryRequest<'_>) -> Result<QueryViewResult, Failure>;
     fn query_markdown(&self, source: &str) -> Result<ResolvedContent, Failure>;
+    #[cfg(any(feature = "tui", test))]
     fn resolve_scope(
         &self,
         _scope: &mant_protocol::DocumentScope,
@@ -78,6 +80,7 @@ impl CliHost for SystemHost {
         mant_engine::query_markdown_text(source, None).map_err(Failure::operational)
     }
 
+    #[cfg(any(feature = "tui", test))]
     fn resolve_scope(
         &self,
         scope: &mant_protocol::DocumentScope,
@@ -97,14 +100,42 @@ impl CliHost for SystemHost {
     }
 
     fn update_tldr(&self) -> Result<TldrCacheUpdate, Failure> {
-        maintenance::tldr::update_tldr_cache().map_err(Failure::operational)
+        #[cfg(feature = "update")]
+        {
+            maintenance::tldr::update_tldr_cache().map_err(Failure::operational)
+        }
+        #[cfg(not(feature = "update"))]
+        {
+            Err(Failure::usage(
+                "source maintenance is unavailable in this build",
+            ))
+        }
     }
 
     fn update_docs(&self) -> Result<DocumentSourcesUpdate, Failure> {
-        mant_sources::update_document_sources().map_err(Failure::operational)
+        #[cfg(feature = "update")]
+        {
+            mant_sources::update_document_sources().map_err(Failure::operational)
+        }
+        #[cfg(not(feature = "update"))]
+        {
+            Err(Failure::usage(
+                "source maintenance is unavailable in this build",
+            ))
+        }
     }
 
     fn prune_docs(&self, dry_run: bool) -> Result<DocumentSourcesPrune, Failure> {
-        mant_sources::prune_document_sources(dry_run).map_err(Failure::operational)
+        #[cfg(feature = "update")]
+        {
+            mant_sources::prune_document_sources(dry_run).map_err(Failure::operational)
+        }
+        #[cfg(not(feature = "update"))]
+        {
+            let _ = dry_run;
+            Err(Failure::usage(
+                "source maintenance is unavailable in this build",
+            ))
+        }
     }
 }

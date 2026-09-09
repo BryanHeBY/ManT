@@ -58,19 +58,21 @@ impl DisplayCapabilities {
                     }) | QuerySource::ScopeArguments { view: None, .. }
                 );
                 Self {
-                    reader: full && *policy != mant_engine::LoadPolicy::TldrOnly,
-                    pager: !stdin,
-                    auto_page: !stdin,
+                    reader: cfg!(feature = "tui")
+                        && full
+                        && *policy != mant_engine::LoadPolicy::TldrOnly,
+                    pager: cfg!(feature = "pager") && !stdin,
+                    auto_page: cfg!(feature = "pager") && !stdin,
                 }
             }
             Command::Catalog { .. } => Self {
                 reader: false,
-                pager: true,
-                auto_page: true,
+                pager: cfg!(feature = "pager"),
+                auto_page: cfg!(feature = "pager"),
             },
             Command::Doctor { .. } => Self {
                 reader: false,
-                pager: true,
+                pager: cfg!(feature = "pager"),
                 auto_page: false,
             },
             _ => Self {
@@ -98,6 +100,12 @@ pub(crate) fn validate(command: &Command) -> Result<(), Failure> {
     };
     let capabilities = DisplayCapabilities::for_command(command);
     match output.display {
+        DisplayMode::Tui if !cfg!(feature = "tui") => Err(Failure::usage(
+            "this build does not support --display tui (requires the tui feature)",
+        )),
+        DisplayMode::Pager if !cfg!(feature = "pager") => Err(Failure::usage(
+            "this build does not support --display pager (requires the pager feature)",
+        )),
         DisplayMode::Tui if !capabilities.reader || output.format.is_some() => Err(Failure::usage(
             "--display tui requires full document reading without --format or stdin input",
         )),
@@ -176,6 +184,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(all(feature = "tui", feature = "pager", feature = "update"))]
     fn display_policy_covers_every_operation_without_changing_formats() {
         for (args, expected) in [
             (vec!["git"], DisplayMode::Tui),
@@ -245,6 +254,11 @@ mod tests {
                 );
             }
             for display in ["pager", "tui"] {
+                if (display == "pager" && !cfg!(feature = "pager"))
+                    || (display == "tui" && !cfg!(feature = "tui"))
+                {
+                    continue;
+                }
                 assert!(
                     resolve_process_presentation(
                         &mut command(&["git", "--display", display]),
@@ -253,6 +267,55 @@ mod tests {
                     .is_err()
                 );
             }
+        }
+    }
+
+    #[test]
+    fn automatic_presentation_uses_only_compiled_capabilities() {
+        let full = if cfg!(feature = "tui") {
+            DisplayMode::Tui
+        } else if cfg!(feature = "pager") {
+            DisplayMode::Pager
+        } else {
+            DisplayMode::Direct
+        };
+        let text = if cfg!(feature = "pager") {
+            DisplayMode::Pager
+        } else {
+            DisplayMode::Direct
+        };
+        for (args, expected) in [
+            (vec!["demo"], full),
+            (vec!["demo", "--outline"], text),
+            (vec!["demo", "--format", "text"], text),
+            (vec!["--list"], text),
+            (vec!["--doctor"], DisplayMode::Direct),
+            (
+                vec!["--input", "-", "--input-format", "markdown"],
+                DisplayMode::Direct,
+            ),
+            (vec!["demo", "--format", "json"], DisplayMode::Direct),
+        ] {
+            assert_eq!(
+                resolve_process_presentation(&mut command(&args), terminal()).unwrap(),
+                expected,
+                "{args:?}"
+            );
+        }
+        for (available, display) in [
+            (cfg!(feature = "tui"), DisplayMode::Tui),
+            (cfg!(feature = "pager"), DisplayMode::Pager),
+        ] {
+            let mut request = command(&["demo"]);
+            let Command::Query { presentation, .. } = &mut request else {
+                unreachable!()
+            };
+            presentation.display = display;
+            assert_eq!(
+                validate(&request).is_ok(),
+                available,
+                "typed request {display:?}"
+            );
         }
     }
 

@@ -162,6 +162,18 @@ fn unqualified_manual_navigation_preserves_native_resolution_without_a_default_s
 
 #[test]
 fn terminal_capabilities_resolve_interactivity_and_text_colour() {
+    let full_display = if cfg!(feature = "tui") {
+        DisplayMode::Tui
+    } else if cfg!(feature = "pager") {
+        DisplayMode::Pager
+    } else {
+        DisplayMode::Direct
+    };
+    let partial_display = if cfg!(feature = "pager") {
+        DisplayMode::Pager
+    } else {
+        DisplayMode::Direct
+    };
     let mut terminal_query = arguments::parse(&["git".to_owned()]).expect("automatic query");
     resolve_process_presentation(
         &mut terminal_query,
@@ -177,11 +189,11 @@ fn terminal_capabilities_resolve_interactivity_and_text_colour() {
         terminal_query,
         Command::Query {
             presentation: OutputOptions {
-                display: DisplayMode::Tui,
+                display,
                 ..
             },
             ..
-        }
+        } if display == full_display
     ));
 
     let mut redirected_query = arguments::parse(&["git".to_owned()]).expect("automatic query");
@@ -225,10 +237,10 @@ fn terminal_capabilities_resolve_interactivity_and_text_colour() {
             presentation: OutputOptions {
                 format: None,
                 color: ColorMode::Always,
-                display: DisplayMode::Pager
+                display
             },
             ..
-        }
+        } if display == partial_display
     ));
 
     let mut tldr = arguments::parse(&["git".to_owned(), "--tldr".to_owned()]).expect("tldr query");
@@ -256,6 +268,7 @@ fn terminal_capabilities_resolve_interactivity_and_text_colour() {
 }
 
 #[test]
+#[cfg(feature = "tui")]
 fn explicit_interactive_queries_require_both_terminal_streams() {
     for terminal in [
         TerminalCapabilities {
@@ -368,7 +381,10 @@ fn catalog_paging_requires_text_and_a_complete_non_dumb_terminal() {
         kind: TerminalKind::Capable,
     };
     let list = arguments::parse(&["--list".to_owned()]).expect("catalog list");
-    assert!(should_page_catalog(&list, terminal));
+    assert_eq!(
+        should_page_catalog(&list, terminal),
+        cfg!(feature = "pager")
+    );
 
     let direct = arguments::parse(&[
         "--list".to_owned(),
@@ -1143,6 +1159,7 @@ fn ambiguous_semantic_entries_remain_addressable_by_returned_id() {
 }
 
 #[test]
+#[cfg(feature = "roff")]
 fn manual_option_reaches_the_resolution_policy_without_stderr_noise() {
     let host = FakeHost::with_manual();
     let (status, output, diagnostics) = invoke(&["demo", "--outline", "--manual"], b"", &host);
@@ -1259,7 +1276,8 @@ fn explain_reports_ordinary_support_without_inventing_a_definition() {
 }
 
 #[test]
-fn update_and_protocol_results_are_stable_json_documents() {
+#[cfg(feature = "update")]
+fn update_results_are_stable_json_documents() {
     let host = FakeHost::new();
     let (status, output, diagnostics) = invoke(&["--update-tldr", "--compact"], b"", &host);
     assert_eq!(status, 0);
@@ -1278,7 +1296,11 @@ fn update_and_protocol_results_are_stable_json_documents() {
         "{\"schema\":\"mant.sources-prune/v1\",\"config\":\"/data/mant/sources.toml\",\"dryRun\":true,\"sources\":[]}\n"
     );
     assert!(diagnostics.is_empty());
+}
 
+#[test]
+fn protocol_results_are_stable_json_documents_without_optional_capabilities() {
+    let host = FakeHost::new();
     let (status, output, diagnostics) = invoke(&["--protocol-version", "--compact"], b"", &host);
     assert_eq!(status, 0);
     let value: serde_json::Value = serde_json::from_str(&output).expect("protocol JSON");

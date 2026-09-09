@@ -1,22 +1,33 @@
 //! Native process policy, application dispatch and terminal delivery.
 
-use crate::{
-    application, arguments, clipboard, delivery, error, external, host, mcp, output_policy,
-    presentation, terminal,
-};
-use std::{
-    io::{self, IsTerminal, Write},
-    sync::Arc,
-};
+#[cfg(any(feature = "tui", feature = "pager"))]
+use crate::delivery;
+#[cfg(feature = "tui")]
+use crate::{application, clipboard, external};
+use crate::{arguments, error, host, output_policy, presentation, terminal};
+#[cfg(any(feature = "tui", feature = "pager"))]
+use std::io::Write;
+use std::io::{self, IsTerminal};
+#[cfg(feature = "tui")]
+use std::sync::Arc;
 
 use crate::cli::run_command;
+#[cfg(feature = "tui")]
 use application::request_for_navigation;
-use arguments::{Command, DisplayMode, OutputOptions, QuerySource};
+use arguments::{Command, DisplayMode};
+#[cfg(feature = "tui")]
+use arguments::{OutputOptions, QuerySource};
+#[cfg(feature = "tui")]
 use clipboard::SystemClipboard;
 use error::{Failure, report_failure, report_process_argument_error};
+#[cfg(feature = "tui")]
 use external::open_uri as open_external_uri;
-use host::{CliHost, SystemHost};
+#[cfg(any(feature = "tui", feature = "pager"))]
+use host::CliHost;
+use host::SystemHost;
+#[cfg(feature = "tui")]
 use mant_engine::LoadPolicy;
+#[cfg(feature = "tui")]
 use mant_protocol::{CatalogQuery, QueryView};
 use output_policy::{TerminalCapabilities, TerminalKind, resolve_process_presentation};
 
@@ -25,7 +36,10 @@ use output_policy::{TerminalCapabilities, TerminalKind, resolve_process_presenta
 /// The conventional CLI keeps injectable streams through [`crate::run`], while MCP
 /// owns operating-system stdio because the protocol reserves it exclusively
 /// for newline-delimited JSON-RPC messages.
-pub async fn run_process(arguments: &[String]) -> u8 {
+/// An async runtime is created only for an explicitly selected MCP session;
+/// conventional CLI execution does not require a caller-provided runtime.
+#[must_use]
+pub fn run_process(arguments: &[String]) -> u8 {
     let requested_color = arguments::requested_color(arguments);
     let mut command = match arguments::parse_process(arguments) {
         Ok(command) => command,
@@ -33,7 +47,7 @@ pub async fn run_process(arguments: &[String]) -> u8 {
     };
 
     if matches!(command, Command::Mcp) {
-        return mcp::run_stdio().await;
+        return run_mcp();
     }
     let host = SystemHost::default();
     let mut diagnostics = anstream::AutoStream::new(io::stderr(), requested_color.into()).lock();
@@ -57,10 +71,24 @@ pub async fn run_process(arguments: &[String]) -> u8 {
         Err(error) => return report_failure(&error, &mut diagnostics, true),
     };
     if display == DisplayMode::Tui {
+        #[cfg(feature = "tui")]
         return run_interactive(command, &mut diagnostics, &host, true);
+        #[cfg(not(feature = "tui"))]
+        return report_failure(
+            &Failure::usage("TUI is unavailable in this build"),
+            &mut diagnostics,
+            true,
+        );
     }
     if display == DisplayMode::Pager {
+        #[cfg(feature = "pager")]
         return run_paged(command, &mut diagnostics, &host, true);
+        #[cfg(not(feature = "pager"))]
+        return report_failure(
+            &Failure::usage("pager is unavailable in this build"),
+            &mut diagnostics,
+            true,
+        );
     }
 
     run_command(
@@ -80,6 +108,7 @@ pub async fn run_process(arguments: &[String]) -> u8 {
 
 /// Buffer one successful human-readable result before lending the terminal to the pager.
 /// The exit status and stderr stay owned by the command even if the user quits paging.
+#[cfg(feature = "pager")]
 fn run_paged(
     command: Command,
     diagnostics: &mut dyn Write,
@@ -112,6 +141,7 @@ fn run_paged(
 }
 
 /// Load one full query and hand the normalized document directly to Ratatui.
+#[cfg(feature = "tui")]
 fn run_interactive(
     command: Command,
     diagnostics: &mut dyn Write,
@@ -215,4 +245,53 @@ fn run_interactive(
         Ok(()) => 0,
         Err(error) => report_failure(&Failure::operational(error), diagnostics, diagnostics_color),
     }
+}
+
+#[cfg(feature = "mcp")]
+fn run_mcp() -> u8 {
+    let runtime = match mcp_runtime() {
+        Ok(runtime) => runtime,
+        Err(error) => {
+            return report_failure(
+                &Failure::operational(error),
+                &mut io::stderr().lock(),
+                false,
+            );
+        }
+    };
+    runtime.block_on(crate::mcp::run_stdio())
+}
+
+#[cfg(feature = "mcp")]
+fn mcp_runtime() -> io::Result<tokio::runtime::Runtime> {
+    if tokio::runtime::Handle::try_current().is_ok() {
+        return Err(io::Error::other(
+            "the native MCP entry point must run outside an existing async runtime",
+        ));
+    }
+    tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+}
+
+#[cfg(all(test, feature = "mcp"))]
+mod tests {
+    #[tokio::test]
+    async fn nested_process_runtime_is_rejected_before_stdio_acquisition() {
+        let error = super::mcp_runtime().unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("outside an existing async runtime")
+        );
+    }
+}
+
+#[cfg(not(feature = "mcp"))]
+fn run_mcp() -> u8 {
+    report_failure(
+        &Failure::usage("MCP is unavailable in this build"),
+        &mut io::stderr().lock(),
+        false,
+    )
 }

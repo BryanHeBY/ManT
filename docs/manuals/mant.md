@@ -73,6 +73,18 @@ Use `mant mant --outline` to explore its structure before selecting content with
 `--node` or `--explain`. Running `mant` without arguments reports a missing action
 and shows the same manual hints; it does not automatically read the full manual.
 
+Official builds enable `roff`, `tui`, `pager`, `mcp`, and `update`. Custom Cargo
+builds may select these features individually; this manual documents the full
+build, while `--help` lists only the local executable's available flags and
+display values. Without a reader or pager, automatic display writes directly.
+Markdown, cached quick references, queries, schema output, and offline inspection
+remain available with no default features. Manual catalog discovery is metadata
+inspection and does not require a parser; reading a native page without `roff`
+returns an explicit capability error. Wire schemas are not narrowed by build
+features, and `--doctor` reports an intentionally disabled native backend as
+informational rather than broken. Maintenance hints identify when another build
+with the `update` feature is required.
+
 ## Semantic Document Model
 
 ManT preserves source meaning before presentation. Markdown and native manuals

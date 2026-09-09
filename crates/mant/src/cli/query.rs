@@ -3,13 +3,13 @@ use crate::{
     application,
     arguments::{ColorMode, OutputOptions, QuerySource},
     delivery,
-    error::{Failure, query_execution_failure, query_failure},
+    error::{Failure, query_execution_failure},
     host::CliHost,
     presentation::{self, render_query_result},
-    request_input::{
-        NativeRequest, read_input_bytes, read_native_request, read_query_request, read_utf8_input,
-    },
+    request_input::{NativeRequest, read_native_request, read_query_request, read_utf8_input},
 };
+#[cfg(feature = "roff")]
+use crate::{error::query_failure, request_input::read_input_bytes};
 use mant_engine::LoadPolicy;
 use mant_protocol::{InputFormat, ScopeQueryRequest, ScopeRequestSchema};
 use std::io::Read;
@@ -75,9 +75,16 @@ pub(super) fn execute_query(
                     host.query_markdown(&source)?
                 }
                 InputFormat::Roff => {
-                    let source =
-                        read_input_bytes(input, mant_engine::MAX_MANUAL_BYTES, "roff input")?;
-                    mant_engine::query_roff_bytes(&source).map_err(query_failure)?
+                    #[cfg(feature = "roff")]
+                    {
+                        let source =
+                            read_input_bytes(input, mant_engine::MAX_MANUAL_BYTES, "roff input")?;
+                        mant_engine::query_roff_bytes(&source).map_err(query_failure)?
+                    }
+                    #[cfg(not(feature = "roff"))]
+                    return Err(Failure::usage(
+                        "native roff input is unavailable in this build",
+                    ));
                 }
                 InputFormat::Auto => unreachable!("stdin input format is validated by clap"),
             };

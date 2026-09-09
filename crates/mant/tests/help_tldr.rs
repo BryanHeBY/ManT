@@ -6,11 +6,38 @@ mod help_tldr_generation;
 #[test]
 fn generation_has_canonical_newlines_for_both_checkout_styles() {
     let manual = "<!-- mant:tldr:start -->\n# mant\n\n- Read a manual:\n\n`mant {{command}}`\n<!-- mant:tldr:end -->\n";
-    let generated = help_tldr_generation::generate(manual);
+    let requirements: &[(&str, &[&str])] = &[("mant command", &[])];
+    let generated = help_tldr_generation::generate_with_requirements(manual, requirements);
     assert!(!generated.contains('\r'));
     assert_eq!(
         generated,
-        help_tldr_generation::generate(&manual.replace('\n', "\r\n")),
+        help_tldr_generation::generate_with_requirements(
+            &manual.replace('\n', "\r\n"),
+            requirements
+        ),
+    );
+}
+
+#[test]
+fn capability_metadata_requires_an_explicit_review_when_examples_change() {
+    let manual = "<!-- mant:tldr:start -->\n# mant\n\n- Read a manual:\n\n`mant {{command}}`\n<!-- mant:tldr:end -->\n";
+    assert!(
+        std::panic::catch_unwind(|| help_tldr_generation::generate_with_requirements(manual, &[]))
+            .is_err()
+    );
+    assert!(
+        std::panic::catch_unwind(|| help_tldr_generation::generate_with_requirements(
+            manual,
+            &[("mant other", &[])]
+        ))
+        .is_err()
+    );
+    assert!(
+        std::panic::catch_unwind(|| help_tldr_generation::generate_with_requirements(
+            manual,
+            &[("mant command", &["unknown"])]
+        ))
+        .is_err()
     );
 }
 

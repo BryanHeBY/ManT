@@ -2,8 +2,7 @@
 
 use std::{env, process::ExitCode};
 
-#[tokio::main(flavor = "current_thread")]
-async fn main() -> ExitCode {
+fn main() -> ExitCode {
     let mut arguments = Vec::new();
     for argument in env::args_os().skip(1) {
         let Ok(argument) = argument.into_string() else {
@@ -14,6 +13,6 @@ async fn main() -> ExitCode {
         arguments.push(argument);
     }
 
-    let status = mant::run_process(&arguments).await;
+    let status = mant::run_process(&arguments);
     ExitCode::from(status)
 }

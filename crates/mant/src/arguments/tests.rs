@@ -1,8 +1,10 @@
 use mant_ir::{EntryKind, ParameterKind};
+#[cfg(feature = "roff")]
+use mant_protocol::CatalogDocumentKind;
 use mant_protocol::{
-    CatalogDocumentKind, CatalogQuery, DocumentScope, DocumentSelector, DocumentTraversal,
-    EntryProjection, InputFormat, QueryInput, QueryRequest, QueryView, RequestSchema,
-    ScopeQueryView, SearchCase, SearchScope, SearchSyntax,
+    CatalogQuery, DocumentScope, DocumentSelector, DocumentTraversal, EntryProjection, InputFormat,
+    QueryInput, QueryRequest, QueryView, RequestSchema, ScopeQueryView, SearchCase, SearchScope,
+    SearchSyntax,
 };
 
 use super::{
@@ -109,6 +111,7 @@ fn parses_grouped_lists_and_grep_like_catalog_searches() {
             pretty: true,
         }
     );
+    #[cfg(feature = "roff")]
     assert_eq!(
         parse(&args(&[
             "--find",
@@ -174,6 +177,7 @@ fn parses_grouped_lists_and_grep_like_catalog_searches() {
 }
 
 #[test]
+#[cfg(feature = "tui")]
 fn parses_an_explicit_interactive_query_without_an_output_projection() {
     assert!(matches!(
         parse(&args(&["git", "--display", "tui"])).expect("interactive query"),
@@ -256,6 +260,7 @@ fn parses_bounded_multi_document_queries_without_changing_single_document_syntax
         }
     );
 
+    #[cfg(feature = "tui")]
     assert!(matches!(
         parse(&args(&["git", "--follow-links", "--display", "tui"]))
             .expect("interactive transitive scope"),
@@ -330,6 +335,7 @@ fn dispatches_explicit_files_and_direct_stdin_without_embedding_content() {
             ..
         }
     ));
+    #[cfg(feature = "roff")]
     assert!(
         parse(&args(&["--input", "README.md", "--man-section", "1"]))
             .expect_err("input has no man section selector")
@@ -355,6 +361,7 @@ fn preserves_markdown_anchors_only_when_requested() {
 }
 
 #[test]
+#[cfg(feature = "roff")]
 fn parses_format_man_section_and_compact_json_options() {
     assert_eq!(
         parse(&args(&[
@@ -515,9 +522,9 @@ fn tldr_footer_preserves_semantic_parts_and_is_shared_by_help_and_usage() {
         let footer = plain.split_once("TLDR:\n").unwrap().1;
         let tldr = footer.split_once("\n\nManT manual:").unwrap().0;
         assert!(!tldr.contains("\n\n"), "TLDR examples stay compact");
-        assert_eq!(tldr.lines().count(), super::help::EXAMPLES.len() * 2);
+        assert_eq!(tldr.lines().count(), super::help::examples().count() * 2);
         let mut remaining = footer;
-        for (description, parts) in super::help::EXAMPLES {
+        for (description, _, parts) in super::help::examples() {
             remaining = remaining.split_once(description).unwrap().1;
             let command: String = parts.iter().map(|(value, _)| *value).collect();
             remaining = remaining.split_once(&command).unwrap().1;
@@ -605,6 +612,7 @@ fn tldr_joins_multiword_topics_and_keeps_explicit_formats() {
     for values in [
         vec!["1", "tar", "--tldr"],
         vec!["tar(1)", "--tldr"],
+        #[cfg(feature = "roff")]
         vec!["tar", "--man-section", "1", "--tldr"],
     ] {
         assert!(matches!(
@@ -661,6 +669,7 @@ fn parses_the_closed_stdin_request_mode_used_by_the_tui() {
 }
 
 #[test]
+#[cfg(feature = "roff")]
 fn parses_explicit_manual_and_tldr_selections() {
     assert!(matches!(
         parse(&args(&["tar", "--manual", "--format", "json"])).expect("manual-only query"),
@@ -1016,10 +1025,12 @@ fn parses_long_option_actions_without_ad_hoc_subcommands() {
             pretty: false,
         }
     );
+    #[cfg(feature = "update")]
     assert_eq!(
         parse(&args(&["--update-docs", "--compact"])).expect("document update"),
         Command::UpdateDocs { pretty: false }
     );
+    #[cfg(feature = "update")]
     assert_eq!(
         parse(&args(&["--prune-docs", "--dry-run", "--compact"])).expect("document source prune"),
         Command::PruneDocs {
@@ -1027,6 +1038,7 @@ fn parses_long_option_actions_without_ad_hoc_subcommands() {
             dry_run: true,
         }
     );
+    #[cfg(feature = "update")]
     assert_eq!(
         parse(&args(&["--update-tldr"])).expect("update"),
         Command::UpdateTldr { pretty: true }
@@ -1056,6 +1068,7 @@ fn parses_long_option_actions_without_ad_hoc_subcommands() {
             pretty: true,
         }
     );
+    #[cfg(feature = "mcp")]
     assert_eq!(parse(&args(&["--mcp"])).expect("MCP"), Command::Mcp);
 }
 

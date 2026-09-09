@@ -1,6 +1,8 @@
 //! Read-only installation diagnostics for the native CLI.
 
-use std::{collections::BTreeSet, fmt::Write as _, fs, path::Path};
+#[cfg(feature = "roff")]
+use std::path::Path;
+use std::{collections::BTreeSet, fmt::Write as _, fs};
 
 use anstyle::{AnsiColor, Style};
 use mant_protocol::{DoctorCheck, DoctorCheckStatus, DoctorEnvironment, DoctorReport, Producer};
@@ -87,6 +89,7 @@ pub(crate) fn inspect_system() -> DoctorReport {
     builder.finish()
 }
 
+#[cfg(feature = "roff")]
 fn inspect_libmandoc(builder: &mut DoctorBuilder) {
     let probe = b".TH MANT-DOCTOR 1\n.SH NAME\nmant-doctor \\- installation probe\n";
     match mant_engine::parse_manual_bytes(Path::new("mant-doctor.1"), probe) {
@@ -113,6 +116,15 @@ fn inspect_libmandoc(builder: &mut DoctorBuilder) {
             check.details.push(error.to_string());
         }
     }
+}
+
+#[cfg(not(feature = "roff"))]
+fn inspect_libmandoc(builder: &mut DoctorBuilder) {
+    builder.push(
+        "runtime.libmandoc",
+        DoctorCheckStatus::Info,
+        "native roff parsing is not enabled in this build",
+    );
 }
 
 fn inspect_sources(builder: &mut DoctorBuilder) {
@@ -184,12 +196,12 @@ fn inspect_sources(builder: &mut DoctorBuilder) {
             check.details.push(error.clone());
         }
         check.remediation = Some(if source.removable {
-            "mant --prune-docs --dry-run".to_owned()
+            maintenance_hint("mant --prune-docs --dry-run")
         } else {
             "inspect the reported entry manually".to_owned()
         });
     }
-    if git_required {
+    if git_required && cfg!(feature = "update") {
         if let Some(path) = mant_engine::find_host_executable("git") {
             let check = builder.push(
                 "tools.git",
@@ -328,7 +340,7 @@ fn push_configured_source(builder: &mut DoctorBuilder, source: &ConfiguredSource
     if let Some(detail) = &source.detail {
         check.details.push(detail.clone());
     }
-    check.remediation = remediation.map(ToOwned::to_owned);
+    check.remediation = remediation.map(maintenance_hint);
 }
 
 fn inspect_manuals(builder: &mut DoctorBuilder) {
@@ -443,7 +455,15 @@ fn inspect_tldr(builder: &mut DoctorBuilder) {
             .push(format!("client={}", client.to_string_lossy()));
     }
     if readable == 0 {
-        check.remediation = Some("mant --update-tldr".to_owned());
+        check.remediation = Some(maintenance_hint("mant --update-tldr"));
+    }
+}
+
+fn maintenance_hint(command: &str) -> String {
+    if cfg!(feature = "update") {
+        command.to_owned()
+    } else {
+        format!("use a ManT build with the update feature to run {command}")
     }
 }
 
@@ -609,6 +629,19 @@ mod tests {
                 .any(|detail| detail == "remote freshness was not checked")
         );
         assert!(!check.message.contains("current"));
+    }
+
+    #[test]
+    fn maintenance_remediation_respects_the_compiled_capability() {
+        let hint = super::maintenance_hint("mant --update-tldr");
+        if cfg!(feature = "update") {
+            assert_eq!(hint, "mant --update-tldr");
+        } else {
+            assert_eq!(
+                hint,
+                "use a ManT build with the update feature to run mant --update-tldr"
+            );
+        }
     }
 
     #[test]

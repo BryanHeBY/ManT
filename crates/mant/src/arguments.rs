@@ -21,6 +21,7 @@ use mant_protocol::{
     RequestSchema, ScopeQueryView, SearchCase, SearchScope, SearchSyntax, default_search_limit,
 };
 
+mod capabilities;
 mod normalize;
 
 use normalize::{command_error, non_empty, normalize};
@@ -77,7 +78,9 @@ pub(crate) enum DisplayMode {
     #[default]
     Auto,
     Direct,
+    #[cfg_attr(not(feature = "pager"), value(skip))]
     Pager,
+    #[cfg_attr(not(feature = "tui"), value(skip))]
     Tui,
 }
 
@@ -224,6 +227,7 @@ enum SearchScopeMode {
 enum InputFormatMode {
     Auto,
     Markdown,
+    #[cfg(feature = "roff")]
     Roff,
 }
 
@@ -232,6 +236,7 @@ impl From<InputFormatMode> for InputFormat {
         match value {
             InputFormatMode::Auto => Self::Auto,
             InputFormatMode::Markdown => Self::Markdown,
+            #[cfg(feature = "roff")]
             InputFormatMode::Roff => Self::Roff,
         }
     }
@@ -314,6 +319,7 @@ const CLI_STYLES: Styles = Styles::styled()
     .valid(AnsiColor::Green.on_default())
     .invalid(AnsiColor::Yellow.on_default());
 
+#[cfg(test)]
 const CLI_USAGE: &str = "mant <SELECTOR> [OPTIONS]\n       mant <MAN_SECTION> <NAME> [OPTIONS]\n       mant --document <SELECTOR>... [--follow-links] [OPTIONS]\n       mant --input <PATH|-> [--input-format <FORMAT>] [OPTIONS]\n       mant --list [FILTERS]\n       mant --find <PATTERN> [FILTERS]\n       mant --request-json [--format <FORMAT>] [--compact]\n       mant --doctor [--format <text|json>] [--compact]\n       mant --schema <CONTRACT> [--compact]\n       mant --update-docs [--compact]\n       mant --prune-docs [--dry-run] [--compact]\n       mant --update-tldr [--compact]\n       mant --protocol-version [--compact]\n       mant --mcp";
 
 mod help;
@@ -329,10 +335,10 @@ mod help;
     styles = CLI_STYLES,
     disable_help_flag = true,
     version,
-    override_usage = CLI_USAGE,
+    override_usage = capabilities::usage(),
     after_help = help::footer(),
     group = ArgGroup::new("action")
-        .args(["selector", "document", "input", "list", "find", "request_json", "doctor", "update_docs", "prune_docs", "update_tldr", "protocol_version", "schema", "mcp"])
+        .args(capabilities::argument_ids(["selector", "document", "input", "list", "find", "request_json", "doctor", "update_docs", "prune_docs", "update_tldr", "protocol_version", "schema", "mcp"]))
         .required(true)
         .multiple(false)
 )]
@@ -375,6 +381,10 @@ struct Cli {
 
     /// Read one explicit Markdown or roff file; use `-` for standard input.
     #[arg(long, value_name = "PATH|-", value_parser = non_empty, help_heading = "Input")]
+    #[cfg_attr(
+        not(feature = "roff"),
+        arg(help = "Read one explicit Markdown file; use `-` for standard input.")
+    )]
     input: Option<String>,
 
     /// Select the parser for `--input`; auto uses the filename suffix.
@@ -400,13 +410,14 @@ struct Cli {
     kind: Option<CatalogKindMode>,
 
     /// Select the full document from a native manual category such as 1 or 3p.
-    #[arg(
+    #[cfg_attr(feature = "roff", arg(
         long = "man-section",
         value_name = "MAN_SECTION",
         value_parser = non_empty,
         conflicts_with = "input",
         help_heading = "Document selection"
-    )]
+    ))]
+    #[cfg_attr(not(feature = "roff"), arg(skip))]
     man_section: Option<String>,
 
     /// Select exactly one configured Markdown source.
@@ -414,25 +425,26 @@ struct Cli {
         long,
         value_name = "SOURCE",
         value_parser = non_empty,
-        conflicts_with_all = ["man_section", "manual", "input"],
+        conflicts_with_all = capabilities::argument_ids(["man_section", "manual", "input"]),
         help_heading = "Document selection"
     )]
     source: Option<String>,
 
     /// Print only a native manual, bypassing Markdown and tldr content.
-    #[arg(
+    #[cfg_attr(feature = "roff", arg(
         long,
         requires = "selector",
-        conflicts_with_all = ["tldr", "input"],
+        conflicts_with_all = capabilities::argument_ids(["tldr", "input"]),
         help_heading = "Document selection"
-    )]
+    ))]
+    #[cfg_attr(not(feature = "roff"), arg(skip))]
     manual: bool,
 
     /// Print only the available tldr quick reference.
     #[arg(
         long,
         requires = "selector",
-        conflicts_with_all = ["manual", "outline", "node", "explain", "search", "input"],
+        conflicts_with_all = capabilities::argument_ids(["manual", "outline", "node", "explain", "search", "input"]),
         help_heading = "Document selection"
     )]
     tldr: bool,
@@ -440,7 +452,7 @@ struct Cli {
     /// Print the addressable outline tree with compact semantic summaries.
     #[arg(
         long,
-        conflicts_with_all = ["node", "explain"],
+        conflicts_with_all = capabilities::argument_ids(["node", "explain"]),
         help_heading = "Document selection"
     )]
     outline: bool,
@@ -500,7 +512,7 @@ struct Cli {
         value_name = "ENTRY",
         value_parser = non_empty,
         allow_hyphen_values = true,
-        conflicts_with_all = ["outline", "node", "search"],
+        conflicts_with_all = capabilities::argument_ids(["outline", "node", "search"]),
         help_heading = "Document selection"
     )]
     explain: Option<String>,
@@ -520,7 +532,7 @@ struct Cli {
         visible_alias = "grep",
         value_name = "PATTERN",
         value_parser = non_empty,
-        conflicts_with_all = ["outline", "node", "explain"],
+        conflicts_with_all = capabilities::argument_ids(["outline", "node", "explain"]),
         help_heading = "Search"
     )]
     search: Option<String>,
@@ -572,7 +584,7 @@ struct Cli {
     /// Read a versioned single- or multi-document request JSON object from standard input.
     #[arg(
         long,
-        conflicts_with_all = [
+        conflicts_with_all = capabilities::argument_ids([
             "man_section",
             "tldr",
             "outline",
@@ -586,7 +598,7 @@ struct Cli {
             "context",
             "limit",
             "offset"
-        ],
+        ]),
         help_heading = "Integration"
     )]
     request_json: bool,
@@ -594,7 +606,7 @@ struct Cli {
     /// Diagnose local paths, sources, manuals, and tldr caches without changing them.
     #[arg(
         long,
-        conflicts_with_all = [
+        conflicts_with_all = capabilities::argument_ids([
             "selector",
             "input",
             "input_format",
@@ -619,43 +631,50 @@ struct Cli {
             "request_json",
             "dry_run",
             "preserve_anchors"
-        ],
+        ]),
         help_heading = "Diagnostics"
     )]
     doctor: bool,
 
     /// Update tldr data through the installed client or `ManT` cache.
-    #[arg(
+    #[cfg_attr(feature = "update", arg(
         long,
-        conflicts_with_all = ["man_section", "outline", "node", "search", "format"],
+        conflicts_with_all = capabilities::argument_ids(["man_section", "outline", "node", "search", "format"]),
         help_heading = "Data"
-    )]
+    ))]
+    #[cfg_attr(not(feature = "update"), arg(skip))]
     update_tldr: bool,
 
     /// Update configured Markdown repositories from sources.toml.
-    #[arg(
+    #[cfg_attr(feature = "update", arg(
         long,
-        conflicts_with_all = ["man_section", "source", "outline", "node", "search", "format"],
+        conflicts_with_all = capabilities::argument_ids(["man_section", "source", "outline", "node", "search", "format"]),
         help_heading = "Data"
-    )]
+    ))]
+    #[cfg_attr(not(feature = "update"), arg(skip))]
     update_docs: bool,
 
     /// Remove installed document sources absent from sources.toml.
-    #[arg(
+    #[cfg_attr(feature = "update", arg(
         long,
-        conflicts_with_all = ["man_section", "source", "outline", "node", "search", "format"],
+        conflicts_with_all = capabilities::argument_ids(["man_section", "source", "outline", "node", "search", "format"]),
         help_heading = "Data"
-    )]
+    ))]
+    #[cfg_attr(not(feature = "update"), arg(skip))]
     prune_docs: bool,
 
     /// Report exact orphaned source targets without removing them.
-    #[arg(long, requires = "prune_docs", help_heading = "Data")]
+    #[cfg_attr(
+        feature = "update",
+        arg(long, requires = "prune_docs", help_heading = "Data")
+    )]
+    #[cfg_attr(not(feature = "update"), arg(skip))]
     dry_run: bool,
 
     /// Print the native protocol description as JSON.
     #[arg(
         long,
-        conflicts_with_all = ["man_section", "outline", "node", "search", "format"],
+        conflicts_with_all = capabilities::argument_ids(["man_section", "outline", "node", "search", "format"]),
         help_heading = "Integration"
     )]
     protocol_version: bool,
@@ -665,15 +684,15 @@ struct Cli {
         long,
         value_name = "CONTRACT",
         value_enum,
-        conflicts_with_all = ["man_section", "outline", "node", "search", "format"],
+        conflicts_with_all = capabilities::argument_ids(["man_section", "outline", "node", "search", "format"]),
         help_heading = "Integration"
     )]
     schema: Option<SchemaContract>,
 
     /// Serve read-only manual queries through the MCP stdio transport.
-    #[arg(
+    #[cfg_attr(feature = "mcp", arg(
         long,
-        conflicts_with_all = [
+        conflicts_with_all = capabilities::argument_ids([
             "selector",
             "input",
             "input_format",
@@ -703,13 +722,18 @@ struct Cli {
             "format",
             "compact",
             "preserve_anchors"
-        ],
+        ]),
         help_heading = "Integration"
-    )]
+    ))]
+    #[cfg_attr(not(feature = "mcp"), arg(skip))]
     mcp: bool,
 
     /// Output format. Document queries default to text; interactive full reading opens the TUI.
     #[arg(long, value_name = "FORMAT", value_enum, help_heading = "Output")]
+    #[cfg_attr(
+        not(feature = "tui"),
+        arg(help = "Output format. Document queries default to text.")
+    )]
     format: Option<QueryFormat>,
 
     /// Control colors in human-readable terminal output.
@@ -722,12 +746,16 @@ struct Cli {
 
     /// Choose automatic presentation, direct printing, a pager, or the document TUI.
     #[arg(long, value_enum, help_heading = "Output")]
+    #[cfg_attr(
+        not(all(feature = "tui", feature = "pager")),
+        arg(help = "Choose automatic presentation or an available explicit display mode.")
+    )]
     display: Option<DisplayMode>,
 
     /// Preserve raw HTML anchors and document-local links in Markdown output.
     #[arg(
         long,
-        conflicts_with_all = ["update_docs", "prune_docs", "update_tldr", "protocol_version", "schema", "mcp"],
+        conflicts_with_all = capabilities::argument_ids(["update_docs", "prune_docs", "update_tldr", "protocol_version", "schema", "mcp"]),
         help_heading = "Output"
     )]
     preserve_anchors: bool,

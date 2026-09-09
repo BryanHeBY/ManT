@@ -52,6 +52,14 @@ fn collect_option_aliases(nodes: &[OutlineNode], observed: &mut BTreeMap<String,
 }
 
 fn check_manual(command: &mut clap::Command, manual: &str) -> Result<(), String> {
+    check_manual_coverage(command, manual, true)
+}
+
+fn check_manual_coverage(
+    command: &mut clap::Command,
+    manual: &str,
+    exact: bool,
+) -> Result<(), String> {
     let groups = public_flags(command);
     let query = query_markdown_text(manual, None).map_err(|error| error.to_string())?;
     let document = query.document.as_ref().ok_or("missing manual document")?;
@@ -70,7 +78,12 @@ fn check_manual(command: &mut clap::Command, manual: &str) -> Result<(), String>
         .flatten()
         .map(|name| (name.clone(), 1))
         .collect();
-    if observed != expected {
+    if (exact && observed != expected)
+        || expected
+            .iter()
+            .any(|(name, count)| observed.get(name) != Some(count))
+        || observed.values().any(|count| *count != 1)
+    {
         return Err(format!(
             "public option coverage differs: expected {expected:?}, observed {observed:?}"
         ));
@@ -144,7 +157,18 @@ fn self_manual_covers_every_public_clap_option_and_alias() {
     }
     let manual = std::fs::read_to_string(manifest.join("../../docs/manuals/mant.md"))
         .expect("the checkout must contain its authoritative self manual");
-    check_manual(&mut super::super::Cli::command(), &manual).unwrap();
+    check_manual_coverage(
+        &mut super::super::Cli::command(),
+        &manual,
+        cfg!(all(
+            feature = "roff",
+            feature = "tui",
+            feature = "pager",
+            feature = "mcp",
+            feature = "update"
+        )),
+    )
+    .unwrap();
 }
 
 #[test]
@@ -206,4 +230,32 @@ fn coverage_rejects_prose_only_obsolete_and_wrongly_grouped_options() {
             "{body}"
         );
     }
+}
+
+#[test]
+fn partial_capabilities_require_all_exposed_flags_without_erasing_full_manual_contract() {
+    let command = || {
+        clap::Command::new("demo")
+            .disable_help_flag(true)
+            .arg(clap::Arg::new("query").long("query"))
+    };
+    let manual = "# demo\n\n## Options\n\n<!-- mant:entries role=option case=sensitive -->\n- `--query`: Query.\n- `--update`: Update.\n";
+    assert!(check_manual_coverage(&mut command(), manual, false).is_ok());
+    assert!(check_manual_coverage(&mut command(), manual, true).is_err());
+    assert!(
+        check_manual_coverage(
+            &mut command(),
+            &manual.replace("--query", "--missing"),
+            false
+        )
+        .is_err()
+    );
+    assert!(
+        check_manual_coverage(
+            &mut command(),
+            &format!("{manual}- `--query`: Duplicate.\n"),
+            false
+        )
+        .is_err()
+    );
 }

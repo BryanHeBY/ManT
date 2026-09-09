@@ -28,39 +28,50 @@ pkg-url = "{ repo }/releases/download/v{ version }/mant-{ version }-windows-x64.
 bin-dir = "mant-{ version }-windows-x64/{ bin }{ binary-ext }"
 pkg-fmt = "zip"
 
+[package.metadata.docs.rs]
+all-features = true
+
+[features]
+default = ["roff", "tui", "pager", "mcp", "update"]
+roff = ["mant-engine/roff"]
+tui = ["dep:mant-ui", "dep:ratatui", "dep:crossterm", "dep:arboard", "dep:base64", "dep:signal-hook"]
+pager = ["dep:crossterm", "dep:crossbeam-channel", "dep:parking_lot", "dep:regex", "dep:textwrap", "dep:thiserror", "dep:signal-hook"]
+mcp = ["dep:rmcp", "dep:rmcp-macros", "dep:tokio"]
+update = ["mant-sources/update"]
+
 [dependencies]
 anstream.workspace = true
 anstyle.workspace = true
-arboard.workspace = true
-base64.workspace = true
+arboard = { workspace = true, optional = true }
+base64 = { workspace = true, optional = true }
 clap.workspace = true
-crossterm.workspace = true
-crossbeam-channel = "^0.5"
-parking_lot = "^0.12.1"
-regex = "^1"
-textwrap = { version = "~0.16", default-features = false, features = ["unicode-width"] }
-thiserror = "^2"
-ratatui.workspace = true
+crossterm = { workspace = true, optional = true }
+crossbeam-channel = { version = "^0.5", optional = true }
+parking_lot = { version = "^0.12.1", optional = true }
+regex = { version = "^1", optional = true }
+textwrap = { version = "~0.16", default-features = false, features = ["unicode-width"], optional = true }
+thiserror = { version = "^2", optional = true }
+ratatui = { workspace = true, optional = true }
 mant-ir = { path = "../mant-ir", version = "^0.11.0" }
 mant-protocol = { path = "../mant-protocol", version = "^0.11.0" }
 mant-render = { path = "../mant-render", version = "^0.11.0" }
 mant-codec = { path = "../mant-codec", version = "^0.11.0", default-features = false }
-mant-engine = { path = "../mant-engine", version = "^0.11.0", features = ["roff"] }
+mant-engine = { path = "../mant-engine", version = "^0.11.0", default-features = false }
 mant-loader = { path = "../mant-loader", version = "^0.11.0", default-features = false }
-mant-sources = { path = "../mant-sources", version = "^0.9.3", features = ["update"] }
-mant-ui = { path = "../mant-ui", version = "^0.11.0" }
-rmcp.workspace = true
-rmcp-macros.workspace = true
+mant-sources = { path = "../mant-sources", version = "^0.9.3", default-features = false }
+mant-ui = { path = "../mant-ui", version = "^0.11.0", optional = true }
+rmcp = { workspace = true, optional = true }
+rmcp-macros = { workspace = true, optional = true }
 schemars.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-tokio.workspace = true
+tokio = { workspace = true, optional = true }
 
 [target.'cfg(windows)'.dependencies]
 crossterm_winapi.workspace = true
 
 [target.'cfg(unix)'.dependencies]
-signal-hook.workspace = true
+signal-hook = { workspace = true, optional = true }
 
 [target.'cfg(unix)'.dev-dependencies]
 libc.workspace = true

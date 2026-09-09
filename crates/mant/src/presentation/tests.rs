@@ -31,6 +31,7 @@ The selected color is visible in terminal output.
 ";
 
 #[test]
+#[cfg(feature = "roff")]
 fn environment_names_use_the_same_distinct_palette_across_text_views() {
     use super::terminal::{TerminalRole, terminal_style};
     let content = mant_engine::query_roff_bytes(
@@ -93,6 +94,7 @@ fn environment_names_use_the_same_distinct_palette_across_text_views() {
 }
 
 #[test]
+#[cfg(feature = "roff")]
 fn explanation_ansi_uses_the_exact_same_unframed_report_as_plain_text() {
     // Keep the packaged unit test independent of sibling integration fixtures.
     let source = b".TH PROBE 1\n.SH OPTIONS\n.TP\n.B -x, --language=LANG\nSelect language.\n.TP\n.B -Q\nUse -x as well.\n.SH NOTES\n-xylophone is not the same as -x.\n";
@@ -123,6 +125,7 @@ fn explanation_ansi_uses_the_exact_same_unframed_report_as_plain_text() {
 }
 
 #[test]
+#[cfg(feature = "roff")]
 fn full_and_node_color_validated_names_without_prefix_guessing() {
     let source = b".TH PROBE 1\n.SH OPTIONS\n.TP\n.B -x, --language=LANG\nSelect language.\n.SH NOTES\n-xylophone is not an option.\n";
     for view in [
@@ -159,6 +162,7 @@ fn full_and_node_color_validated_names_without_prefix_guessing() {
 }
 
 #[test]
+#[cfg(feature = "roff")]
 fn source_styling_preserves_whitespace_only_blocks_nested_terms_and_tables() {
     let source = ".TH PROBE 1\n.SH OPTIONS\n.TP\n.B --help\n.RS 4\n.sp 2\n.B nested\n.RE\n.TS\nl l.\nleft\tright\n.TE\n.nf\n  code\n\n    tail\n.fi\n";
     let query = mant_engine::query_roff_bytes(source.as_bytes()).unwrap();
@@ -173,6 +177,7 @@ fn source_styling_preserves_whitespace_only_blocks_nested_terms_and_tables() {
     );
 }
 
+#[cfg(feature = "roff")]
 fn visible_colors(text: &str) -> Vec<(char, Option<u16>)> {
     let mut chars = text.chars();
     let mut color = None;

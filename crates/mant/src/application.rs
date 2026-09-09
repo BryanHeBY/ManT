@@ -4,11 +4,11 @@ use crate::{
     host::CliHost,
 };
 use mant_engine::{LoadPolicy, PreparedQueryRequest, PreparedScopeQuery, QueryViewResult};
+#[cfg(feature = "tui")]
 use mant_ir::ResolvedContent;
-use mant_protocol::{
-    DocumentAddress, QueryInput, QueryRequest, QueryView, RequestSchema, ScopeQueryRequest,
-    ScopeQueryResponse,
-};
+#[cfg(any(feature = "tui", test))]
+use mant_protocol::{DocumentAddress, QueryInput, QueryView, RequestSchema};
+use mant_protocol::{QueryRequest, ScopeQueryRequest, ScopeQueryResponse};
 
 pub(crate) fn execute_query(
     request: &QueryRequest,
@@ -27,6 +27,7 @@ pub(crate) fn execute_scope_query(
     host.query_scope(&prepared)
 }
 
+#[cfg(feature = "tui")]
 pub(crate) fn read_full(
     request: &QueryRequest,
     policy: LoadPolicy,
@@ -45,6 +46,7 @@ pub(crate) fn read_full(
     }
 }
 
+#[cfg(any(feature = "tui", test))]
 pub(crate) fn request_for_address(address: &DocumentAddress) -> (QueryRequest, LoadPolicy) {
     let policy = match address {
         DocumentAddress::Markdown { .. } => LoadPolicy::Combined,
@@ -66,6 +68,7 @@ pub(crate) fn request_for_address(address: &DocumentAddress) -> (QueryRequest, L
     )
 }
 
+#[cfg(any(feature = "tui", test))]
 pub(crate) fn request_for_navigation(
     target: &mant_protocol::DocumentOpenTarget,
 ) -> (QueryRequest, LoadPolicy) {

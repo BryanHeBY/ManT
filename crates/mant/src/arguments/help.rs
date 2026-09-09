@@ -9,17 +9,29 @@ use clap::builder::StyledStr;
 
 use super::CLI_STYLES;
 
-/// Description and ordered command fragments (text, replaceable placeholder).
-type HelpExample = (&'static str, &'static [(&'static str, bool)]);
+/// Description, required build features, and ordered command fragments.
+type HelpExample = (
+    &'static str,
+    &'static [&'static str],
+    &'static [(&'static str, bool)],
+);
 
 include!("help_tldr_generated.rs");
+
+pub(super) fn examples() -> impl Iterator<Item = &'static HelpExample> {
+    EXAMPLES.iter().filter(|(_, required, _)| {
+        required
+            .iter()
+            .all(|feature| super::capabilities::enabled(feature))
+    })
+}
 
 /// Keep quick-start tasks before the optional deeper-reading destination.
 pub(super) fn footer() -> StyledStr {
     let header = CLI_STYLES.get_header();
     let literal = CLI_STYLES.get_literal();
     let mut text = format!("{header}TLDR:{header:#}\n");
-    for (description, parts) in EXAMPLES {
+    for (description, _, parts) in examples() {
         let _ = write!(text, "  {description}\n    ");
         for (value, placeholder) in *parts {
             if *placeholder {
