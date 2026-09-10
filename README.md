@@ -390,12 +390,14 @@ queries and interactive cross-document search use the same scope model.
 
 ## Architecture
 
-![ManT architecture: mant-engine composes source loading and IR queries; mant-render formats existing content and protocol results, while mant-ui retains interactive layout and host adapters deliver output](docs/assets/architecture.svg)
+![ManT architecture: local sources enter loader and codec; libmandoc-rs supplies the native roff AST; shared IR feeds queries, renderers and the TUI. The codec also exports document Markdown. The engine orchestrates loading and queries, and the mant host owns delivery.](docs/assets/architecture.svg)
 
 `mant-ir` is the shared semantic center. `mant-loader` owns local discovery,
 bounded source reads, linked-document scopes, and read-only tldr caches;
-`mant-codec` owns in-memory parsing and document encoding. `mant-query` owns
-bounded selection, outlines, search, explanation, and references over existing
+`mant-codec` owns in-memory parsing and document Markdown encoding, using the
+native AST from `libmandoc-rs` to lower man/mdoc/roff into the shared IR. Solid
+arrows show content flow; dashed arrows show calls, not crate containment.
+`mant-query` owns bounded selection, outlines, search, explanation, and references over existing
 IR without loading sources. `mant-engine` composes loading with those queries;
 `mant-render` formats existing IR and protocol results without loading or
 querying documents. The CLI combines these independent capabilities. Loader and codec default

@@ -1,129 +1,141 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="900" height="740" viewBox="0 0 900 740" role="img" aria-labelledby="title description">
-  <title id="title">ManT architecture</title>
-  <desc id="description">mant-engine composes document loading and queries. mant-loader reads local sources; mant-codec decodes Markdown, tldr and optional native manuals into mant-ir; mant-query consumes existing IR. mant-protocol supplies result DTOs and stable labels. Independent mant-render formats existing IR and DTOs without loading or querying; terminal adapters own delivery. The TUI consumes IR directly and shares render styles while keeping interactive layout.</desc>
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="960" viewBox="0 0 900 960" role="img" aria-labelledby="title description">
+  <title id="title">ManT: local sources, shared semantics, independent interfaces</title>
+  <desc id="description">Native man, mdoc and roff manuals, Markdown and tldr pages enter mant-loader, then mant-codec. The codec calls libmandoc-rs for a native AST and lowers content into mant-ir. It also encodes document Markdown from IR. The independent mant-engine orchestrates loader and query calls. Queries produce mant-protocol results; mant-render formats IR and results, delegating document Markdown encoding to codec. The TUI consumes IR and shared render styles. The mant host composes these capabilities and owns terminal, JSON and MCP delivery. Solid arrows show content flow; dashed arrows show labeled calls, not crate containment or the complete dependency graph.</desc>
   <defs>
-    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-      <path d="M 0 0 L 10 5 L 0 10 z" class="arrow-head"/>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#6e7781"/>
     </marker>
-    <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%">
-      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-opacity="0.07"/>
-    </filter>
+    <marker id="call-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#218bff"/>
+    </marker>
     <style>
-      .card { fill: #ffffff; stroke: #d0d7de; stroke-width: 1.5; }
-      .engine { fill: #f6f8fa; stroke: #54aeff; stroke-width: 2; }
-      .stage { fill: #ffffff; stroke: #b6c2cf; stroke-width: 1.25; }
-      .ir { fill: #dafbe1; stroke: #2da44e; stroke-width: 2; }
-      .protocol { fill: #fff8c5; stroke: #bf8700; stroke-width: 2; }
-      .connector { fill: none; stroke: #8c959f; stroke-width: 2; marker-end: url(#arrow); }
-      .protocol-connector { fill: none; stroke: #bf8700; stroke-width: 1.75; stroke-dasharray: 6 5; marker-end: url(#arrow); }
-      .arrow-head { fill: #8c959f; }
-      .label { fill: #57606a; font: 650 13px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; letter-spacing: 1.5px; }
-      .title { fill: #1f2328; font: 650 18px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
-      .detail { fill: #57606a; font: 13px ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace; }
-      .engine-title { fill: #0969da; font: 700 21px ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace; }
-      .ir-title { fill: #1a7f37; font: 700 22px ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace; }
-      .protocol-title { fill: #9a6700; font: 700 18px ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace; }
-      .interface-title { fill: #1f2328; font: 650 16px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      .source { fill: #f6f8fa; stroke: #8c959f; }
+      .execution { fill: #ddf4ff; stroke: #218bff; }
+      .codec { fill: #fbefff; stroke: #a475f9; }
+      .ir { fill: #dafbe1; stroke: #2da44e; }
+      .protocol { fill: #fff8c5; stroke: #bf8700; }
+      .presentation { fill: #ddf8f5; stroke: #1b7c83; }
+      .host { fill: #eaeef2; stroke: #6e7781; }
+      rect { stroke-width: 1.5; }
+      .flow { fill: none; stroke: #6e7781; stroke-width: 2; marker-end: url(#arrow); }
+      .both { marker-start: url(#arrow); }
+      .call { fill: none; stroke: #218bff; stroke-width: 1.75; stroke-dasharray: 5 5; marker-end: url(#call-arrow); }
+      .call-stem { marker-end: none; }
+      .title { fill: #1f2328; font: 650 20px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      .detail { fill: #424a53; font: 16px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      .label { fill: #57606a; font: 650 14px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; letter-spacing: 1px; }
+      .call-label { fill: #0969da; font: 15px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      .ir-title { fill: #1a7f37; font: 700 23px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
       @media (prefers-color-scheme: dark) {
-        .card, .stage { fill: #161b22; stroke: #30363d; }
-        .engine { fill: #0d2033; stroke: #1f6feb; }
-        .ir { fill: #173b24; stroke: #2ea043; }
+        .source { fill: #161b22; stroke: #6e7681; }
+        .execution { fill: #0d2033; stroke: #58a6ff; }
+        .codec { fill: #271b36; stroke: #bc8cff; }
+        .ir { fill: #173b24; stroke: #3fb950; }
         .protocol { fill: #3b2e0b; stroke: #d29922; }
-        .connector { stroke: #6e7681; }
-        .protocol-connector { stroke: #d29922; }
-        .arrow-head { fill: #6e7681; }
-        .label, .detail { fill: #8b949e; }
+        .presentation { fill: #123536; stroke: #56d4c7; }
+        .host { fill: #21262d; stroke: #8b949e; }
+        .flow { stroke: #8b949e; }
+        .call { stroke: #58a6ff; }
+        #arrow path { fill: #8b949e; }
+        #call-arrow path { fill: #58a6ff; }
         .title { fill: #f0f6fc; }
-        .engine-title { fill: #58a6ff; }
+        .detail, .label { fill: #b1bac4; }
+        .call-label { fill: #58a6ff; }
         .ir-title { fill: #56d364; }
-        .protocol-title { fill: #e3b341; }
-        .interface-title { fill: #f0f6fc; }
       }
     </style>
   </defs>
 
-  <text x="35" y="27" class="label">SOURCE ADAPTERS</text>
-
-  <g filter="url(#shadow)">
-    <rect x="35" y="45" width="250" height="80" rx="12" class="card"/>
-    <rect x="325" y="45" width="250" height="80" rx="12" class="card"/>
-    <rect x="615" y="45" width="250" height="80" rx="12" class="card"/>
+  <text x="30" y="28" class="label">LOCAL SOURCES</text>
+  <rect x="30" y="45" width="260" height="76" rx="12" class="source"/>
+  <rect x="320" y="45" width="260" height="76" rx="12" class="source"/>
+  <rect x="610" y="45" width="260" height="76" rx="12" class="source"/>
+  <g text-anchor="middle">
+    <text x="160" y="76" class="title">Native manuals</text>
+    <text x="160" y="102" class="detail">man · mdoc · roff</text>
+    <text x="450" y="76" class="title">Markdown</text>
+    <text x="450" y="102" class="detail">personal · managed sources</text>
+    <text x="740" y="76" class="title">tldr pages</text>
+    <text x="740" y="102" class="detail">installed local content</text>
   </g>
-  <text x="160" y="77" text-anchor="middle" class="title">Native manuals</text>
-  <text x="160" y="103" text-anchor="middle" class="detail">indexed files · optional roff</text>
-  <text x="450" y="77" text-anchor="middle" class="title">Markdown</text>
-  <text x="450" y="103" text-anchor="middle" class="detail">mant-sources · local files</text>
-  <text x="740" y="77" text-anchor="middle" class="title">tldr caches</text>
-  <text x="740" y="103" text-anchor="middle" class="detail">read-only local pages</text>
+  <!-- All source lanes terminate at the loader, never at the orchestrator. -->
+  <path d="M 160 121 V 148 H 380 V 180" class="flow"/>
+  <path d="M 450 121 V 180" class="flow"/>
+  <path d="M 740 121 V 148 H 520 V 180" class="flow"/>
 
-  <g filter="url(#shadow)">
-    <rect x="75" y="165" width="750" height="310" rx="18" class="engine"/>
-  </g>
+  <rect x="300" y="180" width="300" height="76" rx="12" class="execution"/>
+  <text x="450" y="211" text-anchor="middle" class="title">mant-loader</text>
+  <text x="450" y="237" text-anchor="middle" class="detail">discover · bounded reads · scope</text>
+  <text x="635" y="211" class="detail">Markdown registry:</text>
+  <text x="635" y="237" class="title">mant-sources</text>
+  <path d="M 450 256 V 310" class="flow"/>
+  <text x="465" y="289" class="detail">input content</text>
 
-  <path d="M 160 125 L 160 165" class="connector"/>
-  <path d="M 450 125 L 450 165" class="connector"/>
-  <path d="M 740 125 L 740 165" class="connector"/>
+  <rect x="30" y="180" width="220" height="100" rx="12" class="execution"/>
+  <text x="140" y="211" text-anchor="middle" class="title">mant-engine</text>
+  <text x="140" y="237" text-anchor="middle" class="detail">validate requests</text>
+  <text x="140" y="262" text-anchor="middle" class="detail">compose load + query</text>
+  <path d="M 250 218 H 300" class="call"/>
+  <!-- A gap distinguishes the crossing from a junction with the IR flow. -->
+  <path d="M 250 256 H 275 V 496" class="call call-stem"/>
+  <path d="M 275 514 V 622 H 300" class="call"/>
+  <text x="30" y="319" class="label">INDEPENDENT CRATES</text>
+  <path d="M 30 345 H 78" class="flow"/>
+  <text x="90" y="350" class="detail">content flow</text>
+  <path d="M 30 375 H 78" class="call"/>
+  <text x="90" y="380" class="detail">calls / orchestration</text>
 
-  <text x="105" y="199" class="engine-title">mant-engine</text>
-  <text x="795" y="198" text-anchor="end" class="detail">request validation · load + query</text>
+  <rect x="300" y="310" width="300" height="90" rx="12" class="codec"/>
+  <text x="450" y="337" text-anchor="middle" class="title">mant-codec</text>
+  <text x="450" y="362" text-anchor="middle" class="detail">decode · semantic lowering</text>
+  <text x="450" y="386" text-anchor="middle" class="detail">document Markdown encoding</text>
+  <rect x="670" y="300" width="200" height="100" rx="12" class="codec"/>
+  <text x="770" y="330" text-anchor="middle" class="title">libmandoc-rs</text>
+  <text x="770" y="357" text-anchor="middle" class="detail">native roff parser</text>
+  <text x="770" y="383" text-anchor="middle" class="detail">owned AST</text>
+  <path d="M 600 332 H 670" class="call"/>
+  <text x="635" y="320" text-anchor="middle" class="call-label">parse</text>
+  <path d="M 670 378 H 600" class="flow"/>
+  <text x="635" y="367" text-anchor="middle" class="detail">AST</text>
 
-  <g>
-    <rect x="110" y="215" width="200" height="62" rx="10" class="stage"/>
-    <rect x="350" y="215" width="200" height="62" rx="10" class="stage"/>
-    <rect x="590" y="215" width="200" height="62" rx="10" class="stage"/>
-  </g>
-  <text x="210" y="241" text-anchor="middle" class="title">mant-loader</text>
-  <text x="210" y="261" text-anchor="middle" class="detail">read · catalog · scope</text>
-  <text x="450" y="241" text-anchor="middle" class="title">mant-codec</text>
-  <text x="450" y="261" text-anchor="middle" class="detail">memory-only formats</text>
-  <text x="690" y="241" text-anchor="middle" class="title">mant-query</text>
-  <text x="690" y="261" text-anchor="middle" class="detail">existing IR queries</text>
+  <path d="M 450 400 V 450" class="flow both"/>
+  <text x="465" y="430" class="detail">decode / encode</text>
+  <rect x="300" y="450" width="300" height="110" rx="14" class="ir"/>
+  <text x="450" y="482" text-anchor="middle" class="ir-title">mant-ir</text>
+  <text x="450" y="509" text-anchor="middle" class="title">Shared semantic model</text>
+  <text x="450" y="537" text-anchor="middle" class="detail">content · entries · typed links</text>
+  <path d="M 450 560 V 590" class="flow"/>
+  <rect x="300" y="590" width="300" height="64" rx="12" class="execution"/>
+  <text x="450" y="617" text-anchor="middle" class="title">mant-query</text>
+  <text x="450" y="641" text-anchor="middle" class="detail">select · search · explain</text>
+  <path d="M 450 654 V 710" class="flow"/>
 
-  <path d="M 310 246 L 350 246" class="connector"/>
-  <path d="M 210 277 L 300 310" class="connector"/>
-  <path d="M 450 277 L 450 310" class="connector"/>
-  <path d="M 600 310 L 690 277" class="connector"/>
+  <!-- Direct IR consumers bypass query execution and serialization. -->
+  <path d="M 300 505 H 145 V 710" class="flow"/>
+  <text x="158" y="575" class="detail">document IR</text>
+  <path d="M 600 505 H 755 V 710" class="flow"/>
+  <text x="768" y="575" class="detail">body IR</text>
+  <rect x="30" y="710" width="230" height="90" rx="12" class="presentation"/>
+  <text x="145" y="739" text-anchor="middle" class="title">mant-ui</text>
+  <text x="145" y="764" text-anchor="middle" class="detail">interactive layout</text>
+  <text x="145" y="788" text-anchor="middle" class="detail">IR + shared render styles</text>
+  <rect x="300" y="710" width="300" height="90" rx="12" class="protocol"/>
+  <text x="450" y="739" text-anchor="middle" class="title">mant-protocol</text>
+  <text x="450" y="764" text-anchor="middle" class="detail">query results · DTOs</text>
+  <text x="450" y="788" text-anchor="middle" class="detail">shared contracts + labels</text>
+  <rect x="650" y="710" width="220" height="90" rx="12" class="presentation"/>
+  <text x="760" y="739" text-anchor="middle" class="title">mant-render</text>
+  <text x="760" y="764" text-anchor="middle" class="detail">body + report formats</text>
+  <text x="760" y="788" text-anchor="middle" class="detail">shared styles + cells</text>
+  <path d="M 600 755 H 650" class="flow"/>
 
-  <g filter="url(#shadow)">
-    <rect x="165" y="310" width="570" height="108" rx="15" class="ir"/>
-  </g>
-  <text x="450" y="346" text-anchor="middle" class="ir-title">mant-ir · semantic center</text>
-  <text x="450" y="375" text-anchor="middle" class="title">ResolvedContent · Document · TldrDocument</text>
-  <text x="450" y="398" text-anchor="middle" class="detail">typed IDs · links · outline paths · ranges · visitors · index</text>
-
-  <path d="M 300 418 C 300 500, 85 500, 85 635" class="connector"/>
-  <path d="M 600 418 C 600 480, 735 480, 735 520" class="connector"/>
-  <path d="M 450 418 L 450 520" class="connector"/>
-  <g filter="url(#shadow)">
-    <rect x="325" y="520" width="250" height="58" rx="12" class="protocol"/>
-    <rect x="610" y="520" width="250" height="58" rx="12" class="stage"/>
-  </g>
-  <text x="450" y="544" text-anchor="middle" class="protocol-title">mant-protocol</text>
-  <text x="450" y="565" text-anchor="middle" class="detail">DTOs · validation · labels</text>
-  <text x="735" y="544" text-anchor="middle" class="title">mant-render</text>
-  <text x="735" y="565" text-anchor="middle" class="detail">body · reports · style roles</text>
-  <path d="M 575 549 L 610 549" class="connector"/>
-  <path d="M 735 578 L 765 635" class="connector"/>
-
-  <path d="M 350 578 C 300 610, 210 600, 155 635" class="protocol-connector"/>
-  <path d="M 405 578 L 335 635" class="connector"/>
-  <path d="M 495 578 L 550 635" class="connector"/>
-
-  <g filter="url(#shadow)">
-    <rect x="25" y="635" width="190" height="85" rx="12" class="card"/>
-    <rect x="240" y="635" width="190" height="85" rx="12" class="card"/>
-    <rect x="455" y="635" width="190" height="85" rx="12" class="card"/>
-    <rect x="670" y="635" width="190" height="85" rx="12" class="card"/>
-  </g>
-  <text x="120" y="661" text-anchor="middle" class="interface-title">TUI · optional</text>
-  <text x="120" y="684" text-anchor="middle" class="detail">document IR</text>
-  <text x="120" y="705" text-anchor="middle" class="detail">protocol host DTOs</text>
-  <text x="335" y="661" text-anchor="middle" class="interface-title">CLI &amp; request JSON</text>
-  <text x="335" y="692" text-anchor="middle" class="detail">queries · schemas</text>
-  <text x="550" y="661" text-anchor="middle" class="interface-title">MCP · optional</text>
-  <text x="550" y="684" text-anchor="middle" class="detail">read-only tools</text>
-  <text x="550" y="705" text-anchor="middle" class="detail">text · CommonMark</text>
-  <text x="765" y="661" text-anchor="middle" class="interface-title">Output adapters</text>
-  <text x="765" y="684" text-anchor="middle" class="detail">terminal · text</text>
-  <text x="765" y="705" text-anchor="middle" class="detail">optional pager</text>
+  <path d="M 145 800 V 848" class="flow"/>
+  <path d="M 450 800 V 848" class="flow"/>
+  <path d="M 760 800 V 848" class="flow"/>
+  <rect x="30" y="848" width="840" height="90" rx="14" class="host"/>
+  <text x="145" y="876" text-anchor="middle" class="title">TUI sessions</text>
+  <text x="450" y="876" text-anchor="middle" class="title">CLI / request JSON</text>
+  <text x="760" y="872" text-anchor="middle" class="title">Text / Markdown</text>
+  <text x="760" y="894" text-anchor="middle" class="detail">CLI / MCP</text>
+  <text x="450" y="921" text-anchor="middle" class="detail">mant · composition root · terminal / pager / clipboard · JSON / MCP delivery</text>
 </svg>

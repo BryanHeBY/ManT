@@ -33,6 +33,15 @@ mant-ir ─> mant-query ─> mant-protocol projections ─> mant-render
 mant-engine composes loading and queries; hosts choose render / UI delivery
 ```
 
+The README overview likewise separates content flow from orchestration: local
+sources enter the loader, the codec calls `libmandoc-rs` for a native roff AST
+and lowers it into IR, and the engine coordinates loader/query calls without
+containing those crates. The codec also encodes document Markdown from IR;
+renderers delegate that encoding to the codec while composing query reports
+themselves. The `mant` host selects independent render/UI delivery.
+The overview is not an exhaustive call or dependency graph: shared protocol
+contracts also serve host callbacks, and the TUI shares render styles and cells.
+
 That diagram describes data ownership. The compile-time workspace dependency
 direction is related but not identical:
 
