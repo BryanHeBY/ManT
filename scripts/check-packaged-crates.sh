@@ -22,8 +22,9 @@ for package in "${PACKAGES[@]}"; do
     mant-protocol) dependencies=(mant-ir) ;;
     mant-codec) dependencies=(libmandoc-rs mant-ir) ;;
     mant-loader) dependencies=(libmandoc-rs mant-ir mant-protocol mant-sources mant-codec) ;;
-    mant-query) dependencies=(libmandoc-rs mant-ir mant-protocol mant-codec) ;;
-    mant-render) dependencies=(libmandoc-rs mant-ir mant-protocol mant-codec) ;;
+    # Query/render use codec without native features, so no libmandoc patch applies.
+    mant-query) dependencies=(mant-ir mant-protocol mant-codec) ;;
+    mant-render) dependencies=(mant-ir mant-protocol mant-codec) ;;
     mant-engine) dependencies=(libmandoc-rs mant-ir mant-protocol mant-sources mant-codec mant-loader mant-query mant-render) ;;
     mant-ui) dependencies=(libmandoc-rs mant-ir mant-protocol mant-sources mant-codec mant-loader mant-query mant-render mant-engine) ;;
     mant) dependencies=(libmandoc-rs mant-ir mant-protocol mant-sources mant-codec mant-loader mant-query mant-render mant-engine mant-ui) ;;
