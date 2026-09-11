@@ -85,6 +85,29 @@ fn control_spellings_and_numbers_remain_visible_when_authored_as_words() {
 }
 
 #[test]
+fn legacy_manual_metadata_operands_are_not_body_content() {
+    // Fixed CVS man_term_acts uses pre_ign/MAN_NOTEXT for UC and AT;
+    // groff 1.24.1 an.tmac changes footer metadata rather than printing args.
+    for request in [".UC 5", ".UC 3", ".AT 3", ".AT 5 2"] {
+        for prefix in ["", ".SH TEST\n", ".SH TEST\n.nf\n"] {
+            let input = format!(".TH PROBE 1\n{prefix}{request}\nBODY\n");
+            let query = load_roff_bytes(input.as_bytes()).unwrap();
+            let text = render_query_text(&query);
+            assert_eq!(text.matches("BODY").count(), 1, "{input}: {text:?}");
+            assert!(
+                !text
+                    .lines()
+                    .any(|line| matches!(line.trim(), "5" | "3" | "5 2")),
+                "{input}: {text:?}"
+            );
+            assert!(mant_ir::validate_document(query.document.as_ref().unwrap()).is_empty());
+        }
+    }
+    let query = load_roff_bytes(b".TH PROBE 1\n.SH TEST\n.B UC 5 AT 3\n").unwrap();
+    assert!(render_query_text(&query).contains("UC 5 AT 3"));
+}
+
+#[test]
 fn table_inline_recovery_consumes_controls_without_discarding_real_words() {
     for dialect in ["man", "mdoc"] {
         let word = if dialect == "man" {

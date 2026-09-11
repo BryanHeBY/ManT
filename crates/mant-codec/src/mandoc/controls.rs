@@ -12,6 +12,8 @@ pub(super) enum OperandControl {
     Indent,
     ParagraphDistance,
     Delimiters,
+    /// Native validation already consumed legacy manual metadata.
+    Metadata,
     /// Device/page presentation omitted by the source-neutral reader.
     Presentation,
 }
@@ -28,7 +30,10 @@ pub(super) fn operand_control(name: Option<&str>) -> Option<OperandControl> {
         "PD" => OperandControl::ParagraphDistance,
         // Native validation has already attached these to later En nodes.
         "Es" => OperandControl::Delimiters,
-        "ad" | "na" | "hy" | "nh" | "ne" | "nr" | "ta" | "ti" | "ll" | "mc" | "po" => {
+        // man_term_acts marks UC/AT MAN_NOTEXT. They set the OS string in
+        // man_validate, not a paragraph, even when retained in the root AST.
+        "UC" | "AT" => OperandControl::Metadata,
+        "ad" | "na" | "hy" | "nh" | "ne" | "nr" | "ta" | "DT" | "ti" | "ll" | "mc" | "po" => {
             OperandControl::Presentation
         }
         _ => return None,
