@@ -863,6 +863,42 @@ Convert filenames from the specified encoding.\n\
 }
 
 #[test]
+fn generic_callable_terms_are_addressable_without_borrowing_a_later_taxonomy_body() {
+    // Reduced from the Pod-generated perltoc(1) layout. Its `.IP` sequence is
+    // an index of independent subjects: only ENVIRONMENT owns the following
+    // prose. A callable term with sigilled parameters is still a useful exact
+    // selector, but generic terms must not form a declaration group and gain
+    // the environment description as shared context.
+    let document = parse_manual_bytes(
+        std::path::Path::new("pod-taxonomy.1"),
+        b".TH POD-TAXONOMY 1\n.SH CONTENTS\n.IP run_filter($cmd,$src) 4\n.IP pm_to_blib 4\n.IP _autosplit 4\n.IP ENVIRONMENT 4\nPERL_INSTALL_ROOT controls the install root.\n",
+    )
+    .expect("lower Pod-style taxonomy");
+
+    let Block::DefinitionList {
+        items,
+        declaration_groups,
+        ..
+    } = &document.sections[0].blocks[0]
+    else {
+        panic!("expected definition list");
+    };
+    assert_eq!(
+        items[0].entry.as_ref().expect("callable entry").names,
+        ["run_filter"]
+    );
+    assert!(items[..3].iter().all(|item| item.description.is_empty()));
+    let Block::Paragraph { children, .. } = &items[3].description[0] else {
+        panic!("expected environment paragraph");
+    };
+    assert!(inline_text(children).contains("PERL_INSTALL_ROOT"));
+    assert!(
+        declaration_groups.is_empty(),
+        "generic index labels must not inherit ENVIRONMENT's body: {declaration_groups:?}"
+    );
+}
+
+#[test]
 fn preserves_a_single_mdoc_option_argument_and_its_description() {
     let document = parse_manual_bytes(
         std::path::Path::new("option-with-argument.1"),

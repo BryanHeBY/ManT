@@ -64,7 +64,7 @@ pub(in crate::definitions) fn named_term_name(
 /// part of a generic term's selector.  Keep this intentionally narrower than
 /// an array subscript: `name[=<type>]` names `name`, whereas `name[index]`
 /// remains one complete variable spelling.
-fn optional_parameter_name<'a>(value: &'a str, validate: fn(&str) -> bool) -> Option<&'a str> {
+fn optional_parameter_name(value: &str, validate: fn(&str) -> bool) -> Option<&str> {
     let (name, suffix) = value.split_once('[')?;
     let parameter = suffix.strip_suffix(']')?.strip_prefix('=')?;
     let parameter = parameter.strip_prefix('<')?.strip_suffix('>')?;
@@ -194,11 +194,17 @@ pub(super) fn named_occurrences(
 /// treating prose as a declaration: its name must contain lowercase technical
 /// spelling and every remaining token must be an all-uppercase placeholder.
 pub(in crate::definitions) fn term_occurrences(text: &str) -> Option<Vec<RecognizedName>> {
-    named_occurrences(text, is_variable_term).or_else(|| {
-        let name = invocation_name(text.trim())?;
-        let offset = name.as_ptr() as usize - text.as_ptr() as usize;
-        Some(vec![RecognizedName::contiguous(name, offset)])
-    })
+    named_occurrences(text, is_variable_term)
+        .or_else(|| {
+            let name = invocation_name(text.trim())?;
+            let offset = name.as_ptr() as usize - text.as_ptr() as usize;
+            Some(vec![RecognizedName::contiguous(name, offset)])
+        })
+        .or_else(|| {
+            let name = callable_invocation_name(text.trim())?;
+            let offset = name.as_ptr() as usize - text.as_ptr() as usize;
+            Some(vec![RecognizedName::contiguous(name, offset)])
+        })
 }
 
 fn invocation_name(value: &str) -> Option<&str> {
@@ -213,12 +219,57 @@ fn invocation_placeholder(token: &str) -> bool {
     !token.is_empty()
         && token.split(',').all(|part| {
             !part.is_empty()
+                && !part.starts_with('-')
                 && part.chars().all(|character| {
                     character.is_ascii_uppercase()
                         || character.is_ascii_digit()
                         || matches!(character, '_' | '-')
                 })
         })
+}
+
+/// A complete call form is a declaration head when its callable spelling is
+/// technical and every argument is an explicitly sigilled variable.  This
+/// covers generated Perl/POSIX-style heads such as `run_filter($cmd,$src)`
+/// without extracting a word from prose or treating arbitrary parenthetical
+/// text as an invocation.  The caller retains the full authored form; only
+/// the callable base becomes the selector.
+fn callable_invocation_name(value: &str) -> Option<&str> {
+    let (name, arguments) = value.split_once('(')?;
+    let arguments = arguments.strip_suffix(')')?;
+    if name.is_empty()
+        || name.contains(char::is_whitespace)
+        || !is_variable_term(name)
+        || !name.chars().any(char::is_lowercase)
+    {
+        return None;
+    }
+    let arguments = arguments.trim();
+    if arguments.is_empty() {
+        return Some(name);
+    }
+    let mut count = 0usize;
+    for argument in arguments.split(',') {
+        count += 1;
+        if count > 64 || !sigilled_invocation_argument(argument.trim()) {
+            return None;
+        }
+    }
+    Some(name)
+}
+
+fn sigilled_invocation_argument(value: &str) -> bool {
+    let Some(variable) = value.strip_prefix(['$', '@', '%']) else {
+        return false;
+    };
+    !variable.is_empty()
+        && variable
+            .chars()
+            .next()
+            .is_some_and(|character| character.is_ascii_alphabetic() || character == '_')
+        && variable
+            .chars()
+            .all(|character| character.is_ascii_alphanumeric() || character == '_')
 }
 
 /// A declaration group is atomic: accepting a word after rejected prose does
@@ -439,8 +490,16 @@ mod tests {
         };
         assert_eq!(names("istrip[=<bool>]"), ["istrip"]);
         assert_eq!(names("getservbyname NAME,PROTO"), ["getservbyname"]);
+        assert_eq!(names("run_filter($cmd,$src)"), ["run_filter"]);
+        assert_eq!(
+            names("install_rooted_file( $file )"),
+            ["install_rooted_file"]
+        );
         assert_eq!(names("array[index]"), ["array[index]"]);
         assert!(names("Using References").is_empty());
         assert!(names("name[=literal]").is_empty());
+        assert!(names("Using ($example) text").is_empty());
+        assert!(names("function(argument)").is_empty());
+        assert!(names("zle -I").is_empty());
     }
 }

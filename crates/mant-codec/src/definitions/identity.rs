@@ -104,7 +104,19 @@ pub(super) fn identity_plan(
             .iter()
             .all(|term| is_ordinal_marker(plain_text(term).trim()));
     let semantic = hint != Some(super::NativeHeadRole::Presentation) && !presentation_ordinal;
+    // A declaration group carries a stronger fact than adjacency: its final
+    // member's body is useful reading context for every preceding member.
+    // Keep that recovery to roles whose complete declaration grammar gives us
+    // a concrete subject (options, commands, variables, and configuration
+    // keys). Generic terms and values remain individually addressable, but a
+    // run of them is often a generated contents/taxonomy list; borrowing the
+    // final item's body would silently attach unrelated prose to every term.
+    // This is deliberately independent of whether a generic form happens to
+    // have an extractable selector name.
+    let groupable_role = !matches!(kind, EntryKind::Term | EntryKind::Value)
+        || head_context != DefinitionContext::Generic;
     let group_head = semantic
+        && groupable_role
         && (!names.is_empty()
             || !item.terms.is_empty()
                 && item

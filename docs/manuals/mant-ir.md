@@ -100,13 +100,19 @@ conditions; document validation additionally rejects overlapping ranges with
 
 Items keep their own identities, source spans, forms, descriptions and children.
 A group has no permanent ID, does not prove alias equivalence or complete value
-choices, and never copies the final description into earlier items. It survives
-IR serialization without native parser pointers. Excerpts retain/rebase only
-whole groups; a single-owner excerpt may therefore remain empty while explain
-separately returns useful group context. Renderers ignore the annotation for
-full-document layout. Native producers supply bounded source evidence; ordinary
-Markdown lists are not automatically grouped. IR validation checks structure,
-not roff syntax or the applicability of each sentence to each member.
+choices, and never copies the final description into earlier items. It is only
+produced for source-backed declaration roles with a concrete subject (such as
+options, commands, variables, or configuration keys). Under a generic context,
+generic terms and values remain individually addressable but never gain group
+context merely because a later sibling has prose: generated indexes and
+taxonomies frequently use that layout. A group survives IR serialization
+without native parser pointers.
+Excerpts retain/rebase only whole groups; a single-owner excerpt may therefore
+remain empty while explain separately returns useful group context. Renderers
+ignore the annotation for full-document layout. Native producers supply bounded
+source evidence; ordinary Markdown lists are not automatically grouped. IR
+validation checks structure, not roff syntax or the applicability of each
+sentence to each member.
 
 `ListKind` is `Bullet`, `Plain`, or `Ordered { start: Option<u64> }`. Only ordered
 lists carry a start. Its JSON is a tagged object, for example
