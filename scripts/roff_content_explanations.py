@@ -48,6 +48,7 @@ _TERMINAL_MANUAL_REFERENCE = re.compile(r"([A-Za-z0-9_.:+-]+) \(([1-9][A-Za-z0-9
 _MDOC_REQUEST = re.compile(r"^[.']([A-Za-z][A-Za-z0-9]*)(?:[ \t]+(.*))?$")
 _MDOC_LITERAL_COLUMN_SEPARATOR = " | "
 _MAN_UR = re.compile(r"^[.']UR[ \t]+([^ \t]+)[ \t]*$")
+_MAN_IP_ORDINAL = re.compile(r"^[.']IP[ \t]+(\([1-9][0-9]*\)|\[[1-9][0-9]*\]|[1-9][0-9]*[.)])(?:[ \t]+[^ \t]+)?[ \t]*$")
 _MAN_UR_DYNAMIC_ESCAPE = re.compile(r"\\(?:\*|n|g|V|\$|\[|\()")
 _MAN_UR_LITERAL_ESCAPES = {
     r"\:": ":",
@@ -74,7 +75,7 @@ def _literal_man_ur_targets(source: str) -> Counter[str] | None:
     for raw in source.splitlines():
         if raw.endswith("\\"):
             return None
-        match = _REQUEST.fullmatch(raw)
+        match = _MDOC_REQUEST.fullmatch(raw)
         if match is not None and match[1].lower() in _AUDIT_DYNAMIC_REQUESTS:
             return None
         match = _MAN_UR.fullmatch(raw)
@@ -89,6 +90,32 @@ def _literal_man_ur_targets(source: str) -> Counter[str] | None:
             return None
         targets[target] += 1
     return targets or None
+
+
+def _literal_man_ip_ordinals(source: str) -> Counter[tuple[str, str]] | None:
+    """Return directly authored ``IP`` ordinal spellings and their canonical marks.
+
+    ManT's source-proven ordered-list lowering intentionally represents all
+    accepted man(7) ordinal styles as the portable ``N.`` marker.  The CVS
+    terminal renderer prints the authored tag, such as ``(1)``.  This model is
+    deliberately limited to literal ``IP`` heads and refuses all syntax- or
+    expansion-changing roff requests before treating that difference as
+    presentational.
+    """
+    markers: Counter[tuple[str, str]] = Counter()
+    for raw in source.splitlines():
+        if raw.endswith("\\"):
+            return None
+        match = _MDOC_REQUEST.fullmatch(raw)
+        if match is not None and match[1].lower() in _AUDIT_DYNAMIC_REQUESTS:
+            return None
+        match = _MAN_IP_ORDINAL.fullmatch(raw)
+        if match is None:
+            continue
+        authored = match[1]
+        digits = authored.strip("()[]").rstrip(".)")
+        markers[(authored, f"{digits}.")] += 1
+    return markers or None
 
 
 def _replace_limited(text: str, original: str, replacement: str, limit: int) -> tuple[str, int]:
@@ -467,6 +494,29 @@ def _source_consistent_compatibility_projection(reference: str, mant: str,
                 "referenceDelimiters": reference_replacements,
                 "mantDelimiters": mant_replacements,
                 "reason": "Literal GNU man-ext .UR targets are bracketed by CVS man_term.c:post_UR while ManT preserves the same typed URI with compact link presentation.",
+            })
+
+    ordinal_markers = _literal_man_ip_ordinals(source)
+    if ordinal_markers is not None:
+        replacements = 0
+        for (authored, canonical), limit in ordinal_markers.items():
+            # Require the source inventory to account for every reference
+            # spelling.  A matching number elsewhere in prose must keep this
+            # page reviewable rather than borrowing list evidence.
+            if projected_reference.count(authored) != limit:
+                continue
+            if projected_mant.count(canonical) < limit:
+                continue
+            projected_reference, count = _replace_limited(
+                projected_reference, authored, canonical, limit
+            )
+            replacements += count
+        if replacements:
+            evidence.append({
+                "rule": "source-consistent-man-IP-ordinal-marker/v1",
+                "sourceMarkers": sum(ordinal_markers.values()),
+                "referenceMarkers": replacements,
+                "reason": "Literal punctuated man(7) IP tags are source-proven ordered items; CVS prints the authored tag while ManT's portable ordered-list renderer uses the canonical N. marker.",
             })
 
     column_separators = _literal_mdoc_column_separator_count(source)

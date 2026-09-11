@@ -288,6 +288,25 @@ class ExplanationTests(unittest.TestCase):
                 self.assertNotEqual(result['status'], 'explained')
                 self.assertFalse(result['coverage']['sourceConsistentCompatibilityApplied'])
 
+    def test_literal_man_IP_ordinals_are_source_consistent_presentation(self):
+        source = '.TH PROBE 1\n.IP (1) 4\nfirst\n.IP [2]\nsecond\n'
+        result = assess_content('(1) first\n[2] second\n', '1. first\n2. second\n', source)
+        self.assertEqual(result['status'], 'explained')
+        self.assertEqual(result['rawComparison']['status'], 'review')
+        self.assertEqual(result['compatibilityPresentationComparison']['status'], 'covered')
+        self.assertEqual(
+            result['explanations'][0]['rule'],
+            'source-consistent-man-IP-ordinal-marker/v1',
+        )
+
+    def test_man_IP_ordinal_projection_does_not_borrow_prose_or_dynamic_evidence(self):
+        source = '.TH PROBE 1\n.IP (1)\nfirst\nprose (1)\n'
+        result = assess_content('(1) first\nprose (1)\n', '1. first\nprose (1)\n', source)
+        self.assertNotEqual(result['status'], 'explained')
+        source = '.nr item 1\n.IP (1)\nfirst\n'
+        result = assess_content('(1) first\n', '1. first\n', source)
+        self.assertNotEqual(result['status'], 'explained')
+
     def test_literal_mdoc_column_table_separators_are_source_consistent_presentation(self):
         source = '''.Dd September 11, 2026
 .Dt PROBE 1
