@@ -263,6 +263,48 @@ def bounded_finding(finding):
     return {'finding': compact(finding), 'retentionTruncations': truncations}
 
 
+def classify_cross_reference_presentation(result):
+    """Separate a peer-renderer disagreement from a ManT lowering candidate.
+
+    The terminal renderers are deliberately independent references.  When one
+    complete legacy comparison is clean and the other contains only a review,
+    ManT has matched one rendered contract exactly.  That is not evidence of
+    missing source content or an AST-to-IR failure.  Keep the raw review in
+    ``finding`` for later reference-renderer investigation, but mark the
+    dimension as explained so product-review tooling does not treat it as an
+    unexplained ManT defect.
+
+    This is intentionally symmetric: it records a disagreement rather than
+    declaring mandoc or groff authoritative for every macro package. Hard
+    failures, incomplete coverage, and two-sided reviews remain open.
+    """
+    dimensions = ('fidelity-mandoc', 'fidelity-groff')
+    for reviewed_name, peer_name in (dimensions, dimensions[::-1]):
+        reviewed = result.get(reviewed_name)
+        peer = result.get(peer_name)
+        if not isinstance(reviewed, dict) or not isinstance(peer, dict):
+            continue
+        if (
+            reviewed.get('execution') != 'success'
+            or reviewed.get('status') != 'review'
+            or peer.get('execution') != 'success'
+            or peer.get('status') != 'clean'
+            or reviewed.get('coverage') != peer.get('coverage')
+            or reviewed.get('finding', {}).get('status') != 'review'
+        ):
+            continue
+        reviewed['status'] = 'explained'
+        reviewed['rawStatus'] = 'review'
+        reviewed['triage'] = 'cross-reference-presentation-divergence'
+        reviewed['peerReference'] = peer_name.removeprefix('fidelity-')
+        reviewed['triageReason'] = (
+            f"{peer_name.removeprefix('fidelity-')} matched ManT under the same "
+            'source and complete comparison coverage; retain the other renderer '
+            'review as a reference-presentation divergence, not an unexplained '
+            'lowering candidate'
+        )
+
+
 def execution_status(code, error):
     if code == 0:
         return 'success'
@@ -361,6 +403,7 @@ def render_dimensions(path, source, args, external):
             result['layout-' + kind] = {'execution': 'success',
                 'status': 'review' if layout['candidates'] else 'clean', 'coverage': coverage,
                 **bounded_finding(layout)}
+    classify_cross_reference_presentation(result)
     return result, observations
 
 
@@ -438,6 +481,7 @@ def execute(args, inputs, report):
     result_path = args.output / 'results.jsonl'
     report['status'] = 'running'
     counts = {name: Counter() for name in DIMENSIONS}
+    triage_counts = Counter()
     physical, logical, written = 0, 0, 0
     snapshots = {}
     inventory = []
@@ -465,6 +509,8 @@ def execute(args, inputs, report):
                     for name, value in row['dimensions'].items():
                         for field in ('execution', 'status', 'coverage'):
                             counts[name][field + ':' + value[field]] += len(row['identities'])
+                        if value.get('triage'):
+                            triage_counts[value['triage']] += len(row['identities'])
                 output.flush()
                 if offset % (args.batch_size * 8) == 0:
                     print(f'{physical}/{len(inputs)} physical pages', flush=True)
@@ -493,7 +539,8 @@ def execute(args, inputs, report):
             rulesUnchanged=all(unchanged(ROOT / path, digest) for path, digest in report['rules'].items()),
             manifestUnchanged=unchanged(args.manifest, report['manifestSha256']),
             sourcesUnchanged=all(unchanged(path, digest) for path, digest in snapshots.items()),
-            sourceHashesChecked=len(snapshots), reviewPending=True)
+            sourceHashesChecked=len(snapshots), reviewPending=True,
+            triageCounts=dict(triage_counts))
         report['evidenceStable'] = all(report[key] for key in ('binariesUnchanged', 'rulesUnchanged', 'manifestUnchanged', 'sourcesUnchanged'))
         report['coverageComplete'] = (report['status'] == 'completed' and report['evidenceStable'] and
             all(value.get('coverage:legacy-dimensions-covered', 0) == logical for value in counts.values()))

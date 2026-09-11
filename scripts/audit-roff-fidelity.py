@@ -70,6 +70,11 @@ URL_WRAP = re.compile(
 DEHYPHENATE = re.compile(r"-[ \t]*\n[ \t]*")
 BORDERS = re.compile(r"[\u2500-\u257f\u2022\u00b7]")
 ANGLE_LINK = re.compile(r"<((?:https?|mailto):[^<>]{1,4096})>", re.DOTALL)
+# ManT's terminal presentation uses compact Unicode angle brackets for typed
+# external targets, while mandoc's `man_term.c:post_UR` writes ASCII brackets.
+# Treat either delimiter as presentation around the same URI before lexing;
+# punctuation outside the delimiter remains observable.
+COMPACT_ANGLE_LINK = re.compile(r"⟨((?:https?|mailto):[^⟨⟩]{1,4096})⟩", re.DOTALL)
 RUNNING_HEADER = re.compile(
     r"^\s*(?P<label>\S+\([^)\s]+\))\s+.+\s+(?P=label)\s*$",
     re.IGNORECASE,
@@ -952,7 +957,10 @@ def strip_reference_chrome(value: str) -> str:
 
 
 def unwrap_angle_links(value: str) -> str:
-    return ANGLE_LINK.sub(
+    value = ANGLE_LINK.sub(
+        lambda match: re.sub(r"[ \t]*\n[ \t]*", "", match.group(1)), value
+    )
+    return COMPACT_ANGLE_LINK.sub(
         lambda match: re.sub(r"[ \t]*\n[ \t]*", "", match.group(1)), value
     )
 
@@ -971,12 +979,30 @@ def tokens(value: str) -> list[str]:
 
 
 def token_lines(value: str) -> list[list[str]]:
+    """Return ordinary reference rows eligible for ordered-phrase comparison.
+
+    Token occurrence comparison still sees every table cell. Ordered phrase
+    comparison does not: CVS ``tbl_term.c`` renders a physical table row by
+    interleaving cells with vertical frame glyphs, while ManT intentionally
+    projects the same typed cells into a one-dimensional portable form. An
+    n-gram crossing a frame is therefore renderer geometry, not evidence that
+    a content phrase disappeared or changed order. Keep plain rows intact so
+    prose, literal blocks, and unboxed tables remain subject to the existing
+    strict ordering check.
+    """
     value = strip_terminal_formatting(value).translate(TRANSLATION)
     value = unwrap_angle_links(value)
     value = URL_WRAP.sub(r"\1", value)
     value = DEHYPHENATE.sub("", value)
-    value = BORDERS.sub(" ", value)
-    return [TOKEN.findall(line) for line in value.splitlines()]
+    lines = []
+    for line in value.splitlines():
+        # The UTF-8 terminal renderer's U+2502 is an emitted table-cell frame,
+        # not authored cell text. Do not discard the line from the global
+        # token stream; only exclude cross-cell n-gram evidence here.
+        if "\u2502" in line:
+            continue
+        lines.append(TOKEN.findall(BORDERS.sub(" ", line)))
+    return lines
 
 
 def labeled_mdoc_links(source: str) -> list[tuple[tuple[str, ...], tuple[str, ...]]]:
@@ -2345,6 +2371,9 @@ def self_check() -> None:
     assert normalized_visible_text(
         "read <https://example.test/api/\nversion.3.html> now"
     ) == "read https://example.test/api/version.3.html now"
+    assert normalized_visible_text(
+        "read ⟨https://example.test/api/version.3.html⟩. now"
+    ) == "read https://example.test/api/version.3.html. now"
     assert token_key("line-break") == token_key("linebreak")
     assert manual_section(Path("git.1.gz")) == "1"
     assert manual_section(Path("SSL_read.3ssl")) == "3ssl"
@@ -2451,6 +2480,11 @@ def self_check() -> None:
         ["one", "two", "four", "elsewhere", "three"],
         4,
     ) == ["one two three four"]
+    # CVS tbl_term.c emits a U+2502 frame between physical cells. The global
+    # token comparison still observes both cells; phrase ordering must not
+    # borrow that renderer-owned geometry as a missing-content claim.
+    assert token_lines("│ one two │ three four │") == []
+    assert token_lines("one two three four") == [["one", "two", "three", "four"]]
     hard, review = fidelity_signatures(r"text \[u2192]")
     assert not hard
     assert review == [

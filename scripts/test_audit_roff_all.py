@@ -182,6 +182,81 @@ class AllAuditTests(unittest.TestCase):
         self.assertEqual(value['retentionTruncations'][0]['originalLength'], 100)
         self.assertEqual(len(value['finding']['candidates']), 16)
 
+    def test_cross_reference_presentation_divergence_preserves_raw_review(self):
+        covered = {'execution': 'success', 'coverage': 'legacy-dimensions-covered'}
+        result = {
+            'fidelity-mandoc': {**covered, 'status': 'clean', 'finding': {'status': 'clean'}},
+            'fidelity-groff': {**covered, 'status': 'review', 'finding': {'status': 'review'}},
+        }
+        AUDIT.classify_cross_reference_presentation(result)
+        groff = result['fidelity-groff']
+        self.assertEqual(groff['status'], 'explained')
+        self.assertEqual(groff['rawStatus'], 'review')
+        self.assertEqual(groff['triage'], 'cross-reference-presentation-divergence')
+        self.assertEqual(groff['peerReference'], 'mandoc')
+        self.assertEqual(groff['finding']['status'], 'review')
+
+    def test_cross_reference_classifier_keeps_two_sided_or_partial_reviews_open(self):
+        covered = {'execution': 'success', 'coverage': 'legacy-dimensions-covered'}
+        two_sided = {
+            'fidelity-mandoc': {**covered, 'status': 'review', 'finding': {'status': 'review'}},
+            'fidelity-groff': {**covered, 'status': 'review', 'finding': {'status': 'review'}},
+        }
+        AUDIT.classify_cross_reference_presentation(two_sided)
+        self.assertEqual(two_sided['fidelity-mandoc']['status'], 'review')
+        self.assertEqual(two_sided['fidelity-groff']['status'], 'review')
+
+        partial = {
+            'fidelity-mandoc': {**covered, 'status': 'clean', 'finding': {'status': 'clean'}},
+            'fidelity-groff': {
+                'execution': 'success', 'coverage': 'partial-external-context',
+                'status': 'review', 'finding': {'status': 'review'},
+            },
+        }
+        AUDIT.classify_cross_reference_presentation(partial)
+        self.assertEqual(partial['fidelity-groff']['status'], 'review')
+
+    def test_completed_summary_counts_cross_reference_triage_separately(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / 'source.1'
+            source.write_bytes(b'.TH T 1\n')
+            manifest = root / 'manifest.jsonl'
+            manifest.write_bytes(b'{}\n')
+            args = argparse.Namespace(output=root / 'audit', workers=1, batch_size=1,
+                                      max_result_bytes=100000, manifest=manifest)
+            report = {
+                'physicalPages': 1, 'logicalPages': 1, 'rules': {}, 'binaries': {},
+                'manifestSha256': AUDIT.SOURCES.file_hash(manifest),
+            }
+
+            def inspect(_item, _args):
+                dimensions = {
+                    name: {
+                        'execution': 'success', 'status': 'clean',
+                        'coverage': 'legacy-dimensions-covered',
+                    }
+                    for name in AUDIT.DIMENSIONS
+                }
+                dimensions['fidelity-groff'].update(
+                    status='explained', rawStatus='review',
+                    triage='cross-reference-presentation-divergence',
+                )
+                digest = AUDIT.SOURCES.file_hash(source)
+                return {
+                    'sourcePath': str(source), 'identities': [{'id': 'one'}],
+                    'sourceSha256': digest, 'transportSha256': digest,
+                    'dimensions': dimensions,
+                }
+
+            with patch.object(AUDIT, 'inspect_source', side_effect=inspect):
+                self.assertEqual(AUDIT.execute(args, [(source, [{'id': 'one'}])], report), 0)
+            summary = json.loads((args.output / 'summary.json').read_text())
+            self.assertEqual(summary['dimensionCounts']['fidelity-groff']['status:explained'], 1)
+            self.assertEqual(
+                summary['triageCounts']['cross-reference-presentation-divergence'], 1
+            )
+
     def test_bounded_comparison_worker_matches_the_direct_legacy_oracle(self):
         payload = {'label': 'one', 'source': '.TH T 1\n.SH BODY\nAlpha beta gamma delta\n',
                    'reference': 'Alpha beta gamma delta', 'mant': 'Alpha beta delta', 'kind': 'mandoc'}
