@@ -1,6 +1,8 @@
 //! Independent, bidirectional source-run / final-group accounting.
 //! This profiler does not assign names or repair IR. Unexplained rejected runs
-//! are review candidates; an IR group without a source run is a violation.
+//! are review candidates; an IR group without a compatible source run is a
+//! violation. A source run may also contain layout-preserved, unaddressable
+//! template heads; those do not invalidate a contiguous semantic sub-run.
 use libmandoc_rs::{Node, NodeKind};
 use mant_ir::{
     Block, DefinitionItem, Document, SourceSpan,
@@ -146,6 +148,38 @@ fn unsigned_numeric_head(node: &Node, item: &DefinitionItem) -> bool {
     native_numeric_label(node).is_some_and(|label| label == text.trim_matches([' ', '\t']))
 }
 
+fn native_template_head(node: &Node) -> bool {
+    // This deliberately recognizes only a source-level mdoc command template
+    // such as `.Pf / Ns Ar RE`, not every anonymous final IR owner. The AST
+    // remains immutable during corruption tests, so a later lost name cannot
+    // turn a real declaration into a permitted audit gap.
+    let Some(head) = node
+        .children
+        .iter()
+        .find(|child| child.kind == NodeKind::Head)
+    else {
+        return false;
+    };
+    let mut text = String::new();
+    let mut has_argument = false;
+    fn collect(node: &Node, text: &mut String, has_argument: &mut bool) {
+        if node.flags.no_print {
+            return;
+        }
+        if node.macro_name.as_deref() == Some("Ar") {
+            *has_argument = true;
+        }
+        if let Some(value) = node.text.as_deref() {
+            text.push_str(value);
+        }
+        for child in &node.children {
+            collect(child, text, has_argument);
+        }
+    }
+    collect(head, &mut text, &mut has_argument);
+    has_argument && text.trim_start().starts_with('/')
+}
+
 struct Audit<'a> {
     observed: Observed<'a>,
     rows: Vec<Value>,
@@ -153,8 +187,45 @@ struct Audit<'a> {
     review: usize,
     group_index: BTreeMap<Vec<OwnerKey>, usize>,
     native_owners: BTreeMap<usize, OwnerKey>,
+    native_source_nodes: BTreeMap<OwnerKey, &'a Node>,
 }
 impl Audit<'_> {
+    fn retained_group(&self, sources: &[OwnerKey]) -> Option<(usize, &'static str)> {
+        if let Some(index) = self.group_index.get(sources).copied() {
+            return Some((index, "source-run-retained"));
+        }
+
+        // mdoc command references often collect several `.It Xo` forms under
+        // one description. A leading `/RE` template is deliberately retained
+        // as presentation because it has no literal selector, while a later
+        // `?RE` or `n` can be a real semantic entry. The final declaration
+        // group therefore represents a contiguous *semantic* portion of the
+        // physical native run. Accept that precise subset only when every
+        // omitted owner is an immutable native template form; missing,
+        // reordered, or merely damaged IR owners remain audit obligations.
+        self.observed
+            .groups
+            .iter()
+            .enumerate()
+            .filter(|(_, group)| !group.is_empty() && group.len() < sources.len())
+            .find_map(|(index, group)| {
+                sources
+                    .windows(group.len())
+                    .position(|window| window == group)
+                    .filter(|&start| {
+                        sources[..start]
+                            .iter()
+                            .chain(&sources[start + group.len()..])
+                            .all(|source| {
+                                self.native_source_nodes
+                                    .get(source)
+                                    .is_some_and(|node| native_template_head(node))
+                            })
+                    })
+                    .map(|_| (index, "source-run-semantic-subset"))
+            })
+    }
+
     fn classify(&mut self, run: &[(&Node, Vec<usize>)], boundary: &str) {
         if run.is_empty() {
             return;
@@ -174,10 +245,11 @@ impl Audit<'_> {
             }
             sources.push(source);
         }
-        let retained = self.group_index.get(&sources).copied();
-        let reason = if let Some(index) = retained {
+        let retained = self.retained_group(&sources);
+        let observed_group = retained.map(|(index, _)| index);
+        let reason = if let Some((index, reason)) = retained {
             self.matched.insert(index);
-            "source-run-retained"
+            reason
         } else if boundary != "description" {
             boundary
         } else if sources.len() < 2 {
@@ -206,7 +278,7 @@ impl Audit<'_> {
         self.rows.push(json!({
             "status": if retained.is_some() { "retained" } else { "rejected" }, "reason": reason,
             "sourceOwners": run.iter().map(|(n,path)| json!({"astPath":path,"line":n.line,"column":n.column,"macro":n.macro_name,"flowEpoch":n.flow_epoch,"ownerOccurrence":self.native_owners.get(&(std::ptr::from_ref(*n) as usize)).map(|key|key.2)})).collect::<Vec<_>>(),
-            "physicalSources":sources,"observedGroup":retained,
+            "physicalSources":sources,"observedGroup":observed_group,
         }));
     }
     fn walk(&mut self, node: &Node, path: &mut Vec<usize>) {
@@ -286,10 +358,11 @@ pub(super) fn profile(root: &Node, document: &Document) -> Value {
     // Physical source coordinates can repeat during macro expansion. Preserve
     // every occurrence in syntax/IR traversal order instead of overwriting a
     // coordinate bucket. Deleted/reordered owners leave unmatched obligations.
-    fn native_keys(
-        node: &Node,
+    fn native_keys<'a>(
+        node: &'a Node,
         counts: &mut BTreeMap<(u32, u32), usize>,
         keys: &mut BTreeMap<usize, OwnerKey>,
+        source_nodes: &mut BTreeMap<OwnerKey, &'a Node>,
         list_owners: &BTreeSet<OwnerKey>,
     ) {
         let mut previous: Option<(&Node, OwnerKey)> = None;
@@ -316,7 +389,7 @@ pub(super) fn profile(root: &Node, document: &Document) -> Value {
                 if continuation {
                     // Headless IP is another paragraph of the previous owner,
                     // not a declaration in a source run.
-                    native_keys(child, counts, keys, list_owners);
+                    native_keys(child, counts, keys, source_nodes, list_owners);
                     continue;
                 }
                 let source = if merged {
@@ -329,11 +402,12 @@ pub(super) fn profile(root: &Node, document: &Document) -> Value {
                     source
                 };
                 keys.insert(std::ptr::from_ref(child) as usize, source);
+                source_nodes.insert(source, child);
                 previous = Some((child, source));
             } else if !matches!(child.macro_name.as_deref(), Some("PD" | "Sm" | "Tg" | "ft")) {
                 previous = None;
             }
-            native_keys(child, counts, keys, list_owners);
+            native_keys(child, counts, keys, source_nodes, list_owners);
         }
     }
     let mut observed = Observed::default();
@@ -344,10 +418,12 @@ pub(super) fn profile(root: &Node, document: &Document) -> Value {
         .map(|group| group.iter().map(|p| observed.pointers[p]).collect())
         .collect();
     let mut native_owners = BTreeMap::new();
+    let mut native_source_nodes = BTreeMap::new();
     native_keys(
         root,
         &mut BTreeMap::new(),
         &mut native_owners,
+        &mut native_source_nodes,
         &observed.list_owners,
     );
     let group_index = observed
@@ -364,6 +440,7 @@ pub(super) fn profile(root: &Node, document: &Document) -> Value {
         review: 0,
         group_index,
         native_owners,
+        native_source_nodes,
     };
     audit.walk(root, &mut Vec::new());
     let unexpected = audit.observed.groups.iter().enumerate().filter(|(i,_)| !audit.matched.contains(i))
@@ -493,6 +570,28 @@ mod tests {
         let valid = profile(&native.document.root, &document);
         assert_eq!(valid["observedGroups"].as_array().unwrap().len(), 1);
         assert!(violations(&valid).is_empty(), "{valid}");
+    }
+
+    #[test]
+    fn semantic_subrun_can_follow_unaddressable_mdoc_templates() {
+        // Reduced from the vi(1) search commands. `/RE` forms use an authored
+        // regular-expression placeholder and deliberately have no exact
+        // selector; `?RE` and `n` are addressable command heads sharing the
+        // same physical mdoc description run.
+        let source = b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh COMMANDS\n.Bl -tag -width Ds\n.It Xo\n.Pf / Ns Ar RE\n.Xc\n.It Xo\n.Pf / Ns Ar RE Ns /\n.Xc\n.It Xo\n.Pf ? Ns Ar RE\n.Xc\n.It Cm n\nSearch.\n.El\n";
+        let native = libmandoc_rs::Parser::default()
+            .parse_bytes("probe.1", source)
+            .unwrap();
+        let document =
+            mant_loader::parse_manual_bytes(std::path::Path::new("probe.1"), source).unwrap();
+        let profile = profile(&native.document.root, &document);
+
+        assert!(violations(&profile).is_empty(), "{profile}");
+        assert!(profile["sourceRuns"].as_array().unwrap().iter().any(|row| {
+            row["reason"] == "source-run-semantic-subset"
+                && row["physicalSources"] == json!([[6, 2, 0], [9, 2, 0], [12, 2, 0], [15, 2, 0]])
+                && row["observedGroup"] == 0
+        }));
     }
 
     #[test]

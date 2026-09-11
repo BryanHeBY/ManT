@@ -839,6 +839,12 @@ block at that source line to have the intended retained or recovered shape.
 This independent source-side ledger detects over-conversion after the original
 definition term has already disappeared from the IR:
 
+The companion declaration-group ledger is bidirectional. It compares each
+final group with its complete native owner run, including AST path and executed
+flow epoch. A contiguous final semantic subset may omit only a source-proven
+mdoc template head (for example `/RE` with an `Ar` placeholder); a missing,
+reordered, or merely unnamed final owner never qualifies as that exception.
+
 ```sh
 cargo build --package mant-engine --example roff_semantic_profile
 python3 scripts/audit-roff-semantics.py --fixtures --recheck-recorded \
