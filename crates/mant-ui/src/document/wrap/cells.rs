@@ -1,13 +1,14 @@
 //! Text cells, decoration and exact link/search column projection.
 use super::{
-    Line, LineSurface, LogicalLine, Span, Style, UnicodeWidthChar, WrappedLine, WrappedLink,
-    WrappedSearchCell, theme,
+    Line, LineSurface, LogicalLine, Span, Style, WrappedLine, WrappedLink, WrappedSearchCell, theme,
 };
 #[derive(Clone, Copy)]
 pub(super) struct StyledCell {
     pub(super) source_index: usize,
     pub(super) character: char,
-    pub(super) display_character: char,
+    pub(super) display_character: Option<char>,
+    pub(super) grapheme_start: bool,
+    pub(super) whitespace: bool,
     pub(super) width: usize,
     pub(super) style: Style,
     pub(super) link_index: Option<usize>,
@@ -20,45 +21,75 @@ pub(super) fn styled_cells(line: &LogicalLine) -> Vec<StyledCell> {
     let mut column = line.indent;
     let mut source_column = 0;
     let mut source_index = 0;
-    for span in &line.spans {
-        for character in span.content.chars() {
-            let source_width = character.width().unwrap_or(0);
-            let link_index = line.links.iter().position(|link| {
-                link.start_column < source_column + source_width && link.end_column > source_column
-            });
-            if character == '\t' {
-                let spaces = TAB_STOP - column % TAB_STOP;
-                cells.extend((0..spaces).map(|_| StyledCell {
-                    source_index,
-                    character: ' ',
-                    display_character: ' ',
-                    width: 1,
-                    style: span.style,
-                    link_index,
-                }));
-                column += spaces;
-                source_column += spaces;
-                source_index += 1;
-                continue;
+    // A grapheme can cross source-style boundaries. Segment the whole logical
+    // row, then give each indivisible terminal glyph its first scalar's style.
+    // Keep scalar source cells for search/reference coordinates, charging its
+    // terminal width once and never wrapping in the middle of the cluster.
+    let text = line
+        .spans
+        .iter()
+        .map(|span| span.content.as_ref())
+        .collect::<String>();
+    let mut spans = line.spans.iter();
+    let mut span = spans.next();
+    let mut span_end = span.map_or(0, |span| span.content.len());
+    for grapheme in mant_render::cells::graphemes(&text) {
+        while grapheme.bytes().start >= span_end {
+            span = spans.next();
+            span_end += span.map_or(0, |span| span.content.len());
+            if span.is_none() {
+                break;
             }
+        }
+        let style = span.map_or_else(Style::default, |span| span.style);
+        let source_width = grapheme.columns();
+        let link_index = line.links.iter().position(|link| {
+            link.start_column < source_column + source_width && link.end_column > source_column
+        });
+        if grapheme.text() == "\t" {
+            let spaces = TAB_STOP - column % TAB_STOP;
+            cells.extend((0..spaces).map(|_| StyledCell {
+                source_index,
+                character: ' ',
+                display_character: Some(' '),
+                grapheme_start: true,
+                whitespace: true,
+                width: 1,
+                style,
+                link_index,
+            }));
+            column += spaces;
+            source_column += spaces;
+            source_index += 1;
+            continue;
+        }
+        let display_width = if grapheme.text().chars().any(char::is_control) {
+            1
+        } else {
+            source_width
+        };
+        let whitespace = grapheme.text().chars().all(char::is_whitespace);
+        for (index, character) in grapheme.text().chars().enumerate() {
             let character = if character.is_control() {
                 '\u{fffd}'
             } else {
                 character
             };
-            let cell_width = character.width().unwrap_or(0);
+            let cell_width = if index == 0 { display_width } else { 0 };
             cells.push(StyledCell {
                 source_index,
                 character,
-                display_character: character,
+                display_character: Some(character),
+                grapheme_start: index == 0,
+                whitespace,
                 width: cell_width,
-                style: span.style,
+                style,
                 link_index,
             });
             column += cell_width;
-            source_column += source_width;
             source_index += 1;
         }
+        source_column += source_width;
     }
     cells
 }
@@ -76,7 +107,7 @@ pub(super) fn fitting_prefix(cells: &[StyledCell], available: usize) -> usize {
 
 pub(super) fn trim_trailing_whitespace(cells: &[StyledCell], end: usize) -> usize {
     let mut result = end;
-    while result > 0 && cells[result - 1].character.is_whitespace() {
+    while result > 0 && cells[result - 1].whitespace {
         result -= 1;
     }
     result
@@ -127,7 +158,9 @@ fn cells_to_line(
                 spans.push(Span::styled(std::mem::take(&mut value), current_style));
                 current_style = style;
             }
-            value.push(cell.display_character);
+            if let Some(character) = cell.display_character {
+                value.push(character);
+            }
         }
         spans.push(Span::styled(value, current_style));
     }
@@ -166,14 +199,18 @@ pub(super) fn wrapped_cells_to_line(
     let mut links = Vec::new();
     let mut search_cells = Vec::with_capacity(cells.len());
     let mut column = indent + tldr_decoration_width(line, width) / 2;
+    let mut grapheme_column = column;
     let mut active: Option<(usize, usize, usize)> = None;
     for (index, cell) in cells.iter().enumerate() {
+        if cell.grapheme_start {
+            grapheme_column = column;
+        }
         let next_column = column + cell.width;
         search_cells.push(WrappedSearchCell {
             group: 0,
             join_before: index == 0 && join_with_space,
             character: cell.character,
-            start_column: column,
+            start_column: grapheme_column,
             end_column: next_column,
         });
         match (active, cell.link_index) {

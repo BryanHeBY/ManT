@@ -1,7 +1,6 @@
 //! Width-aware document selection and plain-text extraction.
 
 use ratatui::text::{Line, Span, Text};
-use unicode_width::UnicodeWidthChar;
 
 use super::RenderedDocument;
 use crate::theme;
@@ -83,13 +82,14 @@ impl RenderedDocument {
                 let (start_column, end_column) = selection
                     .columns_for_row(row)
                     .expect("selected row is inside normalized endpoints");
-                let (start_column, end_column) =
-                    if surface == super::LineSurface::Tldr && line.width() >= 6 {
-                        let width = line.width();
-                        (start_column.max(2), end_column.min(width.saturating_sub(2)))
-                    } else {
-                        (start_column, end_column)
-                    };
+                let (start_column, end_column) = if surface == super::LineSurface::Tldr
+                    && super::inline::spans_width(&line.spans) >= 6
+                {
+                    let width = super::inline::spans_width(&line.spans);
+                    (start_column.max(2), end_column.min(width.saturating_sub(2)))
+                } else {
+                    (start_column, end_column)
+                };
                 Some(
                     line_fragment(line, start_column, end_column)
                         .trim_end_matches(' ')
@@ -124,8 +124,8 @@ fn line_fragment(line: &Line<'_>, start_column: usize, end_column: usize) -> Str
     let mut column: usize = 0;
     let mut previous_selected = false;
     for span in &line.spans {
-        for character in span.content.chars() {
-            let width = character.width().unwrap_or(0);
+        for grapheme in mant_render::cells::graphemes(&span.content) {
+            let width = grapheme.columns();
             let next_column = column.saturating_add(width);
             let selected = if width == 0 {
                 previous_selected
@@ -133,7 +133,7 @@ fn line_fragment(line: &Line<'_>, start_column: usize, end_column: usize) -> Str
                 start_column < next_column && end_column > column
             };
             if selected {
-                output.push(character);
+                output.push_str(grapheme.text());
             }
             previous_selected = selected;
             column = next_column;
@@ -149,8 +149,8 @@ fn highlight_line(line: &Line<'static>, start_column: usize, end_column: usize) 
     for span in &line.spans {
         let mut segment = String::new();
         let mut segment_selected = None;
-        for character in span.content.chars() {
-            let width = character.width().unwrap_or(0);
+        for grapheme in mant_render::cells::graphemes(&span.content) {
+            let width = grapheme.columns();
             let next_column = column.saturating_add(width);
             let selected = if width == 0 {
                 previous_selected
@@ -165,7 +165,7 @@ fn highlight_line(line: &Line<'static>, start_column: usize, end_column: usize) 
                 ));
             }
             segment_selected = Some(selected);
-            segment.push(character);
+            segment.push_str(grapheme.text());
             previous_selected = selected;
             column = next_column;
         }

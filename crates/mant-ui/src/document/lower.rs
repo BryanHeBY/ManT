@@ -3,8 +3,8 @@ use super::inline::styled_reference_inline_lines;
 use super::{
     Arc, Block, DocumentAddress, ExternalUri, HashMap, Inline, LineSurface, LinkTarget,
     LogicalLine, LogicalLinkRange, Modifier, NavKind, NavNode, Section, SemanticIndex, Span, Style,
-    TLDR_ID, TLDR_VERTICAL_PADDING_ROWS, TldrDocument, UnicodeWidthStr, WrapMode,
-    inline_anchor_rows, theme, tldr_style,
+    TLDR_ID, TLDR_VERTICAL_PADDING_ROWS, TldrDocument, WrapMode, inline_anchor_rows, theme,
+    tldr_style,
 };
 use mant_ir::geometry::{compose_origin, coordinate, padding};
 
@@ -120,7 +120,9 @@ impl DocumentBuilder<'_> {
                 .map(|(span, uri)| LogicalLinkRange {
                     target: LinkTarget::External(uri),
                     start_column: 0,
-                    end_column: UnicodeWidthStr::width(span.text.as_str()),
+                    end_column: mant_render::cells::graphemes(&span.text)
+                        .map(|g| g.columns())
+                        .sum(),
                 })
                 .collect();
             self.push(LogicalLine {

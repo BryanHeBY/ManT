@@ -46,6 +46,16 @@ that crate was not published for that change.
   Unchanged crates retain their versions; all published v0.11 protocol shapes
   and schema snapshots are unchanged. No release tag is implied by these notes.
 
+### mant-ui 0.11.1
+
+- Keep complete Unicode graphemes together in document wrapping, including
+  combining marks, flags and joined emoji across source styles. Search,
+  selection, copy and link hit testing now use the same terminal-cell geometry
+  as the rendered glyphs. A glyph wider than the entire viewport is replaced
+  once for display while its original text remains searchable and copyable.
+- `mant` requires `mant-ui ^0.11.1` for this fix; unrelated crate versions and
+  versioned output contracts remain unchanged.
+
 ## 0.11.0 - 2026-09-11
 
 This release prepares `mant-ir`, `mant-protocol`, `mant-codec`, `mant-loader`,

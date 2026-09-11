@@ -1073,7 +1073,7 @@ dependencies = [
 
 [[package]]
 name = "mant-ui"
-version = "0.11.0"
+version = "0.11.1"
 dependencies = [
  "crossterm",
  "mant-codec",
@@ -1084,6 +1084,7 @@ dependencies = [
  "mant-query",
  "mant-render",
  "ratatui",
+ "serde_json",
  "tokio",
  "unicode-width",
 ]

@@ -4,7 +4,6 @@ use std::sync::Arc;
 
 use mant_ir::{DocumentAddress, TableAlignment};
 use ratatui::{style::Style, text::Span};
-use unicode_width::UnicodeWidthStr;
 
 /// External URI that passed `ManT`'s host-activation policy.
 ///
@@ -262,12 +261,7 @@ impl LogicalLine {
 
     fn preferred_width(&self) -> usize {
         let content = self.table_row.as_ref().map_or_else(
-            || {
-                self.spans
-                    .iter()
-                    .map(|span| UnicodeWidthStr::width(span.content.as_ref()))
-                    .sum()
-            },
+            || super::inline::spans_width(&self.spans),
             |table| table.layout.preferred_width(),
         );
         self.indent.saturating_add(content)

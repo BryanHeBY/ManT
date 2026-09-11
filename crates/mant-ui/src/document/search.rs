@@ -6,7 +6,6 @@ use ratatui::{
     style::Modifier,
     text::{Line, Span, Text},
 };
-use unicode_width::UnicodeWidthChar;
 
 use super::{RenderedDocument, RenderedSelection, WrappedLine};
 use crate::theme;
@@ -203,9 +202,9 @@ fn search_match_for_range(
     {
         if let Some(last) = fragments.last_mut()
             && last.row == cell.fragment.row
-            && last.end_column == cell.fragment.start_column
+            && cell.fragment.start_column <= last.end_column
         {
-            last.end_column = cell.fragment.end_column;
+            last.end_column = last.end_column.max(cell.fragment.end_column);
         } else {
             fragments.push(cell.fragment);
         }
@@ -253,8 +252,8 @@ fn highlight_line(
     for span in &line.spans {
         let mut segment = String::new();
         let mut segment_style = None;
-        for character in span.content.chars() {
-            let width = character.width().unwrap_or(0);
+        for grapheme in mant_render::cells::graphemes(&span.content) {
+            let width = grapheme.columns();
             let next_column = column + width;
             let matched = ranges
                 .iter()
@@ -275,7 +274,7 @@ fn highlight_line(
                 ));
             }
             segment_style = Some(style);
-            segment.push(character);
+            segment.push_str(grapheme.text());
             column = next_column;
         }
         if !segment.is_empty() {

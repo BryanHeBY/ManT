@@ -178,7 +178,9 @@ impl DocumentBuilder<'_> {
         let mut term_spans = last.spans;
         let mut term_links = last.links;
         let mut term_marks = last.reference_marks;
-        let term_width = mant_ir::geometry::definition_run_in_width(&item.terms).unwrap_or(0);
+        // Terminal placement measures the final visible head's graphemes;
+        // whole-string shaping can charge adjacent glyphs differently.
+        let term_width = spans_width(&term_spans);
         if let Some((children, layout)) = item.inline_description() {
             for (id, row) in inline_anchor_rows(children) {
                 self.anchors.entry(id).or_insert(self.lines.len() + row);

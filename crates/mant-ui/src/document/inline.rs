@@ -2,7 +2,7 @@
 
 use super::{
     DocumentAddress, ExternalUri, Inline, LinkTarget, LogicalLinkRange, Modifier, Section, Span,
-    Style, StyledInlineLine, UnicodeWidthStr, theme,
+    Style, StyledInlineLine, theme,
 };
 
 pub(super) fn tldr_style(role: mant_render::TldrRole) -> Style {
@@ -162,9 +162,17 @@ pub(super) fn shifted_reference_marks(
 }
 
 pub(super) fn spans_width(spans: &[Span<'_>]) -> usize {
-    spans
+    if let [span] = spans {
+        return mant_render::cells::graphemes(&span.content)
+            .map(|g| g.columns())
+            .sum();
+    }
+    let text = spans
         .iter()
-        .map(|span| UnicodeWidthStr::width(span.content.as_ref()))
+        .map(|span| span.content.as_ref())
+        .collect::<String>();
+    mant_render::cells::graphemes(&text)
+        .map(|g| g.columns())
         .sum()
 }
 

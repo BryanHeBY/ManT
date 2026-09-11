@@ -1,7 +1,7 @@
 [package]
 name = "mant-ui"
 autobins = false
-version = "0.11.0"
+version = "0.11.1"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
@@ -23,6 +23,7 @@ ratatui.workspace = true
 unicode-width.workspace = true
 
 [dev-dependencies]
+serde_json.workspace = true
 mant-codec = { path = "../mant-codec", version = "^0.11.0", default-features = false }
 mant-engine = { path = "../mant-engine", version = "^0.11.0" }
 mant-loader = { path = "../mant-loader", version = "^0.11.0", features = ["roff"] }

@@ -8,7 +8,6 @@ use ratatui::{
     style::Style,
     text::{Line, Span},
 };
-use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 use mant_ir::TableAlignment;
 
@@ -177,8 +176,15 @@ fn wrap_logical_line(line: &LogicalLine, width: usize) -> Vec<WrappedLine> {
             // A double-width glyph cannot occupy a one-column viewport.
             // Preserve its semantic search cell while rendering one bounded
             // replacement cell, just as control characters are sanitized.
-            first.display_character = '\u{fffd}';
+            first.display_character = Some('\u{fffd}');
             first.width = 1;
+            for cell in cells
+                .iter_mut()
+                .skip(1)
+                .take_while(|cell| !cell.grapheme_start)
+            {
+                cell.display_character = None;
+            }
         }
         let fit = fitting_prefix(&cells, available);
         if fit == cells.len() {
@@ -205,7 +211,7 @@ fn wrap_logical_line(line: &LogicalLine, width: usize) -> Vec<WrappedLine> {
         } else {
             let split = cells[..fit]
                 .iter()
-                .rposition(|cell| cell.character.is_whitespace())
+                .rposition(|cell| cell.grapheme_start && cell.whitespace)
                 .filter(|position| *position > 0)
                 .unwrap_or(fit);
             let row_end = trim_trailing_whitespace(&cells, split);
@@ -226,10 +232,7 @@ fn wrap_logical_line(line: &LogicalLine, width: usize) -> Vec<WrappedLine> {
                 cells.drain(..consumed.max(1));
                 removed_separator
             };
-            while cells
-                .first()
-                .is_some_and(|cell| cell.character.is_whitespace())
-            {
+            while cells.first().is_some_and(|cell| cell.whitespace) {
                 cells.remove(0);
                 removed_separator = true;
             }

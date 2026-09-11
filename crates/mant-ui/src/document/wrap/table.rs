@@ -1,7 +1,7 @@
 //! Bounded table columns and stacked fallback, preserving cell-local payload.
 use super::{
-    Line, LogicalTableCell, LogicalTableRow, Span, TableAlignment, UnicodeWidthStr, WrappedLine,
-    WrappedLink, WrappedSearchCell, wrap_line_with_links,
+    Line, LogicalTableCell, LogicalTableRow, Span, TableAlignment, WrappedLine, WrappedLink,
+    WrappedSearchCell, wrap_line_with_links,
 };
 const TABLE_COLUMN_GAP: usize = 2;
 pub(super) fn render_table_row_with_links(
@@ -138,7 +138,7 @@ fn render_table_columns(
                 let mut left_padding = 0;
                 if let Some(row) = cell_rows.and_then(|rows| rows.get(row_index)) {
                     anchors.extend(row.anchors.iter().cloned());
-                    used = UnicodeWidthStr::width(row.line.to_string().as_str());
+                    used = super::super::inline::spans_width(&row.line.spans);
                     let free = column_width.saturating_sub(used);
                     left_padding = match alignment {
                         TableAlignment::Left => 0,

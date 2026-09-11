@@ -30,7 +30,6 @@ use ratatui::{
 };
 #[cfg(test)]
 use unicode_width::UnicodeWidthChar;
-use unicode_width::UnicodeWidthStr;
 
 use crate::theme;
 #[cfg(test)]
