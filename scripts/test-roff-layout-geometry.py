@@ -32,6 +32,25 @@ class GeometryTests(unittest.TestCase):
             report = compare_layout_geometry("       A\n         B\n       C\n", damaged, source)
             self.assertIn("relative-origin", self.kinds(report))
 
+    def test_native_nonbreaking_indent_has_real_terminal_width(self):
+        source = ".SH TEST\n.nf\nBASE\n\\ \\ \\ \\ INDENTED\nTAIL\n.fi\n"
+        reference = "TEST\n     BASE\n     \u00a0\u00a0\u00a0\u00a0INDENTED\n     TAIL\n"
+        correct = "TEST\nBASE\n    INDENTED\nTAIL\n"
+        self.assertEqual(compare_layout_geometry(reference, correct, source)['status'], 'covered')
+        damaged = correct.replace('    INDENTED', 'INDENTED')
+        self.assertIn('relative-origin', self.kinds(compare_layout_geometry(reference, damaged, source)))
+
+    def test_table_cells_are_not_prose_anchors_but_following_damage_survives(self):
+        source = ".SH TEST\n.TS\nl l.\nWORD\tCELLTWO\n.TE\n.nf\nAFTER\n.sp 1\nLAST\n.fi\n"
+        reference = "TEST\nWORD   CELLTWO\nAFTER\n\nLAST\n"
+        correct = "TEST\nWORD | CELLTWO\nAFTER\n\nLAST\n"
+        result = compare_layout_geometry(reference, correct, source)
+        self.assertEqual(result['status'], 'partial')
+        self.assertFalse(result['findings'])
+        self.assertIn('documented-table-column-geometry-difference', {r['reason'] for r in result['coverage']['uncovered']})
+        damaged = correct.replace('AFTER\n\nLAST', 'AFTER\nLAST')
+        self.assertIn('blank-gap', self.kinds(compare_layout_geometry(reference, damaged, source)))
+
     def test_explicit_rs_origin_is_relative_to_parent_not_global_mode(self):
         source = ".SH TEST\nOUTER\n.RS 4\n.nf\nA\nB\n.fi\n.RE\nAFTER\n"
         reference = "TEST\n       OUTER\n           A\n           B\n       AFTER\n"

@@ -136,6 +136,7 @@ def _source_anchors(source, limits):
     serial, scopes, island = 0, 1, 0
     literal, trusted_indent, gap = False, True, False
     paragraph, paragraph_line = [], 0
+    unmodeled_block = None
 
     def emit(text, number, heading=False):
         nonlocal gap
@@ -167,6 +168,15 @@ def _source_anchors(source, limits):
             continue
         match = _REQUEST.fullmatch(raw)
         name, arguments = (match["name"], match["args"] or "") if match else (None, "")
+        if unmodeled_block:
+            if name == unmodeled_block:
+                barrier(number, "unmodeled-block-end:" + name)
+                unmodeled_block = None
+            continue
+        if name in {"TS", "EQ"}:
+            barrier(number, _POLICY[name])
+            unmodeled_block = "TE" if name == "TS" else "EN"
+            continue
         if name in _METADATA or name in _TRANSPARENT:
             continue
         if name in {"SH", "SS", "Sh", "Ss"}:
@@ -246,6 +256,8 @@ def _source_anchors(source, limits):
     flush()
     if stack:
         uncovered.append({"reason": "unclosed-source-scope", "source_line": len(lines)})
+    if unmodeled_block:
+        uncovered.append({"reason": "unclosed-unmodeled-block", "source_line": len(lines)})
     return anchors, uncovered, scopes
 
 
@@ -256,7 +268,10 @@ def _render_tokens(text, limits):
     # source/IR decisions. An unverified control remains visible/unmatchable.
     for number, raw in enumerate(visible_text(text).splitlines(), 1):
         raw = raw.expandtabs(8)
-        indent = len(raw) - len(raw.lstrip(" "))
+        # Native term.c retains authored nonbreaking spaces as U+00A0 in
+        # UTF-8. They occupy one terminal cell, just like ordinary spaces.
+        # Do not silently drop them while measuring a relative origin.
+        indent = len(raw) - len(raw.lstrip(" \u00a0"))
         for word in _words(raw):
             if len(words) >= limits.rendered_tokens:
                 raise _Limit("rendered-token-budget")
