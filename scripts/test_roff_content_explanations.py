@@ -248,7 +248,8 @@ class ExplanationTests(unittest.TestCase):
 
     def test_direct_BR_manual_reference_spacing_is_a_source_consistent_projection(self):
         source = '.TS\nT{\n.BR accept (2)\nT}\n.TE\n'
-        result = assess_content('accept (2)\n', 'accept(2)\n', source)
+        terminal_bold = ''.join(char + '\b' + char for char in 'accept')
+        result = assess_content(terminal_bold + ' (2)\n', 'accept(2)\n', source)
         self.assertEqual(result['status'], 'explained')
         self.assertEqual(result['rawComparison']['status'], 'review')
         self.assertEqual(result['compatibilityPresentationComparison']['status'], 'covered')
@@ -264,6 +265,18 @@ class ExplanationTests(unittest.TestCase):
                 result = assess_content(reference, mant, source)
                 self.assertEqual(result['status'], 'review')
                 self.assertFalse(result['coverage']['sourceConsistentCompatibilityApplied'])
+
+    def test_secondary_projection_can_reduce_a_capped_raw_finding_sample(self):
+        source = '.IP \\(bu\nBODY\n'
+        result = assess_content('• BODY\nALPHA\n', '- BODY\nBETA\n', source,
+                                limits=ContentLimits(max_findings=1))
+        self.assertFalse(result['rawComparison']['coverage']['complete'])
+        self.assertIn('finding-retention-budget', result['rawComparison']['coverage']['reasons'])
+        self.assertTrue(result['coverage']['sourceConsistentCompatibilityApplied'])
+        self.assertLess(
+            sum(result['compatibilityPresentationComparison']['counts'].values()),
+            sum(result['rawComparison']['counts'].values()),
+        )
 
 
 if __name__ == '__main__':

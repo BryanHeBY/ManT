@@ -277,6 +277,18 @@ class RenderingCensusTests(unittest.TestCase):
             'ambiguous-operand-origin',
         )
 
+    def test_source_consistent_presentation_reduction_keeps_a_distinct_residual_queue(self):
+        record = {
+            'status': 'review',
+            'content': {'status': 'review', 'counts': {'missing-occurrence': 10}},
+            'contentAssessment': {'explanations': [{'rule': 'source-consistent-example'}]},
+            'geometry': {'status': 'covered'},
+        }
+        self.assertEqual(
+            classify(record, {'status': 'review', 'counts': {'missing-occurrence': 2}})['category'],
+            'mixed-presentation-and-content-review',
+        )
+
     def test_artifact_selection_prefers_late_high_risk_and_distinct_corpora(self):
         def row(identity, priority):
             return {'status': 'review', 'identities': [{'id': identity}], 'triage': {'category': 'unexplained-content', 'priority': priority}}

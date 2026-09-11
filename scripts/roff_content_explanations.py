@@ -232,6 +232,24 @@ def _difference_weight(comparison: dict) -> int:
     return sum(comparison.get("counts", {}).values())
 
 
+def _eligible_for_secondary_projection(comparison: dict) -> bool:
+    """Permit presentation lenses when only the retained sample was capped.
+
+    Token totals, order alignment and control checks are still complete in that
+    case; only the serialized finding sample reached its bounded cap.  A
+    source/terminal projection may therefore quantify a lower residual, while
+    the raw counters and incomplete sample flag remain in the evidence.  Any
+    actual comparison coverage gap stays ineligible.
+    """
+    coverage = comparison.get("coverage", {})
+    reasons = set(coverage.get("reasons", ()))
+    return (
+        comparison.get("status") == "review"
+        and reasons <= {"finding-retention-budget"}
+        and not coverage.get("token_counts_are_lower_bounds", False)
+    )
+
+
 def _source_is_consistent_with_hyphen_reflows(source: str | None, *reflows) -> bool:
     """Require every rejoined spelling to occur enough times literally in source.
 
@@ -325,7 +343,7 @@ def assess_content(reference: str, mant: str, source: str | None, *,
     projection_used = False
     projection_counts = {"reference": 0, "mant": 0}
     terminal_source_consistent = False
-    if raw["status"] == "review" and raw["coverage"].get("complete", False):
+    if _eligible_for_secondary_projection(raw):
         # Inspect first so an unchanged page does not spend a second complete
         # comparison solely to establish that no terminal hyphen rule applies.
         reflows = {
@@ -342,8 +360,10 @@ def assess_content(reference: str, mant: str, source: str | None, *,
     compatibility = projection
     compatibility_evidence: list[dict] = []
     compatibility_used = False
-    if projection["status"] == "review" and projection["coverage"].get("complete", False):
-        projected_reference, compatibility_evidence = _source_consistent_compatibility_projection(reference, source)
+    if _eligible_for_secondary_projection(projection):
+        projected_reference, compatibility_evidence = _source_consistent_compatibility_projection(
+            visible_text(reference), source
+        )
         if compatibility_evidence:
             compatibility = compare_content(
                 projected_reference, mant, source, limits=limits,

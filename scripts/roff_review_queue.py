@@ -12,6 +12,10 @@ def plain_output_controls(text: str) -> dict:
             'characters': [{'codepoint': f'U+{ord(c):04X}', 'count': n} for c, n in sorted(bad.items())]}
 
 
+def _difference_weight(comparison: dict) -> int:
+    return sum(comparison.get('counts', {}).values())
+
+
 def classify(record: dict, residual: dict | None = None) -> dict:
     """Order investigation; names describe signals, not confirmed defects."""
     residual = record.get('content', {}) if residual is None else residual
@@ -35,6 +39,14 @@ def classify(record: dict, residual: dict | None = None) -> dict:
         # The raw content diff remains in evidence, but an incomplete header
         # or footer mask makes it unsafe to rank it as body-content loss.
         category, priority = 'frame-limited-content-coverage', 60
+    elif (residual.get('status') == 'review'
+          and record.get('contentAssessment', {}).get('explanations')
+          and _difference_weight(residual) < _difference_weight(record.get('content', {}))):
+        # A source-consistent secondary presentation lens removed part of the
+        # raw divergence, but an actual residual remains. Keep it reviewable
+        # without sending it to the same queue as unexplained whole-content
+        # failures; raw counts and the residual are both preserved.
+        category, priority = 'mixed-presentation-and-content-review', 70
     elif residual.get('status') == 'review':
         # Keep executable punctuation names in the higher tier. This ranking
         # does not authorize normalizing or discarding punctuation differences.
