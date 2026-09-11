@@ -373,7 +373,7 @@ fn collect_ast_structure(
                     profile.generic_list_items += direct_list_item_count(node);
                 }
             },
-            Some("IP") if ast_ip_is_bullet(node) => profile.generic_list_items += 1,
+            Some("IP" | "TP") if ast_tag_is_bullet(node) => profile.generic_list_items += 1,
             // `.TQ` only adds an alias to the next described `.TP` item.  It
             // intentionally has no standalone IR item.
             Some("TP" | "IP") if has_visible_definition_description(node) => {
@@ -620,7 +620,7 @@ fn mdoc_list_topology_kind(node: &Node) -> Option<MdocContainerKind> {
     })
 }
 
-fn ast_ip_is_bullet(node: &Node) -> bool {
+fn ast_tag_is_bullet(node: &Node) -> bool {
     let Some(head) = node
         .children
         .iter()
@@ -628,10 +628,20 @@ fn ast_ip_is_bullet(node: &Node) -> bool {
     else {
         return false;
     };
-    let Some(term) = head.children.first() else {
-        return false;
+    // man(7) prints an IP tag literally (CVS pre_IP / groff an.tmac).
+    // Only the authored named bullet is a list obligation; punctuation and
+    // editor keys such as `*` and `o` must not become fabricated expectations.
+    // IP's remaining head children are layout operands, not tag text.
+    let tag = if node.macro_name.as_deref() == Some("IP") {
+        let Some(tag) = head.children.first() else {
+            return false;
+        };
+        tag
+    } else {
+        head
     };
-    is_bullet_glyph(ast_visible_text(term).trim())
+    let term = strip_equation_font_escapes(&ast_visible_text(tag));
+    matches!(term.trim(), r"\[bu]" | r"\(bu")
 }
 
 fn has_visible_definition_description(node: &Node) -> bool {
@@ -657,11 +667,6 @@ fn ast_visible_text(node: &Node) -> String {
         text.push_str(&ast_visible_text(child));
     }
     text
-}
-
-fn is_bullet_glyph(value: &str) -> bool {
-    matches!(value, "o" | r"\[bu]" | r"\(bu")
-        || matches!(value.chars().collect::<Vec<_>>().as_slice(), [glyph] if !glyph.is_alphanumeric())
 }
 
 fn has_visible_flow_text(node: &Node) -> bool {
@@ -1448,6 +1453,33 @@ mod tests {
         NoFillSourceLine, equation_visible_text, is_no_fill_row_text, is_zero_width_guard_line,
         retained_no_fill_rows,
     };
+
+    #[test]
+    fn ip_list_obligations_require_complete_authored_named_bullets() {
+        let source = concat!(
+            ".TH AUDIT 1\n.SH BODY\n",
+            ".IP *\nStar key.\n.IP o\nLetter key.\n.IP +\nPlus key.\n",
+            ".IP \\(bu\nBullet.\n.IP \\fB\\[bu]\\fR\nStyled bullet.\n",
+            ".IP \\(buSuffix\nNot just a bullet.\n",
+            ".IP \\(bu 4\nIndented bullet.\n.TP\n\\(bu\nTagged bullet.\n",
+        );
+        let parsed = super::Parser::new(super::ParseOptions {
+            includes: super::IncludePolicy::Deny,
+            compression: super::Compression::Plain,
+        })
+        .parse_bytes("audit.1", source.as_bytes())
+        .unwrap();
+        let (expected, _) = super::ast_profile(&parsed.document.root);
+        assert_eq!(expected.generic_list_items, 4);
+        let mut violations = Vec::new();
+        super::underflow(
+            &mut violations,
+            "generic-list-items",
+            expected.generic_list_items,
+            0,
+        );
+        assert_eq!(violations.len(), 1, "losing named bullets must still fail");
+    }
 
     #[test]
     fn standalone_roff_font_switches_do_not_claim_visible_no_fill_lines() {

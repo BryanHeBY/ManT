@@ -265,11 +265,17 @@ fn collect_sections(sections: &[Section], parent: &[usize], topology: &mut Proje
         topology.sections.push(SectionTopology {
             path: path.clone(),
             depth: path.len() + 1,
-            title: section.heading.plain_text(),
+            title: projected_heading_title(&section.heading.plain_text()).to_owned(),
         });
         collect_blocks(&section.blocks, &path, &mut Vec::new(), topology);
         collect_sections(&section.children, &path, topology);
     }
+}
+
+fn projected_heading_title(title: &str) -> &str {
+    // The CommonMark encoder trims only ASCII boundary space/tab. Interior
+    // whitespace and authored nonbreaking spaces remain observable content.
+    title.trim_matches([' ', '\t'])
 }
 
 fn collect_blocks(
@@ -360,7 +366,7 @@ fn compare_topology(
     let mut violations = Vec::new();
     if expected.sections != observed.sections {
         violations.push(format!(
-            "{scope} sections: expected {}, observed {}",
+            "{scope} section topology or titles differ: expected {} sections, observed {}",
             expected.sections.len(),
             observed.sections.len()
         ));
@@ -589,4 +595,36 @@ fn sample_indexes(length: usize) -> Vec<usize> {
     indexes.sort_unstable();
     indexes.dedup();
     indexes
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn heading(title: &str) -> ProjectionTopology {
+        ProjectionTopology {
+            sections: vec![SectionTopology {
+                path: vec![1],
+                depth: 2,
+                title: projected_heading_title(title).to_owned(),
+            }],
+            ..ProjectionTopology::default()
+        }
+    }
+
+    #[test]
+    fn heading_projection_only_normalizes_ascii_boundary_whitespace() {
+        assert!(compare_topology("full", &heading(" \tTitle\t "), &heading("Title")).is_empty());
+        for (before, after) in [
+            ("A  B", "A B"),
+            ("A\tB", "A B"),
+            ("\u{a0}Title\u{a0}", "Title"),
+            ("Title", "Other"),
+        ] {
+            assert!(!compare_topology("full", &heading(before), &heading(after)).is_empty());
+        }
+        assert!(
+            !compare_topology("full", &heading("Title"), &ProjectionTopology::default()).is_empty()
+        );
+    }
 }
