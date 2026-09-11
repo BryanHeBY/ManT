@@ -690,6 +690,16 @@ still contain uncovered pages and pending candidates. Run the separate content
 and source-geometry census and reduced multi-width reader matrix below too;
 legacy layout scores alone do not establish exact indentation or blank rows.
 
+The two manifest-bound runners choose their default worker count from the
+effective CPU affinity/cgroup capacity, available memory (reserving 1 GiB per
+worker), and the soft file-descriptor limit, with a hard ceiling of 16. They
+also retain only two worker waves of page records at once. This makes a normal
+local full-corpus run use an appropriately wider parallel pass without turning
+the corpus into an unbounded in-memory queue. Pass `--workers N` (1 through
+16) only when intentionally overriding that host-local recommendation; use
+`--batch-size N` (1 through 64) to reduce retained per-wave evidence on a
+memory-constrained machine. Each result summary records the resolved plan.
+
 Use the independent rendering census after parser, lowering or reader geometry
 changes. Supply an explicitly built, **unpatched** fixed upstream mandoc; do not
 use the embedding crate's renderer as the only reference. Keep its source

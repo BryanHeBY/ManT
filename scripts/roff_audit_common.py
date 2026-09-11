@@ -12,10 +12,12 @@ from __future__ import annotations
 
 import argparse
 import bz2
+from dataclasses import dataclass, asdict
 import gzip
 import hashlib
 import json
 import lzma
+import math
 import os
 import re
 import shutil
@@ -28,6 +30,165 @@ from typing import Sequence
 MANUAL_SUFFIX = re.compile(
     r"\.(?P<section>[1-9][0-9A-Za-z]*|[ln])(?:\.(?:gz|bz2|xz|zst))?$"
 )
+
+# The renderer boundary gives every child a 1 GiB address-space ceiling.  That
+# is a containment limit, not a prediction of normal resident memory, so the
+# automatic worker count reserves the same amount per concurrent audit item.
+# It deliberately stays conservative on small CI containers while allowing a
+# local review host to use the cores it actually has.  An explicit --workers
+# remains available for an informed local override, up to the hard cap.
+MAX_AUDIT_WORKERS = 16
+AUDIT_WORKER_MEMORY_RESERVE = 1024 * 1024 * 1024
+AUDIT_FD_HEADROOM = 128
+AUDIT_FDS_PER_WORKER = 8
+
+
+@dataclass(frozen=True)
+class AuditParallelism:
+    """Resolved local audit concurrency and the bounded-resource inputs.
+
+    ``automaticWorkers`` is an advisory capacity, not a security guarantee:
+    source parsing and native renderers have their own per-process resource
+    limits, and an explicit command-line value intentionally overrides this
+    local recommendation.  Persisting the inputs makes a full-corpus result
+    reproducible enough to explain why two hosts chose different defaults.
+    """
+
+    workers: int
+    requestedWorkers: int | None
+    automaticWorkers: int
+    cpuLimit: int
+    memoryLimit: int | None
+    fileDescriptorLimit: int | None
+    hardLimit: int
+    explicitOverride: bool
+
+    def report(self) -> dict[str, int | bool | None]:
+        return asdict(self)
+
+
+def _read_text(path: Path) -> str | None:
+    try:
+        return path.read_text(encoding="ascii").strip()
+    except (OSError, UnicodeError):
+        return None
+
+
+def _positive_int(value: str | None) -> int | None:
+    if value is None:
+        return None
+    try:
+        parsed = int(value)
+    except ValueError:
+        return None
+    return parsed if parsed > 0 else None
+
+
+def audit_cpu_limit() -> int:
+    """Return the effective CPU capacity, honoring affinity and cgroup v2."""
+    try:
+        available = len(os.sched_getaffinity(0))
+    except (AttributeError, OSError):
+        available = os.cpu_count() or 1
+    cgroup = _read_text(Path("/sys/fs/cgroup/cpu.max"))
+    if cgroup:
+        fields = cgroup.split()
+        if len(fields) == 2 and fields[0] != "max":
+            quota, period = (_positive_int(field) for field in fields)
+            if quota is not None and period is not None:
+                available = min(available, max(1, math.ceil(quota / period)))
+    return max(1, available)
+
+
+def audit_memory_available() -> int | None:
+    """Return a conservative available-memory bound when this host exposes one."""
+    available = None
+    meminfo = _read_text(Path("/proc/meminfo"))
+    if meminfo:
+        for line in meminfo.splitlines():
+            field, _, value = line.partition(":")
+            if field != "MemAvailable":
+                continue
+            fields = value.split()
+            if fields:
+                kib = _positive_int(fields[0])
+                if kib is not None:
+                    available = kib * 1024
+            break
+    # cgroup v2 expresses a hard memory capacity separately from the current
+    # use.  A container may expose a large host MemAvailable while still being
+    # tightly capped, so take the smaller value when both observations exist.
+    maximum = _read_text(Path("/sys/fs/cgroup/memory.max"))
+    current = _positive_int(_read_text(Path("/sys/fs/cgroup/memory.current")))
+    limit = _positive_int(maximum) if maximum != "max" else None
+    if limit is not None:
+        cgroup_available = max(0, limit - (current or 0))
+        available = cgroup_available if available is None else min(available, cgroup_available)
+    return available
+
+
+def audit_file_descriptor_limit() -> int | None:
+    try:
+        import resource
+
+        limit, _ = resource.getrlimit(resource.RLIMIT_NOFILE)
+    except (ImportError, AttributeError, OSError):
+        return None
+    if limit == getattr(resource, "RLIM_INFINITY", limit):
+        return None
+    return int(limit) if limit > 0 else None
+
+
+def resolve_audit_parallelism(
+    requested_workers: int | None,
+    *,
+    hard_limit: int = MAX_AUDIT_WORKERS,
+    cpu_limit: int | None = None,
+    memory_available: int | None = None,
+    file_descriptor_limit: int | None = None,
+) -> AuditParallelism:
+    """Choose a bounded automatic worker count or validate an explicit one.
+
+    The worker owns one source plus sequential renderer/comparison children;
+    batching is resolved separately and never creates extra simultaneous
+    workers.  Explicit values preserve the old local tuning escape hatch, but
+    cannot exceed the shared hard cap.
+    """
+    if hard_limit < 1:
+        raise ValueError("parallelism hard limit must be positive")
+    if requested_workers is not None and not 1 <= requested_workers <= hard_limit:
+        raise ValueError(f"workers 1..{hard_limit} required")
+    cpu = max(1, cpu_limit if cpu_limit is not None else audit_cpu_limit())
+    memory = memory_available if memory_available is not None else audit_memory_available()
+    descriptors = file_descriptor_limit if file_descriptor_limit is not None else audit_file_descriptor_limit()
+    candidates = [hard_limit, cpu]
+    memory_workers = None
+    if memory is not None:
+        memory_workers = max(1, memory // AUDIT_WORKER_MEMORY_RESERVE)
+        candidates.append(memory_workers)
+    descriptor_workers = None
+    if descriptors is not None:
+        descriptor_workers = max(1, (descriptors - AUDIT_FD_HEADROOM) // AUDIT_FDS_PER_WORKER)
+        candidates.append(descriptor_workers)
+    automatic = max(1, min(candidates))
+    workers = requested_workers if requested_workers is not None else automatic
+    return AuditParallelism(
+        workers=workers,
+        requestedWorkers=requested_workers,
+        automaticWorkers=automatic,
+        cpuLimit=cpu,
+        memoryLimit=memory_workers,
+        fileDescriptorLimit=descriptor_workers,
+        hardLimit=hard_limit,
+        explicitOverride=requested_workers is not None and requested_workers != automatic,
+    )
+
+
+def default_audit_batch_size(workers: int, *, maximum: int = 64) -> int:
+    """Keep two waves of completed records without growing corpus-sized queues."""
+    if workers < 1 or maximum < 1:
+        raise ValueError("positive worker and batch limits required")
+    return min(maximum, workers * 2)
 
 
 def merge_clean_review_state(previous: str | None, status: str) -> str:

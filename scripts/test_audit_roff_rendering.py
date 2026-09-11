@@ -170,7 +170,7 @@ class RenderingCensusTests(unittest.TestCase):
                 output.mkdir()
                 args = argparse.Namespace(mant=mant, reference=reference, manifest=manifest, max_pages=None,
                     reference_id='fixed-test', output=output, workers=1, artifact_pages=0,
-                    width=80, timeout=1, verify=False)
+                    batch_size=1, parallelism={'workers': 1}, width=80, timeout=1, verify=False)
                 def inspect(_item, _args):
                     if state == 'changed':
                         decoder.write_bytes(b'changed binary identity')
@@ -336,7 +336,7 @@ class RenderingCensusTests(unittest.TestCase):
             output.mkdir()
             args = argparse.Namespace(mant=mant, reference=reference, manifest=manifest, max_pages=None,
                 reference_id='fixed-test', output=output, workers=1, artifact_pages=0,
-                width=80, timeout=1, verify=False)
+                batch_size=1, parallelism={'workers': 1}, width=80, timeout=1, verify=False)
 
             def inspect(_item, _args):
                 return {

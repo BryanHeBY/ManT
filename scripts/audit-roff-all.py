@@ -22,7 +22,11 @@ import shutil
 import subprocess
 import sys
 
-from roff_audit_common import run_bounded_profile_batch
+from roff_audit_common import (
+    default_audit_batch_size,
+    resolve_audit_parallelism,
+    run_bounded_profile_batch,
+)
 from roff_reference import reference_environment, run_renderer
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -67,15 +71,25 @@ def arguments(argv):
     parser.add_argument('--mandoc', required=True, type=Path)
     parser.add_argument('--groff', required=True, type=Path)
     parser.add_argument('--profiler-dir', required=True, type=Path)
-    parser.add_argument('--workers', type=int, default=2)
-    parser.add_argument('--batch-size', type=int, default=16)
+    parser.add_argument('--workers', type=int,
+                        help='Concurrent source/render passes; default is a CPU/memory/FD-aware local capacity (maximum 16)')
+    parser.add_argument('--batch-size', type=int,
+                        help='Sources per render/profile wave; default is twice the worker count')
     parser.add_argument('--timeout', type=positive, default=20)
     parser.add_argument('--batch-timeout', type=positive, default=120)
     parser.add_argument('--max-result-bytes', type=int, default=2 * 1024**3)
     parser.add_argument('--plan', action='store_true', help='validate and print plan; do not run audits')
     args = parser.parse_args(argv)
-    if not 1 <= args.workers <= 16 or not 1 <= args.batch_size <= 64 or args.max_result_bytes < 1024:
-        parser.error('workers 1..16, batch-size 1..64 and max-result-bytes >=1024 required')
+    try:
+        parallelism = resolve_audit_parallelism(args.workers)
+    except ValueError as error:
+        parser.error(str(error))
+    args.parallelism = parallelism.report()
+    args.workers = parallelism.workers
+    if args.batch_size is None:
+        args.batch_size = default_audit_batch_size(args.workers)
+    if not 1 <= args.batch_size <= 64 or args.max_result_bytes < 1024:
+        parser.error('batch-size 1..64 and max-result-bytes >=1024 required')
     args.output = args.output.resolve()
     if not args.output.is_relative_to(ROOT / 'target') or args.output == ROOT / 'target':
         parser.error('--output must be a new descendant of the repository target directory')
@@ -141,6 +155,7 @@ def plan(args):
               'physicalPages': len(inputs), 'logicalPages': sum(len(rows) for _, rows in inputs),
               'dimensions': list(DIMENSIONS), 'parameters': {key: getattr(args, key) for key in
                   ('workers', 'batch_size', 'timeout', 'batch_timeout', 'max_result_bytes')},
+              'parallelism': args.parallelism,
               'commands': {'mandoc': ['mandoc', '-T', 'utf8', '-O', 'width=200'],
                            'groff': ['groff', '-Kutf8', '-Tutf8', '-t', '-e', '-mandoc', '-rLL=200n', '-rLT=200n', '-I', 'EXACT_ROOT'],
                            'profiles': ['PROFILE', '< JSONL(id,path,root)']},

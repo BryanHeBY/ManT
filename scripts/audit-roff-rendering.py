@@ -28,6 +28,7 @@ import sys
 
 from roff_content_compare import compare_content
 from roff_content_explanations import assess_content
+from roff_audit_common import default_audit_batch_size, resolve_audit_parallelism
 from roff_layout_geometry import compare_layout_geometry
 from roff_reference import MAX_INPUT_BYTES, reference_environment, run_renderer
 from roff_rendering_frame import prepare_frame
@@ -301,13 +302,28 @@ def main():
     parser.add_argument("--output", type=Path, required=True, help="New evidence directory")
     parser.add_argument("--width", type=int, default=200)
     parser.add_argument("--timeout", type=float, default=15)
-    parser.add_argument("--workers", type=int, default=4)
+    parser.add_argument(
+        "--workers", type=int,
+        help="Concurrent pages; default is a CPU/memory/FD-aware local capacity (maximum 16)",
+    )
+    parser.add_argument(
+        "--batch-size", type=int,
+        help="Completed-page records retained per scheduling wave; default is twice the worker count",
+    )
     parser.add_argument("--max-pages", type=int)
     parser.add_argument("--artifact-pages", type=int, default=32, help='Risk-ranked category/corpus representatives, under a shared 64 MiB raw-artifact cap')
     parser.add_argument("--verify", action="store_true", help="Also fail on candidates or incomplete coverage")
     args = parser.parse_args()
-    if not 1 <= args.workers <= 4 or not 20 <= args.width <= 1000 or not math.isfinite(args.timeout) or args.timeout <= 0:
-        parser.error("workers 1..4, width 20..1000, and positive timeout required")
+    try:
+        parallelism = resolve_audit_parallelism(args.workers)
+    except ValueError as error:
+        parser.error(str(error))
+    args.parallelism = parallelism.report()
+    args.workers = parallelism.workers
+    if args.batch_size is None:
+        args.batch_size = default_audit_batch_size(args.workers)
+    if not 1 <= args.batch_size <= 64 or not 20 <= args.width <= 1000 or not math.isfinite(args.timeout) or args.timeout <= 0:
+        parser.error("batch-size 1..64, width 20..1000, and positive timeout required")
     if args.artifact_pages < 0 or (args.max_pages is not None and args.max_pages < 1):
         parser.error("invalid page budget")
     args.output.mkdir(parents=True, exist_ok=False)
@@ -354,7 +370,9 @@ def census(args, report):
                   "roff_content_compare.py", "roff_layout_geometry.py", "roff_rendering_frame.py",
                   "roff_reference.py", "roff_content_explanations.py", "roff_review_queue.py", "audit-roff-rendering.py")},
               "parameters": {key: str(value) if isinstance(value, Path) else value
-                             for key, value in vars(args).items() if not key.startswith("_")},
+                             for key, value in vars(args).items()
+                             if not key.startswith("_") and key != "parallelism"},
+              "parallelism": args.parallelism,
               "physicalPages": len(inputs), "logicalPages": sum(len(rows) for _, rows in inputs),
               "environment": reference_environment()})
     counts, dimensions, triage_counts, explained_counts = Counter(), Counter(), Counter(), Counter()
@@ -365,8 +383,8 @@ def census(args, report):
     with (args.output / "results.jsonl").open("w", encoding="utf-8") as stream, ThreadPoolExecutor(args.workers) as pool:
         # Executor.map preserves source order, but eagerly submits all futures.
         # Batches bound queued rendered output independently of corpus size.
-        for start in range(0, len(inputs), args.workers * 4):
-            for record, artifacts in pool.map(lambda item: inspect(item, args), inputs[start:start + args.workers * 4]):
+        for start in range(0, len(inputs), args.batch_size):
+            for record, artifacts in pool.map(lambda item: inspect(item, args), inputs[start:start + args.batch_size]):
                 record.setdefault('triage', classify(record))
                 residual = record.get("contentAssessment", {}).get(
                     "residualComparison", record.get("content", {})
@@ -396,8 +414,8 @@ def census(args, report):
                 stream.write(json.dumps(record, ensure_ascii=False, separators=(",", ":")) + "\n")
                 report["statusCounts"] = dict(counts)
             stream.flush()
-            if start % (args.workers * 4 * 16) == 0:
-                print(f"{min(start + args.workers * 4, len(inputs))}/{len(inputs)} physical pages: {dict(counts)}", flush=True)
+            if start % (args.batch_size * 16) == 0:
+                print(f"{min(start + args.batch_size, len(inputs))}/{len(inputs)} physical pages: {dict(counts)}", flush=True)
     artifact_index = []
     for item in selection.selected():
         record = item['record']

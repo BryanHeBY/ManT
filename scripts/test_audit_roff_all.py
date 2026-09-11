@@ -105,7 +105,7 @@ class AllAuditTests(unittest.TestCase):
     def test_plan_freezes_resolved_zstd_and_explicitly_records_absence(self):
         args = argparse.Namespace(mant=Path('/bin/mant'), mandoc=Path('/bin/mandoc'), groff=Path('/bin/groff'),
             profiler_dir=Path('/profiles'), _manifest_sha256='manifest', workers=1, batch_size=1,
-            timeout=1, batch_timeout=1, max_result_bytes=4096)
+            timeout=1, batch_timeout=1, max_result_bytes=4096, parallelism={'workers': 1})
         for decoder in (Path('/resolved/zstd'), None):
             with patch.object(AUDIT.SOURCES, 'census_inputs', return_value=[('/input', [{'id': 'one'}])]), \
                  patch.object(AUDIT.SOURCES, 'ZSTD_BINARY', decoder), \
