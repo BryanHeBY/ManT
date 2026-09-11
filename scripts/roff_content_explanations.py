@@ -47,6 +47,60 @@ _BR_MANUAL_REFERENCE = re.compile(
 _TERMINAL_MANUAL_REFERENCE = re.compile(r"([A-Za-z0-9_.:+-]+) \(([1-9][A-Za-z0-9]*)\)")
 _MDOC_REQUEST = re.compile(r"^[.']([A-Za-z][A-Za-z0-9]*)(?:[ \t]+(.*))?$")
 _MDOC_LITERAL_COLUMN_SEPARATOR = " | "
+_MAN_UR = re.compile(r"^[.']UR[ \t]+([^ \t]+)[ \t]*$")
+_MAN_UR_DYNAMIC_ESCAPE = re.compile(r"\\(?:\*|n|g|V|\$|\[|\()")
+_MAN_UR_LITERAL_ESCAPES = {
+    r"\:": ":",
+    r"\-": "-",
+    r"\%": "",
+    r"\&": "",
+}
+_AUDIT_DYNAMIC_REQUESTS = {
+    "als", "am", "cc", "c2", "de", "di", "ds", "ec", "el", "ie", "if", "ig",
+    "mso", "nr", "rm", "rn", "so", "soquiet", "tr", "wh",
+}
+
+
+def _literal_man_ur_targets(source: str) -> Counter[str] | None:
+    """Return direct GNU man-ext ``.UR`` targets, or decline unsafe source.
+
+    CVS ``man_term.c:post_UR`` deliberately writes angle brackets around the
+    head target of every ``UR`` block.  ManT keeps the same typed target but
+    chooses its own compact link presentation.  This small source model proves
+    only literal, single-token heads; it refuses roff execution that could
+    change source syntax or expand the target before the native parser sees it.
+    """
+    targets: Counter[str] = Counter()
+    for raw in source.splitlines():
+        if raw.endswith("\\"):
+            return None
+        match = _REQUEST.fullmatch(raw)
+        if match is not None and match[1].lower() in _AUDIT_DYNAMIC_REQUESTS:
+            return None
+        match = _MAN_UR.fullmatch(raw)
+        if match is None:
+            continue
+        target = match[1]
+        if _MAN_UR_DYNAMIC_ESCAPE.search(target):
+            return None
+        for escaped, visible in _MAN_UR_LITERAL_ESCAPES.items():
+            target = target.replace(escaped, visible)
+        if "\\" in target or not target:
+            return None
+        targets[target] += 1
+    return targets or None
+
+
+def _replace_limited(text: str, original: str, replacement: str, limit: int) -> tuple[str, int]:
+    """Replace at most ``limit`` exact display spellings without broadening scope."""
+    if limit <= 0:
+        return text, 0
+    parts = text.split(original)
+    available = len(parts) - 1
+    count = min(available, limit)
+    if count == 0:
+        return text, 0
+    return replacement.join(parts[:count + 1]) + original.join(parts[count + 1:]), count
 
 
 def _literal_mdoc_column_separator_count(source: str) -> int | None:
@@ -392,6 +446,29 @@ def _source_consistent_compatibility_projection(reference: str, mant: str,
             "referenceReferences": replacements,
             "reason": "Literal .BR name (section) source cells are consistent with CVS terminal spacing and ManT's atomic manual-reference presentation.",
         })
+
+    ur_targets = _literal_man_ur_targets(source)
+    if ur_targets is not None:
+        reference_replacements = 0
+        mant_replacements = 0
+        for target, limit in ur_targets.items():
+            projected_reference, count = _replace_limited(
+                projected_reference, f"<{target}>", target, limit
+            )
+            reference_replacements += count
+            projected_mant, count = _replace_limited(
+                projected_mant, f"⟨{target}⟩", target, limit
+            )
+            mant_replacements += count
+        if reference_replacements:
+            evidence.append({
+                "rule": "source-consistent-man-UR-target-delimiters/v1",
+                "sourceTargets": sum(ur_targets.values()),
+                "referenceDelimiters": reference_replacements,
+                "mantDelimiters": mant_replacements,
+                "reason": "Literal GNU man-ext .UR targets are bracketed by CVS man_term.c:post_UR while ManT preserves the same typed URI with compact link presentation.",
+            })
+
     column_separators = _literal_mdoc_column_separator_count(source)
     # Source text, CVS output, and the product output must agree on the
     # *complete* separator inventory.  This makes it impossible for this

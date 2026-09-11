@@ -255,6 +255,39 @@ class ExplanationTests(unittest.TestCase):
         self.assertEqual(result['compatibilityPresentationComparison']['status'], 'covered')
         self.assertEqual(result['explanations'][0]['rule'], 'source-consistent-BR-manual-reference-spacing/v1')
 
+    def test_literal_man_UR_target_delimiters_are_source_consistent_presentation(self):
+        source = '.TH PROBE 1\n.UR https\\://example.test/a\\-b\n.UE .\n'
+        result = assess_content(
+            '<https://example.test/a-b>.\n',
+            'https://example.test/a-b.\n',
+            source,
+        )
+        self.assertEqual(result['status'], 'explained')
+        self.assertEqual(result['rawComparison']['status'], 'review')
+        self.assertEqual(result['compatibilityPresentationComparison']['status'], 'covered')
+        self.assertEqual(
+            result['explanations'][0]['rule'],
+            'source-consistent-man-UR-target-delimiters/v1',
+        )
+
+    def test_man_UR_projection_preserves_labels_and_rejects_dynamic_targets(self):
+        source = '.TH PROBE 1\n.UR https\\://example.test/a\nlabel\n.UE\n'
+        result = assess_content(
+            'label <https://example.test/a>\n',
+            'label ⟨https://example.test/a⟩\n',
+            source,
+        )
+        self.assertEqual(result['status'], 'explained')
+        for dynamic in ('.ds url https://example.test/a\n', '.UR \\*[url]\n.UE\n'):
+            with self.subTest(dynamic=dynamic):
+                result = assess_content(
+                    '<https://example.test/a>\n',
+                    'https://example.test/a\n',
+                    '.TH PROBE 1\n' + dynamic,
+                )
+                self.assertNotEqual(result['status'], 'explained')
+                self.assertFalse(result['coverage']['sourceConsistentCompatibilityApplied'])
+
     def test_literal_mdoc_column_table_separators_are_source_consistent_presentation(self):
         source = '''.Dd September 11, 2026
 .Dt PROBE 1
