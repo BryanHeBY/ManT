@@ -255,6 +255,58 @@ class ExplanationTests(unittest.TestCase):
         self.assertEqual(result['compatibilityPresentationComparison']['status'], 'covered')
         self.assertEqual(result['explanations'][0]['rule'], 'source-consistent-BR-manual-reference-spacing/v1')
 
+    def test_literal_mdoc_column_table_separators_are_source_consistent_presentation(self):
+        source = '''.Dd September 11, 2026
+.Dt PROBE 1
+.Os
+.Bl -column "left" "right"
+.It Sy "Left" Ta Sy "Right"
+.It alpha Ta beta
+.El
+'''
+        result = assess_content('Left Right\nalpha beta\n',
+                                'Left | Right\nalpha | beta\n', source)
+        self.assertEqual(result['status'], 'explained')
+        self.assertEqual(result['rawComparison']['status'], 'review')
+        self.assertEqual(result['compatibilityPresentationComparison']['status'], 'covered')
+        self.assertEqual(result['explanations'][0]['rule'],
+                         'source-consistent-mdoc-column-table-separators/v1')
+
+    def test_column_separator_projection_permits_zero_width_no_call_escapes(self):
+        source = '''.ds kept preamble
+.Bl -column left right
+.It "\\&left" Ta "\\&right"
+.El
+'''
+        result = assess_content('left right\n', 'left | right\n', source)
+        self.assertEqual(result['status'], 'explained')
+
+    def test_column_separator_projection_refuses_ambiguous_or_incomplete_sources(self):
+        valid = '''.Bl -column left right
+.It left Ta right
+.El
+'''
+        cases = [
+            valid.replace('.It left Ta right', '.It left Ta right\\*[unsafe]'),
+            valid.replace('.It left Ta right', '.It left "Ta" right'),
+            valid.replace('.El', '.Bl -bullet\n.It nested\n.El\n.El'),
+            valid.replace('.It left Ta right', '.if 1 .It left Ta right'),
+            valid.replace('.El', '.El\ntext | literal'),
+        ]
+        for source in cases:
+            with self.subTest(source=source):
+                result = assess_content('left right\n', 'left | right\n', source)
+                self.assertEqual(result['status'], 'review')
+                self.assertFalse(result['coverage']['sourceConsistentCompatibilityApplied'])
+
+    def test_column_separator_projection_requires_an_exact_output_inventory(self):
+        source = '.Bl -column left right\n.It left Ta right\n.El\n'
+        for mant in ('left | right | literal\n', 'left right\n'):
+            with self.subTest(mant=mant):
+                result = assess_content('left right\n', mant, source)
+                self.assertNotEqual(result['status'], 'explained')
+                self.assertFalse(result['coverage']['sourceConsistentCompatibilityApplied'])
+
     def test_compatibility_projection_requires_direct_source_evidence(self):
         for source, reference, mant in [
             ('plain prose\n', '• BODY\n', '- BODY\n'),

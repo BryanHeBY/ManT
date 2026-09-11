@@ -34,7 +34,7 @@ from roff_content_compare import (
 
 SCHEMA = "mant.roff-content-explanations/v1"
 RULE = "mdoc-literal-NAME-generated-Nd-separator/v1"
-ASSESSMENT_SCHEMA = "mant.roff-content-assessment/v2"
+ASSESSMENT_SCHEMA = "mant.roff-content-assessment/v3"
 TERMINAL_HYPHEN_RULE = "cvs-terminal-breakable-hyphen/v1"
 _REQUEST = re.compile(r"^\.([A-Za-z]+)(?:[ \t]+(.*))?$")
 _ARGUMENT = re.compile(r'"([^"\n]*)"|([^ \t"\n]+)')
@@ -45,6 +45,75 @@ _BR_MANUAL_REFERENCE = re.compile(
     re.MULTILINE,
 )
 _TERMINAL_MANUAL_REFERENCE = re.compile(r"([A-Za-z0-9_.:+-]+) \(([1-9][A-Za-z0-9]*)\)")
+_MDOC_REQUEST = re.compile(r"^[.']([A-Za-z][A-Za-z0-9]*)(?:[ \t]+(.*))?$")
+_MDOC_LITERAL_COLUMN_SEPARATOR = " | "
+
+
+def _literal_mdoc_column_separator_count(source: str) -> int | None:
+    """Count a deliberately small, non-executing subset of mdoc column cells.
+
+    ManT's portable text renderer deliberately joins dense IR table cells with
+    ``" | "`` while CVS terminal output aligns those cells with spaces.  This
+    is presentation, but arbitrary ``|`` text is content.  Only accept a page
+    when each expected separator comes from a literal ``.Bl -column`` / ``.It
+    ... Ta ...`` stream: no nested list, macro mutation, continuation, or
+    standalone text is interpreted here.  Callers must still require the
+    exact resulting separator count before changing a comparison view.
+    """
+    if source.count(_MDOC_LITERAL_COLUMN_SEPARATOR):
+        return None
+    stack: list[bool] = []
+    separators = 0
+    unsafe = {"als", "am", "cc", "c2", "de", "di", "ds", "ec", "if", "ie", "el", "ig", "mso", "nr", "rm", "rn", "so", "soquiet", "tr"}
+    for raw in source.splitlines():
+        if raw.endswith("\\"):
+            return None
+        match = _MDOC_REQUEST.fullmatch(raw)
+        if match is None:
+            # Raw text inside a column list can be a valid cell continuation,
+            # but then the short source model cannot bind its row separators.
+            if stack and stack[-1]:
+                return None
+            continue
+        request, payload = match[1], match[2] or ""
+        if request == "Bl":
+            if stack:
+                # Nested list/table cells need full mdoc execution to map
+                # their separator ownership.  Refuse rather than guess.
+                return None
+            options = payload.split()
+            stack.append("-column" in options)
+            continue
+        if request == "El":
+            if not stack:
+                return None
+            stack.pop()
+            continue
+        if stack and stack[-1] and request.lower() in unsafe:
+            return None
+        if not stack or not stack[-1]:
+            continue
+        if request != "It":
+            return None
+        # A quoted ``Ta`` is literal text; this simple scanner therefore
+        # counts only whitespace-delimited, unquoted macro words.  ``\\&`` is
+        # mdoc's zero-width, no-call escape and cannot create or consume a
+        # macro word; other escapes can, so decline those rows altogether.
+        payload = payload.replace("\\&", "")
+        if "\\" in payload:
+            return None
+        quoted = False
+        words: list[tuple[str, bool]] = []
+        for word in payload.split():
+            if word.startswith('"'):
+                quoted = True
+            words.append((word.strip('"'), quoted))
+            if word.endswith('"'):
+                quoted = False
+        if quoted:
+            return None
+        separators += sum(1 for word, was_quoted in words if word == "Ta" and not was_quoted)
+    return separators if not stack and separators else None
 
 
 @dataclass(frozen=True)
@@ -270,8 +339,9 @@ def _source_is_consistent_with_hyphen_reflows(source: str | None, *reflows) -> b
     return all(source.count(term) >= count for term, count in occurrences.items())
 
 
-def _source_consistent_compatibility_projection(reference: str, source: str | None) -> tuple[str, list[dict]]:
-    """Apply two deliberately narrow, source-consistent display projections.
+def _source_consistent_compatibility_projection(reference: str, mant: str,
+                                                source: str | None) -> tuple[str, str, list[dict]]:
+    """Apply narrow, source-consistent display projections to each renderer.
 
     These model known terminal compatibility policy rather than roff execution:
     direct ``\\(bu``/``\\[bu]`` markers render as a terminal bullet while ManT's
@@ -282,14 +352,15 @@ def _source_consistent_compatibility_projection(reference: str, source: str | No
     this helper is never a semantic acceptance path.
     """
     if source is None:
-        return reference, []
-    result = reference
+        return reference, mant, []
+    projected_reference = reference
+    projected_mant = mant
     evidence: list[dict] = []
 
     bullet_count = len(_BULLET_ESCAPE.findall(source))
-    reference_bullets = result.count("•")
+    reference_bullets = projected_reference.count("•")
     if bullet_count and reference_bullets and reference_bullets <= bullet_count:
-        result = result.replace("•", "-")
+        projected_reference = projected_reference.replace("•", "-")
         evidence.append({
             "rule": "source-consistent-explicit-bullet-marker/v1",
             "sourceMarkers": bullet_count,
@@ -311,7 +382,9 @@ def _source_consistent_compatibility_projection(reference: str, source: str | No
         return f"{pair[0]}({pair[1]})"
 
     if authored:
-        result = _TERMINAL_MANUAL_REFERENCE.sub(replace_manual_reference, result)
+        projected_reference = _TERMINAL_MANUAL_REFERENCE.sub(
+            replace_manual_reference, projected_reference
+        )
     if replacements:
         evidence.append({
             "rule": "source-consistent-BR-manual-reference-spacing/v1",
@@ -319,7 +392,21 @@ def _source_consistent_compatibility_projection(reference: str, source: str | No
             "referenceReferences": replacements,
             "reason": "Literal .BR name (section) source cells are consistent with CVS terminal spacing and ManT's atomic manual-reference presentation.",
         })
-    return result, evidence
+    column_separators = _literal_mdoc_column_separator_count(source)
+    # Source text, CVS output, and the product output must agree on the
+    # *complete* separator inventory.  This makes it impossible for this
+    # presentation lens to erase a literal pipe or a partially lowered table.
+    if (column_separators is not None
+            and projected_reference.count(_MDOC_LITERAL_COLUMN_SEPARATOR) == 0
+            and projected_mant.count(_MDOC_LITERAL_COLUMN_SEPARATOR) == column_separators):
+        projected_mant = projected_mant.replace(_MDOC_LITERAL_COLUMN_SEPARATOR, " ")
+        evidence.append({
+            "rule": "source-consistent-mdoc-column-table-separators/v1",
+            "sourceSeparators": column_separators,
+            "mantSeparators": column_separators,
+            "reason": "A literal, non-nested mdoc Bl -column stream has one Ta per ManT portable-text separator; CVS terminal alignment presents the same cell boundaries as spacing.",
+        })
+    return projected_reference, projected_mant, evidence
 
 
 def assess_content(reference: str, mant: str, source: str | None, *,
@@ -333,7 +420,8 @@ def assess_content(reference: str, mant: str, source: str | None, *,
     compound words as well as URIs.  Every candidate spelling must occur
     literally enough times in source.  This is consistency evidence rather
     than an execution proof: no roff execution, punctuation folding, table
-    masking, or product-output mutation is performed.  The raw comparison is
+    cell-content normalization, or product document-output mutation is
+    performed.  The raw comparison is
     always retained verbatim; callers must use it for acceptance and
     regression evidence.
     """
@@ -361,12 +449,12 @@ def assess_content(reference: str, mant: str, source: str | None, *,
     compatibility_evidence: list[dict] = []
     compatibility_used = False
     if _eligible_for_secondary_projection(projection):
-        projected_reference, compatibility_evidence = _source_consistent_compatibility_projection(
-            visible_text(reference), source
+        projected_reference, projected_mant, compatibility_evidence = _source_consistent_compatibility_projection(
+            visible_text(reference), visible_text(mant), source
         )
         if compatibility_evidence:
             compatibility = compare_content(
-                projected_reference, mant, source, limits=limits,
+                projected_reference, projected_mant, source, limits=limits,
                 terminal_hyphen_wraps=projection_used,
             )
             compatibility_used = _difference_weight(compatibility) < _difference_weight(projection)
