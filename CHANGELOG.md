@@ -27,6 +27,11 @@ that crate was not published for that change.
   Output capture, UTF-8 width, limits and concurrent isolation remain supported.
   Update native-renderer golden output deliberately; this is not a change to
   ManT's own text/TUI renderer or its versioned document contracts.
+- Follow upstream's deliberate removal of the nonportable `.St -xsh4.2`
+  alias (`st.c` revision 1.17, 2022-01-13). It now emits an `unknown standard
+  specifier` error diagnostic instead of generating the old standard text.
+  Migrate sources to the supported, portable `.St -xpg4.2`; the old alias is
+  not restored locally.
 - Restack local changes into independent upstream-candidate fixes and explicit
   embedding policies. The active vendor source may be a pinned release or CVS
   snapshot; Git history owns earlier baselines, not parallel patch stacks.

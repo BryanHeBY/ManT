@@ -207,7 +207,7 @@ write to the process's `stdout`. `render_file`, `render_bytes`, and
 Reference output follows the pinned CVS formatter: its default terminal body
 indent is five columns, and HTML uses semantic section containers and
 accessible document structure. These native reference bytes are distinct from
-ManT's source-neutral text and TUI layout. The owned public AST shape and the
+`ManT`'s source-neutral text and TUI layout. The owned public AST shape and the
 source, include, output-budget, and session-isolation contracts are unchanged
 by the baseline selection. `LIBMANDOC_VERSION` reports `cvs-20260911`.
 
@@ -252,6 +252,14 @@ patches applied. `upstream/SOURCE` pins the checkout; `upstream/FILES`
 records the SHA-256 and CVS revision of each of the 198 upstream files.
 End-user `cargo build` compiles this tree directly; no network access,
 CVS client, or external patch tool is required.
+
+The pinned baseline intentionally no longer recognizes `.St -xsh4.2`.
+Migrate that nonportable alias to `.St -xpg4.2`. The former produces an
+`unknown standard specifier` error diagnostic and no generated standard text;
+the replacement expands to the X/Open Portability Guide, Issue 4, Version 2.
+This follows upstream `st.c` revision 1.17 (2022-01-13): the portable spelling
+already existed, and groff never supported `-xsh4.2`. No compatibility alias is
+reintroduced by this crate.
 
 The local thread-safety patch moves remaining mutable parser-global slots in
 the compiled libmandoc subset into static thread-local storage. It uses C11 TLS
