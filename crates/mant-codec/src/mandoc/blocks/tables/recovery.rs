@@ -143,6 +143,8 @@ impl CellCandidate {
     }
 }
 
+/// `Some`, including an empty vector, is decoded native/recovered content.
+/// `None` means no usable payload was available and source fallback may apply.
 pub(super) fn lower_table_cell(
     cell: &libmandoc_rs::TableCell,
     position: CellPosition<'_>,
@@ -151,7 +153,7 @@ pub(super) fn lower_table_cell(
     text_block: Option<&TableTextBlock>,
     semantic_nodes: &[&Node],
     formatter: &mut crate::mandoc::formatter::FormatterState,
-) -> Vec<Inline> {
+) -> Option<Vec<Inline>> {
     if let Some(text_block) = text_block {
         let initial_state = *formatter;
         let diagnostic_start = context.diagnostics.borrow().len();
@@ -185,9 +187,9 @@ pub(super) fn lower_table_cell(
                     .extend(candidate_diagnostics);
                 *formatter = initial_state;
                 if let Some(text) = cell.text.as_deref().filter(|text| !text.is_empty()) {
-                    return lower_table_cell_text(text, node.line, context, formatter);
+                    return Some(lower_table_cell_text(text, node.line, context, formatter));
                 }
-                return context.lower_text(&text_block.source, formatter);
+                return Some(context.lower_text(&text_block.source, formatter));
             }
         };
         let candidate = CellCandidate {
@@ -196,20 +198,20 @@ pub(super) fn lower_table_cell(
             diagnostics: candidate_diagnostics,
         };
         if candidate.belongs_to(cell, position) {
-            return candidate.commit(context, formatter);
+            return Some(candidate.commit(context, formatter));
         }
         *formatter = initial_state;
     }
     if cell.text.as_deref().is_some_and(|text| !text.is_empty()) {
-        return lower_table_cell_text(
+        return Some(lower_table_cell_text(
             cell.text.as_deref().unwrap_or_default(),
             node.line,
             context,
             formatter,
-        );
+        ));
     }
     if !cell.text_block {
-        return Vec::new();
+        return None;
     }
 
     let request = text_block.and_then(|block| {
@@ -238,11 +240,11 @@ pub(super) fn lower_table_cell(
             }
         });
     if let Some(children) = name.filter(|children| !children.is_empty()) {
-        return vec![Inline::Strong { children }];
+        return Some(vec![Inline::Strong { children }]);
     }
 
     context.warn_unhandled_table_text_block(node);
-    Vec::new()
+    None
 }
 
 fn table_text_agrees(reconstructed: &str, parsed: &str) -> bool {
@@ -429,7 +431,11 @@ mod tests {
                 &[],
                 &mut state,
             );
-            assert_eq!(plain_text(&result), expected_text, "{source}");
+            assert_eq!(
+                plain_text(&result.expect("decoded cell")),
+                expected_text,
+                "{source}"
+            );
             assert_eq!(state.spacing, expected_spacing, "{source}");
             assert_eq!(state, expected, "{source}");
         }
@@ -481,7 +487,7 @@ mod tests {
                 &mut crate::mandoc::formatter::FormatterState::default(),
             );
             assert_eq!(
-                plain_text(&inlines),
+                plain_text(&inlines.expect("complete fallback payload")),
                 native
                     .filter(|text| !text.is_empty())
                     .unwrap_or(&block.source)

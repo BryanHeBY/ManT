@@ -10,6 +10,40 @@ fn man(body: &str) -> mant_ir::Document {
 }
 
 #[test]
+fn decoded_empty_table_cells_do_not_recover_control_spelling_as_content() {
+    // Native tbl retains these strings; tbl_term passes them to term_word,
+    // where IGNORE/font/motion controls successfully emit no visible glyph.
+    for payload in [r"\&", r"\fB", r"\h'0'"] {
+        let document = man(&format!(".TS\nl l l.\nLEFT\t{payload}\tRIGHT\n.TE"));
+        let [Block::Table { rows, .. }] = document.sections[0].blocks.as_slice() else {
+            panic!("table: {document:?}")
+        };
+        assert_eq!(rows[0].cells.len(), 3);
+        let [Block::Paragraph { children, .. }] = rows[0].cells[1].blocks.as_slice() else {
+            panic!("decoded empty cell")
+        };
+        assert!(children.is_empty(), "{payload}: {children:?}");
+        assert!(!document.diagnostics.iter().any(|diagnostic| {
+            diagnostic.code.as_deref() == Some("manual.unexpanded-table-cell")
+        }));
+    }
+}
+
+#[test]
+fn escaped_literal_backslash_cells_are_not_decoded_a_second_time() {
+    for payload in [r"\e&", r"\\&"] {
+        let document = man(&format!(".TS\nl l l.\nLEFT\t{payload}\tRIGHT\n.TE"));
+        let [Block::Table { rows, .. }] = document.sections[0].blocks.as_slice() else {
+            panic!("table: {document:?}")
+        };
+        let [Block::Paragraph { children, .. }] = rows[0].cells[1].blocks.as_slice() else {
+            panic!("literal cell")
+        };
+        assert_eq!(inline_text(children), r"\&", "{payload}");
+    }
+}
+
+#[test]
 fn horizontal_spans_keep_following_cells_in_the_same_logical_column() {
     let document = man(".TS\nl s l\nl l l.\nTOPSPAN\tRIGHT\nLEFT\tMIDDLE\tEND\n.TE");
     let query = ResolvedContent {

@@ -66,13 +66,14 @@ pub(super) fn append_table_row(
                             embedding.map_or(&[], |embedding| embedding.nodes.as_slice()),
                             formatter,
                         );
-                        if lowered.is_empty()
-                            && text_block.is_none()
-                            && raw_source.is_some_and(|source| !source.is_empty())
-                        {
-                            lower_missing_table_cell(raw_source, node, context, formatter)
-                        } else {
-                            lowered
+                        match lowered {
+                            // A successfully decoded control-only cell is
+                            // empty, not missing source that needs recovery.
+                            Some(inlines) => inlines,
+                            None if text_block.is_none() => {
+                                lower_missing_table_cell(raw_source, node, context, formatter)
+                            }
+                            None => Vec::new(),
                         }
                     } else {
                         lower_missing_table_cell(raw_source, node, context, formatter)
