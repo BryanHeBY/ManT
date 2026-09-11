@@ -150,7 +150,7 @@ checksum = "f9f8bd3e56ce4dfc153cf470fffbfa98c7620958b312ca5c3a4b8d5181fd13c6"
 
 [[package]]
 name = "mant-codec"
-version = "0.11.0"
+version = "0.11.1"
 dependencies = [
  "mant-ir",
  "pulldown-cmark",
@@ -170,7 +170,7 @@ dependencies = [
 
 [[package]]
 name = "mant-loader"
-version = "0.11.0"
+version = "0.11.1"
 dependencies = [
  "grep-matcher",
  "grep-regex",
