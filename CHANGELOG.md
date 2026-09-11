@@ -12,6 +12,19 @@ that crate was not published for that change.
 
 ## Unreleased
 
+No compatibility changes are pending beyond the prepared releases below.
+
+## 0.11.0 - 2026-09-11
+
+This release prepares `mant-ir`, `mant-protocol`, `mant-codec`, `mant-loader`,
+`mant-query`, `mant-render`, `mant-engine`, `mant-ui`, and `mant` at `0.11.0`,
+`libmandoc-rs` at `0.10.0`, and `mant-sources` at `0.9.3`. These are independent
+crate versions, not a return to lockstep publication. The v0.11 development
+notes below describe the changes consolidated into this release; intermediate
+unpublished APIs and schemas are not compatibility baselines. The final
+checked-in v0.11 contracts supersede those intermediate forms, while published
+v0.10 and earlier schema snapshots remain unchanged.
+
 - `mant` exposes independent `roff`, `tui`, `pager`, `mcp`, and `update` Cargo
   features, all enabled by default. Minimal builds retain direct Markdown and
   cached-tldr queries, schemas and offline inspection; disabled execution flags
