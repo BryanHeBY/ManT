@@ -244,7 +244,26 @@ class ExplanationTests(unittest.TestCase):
         self.assertEqual(result['status'], 'explained')
         self.assertEqual(result['rawComparison']['status'], 'review')
         self.assertEqual(result['compatibilityPresentationComparison']['status'], 'covered')
-        self.assertEqual(result['explanations'][0]['rule'], 'source-consistent-explicit-bullet-marker/v1')
+        self.assertEqual(result['explanations'][0]['rule'], 'source-consistent-bullet-list-marker/v2')
+
+    def test_literal_mdoc_bullet_list_is_a_source_consistent_compatibility_projection(self):
+        source = '.Dd July 1, 2026\n.Bl -bullet -compact\n.It\nfirst\n.Bl -bullet\n.It\ninner\n.El\n.It\nlast\n.El\n'
+        result = assess_content('• first\n• inner\n• last\n', '- first\n- inner\n- last\n', source)
+        self.assertEqual(result['status'], 'explained')
+        self.assertEqual(result['rawComparison']['status'], 'review')
+        self.assertEqual(result['compatibilityPresentationComparison']['status'], 'covered')
+        self.assertEqual(result['explanations'][0]['rule'], 'source-consistent-bullet-list-marker/v2')
+        self.assertEqual(result['explanations'][0]['mdocListItems'], 3)
+
+    def test_mdoc_bullet_source_model_rejects_unbalanced_or_executed_lists(self):
+        for source in (
+            '.Bl -bullet\n.It\nfirst\n',
+            '.Bl -bullet\n.if 1 .It\nfirst\n.El\n',
+        ):
+            with self.subTest(source=source):
+                result = assess_content('• first\n', '- first\n', source)
+                self.assertNotEqual(result['status'], 'explained')
+                self.assertFalse(result['coverage']['sourceConsistentCompatibilityApplied'])
 
     def test_direct_BR_manual_reference_spacing_is_a_source_consistent_projection(self):
         source = '.TS\nT{\n.BR accept (2)\nT}\n.TE\n'

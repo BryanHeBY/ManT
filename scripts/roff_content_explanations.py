@@ -67,6 +67,48 @@ _AUDIT_DYNAMIC_REQUESTS = {
 }
 
 
+def _literal_mdoc_bullet_item_count(source: str) -> int | None:
+    """Count literal mdoc ``Bl -bullet`` items without executing roff.
+
+    CVS ``mdoc_term.c`` renders each such item with a bullet while ManT's
+    portable text renderer deliberately uses ``-``.  This is a presentation
+    distinction, but only a fully balanced, non-dynamic list stream can prove
+    that a particular document's bullets originated from that choice.  Nested
+    lists are safe because ownership follows the innermost active ``Bl``;
+    conditionals, definitions, includes and other execution-changing requests
+    make the small source model decline the whole document.
+    """
+    stack: list[bool] = []
+    items = 0
+    for raw in source.splitlines():
+        if raw.endswith("\\"):
+            return None
+        match = _MDOC_REQUEST.fullmatch(raw)
+        if match is None:
+            continue
+        request, payload = match[1], match[2] or ""
+        # roff requests are lowercase while mdoc macro names are capitalized;
+        # never turn `.El` into the unrelated conditional `.el` merely by
+        # folding its spelling during this non-executing inspection.
+        if request.islower() and request in _AUDIT_DYNAMIC_REQUESTS:
+            return None
+        if request == "Bl":
+            # mdoc option parsing is substantially broader than this bounded
+            # source model.  The literal token is enough to prove the one
+            # presentation policy we model; all other list options remain
+            # irrelevant to bullet ownership.
+            stack.append("-bullet" in payload.split())
+            continue
+        if request == "El":
+            if not stack:
+                return None
+            stack.pop()
+            continue
+        if request == "It" and stack and stack[-1]:
+            items += 1
+    return items if not stack and items else None
+
+
 def _literal_man_ur_targets(source: str) -> Counter[str] | None:
     """Return direct GNU man-ext ``.UR`` targets, or decline unsafe source.
 
@@ -443,15 +485,19 @@ def _source_consistent_compatibility_projection(reference: str, mant: str,
     projected_mant = mant
     evidence: list[dict] = []
 
-    bullet_count = len(_BULLET_ESCAPE.findall(source))
+    direct_bullet_count = len(_BULLET_ESCAPE.findall(source))
+    mdoc_bullet_count = _literal_mdoc_bullet_item_count(source)
+    bullet_count = direct_bullet_count + (mdoc_bullet_count or 0)
     reference_bullets = projected_reference.count("•")
     if bullet_count and reference_bullets and reference_bullets <= bullet_count:
         projected_reference = projected_reference.replace("•", "-")
         evidence.append({
-            "rule": "source-consistent-explicit-bullet-marker/v1",
+            "rule": "source-consistent-bullet-list-marker/v2",
             "sourceMarkers": bullet_count,
+            "directSourceMarkers": direct_bullet_count,
+            "mdocListItems": mdoc_bullet_count or 0,
             "referenceMarkers": reference_bullets,
-            "reason": "Direct source bullet escapes are consistent with CVS UTF-8 bullet output and ManT's hyphen list-marker presentation.",
+            "reason": "Source-proven direct bullet escapes or literal mdoc Bl -bullet items are consistent with CVS UTF-8 bullet output and ManT's hyphen list-marker presentation.",
         })
 
     authored = Counter((match[1], match[2]) for match in _BR_MANUAL_REFERENCE.finditer(source))
