@@ -77,6 +77,20 @@ unknown=\\[future-glyph]\n",
 }
 
 #[test]
+fn lowers_historical_single_character_escapes_through_the_pinned_catalog() {
+    let document = parse_manual_bytes(
+        std::path::Path::new("single-character-escapes.7"),
+        b".TH SINGLE-CHARACTER-ESCAPES 7\n.SH TEST\n\\`left\\'right \\_\n",
+    )
+    .expect("lower historical single-character escape forms");
+
+    let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
+        panic!("expected one character paragraph");
+    };
+    assert_eq!(inline_text(children), "`left´right _");
+}
+
+#[test]
 fn round_trips_raw_and_bracketed_unicode_manual_text() {
     let source = ".TH UNICODE 7\n\
 .SH TEST\n\

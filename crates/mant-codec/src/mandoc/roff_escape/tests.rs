@@ -149,6 +149,7 @@ fn resolves_named_characters_from_the_pinned_mandoc_catalog() {
         "at=@ ga=` oq=‘ cq=’ lq=“ rq=” arrow=→ larrow=← mu=× lB=[ rB=]"
     );
     assert_eq!(visible_text(r"zero=\[:]width"), "zero=width");
+    assert_eq!(visible_text(r"\`left\'right \_"), "`left´right _");
 }
 
 #[test]

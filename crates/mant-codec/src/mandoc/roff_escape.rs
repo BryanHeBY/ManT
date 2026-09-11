@@ -175,6 +175,14 @@ impl Decoder {
                 let name = self.take_delimited_argument().unwrap_or_default();
                 self.push_special_character(&name, NamedCharacterSyntax::CharacterDescriptor);
             }
+            // CVS `roff_escape()` classifies these historical one-character
+            // forms as named special characters, not undefined literals.
+            // Route them through the pinned catalog just like `\(XX`: in
+            // particular, `\'` is the catalog acute accent rather than an
+            // ASCII apostrophe.  GNU groff likewise has dedicated escape
+            // tokens for the left quote, right quote and underscore forms.
+            '`' | '\'' | '_' => self
+                .push_special_character(&trigger.to_string(), NamedCharacterSyntax::TwoCharacter),
             '-' => self.text.push('-'),
             'e' | '\\' => self.text.push('\\'),
             ' ' | '~' | '0' => self.text.push(' '),

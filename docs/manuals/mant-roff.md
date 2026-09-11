@@ -411,6 +411,8 @@ ManT decodes visible roff text after libmandoc parsing. These escape families ha
 
 Named characters resolve through the complete character catalog compiled from the pinned libmandoc source, retaining its declared Unicode scalar—including typographic quotes—rather than applying presentation-only folds. Groff-style bracketed Unicode names such as `\[u2192]` and composite names such as `\[u0061_0301]` are decoded independently of that catalog. A name absent from both forms is retained as `\(XX`, `\[NAME]`, or `\C'desc'` instead of being silently deleted, while known zero-width controls remain invisible.
 
+The historical single-character quote and underscore escapes use that same catalog: in particular, the right-quote form is the catalog acute accent, rather than a silently substituted ASCII apostrophe.
+
 Font names map as follows:
 
 | Roff font | IR style |
