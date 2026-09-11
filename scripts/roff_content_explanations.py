@@ -1,4 +1,4 @@
-"""Source-bound explanations of content findings, never punctuation folding.
+"""Source-bound and terminal-proven explanation layers for content findings.
 
 Call with conservatively framed bodies and the unchanged decoded roff source.
 The first rule models only a literal mdoc NAME prefix through the first Nd
@@ -7,9 +7,12 @@ ManT's mandoc/inline/scopes.rs emits an em dash. No authored dash is equivalent
 on that account. Quotes, bullets, dynamic roff and other constructions are not
 explained by this module.
 
-Raw findings survive unchanged. A separate residual comparison changes exactly
-one source-proven, positioned reference token, not all occurrences of a glyph.
-An ``explained`` result is not pixel equality or complete document acceptance.
+Raw findings survive unchanged. A terminal presentation projection can rejoin
+only the CVS formatter's URI breakable-hyphen rows before a source-bound rule
+runs; that projection is recorded separately and never changes the raw result.
+A separate residual comparison changes exactly one source-proven, positioned
+reference token, not all occurrences of a glyph. An ``explained`` result is
+not pixel equality or complete document acceptance.
 """
 from __future__ import annotations
 
@@ -18,11 +21,20 @@ from io import StringIO
 import re
 import unicodedata
 
-from roff_content_compare import ContentLimits, LEXEME, compare_content, lexemes, visible_text
+from roff_content_compare import (
+    ContentLimits,
+    LEXEME,
+    compare_content,
+    lexemes,
+    reflow_terminal_uri_wraps,
+    visible_text,
+)
 
 
 SCHEMA = "mant.roff-content-explanations/v1"
 RULE = "mdoc-literal-NAME-generated-Nd-separator/v1"
+ASSESSMENT_SCHEMA = "mant.roff-content-assessment/v1"
+TERMINAL_URI_RULE = "cvs-terminal-breakable-uri-hyphen/v1"
 _REQUEST = re.compile(r"^\.([A-Za-z]+)(?:[ \t]+(.*))?$")
 _ARGUMENT = re.compile(r'"([^"\n]*)"|([^ \t"\n]+)')
 _NAME = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_.+:@-]*")
@@ -134,7 +146,8 @@ def _name_prefix(source: str, limits: ExplanationLimits) -> tuple[dict | None, s
 def explain_content(reference: str, mant: str, source: str | None, *,
                     raw_comparison: dict | None = None,
                     limits: ContentLimits = ContentLimits(),
-                    explanation_limits: ExplanationLimits = ExplanationLimits()) -> dict:
+                    explanation_limits: ExplanationLimits = ExplanationLimits(),
+                    terminal_uri_wraps: bool = False) -> dict:
     """Return original evidence plus source-bound explanations and residuals.
 
     ``raw_comparison``, when supplied, must be compare_content's result for
@@ -146,7 +159,8 @@ def explain_content(reference: str, mant: str, source: str | None, *,
     Work is bounded by ContentLimits and a separate source-prefix budget. At
     most one additional bounded content comparison is made.
     """
-    raw = (compare_content(reference, mant, source, limits=limits)
+    raw = (compare_content(reference, mant, source, limits=limits,
+                           terminal_uri_wraps=terminal_uri_wraps)
            if raw_comparison is None else raw_comparison)
     result = {"schema": SCHEMA, "status": raw["status"], "rawComparison": raw,
               "residualComparison": raw, "explanations": [],
@@ -187,7 +201,8 @@ def explain_content(reference: str, mant: str, source: str | None, *,
         return stop("source-prefix-not-at-output-origin")
     token = next(match for n, match in enumerate(LEXEME.finditer(left)) if n == index)
     rewritten = left[:token.start()] + "—" + left[token.end():]
-    residual = compare_content(rewritten, mant, source, limits=limits)
+    residual = compare_content(rewritten, mant, source, limits=limits,
+                               terminal_uri_wraps=terminal_uri_wraps)
     result["residualComparison"] = residual
     result["status"] = "explained" if residual["status"] == "covered" else residual["status"]
     result["coverage"]["comparisonComplete"] = residual["coverage"]["complete"]
@@ -200,3 +215,93 @@ def explain_content(reference: str, mant: str, source: str | None, *,
         "reason": "Source-proven first Nd BODY separator at the exact literal NAME prefix; no other punctuation occurrence was changed.",
     })
     return result
+
+
+def _difference_weight(comparison: dict) -> int:
+    """Count retained comparison signals without pretending they are defects."""
+    return sum(comparison.get("counts", {}).values())
+
+
+def _source_proves_uri_reflows(source: str | None, *reflows) -> bool:
+    """Require every joined URI to occur literally in the decoded source.
+
+    The formatter alone proves a possible physical wrap, not that an arbitrary
+    adjacent word was source-level URI content. A context-dependent or escaped
+    URI remains raw review rather than receiving this presentation label.
+    """
+    if source is None:
+        return False
+    return all(
+        reflow.evidence_complete and all(uri in source for uri in reflow.uris)
+        for reflow in reflows
+    )
+
+
+def assess_content(reference: str, mant: str, source: str | None, *,
+                   raw_comparison: dict | None = None,
+                   limits: ContentLimits = ContentLimits(),
+                   explanation_limits: ExplanationLimits = ExplanationLimits()) -> dict:
+    """Layer bounded presentation evidence over an unchanged raw comparison.
+
+    The sole terminal rule is tied to CVS ``term.c:term_fill``: a breakable
+    hyphen in a URI is emitted before automatic wrapping. No general hyphen
+    joining, punctuation folding, source execution, table masking, or output
+    mutation is performed. The raw comparison is always retained verbatim;
+    callers must use it for acceptance and regression evidence.
+    """
+    raw = (compare_content(reference, mant, source, limits=limits)
+           if raw_comparison is None else raw_comparison)
+    projection = raw
+    projection_used = False
+    projection_counts = {"reference": 0, "mant": 0}
+    terminal_source_proven = False
+    if raw["status"] == "review" and raw["coverage"].get("complete", False):
+        # Inspect first so an unchanged page does not spend a second complete
+        # comparison solely to establish that no terminal URI rule applies.
+        reflows = {
+            "reference": reflow_terminal_uri_wraps(visible_text(reference)),
+            "mant": reflow_terminal_uri_wraps(visible_text(mant)),
+        }
+        projection_counts = {side: reflow.rows_rejoined for side, reflow in reflows.items()}
+        terminal_source_proven = _source_proves_uri_reflows(source, *reflows.values())
+        if any(projection_counts.values()) and terminal_source_proven:
+            projection = compare_content(reference, mant, source, limits=limits,
+                                         terminal_uri_wraps=True)
+            projection_used = True
+
+    explained = explain_content(
+        reference, mant, source, raw_comparison=projection, limits=limits,
+        explanation_limits=explanation_limits, terminal_uri_wraps=projection_used,
+    )
+    terminal_helped = (
+        projection_used
+        and _difference_weight(projection) < _difference_weight(raw)
+    )
+    explanations = []
+    if terminal_helped:
+        explanations.append({
+            "rule": TERMINAL_URI_RULE,
+            "referenceRowsRejoined": projection_counts["reference"],
+            "mantRowsRejoined": projection_counts["mant"],
+            "reason": "Pinned CVS term.c emits a literal breakable hyphen before its automatic line break; only URI-continuation rows were rejoined for this secondary presentation comparison.",
+        })
+    explanations.extend(explained["explanations"])
+    status = explained["status"]
+    if terminal_helped and status == "covered":
+        status = "explained"
+    return {
+        "schema": ASSESSMENT_SCHEMA,
+        "status": status,
+        "rawComparison": raw,
+        "terminalPresentationComparison": projection,
+        "residualComparison": explained["residualComparison"],
+        "explanations": explanations,
+        "coverage": {
+            "rawComparisonComplete": raw["coverage"].get("complete", False),
+            "terminalPresentationApplied": projection_used,
+            "terminalUriSourceProven": terminal_source_proven,
+            "terminalUriRowsRejoined": projection_counts,
+            "sourceExplanation": explained["coverage"],
+            "reasons": [],
+        },
+    }

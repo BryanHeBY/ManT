@@ -27,7 +27,7 @@ import subprocess
 import sys
 
 from roff_content_compare import compare_content
-from roff_content_explanations import explain_content
+from roff_content_explanations import assess_content
 from roff_layout_geometry import compare_layout_geometry
 from roff_reference import MAX_INPUT_BYTES, reference_environment, run_renderer
 from roff_rendering_frame import prepare_frame
@@ -249,15 +249,19 @@ def inspect(item, args):
         mant, mant_frame = prepare_frame(outputs["mant"], source_text, reference=False)
         record["frames"] = {"reference": ref_frame, "mant": mant_frame}
         content = compare_content(ref, mant, source_text)
-        explained = explain_content(ref, mant, source_text, raw_comparison=content)
+        assessment = assess_content(ref, mant, source_text, raw_comparison=content)
         geometry = compare_layout_geometry(ref, mant, source_text)
         # Check raw output as well: furniture masking must never conceal leaks.
         raw = plain_output_controls(outputs["mant"])
         record["rawControlLeaks"] = len(raw.get("characters", []))
         record["rawControlCoverage"] = raw
         record["content"] = compact(content)
-        record["contentAssessment"] = {key: value for key, value in explained.items() if key not in ('rawComparison', 'residualComparison')}
-        record["contentAssessment"]["residualComparison"] = compact(explained['residualComparison'])
+        record["contentAssessment"] = {
+            key: value for key, value in assessment.items()
+            if key not in ('rawComparison', 'terminalPresentationComparison', 'residualComparison')
+        }
+        record["contentAssessment"]["terminalPresentationComparison"] = compact(assessment['terminalPresentationComparison'])
+        record["contentAssessment"]["residualComparison"] = compact(assessment['residualComparison'])
         record["geometry"] = compact(geometry)
         statuses = [content["status"], geometry["status"], ref_frame["status"], mant_frame["status"], raw["status"]]
         if raw["status"] == "hard-failure" or content["status"] == "hard-failure":
@@ -269,9 +273,9 @@ def inspect(item, args):
             record["status"] = "clean"
         else:
             record["status"] = "partial"
-        record['triage'] = classify(record, explained['residualComparison'])
+        record['triage'] = classify(record, assessment['residualComparison'])
         artifacts["source.roff"] = source
-        artifacts["comparison.json"] = (json.dumps({"content": content, "geometry": geometry, 'assessment': explained},
+        artifacts["comparison.json"] = (json.dumps({"content": content, "geometry": geometry, 'assessment': assessment},
                                        ensure_ascii=False, indent=2) + "\n").encode()
     except SourceBudgetError as error:
         record.update(reason="source-budget", execution="budget",
@@ -305,7 +309,7 @@ def main():
     if args.artifact_pages < 0 or (args.max_pages is not None and args.max_pages < 1):
         parser.error("invalid page budget")
     args.output.mkdir(parents=True, exist_ok=False)
-    report = {"schema": "mant.roff-rendering-census/v2", "status": "audit-error", "coverageComplete": False}
+    report = {"schema": "mant.roff-rendering-census/v3", "status": "audit-error", "coverageComplete": False}
     try:
         return census(args, report)
     except Exception as error:
@@ -333,7 +337,7 @@ def census(args, report):
         decoder["sha256"] = binaries["zstd"]["sha256"]
     producer = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
     dirty = subprocess.check_output(["git", "status", "--porcelain"], cwd=ROOT, text=True).splitlines()
-    report.update({"schema": "mant.roff-rendering-census/v2", "producerCommit": producer,
+    report.update({"schema": "mant.roff-rendering-census/v3", "producerCommit": producer,
               "producerDirtyPaths": dirty, "started": datetime.now(timezone.utc).isoformat(),
               "binaries": binaries, "sourceDecoders": {"zstd": decoder},
               "referenceIdentity": args.reference_id,

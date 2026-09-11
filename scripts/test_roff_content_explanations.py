@@ -4,7 +4,7 @@ import unittest
 from unittest.mock import patch
 
 from roff_content_compare import ContentLimits, compare_content
-from roff_content_explanations import ExplanationLimits, explain_content
+from roff_content_explanations import ExplanationLimits, assess_content, explain_content
 
 
 SOURCE = '.Dd September 11, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd inspect text\n.Sh DESCRIPTION\nBODY – dash\n'
@@ -199,6 +199,28 @@ class ExplanationTests(unittest.TestCase):
         result = explain_content(MANT, MANT, SOURCE)
         self.assertEqual(result['status'], 'covered')
         self.assertEqual(result['explanations'], [])
+
+    def test_terminal_uri_projection_is_source_proven_and_never_mutates_raw_evidence(self):
+        source = '.TH PROBE 1\nhttps://example.test/container-registry/path\n'
+        reference = 'https://example.test/container-\n registry/path\n'
+        mant = 'https://example.test/container-registry/path\n'
+        result = assess_content(reference, mant, source)
+        self.assertEqual(result['status'], 'explained')
+        self.assertEqual(result['rawComparison']['status'], 'review')
+        self.assertEqual(result['terminalPresentationComparison']['status'], 'covered')
+        self.assertEqual(result['residualComparison']['status'], 'covered')
+        self.assertEqual(result['explanations'][0]['rule'], 'cvs-terminal-breakable-uri-hyphen/v1')
+
+    def test_terminal_uri_projection_requires_the_complete_literal_source_uri(self):
+        reference = 'https://example.test/container-\n registry/path\n'
+        mant = 'https://example.test/container-registry/path\n'
+        for source in (None, 'https://example.test/container-\nregistry/path\n',
+                       'ordinary prose only\n'):
+            with self.subTest(source=source):
+                result = assess_content(reference, mant, source)
+                self.assertEqual(result['status'], 'review')
+                self.assertFalse(result['coverage']['terminalPresentationApplied'])
+                self.assertEqual(result['rawComparison'], result['terminalPresentationComparison'])
 
 
 if __name__ == '__main__':

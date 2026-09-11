@@ -21,8 +21,20 @@ def classify(record: dict, residual: dict | None = None) -> dict:
         category, priority = 'process-or-output-safety', 100
     elif record.get('reason'):
         category, priority = 'source-or-reference-coverage', 40
+    elif any(finding.get('kind') == 'reference-control'
+             for finding in record.get('content', {}).get('findings', [])):
+        # A reference byte stream with cursor controls cannot establish a
+        # trustworthy visible-text oracle. Keep it, but do not call it loss.
+        category, priority = 'reference-output-coverage', 60
     elif counts.get('possible-control-operand'):
         category, priority = 'possible-operand-leak', 90
+    elif counts.get('ambiguous-control-operand'):
+        category, priority = 'ambiguous-operand-origin', 60
+    elif any(frame.get('status') == 'partial'
+             for frame in record.get('frames', {}).values()):
+        # The raw content diff remains in evidence, but an incomplete header
+        # or footer mask makes it unsafe to rank it as body-content loss.
+        category, priority = 'frame-limited-content-coverage', 60
     elif residual.get('status') == 'review':
         # Keep executable punctuation names in the higher tier. This ranking
         # does not authorize normalizing or discarding punctuation differences.

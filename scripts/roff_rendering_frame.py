@@ -24,6 +24,22 @@ def plain(value: str) -> str:
     return " ".join(visible_text(value).split())
 
 
+def metadata_words(line: str) -> list[str] | None:
+    """Parse only literal title metadata escapes used by man(7) prologues.
+
+    ``\\&`` is a zero-width escape and ``\\-`` is the rendered hyphen in
+    mandoc's TH/Dt metadata. Treating any other roff escape as literal would
+    turn the frame mask into a partial interpreter, so reject it instead.
+    """
+    normalized = line.replace(r"\&", "").replace(r"\-", "-")
+    if "\\" in normalized:
+        return None
+    try:
+        return shlex.split(normalized)
+    except ValueError:
+        return None
+
+
 def prepare_frame(raw: str, source: str, *, reference: bool,
                   default_os: str | None = None) -> tuple[str, dict]:
     """Return original rows minus precisely identified title/header/footer.
@@ -40,9 +56,8 @@ def prepare_frame(raw: str, source: str, *, reference: bool,
     for line in source.splitlines():
         if not line.startswith((".TH ", ".Dt ", ".Dd ", ".Os", ".Nm ")):
             continue
-        try:
-            words = shlex.split(line)
-        except ValueError:
+        words = metadata_words(line)
+        if words is None:
             continue
         if words[0] in (".TH", ".Dt") and len(words) >= 3:
             title = words[1] + "(" + words[2] + ")"
@@ -149,6 +164,10 @@ def self_test() -> None:
     source = '.TH FOO 8 "2026-09-11" "Source" "Custom Volume"\n.SH TEST\nBODY\n'
     raw = "FOO(8) Custom Volume FOO(8)\n\nTEST\n BODY\n\nSource 2026-09-11 FOO(8)\n"
     assert prepare_frame(raw, source, reference=True)[1]["status"] == "covered"
+    source = '.TH GIT\\-FAQ 1 "2026-09-11" "GNU\\& project"\n.SH TEST\nBODY\n'
+    raw = "GIT-FAQ(1) General Commands Manual\n\nTEST\n BODY\n\nGNU project 2026-09-11 GIT-FAQ(1)\n"
+    assert prepare_frame(raw, source, reference=True)[1]["status"] == "covered"
+    assert metadata_words(r'.TH PROBE\\*[x] 1') is None
 
 
 if __name__ == "__main__":

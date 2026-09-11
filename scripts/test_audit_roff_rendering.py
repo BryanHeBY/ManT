@@ -250,6 +250,33 @@ class RenderingCensusTests(unittest.TestCase):
         self.assertEqual(record['status'], 'review')
         self.assertFalse(result['confirmedProductDefect'])
 
+    def test_incomplete_frame_and_reference_controls_are_coverage_not_content_loss(self):
+        frame_limited = {
+            'status': 'review', 'content': {'status': 'review', 'findings': []},
+            'geometry': {'status': 'covered'},
+            'frames': {'reference': {'status': 'partial'}, 'mant': {'status': 'covered'}},
+        }
+        self.assertEqual(
+            classify(frame_limited, {'status': 'review', 'counts': {'missing-occurrence': 1}})['category'],
+            'frame-limited-content-coverage',
+        )
+        bad_reference = {
+            'status': 'review',
+            'content': {'status': 'review', 'findings': [{'kind': 'reference-control'}]},
+            'geometry': {'status': 'covered'},
+        }
+        self.assertEqual(
+            classify(bad_reference, {'status': 'review', 'counts': {'missing-occurrence': 1}})['category'],
+            'reference-output-coverage',
+        )
+
+    def test_ambiguous_control_operand_is_not_ranked_as_a_leak(self):
+        record = {'status': 'review', 'content': {'status': 'review'}, 'geometry': {'status': 'covered'}}
+        self.assertEqual(
+            classify(record, {'status': 'review', 'counts': {'ambiguous-control-operand': 1}})['category'],
+            'ambiguous-operand-origin',
+        )
+
     def test_artifact_selection_prefers_late_high_risk_and_distinct_corpora(self):
         def row(identity, priority):
             return {'status': 'review', 'identities': [{'id': identity}], 'triage': {'category': 'unexplained-content', 'priority': priority}}

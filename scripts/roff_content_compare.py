@@ -24,6 +24,15 @@ SGR = re.compile(r"\x1b\[[0-9;:]*m")
 # hyphens and quotes are distinct spellings unless source review proves a
 # specific presentation-only difference; no page-wide folding is justified.
 LEXEME = re.compile(r"\S+", re.UNICODE)
+# The fixed CVS terminal formatter can split a URI at an internal breakable
+# hyphen (term.c:term_fill, ASCII_HYPH) and emits the literal hyphen before its
+# physical newline.  Content comparison already treats ordinary soft wrapping
+# as whitespace, but that would otherwise turn one URI into two distinct
+# lexemes.  This deliberately recognizes only a URI continuation; ordinary
+# prose, option names and authored hyphen/newline boundaries stay observable.
+_URI_CHARACTER = r"[A-Za-z0-9._~!$&'()*+,;=:@%/?#\[\]-]"
+_URI_AT_LINE_END = re.compile(r"(?:https?|ftp)://" + _URI_CHARACTER + r"*-$")
+_URI_CONTINUATION = re.compile(r"^[ \t]*(" + _URI_CHARACTER + r"+)")
 CONTROL_REQUEST = re.compile(
     r"^[.'](?:ll|po|mc|ti|ad|na|hy|nh|ne|nr|ta|ft|ce|rj|Tg)(?:[ \t]+(.*))?$"
 )
@@ -41,6 +50,16 @@ class ContentLimits:
     def __post_init__(self):
         if any(value < 1 for value in self.__dict__.values()):
             raise ValueError("content comparison budgets must be positive")
+
+
+@dataclass(frozen=True)
+class TerminalUriReflow:
+    """A bounded physical-row projection with source-proof candidates."""
+
+    text: str
+    rows_rejoined: int
+    uris: tuple[str, ...]
+    evidence_complete: bool
 
 
 def visible_text(text: str) -> str:
@@ -108,6 +127,48 @@ def lexemes(text: str, *, limit: int = 500_000) -> list[str]:
     return output
 
 
+def reflow_terminal_uri_wraps(text: str, *, evidence_limit: int = 128) -> TerminalUriReflow:
+    """Rejoin only a URI continuation split at a terminal breakable hyphen.
+
+    This is comparison representation, never document/source normalization.
+    CVS term.c replaces ASCII_HYPH with ``-`` before deciding its automatic
+    line boundary. The next physical row therefore begins with the next URI
+    character, after indentation. A source-authored newline outside a URI or
+    a URI followed by an ordinary separate word is left unchanged.
+    """
+    if evidence_limit < 1:
+        raise ValueError("URI reflow evidence budget must be positive")
+    rows = text.splitlines()
+    trailing_newline = text.endswith("\n")
+    output: list[str] = []
+    uris: list[str] = []
+    evidence_complete = True
+    index = 0
+    while index < len(rows):
+        row = rows[index]
+        while index + 1 < len(rows) and _URI_AT_LINE_END.search(row):
+            continuation = _URI_CONTINUATION.match(rows[index + 1])
+            if continuation is None:
+                break
+            # Keep any text after the URI run on the physical continuation
+            # row. Dropping it would make a comparison projection itself lose
+            # evidence when a formatter wraps before trailing prose.
+            joined_uri = row + continuation[1]
+            row = joined_uri + rows[index + 1][continuation.end():]
+            index += 1
+            if len(uris) < evidence_limit:
+                uris.append(joined_uri)
+            else:
+                evidence_complete = False
+        output.append(row)
+        index += 1
+    return TerminalUriReflow(
+        text="\n".join(output) + ("\n" if trailing_newline else ""),
+        rows_rejoined=len(rows) - len(output), uris=tuple(uris),
+        evidence_complete=evidence_complete,
+    )
+
+
 def _unique_anchors(left: list[str], right: list[str]) -> list[tuple[int, int]]:
     """Patience anchors bound alignment work without a quadratic page-wide diff."""
     counts_left, counts_right = Counter(left), Counter(right)
@@ -135,7 +196,8 @@ def _unique_anchors(left: list[str], right: list[str]) -> list[tuple[int, int]]:
 
 
 def compare_content(reference: str, mant: str, source: str | None = None, *,
-                    limits: ContentLimits = ContentLimits()) -> dict:
+                    limits: ContentLimits = ContentLimits(),
+                    terminal_uri_wraps: bool = False) -> dict:
     """Compare visible streams, with explicit coverage and bounded evidence.
 
     Reference-only content is not automatically loss; ManT-only content is not
@@ -167,6 +229,11 @@ def compare_content(reference: str, mant: str, source: str | None = None, *,
                     "reasons": ["input-character-budget"]}}
 
     visible = {"reference": visible_text(reference), "mant": visible_text(mant)}
+    uri_wraps = {"reference": 0, "mant": 0}
+    if terminal_uri_wraps:
+        for side, text in visible.items():
+            reflow = reflow_terminal_uri_wraps(text)
+            visible[side], uri_wraps[side] = reflow.text, reflow.rows_rejoined
     controls: dict[str, list[dict]] = {}
     for side, text in visible.items():
         bad = Counter(char for char in text if (ord(char) < 32 and char not in "\n\t")
@@ -198,6 +265,16 @@ def compare_content(reference: str, mant: str, source: str | None = None, *,
                 reference_count=lc[token], mant_count=rc[token])
 
         if source is not None:
+            # A matching token anywhere in the source is not enough evidence
+            # that a non-output request leaked it.  For example, ``.ne 2``
+            # and an equation's literal ``2`` may coexist.  First retain the
+            # exact request operands that are extra in ManT, then check
+            # whether each candidate also occurs in source text outside a
+            # known non-output request.  The latter remains reviewable but is
+            # not promoted as a likely control operand leak.
+            request_operands: list[tuple[int, str, list[str]]] = []
+            candidate_operands: set[str] = set()
+            non_control_lines: list[str] = []
             for line, raw in enumerate(source.splitlines(), 1):
                 match = CONTROL_REQUEST.fullmatch(raw)
                 if match and match[1]:
@@ -206,8 +283,29 @@ def compare_content(reference: str, mant: str, source: str | None = None, *,
                         incomplete("source-operand-token-budget")
                     payload = [token for token in operands if token in extra]
                     if payload:
-                        add("possible-control-operand", source_line=line,
-                            request=raw[:256], tokens=payload[:limits.preview_tokens])
+                        request_operands.append((line, raw, payload))
+                        candidate_operands.update(payload)
+                else:
+                    non_control_lines.append(raw)
+            # This scans the source once, but only remembers candidates.  It
+            # therefore remains bounded by the already admitted input size,
+            # rather than materializing every source lexeme a second time.
+            also_authored: set[str] = set()
+            if candidate_operands:
+                for raw in non_control_lines:
+                    for match in LEXEME.finditer(unicodedata.normalize("NFC", raw)):
+                        if match[0] in candidate_operands:
+                            also_authored.add(match[0])
+            for line, raw, payload in request_operands:
+                plausible = [token for token in payload if token not in also_authored]
+                ambiguous = [token for token in payload if token in also_authored]
+                if plausible:
+                    add("possible-control-operand", source_line=line,
+                        request=raw[:256], tokens=plausible[:limits.preview_tokens])
+                if ambiguous:
+                    add("ambiguous-control-operand", source_line=line,
+                        request=raw[:256], tokens=ambiguous[:limits.preview_tokens],
+                        reason="also-occurs-outside-known-control-request")
 
         # Only distinct unequal windows invoke a quadratic matcher. Unique
         # anchors are monotone, so reordered content produces deletion/insertion
@@ -234,7 +332,8 @@ def compare_content(reference: str, mant: str, source: str | None = None, *,
                         mant_range=[b + b2, b + b3],
                         reference_preview=la[a2:a3][:limits.preview_tokens],
                         mant_preview=rb[b2:b3][:limits.preview_tokens])
-    coverage.update(findings_total=sum(counts.values()), findings_retained=len(findings))
+    coverage.update(findings_total=sum(counts.values()), findings_retained=len(findings),
+                    terminal_uri_wraps=uri_wraps if terminal_uri_wraps else None)
     status = ("hard-failure" if controls["mant"] else "review" if counts else
               "covered" if coverage["complete"] else "uncovered")
     return {"schema": SCHEMA, "status": status, "coverage": coverage,
@@ -258,11 +357,20 @@ def self_check():
     assert kinds("ALPHA", "\bALPHA")["status"] == "hard-failure"
     leak = kinds("BODY", "50n BODY", ".ll 50n\nBODY\n")
     assert "possible-control-operand" in leak["counts"]
+    equation = kinds("BODY", "2 BODY", ".ne 2\n.EQ\nx sup 2\n.EN\n")
+    assert "possible-control-operand" not in equation["counts"]
+    assert "ambiguous-control-operand" in equation["counts"]
     assert kinds("a b c", "c b a", limits=ContentLimits(max_window=1))["status"] != "covered"
     assert not kinds("a", "a b c", limits=ContentLimits(max_findings=1))["coverage"]["complete"]
     assert kinds("a b", "a b", limits=ContentLimits(max_tokens=1))["status"] == "uncovered"
     assert kinds("", "")["status"] == "uncovered"
     assert kinds("a\nb", "a b")["status"] == "covered"  # soft reflow is not content loss
+    assert kinds("https://example.test/container-\n registry/path", "https://example.test/container-registry/path")["status"] == "review"
+    assert kinds("https://example.test/container-\n registry/path", "https://example.test/container-registry/path", terminal_uri_wraps=True)["status"] == "covered"
+    assert kinds("https://example.test/one-\n two-\n three", "https://example.test/one-two-three", terminal_uri_wraps=True)["status"] == "covered"
+    assert kinds("https://example.test/one-\n two trailing", "https://example.test/one-two trailing", terminal_uri_wraps=True)["status"] == "covered"
+    assert kinds("word-\n next", "word-next")["status"] == "review"
+    assert kinds("https://example.test/word-\n next", "https://example.test/word- next", terminal_uri_wraps=True)["status"] == "review"
     for left, right in [("--help", "- -help"), ("-x", "- x"),
                         ("👩\u200d💻", "👩 \u200d 💻"), ("क\u093f", "क \u093f"),
                         ("−x", "-x"), ("non\u2011breaking", "non-breaking"), ("‘name’", "'name'")]:
