@@ -54,12 +54,146 @@ class RenderingCensusTests(unittest.TestCase):
 
     def test_decoded_limit_and_xz_dictionary_limit_are_independent(self):
         with patch.object(AUDIT, "MAX_INPUT_BYTES", 4):
-            with self.assertRaises(ValueError):
+            with self.assertRaises(AUDIT.SourceBudgetError):
                 AUDIT.decode_xz(lzma.compress(b"12345"))
         real = lzma.LZMADecompressor
         with patch.object(AUDIT.lzma, "LZMADecompressor", wraps=real) as decoder:
             self.assertEqual(AUDIT.decode_xz(lzma.compress(b"body")), b"body")
             self.assertEqual(decoder.call_args.kwargs["memlimit"], 64 * 1024 * 1024)
+
+    def test_encoded_decoded_and_manifest_caps_are_typed_with_path_context(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'oversized-source'
+            with patch.object(AUDIT, 'MAX_INPUT_BYTES', 64):
+                for data in (b'x' * 65, gzip.compress(b'x' * 65), bz2.compress(b'x' * 65)):
+                    with self.subTest(encoded_bytes=len(data)):
+                        path.write_bytes(data)
+                        with self.assertRaises(AUDIT.SourceBudgetError) as error:
+                            AUDIT.source_bytes(path)
+                        self.assertIn(str(path), str(error.exception))
+                        self.assertIn('64 bytes', str(error.exception))
+            path.write_bytes(b'12345')
+            with patch.object(AUDIT, 'MAX_MANIFEST_BYTES', 4), self.assertRaises(AUDIT.SourceBudgetError) as error:
+                AUDIT.census_inputs(argparse.Namespace(manifest=path, max_pages=None))
+            self.assertIn(str(path), str(error.exception))
+            self.assertIn('manifest', str(error.exception))
+
+    def test_real_liblzma_memory_limit_is_typed_not_a_corrupt_source(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'small-output-large-dictionary.xz'
+            path.write_bytes(lzma.compress(b'body'))
+            # A tiny configured cap exercises the real liblzma error without
+            # allocating a deliberately enormous compressor dictionary.
+            with patch.object(AUDIT, 'XZ_MEMORY_LIMIT', 1024), self.assertRaises(AUDIT.SourceBudgetError) as error:
+                AUDIT.source_bytes(path)
+            self.assertIn(str(path), str(error.exception))
+            self.assertIn('XZ dictionary memory cap (1024 bytes)', str(error.exception))
+            self.assertIn('Memory usage limit exceeded', str(error.exception))
+            self.assertIsInstance(error.exception.__cause__.__cause__, lzma.LZMAError)
+            path.write_bytes(b'\xfd7zXZ\0corrupt')
+            with self.assertRaises(lzma.LZMAError):
+                AUDIT.source_bytes(path)
+
+    def test_zstd_uses_frozen_path_and_retains_budget_exit_and_stderr(self):
+        decoder = Path('/frozen/decoder/zstd')
+        failures = [(124, 'renderer timed out after 10s'),
+                    (125, 'renderer output exceeds 16777216 bytes'),
+                    (-24, 'CPU limit'), (-9, 'resource kill')]
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'source.zst'
+            path.write_bytes(b'\x28\xb5\x2f\xfdencoded')
+            for code, detail in failures:
+                with self.subTest(code=code), patch.object(AUDIT, 'ZSTD_BINARY', decoder), \
+                     patch.object(AUDIT, 'run_renderer', return_value=(code, b'', detail)) as run, \
+                     self.assertRaises(AUDIT.SourceBudgetError) as error:
+                    AUDIT.source_bytes(path)
+                self.assertEqual(run.call_args.args[0], [str(decoder), '-qdc'])
+                self.assertIn(str(path), str(error.exception))
+                self.assertIn(f'exit {code}', str(error.exception))
+                self.assertIn(detail, str(error.exception))
+            with patch.object(AUDIT, 'ZSTD_BINARY', decoder), \
+                 patch.object(AUDIT, 'run_renderer', return_value=(1, b'', 'corrupt frame')), \
+                 self.assertRaises(ValueError) as error:
+                AUDIT.source_bytes(path)
+            self.assertNotIsInstance(error.exception, AUDIT.SourceBudgetError)
+            self.assertIn('exit 1', str(error.exception))
+            self.assertIn('corrupt frame', str(error.exception))
+            with patch.object(AUDIT, 'ZSTD_BINARY', None), patch.object(AUDIT, 'run_renderer') as run, \
+                 self.assertRaises(ValueError) as error:
+                AUDIT.source_bytes(path)
+            run.assert_not_called()
+            self.assertNotIsInstance(error.exception, AUDIT.SourceBudgetError)
+            self.assertIn('unavailable at run start', str(error.exception))
+
+    def test_source_budget_record_is_uncovered_and_keeps_typed_context(self):
+        with patch.object(AUDIT, 'source_bytes', side_effect=AUDIT.SourceBudgetError('source.zst: exit 124: timed out')):
+            record, _ = AUDIT.inspect(('source.zst', [{'id': 'one'}]), argparse.Namespace())
+        self.assertEqual(record['status'], 'uncovered')
+        self.assertEqual(record['execution'], 'budget')
+        self.assertEqual(record['errorType'], 'SourceBudgetError')
+        self.assertEqual(record['error'], 'source.zst: exit 124: timed out')
+
+    def test_possible_external_context_includes_inline_conditions(self):
+        for source in [b'.so man1/target.1\n', b"'mso package.tmac\n", b'.soquiet absent\n',
+                       b'.if 1 .so man1/target.1\n', b'.ie n .mso package\n',
+                       b'.el .soquiet absent\n', b"'if t 'so target\n",
+                       b'.if 1 .if 0 .so target\n', b'.if 0 .so never-executed\n',
+                       b'.if \\n[register] .so target\n']:
+            with self.subTest(source=source):
+                self.assertIsNotNone(AUDIT.EXTERNAL.search(source))
+                record = self.inspect(source=source)
+                self.assertEqual(record['status'], 'uncovered')
+                self.assertTrue(record['externalContext'])
+                self.assertIn('possible-external-source-context', record['reason'])
+
+    def test_external_context_does_not_match_prose_comments_or_other_requests(self):
+        for source in [b'Prose mentions .so target\n', b'.\\" .so commented-out\n',
+                       b'.\\" .if 1 .so comment\n', b'.B .so\n', b'.source path\n',
+                       b'.soquietly absent\n', b'.if 1 .source path\n',
+                       b'.if 1 .B "mention.so path"\n', b'.if 1 .B "quoted .so text"\n',
+                       b'.if 1 BODY\n']:
+            with self.subTest(source=source):
+                self.assertIsNone(AUDIT.EXTERNAL.search(source))
+
+    def test_decoder_identity_is_in_summary_and_rechecked_on_completion(self):
+        for state in ('stable', 'changed', 'removed', 'unavailable'):
+            with self.subTest(state=state), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                mant, reference, decoder = (root / name for name in ('mant', 'mandoc', 'zstd'))
+                for binary in (mant, reference, decoder):
+                    binary.write_bytes(b'initial binary identity')
+                source = root / 'source'
+                source.write_bytes(b'body')
+                manifest = root / 'manifest'
+                manifest.write_text(json.dumps({'id': 'one', 'source_path': str(source)}) + '\n')
+                output = root / 'audit'
+                output.mkdir()
+                args = argparse.Namespace(mant=mant, reference=reference, manifest=manifest, max_pages=None,
+                    reference_id='fixed-test', output=output, workers=1, artifact_pages=0,
+                    width=80, timeout=1, verify=False)
+                def inspect(_item, _args):
+                    if state == 'changed':
+                        decoder.write_bytes(b'changed binary identity')
+                    elif state == 'removed':
+                        decoder.unlink()
+                    return {'sourcePath': str(source), 'identities': [{'id': 'one'}], 'status': 'clean'}, {}
+                report = {}
+                with patch.object(AUDIT, 'ZSTD_BINARY', None if state == 'unavailable' else decoder), \
+                     patch.object(AUDIT, 'inspect', side_effect=inspect), \
+                     patch.object(AUDIT.subprocess, 'check_output', side_effect=['producer', '']), \
+                     patch('builtins.print'):
+                    code = AUDIT.census(args, report)
+                saved = json.loads((output / 'summary.json').read_text())
+                self.assertEqual(saved['sourceDecoders']['zstd']['available'], state != 'unavailable')
+                if state != 'unavailable':
+                    self.assertEqual(saved['binaries']['zstd']['path'], str(decoder))
+                    self.assertEqual(saved['binaries']['zstd']['sha256'], AUDIT.digest(b'initial binary identity'))
+                else:
+                    self.assertNotIn('zstd', saved['binaries'])
+                self.assertEqual(saved['binariesUnchanged'], state in ('stable', 'unavailable'))
+                self.assertEqual(saved['coverageComplete'], state in ('stable', 'unavailable'))
+                self.assertEqual(code, int(state in ('changed', 'removed')))
+                self.assertTrue(any('not an end-to-end' in note for note in saved['limitations']))
 
     def test_manifest_snapshot_duplicate_ids_and_empty_selection(self):
         with tempfile.TemporaryDirectory() as directory:

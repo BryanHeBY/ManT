@@ -21,6 +21,7 @@ import math
 import os
 from pathlib import Path
 import re
+import shutil
 import stat
 import subprocess
 import sys
@@ -33,7 +34,26 @@ from roff_rendering_frame import prepare_frame
 from roff_review_queue import ArtifactSelection, classify, plain_output_controls
 
 ROOT = Path(__file__).resolve().parents[1]
-EXTERNAL = re.compile(rb"^[.'][ \t]*(?:so|soquiet|mso)(?:[ \t]|$)", re.MULTILINE)
+# A possible dependency detector, NOT a roff interpreter. In particular, even
+# a false conditional branch is conservatively external; executed aliases,
+# changed control characters and expanded request names are not fully modeled.
+# Require a control line and a standalone request token, not prose mentioning
+# .so, a comment, or another request name such as .source.
+EXTERNAL = re.compile(
+    rb"^[.'][ \t]*(?:(?:soquiet|mso|so)(?:[ \t]|$)|"
+    rb'''(?:if|ie|el)[ \t]+(?:(?:[^"\r\n]|"[^"\r\n]*")*[ \t])?[.'][ \t]*(?:soquiet|mso|so)(?:[ \t]|$))''',
+    re.MULTILINE,
+)
+MAX_MANIFEST_BYTES = 128 * 1024 * 1024
+XZ_MEMORY_LIMIT = 64 * 1024 * 1024
+# Freeze discovery once; neither PATH changes nor a sibling decoder later in
+# PATH can silently select a different executable during this imported run.
+_zstd = shutil.which("zstd")
+ZSTD_BINARY: Path | None = Path(_zstd).resolve() if _zstd else None
+
+
+class SourceBudgetError(ValueError):
+    """Source transport/decompression exceeded an explicit audit resource cap."""
 
 
 def digest(data):
@@ -64,12 +84,22 @@ def decode_xz(encoded):
     output = bytearray()
     remaining = encoded
     while remaining:
-        decoder = lzma.LZMADecompressor(memlimit=64 * 1024 * 1024)
+        decoder = lzma.LZMADecompressor(memlimit=XZ_MEMORY_LIMIT)
         chunk = remaining
         while True:
-            output.extend(decoder.decompress(chunk, max_length=MAX_INPUT_BYTES + 1 - len(output)))
+            try:
+                output.extend(decoder.decompress(chunk, max_length=MAX_INPUT_BYTES + 1 - len(output)))
+            except lzma.LZMAError as error:
+                # Python exposes liblzma's memory-cap failure as LZMAError,
+                # without a typed status. Translate this exact boundary signal
+                # here; callers must not infer budgets from arbitrary text.
+                if str(error) == "Memory usage limit exceeded":
+                    raise SourceBudgetError(
+                        f"XZ dictionary memory cap ({XZ_MEMORY_LIMIT} bytes): {error}"
+                    ) from error
+                raise
             if len(output) > MAX_INPUT_BYTES:
-                raise ValueError("decoded source exceeds 16 MiB")
+                raise SourceBudgetError(f"decoded XZ source exceeds {MAX_INPUT_BYTES} bytes")
             if decoder.eof:
                 break
             if decoder.needs_input:
@@ -85,17 +115,34 @@ def decode_xz(encoded):
 
 
 def source_bytes(path):
-    """Check/open/check and bounded decompression; never block on a FIFO."""
+    """Byte-capped source acquisition, not an end-to-end wall-time deadline.
+
+    Reject FIFOs and limit decoded bytes/XZ dictionary memory. zstd alone has a
+    subprocess deadline; regular-file reads and in-process gzip/bzip2/XZ work
+    run in the caller and can outlast an individual renderer's timeout.
+    """
+    try:
+        return _source_bytes(path)
+    except SourceBudgetError as error:
+        raise SourceBudgetError(f"{path}: {error}") from error
+
+
+def _source_bytes(path):
     with regular_stream(path) as stream:
         encoded = stream.read(MAX_INPUT_BYTES + 1)
     if len(encoded) > MAX_INPUT_BYTES:
-        raise ValueError("compressed source exceeds 16 MiB")
+        raise SourceBudgetError(f"encoded source exceeds {MAX_INPUT_BYTES} bytes")
     if encoded.startswith(b"\x28\xb5\x2f\xfd"):
+        if ZSTD_BINARY is None:
+            raise ValueError(f"{path}: zstd source decoder was unavailable at run start")
         code, decoded, error = run_renderer(
-            ["zstd", "-qdc"], 10, reference_environment(), encoded,
+            [str(ZSTD_BINARY), "-qdc"], 10, reference_environment(), encoded,
             binary_output=True, output_limit=MAX_INPUT_BYTES)
         if code:
-            raise ValueError(f"bounded zstd decode failed: {error}")
+            detail = f"zstd decode failed (exit {code}): {error or 'no stderr'}"
+            if code in (124, -24, -9) or (code == 125 and "exceeds" in error):
+                raise SourceBudgetError(detail)
+            raise ValueError(f"{path}: {detail}")
     elif encoded.startswith(b"\xfd7zXZ\0"):
         decoded = decode_xz(encoded)
     else:
@@ -107,7 +154,7 @@ def source_bytes(path):
         else:
             decoded = encoded
     if len(decoded) > MAX_INPUT_BYTES:
-        raise ValueError("decoded source exceeds 16 MiB")
+        raise SourceBudgetError(f"decoded source exceeds {MAX_INPUT_BYTES} bytes")
     return decoded, digest(encoded)
 
 
@@ -116,9 +163,9 @@ def census_inputs(args):
     args._manifest_sha256 = None
     if args.manifest:
         with regular_stream(args.manifest) as stream:
-            snapshot = stream.read(128 * 1024 * 1024 + 1)
-        if len(snapshot) > 128 * 1024 * 1024:
-            raise ValueError("manifest exceeds 128 MiB")
+            snapshot = stream.read(MAX_MANIFEST_BYTES + 1)
+        if len(snapshot) > MAX_MANIFEST_BYTES:
+            raise SourceBudgetError(f"{args.manifest}: manifest exceeds {MAX_MANIFEST_BYTES} bytes")
         args._manifest_sha256 = digest(snapshot)
         identities = set()
         for line in snapshot.decode("utf-8").splitlines():
@@ -170,8 +217,9 @@ def inspect(item, args):
                       sourceValidUtf8=source == source_text.encode("utf-8"),
                       sourceBytes=len(source), historicalHashMatches=[
                           row.get("historicalSha256") == actual_sha for row in identities])
-        if EXTERNAL.search(source):
-            record["reason"] = "external-source-context: standalone .so/.soquiet/.mso is not comparable"
+        record["externalContext"] = bool(EXTERNAL.search(source))
+        if record["externalContext"]:
+            record["reason"] = "possible-external-source-context: direct or conditional .so/.soquiet/.mso; standalone comparison cannot establish dependencies"
             return record, artifacts
         artifacts['source.roff'] = source
         environment = reference_environment()
@@ -225,6 +273,9 @@ def inspect(item, args):
         artifacts["source.roff"] = source
         artifacts["comparison.json"] = (json.dumps({"content": content, "geometry": geometry, 'assessment': explained},
                                        ensure_ascii=False, indent=2) + "\n").encode()
+    except SourceBudgetError as error:
+        record.update(reason="source-budget", execution="budget",
+                      errorType=type(error).__name__, error=str(error)[:4096])
     except (OSError, ValueError, EOFError, lzma.LZMAError) as error:
         record.update(reason="source-or-comparison-error", error=str(error)[:512])
     record.setdefault('triage', classify(record))
@@ -276,11 +327,22 @@ def census(args, report):
     inputs = census_inputs(args)
     binaries = {name: {"path": str(path), "sha256": file_hash(path)}
                 for name, path in (("mant", args.mant), ("reference", args.reference))}
+    decoder = {"available": ZSTD_BINARY is not None, "path": str(ZSTD_BINARY) if ZSTD_BINARY else None}
+    if ZSTD_BINARY is not None:
+        binaries["zstd"] = {"path": str(ZSTD_BINARY), "sha256": file_hash(ZSTD_BINARY)}
+        decoder["sha256"] = binaries["zstd"]["sha256"]
     producer = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
     dirty = subprocess.check_output(["git", "status", "--porcelain"], cwd=ROOT, text=True).splitlines()
     report.update({"schema": "mant.roff-rendering-census/v2", "producerCommit": producer,
               "producerDirtyPaths": dirty, "started": datetime.now(timezone.utc).isoformat(),
-              "binaries": binaries, "referenceIdentity": args.reference_id,
+              "binaries": binaries, "sourceDecoders": {"zstd": decoder},
+              "referenceIdentity": args.reference_id,
+              "limitations": [
+                  "Byte/token/alignment/retention caps and renderer subprocess deadlines are not an end-to-end census or per-source wall-time bound.",
+                  "Regular-file reads, in-process gzip/bzip2/XZ decoding, hashing, JSON transport and Python comparisons run in the parent without a total wall-time deadline or aggregate process-memory cap.",
+                  "zstd uses the resolved executable frozen at module import and recorded here; unavailable decoders stay explicit errors, never empty successful input.",
+                  "External-source detection is conservative lexical possible-dependency evidence, including false conditional branches; it is not an interpreter or a complete inventory of dynamic include dependencies.",
+              ],
               "manifestSha256": args._manifest_sha256,
               "comparators": {name: file_hash(ROOT / "scripts" / name) for name in (
                   "roff_content_compare.py", "roff_layout_geometry.py", "roff_rendering_frame.py",
@@ -331,7 +393,7 @@ def census(args, report):
                   artifactBytes=selection.bytes, artifactPages=len(artifact_index), artifactIndex=artifact_index,
                   artifactSelectionOmissions=dict(selection.omitted),
                   resultsSha256=file_hash(args.output / "results.jsonl"),
-                  binariesUnchanged=all(file_hash(Path(v["path"])) == v["sha256"] for v in binaries.values()),
+                  binariesUnchanged=all(identity_unchanged(v) for v in binaries.values()),
                   comparatorsUnchanged=all(file_hash(ROOT / "scripts" / name) == sha for name, sha in report["comparators"].items()),
                   manifestUnchanged=args.manifest is None or file_hash(args.manifest) == args._manifest_sha256)
     identity_stable = report["binariesUnchanged"] and report["comparatorsUnchanged"] and report["manifestUnchanged"]
@@ -340,6 +402,14 @@ def census(args, report):
     print(json.dumps({"summary": str(args.output / "summary.json"), "counts": dict(counts)}))
     return int(not identity_stable or counts["hard-failure"] > 0 or
                (args.verify and any(value for status, value in counts.items() if status != "clean")))
+
+
+def identity_unchanged(value):
+    """A vanished/replaced executable is unstable evidence, not a hash crash."""
+    try:
+        return file_hash(Path(value["path"])) == value["sha256"]
+    except (OSError, ValueError):
+        return False
 
 
 if __name__ == "__main__":
