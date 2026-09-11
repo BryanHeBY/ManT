@@ -307,6 +307,20 @@ class ExplanationTests(unittest.TestCase):
             'source-consistent-man-external-target-delimiters/v2',
         )
 
+    def test_partial_external_target_inventory_cannot_explain_another_target(self):
+        source = (
+            '.TH PROBE 1\n'
+            '.UR https:\\://one.example.test\n.UE\n'
+            '.UR https:\\://two.example.test\n.UE\n'
+        )
+        result = assess_content(
+            '<https://one.example.test>\n',
+            'https://one.example.test\n',
+            source,
+        )
+        self.assertEqual(result['status'], 'review')
+        self.assertFalse(result['coverage']['sourceConsistentCompatibilityApplied'])
+
     def test_literal_man_UR_zero_width_break_does_not_duplicate_uri_colon(self):
         # GNU groff tokenizes `\\:` as TOKEN_ZERO_WIDTH_BREAK and CVS mandoc
         # renders the corresponding special character without a glyph.  The
@@ -437,6 +451,19 @@ class ExplanationTests(unittest.TestCase):
             sum(result['compatibilityPresentationComparison']['counts'].values()),
             sum(result['rawComparison']['counts'].values()),
         )
+
+    def test_complete_bullet_inventory_is_not_blocked_by_an_incomplete_BR_inventory(self):
+        # The .BR occurrence is deliberately absent from both outputs.  It
+        # must not be borrowed as presentation evidence, but it also must not
+        # discard the independently complete bullet proof on the same page.
+        source = '.IP \\(bu\nBODY\n.BR hidden (2)\n'
+        result = assess_content('• BODY\n', '- BODY\n', source)
+        self.assertEqual(result['status'], 'explained')
+        self.assertEqual(
+            [entry['rule'] for entry in result['explanations']],
+            ['source-consistent-bullet-list-marker/v2'],
+        )
+        self.assertEqual(result['compatibilityPresentationComparison']['status'], 'covered')
 
     def test_direct_source_compatibility_can_refine_an_unaligned_page_without_covering_it(self):
         # Alignment has a deliberately bounded work budget.  The literal

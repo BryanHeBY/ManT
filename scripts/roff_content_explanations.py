@@ -45,7 +45,6 @@ _BR_MANUAL_REFERENCE = re.compile(
     r"^[.']BR[ \t]+([A-Za-z0-9_.:+-]+)[ \t]+\(([1-9][A-Za-z0-9]*)\)[ \t]*$",
     re.MULTILINE,
 )
-_TERMINAL_MANUAL_REFERENCE = re.compile(r"([A-Za-z0-9_.:+-]+) \(([1-9][A-Za-z0-9]*)\)")
 _MDOC_REQUEST = re.compile(r"^[.']([A-Za-z][A-Za-z0-9]*)(?:[ \t]+(.*))?$")
 _MDOC_LITERAL_COLUMN_SEPARATOR = " | "
 # CVS registers UR/UE and MT/ME as the same expanded-block/closing-block
@@ -516,7 +515,21 @@ def _source_consistent_compatibility_projection(reference: str, mant: str,
     mdoc_bullet_count = _literal_mdoc_bullet_item_count(source)
     bullet_count = direct_bullet_count + (mdoc_bullet_count or 0)
     reference_bullets = projected_reference.count("•")
-    if bullet_count and reference_bullets and reference_bullets <= bullet_count:
+    # Count equality proves that every displayed reference bullet came from
+    # the literal inventory.  Also require ManT to have enough portable list
+    # markers for the replacement to reduce occurrence residue rather than
+    # manufacture a new unmatched hyphen.  A page with conditional or omitted
+    # source items must stay reviewable.
+    bullet_residue_before = (
+        abs(reference_bullets - projected_mant.count("•"))
+        + abs(projected_reference.count("-") - projected_mant.count("-"))
+    )
+    bullet_residue_after = (
+        abs(projected_mant.count("•"))
+        + abs(projected_reference.count("-") + reference_bullets - projected_mant.count("-"))
+    )
+    if (bullet_count and reference_bullets == bullet_count
+            and bullet_residue_after < bullet_residue_before):
         projected_reference = projected_reference.replace("•", "-")
         evidence.append({
             "rule": "source-consistent-bullet-list-marker/v2",
@@ -528,51 +541,69 @@ def _source_consistent_compatibility_projection(reference: str, mant: str,
         })
 
     authored = Counter((match[1], match[2]) for match in _BR_MANUAL_REFERENCE.finditer(source))
-    used: Counter[tuple[str, str]] = Counter()
     replacements = 0
-
-    def replace_manual_reference(match: re.Match[str]) -> str:
-        nonlocal replacements
-        pair = (match[1], match[2])
-        if used[pair] >= authored[pair]:
-            return match[0]
-        used[pair] += 1
-        replacements += 1
-        return f"{pair[0]}({pair[1]})"
-
-    if authored:
-        projected_reference = _TERMINAL_MANUAL_REFERENCE.sub(
-            replace_manual_reference, projected_reference
-        )
+    # A partial .BR inventory is not evidence for any member of that family:
+    # conditionals or table-specific execution can suppress an otherwise
+    # literal call.  Keep all manual-reference cells raw unless every source
+    # declaration has an exact terminal and compact counterpart.
+    if authored and all(
+            projected_reference.count(f"{pair[0]} ({pair[1]})") == limit
+            and projected_mant.count(f"{pair[0]}({pair[1]})") >= limit
+            for pair, limit in authored.items()
+    ):
+        for pair, limit in authored.items():
+            terminal = f"{pair[0]} ({pair[1]})"
+            compact = f"{pair[0]}({pair[1]})"
+            projected_reference, count = _replace_limited(
+                projected_reference, terminal, compact, limit
+            )
+            replacements += count
     if replacements:
         evidence.append({
             "rule": "source-consistent-BR-manual-reference-spacing/v1",
-            "sourceReferences": sum(authored.values()),
+            "sourceReferences": replacements,
+            "sourceCandidates": sum(authored.values()),
             "referenceReferences": replacements,
-            "reason": "Literal .BR name (section) source cells are consistent with CVS terminal spacing and ManT's atomic manual-reference presentation.",
+            "reason": "Only literal .BR name (section) cells whose complete source, CVS, and ManT inventories agree are consistent with CVS terminal spacing and ManT's atomic manual-reference presentation.",
         })
 
     external_targets = _literal_man_external_targets(source)
-    if external_targets is not None:
+    # Apply the same all-or-nothing rule to URI/mail heads.  A single hidden
+    # or malformed block must not let a different explicit head borrow its
+    # source proof.
+    if external_targets is not None and all(
+            projected_reference.count(f"<{target}>") == limit
+            and max(projected_mant.count(f"⟨{target}⟩"), projected_mant.count(target)) >= limit
+            for target, limit in external_targets.items()
+    ):
         reference_replacements = 0
         mant_replacements = 0
         for target, limit in external_targets.items():
+            reference_target = f"<{target}>"
+            mant_target = f"⟨{target}⟩"
+            mant_bracketed = projected_mant.count(mant_target)
+            mant_plain = projected_mant.count(target)
+            # All literal heads have already passed the complete-inventory
+            # guard.  ManT's text projection may retain a typed target bare
+            # or put it in compact angle brackets, so rewrite only the latter.
             projected_reference, count = _replace_limited(
-                projected_reference, f"<{target}>", target, limit
+                projected_reference, reference_target, target, limit
             )
             reference_replacements += count
-            projected_mant, count = _replace_limited(
-                projected_mant, f"⟨{target}⟩", target, limit
-            )
-            mant_replacements += count
+            if mant_bracketed:
+                projected_mant, count = _replace_limited(
+                    projected_mant, mant_target, target, limit
+                )
+                mant_replacements += count
         if reference_replacements:
             evidence.append({
-            "rule": "source-consistent-man-external-target-delimiters/v2",
-            "sourceTargets": sum(external_targets.values()),
-            "referenceDelimiters": reference_replacements,
-            "mantDelimiters": mant_replacements,
-            "reason": "Literal GNU man-ext .UR/.MT targets are bracketed by CVS man_term.c:post_UR while ManT preserves the same typed URI or mail address with compact link presentation.",
-        })
+                "rule": "source-consistent-man-external-target-delimiters/v2",
+                "sourceTargets": reference_replacements,
+                "sourceCandidates": sum(external_targets.values()),
+                "referenceDelimiters": reference_replacements,
+                "mantDelimiters": mant_replacements,
+                "reason": "Only literal GNU man-ext .UR/.MT targets whose complete source, CVS, and ManT inventories agree are consistent with CVS man_term.c:post_UR bracket delimiters and ManT's compact link presentation.",
+            })
 
     ordinal_markers = _literal_man_ip_ordinals(source)
     if ordinal_markers is not None:
