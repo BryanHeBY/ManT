@@ -44,6 +44,7 @@ struct AstStructure {
     table_rows: usize,
     table_spanning_cells: usize,
     max_relative_indent_depth: usize,
+    positive_relative_indent_scopes: usize,
     hard_breaks: usize,
     manual_links: usize,
     external_links: usize,
@@ -401,14 +402,15 @@ fn collect_ast_structure(
         }
     }
     let child_inside_table = inside_table || node.kind == NodeKind::Table;
-    let child_indent_depth = relative_indent_depth
-        + usize::from(
-            node.kind == NodeKind::Block
-                && node.macro_name.as_deref() == Some("RS")
-                && node_part_children(node, NodeKind::Body)
-                    .iter()
-                    .any(has_visible_text),
-        );
+    let visible_rs = node.kind == NodeKind::Block
+        && node.macro_name.as_deref() == Some("RS")
+        && node_part_children(node, NodeKind::Body)
+            .iter()
+            .any(has_visible_text);
+    let child_indent_depth = relative_indent_depth + usize::from(visible_rs);
+    if visible_rs && !rs_has_nonpositive_literal_offset(node) {
+        profile.positive_relative_indent_scopes += 1;
+    }
     profile.max_relative_indent_depth = profile.max_relative_indent_depth.max(child_indent_depth);
     for child in &node.children {
         collect_ast_structure(
@@ -420,6 +422,33 @@ fn collect_ast_structure(
             no_fill_lines,
         );
     }
+}
+
+/// A signed RS offset is not necessarily an indentation to the right.
+/// Native `man_term.c` `pre_RS` adds the signed distance and clamps at page left.
+/// Recognize only bounded, finite character-unit literals here: expressions,
+/// other units and missing arguments retain the conservative legacy obligation.
+/// This is not a replacement formatter or a cumulative-position oracle.
+fn rs_has_nonpositive_literal_offset(node: &Node) -> bool {
+    let Some(argument) = node_part_children(node, NodeKind::Head)
+        .first()
+        .and_then(|head| head.text.as_deref())
+    else {
+        return false;
+    };
+    let number = argument
+        .strip_suffix('n')
+        .or_else(|| argument.strip_suffix('m'))
+        .unwrap_or(argument);
+    if !number
+        .chars()
+        .all(|ch| ch.is_ascii_digit() || matches!(ch, '+' | '-' | '.'))
+    {
+        return false;
+    }
+    number
+        .parse::<f64>()
+        .is_ok_and(|value| value.is_finite() && (-4096.0..=0.0).contains(&value))
 }
 
 /// Return unique, printable source occurrences for one semantic link macro.
@@ -785,6 +814,13 @@ fn ir_profile(document: &Document) -> (IrStructure, IrTopology) {
 }
 
 fn collect_section(section: &Section, profile: &mut IrStructure, topology: &mut IrTopology) {
+    collect_inlines(
+        &section.heading.content,
+        section.source.map_or(0, |source| source.line),
+        false,
+        profile,
+        topology,
+    );
     collect_blocks(&section.blocks, false, profile, topology);
     for child in &section.children {
         collect_section(child, profile, topology);
@@ -1066,10 +1102,10 @@ fn compare_structure(
             .section_links
             .saturating_add(observed.unresolved_section_references),
     );
-    if expected.max_relative_indent_depth > 0 && observed.max_indent_columns == 0 {
+    if expected.positive_relative_indent_scopes > 0 && observed.max_indent_columns == 0 {
         violations.push(format!(
-            "relative-indent: expected nested RS depth {}, observed no indented IR block",
-            expected.max_relative_indent_depth
+            "relative-indent: expected positive indentation from {} RS scopes (nested depth {}), observed no indented IR block",
+            expected.positive_relative_indent_scopes, expected.max_relative_indent_depth
         ));
     }
     compare_list_topology(
@@ -1467,6 +1503,110 @@ mod tests {
         NoFillSourceLine, equation_visible_text, is_no_fill_row_text, is_zero_width_guard_line,
         retained_no_fill_rows,
     };
+
+    fn parsed_structure(
+        source: &str,
+    ) -> (super::AstStructure, super::AstTopology, super::Document) {
+        let report = super::Parser::new(super::ParseOptions {
+            includes: super::IncludePolicy::Deny,
+            compression: super::Compression::Plain,
+        })
+        .parse_bytes("audit.1", source.as_bytes())
+        .unwrap();
+        let (expected, topology) = super::ast_profile(&report.document.root);
+        let document =
+            mant_codec::parse_roff_bytes(std::path::Path::new("audit.1"), source.as_bytes())
+                .unwrap();
+        (expected, topology, document)
+    }
+
+    #[test]
+    fn section_heading_links_are_counted_and_loss_is_detected() {
+        let (expected, expected_topology, mut document) = parsed_structure(concat!(
+            ".Dd September 11, 2026\n.Dt AUDIT 1\n.Os\n",
+            ".Sh NAME\n.Nm audit\n.Nd heading link probe\n",
+            ".Sh DESCRIPTION\n.Ss Eo\n.Xr printf 3\nReference\n.Ec\n.Pp\nVisible body.\n",
+        ));
+        let (observed, topology) = super::ir_profile(&document);
+        assert_eq!(expected.manual_links, 1);
+        assert_eq!(observed.manual_links, 1);
+        assert!(
+            super::compare_structure(&expected, &observed, &expected_topology, &topology)
+                .is_empty()
+        );
+
+        let heading = &mut document.sections[1].children[0].heading;
+        // Preserve the words, but remove the typed link: topology must notice.
+        heading.content = vec![super::Inline::Text {
+            value: heading.plain_text(),
+        }];
+        let (mutated, topology) = super::ir_profile(&document);
+        let violations =
+            super::compare_structure(&expected, &mutated, &expected_topology, &topology);
+        assert!(
+            violations
+                .iter()
+                .any(|item| item.starts_with("manual-links:"))
+        );
+    }
+
+    #[test]
+    fn nonpositive_rs_literals_do_not_require_positive_layout() {
+        for argument in ["-7", "-2n", "-1.5m", "0", "+0n"] {
+            let (expected, expected_topology, document) = parsed_structure(&format!(
+                ".TH AUDIT 1\n.SH BODY\n.RS {argument}\n.PP\nVisible body.\n.RE\n"
+            ));
+            assert_eq!(expected.max_relative_indent_depth, 1, "{argument}");
+            assert_eq!(expected.positive_relative_indent_scopes, 0, "{argument}");
+            let (observed, topology) = super::ir_profile(&document);
+            assert_eq!(observed.max_indent_columns, 0, "{argument}");
+            assert!(
+                super::compare_structure(&expected, &observed, &expected_topology, &topology)
+                    .is_empty()
+            );
+        }
+    }
+
+    #[test]
+    fn positive_rs_loss_is_detected_even_below_a_negative_scope() {
+        for scopes in [".RS 4\n", ".RS\n", ".RS -2\n.RS 4\n"] {
+            let (expected, expected_topology, mut document) = parsed_structure(&format!(
+                ".TH AUDIT 1\n.SH BODY\n{scopes}.PP\nVisible body.\n.RE\n"
+            ));
+            assert_eq!(expected.positive_relative_indent_scopes, 1, "{scopes}");
+            let (observed, topology) = super::ir_profile(&document);
+            assert!(observed.max_indent_columns > 0, "{scopes}");
+            assert!(
+                super::compare_structure(&expected, &observed, &expected_topology, &topology)
+                    .is_empty()
+            );
+            for block in &mut document.sections[0].blocks {
+                if let super::Block::Paragraph { layout, .. } = block {
+                    layout.indent_columns = 0;
+                }
+            }
+            let (mutated, topology) = super::ir_profile(&document);
+            assert_eq!(mutated.max_indent_columns, 0);
+            let violations =
+                super::compare_structure(&expected, &mutated, &expected_topology, &topology);
+            assert!(
+                violations
+                    .iter()
+                    .any(|item| item.starts_with("relative-indent:")),
+                "{scopes}"
+            );
+        }
+    }
+
+    #[test]
+    fn unsupported_rs_arguments_retain_the_conservative_obligation() {
+        for argument in ["-2q", "-1i", "-999999n", "-2+1", "NaN"] {
+            let (expected, _, _) = parsed_structure(&format!(
+                ".TH AUDIT 1\n.SH BODY\n.RS {argument}\n.PP\nVisible body.\n.RE\n"
+            ));
+            assert_eq!(expected.positive_relative_indent_scopes, 1, "{argument}");
+        }
+    }
 
     #[test]
     fn unavailable_source_decoder_is_not_absent_equation_evidence() {
