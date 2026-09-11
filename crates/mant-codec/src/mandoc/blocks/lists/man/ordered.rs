@@ -571,5 +571,6 @@ mod tests {
         };
         assert_eq!(crate::mandoc::inline::plain_text(&items[0].terms[0]), "[0]");
         assert_eq!(crate::mandoc::inline::plain_text(&items[1].terms[0]), "[1]");
+        assert!(items.iter().all(|item| item.entry.is_none()));
     }
 }

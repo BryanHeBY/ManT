@@ -98,7 +98,9 @@ integer such as `1.`, `1)`, or `(1)` is sufficient evidence for an
 ordered item, including a one-item footnote list. Bracketed numeric tags such
 as `[0]` remain exact definition labels: in man pages they commonly name array
 slots or structure fields, and the current ordered-list IR has no field for
-their non-decimal marker spelling. Adjacent, same-style,
+their non-decimal marker spelling. Retained punctuated numeric labels are
+presentation only, not aliasless semantic entries; a nonnumeric label remains
+eligible for its ordinary term grammar. Adjacent, same-style,
 consecutively increasing marks join one list; a gap or style change begins a
 new list at the explicit number. A bare integer is treated as ordered only
 when the original `IP` call uses roff's pre-increment number-register form.

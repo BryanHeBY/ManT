@@ -13,9 +13,9 @@ mod head;
 mod named;
 mod options;
 pub(super) use head::is_inferred_head;
-pub(super) use named::is_value_name;
 pub(crate) use named::{environment_variable_alias, environment_variable_body};
 use named::{is_configuration_key, is_variable_term};
+pub(super) use named::{is_ordinal_marker, is_value_name};
 #[cfg(test)]
 pub(super) use options::option_names;
 pub(crate) use options::{

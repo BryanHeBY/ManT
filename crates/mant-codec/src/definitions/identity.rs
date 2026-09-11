@@ -1,7 +1,7 @@
 //! Definition identity policy; coordinated by the parent discovery passes.
 use super::{
     context::DefinitionContext,
-    syntax::{environment_variable_body, infer_identity},
+    syntax::{environment_variable_body, infer_identity, is_ordinal_marker},
 };
 use mant_ir::inline_plain_text as plain_text;
 use mant_ir::{
@@ -53,6 +53,7 @@ pub(super) fn identity_plan(
     context: DefinitionContext,
     hint: Option<super::NativeHeadRole>,
 ) -> IdentityPlan {
+    let inferred = item.entry.is_none();
     let (kind, case, names, occurrences, value_domain) = item.entry.as_ref().map_or_else(
         || {
             let inferred = infer_identity(item, context, hint);
@@ -88,7 +89,21 @@ pub(super) fn identity_plan(
     } else {
         context
     };
-    let semantic = hint != Some(super::NativeHeadRole::Presentation);
+    // A definition label can be necessary for native layout without naming a
+    // user-addressable concept. In particular, `.IP [1]` and singleton
+    // `1.`/`(1)` tags survive as definitions when no complete list can prove
+    // that they should become an ordered list. Do not turn that preserved
+    // presentation marker into an aliasless `term` entry. Explicit producer
+    // facts remain authoritative: this guard only applies to inferred native
+    // identities that have no recognized spelling.
+    let presentation_ordinal = inferred
+        && names.is_empty()
+        && !item.terms.is_empty()
+        && item
+            .terms
+            .iter()
+            .all(|term| is_ordinal_marker(plain_text(term).trim()));
+    let semantic = hint != Some(super::NativeHeadRole::Presentation) && !presentation_ordinal;
     let group_head = semantic
         && (!names.is_empty()
             || !item.terms.is_empty()

@@ -531,6 +531,60 @@ fn generic_terms_receive_the_anchor_their_projected_entry_advertises() {
 }
 
 #[test]
+fn retained_ordinal_labels_are_presentation_not_semantic_entries() {
+    // Native man `.IP`/`.TP` labels may remain definitions when one item or
+    // an authored marker spelling cannot prove an ordered list. They remain
+    // visible for layout, without creating empty-name Term entries in
+    // outlines, explain, or search.
+    for label in ["1.", "2)", "(3)", "[4]"] {
+        let mut sections = vec![Section {
+            id: "notes".into(),
+            fragment_aliases: Vec::new(),
+            heading: "NOTES".into(),
+            spacing_before_lines: 0,
+            blocks: vec![Block::DefinitionList {
+                declaration_groups: Vec::new(),
+                items: vec![item(label)],
+                compact: true,
+                layout: LayoutHint::default(),
+                source: None,
+            }],
+            children: Vec::new(),
+            source: None,
+        }];
+
+        identify_definitions(&mut Vec::new(), &mut sections, &HashSet::new(), None);
+        let Block::DefinitionList { items, .. } = &sections[0].blocks[0] else {
+            panic!("expected retained ordinal definition");
+        };
+        assert!(items[0].entry.is_none(), "{label} became a semantic entry");
+        assert_eq!(mant_ir::inline_plain_text(&items[0].terms[0]), label);
+    }
+
+    // Ordinary literal labels remain eligible for generic-term discovery.
+    let mut sections = vec![Section {
+        id: "glossary".into(),
+        fragment_aliases: Vec::new(),
+        heading: "GLOSSARY".into(),
+        spacing_before_lines: 0,
+        blocks: vec![Block::DefinitionList {
+            declaration_groups: Vec::new(),
+            items: vec![item("ISO")],
+            compact: true,
+            layout: LayoutHint::default(),
+            source: None,
+        }],
+        children: Vec::new(),
+        source: None,
+    }];
+    identify_definitions(&mut Vec::new(), &mut sections, &HashSet::new(), None);
+    let Block::DefinitionList { items, .. } = &sections[0].blocks[0] else {
+        panic!("expected ordinary term definition");
+    };
+    assert_eq!(items[0].entry.as_ref().unwrap().names, ["ISO"]);
+}
+
+#[test]
 fn classifies_environment_configuration_and_nested_parameter_semantics() {
     fn identities(section: &Section) -> Vec<&mant_ir::EntryFacts> {
         let Block::DefinitionList { items, .. } = &section.blocks[0] else {
