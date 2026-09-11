@@ -153,7 +153,10 @@ fn profile_document(
             entry.names.is_empty() && entry.forms.iter().all(|form| form.trim().is_empty())
         })
         .collect::<Vec<_>>();
-    let ordinal_definitions = ordinal_definition_candidates(document);
+    let (ordinal_definitions, retained_presentation_ordinals): (Vec<_>, Vec<_>) =
+        ordinal_definition_candidates(document)
+            .into_iter()
+            .partition(|candidate| !bracketed_ordinal_marker(&candidate.form));
     let value_domain_violations = value_domain_violations(document);
     let ordinal_conversions = ordinal_conversions(native_root, document);
     let ordinal_conversion_violations = conversion_violations(&ordinal_conversions);
@@ -222,6 +225,7 @@ fn profile_document(
         "semanticViolations": semantic_diagnostics,
         "ordinalEntries": ordinal_entries,
         "ordinalDefinitions": ordinal_definitions,
+        "retainedPresentationOrdinals": retained_presentation_ordinals,
         "emptyEntries": empty_entries,
         "aliaslessGenericTermCount": aliasless_generic_terms.len(),
         "aliaslessGenericTermSamples": aliasless_generic_terms.into_iter().take(SAMPLE_LIMIT).collect::<Vec<_>>(),
@@ -491,6 +495,21 @@ fn ordinal_marker(value: &str) -> bool {
     })
 }
 
+/// Bracketed numeric tags are visible definition labels, not decimal ordered
+/// list spelling. The lowerer intentionally retains them because `ListKind`
+/// cannot reproduce their marker syntax. Keep them in the profiler census,
+/// but do not represent that deliberate layout-preserving choice as a
+/// conversion violation.
+fn bracketed_ordinal_marker(value: &str) -> bool {
+    value
+        .trim()
+        .strip_prefix('[')
+        .and_then(|digits| digits.strip_suffix(']'))
+        .is_some_and(|digits| {
+            !digits.is_empty() && digits.chars().all(|character| character.is_ascii_digit())
+        })
+}
+
 fn note_like_title(title: &str) -> bool {
     title
         .split(|character: char| !character.is_alphanumeric())
@@ -667,6 +686,29 @@ mod tests {
         for value in ["0", "1", "2.2", "v1.", "1.2.", "[x]"] {
             assert!(!super::ordinal_marker(value));
         }
+    }
+
+    #[test]
+    fn bracketed_definition_labels_are_census_not_precision_violations() {
+        let source = b".TH PROBE 1\n.SH NOTES\n.IP [1] 4\nFirst.\n.IP [2] 4\nSecond.\n";
+        let parsed = libmandoc_rs::Parser::default()
+            .parse_bytes("probe.1", source)
+            .unwrap();
+        let document = mant_codec::lower_mandoc_document(std::path::Path::new("probe.1"), &parsed);
+        let profile = super::profile_document("probe", &parsed.document.root, &document, 0);
+
+        assert_eq!(profile["ordinalEntries"], serde_json::json!([]));
+        assert_eq!(profile["ordinalDefinitions"], serde_json::json!([]));
+        assert_eq!(
+            profile["retainedPresentationOrdinals"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|candidate| candidate["form"].as_str().unwrap())
+                .collect::<Vec<_>>(),
+            ["[1]", "[2]"]
+        );
+        assert_eq!(profile["violations"], serde_json::json!([]));
     }
 
     #[test]

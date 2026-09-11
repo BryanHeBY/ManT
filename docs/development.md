@@ -848,8 +848,8 @@ python3 scripts/audit-roff-semantics.py --manpath /usr/share/man \
   --json /tmp/mant-roff-semantics.json
 ```
 
-Punctuated integer definitions left outside an ordered list, corresponding
-`term` or `value` entries, entries with neither an alias nor a visible form,
+Decimal punctuated integer definitions left outside an ordered list,
+corresponding `term` or `value` entries, entries with neither an alias nor a visible form,
 and non-`value` children inside a `Choices` domain are review findings.
 So are qualifying `Bl -tag` sequences that remain definitions and ordinal
 `-diag`, `-hang`, `-inset`, or `-ohang` definitions that become ordered lists.
