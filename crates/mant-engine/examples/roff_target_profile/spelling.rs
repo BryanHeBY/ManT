@@ -12,7 +12,7 @@ pub(super) fn automatic_target_spelling(raw: &str) -> Option<String> {
     let mut visible = String::with_capacity(raw.len());
     let mut characters = raw.chars();
     while !characters.as_str().is_empty() {
-        if let Some(character) = next_visible_character(&mut characters)? {
+        if let SpellingEvent::Visible(character) = next_spelling_event(&mut characters)? {
             visible.push(character);
         }
     }
@@ -30,7 +30,7 @@ pub(super) fn first_source_token(raw: &str) -> Option<&str> {
     let mut has_visible_character = false;
     while !characters.as_str().is_empty() {
         let offset = raw.len() - characters.as_str().len();
-        let Some(character) = next_visible_character(&mut characters)? else {
+        let SpellingEvent::Visible(character) = next_spelling_event(&mut characters)? else {
             continue;
         };
         if character.is_whitespace() {
@@ -45,18 +45,23 @@ pub(super) fn first_source_token(raw: &str) -> Option<&str> {
     has_visible_character.then_some(&raw[token_start..])
 }
 
-fn next_visible_character(characters: &mut std::str::Chars<'_>) -> Option<Option<char>> {
+enum SpellingEvent {
+    Visible(char),
+    Nonprinting,
+}
+
+fn next_spelling_event(characters: &mut std::str::Chars<'_>) -> Option<SpellingEvent> {
     let character = characters.next()?;
     if character != '\\' {
-        return Some(Some(character));
+        return Some(SpellingEvent::Visible(character));
     }
     match characters.next()? {
         // ManT does not turn zero-width or sub-column spacing hints into name
         // characters. These are not the word separators handled below.
-        '&' | '^' | '|' => Some(None),
-        'e' | '\\' => Some(Some('\\')),
-        '-' => Some(Some('-')),
-        ' ' | '~' | '0' => Some(Some(' ')),
+        '&' | '^' | '|' => Some(SpellingEvent::Nonprinting),
+        'e' | '\\' => Some(SpellingEvent::Visible('\\')),
+        '-' => Some(SpellingEvent::Visible('-')),
+        ' ' | '~' | '0' => Some(SpellingEvent::Visible(' ')),
         'f' => {
             match characters.next()? {
                 '(' => {
@@ -70,7 +75,7 @@ fn next_visible_character(characters: &mut std::str::Chars<'_>) -> Option<Option
                 },
                 _ => {}
             }
-            Some(None)
+            Some(SpellingEvent::Nonprinting)
         }
         _ => None,
     }

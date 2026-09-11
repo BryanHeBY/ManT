@@ -230,14 +230,7 @@ fn assemble_native_profile(
             continue;
         };
         let expected_container = expected_container(&owner.owner_macro);
-        let normalized_id = if owner.explicit || owner.owner_macro == "Tg" {
-            document_id_slug(&id)
-        } else {
-            document_id_slug(
-                &automatic_target_spelling(&id)
-                    .expect("retained automatic targets have a classified source spelling"),
-            )
-        };
+        let normalized_id = normalized_target_identity(&id, owner.explicit, &owner.owner_macro);
         targets.push(ExpectedTarget {
             normalized_id,
             explicit: owner.explicit,
@@ -297,6 +290,17 @@ fn assemble_native_profile(
             )
             .collect(),
         unclassified,
+    }
+}
+
+fn normalized_target_identity(id: &str, explicit: bool, owner_macro: &str) -> String {
+    if explicit || owner_macro == "Tg" {
+        document_id_slug(id)
+    } else {
+        document_id_slug(
+            &automatic_target_spelling(id)
+                .expect("retained automatic targets have a classified source spelling"),
+        )
     }
 }
 
