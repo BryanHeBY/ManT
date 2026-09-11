@@ -24,9 +24,7 @@ pub(super) use font::parse_roff_text_with_state;
 pub(super) use font::{lower_inline_nodes_with_font_state, parse_roff_text};
 
 pub(super) use source::roff_macro_arguments;
-pub(in crate::mandoc) use source_fragment::{
-    FragmentContentAuthority, lower_source_fragment_with_formatter_state,
-};
+pub(in crate::mandoc) use source_fragment::lower_source_fragment_with_formatter_state;
 
 use super::{
     first_part_children,

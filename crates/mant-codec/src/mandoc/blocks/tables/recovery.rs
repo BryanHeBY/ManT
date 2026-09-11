@@ -2,8 +2,8 @@
 use crate::mandoc::{
     LoweringContext, TableTextBlock,
     inline::{
-        FilledBoundary, FragmentContentAuthority, InlineBuilder, lower_man_link,
-        lower_source_fragment_with_formatter_state, plain_text,
+        FilledBoundary, InlineBuilder, lower_man_link, lower_source_fragment_with_formatter_state,
+        plain_text,
     },
     roff_escape::visible_text,
 };
@@ -81,7 +81,8 @@ pub(super) fn lower_missing_table_cell(
     context: &LoweringContext<'_>,
     formatter: &mut crate::mandoc::formatter::FormatterState,
 ) -> Vec<Inline> {
-    let source = source.unwrap_or_default().trim();
+    let source = context.table_execution_source(node.line, source.unwrap_or_default());
+    let source = source.trim();
     if source.is_empty() {
         return Vec::new();
     }
@@ -105,7 +106,6 @@ pub(super) struct CellPosition<'a> {
 #[must_use]
 struct CellCandidate {
     inlines: Vec<Inline>,
-    content_authority: FragmentContentAuthority,
     formatter: crate::mandoc::formatter::FormatterState,
     diagnostics: Vec<mant_ir::Diagnostic>,
 }
@@ -123,12 +123,12 @@ impl CellCandidate {
         // CVS mandoc invokes roff_expand() before tbl_read().  Strings,
         // registers, and macro arguments therefore need the original
         // session's tbl_dat payload.  Conversely, that flattened payload has
-        // discarded self-contained mdoc/man inline syntax, so a complete
-        // source recovery is authoritative for `.Fl`, `.Ns`, fonts, and
-        // enclosure macros even when its visible spelling differs.
+        // discarded self-contained mdoc/man inline syntax.  Recover that
+        // structure for `.Fl`, `.Ns`, fonts, and enclosure macros only after
+        // its visible text agrees with this exact native cell: source syntax
+        // must not let a mis-associated block replace neighboring content.
         if let Some(native) = native {
-            return self.content_authority == FragmentContentAuthority::RecoveredSyntax
-                || table_text_agrees(&text, &visible_text(native));
+            return table_text_agrees(&text, &visible_text(native));
         }
         !position.row.iter().enumerate().any(|(index, candidate)| {
             index != position.index
@@ -185,11 +185,8 @@ pub(super) fn lower_table_cell(
         // replacement for the native payload. If that payload is absent,
         // retain the entire source rather than only the supported lines.
         let candidate_diagnostics = context.diagnostics.borrow_mut().split_off(diagnostic_start);
-        let (reconstructed, content_authority) = match recovered {
-            TableTextRecovery::Complete {
-                inlines,
-                content_authority,
-            } => (inlines, content_authority),
+        let reconstructed = match recovered {
+            TableTextRecovery::Complete { inlines } => inlines,
             TableTextRecovery::Incomplete => {
                 context
                     .diagnostics
@@ -199,12 +196,13 @@ pub(super) fn lower_table_cell(
                 if let Some(text) = cell.text.as_deref().filter(|text| !text.is_empty()) {
                     return Some(lower_table_cell_text(text, node.line, context, formatter));
                 }
-                return Some(context.lower_text(&text_block.source, formatter));
+                let source =
+                    context.table_execution_source(text_block.start_line, &text_block.source);
+                return Some(context.lower_text(&source, formatter));
             }
         };
         let candidate = CellCandidate {
             inlines: reconstructed,
-            content_authority,
             formatter: candidate_state,
             diagnostics: candidate_diagnostics,
         };
@@ -225,13 +223,11 @@ pub(super) fn lower_table_cell(
         return None;
     }
 
-    let request = text_block.and_then(|block| {
-        block
-            .source
-            .lines()
-            .map(str::trim)
-            .find(|line| !line.is_empty())
-    });
+    let source =
+        text_block.map(|block| context.table_execution_source(block.start_line, &block.source));
+    let request = source
+        .as_deref()
+        .and_then(|source| source.lines().map(str::trim).find(|line| !line.is_empty()));
     let name = request
         .and_then(|line| {
             line.strip_prefix(".Nm")
@@ -303,10 +299,7 @@ fn lower_table_cell_text(
 }
 
 enum TableTextRecovery {
-    Complete {
-        inlines: Vec<Inline>,
-        content_authority: FragmentContentAuthority,
-    },
+    Complete { inlines: Vec<Inline> },
     Incomplete,
 }
 
@@ -317,8 +310,9 @@ fn lower_table_text_block(
     synopsis: bool,
     formatter: &mut crate::mandoc::formatter::FormatterState,
 ) -> TableTextRecovery {
+    let source = context.table_execution_source(block.start_line, &block.source);
     if let Some(recovered) = lower_source_fragment_with_formatter_state(
-        &block.source,
+        &source,
         context.macro_set,
         context.default_name,
         synopsis,
@@ -331,14 +325,12 @@ fn lower_table_text_block(
         *formatter = recovered.formatter;
         return TableTextRecovery::Complete {
             inlines: recovered.inlines,
-            content_authority: recovered.content_authority,
         };
     }
     // A rejected request sequence cannot be proven complete by stitching
     // together whichever AST siblings escaped tbl. Even a present node may
     // only represent part of that sequence. Keep the whole cell instead.
-    if let Some(offset) = block
-        .source
+    if let Some(offset) = source
         .lines()
         .position(|line| line.trim_start().starts_with(['.', '\'']))
     {
@@ -350,7 +342,7 @@ fn lower_table_text_block(
         return TableTextRecovery::Incomplete;
     }
     let mut builder = InlineBuilder::with_spacing(formatter.spacing);
-    for (offset, source_line) in block.source.lines().enumerate() {
+    for (offset, source_line) in source.lines().enumerate() {
         let line = block
             .start_line
             .saturating_add(u32::try_from(offset).unwrap_or(u32::MAX));
@@ -389,7 +381,6 @@ fn lower_table_text_block(
     formatter.spacing = builder.spacing_enabled();
     TableTextRecovery::Complete {
         inlines: builder.finish(),
-        content_authority: FragmentContentAuthority::NativeEvaluation,
     }
 }
 

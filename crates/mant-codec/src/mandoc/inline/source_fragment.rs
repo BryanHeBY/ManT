@@ -17,24 +17,7 @@ use super::{
 pub(in crate::mandoc) struct RecoveredFragment {
     pub(in crate::mandoc) inlines: Vec<Inline>,
     pub(in crate::mandoc) complete: bool,
-    /// Whether a complete fragment still needs the original parser session
-    /// for its visible text.  `roff_expand()` resolves strings, number
-    /// registers, and macro arguments before tbl records a cell; a synthetic
-    /// parser cannot reproduce that document-local state.
-    pub(in crate::mandoc) content_authority: FragmentContentAuthority,
     pub(in crate::mandoc) formatter: crate::mandoc::formatter::FormatterState,
-}
-
-/// Select the source of visible cell text after bounded source recovery.
-///
-/// A synthetic parse is authoritative for self-contained inline syntax such
-/// as `.Fl`, `.Ns`, and enclosure macros: libmandoc's flattened tbl payload
-/// has already lost that structure.  Dynamic roff interpolation is resolved
-/// by the original parse session, so the native cell text remains authority.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(in crate::mandoc) enum FragmentContentAuthority {
-    RecoveredSyntax,
-    NativeEvaluation,
 }
 
 pub(in crate::mandoc) fn lower_source_fragment_with_formatter_state(
@@ -44,11 +27,6 @@ pub(in crate::mandoc) fn lower_source_fragment_with_formatter_state(
     synopsis: bool,
     formatter: crate::mandoc::formatter::FormatterState,
 ) -> Option<RecoveredFragment> {
-    let content_authority = if requires_native_evaluation(source) {
-        FragmentContentAuthority::NativeEvaluation
-    } else {
-        FragmentContentAuthority::RecoveredSyntax
-    };
     let mut requests = 0;
     for line in source.lines() {
         if let Some(request) = line.trim_start().strip_prefix(['.', '\'']) {
@@ -76,7 +54,6 @@ pub(in crate::mandoc) fn lower_source_fragment_with_formatter_state(
         RecoveredFragment {
             inlines: parse_roff_text_with_state(source, &mut font, true),
             complete: false,
-            content_authority,
             formatter,
         }
     };
@@ -142,7 +119,6 @@ pub(in crate::mandoc) fn lower_source_fragment_with_formatter_state(
     Some(RecoveredFragment {
         inlines,
         complete: true,
-        content_authority,
         formatter,
     })
 }
@@ -158,6 +134,7 @@ pub(in crate::mandoc) fn lower_source_fragment_with_formatter_state(
 /// therefore keep structured source recovery.  In particular, `\\g` is not
 /// expanded by mandoc and `\\V` is retained as unsupported syntax, so neither
 /// makes the original parser session content authority.
+#[cfg(test)]
 fn requires_native_evaluation(source: &str) -> bool {
     let mut characters = source.chars();
     while let Some(character) = characters.next() {
@@ -341,27 +318,11 @@ mod tests {
     }
 
     #[test]
-    fn content_authority_distinguishes_inline_syntax_from_session_expansion() {
-        let recovered = lower_source_fragment(".Fl Fl help", MacroSet::Mdoc, None, false)
-            .expect("recover self-contained mdoc syntax");
-        assert_eq!(
-            recovered.content_authority,
-            FragmentContentAuthority::RecoveredSyntax
-        );
+    fn detects_fragments_that_need_the_native_parser_session() {
+        assert!(!requires_native_evaluation(".Fl Fl help"));
         for source in [r".No There\*(Aqs", r".No step\n+[counter]", r".No \$1"] {
-            let recovered = lower_source_fragment(source, MacroSet::Mdoc, None, false)
-                .expect("recover bounded source fragment");
-            assert_eq!(
-                recovered.content_authority,
-                FragmentContentAuthority::NativeEvaluation,
-                "{source}"
-            );
+            assert!(requires_native_evaluation(source), "{source}");
         }
-        let recovered = lower_source_fragment(r".No fixed\(aqglyph", MacroSet::Mdoc, None, false)
-            .expect("recover fixed glyph");
-        assert_eq!(
-            recovered.content_authority,
-            FragmentContentAuthority::RecoveredSyntax
-        );
+        assert!(!requires_native_evaluation(r".No fixed\(aqglyph"));
     }
 }

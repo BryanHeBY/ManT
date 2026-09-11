@@ -45,3 +45,55 @@ fn tbl_text_block_prefers_native_parse_time_string_expansion() {
         "There's"
     );
 }
+
+#[test]
+fn tbl_source_recovery_never_promotes_roff_comments_to_cells_or_text_blocks() {
+    let document = parse_manual_bytes(
+        std::path::Path::new("tbl-inline-comment.3"),
+        b".TH TBL-INLINE-COMMENT 3\n.SH DESCRIPTION\n.TS\nl l.\nleft\tright\\\" ignored ordinary-cell payload\nT{ \\\" real text-block marker with comment\n.BR linked (3) \\\" ignored text-block payload\nT}\tplain\n.TE\n",
+    )
+    .expect("lower table comments through the native roff lexical boundary");
+    let Block::Table { rows, .. } = &document.sections[0].blocks[0] else {
+        panic!("expected one lowered table");
+    };
+    let table_text = rows
+        .iter()
+        .flat_map(|row| &row.cells)
+        .flat_map(|cell| &cell.blocks)
+        .filter_map(|block| match block {
+            Block::Paragraph { children, .. } => Some(inline_text(children)),
+            _ => None,
+        })
+        .collect::<Vec<_>>()
+        .join(" ");
+    assert!(
+        table_text.contains("left right linked(3) plain"),
+        "{table_text}"
+    );
+    assert!(!table_text.contains("ignored"), "{table_text}");
+    assert!(!table_text.contains("payload"), "{table_text}");
+}
+
+#[test]
+fn tbl_source_recovery_uses_a_document_level_ec_escape_change() {
+    let document = parse_manual_bytes(
+        std::path::Path::new("tbl-alternate-escape-comment.3"),
+        b".TH TBL-ALTERNATE-ESCAPE-COMMENT 3\n.ec @\n.SH DESCRIPTION\n.TS\nl l.\nleft\tright\t@\" ignored third source cell\n.TE\n.ec\n",
+    )
+    .expect("lower a table after a native .ec escape change");
+    let Block::Table { rows, .. } = &document.sections[0].blocks[0] else {
+        panic!("expected one lowered table");
+    };
+    let table_text = rows
+        .iter()
+        .flat_map(|row| &row.cells)
+        .flat_map(|cell| &cell.blocks)
+        .filter_map(|block| match block {
+            Block::Paragraph { children, .. } => Some(inline_text(children)),
+            _ => None,
+        })
+        .collect::<Vec<_>>()
+        .join(" ");
+    assert!(table_text.contains("left right"), "{table_text}");
+    assert!(!table_text.contains("ignored"), "{table_text}");
+}
