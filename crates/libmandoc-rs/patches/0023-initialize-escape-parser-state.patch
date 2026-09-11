@@ -1,0 +1,28 @@
+Subject: initialize optional escape parser state
+Upstream-Status: Candidate (not submitted)
+Replaces: new CVS source portability
+
+Give the optional argument length and recursive escape coordinates explicit
+initial values for MSVC's path-sensitive C4701 check. Valid special escapes
+already set argl before diagnostic use; nested coordinates are read only after
+roff_escape writes every output argument. Keep those assignments and behavior
+unchanged rather than weakening the warning policy for the new translation unit.
+
+--- a/roff_escape.c
++++ b/roff_escape.c
+@@ -99,6 +99,7 @@
+ 	 */
+ 
+ 	iarg = iendarg = iend = inam + 1;
++	argl = 0;
+ 	maxl = INT_MAX;
+ 	term = '\0';
+ 	err = MANDOCERR_OK;
+@@ -277,6 +278,7 @@
+ 	/* Decide how to end the argument. */
+ 
+ 	escterm = 0;
++	sesc = snam = sarg = sendarg = send = 0;
+ 	stype = ESCAPE_EXPAND;
+ 	if ((term == '\b' || (term == '\0' && maxl == INT_MAX)) &&
+ 	    buf[iarg] == buf[iesc]) {

@@ -332,7 +332,7 @@ or changing the patch stack.
 ### Local vendor patches
 
 The checked-in vendor tree differs from the pinned CVS source subset only by
-the 22 ordered patches in `patches/series`. The first group contains
+the 23 ordered patches in `patches/series`. The following group contains
 independently reviewable correctness, compatibility, and portability changes;
 they are candidates for separate upstream evaluation, not claims of submission
 or acceptance:
@@ -362,6 +362,9 @@ or acceptance:
 - `0012-libbsd-library-name.patch` adds libbsd's library catalog entry.
 - `0013-pandoc-verbatim-fonts.patch` recognizes Pandoc's `\f[V]`,
   `\f[VB]`, and `\f[VI]` fonts.
+- `0023-initialize-escape-parser-state.patch` gives optional recursive escape
+  state explicit initial values for strict MSVC compilation, retaining the
+  existing assignments and diagnostic behavior.
 
 The remaining patches implement the synchronous embedding boundary:
 

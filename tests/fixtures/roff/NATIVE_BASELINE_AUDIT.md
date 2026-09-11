@@ -68,3 +68,13 @@ no-fill occurrences; global matching against other flowed prose caused them.
 The compact record distributes hashes and conclusions, not the external corpus
 or local output archives. Included-file dependency graphs were not independently
 frozen. This Linux run does not establish other-platform behavior.
+
+## Cross-platform follow-up
+
+The recorded full-corpus producer contains 22 patches. Subsequent Windows CI
+identified MSVC C4701 diagnostics in the new escape parser; patch 0023 explicitly
+initializes optional argument/recursive-offset state without replacing any of
+the existing assignments. Parser and reference-renderer regressions cover valid
+special escapes, recursive expansion, invalid delimiters and incomplete escapes.
+The original corpus hashes and producer records above remain unchanged; they
+are not relabeled as results from this follow-up build.

@@ -99,6 +99,7 @@ roff_escape(const char *buf, const int ln, const int aesc,
 	 */
 
 	iarg = iendarg = iend = inam + 1;
+	argl = 0;
 	maxl = INT_MAX;
 	term = '\0';
 	err = MANDOCERR_OK;
@@ -277,6 +278,7 @@ roff_escape(const char *buf, const int ln, const int aesc,
 	/* Decide how to end the argument. */
 
 	escterm = 0;
+	sesc = snam = sarg = sendarg = send = 0;
 	stype = ESCAPE_EXPAND;
 	if ((term == '\b' || (term == '\0' && maxl == INT_MAX)) &&
 	    buf[iarg] == buf[iesc]) {
