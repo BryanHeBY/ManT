@@ -393,7 +393,7 @@ pub fn assert_git_generated_highlight_is_lowered(name: &str, document: &Document
     let description = section(document, "DESCRIPTION");
     let text = block_slice_text(&description.blocks);
     assert!(
-        text.contains("The Git User's Manual[1] has a more in-depth introduction"),
+        text.contains("The Git User’s Manual[1] has a more in-depth introduction"),
         "fixture {name} lost generated Git title or footnote: {text:?}",
     );
     assert!(
@@ -405,7 +405,7 @@ pub fn assert_git_generated_highlight_is_lowered(name: &str, document: &Document
     for block in &description.blocks {
         visit_block_inlines(block, &mut |inline| {
             if let Inline::Strong { children } = inline
-                && inline_text(children).contains("Git User's Manual")
+                && inline_text(children).contains("Git User’s Manual")
             {
                 title_is_strong = true;
             }

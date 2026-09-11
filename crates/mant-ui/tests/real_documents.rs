@@ -243,7 +243,7 @@ fn generated_git_presentation_requests_never_reach_terminal_text() {
             .collect::<Vec<_>>()
             .join("\n");
 
-        assert!(output.contains("The Git User's Manual[1]"), "{relative}");
+        assert!(output.contains("The Git User’s Manual[1]"), "{relative}");
         assert!(!output.contains("m[blue]"), "{relative}: {output}");
         assert!(!output.contains("s-2[1]s+2"), "{relative}: {output}");
     }
