@@ -573,15 +573,16 @@ fn flatten_sections<'a>(
     parent: &[usize],
     output: &mut Vec<(Vec<usize>, &'a Section)>,
 ) {
-    let mut projected_index = 0;
-    for section in sections {
+    // Excerpt selectors address the source IR, not the serialized Markdown.
+    // Invisible headings disappear from CommonMark topology but still occupy
+    // their original query coordinate, including the path to their children.
+    for (index, section) in sections.iter().enumerate() {
+        let mut path = parent.to_vec();
+        path.push(index + 1);
         if section.heading.plain_text().trim().is_empty() {
-            flatten_sections(&section.children, parent, output);
+            flatten_sections(&section.children, &path, output);
             continue;
         }
-        projected_index += 1;
-        let mut path = parent.to_vec();
-        path.push(projected_index);
         output.push((path.clone(), section));
         flatten_sections(&section.children, &path, output);
     }
@@ -626,5 +627,32 @@ mod tests {
         assert!(
             !compare_topology("full", &heading("Title"), &ProjectionTopology::default()).is_empty()
         );
+    }
+
+    #[test]
+    fn excerpt_coordinates_do_not_compress_invisible_source_headings() {
+        let mut document = parse_markdown(
+            "# Probe\n\n## One\n\nFIRST\n\n## Empty\n\n### Inner\n\nINNER\n\n## Three\n\nLAST\n",
+            None,
+        )
+        .unwrap()
+        .document;
+        document.sections[1].heading = mant_ir::Heading::default();
+        let mut selected = Vec::new();
+        flatten_sections(&document.sections, &[], &mut selected);
+        let coordinates: Vec<_> = selected.iter().map(|(path, _)| path.clone()).collect();
+        assert_eq!(coordinates, [vec![1], vec![2, 1], vec![3]]);
+        let query = ResolvedContent {
+            label: "Probe".into(),
+            address: None,
+            document: Some(document.clone()),
+            tldr: None,
+        };
+        let mut violations = Vec::new();
+        assert_eq!(
+            check_section_excerpts(&query, &document, &mut violations).unwrap(),
+            3
+        );
+        assert!(violations.is_empty(), "{violations:?}");
     }
 }
