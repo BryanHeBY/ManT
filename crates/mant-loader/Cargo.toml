@@ -1,6 +1,6 @@
 [package]
 name = "mant-loader"
-version = "0.11.0"
+version = "0.11.1"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
@@ -23,12 +23,12 @@ roff = ["mant-codec/roff", "dep:libmandoc-rs", "dep:flate2", "dep:zstd"]
 [dependencies]
 mant-ir = { path = "../mant-ir", version = "^0.11.0" }
 mant-protocol = { path = "../mant-protocol", version = "^0.11.0" }
-mant-codec = { path = "../mant-codec", version = "^0.11.0", default-features = false }
+mant-codec = { path = "../mant-codec", version = "^0.11.1", default-features = false }
 mant-sources = { path = "../mant-sources", version = "^0.9.3", default-features = false }
 grep-matcher.workspace = true
 grep-regex.workspace = true
 serde_json.workspace = true
-libmandoc-rs = { path = "../libmandoc-rs", version = "^0.10.0", optional = true }
+libmandoc-rs = { path = "../libmandoc-rs", version = "^0.11.0", optional = true }
 flate2 = { workspace = true, optional = true }
 zstd = { workspace = true, optional = true }
 

@@ -867,7 +867,7 @@ checksum = "b6d2cec3eae94f9f509c767b45932f1ada8350c4bdb85af2fcab4a3c14807981"
 
 [[package]]
 name = "libmandoc-rs"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "cc",
  "flate2",
@@ -925,7 +925,7 @@ dependencies = [
 
 [[package]]
 name = "mant"
-version = "0.11.0"
+version = "0.11.1"
 dependencies = [
  "anstream",
  "anstyle",
@@ -962,7 +962,7 @@ dependencies = [
 
 [[package]]
 name = "mant-codec"
-version = "0.11.0"
+version = "0.11.1"
 dependencies = [
  "libmandoc-rs",
  "mant-ir",
@@ -974,7 +974,7 @@ dependencies = [
 
 [[package]]
 name = "mant-engine"
-version = "0.11.0"
+version = "0.11.1"
 dependencies = [
  "flate2",
  "libmandoc-rs",
@@ -1002,7 +1002,7 @@ dependencies = [
 
 [[package]]
 name = "mant-loader"
-version = "0.11.0"
+version = "0.11.1"
 dependencies = [
  "flate2",
  "grep-matcher",

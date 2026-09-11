@@ -12,7 +12,34 @@ that crate was not published for that change.
 
 ## Unreleased
 
-No compatibility changes are pending beyond the prepared releases below.
+### libmandoc-rs 0.11.0
+
+- Replace the 1.14.6 native baseline with the official CVS tree pinned at
+  2026-09-11 08:00:00 UTC. `LIBMANDOC_VERSION` is `cvs-20260911`; the source
+  inventory records every upstream revision and SHA-256. Builds remain offline.
+- Preserve the owned Rust AST shape, memory-only input, strict include roots,
+  bounded parsing and per-thread session isolation. Native tokens and generated
+  syntax now follow the pinned upstream, including distinct `P`/`LP` paragraphs,
+  `soquiet`, and updated SYNOPSIS declarations. Consumers matching private
+  upstream syntax should recheck their lowering rather than assume 1.14.6 trees.
+- The optional reference renderer follows the new upstream basic-unit layout:
+  its default body indent is five columns and its HTML structure has changed.
+  Output capture, UTF-8 width, limits and concurrent isolation remain supported.
+  Update native-renderer golden output deliberately; this is not a change to
+  ManT's own text/TUI renderer or its versioned document contracts.
+- Restack local changes into independent upstream-candidate fixes and explicit
+  embedding policies. The active vendor source may be a pinned release or CVS
+  snapshot; Git history owns earlier baselines, not parallel patch stacks.
+
+### mant-codec, mant-loader, mant-engine and mant 0.11.1
+
+- Adopt `libmandoc-rs ^0.11.0` through the roff loading path. Paragraph font
+  resets cover the newly preserved `P` and `LP` tokens. Standalone `soquiet`
+  redirects use the same exact-name and confined-source rules as `so`.
+- Require the updated codec/loader in downstream production dependencies so a
+  fresh resolution cannot mix the CVS parser with pre-migration lowering.
+  Unchanged crates retain their versions; all published v0.11 protocol shapes
+  and schema snapshots are unchanged. No release tag is implied by these notes.
 
 ## 0.11.0 - 2026-09-11
 

@@ -1,6 +1,6 @@
 [package]
 name = "mant-engine"
-version = "0.11.0"
+version = "0.11.1"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
@@ -29,18 +29,18 @@ roff = ["mant-loader/roff"]
 
 [dependencies]
 mant-ir = { path = "../mant-ir", version = "^0.11.0" }
-mant-loader = { path = "../mant-loader", version = "^0.11.0", default-features = false }
+mant-loader = { path = "../mant-loader", version = "^0.11.1", default-features = false }
 mant-query = { path = "../mant-query", version = "^0.11.0", default-features = false }
 mant-protocol = { path = "../mant-protocol", version = "^0.11.0" }
 
 [dev-dependencies]
-mant-codec = { path = "../mant-codec", version = "^0.11.0", default-features = false }
+mant-codec = { path = "../mant-codec", version = "^0.11.1", default-features = false }
 mant-render = { path = "../mant-render", version = "^0.11.0" }
 pulldown-cmark.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 # Cross-pipeline native audit examples remain outside the production loader API.
-libmandoc-rs = { path = "../libmandoc-rs", version = "^0.10.0" }
+libmandoc-rs = { path = "../libmandoc-rs", version = "^0.11.0" }
 flate2.workspace = true
 zstd.workspace = true
 
