@@ -1,0 +1,1699 @@
+{
+  "schema": "mant.roff-audit-triage-record/v1",
+  "reviewPending": true,
+  "acceptance": "Completed census, not whole-corpus acceptance. Raw failures, candidates and coverage gaps are retained.",
+  "baseline": "ebf7de0a",
+  "recordProducer": "41051a967e5ba10f3551e2f6a0de89a886f8d03a",
+  "legacyFull": {
+    "artifact": "target/roff-all-audit/full-final/summary.json",
+    "artifactSha256": "6f75b8a35a804ff0c1981fa315ead30affd0f1f3f9f061dbcd5bf6df0375006e",
+    "schema": "mant.roff-all-audit/v1",
+    "status": "completed",
+    "producerCommit": "41ad0a6961609a0a12a7e5fff79d0b090a1c7e3d",
+    "producerGitStatus": "",
+    "started": "2026-09-11T12:26:08.500350+00:00",
+    "finished": "2026-09-11T13:04:29.068142+00:00",
+    "manifestSha256": "a5cd7919d1ac2774a335d077611b47680de8c1babe1b031d31ff8808f568879c",
+    "physicalPages": 37286,
+    "logicalPages": 45036,
+    "processedPhysicalPages": 37286,
+    "processedLogicalPages": 45036,
+    "unprocessedLogicalPages": 0,
+    "actualSourceInventorySha256": "66c40cae9dcbbc262006a5a0050c522d9580cc0db37046212f05a2ef20ff3410",
+    "inventoryEncoding": "Sorted [logical ID, decoded SHA256 or null, transport SHA256 or null] arrays, compact UTF-8 JSON plus LF per processed identity.",
+    "dimensionCounts": {
+      "structure": {
+        "execution:success": 45033,
+        "status:clean": 45017,
+        "coverage:legacy-dimensions-covered": 42975,
+        "coverage:partial-external-context": 1978,
+        "execution:error": 3,
+        "status:hard-failure": 3,
+        "coverage:uncovered": 3,
+        "coverage:partial-non-utf8-source": 80,
+        "status:review": 16
+      },
+      "projection": {
+        "execution:success": 45033,
+        "status:clean": 45031,
+        "coverage:legacy-dimensions-covered": 43055,
+        "coverage:partial-external-context": 1978,
+        "execution:error": 3,
+        "status:hard-failure": 3,
+        "coverage:uncovered": 3,
+        "status:review": 2
+      },
+      "targets": {
+        "execution:success": 44970,
+        "status:clean": 44970,
+        "coverage:legacy-dimensions-covered": 43040,
+        "coverage:partial-external-context": 1930,
+        "execution:budget": 66,
+        "status:uncovered": 66,
+        "coverage:uncovered": 66
+      },
+      "semantics": {
+        "execution:success": 44208,
+        "status:clean": 44180,
+        "coverage:legacy-dimensions-covered": 43055,
+        "coverage:partial-external-context": 1153,
+        "execution:error": 828,
+        "status:hard-failure": 828,
+        "coverage:uncovered": 828,
+        "status:review": 28
+      },
+      "fidelity-mandoc": {
+        "execution:success": 44949,
+        "status:clean": 44708,
+        "coverage:legacy-dimensions-covered": 42975,
+        "status:review": 241,
+        "coverage:partial-external-context": 1974,
+        "execution:error": 3,
+        "status:uncovered": 87,
+        "coverage:uncovered": 87,
+        "execution:uncovered": 84
+      },
+      "layout-mandoc": {
+        "execution:success": 44949,
+        "status:clean": 44946,
+        "coverage:legacy-dimensions-covered": 42975,
+        "coverage:partial-external-context": 1974,
+        "execution:error": 3,
+        "status:uncovered": 87,
+        "coverage:uncovered": 87,
+        "execution:uncovered": 84,
+        "status:review": 3
+      },
+      "fidelity-groff": {
+        "execution:success": 44952,
+        "status:clean": 43451,
+        "coverage:legacy-dimensions-covered": 42974,
+        "status:review": 779,
+        "coverage:partial-external-context": 1256,
+        "status:hard-failure": 722,
+        "coverage:uncovered": 806,
+        "execution:error": 4,
+        "status:uncovered": 84,
+        "execution:uncovered": 80
+      },
+      "layout-groff": {
+        "execution:success": 44230,
+        "status:clean": 44219,
+        "coverage:legacy-dimensions-covered": 42974,
+        "coverage:partial-external-context": 1256,
+        "execution:uncovered": 802,
+        "status:uncovered": 806,
+        "coverage:uncovered": 806,
+        "execution:error": 4,
+        "status:review": 11
+      }
+    },
+    "dimensions": [
+      "structure",
+      "projection",
+      "targets",
+      "semantics",
+      "fidelity-mandoc",
+      "layout-mandoc",
+      "fidelity-groff",
+      "layout-groff"
+    ],
+    "coverageComplete": false,
+    "reviewPending": true,
+    "evidenceStable": true,
+    "binariesUnchanged": true,
+    "rulesUnchanged": true,
+    "manifestUnchanged": true,
+    "sourcesUnchanged": true,
+    "sourceHashesChecked": 37286,
+    "resultsSha256": "027eb24f29b7e5674e1ee1c446c861a980749a95e7404234ffc0c1cb6229dca9",
+    "parameters": {
+      "workers": 16,
+      "batch_size": 64,
+      "timeout": 20,
+      "batch_timeout": 120,
+      "max_result_bytes": 8589934592
+    },
+    "binaries": {
+      "mant": {
+        "path": "/home/hby/dev/ManT/target/roff-audit-triage/bin/mant",
+        "sha256": "3f6382cc67f2d4bdb723b4f8c26422700db0c9a0b58aaa0def6758ca1c316f36"
+      },
+      "mandoc": {
+        "path": "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+        "sha256": "f06ba20baedee4adc5914fa023bf02812645b41249077204849d465c08c02f59"
+      },
+      "groff": {
+        "path": "/usr/bin/groff",
+        "sha256": "a9bd52a949d7cf84f8fd0e3b027e2c5a325a4f205d2b4636e50abf88ff5aa65d"
+      },
+      "zstd": {
+        "path": "/usr/bin/zstd",
+        "sha256": "6b799c822798547e33f3d928d04492ca4814d4b45088786b73d700f0cc0d905a"
+      },
+      "xz": {
+        "path": "/usr/bin/xz",
+        "sha256": "dfd848f00738fe62b11689ad6216587fb76ec160df0b273291aaff7eb5c6f620"
+      },
+      "bzip2": {
+        "path": "/usr/bin/bzip2",
+        "sha256": "f7a4fc551da5bca1a77026c9530273224daeedfca5492665bed1c383feb42096"
+      },
+      "structure": {
+        "path": "/home/hby/dev/ManT/target/roff-audit-triage/bin/roff_structure_profile",
+        "sha256": "9ad4eadf3889b896b6476cb26f5576a5e3d57bbb3e79b7911c194704ece85d5f"
+      },
+      "projection": {
+        "path": "/home/hby/dev/ManT/target/roff-audit-triage/bin/roff_projection_profile",
+        "sha256": "e53dcdbf4658d310afb172aa0715fa6da1072bd5385c59f4e3cb07e2d94797be"
+      },
+      "targets": {
+        "path": "/home/hby/dev/ManT/target/roff-audit-triage/bin/roff_target_profile",
+        "sha256": "a6c27f4c37f2a19ee61a6eeed028f5497d423fb46535883d5e1e11ceccaf9514"
+      },
+      "semantics": {
+        "path": "/home/hby/dev/ManT/target/roff-audit-triage/bin/roff_semantic_profile",
+        "sha256": "d60396992ce9b5bfeb7bb05e84affb85748699ed0bb06cedd54ef5d7ca51d910"
+      },
+      "groff-troff": {
+        "path": "/usr/bin/troff",
+        "sha256": "d87a6a1f075d144327d0ec89eeb3b43845e603737a3d8d4edf6d57ed7632bdaa"
+      },
+      "groff-preconv": {
+        "path": "/usr/bin/preconv",
+        "sha256": "27bc5d094f84e7a921347b94882d16cacae4cd130dfff8e48a3c8a904c6a0035"
+      },
+      "groff-tbl": {
+        "path": "/usr/bin/tbl",
+        "sha256": "69edf47cfb28e1c2549b31fb9c79adf7f29c38323d1282cb0eccb8b047d1f8e2"
+      },
+      "groff-eqn": {
+        "path": "/usr/bin/eqn",
+        "sha256": "3ebdd63a9733ebb4d7e2e3bcd12c92016cbc43560a98aacb7df9b8943a06f6bd"
+      },
+      "groff-grotty": {
+        "path": "/usr/bin/grotty",
+        "sha256": "9fa2df6c6fb58abe5f379fd8c0d4c9ce0ac8510171e71ed1c72f695381756515"
+      }
+    },
+    "rules": {
+      "scripts/audit-roff-all.py": "c9897b0b3d4e5ecb6b5a4d925294232693b838ccdbfc36fab31b52a041759c22",
+      "scripts/roff_audit_common.py": "771f7996cc8374808979381a8eb0dd69e8765e99beddfd777b20661bad4562a3",
+      "scripts/roff_reference.py": "4babe9299221ba382f9b191edc6947f1690b3d8e9ccd5ff0cfc5d11838acbebf",
+      "scripts/audit-roff-structure.py": "67f6195240e5ebb06fc03081e41c7069b9a5bc1e82a49b1bf6f1c8431e990864",
+      "scripts/audit-roff-projection.py": "ac78f28d1b18977f11a54a8d3c0639570fd828fbe131d0f29121e3ac1afe1e65",
+      "scripts/audit-roff-targets.py": "dee4785baa42bc65c0618a43de8c8bbf24e4254d4d65baf37a06ebd9f4004f17",
+      "scripts/audit-roff-semantics.py": "d875f225340891062a2f98953460ca8b1534e596ab42d6b981f20281976f40aa",
+      "scripts/audit-roff-fidelity.py": "7f2cc2784fab0b996ca1e61284d350d215b1b7852b4f5226bbef50e8b488d98e",
+      "scripts/audit-roff-layout.py": "8bd229affaa77fda714391a54e2c82c9a59e039656944cc870ec9b9fec459a86",
+      "scripts/audit-roff-rendering.py": "d1be04fb0063a66dbf8916e2ef27ab8c9cba7c699d9bcd0c074aab5da3569426",
+      "scripts/roff_content_compare.py": "2cc1a0a810569d28f187e0eb550e4a5cf48a0e7082cc3d14491985b001916d27",
+      "scripts/roff_layout_geometry.py": "ea68a78681cc3b5e3c26f36397b7b180896b0b150af400c454cbd47658a3620a",
+      "scripts/roff_rendering_frame.py": "e76f1b4485bcca4817f1a2e374a3af25a20b7305768a9205e7416e8a4e96518b",
+      "scripts/roff_content_explanations.py": "a1825d33e5e24c79ab7e1b6bc65a2d98ae360e79e724ec1b1ff465c5f1726952",
+      "scripts/roff_review_queue.py": "849551b06ce69da901d394e04ec80adb52bf45e72d63b3d30c2e77418554f232"
+    },
+    "dependencyAvailability": {
+      "zstd": true,
+      "xz": true,
+      "bzip2": true
+    }
+  },
+  "renderingFull": {
+    "artifact": "target/roff-audit-triage/full-rendering-final/summary.json",
+    "artifactSha256": "414c61a8b61c8ef30549c5a9767f43bf0b801dd39429e5c0ace5c3e6777c7ad6",
+    "schema": "mant.roff-rendering-census/v2",
+    "status": "completed",
+    "producerCommit": "5867216e99088bcf7b663ec1520a253e98665b5f",
+    "producerDirtyPaths": [],
+    "started": "2026-09-11T12:23:11.038641+00:00",
+    "finished": "2026-09-11T12:47:47.105077+00:00",
+    "manifestSha256": "a5cd7919d1ac2774a335d077611b47680de8c1babe1b031d31ff8808f568879c",
+    "physicalPages": 37286,
+    "logicalPages": 45036,
+    "statusCounts": {
+      "partial": 14350,
+      "review": 28651,
+      "uncovered": 1981,
+      "clean": 54
+    },
+    "dimensions": {
+      "content:covered": 14608,
+      "geometry:uncovered": 18732,
+      "geometry:partial": 25228,
+      "content:review": 28447,
+      "geometry:review": 957,
+      "content:uncovered": 1981,
+      "geometry:covered": 119
+    },
+    "triageLogicalCounts": {
+      "other-coverage": 14377,
+      "unexplained-content": 17099,
+      "unexplained-presentation": 1213,
+      "source-or-reference-coverage": 1981,
+      "source-explained-presentation": 9818,
+      "geometry-difference": 493,
+      "covered": 54,
+      "possible-operand-leak": 1
+    },
+    "contentAssessmentLogicalCounts": {
+      "covered": 14608,
+      "review": 18313,
+      "uncovered": 1981,
+      "explained": 10134
+    },
+    "coverageComplete": false,
+    "binariesUnchanged": true,
+    "comparatorsUnchanged": true,
+    "manifestUnchanged": true,
+    "resultsSha256": "8c71921a5e46da794b3b4df89bcb959bb35745688f1cdd6b3e7c2e1e172a8baf",
+    "parameters": {
+      "manifest": "/home/hby/dev/tmp/mantdoc-real-corpus/full-restored-manifest.jsonl",
+      "mant": "/home/hby/dev/ManT/target/roff-audit-triage/bin/mant",
+      "reference": "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+      "reference_id": "cvs-20260911T080000Z-manifest-1d49f6c3",
+      "output": "target/roff-audit-triage/full-rendering-final",
+      "width": 200,
+      "timeout": 15,
+      "workers": 4,
+      "max_pages": null,
+      "artifact_pages": 32,
+      "verify": false
+    },
+    "binaries": {
+      "mant": {
+        "path": "/home/hby/dev/ManT/target/roff-audit-triage/bin/mant",
+        "sha256": "3f6382cc67f2d4bdb723b4f8c26422700db0c9a0b58aaa0def6758ca1c316f36"
+      },
+      "reference": {
+        "path": "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+        "sha256": "f06ba20baedee4adc5914fa023bf02812645b41249077204849d465c08c02f59"
+      },
+      "zstd": {
+        "path": "/usr/bin/zstd",
+        "sha256": "6b799c822798547e33f3d928d04492ca4814d4b45088786b73d700f0cc0d905a"
+      }
+    },
+    "comparators": {
+      "roff_content_compare.py": "2cc1a0a810569d28f187e0eb550e4a5cf48a0e7082cc3d14491985b001916d27",
+      "roff_layout_geometry.py": "ea68a78681cc3b5e3c26f36397b7b180896b0b150af400c454cbd47658a3620a",
+      "roff_rendering_frame.py": "e76f1b4485bcca4817f1a2e374a3af25a20b7305768a9205e7416e8a4e96518b",
+      "roff_reference.py": "4babe9299221ba382f9b191edc6947f1690b3d8e9ccd5ff0cfc5d11838acbebf",
+      "roff_content_explanations.py": "a1825d33e5e24c79ab7e1b6bc65a2d98ae360e79e724ec1b1ff465c5f1726952",
+      "roff_review_queue.py": "849551b06ce69da901d394e04ec80adb52bf45e72d63b3d30c2e77418554f232",
+      "audit-roff-rendering.py": "d1be04fb0063a66dbf8916e2ef27ab8c9cba7c699d9bcd0c074aab5da3569426"
+    },
+    "sourceDecoders": {
+      "zstd": {
+        "available": true,
+        "path": "/usr/bin/zstd",
+        "sha256": "6b799c822798547e33f3d928d04492ca4814d4b45088786b73d700f0cc0d905a"
+      }
+    },
+    "referenceIdentity": "cvs-20260911T080000Z-manifest-1d49f6c3"
+  },
+  "corpusValidation": {
+    "uniqueLogicalIdentities": 45036,
+    "dimensionRecordCounts": {
+      "fidelity-mandoc": 45036,
+      "layout-mandoc": 45036,
+      "fidelity-groff": 45036,
+      "layout-groff": 45036,
+      "structure": 45036,
+      "projection": 45036,
+      "targets": 45036,
+      "semantics": 45036
+    },
+    "historicalSourceHashMismatches": 8452,
+    "note": "Rolling host source changes do not inherit historical acceptance.",
+    "sameActualInputsAcrossFullPasses": true
+  },
+  "executionTriage": {
+    "standaloneAliasSemanticErrors": 828,
+    "note": "Possible external context is not a causal proof or waiver; raw statuses remain authoritative.",
+    "counts": [
+      {
+        "dimension": "fidelity-groff",
+        "execution": "error",
+        "status": "uncovered",
+        "context": "no-external-context",
+        "logicalCount": 1
+      },
+      {
+        "dimension": "fidelity-groff",
+        "execution": "error",
+        "status": "uncovered",
+        "context": "possible-external-context",
+        "logicalCount": 3
+      },
+      {
+        "dimension": "fidelity-groff",
+        "execution": "success",
+        "status": "hard-failure",
+        "context": "possible-external-context",
+        "logicalCount": 722
+      },
+      {
+        "dimension": "fidelity-mandoc",
+        "execution": "error",
+        "status": "uncovered",
+        "context": "possible-external-context",
+        "logicalCount": 3
+      },
+      {
+        "dimension": "layout-groff",
+        "execution": "error",
+        "status": "uncovered",
+        "context": "no-external-context",
+        "logicalCount": 1
+      },
+      {
+        "dimension": "layout-groff",
+        "execution": "error",
+        "status": "uncovered",
+        "context": "possible-external-context",
+        "logicalCount": 3
+      },
+      {
+        "dimension": "layout-mandoc",
+        "execution": "error",
+        "status": "uncovered",
+        "context": "possible-external-context",
+        "logicalCount": 3
+      },
+      {
+        "dimension": "projection",
+        "execution": "error",
+        "status": "hard-failure",
+        "context": "possible-external-context",
+        "logicalCount": 3
+      },
+      {
+        "dimension": "semantics",
+        "execution": "error",
+        "status": "hard-failure",
+        "context": "possible-external-context",
+        "logicalCount": 828
+      },
+      {
+        "dimension": "structure",
+        "execution": "error",
+        "status": "hard-failure",
+        "context": "possible-external-context",
+        "logicalCount": 3
+      },
+      {
+        "dimension": "targets",
+        "execution": "budget",
+        "status": "uncovered",
+        "context": "no-external-context",
+        "logicalCount": 15
+      },
+      {
+        "dimension": "targets",
+        "execution": "budget",
+        "status": "uncovered",
+        "context": "possible-external-context",
+        "logicalCount": 51
+      }
+    ]
+  },
+  "targetBudgetRetry": {
+    "artifact": "target/roff-all-audit/budget-retry/summary.json",
+    "artifactSha256": "5109b71c4316b2207af27ac661b8efaaec2c870d4bf345580ef0f53ea180213f",
+    "schema": "mant.roff-all-audit/v1",
+    "status": "completed",
+    "producerCommit": "bb1985ebbffba9f0273841c43875b5a363a3348a",
+    "producerGitStatus": "",
+    "started": "2026-09-11T12:57:25.798617+00:00",
+    "finished": "2026-09-11T12:58:35.304072+00:00",
+    "manifestSha256": "2ea999f345b0074a50343b6c40352055371e4be966a1ea74b8fec1c5fb76af6b",
+    "physicalPages": 64,
+    "logicalPages": 66,
+    "processedPhysicalPages": 64,
+    "processedLogicalPages": 66,
+    "unprocessedLogicalPages": 0,
+    "actualSourceInventorySha256": "e2c1d8f5c0d7486e4d046ec32d2dbfd2c4f6ede3e6771a74b93537cfb33d1dac",
+    "inventoryEncoding": "Sorted [logical ID, decoded SHA256 or null, transport SHA256 or null] arrays, compact UTF-8 JSON plus LF per processed identity.",
+    "dimensionCounts": {
+      "structure": {
+        "execution:success": 66,
+        "status:clean": 65,
+        "coverage:legacy-dimensions-covered": 15,
+        "coverage:partial-external-context": 51,
+        "status:review": 1
+      },
+      "projection": {
+        "execution:success": 66,
+        "status:clean": 66,
+        "coverage:legacy-dimensions-covered": 15,
+        "coverage:partial-external-context": 51
+      },
+      "targets": {
+        "execution:success": 66,
+        "status:clean": 66,
+        "coverage:legacy-dimensions-covered": 15,
+        "coverage:partial-external-context": 51
+      },
+      "semantics": {
+        "execution:success": 16,
+        "status:clean": 16,
+        "coverage:legacy-dimensions-covered": 15,
+        "execution:error": 50,
+        "status:hard-failure": 50,
+        "coverage:uncovered": 50,
+        "coverage:partial-external-context": 1
+      },
+      "fidelity-mandoc": {
+        "execution:success": 65,
+        "status:clean": 15,
+        "coverage:legacy-dimensions-covered": 15,
+        "status:review": 50,
+        "coverage:partial-external-context": 50,
+        "execution:uncovered": 1,
+        "status:uncovered": 1,
+        "coverage:uncovered": 1
+      },
+      "layout-mandoc": {
+        "execution:success": 65,
+        "status:clean": 65,
+        "coverage:legacy-dimensions-covered": 15,
+        "coverage:partial-external-context": 50,
+        "execution:uncovered": 1,
+        "status:uncovered": 1,
+        "coverage:uncovered": 1
+      },
+      "fidelity-groff": {
+        "execution:success": 66,
+        "status:clean": 16,
+        "coverage:legacy-dimensions-covered": 15,
+        "status:hard-failure": 50,
+        "coverage:uncovered": 50,
+        "coverage:partial-external-context": 1
+      },
+      "layout-groff": {
+        "execution:success": 16,
+        "status:clean": 16,
+        "coverage:legacy-dimensions-covered": 15,
+        "execution:uncovered": 50,
+        "status:uncovered": 50,
+        "coverage:uncovered": 50,
+        "coverage:partial-external-context": 1
+      }
+    },
+    "dimensions": [
+      "structure",
+      "projection",
+      "targets",
+      "semantics",
+      "fidelity-mandoc",
+      "layout-mandoc",
+      "fidelity-groff",
+      "layout-groff"
+    ],
+    "coverageComplete": false,
+    "reviewPending": true,
+    "evidenceStable": true,
+    "binariesUnchanged": true,
+    "rulesUnchanged": true,
+    "manifestUnchanged": true,
+    "sourcesUnchanged": true,
+    "sourceHashesChecked": 64,
+    "resultsSha256": "3e5b4338b4865e009277ba67687a0a8e7501382a67c871f794ec04078e780fa2",
+    "parameters": {
+      "workers": 4,
+      "batch_size": 1,
+      "timeout": 20,
+      "batch_timeout": 120,
+      "max_result_bytes": 1073741824
+    },
+    "binaries": {
+      "mant": {
+        "path": "/home/hby/dev/ManT/target/roff-audit-triage/bin/mant",
+        "sha256": "3f6382cc67f2d4bdb723b4f8c26422700db0c9a0b58aaa0def6758ca1c316f36"
+      },
+      "mandoc": {
+        "path": "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+        "sha256": "f06ba20baedee4adc5914fa023bf02812645b41249077204849d465c08c02f59"
+      },
+      "groff": {
+        "path": "/usr/bin/groff",
+        "sha256": "a9bd52a949d7cf84f8fd0e3b027e2c5a325a4f205d2b4636e50abf88ff5aa65d"
+      },
+      "zstd": {
+        "path": "/usr/bin/zstd",
+        "sha256": "6b799c822798547e33f3d928d04492ca4814d4b45088786b73d700f0cc0d905a"
+      },
+      "xz": {
+        "path": "/usr/bin/xz",
+        "sha256": "dfd848f00738fe62b11689ad6216587fb76ec160df0b273291aaff7eb5c6f620"
+      },
+      "bzip2": {
+        "path": "/usr/bin/bzip2",
+        "sha256": "f7a4fc551da5bca1a77026c9530273224daeedfca5492665bed1c383feb42096"
+      },
+      "structure": {
+        "path": "/home/hby/dev/ManT/target/roff-audit-triage/bin/roff_structure_profile",
+        "sha256": "9ad4eadf3889b896b6476cb26f5576a5e3d57bbb3e79b7911c194704ece85d5f"
+      },
+      "projection": {
+        "path": "/home/hby/dev/ManT/target/roff-audit-triage/bin/roff_projection_profile",
+        "sha256": "e53dcdbf4658d310afb172aa0715fa6da1072bd5385c59f4e3cb07e2d94797be"
+      },
+      "targets": {
+        "path": "/home/hby/dev/ManT/target/roff-audit-triage/bin/roff_target_profile",
+        "sha256": "a6c27f4c37f2a19ee61a6eeed028f5497d423fb46535883d5e1e11ceccaf9514"
+      },
+      "semantics": {
+        "path": "/home/hby/dev/ManT/target/roff-audit-triage/bin/roff_semantic_profile",
+        "sha256": "d60396992ce9b5bfeb7bb05e84affb85748699ed0bb06cedd54ef5d7ca51d910"
+      },
+      "groff-troff": {
+        "path": "/usr/bin/troff",
+        "sha256": "d87a6a1f075d144327d0ec89eeb3b43845e603737a3d8d4edf6d57ed7632bdaa"
+      },
+      "groff-preconv": {
+        "path": "/usr/bin/preconv",
+        "sha256": "27bc5d094f84e7a921347b94882d16cacae4cd130dfff8e48a3c8a904c6a0035"
+      },
+      "groff-tbl": {
+        "path": "/usr/bin/tbl",
+        "sha256": "69edf47cfb28e1c2549b31fb9c79adf7f29c38323d1282cb0eccb8b047d1f8e2"
+      },
+      "groff-eqn": {
+        "path": "/usr/bin/eqn",
+        "sha256": "3ebdd63a9733ebb4d7e2e3bcd12c92016cbc43560a98aacb7df9b8943a06f6bd"
+      },
+      "groff-grotty": {
+        "path": "/usr/bin/grotty",
+        "sha256": "9fa2df6c6fb58abe5f379fd8c0d4c9ce0ac8510171e71ed1c72f695381756515"
+      }
+    },
+    "rules": {
+      "scripts/audit-roff-all.py": "c9897b0b3d4e5ecb6b5a4d925294232693b838ccdbfc36fab31b52a041759c22",
+      "scripts/roff_audit_common.py": "771f7996cc8374808979381a8eb0dd69e8765e99beddfd777b20661bad4562a3",
+      "scripts/roff_reference.py": "4babe9299221ba382f9b191edc6947f1690b3d8e9ccd5ff0cfc5d11838acbebf",
+      "scripts/audit-roff-structure.py": "67f6195240e5ebb06fc03081e41c7069b9a5bc1e82a49b1bf6f1c8431e990864",
+      "scripts/audit-roff-projection.py": "ac78f28d1b18977f11a54a8d3c0639570fd828fbe131d0f29121e3ac1afe1e65",
+      "scripts/audit-roff-targets.py": "dee4785baa42bc65c0618a43de8c8bbf24e4254d4d65baf37a06ebd9f4004f17",
+      "scripts/audit-roff-semantics.py": "d875f225340891062a2f98953460ca8b1534e596ab42d6b981f20281976f40aa",
+      "scripts/audit-roff-fidelity.py": "7f2cc2784fab0b996ca1e61284d350d215b1b7852b4f5226bbef50e8b488d98e",
+      "scripts/audit-roff-layout.py": "8bd229affaa77fda714391a54e2c82c9a59e039656944cc870ec9b9fec459a86",
+      "scripts/audit-roff-rendering.py": "d1be04fb0063a66dbf8916e2ef27ab8c9cba7c699d9bcd0c074aab5da3569426",
+      "scripts/roff_content_compare.py": "2cc1a0a810569d28f187e0eb550e4a5cf48a0e7082cc3d14491985b001916d27",
+      "scripts/roff_layout_geometry.py": "ea68a78681cc3b5e3c26f36397b7b180896b0b150af400c454cbd47658a3620a",
+      "scripts/roff_rendering_frame.py": "e76f1b4485bcca4817f1a2e374a3af25a20b7305768a9205e7416e8a4e96518b",
+      "scripts/roff_content_explanations.py": "a1825d33e5e24c79ab7e1b6bc65a2d98ae360e79e724ec1b1ff465c5f1726952",
+      "scripts/roff_review_queue.py": "849551b06ce69da901d394e04ec80adb52bf45e72d63b3d30c2e77418554f232"
+    },
+    "dependencyAvailability": {
+      "zstd": true,
+      "xz": true,
+      "bzip2": true
+    },
+    "interpretation": "Same frozen binaries, batch size 1 instead of 64. Supplement target coverage only; do not overwrite other original dimensions or source-context gaps."
+  },
+  "matrix": {
+    "artifact": "target/roff-audit-triage/matrix-final/summary.json",
+    "artifactSha256": "acad12a7a0b1df37ab01ae18afd694880bd7f87e779bdab2ffedd615df310c40",
+    "schema": "mant-roff-behavior-matrix/1",
+    "status": "review-required",
+    "cases": 112,
+    "historicalCases": 61,
+    "generatedCases": 51,
+    "statuses": {
+      "frame:covered": 560,
+      "content:covered": 408,
+      "geometry:partial": 200,
+      "viewport:covered": 112,
+      "viewport-geometry:partial": 188,
+      "geometry:covered": 136,
+      "viewport-geometry:covered": 134,
+      "viewport-geometry:review": 14,
+      "geometry:uncovered": 112,
+      "viewport-geometry:uncovered": 112,
+      "content:review": 40,
+      "assertions:covered": 51
+    },
+    "sensitivity": {
+      "detected": 9
+    },
+    "binaryStable": true,
+    "comparatorStable": true,
+    "binariesAfter": {
+      "mant": {
+        "path": "/home/hby/dev/ManT/target/roff-audit-triage/bin/mant",
+        "sha256": "3f6382cc67f2d4bdb723b4f8c26422700db0c9a0b58aaa0def6758ca1c316f36"
+      },
+      "reference": {
+        "path": "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+        "sha256": "f06ba20baedee4adc5914fa023bf02812645b41249077204849d465c08c02f59"
+      },
+      "geometry": {
+        "path": "/home/hby/dev/ManT/target/roff-audit-triage/bin/geometry-verified",
+        "sha256": "3e24d1d4ff2281e24041d245b8c2778a7bfaa2c24cb947686b5a07cac5374cf9"
+      }
+    },
+    "sourceBoundContentAssessment": {
+      "covered": 408,
+      "review": 16,
+      "explained": 24
+    }
+  },
+  "postfixMatrix": {
+    "artifact": "target/roff-audit-triage/matrix-postfix/summary.json",
+    "artifactSha256": "6b4cd4c9460c5de1bfa51f417ec9df9cc986ba40138675492e51cce2a048c075",
+    "schema": "mant-roff-behavior-matrix/1",
+    "status": "review-required",
+    "cases": 112,
+    "historicalCases": 61,
+    "generatedCases": 51,
+    "statuses": {
+      "frame:covered": 560,
+      "content:covered": 408,
+      "geometry:partial": 200,
+      "viewport:covered": 112,
+      "viewport-geometry:partial": 188,
+      "geometry:covered": 136,
+      "viewport-geometry:covered": 134,
+      "viewport-geometry:review": 14,
+      "geometry:uncovered": 112,
+      "viewport-geometry:uncovered": 112,
+      "content:review": 40,
+      "assertions:covered": 51
+    },
+    "sensitivity": {
+      "detected": 9
+    },
+    "binaryStable": true,
+    "comparatorStable": true,
+    "binariesAfter": {
+      "mant": {
+        "path": "/home/hby/dev/ManT/target/release/mant",
+        "sha256": "3c9f7fa4506f9a2e6c5de0291e1fdde6c3c42f9f87f0f2f5d653b04056f2c834"
+      },
+      "reference": {
+        "path": "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+        "sha256": "f06ba20baedee4adc5914fa023bf02812645b41249077204849d465c08c02f59"
+      },
+      "geometry": {
+        "path": "/home/hby/dev/ManT/target/debug/examples/geometry_audit",
+        "sha256": "3b48f0eb806ed0fdb25e0cd3f143d71927c0146c2b0fd2449712909cf8a38d29"
+      }
+    }
+  },
+  "fixtureCensus": {
+    "artifact": "target/roff-audit-triage/fixtures-final/summary.json",
+    "artifactSha256": "2a8b5c42f00668dc5253962b82c038bd8037755ecdfe6dc2ffdea98a6d90da84",
+    "schema": "mant.roff-rendering-census/v2",
+    "status": "completed",
+    "producerCommit": "5867216e99088bcf7b663ec1520a253e98665b5f",
+    "producerDirtyPaths": [],
+    "started": "2026-09-11T12:22:57.636463+00:00",
+    "finished": "2026-09-11T12:23:06.222687+00:00",
+    "manifestSha256": null,
+    "physicalPages": 51,
+    "logicalPages": 51,
+    "statusCounts": {
+      "review": 40,
+      "partial": 10,
+      "clean": 1
+    },
+    "dimensions": {
+      "content:review": 40,
+      "geometry:partial": 19,
+      "geometry:uncovered": 30,
+      "content:covered": 11,
+      "geometry:review": 1,
+      "geometry:covered": 1
+    },
+    "triageLogicalCounts": {
+      "source-explained-presentation": 12,
+      "unexplained-content": 27,
+      "other-coverage": 10,
+      "unexplained-presentation": 1,
+      "covered": 1
+    },
+    "contentAssessmentLogicalCounts": {
+      "explained": 12,
+      "review": 28,
+      "covered": 11
+    },
+    "coverageComplete": false,
+    "binariesUnchanged": true,
+    "comparatorsUnchanged": true,
+    "manifestUnchanged": true,
+    "resultsSha256": "04eb07ca911bd974a542411bb0068cf8c4dc46485d44595b7d911ae905929cfc",
+    "parameters": {
+      "manifest": null,
+      "mant": "/home/hby/dev/ManT/target/roff-audit-triage/bin/mant",
+      "reference": "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+      "reference_id": "cvs-20260911T080000Z-manifest-1d49f6c3",
+      "output": "target/roff-audit-triage/fixtures-final",
+      "width": 200,
+      "timeout": 15,
+      "workers": 4,
+      "max_pages": null,
+      "artifact_pages": 32,
+      "verify": false
+    },
+    "binaries": {
+      "mant": {
+        "path": "/home/hby/dev/ManT/target/roff-audit-triage/bin/mant",
+        "sha256": "3f6382cc67f2d4bdb723b4f8c26422700db0c9a0b58aaa0def6758ca1c316f36"
+      },
+      "reference": {
+        "path": "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+        "sha256": "f06ba20baedee4adc5914fa023bf02812645b41249077204849d465c08c02f59"
+      },
+      "zstd": {
+        "path": "/usr/bin/zstd",
+        "sha256": "6b799c822798547e33f3d928d04492ca4814d4b45088786b73d700f0cc0d905a"
+      }
+    },
+    "comparators": {
+      "roff_content_compare.py": "2cc1a0a810569d28f187e0eb550e4a5cf48a0e7082cc3d14491985b001916d27",
+      "roff_layout_geometry.py": "ea68a78681cc3b5e3c26f36397b7b180896b0b150af400c454cbd47658a3620a",
+      "roff_rendering_frame.py": "e76f1b4485bcca4817f1a2e374a3af25a20b7305768a9205e7416e8a4e96518b",
+      "roff_reference.py": "4babe9299221ba382f9b191edc6947f1690b3d8e9ccd5ff0cfc5d11838acbebf",
+      "roff_content_explanations.py": "a1825d33e5e24c79ab7e1b6bc65a2d98ae360e79e724ec1b1ff465c5f1726952",
+      "roff_review_queue.py": "849551b06ce69da901d394e04ec80adb52bf45e72d63b3d30c2e77418554f232",
+      "audit-roff-rendering.py": "d1be04fb0063a66dbf8916e2ef27ab8c9cba7c699d9bcd0c074aab5da3569426"
+    },
+    "sourceDecoders": {
+      "zstd": {
+        "available": true,
+        "path": "/usr/bin/zstd",
+        "sha256": "6b799c822798547e33f3d928d04492ca4814d4b45088786b73d700f0cc0d905a"
+      }
+    },
+    "referenceIdentity": "cvs-20260911T080000Z-manifest-1d49f6c3"
+  },
+  "postfix": {
+    "artifact": "target/roff-audit-triage/postfix/summary.json",
+    "artifactSha256": "42da7755bee4607b7ee27a510739223cd44313e815c2cddc9a7654dad8ff5326",
+    "producerCommit": "bb1985ebbffba9f0273841c43875b5a363a3348a",
+    "binaries": {
+      "target/roff-audit-triage/bin/mant": "3f6382cc67f2d4bdb723b4f8c26422700db0c9a0b58aaa0def6758ca1c316f36",
+      "target/release/mant": "3c9f7fa4506f9a2e6c5de0291e1fdde6c3c42f9f87f0f2f5d653b04056f2c834",
+      "target/mandoc-migration/reference/mandoc": "f06ba20baedee4adc5914fa023bf02812645b41249077204849d465c08c02f59",
+      "target/debug/examples/roff_projection_profile": "75b08c9fccb97d0af62858ceb1077252ec11b5e3c258d257442cab622a99ccd5"
+    },
+    "paragraphs": [
+      {
+        "paragraph": "PP",
+        "control": "nf",
+        "distance": 0,
+        "sourceSha256": "2e2e1f573355c44bc2add151ea21fede1e5f82e6b20b914f20c1c8727b21c6e9",
+        "blankRows": {
+          "before": 0,
+          "after": 0,
+          "cvs": 0,
+          "groff": 0
+        }
+      },
+      {
+        "paragraph": "PP",
+        "control": "nf",
+        "distance": 1,
+        "sourceSha256": "1e3ca94b8c79e364644842b3f356cc861875548777cae176027cce23141ed091",
+        "blankRows": {
+          "before": 0,
+          "after": 1,
+          "cvs": 1,
+          "groff": 1
+        }
+      },
+      {
+        "paragraph": "PP",
+        "control": "nf",
+        "distance": 2,
+        "sourceSha256": "a2f02d3dd08f3f8a38401a574db49100739f35630493ba09f4d449706583d62c",
+        "blankRows": {
+          "before": 0,
+          "after": 2,
+          "cvs": 2,
+          "groff": 2
+        }
+      },
+      {
+        "paragraph": "PP",
+        "control": "fi",
+        "distance": 0,
+        "sourceSha256": "9412a3f541a42eed191a097b93c98e5c457fac060fe8c8a7f0a90868b2c33c03",
+        "blankRows": {
+          "before": 0,
+          "after": 0,
+          "cvs": 0,
+          "groff": 0
+        }
+      },
+      {
+        "paragraph": "PP",
+        "control": "fi",
+        "distance": 1,
+        "sourceSha256": "c4a220f1da1b3e64edf5f52ce7b7e231d5a4de7b0d6cb88d453a78e61744ecc2",
+        "blankRows": {
+          "before": 0,
+          "after": 1,
+          "cvs": 1,
+          "groff": 1
+        }
+      },
+      {
+        "paragraph": "PP",
+        "control": "fi",
+        "distance": 2,
+        "sourceSha256": "7cf9248f2c63c066765a55599e026b2e9832dd461e316c01275117a32dad4b9d",
+        "blankRows": {
+          "before": 0,
+          "after": 2,
+          "cvs": 2,
+          "groff": 2
+        }
+      },
+      {
+        "paragraph": "PP",
+        "control": "ft B",
+        "distance": 0,
+        "sourceSha256": "0be9d7e5b64da950943524a7f9387f08939c221efd246d0e9a1bd94090079f94",
+        "blankRows": {
+          "before": 0,
+          "after": 0,
+          "cvs": 0,
+          "groff": 0
+        }
+      },
+      {
+        "paragraph": "PP",
+        "control": "ft B",
+        "distance": 1,
+        "sourceSha256": "8b7cbe203b4214d590399c7c41d513b1ea94404783526ee03fbde27ddf72cbf3",
+        "blankRows": {
+          "before": 0,
+          "after": 1,
+          "cvs": 1,
+          "groff": 1
+        }
+      },
+      {
+        "paragraph": "PP",
+        "control": "ft B",
+        "distance": 2,
+        "sourceSha256": "cb1428503354a28891be87a250cce8ed2c5ad2ab55d4beada66c5e183d6651fe",
+        "blankRows": {
+          "before": 0,
+          "after": 2,
+          "cvs": 2,
+          "groff": 2
+        }
+      },
+      {
+        "paragraph": "P",
+        "control": "nf",
+        "distance": 0,
+        "sourceSha256": "3480fb00272d6adbcdd9845b33e5dac8d8fd0f227b68d9deea87e01fb8160524",
+        "blankRows": {
+          "before": 0,
+          "after": 0,
+          "cvs": 0,
+          "groff": 0
+        }
+      },
+      {
+        "paragraph": "P",
+        "control": "nf",
+        "distance": 1,
+        "sourceSha256": "2d4bcb1a6a6b1551ce0da4dde9c27667e957aacd6faecf07fe2fb3fc097e70f7",
+        "blankRows": {
+          "before": 0,
+          "after": 1,
+          "cvs": 1,
+          "groff": 1
+        }
+      },
+      {
+        "paragraph": "P",
+        "control": "nf",
+        "distance": 2,
+        "sourceSha256": "ee6e9482f1f918917a0d33f336ae8141a91a8efbb8fbf31e3fa094b7be163f9b",
+        "blankRows": {
+          "before": 0,
+          "after": 2,
+          "cvs": 2,
+          "groff": 2
+        }
+      },
+      {
+        "paragraph": "P",
+        "control": "fi",
+        "distance": 0,
+        "sourceSha256": "bf952743922ea52b847208f4de6548f611b4f39d6067b4dac3686d8efef7d37f",
+        "blankRows": {
+          "before": 0,
+          "after": 0,
+          "cvs": 0,
+          "groff": 0
+        }
+      },
+      {
+        "paragraph": "P",
+        "control": "fi",
+        "distance": 1,
+        "sourceSha256": "97621dee63accda06a0b8d68aa0b6d3031b100b36af4a5747384a1c4ec5dc3a3",
+        "blankRows": {
+          "before": 0,
+          "after": 1,
+          "cvs": 1,
+          "groff": 1
+        }
+      },
+      {
+        "paragraph": "P",
+        "control": "fi",
+        "distance": 2,
+        "sourceSha256": "d3cda65f664e208a52c4ec1d32282dde408feb859faf019b996d2755a82ccd2d",
+        "blankRows": {
+          "before": 0,
+          "after": 2,
+          "cvs": 2,
+          "groff": 2
+        }
+      },
+      {
+        "paragraph": "P",
+        "control": "ft B",
+        "distance": 0,
+        "sourceSha256": "5f4827bfc176943785582af477c47f1e011790a215f12df967f3ce975c074026",
+        "blankRows": {
+          "before": 0,
+          "after": 0,
+          "cvs": 0,
+          "groff": 0
+        }
+      },
+      {
+        "paragraph": "P",
+        "control": "ft B",
+        "distance": 1,
+        "sourceSha256": "ae0a9e2a5b5ae2638f14d75de6d8d7f6e0f7963c4e60525a2f37a6d387b93e0f",
+        "blankRows": {
+          "before": 0,
+          "after": 1,
+          "cvs": 1,
+          "groff": 1
+        }
+      },
+      {
+        "paragraph": "P",
+        "control": "ft B",
+        "distance": 2,
+        "sourceSha256": "20bc7a2eb3810155959ed28b228a5fd405806240ff5bdc21a52d015cc46d8ec2",
+        "blankRows": {
+          "before": 0,
+          "after": 2,
+          "cvs": 2,
+          "groff": 2
+        }
+      },
+      {
+        "paragraph": "LP",
+        "control": "nf",
+        "distance": 0,
+        "sourceSha256": "64fc62269ec9449ff1c9a5e005e1e937670e5415cb3ff2497a072cd8b5fa9e04",
+        "blankRows": {
+          "before": 0,
+          "after": 0,
+          "cvs": 0,
+          "groff": 0
+        }
+      },
+      {
+        "paragraph": "LP",
+        "control": "nf",
+        "distance": 1,
+        "sourceSha256": "73da562e1abe23da0793831ce343a2b3f21c61a0628ee0ba736bc62b6963d0ff",
+        "blankRows": {
+          "before": 0,
+          "after": 1,
+          "cvs": 1,
+          "groff": 1
+        }
+      },
+      {
+        "paragraph": "LP",
+        "control": "nf",
+        "distance": 2,
+        "sourceSha256": "54d0ff264f47fa458d6c93b459d7c8e4c381fa70ebbb77e0733b77477ed29983",
+        "blankRows": {
+          "before": 0,
+          "after": 2,
+          "cvs": 2,
+          "groff": 2
+        }
+      },
+      {
+        "paragraph": "LP",
+        "control": "fi",
+        "distance": 0,
+        "sourceSha256": "0df761cdedbc1b401524304b8e1b9217867d02cb122b67217047942928081bbf",
+        "blankRows": {
+          "before": 0,
+          "after": 0,
+          "cvs": 0,
+          "groff": 0
+        }
+      },
+      {
+        "paragraph": "LP",
+        "control": "fi",
+        "distance": 1,
+        "sourceSha256": "6af5cf5754fd2bd69e3ceaacc310a4d0c47cc167795653b6e8bef3d7278bf19c",
+        "blankRows": {
+          "before": 0,
+          "after": 1,
+          "cvs": 1,
+          "groff": 1
+        }
+      },
+      {
+        "paragraph": "LP",
+        "control": "fi",
+        "distance": 2,
+        "sourceSha256": "246e10649cd085d98a5f4e1d79440faa6588d458d2c070ca2e4496bd8cef0702",
+        "blankRows": {
+          "before": 0,
+          "after": 2,
+          "cvs": 2,
+          "groff": 2
+        }
+      },
+      {
+        "paragraph": "LP",
+        "control": "ft B",
+        "distance": 0,
+        "sourceSha256": "d48e3cc78fb8670bf42a72890b58d31ab20c2c35167dee6539b13600872362e7",
+        "blankRows": {
+          "before": 0,
+          "after": 0,
+          "cvs": 0,
+          "groff": 0
+        }
+      },
+      {
+        "paragraph": "LP",
+        "control": "ft B",
+        "distance": 1,
+        "sourceSha256": "97654d6b0ef3739500414a5ededfedef0ca149c1fe84dbaa5c6cee6ba570e4e0",
+        "blankRows": {
+          "before": 0,
+          "after": 1,
+          "cvs": 1,
+          "groff": 1
+        }
+      },
+      {
+        "paragraph": "LP",
+        "control": "ft B",
+        "distance": 2,
+        "sourceSha256": "985cc7772581faece36c872c447cdd6ddff4e0d431a06470115a39aab7ef8863",
+        "blankRows": {
+          "before": 0,
+          "after": 2,
+          "cvs": 2,
+          "groff": 2
+        }
+      }
+    ],
+    "definitions": [
+      {
+        "head": ".TP\n.B window\n",
+        "request": ".br\n",
+        "sourceSha256": "e8a8bd08574912e65f46d49c7f23550cc17b4f032bac19919dda42b27d90139b",
+        "separateHeadRow": {
+          "before": false,
+          "after": true,
+          "cvs": true,
+          "groff": true
+        }
+      },
+      {
+        "head": ".TP\n.B window\n",
+        "request": ".fi\n",
+        "sourceSha256": "0e050148aefd275575e23b568c298f5f1f27b8d2069db1d7f51d3b793bb20cdc",
+        "separateHeadRow": {
+          "before": false,
+          "after": true,
+          "cvs": true,
+          "groff": true
+        }
+      },
+      {
+        "head": ".TP\n.B window\n",
+        "request": ".nf\n",
+        "sourceSha256": "c5c50c6d0b295d0da75362330b4d8475e4bb6fb4ecd27c4b24286755671823a9",
+        "separateHeadRow": {
+          "before": true,
+          "after": true,
+          "cvs": true,
+          "groff": true
+        }
+      },
+      {
+        "head": ".TP\n.B window\n",
+        "request": ".sp 0\n",
+        "sourceSha256": "f592aae380f9e1050b432fa3c2ce79e0158cafff41dce40a698a4a7b70d4abb0",
+        "separateHeadRow": {
+          "before": true,
+          "after": true,
+          "cvs": true,
+          "groff": true
+        }
+      },
+      {
+        "head": ".TP\n.B window\n",
+        "request": ".in +2n\n",
+        "sourceSha256": "403b768ba61148c731c9bf773017baf283b986d903522013190a05589f612c54",
+        "separateHeadRow": {
+          "before": false,
+          "after": true,
+          "cvs": true,
+          "groff": true
+        }
+      },
+      {
+        "head": ".TP\n.B window\n",
+        "request": ".ti 0\n",
+        "sourceSha256": "971c2807225922273adc56dcc8179c6a1c6958f0d49cc33a52d9dbcd51d62d15",
+        "separateHeadRow": {
+          "before": false,
+          "after": true,
+          "cvs": true,
+          "groff": true
+        }
+      },
+      {
+        "head": ".TP\n.B window\n",
+        "request": ".ce 0\n",
+        "sourceSha256": "336f96306881d7b06120474a12585adde23facd101c1b489c708eeb93bea49f2",
+        "separateHeadRow": {
+          "before": false,
+          "after": true,
+          "cvs": true,
+          "groff": true
+        }
+      },
+      {
+        "head": ".TP\n.B window\n",
+        "request": ".ce 1\n",
+        "sourceSha256": "3cabf1c6b4512349afc1757f32183be0516f11c9f4412c6141f72c9b79fd4ed2",
+        "separateHeadRow": {
+          "before": false,
+          "after": true,
+          "cvs": true,
+          "groff": true
+        }
+      },
+      {
+        "head": ".TP\n.B window\n",
+        "request": ".rj 0\n",
+        "sourceSha256": "5804be2da6deab7cd4f05ef2706dd435a5faa73a82ed638aac2aa6cf202da540",
+        "separateHeadRow": {
+          "before": false,
+          "after": true,
+          "cvs": true,
+          "groff": true
+        }
+      },
+      {
+        "head": ".TP\n.B window\n",
+        "request": ".rj 1\n",
+        "sourceSha256": "37afd7fe0e8e0ce60c6da571151ce70d2f6db330bcc1157365cec17aad3e1e35",
+        "separateHeadRow": {
+          "before": false,
+          "after": true,
+          "cvs": true,
+          "groff": true
+        }
+      },
+      {
+        "head": ".TP\n.B window\n",
+        "request": ".EX\n",
+        "sourceSha256": "bf0683186caa91940386c3f1fba4f8a899ad526bc1ea1e5b2bde57fe5802becf",
+        "separateHeadRow": {
+          "before": true,
+          "after": true,
+          "cvs": true,
+          "groff": true
+        }
+      },
+      {
+        "head": ".TP\n.B window\n",
+        "request": ".EE\n",
+        "sourceSha256": "9682ace864d6677905d17fdcc77c5a543a5a13621f75fd1f1b3812e79d17debb",
+        "separateHeadRow": {
+          "before": false,
+          "after": true,
+          "cvs": true,
+          "groff": true
+        }
+      },
+      {
+        "head": ".IP window\n",
+        "request": ".br\n",
+        "sourceSha256": "6239edda18456f3307ecebd257dfed9cb005cde21e4d9db6c59422da808945f4",
+        "separateHeadRow": {
+          "before": false,
+          "after": true,
+          "cvs": true,
+          "groff": true
+        }
+      },
+      {
+        "head": ".IP window\n",
+        "request": ".fi\n",
+        "sourceSha256": "a44de6cb16dd22fdf1f3c58a50f1996dfbb8fe2b68f0c18b83d5997a8fb02ce3",
+        "separateHeadRow": {
+          "before": false,
+          "after": true,
+          "cvs": true,
+          "groff": true
+        }
+      },
+      {
+        "head": ".IP window\n",
+        "request": ".nf\n",
+        "sourceSha256": "4bd90a18e356f014689c5896ddfb4d52bbd57ad5fbb7bf535393505d3438ead1",
+        "separateHeadRow": {
+          "before": true,
+          "after": true,
+          "cvs": true,
+          "groff": true
+        }
+      },
+      {
+        "head": ".IP window\n",
+        "request": ".sp 0\n",
+        "sourceSha256": "bc7076598409dd6d98d24a129f3d24153a8faa0584ebb82bf8a7c78a69ac04d9",
+        "separateHeadRow": {
+          "before": true,
+          "after": true,
+          "cvs": true,
+          "groff": true
+        }
+      },
+      {
+        "head": ".IP window\n",
+        "request": ".in +2n\n",
+        "sourceSha256": "36bd56ee044efdeb64c8b3bfe6c17c6d86ad0767b1a8caf60e4763fe7b63399c",
+        "separateHeadRow": {
+          "before": false,
+          "after": true,
+          "cvs": true,
+          "groff": true
+        }
+      },
+      {
+        "head": ".IP window\n",
+        "request": ".ti 0\n",
+        "sourceSha256": "0aceed6eb75baeb7316b57ded863c8881883dc65f150a635f994d37ac902585c",
+        "separateHeadRow": {
+          "before": false,
+          "after": true,
+          "cvs": true,
+          "groff": true
+        }
+      },
+      {
+        "head": ".IP window\n",
+        "request": ".ce 0\n",
+        "sourceSha256": "6a248c61520ae7b87de1fbd3215d99500c90057a564c3b1f0b2f81d42a6d35dd",
+        "separateHeadRow": {
+          "before": false,
+          "after": true,
+          "cvs": true,
+          "groff": true
+        }
+      },
+      {
+        "head": ".IP window\n",
+        "request": ".ce 1\n",
+        "sourceSha256": "b379e29b140099a9ec4de7e0399895bf3a9f672e7a1fd4458a322c212f39b6a9",
+        "separateHeadRow": {
+          "before": false,
+          "after": true,
+          "cvs": true,
+          "groff": true
+        }
+      },
+      {
+        "head": ".IP window\n",
+        "request": ".rj 0\n",
+        "sourceSha256": "f7b1055c1fa218f9fd912173e0924a412b1f97d5450003371bef3f8ae2b77e5f",
+        "separateHeadRow": {
+          "before": false,
+          "after": true,
+          "cvs": true,
+          "groff": true
+        }
+      },
+      {
+        "head": ".IP window\n",
+        "request": ".rj 1\n",
+        "sourceSha256": "f5bd7594c9f9cdfd27df55fbf772e6c8e0666646d71be95fc8d591204c27fd47",
+        "separateHeadRow": {
+          "before": false,
+          "after": true,
+          "cvs": true,
+          "groff": true
+        }
+      },
+      {
+        "head": ".IP window\n",
+        "request": ".EX\n",
+        "sourceSha256": "58d9945e928dfb606315a537c572616fc48c74ac9853175bc0e38392f065e5b2",
+        "separateHeadRow": {
+          "before": true,
+          "after": true,
+          "cvs": true,
+          "groff": true
+        }
+      },
+      {
+        "head": ".IP window\n",
+        "request": ".EE\n",
+        "sourceSha256": "4e1c3bcb8cd4734da10c0c122f7b9afde6b4813aa8875839fd01a9f50abf70a1",
+        "separateHeadRow": {
+          "before": false,
+          "after": true,
+          "cvs": true,
+          "groff": true
+        }
+      },
+      {
+        "head": ".TP\n.B first\n.TQ\n.B window\n",
+        "request": ".br\n",
+        "sourceSha256": "51bf426c28f5a29c2ecdfe0be30f51e9d33d3cd1f0916adcaca41186fc2fa248",
+        "separateHeadRow": {
+          "before": false,
+          "after": true,
+          "cvs": true,
+          "groff": true
+        }
+      },
+      {
+        "head": ".TP\n.B first\n.TQ\n.B window\n",
+        "request": ".fi\n",
+        "sourceSha256": "ef3327469ad43ad028364c300fcedabfb32814a41255d1ad1e64b2d0ca4d2f52",
+        "separateHeadRow": {
+          "before": false,
+          "after": true,
+          "cvs": true,
+          "groff": true
+        }
+      },
+      {
+        "head": ".TP\n.B first\n.TQ\n.B window\n",
+        "request": ".nf\n",
+        "sourceSha256": "aea8d6e2af2fd7612b1d3175686c034c00007cad4591b0c7a51ffa316225c793",
+        "separateHeadRow": {
+          "before": true,
+          "after": true,
+          "cvs": true,
+          "groff": true
+        }
+      },
+      {
+        "head": ".TP\n.B first\n.TQ\n.B window\n",
+        "request": ".sp 0\n",
+        "sourceSha256": "5fa190ee3b28ee73a13c81f55818b02c81afa06ea2ff38b7125f2646e05af9dc",
+        "separateHeadRow": {
+          "before": true,
+          "after": true,
+          "cvs": true,
+          "groff": true
+        }
+      },
+      {
+        "head": ".TP\n.B first\n.TQ\n.B window\n",
+        "request": ".in +2n\n",
+        "sourceSha256": "b17a7c2210986a6f4aa3cb6122039a5ea87c541cde0d8130da860213f1f283f2",
+        "separateHeadRow": {
+          "before": false,
+          "after": true,
+          "cvs": true,
+          "groff": true
+        }
+      },
+      {
+        "head": ".TP\n.B first\n.TQ\n.B window\n",
+        "request": ".ti 0\n",
+        "sourceSha256": "e73f73aa9715acb2ba745ef606ff9d6bb01dcc059d5748d8f9e55e78dbc9b5f0",
+        "separateHeadRow": {
+          "before": false,
+          "after": true,
+          "cvs": true,
+          "groff": true
+        }
+      },
+      {
+        "head": ".TP\n.B first\n.TQ\n.B window\n",
+        "request": ".ce 0\n",
+        "sourceSha256": "a0a473ad01cfb3ef19b027add1819503e5879e7f4554fbbe53899f597d266cac",
+        "separateHeadRow": {
+          "before": false,
+          "after": true,
+          "cvs": true,
+          "groff": true
+        }
+      },
+      {
+        "head": ".TP\n.B first\n.TQ\n.B window\n",
+        "request": ".ce 1\n",
+        "sourceSha256": "2384e6d4a140a4940a3b6c2a12015f3fbb4558f15d9fa865f195041261737b28",
+        "separateHeadRow": {
+          "before": false,
+          "after": true,
+          "cvs": true,
+          "groff": true
+        }
+      },
+      {
+        "head": ".TP\n.B first\n.TQ\n.B window\n",
+        "request": ".rj 0\n",
+        "sourceSha256": "d80a9f90a326b251d46b9d3072ed276c4b7ce3684fbfecfc6d292fb6fc183d5b",
+        "separateHeadRow": {
+          "before": false,
+          "after": true,
+          "cvs": true,
+          "groff": true
+        }
+      },
+      {
+        "head": ".TP\n.B first\n.TQ\n.B window\n",
+        "request": ".rj 1\n",
+        "sourceSha256": "71d1f6ac605048d2ddac7e53513df1d3bd2beba4b56cf2fd7887b6c7746f046d",
+        "separateHeadRow": {
+          "before": false,
+          "after": true,
+          "cvs": true,
+          "groff": true
+        }
+      },
+      {
+        "head": ".TP\n.B first\n.TQ\n.B window\n",
+        "request": ".EX\n",
+        "sourceSha256": "377964ca368e96e49dfea27cdc8895edc060e65a440dbc52ba2630102891ceb4",
+        "separateHeadRow": {
+          "before": true,
+          "after": true,
+          "cvs": true,
+          "groff": true
+        }
+      },
+      {
+        "head": ".TP\n.B first\n.TQ\n.B window\n",
+        "request": ".EE\n",
+        "sourceSha256": "10e999f7c4c84e5ba1fc52d81f4fbb37881e3a68b04f33cc2f32262bae6d2591",
+        "separateHeadRow": {
+          "before": false,
+          "after": true,
+          "cvs": true,
+          "groff": true
+        }
+      }
+    ],
+    "realProduct": [
+      {
+        "path": "/usr/share/man/man1/vimtutor.1.gz",
+        "sourceSha256": "0ed6f3c7a3165368ad5584a4fc1889888bc6573dba91928524a524796c762e0c",
+        "outputs": {
+          "before": {
+            "stdoutSha256": "edcc645ca9cf90259a0cc6bd65b9ed9afe7380f159172e5de8d8eaf96d36b9d6"
+          },
+          "after": {
+            "stdoutSha256": "f4bcf977c54a42a6eae72f1d9de0dd64eb9329bf1cb91ddb83907b927686f654"
+          },
+          "cvs": {
+            "stdoutSha256": "979f6f901884a1daa4634354a285cf7fb661d7489eef2c094e8d1ce37ff7ea55"
+          },
+          "groff": {
+            "stdoutSha256": "5fedb0454ac6d8ccb72af8680ef3cf4bbe75d02596623a74df6bdbd66fedc6ec"
+          }
+        }
+      },
+      {
+        "path": "/usr/share/man/man8/tipc-media.8.gz",
+        "sourceSha256": "e8ba5441501c64a1af5779cccb4466dd26da9c0a81bf9f7aa39bc18456a40eda",
+        "outputs": {
+          "before": {
+            "stdoutSha256": "93694ef9317eaba30045a04f67decf92d0c522fa2a6f9111939e4f2638dbdac2"
+          },
+          "after": {
+            "stdoutSha256": "3516d381a085501fbd3379ad490f33427825efcc11dd6043a73cc73cdd989e45"
+          },
+          "cvs": {
+            "stdoutSha256": "eac11610ed8257da3421d567434066454ef74d38fca5678807b6a6f327d252d2"
+          },
+          "groff": {
+            "stdoutSha256": "316067449f0c8b93bff7f160a5c5ba58c470500f795a5c356be4872760d8536e"
+          }
+        }
+      }
+    ],
+    "realProjection": [
+      {
+        "request": {
+          "id": "man3/stringprep_locale_charset.3.gz",
+          "path": "/usr/share/man/man3/stringprep_locale_charset.3.gz",
+          "root": "/usr/share/man"
+        },
+        "sourceSha256": "241d587d6207e87527aa198d8a4cdaa29e73eda5d78160a25a164320db4985b1",
+        "violations": [],
+        "excerptChecks": 3
+      },
+      {
+        "request": {
+          "id": "man8/net.8.gz",
+          "path": "/usr/share/man/man8/net.8.gz",
+          "root": "/usr/share/man"
+        },
+        "sourceSha256": "40df5fa9377f0819cdcb4d45667c7fefbba66bd5369d71081972c36d5150d02f",
+        "violations": [],
+        "excerptChecks": 3
+      }
+    ]
+  },
+  "validationLogs": {
+    "check-postfix.log": {
+      "sha256": "7a35902bccaacf75ebd94bd2275995e7fd90276b5352e60737951d1b3ff8c207",
+      "artifact": "target/roff-audit-triage/check-postfix.log",
+      "exitCode": 0
+    },
+    "all-features-postfix.log": {
+      "sha256": "679f47b34c33fbcb9c807a917abd12f8ed1bd78b5329689e52ebc05a5375860d",
+      "artifact": "target/roff-audit-triage/all-features-postfix.log",
+      "exitCode": 0
+    },
+    "deny.log": {
+      "sha256": "bafb5311f23b41e73e18369ad8d7efb94860c249d40f9566713cd2da98a736f6",
+      "artifact": "target/roff-audit-triage/deny.log",
+      "exitCode": 0
+    },
+    "postfix-replay.log": {
+      "sha256": "7aeef35a6559abec4baccc08d1d15a97c697dc6f77b9eb89b8d6345e88e059e4",
+      "artifact": "target/roff-audit-triage/postfix-replay.log",
+      "exitCode": 0
+    }
+  },
+  "boundedReviews": {
+    "geometry-bounded-review.md": {
+      "artifact": "target/roff-audit-triage/geometry-bounded-review.md",
+      "sha256": "e6c312ebb782774a044634eb85359dd499ac52c47fa84d45079c6fa227c1abe9"
+    },
+    "eqn-operand-candidate-review.md": {
+      "artifact": "target/roff-audit-triage/eqn-operand-candidate-review.md",
+      "sha256": "960881ce29f7ccf0d84aae408bfaecacba9670f3ea20d13bcd521fd52bf3fe3e"
+    }
+  },
+  "structureOracleRecheck": {
+    "artifact": "target/roff-all-audit/structure-oracle-targeted-recheck.json",
+    "artifactSha256": "6f5f58ef7d76b3b1404352282b72ffbcb50d6cae4c816686aa87b1ecd38700a3",
+    "schema": "mant.structure-oracle-targeted-recheck/v1",
+    "scope": "five previously observed structure reviews; not a full rerun; frozen full-run rows remain unchanged",
+    "binary": {
+      "path": "target/debug/examples/roff_structure_profile",
+      "sha256": "2998c9e99fee6d9ad6ff753f08b6448cc9c14be397c6b4bf351cc69216fc1660"
+    },
+    "profilerSourceSha256": "04a4a7b453136ec76adcb833c7c2c6ce69fb0da9b36d5c8077b6cbe051421a1d",
+    "commit": "41051a96",
+    "cases": [
+      {
+        "sourcePath": "/usr/share/man/man3/pcre2demo.3.gz",
+        "sourceSha256": "4214bf4bcea63cac2e0789bb69b9e2e82f151e1589e31e6f3e89c82d4f089ab5",
+        "beforeViolations": [
+          "relative-indent: expected nested RS depth 1, observed no indented IR block"
+        ],
+        "afterViolations": [],
+        "expectedManualLinks": 0,
+        "observedManualLinks": 0,
+        "positiveRelativeIndentScopes": 0
+      },
+      {
+        "sourcePath": "/home/hby/dev/tmp/mantdoc-real-corpus/dragonflybsd-6.4.2-x86_64/root/man/man4/acpi_hp.4.gz",
+        "sourceSha256": "8c59b8e9cf41f554bd2d85d8f62f8491b76987419087254a2dce479d4378c499",
+        "beforeViolations": [
+          "manual-links: expected at least 15, observed 13"
+        ],
+        "afterViolations": [],
+        "expectedManualLinks": 15,
+        "observedManualLinks": 15,
+        "positiveRelativeIndentScopes": 0
+      },
+      {
+        "sourcePath": "/home/hby/dev/tmp/mantdoc-real-corpus/dragonflybsd-6.4.2-x86_64/root/man/man4/acpi_panasonic.4.gz",
+        "sourceSha256": "9b62917d435d1ca020fe893d6bbd3e0abf2677859ce7ff9a6594872a967294a1",
+        "beforeViolations": [
+          "manual-links: expected at least 11, observed 10"
+        ],
+        "afterViolations": [],
+        "expectedManualLinks": 11,
+        "observedManualLinks": 11,
+        "positiveRelativeIndentScopes": 0
+      },
+      {
+        "sourcePath": "/home/hby/dev/tmp/mantdoc-real-corpus/dragonflybsd-6.4.2-x86_64/root/man/man4/acpi_thinkpad.4.gz",
+        "sourceSha256": "6c701ae41186e0078175f334e5da390d699d1d44920648a6a3d134b44de2b2fc",
+        "beforeViolations": [
+          "manual-links: expected at least 23, observed 21"
+        ],
+        "afterViolations": [],
+        "expectedManualLinks": 23,
+        "observedManualLinks": 23,
+        "positiveRelativeIndentScopes": 0
+      },
+      {
+        "sourcePath": "/home/hby/dev/tmp/mantdoc-real-corpus/freebsd-15.1-amd64/root/share/man/man3/libalias.3.gz",
+        "sourceSha256": "0a4c88fd65951d5ae5808958a5f0cb7b91cf1a4485b0738b70b3b12dcd18caf3",
+        "beforeViolations": [
+          "manual-links: expected at least 14, observed 13"
+        ],
+        "afterViolations": [],
+        "expectedManualLinks": 14,
+        "observedManualLinks": 14,
+        "positiveRelativeIndentScopes": 0
+      }
+    ]
+  },
+  "limitations": [
+    "Whole-corpus binaries were frozen before the selected paragraph/definition fixes. Post-fix evidence is reduced/real-page replay and full local gates, not another whole-corpus run.",
+    "The two legacy projection candidates are known source-coordinate oracle errors, verified with the corrected profiler separately; original results are not overwritten.",
+    "Clean means an automatic oracle found no candidate within its coverage, not a proof of semantic equivalence.",
+    "There is no complete manual adjudication of remaining content, equation, table, tab-stop, framing or layout reviews.",
+    "Real TUI terminal-cell checks cover the reduced matrix; this is not full-corpus TUI or Windows/macOS native interaction evidence.",
+    "The historical pre-/post-migration canonical-IR comparison is not repeated by this rendering audit.",
+    "Large inputs/results remain on the audit host. Their hashes bind identity, not remote availability or build provenance.",
+    "Per-child subprocess limits are not an aggregate end-to-end wall-time or memory cap. Include context outside manifest leaves is not exhaustively inventoried.",
+    "Earlier full-01 and full-rendering runs were interrupted exploratory runs and are excluded from final counts."
+  ]
+}
