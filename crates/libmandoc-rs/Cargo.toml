@@ -21,9 +21,9 @@ include = [
   "/shim/**",
   "/src/**",
   "/tests/**",
-  "/vendor/mandoc-1.14.6/**",
-  "!/vendor/mandoc-1.14.6/soelim.c",
-  "!/vendor/mandoc-1.14.6/soelim.1",
+  "/vendor/mandoc-cvs-20260911/**",
+  "!/vendor/mandoc-cvs-20260911/soelim.c",
+  "!/vendor/mandoc-cvs-20260911/soelim.1",
 ]
 publish.workspace = true
 links = "libmandoc_rs"

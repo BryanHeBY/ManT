@@ -1,0 +1,26 @@
+Subject: preserve unknown encoding
+Upstream-Status: Candidate (not submitted)
+Replaces: 0009
+
+Retain automatic detection for unsupported encoding cues and recognize common Latin-1 spellings.
+
+--- a/preconv.c
++++ b/preconv.c
+@@ -177,7 +177,16 @@
+ 			return MPARSE_UTF8;
+ 		if (phsz > 10 && !strncasecmp(ln, "iso-latin-1", 11))
+ 			return MPARSE_LATIN1;
+-		return 0;
++		if ((phsz > 6 && !strncasecmp(ln, "latin-1", 7)) ||
++		    (phsz > 9 && !strncasecmp(ln, "iso-8859-1", 10)))
++			return MPARSE_LATIN1;
++
++		/*
++		 * No other encoding can be selected by this converter.  Keep
++		 * automatic UTF-8/Latin-1 detection rather than disabling both
++		 * paths and replacing every high byte with a question mark.
++		 */
++		return MPARSE_UTF8 | MPARSE_LATIN1;
+ 	}
+ 	return MPARSE_UTF8 | MPARSE_LATIN1;
+ }

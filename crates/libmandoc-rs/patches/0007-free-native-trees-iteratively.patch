@@ -1,0 +1,82 @@
+Subject: free native trees iteratively
+Upstream-Status: Candidate (not submitted)
+Replaces: 0031 (cleanup half)
+
+Release roff and equation child/sibling forests without stack proportional to tree depth or width.
+
+--- a/eqn.c
++++ b/eqn.c
+@@ -485,20 +485,27 @@
+ void
+ eqn_box_free(struct eqn_box *bp)
+ {
+-	if (bp == NULL)
+-		return;
+-
+-	if (bp->first)
+-		eqn_box_free(bp->first);
+-	if (bp->next)
+-		eqn_box_free(bp->next);
+-
+-	free(bp->text);
+-	free(bp->left);
+-	free(bp->right);
+-	free(bp->top);
+-	free(bp->bottom);
+-	free(bp);
++	struct eqn_box *next, *tail;
++
++	/* Flatten the owned child/sibling forest while freeing it. Neither
++	 * equation depth nor a very wide sibling list consumes call stack. */
++	while (bp != NULL) {
++		next = bp->next;
++		if (bp->first != NULL) {
++			for (tail = bp->first; tail->next != NULL;
++			    tail = tail->next)
++				continue;
++			tail->next = next;
++			next = bp->first;
++		}
++		free(bp->text);
++		free(bp->left);
++		free(bp->right);
++		free(bp->top);
++		free(bp->bottom);
++		free(bp);
++		bp = next;
++	}
+ }
+ 
+ struct eqn_box *
+--- a/roff.c
++++ b/roff.c
+@@ -1151,11 +1151,24 @@
+ void
+ roff_node_delete(struct roff_man *man, struct roff_node *n)
+ {
+-
+-	while (n->child != NULL)
+-		roff_node_delete(man, n->child);
+-	roff_node_unlink(man, n);
+-	roff_node_free(n);
++	struct roff_node *root, *parent;
++
++	/* Cleanup must not require stack proportional to a rejected tree. */
++	root = n;
++	for (;;) {
++		if (n->child != NULL) {
++			n = n->child;
++			continue;
++		}
++		parent = n->parent;
++		roff_node_unlink(man, n);
++		if (n == root) {
++			roff_node_free(n);
++			break;
++		}
++		roff_node_free(n);
++		n = parent;
++	}
+ }
+ 
+ int

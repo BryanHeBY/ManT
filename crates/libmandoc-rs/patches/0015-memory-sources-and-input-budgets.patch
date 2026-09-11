@@ -1,0 +1,336 @@
+Subject: memory sources and input budgets
+Upstream-Status: Local embedding (not submitted)
+Replaces: 0001 + 0008 + 0013 + 0018 + 0019 + 0022 + 0023
+
+Add memory input and resolver bridge with shared recursion/while budgets and diagnostic-only denied or invalid include policy. Shared parser fields/lifecycle make these one coherent input-policy unit.
+
+--- a/mandoc_parse.h
++++ b/mandoc_parse.h
+@@ -40,5 +40,7 @@
+ void		  mparse_free(struct mparse *);
+ int		  mparse_open(struct mparse *, const char *);
+ void		  mparse_readfd(struct mparse *, int, const char *);
++void		  mparse_readmem(struct mparse *, const unsigned char *, size_t,
++			const char *);
+ void		  mparse_reset(struct mparse *);
+ struct roff_meta *mparse_result(struct mparse *);
+--- a/read.c
++++ b/read.c
+@@ -25,19 +25,25 @@
+ #include "config.h"
+ 
+ #include <sys/types.h>
++#ifndef MANDOC_MEMORY_ONLY
+ #include <sys/mman.h>
+ #include <sys/stat.h>
++#endif
+ 
+ #include <assert.h>
+ #include <ctype.h>
+ #include <errno.h>
++#ifndef MANDOC_MEMORY_ONLY
+ #include <fcntl.h>
++#endif
+ #include <stdarg.h>
+ #include <stdio.h>
+ #include <stdlib.h>
+ #include <string.h>
++#ifndef MANDOC_MEMORY_ONLY
+ #include <unistd.h>
+ #include <zlib.h>
++#endif
+ 
+ #include "mandoc_aux.h"
+ #include "mandoc.h"
+@@ -48,8 +54,11 @@
+ #include "libmandoc.h"
+ #include "roff_int.h"
+ #include "tag.h"
++#include "mant_mandoc_shim.h"
+ 
+ #define	REPARSE_LIMIT	1000
++#define	WHILE_LIMIT	10000
++#define	WHILE_TOTAL_LIMIT 10000
+ 
+ struct	mparse {
+ 	struct roff	 *roff; /* roff parser (!NULL) */
+@@ -62,6 +71,10 @@
+ 	int		  gzip; /* current input file is gzipped */
+ 	int		  filenc; /* encoding of the current file */
+ 	int		  reparse_count; /* finite interp. stack */
++	int		  while_count; /* finite .while expansion */
++	int		  while_total; /* aggregate .while replays */
++	int		  while_total_reported;
++	int		  input_depth; /* shared memory/file recursion */
+ 	int		  line; /* line number in the file */
+ };
+ 
+@@ -69,7 +82,9 @@
+ static	void	  free_buf_list(struct buf *);
+ static	void	  resize_buf(struct buf *, size_t);
+ static	int	  mparse_buf_r(struct mparse *, struct buf, size_t, int);
++#ifndef MANDOC_MEMORY_ONLY
+ static	int	  read_whole_file(struct mparse *, int, struct buf *, int *);
++#endif
+ static	void	  mparse_end(struct mparse *);
+ 
+ 
+@@ -155,10 +170,12 @@
+ 	char		*cp;
+ 	size_t		 pos; /* byte number in the ln buffer */
+ 	size_t		 spos; /* at the start of the current line parse */
+-	int		 line_result, result;
++	int		 bundle_status, line_result, result;
+ 	int		 of;
+ 	int		 lnn; /* line number in the real file */
++#ifndef MANDOC_MEMORY_ONLY
+ 	int		 fd;
++#endif
+ 	int		 inloop; /* Saw .while on this level. */
+ 	unsigned char	 c;
+ 
+@@ -318,6 +335,7 @@
+ 			}
+ 			curp->loop = thisln;
+ 			loop = NULL;
++			curp->while_count = 1;
+ 			inloop = 1;
+ 			break;
+ 		case ROFF_LOOPCONT:
+@@ -333,8 +351,26 @@
+ 				curp->loop = loop = NULL;
+ 				break;
+ 			}
+-			if (line_result & ROFF_LOOPCONT)
+-				loop = curp->loop;
++			if (line_result & ROFF_LOOPCONT) {
++				if (++curp->while_count > WHILE_LIMIT) {
++					mandoc_msg(MANDOCERR_ROFFLOOP,
++					    curp->line, pos, NULL);
++					curp->loop = loop = NULL;
++					inloop = 0;
++				} else if (curp->while_total >=
++				    WHILE_TOTAL_LIMIT) {
++					if (curp->while_total_reported == 0) {
++						mandoc_msg(MANDOCERR_ROFFLOOP,
++						    curp->line, pos, NULL);
++						curp->while_total_reported = 1;
++					}
++					curp->loop = loop = NULL;
++					inloop = 0;
++				} else {
++					curp->while_total++;
++					loop = curp->loop;
++				}
++			}
+ 			else {
+ 				curp->loop = loop = NULL;
+ 				inloop = 0;
+@@ -385,6 +421,38 @@
+ 				    mandoc_strdup(ln.buf + of);
+ 				goto out;
+ 			}
++			if ( ! (curp->options & MPARSE_SO)) {
++				mandoc_msg(MANDOCERR_SO_FAIL, curp->line, of,
++				    ".so %s: file inclusion disabled", ln.buf + of);
++				break;
++			}
++			bundle_status = mant_mandoc_read_bundle(curp,
++			    ln.buf + of);
++			if (bundle_status > 0)
++				break;
++			if (bundle_status < 0) {
++				mandoc_msg(MANDOCERR_SO_FAIL,
++				    curp->line, of, ".so %s: %s",
++				    ln.buf + of, strerror(errno));
++				ln.sz = mandoc_asprintf(&cp,
++				    ".sp\nSee the file %s.\n.sp",
++				    ln.buf + of);
++				free(ln.buf);
++				ln.buf = cp;
++				of = 0;
++				mparse_buf_r(curp, ln, of, 0);
++				break;
++			}
++#ifdef MANDOC_MEMORY_ONLY
++			mandoc_msg(MANDOCERR_SO_FAIL, curp->line, of,
++			    ".so %s: file inclusion disabled", ln.buf + of);
++			ln.sz = mandoc_asprintf(&cp,
++			    ".sp\nSee the file %s.\n.sp", ln.buf + of);
++			free(ln.buf);
++			ln.buf = cp;
++			of = 0;
++			mparse_buf_r(curp, ln, of, 0);
++#else
+ 			if ((fd = mparse_open(curp, ln.buf + of)) != -1) {
+ 				mparse_readfd(curp, fd, ln.buf + of);
+ 				close(fd);
+@@ -400,6 +468,7 @@
+ 				of = 0;
+ 				mparse_buf_r(curp, ln, of, 0);
+ 			}
++#endif
+ 			break;
+ 		default:
+ 			abort();
+@@ -436,6 +505,7 @@
+ 	return result;
+ }
+ 
++#ifndef MANDOC_MEMORY_ONLY
+ static int
+ read_whole_file(struct mparse *curp, int fd, struct buf *fb, int *with_mmap)
+ {
+@@ -538,6 +608,7 @@
+ 	}
+ 	return retval;
+ }
++#endif
+ 
+ static void
+ mparse_end(struct mparse *curp)
+@@ -552,14 +623,72 @@
+ }
+ 
+ /*
++ * Parse one caller-owned memory buffer without opening files.
++ * The embedding application owns source I/O, decompression, and .so policy.
++ */
++void
++mparse_readmem(struct mparse *curp, const unsigned char *data, size_t size,
++    const char *filename)
++{
++	struct buf	 blk;
++	struct buf	*save_primary;
++	const char	*save_filename, *cp;
++	size_t		 offset;
++	int		 save_filenc, save_lineno;
++
++	if (curp->input_depth == 0) {
++		curp->while_total = 0;
++		curp->while_total_reported = 0;
++	}
++	if (curp->input_depth > 64) {
++		mandoc_msg(MANDOCERR_ROFFLOOP, curp->line, 0, NULL);
++		return;
++	} else if (curp->input_depth == 0) {
++		if ((cp = strrchr(filename, '.')) != NULL &&
++		    cp[1] >= '1' && cp[1] <= '9')
++			curp->man->filesec = cp[1];
++		else
++			curp->man->filesec = '\0';
++	}
++
++	blk.buf = (char *)data;
++	blk.sz = size;
++	blk.next = NULL;
++	save_primary = curp->primary;
++	save_filenc = curp->filenc;
++	save_lineno = curp->line;
++	save_filename = mandoc_msg_getinfilename();
++
++	curp->primary = &blk;
++	curp->filenc = curp->options & (MPARSE_UTF8 | MPARSE_LATIN1);
++	curp->line = 1;
++	mandoc_msg_setinfilename(filename);
++	if (curp->filenc & MPARSE_UTF8 && blk.sz > 2 &&
++	    data[0] == 0xef && data[1] == 0xbb && data[2] == 0xbf) {
++		offset = 3;
++		curp->filenc &= ~MPARSE_LATIN1;
++	} else
++		offset = 0;
++
++	curp->input_depth++;
++	mparse_buf_r(curp, blk, offset, 1);
++	if (--curp->input_depth == 0)
++		mparse_end(curp);
++
++	curp->primary = save_primary;
++	curp->filenc = save_filenc;
++	curp->line = save_lineno;
++	mandoc_msg_setinfilename(save_filename);
++}
++
++#ifndef MANDOC_MEMORY_ONLY
++/*
+  * Read the whole file into memory and call the parsers.
+  * Called recursively when an .so request is encountered.
+  */
+ void
+ mparse_readfd(struct mparse *curp, int fd, const char *filename)
+ {
+-	static int	 recursion_depth;
+-
+ 	struct buf	 blk;
+ 	struct buf	*save_primary;
+ 	const char	*save_filename, *cp;
+@@ -567,10 +696,14 @@
+ 	int		 save_filenc, save_lineno;
+ 	int		 with_mmap;
+ 
+-	if (recursion_depth > 64) {
++	if (curp->input_depth == 0) {
++		curp->while_total = 0;
++		curp->while_total_reported = 0;
++	}
++	if (curp->input_depth > 64) {
+ 		mandoc_msg(MANDOCERR_ROFFLOOP, curp->line, 0, NULL);
+ 		return;
+-	} else if (recursion_depth == 0 &&
++	} else if (curp->input_depth == 0 &&
+ 	    (cp = strrchr(filename, '.')) != NULL &&
+             cp[1] >= '1' && cp[1] <= '9')
+                 curp->man->filesec = cp[1];
+@@ -604,9 +737,9 @@
+ 	} else
+ 		offset = 0;
+ 
+-	recursion_depth++;
++	curp->input_depth++;
+ 	mparse_buf_r(curp, blk, offset, 1);
+-	if (--recursion_depth == 0)
++	if (--curp->input_depth == 0)
+ 		mparse_end(curp);
+ 
+ 	/*
+@@ -661,6 +794,7 @@
+ 
+ 	return -1;
+ }
++#endif
+ 
+ struct mparse *
+ mparse_alloc(int options, enum mandoc_os os_e, const char *os_s)
+@@ -699,6 +833,7 @@
+ 	free_buf_list(curp->secondary);
+ 	curp->secondary = NULL;
+ 	curp->gzip = 0;
++	curp->input_depth = 0;
+ 	tag_alloc();
+ }
+ 
+--- a/roff.c
++++ b/roff.c
+@@ -3983,7 +3983,7 @@
+ static int
+ roff_so(ROFF_ARGS)
+ {
+-	char *name, *cp;
++	char *name;
+ 
+ 	name = buf->buf + pos;
+ 	mandoc_msg(MANDOCERR_SO, ln, ppos, "so %s", name);
+@@ -3997,12 +3997,7 @@
+ 
+ 	if (*name == '/' || strstr(name, "../") || strstr(name, "/..")) {
+ 		mandoc_msg(MANDOCERR_SO_PATH, ln, ppos, ".so %s", name);
+-		buf->sz = mandoc_asprintf(&cp,
+-		    ".sp\nSee the file %s.\n.sp", name) + 1;
+-		free(buf->buf);
+-		buf->buf = cp;
+-		*offs = 0;
+-		return ROFF_REPARSE;
++		return ROFF_IGN;
+ 	}
+ 
+ 	*offs = pos;

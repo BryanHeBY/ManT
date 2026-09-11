@@ -1,0 +1,72 @@
+Subject: render direct layout sentinels
+Upstream-Status: Candidate (not submitted)
+Replaces: new CVS renderer finding
+
+Give unbuffered direct-output paths the same sentinel semantics as the normal line buffer.
+
+--- a/term.c
++++ b/term.c
+@@ -35,6 +35,7 @@
+ static	size_t		 cond_width(const struct termp *, int, int *);
+ static	void		 adjbuf(struct termp_col *, size_t);
+ static	void		 bufferc(struct termp *, char);
++static	void		 directc(struct termp *, int);
+ static	void		 encode(struct termp *, const char *, size_t);
+ static	void		 encode1(struct termp *, int);
+ static	void		 endline(struct termp *);
+@@ -828,11 +829,36 @@
+ 	c->buf = mandoc_reallocarray(c->buf, c->maxcols, sizeof(*c->buf));
+ }
+ 
++/*
++ * Without the line buffer, layout sentinels still have their usual visible
++ * meaning.  In particular, unknown margin characters are zero-width, not
++ * literal ASCII_NBRZW bytes.  Tab-reference state is handled by term_field();
++ * term_tab_ref() never inserts it while TERMP_NOBUF is set.
++ */
++static void
++directc(struct termp *p, int c)
++{
++	switch (c) {
++	case ASCII_BREAK:
++	case ASCII_NBRZW:
++		return;
++	case ASCII_NBRSP:
++		c = ' ';
++		break;
++	case ASCII_HYPH:
++		c = '-';
++		break;
++	default:
++		break;
++	}
++	(*p->letter)(p, c);
++}
++
+ static void
+ bufferc(struct termp *p, char c)
+ {
+ 	if (p->flags & TERMP_NOBUF) {
+-		(*p->letter)(p, c);
++		directc(p, c);
+ 		return;
+ 	}
+ 	if (p->col + 1 >= p->tcol->maxcols)
+@@ -862,7 +888,7 @@
+ 	enum termfont	  f;
+ 
+ 	if (p->flags & TERMP_NOBUF) {
+-		(*p->letter)(p, c);
++		directc(p, c);
+ 		return;
+ 	}
+ 
+@@ -908,7 +934,7 @@
+ 
+ 	if (p->flags & TERMP_NOBUF) {
+ 		for (i = 0; i < sz; i++)
+-			(*p->letter)(p, word[i]);
++			directc(p, word[i]);
+ 		return;
+ 	}
+ 

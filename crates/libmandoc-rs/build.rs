@@ -1,6 +1,6 @@
 //! Build the parsing subset of the pinned mandoc source tree.
 //!
-//! The vendored source at `vendor/mandoc-1.14.6/` is a pre-patched snapshot
+//! The vendored source at `vendor/mandoc-cvs-20260911/` is a pre-patched snapshot
 //! maintained by `scripts/sync-vendor`.  See `upstream/SOURCE` for provenance
 //! and `patches/series` for any local modifications.
 //!
@@ -30,6 +30,7 @@ const LIBMANDOC_SOURCES: &[&str] = &[
     "st.c",
     "eqn.c",
     "roff.c",
+    "roff_escape.c",
     "roff_validate.c",
     "tbl.c",
     "tbl_data.c",
@@ -68,7 +69,7 @@ const RENDER_SOURCES: &[&str] = &[
 
 fn main() {
     let crate_dir = PathBuf::from(env::var_os("CARGO_MANIFEST_DIR").expect("manifest directory"));
-    let vendor_dir = crate_dir.join("vendor/mandoc-1.14.6");
+    let vendor_dir = crate_dir.join("vendor/mandoc-cvs-20260911");
     let out_dir = PathBuf::from(env::var_os("OUT_DIR").expect("Cargo output directory"));
     let target_os = env::var("CARGO_CFG_TARGET_OS").expect("target operating system");
     let target_env = env::var("CARGO_CFG_TARGET_ENV").unwrap_or_default();
@@ -95,6 +96,7 @@ fn main() {
     fs::copy(crate_dir.join(config), out_dir.join("config.h"))
         .expect("copy checked mandoc target configuration");
     generate_special_character_table(&vendor_dir, &out_dir);
+    generate_text_sentinels(&vendor_dir, &out_dir);
 
     let mut build = cc::Build::new();
     build
@@ -267,7 +269,7 @@ fn generate_special_character_table(vendor_dir: &std::path::Path, out_dir: &std:
     entries.sort_unstable_by(|left, right| left.0.cmp(&right.0));
 
     let mut generated = String::from(
-        "// Generated from vendor/mandoc-1.14.6/chars.c; do not edit.\n\
+        "// Generated from the pinned vendor chars.c; do not edit.\n\
          const CATALOG: &[(&str, u32)] = &[\n",
     );
     for (name, codepoint) in entries {
@@ -289,6 +291,37 @@ fn generate_special_character_table(vendor_dir: &std::path::Path, out_dir: &std:
     );
     fs::write(out_dir.join("special_characters.rs"), generated)
         .expect("write generated mandoc character catalog");
+}
+
+/// Private native marker bytes are not an ABI. Derive them from the same
+/// header compiled by C, rather than silently carrying old values across a rebase.
+fn generate_text_sentinels(vendor_dir: &std::path::Path, out_dir: &std::path::Path) {
+    let header = fs::read_to_string(vendor_dir.join("mandoc.h")).expect("read native markers");
+    let mut generated = String::from("// Generated from mandoc.h; do not edit.\n");
+    let mut values = HashSet::new();
+    for name in [
+        "ASCII_NBRSP",
+        "ASCII_NBRZW",
+        "ASCII_BREAK",
+        "ASCII_HYPH",
+        "ASCII_TABREF",
+    ] {
+        let value = header
+            .lines()
+            .find_map(|line| {
+                let mut fields = line.split_whitespace();
+                (fields.next() == Some("#define") && fields.next() == Some(name))
+                    .then(|| fields.next().and_then(parse_c_integer))
+                    .flatten()
+            })
+            .unwrap_or_else(|| panic!("missing native marker {name}"));
+        assert!(
+            (1..32).contains(&value) && values.insert(value),
+            "invalid native marker {name}"
+        );
+        writeln!(generated, "const {name}: char = '\\u{{{value:x}}}';").expect("write marker");
+    }
+    fs::write(out_dir.join("text_sentinels.rs"), generated).expect("write native marker table");
 }
 
 fn parse_c_string(source: &str) -> Option<(String, &str)> {

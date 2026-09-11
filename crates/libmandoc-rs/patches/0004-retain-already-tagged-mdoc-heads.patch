@@ -1,0 +1,19 @@
+Subject: retain already tagged mdoc heads
+Upstream-Status: Candidate (not submitted)
+Replaces: 0029 (post_tg half)
+
+Do not replace an already-tagged section/function head with another explicit Tg; preserve a separate target node.
+
+--- a/mdoc_validate.c
++++ b/mdoc_validate.c
+@@ -1182,7 +1182,9 @@
+ 	case MDOC_Sh:
+ 	case MDOC_Ss:
+ 	case MDOC_Fo:
+-		nn = nn->head->child == NULL ? n : nn->head;
++		/* Keep a second authored target on its own zero-width node. */
++		nn = nn->head->child == NULL ||
++		    nn->head->flags & NODE_ID ? n : nn->head;
+ 		break;
+ 	case MDOC_It:
+ 		np = nn->parent;

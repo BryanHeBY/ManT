@@ -74,10 +74,29 @@ fn parser_normalizes_internal_sentinels_in_validated_tags() {
     assert!(
         find_node(&report.document.root, &|node| {
             node.tag.as_deref().is_some_and(|tag| {
-                tag.chars()
-                    .any(|character| ['\u{1d}', '\u{1e}', '\u{1f}'].contains(&character))
+                tag.chars().any(|character| {
+                    ['\u{1a}', '\u{1c}', '\u{1d}', '\u{1e}', '\u{1f}'].contains(&character)
+                })
             })
         })
         .is_none()
     );
+}
+
+#[test]
+fn automatic_option_tags_normalize_escaped_hyphens_at_the_same_owner() {
+    for spelling in ["new-window", "new\\-window"] {
+        let source = format!(
+            ".Dd September 11, 2026\n.Dt PROBE 1\n.Os ManT\n.Sh OPTIONS\n.Bl -tag -width Ds\n.It Fl {spelling}\nOpen a window.\n.El\n"
+        );
+        let report = Parser::default()
+            .parse_bytes("tag-hyphen.1", source.as_bytes())
+            .expect("parse option tag with equivalent hyphen spelling");
+        let target = find_node(&report.document.root, &|node| {
+            node.flags.deep_link_target && node.tag.as_deref() == Some("new-window")
+        })
+        .expect("normalized automatic option destination");
+        assert_eq!(target.line, 6, "{spelling}: {target:?}");
+        assert!(find_macro(target, "Fl").is_some(), "{spelling}: {target:?}");
+    }
 }

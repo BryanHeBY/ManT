@@ -1,0 +1,211 @@
+Subject: isolate parser session state
+Upstream-Status: Local embedding (not submitted)
+Replaces: 0006 + 0010
+
+Move remaining mutable parser globals to per-thread storage and reset session-owned trap/centering state on lifecycle boundaries.
+
+--- a/chars.c
++++ b/chars.c
+@@ -17,6 +17,7 @@
+  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+  */
+ #include "config.h"
++#include "mant_thread_local.h"
+ 
+ #include <sys/types.h>
+ 
+@@ -425,7 +426,7 @@
+ 	{ "ts",			"<sigma>",	0x03c2	},
+ };
+ 
+-static	struct ohash	  mchars;
++MANT_THREAD_LOCAL struct ohash mchars;
+ 
+ 
+ void
+--- a/compat_progname.c
++++ b/compat_progname.c
+@@ -15,8 +15,9 @@
+  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+  */
+ #include "config.h"
++#include "mant_thread_local.h"
+ 
+-static const char *progname;
++MANT_THREAD_LOCAL const char *progname;
+ 
+ void
+ setprogname(const char *name)
+--- a/mandoc_msg.c
++++ b/mandoc_msg.c
+@@ -18,6 +18,7 @@
+  * Implementation of warning and error messages for mandoc(1).
+  */
+ #include "config.h"
++#include "mant_thread_local.h"
+ 
+ #include <stdarg.h>
+ #include <stdio.h>
+@@ -291,10 +292,10 @@
+ 	"write",
+ };
+ 
+-static	FILE		*fileptr = NULL;
+-static	const char	*filename = NULL;
+-static	enum mandocerr	 min_type = MANDOCERR_BADARG;
+-static	enum mandoclevel rc = MANDOCLEVEL_OK;
++MANT_THREAD_LOCAL FILE *fileptr = NULL;
++MANT_THREAD_LOCAL const char *filename = NULL;
++MANT_THREAD_LOCAL enum mandocerr min_type = MANDOCERR_BADARG;
++MANT_THREAD_LOCAL enum mandoclevel rc = MANDOCLEVEL_OK;
+ 
+ 
+ void
+--- a/mandoc_xr.c
++++ b/mandoc_xr.c
+@@ -15,6 +15,7 @@
+  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+  */
+ #include "config.h"
++#include "mant_thread_local.h"
+ 
+ #include <sys/types.h>
+ 
+@@ -28,9 +29,9 @@
+ #include "mandoc_ohash.h"
+ #include "mandoc_xr.h"
+ 
+-static struct ohash	 *xr_hash = NULL;
+-static struct mandoc_xr	 *xr_first = NULL;
+-static struct mandoc_xr	 *xr_last = NULL;
++MANT_THREAD_LOCAL struct ohash *xr_hash = NULL;
++MANT_THREAD_LOCAL struct mandoc_xr *xr_first = NULL;
++MANT_THREAD_LOCAL struct mandoc_xr *xr_last = NULL;
+ 
+ static void		  mandoc_xr_clear(void);
+ 
+--- /dev/null
++++ b/mant_thread_local.h
+@@ -0,0 +1,20 @@
++/*
++ * ManT local patch: make libmandoc's parser-global mutable state private to
++ * the calling OS thread.  The selected API is synchronous and never hands C
++ * state to another thread, so static TLS gives each concurrent Rust parse an
++ * independent parser session without a process-wide lock.
++ *
++ * The Rust crate supports Linux/glibc, macOS, and Windows/MSVC.  C11 TLS is
++ * available on the Unix targets; MSVC's static TLS spelling is equivalent for
++ * the constant-initialized state used by this parser subset.
++ */
++#ifndef MANT_THREAD_LOCAL_H
++#define MANT_THREAD_LOCAL_H
++
++#if defined(_MSC_VER)
++#define MANT_THREAD_LOCAL static __declspec(thread)
++#else
++#define MANT_THREAD_LOCAL static _Thread_local
++#endif
++
++#endif
+--- a/mdoc_validate.c
++++ b/mdoc_validate.c
+@@ -19,6 +19,7 @@
+  * Validation module for mdoc(7) syntax trees used by mandoc(1).
+  */
+ #include "config.h"
++#include "mant_thread_local.h"
+ 
+ #include <sys/types.h>
+ #ifndef OSNAME
+@@ -294,7 +295,7 @@
+ 	NULL
+ };
+ 
+-static	int	  fn_prio = TAG_STRONG;
++MANT_THREAD_LOCAL int fn_prio = TAG_STRONG;
+ 
+ 
+ /* Validate the subtree rooted at mdoc->last. */
+--- a/roff.c
++++ b/roff.c
+@@ -18,6 +18,7 @@
+  * Implementation of the roff(7) parser for mandoc(1).
+  */
+ #include "config.h"
++#include "mant_thread_local.h"
+ 
+ #include <sys/types.h>
+ 
+@@ -638,10 +639,21 @@
+ #include "predefs.in"
+ };
+ 
+-static	int	 roffce_lines;	/* number of input lines to center */
+-static	struct roff_node *roffce_node;  /* active request */
+-static	int	 roffit_lines;  /* number of lines to delay */
+-static	char	*roffit_macro;  /* nil-terminated macro line */
++MANT_THREAD_LOCAL int roffce_lines; /* number of input lines to center */
++MANT_THREAD_LOCAL struct roff_node *roffce_node; /* active request */
++MANT_THREAD_LOCAL int roffit_lines; /* number of lines to delay */
++MANT_THREAD_LOCAL char *roffit_macro; /* nil-terminated macro line */
++
++/* Reset armed requests before their owning document is freed or reused. */
++static void
++roff_session_reset(void)
++{
++	roffce_lines = 0;
++	roffce_node = NULL;
++	roffit_lines = 0;
++	free(roffit_macro);
++	roffit_macro = NULL;
++}
+ 
+ 
+ /* --- request table ------------------------------------------------------ */
+@@ -790,10 +802,7 @@
+ 	r->format = r->options & (MPARSE_MDOC | MPARSE_MAN);
+ 	r->control = '\0';
+ 	r->escape = '\\';
+-	roffce_lines = 0;
+-	roffce_node = NULL;
+-	roffit_lines = 0;
+-	roffit_macro = NULL;
++	roff_session_reset();
+ }
+ 
+ void
+@@ -801,6 +810,7 @@
+ {
+ 	int		 i;
+ 
++	roff_session_reset();
+ 	roff_free1(r);
+ 	for (i = 0; i < r->mstacksz; i++)
+ 		free(r->mstack[i].argv);
+@@ -814,6 +824,7 @@
+ {
+ 	struct roff	*r;
+ 
++	roff_session_reset();
+ 	r = mandoc_calloc(1, sizeof(struct roff));
+ 	r->reqtab = roffhash_alloc(0, ROFF_RENAMED);
+ 	r->options = options | MPARSE_COMMENT;
+--- a/tag.c
++++ b/tag.c
+@@ -19,6 +19,7 @@
+  * For internal use by mandoc(1) validation modules only.
+  */
+ #include "config.h"
++#include "mant_thread_local.h"
+ 
+ #include <sys/types.h>
+ 
+@@ -50,7 +51,7 @@
+ 				struct roff_node *, const char *);
+ static void		 tag_move_id(struct roff_node *);
+ 
+-static struct ohash	 tag_data;
++MANT_THREAD_LOCAL struct ohash tag_data;
+ 
+ 
+ /*

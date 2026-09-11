@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Ensure the Linux C toolchain and zlib development interface used by libmandoc.
+# Ensure native builds and the maintainer-only pinned CVS replay can run in CI.
 
 set -euo pipefail
 
@@ -9,6 +9,7 @@ trap 'rm -rf -- "$probe_dir"' EXIT
 native_dependencies_available() {
   command -v cc >/dev/null 2>&1 &&
     command -v ar >/dev/null 2>&1 &&
+    command -v cvs >/dev/null 2>&1 &&
     printf '%s\n' \
       '#include <zlib.h>' \
       'int main(void) { return zlibVersion() == 0; }' |
@@ -41,6 +42,7 @@ timeout --signal=TERM --kill-after=10s 90s "${apt_get[@]}" install \
   --yes \
   --no-install-recommends \
   build-essential \
+  cvs \
   zlib1g-dev
 
 if ! native_dependencies_available; then

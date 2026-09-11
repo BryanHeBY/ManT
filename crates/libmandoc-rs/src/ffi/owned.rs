@@ -80,19 +80,27 @@ pub(super) unsafe fn optional_string(pointer: *const c_char) -> Option<String> {
     }
 }
 
+include!(concat!(env!("OUT_DIR"), "/text_sentinels.rs"));
+
 unsafe fn visible_string(pointer: *const c_char) -> Option<String> {
     unsafe { optional_string(pointer) }.map(|text| {
-        if !text
-            .chars()
-            .any(|character| ['\u{1d}', '\u{1e}', '\u{1f}'].contains(&character))
-        {
+        if !text.chars().any(|character| {
+            [
+                ASCII_NBRSP,
+                ASCII_NBRZW,
+                ASCII_BREAK,
+                ASCII_HYPH,
+                ASCII_TABREF,
+            ]
+            .contains(&character)
+        }) {
             return text;
         }
         text.chars()
             .filter_map(|character| match character {
-                '\u{1d}' => None,
-                '\u{1e}' => Some('-'),
-                '\u{1f}' => Some(' '),
+                ASCII_NBRZW | ASCII_BREAK | ASCII_TABREF => None,
+                ASCII_HYPH => Some('-'),
+                ASCII_NBRSP => Some(' '),
                 other => Some(other),
             })
             .collect()
@@ -298,4 +306,39 @@ unsafe fn copy_table_cells(
         pointer = view.next;
     }
     Ok(cells)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::ffi::CString;
+
+    #[test]
+    fn native_marker_values_and_visible_translation_follow_the_pinned_header() {
+        assert_eq!(ASCII_TABREF, '\u{1a}');
+        assert_eq!(ASCII_HYPH, '\u{1c}');
+        assert_eq!(ASCII_BREAK, '\u{1d}');
+        assert_eq!(ASCII_NBRZW, '\u{1e}');
+        assert_eq!(ASCII_NBRSP, '\u{1f}');
+        for (marker, expected) in [
+            (ASCII_TABREF, "AB"),
+            (ASCII_HYPH, "A-B"),
+            (ASCII_BREAK, "AB"),
+            (ASCII_NBRZW, "AB"),
+            (ASCII_NBRSP, "A B"),
+        ] {
+            let input = CString::new(format!("A{marker}B")).unwrap();
+            // CString owns the NUL-terminated bytes for this complete call.
+            assert_eq!(
+                unsafe { visible_string(input.as_ptr()) }.as_deref(),
+                Some(expected)
+            );
+        }
+        let input = CString::new("café 日本 😀\t").unwrap();
+        assert_eq!(
+            unsafe { visible_string(input.as_ptr()) }.as_deref(),
+            Some("café 日本 😀\t")
+        );
+        assert_eq!(unsafe { visible_string(std::ptr::null()) }, None);
+    }
 }

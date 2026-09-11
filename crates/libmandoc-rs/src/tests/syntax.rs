@@ -24,7 +24,7 @@ fn incomplete_root_font_scopes_report_diagnostics_and_reset() {
 
 #[test]
 fn upstream_version_is_pinned() {
-    assert_eq!(crate::LIBMANDOC_VERSION, "1.14.6");
+    assert_eq!(crate::LIBMANDOC_VERSION, "cvs-20260911");
 }
 
 #[test]
@@ -55,6 +55,144 @@ fn parser_recognizes_the_modern_man_reference_macro() {
             .collect::<Vec<_>>(),
         ["git-add", "1", ","]
     );
+}
+
+#[test]
+fn parser_preserves_man_paragraph_macro_names_and_source_lines() {
+    let report = Parser::default()
+        .parse_bytes(
+            "paragraph-names.1",
+            b".TH PROBE 1\n.SH DESCRIPTION\nBefore.\n.P\nFirst.\n.LP\nSecond.\n.PP\nThird.\n",
+        )
+        .expect("parse distinct paragraph requests");
+    for (name, line, body) in [
+        ("P", 4, "First."),
+        ("LP", 6, "Second."),
+        ("PP", 8, "Third."),
+    ] {
+        let paragraph = find_macro(&report.document.root, name).expect("preserved paragraph node");
+        assert_eq!(paragraph.kind, NodeKind::Block);
+        assert_eq!(paragraph.line, line);
+        let text = find_node(paragraph, &|node| node.text.as_deref() == Some(body))
+            .expect("paragraph body remains in its own source scope");
+        assert_eq!(text.line, line + 1);
+    }
+}
+
+#[test]
+fn quiet_include_requests_obey_memory_and_bundle_source_policies() {
+    let parser = Parser::default();
+    for request in ["so", "soquiet"] {
+        let alias = parser
+            .parse_bytes("alias.1", format!(".{request} target.1\n").as_bytes())
+            .expect("standalone alias retains metadata without opening a file");
+        assert_eq!(
+            alias.document.metadata.alias_target.as_deref(),
+            Some("target.1")
+        );
+        assert!(!alias.document.metadata.has_body);
+
+        let source = format!(".TH PROBE 1\n.SH DESCRIPTION\nBEFORE\n.{request} target.1\nAFTER\n");
+        let denied = parser
+            .parse_bytes("root.1", source.as_bytes())
+            .expect("denied embedded include leaves the containing page readable");
+        let mut text = Vec::new();
+        collect_visible_text(&denied.document.root, &mut text);
+        assert!(
+            text.contains(&"BEFORE") && text.contains(&"AFTER"),
+            "{text:?}"
+        );
+        assert!(!text.join(" ").contains("See the file"));
+        assert!(denied.document.metadata.alias_target.is_none());
+        assert!(denied.diagnostics.iter().any(|diagnostic| {
+            diagnostic.message.contains("target.1") && diagnostic.message.contains("disabled")
+        }));
+
+        let mut bundle = SourceBundle::new();
+        bundle.insert("root.1", source.into_bytes()).unwrap();
+        bundle.insert("target.1", b"INCLUDED\n".to_vec()).unwrap();
+        bundle
+            .insert("alias.1", format!(".{request} full.1\n").into_bytes())
+            .unwrap();
+        bundle
+            .insert("full.1", b".TH FULL 1\n.SH NAME\nfull\n".to_vec())
+            .unwrap();
+        let allowed = parser
+            .parse_bundle("root.1", &bundle)
+            .expect("resolve virtual include");
+        let mut text = Vec::new();
+        collect_visible_text(&allowed.document.root, &mut text);
+        assert_eq!(text, ["DESCRIPTION", "BEFORE", "INCLUDED", "AFTER"]);
+        let trailing = find_node(&allowed.document.root, &|node| {
+            node.text.as_deref() == Some("AFTER")
+        })
+        .expect("parent source resumes after virtual include");
+        assert_eq!(trailing.line, 5);
+        let alias = parser
+            .parse_bundle("alias.1", &bundle)
+            .expect("resolve virtual alias");
+        assert_eq!(alias.document.metadata.title.as_deref(), Some("FULL"));
+
+        bundle
+            .insert(
+                "root.1",
+                format!(".TH PROBE 1\n.SH DESCRIPTION\nBEFORE\n.{request} missing.1\nAFTER\n")
+                    .into_bytes(),
+            )
+            .unwrap();
+        let missing = parser
+            .parse_bundle("root.1", &bundle)
+            .expect("missing virtual include is recoverable");
+        assert!(
+            missing
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.message.contains("missing.1"))
+        );
+        assert!(
+            find_node(&missing.document.root, &|node| node.text.as_deref()
+                == Some("AFTER"))
+            .is_some()
+        );
+    }
+}
+
+#[test]
+fn synopsis_library_and_type_nodes_preserve_generated_roles() {
+    // post_lb emits comment punctuation and -l with NODE_NOSRC, while the
+    // authored library argument retains its origin; Ft uses MDOC_JOIN.
+    let report = Parser::default()
+        .parse_bytes(
+            "synopsis-facts.3",
+            b".Dd September 11, 2026\n.Dt PROBE 3\n.Os ManT\n.Sh SYNOPSIS\n.Lb libbsd\n.Ft const unsigned char *\n.Fn probe void\n",
+        )
+        .expect("parse updated synopsis facts");
+    let library = find_macro(&report.document.root, "Lb").expect("Lb node");
+    assert_eq!(library.line, 5);
+    assert!(library.flags.synopsis_pretty);
+    assert_eq!(
+        library
+            .children
+            .iter()
+            .filter_map(|node| node.text.as_deref())
+            .collect::<Vec<_>>(),
+        ["/*", "-l", "bsd", "*/"],
+    );
+    for node in &library.children {
+        assert_eq!(node.line, 5);
+        assert_eq!(node.flags.generated, node.text.as_deref() != Some("bsd"));
+    }
+    assert!(library.children[1].flags.delimiter_open);
+    let return_type = find_macro(&report.document.root, "Ft").expect("Ft node");
+    assert_eq!(return_type.line, 6);
+    assert!(return_type.flags.synopsis_pretty);
+    assert_eq!(return_type.children.len(), 1);
+    assert_eq!(
+        return_type.children[0].text.as_deref(),
+        Some("const unsigned char *")
+    );
+    assert_eq!(return_type.children[0].line, 6);
+    assert!(!return_type.children[0].flags.generated);
 }
 
 #[test]
@@ -120,8 +258,9 @@ fn public_text_normalizes_native_layout_sentinels() {
     assert!(
         find_node(&report.document.root, &|node| {
             node.text.as_deref().is_some_and(|text| {
-                text.chars()
-                    .any(|character| ['\u{1d}', '\u{1e}', '\u{1f}'].contains(&character))
+                text.chars().any(|character| {
+                    ['\u{1a}', '\u{1c}', '\u{1d}', '\u{1e}', '\u{1f}'].contains(&character)
+                })
             })
         })
         .is_none(),

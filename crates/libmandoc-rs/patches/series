@@ -1,41 +1,22 @@
-# Patch series applied to mandoc-1.14.6 before the result becomes vendor/.
-# Each entry references a numbered patch file in this directory.
-#
-# Conventions:
-# - Keep each semantic or portability change independently reviewable.
-# - Semantic parser patches require an explicit Rust regression test.
-# - Portability patches are exercised by the relevant target CI jobs.
-# - Submit patches upstream where possible; delete them when merged.
-#
-0001-memory-only-input.patch
-0002-man-mr.patch
-0003-pandoc-verbatim-fonts.patch
-0004-libbsd-library-name.patch
-0005-modern-standards.patch
-0006-thread-local-parser-state.patch
-0007-thread-safe-date-conversion.patch
-0008-bounded-while-expansion.patch
-0009-preserve-unknown-encoding.patch
-0010-reset-roff-session-state.patch
-0011-bound-memory-input-utf8.patch
-0012-replace-input-traps.patch
-0013-memory-source-bundles.patch
-0014-isolate-renderer-output.patch
-0015-deterministic-utf8-rendering.patch
-0016-portable-memory-renderers.patch
-0017-preserve-continued-tp-aliases.patch
-0018-bound-aggregate-while-expansion.patch
-0019-share-input-recursion-depth.patch
-0020-bound-mdoc-macro-recursion.patch
-0021-isolate-terminal-renderer-state.patch
-0022-keep-denied-includes-diagnostic-only.patch
-0023-keep-invalid-includes-diagnostic-only.patch
-0024-deterministic-manual-dates.patch
-0025-keep-ohash-size-unsigned.patch
-0026-initialize-number-register-sign.patch
-0027-initialize-alternating-html-tag.patch
-0028-initialize-terminal-escape-state.patch
-0029-avoid-retagging-mdoc-parts.patch
-0030-close-root-element-scope.patch
-0031-bound-native-tree-lifecycle.patch
-0032-retain-executed-flow-boundaries.patch
+0001-bound-memory-input-utf8.patch
+0002-preserve-unknown-encoding.patch
+0003-preserve-continued-tp-aliases.patch
+0004-retain-already-tagged-mdoc-heads.patch
+0005-keep-ohash-size-unsigned.patch
+0006-replace-input-traps.patch
+0007-free-native-trees-iteratively.patch
+0008-size-renderer-scratch-buffers.patch
+0009-initialize-renderer-optional-state.patch
+0010-keep-rfc-url-bytes-unsigned.patch
+0011-render-direct-layout-sentinels.patch
+0012-libbsd-library-name.patch
+0013-pandoc-verbatim-fonts.patch
+0014-isolate-parser-session-state.patch
+0015-memory-sources-and-input-budgets.patch
+0016-bound-native-parser-depth.patch
+0017-retain-executed-flow-boundaries.patch
+0018-deterministic-manual-dates.patch
+0019-isolate-reference-renderer-state.patch
+0020-capture-deterministic-reference-output.patch
+0021-portable-memory-renderers.patch
+0022-apply-private-config-to-roff-escapes.patch

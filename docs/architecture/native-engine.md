@@ -400,11 +400,13 @@ through a per-call output sink. These are library capabilities, not a second
 ManT rendering path: `mant-codec` consumes the owned parser tree, while
 `mant-render` reports and the UI render the resulting shared source-neutral IR.
 
-The pinned libmandoc 1.14.6 snapshot originally kept character, diagnostic,
-tag, roff-request, formatter-tab, HTML-ID, and recursion state in process
-globals. The local vendor patch makes those parser and formatter session slots
-thread-local, and the shim keeps source roots and diagnostic capture
-thread-local as well. Independent parser calls
+The active libmandoc baseline is the fixed mandoc `cvs-20260911` snapshot,
+checked out at 2026-09-11 08:00:00 UTC and recorded by a checksummed per-file
+CVS revision manifest. Remaining mutable character, diagnostic, tag,
+roff-request, formatter-tab, and HTML-ID globals are made thread-local by
+local patches; equation substitution counters are already parser-owned
+upstream. The shim keeps source roots and diagnostic capture thread-local
+as well. Independent parser calls
 therefore run concurrently without a process-wide lock; one-time native
 initialization remains synchronized. Date conversion avoids process-global
 timezone mutation and uses reentrant platform APIs where local time is

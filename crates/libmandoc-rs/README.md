@@ -33,7 +33,7 @@ document model, and `ManT`'s existing engine integration remains unchanged.
 plain / gzip / zstd source
           │
           v
-Rust transport and policy ──> private C shim ──> vendored libmandoc 1.14.6
+Rust transport and policy ──> private C shim ──> libmandoc cvs-20260911
           ^                         │                 │
           ├─ owned ParseReport <────┘                 │
           │  ├─ Document syntax tree                  │
@@ -204,6 +204,13 @@ a per-thread native sink, so concurrent calls neither share renderer state nor
 write to the process's `stdout`. `render_file`, `render_bytes`, and
 `render_bundle` retain the corresponding parser transport and `.so` policies.
 
+Reference output follows the pinned CVS formatter: its default terminal body
+indent is five columns, and HTML uses semantic section containers and
+accessible document structure. These native reference bytes are distinct from
+ManT's source-neutral text and TUI layout. The owned public AST shape and the
+source, include, output-budget, and session-isolation contracts are unchanged
+by the baseline selection. `LIBMANDOC_VERSION` reports `cvs-20260911`.
+
 ```rust,no_run
 # #[cfg(feature = "render")]
 # {
@@ -239,15 +246,17 @@ overflow. Unix native file/gzip transport retains libmandoc's own limits;
 
 ## Vendor layering
 
-The vendored C source at `vendor/mandoc-1.14.6/` is derived from the
-[official 1.14.6 snapshot](https://mandoc.bsd.lv/snapshots/) with ordered
-local patches applied. End-user `cargo build` compiles this tree directly;
-no network access or external patch tool is required.
+The vendored C source at `vendor/mandoc-cvs-20260911/` is derived from the
+official mandoc CVS module at 2026-09-11 08:00:00 UTC with ordered local
+patches applied. `upstream/SOURCE` pins the checkout; `upstream/FILES`
+records the SHA-256 and CVS revision of each of the 198 upstream files.
+End-user `cargo build` compiles this tree directly; no network access,
+CVS client, or external patch tool is required.
 
-The local thread-safety patch moves each mutable parser-global slot in the
-compiled libmandoc subset into static thread-local storage. It uses C11 TLS on
-Linux and macOS, and `__declspec(thread)` on Windows/MSVC; macOS's native
-process-global program-name slot is initialized once before concurrent parses.
+The local thread-safety patch moves remaining mutable parser-global slots in
+the compiled libmandoc subset into static thread-local storage. It uses C11 TLS
+on Linux and macOS, and `__declspec(thread)` on Windows/MSVC; macOS uses the
+thread-local program-name compatibility layer without changing host state.
 Date-only metadata is converted without process-global timezone state, while
 the special current-date form uses the platform's reentrant local-time API.
 
@@ -314,114 +323,73 @@ or changing the patch stack.
 
 ### Local vendor patches
 
-The checked-in vendor tree differs from the official 1.14.6 snapshot only by
-the ordered patches in `patches/series`:
+The checked-in vendor tree differs from the pinned CVS source subset only by
+the 22 ordered patches in `patches/series`. The first group contains
+independently reviewable correctness, compatibility, and portability changes;
+they are candidates for separate upstream evaluation, not claims of submission
+or acceptance:
 
-- `0031-bound-native-tree-lifecycle.patch` stops excessively nested input
-  before finalization/validation and frees syntax and equation trees
-  iteratively. The shim separately checks both tree depths before rendering.
-- `0032-retain-executed-flow-boundaries.patch` stamps native nodes with a
-  per-document flow generation before empty paragraph validation. Conditional
-  and user-macro execution, not physical source lines, determines whether
-  neighboring declarations have an intervening flow boundary. The owned
-  `Node::flow_epoch` survives parser release without a second interpreter.
+- `0001-bound-memory-input-utf8.patch` bounds truncated UTF-8 reads at the
+  caller-owned buffer end.
+- `0002-preserve-unknown-encoding.patch` recognizes common Latin-1 names and
+  retains automatic detection for unsupported encoding declarations.
+- `0003-preserve-continued-tp-aliases.patch` closes a populated continued
+  `.TP`/`.TQ` head before the next declaration, retaining independent terms.
+- `0004-retain-already-tagged-mdoc-heads.patch` keeps an explicit `.Tg` on its
+  own zero-width node when the following head already owns an automatic ID.
+- `0005-keep-ohash-size-unsigned.patch` retains the hash table's unsigned
+  size/index domain without lossy MSVC conversions.
+- `0006-replace-input-traps.patch` frees superseded `.it` macros and clears
+  consumed pointers.
+- `0007-free-native-trees-iteratively.patch` frees syntax and equation trees
+  without stack growth proportional to depth or sibling count.
+- `0008-size-renderer-scratch-buffers.patch` accommodates complete integer
+  representations in table-formatting buffers.
+- `0009-initialize-renderer-optional-state.patch` initializes guarded
+  HTML/terminal temporary state without changing valid output.
+- `0010-keep-rfc-url-bytes-unsigned.patch` checks RFC-number bytes without
+  signed-character ambiguity.
+- `0011-render-direct-layout-sentinels.patch` consumes internal layout
+  markers on direct terminal-character paths, including margin characters.
+- `0012-libbsd-library-name.patch` adds libbsd's library catalog entry.
+- `0013-pandoc-verbatim-fonts.patch` recognizes Pandoc's `\f[V]`,
+  `\f[VB]`, and `\f[VI]` fonts.
 
-- `0001-memory-only-input.patch` adds the buffer-only entry point used on
-  Windows and makes `.so` requests without an explicit bundle or strict root
-  resolver fail rather than opening files implicitly.
-- `0002-man-mr.patch` recognizes the modern man(7) `MR` reference macro.
-- `0003-pandoc-verbatim-fonts.patch` recognizes Pandoc's `\f[V]`, `\f[VB]`,
-  and `\f[VI]` font escapes.
-- `0004-libbsd-library-name.patch` adds libbsd to libmandoc's recognized
-  library-name catalog.
-- `0005-modern-standards.patch` adds POSIX.1-2024 and C23 standard aliases.
-- `0006-thread-local-parser-state.patch` gives independent parser calls
-  isolated mutable libmandoc state without a process-wide lock.
-- `0007-thread-safe-date-conversion.patch` makes ordinary manual dates
-  timezone-independent and uses reentrant conversion for the special current
-  date form.
-- `0008-bounded-while-expansion.patch` limits each roff `.while` loop to
-  10,000 iterations, retains the finite prefix, and emits libmandoc's existing
-  infinite-loop diagnostic instead of allowing hostile input to parse forever.
-- `0018-bound-aggregate-while-expansion.patch` shares a 10,000-replay budget
-  across every `.while` statement and user-macro call in one parser session,
-  preventing individually bounded loops from multiplying into unbounded work.
-- `0009-preserve-unknown-encoding.patch` recognizes common Latin-1 declaration
-  spellings and retains automatic UTF-8/Latin-1 detection when a `coding:`
-  declaration names an unsupported charset, avoiding irreversible `?`
-  replacement for bytes the bundled converter cannot interpret explicitly.
-- `0010-reset-roff-session-state.patch` clears unfinished input-trap and
-  centering state at every parser-session boundary, preventing a page ending
-  with an armed request from carrying dangling native pointers into the next
-  parse in a long-lived process.
-- `0011-bound-memory-input-utf8.patch` falls back to Latin-1 for a truncated
-  UTF-8 sequence at a caller-owned buffer boundary instead of reading past the
-  supplied memory.
-- `0012-replace-input-traps.patch` frees the superseded `.it` trap macro when
-  a page replaces it, preventing repeated trap declarations from accumulating
-  memory in a long-lived parser process.
-- `0013-memory-source-bundles.patch` lets the memory parser recursively read
-  `.so` targets through the shim's per-call source hook. That hook serves a
-  virtual bundle or the strict Windows root resolver, and finalizes only after
-  the outermost memory source with the same recursion bound as files.
-- `0019-share-input-recursion-depth.patch` keeps memory buffers and native
-  files in one parser-owned include-depth counter, so a native `.so` target
-  cannot finalize the document while its caller-owned outer buffer still has
-  content to parse.
-- `0020-bound-mdoc-macro-recursion.patch` routes all mdoc macro dispatch
-  through a parser-owned 64-level nesting budget, retaining the rejected macro
-  and remaining words as visible text instead of overflowing the C stack.
-- `0014-isolate-renderer-output.patch` routes ASCII and HTML bytes into the
-  shim's bounded per-call sink, makes formatter ID/tab state thread-local,
-  releases per-call tab storage, and widens small integer-format buffers to
-  their complete representable sizes.
-- `0015-deterministic-utf8-rendering.patch` replaces libmandoc's process-locale
-  UTF-8 setup with explicit sink encoding and caller-supplied Unicode cell
-  widths, giving Linux, macOS, and Windows the same locale-independent path.
-- `0016-portable-memory-renderers.patch` removes unused POSIX header and pager
-  process types from the Windows memory-only formatter build while retaining
-  the complete upstream interfaces for native Unix builds.
-- `0025-keep-ohash-size-unsigned.patch` keeps the compatibility hash table's
-  bounded size and probe indices in their public `unsigned int` domain,
-  avoiding lossy `size_t` round trips on 64-bit MSVC.
-- `0026-initialize-number-register-sign.patch` gives the numeric-register
-  escape state an explicit neutral default before the expansion loop,
-  removing an MSVC dataflow ambiguity without changing valid escape behavior.
-- `0027-initialize-alternating-html-tag.patch` initializes the temporary tag
-  pointer used by alternating-font HTML macros, making the guarded lifetime
-  explicit to MSVC without changing formatter output.
-- `0028-initialize-terminal-escape-state.patch` gives terminal horizontal-line
-  byte counts and string-width escape code points explicit neutral defaults,
-  removing MSVC dataflow ambiguity without changing reachable output paths.
-- `0030-close-root-element-scope.patch` treats the synthetic document root as
-  the end of a man next-line element scope during EOF cleanup, matching normal
-  line cleanup. Incomplete font macros therefore report a diagnostic instead
-  of passing the root's non-macro token to the macro dispatch table.
-- `0029-avoid-retagging-mdoc-parts.patch` keeps an explicit `.Tg` on its own
-  zero-width node when the following section or function head already owns an
-  automatic ID, and prevents later automatic tagging from overwriting an
-  explicit destination. This closes both validation orders without letting
-  document input reach libmandoc's duplicate-tag assertion.
-- `0017-preserve-continued-tp-aliases.patch` closes a populated `.TP`/`.TQ`
-  head before a following tagged paragraph when the tag ends in `\\c`, so
-  legacy GNU pages retain consecutive long and short option aliases instead
-  of deleting the first tag as a broken next-line scope.
-- `0021-isolate-terminal-renderer-state.patch` moves table borders, centered
-  table offsets, and roff page-offset history from C statics into each terminal
-  renderer, preventing both cross-thread races and same-thread document leaks.
-- `0022-keep-denied-includes-diagnostic-only.patch` keeps an embedded `.so`
-  rejected by parser policy observable as a diagnostic without synthesizing
-  the rejected target path into visible document prose.
-- `0023-keep-invalid-includes-diagnostic-only.patch` treats an absolute or
-  parent-traversing embedded `.so` as a diagnostic-only rejected request,
-  retaining surrounding content without inserting the invalid path into
-  visible document prose.
-- `0024-deterministic-manual-dates.patch` formats validated manual dates with
-  fixed English month names instead of consulting the process `LC_TIME`.
+The remaining patches implement the synchronous embedding boundary:
 
-Each is a narrow parser, renderer-boundary, or portability correction. They do
-not create a separately maintained formatter. `scripts/sync-vendor --verify`
-proves the checked-in tree is the official snapshot plus exactly this series.
+- `0014-isolate-parser-session-state.patch` gives remaining mutable parser
+  globals thread-local storage and resets unfinished requests between sessions.
+- `0015-memory-sources-and-input-budgets.patch` adds memory input and virtual
+  source hooks, shares include depth across buffers/files, bounds individual
+  loops and aggregate replay to 10,000, and keeps denied or invalid includes
+  diagnostic-only.
+- `0016-bound-native-parser-depth.patch` bounds mdoc dispatch at 64 levels and
+  stops trees beyond 512 parent levels before finalization/validation. The
+  rejected mdoc call retains its remaining words as literal content.
+- `0017-retain-executed-flow-boundaries.patch` stamps actual allocated nodes
+  with a per-document flow generation before validation can remove empty
+  paragraphs. `Node::flow_epoch` retains that execution provenance after
+  parser release; physical source lines do not substitute for it.
+- `0018-deterministic-manual-dates.patch` uses timezone-independent calendar
+  dates, fixed English month names, and reentrant current-date conversion.
+- `0019-isolate-reference-renderer-state.patch` isolates HTML IDs, table/tab
+  state, centered offsets, and page-offset history per instance or thread.
+- `0020-capture-deterministic-reference-output.patch` captures bytes in a
+  bounded per-call sink and uses explicit UTF-8 encoding with Rust-provided
+  Unicode cell widths rather than process locale.
+- `0021-portable-memory-renderers.patch` guards unused POSIX/pager interfaces
+  in the Windows memory-only formatter build.
+- `0022-apply-private-config-to-roff-escapes.patch` applies the private target
+  configuration, character policy, and symbol prefix to the new escape unit.
+
+Upstream already provides `MR`, modern standard names, root-element scope
+cleanup, and the `tag_put` explicit-tag guard; these are not duplicate local
+patches. Equation substitution state is already parser-owned upstream.
+Regression tests retain these contracts even when no local hunk is needed.
+
+These patches do not create a separately maintained formatter.
+`scripts/sync-vendor --verify` proves the checked-in tree is the pinned source
+subset plus exactly this series.
 
 ### C shim and Rust AST extensions
 
@@ -449,7 +417,7 @@ as table text rather than a nested public syntax tree.
 
 ## Build requirements and supported targets
 
-The source package vendors libmandoc 1.14.6 and compiles it with the `cc`
+The source package vendors libmandoc `cvs-20260911` and compiles it with the `cc`
 crate, so a working C compiler is required. Checked configurations are
 supplied for Linux/glibc, macOS, and Windows/MSVC. Unix native-file parsing
 also requires zlib development headers; Windows builds the memory-only parser
@@ -459,7 +427,7 @@ configuration.
 
 `ManT`'s project checks set `LIBMANDOC_RS_DENY_WARNINGS=1` to promote native C
 warnings to errors on every supported compiler. MSVC keeps an explicit
-five-warning baseline for pinned upstream 1.14.6 (`C4100`, `C4146`, `C4200`,
+five-warning baseline for the pinned upstream sources (`C4100`, `C4146`, `C4200`,
 `C4244`, and `C4267`). `C4200` covers its four C99 flexible-array members,
 which MSVC diagnoses as an extension even in C11 mode. ManT-owned shim and
 compatibility sources promote every baseline family back to errors. This is
@@ -472,7 +440,7 @@ The Rust wrapper and C shim are licensed under Apache-2.0.  The vendored
 libmandoc source is primarily ISC licensed and includes selected compatibility
 files under BSD-2-Clause and BSD-3-Clause terms.  The complete license texts
 and upstream attribution are shipped under `LICENSES/` and
-`vendor/mandoc-1.14.6/LICENSE`.
+`vendor/mandoc-cvs-20260911/LICENSE`.
 
 This crate is not affiliated with the upstream mandoc project.
 

@@ -1231,7 +1231,7 @@ fn addressable_rendering_returns_exact_semantic_node_ranges() {
 #[test]
 fn serializes_a_large_source_lowered_document() {
     let source = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../libmandoc-rs/vendor/mandoc-1.14.6/mandoc.1");
+        .join("../libmandoc-rs/vendor/mandoc-cvs-20260911/mandoc.1");
     if !source.exists() {
         // Published package tests must not require a sibling crate's vendor
         // tree; repository verification still exercises the real fixture.

@@ -72,8 +72,13 @@ token is not a failed search. Reuse one `DocumentView` for width changes, record
 the input hash and producer commit, and compare source-relative columns after
 removing page/UI margins. Deterministic source probes in the engine and UI tests
 pin rules independently of the installed host corpus. Native layout research
-uses the explicitly recorded mandoc CVS revisions and a groff cross-check;
-this does not upgrade the vendored 1.14.6 parser or import upstream test licenses.
+uses the explicitly recorded reference revisions and a groff cross-check.
+The active native baseline is mandoc `cvs-20260911`, pinned to
+2026-09-11 08:00:00 UTC in `crates/libmandoc-rs/upstream/SOURCE`; its
+`FILES` manifest records source hashes and CVS revisions. Historical audit
+results retain their original renderer identities and source hashes. The
+vendored source subset excludes upstream `regress/`; upstream test licenses
+are not imported implicitly by choosing a parser baseline.
 
 ## Prerequisites
 
@@ -240,7 +245,7 @@ already-pushed history; do not rewrite commits to hide failed iterations.
 
 Project verification and release builds set
 `LIBMANDOC_RS_DENY_WARNINGS=1`, which promotes warnings from libmandoc's C
-build to errors on GCC, Apple Clang, and MSVC. Pinned upstream 1.14.6 retains a
+build to errors on GCC, Apple Clang, and MSVC. The pinned CVS baseline retains a
 documented MSVC baseline for `C4100`, `C4146`, `C4200`, `C4244`, and `C4267`.
 `C4200` is confined to four C99 flexible-array members that MSVC diagnoses as
 an extension even in C11 mode. ManT-owned C shim and compatibility sources do

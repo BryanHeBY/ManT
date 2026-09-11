@@ -1,0 +1,19 @@
+Subject: bound memory input utf8
+Upstream-Status: Candidate (not submitted)
+Replaces: 0011
+
+Bound UTF-8 lookahead by the actual input length; no mandatory trailing sentinel bytes.
+
+--- a/preconv.c
++++ b/preconv.c
+@@ -63,6 +63,10 @@
+ 	default:  /* Bad sequence header. */
+ 		goto latin;
+ 	}
++
++	/* Memory-only callers need not provide trailing sentinel bytes. */
++	if ((size_t)nby > ib->sz - *ii)
++		goto latin;
+ 
+ 	cu++;
+ 	switch (nby) {

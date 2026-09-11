@@ -2,15 +2,17 @@
 
 *.html text eol=lf
 *.svg text eol=lf
-# Unified diffs encode an empty context line as one space, not source whitespace.
+# Unified diffs prefix context (including tabs/empty lines) with one space.
 # Their replay verifiers still compare the resulting source bytes exactly.
-*.patch text eol=lf whitespace=-blank-at-eol
+*.patch text eol=lf whitespace=-blank-at-eol,-space-before-tab,-blank-at-eof
 *.sh text eol=lf
 # Compared byte-for-byte with the platform-independent manual generator.
 crates/mant/src/arguments/help_tldr_generated.rs text eol=lf
 crates/libmandoc-rs/patches/series text eol=lf
 crates/libmandoc-rs/scripts/* text eol=lf
-crates/libmandoc-rs/vendor/** text eol=lf
+# Preserve upstream whitespace byte-for-byte; SOURCE/FILES and patch replay
+# validate this generated tree, which is not formatted as authored project code.
+crates/libmandoc-rs/vendor/** text eol=lf -whitespace
 crates/libmandoc-rs/upstream/** text eol=lf
 *.gz binary
 *.zst binary

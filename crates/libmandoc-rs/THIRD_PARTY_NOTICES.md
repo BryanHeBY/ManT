@@ -1,11 +1,14 @@
 # Third-party notices
 
-## libmandoc 1.14.6
+## libmandoc cvs-20260911
 
-This crate vendors the libmandoc parser sources from mandoc 1.14.6.  The
-vendored tree is preserved under `vendor/mandoc-1.14.6/` and its upstream
-license inventory is included verbatim at both
-`vendor/mandoc-1.14.6/LICENSE` and `LICENSES/mandoc-1.14.6.txt`.
+This crate vendors the mandoc CVS source snapshot pinned to
+2026-09-11 08:00:00 UTC. The vendored tree is preserved under
+`vendor/mandoc-cvs-20260911/` and its upstream license inventory is included
+verbatim at both `vendor/mandoc-cvs-20260911/LICENSE` and
+`LICENSES/mandoc-cvs-20260911.txt`. The repository's `upstream/FILES` records
+SHA-256 hashes and CVS revisions for all 198 upstream files; `regress/` and CVS
+administration are excluded from this source subset.
 
 The vendored sources are locally modified by ManT's ordered patch series for
 memory-only input and virtual bundles, parser/renderer compatibility,
@@ -16,8 +19,12 @@ the corresponding tagged repository contains the exact patches and pinned
 upstream checksum under `patches/` and `upstream/`. These modifications do not
 remove or replace upstream copyright and permission notices.
 
-Most upstream files are distributed under the ISC license.  Some compatibility
-files originate elsewhere and retain the following terms:
+Most non-trivial upstream files are distributed under the ISC license,
+including `roff_escape.c`, `mandoc_dbg.c`, `mandoc_dbg.h`, and
+`mandoc_dbg_init.3`. Their complete original notices remain in their headers;
+the debug helpers and trivial `test-unveil.c` feature probe are not compiled
+into the parser or reference-renderer library. Some compatibility files
+originate elsewhere and retain the following terms:
 
 | License | Vendored files |
 | --- | --- |

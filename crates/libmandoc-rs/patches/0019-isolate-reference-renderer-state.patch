@@ -1,0 +1,204 @@
+Subject: isolate reference renderer state
+Upstream-Status: Local embedding (not submitted)
+Replaces: 0014 (state) + 0021
+
+Own page offset and table border/offset state per renderer; isolate remaining HTML/tab globals by thread.
+
+--- a/html.c
++++ b/html.c
+@@ -20,6 +20,7 @@
+  * For use by individual formatters and by the main program.
+  */
+ #include "config.h"
++#include "mant_thread_local.h"
+ 
+ #include <sys/types.h>
+ #include <sys/stat.h>
+@@ -121,7 +122,7 @@
+ 	int	 ord;	/* Ordinal number of the latest occurrence. */
+ 	char	 id[];	/* The id= attribute without any ordinal suffix. */
+ };
+-static	struct ohash	 id_unique;
++MANT_THREAD_LOCAL struct ohash id_unique;
+ 
+ static	void	 html_reset_internal(struct html *);
+ static	void	 print_byte(struct html *, char);
+--- a/roff_term.c
++++ b/roff_term.c
+@@ -162,15 +162,12 @@
+ 	struct roffsu	 su;
+ 
+ 	/* Page offsets in basic units. */
+-	static int	 polast;  /* Previously requested. */
+-	static int	 po;      /* Currently requested. */
+-	static int	 pouse;   /* Currently used. */
+ 	int		 pomin;   /* Minimum to be used. */
+ 	int		 pomax;   /* Maximum to be used. */
+ 	int		 ponew;   /* Newly requested. */
+ 
+ 	/* Revert the currently active page offset. */
+-	p->tcol->offset -= pouse;
++	p->tcol->offset -= p->roff_pouse;
+ 
+ 	/* Determine the requested page offset. */
+ 	if (n->child != NULL &&
+@@ -178,19 +175,20 @@
+ 		ponew = term_hspan(p, &su);
+ 		if (*n->child->string == '+' ||
+ 		    *n->child->string == '-')
+-			ponew += po;
+-	} else
+-		ponew = polast;
++			ponew += p->roff_po;
++	} else
++		ponew = p->roff_polast;
+ 
+ 	/* Remember both the previous and the newly requested offset. */
+-	polast = po;
+-	po = ponew;
++	p->roff_polast = p->roff_po;
++	p->roff_po = ponew;
+ 
+ 	/* Truncate to the range [-offset, 60], remember, and apply it. */
+ 	pomin = -p->tcol->offset;
+ 	pomax = term_len(p, 60);
+-	pouse = po > pomax ? pomax : po < pomin ? pomin : po;
+-	p->tcol->offset += pouse;
++	p->roff_pouse = p->roff_po > pomax ? pomax :
++	    p->roff_po < pomin ? pomin : p->roff_po;
++	p->tcol->offset += p->roff_pouse;
+ }
+ 
+ static void
+--- a/tbl_term.c
++++ b/tbl_term.c
+@@ -135,10 +135,6 @@
+ 	'+', '+', '+',  /* 222 */
+ };
+ 
+-/* Either of the above according to the selected output encoding. */
+-static	const int *borders_locale;
+-
+-
+ static size_t
+ term_tbl_strlen(const char *p, void *arg)
+ {
+@@ -159,7 +155,6 @@
+ 	const struct tbl_dat	*dp;
+ 
+ 	/* Positions and widths in basic units. */
+-	static size_t	 offset;	/* Of the table as a whole. */
+ 	size_t		 save_offset;	/* Of the surrounding text. */
+ 	size_t		 coloff;	/* Of this cell. */
+ 	size_t		 tsz;		/* Total width of the table. */
+@@ -172,7 +167,7 @@
+ 	int	 rhori;	 /* Number of horizontal lines pointing right. */
+ 	int	 dvert;	 /* Number of vertical lines pointing down. */
+ 	int	 uvert;	 /* Number of vertical lines pointing up. */
+-	int	 fc;	 /* Frame character index in borders_locale[]. */
++	int	 fc;	 /* Frame character index in tbl_borders[]. */
+ 	int	 more;	 /* Boolean: there are more columns to print. */
+ 
+ 	/* Inhibit printing of spaces: we do padding ourselves. */
+@@ -187,7 +182,7 @@
+ 	 */
+ 
+ 	if (tp->tbl.cols == NULL) {
+-		borders_locale = tp->enc == TERMENC_UTF8 ?
++		tp->tbl_borders = tp->enc == TERMENC_UTF8 ?
+ 		    borders_utf8 : borders_ascii;
+ 
+ 		tp->tbl.len = term_tbl_len;
+@@ -198,7 +193,7 @@
+ 
+ 		/* Center the table as a whole. */
+ 
+-		offset = tp->tcol->offset;
++		tp->tbl_offset = tp->tcol->offset;
+ 		if (sp->opts->opts & TBL_OPT_CENTRE) {
+ 
+ 			/*
+@@ -225,12 +220,12 @@
+ 			if (sp->opts->cols)
+ 				tsz += tp->tbl.cols[sp->opts->cols - 1].width;
+ 
+-			if (offset + tsz > tp->tcol->rmargin)
++			if (tp->tbl_offset + tsz > tp->tcol->rmargin)
+ 				tsz -= enw;
+-			offset = offset + tp->tcol->rmargin > tsz ?
+-			    ((offset + tp->tcol->rmargin - tsz) / enw / 2) *
++			tp->tbl_offset = tp->tbl_offset + tp->tcol->rmargin > tsz ?
++			    ((tp->tbl_offset + tp->tcol->rmargin - tsz) / enw / 2) *
+ 			    enw : 0;
+-			tp->tcol->offset = offset;
++			tp->tcol->offset = tp->tbl_offset;
+ 		}
+ 
+ 		/*
+@@ -255,7 +250,7 @@
+ 	/* Set up the columns. */
+ 
+ 	tp->flags |= TERMP_MULTICOL;
+-	tp->tcol->offset = offset;
++	tp->tcol->offset = tp->tbl_offset;
+ 	horiz = 0;
+ 	switch (sp->pos) {
+ 	case TBL_SPAN_HORIZ:
+@@ -857,7 +852,7 @@
+ {
+ 	char	 buf[16];
+ 
+-	if ((c = borders_locale[c]) > 127) {
++	if ((c = tp->tbl_borders[c]) > 127) {
+ 		(void)snprintf(buf, sizeof(buf), "\\[u%04x]", c);
+ 		tbl_fill_string(tp, buf, coloff, len);
+ 	} else
+@@ -875,7 +870,7 @@
+ 	size_t	 enw2;    /* Width of half an EN in basic units. */
+ 	size_t	 target;  /* Distance from the left margin in basic units. */
+ 
+-	c = borders_locale[c];
++	c = tp->tbl_borders[c];
+ 	sz = (*tp->getwidth)(tp, c);
+ 	enw2 = (*tp->getwidth)(tp, ' ') / 2;
+ 	target = tp->viscol + len;
+--- a/term.h
++++ b/term.h
+@@ -57,6 +57,8 @@
+ 
+ struct	termp {
+ 	struct rofftbl	  tbl;		/* Table configuration. */
++	const int	 *tbl_borders;	/* Table borders for this encoding. */
++	size_t		  tbl_offset;	/* Left offset of the current table [BU]. */
+ 	struct termp_col *tcols;	/* Array of table columns. */
+ 	struct termp_col *tcol;		/* Current table column. */
+ 	size_t		  maxtcol;	/* Allocated table columns. */
+@@ -74,6 +76,9 @@
+ 	int		  synopsisonly; /* Print the synopsis only. */
+ 	int		  ti;		/* Temporary indent for line [BU]. */
+ 	int		  skipvsp;	/* Vertical space to skip. */
++	int		  roff_po;	/* Requested page offset [BU]. */
++	int		  roff_pouse;	/* Applied page offset [BU]. */
++	int		  roff_polast;	/* Previous page offset [BU]. */
+ 	int		  flags;
+ #define	TERMP_SENTENCE	 (1 << 0)	/* Space before a sentence. */
+ #define	TERMP_NOSPACE	 (1 << 1)	/* No space before words. */
+--- a/term_tab.c
++++ b/term_tab.c
+@@ -15,6 +15,7 @@
+  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+  */
+ #include "config.h"
++#include "mant_thread_local.h"
+ 
+ #include <sys/types.h>
+ 
+@@ -32,7 +33,7 @@
+ 	size_t	 n;	/* Currently used number of positions. */
+ };
+ 
+-static struct {
++MANT_THREAD_LOCAL struct {
+ 	struct tablist	 a;	/* All tab positions for lookup. */
+ 	struct tablist	 p;	/* Periodic tab positions to add. */
+ 	struct tablist	*r;	/* Tablist currently being recorded. */

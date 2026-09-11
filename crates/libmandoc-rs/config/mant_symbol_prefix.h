@@ -118,6 +118,8 @@
 #define roff_body_alloc mant_vendored_roff_body_alloc
 #define roff_elem_alloc mant_vendored_roff_elem_alloc
 #define roff_endparse mant_vendored_roff_endparse
+#define roff_evalnum mant_vendored_roff_evalnum
+#define roff_escape mant_vendored_roff_escape
 #define roff_free mant_vendored_roff_free
 #define roff_getarg mant_vendored_roff_getarg
 #define roff_getcontrol mant_vendored_roff_getcontrol
@@ -179,7 +181,6 @@
 #define term_fontpush mant_vendored_term_fontpush
 #define term_fontrepl mant_vendored_term_fontrepl
 #define term_free mant_vendored_term_free
-#define term_hen mant_vendored_term_hen
 #define term_hspan mant_vendored_term_hspan
 #define term_len mant_vendored_term_len
 #define term_newln mant_vendored_term_newln
@@ -187,7 +188,7 @@
 #define term_setwidth mant_vendored_term_setwidth
 #define term_strlen mant_vendored_term_strlen
 #define term_tab_free mant_vendored_term_tab_free
-#define term_tab_iset mant_vendored_term_tab_iset
+#define term_tab_ref mant_vendored_term_tab_ref
 #define term_tab_next mant_vendored_term_tab_next
 #define term_tab_set mant_vendored_term_tab_set
 #define term_tag_write mant_vendored_term_tag_write
@@ -258,4 +259,3 @@
 #endif
 
 #endif
-

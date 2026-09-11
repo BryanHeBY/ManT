@@ -1,4 +1,4 @@
-/* Private borrowed-snapshot boundary around libmandoc 1.14.6 structures. */
+/* Private borrowed-snapshot boundary around the pinned libmandoc structures. */
 #ifndef MANT_MANDOC_SHIM_H
 #define MANT_MANDOC_SHIM_H
 

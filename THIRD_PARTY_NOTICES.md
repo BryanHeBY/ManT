@@ -32,8 +32,9 @@ support by default. Neither package redistributes a second vendored tree.
 codec's canonical Markdown artifacts with native features disabled. It does
 not contain or enable another native parser copy.
 
-`crates/libmandoc-rs/vendor/mandoc-1.14.6/` is a pinned mandoc 1.14.6 source
-snapshot with an ordered local patch series. Its upstream inventory, local
+`crates/libmandoc-rs/vendor/mandoc-cvs-20260911/` is the mandoc CVS source
+snapshot pinned to 2026-09-11 08:00:00 UTC, with an ordered local patch series
+and a checksummed 198-file upstream revision manifest. Its upstream inventory, local
 modification summary, exact exception mapping, and complete reusable terms are
 documented in
 [`crates/libmandoc-rs/THIRD_PARTY_NOTICES.md`](crates/libmandoc-rs/THIRD_PARTY_NOTICES.md)

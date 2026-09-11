@@ -1,0 +1,24 @@
+Subject: replace input traps
+Upstream-Status: Candidate (not submitted)
+Replaces: 0012 + consumed pointer cleanup
+
+Free replaced trap strings and clear consumed pointers; remains independent of thread-local session policy.
+
+--- a/roff.c
++++ b/roff.c
+@@ -1786,6 +1786,7 @@
+ 		buf->sz = isz + 1;
+ 		*offs = 0;
+ 		free(roffit_macro);
++		roffit_macro = NULL;
+ 		roffit_lines = 0;
+ 		return ROFF_REPARSE;
+ 	} else if (roffit_lines > 1)
+@@ -3296,6 +3297,7 @@
+ 	 */
+ 
+ 	roffit_lines = iv;
++	free(roffit_macro);
+ 	roffit_macro = mandoc_strdup(iv != 1 ||
+ 	    strcmp(buf->buf + pos, "an-trap") ?
+ 	    buf->buf + pos : "br");

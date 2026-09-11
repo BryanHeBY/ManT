@@ -194,21 +194,16 @@ mod tests {
         assert!(build.contains("upstream_build.compile_intermediates()"));
         assert!(build.contains("owned_build.compile_intermediates()"));
 
-        let roff = include_str!("../vendor/mandoc-1.14.6/roff.c");
-        let done = roff.find("done = 0;").expect("expansion state reset");
-        let sign = roff
-            .find("sign = '\\0';")
-            .expect("neutral numeric-register sign");
-        let start = roff
-            .find("start = buf->buf + pos;")
-            .expect("expansion scan start");
-        assert!(done < sign && sign < start);
+        // CVS replaced the old register-expansion sign state. Keep runtime
+        // register regressions, not an assertion for a removed implementation.
+        let escapes = include_str!("../vendor/mandoc-cvs-20260911/roff_escape.c");
+        assert!(escapes.contains("#include \"config.h\""));
 
-        let man_html = include_str!("../vendor/mandoc-1.14.6/man_html.c");
+        let man_html = include_str!("../vendor/mandoc-cvs-20260911/man_html.c");
         assert!(man_html.contains("struct tag\t*t = NULL;"));
 
-        let term = include_str!("../vendor/mandoc-1.14.6/term.c");
-        assert!(term.contains("size_t\t\t csz, lsz, ssz = 0;"));
+        let term = include_str!("../vendor/mandoc-cvs-20260911/term.c");
+        assert!(term.contains("size_t\t\t ssz = 0;"));
         let rhs = term.find("rhs = NULL;").expect("escape result reset");
         let uc = term[rhs..]
             .find("uc = 0;")

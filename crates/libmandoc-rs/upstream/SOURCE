@@ -1,9 +1,13 @@
-# Upstream mandoc release used as the vendor base.
+# Fixed upstream mandoc CVS snapshot used as the vendor base.
 # The sync-vendor script uses this file to verify and regenerate
 # the vendor/ tree.  End-user builds never download or patch anything;
 # they compile the already-patched vendor/ sources directly.
 
-kind    = release
-url     = https://mandoc.bsd.lv/snapshots/mandoc-1.14.6.tar.gz
-sha256  = 8bf0d570f01e70a6e124884088870cbed7537f36328d512909eb10cd53179d9c
-version = 1.14.6
+kind = cvs
+version = cvs-20260911
+cvsroot = :ext:anoncvs@mandoc.bsd.lv:/cvs
+module = mandoc
+date = 2026-09-11 08:00:00 UTC
+root = mandoc
+manifest = FILES
+manifest_sha256 = 1d49f6c3bd0b09b81e61bc04d034e974cf1c3d204af0596928edf9cd0be6e6dd

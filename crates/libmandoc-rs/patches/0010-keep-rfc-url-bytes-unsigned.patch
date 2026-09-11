@@ -1,0 +1,18 @@
+Subject: keep rfc url bytes unsigned
+Upstream-Status: Candidate (not submitted)
+Replaces: new CVS warning fix
+
+Use unsigned byte pointers explicitly while interpreting RFC link content.
+
+--- a/mdoc_html.c
++++ b/mdoc_html.c
+@@ -1550,7 +1550,8 @@
+ 		break;
+ 	case MDOC__R:
+ 		if (strncmp(arg, "RFC ", 4) == 0) {
+-			cp = arg += 4;
++			arg += 4;
++			cp = (const unsigned char *)arg;
+ 			while (isdigit(*cp))
+ 				cp++;
+ 			if (*cp == '\0') {

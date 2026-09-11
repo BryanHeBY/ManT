@@ -6,7 +6,7 @@ mant-roff — native man, mdoc, tbl, eqn, and roff compatibility in ManT
 
 ## Description
 
-ManT reads native manual pages through a vendored `libmandoc` 1.14.6 parser and lowers its validated owned syntax tree into [mant-ir(7)](mant-ir.md). The supported authoring languages are mandoc's [man(7)](https://mandoc.bsd.lv/man/man.7.html) and [mdoc(7)](https://mandoc.bsd.lv/man/mdoc.7.html), with the subset of roff requests, escapes, [tbl(7)](https://mandoc.bsd.lv/man/tbl.7.html), and [eqn(7)](https://mandoc.bsd.lv/man/eqn.7.html) that occur inside those manuals.
+ManT reads native manual pages through the vendored `libmandoc` `cvs-20260911` parser, pinned to 2026-09-11 08:00:00 UTC, and lowers its validated owned syntax tree into [mant-ir(7)](mant-ir.md). The supported authoring languages are mandoc's [man(7)](https://mandoc.bsd.lv/man/man.7.html) and [mdoc(7)](https://mandoc.bsd.lv/man/mdoc.7.html), with the subset of roff requests, escapes, [tbl(7)](https://mandoc.bsd.lv/man/tbl.7.html), and [eqn(7)](https://mandoc.bsd.lv/man/eqn.7.html) that occur inside those manuals.
 
 ManT is a semantic manual reader, not a general troff formatter. Device geometry, page headers and footers, traps, diversions, arbitrary postprocessor commands, and print-specific typography are outside its output model.
 
@@ -321,7 +321,7 @@ Plain text and transparent macros such as `Pf` do not create font scopes. Their 
 
 Bibliographies and table cells inherit the enclosing font state; a rejected cell recovery does not commit its partial state. Generated function and manual-reference punctuation participates in the same output flow as its operands. `Fo` is an inline scope in ordinary prose, while SYNOPSIS retains declaration boundaries. Font changes inside a man `SY` body persist across physical no-fill lines and reset when that macro scope ends.
 
-`Lk` evaluates its optional label in an emphasis scope before evaluating the URI in the inherited font, even when compact link presentation hides the URI. `Mt` uses one emphasis scope for its whole address sequence. `In` uses the native prose/synopsis font scope while retaining ManT's code presentation; `Xr` does not create a font scope. Pure link-target extraction does not execute font escapes. These choices follow mandoc CVS `mdoc_term.c` revision 1.388, including its unstyled URI policy, rather than the older vendored renderer's URI styling.
+`Lk` evaluates its optional label in an emphasis scope before evaluating the URI in the inherited font, even when compact link presentation hides the URI. `Mt` uses one emphasis scope for its whole address sequence. `In` uses the native prose/synopsis font scope while retaining ManT's code presentation; `Xr` does not create a font scope. Pure link-target extraction does not execute font escapes. These choices follow the pinned mandoc CVS formatter, including its unstyled URI policy; the source-consumer contract was originally checked against `mdoc_term.c` revision 1.388.
 
 Inside `Fo`, a generated comma separates adjacent logical `Fa` parameters. Nonprinting controls and targets do not break that adjacency, but intervening prose or a visible container does; an authored closing delimiter is not duplicated. Generated punctuation is emitted before following controls, so `.Fa x`, `.Sm off`, `.Fa y` retains `x, y`.
 
@@ -373,13 +373,13 @@ Control operands are never printable descendants. The block, inline and display 
 
 Inside these captured groups, `br`, `fi`, `nf` and the break preceding `ti` execute immediately before the unconditional group-end flush, independently of the surrounding fill mode. This follows mandoc's `roff_term_pre_ce` execution order: an embedded break after text can therefore leave a blank row that groff does not emit. Ordinary `br` outside a captured group does not gain that blank row, and fill/font state changes still apply normally.
 
-Man's `.in` state is applied by lowering, not assumed to have been executed by parsing. Following mandoc CVS HEAD, repeated argument-less `.in` requests restore the same current macro base (including an enclosing `RS`); they do not swap previous requested positions as groff does. Ordinary paragraph and structural macro boundaries restore their own geometry. `HP` records a distinct continuation displacement and updates the prevailing tag width. ManT retains explicit source hard breaks as well as that hanging displacement: it does not reproduce the character renderer's `HP` short-line flush artifact that can place text after `br` on the same row. Soft wrapping remains a view concern, and the deterministic unbounded text renderer does not invent soft breaks.
+Man's `.in` state is applied by lowering, not assumed to have been executed by parsing. Following the pinned mandoc CVS formatter, repeated argument-less `.in` requests restore the same current macro base (including an enclosing `RS`); they do not swap previous requested positions as groff does. Ordinary paragraph and structural macro boundaries restore their own geometry. `HP` records a distinct continuation displacement and updates the prevailing tag width. ManT retains explicit source hard breaks as well as that hanging displacement: it does not reproduce the character renderer's `HP` short-line flush artifact that can place text after `br` on the same row. Soft wrapping remains a view concern, and the deterministic unbounded text renderer does not invent soft breaks.
 
 Man paragraph distance depends on source predecessors, including predecessors outside an enclosing `RS`; the first item in a newly created IR container is not necessarily the first source paragraph. Recovered ordered and bullet lists retain each item's resolved distance, including changes between zero and two rows, without splitting the list or changing entry ownership. Its gap precedes the entire marker and body and remains independent of explicit `sp` requests. A headless `IP` continuation likewise retains both its paragraph distance and any following explicit space. An invisible or empty tag does not itself become an additional content row: ManT does not reproduce a terminal formatter's empty-label flush artifact.
 
 Man `nf`/`fi` and `EX`/`EE` boundaries consume a pending `HP` first line even before text is emitted. If `HP` starts inside an existing no-fill region, its first physical line keeps the first-line origin and later lines use the hanging origin; `\c` continuations do not consume that boundary. This preserves significant literal rows without splitting ordinary adjacent no-fill regions unnecessarily.
 
-`TS`/`TE` and `EQ`/`EN` are handled as structured preprocessors, described below. For the distinction between requests implemented, ignored, unsupported, and insecure in the pinned upstream parser, consult `mandoc-1.14.6/roff.7` in the [official mandoc 1.14.6 source archive](https://mandoc.bsd.lv/snapshots/mandoc-1.14.6.tar.gz). The [online mandoc roff(7) reference](https://mandoc.bsd.lv/man/roff.7.html) tracks a different, evolving revision rather than fixing the 1.14.6 contract. ManT's local patches and stricter source/include boundary are described in this manual.
+`TS`/`TE` and `EQ`/`EN` are handled as structured preprocessors, described below. For the distinction between requests implemented, ignored, unsupported, and insecure in the pinned upstream parser, consult the [vendored roff(7) source](https://github.com/BryanHeBY/ManT/blob/main/crates/libmandoc-rs/vendor/mandoc-cvs-20260911/roff.7), whose exact upstream revision and hash are recorded in the repository's `crates/libmandoc-rs/upstream/FILES` manifest. The [online mandoc roff(7) reference](https://mandoc.bsd.lv/man/roff.7.html) tracks an evolving revision rather than fixing the `cvs-20260911` contract. ManT's local patches and stricter source/include boundary are described in this manual.
 
 ## Escapes
 
@@ -486,7 +486,7 @@ The upstream references define the source languages; this manual defines ManT's 
 
 The online mandoc manuals and GNU troff manual describe separate implementations;
 neither is a promise that every feature exists in the pinned parser or ManT's
-lowering. For fixed upstream version evidence use the 1.14.6 archive above.
+lowering. For fixed upstream version evidence use the pinned source and revision manifest above.
 An [installed roff(7) manual](man:roff(7)) is a convenient local reading entry,
 but its implementation and version depend on the system. It may describe groff,
 not mandoc. Some distributions rename mandoc's pages; ManT does not guess those

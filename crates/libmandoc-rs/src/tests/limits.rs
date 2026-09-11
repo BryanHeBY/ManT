@@ -63,6 +63,69 @@ fn aggregate_while_replays_are_bounded_across_statements() {
 }
 
 #[test]
+fn aggregate_while_budget_survives_bundle_returns_and_resets_next_session() {
+    let mut bundle = SourceBundle::new();
+    bundle
+        .insert(
+            "root.1",
+            b".TH BUNDLE-BUDGET 1\n.SH BODY\n.so parts/outer.1\n\
+.while 1 \\{\\\nROOT_REPLAY\n.\\}\n.SH AFTER\nROOT_AFTER\n"
+                .to_vec(),
+        )
+        .unwrap();
+    bundle
+        .insert(
+            "parts/outer.1",
+            b".so leaf.1\n.while 1 \\{\\\nOUTER_REPLAY\n.\\}\nOUTER_AFTER\n".to_vec(),
+        )
+        .unwrap();
+    bundle
+        .insert(
+            "parts/leaf.1",
+            b".while 1 \\{\\\nLEAF_REPLAY\n.\\}\nLEAF_AFTER\n".to_vec(),
+        )
+        .unwrap();
+
+    let parser = Parser::default();
+    let mut previous_counts = None;
+    for _ in 0..2 {
+        let report = parser
+            .parse_bundle("root.1", &bundle)
+            .expect("nested looping includes retain a finite document");
+        let mut visible = Vec::new();
+        collect_visible_text(&report.document.root, &mut visible);
+        let counts = ["LEAF_REPLAY", "OUTER_REPLAY", "ROOT_REPLAY"]
+            .map(|marker| visible.iter().filter(|value| **value == marker).count());
+        // Each of the three statements may execute its initial body, but all
+        // subsequent replays share one budget, even after an include returns.
+        assert!(counts.iter().all(|count| *count > 0), "{counts:?}");
+        assert!(counts.iter().sum::<usize>() <= 10_003, "{counts:?}");
+        assert!(counts[0] > counts[1] && counts[0] > counts[2], "{counts:?}");
+        for marker in ["LEAF_AFTER", "OUTER_AFTER", "ROOT_AFTER"] {
+            assert!(visible.contains(&marker), "lost continuation: {marker}");
+        }
+        assert!(
+            report
+                .diagnostics
+                .iter()
+                .any(|diagnostic| { diagnostic.message.contains("infinite loop") })
+        );
+        let root_tail = find_node(&report.document.root, &|node| {
+            node.text.as_deref() == Some("ROOT_AFTER")
+        })
+        .expect("root continues after both includes");
+        assert_eq!(root_tail.line, 8);
+        if let Some(previous_counts) = previous_counts {
+            assert_eq!(
+                counts, previous_counts,
+                "new parse gets a fresh replay budget"
+            );
+        }
+        previous_counts = Some(counts);
+    }
+}
+
+#[test]
 fn recursive_user_macro_retains_content_after_the_cycle() {
     let report = Parser::default()
         .parse_bytes(

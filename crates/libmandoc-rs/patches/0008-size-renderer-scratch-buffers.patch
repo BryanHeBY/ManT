@@ -1,0 +1,28 @@
+Subject: size renderer scratch buffers
+Upstream-Status: Candidate (not submitted)
+Replaces: 0014 (tbl buffers)
+
+Provide enough scratch space for full rendered table border values.
+
+--- a/tbl_html.c
++++ b/tbl_html.c
+@@ -91,7 +91,7 @@
+ 	const char		*hspans, *vspans, *halign, *valign;
+ 	const char		*bborder, *lborder, *rborder;
+ 	const char		*ccp;
+-	char			 hbuf[4], vbuf[4];
++	char			 hbuf[12], vbuf[12];
+ 	size_t			 sz;
+ 	enum mandoc_esc		 save_font;
+ 	int			 i;
+--- a/tbl_term.c
++++ b/tbl_term.c
+@@ -855,7 +855,7 @@
+ static void
+ tbl_fill_border(struct termp *tp, int c, size_t *coloff, size_t len)
+ {
+-	char	 buf[12];
++	char	 buf[16];
+ 
+ 	if ((c = borders_locale[c]) > 127) {
+ 		(void)snprintf(buf, sizeof(buf), "\\[u%04x]", c);

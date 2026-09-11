@@ -1,0 +1,16 @@
+Subject: apply private config to roff escapes
+Upstream-Status: Local embedding (not submitted)
+Replaces: new CVS source integration
+
+Include the embedding build configuration in the new roff_escape translation unit so symbol/portability definitions apply.
+
+--- a/roff_escape.c
++++ b/roff_escape.c
+@@ -19,6 +19,7 @@
+  * Parser for roff(7) escape sequences.
+  * To be used by all mandoc(1) parsers and formatters.
+  */
++#include "config.h"
+ #include <assert.h>
+ #include <ctype.h>
+ #include <limits.h>

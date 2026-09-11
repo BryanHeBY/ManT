@@ -1,0 +1,186 @@
+Subject: capture deterministic reference output
+Upstream-Status: Local embedding (not submitted)
+Replaces: 0014 (sink) + 0015
+
+Capture output through the bounded private sink and use deterministic UTF-8 width callbacks in the CVS basic-unit model.
+
+--- a/html.c
++++ b/html.c
+@@ -43,6 +43,7 @@
+ #include "html.h"
+ #include "manconf.h"
+ #include "main.h"
++#include "mant_mandoc_output.h"
+ 
+ struct	htmldata {
+ 	const char	 *name;
+@@ -1015,7 +1016,7 @@
+ print_byte(struct html *h, char c)
+ {
+ 	if ((h->flags & HTML_BUFFER) == 0) {
+-		putchar(c);
++		mant_mandoc_output_write(&c, 1);
+ 		h->col++;
+ 		return;
+ 	}
+@@ -1025,13 +1026,12 @@
+ 		return;
+ 	}
+ 
+-	putchar('\n');
++	mant_mandoc_output_write("\n", 1);
+ 	h->col = 0;
+ 	print_indent(h);
+-	putchar(' ');
+-	putchar(' ');
+-	fwrite(h->buf, h->bufcol, 1, stdout);
+-	putchar(c);
++	mant_mandoc_output_write("  ", 2);
++	mant_mandoc_output_write(h->buf, h->bufcol);
++	mant_mandoc_output_write(&c, 1);
+ 	h->col = (h->indent + 1) * 2 + h->bufcol + 1;
+ 	h->bufcol = 0;
+ 	h->flags &= ~HTML_BUFFER;
+@@ -1048,11 +1048,11 @@
+ 		return;
+ 
+ 	if (h->bufcol) {
+-		putchar(' ');
+-		fwrite(h->buf, h->bufcol, 1, stdout);
++		mant_mandoc_output_write(" ", 1);
++		mant_mandoc_output_write(h->buf, h->bufcol);
+ 		h->bufcol = 0;
+ 	}
+-	putchar('\n');
++	mant_mandoc_output_write("\n", 1);
+ 	h->col = 0;
+ 	h->flags |= HTML_NOSPACE;
+ 	h->flags &= ~HTML_BUFFER;
+@@ -1074,8 +1074,8 @@
+ 		h->col++;
+ 		h->flags |= HTML_BUFFER;
+ 	} else if (h->bufcol) {
+-		putchar(' ');
+-		fwrite(h->buf, h->bufcol, 1, stdout);
++		mant_mandoc_output_write(" ", 1);
++		mant_mandoc_output_write(h->buf, h->bufcol);
+ 		h->col += h->bufcol + 1;
+ 	}
+ 	h->bufcol = 0;
+@@ -1097,7 +1097,7 @@
+ 
+ 	h->col = h->indent * 2;
+ 	for (i = 0; i < h->col; i++)
+-		putchar(' ');
++		mant_mandoc_output_write(" ", 1);
+ }
+ 
+ /*
+--- a/term_ascii.c
++++ b/term_ascii.c
+@@ -40,6 +40,7 @@
+ #include "term.h"
+ #include "manconf.h"
+ #include "main.h"
++#include "mant_mandoc_output.h"
+ 
+ static	struct termp	 *ascii_init(enum termenc, const struct manoutput *);
+ static	int		  ascii_hspan(const struct termp *,
+@@ -51,6 +52,8 @@
+ static	void		  ascii_endline(struct termp *);
+ static	void		  ascii_letter(struct termp *, int);
+ static	void		  ascii_setwidth(struct termp *, int, size_t);
++static	void		  utf8_letter(struct termp *, int);
++static	size_t		  utf8_getwidth(const struct termp *, int);
+ 
+ #if HAVE_WCHAR
+ static	void		  locale_advance(struct termp *, size_t);
+@@ -90,7 +93,7 @@
+ 	p->getwidth = ascii_getwidth;
+ 
+ #if HAVE_WCHAR
+-	if (enc != TERMENC_ASCII) {
++	if (enc == TERMENC_LOCALE) {
+ 
+ 		/*
+ 		 * Do not change any of this to LC_ALL.  It might break
+@@ -99,9 +102,7 @@
+ 		 * worst case, it might even cause buffer overflows.
+ 		 */
+ 
+-		v = enc == TERMENC_LOCALE ?
+-		    setlocale(LC_CTYPE, "") :
+-		    setlocale(LC_CTYPE, UTF8_LOCALE);
++		v = setlocale(LC_CTYPE, "");
+ 
+ 		/*
+ 		 * We only support UTF-8,
+@@ -121,6 +122,13 @@
+ 		}
+ 	}
+ #endif
++	if (enc == TERMENC_UTF8) {
++		p->enc = TERMENC_UTF8;
++		p->advance = ascii_advance;
++		p->endline = ascii_endline;
++		p->letter = utf8_letter;
++		p->getwidth = utf8_getwidth;
++	}
+ 	p->defrmargin = term_len(p, outopts->width ? outopts->width : 78);
+ 	p->lastrmargin = p->maxrmargin = p->defrmargin;
+ 
+@@ -208,7 +216,35 @@
+ static void
+ ascii_letter(struct termp *p, int c)
+ {
+-	putchar(c);
++	unsigned char byte = (unsigned char)c;
++
++	mant_mandoc_output_write(&byte, 1);
++}
++
++static size_t
++utf8_getwidth(const struct termp *p, int c)
++{
++	switch (c) {
++	case ASCII_BREAK:
++	case ASCII_NBRZW:
++	case ASCII_TABREF:
++		return 0;
++	case ASCII_NBRSP:
++		c = ' ';
++		break;
++	default:
++		break;
++	}
++	/* The native terminal uses 24 basic units per character cell. */
++	return mant_mandoc_utf8_width(c) * 24;
++}
++
++static void
++utf8_letter(struct termp *p, int c)
++{
++	if (c == ASCII_NBRSP)
++		c = ' ';
++	mant_mandoc_output_utf8(c);
+ }
+ 
+ static void
+@@ -234,7 +270,7 @@
+ 	p->ti = 0;
+ 	p->minbl = 0;
+ 	p->viscol = 0;
+-	putchar('\n');
++	mant_mandoc_output_write("\n", 1);
+ }
+ 
+ static void
+@@ -256,7 +292,7 @@
+ 
+ 	dst = p->viscol + len;
+ 	while (p->viscol + sz / 2 < dst) {
+-		putchar(' ');
++		mant_mandoc_output_write(" ", 1);
+ 		p->viscol += sz;
+ 	}
+ }
