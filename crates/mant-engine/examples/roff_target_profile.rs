@@ -27,6 +27,8 @@ mod matching;
 mod native;
 #[path = "roff_target_profile/observed.rs"]
 mod observed;
+#[path = "roff_target_profile/spelling.rs"]
+mod spelling;
 
 #[cfg(test)]
 use matching::generated_identity_matches;
@@ -425,6 +427,89 @@ mod tests {
                 assert!(unexpected_targets(&observed, &used).is_empty(), "{source}");
             }
         }
+    }
+
+    #[test]
+    fn escaped_native_targets_preserve_raw_evidence_and_match_visible_identities() {
+        // Original reductions of the iostat/groff_mdoc, snprintb, ksh93 and
+        // lam corpus findings. The oracle must not confuse the adjacent ?/!
+        // column targets, recursively decode a literal backslash, or include
+        // a font name in the identity. Parsing and lowering use the same tree.
+        let source = r#".Dd September 11, 2026
+.Dt TARGETS 7
+.Os
+.Sh DESCRIPTION
+.Bl -tag -width Ds
+.It Fl ?\&
+Help.
+.It Cm b\eB
+Bit.
+.It Cm f\eB\eL
+Field.
+.It Cm F\eB\eL
+Another field.
+.It Cm :\eV
+Value.
+.It Fl F\fR|\fPf
+Format.
+.El
+.Pp
+.Sy %({}Q"E\e) ,
+Pattern.
+.Bl -column one two
+.It Li ?\& Ta Li !\&
+.El
+"#;
+        let path = std::path::Path::new("escaped-target-spelling.7");
+        let report = super::Parser::new(super::ParseOptions {
+            includes: super::IncludePolicy::Deny,
+            compression: super::Compression::Plain,
+        })
+        .parse_bytes(path, source.as_bytes())
+        .unwrap();
+        let native = native_target_profile(&report.document.root);
+        assert!(native.unclassified.is_empty());
+        for (raw, canonical) in [
+            (r"?\&", "help"),
+            (r"!\&", "entry"),
+            (r"b\eB", "b-b"),
+            (r"f\eB\eL", "f-b-l"),
+            (r"F\eB\eL", "f-b-l"),
+            (r":\eV", "v"),
+            (r"F\fR|\fPf", "f-f"),
+            (r#"%({}Q"E\e)"#, "q-e"),
+        ] {
+            assert!(
+                native
+                    .expected
+                    .iter()
+                    .any(|target| { target.id == raw && target.normalized_id == canonical }),
+                "{raw} -> {canonical}: {}",
+                serde_json::to_string(&native.expected).unwrap()
+            );
+        }
+        let document = super::lower_mandoc_document(path, &report);
+        let observed = super::observed_targets(&document);
+        let (missing, matched, used) = match_targets(&native.expected, &observed.occurrences);
+        assert!(
+            missing.is_empty(),
+            "{}",
+            serde_json::to_string(&missing).unwrap()
+        );
+        assert_eq!(matched.len(), native.expected.len());
+        assert!(unexpected_targets(&observed, &used).is_empty());
+    }
+
+    #[test]
+    fn unreviewed_automatic_target_escapes_cannot_report_clean() {
+        let mut owner = logical_owner(r"name\h'2m'", "0.4.1");
+        owner.owner_macro = "It".to_owned();
+        let classified = classify_target_owner(&owner);
+        assert_eq!(classified.disposition, OwnerDisposition::Unclassified);
+        assert_eq!(
+            classified.reason,
+            "automatic target contains an unclassified source escape"
+        );
     }
 
     fn node(

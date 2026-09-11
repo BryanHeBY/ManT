@@ -4,6 +4,8 @@ use std::collections::BTreeMap;
 
 use libmandoc_rs::{Node, NodeKind};
 
+use super::spelling::automatic_target_spelling;
+
 use super::{
     ClassifiedOwner, ExpectedTarget, OwnerClass, OwnerDisposition, TargetRole, UnclassifiedOwner,
     document_id_slug,
@@ -228,8 +230,16 @@ fn assemble_native_profile(
             continue;
         };
         let expected_container = expected_container(&owner.owner_macro);
+        let normalized_id = if owner.explicit || owner.owner_macro == "Tg" {
+            document_id_slug(&id)
+        } else {
+            document_id_slug(
+                &automatic_target_spelling(&id)
+                    .expect("retained automatic targets have a classified source spelling"),
+            )
+        };
         targets.push(ExpectedTarget {
-            normalized_id: document_id_slug(&id),
+            normalized_id,
             explicit: owner.explicit,
             id,
             source_line: logical
@@ -323,6 +333,14 @@ pub(super) fn classify_target_owner(logical: &LogicalOwner) -> ClassifiedOwner {
         )
     } else if is_explicit || owner_macro == "Tg" {
         (OwnerDisposition::Retained, "source-authored Tg destination")
+    } else if target
+        .as_deref()
+        .is_some_and(|target| automatic_target_spelling(target).is_none())
+    {
+        (
+            OwnerDisposition::Unclassified,
+            "automatic target contains an unclassified source escape",
+        )
     } else if matches!(
         owner_macro.as_str(),
         "IP" | "TP"
