@@ -274,7 +274,7 @@ class ExplanationTests(unittest.TestCase):
         self.assertEqual(result['compatibilityPresentationComparison']['status'], 'covered')
         self.assertEqual(result['explanations'][0]['rule'], 'source-consistent-BR-manual-reference-spacing/v1')
 
-    def test_literal_man_UR_target_delimiters_are_source_consistent_presentation(self):
+    def test_literal_man_external_target_delimiters_are_source_consistent_presentation(self):
         source = '.TH PROBE 1\n.UR https:\\://example.test/a\\-b\n.UE .\n'
         result = assess_content(
             '<https://example.test/a-b>.\n',
@@ -286,7 +286,25 @@ class ExplanationTests(unittest.TestCase):
         self.assertEqual(result['compatibilityPresentationComparison']['status'], 'covered')
         self.assertEqual(
             result['explanations'][0]['rule'],
-            'source-consistent-man-UR-target-delimiters/v1',
+            'source-consistent-man-external-target-delimiters/v2',
+        )
+
+    def test_literal_man_MT_email_target_delimiters_are_source_consistent_presentation(self):
+        # CVS man_macro.c gives MT/ME the same block machinery as UR/UE, and
+        # man_term.c routes both through post_UR.  Keep the source proof at
+        # the literal head rather than inferring an email address from prose.
+        source = '.TH PROBE 1\n.MT maintainer@\\:example.test\n.ME ,\n'
+        result = assess_content(
+            '<maintainer@example.test>,\n',
+            '⟨maintainer@example.test⟩,\n',
+            source,
+        )
+        self.assertEqual(result['status'], 'explained')
+        self.assertEqual(result['rawComparison']['status'], 'review')
+        self.assertEqual(result['compatibilityPresentationComparison']['status'], 'covered')
+        self.assertEqual(
+            result['explanations'][0]['rule'],
+            'source-consistent-man-external-target-delimiters/v2',
         )
 
     def test_literal_man_UR_zero_width_break_does_not_duplicate_uri_colon(self):
@@ -305,7 +323,7 @@ class ExplanationTests(unittest.TestCase):
         self.assertEqual(result['compatibilityPresentationComparison']['status'], 'covered')
         self.assertEqual(
             result['explanations'][0]['rule'],
-            'source-consistent-man-UR-target-delimiters/v1',
+            'source-consistent-man-external-target-delimiters/v2',
         )
 
     def test_man_UR_projection_preserves_labels_and_rejects_dynamic_targets(self):

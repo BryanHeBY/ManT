@@ -9,7 +9,8 @@ explained by this module.
 
 Raw findings survive unchanged. A terminal presentation projection can rejoin
 only the CVS formatter's URI breakable-hyphen rows before a source-bound rule
-runs; that projection is recorded separately and never changes the raw result.
+runs; literal GNU man-ext URI and mail-address blocks share a separately
+recorded delimiter projection.  Neither changes the raw result.
 A separate residual comparison changes exactly one source-proven, positioned
 reference token, not all occurrences of a glyph. An ``explained`` result is
 not pixel equality or complete document acceptance.
@@ -47,10 +48,14 @@ _BR_MANUAL_REFERENCE = re.compile(
 _TERMINAL_MANUAL_REFERENCE = re.compile(r"([A-Za-z0-9_.:+-]+) \(([1-9][A-Za-z0-9]*)\)")
 _MDOC_REQUEST = re.compile(r"^[.']([A-Za-z][A-Za-z0-9]*)(?:[ \t]+(.*))?$")
 _MDOC_LITERAL_COLUMN_SEPARATOR = " | "
-_MAN_UR = re.compile(r"^[.']UR[ \t]+([^ \t]+)[ \t]*$")
+# CVS registers UR/UE and MT/ME as the same expanded-block/closing-block
+# macro pair (man_macro.c) and uses the same pre_UR/post_UR terminal handlers
+# for both (man_term.c).  The source proof below can consequently model their
+# literal heads through one deliberately narrow grammar.
+_MAN_EXTERNAL_TARGET = re.compile(r"^[.'](?:UR|MT)[ \t]+([^ \t]+)[ \t]*$")
 _MAN_IP_ORDINAL = re.compile(r"^[.']IP[ \t]+(\([1-9][0-9]*\)|\[[1-9][0-9]*\]|[1-9][0-9]*[.)])(?:[ \t]+[^ \t]+)?[ \t]*$")
-_MAN_UR_DYNAMIC_ESCAPE = re.compile(r"\\(?:\*|n|g|V|\$|\[|\()")
-_MAN_UR_LITERAL_ESCAPES = {
+_MAN_EXTERNAL_DYNAMIC_ESCAPE = re.compile(r"\\(?:\*|n|g|V|\$|\[|\()")
+_MAN_EXTERNAL_LITERAL_ESCAPES = {
     # GNU groff parses \: as a zero-width break (input.cpp), and CVS
     # mandoc's terminal character table likewise emits no visible glyph for
     # this special escape.  It is commonly used after an already-authored
@@ -109,11 +114,12 @@ def _literal_mdoc_bullet_item_count(source: str) -> int | None:
     return items if not stack and items else None
 
 
-def _literal_man_ur_targets(source: str) -> Counter[str] | None:
-    """Return direct GNU man-ext ``.UR`` targets, or decline unsafe source.
+def _literal_man_external_targets(source: str) -> Counter[str] | None:
+    """Return direct GNU man-ext ``.UR``/``.MT`` targets, or decline unsafe source.
 
-    CVS ``man_term.c:post_UR`` deliberately writes angle brackets around the
-    head target of every ``UR`` block.  ManT keeps the same typed target but
+    CVS registers URI and mail targets with the same expanded block parser and
+    sends both through ``man_term.c:post_UR``, which deliberately writes angle
+    brackets around the head target.  ManT keeps the same typed target but
     chooses its own compact link presentation.  This small source model proves
     only literal, single-token heads; it refuses roff execution that could
     change source syntax or expand the target before the native parser sees it.
@@ -125,13 +131,13 @@ def _literal_man_ur_targets(source: str) -> Counter[str] | None:
         match = _MDOC_REQUEST.fullmatch(raw)
         if match is not None and match[1].lower() in _AUDIT_DYNAMIC_REQUESTS:
             return None
-        match = _MAN_UR.fullmatch(raw)
+        match = _MAN_EXTERNAL_TARGET.fullmatch(raw)
         if match is None:
             continue
         target = match[1]
-        if _MAN_UR_DYNAMIC_ESCAPE.search(target):
+        if _MAN_EXTERNAL_DYNAMIC_ESCAPE.search(target):
             return None
-        for escaped, visible in _MAN_UR_LITERAL_ESCAPES.items():
+        for escaped, visible in _MAN_EXTERNAL_LITERAL_ESCAPES.items():
             target = target.replace(escaped, visible)
         if "\\" in target or not target:
             return None
@@ -525,11 +531,11 @@ def _source_consistent_compatibility_projection(reference: str, mant: str,
             "reason": "Literal .BR name (section) source cells are consistent with CVS terminal spacing and ManT's atomic manual-reference presentation.",
         })
 
-    ur_targets = _literal_man_ur_targets(source)
-    if ur_targets is not None:
+    external_targets = _literal_man_external_targets(source)
+    if external_targets is not None:
         reference_replacements = 0
         mant_replacements = 0
-        for target, limit in ur_targets.items():
+        for target, limit in external_targets.items():
             projected_reference, count = _replace_limited(
                 projected_reference, f"<{target}>", target, limit
             )
@@ -540,12 +546,12 @@ def _source_consistent_compatibility_projection(reference: str, mant: str,
             mant_replacements += count
         if reference_replacements:
             evidence.append({
-                "rule": "source-consistent-man-UR-target-delimiters/v1",
-                "sourceTargets": sum(ur_targets.values()),
-                "referenceDelimiters": reference_replacements,
-                "mantDelimiters": mant_replacements,
-                "reason": "Literal GNU man-ext .UR targets are bracketed by CVS man_term.c:post_UR while ManT preserves the same typed URI with compact link presentation.",
-            })
+            "rule": "source-consistent-man-external-target-delimiters/v2",
+            "sourceTargets": sum(external_targets.values()),
+            "referenceDelimiters": reference_replacements,
+            "mantDelimiters": mant_replacements,
+            "reason": "Literal GNU man-ext .UR/.MT targets are bracketed by CVS man_term.c:post_UR while ManT preserves the same typed URI or mail address with compact link presentation.",
+        })
 
     ordinal_markers = _literal_man_ip_ordinals(source)
     if ordinal_markers is not None:
