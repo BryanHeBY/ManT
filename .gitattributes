@@ -10,7 +10,8 @@
 crates/mant/src/arguments/help_tldr_generated.rs text eol=lf
 crates/libmandoc-rs/patches/series text eol=lf
 crates/libmandoc-rs/scripts/* text eol=lf
-crates/libmandoc-rs/vendor/mandoc-1.14.6/** text eol=lf
+crates/libmandoc-rs/vendor/** text eol=lf
+crates/libmandoc-rs/upstream/** text eol=lf
 *.gz binary
 *.zst binary
 *.zip binary

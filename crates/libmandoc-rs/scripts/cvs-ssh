@@ -1,0 +1,6 @@
+#!/bin/sh
+# Pin the anonymous CVS server key instead of trusting first-use network input.
+set -eu
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+exec ssh -oBatchMode=yes -oConnectTimeout=20 -oStrictHostKeyChecking=yes \
+  -oUserKnownHostsFile="$script_dir/../upstream/known_hosts" "$@"

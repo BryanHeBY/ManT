@@ -257,11 +257,26 @@ regenerate the vendor tree while working in `crates/libmandoc-rs/`:
 ```sh
 ./scripts/sync-vendor           # download, patch, replace vendor/
 ./scripts/sync-vendor --verify  # CI: check vendor/ matches upstream + patches
+./scripts/sync-vendor --verify --archive /path/to/upstream.tar.gz  # offline
 ```
 
-The vendor synchronizer reads `upstream/SOURCE` for the tarball URL and
-SHA-256, and `patches/series` for the ordered patch list. `--verify`
-reconstructs the tree from those inputs and compares it with `vendor/`.
+The vendor synchronizer reads one `upstream/SOURCE` and one ordered
+`patches/series`. `kind = release` locks an HTTPS archive URL, SHA-256 and
+version. `kind = cvs` instead locks the official CVS root, module, UTC checkout
+date, archive root, version label and a checksummed file manifest. Manifest rows
+are tab-separated `sha256`, CVS `revision`, and relative `path`; they cover the
+complete vendored source subset, excluding `regress/` and CVS administration.
+The version label selects `vendor/mandoc-<version>/`; changing upstream baselines
+updates the same source declaration and patch series, with previous states kept
+in Git rather than parallel baseline directories.
+
+`--verify` reconstructs that fixed tree and compares it with checked-in vendor
+contents. A CVS checkout uses the pinned server key in `upstream/known_hosts`,
+never a moving HEAD; `CVS=/path/to/cvs` selects a non-default client executable.
+`--archive` avoids network access and verifies the same release archive checksum
+or CVS file manifest before replay. The maintainer tool requires Python 3 and
+`patch`, plus `curl` for online release retrieval or CVS and SSH for online CVS
+retrieval. None of these tools is needed by an end-user Cargo build.
 Semantic parser changes need a Rust test with the smallest useful roff input;
 portability patches are covered by the relevant target CI jobs.
 

@@ -39,6 +39,8 @@ run "check product build script syntax" bash -n scripts/build-and-smoke.sh
 run "check CI verification script syntax" bash -n scripts/find-successful-ci.sh
 run "check CI native dependency script syntax" \
   bash -n scripts/install-ci-native-dependencies.sh
+run "test locked vendor source replay" \
+  python3 crates/libmandoc-rs/scripts/test_sync_vendor.py
 run "check roff fidelity audit" python3 scripts/audit-roff-fidelity.py --self-check
 run "check roff structure audit" python3 scripts/audit-roff-structure.py --self-check
 run "check roff CommonMark projection audit" \
