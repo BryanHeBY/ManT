@@ -517,7 +517,7 @@ mod tests {
 
         assert_eq!(
             plain_text(&nodes),
-            "The Git User's Manual[1] has more detail"
+            "The Git User’s Manual[1] has more detail"
         );
         assert!(
             nodes
