@@ -106,6 +106,17 @@ def git(*args):
 def plan(args):
     inputs = [(Path(path), rows) for path, rows in SOURCES.census_inputs(args)]
     binaries = {'mant': identity(args.mant), 'mandoc': identity(args.mandoc), 'groff': identity(args.groff)}
+    dependencies = {'zstd': SOURCES.ZSTD_BINARY is not None}
+    if SOURCES.ZSTD_BINARY is not None:
+        binaries['zstd'] = identity(SOURCES.ZSTD_BINARY)
+    # The structure profiler's auxiliary table-equation scan invokes these
+    # decoders through PATH. Absence is an observation, not a global preflight
+    # failure for a manifest that may not contain either compressed format.
+    for name in ('xz', 'bzip2'):
+        decoder = shutil.which(name)
+        dependencies[name] = decoder is not None
+        if decoder is not None:
+            binaries[name] = identity(Path(decoder).resolve())
     for name in PROFILES:
         binaries[name] = identity(args.profiler_dir / EXAMPLES[name])
     # groff launches these backends; record them independently of host man(1).
@@ -124,6 +135,7 @@ def plan(args):
     report = {'schema': 'mant.roff-all-audit/v1', 'status': 'planned', 'started': stamp(),
               'manifestSha256': args._manifest_sha256, 'producerCommit': git('rev-parse', 'HEAD'),
               'producerGitStatus': git('status', '--porcelain'), 'binaries': binaries,
+              'dependencyAvailability': dependencies,
               'producerAttribution': 'Working tree at run start; binary hashes are authoritative identities, not independent source-to-build attestations.',
               'rules': {str(p.relative_to(ROOT)): SOURCES.file_hash(p) for p in rules},
               'physicalPages': len(inputs), 'logicalPages': sum(len(rows) for _, rows in inputs),
@@ -137,6 +149,8 @@ def plan(args):
                   'Source hashes bind manifest leaves; include dependencies outside the manifest are not fully inventoried.',
                   'External-context sources retain explicit partial coverage even after successful rendering.',
                   'Profile modes differ by existing contract: indexed source for structure/projection, same native session for targets, production standalone for semantics.',
+                  'Non-UTF8 source skips string-based fidelity/layout only; native profiles still run. Structure source-equation scanning uses lossy UTF-8 and retains explicit partial coverage.',
+                  'Timeouts bound individual renderer/comparison subprocesses and each profiler batch, not the total wall time of a page or the complete census. Source I/O and final hashing have no separate wall-time deadline.',
                   'groff macro/font data are host resources, not independently attested by executable hashes.',
                   'Local trusted-source POSIX audit only; no cross-platform or security-sandbox claim.',
                   'Finding details are bounded; truncation is recorded, never interpreted as clean.']}
@@ -202,9 +216,11 @@ def render_dimensions(path, source, args, external):
             try:
                 command, data, reason = FIDELITY.reference_render_command(path, str(binary), kind, root, source,
                     source_reader=lambda p: SOURCES.source_bytes(p)[0])
+            except SOURCES.SourceBudgetError as error:
+                result['fidelity-' + kind] = result['layout-' + kind] = failed('budget', error)
+                continue
             except Exception as error:
-                category = 'budget' if 'exceeds' in str(error) else 'error'
-                result['fidelity-' + kind] = result['layout-' + kind] = failed(category, error)
+                result['fidelity-' + kind] = result['layout-' + kind] = failed('error', error)
                 continue
         else:
             command = [str(binary), '-Kutf8', '-Tutf8', '-t', '-e', '-mandoc', '-rLL=200n', '-rLT=200n', '-I', str(root)]
@@ -234,6 +250,8 @@ def render_dimensions(path, source, args, external):
             result['fidelity-' + kind] = result['layout-' + kind] = failed('error', error)
             continue
         coverage = 'partial-external-context' if external else 'legacy-dimensions-covered'
+        if finding['status'] == 'hard-failure':
+            coverage = 'uncovered'
         result['fidelity-' + kind] = {'execution': 'success', 'status': finding['status'],
                                      'coverage': coverage, **bounded_finding(finding)}
         layout = finding['layout']
@@ -254,13 +272,19 @@ def inspect_source(item, args):
         record.update(sourceSha256=hashlib.sha256(source).hexdigest(), transportSha256=transport,
                       sourceBytes=len(source), externalContext=bool(SOURCES.EXTERNAL.search(source)))
         record['historicalHashMatches'] = [r.get('historicalSha256') == record['sourceSha256'] for r in identities]
-        source.decode('utf-8')
+        try:
+            source.decode('utf-8')
+        except UnicodeError:
+            record['sourceValidUtf8'] = False
+            record['dimensions'] = {name: failed('uncovered', 'string-based comparison requires valid source UTF-8')
+                                    for name in DIMENSIONS if name not in PROFILES}
+            return record
+        record['sourceValidUtf8'] = True
         record['dimensions'], record['renderers'] = render_dimensions(path, source, args, record['externalContext'])
-    except UnicodeError:
-        record['dimensions'] = {name: failed('uncovered', 'source is not valid UTF-8') for name in DIMENSIONS}
+    except SOURCES.SourceBudgetError as error:
+        record['dimensions'] = {name: failed('budget', error) for name in DIMENSIONS}
     except Exception as error:
-        category = 'budget' if 'exceeds' in str(error) else 'error'
-        record['dimensions'] = {name: failed(category, error) for name in DIMENSIONS}
+        record['dimensions'] = {name: failed('error', error) for name in DIMENSIONS}
     return record
 
 
@@ -296,6 +320,11 @@ def profile_dimension(name, records, args):
                          'coverage': 'uncovered' if finding.status == 'hard-failure' else
                              'partial-external-context' if row['externalContext'] else 'legacy-dimensions-covered',
                          **bounded_finding(asdict(finding))}
+                if name == 'structure' and row.get('sourceValidUtf8') is False and finding.status != 'hard-failure':
+                    value['coverage'] = 'partial-non-utf8-source'
+                    value['coverageReasons'] = ['legacy structure source-equation scan uses String::from_utf8_lossy']
+                    if row['externalContext']:
+                        value['coverageReasons'].append('external source context is not fully inventoried')
             row['dimensions'][name] = value
     except Exception as error:
         for row in selected:

@@ -75,13 +75,55 @@ class AllAuditTests(unittest.TestCase):
         self.assertEqual(row['dimensions']['structure']['execution'], 'budget')
         self.assertEqual(row['dimensions']['structure']['coverage'], 'uncovered')
 
-    def test_invalid_source_utf8_covers_no_dimension(self):
+    def test_invalid_source_utf8_skips_strings_but_runs_all_native_profiles(self):
         with tempfile.TemporaryDirectory() as temporary:
             path = Path(temporary) / 'generated.roff'
             path.write_bytes(b'\xff')
             row = AUDIT.inspect_source((path, [{'id': 'one'}]), argparse.Namespace())
-        self.assertEqual(set(row['dimensions']), set(AUDIT.DIMENSIONS))
+        self.assertFalse(row['sourceValidUtf8'])
+        self.assertEqual(set(row['dimensions']), set(AUDIT.DIMENSIONS) - set(AUDIT.PROFILES))
         self.assertTrue(all(value['execution'] == 'uncovered' for value in row['dimensions'].values()))
+        args = argparse.Namespace(profiler_dir=Path('unused'), batch_timeout=1)
+        for name, legacy in AUDIT.LEGACY.items():
+            with patch.object(legacy, 'profile_findings', return_value=iter([legacy.Finding(str(path), 'clean', [])])) as profile:
+                AUDIT.profile_dimension(name, [row], args)
+            self.assertEqual(profile.call_args.args[0], [path])
+            self.assertEqual(row['dimensions'][name]['execution'], 'success')
+            self.assertEqual(row['dimensions'][name]['status'], 'clean')
+            coverage = 'partial-non-utf8-source' if name == 'structure' else 'legacy-dimensions-covered'
+            self.assertEqual(row['dimensions'][name]['coverage'], coverage)
+        self.assertEqual(set(row['dimensions']), set(AUDIT.DIMENSIONS))
+
+    def test_source_budget_type_not_detail_words_controls_classification(self):
+        for error, execution in [(AUDIT.SOURCES.SourceBudgetError('LZMA dictionary memory limit reached'), 'budget'),
+                                 (AUDIT.SOURCES.SourceBudgetError('zstd timed out'), 'budget'),
+                                 (ValueError('invalid header exceeds expectations'), 'error')]:
+            with patch.object(AUDIT.SOURCES, 'source_bytes', side_effect=error):
+                row = AUDIT.inspect_source((Path('/source'), [{'id': 'one'}]), argparse.Namespace())
+            self.assertTrue(all(value['execution'] == execution for value in row['dimensions'].values()))
+
+    def test_plan_freezes_resolved_zstd_and_explicitly_records_absence(self):
+        args = argparse.Namespace(mant=Path('/bin/mant'), mandoc=Path('/bin/mandoc'), groff=Path('/bin/groff'),
+            profiler_dir=Path('/profiles'), _manifest_sha256='manifest', workers=1, batch_size=1,
+            timeout=1, batch_timeout=1, max_result_bytes=4096)
+        for decoder in (Path('/resolved/zstd'), None):
+            with patch.object(AUDIT.SOURCES, 'census_inputs', return_value=[('/input', [{'id': 'one'}])]), \
+                 patch.object(AUDIT.SOURCES, 'ZSTD_BINARY', decoder), \
+                 patch.object(AUDIT, 'identity', side_effect=lambda path: {'path': str(path), 'sha256': 'bound'}), \
+                 patch.object(AUDIT.SOURCES, 'file_hash', return_value='rule'), \
+                 patch.object(AUDIT, 'git', return_value='commit'), \
+                 patch.object(AUDIT.shutil, 'which', side_effect=lambda name:
+                     {'xz': None, 'bzip2': '/resolved/bzip2'}.get(name, '/backend')):
+                _, report = AUDIT.plan(args)
+            self.assertEqual(report['dependencyAvailability']['zstd'], decoder is not None)
+            self.assertFalse(report['dependencyAvailability']['xz'])
+            self.assertNotIn('xz', report['binaries'])
+            self.assertTrue(report['dependencyAvailability']['bzip2'])
+            self.assertEqual(report['binaries']['bzip2'], {'path': '/resolved/bzip2', 'sha256': 'bound'})
+            if decoder:
+                self.assertEqual(report['binaries']['zstd'], {'path': str(decoder), 'sha256': 'bound'})
+            else:
+                self.assertNotIn('zstd', report['binaries'])
 
     def test_reused_oracle_preserves_original_candidates_and_ngram_default(self):
         source = b'.TH T 1\n.SH BODY\nAlpha beta gamma delta epsilon\n'
@@ -113,11 +155,46 @@ class AllAuditTests(unittest.TestCase):
              patch.object(AUDIT, 'run_renderer', return_value=(0, json.dumps(finding).encode(), '')):
             results, _ = AUDIT.render_dimensions(Path('/fixture/generated.roff'), source, args, False)
         self.assertEqual(results['fidelity-mandoc']['execution'], 'uncovered')
+        self.assertEqual(results['fidelity-groff']['status'], 'hard-failure')
+        self.assertEqual(results['fidelity-groff']['coverage'], 'uncovered')
         self.assertEqual(results['layout-groff']['execution'], 'uncovered')
         command = rendered.call_args_list[1].args[0]
         self.assertIn('-mandoc', command)
         self.assertIn('-Kutf8', command)
         self.assertNotIn('-man', command)
+
+    def test_reference_source_budget_does_not_prevent_other_renderer(self):
+        args = argparse.Namespace(groff=Path('/bin/groff'), mandoc=Path('/bin/mandoc'), mant=Path('/bin/mant'), timeout=1)
+        source = b'.TH TEST 1\n.SH BODY\nAlpha beta gamma\n'
+        finding = asdict(AUDIT.FIDELITY.compare_rendered('one', source, 'Alpha beta gamma', 'Alpha beta gamma', 'groff').finding)
+        with patch.object(AUDIT.FIDELITY, 'reference_render_command', side_effect=AUDIT.SOURCES.SourceBudgetError('zstd timeout')), \
+             patch.object(AUDIT, 'render', return_value=('Alpha beta gamma', {}, None)), \
+             patch.object(AUDIT, 'run_renderer', return_value=(0, json.dumps(finding).encode(), '')):
+            results, _ = AUDIT.render_dimensions(Path('/fixture/page.1'), source, args, False)
+        self.assertEqual(results['fidelity-mandoc']['execution'], 'budget')
+        self.assertEqual(results['layout-mandoc']['execution'], 'budget')
+        self.assertEqual(results['fidelity-groff']['execution'], 'success')
+
+    def test_dependency_mutation_invalidates_even_successful_completed_run(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            manifest = root / 'manifest'; manifest.write_bytes(b'manifest')
+            decoder = root / 'zstd'; decoder.write_bytes(b'before')
+            path = root / 'source'; path.write_bytes(b'.TH T 1\n')
+            args = argparse.Namespace(output=root / 'audit', workers=1, batch_size=1,
+                max_result_bytes=100000, manifest=manifest)
+            report = {'physicalPages': 1, 'logicalPages': 1, 'rules': {},
+                'binaries': {'zstd': AUDIT.identity(decoder)}, 'manifestSha256': AUDIT.SOURCES.file_hash(manifest)}
+            def inspect(_item, _args):
+                decoder.write_bytes(b'after')
+                return {'sourcePath': str(path), 'identities': [{'id': 'one'}],
+                    'transportSha256': AUDIT.SOURCES.file_hash(path), 'sourceSha256': AUDIT.SOURCES.file_hash(path),
+                    'dimensions': {name: {'execution': 'success', 'status': 'clean', 'coverage': 'legacy-dimensions-covered'} for name in AUDIT.DIMENSIONS}}
+            with patch.object(AUDIT, 'inspect_source', side_effect=inspect):
+                self.assertEqual(AUDIT.execute(args, [(path, [{'id': 'one'}])], report), 1)
+            self.assertEqual(report['status'], 'completed')
+            self.assertFalse(report['binariesUnchanged'])
+            self.assertFalse(report['coverageComplete'])
 
     def test_fatal_processing_error_still_writes_incomplete_summary(self):
         with tempfile.TemporaryDirectory() as temporary:
