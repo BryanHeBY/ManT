@@ -75,6 +75,31 @@ class AllAuditTests(unittest.TestCase):
         self.assertEqual(row['dimensions']['structure']['execution'], 'budget')
         self.assertEqual(row['dimensions']['structure']['coverage'], 'uncovered')
 
+    def test_semantic_standalone_redirect_is_external_coverage_not_lowering_failure(self):
+        finding = AUDIT.LEGACY['semantics'].Finding(
+            '/fixture/alias.1', 'hard-failure', [],
+            '/fixture/alias.1: standalone .so redirects require MANPATH discovery and cannot be followed by --input',
+        )
+        row = {'sourcePath': '/fixture/alias.1', 'externalContext': True, 'dimensions': {}}
+        self.assertEqual(AUDIT.profile_coverage_gap('semantics', row, finding)['status'], 'uncovered')
+        self.assertEqual(AUDIT.profile_coverage_gap('semantics', row, finding)['coverage'], 'partial-external-context')
+        row['externalContext'] = False
+        self.assertIsNone(AUDIT.profile_coverage_gap('semantics', row, finding))
+
+    def test_empty_groff_reference_is_explicit_reference_coverage_gap(self):
+        finding = {
+            'status': 'hard-failure',
+            'detail': 'the page cannot be classified as clean without a reference corpus',
+            'reference_tokens': 0,
+            'mant_tokens': 3,
+        }
+        gap = AUDIT.reference_coverage_gap('groff', finding, False)
+        self.assertEqual(gap['execution'], 'success')
+        self.assertEqual(gap['status'], 'uncovered')
+        self.assertEqual(gap['coverage'], 'partial-reference-renderer')
+        self.assertIsNone(AUDIT.reference_coverage_gap('mandoc', finding, False))
+        self.assertIsNone(AUDIT.reference_coverage_gap('groff', {**finding, 'mant_tokens': 0}, False))
+
     def test_invalid_source_utf8_skips_strings_but_runs_all_native_profiles(self):
         with tempfile.TemporaryDirectory() as temporary:
             path = Path(temporary) / 'generated.roff'

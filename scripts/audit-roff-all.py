@@ -34,6 +34,8 @@ PROFILES = ('structure', 'projection', 'targets', 'semantics')
 EXAMPLES = dict(zip(PROFILES, ('roff_structure_profile', 'roff_projection_profile',
                              'roff_target_profile', 'roff_semantic_profile')))
 DIMENSIONS = (*PROFILES, 'fidelity-mandoc', 'layout-mandoc', 'fidelity-groff', 'layout-groff')
+STANDALONE_REDIRECT_INPUT_LIMIT = 'standalone .so redirects require MANPATH discovery and cannot be followed by --input'
+NO_REFERENCE_TOKENS = 'the page cannot be classified as clean without a reference corpus'
 
 
 def module(name):
@@ -176,6 +178,51 @@ def failed(execution, detail, status='uncovered'):
     return {'execution': execution, 'status': status, 'coverage': 'uncovered', 'detail': str(detail)[:4096]}
 
 
+def profile_coverage_gap(name, row, finding):
+    """Return a bounded, explicit non-product gap for known profile limits.
+
+    The semantic profiler deliberately uses production ``--input`` semantics.
+    A standalone redirect consequently has no document to inspect without a
+    MANPATH catalog.  The source census already classifies that request as
+    external context, so preserving its diagnostic as a hard lowering failure
+    would conflate a deliberately closed process boundary with a product bug.
+    """
+    if (
+        name == 'semantics'
+        and row['externalContext']
+        and finding.status == 'hard-failure'
+        and finding.detail.endswith(STANDALONE_REDIRECT_INPUT_LIMIT)
+    ):
+        return {
+            'execution': 'success',
+            'status': 'uncovered',
+            'coverage': 'partial-external-context',
+            'coverageReasons': ['standalone redirect requires MANPATH catalog discovery; semantic --input profiling is intentionally not a catalog query'],
+            **bounded_finding(asdict(finding)),
+        }
+    return None
+
+
+def reference_coverage_gap(kind, finding, external):
+    """Classify an unusable reference as coverage, never as a ManT failure."""
+    if (
+        kind == 'groff'
+        and finding.get('status') == 'hard-failure'
+        and finding.get('detail') == NO_REFERENCE_TOKENS
+        and finding.get('reference_tokens') == 0
+        and isinstance(finding.get('mant_tokens'), int)
+        and finding['mant_tokens'] > 0
+    ):
+        return {
+            'execution': 'success',
+            'status': 'uncovered',
+            'coverage': 'partial-external-context' if external else 'partial-reference-renderer',
+            'coverageReasons': ['the selected groff invocation produced no comparable visible reference tokens'],
+            **bounded_finding(finding),
+        }
+    return None
+
+
 def bounded_finding(finding):
     """Bound retention without changing a candidate's original status/count."""
     truncations = []
@@ -264,6 +311,17 @@ def render_dimensions(path, source, args, external):
         except (ValueError, UnicodeError) as error:
             result['fidelity-' + kind] = result['layout-' + kind] = failed('error', error)
             continue
+        gap = reference_coverage_gap(kind, finding, external)
+        if gap is not None:
+            result['fidelity-' + kind] = gap
+            result['layout-' + kind] = {
+                'execution': 'uncovered',
+                'status': 'uncovered',
+                'coverage': gap['coverage'],
+                'coverageReasons': gap['coverageReasons'],
+                'detail': 'no comparable reference text is available for layout observation',
+            }
+            continue
         coverage = 'partial-external-context' if external else 'legacy-dimensions-covered'
         if finding['status'] == 'hard-failure':
             coverage = 'uncovered'
@@ -330,11 +388,13 @@ def profile_dimension(name, records, args):
             elif finding is None:
                 value = failed('error', 'legacy interpreter omitted the selected page')
             else:
-                value = {'execution': 'error' if finding.status == 'hard-failure' else 'success',
-                         'status': finding.status,
-                         'coverage': 'uncovered' if finding.status == 'hard-failure' else
-                             'partial-external-context' if row['externalContext'] else 'legacy-dimensions-covered',
-                         **bounded_finding(asdict(finding))}
+                value = profile_coverage_gap(name, row, finding)
+                if value is None:
+                    value = {'execution': 'error' if finding.status == 'hard-failure' else 'success',
+                             'status': finding.status,
+                             'coverage': 'uncovered' if finding.status == 'hard-failure' else
+                                 'partial-external-context' if row['externalContext'] else 'legacy-dimensions-covered',
+                             **bounded_finding(asdict(finding))}
                 if name == 'structure' and row.get('sourceValidUtf8') is False and finding.status != 'hard-failure':
                     value['coverage'] = 'partial-non-utf8-source'
                     value['coverageReasons'] = ['legacy structure source-equation scan uses String::from_utf8_lossy']
