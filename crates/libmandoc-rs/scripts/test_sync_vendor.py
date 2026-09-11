@@ -5,6 +5,7 @@ import io
 import os
 from pathlib import Path
 import shutil
+import subprocess
 import tarfile
 import tempfile
 import unittest
@@ -90,6 +91,27 @@ class VendorReplayTests(unittest.TestCase):
             vendor.extract_archive(archive, self.root / "unpack", "mandoc-1.0")
         self.assertFalse((self.root / "unpack").exists())
 
+    def test_archive_rejects_windows_special_paths_before_extraction(self):
+        for suffix in ["C:/escaped.c", "source.c:stream", "NUL", "CON.c",
+                       "sub/LPT1.txt", "COM¹.c", "trailing.", "trailing ",
+                       "bad\\name", "bad?name", "bad\x01name"]:
+            with self.subTest(suffix=suffix), self.assertRaises(ValueError):
+                vendor.extract_archive(self.archive("mandoc-1.0/" + suffix),
+                                       self.root / "unpack", "mandoc-1.0")
+            self.assertFalse((self.root / "unpack").exists())
+
+    def test_archive_rejects_case_collisions_in_files_and_implicit_directories(self):
+        for names in [("Source.c", "source.c"), ("Sub/one.c", "sub/two.c")]:
+            archive = self.root / "case-collision.tar"
+            with tarfile.open(archive, "w") as stream:
+                for name in names:
+                    entry = tarfile.TarInfo("mandoc-1.0/" + name)
+                    entry.size = 1
+                    stream.addfile(entry, io.BytesIO(b"x"))
+            with self.subTest(names=names), self.assertRaisesRegex(ValueError, "case-colliding"):
+                vendor.extract_archive(archive, self.root / "unpack", "mandoc-1.0")
+            self.assertFalse((self.root / "unpack").exists())
+
     def test_release_checksum_is_checked_before_extraction(self):
         archive = self.archive()
         source = self.release(archive)
@@ -128,6 +150,21 @@ class VendorReplayTests(unittest.TestCase):
             with self.subTest(text=text), self.assertRaises(ValueError):
                 vendor.read_manifest(manifest, vendor.sha256(manifest))
 
+    def test_manifest_requires_portable_paths_without_case_aliases(self):
+        _, manifest, _ = self.cvs_source()
+        original = manifest.read_text()
+        for name in ["C:/source.c", "source.c:stream", "NUL.c", "trailing.", "trailing "]:
+            manifest.write_text(original.replace("source.c", name))
+            with self.subTest(name=name), self.assertRaises(ValueError):
+                vendor.read_manifest(manifest, vendor.sha256(manifest))
+        for names in [("Source.c", "source.c"), ("Sub/one.c", "sub/two.c")]:
+            manifest.write_text("".join(original.replace("source.c", name) for name in names))
+            with self.subTest(names=names), self.assertRaisesRegex(ValueError, "case-colliding"):
+                vendor.read_manifest(manifest, vendor.sha256(manifest))
+        for name in ["Makefile", "Makefile.depend", "compat_strlcpy.c", "configure.local.example"]:
+            manifest.write_text(original.replace("source.c", name))
+            self.assertIn(name, vendor.read_manifest(manifest, vendor.sha256(manifest)))
+
     def test_cvs_archive_replay_is_offline_and_removes_metadata(self):
         tree, _, source = self.cvs_source()
         (tree / "regress").mkdir()
@@ -159,6 +196,26 @@ class VendorReplayTests(unittest.TestCase):
                 patch.object(vendor.subprocess, "run", side_effect=checkout):
             staged = vendor.acquire(self.root, source, work, None)
         self.assertEqual((staged / "source.c").read_bytes(), b"before")
+
+    @unittest.skipUnless(shutil.which("patch"), "patch utility unavailable")
+    def test_already_applied_patch_fails_without_reversing_source(self):
+        staged = self.root / "staged"
+        staged.mkdir()
+        (staged / "source.c").write_bytes(b"after\n")
+        (self.root / "patches" / "series").write_text("0001.patch\n")
+        (self.root / "patches" / "0001.patch").write_text(
+            "--- a/source.c\n+++ b/source.c\n@@ -1 +1 @@\n-before\n+after\n")
+        with self.assertRaises(subprocess.CalledProcessError):
+            vendor.apply_patches(self.root, staged)
+        self.assertEqual((staged / "source.c").read_bytes(), b"after\n")
+
+    def test_duplicate_patch_series_fails_before_any_patch_runs(self):
+        (self.root / "patches" / "series").write_text(
+            "# ordered fixes\n0001.patch\n\n  0001.patch  \n")
+        with patch.object(vendor.subprocess, "run") as command:
+            with self.assertRaisesRegex(ValueError, "duplicate patch in series"):
+                vendor.apply_patches(self.root, self.root / "staged")
+        command.assert_not_called()
 
     @unittest.skipUnless(shutil.which("patch"), "patch utility unavailable")
     def test_release_patch_replay_and_transactional_install(self):

@@ -24,6 +24,34 @@ def component(value):
     return value
 
 
+def portable_path(name):
+    """Reject paths that escape or alias special files on supported hosts."""
+    path = PurePosixPath(name)
+    if path.is_absolute() or not path.parts or ".." in path.parts:
+        raise ValueError(f"unsafe source path: {name!r}")
+    for part in path.parts:
+        # A nested drive (C:) resets Windows path joining; colons also name
+        # alternate data streams. Device names remain special with extensions.
+        stem = part.split(".", 1)[0].upper()
+        if (re.search(r'[<>:"\\|?*\x00-\x1f]', part)
+                or part.endswith((".", " "))
+                or stem in {"CON", "PRN", "AUX", "NUL", "CONIN$", "CONOUT$"}
+                or re.fullmatch(r"(?:COM|LPT)[1-9¹²³]", stem)):
+            raise ValueError(f"nonportable source path: {name!r}")
+    return path
+
+
+def register_portable_path(path, spellings):
+    # Check every prefix, including implicit directories: A/one and a/two
+    # must not silently coalesce on a case-insensitive filesystem.
+    for length in range(1, len(path.parts) + 1):
+        prefix = PurePosixPath(*path.parts[:length]).as_posix()
+        key = prefix.casefold()
+        if key in spellings and spellings[key] != prefix:
+            raise ValueError(f"case-colliding source path: {path}")
+        spellings[key] = prefix
+
+
 def read_source(path):
     fields = {}
     for number, line in enumerate(path.read_text().splitlines(), 1):
@@ -65,14 +93,15 @@ def extract_archive(archive, directory, root):
     with tarfile.open(archive, "r:*") as stream:
         members = stream.getmembers()
         seen = set()
+        spellings = {}
         for member in members:
-            path = PurePosixPath(member.name)
-            if (path.is_absolute() or ".." in path.parts or "\\" in member.name
-                    or not path.parts or path.parts[0] != root
+            path = portable_path(member.name)
+            if (path.parts[0] != root
                     or not (member.isfile() or member.isdir())
                     or path in seen):
                 raise ValueError(f"unsafe or duplicate archive member: {member.name!r}")
             seen.add(path)
+            register_portable_path(path, spellings)
         # All names and types were checked before the first filesystem write.
         for member in members:
             target = directory.joinpath(*PurePosixPath(member.name).parts)
@@ -107,6 +136,7 @@ def read_manifest(path, expected_checksum):
     if sha256(path) != expected_checksum:
         raise ValueError("CVS manifest checksum mismatch")
     entries = {}
+    spellings = {}
     for number, line in enumerate(path.read_text().splitlines(), 1):
         if not line or line.startswith("#"):
             continue
@@ -114,13 +144,14 @@ def read_manifest(path, expected_checksum):
         if len(fields) != 3:
             raise ValueError(f"invalid CVS manifest line {number}")
         checksum, revision, name = fields
-        relative = PurePosixPath(name)
+        relative = portable_path(name)
         if (not re.fullmatch(r"[0-9a-f]{64}", checksum)
                 or not re.fullmatch(r"[0-9]+(?:\.[0-9]+)+", revision)
                 or relative.is_absolute() or ".." in relative.parts
                 or not relative.parts or "\\" in name or name != relative.as_posix()
                 or name in entries):
             raise ValueError(f"invalid CVS manifest entry at line {number}")
+        register_portable_path(relative, spellings)
         entries[name] = (checksum, revision)
     if not entries:
         raise ValueError("CVS manifest is empty")
@@ -181,14 +212,22 @@ def acquire(root, source, directory, archive):
 
 def apply_patches(root, staged):
     patches = root / "patches"
+    names = []
+    seen = set()
     for line in (patches / "series").read_text().splitlines():
         name = line.strip()
         if not name or name.startswith("#"):
             continue
         component(name)
+        if name in seen:
+            raise ValueError(f"duplicate patch in series: {name}")
+        seen.add(name)
+        names.append(name)
+    # Validate the complete ordering before modifying the staged source tree.
+    for name in names:
         print(f"[sync-vendor] applying {name}", flush=True)
         with (patches / name).open("rb") as patch:
-            subprocess.run(["patch", "--batch", "--fuzz=0", "-p1", "-d", str(staged)],
+            subprocess.run(["patch", "--batch", "--forward", "--fuzz=0", "-p1", "-d", str(staged)],
                            stdin=patch, check=True)
 
 
