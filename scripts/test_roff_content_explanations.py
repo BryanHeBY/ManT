@@ -238,6 +238,33 @@ class ExplanationTests(unittest.TestCase):
         self.assertEqual(result['status'], 'explained')
         self.assertEqual(result['terminalPresentationComparison']['status'], 'covered')
 
+    def test_direct_bullet_marker_is_a_source_consistent_compatibility_projection(self):
+        source = '.IP \\(bu\nBODY\n'
+        result = assess_content('• BODY\n', '- BODY\n', source)
+        self.assertEqual(result['status'], 'explained')
+        self.assertEqual(result['rawComparison']['status'], 'review')
+        self.assertEqual(result['compatibilityPresentationComparison']['status'], 'covered')
+        self.assertEqual(result['explanations'][0]['rule'], 'source-consistent-explicit-bullet-marker/v1')
+
+    def test_direct_BR_manual_reference_spacing_is_a_source_consistent_projection(self):
+        source = '.TS\nT{\n.BR accept (2)\nT}\n.TE\n'
+        result = assess_content('accept (2)\n', 'accept(2)\n', source)
+        self.assertEqual(result['status'], 'explained')
+        self.assertEqual(result['rawComparison']['status'], 'review')
+        self.assertEqual(result['compatibilityPresentationComparison']['status'], 'covered')
+        self.assertEqual(result['explanations'][0]['rule'], 'source-consistent-BR-manual-reference-spacing/v1')
+
+    def test_compatibility_projection_requires_direct_source_evidence(self):
+        for source, reference, mant in [
+            ('plain prose\n', '• BODY\n', '- BODY\n'),
+            ('.B accept (2)\n', 'accept (2)\n', 'accept(2)\n'),
+            ('.BR accept (2)\n', 'accept (2)\naccept (2)\n', 'accept(2)\naccept(2)\n'),
+        ]:
+            with self.subTest(source=source):
+                result = assess_content(reference, mant, source)
+                self.assertEqual(result['status'], 'review')
+                self.assertFalse(result['coverage']['sourceConsistentCompatibilityApplied'])
+
 
 if __name__ == '__main__':
     unittest.main()

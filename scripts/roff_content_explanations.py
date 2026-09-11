@@ -17,6 +17,7 @@ not pixel equality or complete document acceptance.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from collections import Counter
 from io import StringIO
 import re
 import unicodedata
@@ -38,6 +39,12 @@ TERMINAL_HYPHEN_RULE = "cvs-terminal-breakable-hyphen/v1"
 _REQUEST = re.compile(r"^\.([A-Za-z]+)(?:[ \t]+(.*))?$")
 _ARGUMENT = re.compile(r'"([^"\n]*)"|([^ \t"\n]+)')
 _NAME = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_.+:@-]*")
+_BULLET_ESCAPE = re.compile(r"\\(?:\(bu|\[bu\])")
+_BR_MANUAL_REFERENCE = re.compile(
+    r"^[.']BR[ \t]+([A-Za-z0-9_.:+-]+)[ \t]+\(([1-9][A-Za-z0-9]*)\)[ \t]*$",
+    re.MULTILINE,
+)
+_TERMINAL_MANUAL_REFERENCE = re.compile(r"([A-Za-z0-9_.:+-]+) \(([1-9][A-Za-z0-9]*)\)")
 
 
 @dataclass(frozen=True)
@@ -245,6 +252,58 @@ def _source_is_consistent_with_hyphen_reflows(source: str | None, *reflows) -> b
     return all(source.count(term) >= count for term, count in occurrences.items())
 
 
+def _source_consistent_compatibility_projection(reference: str, source: str | None) -> tuple[str, list[dict]]:
+    """Apply two deliberately narrow, source-consistent display projections.
+
+    These model known terminal compatibility policy rather than roff execution:
+    direct ``\\(bu``/``\\[bu]`` markers render as a terminal bullet while ManT's
+    text list renderer uses ``-``; a literal ``.BR name (section)`` table cell
+    is commonly printed by CVS with a space where ManT renders one atomic
+    manual reference.  The source only proves compatible spelling/counts, not
+    source-to-output location.  Thus raw evidence remains authoritative and
+    this helper is never a semantic acceptance path.
+    """
+    if source is None:
+        return reference, []
+    result = reference
+    evidence: list[dict] = []
+
+    bullet_count = len(_BULLET_ESCAPE.findall(source))
+    reference_bullets = result.count("•")
+    if bullet_count and reference_bullets and reference_bullets <= bullet_count:
+        result = result.replace("•", "-")
+        evidence.append({
+            "rule": "source-consistent-explicit-bullet-marker/v1",
+            "sourceMarkers": bullet_count,
+            "referenceMarkers": reference_bullets,
+            "reason": "Direct source bullet escapes are consistent with CVS UTF-8 bullet output and ManT's hyphen list-marker presentation.",
+        })
+
+    authored = Counter((match[1], match[2]) for match in _BR_MANUAL_REFERENCE.finditer(source))
+    used: Counter[tuple[str, str]] = Counter()
+    replacements = 0
+
+    def replace_manual_reference(match: re.Match[str]) -> str:
+        nonlocal replacements
+        pair = (match[1], match[2])
+        if used[pair] >= authored[pair]:
+            return match[0]
+        used[pair] += 1
+        replacements += 1
+        return f"{pair[0]}({pair[1]})"
+
+    if authored:
+        result = _TERMINAL_MANUAL_REFERENCE.sub(replace_manual_reference, result)
+    if replacements:
+        evidence.append({
+            "rule": "source-consistent-BR-manual-reference-spacing/v1",
+            "sourceReferences": sum(authored.values()),
+            "referenceReferences": replacements,
+            "reason": "Literal .BR name (section) source cells are consistent with CVS terminal spacing and ManT's atomic manual-reference presentation.",
+        })
+    return result, evidence
+
+
 def assess_content(reference: str, mant: str, source: str | None, *,
                    raw_comparison: dict | None = None,
                    limits: ContentLimits = ContentLimits(),
@@ -280,8 +339,23 @@ def assess_content(reference: str, mant: str, source: str | None, *,
                                          terminal_hyphen_wraps=True)
             projection_used = True
 
+    compatibility = projection
+    compatibility_evidence: list[dict] = []
+    compatibility_used = False
+    if projection["status"] == "review" and projection["coverage"].get("complete", False):
+        projected_reference, compatibility_evidence = _source_consistent_compatibility_projection(reference, source)
+        if compatibility_evidence:
+            compatibility = compare_content(
+                projected_reference, mant, source, limits=limits,
+                terminal_hyphen_wraps=projection_used,
+            )
+            compatibility_used = _difference_weight(compatibility) < _difference_weight(projection)
+            if not compatibility_used:
+                compatibility = projection
+                compatibility_evidence = []
+
     explained = explain_content(
-        reference, mant, source, raw_comparison=projection, limits=limits,
+        reference, mant, source, raw_comparison=compatibility, limits=limits,
         explanation_limits=explanation_limits, terminal_hyphen_wraps=projection_used,
     )
     terminal_helped = (
@@ -296,15 +370,17 @@ def assess_content(reference: str, mant: str, source: str | None, *,
             "mantRowsRejoined": projection_counts["mant"],
             "reason": "Pinned CVS term.c emits a literal breakable hyphen before its automatic line break; only source-consistent continuation rows were rejoined for this secondary presentation comparison.",
         })
+    explanations.extend(compatibility_evidence)
     explanations.extend(explained["explanations"])
     status = explained["status"]
-    if terminal_helped and status == "covered":
+    if (terminal_helped or compatibility_used) and status == "covered":
         status = "explained"
     return {
         "schema": ASSESSMENT_SCHEMA,
         "status": status,
         "rawComparison": raw,
         "terminalPresentationComparison": projection,
+        "compatibilityPresentationComparison": compatibility,
         "residualComparison": explained["residualComparison"],
         "explanations": explanations,
         "coverage": {
@@ -312,6 +388,7 @@ def assess_content(reference: str, mant: str, source: str | None, *,
             "terminalPresentationApplied": projection_used,
             "terminalHyphenSourceConsistent": terminal_source_consistent,
             "terminalHyphenRowsRejoined": projection_counts,
+            "sourceConsistentCompatibilityApplied": compatibility_used,
             "sourceExplanation": explained["coverage"],
             "reasons": [],
         },

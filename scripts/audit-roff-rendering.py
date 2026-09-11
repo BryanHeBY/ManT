@@ -258,9 +258,11 @@ def inspect(item, args):
         record["content"] = compact(content)
         record["contentAssessment"] = {
             key: value for key, value in assessment.items()
-            if key not in ('rawComparison', 'terminalPresentationComparison', 'residualComparison')
+            if key not in ('rawComparison', 'terminalPresentationComparison',
+                           'compatibilityPresentationComparison', 'residualComparison')
         }
         record["contentAssessment"]["terminalPresentationComparison"] = compact(assessment['terminalPresentationComparison'])
+        record["contentAssessment"]["compatibilityPresentationComparison"] = compact(assessment['compatibilityPresentationComparison'])
         record["contentAssessment"]["residualComparison"] = compact(assessment['residualComparison'])
         record["geometry"] = compact(geometry)
         statuses = [content["status"], geometry["status"], ref_frame["status"], mant_frame["status"], raw["status"]]
@@ -309,7 +311,7 @@ def main():
     if args.artifact_pages < 0 or (args.max_pages is not None and args.max_pages < 1):
         parser.error("invalid page budget")
     args.output.mkdir(parents=True, exist_ok=False)
-    report = {"schema": "mant.roff-rendering-census/v3", "status": "audit-error", "coverageComplete": False}
+    report = {"schema": "mant.roff-rendering-census/v4", "status": "audit-error", "coverageComplete": False}
     try:
         return census(args, report)
     except Exception as error:
@@ -337,7 +339,7 @@ def census(args, report):
         decoder["sha256"] = binaries["zstd"]["sha256"]
     producer = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
     dirty = subprocess.check_output(["git", "status", "--porcelain"], cwd=ROOT, text=True).splitlines()
-    report.update({"schema": "mant.roff-rendering-census/v3", "producerCommit": producer,
+    report.update({"schema": "mant.roff-rendering-census/v4", "producerCommit": producer,
               "producerDirtyPaths": dirty, "started": datetime.now(timezone.utc).isoformat(),
               "binaries": binaries, "sourceDecoders": {"zstd": decoder},
               "referenceIdentity": args.reference_id,
