@@ -114,22 +114,26 @@ impl CellCandidate {
     /// styles only when the candidate agrees with this cell or is not proven
     /// to belong to another one; a control-only empty cell still commits state.
     fn belongs_to(&self, cell: &libmandoc_rs::TableCell, position: CellPosition<'_>) -> bool {
+        let native = cell.text.as_deref().filter(|text| !text.is_empty());
         if self.inlines.is_empty() {
-            return cell.text.as_deref().is_none_or(str::is_empty);
+            return native.is_none();
         }
         let text = plain_text(&self.inlines);
-        let agrees = cell
-            .text
-            .as_deref()
-            .is_none_or(|native| table_text_agrees(&text, &visible_text(native)));
-        agrees
-            || !position.row.iter().enumerate().any(|(index, candidate)| {
-                index != position.index
-                    && candidate
-                        .text
-                        .as_deref()
-                        .is_some_and(|native| table_text_agrees(&text, &visible_text(native)))
-            })
+        // tbl_dat::string is produced after roff_expand() in the original
+        // parser session. If native evaluated text exists, it is the content
+        // authority: source-fragment recovery cannot recreate arbitrary
+        // string/register state in a synthetic parser. Source recovery still
+        // supplies macro/font structure when its visible result agrees.
+        if let Some(native) = native {
+            return table_text_agrees(&text, &visible_text(native));
+        }
+        !position.row.iter().enumerate().any(|(index, candidate)| {
+            index != position.index
+                && candidate
+                    .text
+                    .as_deref()
+                    .is_some_and(|native| table_text_agrees(&text, &visible_text(native)))
+        })
     }
 
     fn commit(

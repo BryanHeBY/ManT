@@ -54,6 +54,27 @@ fn parser_marks_tbl_text_block_cells() {
 }
 
 #[test]
+fn parser_retains_the_parse_time_value_of_tbl_text_block_strings() {
+    let document = Parser::default()
+        .parse_bytes(
+            "tbl-expanded-string.1",
+            b".TH TBL-EXPANDED-STRING 1\n.ds Aq \\(aq\n.SH DESCRIPTION\n.TS\nl.\nT{\nThere\\*(Aqs\nT}\n.TE\n",
+        )
+        .expect("parse tbl source with a string expansion")
+        .document;
+    let row = find_node(&document.root, &|node| {
+        node.kind == NodeKind::Table && node.table_cells.iter().any(|cell| cell.text_block)
+    })
+    .expect("tbl row containing a text block");
+    assert!(row.table_cells[0].text_block);
+    // roff.c expands the string before tbl_read() persists tbl_dat::string,
+    // while retaining the resulting named-character escape for later output.
+    // This is native evaluated content, not source spelling that a later
+    // parser may safely reinterpret without the original string table.
+    assert_eq!(row.table_cells[0].text.as_deref(), Some(r"There\(aqs"));
+}
+
+#[test]
 fn parser_marks_both_tbl_vertical_continuation_forms() {
     let document = Parser::default()
         .parse_bytes(
