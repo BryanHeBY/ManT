@@ -202,7 +202,7 @@ fn compile_native_archive(
     strict_msvc: bool,
 ) {
     if strict_msvc {
-        // Pinned upstream 1.14.6 uses unused callback parameters and POSIX-
+        // Pinned upstream uses unused callback parameters and POSIX-
         // sized integer conversions that MSVC diagnoses much more broadly
         // than GCC or Clang. Compile that immutable source group with an
         // explicit five-warning baseline, while compiling every ManT-owned

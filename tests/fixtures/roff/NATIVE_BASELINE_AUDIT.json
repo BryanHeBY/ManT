@@ -1,0 +1,1329 @@
+{
+ "schema": "mant.native-baseline-audit/v1",
+ "status": "audit-complete-local-verification-passed",
+ "audit_date": "2026-09-11",
+ "release_context": {
+  "published_product_version": "0.11.0",
+  "published_date": "2026-09-11",
+  "unreleased_native_crate_version": "0.11.0",
+  "unreleased_adoption_crate_versions": {
+   "mant-codec": "0.11.1",
+   "mant-loader": "0.11.1",
+   "mant-engine": "0.11.1",
+   "mant": "0.11.1"
+  },
+  "api_or_protocol_change": false
+ },
+ "native_baseline": {
+  "from": "mandoc-1.14.6",
+  "to": "mandoc-cvs-20260911",
+  "fixed_cvs_date": "2026-09-11 08:00:00 UTC",
+  "upstream_locked_files": 198,
+  "patched_vendor_files": 199,
+  "patches": 22,
+  "upstream_manifest": "crates/libmandoc-rs/upstream/FILES",
+  "upstream_manifest_sha256": "1d49f6c3bd0b09b81e61bc04d034e974cf1c3d204af0596928edf9cd0be6e6dd"
+ },
+ "source_identity": {
+  "historical_manifest": "full-restored-manifest.jsonl",
+  "manifest_sha256": "a5cd7919d1ac2774a335d077611b47680de8c1babe1b031d31ff8808f568879c",
+  "actual_verified_inputs_artifact": "target/mandoc-migration/restored-sweeps/verified-inputs.jsonl",
+  "actual_verified_inputs_sha256": "e5b8a1c2a70ca3b622cf23203a6c217ad61a0cb71509dad9691077e421d461f5",
+  "hash_contract": "source_sha256 means decompressed original source bytes; stored_sha256 means physical file bytes. Actual hashes, not historical hashes, bind this run.",
+  "counts": {
+   "manifest_rows": 45036,
+   "readable_and_decodable": 45036,
+   "historical_hash_exact": 36584,
+   "historical_hash_changed": 8452,
+   "unreadable_or_missing": 0
+  },
+  "corpora": {
+   "alpine-3.24.1-x86_64": {
+    "exact": 425
+   },
+   "apple-oss-command-repos-pinned": {
+    "exact": 70
+   },
+   "apple-oss-manpages-pinned": {
+    "exact": 36
+   },
+   "archlinux-host": {
+    "changed": 8452,
+    "exact": 13194
+   },
+   "current-host-eqn-2026-08-20": {
+    "exact": 5
+   },
+   "current-host-table-eqn-2026-08-20": {
+    "exact": 2
+   },
+   "debian-sid-2026-07-21-amd64": {
+    "exact": 52
+   },
+   "dragonflybsd-6.4.2-x86_64": {
+    "exact": 6363
+   },
+   "fedora44-2026-07-20-x86_64": {
+    "exact": 258
+   },
+   "fixtures": {
+    "exact": 35
+   },
+   "freebsd-15.1-amd64": {
+    "exact": 11183
+   },
+   "generator-clap-mangen-0.3.0": {
+    "excluded": 21
+   },
+   "generator-ronn-scdoc-pinned": {
+    "exact": 4
+   },
+   "illumos-gate-e8f5c080": {
+    "exact": 918
+   },
+   "miniconda-host": {
+    "exact": 781
+   },
+   "netbsd-10.1-amd64": {
+    "exact": 541
+   },
+   "netbsd-11.0-amd64": {
+    "exact": 2357
+   },
+   "openbsd-7.9-amd64": {
+    "exact": 339
+   }
+  },
+  "note": "The 21 generator rows shown as discovery-excluded in preparation are hash-exact, readable, and all covered by explicit same-source supplements. All8452 changed rows belong to archlinux-host."
+ },
+ "producer_snapshots": {
+  "target_initial": {
+   "producer_commit": "1e7020a89144decc8da51e1cca637cb03da6e0c5",
+   "started": "2026-09-11T09:28:24.649282+00:00",
+   "finished": "2026-09-11T09:30:24.765735+00:00",
+   "profiler_sha256": "b2bb72b10a83f21b59d661d1872e015560a9d0fe187bc4cf03704e434d3c72e4",
+   "profile_schema": "mant.roff-target-profile/v4",
+   "tracked_diff_sha256": "0165f57b5a83a95c9fc73f8493cf489383e7d490486da83acc1c2c35f7d89596",
+   "validator_sha256": "cc8cae9304553bfb042e644d5940fd0ee01895d1ed6f201bde4cf367a443650e",
+   "shared_validator_sha256": "94f85b3403cd3782797cf61ff3559fbc7a0bf1abe8ccd98d9d1bf2d5d43b7d78",
+   "runner_sha256": "630ec9df9931caa851f29f381ffa705c5661e206ce24419c1122f69930454978",
+   "profiler_hash_unchanged": true,
+   "results_sha256": "6688e38166c21cb398f037a2ba2e8e3bba378d429adb50f9f26f8b9f3f409e0f",
+   "pending_sha256": "9506bb29e02319534a0d4fab40d11cbe499855d58dc42d3c5ad801ae7de83fd5",
+   "dirty_tree": true
+  },
+  "target_first_oracle_resweep": {
+   "producer_commit": "f99ebc205a54ec6a0f8f7db0cb0d5026e353e01d",
+   "started": "2026-09-11T09:39:29.292392+00:00",
+   "finished": "2026-09-11T09:42:45.987991+00:00",
+   "profiler_sha256": "14380580c13d584d21de9503ec5e946fa50a253d1ef1d7d28cbd2d8015346fcb",
+   "profile_schema": "mant.roff-target-profile/v4",
+   "tracked_diff_sha256": "70629df3f118918e7fb3f3d176d57db734b55d5f350905a52daf80b613328c72",
+   "validator_sha256": "cc8cae9304553bfb042e644d5940fd0ee01895d1ed6f201bde4cf367a443650e",
+   "shared_validator_sha256": "94f85b3403cd3782797cf61ff3559fbc7a0bf1abe8ccd98d9d1bf2d5d43b7d78",
+   "runner_sha256": "630ec9df9931caa851f29f381ffa705c5661e206ce24419c1122f69930454978",
+   "profiler_hash_unchanged": true,
+   "results_sha256": "436aaa6d0514e7a9e3b307078aeea4411fc472b62bc6683241e6d3fd0c1e5843",
+   "pending_sha256": "1a2e74b7c7865ceac96c92a0e9149c38840d09a085914dbd43970704d7ea69df",
+   "dirty_tree": true
+  },
+  "target_corrected_oracle_run": {
+   "producer_commit": "368b5c7f9c6ad2eaa824b59a7379137195cdde8a",
+   "started": "2026-09-11T09:47:41.475660+00:00",
+   "finished": "2026-09-11T09:49:17.268420+00:00",
+   "profiler_sha256": "228c86b7a928895fbfaaefddfbeb023fc4810b6b5b98c0720726ff69dcc166d7",
+   "profile_schema": "mant.roff-target-profile/v4",
+   "tracked_diff_sha256": "ccf64065d0c134fa1942810b9f656186466cc738f88a6b069237b84860762300",
+   "validator_sha256": "cc8cae9304553bfb042e644d5940fd0ee01895d1ed6f201bde4cf367a443650e",
+   "shared_validator_sha256": "94f85b3403cd3782797cf61ff3559fbc7a0bf1abe8ccd98d9d1bf2d5d43b7d78",
+   "runner_sha256": "630ec9df9931caa851f29f381ffa705c5661e206ce24419c1122f69930454978",
+   "profiler_hash_unchanged": true,
+   "results_sha256": "de8a57659541e6ddfe3c3fcf063f4e2023b44c6677866b53d57ad3fb7698d615",
+   "pending_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "dirty_tree": true
+  },
+  "target_final": {
+   "producer_commit": "1b8ed856ad0e6684561d8b46cebc6f7e87b8d87e",
+   "started": "2026-09-11T09:56:06.619937+00:00",
+   "finished": "2026-09-11T09:57:49.324924+00:00",
+   "profiler_sha256": "34525e169542c5ce5c6bfae132605a6e12b2707ac31f357e956dc2477716175f",
+   "profile_schema": "mant.roff-target-profile/v4",
+   "tracked_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "validator_sha256": "cc8cae9304553bfb042e644d5940fd0ee01895d1ed6f201bde4cf367a443650e",
+   "shared_validator_sha256": "94f85b3403cd3782797cf61ff3559fbc7a0bf1abe8ccd98d9d1bf2d5d43b7d78",
+   "runner_sha256": "630ec9df9931caa851f29f381ffa705c5661e206ce24419c1122f69930454978",
+   "profiler_hash_unchanged": true,
+   "results_sha256": "de8a57659541e6ddfe3c3fcf063f4e2023b44c6677866b53d57ad3fb7698d615",
+   "pending_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "dirty_tree": false
+  },
+  "semantic": {
+   "producer_commit": "1e7020a89144decc8da51e1cca637cb03da6e0c5",
+   "started": "2026-09-11T09:28:25.828285+00:00",
+   "finished": "2026-09-11T09:29:52.708985+00:00",
+   "profiler_sha256": "72aa23737e85d236cf0aa6cbcc6fc92ada70fc7911374ac88a3295c6c56de29f",
+   "profile_schema": "mant.roff-semantic-profile/v5",
+   "tracked_diff_sha256": "0165f57b5a83a95c9fc73f8493cf489383e7d490486da83acc1c2c35f7d89596",
+   "validator_sha256": "e642ca3fb972a4348fe939d2a05c9ca0bb2778abd2d48d10015f5c957eb5b697",
+   "shared_validator_sha256": "94f85b3403cd3782797cf61ff3559fbc7a0bf1abe8ccd98d9d1bf2d5d43b7d78",
+   "runner_sha256": "630ec9df9931caa851f29f381ffa705c5661e206ce24419c1122f69930454978",
+   "profiler_hash_unchanged": true,
+   "results_sha256": "dbba5d6e0839d62bef802b903699a278d80a592a793594488d2dcca2b131178f",
+   "pending_sha256": "a5a02e5562db9ee46d826bd46c33890104f69d1ea9913296e06c6b0251bf6469",
+   "dirty_tree": true
+  },
+  "canonical_cli": {
+   "producer_commit": "b21b7ba86d4efc5630f20304e49857295a7a7bdd",
+   "started": "2026-09-11T09:35:22.716123+00:00",
+   "finished": "2026-09-11T09:40:59.852002+00:00",
+   "runner_sha256": "1310a0041f4bab87dd0bca505f473b3bc9e0ee72e75d27dee3ad968010badf3a",
+   "binary_sha256": {
+    "baseline": "290cbbef45364bd04c10943c8f18d597d8a9a12078894741e8498755db760083",
+    "candidate": "30d2600181516c3b27515937dc397640d140d1b6404901cbec14aae60e9934c6"
+   },
+   "binary_hashes_unchanged": true,
+   "results_sha256": "f6ba8a2a08d935c64e18d1913e3585a1db3713e7df7b33fbb146331fd3b3ed0c",
+   "pending_sha256": "a793e6d532a8f6e01feb800f6fadeb0f818e6f82f61a87cec37812eba8d0b0b7",
+   "dirty_tree": false
+  },
+  "canonical_generator_supplement": {
+   "producer_commit": "368b5c7f9c6ad2eaa824b59a7379137195cdde8a",
+   "started": "2026-09-11T09:43:23.339116+00:00",
+   "finished": "2026-09-11T09:43:23.451218+00:00",
+   "runner_sha256": "1310a0041f4bab87dd0bca505f473b3bc9e0ee72e75d27dee3ad968010badf3a",
+   "binary_sha256": {
+    "baseline": "290cbbef45364bd04c10943c8f18d597d8a9a12078894741e8498755db760083",
+    "candidate": "30d2600181516c3b27515937dc397640d140d1b6404901cbec14aae60e9934c6"
+   },
+   "binary_hashes_unchanged": true,
+   "results_sha256": "3633f4195c5ce589f02cfbf8f97f3df6b66835183cb824ec0e2c4e2b679563c9",
+   "pending_sha256": "bf113e2acbfa3810fa99f353bbbe09da2ab2d249bd981cafe3db94581fd5ce5e",
+   "dirty_tree": false
+  },
+  "body_text_projection": {
+   "runner_sha256": "b2b7175fa46b712976e57bd528746cdc14ce58780e8fec3ce02cd0eba807240d",
+   "binary_sha256": ["290cbbef45364bd04c10943c8f18d597d8a9a12078894741e8498755db760083","30d2600181516c3b27515937dc397640d140d1b6404901cbec14aae60e9934c6"],
+   "binary_hashes_unchanged": true,
+   "results_sha256": "304e6e0a20ae5a8d712860dad5f238644e57684f325e25dce49859595ada94e3"
+  },
+  "semantic_preexisting_cli_comparison": {
+   "baseline": {
+    "sha256": "290cbbef45364bd04c10943c8f18d597d8a9a12078894741e8498755db760083"
+   },
+   "current": {
+    "sha256": "7716e8fe2c973187068a8a5bb45dc32d794c8efa66e2aae1a0a942d87f0c42e5"
+   }
+  },
+  "fixture_binaries": {
+   "target/release/mant": "30d2600181516c3b27515937dc397640d140d1b6404901cbec14aae60e9934c6",
+   "target/mandoc-migration/baseline/mant": "290cbbef45364bd04c10943c8f18d597d8a9a12078894741e8498755db760083",
+   "target/mandoc-migration/reference/mandoc": "f06ba20baedee4adc5914fa023bf02812645b41249077204849d465c08c02f59"
+  },
+  "baseline_source_identity": {
+   "attributed_source_commit": "5508ebb5b4af2b9d491e0ae2b459093ab8de9c7d",
+   "executable_sha256": "290cbbef45364bd04c10943c8f18d597d8a9a12078894741e8498755db760083",
+   "provenance": "Initial-session source revision attributed by the parent, resolved against Git. This is not an independently demonstrated executable-to-build-commit mapping. The preserved executable SHA256 matches every canonical run and is the authoritative binary identity.",
+   "build_commit_mapping_independently_reproduced": false
+  }
+ },
+ "target_scan": {
+  "native_mode": "confined-include-parser-audit",
+  "main_physical_paths": 37265,
+  "generator_physical_paths": 21,
+  "main_rows": 45015,
+  "generator_rows": 21,
+  "final_counts": {
+   "clean": 45036,
+   "review": 0,
+   "hard_failure": 0,
+   "unclassified": 0
+  },
+  "prior_rounds": [
+   {
+    "clean": 44999,
+    "review": 16,
+    "discovery_excluded": 21
+   },
+   {
+    "clean": 45006,
+    "review": 9,
+    "discovery_excluded": 21
+   }
+  ],
+  "review_resolution": "Original16 canonical escaped-tag spelling candidates fixed in independent target oracle; first full rerun discovered9 additional spacing/trailing-token spelling classifications. Final independent full sweep and generator supplement clean. Product matching tolerance was not widened.",
+  "final_producer_replay": {
+   "schema": "mant.target-audit-provenance-comparison/v1",
+   "previous_producer_commit": "368b5c7f9c6ad2eaa824b59a7379137195cdde8a",
+   "previous_profiler_sha256": "228c86b7a928895fbfaaefddfbeb023fc4810b6b5b98c0720726ff69dcc166d7",
+   "producer_commit": "1b8ed856ad0e6684561d8b46cebc6f7e87b8d87e",
+   "profiler_sha256": "34525e169542c5ce5c6bfae132605a6e12b2707ac31f357e956dc2477716175f",
+   "manifest_rows": 45036,
+   "main_clean_rows": 45015,
+   "supplement_clean_rows": 21,
+   "total_clean_rows": 45036,
+   "main_rows_byte_identical": true,
+   "supplement_findings_identical": true,
+   "old_results_sha256": "de8a57659541e6ddfe3c3fcf063f4e2023b44c6677866b53d57ad3fb7698d615",
+   "new_results_sha256": "de8a57659541e6ddfe3c3fcf063f4e2023b44c6677866b53d57ad3fb7698d615",
+   "differences": []
+  }
+ },
+ "semantic_scan": {
+  "native_mode": "production-standalone-loader",
+  "combined_counts": {
+   "clean": 44178,
+   "preexisting_review": 30,
+   "policy_unsupported": 828
+  },
+  "review_unique_source_hashes": 16,
+  "unexpected_groups": 102,
+  "old_cli_same_group_members": 102,
+  "old_cli_identical_complete_owner_facts": 96,
+  "owner_fact_differences": "Six groups: perlfunc/perlport code-source column 7→8; perltoc escaped-hyphen native anchor IDs; socat and socat1 retained i-pop-all native anchor and corresponding binding-index shift. No body text, entry names, or group membership changed.",
+  "review_rule": "All102 groups are named suffixes of one native flow-epoch run. Old CLI emitted the same members. The source-run oracle compares whole runs; preserve preexisting-review, not clean.",
+  "reviews": [
+   {
+    "source_sha256": "c062c2dd565b53a3f2aa649fb679516b20395f9b5cec57e469a51ec73e31d33b",
+    "ids": ["3:man/man1/ffmpeg-all.1.gz"],
+    "unexpected_group_source_lines": [
+     [11490,11492]
+    ],
+    "baseline_same_members": true,
+    "status": "preexisting-review",
+    "prior_exact_hash_ledger": [
+     ["clean","not-required","mant.roff-semantic-profile/v1"]
+    ]
+   },
+   {
+    "source_sha256": "1cd4cb17e525f5e0fc24315f15a4f01c9e4b9e971af6cc1ec48ac54d2bd96141",
+    "ids": ["3:man/man1/ffmpeg-codecs.1.gz"],
+    "unexpected_group_source_lines": [
+     [6122,6124]
+    ],
+    "baseline_same_members": true,
+    "status": "preexisting-review",
+    "prior_exact_hash_ledger": [
+     ["clean","not-required","mant.roff-semantic-profile/v1"]
+    ]
+   },
+   {
+    "source_sha256": "98414256f850e1ae2fc9d597cd0bf67a8301b51f8b0d6aa31307fdaf7f61708e",
+    "ids": ["3:man/man1/perl5120delta.1perl.gz"],
+    "unexpected_group_source_lines": [
+     [584,586]
+    ],
+    "baseline_same_members": true,
+    "status": "preexisting-review",
+    "prior_exact_hash_ledger": [
+     ["clean","not-required","mant.roff-semantic-profile/v1"]
+    ]
+   },
+   {
+    "source_sha256": "ddb6f74441f1cc1492c4fcd47eac21e7f17956176ad9251c4fa1185ddf62154a",
+    "ids": ["3:man/man1/perl584delta.1perl.gz"],
+    "unexpected_group_source_lines": [
+     [164,166,168,170]
+    ],
+    "baseline_same_members": true,
+    "status": "preexisting-review",
+    "prior_exact_hash_ledger": [
+     ["clean","not-required","mant.roff-semantic-profile/v1"]
+    ]
+   },
+   {
+    "source_sha256": "925e54e8e604b42fb9c812871c68f991a1fe6fa2a46eb4e904de23418ae056c9",
+    "ids": ["3:man/man1/perlfunc.1perl.gz"],
+    "unexpected_group_source_lines": [
+     [3365,3367,3369,3371,3373,3375]
+    ],
+    "baseline_same_members": true,
+    "status": "preexisting-review",
+    "prior_exact_hash_ledger": [
+     ["clean","not-required","mant.roff-semantic-profile/v1"]
+    ]
+   },
+   {
+    "source_sha256": "507e62878cb9c16cc5eff9949e3902131fe27f36df9e9c0d0d27fc9e9062c61a",
+    "ids": ["3:man/man1/perlport.1perl.gz"],
+    "unexpected_group_source_lines": [
+     [2309,2311,2313]
+    ],
+    "baseline_same_members": true,
+    "status": "preexisting-review",
+    "prior_exact_hash_ledger": [
+     ["clean","not-required","mant.roff-semantic-profile/v1"]
+    ]
+   },
+   {
+    "source_sha256": "f452764bd4665db0038d7c2de45fc73943e3213bda5e29e74f6610c5889359b5",
+    "ids": ["3:man/man1/perltoc.1perl.gz"],
+    "unexpected_group_source_lines": [
+     [270,272],
+     [3003,3005],
+     [4480,4482],
+     [17328,17330],
+     [17339,17341,17343],
+     [18066,18068,18070],
+     [18717,18719],
+     [19166,19168],
+     [22125,22127],
+     [25292,25294,25296,25298],
+     [26728,26730],
+     [29439,29441],
+     [31038,31040],
+     [31467,31469],
+     [33341,33343,33345],
+     [33924,33926],
+     [34434,34436],
+     [35134,35136],
+     [35181,35183],
+     [36484,36486],
+     [36732,36734],
+     [36748,36750],
+     [36851,36853,36855],
+     [36944,36946],
+     [37176,37178,37180],
+     [37312,37314],
+     [38155,38157],
+     [38498,38500],
+     [38985,38987],
+     [39125,39127],
+     [39153,39155],
+     [39185,39187],
+     [39215,39217],
+     [39253,39255],
+     [39312,39314],
+     [39363,39365],
+     [39396,39398],
+     [39422,39424],
+     [39448,39450],
+     [39496,39498],
+     [39537,39539],
+     [39604,39606],
+     [39657,39659],
+     [39701,39703],
+     [39727,39729],
+     [39761,39763],
+     [39820,39822],
+     [39849,39851],
+     [39876,39878],
+     [39906,39908],
+     [39933,39935],
+     [39963,39965],
+     [39990,39992],
+     [40020,40022],
+     [40052,40054],
+     [40084,40086],
+     [40119,40121],
+     [40179,40181],
+     [40253,40255,40257],
+     [40592,40594],
+     [40660,40662],
+     [40984,40986],
+     [41059,41061],
+     [41103,41105],
+     [41213,41215],
+     [41502,41504],
+     [41575,41577],
+     [41808,41810],
+     [42463,42465]
+    ],
+    "baseline_same_members": true,
+    "status": "preexisting-review",
+    "prior_exact_hash_ledger": [
+     ["clean","not-required","mant.roff-semantic-profile/v1"]
+    ]
+   },
+   {
+    "source_sha256": "650a00979041a6e63b60660d195204f5dddf6a5983022d0eddbc796324e5294e",
+    "ids": ["3:man/man1/socat.1.gz","3:man/man1/socat1.1.gz"],
+    "unexpected_group_source_lines": [
+     [3594,3595,3596,3597],
+     [3620,3621,3622],
+     [3640,3641]
+    ],
+    "baseline_same_members": true,
+    "status": "preexisting-review",
+    "prior_exact_hash_ledger": []
+   },
+   {
+    "source_sha256": "f618bd5baf08e24771aceeb0a5f48f6a5dd037588fb48affdc3bdc3bc7c59679",
+    "ids": ["3:man/man1/strings.1.gz"],
+    "unexpected_group_source_lines": [
+     [145,147]
+    ],
+    "baseline_same_members": true,
+    "status": "preexisting-review",
+    "prior_exact_hash_ledger": [
+     ["clean","not-required","mant.roff-semantic-profile/v1"]
+    ]
+   },
+   {
+    "source_sha256": "27b617d410e076ecdea1170f91049b59fd269fc885e31e50ba74acd0d6ba5631",
+    "ids": ["7:man/man1/ex.1.gz","7:man/man1/nex.1.gz","7:man/man1/nvi.1.gz","7:man/man1/nview.1.gz","7:man/man1/vi.1.gz","7:man/man1/view.1.gz"],
+    "unexpected_group_source_lines": [
+     [922,926,932,933]
+    ],
+    "baseline_same_members": true,
+    "status": "preexisting-review",
+    "prior_exact_hash_ledger": []
+   },
+   {
+    "source_sha256": "6641d546f989724c6f3e375f9a65a5d59ba2a1d28dac9b7c06240cac146bc5e5",
+    "ids": ["7:man/man1/strings.1.gz","7:man/man1/strings234.1.gz"],
+    "unexpected_group_source_lines": [
+     [219,221]
+    ],
+    "baseline_same_members": true,
+    "status": "preexisting-review",
+    "prior_exact_hash_ledger": []
+   },
+   {
+    "source_sha256": "aa4a380db613dcbc94c38058b9b6010eceedc91199408cc2d6f8eab4e4826c6b",
+    "ids": ["7:man/man1/strings227.1.gz"],
+    "unexpected_group_source_lines": [
+     [219,221]
+    ],
+    "baseline_same_members": true,
+    "status": "preexisting-review",
+    "prior_exact_hash_ledger": []
+   },
+   {
+    "source_sha256": "4f0f516496bceeb39c4358e01307a29fe7ae3b2a83ea30131516b6ee0cadb226",
+    "ids": ["7:man/man8/ipfw3.8.gz"],
+    "unexpected_group_source_lines": [
+     [1682,1683]
+    ],
+    "baseline_same_members": true,
+    "status": "preexisting-review",
+    "prior_exact_hash_ledger": []
+   },
+   {
+    "source_sha256": "a1a3fd05f21132b350f99b95a999f000eee3fca3c1155f3b72cfb42cce21feea",
+    "ids": ["10:man/man1/ex.1.gz","10:man/man1/nex.1.gz","10:man/man1/nvi.1.gz","10:man/man1/nview.1.gz","10:man/man1/vi.1.gz","10:man/man1/view.1.gz"],
+    "unexpected_group_source_lines": [
+     [924,928,934,935]
+    ],
+    "baseline_same_members": true,
+    "status": "preexisting-review",
+    "prior_exact_hash_ledger": []
+   },
+   {
+    "source_sha256": "717389f4a4ff080fbf97dceb2a11aceca968d792bf1ce8d343c6935ef885fe32",
+    "ids": ["16:man/man1/ex.1","16:man/man1/vi.1","16:man/man1/view.1"],
+    "unexpected_group_source_lines": [
+     [492,494,496]
+    ],
+    "baseline_same_members": true,
+    "status": "preexisting-review",
+    "prior_exact_hash_ledger": []
+   },
+   {
+    "source_sha256": "87a23c90c61118b3ff84eebd9152c13dd2e407e345e270cdbe31041e1ada6054",
+    "ids": ["17:man/man1/vi.1"],
+    "unexpected_group_source_lines": [
+     [929,933,938,939]
+    ],
+    "baseline_same_members": true,
+    "status": "preexisting-review",
+    "prior_exact_hash_ledger": []
+   }
+  ]
+ },
+ "canonical_cli": {
+  "main_counts_manifest_rows": {
+   "document-changed": 9000,
+   "clean": 20409,
+   "diagnostics-only": 14778,
+   "same-failure": 828
+  },
+  "generator_counts_manifest_rows": {
+   "diagnostics-only": 5,
+   "document-changed": 9,
+   "clean": 7
+  },
+  "combined_counts_manifest_rows": {
+   "clean": 20416,
+   "diagnostics-only": 14783,
+   "document-changed": 9009,
+   "same-failure": 828
+  },
+  "combined_counts_unique_paths": {
+   "clean": 18973,
+   "diagnostics-only": 9796,
+   "document-changed": 7689,
+   "same-failure": 828
+  },
+  "total_manifest_rows": 45036,
+  "total_physical_paths": 37286,
+  "new_process_outcomes": 0,
+  "source_drift": 0,
+  "remaining_discovery_exclusions": 0,
+  "ignored_json_pointers": ["/document/producer/version","/document/producer/engine/version","/document/source/path"],
+  "diagnostics_policy": "compared separately, not discarded",
+  "main_document_triage_unique_paths": {
+   "id-and-optional-source-column-only": 790,
+   "other-document-structure-or-content": 6094,
+   "source-column-only": 796
+  },
+  "main_diagnostic_delta_truncated_paths": 149,
+  "main_saved_raw_cases": 200,
+  "main_saved_raw_case_bytes": 2745426,
+  "saved_delta_added_diagnostic_family_counts": {
+   "skipping paragraph macro": 5714,
+   "ignoring macro in table": 1812,
+   "blank line in fill mode, using .sp": 63090,
+   "skipping insecure request": 1148,
+   "undefined string, using \"\"": 30,
+   "unknown special character": 315,
+   "invalid special character": 6,
+   "invalid escape sequence argument": 254,
+   "undefined escape, printing literally": 4,
+   "unsupported roff request": 4,
+   "unknown font, skipping request": 1,
+   "escaped character not allowed in a name": 20,
+   "skipping all arguments": 1,
+   "ignoring invalid column width in tbl layout": 1,
+   "invalid character in tbl layout": 1,
+   "incomplete escape sequence": 20,
+   "unsupported escape sequence": 7,
+   "unknown standard specifier": 4,
+   "no blank before trailing delimiter": 9,
+   "duplicate RCS id": 17,
+   "trailing delimiter": 1
+  },
+  "saved_delta_removed_diagnostic_family_counts": {
+   "empty block": 220,
+   "ignoring macro in table": 1805,
+   "skipping paragraph macro": 3658,
+   "skipping insecure request": 1148,
+   "undefined string, using \"\"": 32,
+   "invalid escape sequence": 590,
+   "undefined escape, printing literally": 40,
+   "unsupported roff request": 4,
+   "unknown font, skipping request": 1,
+   "escaped character not allowed in a name": 36,
+   "skipping all arguments": 1,
+   "no blank before trailing delimiter": 53,
+   "unknown library name": 32,
+   "duplicate RCS id": 17,
+   "trailing delimiter": 1
+  },
+  "body_projection": {
+   "reviewed_unique_changed_paths": 7689,
+   "reviewed_manifest_rows": 9009,
+   "unique_body_text_exact": 7112,
+   "manifest_body_text_exact": 8432,
+   "unique_body_token_changed": 577,
+   "manifest_body_token_changed": 577,
+   "delta_classes": 61,
+   "unclassified_classes": 0,
+   "class_overflow_unreviewed_occurrences": 0,
+   "projection_contract": "source-order body text/code/equation/unsupported values and explicit linebreaks; heading/meta separately compared; styles/layout/targets/identities remain canonical differences, never waived",
+   "families": [
+    {
+     "family": "ux-spelling",
+     "classes": 31,
+     "delta_occurrences": 1212,
+     "unique_paths": 521,
+     "manifest_rows": 521,
+     "review_statuses": ["upstream-behavior-verified"],
+     "evidence": "Pinned pristine mdoc_validate.c:1717 emits Unix for .Ux; all changes are exact UNIX→Unix substitution.",
+     "class_ids": ["d6cd093faf6b6a1fe694f91584deecd21286d63d832cd1e0330c40d9cc8d00ee","b70c0d46519dc288af4677443f744acd0b19497b6119fcc9dbc71124cb2f9506","c211d2a1f6743d6ac3b780d5e9209e4aab809af6fe2fe4e363c12755a4bc348b","82700279cf933f784e7d52709500c91b925f5c7e3e734467b4a37c643a1b7789","a143d800fef214893916da645d983c78eca6806a67772913932864df203a87f1","c11c1b8f10e04f7faf141fa68ddc697bb97fb3880e715f6f88d9dd247aead767","841ccde94c9ef3da330786b285211859d793b4eae2f74a4ebaaf03792c8ded7d","122acf3082d86637b04c9cdbb30e72fa016c7991528bc5ef6cb3128a33f3e3ee","d75d4c58a585baba5f8f08a8cf3c933b8566d03da103419844a9d06bed51b416","d82c41897fd850928c5a5ae39cf58e470ba35cdecf27c1ba98c09fb345501a74","7bc01bc1e84f08c97b112eee9c947d7160b53eb4d645874e736273b44eebfade","2c4b6d9318b3965edbbf87d8e2d59a84546fc5f5195ea1cb30c8bd099c6f8333","f516ebd4e91e7ab4847e2b1b41b0d36463531dbc705efa539ef37f42be2ab162","e5c9d43dfba485a60619ed44709b699b838fcff5562394a01e2881d8c8df8891","340fd43e0bc62dd9e32a83d7a119f60e9427825bcfd421c474f63abf1e9ad419","ad592f5bff7087f4ea7c12b7202a168d9c496cd553e4b8c752a896d8451b0a0b","c402e798ebdc3c1770323e43d906f0bb655f2d0d00fe92bf43af47ef4bb8dfd6","8bf692c5ef38b7f85cb8113768ae70474e02eb902b76e8b78c7589da21a6e52e","a145da4d4abb9e73fc9d8e7cb56697db7bc4ef63eca59bd28d3c8c2a6f8f004e","1724da722fa5d33d71999923ca41686982fa5100c92226ed3b0c244bb50ef261","d8c7a04205cb8545c443365fd9089c2eff621661555df3a8fa99b3a052efd911","fef7fd21406e85254c0464b1c3ff4c299f004862983556c908dc805cd7ee3a3f","6da8255eb66a27768fe1f452660cbb23ee58f4121c51193c3919b62f08b330db","fc6b99809be589b2fa6fd4af5651419528cdfd1f09f80a86f904b02ac2ace1a6","77670eb859b20cbdea2b68e419a79c69d9593e62655b171013b757b1794e99a8","d87fa1c0ecf80efe770108db5b6bf2269a28425bfd3e7525018b45c0841f75b8","a69e23c5746ea8ad3a84a472ecc24128d25025959247e7290d72233baf0f42be","23249667c36160dedb491f690e0ecb7997e02dbb6a9369f55613725e40bf9f20","5c65c232d8be8d0ecb29da13376cd5ac2adc905a4b94fa6277407fd27516547a","19461551e62b5b76e6bd30cffef27ccc582ceae2f74b3fad3bb26a4ee95810e3","bd7206e0ced4d5c0bd6f8ffde33051c54cfc4492677ee8f20947c2d1a380cd9b"],
+     "representative": {
+      "id": "apple-oss-command-repos-pinned:system_cmds-1042.120.1/chpass/chpass.1",
+      "source_sha256": "bfbfbdfc4c78283cda80a26fe747d7382396c3df44d40c52321ac1f04ce497e4"
+     }
+    },
+    {
+     "family": "lb-synopsis",
+     "classes": 21,
+     "delta_occurrences": 50,
+     "unique_paths": 50,
+     "manifest_rows": 50,
+     "review_statuses": ["upstream-behavior-verified"],
+     "evidence": "lb-crosscheck.json: four independent source/reference samples; pinned mdoc.7:1861–1874 and mdoc_validate.c:1006–1021 define /* -l... */ SYNOPSIS generation.",
+     "class_ids": ["fa2750b9ac99d92493e677a3104aca21d84f5c17174c189b53035d4fe90ec5f2","7921be995114d4414990d33d7c576b8b9b4230ee973bef88533d2fc919470a70","e2d6c077f0c3a6a83f510aca7dbb275c9de204270c215de4afe29b854ab0a073","05dcca31dd5ac390066d27ed19fc5749ff1c15a0ad585845d9727750ced027d6","a674b61fb8de56f06941160a0e910ba19135959a9f5790b1a8485130a8b8a73a","0095f06b3bd329368f6a579762f71f39e23c952b0fec7771a97e97d086eb83dd","bc21fcd2485b3666281edc2fbbf87034624915a051ad7db1d7f232f9ef6d1eda","7f6a5c12e63350ee67eef83f368f490b0691e11b586e6786c457131001b65ae2","785866d74886e61a666550f3d21326d3289c154aab4d5b9a86eb80dea5828b08","4f1fd1a04cb091484062414e9bae8b86307b50595c13da4c405069f98abeffb9","66f3a38e659a1691a98380f8c4022967347bc39e5766dd450a0d43da095ca66a","47f7fe8e6471ce6ce7de0cb5933e1673d5584b4fdbea69888c6657e3a059626f","e20e82ca2f48e6696983f4db04eb30c98e6606dff1709ea5c384aac3bff952ae","09c7a54988e78340730f9aad0ade279d3c6a6bd929b5a3e6ec0dca0a4fd826e9","870e1fe794c09e66c0cc9fc3c238ca7aaefd9827160471fb42ebcdb5bdf969b7","98e95ea4e70f731623c4663ced5a4597159566c9cf39ad0930bd2a635b246404","b1688ff1c27733484403ec8f43215ceb52a75db9f99a90c9500d5f677e2dd340","f1eb2b2af2970bbcbb6772318c5124cb42b6fca2628581074feffb93612638c8","ff6cb5cd37b107b8e3936a363971eabd37b06b3c947261c21efc29fa7568af5d","db6dc003da84c0c2d0d5f00c180bccb7d655b8e7849df7443241346c98b7a45b","e36bb15e68f4ba5730d42505ecb4a1b4555d62770ba1757ef9bbd1217de6e34e"],
+     "representative": {
+      "id": "freebsd-15.1-amd64:man/man3/cap_fileargs.3.gz",
+      "source_sha256": "36c190c2d56d1905e1f99fedf1bb4532b2cb7ac32b547a9349c51e14aa8e7719"
+     }
+    },
+    {
+     "family": "removed-xsh42-standard",
+     "classes": 2,
+     "delta_occurrences": 4,
+     "unique_paths": 4,
+     "manifest_rows": 4,
+     "review_statuses": ["intentional-upstream-compatibility-change-documented"],
+     "evidence": "DragonFly standards.7 source176 .St -xsh4.2: pristine CVS emits ERROR unknown standard specifier and omits old XSH4.2 expansion. Official CVS st.c revision1.17 (2022-01-13 08:42:15 UTC), captured in standards-cvs-log.txt, deliberately removed the alias: portable -xpg4.2 already existed and groff never supported -xsh4.2. Decision: follow pinned CVS, no local alias; migrate sources .St -xsh4.2→.St -xpg4.2. README/CHANGELOG and focused native tests make this explicit. This remains observable behavior change, not equality or silent waiver.",
+     "class_ids": ["a8b160df8ee403b420058b3ea676aa2f2e5764ccae7a5433bd326fb0e00ff1ca","d022c4c900c080b67f5c77481efe08023f148ebad715f3aa085cbd56286de643"],
+     "representative": {
+      "id": "archlinux-host:man/man7/mandoc_mdoc.7.gz",
+      "source_sha256": "e8404b9da92d7aa9b3cf2da4bc076bd275ff86b5ab12a14abf979a2dab4147de"
+     }
+    },
+    {
+     "family": "htop-backslash-key",
+     "classes": 1,
+     "delta_occurrences": 1,
+     "unique_paths": 1,
+     "manifest_rows": 1,
+     "review_statuses": ["upstream-behavior-verified"],
+     "evidence": "htop source204 .B F4 with escaped backslashes; migrated term contains literal backslash, description unchanged; pristine UTF8 reference prints F4, backslash.",
+     "class_ids": ["b397bb83e5af797a88f2c0dc54db1e6fbea8f2c02a4216633af1215fc6d93ee4"],
+     "representative": {
+      "id": "archlinux-host:man/man1/htop.1.gz",
+      "source_sha256": "a811b6e8d766e563f6c55d3853cd479b83101b74142b1f74fb371685c17697e8"
+     }
+    },
+    {
+     "family": "perl-escape-debris",
+     "classes": 2,
+     "delta_occurrences": 2,
+     "unique_paths": 1,
+     "manifest_rows": 1,
+     "review_statuses": ["upstream-behavior-verified"],
+     "evidence": "independent-text-crosscheck.json confirms only two BAq artifacts disappear in perlclib; pristine current reference agrees.",
+     "class_ids": ["2cf5ef42685253a782479305ea76a9bd10abde5629b546d1886a5995527bfe42","de7c572f8783840644ce2181cbaa514794008644b17f673cb3a90fd9bda3cc44"],
+     "representative": {
+      "id": "archlinux-host:man/man1/perlclib.1perl.gz",
+      "source_sha256": "a7c29bfc3110fb8e1e2314562a0690088ba9795ca3c822918972ceeb367f715a"
+     }
+    },
+    {
+     "family": "md-table-ellipsis",
+     "classes": 2,
+     "delta_occurrences": 2,
+     "unique_paths": 1,
+     "manifest_rows": 1,
+     "review_statuses": ["upstream-behavior-verified"],
+     "evidence": "md source570/603 escaped dot rows; pristine UTF8 reference and migrated IR both retain first-cell ... formerly absent. No claim that other source/table quirks are repaired.",
+     "class_ids": ["9a5161a5ef40897d2df41ce1e1c6829a2d868b1e54bfe4f892ca1526795b6a99","7dab9eaa388e5071ef308a573cab256acb31bbed9b55ed815eb120d5f77abce6"],
+     "representative": {
+      "id": "archlinux-host:man/man4/md.4.gz",
+      "source_sha256": "2724e03f1df17949fd59c640213e90d647dfb1b586e7848f7de2b9b16de09f48"
+     }
+    },
+    {
+     "family": "tc-bpf-literal-backslash-n",
+     "classes": 1,
+     "delta_occurrences": 1,
+     "unique_paths": 1,
+     "manifest_rows": 1,
+     "review_statuses": ["upstream-behavior-verified"],
+     "evidence": "independent-text-crosscheck.json confirms literal backslash-n restored in tr command and matches pristine current reference.",
+     "class_ids": ["388434d9d408e90945551eec0f6dc395742e3654d6df8d0b23687262e9544c25"],
+     "representative": {
+      "id": "archlinux-host:man/man8/tc-bpf.8.gz",
+      "source_sha256": "d6eb7fe35620580f5a5433b739636363f0443b07ee17a7789b0e70f9017c8c66"
+     }
+    },
+    {
+     "family": "uk-malformed-string",
+     "classes": 1,
+     "delta_occurrences": 1,
+     "unique_paths": 1,
+     "manifest_rows": 1,
+     "review_statuses": ["upstream-behavior-verified"],
+     "evidence": "independent-text-crosscheck.json and cli-ir-comparison/manual-review-notes.md: malformed source1917 backslash-star followed by Cyrillic; current reference consumes same undefined string. This changes malformed-input text, not correct authored text preservation.",
+     "class_ids": ["b6d3b98da31ae2588314ed99fce8955711db819bf098f9c5f33a477f6217e736"],
+     "representative": {
+      "id": "archlinux-host:man/uk/man1/top.1.gz",
+      "source_sha256": "4ff91cb3cd1be7f8e32b3c4e83151e25fbe3ee2f6ddb1147e3a91a0c6af14f7d"
+     }
+    }
+   ],
+   "family_counts_overlap": true
+  },
+  "heading_metadata_review": {
+   "unique_paths": 597,
+   "heading_text_exact_paths": 591,
+   "only_heading_chunk_merge_paths": 418,
+   "metadata_volume_changed_paths": 173,
+   "ux_spelling_heading_paths": 6,
+   "volume_patterns_to_LOCAL": 27,
+   "manual_section_unchanged": true,
+   "note": "meta.volume display-label changes are distinct from the manualSection identity; body equality never waives structure, links, identity or diagnostics.",
+   "volume_pattern_counts": {
+    "3bsd": 42,
+    "3lua": 23,
+    "3AVL": 12,
+    "3C": 11,
+    "3DEVID": 1,
+    "3DLPI": 1,
+    "3HEAD": 1,
+    "3JEDEC": 3,
+    "3KSTAT": 5,
+    "3LIB": 4,
+    "3M": 1,
+    "3MALLOC": 1,
+    "3OFMT": 1,
+    "3PROC": 13,
+    "3SOCKET": 1,
+    "3SYSEVENT": 1,
+    "3UTEMPTER": 1,
+    "3UUID": 1,
+    "4D": 7,
+    "4FS": 12,
+    "4I": 16,
+    "4M": 1,
+    "4P": 1,
+    "9E": 4,
+    "9F": 2,
+    "9S": 4,
+    "9lua": 3
+   }
+  },
+  "review_scope": "All body-token delta classes classified with source/pristine evidence; JSON structural changes remain recorded. Representative structural checks are not exhaustive approval of every changed object."
+ },
+ "fixture_scans": {
+  "structure": {
+   "clean": 51
+  },
+  "fidelity": {
+   "examined": 51,
+   "clean": 46,
+   "review": 5,
+   "hard_failures": 0,
+   "skipped": 0
+  },
+  "layout": {
+   "clean": 50,
+   "review": 1
+  },
+  "all_51_fidelity_findings_same_as_old_cli": true,
+  "all_51_layout_candidates_same_as_old_cli": true,
+  "layout_metrics_identical": false,
+  "reviewed_pages": [
+   {
+    "path": "real/bsd-closure/netbsd-drm.4",
+    "source_sha256": "de68d037313c80fce7ecdb72da76e09e6009aafba7ad6673d1a6e7df7c6ed9a3",
+    "status": "known-reference-or-presentation-difference",
+    "evidence": "Known reference named-character deviation: source line224 Dole\\[vc]ek; current/old ManT preserve Doleček, pristine CVS reference drops caron.",
+    "same_full_plain_rendering_as_old_cli": true,
+    "missing_tokens": ["Doleek"],
+    "broken_phrase_count": 0,
+    "prior_review_status": ["confirmed-fixed"]
+   },
+   {
+    "path": "real/mant-audit/equation-contexts.7",
+    "source_sha256": "61b65f6ac3608d549fb47dd5a8e0e298561dcc9bf8569998a9ca12bdf8f124d0",
+    "status": "known-reference-or-presentation-difference",
+    "evidence": "Known presentation false positive: same equations retain operands/operators with spaces and Unicode ellipsis; pristine renderer prints compact raw eqn/table spellings.",
+    "same_full_plain_rendering_as_old_cli": true,
+    "missing_tokens": ["x_1","ldots","x_n","width/2","over"],
+    "broken_phrase_count": 0,
+    "prior_review_status": ["false-positive"]
+   },
+   {
+    "path": "real/mant-audit/lowering-lk-label-state.1",
+    "source_sha256": "c1c5eb6560c944e86420e478482326a858ec804f179e6169a025c364118ded7e",
+    "status": "known-reference-or-presentation-difference",
+    "evidence": "Known labeled-link presentation difference: authored label rendered; actual URI retained in typed document link, unlike reference printing both.",
+    "same_full_plain_rendering_as_old_cli": true,
+    "missing_tokens": ["https://example.org"],
+    "broken_phrase_count": 0,
+    "prior_review_status": ["false-positive"]
+   },
+   {
+    "path": "real/mant-audit/lowering-lk-order.1",
+    "source_sha256": "25aaaf5726dd5c9a87a2ec75fd88ccf7336f6414fcfce716955c40ffa520e002",
+    "status": "known-reference-or-presentation-difference",
+    "evidence": "Known labeled-link presentation difference: authored label rendered; actual URI retained in typed document link, unlike reference printing both.",
+    "same_full_plain_rendering_as_old_cli": true,
+    "missing_tokens": ["https://example.org/WORD"],
+    "broken_phrase_count": 0,
+    "prior_review_status": ["false-positive"]
+   },
+   {
+    "path": "real/windows-releases/rclone.1.zst",
+    "source_sha256": "f35de3b3008f684a7db141a7626db68b08c46e5b3d45c97726bc6d97eebade4e",
+    "status": "known-reference-or-presentation-difference",
+    "evidence": "Known table traversal/wrapping phrase candidates; all160 exact candidates reproduced unchanged by old CLI against same pristine reference; no missing tokens.",
+    "same_full_plain_rendering_as_old_cli": true,
+    "missing_tokens": [],
+    "broken_phrase_count": 160,
+    "prior_review_status": ["confirmed-fixed"]
+   }
+  ],
+  "rclone_layout": {
+   "candidate_pairs": 14,
+   "reviewed_pairs": 14,
+   "conclusion": "Each candidate has an intact no-fill occurrence. Matching another filled-prose occurrence caused the merge signal; same candidates on old CLI."
+  }
+ },
+ "explicit_coverage_exceptions": {
+  "id_encoding": "corpus_index:original corpus-relative source_name; indices address corpus_names",
+  "corpus_names": ["alpine-3.24.1-x86_64","apple-oss-command-repos-pinned","apple-oss-manpages-pinned","archlinux-host","current-host-eqn-2026-08-20","current-host-table-eqn-2026-08-20","debian-sid-2026-07-21-amd64","dragonflybsd-6.4.2-x86_64","fedora44-2026-07-20-x86_64","fixtures","freebsd-15.1-amd64","generator-clap-mangen-0.3.0","generator-ronn-scdoc-pinned","illumos-gate-e8f5c080","miniconda-host","netbsd-10.1-amd64","netbsd-11.0-amd64","openbsd-7.9-amd64"],
+  "semantic_standalone_redirects": {
+   "count": 828,
+   "unique_source_hashes": 192,
+   "status": "policy-unsupported",
+   "evidence": "Every source contains exactly one valid .so target plus optional comments/blank lines. Both CLIs reject these standalone aliases; not native parser crashes and not semantic passes.",
+   "by_actual_source_sha256": {
+    "01320ac5c066cad03d58d548e7d338411a7ca27a506180f6d0d245675c275df0": ["3:man/man8/systemd-pcrlock-file-system.service.8.gz"],
+    "0539b1de083c315e22edaaf6e11fe532da5376df7cc7bcf71ec76660be31a990": ["3:man/ja/man8/grpunconv.8.gz","3:man/zh_CN/man8/pwunconv.8.gz"],
+    "057ac9f91df330776baef629d2b69bee65355a78b98741a19171f6f9ffb5789b": ["3:man/man3/verrc.3bsd.gz","3:man/man3/vwarnc.3bsd.gz","3:man/man3/warnc.3bsd.gz"],
+    "05c2a7ce3cff10e819f0da27c9e2cd2561be012358d2047f5fcc1bf59d867101": ["3:man/man3/hwloc_cudart_get_device_pcidev.3.gz"],
+    "088cd72a7bd163689ad11d0c33e4f70902a1bd483f91f48c00f1fadb79dfc3ae": ["3:man/man3/crypt_gensalt_ra.3.gz","3:man/man3/crypt_gensalt_rn.3.gz"],
+    "091b651a9a779f9f809057a705e1b98036e2f99881902fe8293dc5352df3a318": ["3:man/man3/xcb_glx_finish_unchecked.3.gz"],
+    "0964a15ca89218192f519b0ce35ecc5bec032d59c6f0200efc58a197cbf11474": ["3:man/man3/XListFontsWithInfo.3.gz"],
+    "09c802091e635a6132c241df5c659bff17155517a6e5fb27b063e5e80b542a5f": ["3:man/man3/xcb_randr_get_screen_resources_current_names.3.gz"],
+    "0b55ce82d6a5f911e054a9a08466ba0b6f16c21169a6c9ab264e463123e1e9a3": ["3:man/man3/HWLOC_MEMBIND_BIND.3.gz"],
+    "0e25a9cb8051801bd6ad611fe51c1ed70fb48e4fef4ee59ca8015263b810ae67": ["3:man/man3/MMDB_close.3.gz","3:man/man3/MMDB_get_metadata_as_entry_data_list.3.gz","3:man/man3/MMDB_read_node.3.gz"],
+    "0f235388f173cb5bb8a9635610bd43ae95922f2df8b91b5b572ae1e55b2ae6ec": ["3:man/man3/ne_oom_callback.3.gz"],
+    "101315d0935f3f1af2ae5145a22dd4c113b2e843fabb910f1e3c260142abd407": ["2:bsdmanpages-56/usr/man/man3/tputs.3"],
+    "103acf32025f710ae92608d0203767a4b86fe04b96e5b9d3ca0689562cddc3ff": ["2:bsdmanpages-56/usr/man/man3/CIRCLEQ_INSERT_TAIL.3"],
+    "1073791ef6b6f6781e66917cda34c88929060eaa0ea53ea4a4e539c37130f809": ["3:man/man3/XcursorXcFileLoadImage.3.gz"],
+    "1181933516915db194abc790c6b38cf44bbd5c384ae915d0889f243b9fdcf980": ["3:man/man3/caca_cp437_to_utf32.3caca.gz","3:man/man3/caca_utf32_is_fullwidth.3caca.gz","3:man/man3/caca_utf32_to_ascii.3caca.gz","3:man/man3/caca_utf32_to_cp437.3caca.gz","3:man/man3/caca_utf32_to_utf8.3caca.gz","3:man/man3/caca_utf8_to_utf32.3caca.gz"],
+    "130d798107a2523fe3b727e6ed688cb6d4a95257efaf8f7fd8e863ce92cfc6a0": ["3:man/man3/gid_from_group.3bsd.gz","3:man/man3/group_from_gid.3bsd.gz","3:man/man3/uid_from_user.3bsd.gz","3:man/man3/user_from_uid.3bsd.gz"],
+    "14086c6b3dc0579e7e237ac1210ade956090258a0d1e1606bb131ae5d8c4dcb8": ["3:man/man3/XEventsQueued.3.gz"],
+    "142faf4537836888c151d7ddeff9a4f26fdc8673e6d3f2e7ec61e328c4820854": ["3:man/man3/sl_add.3bsd.gz","3:man/man3/sl_delete.3bsd.gz","3:man/man3/sl_find.3bsd.gz","3:man/man3/sl_free.3bsd.gz","3:man/man3/sl_init.3bsd.gz"],
+    "172cde42c47a6d50c244e39d993097dcd3882427d57303078643849cf10a81c4": ["14:man/man1/bzcmp.1"],
+    "183a135c93d3110c704ca76736f926067e7ba1aacc08256156091f9731332f22": ["3:man/man8/cryptsetup-bitlkOpen.8.gz"],
+    "18a9f4d2604063459d0070fdedc59c6d8554ff4b8d050a950b1a6b2e486c9c68": ["3:man/man3/xcb_glx_gen_queries_arb_reply.3.gz"],
+    "196110c9324858cffb825b1b4b97f9f85cd47c9b1cd99af76f7f5752104034bf": ["3:man/man3/strlcat.3bsd.gz"],
+    "19d6350659e80542d169bc4aacde4280a212f06fe5cc3be747e02669c6f6ecc3": ["14:share/man/man3/libssh2_sftp_fstatvfs.3"],
+    "1af7137060ef0e21a2cdeb989d5deada08cc0ae5a7df0f8fcc00b66482f0e774": ["3:man/man3/xcb_set_dashes_checked.3.gz"],
+    "1d6d41524f2b25e07b8720b9b985bcf00e61b9934048d452a021de9fb4215a62": ["3:man/man3/xcb_alloc_color_cells_masks_length.3.gz"],
+    "1e193100097eb95a0369f99863fcbc7204b6260b270f542a11e4ed2d4a0d909a": ["3:man/man3/acl_delete_def_file_at.3.gz"],
+    "1f2641cc770dae61b6324dd80fffe930536c52eec1311692e95cd323f5427006": ["3:man/man3/ne_set_read_timeout.3.gz"],
+    "20ebc343cdc8827ac07b2b7f04eda5904feed3ef5975cdfc45c09c316b03dece": ["3:man/man3/be16dec.3bsd.gz","3:man/man3/be16enc.3bsd.gz","3:man/man3/be32dec.3bsd.gz","3:man/man3/be32enc.3bsd.gz","3:man/man3/be64dec.3bsd.gz","3:man/man3/be64enc.3bsd.gz","3:man/man3/le16dec.3bsd.gz","3:man/man3/le16enc.3bsd.gz","3:man/man3/le32dec.3bsd.gz","3:man/man3/le32enc.3bsd.gz","3:man/man3/le64dec.3bsd.gz","3:man/man3/le64enc.3bsd.gz"],
+    "216898f9b8acf61eeb471ecf23e47c1452dfd648f7f38d7d3bf48627072dc52c": ["14:man/man1/bzless.1"],
+    "2185f28807a35a222412eaa307daa4fffd22e9c6b9b893bef77dbf19255ebe66": ["14:share/man/man3/ares_process_pending_write.3"],
+    "21ce893074fd9e22ae10afc287510735a0e3d405dbe7b6e65a107e31e5ee8638": ["3:man/man3/acl_set_file_at.3.gz"],
+    "21d8d512c49cc9c267a6221ef5bc3e7860e102a8aa16d62efc536b5611ec5e56": ["3:man/man3/XAllocColorCells.3.gz","3:man/man3/XAllocColorPlanes.3.gz","3:man/man3/XAllocNamedColor.3.gz","3:man/man3/XFreeColors.3.gz"],
+    "227074521db0fe46683327601aee7bf3c8f23c5d8258085eb66d38bbeee4b222": ["3:man/man3/caca_flip.3caca.gz","3:man/man3/caca_flop.3caca.gz","3:man/man3/caca_invert.3caca.gz","3:man/man3/caca_rotate_180.3caca.gz","3:man/man3/caca_rotate_left.3caca.gz","3:man/man3/caca_rotate_right.3caca.gz","3:man/man3/caca_stretch_left.3caca.gz","3:man/man3/caca_stretch_right.3caca.gz"],
+    "2377ba8a8c3dd41e28307194675f5643666d7c118272cbadb86f1b66566c941b": ["3:man/man8/pam.8.gz"],
+    "251f58277a1ccfb7190717eb6890c4f94e6e65467b306ac422c3bbdc21160259": ["3:man/man5/.k5login.5.gz"],
+    "25da5091726162b07798ea9ac1c54f0546535cb5b223fda8177cb3b00573e043": ["3:man/man3/sd_bus_emit_interfaces_added_strv.3.gz"],
+    "2600c6d400b38b5e8fe4547514fb4146d924a2d41d1ed70dc4e6bb3b09174fef": ["3:man/man5/system.conf.d.5.gz","3:man/man5/systemd-user.conf.5.gz","3:man/man5/user.conf.d.5.gz"],
+    "2696e72fd59bfb95ced7d1405aa053494fc5f6d4756145598429ebd278f748e3": ["3:man/man3/caca_get_event.3caca.gz","3:man/man3/caca_get_event_key_ch.3caca.gz","3:man/man3/caca_get_event_key_utf32.3caca.gz","3:man/man3/caca_get_event_key_utf8.3caca.gz","3:man/man3/caca_get_event_mouse_button.3caca.gz","3:man/man3/caca_get_event_mouse_x.3caca.gz","3:man/man3/caca_get_event_mouse_y.3caca.gz","3:man/man3/caca_get_event_resize_height.3caca.gz","3:man/man3/caca_get_event_resize_width.3caca.gz","3:man/man3/caca_get_event_type.3caca.gz","3:man/man3/caca_get_mouse_x.3caca.gz","3:man/man3/caca_get_mouse_y.3caca.gz"],
+    "2aadc5a0e27a6a5ee6a37a5585edcbadafe721a661cef54695ad85e69fce8dd4": ["3:man/man3/caca_free_font.3caca.gz","3:man/man3/caca_get_font_blocks.3caca.gz","3:man/man3/caca_get_font_height.3caca.gz","3:man/man3/caca_get_font_list.3caca.gz","3:man/man3/caca_get_font_width.3caca.gz","3:man/man3/caca_load_font.3caca.gz","3:man/man3/caca_render_canvas.3caca.gz"],
+    "2b24882bf49daa32c3f7c3c11b044032d2c4db05b9b552e87e09e9fbd760ec52": ["0:util-linux-doc/usr/share/man/man8/swapoff.8.gz"],
+    "2e4cae3c583889f2f67d95b61be1f8553e603f339227d2e8484855a648366dcf": ["3:man/man8/systemd-volatile-root.8.gz"],
+    "31db2b8aeb9f6abfba357934a11a3e3966cbe33b0f75c1f4b0956628ac878909": ["3:man/man3/xcb_xvmc_list_subpicture_types_reply.3.gz"],
+    "3587afd8a5774e356e190a0696a26edaf84aae61edd2b8db5e7c04e7ca04be12": ["3:man/man3/caca_attr_to_ansi.3caca.gz","3:man/man3/caca_attr_to_ansi_bg.3caca.gz","3:man/man3/caca_attr_to_ansi_fg.3caca.gz","3:man/man3/caca_attr_to_argb64.3caca.gz","3:man/man3/caca_attr_to_rgb12_bg.3caca.gz","3:man/man3/caca_attr_to_rgb12_fg.3caca.gz","3:man/man3/caca_get_attr.3caca.gz","3:man/man3/caca_put_attr.3caca.gz","3:man/man3/caca_set_attr.3caca.gz","3:man/man3/caca_set_color_ansi.3caca.gz","3:man/man3/caca_set_color_argb.3caca.gz","3:man/man3/caca_toggle_attr.3caca.gz","3:man/man3/caca_unset_attr.3caca.gz"],
+    "35a853e71a55eae5b8f6692817582a3dbee50489927a0d8d503e8f4b9dbbcd67": ["3:man/man5/journald.conf.d.5.gz","3:man/man5/journald@.conf.5.gz"],
+    "376a67065ac66121f486f5e59065d67ea8284135fdf4e3b404b968f18ddd6b4f": ["14:share/man/man3/ares_dns_rr_get_keys.3"],
+    "380dfe14f30aae8abe59b8fc085b7d44db3310628b7c60854ef3dfd92ce57f3c": ["14:share/man/man3/ares_process_fd.3","14:share/man/man3/ares_process_fds.3"],
+    "3e7dc329df67a0ad39c9317f64605301c50f30ae0384cc7f282de1eab704d155": ["3:man/man3/bit_alloc.3bsd.gz","3:man/man3/bit_clear.3bsd.gz","3:man/man3/bit_decl.3bsd.gz","3:man/man3/bit_ffc.3bsd.gz","3:man/man3/bit_ffs.3bsd.gz","3:man/man3/bit_nclear.3bsd.gz","3:man/man3/bit_nset.3bsd.gz","3:man/man3/bit_set.3bsd.gz","3:man/man3/bit_test.3bsd.gz","3:man/man3/bitstr_size.3bsd.gz"],
+    "3eb88c313aa149bd956cbeb37d18f417917aeddcbb6385b94f4d8d0d03054844": ["3:man/man5/pstore.conf.d.5.gz"],
+    "402bc4ade98c8a9956a92c017c8821d60446d934d21a99335778c71cb9ff501c": ["3:man/man5/journal-remote.conf.d.5.gz"],
+    "405f186e58a14d41b0b77bc80660298d36869ac2297c335cae77bd1a08b30e43": ["3:man/man3/setprogname.3bsd.gz"],
+    "4211db281b9c9d45ac52a73c54d868e911e267d602dc530fedb4e5f22fa8e9d8": ["3:man/man5/oomd.conf.d.5.gz"],
+    "42226d3939573c563c4f6d9dfaaa444b452ac6bcd36bd0f2575375dd99db4320": ["3:man/man3/hwloc_memattr_set_value.3.gz"],
+    "47dc26c11d1dab364672407456da9c2a94db94fb30c300e0dbe591b7bf07bff0": ["3:man/man7/linuxaa64.efi.stub.7.gz","3:man/man7/linuxia32.efi.stub.7.gz","3:man/man7/linuxx64.efi.stub.7.gz","3:man/man7/sd-stub.7.gz"],
+    "48912f6d668649b509735c8a79535fd025780d5ccee83bd14048d86aaf350975": ["3:man/man5/confext.conf.5.gz","3:man/man5/confext.conf.d.5.gz","3:man/man5/sysext.conf.d.5.gz"],
+    "4b0f25de308f959133fe26ced014f75353b32d278f89d37f27f29be3f89e694a": ["3:man/man1/phar.phar.1.gz"],
+    "4c401dac697ad920fd50f869ea7b7d52d85196ffab521b45664abcde7334af36": ["3:man/man3/getmode.3bsd.gz"],
+    "4c85fae53baefc07483e680d1bd28888a6a2446a1d1d2ebd50f220d685629802": ["3:man/man3/dehumanize_number.3bsd.gz"],
+    "4cb9fbd690a7de33cdf67e19bd5b837e1d3441220a7d6fe1c4d78ef95c6e1d7d": ["3:man/man3/xcb_sync_reset_fence_checked.3.gz"],
+    "4cc168a8fbb3b7ea5bc5455214dc43d368a48c8eec04bdd4a512e3260c668de2": ["3:man/man3/elf64_newphdr.3.gz"],
+    "4d76e0cf5f17580491b299bead685f5aba525c99efbbebc8d936ada9a2fb045c": ["3:man/man5/pam.d.5.gz"],
+    "4ed3702bf6289664d897d0fc7962d537a93df9809adb22034e95db234e707241": ["3:man/man3/udev_device_get_is_initialized.3.gz"],
+    "51f51d0612120faa57b60b302b8d214d1a44dec7eeb71f808107131e983b5cb0": ["3:man/man3/XScreenSaverRegister.3.gz"],
+    "524bb91385277beb6ae1b54b5a604df8d9b83b2597066965898868ebdd3c46b1": ["3:man/man3/CACA_CONIO_COLORS.3caca.gz","3:man/man3/CACA_CONIO_CURSOR.3caca.gz","3:man/man3/CACA_CONIO_MODE.3caca.gz"],
+    "52c9441957d4cf5f1e91c70ea752ec55d5a3a04aa00d31b00b152b2f9c29fbe0": ["3:man/man3/XcmsCIELuvQueryMinL.3.gz"],
+    "53d7951c9adad22f109d2c5a5c7a8eaa63ea7d587ca5a8326a23e3ed8113e5ef": ["14:share/man/man3/ares_send_dnsrec.3"],
+    "56158407b7bd42bf46837e7b1fb06620679476344775fb7bfd7dfedb2fb8ec2c": ["3:man/man3/CACA_MAGIC_FULLWIDTH.3caca.gz","3:man/man3/caca_blit.3caca.gz","3:man/man3/caca_clear_canvas.3caca.gz","3:man/man3/caca_get_canvas_handle_x.3caca.gz","3:man/man3/caca_get_canvas_handle_y.3caca.gz","3:man/man3/caca_get_char.3caca.gz","3:man/man3/caca_gotoxy.3caca.gz","3:man/man3/caca_printf.3caca.gz","3:man/man3/caca_put_char.3caca.gz","3:man/man3/caca_put_str.3caca.gz","3:man/man3/caca_set_canvas_boundaries.3caca.gz","3:man/man3/caca_set_canvas_handle.3caca.gz","3:man/man3/caca_vprintf.3caca.gz","3:man/man3/caca_wherex.3caca.gz","3:man/man3/caca_wherey.3caca.gz"],
+    "568f8250ff74d6a59dd66ff3502006eac6d364cc35106279c9a46e5c5b0abeed": ["3:man/man3/xcb_glx_get_queryiv_arb_reply.3.gz"],
+    "57601d80a0116b0790f83a2b118bae999f47881f78b09a351188e5e860248db2": ["3:man/man3/xcb_render_query_pict_index_values_reply.3.gz"],
+    "58287c8d4963366e32dc99830bfb697ff41ec04f793cc3616e65d9b6ee567227": ["3:man/man3/attribute.3caca.gz","3:man/man3/currmode.3caca.gz","3:man/man3/curx.3caca.gz","3:man/man3/cury.3caca.gz","3:man/man3/data.3caca.gz","3:man/man3/normattr.3caca.gz","3:man/man3/screenheight.3caca.gz","3:man/man3/screenwidth.3caca.gz","3:man/man3/type.3caca.gz","3:man/man3/winbottom.3caca.gz","3:man/man3/winleft.3caca.gz","3:man/man3/winright.3caca.gz","3:man/man3/wintop.3caca.gz"],
+    "58f3799e4934488272a9efc273f82f23509cb1fec0ef664518b170f92550af16": ["3:man/man3/timerclear.3bsd.gz","3:man/man3/timercmp.3bsd.gz","3:man/man3/timerisset.3bsd.gz","3:man/man3/timersub.3bsd.gz","3:man/man3/timespecadd.3bsd.gz","3:man/man3/timespecclear.3bsd.gz","3:man/man3/timespeccmp.3bsd.gz","3:man/man3/timespecisset.3bsd.gz","3:man/man3/timespecsub.3bsd.gz"],
+    "5949f82910f84ea77d15a60aedc71541b1a7244465b71702a8eff022ad758713": ["3:man/man3/xcb_randr_get_provider_info_unchecked.3.gz"],
+    "5a225441f2b53a9aa0f187dde4909a44a7237f3f50794064698974901c2c60ac": ["3:man/man3/RB_EMPTY.3bsd.gz","3:man/man3/RB_ENTRY.3bsd.gz","3:man/man3/RB_FIND.3bsd.gz","3:man/man3/RB_FOREACH.3bsd.gz","3:man/man3/RB_FOREACH_REVERSE.3bsd.gz","3:man/man3/RB_GENERATE.3bsd.gz","3:man/man3/RB_GENERATE_STATIC.3bsd.gz","3:man/man3/RB_HEAD.3bsd.gz","3:man/man3/RB_INIT.3bsd.gz","3:man/man3/RB_INITIALIZER.3bsd.gz","3:man/man3/RB_INSERT.3bsd.gz","3:man/man3/RB_LEFT.3bsd.gz","3:man/man3/RB_MAX.3bsd.gz","3:man/man3/RB_MIN.3bsd.gz","3:man/man3/RB_NEXT.3bsd.gz","3:man/man3/RB_NFIND.3bsd.gz","3:man/man3/RB_PARENT.3bsd.gz","3:man/man3/RB_PREV.3bsd.gz","3:man/man3/RB_PROTOTYPE.3bsd.gz","3:man/man3/RB_PROTOTYPE_STATIC.3bsd.gz","3:man/man3/RB_REMOVE.3bsd.gz","3:man/man3/RB_RIGHT.3bsd.gz","3:man/man3/RB_ROOT.3bsd.gz","3:man/man3/SPLAY_EMPTY.3bsd.gz","3:man/man3/SPLAY_ENTRY.3bsd.gz","3:man/man3/SPLAY_FIND.3bsd.gz","3:man/man3/SPLAY_FOREACH.3bsd.gz","3:man/man3/SPLAY_GENERATE.3bsd.gz","3:man/man3/SPLAY_HEAD.3bsd.gz","3:man/man3/SPLAY_INIT.3bsd.gz","3:man/man3/SPLAY_INITIALIZER.3bsd.gz","3:man/man3/SPLAY_INSERT.3bsd.gz","3:man/man3/SPLAY_LEFT.3bsd.gz","3:man/man3/SPLAY_MAX.3bsd.gz","3:man/man3/SPLAY_MIN.3bsd.gz","3:man/man3/SPLAY_NEXT.3bsd.gz","3:man/man3/SPLAY_PROTOTYPE.3bsd.gz","3:man/man3/SPLAY_REMOVE.3bsd.gz","3:man/man3/SPLAY_RIGHT.3bsd.gz","3:man/man3/SPLAY_ROOT.3bsd.gz"],
+    "5a3d3d4fc2bb2aae38e5b94e83d0697c34d5045179952844583052b18bc7bc49": ["3:man/man8/systemd-sysusers.service.8.gz"],
+    "5ae15ad03780f778efc345302d32822e8ca7ef634fa3623b5bb7f3e348fcee80": ["3:man/man8/libnss_resolve.so.2.8.gz"],
+    "5bdf5458932a8c341103bece8486434824687d7f0501ffa4be05a96e4756ca38": ["3:man/man8/systemd-networkd-wait-online.8.gz"],
+    "5c370659092b38b7b7d66f47d45eafc1a1125f671a891bd1f7b2dd373d4ef434": ["3:man/man8/systemd-ask-password-wall.service.8.gz"],
+    "5e94c4ba5001ca51727307516cf1e03a91e28426a89118c80c3f120d215ad034": ["14:share/man/man3/ares_dns_class_t.3","14:share/man/man3/ares_dns_flags_t.3","14:share/man/man3/ares_dns_opcode_t.3","14:share/man/man3/ares_dns_parse.3","14:share/man/man3/ares_dns_rcode_t.3","14:share/man/man3/ares_dns_rec_type_t.3","14:share/man/man3/ares_dns_record_create.3","14:share/man/man3/ares_dns_record_destroy.3","14:share/man/man3/ares_dns_record_duplicate.3","14:share/man/man3/ares_dns_record_get_flags.3","14:share/man/man3/ares_dns_record_get_id.3","14:share/man/man3/ares_dns_record_get_opcode.3","14:share/man/man3/ares_dns_record_get_rcode.3","14:share/man/man3/ares_dns_record_query_add.3","14:share/man/man3/ares_dns_record_query_cnt.3","14:share/man/man3/ares_dns_record_query_get.3","14:share/man/man3/ares_dns_record_query_set_name.3","14:share/man/man3/ares_dns_record_query_set_type.3","14:share/man/man3/ares_dns_record_set_id.3","14:share/man/man3/ares_dns_write.3"],
+    "5faf51f44866ca8f811d0787d86a508ef6ec54201a4bd2b45de9d385472a1310": ["3:man/man3/CACA_BLACK.3caca.gz","3:man/man3/CACA_BLINK.3caca.gz","3:man/man3/CACA_BLUE.3caca.gz","3:man/man3/CACA_BOLD.3caca.gz","3:man/man3/CACA_BROWN.3caca.gz","3:man/man3/CACA_CYAN.3caca.gz","3:man/man3/CACA_DARKGRAY.3caca.gz","3:man/man3/CACA_DEFAULT.3caca.gz","3:man/man3/CACA_EVENT_ANY.3caca.gz","3:man/man3/CACA_EVENT_KEY_PRESS.3caca.gz","3:man/man3/CACA_EVENT_KEY_RELEASE.3caca.gz","3:man/man3/CACA_EVENT_MOUSE_MOTION.3caca.gz","3:man/man3/CACA_EVENT_MOUSE_PRESS.3caca.gz","3:man/man3/CACA_EVENT_MOUSE_RELEASE.3caca.gz","3:man/man3/CACA_EVENT_NONE.3caca.gz","3:man/man3/CACA_EVENT_QUIT.3caca.gz","3:man/man3/CACA_EVENT_RESIZE.3caca.gz","3:man/man3/CACA_GREEN.3caca.gz","3:man/man3/CACA_ITALICS.3caca.gz","3:man/man3/CACA_KEY_BACKSPACE.3caca.gz","3:man/man3/CACA_KEY_CTRL_A.3caca.gz","3:man/man3/CACA_KEY_CTRL_B.3caca.gz","3:man/man3/CACA_KEY_CTRL_C.3caca.gz","3:man/man3/CACA_KEY_CTRL_D.3caca.gz","3:man/man3/CACA_KEY_CTRL_E.3caca.gz","3:man/man3/CACA_KEY_CTRL_F.3caca.gz","3:man/man3/CACA_KEY_CTRL_G.3caca.gz","3:man/man3/CACA_KEY_CTRL_J.3caca.gz","3:man/man3/CACA_KEY_CTRL_K.3caca.gz","3:man/man3/CACA_KEY_CTRL_L.3caca.gz","3:man/man3/CACA_KEY_CTRL_N.3caca.gz","3:man/man3/CACA_KEY_CTRL_O.3caca.gz","3:man/man3/CACA_KEY_CTRL_P.3caca.gz","3:man/man3/CACA_KEY_CTRL_Q.3caca.gz","3:man/man3/CACA_KEY_CTRL_R.3caca.gz","3:man/man3/CACA_KEY_CTRL_T.3caca.gz","3:man/man3/CACA_KEY_CTRL_U.3caca.gz","3:man/man3/CACA_KEY_CTRL_V.3caca.gz","3:man/man3/CACA_KEY_CTRL_W.3caca.gz","3:man/man3/CACA_KEY_CTRL_X.3caca.gz","3:man/man3/CACA_KEY_CTRL_Y.3caca.gz","3:man/man3/CACA_KEY_CTRL_Z.3caca.gz","3:man/man3/CACA_KEY_DELETE.3caca.gz","3:man/man3/CACA_KEY_DOWN.3caca.gz","3:man/man3/CACA_KEY_END.3caca.gz","3:man/man3/CACA_KEY_ESCAPE.3caca.gz","3:man/man3/CACA_KEY_F1.3caca.gz","3:man/man3/CACA_KEY_F10.3caca.gz","3:man/man3/CACA_KEY_F11.3caca.gz","3:man/man3/CACA_KEY_F12.3caca.gz","3:man/man3/CACA_KEY_F13.3caca.gz","3:man/man3/CACA_KEY_F14.3caca.gz","3:man/man3/CACA_KEY_F15.3caca.gz","3:man/man3/CACA_KEY_F2.3caca.gz","3:man/man3/CACA_KEY_F3.3caca.gz","3:man/man3/CACA_KEY_F4.3caca.gz","3:man/man3/CACA_KEY_F5.3caca.gz","3:man/man3/CACA_KEY_F6.3caca.gz","3:man/man3/CACA_KEY_F7.3caca.gz","3:man/man3/CACA_KEY_F8.3caca.gz","3:man/man3/CACA_KEY_F9.3caca.gz","3:man/man3/CACA_KEY_HOME.3caca.gz","3:man/man3/CACA_KEY_INSERT.3caca.gz","3:man/man3/CACA_KEY_LEFT.3caca.gz","3:man/man3/CACA_KEY_PAGEDOWN.3caca.gz","3:man/man3/CACA_KEY_PAGEUP.3caca.gz","3:man/man3/CACA_KEY_PAUSE.3caca.gz","3:man/man3/CACA_KEY_RETURN.3caca.gz","3:man/man3/CACA_KEY_RIGHT.3caca.gz","3:man/man3/CACA_KEY_TAB.3caca.gz","3:man/man3/CACA_KEY_UNKNOWN.3caca.gz","3:man/man3/CACA_KEY_UP.3caca.gz","3:man/man3/CACA_LIGHTBLUE.3caca.gz","3:man/man3/CACA_LIGHTCYAN.3caca.gz","3:man/man3/CACA_LIGHTGRAY.3caca.gz","3:man/man3/CACA_LIGHTGREEN.3caca.gz","3:man/man3/CACA_LIGHTMAGENTA.3caca.gz","3:man/man3/CACA_LIGHTRED.3caca.gz","3:man/man3/CACA_MAGENTA.3caca.gz","3:man/man3/CACA_RED.3caca.gz","3:man/man3/CACA_TRANSPARENT.3caca.gz","3:man/man3/CACA_UNDERLINE.3caca.gz","3:man/man3/CACA_WHITE.3caca.gz","3:man/man3/CACA_YELLOW.3caca.gz","3:man/man3/caca_color.3caca.gz","3:man/man3/caca_event_type.3caca.gz","3:man/man3/caca_key.3caca.gz","3:man/man3/caca_style.3caca.gz"],
+    "615d969454613bc1e83b4eca5f9fed9014fe0c479eebc9be269deed60415017e": ["14:share/man/man3/dcngettext.3","14:share/man/man3/dngettext.3"],
+    "635bc81d3efc8d35e0242e3e488b3e741c00cbce333a6bd84f7af3e58c614570": ["3:man/man3/xcb_input_xi_ungrab_device_checked.3.gz"],
+    "647a6cf86c7ffba0a95cd765fcbc13ac1291464b196579a23fb7107bbe720209": ["3:man/man3/sd_event_get_tid.3.gz","3:man/man3/sd_event_ref.3.gz"],
+    "6568c030be55cdc19a4d587341902cd60312b563187e642b3282b267f0048be9": ["3:man/man3/wcslcat.3bsd.gz"],
+    "661ad7f4c44a13cb0f73053fc46f390d96f18626a1580259860e72ed21a234fb": ["3:man/man3/ne_iaddr_cmp.3.gz"],
+    "669eb1e2f33ebaf3e9d09b57bce5373bf6b12facccf0422242039374159896b7": ["3:man/man5/networkd.conf.d.5.gz"],
+    "6a6018613ce0c8c345f5057e5776ec6e895689105ba6cea5677b87c84995993e": ["3:man/man3/flag.3caca.gz","3:man/man3/has_arg.3caca.gz","3:man/man3/name.3caca.gz","3:man/man3/val.3caca.gz"],
+    "6cfd7938c69c82973a2f026a7c82cd63269fa1d927c498650bfe7ba78bd6b54c": ["14:share/man/man3/ares_init.3"],
+    "6da16e6f7189d1fcd2b79d60361bb89ae6be90a1cdc5d829214b7e56790248fd": ["3:man/man3/xcb_input_ungrab_device_key_checked.3.gz"],
+    "6ea587cf684586c9eef3a09ca753fc8e5d7539afc29f2c317a6945102b715fe8": ["3:man/man8/ebtables-translate.8.gz","3:man/man8/ip6tables-translate.8.gz"],
+    "6fb2b0aaec76be37e07d4465cdf110c43dc3e92763b72cf974bfdc2606480a06": ["3:man/man3/XTestCompareCurrentCursorWithWindow.3.gz","3:man/man3/XTestCompareCursorWithWindow.3.gz","3:man/man3/XTestFakeButtonEvent.3.gz","3:man/man3/XTestFakeKeyEvent.3.gz","3:man/man3/XTestFakeMotionEvent.3.gz","3:man/man3/XTestFakeRelativeMotionEvent.3.gz","3:man/man3/XTestSetGContextOfGC.3.gz","3:man/man3/XTestSetVisualIDOfVisual.3.gz"],
+    "71fe7e348c6bf5f78dda5b73cf44f98a1442ec050915e26883def11c57e6f170": ["2:man-171/usr/man/man3/ether_addr.3"],
+    "73e960e82fe8ee615f0da2d1e5f2d89ac8e715fdbe4eaa755f3539816d4d71a8": ["3:man/man8/systemd-tpm2-setup-early.service.8.gz"],
+    "74d331e591be5621c9a2b25c51f441fe39bea903b9ca4e0d9ff89344ed2f8542": ["3:man/man3/xcb_input_xi_get_property_reply.3.gz"],
+    "75cff30c999c6b7dc8b5566637940efa9884f5f0521d08a5467d5fdd9b60f2a4": ["3:man/man3/xcb_query_tree_children_end.3.gz"],
+    "765e64ddf3dea5f515a8d940fcd93186ff29f1f6a32ba15010aff9615cc6f311": ["3:man/man5/resolved.conf.d.5.gz"],
+    "77ceff8a903c897bdceb3118e4f8112b220e5440c4d9774872b88321e92600a1": ["3:man/man7/libOpenCL.so.7.gz"],
+    "786b6bdbd2b51a017ae31a62a050ee2059051d4b36bfd17bc8452786c880a00d": ["3:man/man8/systemd-resolved.8.gz"],
+    "78b83ba1c6d8a130a1552fa7ca66bfd1c1ff4d633dbbd9c922d8653a7f243b51": ["3:man/man3/sd_bus_is_bus_client.3.gz"],
+    "7ce587f0a439a74e451465c63a64f75617fcb46e699ae99fef902a7cdd96edd9": ["3:man/man8/reboot.8.gz"],
+    "7da7897de52b974a4c4e7ba1a3dc3994339c6ed90ff2d2af1f31536e438f2dad": ["3:man/man8/cryptsetup-luksErase.8.gz"],
+    "7e0478e0e5370c48c08c2e9d7eb4181809e4b7805d2b39da61e5fc2853be11f0": ["3:man/man3/caca_create_display.3caca.gz","3:man/man3/caca_create_display_with_driver.3caca.gz","3:man/man3/caca_free_display.3caca.gz","3:man/man3/caca_get_canvas.3caca.gz","3:man/man3/caca_get_display_driver.3caca.gz","3:man/man3/caca_get_display_driver_list.3caca.gz","3:man/man3/caca_get_display_height.3caca.gz","3:man/man3/caca_get_display_time.3caca.gz","3:man/man3/caca_get_display_width.3caca.gz","3:man/man3/caca_refresh_display.3caca.gz","3:man/man3/caca_set_cursor.3caca.gz","3:man/man3/caca_set_display_driver.3caca.gz","3:man/man3/caca_set_display_time.3caca.gz","3:man/man3/caca_set_display_title.3caca.gz","3:man/man3/caca_set_mouse.3caca.gz"],
+    "7ea38aef5869aaf4a995dcbea775c1785e171704d38935b7a34e102b45fb05f2": ["3:man/man3/xcb_glx_get_color_table_parameterfv_data.3.gz"],
+    "80cb63a8b9dfc42e6fcf0edc48b713340e2aaa39dcb5cd317757d365ea9ead15": ["3:man/man8/systemd-pcrlogin@.service.8.gz","3:man/man8/systemd-pcrmachine.service.8.gz","3:man/man8/systemd-pcrphase-sysinit.service.8.gz"],
+    "82e1ac0392e59c151fd429f6b5243ea369747625a3b89b6bed9409372b1d713d": ["3:man/man3/XFreeExtensionList.3.gz"],
+    "845dd86c19cfa8e4720320783d879c6b51500057d84b0524f6e1ca03ffe70b07": ["3:man/man3/caca_add_dirty_rect.3caca.gz","3:man/man3/caca_clear_dirty_rect_list.3caca.gz","3:man/man3/caca_disable_dirty_rect.3caca.gz","3:man/man3/caca_enable_dirty_rect.3caca.gz","3:man/man3/caca_get_dirty_rect.3caca.gz","3:man/man3/caca_get_dirty_rect_count.3caca.gz","3:man/man3/caca_remove_dirty_rect.3caca.gz"],
+    "84ef4572844911769ef0bb91f56595d9a87610fc2378bd7cfc1b6f3214628f04": ["3:man/man3/XShapeQueryVersion.3.gz"],
+    "858e70b6d9d5925aab6b819df7a1d46c901945e1e4abf9cd072fdd47c44f0913": ["1:shell_cmds-329/locate/bigram/locate.bigram.8"],
+    "8696d08e06ff2c5c35e9430839ec40f291e05b5cc22e27e678d82458635364a5": ["3:man/man3/ne_ssl_cert_validity_time.3.gz"],
+    "86a8919c948e2702a780a69c596217adb86c9a60d784a2111253d398830ade22": ["3:man/man3/freezero.3bsd.gz","3:man/man3/recallocarray.3bsd.gz"],
+    "889a63bd2e6b0015eb432792d8b38c7dd069cdbe656285726514eddbcdbe1b49": ["8:bash/usr/share/man/man1/..1.gz","8:bash/usr/share/man/man1/:.1.gz","8:bash/usr/share/man/man1/[.1.gz","8:bash/usr/share/man/man1/alias.1.gz","8:bash/usr/share/man/man1/bg.1.gz","8:bash/usr/share/man/man1/bind.1.gz","8:bash/usr/share/man/man1/break.1.gz","8:bash/usr/share/man/man1/builtin.1.gz","8:bash/usr/share/man/man1/caller.1.gz","8:bash/usr/share/man/man1/cd.1.gz","8:bash/usr/share/man/man1/command.1.gz","8:bash/usr/share/man/man1/compgen.1.gz","8:bash/usr/share/man/man1/complete.1.gz","8:bash/usr/share/man/man1/compopt.1.gz","8:bash/usr/share/man/man1/continue.1.gz","8:bash/usr/share/man/man1/declare.1.gz","8:bash/usr/share/man/man1/dirs.1.gz","8:bash/usr/share/man/man1/disown.1.gz","8:bash/usr/share/man/man1/enable.1.gz","8:bash/usr/share/man/man1/eval.1.gz","8:bash/usr/share/man/man1/exec.1.gz","8:bash/usr/share/man/man1/exit.1.gz","8:bash/usr/share/man/man1/export.1.gz","8:bash/usr/share/man/man1/fc.1.gz","8:bash/usr/share/man/man1/fg.1.gz","8:bash/usr/share/man/man1/getopts.1.gz","8:bash/usr/share/man/man1/hash.1.gz","8:bash/usr/share/man/man1/help.1.gz","8:bash/usr/share/man/man1/history.1.gz","8:bash/usr/share/man/man1/jobs.1.gz","8:bash/usr/share/man/man1/let.1.gz","8:bash/usr/share/man/man1/local.1.gz","8:bash/usr/share/man/man1/logout.1.gz","8:bash/usr/share/man/man1/mapfile.1.gz","8:bash/usr/share/man/man1/popd.1.gz","8:bash/usr/share/man/man1/pushd.1.gz","8:bash/usr/share/man/man1/read.1.gz","8:bash/usr/share/man/man1/readarray.1.gz","8:bash/usr/share/man/man1/readonly.1.gz","8:bash/usr/share/man/man1/return.1.gz","8:bash/usr/share/man/man1/set.1.gz","8:bash/usr/share/man/man1/shift.1.gz","8:bash/usr/share/man/man1/shopt.1.gz","8:bash/usr/share/man/man1/source.1.gz","8:bash/usr/share/man/man1/suspend.1.gz","8:bash/usr/share/man/man1/times.1.gz","8:bash/usr/share/man/man1/trap.1.gz","8:bash/usr/share/man/man1/type.1.gz","8:bash/usr/share/man/man1/typeset.1.gz","8:bash/usr/share/man/man1/ulimit.1.gz","8:bash/usr/share/man/man1/umask.1.gz","8:bash/usr/share/man/man1/unalias.1.gz","8:bash/usr/share/man/man1/unset.1.gz","8:bash/usr/share/man/man1/wait.1.gz"],
+    "890c8911322e7364c08a150c93704258fffaa23bc3678e35cf63bd499c3232fe": ["3:man/man3/strnvis.3bsd.gz","3:man/man3/strvis.3bsd.gz","3:man/man3/strvisx.3bsd.gz"],
+    "8aedad2db6afe9862248ab4d01802c3faeb9edb86c5fc4ad5b27ff1d299d13e7": ["14:share/man/man3/ares_queue_active_queries.3","14:share/man/man3/ares_queue_wait_empty.3"],
+    "8c79f2031ea3eab5e6f4a5aae6b7a6d76f3f105fb21c66523bf458d0b27a580b": ["3:man/man3/XUnionRectWithRegion.3.gz"],
+    "8e0bcf7b8c9e8fdada1c40ac394432a3b11ac9c854d35468b63728a14151998a": ["3:man/man5/homed.conf.d.5.gz"],
+    "8e62320299872a84b5643e384432409836662914e9e4c211b50d4c6ca4bfa1d0": ["3:man/man3/CACA_API_VERSION_1.3caca.gz","3:man/man3/caca_canvas_set_figfont.3caca.gz","3:man/man3/caca_canvas_t.3caca.gz","3:man/man3/caca_charfont_t.3caca.gz","3:man/man3/caca_conio__setcursortype.3caca.gz","3:man/man3/caca_conio__wscroll.3caca.gz","3:man/man3/caca_conio_cgets.3caca.gz","3:man/man3/caca_conio_clreol.3caca.gz","3:man/man3/caca_conio_clrscr.3caca.gz","3:man/man3/caca_conio_cprintf.3caca.gz","3:man/man3/caca_conio_cputs.3caca.gz","3:man/man3/caca_conio_cscanf.3caca.gz","3:man/man3/caca_conio_delay.3caca.gz","3:man/man3/caca_conio_delline.3caca.gz","3:man/man3/caca_conio_directvideo.3caca.gz","3:man/man3/caca_conio_getch.3caca.gz","3:man/man3/caca_conio_getche.3caca.gz","3:man/man3/caca_conio_getpass.3caca.gz","3:man/man3/caca_conio_gettext.3caca.gz","3:man/man3/caca_conio_gettextinfo.3caca.gz","3:man/man3/caca_conio_gotoxy.3caca.gz","3:man/man3/caca_conio_highvideo.3caca.gz","3:man/man3/caca_conio_insline.3caca.gz","3:man/man3/caca_conio_kbhit.3caca.gz","3:man/man3/caca_conio_lowvideo.3caca.gz","3:man/man3/caca_conio_movetext.3caca.gz","3:man/man3/caca_conio_normvideo.3caca.gz","3:man/man3/caca_conio_nosound.3caca.gz","3:man/man3/caca_conio_printf.3caca.gz","3:man/man3/caca_conio_putch.3caca.gz","3:man/man3/caca_conio_puttext.3caca.gz","3:man/man3/caca_conio_sleep.3caca.gz","3:man/man3/caca_conio_sound.3caca.gz","3:man/man3/caca_conio_textattr.3caca.gz","3:man/man3/caca_conio_textbackground.3caca.gz","3:man/man3/caca_conio_textcolor.3caca.gz","3:man/man3/caca_conio_textmode.3caca.gz","3:man/man3/caca_conio_ungetch.3caca.gz","3:man/man3/caca_conio_wherex.3caca.gz","3:man/man3/caca_conio_wherey.3caca.gz","3:man/man3/caca_conio_window.3caca.gz","3:man/man3/caca_display_t.3caca.gz","3:man/man3/caca_dither_t.3caca.gz","3:man/man3/caca_event_t.3caca.gz","3:man/man3/caca_file_t.3caca.gz","3:man/man3/caca_flush_figlet.3caca.gz","3:man/man3/caca_font_t.3caca.gz","3:man/man3/caca_free_charfont.3caca.gz","3:man/man3/caca_getopt.3caca.gz","3:man/man3/caca_load_charfont.3caca.gz","3:man/man3/caca_optarg.3caca.gz","3:man/man3/caca_optind.3caca.gz","3:man/man3/caca_put_figchar.3caca.gz","3:man/man3/caca_rand.3caca.gz","3:man/man3/caca_set_figfont_smush.3caca.gz","3:man/man3/caca_set_figfont_width.3caca.gz"],
+    "91a053cdfc2a4202fa820868ec84d37383d6be48101e2c6e3d607fb21671d4ab": ["3:man/man5/journal-upload.conf.d.5.gz"],
+    "93da1e82156e50a84e27af1edecd06a62f442de022f31e8aa5e0db25f893c89a": ["3:man/man3/caca_create_dither.3caca.gz","3:man/man3/caca_dither_bitmap.3caca.gz","3:man/man3/caca_free_dither.3caca.gz","3:man/man3/caca_get_dither_algorithm.3caca.gz","3:man/man3/caca_get_dither_algorithm_list.3caca.gz","3:man/man3/caca_get_dither_antialias.3caca.gz","3:man/man3/caca_get_dither_antialias_list.3caca.gz","3:man/man3/caca_get_dither_brightness.3caca.gz","3:man/man3/caca_get_dither_charset.3caca.gz","3:man/man3/caca_get_dither_charset_list.3caca.gz","3:man/man3/caca_get_dither_color.3caca.gz","3:man/man3/caca_get_dither_color_list.3caca.gz","3:man/man3/caca_get_dither_contrast.3caca.gz","3:man/man3/caca_get_dither_gamma.3caca.gz","3:man/man3/caca_set_dither_algorithm.3caca.gz","3:man/man3/caca_set_dither_antialias.3caca.gz","3:man/man3/caca_set_dither_brightness.3caca.gz","3:man/man3/caca_set_dither_charset.3caca.gz","3:man/man3/caca_set_dither_color.3caca.gz","3:man/man3/caca_set_dither_contrast.3caca.gz","3:man/man3/caca_set_dither_gamma.3caca.gz","3:man/man3/caca_set_dither_palette.3caca.gz"],
+    "93fce18e51d16e99eb545ac8f6aceba73ce04c8ea5a85494dfd5c90b0abac297": ["3:man/man5/modules.dep.bin.5.gz"],
+    "961846ee196abc1d5734d7271635a22875570ba5af38d93df3dae1fba09a9eac": ["3:man/man3/hwloc_get_nbobjs_inside_cpuset_by_type.3.gz"],
+    "9819dba11388182fe0c083df93459bd6092581397733d53da9ec872a0df9c9e1": ["14:share/man/man3/ares_set_socket_functions_ex.3"],
+    "9f155e01d1d14b4a18f315260d1f63fa6df3e60a375415dc6910a9bc5029ed63": ["14:share/man/man3/ares_search_dnsrec.3"],
+    "9f8ec98d11168da876145a3fb67b190b8342fbb7ddbcc0ef2280ee5e47cc0d1a": ["3:man/man3/caca_create_frame.3caca.gz","3:man/man3/caca_free_frame.3caca.gz","3:man/man3/caca_get_frame_count.3caca.gz","3:man/man3/caca_get_frame_name.3caca.gz","3:man/man3/caca_set_frame.3caca.gz","3:man/man3/caca_set_frame_name.3caca.gz"],
+    "9fdd19bfeef5951c6aef4b4111ccc14d2be3069ec27cc213025c260a417fd6c8": ["3:man/man8/systemd-confext-initrd.service.8.gz"],
+    "a27b58476a353f8701f12c453eb5621e17df622d26fc77bd343ef5b60bb66a4d": ["3:man/man5/.k5identity.5.gz"],
+    "a3056663b2b5936f2cb2f10b3774ed69ce0ae0e814825902b0786043d2c9ce77": ["3:man/man3/XNewModifiermap.3.gz"],
+    "a4897b7dfd4fdc1ee93140b0f08add68477ade4fdbb32f04705a55be90d3e927": ["3:man/man3/HeightOfScreen.3.gz"],
+    "a5a414b31e0bdc0c49b26d4a66bf92e8ee06b601f76a5ab64a9c98af016a78bc": ["3:man/man5/xorg.conf.d.5.gz"],
+    "a5e5a5abd3018c59b598ecfa242aeba86671d2fe422c7c81c41bbbfba686be5f": ["3:man/man3/ne_set_request_body_provider.3.gz"],
+    "a63e33261e624a18372bf1593762c2e6a83bb9b4db7f76db1ab1b827d5748fd4": ["3:man/man3/LIST_CLASS_ENTRY.3bsd.gz","3:man/man3/LIST_CLASS_HEAD.3bsd.gz","3:man/man3/LIST_EMPTY.3bsd.gz","3:man/man3/LIST_ENTRY.3bsd.gz","3:man/man3/LIST_FIRST.3bsd.gz","3:man/man3/LIST_FOREACH.3bsd.gz","3:man/man3/LIST_FOREACH_FROM.3bsd.gz","3:man/man3/LIST_FOREACH_FROM_SAFE.3bsd.gz","3:man/man3/LIST_FOREACH_SAFE.3bsd.gz","3:man/man3/LIST_HEAD.3bsd.gz","3:man/man3/LIST_HEAD_INITIALIZER.3bsd.gz","3:man/man3/LIST_INIT.3bsd.gz","3:man/man3/LIST_INSERT_AFTER.3bsd.gz","3:man/man3/LIST_INSERT_BEFORE.3bsd.gz","3:man/man3/LIST_INSERT_HEAD.3bsd.gz","3:man/man3/LIST_NEXT.3bsd.gz","3:man/man3/LIST_PREV.3bsd.gz","3:man/man3/LIST_REMOVE.3bsd.gz","3:man/man3/LIST_SWAP.3bsd.gz","3:man/man3/SLIST_CLASS_ENTRY.3bsd.gz","3:man/man3/SLIST_CLASS_HEAD.3bsd.gz","3:man/man3/SLIST_EMPTY.3bsd.gz","3:man/man3/SLIST_ENTRY.3bsd.gz","3:man/man3/SLIST_FIRST.3bsd.gz","3:man/man3/SLIST_FOREACH.3bsd.gz","3:man/man3/SLIST_FOREACH_FROM.3bsd.gz","3:man/man3/SLIST_FOREACH_FROM_SAFE.3bsd.gz","3:man/man3/SLIST_FOREACH_SAFE.3bsd.gz","3:man/man3/SLIST_HEAD.3bsd.gz","3:man/man3/SLIST_HEAD_INITIALIZER.3bsd.gz","3:man/man3/SLIST_INIT.3bsd.gz","3:man/man3/SLIST_INSERT_AFTER.3bsd.gz","3:man/man3/SLIST_INSERT_HEAD.3bsd.gz","3:man/man3/SLIST_NEXT.3bsd.gz","3:man/man3/SLIST_REMOVE.3bsd.gz","3:man/man3/SLIST_REMOVE_AFTER.3bsd.gz","3:man/man3/SLIST_REMOVE_HEAD.3bsd.gz","3:man/man3/SLIST_REMOVE_PREVPTR.3bsd.gz","3:man/man3/SLIST_SWAP.3bsd.gz","3:man/man3/STAILQ_CLASS_ENTRY.3bsd.gz","3:man/man3/STAILQ_CLASS_HEAD.3bsd.gz","3:man/man3/STAILQ_CONCAT.3bsd.gz","3:man/man3/STAILQ_EMPTY.3bsd.gz","3:man/man3/STAILQ_ENTRY.3bsd.gz","3:man/man3/STAILQ_FIRST.3bsd.gz","3:man/man3/STAILQ_FOREACH.3bsd.gz","3:man/man3/STAILQ_FOREACH_FROM.3bsd.gz","3:man/man3/STAILQ_FOREACH_FROM_SAFE.3bsd.gz","3:man/man3/STAILQ_FOREACH_SAFE.3bsd.gz","3:man/man3/STAILQ_HEAD.3bsd.gz","3:man/man3/STAILQ_HEAD_INITIALIZER.3bsd.gz","3:man/man3/STAILQ_INIT.3bsd.gz","3:man/man3/STAILQ_INSERT_AFTER.3bsd.gz","3:man/man3/STAILQ_INSERT_HEAD.3bsd.gz","3:man/man3/STAILQ_INSERT_TAIL.3bsd.gz","3:man/man3/STAILQ_LAST.3bsd.gz","3:man/man3/STAILQ_NEXT.3bsd.gz","3:man/man3/STAILQ_REMOVE.3bsd.gz","3:man/man3/STAILQ_REMOVE_AFTER.3bsd.gz","3:man/man3/STAILQ_REMOVE_HEAD.3bsd.gz","3:man/man3/STAILQ_SWAP.3bsd.gz","3:man/man3/TAILQ_CLASS_ENTRY.3bsd.gz","3:man/man3/TAILQ_CLASS_HEAD.3bsd.gz","3:man/man3/TAILQ_CONCAT.3bsd.gz","3:man/man3/TAILQ_EMPTY.3bsd.gz","3:man/man3/TAILQ_ENTRY.3bsd.gz","3:man/man3/TAILQ_FIRST.3bsd.gz","3:man/man3/TAILQ_FOREACH.3bsd.gz","3:man/man3/TAILQ_FOREACH_FROM.3bsd.gz","3:man/man3/TAILQ_FOREACH_FROM_SAFE.3bsd.gz","3:man/man3/TAILQ_FOREACH_REVERSE.3bsd.gz","3:man/man3/TAILQ_FOREACH_REVERSE_FROM.3bsd.gz","3:man/man3/TAILQ_FOREACH_REVERSE_FROM_SAFE.3bsd.gz","3:man/man3/TAILQ_FOREACH_REVERSE_SAFE.3bsd.gz","3:man/man3/TAILQ_FOREACH_SAFE.3bsd.gz","3:man/man3/TAILQ_HEAD.3bsd.gz","3:man/man3/TAILQ_HEAD_INITIALIZER.3bsd.gz","3:man/man3/TAILQ_INIT.3bsd.gz","3:man/man3/TAILQ_INSERT_AFTER.3bsd.gz","3:man/man3/TAILQ_INSERT_BEFORE.3bsd.gz","3:man/man3/TAILQ_INSERT_HEAD.3bsd.gz","3:man/man3/TAILQ_INSERT_TAIL.3bsd.gz","3:man/man3/TAILQ_LAST.3bsd.gz","3:man/man3/TAILQ_NEXT.3bsd.gz","3:man/man3/TAILQ_PREV.3bsd.gz","3:man/man3/TAILQ_REMOVE.3bsd.gz","3:man/man3/TAILQ_SWAP.3bsd.gz"],
+    "a63e57eed167e6d38c4133e1e278d27643ca3184f5cb134dfa92d2ecf483371d": ["2:man-171/usr/man/man3/yp_all.3","2:man-171/usr/man/man3/yp_bind.3","2:man-171/usr/man/man3/yp_master.3","2:man-171/usr/man/man3/yp_match.3","2:man-171/usr/man/man3/yp_unbind.3"],
+    "ab566c9cd7d5483d35583bb789be4bbad5693fc01bf45ded516b89bd5efc37f4": ["3:man/man3/xcb_input_ungrab_device_checked.3.gz"],
+    "abb916341900beb76f59bc5adbb79fea5f0223043d9df84ba5f5cb718a6a8600": ["3:man/man3/strnunvis.3bsd.gz","3:man/man3/strunvis.3bsd.gz"],
+    "ac00649873cfe6bc5c50ee32a1459c32d382e20ac0333a2c4ca406bd9e7b84da": ["14:share/man/man3/ares_query_dnsrec.3"],
+    "ad1388749e0ef5cd21c4816612e209de90cf8e1ad746332bd4aa105391ee7d6f": ["3:man/man3/xcb_x_print_print_get_attributes_attributes_end.3.gz"],
+    "af1b230f86b18cb1d2750c1cc12bb7d2bdb7efd19f4a9a0e675052b511a89c93": ["3:man/man3/HWLOC_TOPOLOGY_FLAG_NO_MEMATTRS.3.gz","3:man/man3/hwloc_topology_set_all_types_filter.3.gz"],
+    "afa9103db59d445c0875e0acced246a7a458812dc5a14ef0999fb13cc1795732": ["3:man/man3/caca_file_close.3caca.gz","3:man/man3/caca_file_eof.3caca.gz","3:man/man3/caca_file_gets.3caca.gz","3:man/man3/caca_file_open.3caca.gz","3:man/man3/caca_file_read.3caca.gz","3:man/man3/caca_file_tell.3caca.gz","3:man/man3/caca_file_write.3caca.gz"],
+    "b63009d1813bf637151bf00a05aca08e973141fe1cac4db5a7185783bc097f2f": ["14:share/man/man3/ares_get_servers_ports.3"],
+    "be0f1bea480cbadab6f2dee74fb9adbee4e199939489a3e32660b30262ac66a1": ["3:man/man3/arc4random_addrandom.3bsd.gz","3:man/man3/arc4random_buf.3bsd.gz","3:man/man3/arc4random_stir.3bsd.gz","3:man/man3/arc4random_uniform.3bsd.gz"],
+    "be2f6c1c152c2a3c4bbedbf791b578df5c589a364ca6af4a4c163539046b833a": ["3:man/man5/udev.conf.d.5.gz"],
+    "bfdb0282a27006c86439f7794f084bb80ee435e0645433a317e423be74b86689": ["14:share/man/man3/ares_dns_class_fromstr.3","14:share/man/man3/ares_dns_class_tostr.3","14:share/man/man3/ares_dns_datatype_t.3","14:share/man/man3/ares_dns_opcode_tostr.3","14:share/man/man3/ares_dns_opt_datatype_t.3","14:share/man/man3/ares_dns_opt_get_datatype.3","14:share/man/man3/ares_dns_opt_get_name.3","14:share/man/man3/ares_dns_rcode_tostr.3","14:share/man/man3/ares_dns_rec_type_fromstr.3","14:share/man/man3/ares_dns_rec_type_tostr.3","14:share/man/man3/ares_dns_rr_key_datatype.3","14:share/man/man3/ares_dns_rr_key_to_rec_type.3","14:share/man/man3/ares_dns_rr_key_tostr.3","14:share/man/man3/ares_dns_section_tostr.3","14:share/man/man3/ares_opt_param_t.3","14:share/man/man3/ares_svcb_param_t.3"],
+    "c0c096e1154561bc1ca071c54d9151397a742b422fa9ad39263e69d1be943e5b": ["14:share/man/man3/ares_get_servers_csv.3","14:share/man/man3/ares_set_servers_ports_csv.3"],
+    "c0fa20023b2437dc2d7bcdf9e9394d1df41974be60fa2c4eb5940603e02e7913": ["3:man/man8/swapoff.8.gz"],
+    "c2307172d5e2fb57a8425274279dd17fecf8aa12ee7701631c70904e44b3df73": ["3:man/man3/xcb_input_get_device_dont_propagate_list_classes.3.gz"],
+    "c31434d23d685fcfd0f322c85af55160e35191f7d4bed8a2efca578fdfd5720c": ["3:man/man5/sleep.conf.d.5.gz"],
+    "c4fe99a53e5a33f591f0fb2194cc925c1e804ebc25aa54b6f6a0769478176803": ["3:man/man5/XCompose.5.gz"],
+    "c592932e193565289e255ac55fb03571a2f6392efbf8e40dabd0a7b5e148cc0b": ["3:man/man3/setproctitle_init.3bsd.gz"],
+    "c597f5ccb8768c3c585537904245d7a97636f95d9118ec5cca3372b12cf4f44d": ["3:man/man8/systemd-user-sessions.8.gz"],
+    "c5f1fb10d676ca7f5a57869cd11059845e860825dc079771ea7702cf85eb1781": ["3:man/man3/pidfile_close.3bsd.gz","3:man/man3/pidfile_open.3bsd.gz","3:man/man3/pidfile_remove.3bsd.gz","3:man/man3/pidfile_write.3bsd.gz"],
+    "c9b73cb7698eab6f93d300d36ce3a60b6b712cf1f9abdc088c6c7519c99264ea": ["3:man/man3/mergesort.3bsd.gz"],
+    "ca07ac22ce3e5d66e52abe2693094ea8f2bcf41d4b185c797fb30b0e7b778b10": ["3:man/man8/systemd-coredump@.service.8.gz"],
+    "cbf81261513d7da5cfbea24d53e2a5c239d7e2551c49897956e7d266e405c168": ["3:man/man5/systemd.negative.5.gz","3:man/man5/systemd.positive.5.gz"],
+    "cbfdb9fa4a6b6cf395153be6395d207d18804b9b3d427bc50c2a0eda3350b498": ["3:man/man3/XLocaleOfIM.3.gz"],
+    "cc2dac6089bee6ea7430a4ce5c77715d19e6aef847cc2432a21f8caaf1f13e39": ["3:man/man5/environment.5.gz"],
+    "cf1c98d3fa055506c8af2f8bba4da9c17d367c6409c6ad83a2bc67ccb6630182": ["14:man/man1/bzegrep.1","14:man/man1/bzfgrep.1"],
+    "cf27a1153f38e10b838bac1a5d8d4bf2c451c522007da1e9cf7f3f0444dd250c": ["3:man/man3/XrmDestroyDatabase.3.gz"],
+    "cf96d6714f7fa23304eb8725b2d157c515b06c0bf84b1a0f2fa4c1446a5e00f4": ["3:man/man3/sd_session_get_service.3.gz"],
+    "cfe07853d821a3b23d57b2f6895aaa67c8aff0e0761a1b580e666256287aca2d": ["3:man/man8/systemd-sysupdate-reboot.service.8.gz"],
+    "d0accbe441a55e2234f2877a84d87b3d45d7713c81ebf66eba770f7cb9e50ee8": ["3:man/man3/XContextDependentDrawing.3.gz"],
+    "d18158fb6cbb2010439a85e87c24a8412390099f15b08fadd3945f838b4a4c0f": ["3:man/man8/systemd-halt.service.8.gz"],
+    "d33a7750fc712929b01fe15e55931ac83eac46c6dc294ad4dc3f12822f7a2bf5": ["3:man/man3/XDrawPoints.3.gz"],
+    "d360fe772abba0319c38d114bd638d03d8d6dc282de790049465aedeb9203e37": ["14:share/man/man3/ares_set_servers_ports.3"],
+    "d4a8217160fa531bbc2ab77a055b2692a998fecf405da7385997092939b96bcf": ["3:man/man5/systemd-user-runtime-dir.5.gz","3:man/man5/user-runtime-dir@.service.5.gz"],
+    "d643005c5481d1c6b56b20403dff4a5cfad4e6611aa03445b19a80cf13630197": ["3:man/man3/seccomp_export_bpf_mem.3.gz"],
+    "d6dc9dbbf715594c24bf6e9e568c295855e823aa8e9f4d988985cd383436f007": ["14:share/man/man3/dcgettext.3","14:share/man/man3/dgettext.3"],
+    "d7e0d05fe991e4103b484c71403633aa982d8617e3e2005e47244f0ef00d6439": ["3:man/man3/xcb_selinux_get_selection_create_context_context.3.gz"],
+    "db58bd882ebb0787aeff3d89e5697a051af40363e6d8146bd5cdb35fac7682b7": ["3:man/man3/caca_export_area_to_memory.3caca.gz","3:man/man3/caca_export_canvas_to_memory.3caca.gz","3:man/man3/caca_get_export_list.3caca.gz","3:man/man3/caca_get_import_list.3caca.gz","3:man/man3/caca_import_area_from_file.3caca.gz","3:man/man3/caca_import_area_from_memory.3caca.gz","3:man/man3/caca_import_canvas_from_file.3caca.gz","3:man/man3/caca_import_canvas_from_memory.3caca.gz"],
+    "dc0b3d96af7ea8eec83ca05ae4040776226015751555fe786b1ec0817c00d9bf": ["3:man/man7/sd-boot.7.gz"],
+    "dcce65b5de9b50ac2883d3548f8b95bcf5667f1656b6392609041cab9eab5648": ["3:man/man3/xcb_xfixes_get_cursor_name_name.3.gz"],
+    "dd1fc7c0ea8027c8f9274a71a354be1c3ec7a772ce27deed5446a877576b6fc9": ["3:man/man8/systemd-factory-reset-request.service.8.gz","3:man/man8/systemd-factory-reset.socket.8.gz"],
+    "ddd98490864f92d4d34c3ff88e6a3b560a3563c87c13be1dc42ff41f97b247eb": ["14:share/man/man3/ares_dns_record_rr_add.3","14:share/man/man3/ares_dns_record_rr_cnt.3","14:share/man/man3/ares_dns_record_rr_del.3","14:share/man/man3/ares_dns_record_rr_get.3","14:share/man/man3/ares_dns_record_rr_get_const.3","14:share/man/man3/ares_dns_rr_add_abin.3","14:share/man/man3/ares_dns_rr_del_abin.3","14:share/man/man3/ares_dns_rr_del_opt_byid.3","14:share/man/man3/ares_dns_rr_get_abin.3","14:share/man/man3/ares_dns_rr_get_abin_cnt.3","14:share/man/man3/ares_dns_rr_get_addr.3","14:share/man/man3/ares_dns_rr_get_addr6.3","14:share/man/man3/ares_dns_rr_get_bin.3","14:share/man/man3/ares_dns_rr_get_class.3","14:share/man/man3/ares_dns_rr_get_name.3","14:share/man/man3/ares_dns_rr_get_opt.3","14:share/man/man3/ares_dns_rr_get_opt_byid.3","14:share/man/man3/ares_dns_rr_get_opt_cnt.3","14:share/man/man3/ares_dns_rr_get_str.3","14:share/man/man3/ares_dns_rr_get_ttl.3","14:share/man/man3/ares_dns_rr_get_type.3","14:share/man/man3/ares_dns_rr_get_u16.3","14:share/man/man3/ares_dns_rr_get_u32.3","14:share/man/man3/ares_dns_rr_get_u8.3","14:share/man/man3/ares_dns_rr_key_t.3","14:share/man/man3/ares_dns_rr_set_addr.3","14:share/man/man3/ares_dns_rr_set_addr6.3","14:share/man/man3/ares_dns_rr_set_bin.3","14:share/man/man3/ares_dns_rr_set_opt.3","14:share/man/man3/ares_dns_rr_set_str.3","14:share/man/man3/ares_dns_rr_set_u16.3","14:share/man/man3/ares_dns_rr_set_u32.3","14:share/man/man3/ares_dns_rr_set_u8.3","14:share/man/man3/ares_dns_section_t.3","14:share/man/man3/ares_tlsa_match_t.3","14:share/man/man3/ares_tlsa_selector_t.3","14:share/man/man3/ares_tlsa_usage_t.3"],
+    "dedd3bb4718cd333ebfee1e25240d4b4229276c714d2bcbb519634c12381ba9f": ["3:man/man5/timesyncd.conf.d.5.gz"],
+    "deebe152c0b0274045e7211256b076c81801c8eacb1238f624eecc6ae8719944": ["3:man/man3/XArc.3.gz","3:man/man3/XDrawArcs.3.gz"],
+    "e03f0b95062176ba33b640479942251523bc5ccc28e42a291204262a4614b7e0": ["3:man/man3/crypt_r.3.gz","3:man/man3/crypt_ra.3.gz","3:man/man3/crypt_rn.3.gz"],
+    "e13f661dd2ea8f335c3ff4c64613b18bd44295c018596258411bc7cd70aab639": ["3:man/man5/Xwrapper.config.5.gz"],
+    "e3a75aa6ee253f77e9b0699e753ff19b85189d1f179c03b2909258642f323147": ["3:man/man3/XResQueryExtension.3.gz"],
+    "e4f555b1e171e2047fbcddbe17d0481bdb44fce2c88cb82a46097c987fc9e1cb": ["3:man/man3/xcb_dri2_connect_reply.3.gz"],
+    "e5e6d3b2ecc809b96e0fc209b95e1877f8b8a4fc659e4bee5575009383ff550d": ["3:man/man3/xcb_selinux_set_property_create_context_checked.3.gz"],
+    "e606f68ac5ab3834939dd78e857072d991e1ac50eda25962e4a18c073b43c34d": ["3:man/man3/XtAppSetErrorMsgHandler.3.gz"],
+    "eb005250bf71023cfdf15cbaf05e2e6dd6c7b4c113c6d8fed7a943d5c82216d6": ["3:man/man5/coredump.conf.d.5.gz"],
+    "ec26321a89b5ddef28cf410c698064ce746febed9b6996660a201b5eb4d3774d": ["3:man/man5/logind.conf.d.5.gz"],
+    "ec95fab122b6e4aeaf19de701e5317b4645593c83c4959ceaff2fa7c5d852c09": ["3:man/man3/acl_get_file_at.3.gz"],
+    "eebb8acd82121b8d5adaba318e576934a3e88ab22459a075588211abd3fd1090": ["3:man/man3/XtIsSessionShell.3.gz"],
+    "f05bc262b7d05f2acd458491f33c5375c9420e10bc6673b7310ddfe98f7858ec": ["3:man/man3/HWLOC_ALLOW_FLAG_ALL.3.gz"],
+    "f675b6d5bf70265450979e995e443a9382bb9c9e663ab0ad42b9840dcce965ea": ["3:man/man5/systemd.pcrlock.d.5.gz"],
+    "f69153f61efc9794b8a6d4af738d576a0b1fa2b41d03d2801d8ea675382fb5e1": ["3:man/man8/systemd-journald-audit.socket.8.gz"],
+    "f774741d1c4d6f8e6332a850cc2a9d88d87d355a944553bde1152c276f8093a7": ["3:man/man3/caca_draw_box.3caca.gz","3:man/man3/caca_draw_circle.3caca.gz","3:man/man3/caca_draw_cp437_box.3caca.gz","3:man/man3/caca_draw_ellipse.3caca.gz","3:man/man3/caca_draw_line.3caca.gz","3:man/man3/caca_draw_polyline.3caca.gz","3:man/man3/caca_draw_thin_box.3caca.gz","3:man/man3/caca_draw_thin_ellipse.3caca.gz","3:man/man3/caca_draw_thin_line.3caca.gz","3:man/man3/caca_draw_thin_polyline.3caca.gz","3:man/man3/caca_draw_thin_triangle.3caca.gz","3:man/man3/caca_draw_triangle.3caca.gz","3:man/man3/caca_fill_box.3caca.gz","3:man/man3/caca_fill_ellipse.3caca.gz","3:man/man3/caca_fill_triangle.3caca.gz","3:man/man3/caca_fill_triangle_textured.3caca.gz"],
+    "f8903cc30e0accb7624fc9622044e80c9e6520b3e3614676a7838b568cc90d4f": ["3:man/man3/hwloc_memattr_get_initiators.3.gz"],
+    "f9485b91597b0669f3835706cd235f2582b959d50138f3522797b7f0a032e899": ["3:man/man3/sradixsort.3bsd.gz"],
+    "fb38def9d10226b207aa8d52e7cb693d112eb2c3db211b8542d4b5cc89c0b79f": ["3:man/man3/sd_journal_sendv_with_location.3.gz"],
+    "fcc3c3716a50fac3b47600d6239884b431c48d43e65670aa410579843291d145": ["3:man/man5/modprobe.conf.5.gz"],
+    "fe78d7cbef78098ebed3585a1fc943eb294e5cfd16ca84ae77c64ed0903a8b5e": ["3:man/man3/caca_create_canvas.3caca.gz","3:man/man3/caca_free_canvas.3caca.gz","3:man/man3/caca_get_canvas_attrs.3caca.gz","3:man/man3/caca_get_canvas_chars.3caca.gz","3:man/man3/caca_get_canvas_height.3caca.gz","3:man/man3/caca_get_canvas_width.3caca.gz","3:man/man3/caca_get_version.3caca.gz","3:man/man3/caca_manage_canvas.3caca.gz","3:man/man3/caca_set_canvas_size.3caca.gz","3:man/man3/caca_unmanage_canvas.3caca.gz"],
+    "feafd434f91e15d71d0cb1ba3aa59d002d04220831565ef0a74a5884146dcb6e": ["3:man/man3/xcb_input_grab_device_unchecked.3.gz"],
+    "fef1588e09020c13f6b6ad9316bf1e71326b16477b1a147ceb779b279fad55bc": ["3:man/man5/extension-release.5.gz","3:man/man5/initrd-release.5.gz"]
+   }
+  },
+  "generator_initial_discovery_exclusions": {
+   "count": 21,
+   "resolution": "explicit .roff source-parent roots; original bytes and native mode unchanged; target/semantic supplements clean",
+   "sources": [
+    ["11:clap-mangen-man/man1/aliases.bash.1","fbdf81c5000af686d765b19a18f75e52b0460b866690299b715093db7e04312e"],
+    ["11:clap-mangen-man/man1/basic.bash.1","a13b730224b2445321621dade9524d605218b41f41943e763eda9912d3bd96f7"],
+    ["11:clap-mangen-man/man1/configured_display_order_args.1","ee351b7a3b5492bd9ca4aa9bf5ab0358ed303ea6a352924a4869ef4fd03064c0"],
+    ["11:clap-mangen-man/man1/configured_subcmd_order.1","5b7800d68020a2144b8c2223c24bc04ccfa9e3f1fa333be4cd4bac7a2af0fdcf"],
+    ["11:clap-mangen-man/man1/default_subcmd_order.1","7e17a36c1e39945f51f681e0ab527b103daeb4d938f77d518f23a0b2e2072fb6"],
+    ["11:clap-mangen-man/man1/feature_sample.bash.1","635d70075ada47e84f8f1f511795ea238a9a666bce2703f3b72106150b8b635e"],
+    ["11:clap-mangen-man/man1/help_headings.bash.1","c7323880bcc80f6a0c1ae5917a219cab3b52011d770a9c6a1a4aa171cecbc969"],
+    ["11:clap-mangen-man/man1/hidden_option.bash.1","5961a7d03247d7de51fdec4e853664c34622db74837a7f7d857cdfb2ab493e25"],
+    ["11:clap-mangen-man/man1/multiple_optional_values.bash.1","4f6f2a9922aa0041437c65c4f317894a6c385e00f67b2e6b3febee2a728972b1"],
+    ["11:clap-mangen-man/man1/optional_value.bash.1","d260e35f8c3cd0c2ea0159b130209d877fbd357820c7fce321329be09d878ae4"],
+    ["11:clap-mangen-man/man1/optional_with_required_equals_value.bash.1","70d89513bfdfe9ce39e3e043195e981f8952df2a1700fc7f98f8a7d3a22cf6df"],
+    ["11:clap-mangen-man/man1/possible_values.bash.1","6bfba32f6501b797e45feed845521bfa26122cb79006198cc62e1d89eee9646c"],
+    ["11:clap-mangen-man/man1/quoting.bash.1","bdd5b0242b9258c305a3288448111e5ec32c0773c625208dfa8c72c1717e2a9c"],
+    ["11:clap-mangen-man/man1/special_commands.bash.1","fff3faf38aa937861b33fd50487b9127adf96fbc5ad230e45d7cb9706f6d090f"],
+    ["11:clap-mangen-man/man1/sub_subcommand_help.1","5dab68970acd5fec76f5da34f93dc2d2a98643846d811a391d412346937d3401"],
+    ["11:clap-mangen-man/man1/sub_subcommands.bash.1","7513276fc16ab5cadff6c876b95bd388ef68f007bb6ab5518967717731975a02"],
+    ["11:clap-mangen-man/man1/value_env.bash.1","bf1de5932c5ce4cdff761aeb0ad86054720c8e6e0f32fe20833affd93b86bd6a"],
+    ["11:clap-mangen-man/man1/value_hint.bash.1","77d1b11f6cda26f20f1c05279afe2aac6c4fa288c96e00747ee1c85e71174e51"],
+    ["11:clap-mangen-man/man1/value_name_without_arg.bash.1","c4400f5e6eaa9b0492f9145f1998056e880c9f3c3949e7609ee23439103d76ea"],
+    ["11:clap-mangen-man/man1/value_with_required_equals.bash.1","41ac6fecf1061e49328b75422d311557a2106dd3c8d7f71ba90ed00a8f8383ae"],
+    ["11:clap-mangen-man/man1/variadic_values.bash.1","a2ec8f08b4140402c761cd5c93aa9f36ebc6636a8a30f38c27d10c240bb8e73e"]
+   ]
+  }
+ },
+ "local_evidence_artifacts": [
+  {
+   "path": "target/mandoc-migration/check.log",
+   "sha256": "17d0d13df8e2c06c74f3a6bace65c9975c462cc50ec050c5a86d16baa4a21ec2",
+   "bytes": 583514
+  },
+  {
+   "path": "target/mandoc-migration/restored-target-final-provenance/target/summary.json",
+   "sha256": "18754aed59927cb6e727fa3e2657a7d10f69c4b7aaf0700c87a59d5f34dad003",
+   "bytes": 2486
+  },
+  {
+   "path": "target/mandoc-migration/restored-target-final-provenance/target-generator-supplement.json",
+   "sha256": "a39d6323e3d3d94e05d8bd105dc09348a0a5ec17a13d1c55ee2fb409eac3aa04",
+   "bytes": 296100
+  },
+  {
+   "path": "target/mandoc-migration/restored-target-final-provenance/previous-run-comparison.json",
+   "sha256": "2b9d1749cccf09fa3b29aac2cb0477218e0d5f6a66eedc29a47a40a213e27dc6",
+   "bytes": 783
+  },
+  {
+   "path": "target/mandoc-migration/restored-sweeps/preparation.json",
+   "sha256": "25c9601ee0c6d546a2aa32d4c0ee1324dd105002631e079ec9e85e12d5d35786",
+   "bytes": 1811
+  },
+  {
+   "path": "target/mandoc-migration/restored-sweeps/verified-inputs.jsonl",
+   "sha256": "e5b8a1c2a70ca3b622cf23203a6c217ad61a0cb71509dad9691077e421d461f5",
+   "bytes": 34703206
+  },
+  {
+   "path": "target/mandoc-migration/restored-sweeps/target/summary.json",
+   "sha256": "4c71b9e863ba51e73784d93b5197d3a91128264e1ebadd4b255bb42020b8d915",
+   "bytes": 2774
+  },
+  {
+   "path": "target/mandoc-migration/restored-target-resweep/target/summary.json",
+   "sha256": "e04588abb7f6b48e3f17c1993b2dcaf4e74821f50f60475610b3ea67b916c306",
+   "bytes": 2762
+  },
+  {
+   "path": "target/mandoc-migration/restored-target-final/target/summary.json",
+   "sha256": "af94be69b5197761aba54c2489d4f3e07f914d2d0c01e3fdfe25a3bb5a1cb7e6",
+   "bytes": 2667
+  },
+  {
+   "path": "target/mandoc-migration/restored-target-final/target/results.jsonl",
+   "sha256": "de8a57659541e6ddfe3c3fcf063f4e2023b44c6677866b53d57ad3fb7698d615",
+   "bytes": 1398537109
+  },
+  {
+   "path": "target/mandoc-migration/restored-target-final/target/pending.jsonl",
+   "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "bytes": 0
+  },
+  {
+   "path": "target/mandoc-migration/restored-target-final/target-generator-supplement.json",
+   "sha256": "59a172f1f97ea0a331ef8ed4536336f572d3bf9a0e346175d14f661be95e2452",
+   "bytes": 296281
+  },
+  {
+   "path": "target/mandoc-migration/restored-sweeps/semantic/summary.json",
+   "sha256": "e80ad84d7b14e138cc9fb1b2000da19ecb650753e55db80e367845275f35b186",
+   "bytes": 2885
+  },
+  {
+   "path": "target/mandoc-migration/restored-sweeps/semantic/results.jsonl",
+   "sha256": "dbba5d6e0839d62bef802b903699a278d80a592a793594488d2dcca2b131178f",
+   "bytes": 87593665
+  },
+  {
+   "path": "target/mandoc-migration/restored-sweeps/semantic/pending.jsonl",
+   "sha256": "a5a02e5562db9ee46d826bd46c33890104f69d1ea9913296e06c6b0251bf6469",
+   "bytes": 4340941
+  },
+  {
+   "path": "target/mandoc-migration/restored-sweeps/semantic-generator-supplement.json",
+   "sha256": "0a6f836b295c5baf688a1da9d8b5cb8ba1cba56056d1be84b9a38f6b718b74b5",
+   "bytes": 62717
+  },
+  {
+   "path": "target/mandoc-migration/restored-sweeps/semantic-review-evidence.json",
+   "sha256": "e0e5167866a226bdf8aa772a6a653513238e6117140e87378df29222e71345d2",
+   "bytes": 11508860
+  },
+  {
+   "path": "target/mandoc-migration/restored-sweeps/semantic-baseline-comparison.json",
+   "sha256": "559e50c8b8b6a9fba09140069f3e7d77481380f245b5e3f5f73395ac661e55dc",
+   "bytes": 2178740
+  },
+  {
+   "path": "target/mandoc-migration/cli-ir-comparison/producer.json",
+   "sha256": "3a9ce292135c7474ec5965565d2e3174ac21345084a88f13e3b9965f56116de9",
+   "bytes": 3017
+  },
+  {
+   "path": "target/mandoc-migration/cli-ir-comparison/summary.json",
+   "sha256": "d5fd18b7695a893a436f0da6533afa3ca70f6c7984023278bca03b2fdbc47a48",
+   "bytes": 26254
+  },
+  {
+   "path": "target/mandoc-migration/cli-ir-comparison/results.jsonl",
+   "sha256": "f6ba8a2a08d935c64e18d1913e3585a1db3713e7df7b33fbb146331fd3b3ed0c",
+   "bytes": 102267768
+  },
+  {
+   "path": "target/mandoc-migration/cli-ir-comparison/pending.jsonl",
+   "sha256": "a793e6d532a8f6e01feb800f6fadeb0f818e6f82f61a87cec37812eba8d0b0b7",
+   "bytes": 77348755
+  },
+  {
+   "path": "target/mandoc-migration/cli-ir-comparison/review-index.json",
+   "sha256": "104fc9eab3d27eaddf692703352accb5bf58a0f2af1831bcb167f33ac6a1cefb",
+   "bytes": 873547
+  },
+  {
+   "path": "target/mandoc-migration/cli-ir-generator-supplement/summary.json",
+   "sha256": "1b350820e1dc4d4879d25fe0fe53fd606e2570faafd0c6824b3cf943729c8c5e",
+   "bytes": 3790
+  },
+  {
+   "path": "target/mandoc-migration/cli-ir-generator-supplement/results.jsonl",
+   "sha256": "3633f4195c5ce589f02cfbf8f97f3df6b66835183cb824ec0e2c4e2b679563c9",
+   "bytes": 40685
+  },
+  {
+   "path": "target/mandoc-migration/cli-ir-text-review/summary.json",
+   "sha256": "0e01b94b849cf3e0d2a863bf67600a194542c05f688e33348bf216dd9ee74339",
+   "bytes": 1137
+  },
+  {
+   "path": "target/mandoc-migration/cli-ir-text-review/results.jsonl",
+   "sha256": "304e6e0a20ae5a8d712860dad5f238644e57684f325e25dce49859595ada94e3",
+   "bytes": 4239790
+  },
+  {
+   "path": "target/mandoc-migration/cli-ir-text-review/classes.json",
+   "sha256": "c0c3221e21f65a1ab0bf36c0d67f52e0a1a7f12aebb345bbf9a45c9fa2939d94",
+   "bytes": 84396
+  },
+  {
+   "path": "target/mandoc-migration/cli-ir-text-review/class-review.json",
+   "sha256": "a538852ac840e7c51895a4b951c0c97fdbd286acfad0586666078769acb7afa2",
+   "bytes": 102800
+  },
+  {
+   "path": "target/mandoc-migration/cli-ir-text-review/metadata-headings.json",
+   "sha256": "eb73cde4fe44572679b058f26368293825d9c14bd73e670d0f0e0cb5c6998bc4",
+   "bytes": 288769
+  },
+  {
+   "path": "target/mandoc-migration/cli-ir-text-review/rare-crosscheck.json",
+   "sha256": "1dcc338fd5aeae2b1ca4c295febb2cb563fc605c16f52d29ffb87b1613c61a2e",
+   "bytes": 11510
+  },
+  {
+   "path": "target/mandoc-migration/structure.json",
+   "sha256": "d49f9a1f9d333d01a9f48937ac3b9596671fae821275bae4d846bb28fa5933ed",
+   "bytes": 62633
+  },
+  {
+   "path": "target/mandoc-migration/fidelity-cvs.json",
+   "sha256": "58988ab1b5aae48e9cd13611c0aabc1b0c0a605e668a9e56b64a2e0e4438fa33",
+   "bytes": 20600
+  },
+  {
+   "path": "target/mandoc-migration/fidelity-baseline-cvs.json",
+   "sha256": "f1d258819aa5f0b18813cc3747e9b1cb65b475986ced6150976e1bfca8c5c2f2",
+   "bytes": 20618
+  },
+  {
+   "path": "target/mandoc-migration/layout-cvs.json",
+   "sha256": "acb06e67eae7e9ed82e91df8a21730de41c98db1154feaaf3bce8fc2d9a00692",
+   "bytes": 47090
+  },
+  {
+   "path": "target/mandoc-migration/layout-baseline-cvs.json",
+   "sha256": "78752de607e87d060e329af860766f2dc36a2ab549e30a4b1d24b391d5bdd91b",
+   "bytes": 47169
+  },
+  {
+   "path": "target/mandoc-migration/fixture-review-summary.json",
+   "sha256": "0c43854428f427c0ce63020327b44d144e99309a992230f961987bd767e0ed05",
+   "bytes": 37431
+  },
+  {
+   "path": "target/mandoc-migration/independent-text-crosscheck.json",
+   "sha256": "29a24573e79632fe241e9556b4f24bf0a7fd03b848987ffb5ea48b04e4c94272",
+   "bytes": 296320
+  },
+  {
+   "path": "target/mandoc-migration/lb-crosscheck.json",
+   "sha256": "5bca34c1181a1b3d66dd5dcf7951441f395b08332dc01ed338a6fc7e984cd52d",
+   "bytes": 9261
+  },
+  {
+   "path": "target/mandoc-migration/standards-cvs-log.txt",
+   "sha256": "e725830b1ab645739296dade28d47a6833f7aba225be248bcb509560779fa4a6",
+   "bytes": 9188
+  },
+  {
+   "path": "target/mandoc-migration/restored_sweeps.py",
+   "sha256": "630ec9df9931caa851f29f381ffa705c5661e206ce24419c1122f69930454978",
+   "bytes": 10699
+  },
+  {
+   "path": "target/mandoc-migration/run_target_validation.py",
+   "sha256": "9334eae15c926958c9aef7046cc22d7a080918efcf1a4b9946dc623328864d0b",
+   "bytes": 2766
+  },
+  {
+   "path": "target/mandoc-migration/semantic_baseline_compare.py",
+   "sha256": "001b64c034cd9b651f6ac08b426eef2ee11bf5cb4773a680636bc59159371d57",
+   "bytes": 2688
+  },
+  {
+   "path": "target/mandoc-migration/text_crosscheck.py",
+   "sha256": "a420da01a8cce4c1eeb2dd3889f0c9aa4027a32fb5cf4c9608121df33d3d62d8",
+   "bytes": 4277
+  },
+  {
+   "path": "target/mandoc-migration/lb_crosscheck.py",
+   "sha256": "5fe789a22158170c4d0fff9ecde2a9a903a50b0d81f2c8c2bedf7169f74c9913",
+   "bytes": 2451
+  },
+  {
+   "path": "target/mandoc-migration/fixture_review.py",
+   "sha256": "dad8d22c907066da7383e165d5aa9737ae57bc7e555ab221909c409c51422c2a",
+   "bytes": 5674
+  }
+ ],
+ "limitations": ["8,452 host sources changed versus the historical manifest; this is a hash-verified current-state run, not exact historical corpus replay.","No historical profiler was available; migration-preexistence was proven with the preserved old CLI model for the same source bytes, not by rerunning the old semantic oracle.","828 redirect-only pages are explicitly unsupported by the production standalone semantic scan; no claim of their semantic validation is made.","Raw pending statuses and prior checked-in ledgers were not changed.","Included .so dependency graphs were not independently frozen; the input index binds each manifest source, not every possible secondary file.","The source corpus and local target artifacts are not distributed by this compact record; their hashes detect identity but cannot recreate unavailable bytes.","Canonical diagnostic excerpts truncate149 paths; complete per-side diagnostic hashes remain recorded. Rerun these sources to inspect all diagnostic wording.","No blanket equivalence claim: native formatting, metadata, diagnostics and target identities intentionally changed. Text equality does not validate semantics or all structural differences.","This is a Linux corpus run; it does not establish macOS or other platform behavior.","Local scripts/check.sh succeeded, including the new .St tests; remote CI, release publication, and other-platform validation are separate obligations."],
+ "release_verification": {
+  "status": "local-check-passed",
+  "command": "scripts/check.sh",
+  "producer_commit": "1b8ed856ad0e6684561d8b46cebc6f7e87b8d87e",
+  "new_standard_compatibility_tests": "passed-in-check-log",
+  "compatibility_decision": "Follow intentional upstream st.c revision1.17 removal of -xsh4.2; use portable -xpg4.2 in sources. No local compatibility alias. Documentation and focused tests are separate from corpus evidence.",
+  "evidence_artifact": "target/mandoc-migration/check.log",
+  "final_cli_sha256": "30d2600181516c3b27515937dc397640d140d1b6404901cbec14aae60e9934c6"
+ }
+}

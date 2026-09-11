@@ -1,4 +1,4 @@
-/* Linux/glibc feature configuration for the vendored mandoc 1.14.6 parser. */
+/* Linux/glibc feature configuration for the pinned vendored mandoc parser. */
 #ifdef __cplusplus
 #error "Do not use C++.  See the upstream INSTALL file."
 #endif
