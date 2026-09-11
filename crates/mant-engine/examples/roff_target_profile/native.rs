@@ -4,7 +4,7 @@ use std::collections::BTreeMap;
 
 use libmandoc_rs::{Node, NodeKind};
 
-use super::spelling::automatic_target_spelling;
+use super::spelling::{automatic_target_spelling, first_source_token};
 
 use super::{
     ClassifiedOwner, ExpectedTarget, OwnerClass, OwnerDisposition, TargetRole, UnclassifiedOwner,
@@ -471,8 +471,8 @@ fn explicit_target_argument(node: &Node) -> Option<String> {
 
 fn source_token(node: &Node) -> Option<String> {
     first_text(node)
-        .map(first_token)
-        .filter(|target| !target.is_empty())
+        .and_then(first_source_token)
+        .map(str::to_owned)
 }
 
 fn first_text(node: &Node) -> Option<&str> {
@@ -489,14 +489,6 @@ fn first_text_on_line(node: &Node, line: u32) -> Option<&str> {
     node.children
         .iter()
         .find_map(|child| first_text_on_line(child, line))
-}
-
-fn first_token(value: &str) -> String {
-    value
-        .split_whitespace()
-        .next()
-        .unwrap_or_default()
-        .to_owned()
 }
 
 fn flatten_nodes<'a>(

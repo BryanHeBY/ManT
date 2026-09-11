@@ -50,11 +50,14 @@ identity, while libmandoc's formatter tag may use a shortened spelling. An
 explicit `.Tg` moved onto the same wrapper remains an exact obligation.
 Some native automatic tags retain source escapes after validation. The oracle
 keeps that raw spelling as evidence and independently decodes reviewed
-zero-width, literal-backslash, hyphen and font-switch forms for canonical-ID
+zero-width, sub-column spacing, literal-backslash, hyphen and font-switch forms for canonical-ID
 comparison. It does not call the production target decoder or relax owner,
 role, occurrence or source-line matching. An unrecognized escape becomes an
 unclassified obligation rather than an assumed match. Explicit `.Tg` fragments
 are not subjected to this automatic-target spelling rule.
+When no native tag string was retained, the fallback takes the first visible
+word without splitting a source escape at its encoded space. An actual retained
+multiword tag instead keeps its complete spelling; these are distinct cases.
 Redirect-only alias pages are recorded but have no local IR destination
 obligation.
 

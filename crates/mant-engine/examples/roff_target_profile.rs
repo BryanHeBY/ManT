@@ -452,10 +452,22 @@ Another field.
 Value.
 .It Fl F\fR|\fPf
 Format.
+.It Cm length\^
+Length.
+.It Cm <\|(\|[
+Punctuation.
+.It Cm show\ all\ procs
+Processes.
 .El
 .Pp
 .Sy %({}Q"E\e) ,
 Pattern.
+.Ss Chunk
+.Em (chunk\ size\ is\ the\ number\ of\ bytes read)
+Chunk.
+.Ss Escape
+.Dq Em tilde\ escape
+Escape.
 .Bl -column one two
 .It Li ?\& Ta Li !\&
 .El
@@ -478,6 +490,11 @@ Pattern.
             (r":\eV", "v"),
             (r"F\fR|\fPf", "f-f"),
             (r#"%({}Q"E\e)"#, "q-e"),
+            (r"length\^", "length"),
+            (r"<\|(\|[", "entry"),
+            (r"show\ all\ procs", "show-all-procs"),
+            ("(chunk", "chunk"),
+            ("tilde", "tilde"),
         ] {
             assert!(
                 native
