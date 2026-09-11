@@ -438,6 +438,27 @@ class ExplanationTests(unittest.TestCase):
             sum(result['rawComparison']['counts'].values()),
         )
 
+    def test_direct_source_compatibility_can_refine_an_unaligned_page_without_covering_it(self):
+        # Alignment has a deliberately bounded work budget.  The literal
+        # bullet evidence is still exact, so it can be removed from the
+        # *secondary* presentation residue while the reordered body remains
+        # reviewable and the raw incomplete comparison remains authoritative.
+        source = '.IP \\(bu\nBODY\n'
+        result = assess_content(
+            '• ALPHA BETA GAMMA\n',
+            '- GAMMA BETA ALPHA\n',
+            source,
+            limits=ContentLimits(max_window=1),
+        )
+        self.assertEqual(result['status'], 'review')
+        self.assertIn('alignment-window-budget', result['rawComparison']['coverage']['reasons'])
+        self.assertTrue(result['coverage']['sourceConsistentCompatibilityApplied'])
+        self.assertLess(
+            sum(result['compatibilityPresentationComparison']['counts'].values()),
+            sum(result['rawComparison']['counts'].values()),
+        )
+        self.assertNotEqual(result['compatibilityPresentationComparison']['status'], 'covered')
+
 
 if __name__ == '__main__':
     unittest.main()

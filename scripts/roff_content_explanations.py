@@ -453,6 +453,27 @@ def _eligible_for_secondary_projection(comparison: dict) -> bool:
     )
 
 
+def _eligible_for_source_consistent_compatibility(comparison: dict) -> bool:
+    """Allow exact source-bound display lenses after bounded alignment stops.
+
+    A large unmatched window prevents an order proof, but it does *not* make
+    occurrence counts, control scanning, or an exact literal source inventory
+    unreliable.  Direct bullet, URI/mail delimiter, manual-reference, and
+    column-cell projections only rewrite counted spellings under independent
+    source bounds; they can therefore shrink their own presentation residue
+    without upgrading an incomplete comparison to ``covered``.  Terminal
+    hyphen reflow is deliberately excluded because it rewrites physical row
+    boundaries and needs complete order evidence.
+    """
+    coverage = comparison.get("coverage", {})
+    reasons = set(coverage.get("reasons", ()))
+    return (
+        comparison.get("status") == "review"
+        and reasons <= {"finding-retention-budget", "alignment-window-budget"}
+        and not coverage.get("token_counts_are_lower_bounds", False)
+    )
+
+
 def _source_is_consistent_with_hyphen_reflows(source: str | None, *reflows) -> bool:
     """Require every rejoined spelling to occur enough times literally in source.
 
@@ -632,7 +653,7 @@ def assess_content(reference: str, mant: str, source: str | None, *,
     compatibility = projection
     compatibility_evidence: list[dict] = []
     compatibility_used = False
-    if _eligible_for_secondary_projection(projection):
+    if _eligible_for_source_consistent_compatibility(projection):
         projected_reference, projected_mant, compatibility_evidence = _source_consistent_compatibility_projection(
             visible_text(reference), visible_text(mant), source
         )
