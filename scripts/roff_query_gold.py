@@ -270,7 +270,10 @@ def run(manifest: Path, profiler: Path, timeout: int, root_overrides: list[str] 
                 "decisions": dict(Counter(row["reason"] for row in group_profile["sourceRuns"])),
                 "unexpectedGroups": group_profile["unexpectedGroups"],
                 "invalidGroups": group_profile["invalidGroups"],
-                "unresolvedRuns": group_profile["unresolvedRuns"]})
+                "unresolvedRuns": group_profile["unresolvedRuns"],
+                # Source runs without a final declaration group are a census
+                # count, not a review failure: roff has no group construct.
+                "ungroupedRuns": group_profile.get("ungroupedRuns", 0)})
         rows = response.get("queryProfiles", [])
         if response.get("error") or len(rows) != len(request["queries"]):
             results.append({"id": key, "status": "unresolved", "reason": response.get("error", "incomplete probe response")})

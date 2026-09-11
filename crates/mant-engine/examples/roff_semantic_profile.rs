@@ -179,6 +179,54 @@ fn profile_document(
     for entry in &entries {
         *counts.entry(entry.kind).or_default() += 1;
     }
+    let (violations, semantic_diagnostics) = collect_violations(
+        &ordinal_entries,
+        &ordinal_definitions,
+        &empty_entries,
+        &value_domain_violations,
+        &ordinal_conversion_violations,
+        &declaration_group_violations,
+        document,
+    );
+
+    json!({
+        "schema": PROFILE_SCHEMA,
+        "id": id,
+        "entries": entries,
+        "entryCounts": counts,
+        "relationshipCounts": relationship_counts(&entries),
+        "semanticsComplete": mant_query::semantics_complete(&document.diagnostics) && semantic_diagnostics.is_empty(),
+        "semanticViolations": semantic_diagnostics,
+        "ordinalEntries": ordinal_entries,
+        "ordinalDefinitions": ordinal_definitions,
+        "retainedPresentationOrdinals": retained_presentation_ordinals,
+        "emptyEntries": empty_entries,
+        "aliaslessGenericTermCount": aliasless_generic_terms.len(),
+        "aliaslessGenericTermSamples": aliasless_generic_terms.into_iter().take(SAMPLE_LIMIT).collect::<Vec<_>>(),
+        "noteLikeEntryCount": note_like_entries.len(),
+        "noteLikeEntrySamples": note_like_entries.into_iter().take(SAMPLE_LIMIT).collect::<Vec<_>>(),
+        "valueDomainViolations": value_domain_violations,
+        "ordinalConversions": ordinal_conversions,
+        "ordinalConversionViolations": ordinal_conversion_violations,
+        "declarationGroups": declaration_groups,
+        "declarationGroupViolations": declaration_group_violations,
+        "diagnostics": {
+            "parser": parser_diagnostics,
+            "ir": document.diagnostics.len(),
+        },
+        "violations": violations,
+    })
+}
+
+fn collect_violations(
+    ordinal_entries: &[&EntryRecord],
+    ordinal_definitions: &[DefinitionCandidate],
+    empty_entries: &[&EntryRecord],
+    value_domain_violations: &[String],
+    ordinal_conversion_violations: &[String],
+    declaration_group_violations: &[String],
+    document: &Document,
+) -> (Vec<String>, std::collections::BTreeSet<String>) {
     let mut violations = ordinal_entries
         .iter()
         .map(|entry| {
@@ -214,34 +262,7 @@ fn profile_document(
         .map(|diagnostic| diagnostic.message)
         .collect::<std::collections::BTreeSet<_>>();
     violations.extend(semantic_diagnostics.iter().cloned());
-
-    json!({
-        "schema": PROFILE_SCHEMA,
-        "id": id,
-        "entries": entries,
-        "entryCounts": counts,
-        "relationshipCounts": relationship_counts(&entries),
-        "semanticsComplete": mant_query::semantics_complete(&document.diagnostics) && semantic_diagnostics.is_empty(),
-        "semanticViolations": semantic_diagnostics,
-        "ordinalEntries": ordinal_entries,
-        "ordinalDefinitions": ordinal_definitions,
-        "retainedPresentationOrdinals": retained_presentation_ordinals,
-        "emptyEntries": empty_entries,
-        "aliaslessGenericTermCount": aliasless_generic_terms.len(),
-        "aliaslessGenericTermSamples": aliasless_generic_terms.into_iter().take(SAMPLE_LIMIT).collect::<Vec<_>>(),
-        "noteLikeEntryCount": note_like_entries.len(),
-        "noteLikeEntrySamples": note_like_entries.into_iter().take(SAMPLE_LIMIT).collect::<Vec<_>>(),
-        "valueDomainViolations": value_domain_violations,
-        "ordinalConversions": ordinal_conversions,
-        "ordinalConversionViolations": ordinal_conversion_violations,
-        "declarationGroups": declaration_groups,
-        "declarationGroupViolations": declaration_group_violations,
-        "diagnostics": {
-            "parser": parser_diagnostics,
-            "ir": document.diagnostics.len(),
-        },
-        "violations": violations,
-    })
+    (violations, semantic_diagnostics)
 }
 
 fn path_field(request: &Value, field: &str) -> Result<PathBuf, String> {

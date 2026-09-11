@@ -839,11 +839,18 @@ block at that source line to have the intended retained or recovered shape.
 This independent source-side ledger detects over-conversion after the original
 definition term has already disappeared from the IR:
 
-The companion declaration-group ledger is bidirectional. It compares each
-final group with its complete native owner run, including AST path and executed
-flow epoch. A contiguous final semantic subset may omit only a source-proven
-mdoc template head (for example `/RE` with an `Ar` placeholder); a missing,
-reordered, or merely unnamed final owner never qualifies as that exception.
+The companion declaration-group ledger is bidirectional where roff supplies a
+real group fact: every final group must match its complete native owner run,
+including AST path and executed flow epoch. A contiguous final semantic subset
+may omit only a source-proven presentation template: an mdoc search form (for
+example `/RE` with an `Ar` placeholder), a man dash-plus-italic parameter
+template, or a plain title-style label. A missing, reordered, or merely
+unnamed final owner never qualifies as that exception. Conversely, roff has no
+declaration-group syntax: an ungrouped consecutive run is recorded as census
+evidence, not a failure, because it can be an index, a taxonomy, or independent
+definitions without a shared source body.
+The profile separately counts those ungrouped runs as census evidence; they do
+not share the historical `unresolvedRuns` failure counter.
 
 ```sh
 cargo build --package mant-engine --example roff_semantic_profile

@@ -148,11 +148,33 @@ fn unsigned_numeric_head(node: &Node, item: &DefinitionItem) -> bool {
     native_numeric_label(node).is_some_and(|label| label == text.trim_matches([' ', '\t']))
 }
 
-fn native_template_head(node: &Node) -> bool {
-    // This deliberately recognizes only a source-level mdoc command template
-    // such as `.Pf / Ns Ar RE`, not every anonymous final IR owner. The AST
-    // remains immutable during corruption tests, so a later lost name cannot
-    // turn a real declaration into a permitted audit gap.
+fn source_presentation_head(node: &Node) -> bool {
+    // This deliberately recognizes only source-level presentation templates,
+    // never an anonymous final IR owner. The AST remains immutable during
+    // corruption tests, so a later lost name cannot turn a real declaration
+    // into a permitted audit gap.
+    native_mdoc_search_template(node)
+        || native_man_option_template(node)
+        || native_man_search_template(node)
+        || native_title_head(node)
+}
+
+fn collect_mdoc_template_text(node: &Node, text: &mut String, has_argument: &mut bool) {
+    if node.flags.no_print {
+        return;
+    }
+    if node.macro_name.as_deref() == Some("Ar") {
+        *has_argument = true;
+    }
+    if let Some(value) = node.text.as_deref() {
+        text.push_str(value);
+    }
+    for child in &node.children {
+        collect_mdoc_template_text(child, text, has_argument);
+    }
+}
+
+fn native_mdoc_search_template(node: &Node) -> bool {
     let Some(head) = node
         .children
         .iter()
@@ -162,29 +184,135 @@ fn native_template_head(node: &Node) -> bool {
     };
     let mut text = String::new();
     let mut has_argument = false;
-    fn collect(node: &Node, text: &mut String, has_argument: &mut bool) {
-        if node.flags.no_print {
-            return;
+    collect_mdoc_template_text(head, &mut text, &mut has_argument);
+    has_argument && text.trim_start().starts_with('/')
+}
+
+fn source_head_text(node: &Node) -> Option<&str> {
+    let head = node
+        .children
+        .iter()
+        .find(|child| child.kind == NodeKind::Head)?;
+    let mut current = head.children.first()?;
+    loop {
+        if current.kind == NodeKind::Text {
+            return (!current.flags.no_print && current.children.is_empty())
+                .then_some(current.text.as_deref()?);
         }
-        if node.macro_name.as_deref() == Some("Ar") {
-            *has_argument = true;
+        if current.flags.no_print || current.text.is_some() || current.children.len() != 1 {
+            return None;
         }
-        if let Some(value) = node.text.as_deref() {
-            text.push_str(value);
+        current = &current.children[0];
+    }
+}
+
+fn native_man_option_template(node: &Node) -> bool {
+    // Perl-generated man pages use a historical spelling such as
+    // `.IP \fB-\fR\fImin-len\fR`: it displays a dash followed by an italic
+    // placeholder, rather than an option named `-min-len`. mandoc's man
+    // formatter deliberately treats the head as visible layout text. Admit
+    // this exact source witness as presentation-only so a later `-n`/`--long`
+    // semantic group may still be proven, but never generalize it to a real
+    // dash option or a damaged final owner.
+    if !matches!(node.macro_name.as_deref(), Some("IP" | "TP")) {
+        return false;
+    }
+    let Some(raw) = source_head_text(node) else {
+        return false;
+    };
+    let Some((dash, parameter)) = raw.trim_matches([' ', '\t']).split_once(r"\fI") else {
+        return false;
+    };
+    source_visible_dash(dash)
+        && parameter
+            .strip_suffix(r"\fR")
+            .is_some_and(|name| !name.is_empty() && !name.contains(char::is_whitespace))
+}
+
+fn source_visible_dash(source: &str) -> bool {
+    // Interpret only the historical two-byte font changes and escaped hyphen
+    // emitted by generated man pages. This is intentionally not a roff
+    // evaluator: an arbitrary escape cannot prove a presentation template.
+    // The traditional bold/escaped-hyphen/reset and bold/hyphen/reset forms
+    // both render exactly one dash.
+    let mut visible = String::new();
+    let mut characters = source.chars();
+    while let Some(character) = characters.next() {
+        if character != '\\' {
+            visible.push(character);
+            continue;
         }
-        for child in &node.children {
-            collect(child, text, has_argument);
+        match characters.next() {
+            Some('f') if matches!(characters.next(), Some('B' | 'I' | 'R' | 'P' | '1'..='4')) => {}
+            Some('-') => visible.push('-'),
+            _ => return false,
         }
     }
-    collect(head, &mut text, &mut has_argument);
-    has_argument && text.trim_start().starts_with('/')
+    visible == "-"
+}
+
+fn native_man_search_template(node: &Node) -> bool {
+    // Historic nvi/ex manuals encode search commands as a man TP head with an
+    // RE placeholder and a carriage-return marker. It is visible syntax, not
+    // a literal command that can be selected safely. Modern mdoc forms are
+    // handled separately by native_mdoc_search_template.
+    matches!(node.macro_name.as_deref(), Some("IP" | "TP"))
+        && source_head_text(node).is_some_and(|text| {
+            let text = text.trim_matches([' ', '\t']);
+            if !matches!(text.as_bytes().first(), Some(b'/' | b'?')) {
+                return false;
+            }
+            let rest = &text[1..];
+            let Some(suffix) = rest.strip_prefix("RE") else {
+                return false;
+            };
+            let Some(parameters) = suffix.strip_suffix("<carriage-return>") else {
+                return false;
+            };
+            parameters.chars().all(|character| {
+                character.is_ascii_alphabetic()
+                    || matches!(character, '/' | '?' | '[' | ']' | ' ' | '-')
+            })
+        })
+}
+
+fn native_title_head(node: &Node) -> bool {
+    // A plain, bodyless title in native list layout is presentation structure
+    // rather than a selector. This covers generated contents/taxonomy labels
+    // while preserving styled syntax, lower-case commands, option spelling,
+    // and every label with readable owner content as audit obligations.
+    if !matches!(node.macro_name.as_deref(), Some("IP" | "TP" | "It")) || body(node) {
+        return false;
+    }
+    let Some(text) = source_head_text(node).map(str::trim) else {
+        return false;
+    };
+    let mut characters = text.chars();
+    let Some(first) = characters.next() else {
+        return false;
+    };
+    if !first.is_ascii_uppercase()
+        || text.starts_with('-')
+        || text.contains(['=', ':', '<', '>', '[', ']'])
+    {
+        return false;
+    }
+    if text.contains('/') {
+        return text.chars().all(|character| {
+            character.is_ascii_alphanumeric()
+                || character.is_ascii_whitespace()
+                || matches!(character, '/' | '-')
+        });
+    }
+    characters.all(|character| {
+        character.is_ascii_alphabetic() || character.is_ascii_whitespace() || character == '-'
+    })
 }
 
 struct Audit<'a> {
     observed: Observed<'a>,
     rows: Vec<Value>,
     matched: BTreeSet<usize>,
-    review: usize,
     group_index: BTreeMap<Vec<OwnerKey>, usize>,
     native_owners: BTreeMap<usize, OwnerKey>,
     native_source_nodes: BTreeMap<OwnerKey, &'a Node>,
@@ -219,7 +347,7 @@ impl Audit<'_> {
                             .all(|source| {
                                 self.native_source_nodes
                                     .get(source)
-                                    .is_some_and(|node| native_template_head(node))
+                                    .is_some_and(|node| source_presentation_head(node))
                             })
                     })
                     .map(|_| (index, "source-run-semantic-subset"))
@@ -265,15 +393,21 @@ impl Audit<'_> {
                 .as_ref()
                 .is_none_or(|e| e.names.is_empty())
         }) {
-            "no-exact-name-review-template-or-non-declaration"
-        } else if sources[..sources.len() - 1]
-            .iter()
-            .any(|s| mant_ir::blocks_have_readable_content(&self.observed.owners[s].description))
-        {
-            "leading-owner-has-readable-content"
+            // Roff has no declaration-group construct. A contiguous run of
+            // independently named IP heads can be a table of contents,
+            // taxonomy, or several unrelated definitions with no shared
+            // source body. It is therefore evidence worth preserving, but
+            // cannot prove that lowering must have created one final group.
+            // The reverse direction remains strict: every actual IR group
+            // must still have an exact source-owner run. This avoids treating
+            // ordinary presentation lists as false semantic regressions.
+            "named-source-run-without-group"
         } else {
-            self.review += 1;
-            "unresolved-recognized-source-run"
+            // Without an actual final group, even a fully named native run
+            // does not establish that all heads share one description. Keep
+            // this source fact in the ledger, but do not promote it to a
+            // product failure on inference alone.
+            "named-source-run-without-group"
         };
         self.rows.push(json!({
             "status": if retained.is_some() { "retained" } else { "rejected" }, "reason": reason,
@@ -437,16 +571,23 @@ pub(super) fn profile(root: &Node, document: &Document) -> Value {
         observed,
         rows: Vec::new(),
         matched: BTreeSet::new(),
-        review: 0,
         group_index,
         native_owners,
         native_source_nodes,
     };
     audit.walk(root, &mut Vec::new());
+    let ungrouped_runs = audit
+        .rows
+        .iter()
+        .filter(|row| row["reason"] == "named-source-run-without-group")
+        .count();
     let unexpected = audit.observed.groups.iter().enumerate().filter(|(i,_)| !audit.matched.contains(i))
         .map(|(index,sources)| json!({"group":index,"sources":sources,"reason":"no-compatible-source-run"})).collect::<Vec<_>>();
     json!({"sourceRuns":audit.rows,"observedGroups":audit.observed.groups,
-        "unexpectedGroups":unexpected,"invalidGroups":audit.observed.invalid,"unresolvedRuns":audit.review})
+        "unexpectedGroups":unexpected,"invalidGroups":audit.observed.invalid,
+        // Kept for historical ledger readers. Ungrouped source runs are now
+        // separately counted census evidence, never unresolved failures.
+        "unresolvedRuns":0,"ungroupedRuns":ungrouped_runs})
 }
 
 pub(super) fn violations(profile: &Value) -> Vec<String> {
@@ -457,11 +598,6 @@ pub(super) fn violations(profile: &Value) -> Vec<String> {
             .is_some_and(Vec::is_empty)
     {
         errors.push("declaration group lacks a valid source-owner run".into());
-    }
-    if let Some(count) = profile["unresolvedRuns"].as_u64().filter(|&n| n != 0) {
-        errors.push(format!(
-            "{count} recognized source declaration runs need review"
-        ));
     }
     errors
 }
@@ -555,7 +691,18 @@ mod tests {
                 _ => unreachable!(),
             }
             let observed = profile(&native.document.root, &changed);
-            assert!(!violations(&observed).is_empty(), "{mutation}: {observed}");
+            if mutation == "delete-group" {
+                assert!(violations(&observed).is_empty(), "{mutation}: {observed}");
+                assert!(
+                    observed["sourceRuns"]
+                        .as_array()
+                        .unwrap()
+                        .iter()
+                        .any(|row| { row["reason"] == "named-source-run-without-group" })
+                );
+            } else {
+                assert!(!violations(&observed).is_empty(), "{mutation}: {observed}");
+            }
         }
     }
 
@@ -595,6 +742,98 @@ mod tests {
     }
 
     #[test]
+    fn semantic_subrun_can_follow_source_proven_man_option_templates() {
+        // Reduced from strings(1). The legacy `-min-len` heading is a
+        // formatter-visible synopsis template, not an addressable option;
+        // `-n` and `--bytes` are the independent names sharing its body.
+        let source = b".TH PROBE 1\n.SH OPTIONS\n.IP \\fB\\-\\fR\\fImin\\-len\\fR 4\n.PD 0\n.IP \"\\fB\\-n\\fR \\fImin\\-len\\fR\" 4\n.IP \\fB\\-\\-bytes=\\fR\\fImin\\-len\\fR 4\n.PD\nDisplay strings.\n";
+        let native = libmandoc_rs::Parser::default()
+            .parse_bytes("probe.1", source)
+            .unwrap();
+        let document =
+            mant_loader::parse_manual_bytes(std::path::Path::new("probe.1"), source).unwrap();
+        let valid = profile(&native.document.root, &document);
+        assert!(violations(&valid).is_empty(), "{valid}");
+        assert!(valid["sourceRuns"].as_array().unwrap().iter().any(|row| {
+            row["reason"] == "source-run-semantic-subset"
+                && row["physicalSources"] == json!([[3, 2, 0], [5, 2, 0], [6, 2, 0]])
+        }));
+
+        let mut corrupted = document;
+        let Block::DefinitionList {
+            declaration_groups, ..
+        } = &mut corrupted.sections[0].blocks[0]
+        else {
+            panic!("definition list")
+        };
+        declaration_groups.clear();
+        let ungrouped = profile(&native.document.root, &corrupted);
+        assert!(violations(&ungrouped).is_empty(), "{ungrouped}");
+        assert!(
+            ungrouped["sourceRuns"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|row| { row["reason"] == "named-source-run-without-group" })
+        );
+    }
+
+    #[test]
+    fn semantic_subrun_can_follow_source_proven_man_search_templates() {
+        // Reduced from the historic NetBSD ex(1) source. The RE form is a
+        // visible edit-language template; N and n are the selectable commands
+        // carrying its shared description.
+        let source = b".TH PROBE 1\n.SH COMMANDS\n.TP\n.B \"?RE? [offset]<carriage-return>\"\n.TP\n.B N\n.TP\n.B n\nSearch forward or backward.\n";
+        let native = libmandoc_rs::Parser::default()
+            .parse_bytes("probe.1", source)
+            .unwrap();
+        fn find_line(node: &Node, line: u32) -> Option<&Node> {
+            (node.kind == NodeKind::Block && node.line == line)
+                .then_some(node)
+                .or_else(|| {
+                    node.children
+                        .iter()
+                        .find_map(|child| find_line(child, line))
+                })
+        }
+        assert!(native_man_search_template(
+            find_line(&native.document.root, 3).expect("search template")
+        ));
+        let document =
+            mant_loader::parse_manual_bytes(std::path::Path::new("probe.1"), source).unwrap();
+        let valid = profile(&native.document.root, &document);
+        assert!(violations(&valid).is_empty(), "{valid}");
+        assert!(
+            valid["sourceRuns"].as_array().unwrap().iter().any(|row| {
+                row["reason"] == "source-run-retained"
+                    && row["physicalSources"] == json!([[3, 2, 0], [5, 2, 0], [7, 2, 0]])
+            }),
+            "{valid}"
+        );
+    }
+
+    #[test]
+    fn plain_title_taxonomies_remain_ungrouped_census_evidence() {
+        // Reduced from perltoc(1). Plain title-cased labels under a generic
+        // heading are an index/taxonomy, not declarations sharing the final
+        // item's prose. They remain visible individual terms, but must never
+        // manufacture explanation context by adjacency alone.
+        let source = b".TH PROBE 1\n.SH CONTENTS\n.IP Solution 4\n.PD 0\n.IP \"The Rest\" 4\n.IP Summary 4\n.IP Credits 4\n.PD\nContents.\n";
+        let native = libmandoc_rs::Parser::default()
+            .parse_bytes("probe.1", source)
+            .unwrap();
+        let document =
+            mant_loader::parse_manual_bytes(std::path::Path::new("probe.1"), source).unwrap();
+        let valid = profile(&native.document.root, &document);
+        assert!(violations(&valid).is_empty(), "{valid}");
+        assert!(valid["observedGroups"].as_array().unwrap().is_empty());
+        assert!(valid["sourceRuns"].as_array().unwrap().iter().any(|row| {
+            row["reason"] == "named-source-run-without-group"
+                && row["physicalSources"] == json!([[3, 2, 0], [5, 2, 0], [6, 2, 0], [7, 2, 0]])
+        }));
+    }
+
+    #[test]
     fn headless_ip_layout_arguments_and_non_definition_predecessors_preserve_obligations() {
         for prefix in [
             ".TP\n.B -c\n.TP\n.B -d\nFirst body.\n.IP \"\" 4\nTail.\n",
@@ -621,8 +860,15 @@ mod tests {
             }
             let removed = profile(&native.document.root, &document);
             assert!(
-                !violations(&removed).is_empty(),
-                "deleted groups were silently accepted: {source}\n{removed}"
+                violations(&removed).is_empty(),
+                "ungrouped source run is a census fact, not a false failure: {source}\n{removed}"
+            );
+            assert!(
+                removed["sourceRuns"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .any(|row| { row["reason"] == "named-source-run-without-group" })
             );
         }
     }
@@ -669,7 +915,15 @@ mod tests {
             panic!("definitions")
         };
         declaration_groups.remove(0);
-        assert!(!violations(&profile(&native.document.root, &document)).is_empty());
+        let ungrouped = profile(&native.document.root, &document);
+        assert!(violations(&ungrouped).is_empty(), "{ungrouped}");
+        assert!(
+            ungrouped["sourceRuns"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|row| { row["reason"] == "named-source-run-without-group" })
+        );
     }
     #[test]
     fn parameter_continuation_separates_runs_without_hiding_crossing_groups() {
@@ -706,7 +960,7 @@ mod tests {
         );
     }
     #[test]
-    fn accounting_detects_missing_and_unbacked_groups_in_both_directions() {
+    fn accounting_binds_actual_groups_and_records_ungrouped_runs() {
         let source = b".TH PROBE 1\n.SH OPTIONS\n.TP\n.B --first\n.TP\n.B --second\nBody.\n";
         let parsed = libmandoc_rs::Parser::new(Default::default())
             .parse_bytes("probe.1", source)
@@ -725,9 +979,14 @@ mod tests {
             panic!()
         };
         declaration_groups.clear();
-        assert_eq!(
-            profile(&parsed.document.root, &document)["unresolvedRuns"],
-            1
+        let ungrouped = profile(&parsed.document.root, &document);
+        assert!(violations(&ungrouped).is_empty(), "{ungrouped}");
+        assert!(
+            ungrouped["sourceRuns"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|row| { row["reason"] == "named-source-run-without-group" })
         );
         let Block::DefinitionList {
             declaration_groups, ..
