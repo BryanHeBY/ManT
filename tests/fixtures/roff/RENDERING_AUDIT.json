@@ -1,0 +1,1752 @@
+{
+  "schema": "mant.roff-rendering-evidence/v1",
+  "status": "verified-fixes-with-open-census-coverage",
+  "producerCommit": "a6d5c965af6895b259b23331e61ce3630ba57b94",
+  "referenceSource": {
+    "kind": "unpatched CVS",
+    "snapshotUtc": "2026-09-11T08:00:00Z",
+    "filesManifestSha256": "1d49f6c3bd0b09b81e61bc04d034e974cf1c3d204af0596928edf9cd0be6e6dd",
+    "groffArchive": "https://ftp.gnu.org/gnu/groff/groff-1.24.1.tar.gz",
+    "groffArchiveSha256": "74e2819795b6aff431aeac983d63a9c8968eeaba2a2eba7df8ba4c7b41e7cfd8"
+  },
+  "build": {
+    "command": "cargo build --locked --release -p mant -p mant-ui --bin mant --example geometry_audit",
+    "logSha256": "6d490fb3bcdda7ef588f9c5d3dfec12fe99a42975b29db0a90dd21e377f6bcab",
+    "note": "Frozen local binary copies; hashes bind evidence, not an independent build attestation."
+  },
+  "gates": [
+    {
+      "command": "bash scripts/check.sh",
+      "exitCode": 0,
+      "exitStatusEvidence": "Observed exec session completion",
+      "sessionId": 21644,
+      "log": "target/roff-rendering-audit/check-final.log",
+      "logSha256": "a6b2dfb0c252bbad319a67b21814a6103014b36f7bbdd1b462bf4be06025d3ee"
+    },
+    {
+      "command": "cargo test --locked --workspace --all-features",
+      "exitCode": 0,
+      "exitStatusEvidence": "Observed exec session completion",
+      "sessionId": 88363,
+      "log": "target/roff-rendering-audit/all-features-final.log",
+      "logSha256": "9524e80c90ae1ce3146a6f5cb85369a403d76aee1c6292cea42e3eddfc65eda3"
+    },
+    {
+      "command": "cargo deny check",
+      "exitCode": 0,
+      "exitStatusEvidence": "Observed exec session completion",
+      "sessionId": 79674,
+      "log": "target/roff-rendering-audit/deny-final.log",
+      "logSha256": "bafb5311f23b41e73e18369ad8d7efb94860c249d40f9566713cd2da98a736f6"
+    }
+  ],
+  "gateBinaryParity": {
+    "pages": 51,
+    "equalSuccessfulExitStdoutStderr": 51,
+    "artifactSha256": "cd95e988a909b684a110b057b84819cfc9c6a3251735ac1f32800b9dbbb119a8",
+    "binarySha256": {
+      "target/roff-rendering-audit/mant-verified": "f0144b5cb88415a77a4373904b91ace940aa8744b90e1fbb2d31c465d0572a8c",
+      "target/release/mant": "7d01bb1038e8fe9b2a388996922392a693438fd61f680d87d053edad85991d1a"
+    },
+    "fixtureSourceHashes": {
+      "tests/fixtures/roff/real/archlinux/archive_entry_stat.3": "06311cf3566f167804ef732defd0e5d1375dd68ceb001713be666de69e58581b",
+      "tests/fixtures/roff/real/archlinux/bsdunzip.1": "a271c9471543684df90d1a3f0d988628588ed8ec4f49bb2f7e402fc752ff4a83",
+      "tests/fixtures/roff/real/archlinux/clang.1.gz": "ff10a1611fc293291388feabf2d988c2c8950c0e784a34d4fcea5b4eb966fce0",
+      "tests/fixtures/roff/real/archlinux/expand_number.3bsd": "4e0d2bd2af63de49f6c55ce96ae07b52a6c2214d837f4c33eec47699ca19de03",
+      "tests/fixtures/roff/real/archlinux/gawk.1.zst": "d28fc0d5bfdc08f85faaa6267b14223520967f9fdf0730550f12fee880b2ca31",
+      "tests/fixtures/roff/real/archlinux/gcc.1.gz": "a86bd1d671aa2afff558eb3b7c8b6e2a8bbaf55cb9fb2a6549b7538dd56e0f0f",
+      "tests/fixtures/roff/real/archlinux/git.1.gz": "2736b9d20cd9a36c7971ccdbd7ba5e71cea543960340bb9a27984369df559862",
+      "tests/fixtures/roff/real/archlinux/libpipeline.3.gz": "94a41b04b7abff510f296076372b40c40b67c1c48869a28e303c765f28751cae",
+      "tests/fixtures/roff/real/archlinux/ls.1.gz": "b38365a9b33e2fe2f6773b08e7d72f11f7706e8f91e8a78c40557cce2e862fab",
+      "tests/fixtures/roff/real/archlinux/rsync.1.zst": "12417d699e494cd5154195df53762f0043e2ffe3997634c4e5f4afc209f87d45",
+      "tests/fixtures/roff/real/archlinux/sh.1p.gz": "8caa52a52fcb46e6e4e38105408dac290b66865cf712f6897d81bfa438f16b2d",
+      "tests/fixtures/roff/real/archlinux/tar.1.gz": "3a85ebdd1601114e7c8c1dfa35726f8394d59412887242ffc6ef49ec021017ee",
+      "tests/fixtures/roff/real/archlinux/zip_source_function.3": "73a409d297a001c885fc00092a92105f30fe4e6ecca0b57d06c6fecc40b5b898",
+      "tests/fixtures/roff/real/bsd-closure/dragonfly-adduser.8.gz": "d2c2c09556f74e93bac34e9e3d17032c4f66daea96367854a096fbcc062d733e",
+      "tests/fixtures/roff/real/bsd-closure/dragonfly-gdb.1.gz": "249b232d42ce6091c61bf1ab85e0e32e9aeb1c30ab73f9ba0d8ef943a55200d2",
+      "tests/fixtures/roff/real/bsd-closure/netbsd-drm.4": "de68d037313c80fce7ecdb72da76e09e6009aafba7ad6673d1a6e7df7c6ed9a3",
+      "tests/fixtures/roff/real/bsd-closure/openbsd-current-term.5": "e756a45cd89d0afef51fde45de85fc69030c2ec151e8937fc6dc5d86886002bf",
+      "tests/fixtures/roff/real/cross-platform-releases/cargo.1.zst": "c483b800c9aceb307fb15ea4138783838cb379b6f4e306a8dabe84af8fd4b01d",
+      "tests/fixtures/roff/real/cross-platform-releases/cmake-toolchains.7.zst": "4f5e1946154896899d6471c4e5b0bf902394429641231074dcacc71bbc5dd20b",
+      "tests/fixtures/roff/real/cross-platform-releases/rustc.1.zst": "03a056a5b5041454e837f12027e3002ceee1e452530d17a5c55edf14183b9afb",
+      "tests/fixtures/roff/real/debian/groff_man_style.7.gz": "ed7a60482e27fecfab69e715e490a7ad9e5b134774ecb485fde93ab15a7fcd5d",
+      "tests/fixtures/roff/real/debian/groff_me.7.gz": "dd0ccb9f517711997a06ac952c776cace6d576a616e27db348ef2718e4e8bf65",
+      "tests/fixtures/roff/real/debian/mt-gnu.1.gz": "0ad3bafacc7edfc9611da0a730826f460fd2c6aeaa33bcee7a7bbd8adb31c65e",
+      "tests/fixtures/roff/real/debian/sh.1.gz": "0f6252ae51279e02e6b6f461f5ab17099f477ccc2f0086d3ab455f837356a1a1",
+      "tests/fixtures/roff/real/fedora44/clang.1.zst": "8f727b7a3966a90989f474259bab124fdb3935913dffcb6912c1237a63b2b241",
+      "tests/fixtures/roff/real/fedora44/gcc.1.zst": "531ca21b660c1fbd294218e921d834adfaccd61c6f400a2a5d844759f40fc034",
+      "tests/fixtures/roff/real/fedora44/git.1.zst": "2ee1c5dd84a69dfc91d84840e943e7df0ee06b86bf27eb4bb9369c415f3351c1",
+      "tests/fixtures/roff/real/fedora44/sh.1.zst": "a3de526eb64c1f066d50899fa6ba2a7e63eb77b977aa881c67599d89978debf1",
+      "tests/fixtures/roff/real/fedora44/tar.1.zst": "3a85ebdd1601114e7c8c1dfa35726f8394d59412887242ffc6ef49ec021017ee",
+      "tests/fixtures/roff/real/mant-audit/equation-contexts.7": "61b65f6ac3608d549fb47dd5a8e0e298561dcc9bf8569998a9ca12bdf8f124d0",
+      "tests/fixtures/roff/real/mant-audit/lowering-bk-table.1": "ab46e6b7a7ab8411bf35319e915d715e6612fcb5a69f6e2d8cff510bcb4bd0fc",
+      "tests/fixtures/roff/real/mant-audit/lowering-display-spacing.1": "0bc76dd138469d18e239fa571f1a4591642b7fb1e875a133759e98e2c88958db",
+      "tests/fixtures/roff/real/mant-audit/lowering-enclosure-font.1": "9b0e59020315f43b194d636792482c1470f6e813eee2a1d6acbfc236c5effcba",
+      "tests/fixtures/roff/real/mant-audit/lowering-enclosure-table.1": "81d2f002ebc1cecbb509a523febc9cfaf49994a5fb768adcd6675dc030082ab5",
+      "tests/fixtures/roff/real/mant-audit/lowering-fa-delimiter.1": "54ff9033916ddf7fbb0e5c53805408199773ffbc08c4c9b266a152870117be19",
+      "tests/fixtures/roff/real/mant-audit/lowering-fa-prose.1": "9abfc4c793c91982924de2320e3e50a3773b2b0edf3b527bb5ed66fbb477f39e",
+      "tests/fixtures/roff/real/mant-audit/lowering-in-state.1": "70d4a5d1eaf09d0013b2df4add26500cca880e23d83953d28ce5233420e828da",
+      "tests/fixtures/roff/real/mant-audit/lowering-literal-enclosure.1": "281617f17545384311bce4678dc7bfe1a4785e036907aba6a650019322339622",
+      "tests/fixtures/roff/real/mant-audit/lowering-literal-function.1": "4815190bfda4ab89fbd91eec3592af5b1968d17fbd6ba8930224d5271d783419",
+      "tests/fixtures/roff/real/mant-audit/lowering-lk-label-state.1": "c1c5eb6560c944e86420e478482326a858ec804f179e6169a025c364118ded7e",
+      "tests/fixtures/roff/real/mant-audit/lowering-lk-order.1": "25aaaf5726dd5c9a87a2ec75fd88ccf7336f6414fcfce716955c40ffa520e002",
+      "tests/fixtures/roff/real/mant-audit/lowering-lk-uri-state.1": "1562c65ebee6410063dd472aa13c9fc675cb6e426b21b2e8e10e12777a647671",
+      "tests/fixtures/roff/real/mant-audit/lowering-mt-state.1": "ae9807ecac0d0d5f850e4695ccc160fd7078a1787d90922eb2761dde3a556c92",
+      "tests/fixtures/roff/real/mant-audit/lowering-sm-plain-lines.1": "4bed9a3de56d65ef430e4de313e62814aa308d2c9dfa9f19ff79bc7e6726c117",
+      "tests/fixtures/roff/real/mant-audit/macro-recursion.7": "ab9675337c6de80df24e8e998c73ef2c2793e7ad0ad43dbbce67d58bda5d5e7a",
+      "tests/fixtures/roff/real/mant-audit/projection-escapes.7": "ea11a4522e13e370bbb88e30b3bac88dbbc95827247e03977f453dea37f802a7",
+      "tests/fixtures/roff/real/mant-audit/tq-aliases.7": "be4df069fed83885de2175a4f54533b7067b328f11455060c24eb27796b57a4e",
+      "tests/fixtures/roff/real/windows-releases/npm.1.zst": "34557de7f44cfdaf1bccdc05621bae7108df3bf58c49d24b1688292b82cff158",
+      "tests/fixtures/roff/real/windows-releases/rclone.1.zst": "f35de3b3008f684a7db141a7626db68b08c46e5b3d45c97726bc6d97eebade4e",
+      "tests/fixtures/roff/real/windows-releases/rg.1.zst": "e83d82c28bb2683cf71500e5fb8d9746a162bb24b08a6396a15ab2ed1d96cb45",
+      "tests/fixtures/roff/real/windows-releases/scan-build.1.zst": "d0e7de01eb61dd787cf8162f00ab60f68d8b271a084c0f2cbc0652797a01d4b9"
+    },
+    "note": "Both binaries consumed identical decoded fixture bytes on stdin with explicit roff/text mode."
+  },
+  "matrix": {
+    "schema": "mant-roff-final-matrix-case-review/1",
+    "status": "reviewed-with-explicit-coverage-limits",
+    "scope": "All final matrix automated content and viewport-geometry review cases only; not a full-corpus acceptance or a blanket waiver. Automated statuses are unchanged.",
+    "producerCommit": "a6d5c965af6895b259b23331e61ce3630ba57b94",
+    "producerGitStatus": "",
+    "binaries": {
+      "mant": {
+        "path": "target/roff-rendering-audit/mant-verified",
+        "sha256": "f0144b5cb88415a77a4373904b91ace940aa8744b90e1fbb2d31c465d0572a8c"
+      },
+      "reference": {
+        "path": "target/mandoc-migration/reference/mandoc",
+        "sha256": "f06ba20baedee4adc5914fa023bf02812645b41249077204849d465c08c02f59"
+      },
+      "geometry": {
+        "path": "target/roff-rendering-audit/geometry-verified",
+        "sha256": "3e24d1d4ff2281e24041d245b8c2778a7bfaa2c24cb947686b5a07cac5374cf9"
+      }
+    },
+    "artifactRoot": "target/roff-rendering-audit/matrix-verified",
+    "artifacts": {
+      "summary.json": "53b49dca34269df56a6ed4128787ed0e7a8e5e3ecbd8e5772e3b3fb575a9f9e9",
+      "provenance.json": "7d483dabe50ac6c538daa3e6488b4bcda56e8811b951d8f26dd7c742dd75d519",
+      "sensitivity.json": "ea7bc5716c3fb7ef983e55139d5faf462b86a8c707d3b883d2cc6913748973e8"
+    },
+    "matrix": {
+      "cases": 112,
+      "historicalCases": 61,
+      "generatedCases": 51,
+      "widths": [
+        20,
+        40,
+        80,
+        120
+      ],
+      "statuses": {
+        "frame:covered": 560,
+        "content:covered": 408,
+        "geometry:partial": 200,
+        "viewport:covered": 112,
+        "viewport-geometry:partial": 188,
+        "geometry:covered": 136,
+        "viewport-geometry:covered": 134,
+        "viewport-geometry:review": 14,
+        "geometry:uncovered": 112,
+        "viewport-geometry:uncovered": 112,
+        "content:review": 40,
+        "assertions:covered": 51
+      },
+      "binaryStable": true,
+      "comparatorStable": true,
+      "sourceHashesRechecked": 112,
+      "sourceInventorySha256": "16cb7162f7b491d0e028c75eae8eb43165904675311f7c2ce6b6bd7579940b2a"
+    },
+    "review": {
+      "contentCaseCount": 10,
+      "contentComparisonCount": 40,
+      "viewportCaseCount": 11,
+      "viewportComparisonCount": 14,
+      "viewportFindingCount": 16,
+      "distinctReviewedCases": 21,
+      "newConfirmedProductRegressions": 0,
+      "conclusionLimit": "No additional product regression was established in these final review candidates. Partial/uncovered geometry and the Unicode reference transport remain unproven; no unreviewed corpus candidate is accepted by this record."
+    },
+    "sensitivity": [
+      {
+        "id": "short-token-loss",
+        "status": "detected"
+      },
+      {
+        "id": "unicode-loss",
+        "status": "detected"
+      },
+      {
+        "id": "repeated-token-loss",
+        "status": "detected"
+      },
+      {
+        "id": "operand-leak",
+        "status": "detected"
+      },
+      {
+        "id": "local-order",
+        "status": "detected"
+      },
+      {
+        "id": "explicit-row-merge",
+        "status": "detected"
+      },
+      {
+        "id": "blank-row-loss",
+        "status": "detected"
+      },
+      {
+        "id": "relative-origin",
+        "status": "detected"
+      },
+      {
+        "id": "target-relocation",
+        "status": "detected"
+      }
+    ],
+    "geometryCoverageReasonOccurrences": {
+      "comparisons": {
+        "ambiguous-or-unmatched-source-occurrence": 32,
+        "documented-device-centering-difference": 44,
+        "documented-device-right-alignment-difference": 28,
+        "documented-temporary-indent-omission": 12,
+        "dynamic-source-requires-native-provenance": 12,
+        "executed-indent-state-requires-native-provenance": 16,
+        "hp-continuation-and-short-line-flush-require-native-provenance": 28,
+        "no-comparable-geometry-obligations": 112,
+        "parent-origin-not-observable": 16,
+        "unclassified-scope-close": 4,
+        "unclassified-source-request:Bl": 72,
+        "unclassified-source-request:D1": 4,
+        "unclassified-source-request:El": 72,
+        "unclassified-source-request:Fl": 8,
+        "unclassified-source-request:IP": 12,
+        "unclassified-source-request:It": 104,
+        "unclassified-source-request:Nd": 24,
+        "unclassified-source-request:Nm": 24,
+        "unclassified-source-request:PD": 20,
+        "unclassified-source-request:RB": 32,
+        "unclassified-source-request:TP": 80,
+        "unclassified-source-request:TQ": 12,
+        "unclassified-source-request:Xc": 4,
+        "unclosed-source-scope": 4
+      },
+      "viewportComparisons": {
+        "ambiguous-or-unmatched-source-occurrence": 48,
+        "documented-device-centering-difference": 44,
+        "documented-device-right-alignment-difference": 28,
+        "documented-temporary-indent-omission": 12,
+        "dynamic-source-requires-native-provenance": 12,
+        "executed-indent-state-requires-native-provenance": 16,
+        "hp-continuation-and-short-line-flush-require-native-provenance": 28,
+        "no-comparable-geometry-obligations": 115,
+        "parent-origin-not-observable": 18,
+        "unclassified-scope-close": 4,
+        "unclassified-source-request:Bl": 72,
+        "unclassified-source-request:D1": 4,
+        "unclassified-source-request:El": 72,
+        "unclassified-source-request:Fl": 8,
+        "unclassified-source-request:IP": 12,
+        "unclassified-source-request:It": 104,
+        "unclassified-source-request:Nd": 24,
+        "unclassified-source-request:Nm": 24,
+        "unclassified-source-request:PD": 20,
+        "unclassified-source-request:RB": 32,
+        "unclassified-source-request:TP": 80,
+        "unclassified-source-request:TQ": 12,
+        "unclassified-source-request:Xc": 4,
+        "unclosed-source-scope": 4
+      }
+    },
+    "evidenceRules": {
+      "sourceInventory": "SHA256 of sorted case-id TAB source-SHA256 LF lines; source bytes checked against both saved source.roff and report case.source.",
+      "rawEvidenceInventory": "Per case SHA256 of sorted filename TAB file-SHA256 LF lines for source.roff and every *.stdout sibling. Original native/ManT/probe output is retained; no comparator or raw evidence was edited.",
+      "sourceReferences": [
+        "docs/manuals/mant-roff.md:88 named-bullet versus literal-tag policy",
+        "crates/mant-codec/src/mandoc/blocks/lists/man/definitions.rs:460 exact named-bullet predicate",
+        "crates/mant-codec/src/mandoc/inline/scopes.rs:104 generated em dash",
+        "target/mandoc-migration/mandoc/mdoc_term.c:1120 termp_nd_pre generated en dash",
+        "target/mandoc-migration/mandoc/term.c:860 encode1 scalar overstrikes",
+        "crates/mant-ui/README.md:98 narrow-width displacement policy",
+        "scripts/roff_layout_geometry.py:363 missing-rendered-anchor inference"
+      ],
+      "referenceTrust": "Caller supplies unpatched pinned CVS binary; binary hash is evidence, not proof of source-to-build mapping.",
+      "notProven": [
+        "Exact cross-renderer font/overstrike terminal cells for the Unicode case",
+        "Geometry obligations reported partial or uncovered, including unsupported source requests, executed state and unobservable origins",
+        "Navigation target columns: the probe exposes public rows, not private target columns",
+        "The full restored corpus and fixture census are outside this case-review scope"
+      ]
+    },
+    "cases": [
+      {
+        "id": "LAYOUT_ACCEPTANCE/btrfs_min",
+        "sourceSha256": "37eea83784dc3ad6f131e1ab2f0755d6771a371cb0ceeb69a135ec9920df51a5",
+        "report": "009-LAYOUT_ACCEPTANCE_btrfs_min/report.json",
+        "reportSha256": "e73c09e108fc7f1dd596db8f3ec78f1d227f9d1c7fd6af000660431c47a4786b",
+        "reason": "At width 20 all three definition phrases survive; description is split as descriptio|n. in create, inner -i QGROUP, and delete bodies.",
+        "rawEvidenceInventorySha256": "fbe9fced0a72ea95b55b7e7a8973cc2389000917c8fbbd6a2898fc5d0aede8a3",
+        "viewport": {
+          "automatedStatus": "review",
+          "decision": "text-present-word-internal-wrap-not-modeled-by-token-anchor-oracle",
+          "anchorChecks": [
+            {
+              "width": 20,
+              "sourceLine": 5,
+              "occurrencesAfterWhitespaceOnlyJoin": 1
+            },
+            {
+              "width": 20,
+              "sourceLine": 11,
+              "occurrencesAfterWhitespaceOnlyJoin": 1
+            },
+            {
+              "width": 20,
+              "sourceLine": 15,
+              "occurrencesAfterWhitespaceOnlyJoin": 1
+            }
+          ],
+          "limits": "Whitespace-only joined, lowercased text checks establish presence/order for these exact phrases, not exact geometry or navigation-target identity/columns. Original rows and findings remain authoritative."
+        }
+      },
+      {
+        "id": "LAYOUT_ACCEPTANCE/tp_7",
+        "sourceSha256": "93a3839614cc7ed91099391baffd20838e2a0797c119b3a0f975fb3ba82c6509",
+        "report": "011-LAYOUT_ACCEPTANCE_tp_7/report.json",
+        "reportSha256": "4f91cba4f28a64ed366d98d5bda08c8f763fb5ffd8a4fd1f716c8f23192ff253",
+        "reason": "At width 20 --long NEXT description. survives with descriptio|n.; explicit SECOND line remains earlier.",
+        "rawEvidenceInventorySha256": "10a4999c926d924c38804eb5762cfbb0cf205536292bf80b0d61d60654d07d57",
+        "viewport": {
+          "automatedStatus": "review",
+          "decision": "text-present-word-internal-wrap-not-modeled-by-token-anchor-oracle",
+          "anchorChecks": [
+            {
+              "width": 20,
+              "sourceLine": 9,
+              "occurrencesAfterWhitespaceOnlyJoin": 1
+            }
+          ],
+          "limits": "Whitespace-only joined, lowercased text checks establish presence/order for these exact phrases, not exact geometry or navigation-target identity/columns. Original rows and findings remain authoritative."
+        }
+      },
+      {
+        "id": "LAYOUT_ACCEPTANCE/tp_20",
+        "sourceSha256": "b7e7104b9bf745d873905db7dcbcc4ea6102a1ff8c362c305b32295c1ea19e19",
+        "report": "012-LAYOUT_ACCEPTANCE_tp_20/report.json",
+        "reportSha256": "db00f3056d2c3f0f2b830647004a169d0a4154ace213f4b7e64d927e681b7ff4",
+        "reason": "At width 20 --long is on its own row and NEXT description. survives with descriptio|n.; indentation reduction is a viewport policy.",
+        "rawEvidenceInventorySha256": "397866e2681f4cdad598ea90c591ae7ae80a69e6a6a77c2064a6519920152527",
+        "viewport": {
+          "automatedStatus": "review",
+          "decision": "text-present-word-internal-wrap-not-modeled-by-token-anchor-oracle",
+          "anchorChecks": [
+            {
+              "width": 20,
+              "sourceLine": 9,
+              "occurrencesAfterWhitespaceOnlyJoin": 1
+            }
+          ],
+          "limits": "Whitespace-only joined, lowercased text checks establish presence/order for these exact phrases, not exact geometry or navigation-target identity/columns. Original rows and findings remain authoritative."
+        }
+      },
+      {
+        "id": "LAYOUT_ACCEPTANCE/nofill",
+        "sourceSha256": "3d5c9ed579ac11fa3114eda4c1fe09a0039c0c2763b3fc0b78a681275fb0f1c3",
+        "report": "020-LAYOUT_ACCEPTANCE_nofill/report.json",
+        "reportSha256": "091369b4bb8e4178b97156efff318fef6bda3f4274d5a44232e2484d583c5387",
+        "reason": "The complete first literal source line survives at widths 20/40 with word-internal wrapping (lin|e; intentiona|lly), followed by the indented SECOND line.",
+        "rawEvidenceInventorySha256": "af0340e909b029146c04ff5b9d8ffbb47054cd11e8d3db9847aa30845e5c4b95",
+        "viewport": {
+          "automatedStatus": "review",
+          "decision": "text-present-word-internal-wrap-not-modeled-by-token-anchor-oracle",
+          "anchorChecks": [
+            {
+              "width": 20,
+              "sourceLine": 4,
+              "occurrencesAfterWhitespaceOnlyJoin": 1
+            },
+            {
+              "width": 40,
+              "sourceLine": 4,
+              "occurrencesAfterWhitespaceOnlyJoin": 1
+            }
+          ],
+          "limits": "Whitespace-only joined, lowercased text checks establish presence/order for these exact phrases, not exact geometry or navigation-target identity/columns. Original rows and findings remain authoritative."
+        }
+      },
+      {
+        "id": "LAYOUT_ACCEPTANCE/ip_bullet",
+        "sourceSha256": "75e39fb0b1c732f88f51e5134816a356ceb49bb9fb02e44f3eb4773c2f7f0474",
+        "report": "022-LAYOUT_ACCEPTANCE_ip_bullet/report.json",
+        "reportSha256": "f90a933d5e8221205bfadc53bd2ad62c81c18e46deaf1ce6d6940ed78afefa05",
+        "reason": "Both IP heads are explicit named \\(bu, not literal ASCII punctuation or bare numeric tags; each native bullet becomes the semantic list marker -, and FIRST/SECOND remain ordered and unique.",
+        "rawEvidenceInventorySha256": "9ef302511528d411db18594bbd1e98e1bc25393d44b4f5d55bdeea7a2d17f3af",
+        "content": {
+          "widths": [
+            20,
+            40,
+            80,
+            120
+          ],
+          "automatedStatus": "review",
+          "findingsPerWidth": 4,
+          "decision": "case-bound-semantic-list-marker-difference"
+        }
+      },
+      {
+        "id": "LAYOUT_ACCEPTANCE/mdoc_bullet",
+        "sourceSha256": "608ca09c01609e057c84578834c9c7cdf55b99d27ed792efa00b8d3c5fbbab12",
+        "report": "029-LAYOUT_ACCEPTANCE_mdoc_bullet/report.json",
+        "reportSha256": "a09ad33e91e1678c6536b2b2a7fc1060bf0b2888b2006dd150b3657ca9196772",
+        "reason": "Nested Bd -ragged -offset 5n and Bl -bullet -offset 3n retain FIRST/SECOND; only two generated bullet glyphs differ.",
+        "rawEvidenceInventorySha256": "b21d2bf02bd7a6c007acdf216506f93fc034944c3845eadb321970b85b252774",
+        "content": {
+          "widths": [
+            20,
+            40,
+            80,
+            120
+          ],
+          "automatedStatus": "review",
+          "findingsPerWidth": 4,
+          "decision": "case-bound-semantic-list-marker-difference"
+        }
+      },
+      {
+        "id": "LAYOUT_ACCEPTANCE/mdoc_spacing",
+        "sourceSha256": "4be608d3261e93db07d5f717f1b310dc273e481fbdc9099d67b8df83ba0e9b3e",
+        "report": "030-LAYOUT_ACCEPTANCE_mdoc_spacing/report.json",
+        "reportSha256": "01b2745266fa04a40e3287ea9c01fb31c36b13446bdb8f2521523310174ebf6d",
+        "reason": "Bl -bullet retains both item bodies and their blank separation; only two generated bullet glyphs differ.",
+        "rawEvidenceInventorySha256": "8f4201dbc8a4ebe471a97820d5ff0703f83b3c561d8853cd5a9742d798bb3dc5",
+        "content": {
+          "widths": [
+            20,
+            40,
+            80,
+            120
+          ],
+          "automatedStatus": "review",
+          "findingsPerWidth": 4,
+          "decision": "case-bound-semantic-list-marker-difference"
+        }
+      },
+      {
+        "id": "LAYOUT_ACCEPTANCE/unicode",
+        "sourceSha256": "94d3239657e1c6499b45f0ac319c63efc2910a4e563f35ff4d6613a5a5b47215",
+        "report": "040-LAYOUT_ACCEPTANCE_unicode/report.json",
+        "reportSha256": "59914b68ea1db33467342cf9d80458b9be5f024c627b983b871df0964c80280e",
+        "reason": "Source has four CJK characters and three e+combining-acute sequences; ManT preserves exactly these. Native bold output repeats each scalar across backspace, including zero-width accents. Strict comparator does not safely collapse these wide/combining overstrikes.",
+        "rawEvidenceInventorySha256": "6b6272e35b99e74c469a080c3a3d73ebabf96a5ccaccb0544d7e719d89b3dd75",
+        "content": {
+          "widths": [
+            20,
+            40,
+            80,
+            120
+          ],
+          "automatedStatus": "review",
+          "findingsPerWidth": 9,
+          "decision": "source-content-verified-reference-overstrike-transport-uncovered"
+        }
+      },
+      {
+        "id": "LAYOUT_FOLLOWUP_ACCEPTANCE/R02-mdoc-raw-tail",
+        "sourceSha256": "a9bb96c9c433f73dcbc09b6ee5678e05206d20eea0de96e329fcf6cd5ec8bbce",
+        "report": "053-LAYOUT_FOLLOWUP_ACCEPTANCE_R02-mdoc-raw-tail/report.json",
+        "reportSha256": "53803224dd849066adbd47ca7ad889d43c77a59f7bbdd8e122d9f9a604a8a886",
+        "reason": "Two raw blank lines between ALPHA/BETA and two trailing blank lines survive; only the generated NAME separator differs.",
+        "rawEvidenceInventorySha256": "2fc487c4fc035074a9c3098411be2c06b0c4ce279263af58776e2cf3c3f1110e",
+        "content": {
+          "widths": [
+            20,
+            40,
+            80,
+            120
+          ],
+          "automatedStatus": "review",
+          "findingsPerWidth": 3,
+          "decision": "case-bound-generated-Nd-separator-difference"
+        }
+      },
+      {
+        "id": "LAYOUT_FOLLOWUP_ACCEPTANCE/R02-mdoc-sp",
+        "sourceSha256": "fe23a214b9c7e59e0ed51963685c22e8f9978b13c089383cfa7ece29594aff85",
+        "report": "054-LAYOUT_FOLLOWUP_ACCEPTANCE_R02-mdoc-sp/report.json",
+        "reportSha256": "9196c93521c4ab3f238b8a11286b65e44634fd731c6a67322c209a65064aaf2e",
+        "reason": "Adjacent literal sp 1 and sp 2 preserve three blank rows; only the generated NAME separator differs.",
+        "rawEvidenceInventorySha256": "f56f89b482432da527409efc283cbc94bd5f8e9f626096363a1328f6560bec35",
+        "content": {
+          "widths": [
+            20,
+            40,
+            80,
+            120
+          ],
+          "automatedStatus": "review",
+          "findingsPerWidth": 3,
+          "decision": "case-bound-generated-Nd-separator-difference"
+        }
+      },
+      {
+        "id": "LAYOUT_FOLLOWUP_ACCEPTANCE/R03-offset-restore",
+        "sourceSha256": "98b28d8ee268a915d36a59c7cc3a6710759975df3302801b32f676479bb4e75d",
+        "report": "055-LAYOUT_FOLLOWUP_ACCEPTANCE_R03-offset-restore/report.json",
+        "reportSha256": "69d4f33a343a509602a06e31ed64248a75f7f0e253bf0b32151a651344ef349d",
+        "reason": "Nested literal offsets 2n then 3n restore outer GAMMA and AFTER; only the generated NAME separator differs.",
+        "rawEvidenceInventorySha256": "85c29f34ef6e5037fb4581812141b0ab623b801163694ad0bc5fefc8e9a4e5f5",
+        "content": {
+          "widths": [
+            20,
+            40,
+            80,
+            120
+          ],
+          "automatedStatus": "review",
+          "findingsPerWidth": 3,
+          "decision": "case-bound-generated-Nd-separator-difference"
+        }
+      },
+      {
+        "id": "LAYOUT_FOLLOWUP_ACCEPTANCE/R03-D1",
+        "sourceSha256": "3a4d260923c6cb5bbb2c1ef416e77e48d89c40b9fca184102acc86763194b669",
+        "report": "056-LAYOUT_FOLLOWUP_ACCEPTANCE_R03-D1/report.json",
+        "reportSha256": "5b987a8e0fb2e16543468a3e9842f0d11eade96ecfc196b229a80dc670b3d0e9",
+        "reason": "D1 BETA inside offset-2n literal display retains BETA and surrounding ALPHA/GAMMA order; only the generated NAME separator differs.",
+        "rawEvidenceInventorySha256": "a12393af0ec533905fc6de2ea8e44b672dc03efc8757efbb76be6477999addff",
+        "content": {
+          "widths": [
+            20,
+            40,
+            80,
+            120
+          ],
+          "automatedStatus": "review",
+          "findingsPerWidth": 3,
+          "decision": "case-bound-generated-Nd-separator-difference"
+        }
+      },
+      {
+        "id": "LAYOUT_FOLLOWUP_ACCEPTANCE/R03-empty-display",
+        "sourceSha256": "6c2c8c5c0e16c73883d2e6eafd705c4c308e93e8b302c235c6111e93bc93c40a",
+        "report": "057-LAYOUT_FOLLOWUP_ACCEPTANCE_R03-empty-display/report.json",
+        "reportSha256": "43603ff6cabdb1173ec068d31a7d79da26b06833e838e523540459ca03ffb3c5",
+        "reason": "Empty nested display followed by nonempty INNER retains blank rows and INNER/AFTER; only the generated NAME separator differs.",
+        "rawEvidenceInventorySha256": "e90f07694f81f042f97d3562c7b8dff39dddd15014e9a22d7a48e9ef4ffe88ac",
+        "content": {
+          "widths": [
+            20,
+            40,
+            80,
+            120
+          ],
+          "automatedStatus": "review",
+          "findingsPerWidth": 3,
+          "decision": "case-bound-generated-Nd-separator-difference"
+        }
+      },
+      {
+        "id": "LAYOUT_FOLLOWUP_ACCEPTANCE/R03-list-item",
+        "sourceSha256": "5f2060cdb20426edeadb6c69403684c755b534179d82e85574c8401624968da1",
+        "report": "058-LAYOUT_FOLLOWUP_ACCEPTANCE_R03-list-item/report.json",
+        "reportSha256": "f630d36a06c641fe2adff473b5617a50c93db238e597d6bc431a22f1ecc34037",
+        "reason": "Nested literal display in Bl -item retains INNER/AFTER and spacing; only the generated NAME separator differs.",
+        "rawEvidenceInventorySha256": "166313cfe5a097ef26991b09153e0d4bc48cf369e89d5d3f7154ecf5308587d2",
+        "content": {
+          "widths": [
+            20,
+            40,
+            80,
+            120
+          ],
+          "automatedStatus": "review",
+          "findingsPerWidth": 3,
+          "decision": "case-bound-generated-Nd-separator-difference"
+        }
+      },
+      {
+        "id": "LAYOUT_FOLLOWUP_ACCEPTANCE/R04-long-short",
+        "sourceSha256": "c9fb03cd53aa601bf959afac222336adff9c918038cc7a447b62fb654607df8c",
+        "report": "059-LAYOUT_FOLLOWUP_ACCEPTANCE_R04-long-short/report.json",
+        "reportSha256": "cea77928cf56d7b2af6912a2998c3f1ee6f7aa84118deec7a6710c6d6ac181e3",
+        "reason": "At width 20 the full first TQ head survives as --long-first-labe|l, followed by -b and BODY; TAIL/AFTER remain in source order.",
+        "rawEvidenceInventorySha256": "3eced37467bc077ccc6781f1ce72b8687c02eb472630f5e0ad770fbcb0db54dc",
+        "viewport": {
+          "automatedStatus": "review",
+          "decision": "text-present-word-internal-wrap-not-modeled-by-token-anchor-oracle",
+          "anchorChecks": [
+            {
+              "width": 20,
+              "sourceLine": 5,
+              "occurrencesAfterWhitespaceOnlyJoin": 1
+            }
+          ],
+          "limits": "Whitespace-only joined, lowercased text checks establish presence/order for these exact phrases, not exact geometry or navigation-target identity/columns. Original rows and findings remain authoritative."
+        }
+      },
+      {
+        "id": "generated/hp-rs-br",
+        "sourceSha256": "9740dc9e784636d391767b5dfd5abc931d4d244382185c854e5dd0c1f245ba2e",
+        "report": "103-generated_hp-rs-br/report.json",
+        "reportSha256": "4a1828f2f980073fca9c4cb94d623a063d6b35fa913fdbeb7a1bdbc1c9af3e2e",
+        "reason": "RS 3/HP 7 followed by br retains the second phrase at width 20 as MATRIXSECO|ND; hard boundary is present.",
+        "rawEvidenceInventorySha256": "3c9d12bb421f0f8a2e9eaedc3e0be981a716c34490b2e4680cd3501f8f373c21",
+        "viewport": {
+          "automatedStatus": "review",
+          "decision": "text-present-word-internal-wrap-not-modeled-by-token-anchor-oracle",
+          "anchorChecks": [
+            {
+              "width": 20,
+              "sourceLine": 8,
+              "occurrencesAfterWhitespaceOnlyJoin": 1
+            }
+          ],
+          "limits": "Whitespace-only joined, lowercased text checks establish presence/order for these exact phrases, not exact geometry or navigation-target identity/columns. Original rows and findings remain authoritative."
+        }
+      },
+      {
+        "id": "generated/hp-rs-nf",
+        "sourceSha256": "e100761f926d1b28ef90bf805b408683dff72bcf0ae0b374643eb8ab6f1d2ca8",
+        "report": "104-generated_hp-rs-nf/report.json",
+        "reportSha256": "f788219eb800fd8050b9da4d5b31ebb3fdc03ea2821bf5a684fde1d1deba13db",
+        "reason": "RS 3/HP 7 followed by nf retains the literal second phrase at widths 20/40; splits MATRIXSECO|ND and ni|ne are visible in captured rows.",
+        "rawEvidenceInventorySha256": "d501d0506a99bf9ef25bfd24475d2657d68f6ee020139c655acf60768753c072",
+        "viewport": {
+          "automatedStatus": "review",
+          "decision": "text-present-word-internal-wrap-not-modeled-by-token-anchor-oracle",
+          "anchorChecks": [
+            {
+              "width": 20,
+              "sourceLine": 8,
+              "occurrencesAfterWhitespaceOnlyJoin": 1
+            },
+            {
+              "width": 40,
+              "sourceLine": 8,
+              "occurrencesAfterWhitespaceOnlyJoin": 1
+            }
+          ],
+          "limits": "Whitespace-only joined, lowercased text checks establish presence/order for these exact phrases, not exact geometry or navigation-target identity/columns. Original rows and findings remain authoritative."
+        }
+      },
+      {
+        "id": "generated/hp-rs-fi",
+        "sourceSha256": "3da7877db87f03abac40217e67ce9f75e1623935b539fb4319576b6be9a8ebde",
+        "report": "105-generated_hp-rs-fi/report.json",
+        "reportSha256": "1d78fce214539a9092a5852826e7c1ae33bdca400268858d096d6aef21aae1ef",
+        "reason": "RS 3/HP 7 followed by redundant fi retains its hard boundary and full second phrase at width 20 as MATRIXSECO|ND.",
+        "rawEvidenceInventorySha256": "d2614ad0403eb14655941210200d94d59d5da0d3af2d4cea82e33804802a5704",
+        "viewport": {
+          "automatedStatus": "review",
+          "decision": "text-present-word-internal-wrap-not-modeled-by-token-anchor-oracle",
+          "anchorChecks": [
+            {
+              "width": 20,
+              "sourceLine": 8,
+              "occurrencesAfterWhitespaceOnlyJoin": 1
+            }
+          ],
+          "limits": "Whitespace-only joined, lowercased text checks establish presence/order for these exact phrases, not exact geometry or navigation-target identity/columns. Original rows and findings remain authoritative."
+        }
+      },
+      {
+        "id": "generated/hp-rs-EX",
+        "sourceSha256": "d93e77b418eb41fe4b18dda7a898994a448e8cf20d1444e9d80af22427a66ec9",
+        "report": "106-generated_hp-rs-EX/report.json",
+        "reportSha256": "58202ddda8df19c891fe2596d6b4228c2b048e390f8583d3bb87cddfe3d58223",
+        "reason": "RS 3/HP 7 followed by EX/EE retains the literal second phrase at widths 20/40; splits MATRIXSECO|ND and ni|ne are visible in captured rows.",
+        "rawEvidenceInventorySha256": "95cffb820ef48996b17508a8748e0bd35b37482774fca70ca8025775a8e00562",
+        "viewport": {
+          "automatedStatus": "review",
+          "decision": "text-present-word-internal-wrap-not-modeled-by-token-anchor-oracle",
+          "anchorChecks": [
+            {
+              "width": 20,
+              "sourceLine": 8,
+              "occurrencesAfterWhitespaceOnlyJoin": 1
+            },
+            {
+              "width": 40,
+              "sourceLine": 8,
+              "occurrencesAfterWhitespaceOnlyJoin": 1
+            }
+          ],
+          "limits": "Whitespace-only joined, lowercased text checks establish presence/order for these exact phrases, not exact geometry or navigation-target identity/columns. Original rows and findings remain authoritative."
+        }
+      },
+      {
+        "id": "generated/hp-rs-sp-0",
+        "sourceSha256": "16c7d1bed744be903b225b2be4232aec5ba62a0d72a0541fdc952f1ac438213d",
+        "report": "107-generated_hp-rs-sp-0/report.json",
+        "reportSha256": "ab6fe1236a795c59a06b9557c293ccd2244a78e1b964bc769cc3038afff0c6dc",
+        "reason": "RS 3/HP 7 followed by sp 0 retains its hard boundary and full second phrase at width 20 as MATRIXSECO|ND.",
+        "rawEvidenceInventorySha256": "8bbf042596094b2abc3bb61e282cc5df1314a59407c93a6a02fa515b573db3a3",
+        "viewport": {
+          "automatedStatus": "review",
+          "decision": "text-present-word-internal-wrap-not-modeled-by-token-anchor-oracle",
+          "anchorChecks": [
+            {
+              "width": 20,
+              "sourceLine": 8,
+              "occurrencesAfterWhitespaceOnlyJoin": 1
+            }
+          ],
+          "limits": "Whitespace-only joined, lowercased text checks establish presence/order for these exact phrases, not exact geometry or navigation-target identity/columns. Original rows and findings remain authoritative."
+        }
+      },
+      {
+        "id": "generated/hp-rs-sp-2",
+        "sourceSha256": "c1376167dddbcd5197118d6b9a8847ab330f7af41981af16fa9844dacc2265ff",
+        "report": "108-generated_hp-rs-sp-2/report.json",
+        "reportSha256": "70b7005991e2a60ba71f4b95a1c54634f143a891dcd8307a14d4d1e08d7d4699",
+        "reason": "RS 3/HP 7 followed by sp 2 retains two blank rows before the full second phrase at width 20 as MATRIXSECO|ND.",
+        "rawEvidenceInventorySha256": "099868b393c1d57c79db134a18bec6153bbe005f7d789c18b19a2dbc71e1adf2",
+        "viewport": {
+          "automatedStatus": "review",
+          "decision": "text-present-word-internal-wrap-not-modeled-by-token-anchor-oracle",
+          "anchorChecks": [
+            {
+              "width": 20,
+              "sourceLine": 8,
+              "occurrencesAfterWhitespaceOnlyJoin": 1
+            }
+          ],
+          "limits": "Whitespace-only joined, lowercased text checks establish presence/order for these exact phrases, not exact geometry or navigation-target identity/columns. Original rows and findings remain authoritative."
+        }
+      }
+    ],
+    "runnerSha256": "7d55ef85ebebdf551433db50004d351f4c781a67ccf04129cdd8236fa02be5ae",
+    "comparatorSha256": {
+      "content": "2cc1a0a810569d28f187e0eb550e4a5cf48a0e7082cc3d14491985b001916d27",
+      "geometry": "b1d8f8cb9be003f22a7ae051f1bfd2707e6849cc9a3cca05e75c303edb9228e4"
+    },
+    "inputRecords": {
+      "tests/fixtures/roff/LAYOUT_ACCEPTANCE.json": "2e0c4325160635c2f251b87e01dc9dc959334f90e2c0832e3806c9179ad4115b",
+      "tests/fixtures/roff/LAYOUT_FOLLOWUP_ACCEPTANCE.json": "27c482227c5cdb0de060d01e6a8c42a22ab2131d15cce97f03736fa803448e72"
+    },
+    "allCases": [
+      {
+        "id": "LAYOUT_ACCEPTANCE/rs_0",
+        "sourceSha256": "f11f7ac6ea5c2e0bb5081e20eee7091734de23da585b27ae9718085b1dda80f5"
+      },
+      {
+        "id": "LAYOUT_ACCEPTANCE/rs_2",
+        "sourceSha256": "eb0060b881ef6954b57a8097638c2a7812d146801503918d3c67f48811e82f5d"
+      },
+      {
+        "id": "LAYOUT_ACCEPTANCE/rs_7",
+        "sourceSha256": "10ac5c59522db6abaf08582c86bd2d91943cf645e9d0e7fdb88cd0c1307745c5"
+      },
+      {
+        "id": "LAYOUT_ACCEPTANCE/rs_12",
+        "sourceSha256": "3476a7364cc0377329178f26071dc264625a2cc09f0fc370fb6934f1a28d0ad2"
+      },
+      {
+        "id": "LAYOUT_ACCEPTANCE/rs_-2",
+        "sourceSha256": "883a57c8ed0866bb0dfdc3d20961d1575ac0e198acd1870c4204195ce50e0ac3"
+      },
+      {
+        "id": "LAYOUT_ACCEPTANCE/rs_0.4",
+        "sourceSha256": "410c9cb5096334615a0fb1afceeff8739ad1488d29a3174383dfeb776fc28fdd"
+      },
+      {
+        "id": "LAYOUT_ACCEPTANCE/rs_0.6",
+        "sourceSha256": "b9cafd909ea7ecc540841850c5f7d647be8c8880cc10a23179ba4dfbcc7e88f0"
+      },
+      {
+        "id": "LAYOUT_ACCEPTANCE/rs_default",
+        "sourceSha256": "3c765723878e6791cdc74bed634da141a84d37d9555d2ab313ef3a364da16fe6"
+      },
+      {
+        "id": "LAYOUT_ACCEPTANCE/rs_nested",
+        "sourceSha256": "9fd3cc9615762fddf9d6aeefbd38987d94b9803af92d09596ce141751622f66a"
+      },
+      {
+        "id": "LAYOUT_ACCEPTANCE/btrfs_min",
+        "sourceSha256": "37eea83784dc3ad6f131e1ab2f0755d6771a371cb0ceeb69a135ec9920df51a5"
+      },
+      {
+        "id": "LAYOUT_ACCEPTANCE/tp_2",
+        "sourceSha256": "ba9d8b47eea48246ebb496f039e87271178d64acce0ef98aa656e13c5cea2c2e"
+      },
+      {
+        "id": "LAYOUT_ACCEPTANCE/tp_7",
+        "sourceSha256": "93a3839614cc7ed91099391baffd20838e2a0797c119b3a0f975fb3ba82c6509"
+      },
+      {
+        "id": "LAYOUT_ACCEPTANCE/tp_20",
+        "sourceSha256": "b7e7104b9bf745d873905db7dcbcc4ea6102a1ff8c362c305b32295c1ea19e19"
+      },
+      {
+        "id": "LAYOUT_ACCEPTANCE/tp_width_state",
+        "sourceSha256": "ebfafbde7cd22d02d20e89b3c2f2b70b9f5425050dab144718c0283e706c1ef4"
+      },
+      {
+        "id": "LAYOUT_ACCEPTANCE/hp",
+        "sourceSha256": "afef2104e84c0618eb9223bb151d785ee8038b18e24d6c6e94d1758e0eb77de7"
+      },
+      {
+        "id": "LAYOUT_ACCEPTANCE/in",
+        "sourceSha256": "6132285198808dbba727a1cb25cfcaa009cc7bd62ab27792c087b5298450b831"
+      },
+      {
+        "id": "LAYOUT_ACCEPTANCE/ti",
+        "sourceSha256": "8bfcd1300e8fe62daf9ad9601956a22746df8e99026ae85aaa8eb8a245c9ff33"
+      },
+      {
+        "id": "LAYOUT_ACCEPTANCE/rs_pp",
+        "sourceSha256": "89c3ee05a0ae36f4f998638406577eed8fb60ed4d6861f4a8b733172d21ed4c6"
+      },
+      {
+        "id": "LAYOUT_ACCEPTANCE/rs_pp_start",
+        "sourceSha256": "219289b7366c840a24cd1512407206829ef04544be74f19bc6b07c3a3cbc4a3c"
+      },
+      {
+        "id": "LAYOUT_ACCEPTANCE/tq",
+        "sourceSha256": "7c5da78a1d694c2f8167a8db9a4a44281462b77438e2fbf215d57b053995ff44"
+      },
+      {
+        "id": "LAYOUT_ACCEPTANCE/nofill",
+        "sourceSha256": "3d5c9ed579ac11fa3114eda4c1fe09a0039c0c2763b3fc0b78a681275fb0f1c3"
+      },
+      {
+        "id": "LAYOUT_ACCEPTANCE/ip_empty",
+        "sourceSha256": "58926f491c87470171cb501f8357325389766220b0b0099af82a7efe5e7f782a"
+      },
+      {
+        "id": "LAYOUT_ACCEPTANCE/ip_bullet",
+        "sourceSha256": "75e39fb0b1c732f88f51e5134816a356ceb49bb9fb02e44f3eb4773c2f7f0474"
+      },
+      {
+        "id": "LAYOUT_ACCEPTANCE/mdoc_tag",
+        "sourceSha256": "c16c585c23d1a4fe46fedc62dcbb24144936d5f8bf592893f0d8c2baa0693a8e"
+      },
+      {
+        "id": "LAYOUT_ACCEPTANCE/mdoc_hang",
+        "sourceSha256": "3bcbad6c9b1eb7f6e030c37b2c41b81a14173994724e70d5a6d712669b3acb56"
+      },
+      {
+        "id": "LAYOUT_ACCEPTANCE/mdoc_ohang",
+        "sourceSha256": "e16651f50210e6315b01024e76c517f94e2c8cfe32b634508473e03fdb0b0fd9"
+      },
+      {
+        "id": "LAYOUT_ACCEPTANCE/mdoc_inset",
+        "sourceSha256": "10b406f0720b7e7d4593caa807576adba315125d903efcf8b5c82b93bce731fd"
+      },
+      {
+        "id": "LAYOUT_ACCEPTANCE/mdoc_diag",
+        "sourceSha256": "eff301a67c02305fd96efb2797f42ffc9a3ba0b3ff0dc9102230a2b8502b1bd3"
+      },
+      {
+        "id": "LAYOUT_ACCEPTANCE/mdoc_nested",
+        "sourceSha256": "8e1d7520c4c8422306d3308dc9370d644ade7bce0bf332be57fa1ba49fb22dc8"
+      },
+      {
+        "id": "LAYOUT_ACCEPTANCE/mdoc_bullet",
+        "sourceSha256": "608ca09c01609e057c84578834c9c7cdf55b99d27ed792efa00b8d3c5fbbab12"
+      },
+      {
+        "id": "LAYOUT_ACCEPTANCE/mdoc_spacing",
+        "sourceSha256": "4be608d3261e93db07d5f717f1b310dc273e481fbdc9099d67b8df83ba0e9b3e"
+      },
+      {
+        "id": "LAYOUT_ACCEPTANCE/mdoc_hardterm",
+        "sourceSha256": "3732f9f82cd1008bfaf940611714ba9f671ae7b0b0c504ee65b2687ef14ad5cd"
+      },
+      {
+        "id": "LAYOUT_ACCEPTANCE/pd",
+        "sourceSha256": "f412aae021f71e34499a7917482d0909ec7b7c91774b283a1de024033ac805c0"
+      },
+      {
+        "id": "LAYOUT_ACCEPTANCE/br_sp",
+        "sourceSha256": "6586345ee670a40e976df43e484eab22b13b6700cb38c09b936a035e614a137c"
+      },
+      {
+        "id": "LAYOUT_ACCEPTANCE/tq_long",
+        "sourceSha256": "1fb647bdefe22893d7ac7726443f87d70a237bbd1b762bffb5979b427cebe5df"
+      },
+      {
+        "id": "LAYOUT_ACCEPTANCE/mdoc_nooffset",
+        "sourceSha256": "4fb780345022f7e55624096575afbc41eafbdcefad119710d3506bb057ff2b44"
+      },
+      {
+        "id": "LAYOUT_ACCEPTANCE/mdoc_widthlabel",
+        "sourceSha256": "4e2dc9056831bf3be696c15ac93d9122cae5885e3318f58c82c6b9f9e8f2d7b4"
+      },
+      {
+        "id": "LAYOUT_ACCEPTANCE/mdoc_offsetonly",
+        "sourceSha256": "4afa3f8d6e9631657caf45ea1803cedb310f1990221640b0fce25ca7e3d68cbc"
+      },
+      {
+        "id": "LAYOUT_ACCEPTANCE/mdoc_nobullet",
+        "sourceSha256": "2c93448235a33d937a2aefd993d064821fce1e9aaeb1235872a8d6a71dafff9b"
+      },
+      {
+        "id": "LAYOUT_ACCEPTANCE/mdocalong",
+        "sourceSha256": "ed11fe4b9b98cf90d65ca1535c9ca3635e00f2355509e1899a26f30db68e7da6"
+      },
+      {
+        "id": "LAYOUT_ACCEPTANCE/unicode",
+        "sourceSha256": "94d3239657e1c6499b45f0ac319c63efc2910a4e563f35ff4d6613a5a5b47215"
+      },
+      {
+        "id": "LAYOUT_ACCEPTANCE/mdoc_unicode",
+        "sourceSha256": "4c743ab4911b8143a3727ef324d7e4d14bf19c2b0463009e54fa7c34b84df3aa"
+      },
+      {
+        "id": "LAYOUT_ACCEPTANCE/mdoc_fraction",
+        "sourceSha256": "fef7a494759e2a43cef068f3b3d5f59f0f6e449a499d4f3181eac88598417965"
+      },
+      {
+        "id": "LAYOUT_ACCEPTANCE/in_abs",
+        "sourceSha256": "f49ce8d56104b5b0154b1ff1e252df406ec156fd44eec0c25bb7b03db870ba1d"
+      },
+      {
+        "id": "LAYOUT_ACCEPTANCE/re_level",
+        "sourceSha256": "430d6aa2021a64f6eedc7de467d58745f73f4d9cf9f524851b423089ccc3698b"
+      },
+      {
+        "id": "LAYOUT_ACCEPTANCE/pd_zero_defs",
+        "sourceSha256": "81ab30b26b3bac5a0a154d1d857255bb3c0feb06a0fd30fae4a15efd6bbcc961"
+      },
+      {
+        "id": "LAYOUT_FOLLOWUP_ACCEPTANCE/R01-nf-sp",
+        "sourceSha256": "e944e2a5f7e83ff7fcbb34c7b9fc79a550193b4c25f755e8fd53757407de7381"
+      },
+      {
+        "id": "LAYOUT_FOLLOWUP_ACCEPTANCE/R01-repeated-sp",
+        "sourceSha256": "e38c8fc1c3e798f1e419e1e69ad1d055be5c703221bf4bc0e87010c96915b309"
+      },
+      {
+        "id": "LAYOUT_FOLLOWUP_ACCEPTANCE/R02-skipped-conditional",
+        "sourceSha256": "b92801dd7a69d3a49b6a2cb900a731f54b22de18b7662081b510eee5c09fa8a2"
+      },
+      {
+        "id": "LAYOUT_FOLLOWUP_ACCEPTANCE/R02-unused-macro",
+        "sourceSha256": "146e9ebeb037b6379f8b0e1b47bb3e04ffb0f257180792419d4cfac40ccb04b3"
+      },
+      {
+        "id": "LAYOUT_FOLLOWUP_ACCEPTANCE/R02-raw-tail",
+        "sourceSha256": "7919c9917c7712d32838a8afe5746dc01fa6bc1a5e7e704f6f606c41b640dd57"
+      },
+      {
+        "id": "LAYOUT_FOLLOWUP_ACCEPTANCE/R02-expansion",
+        "sourceSha256": "303f93d33ae987caf2a6a7fcc6e51a057a762da28b26beff5c842f3fce1c7127"
+      },
+      {
+        "id": "LAYOUT_FOLLOWUP_ACCEPTANCE/R02-single-empty",
+        "sourceSha256": "1200d3712cae219674241009424f15bfedc24861ffadafb56bb5cccac5f9f76e"
+      },
+      {
+        "id": "LAYOUT_FOLLOWUP_ACCEPTANCE/R02-mdoc-raw-tail",
+        "sourceSha256": "a9bb96c9c433f73dcbc09b6ee5678e05206d20eea0de96e329fcf6cd5ec8bbce"
+      },
+      {
+        "id": "LAYOUT_FOLLOWUP_ACCEPTANCE/R02-mdoc-sp",
+        "sourceSha256": "fe23a214b9c7e59e0ed51963685c22e8f9978b13c089383cfa7ece29594aff85"
+      },
+      {
+        "id": "LAYOUT_FOLLOWUP_ACCEPTANCE/R03-offset-restore",
+        "sourceSha256": "98b28d8ee268a915d36a59c7cc3a6710759975df3302801b32f676479bb4e75d"
+      },
+      {
+        "id": "LAYOUT_FOLLOWUP_ACCEPTANCE/R03-D1",
+        "sourceSha256": "3a4d260923c6cb5bbb2c1ef416e77e48d89c40b9fca184102acc86763194b669"
+      },
+      {
+        "id": "LAYOUT_FOLLOWUP_ACCEPTANCE/R03-empty-display",
+        "sourceSha256": "6c2c8c5c0e16c73883d2e6eafd705c4c308e93e8b302c235c6111e93bc93c40a"
+      },
+      {
+        "id": "LAYOUT_FOLLOWUP_ACCEPTANCE/R03-list-item",
+        "sourceSha256": "5f2060cdb20426edeadb6c69403684c755b534179d82e85574c8401624968da1"
+      },
+      {
+        "id": "LAYOUT_FOLLOWUP_ACCEPTANCE/R04-long-short",
+        "sourceSha256": "c9fb03cd53aa601bf959afac222336adff9c918038cc7a447b62fb654607df8c"
+      },
+      {
+        "id": "LAYOUT_FOLLOWUP_ACCEPTANCE/R05-section-PD-sp",
+        "sourceSha256": "a00ea2fa2734486f7c58a5771fde1e8604bab9a1de0bc1759e788d6da581fb63"
+      },
+      {
+        "id": "generated/man-filled-br",
+        "sourceSha256": "e736338566f261e9c1b1f599216d92f97e7c6fa6d2258729b801bc64313be112"
+      },
+      {
+        "id": "generated/man-filled-sp0",
+        "sourceSha256": "0ebc29b4197f86813ed109061b550f63ab472c224cd7e2a0f612407dace6d0d0"
+      },
+      {
+        "id": "generated/man-filled-sp2",
+        "sourceSha256": "e902ab557e9dc5763bc535807868bec0fcf5c291b14ce57cbb937990f70e2d1e"
+      },
+      {
+        "id": "generated/man-filled-paragraph",
+        "sourceSha256": "77efb2015ede687f9073f66406a69ae49b96463f0968d15d84a2d132923b1318"
+      },
+      {
+        "id": "generated/man-filled-fi",
+        "sourceSha256": "8a493dd94fd4f6056ceb39fba8ea16288dc3be4e91322b478d4a8cb06cf77ef8"
+      },
+      {
+        "id": "generated/man-filled-nf",
+        "sourceSha256": "012ffc420ce93b246db7c12ba7a7469147fb5ea88d8c2d8f4fbcd40f761784c1"
+      },
+      {
+        "id": "generated/man-filled-ce",
+        "sourceSha256": "28af502858d72e4142f8b5bd70fdb0be30410d2d0fa48359c168e6d203252677"
+      },
+      {
+        "id": "generated/man-literal-br",
+        "sourceSha256": "9f82fdb75bad1d52d78214aa6b96e08efd3a382b9d0078ae0add31684f2f461a"
+      },
+      {
+        "id": "generated/man-literal-sp0",
+        "sourceSha256": "501ac32b7ff21a966bc550586894030c7a9bdf2259a01213b00836a3561272a8"
+      },
+      {
+        "id": "generated/man-literal-sp2",
+        "sourceSha256": "f03f6bdc875592ddf3bea5d1648c52a42449d76eb15eed8eeac196896a3312e1"
+      },
+      {
+        "id": "generated/man-literal-paragraph",
+        "sourceSha256": "5c1fa95e4796927e6317443fd28e4aca953e63354f97d0436ce263be958cb450"
+      },
+      {
+        "id": "generated/man-literal-fi",
+        "sourceSha256": "85d7505273718df3d74fa3d16d14c5ee03891fb8b6756a448192b08336e46553"
+      },
+      {
+        "id": "generated/man-literal-nf",
+        "sourceSha256": "c649a837f4d6013b71efc30eceee7c6a858e24c9e1dcbe4b0dc76d486b3c0cbd"
+      },
+      {
+        "id": "generated/man-literal-ce",
+        "sourceSha256": "8de1727b1035e76c9448765b159afecdc0b342918c2341376f7049083cf0af4f"
+      },
+      {
+        "id": "generated/mdoc-filled-br",
+        "sourceSha256": "fe185522f457ff90edd34e956e6ad078149d65cf9f36d5b9854bdb15a061554f"
+      },
+      {
+        "id": "generated/mdoc-filled-sp0",
+        "sourceSha256": "2c4836fb99f6039c3f259d9c7234aafe1ab5ee8d850ad1810f43b6ebc3ae86e3"
+      },
+      {
+        "id": "generated/mdoc-filled-sp2",
+        "sourceSha256": "2ef00fd15420f8014b89523301d485860c6fbe1252f6486fc98eac4e22fb3ba7"
+      },
+      {
+        "id": "generated/mdoc-filled-paragraph",
+        "sourceSha256": "3d4e951ba0c2b4f04456bd1497388257d82698bb74893897b988b96a4bea6555"
+      },
+      {
+        "id": "generated/mdoc-filled-fi",
+        "sourceSha256": "02df638b794fa7bb7a0c8673eac57a57766804737e342c32aec4a446c3acb730"
+      },
+      {
+        "id": "generated/mdoc-filled-nf",
+        "sourceSha256": "2b13e50fea6ac4c70d2cc053bcd9c8b750e391fc2a03dbec7669cabddab983ae"
+      },
+      {
+        "id": "generated/mdoc-filled-ce",
+        "sourceSha256": "18a3ae7834dcf3a003edb5b43e106e553be65bd917ed86cb5f14b89d49f8273e"
+      },
+      {
+        "id": "generated/mdoc-literal-br",
+        "sourceSha256": "3de87f0d546f1b62e1a8c3f2717a31e09ac75a17aa121b6888a138f717892052"
+      },
+      {
+        "id": "generated/mdoc-literal-sp0",
+        "sourceSha256": "9ad3ae7741d0f689727277ed26ff8fbea25ed9f454053ec2be572b2fc65a2f98"
+      },
+      {
+        "id": "generated/mdoc-literal-sp2",
+        "sourceSha256": "eaf734c2e1e69f071c54c95fea570f2d2e199b21afacf318d546221abf59a18f"
+      },
+      {
+        "id": "generated/mdoc-literal-paragraph",
+        "sourceSha256": "7ddc8288e08c40a5fcacf7b76690c5e6465a138db89b67ea14d0336e9b15a651"
+      },
+      {
+        "id": "generated/mdoc-literal-fi",
+        "sourceSha256": "a55d972e35a5bf7638d784f69fa199830061b47dd1406a6913eb8b227338564d"
+      },
+      {
+        "id": "generated/mdoc-literal-nf",
+        "sourceSha256": "45e70fe9c32bd2b014a6c72cda4dba5ad912762184e4798e5a5559b51ba65a13"
+      },
+      {
+        "id": "generated/mdoc-literal-ce",
+        "sourceSha256": "8ed5b1ef761ad522b211a8611b18186c20cd6f98f3a364dfe61030848dbd935c"
+      },
+      {
+        "id": "generated/ce-count-default",
+        "sourceSha256": "64b9c5062d683ec8e89956988919161171d425673cc681b0e83443b8788792fa"
+      },
+      {
+        "id": "generated/ce-count-badcount",
+        "sourceSha256": "41f683654a06391ab2ab0396a7d6ffe3fd3b14acf815caa860ebb74ec37e05a3"
+      },
+      {
+        "id": "generated/ce-count-2",
+        "sourceSha256": "116938673c1ba37d1dc784f79102a6ac508a8e8aa2c42730cb515ef58424dc01"
+      },
+      {
+        "id": "generated/ce-nested-br",
+        "sourceSha256": "7ab02fc0644ee49236f11ed96d087a5992eb7ca6b85c12690135b1eaed77d9af"
+      },
+      {
+        "id": "generated/ce-nested-fi",
+        "sourceSha256": "c4fe5c6b3ac9fb83bbe88d1655cafcede715d0b464babaeb4a19e955a84b993b"
+      },
+      {
+        "id": "generated/ce-nested-nf",
+        "sourceSha256": "52cd0f0e8e6dc124b6856ab6ddb11da49c623d071b363d86abe3370886055286"
+      },
+      {
+        "id": "generated/ce-nested-ti",
+        "sourceSha256": "7a4dee3480bda1cefac191f49cf5a96a8d97f4faf5ca3c8a66ba57862737739e"
+      },
+      {
+        "id": "generated/rj-count-default",
+        "sourceSha256": "79d82a165931e420958884ea98d8a22e4a797298642d503a8bc07b0f432dcb19"
+      },
+      {
+        "id": "generated/rj-count-badcount",
+        "sourceSha256": "a150c8c9c22d037817f55569ab2f88503d4b2283980f510f0cb0232c4b674aed"
+      },
+      {
+        "id": "generated/rj-count-2",
+        "sourceSha256": "8d795b66392435fa4288e2888216c7a53a30b4ba905045b60222c80c86d9cb9a"
+      },
+      {
+        "id": "generated/rj-nested-br",
+        "sourceSha256": "629e9d35192ff026d9204707efb597d63e59db054e176b8ebbd06247db7f5b03"
+      },
+      {
+        "id": "generated/rj-nested-fi",
+        "sourceSha256": "17877a61b493882c730270beed82de105deb6c22fa0576f26a0ffb9441b09ca6"
+      },
+      {
+        "id": "generated/rj-nested-nf",
+        "sourceSha256": "ba651787f739f3c971fca38b354d4793349249b2a3062070cfadc0705571934d"
+      },
+      {
+        "id": "generated/rj-nested-ti",
+        "sourceSha256": "10c3ec177dcd7cc037087a65c6a7c1b3cef2b2a07e426c743e4bead4ea419e06"
+      },
+      {
+        "id": "generated/hp-rs-br",
+        "sourceSha256": "9740dc9e784636d391767b5dfd5abc931d4d244382185c854e5dd0c1f245ba2e"
+      },
+      {
+        "id": "generated/hp-rs-nf",
+        "sourceSha256": "e100761f926d1b28ef90bf805b408683dff72bcf0ae0b374643eb8ab6f1d2ca8"
+      },
+      {
+        "id": "generated/hp-rs-fi",
+        "sourceSha256": "3da7877db87f03abac40217e67ce9f75e1623935b539fb4319576b6be9a8ebde"
+      },
+      {
+        "id": "generated/hp-rs-EX",
+        "sourceSha256": "d93e77b418eb41fe4b18dda7a898994a448e8cf20d1444e9d80af22427a66ec9"
+      },
+      {
+        "id": "generated/hp-rs-sp-0",
+        "sourceSha256": "16c7d1bed744be903b225b2be4232aec5ba62a0d72a0541fdc952f1ac438213d"
+      },
+      {
+        "id": "generated/hp-rs-sp-2",
+        "sourceSha256": "c1376167dddbcd5197118d6b9a8847ab330f7af41981af16fa9844dacc2265ff"
+      },
+      {
+        "id": "generated/target-paragraph",
+        "sourceSha256": "4f121314c257a5650ff83d0fcd00b9af88a7f3ce6e47d3b2c4bde2524ebd91f7"
+      },
+      {
+        "id": "generated/target-display",
+        "sourceSha256": "ea7c167d968e71e8caa7c2b6db3755cc82a2407612ef9e81f399cefedf609897"
+      },
+      {
+        "id": "generated/target-item",
+        "sourceSha256": "7bf76a2386d128167a05c0f4c2e539cb24834ab502b9ef35028c37795c204216"
+      }
+    ]
+  },
+  "fixtures": {
+    "schema": "mant.roff-rendering-census/v1",
+    "status": "completed",
+    "coverageComplete": false,
+    "producerCommit": "a6d5c965af6895b259b23331e61ce3630ba57b94",
+    "producerDirtyPaths": [],
+    "started": "2026-09-11T11:31:18.023732+00:00",
+    "finished": "2026-09-11T11:31:28.291253+00:00",
+    "referenceIdentity": "cvs-20260911-manifest-1d49f6c3",
+    "manifestSha256": null,
+    "comparators": {
+      "roff_content_compare.py": "2cc1a0a810569d28f187e0eb550e4a5cf48a0e7082cc3d14491985b001916d27",
+      "roff_layout_geometry.py": "b1d8f8cb9be003f22a7ae051f1bfd2707e6849cc9a3cca05e75c303edb9228e4",
+      "roff_rendering_frame.py": "e76f1b4485bcca4817f1a2e374a3af25a20b7305768a9205e7416e8a4e96518b",
+      "roff_reference.py": "4babe9299221ba382f9b191edc6947f1690b3d8e9ccd5ff0cfc5d11838acbebf",
+      "audit-roff-rendering.py": "b9e7692c26309023c32074cb7fcc89df02d1de184c9f2c9e1e3a669006019635"
+    },
+    "physicalPages": 51,
+    "logicalPages": 51,
+    "statusCounts": {
+      "review": 40,
+      "partial": 10,
+      "clean": 1
+    },
+    "dimensions": {
+      "content:review": 40,
+      "geometry:partial": 18,
+      "geometry:uncovered": 29,
+      "content:covered": 11,
+      "geometry:review": 3,
+      "geometry:covered": 1
+    },
+    "resultsSha256": "72fa72b8836b724a69f211bcef10b43a9d1e5d875efed3881f180879659f07bf",
+    "binariesUnchanged": true,
+    "comparatorsUnchanged": true,
+    "manifestUnchanged": true,
+    "artifactPages": 32,
+    "artifactBytes": 14182981,
+    "summarySha256": "ab66bfd46a69c08cc4f958dbe66988ed86c001cfc6d2e775c076e612c2de5f1e",
+    "localArtifacts": "target/roff-rendering-audit/fixtures-verified",
+    "binarySha256": {
+      "mant": "f0144b5cb88415a77a4373904b91ace940aa8744b90e1fbb2d31c465d0572a8c",
+      "reference": "f06ba20baedee4adc5914fa023bf02812645b41249077204849d465c08c02f59"
+    },
+    "parameters": {
+      "width": 200,
+      "timeout": 15,
+      "workers": 4,
+      "max_pages": null,
+      "artifact_pages": 32,
+      "verify": false
+    },
+    "physicalStatusCounts": {
+      "review": 40,
+      "partial": 10,
+      "clean": 1
+    },
+    "corpusLogicalCounts": {
+      "checked-in-fixtures": 51
+    },
+    "historicalSourceHashes": {
+      "changed": 51
+    },
+    "reasonLogicalCounts": {},
+    "budgetReasonLogicalCounts": {
+      "content:finding-retention-budget": 4,
+      "content:alignment-window-budget": 1
+    },
+    "actualSourceInventorySha256": "c9968ad5bd83fc3c4781d1930895af4c3bf7aa3de5fb5d1f3270c01a59a0be4d",
+    "inventoryEncoding": "Sorted [logical ID, decoded SHA256 or null, transport SHA256 or null] arrays, compact UTF-8 JSON plus LF per row.",
+    "possibleControlOperandCandidates": [],
+    "reviewPending": true,
+    "reviewLimit": "Only named regression findings and matrix cases were reviewed; other corpus candidates are not accepted."
+  },
+  "fullCorpus": {
+    "schema": "mant.roff-rendering-census/v1",
+    "status": "completed",
+    "coverageComplete": false,
+    "producerCommit": "a6d5c965af6895b259b23331e61ce3630ba57b94",
+    "producerDirtyPaths": [],
+    "started": "2026-09-11T11:31:01.263483+00:00",
+    "finished": "2026-09-11T11:44:37.992610+00:00",
+    "referenceIdentity": "cvs-20260911-manifest-1d49f6c3",
+    "manifestSha256": "a5cd7919d1ac2774a335d077611b47680de8c1babe1b031d31ff8808f568879c",
+    "comparators": {
+      "roff_content_compare.py": "2cc1a0a810569d28f187e0eb550e4a5cf48a0e7082cc3d14491985b001916d27",
+      "roff_layout_geometry.py": "b1d8f8cb9be003f22a7ae051f1bfd2707e6849cc9a3cca05e75c303edb9228e4",
+      "roff_rendering_frame.py": "e76f1b4485bcca4817f1a2e374a3af25a20b7305768a9205e7416e8a4e96518b",
+      "roff_reference.py": "4babe9299221ba382f9b191edc6947f1690b3d8e9ccd5ff0cfc5d11838acbebf",
+      "audit-roff-rendering.py": "b9e7692c26309023c32074cb7fcc89df02d1de184c9f2c9e1e3a669006019635"
+    },
+    "physicalPages": 37286,
+    "logicalPages": 45036,
+    "statusCounts": {
+      "partial": 14355,
+      "review": 28659,
+      "uncovered": 1968,
+      "clean": 54
+    },
+    "dimensions": {
+      "content:covered": 14613,
+      "geometry:uncovered": 18732,
+      "geometry:partial": 25193,
+      "content:review": 28455,
+      "geometry:review": 992,
+      "content:uncovered": 1968,
+      "geometry:covered": 119
+    },
+    "resultsSha256": "f5889d03de76faed5f5942a22d3a4f30cf221692ee66d51ed5ca30991ec3f02f",
+    "binariesUnchanged": true,
+    "comparatorsUnchanged": true,
+    "manifestUnchanged": true,
+    "artifactPages": 32,
+    "artifactBytes": 1775031,
+    "summarySha256": "7f2b45fc874fce7d322d295bf1f48fd9beb6159879087373638f0071652031c8",
+    "localArtifacts": "target/roff-rendering-audit/full-corpus-verified",
+    "binarySha256": {
+      "mant": "f0144b5cb88415a77a4373904b91ace940aa8744b90e1fbb2d31c465d0572a8c",
+      "reference": "f06ba20baedee4adc5914fa023bf02812645b41249077204849d465c08c02f59"
+    },
+    "parameters": {
+      "width": 200,
+      "timeout": 15,
+      "workers": 4,
+      "max_pages": null,
+      "artifact_pages": 32,
+      "verify": false
+    },
+    "physicalStatusCounts": {
+      "partial": 8685,
+      "review": 26580,
+      "uncovered": 1967,
+      "clean": 54
+    },
+    "corpusLogicalCounts": {
+      "alpine-3.24.1-x86_64": 425,
+      "apple-oss-command-repos-pinned": 70,
+      "apple-oss-manpages-pinned": 36,
+      "archlinux-host": 21646,
+      "current-host-eqn-2026-08-20": 5,
+      "current-host-table-eqn-2026-08-20": 2,
+      "debian-sid-2026-07-21-amd64": 52,
+      "dragonflybsd-6.4.2-x86_64": 6363,
+      "fedora44-2026-07-20-x86_64": 258,
+      "fixtures": 35,
+      "freebsd-15.1-amd64": 11183,
+      "generator-clap-mangen-0.3.0": 21,
+      "generator-ronn-scdoc-pinned": 4,
+      "illumos-gate-e8f5c080": 918,
+      "miniconda-host": 781,
+      "netbsd-10.1-amd64": 541,
+      "netbsd-11.0-amd64": 2357,
+      "openbsd-7.9-amd64": 339
+    },
+    "historicalSourceHashes": {
+      "match": 36584,
+      "changed": 8452
+    },
+    "reasonLogicalCounts": {
+      "external-source-context: standalone .so/.soquiet/.mso is not comparable": 1968
+    },
+    "budgetReasonLogicalCounts": {
+      "content:finding-retention-budget": 793,
+      "content:alignment-window-budget": 88
+    },
+    "actualSourceInventorySha256": "66c40cae9dcbbc262006a5a0050c522d9580cc0db37046212f05a2ef20ff3410",
+    "inventoryEncoding": "Sorted [logical ID, decoded SHA256 or null, transport SHA256 or null] arrays, compact UTF-8 JSON plus LF per row.",
+    "possibleControlOperandCandidates": [
+      {
+        "ids": [
+          "illumos-gate-e8f5c080:man/man1/eqn.1"
+        ],
+        "sourceSha256": "26d43e92a68a756ec923d42652a6435c22a683c8a67c0bc54a4836d291292692",
+        "findingCount": 32
+      }
+    ],
+    "reviewPending": true,
+    "reviewLimit": "Only named regression findings and matrix cases were reviewed; other corpus candidates are not accepted."
+  },
+  "baselineCorpus": {
+    "schema": "mant.roff-rendering-census/v1",
+    "status": "completed",
+    "coverageComplete": false,
+    "producerCommit": "7bf19cbd8db97234dd3d97dcb8d09cdbd4c4db4c",
+    "producerDirtyPaths": [],
+    "started": "2026-09-11T11:00:04.350408+00:00",
+    "finished": "2026-09-11T11:13:47.723782+00:00",
+    "referenceIdentity": "cvs-20260911-manifest-1d49f6c3",
+    "manifestSha256": "a5cd7919d1ac2774a335d077611b47680de8c1babe1b031d31ff8808f568879c",
+    "comparators": {
+      "roff_content_compare.py": "2cc1a0a810569d28f187e0eb550e4a5cf48a0e7082cc3d14491985b001916d27",
+      "roff_layout_geometry.py": "b1d8f8cb9be003f22a7ae051f1bfd2707e6849cc9a3cca05e75c303edb9228e4",
+      "roff_rendering_frame.py": "e76f1b4485bcca4817f1a2e374a3af25a20b7305768a9205e7416e8a4e96518b",
+      "roff_reference.py": "4babe9299221ba382f9b191edc6947f1690b3d8e9ccd5ff0cfc5d11838acbebf",
+      "audit-roff-rendering.py": "b9e7692c26309023c32074cb7fcc89df02d1de184c9f2c9e1e3a669006019635"
+    },
+    "physicalPages": 37286,
+    "logicalPages": 45036,
+    "statusCounts": {
+      "partial": 14300,
+      "review": 28714,
+      "uncovered": 1968,
+      "clean": 54
+    },
+    "dimensions": {
+      "content:covered": 14558,
+      "geometry:uncovered": 18732,
+      "geometry:partial": 25193,
+      "content:review": 28510,
+      "geometry:review": 992,
+      "content:uncovered": 1968,
+      "geometry:covered": 119
+    },
+    "resultsSha256": "68e808308b3fe8576e36c7b1269415bbf012f4b087ee3cf8f74e73dff08d3af1",
+    "binariesUnchanged": true,
+    "comparatorsUnchanged": true,
+    "manifestUnchanged": true,
+    "artifactPages": 32,
+    "artifactBytes": 1775031,
+    "summarySha256": "2ce1e314f5d6cd4403352897018fc1355bc146d915a81959f2bf910c5b310681",
+    "localArtifacts": "target/roff-rendering-audit/full-corpus",
+    "binarySha256": {
+      "mant": "efe909e4d0afb58dd19f41ac18bd4b0eee9676d0d6a1676537a8909558e61f90",
+      "reference": "f06ba20baedee4adc5914fa023bf02812645b41249077204849d465c08c02f59"
+    },
+    "parameters": {
+      "width": 200,
+      "timeout": 15,
+      "workers": 4,
+      "max_pages": null,
+      "artifact_pages": 32,
+      "verify": false
+    },
+    "physicalStatusCounts": {
+      "partial": 8633,
+      "review": 26632,
+      "uncovered": 1967,
+      "clean": 54
+    },
+    "corpusLogicalCounts": {
+      "alpine-3.24.1-x86_64": 425,
+      "apple-oss-command-repos-pinned": 70,
+      "apple-oss-manpages-pinned": 36,
+      "archlinux-host": 21646,
+      "current-host-eqn-2026-08-20": 5,
+      "current-host-table-eqn-2026-08-20": 2,
+      "debian-sid-2026-07-21-amd64": 52,
+      "dragonflybsd-6.4.2-x86_64": 6363,
+      "fedora44-2026-07-20-x86_64": 258,
+      "fixtures": 35,
+      "freebsd-15.1-amd64": 11183,
+      "generator-clap-mangen-0.3.0": 21,
+      "generator-ronn-scdoc-pinned": 4,
+      "illumos-gate-e8f5c080": 918,
+      "miniconda-host": 781,
+      "netbsd-10.1-amd64": 541,
+      "netbsd-11.0-amd64": 2357,
+      "openbsd-7.9-amd64": 339
+    },
+    "historicalSourceHashes": {
+      "match": 36584,
+      "changed": 8452
+    },
+    "reasonLogicalCounts": {
+      "external-source-context: standalone .so/.soquiet/.mso is not comparable": 1968
+    },
+    "budgetReasonLogicalCounts": {
+      "content:finding-retention-budget": 806,
+      "content:alignment-window-budget": 88
+    },
+    "actualSourceInventorySha256": "66c40cae9dcbbc262006a5a0050c522d9580cc0db37046212f05a2ef20ff3410",
+    "inventoryEncoding": "Sorted [logical ID, decoded SHA256 or null, transport SHA256 or null] arrays, compact UTF-8 JSON plus LF per row.",
+    "possibleControlOperandCandidates": [
+      {
+        "ids": [
+          "illumos-gate-e8f5c080:man/man1/eqn.1"
+        ],
+        "sourceSha256": "26d43e92a68a756ec923d42652a6435c22a683c8a67c0bc54a4836d291292692",
+        "findingCount": 32
+      },
+      {
+        "ids": [
+          "netbsd-11.0-amd64:man/man8/map-mbone.8"
+        ],
+        "sourceSha256": "de77c3f39bd1213685056351f0242890e8ed9c640dbe18886f58ac0e5bd1a9b7",
+        "findingCount": 1
+      },
+      {
+        "ids": [
+          "netbsd-11.0-amd64:man/man8/mrinfo.8"
+        ],
+        "sourceSha256": "c63b8e83df8eea9a153ab649dda3d53a9e0bdeb2e6d6993da9c41dac01aa7b4e",
+        "findingCount": 1
+      }
+    ],
+    "reviewPending": true,
+    "reviewLimit": "Only named regression findings and matrix cases were reviewed; other corpus candidates are not accepted."
+  },
+  "sameSourceSameOracleDelta": {
+    "logicalStatusTransitions": {
+      "partial -> partial": 14300,
+      "review -> review": 28659,
+      "uncovered -> uncovered": 1968,
+      "review -> partial": 55,
+      "clean -> clean": 54
+    },
+    "changedMantStdoutLogicalPages": 227,
+    "note": "Every logical ID and actual decoded source SHA matched; changed output is not by itself an improvement or regression."
+  },
+  "regressions": [
+    {
+      "commit": "09bc15a4",
+      "area": "whole-grapheme terminal geometry"
+    },
+    {
+      "commit": "4ae14881",
+      "area": "executed paragraph and fill-mode boundaries",
+      "test": "crates/mant-engine/tests/executed_flow_boundaries.rs"
+    },
+    {
+      "commit": "b36b28db",
+      "area": "source-link projection after grapheme shaping"
+    },
+    {
+      "commit": "138f083f",
+      "area": "successfully decoded empty table cells",
+      "fixture": "tests/fixtures/roff/real/debian/groff_me.7.gz"
+    },
+    {
+      "commit": "bdf6946c",
+      "area": "metadata operand isolation",
+      "test": "crates/mant-engine/tests/control_operands.rs"
+    },
+    {
+      "commit": "bd4062f7",
+      "area": "authored IP keys without fake semantic marks",
+      "test": "crates/mant-engine/tests/ip_literal_marks.rs"
+    }
+  ],
+  "ipSemanticDelta": {
+    "schema": "mant-dev-ip-mark-delta-v1",
+    "binaries": {
+      "target/release/mant": "efe909e4d0afb58dd19f41ac18bd4b0eee9676d0d6a1676537a8909558e61f90",
+      "target/debug/mant": "0f9f75b4b556bd58874a81b4b7984af02374a7ca03a202562bd549aebea52959"
+    },
+    "pages": 51,
+    "compared": 51,
+    "changedPages": 4,
+    "results": [
+      {
+        "path": "tests/fixtures/roff/real/archlinux/gcc.1.gz",
+        "sourceSha256": "a86bd1d671aa2afff558eb3b7c8b6e2a8bbaf55cb9fb2a6549b7538dd56e0f0f",
+        "status": "compared",
+        "before": {
+          "definition_lists": 351,
+          "definition_items": 4916,
+          "entry:term": 402,
+          "entry:parameter": 3653,
+          "entry:value": 824,
+          "bullet_lists": 26,
+          "bullet_items": 109,
+          "entry:configuration-key": 16,
+          "entry:environment-variable": 21
+        },
+        "after": {
+          "definition_lists": 377,
+          "definition_items": 5025,
+          "entry:term": 402,
+          "entry:parameter": 3653,
+          "entry:value": 824,
+          "entry:configuration-key": 16,
+          "entry:environment-variable": 21
+        },
+        "addedEntries": [],
+        "removedEntryCount": 0
+      },
+      {
+        "path": "tests/fixtures/roff/real/archlinux/rsync.1.zst",
+        "sourceSha256": "12417d699e494cd5154195df53762f0043e2ffe3997634c4e5f4afc209f87d45",
+        "status": "compared",
+        "before": {
+          "bullet_lists": 32,
+          "bullet_items": 157,
+          "definition_lists": 56,
+          "definition_items": 232,
+          "entry:parameter": 163,
+          "entry:term": 10,
+          "entry:environment-variable": 15
+        },
+        "after": {
+          "definition_lists": 88,
+          "definition_items": 389,
+          "entry:parameter": 163,
+          "entry:term": 10,
+          "entry:environment-variable": 15
+        },
+        "addedEntries": [],
+        "removedEntryCount": 0
+      },
+      {
+        "path": "tests/fixtures/roff/real/archlinux/sh.1p.gz",
+        "sourceSha256": "8caa52a52fcb46e6e4e38105408dac290b66865cf712f6897d81bfa438f16b2d",
+        "status": "compared",
+        "before": {
+          "definition_lists": 15,
+          "definition_items": 89,
+          "entry:parameter": 3,
+          "bullet_lists": 8,
+          "bullet_items": 16,
+          "entry:term": 70,
+          "entry:environment-variable": 16
+        },
+        "after": {
+          "definition_lists": 18,
+          "definition_items": 105,
+          "entry:parameter": 3,
+          "entry:term": 76,
+          "entry:environment-variable": 16
+        },
+        "addedEntries": [
+          {
+            "kind": "term",
+            "source": {
+              "line": 668,
+              "column": 2
+            },
+            "terms": [
+              "#"
+            ],
+            "names": [
+              "#"
+            ]
+          },
+          {
+            "kind": "term",
+            "source": {
+              "line": 675,
+              "column": 2
+            },
+            "terms": [
+              "="
+            ],
+            "names": [
+              "="
+            ]
+          },
+          {
+            "kind": "term",
+            "source": {
+              "line": 704,
+              "column": 2
+            },
+            "terms": [
+              "\\"
+            ],
+            "names": [
+              "\\"
+            ]
+          },
+          {
+            "kind": "term",
+            "source": {
+              "line": 728,
+              "column": 2
+            },
+            "terms": [
+              "*"
+            ],
+            "names": [
+              "*"
+            ]
+          },
+          {
+            "kind": "term",
+            "source": {
+              "line": 882,
+              "column": 2
+            },
+            "terms": [
+              "^"
+            ],
+            "names": [
+              "^"
+            ]
+          },
+          {
+            "kind": "term",
+            "source": {
+              "line": 886,
+              "column": 2
+            },
+            "terms": [
+              "$"
+            ],
+            "names": [
+              "$"
+            ]
+          }
+        ],
+        "removedEntryCount": 0
+      },
+      {
+        "path": "tests/fixtures/roff/real/fedora44/gcc.1.zst",
+        "sourceSha256": "531ca21b660c1fbd294218e921d834adfaccd61c6f400a2a5d844759f40fc034",
+        "status": "compared",
+        "before": {
+          "definition_lists": 353,
+          "definition_items": 4902,
+          "entry:term": 389,
+          "entry:parameter": 3651,
+          "entry:value": 821,
+          "bullet_lists": 26,
+          "bullet_items": 109,
+          "entry:configuration-key": 16,
+          "entry:environment-variable": 25
+        },
+        "after": {
+          "definition_lists": 379,
+          "definition_items": 5011,
+          "entry:term": 389,
+          "entry:parameter": 3651,
+          "entry:value": 821,
+          "entry:configuration-key": 16,
+          "entry:environment-variable": 25
+        },
+        "addedEntries": [],
+        "removedEntryCount": 0
+      }
+    ],
+    "artifactSha256": "133f7e4760c3e3413ea5827a6fbbd72b9f11f4cba91c04a2fb40cb05883129ae",
+    "scopeNote": "Historical frozen CLI to intermediate debug comparison, identified by the two recorded hashes; not a final-producer replay or complete IR equality claim."
+  },
+  "limitations": [
+    "The full census is not accepted as clean; review and incomplete coverage remain visible.",
+    "The first 32 raw artifact pages are retained, not a severity-ranked exhaustive sample; compact rows retain only three findings.",
+    "Source-level include filtering is conservative and is not execution-aware alias counting.",
+    "No full-corpus TUI, native Windows/macOS interaction, or new sanitizer claim.",
+    "Large raw artifacts and external corpus paths are local; hashes do not make them independently downloadable.",
+    "Original historical target/semantic/projection/fidelity ledgers are unchanged."
+  ],
+  "reviewedFullCorpusFixes": [
+    {
+      "ids": [
+        "netbsd-11.0-amd64:man/man8/map-mbone.8"
+      ],
+      "sourceSha256": "de77c3f39bd1213685056351f0242890e8ed9c640dbe18886f58ac0e5bd1a9b7",
+      "status": "review",
+      "mantStdoutSha256": "b69f4cbf84e625c5b45f45eee94823f5216ebc7bce2310b4cbd17d0a376df613",
+      "referenceStdoutSha256": "4b864846136440dc54cd5196484b4641ecf4e17743e26dc9936e890ea4967807",
+      "contentCounts": {
+        "missing-occurrence": 4,
+        "sequence-delete": 1
+      },
+      "fixedCommit": "bdf6946c",
+      "scope": "UC metadata operand leakage only; other framing/comparison differences are not accepted."
+    },
+    {
+      "ids": [
+        "netbsd-11.0-amd64:man/man8/mrinfo.8"
+      ],
+      "sourceSha256": "c63b8e83df8eea9a153ab649dda3d53a9e0bdeb2e6d6993da9c41dac01aa7b4e",
+      "status": "review",
+      "mantStdoutSha256": "e97aea40084a65cd134f65321e5f2f32f4a28493a09ae839220af8481140f71c",
+      "referenceStdoutSha256": "46f9f6139c0ba94c3f06f532ea9fea045efddc9ab7e506e1af6533919663b1f5",
+      "contentCounts": {
+        "missing-occurrence": 4,
+        "sequence-delete": 1
+      },
+      "fixedCommit": "bdf6946c",
+      "scope": "UC metadata operand leakage only; other framing/comparison differences are not accepted."
+    }
+  ]
+}
