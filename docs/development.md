@@ -709,10 +709,12 @@ reference for resolving candidates, not an automatic tie breaker.
 The manifest runner keeps failed observations, but distinguishes product
 failures from a closed audit boundary: a standalone `.so` redirect cannot be
 semantic-profiled through production `--input` without catalog discovery, and
-a groff invocation that emits no comparable visible tokens cannot judge ManT
-content. Those rows remain explicitly uncovered (with their original detail);
-they do not become lowering hard-failures. A reference with visible text that
-ManT loses remains a hard failure.
+an incomplete source tree cannot resolve a redirect by guessing outside its
+root. Likewise, a groff invocation that emits no comparable visible tokens or
+fails before comparison cannot judge ManT content. Those rows remain explicitly
+uncovered (with their original detail); they do not become lowering
+hard-failures. A reference with visible text that ManT loses remains a hard
+failure.
 
 ```sh
 cargo build --release -p mant

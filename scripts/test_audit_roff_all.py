@@ -86,6 +86,17 @@ class AllAuditTests(unittest.TestCase):
         row['externalContext'] = False
         self.assertIsNone(AUDIT.profile_coverage_gap('semantics', row, finding))
 
+    def test_missing_redirect_target_is_external_coverage_for_all_profiles(self):
+        finding = AUDIT.LEGACY['structure'].Finding(
+            '/fixture/alias.1', 'hard-failure', [],
+            "/fixture/alias.1: could not resolve manual .so target 'man1/target.1'",
+        )
+        row = {'sourcePath': '/fixture/alias.1', 'externalContext': True, 'dimensions': {}}
+        for name in AUDIT.PROFILES:
+            gap = AUDIT.profile_coverage_gap(name, row, finding)
+            self.assertEqual(gap['status'], 'uncovered')
+            self.assertEqual(gap['coverage'], 'partial-external-context')
+
     def test_empty_groff_reference_is_explicit_reference_coverage_gap(self):
         finding = {
             'status': 'hard-failure',
@@ -99,6 +110,16 @@ class AllAuditTests(unittest.TestCase):
         self.assertEqual(gap['coverage'], 'partial-reference-renderer')
         self.assertIsNone(AUDIT.reference_coverage_gap('mandoc', finding, False))
         self.assertIsNone(AUDIT.reference_coverage_gap('groff', {**finding, 'mant_tokens': 0}, False))
+
+    def test_renderer_failures_distinguish_missing_external_alias_from_reference_gap(self):
+        missing = AUDIT.renderer_coverage_gap(
+            "mant: could not load manual: could not resolve manual .so target 'man1/target.1'", True,
+        )
+        self.assertEqual(missing['coverage'], 'partial-external-context')
+        self.assertIsNone(AUDIT.renderer_coverage_gap('ordinary ManT parser failure', False))
+        reference = AUDIT.renderer_coverage_gap('troff: input stack limit exceeded', False, reference=True)
+        self.assertEqual(reference['status'], 'uncovered')
+        self.assertEqual(reference['coverage'], 'partial-reference-renderer')
 
     def test_invalid_source_utf8_skips_strings_but_runs_all_native_profiles(self):
         with tempfile.TemporaryDirectory() as temporary:

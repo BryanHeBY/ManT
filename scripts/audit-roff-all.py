@@ -36,6 +36,7 @@ EXAMPLES = dict(zip(PROFILES, ('roff_structure_profile', 'roff_projection_profil
 DIMENSIONS = (*PROFILES, 'fidelity-mandoc', 'layout-mandoc', 'fidelity-groff', 'layout-groff')
 STANDALONE_REDIRECT_INPUT_LIMIT = 'standalone .so redirects require MANPATH discovery and cannot be followed by --input'
 NO_REFERENCE_TOKENS = 'the page cannot be classified as clean without a reference corpus'
+MISSING_MANUAL_REDIRECT = 'could not resolve manual .so target'
 
 
 def module(name):
@@ -187,17 +188,18 @@ def profile_coverage_gap(name, row, finding):
     external context, so preserving its diagnostic as a hard lowering failure
     would conflate a deliberately closed process boundary with a product bug.
     """
-    if (
-        name == 'semantics'
-        and row['externalContext']
-        and finding.status == 'hard-failure'
-        and finding.detail.endswith(STANDALONE_REDIRECT_INPUT_LIMIT)
-    ):
+    detail = finding.detail or ''
+    reason = None
+    if name == 'semantics' and detail.endswith(STANDALONE_REDIRECT_INPUT_LIMIT):
+        reason = 'standalone redirect requires MANPATH catalog discovery; semantic --input profiling is intentionally not a catalog query'
+    elif MISSING_MANUAL_REDIRECT in detail:
+        reason = 'the source tree omits a redirect target required to construct the manual; the profiler intentionally does not guess outside that tree'
+    if row['externalContext'] and finding.status == 'hard-failure' and reason:
         return {
             'execution': 'success',
             'status': 'uncovered',
             'coverage': 'partial-external-context',
-            'coverageReasons': ['standalone redirect requires MANPATH catalog discovery; semantic --input profiling is intentionally not a catalog query'],
+            'coverageReasons': [reason],
             **bounded_finding(asdict(finding)),
         }
     return None
@@ -219,6 +221,27 @@ def reference_coverage_gap(kind, finding, external):
             'coverage': 'partial-external-context' if external else 'partial-reference-renderer',
             'coverageReasons': ['the selected groff invocation produced no comparable visible reference tokens'],
             **bounded_finding(finding),
+        }
+    return None
+
+
+def renderer_coverage_gap(detail, external, *, reference=False):
+    """Describe a page-specific renderer boundary without hiding its detail."""
+    if external and MISSING_MANUAL_REDIRECT in detail:
+        return {
+            'execution': 'success',
+            'status': 'uncovered',
+            'coverage': 'partial-external-context',
+            'coverageReasons': ['the source tree omits a redirect target required to construct the manual; rendering does not guess outside that tree'],
+            'detail': detail[:4096],
+        }
+    if reference:
+        return {
+            'execution': 'success',
+            'status': 'uncovered',
+            'coverage': 'partial-external-context' if external else 'partial-reference-renderer',
+            'coverageReasons': ['the reference renderer failed before a comparison could be made'],
+            'detail': detail[:4096],
         }
     return None
 
@@ -272,6 +295,9 @@ def render_dimensions(path, source, args, external):
     command, _ = FIDELITY.mant_render_command(path, [root], args.mant, source=source)
     mine, observations['mant'], failure = render(command, args, env)
     if failure:
+        gap = renderer_coverage_gap(failure['detail'], external)
+        if gap is not None:
+            return {name: gap.copy() for name in DIMENSIONS if name.startswith(('fidelity-', 'layout-'))}, observations
         return {name: failure for name in DIMENSIONS if name.startswith(('fidelity-', 'layout-'))}, observations
     for kind, binary in [('mandoc', args.mandoc), ('groff', args.groff)]:
         if kind == 'mandoc':
@@ -293,7 +319,8 @@ def render_dimensions(path, source, args, external):
             continue
         reference, observations[kind], failure = render(command, args, env, data)
         if failure:
-            result['fidelity-' + kind] = result['layout-' + kind] = failure
+            gap = renderer_coverage_gap(failure['detail'], external, reference=True)
+            result['fidelity-' + kind] = result['layout-' + kind] = gap or failure
             continue
         # Run the unchanged Python oracle under the same process resource
         # boundary too. A successful formatter does not bound comparison cost.
