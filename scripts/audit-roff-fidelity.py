@@ -1794,7 +1794,7 @@ def confined_redirect_target(
 
 
 def mant_render_command(
-    path: Path, roots: Sequence[Path], mant: Path
+    path: Path, roots: Sequence[Path], mant: Path, *, source: bytes | None = None
 ) -> tuple[list[str], Path | None]:
     """Select standalone or indexed rendering without weakening --input.
 
@@ -1802,7 +1802,9 @@ def mant_render_command(
     Redirect-only aliases then resolve normally; unsupported embedded includes
     become visible hard failures instead of silently leaving the audit corpus.
     """
-    if contains_so_request(path):
+    needs_hierarchy = (contains_so_request(path) if source is None else
+        any(re.match(rb"^[.']so(?:[ \t]|$)", line) is not None for line in source.splitlines()))
+    if needs_hierarchy:
         section = manual_section(path)
         topic = manual_topic(path)
         root = manual_hierarchy_root(path, roots)
@@ -1837,6 +1839,7 @@ def reference_render_command(
     reference_kind: str,
     hierarchy_root: Path | None,
     source: bytes | None,
+    *, source_reader=None,
 ) -> tuple[list[str] | None, bytes | None, str | None]:
     """Build a renderer invocation or explain why the source is not comparable."""
     if reference_kind == "mandoc":
@@ -1851,7 +1854,7 @@ def reference_render_command(
             if resolved is None:
                 return None, None, f"redirect target is absent or outside the hierarchy: {target}"
             reference_path = resolved
-        reference_source = source_bytes(reference_path)
+        reference_source = (source_reader or source_bytes)(reference_path)
         if reference_source is None:
             return None, None, f"cannot decompress mandoc reference source: {reference_path}"
         return [reference, "-T", "utf8", "-O", "width=200"], reference_source, None
@@ -1969,6 +1972,19 @@ def audit_page(
             mant_output=mant_output,
         )
 
+    return compare_rendered(label, raw_source, reference_output, mant_output,
+                            reference_kind, ngram, layout_signals)
+
+
+def compare_rendered(
+    label: str, raw_source: bytes | None, reference_output: str, mant_output: str,
+    reference_kind: str, ngram: int = 4, layout_signals: bool = True,
+) -> AuditArtifact:
+    """The legacy oracle, independent of discovery and subprocess transport.
+
+    Callers must establish successful bounded renders and source identity first.
+    No ledger policy or interpretation differs from ``audit_page``.
+    """
     reference_output = strip_reference_chrome(reference_output)
     reference_lines = token_lines(reference_output)
     if reference_kind == "mandoc" and raw_source is not None:

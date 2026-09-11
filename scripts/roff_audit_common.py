@@ -274,3 +274,57 @@ def run_jsonl_profile_batch(
             request_id, {"id": request_id, "error": "profiler returned no response"}
         )
     return responses
+
+
+def run_bounded_profile_batch(profiler, requests, timeout):
+    """Bounded JSONL transport for manifest orchestration, not a new oracle.
+
+    A batch has one wall-time budget, including crash isolation retries. Output
+    and child-process memory limits come from the shared reference boundary.
+    Transport failures retain a typed execution status separate from findings.
+    """
+    import time
+    from roff_reference import reference_environment, run_renderer
+
+    deadline = time.monotonic() + timeout
+
+    def failure(batch, execution, detail):
+        return {key: {"id": key, "error": detail, "_execution": execution}
+                for key in batch}
+
+    def run(batch):
+        if not batch:
+            return {}
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            return failure(batch, "budget", "profiler batch wall-time budget exhausted")
+        payload = ''.join(json.dumps(value, ensure_ascii=False) + '\n'
+                          for value in batch.values()).encode()
+        code, output, error = run_renderer([str(profiler)], remaining,
+            reference_environment(), payload, binary_output=True)
+        if code:
+            budget = code in (124, -24, -9) or (code == 125 and
+                any(word in error for word in ('exceeds', 'budget', 'memory')))
+            if budget:
+                return failure(batch, "budget", error or f"profiler resource exit {code}")
+            if len(batch) > 1:
+                items = list(batch.items()); half = len(items) // 2
+                return {**run(dict(items[:half])), **run(dict(items[half:]))}
+            return failure(batch, "error", error or f"profiler exit {code}")
+        responses = {}
+        try:
+            for line in output.decode('utf-8').splitlines():
+                response = json.loads(line)
+                if not isinstance(response, dict):
+                    raise ValueError('response is not an object')
+                key = response.get('id')
+                if not isinstance(key, str) or key not in batch or key in responses:
+                    raise ValueError('unknown or duplicate response ID')
+                responses[key] = response
+        except (UnicodeError, ValueError) as error:
+            return failure(batch, 'error', f'invalid profiler transport: {error}')
+        for key in batch:
+            responses.setdefault(key, failure({key: None}, 'error', 'missing profiler response')[key])
+        return responses
+
+    return run(requests)

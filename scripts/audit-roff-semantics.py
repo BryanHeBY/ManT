@@ -249,13 +249,14 @@ def valid_ordinal_conversion(value: object) -> bool:
 
 
 def profile_findings(
-    pages: Sequence[Path], roots: Sequence[Path], profiler: Path, timeout: int
+    pages: Sequence[Path], roots: Sequence[Path], profiler: Path, timeout: int,
+    *, exact_roots=None, batch_runner=None,
 ) -> Iterable[Finding]:
     requests = {}
     labels = {}
     for path in pages:
         label = relative_label(path, roots)
-        hierarchy_root = manual_hierarchy_root(path, roots)
+        hierarchy_root = exact_roots[path] if exact_roots is not None else manual_hierarchy_root(path, roots)
         if hierarchy_root is None:
             yield Finding(label, "hard-failure", [], "manual hierarchy is unknown")
             continue
@@ -268,9 +269,9 @@ def profile_findings(
         labels[request_id] = label
     items = list(requests.items())
     for offset in range(0, len(items), 256):
-        responses = run_jsonl_profile_batch(
-            profiler, dict(items[offset : offset + 256]), timeout, "semantic"
-        )
+        batch = dict(items[offset : offset + 256])
+        responses = (batch_runner(profiler, batch, timeout) if batch_runner else
+                     run_jsonl_profile_batch(profiler, batch, timeout, "semantic"))
         for request_id, response in responses.items():
             label = labels[request_id]
             if response.get("schema") != PROFILE_SCHEMA:

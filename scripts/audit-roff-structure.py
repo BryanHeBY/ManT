@@ -438,12 +438,13 @@ def run_profile_batch(
 
 
 def profile_findings(
-    pages: Sequence[Path], roots: Sequence[Path], timeout: int, profiler: Path
+    pages: Sequence[Path], roots: Sequence[Path], timeout: int, profiler: Path,
+    *, exact_roots=None, batch_runner=None,
 ) -> list[Finding]:
     requests = {}
     labels = {}
     for path in pages:
-        hierarchy_root = manual_hierarchy_root(path, roots)
+        hierarchy_root = exact_roots[path] if exact_roots is not None else manual_hierarchy_root(path, roots)
         label = relative_label(path, roots)
         if hierarchy_root is None:
             yield Finding(label, "hard-failure", [], "manual hierarchy is unknown")
@@ -453,7 +454,7 @@ def profile_findings(
         labels[request_id] = label
     for offset in range(0, len(requests), 256):
         batch = dict(list(requests.items())[offset : offset + 256])
-        for request_id, response in run_profile_batch(profiler, batch, timeout).items():
+        for request_id, response in (batch_runner or run_profile_batch)(profiler, batch, timeout).items():
             label = labels[request_id]
             if not isinstance(response.get("schema"), str) or response.get("schema") != PROFILE_SCHEMA:
                 yield Finding(label, "hard-failure", [], "profiler returned an unsupported schema")
