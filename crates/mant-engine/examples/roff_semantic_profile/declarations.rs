@@ -105,13 +105,45 @@ fn bracket_head(item: &DefinitionItem) -> bool {
         .is_some_and(|term| super::inline_text(term).trim_start().starts_with('['))
 }
 
-fn unsigned_numeric_head(item: &DefinitionItem) -> bool {
+fn native_numeric_label(node: &Node) -> Option<String> {
+    // IP's first HEAD child is the label; subsequent children are width
+    // operands. Other macro shapes need their own independent source witness.
+    if node.macro_name.as_deref() != Some("IP") {
+        return None;
+    }
+    let head = node.children.iter().find(|n| n.kind == NodeKind::Head)?;
+    let label = head.children.first()?;
+    if label.kind != NodeKind::Text || label.flags.no_print || !label.children.is_empty() {
+        return None;
+    }
+    literal_numeric_label(label.text.as_deref()?)
+}
+
+fn literal_numeric_label(text: &str) -> Option<String> {
+    // This is deliberately not a roff evaluator. Only literal digits and
+    // known one-character font switches prove a numeric label; every other
+    // escape, request, or internal space leaves the source obligation intact.
+    let mut bytes = text.trim_matches([' ', '\t']).bytes();
+    let mut label = String::new();
+    while let Some(byte) = bytes.next() {
+        if byte.is_ascii_digit() {
+            label.push(char::from(byte));
+        } else if byte != b'\\'
+            || bytes.next() != Some(b'f')
+            || !matches!(bytes.next(), Some(b'B' | b'I' | b'R' | b'P' | b'1'..=b'4'))
+        {
+            return None;
+        }
+    }
+    (!label.is_empty()).then_some(label)
+}
+
+fn unsigned_numeric_head(node: &Node, item: &DefinitionItem) -> bool {
     let [term] = item.terms.as_slice() else {
         return false;
     };
     let text = super::inline_text(term);
-    let text = text.trim();
-    !text.is_empty() && text.bytes().all(|byte| byte.is_ascii_digit())
+    native_numeric_label(node).is_some_and(|label| label == text.trim_matches([' ', '\t']))
 }
 
 struct Audit<'a> {
@@ -195,8 +227,9 @@ impl Audit<'_> {
                 // and can precede a valid named suffix (ffmpeg's 422/high/ss).
                 // Do not generalize to every nameless owner: e.g. -1 has an
                 // option-shaped source witness even when its final kind is Term.
-                // Partition from each source owner and its name evidence, never
-                // from the observed group's start/end. Missing owners are NOT
+                // Require an independent native numeric label, not merely a
+                // damaged observed head with its names removed. Never infer
+                // boundaries from the observed group's start/end. Missing owners are NOT
                 // treated as non-declarations: keep their source obligation.
                 let boundary = self
                     .observed
@@ -214,7 +247,7 @@ impl Audit<'_> {
                     .and_then(|item| {
                         if bracket_head(item) {
                             Some("parameter-only-head")
-                        } else if unsigned_numeric_head(item) {
+                        } else if unsigned_numeric_head(child, item) {
                             Some("unsigned-numeric-head")
                         } else {
                             None
@@ -359,6 +392,52 @@ pub(super) fn violations(profile: &Value) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn numeric_boundary_requires_independent_complete_native_evidence() {
+        for (input, expected) in [
+            ("422", Some("422")),
+            (r"\fB422\fR", Some("422")),
+            (r"\fB4\fI22\fP", Some("422")),
+            ("foo", None),
+            ("4 22", None),
+            (r"\&422", None),
+            (r"\n[digits]", None),
+            (r"\f[unknown]422", None),
+            (r"422\f", None),
+            (r"\fB\fR", None),
+        ] {
+            assert_eq!(literal_numeric_label(input).as_deref(), expected, "{input}");
+        }
+
+        let source = b".TH PROBE 1\n.SH OPTIONS\n.IP \\fBfoo\\fR 4\n.PD 0\n.IP \\fBhigh\\fR 4\n.IP \\fBss\\fR 4\n.PD\nSpatially Scalable\n";
+        let native = libmandoc_rs::Parser::default()
+            .parse_bytes("probe.1", source)
+            .unwrap();
+        let mut document =
+            mant_loader::parse_manual_bytes(std::path::Path::new("probe.1"), source).unwrap();
+        assert!(violations(&profile(&native.document.root, &document)).is_empty());
+        let Block::DefinitionList {
+            items,
+            declaration_groups,
+            ..
+        } = &mut document.sections[0].blocks[0]
+        else {
+            panic!("definition list")
+        };
+        assert_eq!(declaration_groups[0].start_item, 0);
+        assert_eq!(declaration_groups[0].end_item, 3);
+        // Coupled corruption must not turn a real source declaration into a
+        // numeric exception and then bless the shortened observed group.
+        items[0].terms = vec![vec![mant_ir::Inline::Text {
+            value: "422".into(),
+        }]];
+        items[0].entry.as_mut().unwrap().names.clear();
+        declaration_groups[0].start_item = 1;
+        let changed = profile(&native.document.root, &document);
+        assert!(!violations(&changed).is_empty(), "{changed}");
+        assert_eq!(changed["unexpectedGroups"].as_array().unwrap().len(), 1);
+    }
 
     #[test]
     fn unnamed_source_head_does_not_invalidate_or_hide_a_named_suffix_group() {
