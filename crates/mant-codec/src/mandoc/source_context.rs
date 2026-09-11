@@ -319,7 +319,10 @@ impl<'a> LoweringContext<'a> {
             .is_some_and(|head| head.contains("\\n+"))
     }
 
-    fn table_escape_at(&self, line: u32) -> Option<u8> {
+    /// The executed escape character at a source coordinate, if escapes are
+    /// enabled. Table recovery uses this only to recreate a bounded inline
+    /// fragment's lexical state; it never guesses an unobserved session.
+    pub(super) fn table_escape_at(&self, line: u32) -> Option<u8> {
         self.table_escape_changes
             .iter()
             .rev()

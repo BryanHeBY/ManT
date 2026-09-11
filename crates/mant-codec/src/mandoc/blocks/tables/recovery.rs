@@ -1,7 +1,9 @@
 //! Plan source-backed tbl cells and replay tbl's bounded lexical execution.
 use crate::mandoc::{
     LoweringContext, TableTextBlock,
-    inline::{FilledBoundary, InlineBuilder, plain_text},
+    inline::{
+        FilledBoundary, InlineBuilder, lower_source_fragment_with_formatter_state, plain_text,
+    },
     roff_escape::visible_text,
 };
 use libmandoc_rs::{Node, NodeKind};
@@ -149,16 +151,34 @@ pub(super) fn lower_table_cell(
     if let Some(text_block) = text_block {
         let initial_state = *formatter;
         let diagnostic_start = context.diagnostics.borrow().len();
-        // CVS mandoc handles a `T{ ... T}` cell in tbl before high-level
-        // man/mdoc macros run.  It removes a control word and feeds its raw
-        // operands to tbl; it does *not* re-execute `.Sm`, `.Fl`, `.BR`, or
-        // similar document macros.  Replay that bounded table behavior here
-        // rather than constructing a second document parser with different
-        // whitespace and font semantics.
+        let source = context.table_execution_source(text_block.start_line, &text_block.source);
+        // CVS mandoc passes high-level macro operands into tbl, while GNU
+        // tbl expands the same inline macro language. A `T{}` source block is
+        // already associated with this exact native text-block cell, so a
+        // complete, closed inline parse may restore the source semantics
+        // directly. Native requests and anything dependent on the original
+        // roff session deliberately stay on the raw/native path below.
+        if !contains_native_table_request(context, &source)
+            && let Some(recovered) = lower_source_fragment_with_formatter_state(
+                &source,
+                context.table_escape_at(text_block.start_line),
+                context.macro_set,
+                context.default_name,
+                node.flags.synopsis_pretty,
+                initial_state,
+            )
+            && recovered.complete
+        {
+            *formatter = recovered.formatter;
+            return Some(recovered.inlines);
+        }
+
         let mut candidate_state = initial_state;
-        let recovered = lower_table_text_block(text_block, context, &mut candidate_state);
+        let recovered = lower_raw_table_text_block(&source, context, &mut candidate_state);
         // Recovery remains transactional: it can replace native text only
-        // when the candidate belongs to this exact cell.
+        // when a raw candidate agrees with this exact cell. A declined
+        // semantic fragment therefore cannot replace a complete native cell
+        // with a partial subset of its source.
         let candidate_diagnostics = context.diagnostics.borrow_mut().split_off(diagnostic_start);
         let candidate = CellCandidate {
             inlines: recovered,
@@ -222,12 +242,11 @@ fn lower_table_cell_text(
     output
 }
 
-fn lower_table_text_block(
-    block: &TableTextBlock,
+fn lower_raw_table_text_block(
+    source: &str,
     context: &LoweringContext<'_>,
     formatter: &mut crate::mandoc::formatter::FormatterState,
 ) -> Vec<Inline> {
-    let source = context.table_execution_source(block.start_line, &block.source);
     let mut builder = InlineBuilder::with_spacing(formatter.spacing);
     for source_line in source.lines() {
         let Some(source_line) = table_cell_content_line(context, source_line) else {
@@ -247,6 +266,19 @@ fn lower_table_text_block(
     }
     formatter.spacing = builder.spacing_enabled();
     builder.finish()
+}
+
+/// Native roff requests execute before tbl sees a high-level macro operand.
+/// Do not feed a cell containing one to the isolated inline parser: it has no
+/// document-session request state and must not reinterpret that boundary.
+fn contains_native_table_request(context: &LoweringContext<'_>, source: &str) -> bool {
+    source.lines().any(|line| {
+        let Some(request) = line.trim_start().strip_prefix(['.', '\'']) else {
+            return false;
+        };
+        let name = request.split_whitespace().next().unwrap_or_default();
+        context.is_native_table_request(name)
+    })
 }
 
 /// Extract the input `tbl_read()` receives from one physical `T{}` line.
@@ -276,7 +308,7 @@ mod tests {
     use crate::mandoc::inline::plain_text;
 
     #[test]
-    fn tbl_operand_recovery_keeps_native_formatter_state_transactional() {
+    fn complete_semantic_table_recovery_commits_its_formatter_state() {
         fn find(node: &libmandoc_rs::Node) -> Option<&libmandoc_rs::Node> {
             if node.kind == libmandoc_rs::NodeKind::Table {
                 Some(node)
@@ -289,13 +321,12 @@ mod tests {
         let node = find(&report.document.root).unwrap();
         let mut context = crate::mandoc::LoweringContext::new(None, None);
         context.macro_set = libmandoc_rs::MacroSet::Mdoc;
-        for (source, expected_text, native) in [
-            (".BR A / B .", "A / B .", Some("A / B .")),
-            (".Sm off\n.Em WORD", "WORD", Some("WORD")),
-            (".Fl Fl help", "Fl help", None),
+        for (source, expected_text, expected_spacing) in [
+            (".Sm off\n.Em WORD", "WORD", false),
+            (".Fl Fl help", "--help", true),
         ] {
             let mut cell = node.table_cells[0].clone();
-            cell.text = native.map(str::to_owned);
+            cell.text = Some("unexpanded native operand payload".to_owned());
             cell.text_block = true;
             let block = super::TableTextBlock {
                 source: source.to_owned(),
@@ -306,7 +337,6 @@ mod tests {
             state
                 .font
                 .push_scope(crate::mandoc::roff_escape::RoffFont::Strong);
-            let expected = state;
             let result = super::lower_table_cell(
                 &cell,
                 super::CellPosition {
@@ -323,7 +353,7 @@ mod tests {
                 expected_text,
                 "{source}"
             );
-            assert_eq!(state, expected, "{source}");
+            assert_eq!(state.spacing, expected_spacing, "{source}");
         }
     }
 
@@ -411,6 +441,27 @@ mod tests {
         assert!(!super::table_text_agrees(
             "Core",
             "Production-grade, first-class"
+        ));
+    }
+
+    #[test]
+    fn native_requests_keep_table_cells_on_the_raw_recovery_path() {
+        let context = crate::mandoc::LoweringContext::new(None, None);
+        assert!(super::contains_native_table_request(
+            &context,
+            ".br\nvisible"
+        ));
+        assert!(super::contains_native_table_request(
+            &context,
+            ".ll 80n\nvisible"
+        ));
+        assert!(!super::contains_native_table_request(
+            &context,
+            ".No a Ns No b"
+        ));
+        assert!(!super::contains_native_table_request(
+            &context,
+            ".BR git (1)"
         ));
     }
 }

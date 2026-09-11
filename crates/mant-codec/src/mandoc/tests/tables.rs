@@ -47,12 +47,12 @@ fn tbl_text_block_prefers_native_parse_time_string_expansion() {
 }
 
 #[test]
-fn tbl_text_blocks_follow_native_request_dispatch_without_replaying_high_level_macros() {
+fn tbl_text_blocks_recover_complete_inline_macro_semantics() {
     let document = parse_manual_bytes(
         std::path::Path::new("tbl-request-dispatch.1"),
         b".Dd September 12, 2026\n.Dt TBLPROBE 1\n.Os\n.Sh DESCRIPTION\n.TS\nl.\nT{\n.BR A / B .\nT}\nT{\n.Sm off\n.Em WORD\nT}\nT{\n.Fl Fl help\nT}\nT{\n.sp 1\nSPACED\nT}\n.TE\n",
     )
-    .expect("lower CVS mandoc tbl dispatch witness");
+    .expect("lower a bounded inline tbl recovery witness");
     let Block::Table { rows, .. } = &document.sections[0].blocks[0] else {
         panic!("expected one lowered table");
     };
@@ -63,7 +63,7 @@ fn tbl_text_blocks_follow_native_request_dispatch_without_replaying_high_level_m
             blocks => panic!("expected one table cell paragraph: {blocks:?}"),
         })
         .collect::<Vec<_>>();
-    assert_eq!(cells, ["A / B .", "off WORD", "Fl help", "SPACED"]);
+    assert_eq!(cells, ["A / B .", "WORD", "--help", "SPACED"]);
 }
 
 #[test]
@@ -87,7 +87,7 @@ fn tbl_source_recovery_never_promotes_roff_comments_to_cells_or_text_blocks() {
         .collect::<Vec<_>>()
         .join(" ");
     assert!(
-        table_text.contains("left right linked (3) plain"),
+        table_text.contains("left right linked(3) plain"),
         "{table_text}"
     );
     assert!(!table_text.contains("ignored"), "{table_text}");
@@ -116,4 +116,20 @@ fn tbl_source_recovery_uses_a_document_level_ec_escape_change() {
         .join(" ");
     assert!(table_text.contains("left right"), "{table_text}");
     assert!(!table_text.contains("ignored"), "{table_text}");
+}
+
+#[test]
+fn tbl_inline_recovery_recreates_the_active_document_escape_state() {
+    let document = parse_manual_bytes(
+        std::path::Path::new("tbl-alternate-escape-inline.3"),
+        b".Dd September 12, 2026\n.Dt TBL-ALTERNATE-ESCAPE-INLINE 3\n.Os\n.ec @\n.Sh DESCRIPTION\n.TS\nl.\nT{\n.No left@|right\nT}\n.TE\n.ec\n",
+    )
+    .expect("lower a table cell using its active escape state");
+    let Block::Table { rows, .. } = &document.sections[0].blocks[0] else {
+        panic!("expected one lowered table");
+    };
+    let [Block::Paragraph { children, .. }] = rows[0].cells[0].blocks.as_slice() else {
+        panic!("expected one table paragraph");
+    };
+    assert_eq!(inline_text(children), "leftright");
 }

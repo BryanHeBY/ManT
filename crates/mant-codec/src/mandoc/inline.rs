@@ -13,6 +13,7 @@ pub(super) use links::lower_man_link;
 use links::{lower_bsd_reference, lower_link, lower_mail_addresses};
 mod scopes;
 mod source_cursor;
+mod source_fragment;
 pub(super) use flow::{FilledBoundary, FontState, InlineBuilder};
 mod source;
 
@@ -21,6 +22,7 @@ use font::lower_man_font_scope;
 use font::parse_roff_text_with_font;
 pub(super) use font::parse_roff_text_with_state;
 pub(super) use font::{lower_inline_nodes_with_font_state, parse_roff_text};
+pub(in crate::mandoc) use source_fragment::lower_source_fragment_with_formatter_state;
 
 pub(super) use source::roff_macro_arguments;
 
