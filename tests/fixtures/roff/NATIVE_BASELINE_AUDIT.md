@@ -78,3 +78,14 @@ the existing assignments. Parser and reference-renderer regressions cover valid
 special escapes, recursive expansion, invalid delimiters and incomplete escapes.
 The original corpus hashes and producer records above remain unchanged; they
 are not relabeled as results from this follow-up build.
+
+The clean follow-up producer `8d06257703564385225e4b7d2fd810cde878e08f`
+was independently rerun over all 45,036 target inputs. Its profile binary SHA-256
+is `effb82f84395c743bb640e1e4ec964ab46db10cb1cab41f121ec3a26edb974bc`.
+All results were clean and matched the original producer's records byte for
+byte (including the 21 generator supplements compared by complete findings).
+The main result-stream SHA-256 remains
+`de8a57659541e6ddfe3c3fcf063f4e2023b44c6677866b53d57ad3fb7698d615`.
+Subsequent Windows packaging verification also required LF checkout for the
+distributed upstream license copy; the strict byte-for-byte license assertion
+was retained rather than normalizing away distribution differences.

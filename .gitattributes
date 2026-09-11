@@ -14,6 +14,8 @@ crates/libmandoc-rs/scripts/* text eol=lf
 # validate this generated tree, which is not formatted as authored project code.
 crates/libmandoc-rs/vendor/** text eol=lf -whitespace
 crates/libmandoc-rs/upstream/** text eol=lf
+# Distributed native license copies must remain byte-identical to upstream.
+crates/libmandoc-rs/LICENSES/** text eol=lf
 *.gz binary
 *.zst binary
 *.zip binary
