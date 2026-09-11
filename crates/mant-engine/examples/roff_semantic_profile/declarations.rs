@@ -105,6 +105,15 @@ fn bracket_head(item: &DefinitionItem) -> bool {
         .is_some_and(|term| super::inline_text(term).trim_start().starts_with('['))
 }
 
+fn unsigned_numeric_head(item: &DefinitionItem) -> bool {
+    let [term] = item.terms.as_slice() else {
+        return false;
+    };
+    let text = super::inline_text(term);
+    let text = text.trim();
+    !text.is_empty() && text.bytes().all(|byte| byte.is_ascii_digit())
+}
+
 struct Audit<'a> {
     observed: Observed<'a>,
     rows: Vec<Value>,
@@ -182,10 +191,14 @@ impl Audit<'_> {
                     self.classify(&run, "executed-flow-boundary");
                     run.clear();
                 }
-                // A source-only parameter continuation cannot connect the
-                // declarations before and after it. A literal named `[` (test)
-                // is protected by its actual name facts, not this punctuation.
-                let parameter = self
+                // A nameless unsigned numeric label is not a declaration head
+                // and can precede a valid named suffix (ffmpeg's 422/high/ss).
+                // Do not generalize to every nameless owner: e.g. -1 has an
+                // option-shaped source witness even when its final kind is Term.
+                // Partition from each source owner and its name evidence, never
+                // from the observed group's start/end. Missing owners are NOT
+                // treated as non-declarations: keep their source obligation.
+                let boundary = self
                     .observed
                     .owners
                     .get(
@@ -193,17 +206,24 @@ impl Audit<'_> {
                             .get(&(std::ptr::from_ref(child) as usize))
                             .unwrap_or(&(0, 0, usize::MAX)),
                     )
-                    .is_some_and(|item| {
-                        bracket_head(item)
-                            && item
-                                .entry
-                                .as_ref()
-                                .is_none_or(|facts| facts.names.is_empty())
+                    .filter(|item| {
+                        item.entry
+                            .as_ref()
+                            .is_none_or(|facts| facts.names.is_empty())
+                    })
+                    .and_then(|item| {
+                        if bracket_head(item) {
+                            Some("parameter-only-head")
+                        } else if unsigned_numeric_head(item) {
+                            Some("unsigned-numeric-head")
+                        } else {
+                            None
+                        }
                     });
-                if parameter {
-                    self.classify(&run, "parameter-only-head-boundary");
+                if let Some(boundary) = boundary {
+                    self.classify(&run, &format!("{boundary}-boundary"));
                     run.clear();
-                    self.classify(&[(child, path.clone())], "parameter-only-head");
+                    self.classify(&[(child, path.clone())], boundary);
                     self.walk(child, path);
                     path.pop();
                     continue;
@@ -339,6 +359,63 @@ pub(super) fn violations(profile: &Value) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn unnamed_source_head_does_not_invalidate_or_hide_a_named_suffix_group() {
+        // Reduced from ffmpeg-codecs(1)'s 422/high/ss profile list. A numeric
+        // label has no exact discovered name; high/ss still form a contiguous
+        // named source run ending at the independently authored description.
+        let source = b".TH PROBE 1\n.SH OPTIONS\n.IP \\fB422\\fR 4\n.PD 0\n.IP \\fBhigh\\fR 4\n.IP \\fBss\\fR 4\n.PD\nSpatially Scalable\n";
+        let native = libmandoc_rs::Parser::default()
+            .parse_bytes("probe.1", source)
+            .unwrap();
+        let document =
+            mant_loader::parse_manual_bytes(std::path::Path::new("probe.1"), source).unwrap();
+        let valid = profile(&native.document.root, &document);
+        assert_eq!(valid["observedGroups"].as_array().unwrap().len(), 1);
+        assert!(violations(&valid).is_empty(), "{valid}");
+        assert!(valid["sourceRuns"].as_array().unwrap().iter().any(|row| {
+            row["reason"] == "unsigned-numeric-head" && row["physicalSources"] == json!([[3, 2, 0]])
+        }));
+
+        for mutation in ["delete-group", "cross-unnamed-owner", "move-source-owner"] {
+            let mut changed = document.clone();
+            let Block::DefinitionList {
+                items,
+                declaration_groups,
+                ..
+            } = &mut changed.sections[0].blocks[0]
+            else {
+                panic!("definition list")
+            };
+            match mutation {
+                "delete-group" => declaration_groups.clear(),
+                "cross-unnamed-owner" => declaration_groups[0].start_item = 0,
+                "move-source-owner" => {
+                    let source = items[1].source;
+                    items[1].source = items[0].source;
+                    items[0].source = source;
+                }
+                _ => unreachable!(),
+            }
+            let observed = profile(&native.document.root, &changed);
+            assert!(!violations(&observed).is_empty(), "{mutation}: {observed}");
+        }
+    }
+
+    #[test]
+    fn signed_option_shaped_head_remains_in_the_source_run() {
+        let source = b".TH PROBE 1\n.SH OPTIONS\n.IP \\fBseq_disp_ext\\fR 4\nEncoder configuration.\n.RS 4\n.IP \\fB\\-1\\fR 4\n.PD 0\n.IP \\fBauto\\fR 4\n.PD\nDecide automatically.\n.RE\n";
+        let native = libmandoc_rs::Parser::default()
+            .parse_bytes("probe.1", source)
+            .unwrap();
+        let document =
+            mant_loader::parse_manual_bytes(std::path::Path::new("probe.1"), source).unwrap();
+        let valid = profile(&native.document.root, &document);
+        assert_eq!(valid["observedGroups"].as_array().unwrap().len(), 1);
+        assert!(violations(&valid).is_empty(), "{valid}");
+    }
+
     #[test]
     fn headless_ip_layout_arguments_and_non_definition_predecessors_preserve_obligations() {
         for prefix in [
