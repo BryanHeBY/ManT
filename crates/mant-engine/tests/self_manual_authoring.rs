@@ -90,7 +90,7 @@ fn authoring_manuals_expose_real_local_and_implementation_specific_references() 
         let uri = format!("https://mandoc.bsd.lv/man/{page}.7.html");
         assert!(roff.records.iter().any(|record| matches!(&record.target, LinkTarget::External { uri: actual } if actual == &uri)), "real upstream reference for {page}");
     }
-    assert!(roff.records.iter().any(|record| matches!(&record.target, LinkTarget::External { uri } if uri == "https://mandoc.bsd.lv/snapshots/mandoc-1.14.6.tar.gz")));
+    assert!(roff.records.iter().any(|record| matches!(&record.target, LinkTarget::External { uri } if uri == "https://github.com/BryanHeBY/ManT/blob/main/crates/libmandoc-rs/vendor/mandoc-cvs-20260911/roff.7")));
     let manuals: Vec<_> = roff
         .records
         .iter()
