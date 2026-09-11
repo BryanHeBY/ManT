@@ -62,6 +62,16 @@ class TerminalUriReflow:
     evidence_complete: bool
 
 
+@dataclass(frozen=True)
+class TerminalHyphenReflow:
+    """A physical-row reflow at a formatter's breakable hyphen."""
+
+    text: str
+    rows_rejoined: int
+    terms: tuple[str, ...]
+    evidence_complete: bool
+
+
 def visible_text(text: str) -> str:
     """Remove known terminal styling, retaining unexpected control characters.
 
@@ -169,6 +179,50 @@ def reflow_terminal_uri_wraps(text: str, *, evidence_limit: int = 128) -> Termin
     )
 
 
+def reflow_terminal_hyphen_wraps(text: str, *, evidence_limit: int = 128) -> TerminalHyphenReflow:
+    """Rejoin a physical line break immediately after any nonblank hyphen.
+
+    CVS ``term_fill()`` makes every ``ASCII_HYPH`` a possible line break, not
+    only hyphens in URIs.  This function deliberately knows *nothing* about
+    source meaning: callers must separately prove every rejoined spelling was
+    present literally in source before treating this as presentation evidence.
+    It is therefore unsuitable for document normalization and is used only by
+    the secondary audit projection.
+    """
+    if evidence_limit < 1:
+        raise ValueError("hyphen reflow evidence budget must be positive")
+    rows = text.splitlines()
+    trailing_newline = text.endswith("\n")
+    output: list[str] = []
+    terms: list[str] = []
+    evidence_complete = True
+    index = 0
+    while index < len(rows):
+        row = rows[index]
+        while index + 1 < len(rows):
+            match = re.search(r"\S+-$", row)
+            continuation = _URI_CONTINUATION.match(rows[index + 1])
+            if match is None or continuation is None:
+                break
+            # Keep prose following the continuation token.  As with URI
+            # reflow, an audit representation must never drop a physical row's
+            # non-rejoined evidence.
+            joined = match[0] + continuation[1]
+            row = row[:match.start()] + joined + rows[index + 1][continuation.end():]
+            index += 1
+            if len(terms) < evidence_limit:
+                terms.append(joined)
+            else:
+                evidence_complete = False
+        output.append(row)
+        index += 1
+    return TerminalHyphenReflow(
+        text="\n".join(output) + ("\n" if trailing_newline else ""),
+        rows_rejoined=len(rows) - len(output), terms=tuple(terms),
+        evidence_complete=evidence_complete,
+    )
+
+
 def _unique_anchors(left: list[str], right: list[str]) -> list[tuple[int, int]]:
     """Patience anchors bound alignment work without a quadratic page-wide diff."""
     counts_left, counts_right = Counter(left), Counter(right)
@@ -197,7 +251,8 @@ def _unique_anchors(left: list[str], right: list[str]) -> list[tuple[int, int]]:
 
 def compare_content(reference: str, mant: str, source: str | None = None, *,
                     limits: ContentLimits = ContentLimits(),
-                    terminal_uri_wraps: bool = False) -> dict:
+                    terminal_uri_wraps: bool = False,
+                    terminal_hyphen_wraps: bool = False) -> dict:
     """Compare visible streams, with explicit coverage and bounded evidence.
 
     Reference-only content is not automatically loss; ManT-only content is not
@@ -230,7 +285,12 @@ def compare_content(reference: str, mant: str, source: str | None = None, *,
 
     visible = {"reference": visible_text(reference), "mant": visible_text(mant)}
     uri_wraps = {"reference": 0, "mant": 0}
-    if terminal_uri_wraps:
+    hyphen_wraps = {"reference": 0, "mant": 0}
+    if terminal_hyphen_wraps:
+        for side, text in visible.items():
+            reflow = reflow_terminal_hyphen_wraps(text)
+            visible[side], hyphen_wraps[side] = reflow.text, reflow.rows_rejoined
+    elif terminal_uri_wraps:
         for side, text in visible.items():
             reflow = reflow_terminal_uri_wraps(text)
             visible[side], uri_wraps[side] = reflow.text, reflow.rows_rejoined
@@ -333,7 +393,8 @@ def compare_content(reference: str, mant: str, source: str | None = None, *,
                         reference_preview=la[a2:a3][:limits.preview_tokens],
                         mant_preview=rb[b2:b3][:limits.preview_tokens])
     coverage.update(findings_total=sum(counts.values()), findings_retained=len(findings),
-                    terminal_uri_wraps=uri_wraps if terminal_uri_wraps else None)
+                    terminal_uri_wraps=uri_wraps if terminal_uri_wraps else None,
+                    terminal_hyphen_wraps=hyphen_wraps if terminal_hyphen_wraps else None)
     status = ("hard-failure" if controls["mant"] else "review" if counts else
               "covered" if coverage["complete"] else "uncovered")
     return {"schema": SCHEMA, "status": status, "coverage": coverage,
@@ -369,6 +430,8 @@ def self_check():
     assert kinds("https://example.test/container-\n registry/path", "https://example.test/container-registry/path", terminal_uri_wraps=True)["status"] == "covered"
     assert kinds("https://example.test/one-\n two-\n three", "https://example.test/one-two-three", terminal_uri_wraps=True)["status"] == "covered"
     assert kinds("https://example.test/one-\n two trailing", "https://example.test/one-two trailing", terminal_uri_wraps=True)["status"] == "covered"
+    assert kinds("NULL-\n terminated", "NULL-terminated", terminal_hyphen_wraps=True)["status"] == "covered"
+    assert kinds("word-\n next trailing", "word-next trailing", terminal_hyphen_wraps=True)["status"] == "covered"
     assert kinds("word-\n next", "word-next")["status"] == "review"
     assert kinds("https://example.test/word-\n next", "https://example.test/word- next", terminal_uri_wraps=True)["status"] == "review"
     for left, right in [("--help", "- -help"), ("-x", "- x"),

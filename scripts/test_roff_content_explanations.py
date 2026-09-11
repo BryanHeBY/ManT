@@ -200,7 +200,7 @@ class ExplanationTests(unittest.TestCase):
         self.assertEqual(result['status'], 'covered')
         self.assertEqual(result['explanations'], [])
 
-    def test_terminal_uri_projection_is_source_proven_and_never_mutates_raw_evidence(self):
+    def test_terminal_hyphen_projection_is_source_consistent_and_never_mutates_raw_evidence(self):
         source = '.TH PROBE 1\nhttps://example.test/container-registry/path\n'
         reference = 'https://example.test/container-\n registry/path\n'
         mant = 'https://example.test/container-registry/path\n'
@@ -209,18 +209,34 @@ class ExplanationTests(unittest.TestCase):
         self.assertEqual(result['rawComparison']['status'], 'review')
         self.assertEqual(result['terminalPresentationComparison']['status'], 'covered')
         self.assertEqual(result['residualComparison']['status'], 'covered')
-        self.assertEqual(result['explanations'][0]['rule'], 'cvs-terminal-breakable-uri-hyphen/v1')
+        self.assertEqual(result['explanations'][0]['rule'], 'cvs-terminal-breakable-hyphen/v1')
+        self.assertTrue(result['coverage']['terminalHyphenSourceConsistent'])
 
-    def test_terminal_uri_projection_requires_the_complete_literal_source_uri(self):
-        reference = 'https://example.test/container-\n registry/path\n'
-        mant = 'https://example.test/container-registry/path\n'
-        for source in (None, 'https://example.test/container-\nregistry/path\n',
-                       'ordinary prose only\n'):
+    def test_terminal_hyphen_projection_requires_literal_source_occurrences(self):
+        reference = 'NULL-\n terminated\n'
+        mant = 'NULL-terminated\n'
+        for source in (None, 'NULL-\nterminated\n', 'ordinary prose only\n'):
             with self.subTest(source=source):
                 result = assess_content(reference, mant, source)
                 self.assertEqual(result['status'], 'review')
                 self.assertFalse(result['coverage']['terminalPresentationApplied'])
                 self.assertEqual(result['rawComparison'], result['terminalPresentationComparison'])
+
+    def test_terminal_hyphen_projection_requires_enough_repeated_source_occurrences(self):
+        source = 'only one NULL-terminated spelling\n'
+        reference = 'NULL-\n terminated\nNULL-\n terminated\n'
+        mant = 'NULL-terminated\nNULL-terminated\n'
+        result = assess_content(reference, mant, source)
+        self.assertEqual(result['status'], 'review')
+        self.assertFalse(result['coverage']['terminalPresentationApplied'])
+
+    def test_terminal_hyphen_projection_keeps_nonrejoined_trailing_prose(self):
+        source = 'compare-and-block trailing prose\n'
+        reference = 'compare-and-\n block trailing prose\n'
+        mant = 'compare-and-block trailing prose\n'
+        result = assess_content(reference, mant, source)
+        self.assertEqual(result['status'], 'explained')
+        self.assertEqual(result['terminalPresentationComparison']['status'], 'covered')
 
 
 if __name__ == '__main__':

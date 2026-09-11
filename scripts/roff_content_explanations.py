@@ -26,15 +26,15 @@ from roff_content_compare import (
     LEXEME,
     compare_content,
     lexemes,
-    reflow_terminal_uri_wraps,
+    reflow_terminal_hyphen_wraps,
     visible_text,
 )
 
 
 SCHEMA = "mant.roff-content-explanations/v1"
 RULE = "mdoc-literal-NAME-generated-Nd-separator/v1"
-ASSESSMENT_SCHEMA = "mant.roff-content-assessment/v1"
-TERMINAL_URI_RULE = "cvs-terminal-breakable-uri-hyphen/v1"
+ASSESSMENT_SCHEMA = "mant.roff-content-assessment/v2"
+TERMINAL_HYPHEN_RULE = "cvs-terminal-breakable-hyphen/v1"
 _REQUEST = re.compile(r"^\.([A-Za-z]+)(?:[ \t]+(.*))?$")
 _ARGUMENT = re.compile(r'"([^"\n]*)"|([^ \t"\n]+)')
 _NAME = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_.+:@-]*")
@@ -147,7 +147,8 @@ def explain_content(reference: str, mant: str, source: str | None, *,
                     raw_comparison: dict | None = None,
                     limits: ContentLimits = ContentLimits(),
                     explanation_limits: ExplanationLimits = ExplanationLimits(),
-                    terminal_uri_wraps: bool = False) -> dict:
+                    terminal_uri_wraps: bool = False,
+                    terminal_hyphen_wraps: bool = False) -> dict:
     """Return original evidence plus source-bound explanations and residuals.
 
     ``raw_comparison``, when supplied, must be compare_content's result for
@@ -160,7 +161,8 @@ def explain_content(reference: str, mant: str, source: str | None, *,
     most one additional bounded content comparison is made.
     """
     raw = (compare_content(reference, mant, source, limits=limits,
-                           terminal_uri_wraps=terminal_uri_wraps)
+                           terminal_uri_wraps=terminal_uri_wraps,
+                           terminal_hyphen_wraps=terminal_hyphen_wraps)
            if raw_comparison is None else raw_comparison)
     result = {"schema": SCHEMA, "status": raw["status"], "rawComparison": raw,
               "residualComparison": raw, "explanations": [],
@@ -202,7 +204,8 @@ def explain_content(reference: str, mant: str, source: str | None, *,
     token = next(match for n, match in enumerate(LEXEME.finditer(left)) if n == index)
     rewritten = left[:token.start()] + "—" + left[token.end():]
     residual = compare_content(rewritten, mant, source, limits=limits,
-                               terminal_uri_wraps=terminal_uri_wraps)
+                               terminal_uri_wraps=terminal_uri_wraps,
+                               terminal_hyphen_wraps=terminal_hyphen_wraps)
     result["residualComparison"] = residual
     result["status"] = "explained" if residual["status"] == "covered" else residual["status"]
     result["coverage"]["comparisonComplete"] = residual["coverage"]["complete"]
@@ -222,19 +225,24 @@ def _difference_weight(comparison: dict) -> int:
     return sum(comparison.get("counts", {}).values())
 
 
-def _source_proves_uri_reflows(source: str | None, *reflows) -> bool:
-    """Require every joined URI to occur literally in the decoded source.
+def _source_is_consistent_with_hyphen_reflows(source: str | None, *reflows) -> bool:
+    """Require every rejoined spelling to occur enough times literally in source.
 
-    The formatter alone proves a possible physical wrap, not that an arbitrary
-    adjacent word was source-level URI content. A context-dependent or escaped
-    URI remains raw review rather than receiving this presentation label.
+    This is intentionally named *consistent*, rather than source-proven: raw
+    text cannot establish which repeated source occurrence rendered on a given
+    terminal row, and it cannot evaluate macro/register expansion.  It is only
+    sufficient to demote an otherwise fully-explained physical-wrap candidate;
+    raw comparison evidence and acceptance remain untouched.
     """
     if source is None:
         return False
-    return all(
-        reflow.evidence_complete and all(uri in source for uri in reflow.uris)
-        for reflow in reflows
-    )
+    occurrences: dict[str, int] = {}
+    for reflow in reflows:
+        if not reflow.evidence_complete:
+            return False
+        for term in reflow.terms:
+            occurrences[term] = occurrences.get(term, 0) + 1
+    return all(source.count(term) >= count for term, count in occurrences.items())
 
 
 def assess_content(reference: str, mant: str, source: str | None, *,
@@ -243,35 +251,38 @@ def assess_content(reference: str, mant: str, source: str | None, *,
                    explanation_limits: ExplanationLimits = ExplanationLimits()) -> dict:
     """Layer bounded presentation evidence over an unchanged raw comparison.
 
-    The sole terminal rule is tied to CVS ``term.c:term_fill``: a breakable
-    hyphen in a URI is emitted before automatic wrapping. No general hyphen
-    joining, punctuation folding, source execution, table masking, or output
-    mutation is performed. The raw comparison is always retained verbatim;
-    callers must use it for acceptance and regression evidence.
+    The terminal rule is tied to CVS ``term.c:term_fill``: any breakable
+    ``ASCII_HYPH`` may be emitted before automatic wrapping, including ordinary
+    compound words as well as URIs.  Every candidate spelling must occur
+    literally enough times in source.  This is consistency evidence rather
+    than an execution proof: no roff execution, punctuation folding, table
+    masking, or product-output mutation is performed.  The raw comparison is
+    always retained verbatim; callers must use it for acceptance and
+    regression evidence.
     """
     raw = (compare_content(reference, mant, source, limits=limits)
            if raw_comparison is None else raw_comparison)
     projection = raw
     projection_used = False
     projection_counts = {"reference": 0, "mant": 0}
-    terminal_source_proven = False
+    terminal_source_consistent = False
     if raw["status"] == "review" and raw["coverage"].get("complete", False):
         # Inspect first so an unchanged page does not spend a second complete
-        # comparison solely to establish that no terminal URI rule applies.
+        # comparison solely to establish that no terminal hyphen rule applies.
         reflows = {
-            "reference": reflow_terminal_uri_wraps(visible_text(reference)),
-            "mant": reflow_terminal_uri_wraps(visible_text(mant)),
+            "reference": reflow_terminal_hyphen_wraps(visible_text(reference)),
+            "mant": reflow_terminal_hyphen_wraps(visible_text(mant)),
         }
         projection_counts = {side: reflow.rows_rejoined for side, reflow in reflows.items()}
-        terminal_source_proven = _source_proves_uri_reflows(source, *reflows.values())
-        if any(projection_counts.values()) and terminal_source_proven:
+        terminal_source_consistent = _source_is_consistent_with_hyphen_reflows(source, *reflows.values())
+        if any(projection_counts.values()) and terminal_source_consistent:
             projection = compare_content(reference, mant, source, limits=limits,
-                                         terminal_uri_wraps=True)
+                                         terminal_hyphen_wraps=True)
             projection_used = True
 
     explained = explain_content(
         reference, mant, source, raw_comparison=projection, limits=limits,
-        explanation_limits=explanation_limits, terminal_uri_wraps=projection_used,
+        explanation_limits=explanation_limits, terminal_hyphen_wraps=projection_used,
     )
     terminal_helped = (
         projection_used
@@ -280,10 +291,10 @@ def assess_content(reference: str, mant: str, source: str | None, *,
     explanations = []
     if terminal_helped:
         explanations.append({
-            "rule": TERMINAL_URI_RULE,
+            "rule": TERMINAL_HYPHEN_RULE,
             "referenceRowsRejoined": projection_counts["reference"],
             "mantRowsRejoined": projection_counts["mant"],
-            "reason": "Pinned CVS term.c emits a literal breakable hyphen before its automatic line break; only URI-continuation rows were rejoined for this secondary presentation comparison.",
+            "reason": "Pinned CVS term.c emits a literal breakable hyphen before its automatic line break; only source-consistent continuation rows were rejoined for this secondary presentation comparison.",
         })
     explanations.extend(explained["explanations"])
     status = explained["status"]
@@ -299,8 +310,8 @@ def assess_content(reference: str, mant: str, source: str | None, *,
         "coverage": {
             "rawComparisonComplete": raw["coverage"].get("complete", False),
             "terminalPresentationApplied": projection_used,
-            "terminalUriSourceProven": terminal_source_proven,
-            "terminalUriRowsRejoined": projection_counts,
+            "terminalHyphenSourceConsistent": terminal_source_consistent,
+            "terminalHyphenRowsRejoined": projection_counts,
             "sourceExplanation": explained["coverage"],
             "reasons": [],
         },
