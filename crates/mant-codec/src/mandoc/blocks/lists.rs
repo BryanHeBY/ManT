@@ -21,8 +21,6 @@ mod mdoc;
 #[cfg(test)]
 use definition::split_definition_terms;
 use definition::{DefinitionFlow, definition_item, prepend_definition_heads};
-#[cfg(test)]
-use man::is_ip_bullet_item;
 use man::ordered::{ManListState, append_ordered, ordinal_marker, ordinal_sequence};
 pub(super) use man::{ManDefinitionState, lower_man_definition};
 
@@ -72,17 +70,6 @@ mod tests {
         super::prepend_definition_heads(&mut item, std::iter::once(definition("-a", "")));
         assert_eq!(item.source, None);
         assert_eq!(item.terms.len(), 2);
-    }
-
-    #[test]
-    fn only_single_glyph_definition_terms_are_ip_bullets() {
-        assert!(super::is_ip_bullet_item(&definition("*", "multiply")));
-        assert!(super::is_ip_bullet_item(&definition("o", "item")));
-        assert!(!super::is_ip_bullet_item(&definition("&&", "logical and")));
-        assert!(!super::is_ip_bullet_item(&definition(
-            "-a, --all",
-            "show all"
-        )));
     }
 
     #[test]

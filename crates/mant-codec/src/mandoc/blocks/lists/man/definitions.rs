@@ -5,16 +5,6 @@ use super::super::{
     paragraph_distance_lines, plain_text, prepend_definition_heads, source_span, terms_fit_inline,
 };
 
-fn is_bullet_glyph(text: &str) -> bool {
-    let mut chars = text.chars();
-    match (chars.next(), chars.next()) {
-        // `o` is the ASCII bullet convention in man pages; otherwise any single
-        // non-alphanumeric mark (`*`, `•`, `-`, `+`, …) is a bullet.
-        (Some(glyph), None) => glyph == 'o' || !glyph.is_alphanumeric(),
-        _ => false,
-    }
-}
-
 pub(in crate::mandoc::blocks) fn lower_man_definition(
     node: &Node,
     context: &LoweringContext<'_>,
@@ -46,8 +36,10 @@ pub(in crate::mandoc::blocks) fn lower_man_definition(
     let spacing_before =
         crate::mandoc::layout::man_paragraph_spacing(spacing_before, has_predecessor);
     let macro_name = node.macro_name.as_deref();
-    let bullet = (macro_name == Some("IP") && is_ip_bullet_item(&item))
-        || (macro_name == Some("TP") && is_explicit_tp_bullet(node, &item));
+    let bullet = matches!(macro_name, Some("IP" | "TP")) && is_explicit_bullet(node, &item);
+    if macro_name == Some("IP") && !bullet {
+        record_ambiguous_ip_mark(&item, context);
+    }
     let ordinal = matches!(macro_name, Some("IP" | "TP"))
         .then(|| {
             ordinal_marker(
@@ -429,8 +421,8 @@ fn first_node_text(node: &Node) -> Option<&str> {
 ///
 /// Inferring this later from the serialized term text is unsafe: a legitimate
 /// `.TP *` glossary entry looks identical after lowering. Keeping the decision
-/// at this boundary preserves real `.IP o`/`.IP \(bu` lists without erasing
-/// punctuation-only definition terms.
+/// at this boundary preserves explicit named-bullet lists without erasing
+/// punctuation-only definition terms or literal key names.
 fn append_ip_bullet(
     output: &mut Vec<Block>,
     item: DefinitionItem,
@@ -462,17 +454,10 @@ fn append_ip_bullet(
     });
 }
 
-pub(in crate::mandoc::blocks) fn is_ip_bullet_item(item: &DefinitionItem) -> bool {
-    let [term] = item.terms.as_slice() else {
-        return false;
-    };
-    is_bullet_glyph(plain_text(term).trim())
-}
-
-/// TP can define literal operators, so do not apply IP's broad marker
-/// convention. Require the complete tag to be a bullet and native source
-/// evidence for the named roff bullet escape; no section-name heuristic.
-fn is_explicit_tp_bullet(node: &Node, item: &DefinitionItem) -> bool {
+/// IP and TP both print authored tags; neither authorizes replacing arbitrary
+/// glyphs with bullets. Require a complete named bullet, not a section-name,
+/// styling, or adjacent-item heuristic: even `*` and `o` can name editor keys.
+fn is_explicit_bullet(node: &Node, item: &DefinitionItem) -> bool {
     fn contains_bullet_escape(node: &Node) -> bool {
         node.text
             .as_ref()
@@ -485,9 +470,90 @@ fn is_explicit_tp_bullet(node: &Node, item: &DefinitionItem) -> bool {
             .any(contains_bullet_escape)
 }
 
+/// Preserve literal tags without turning typographical marks into discovered
+/// values or terms. Explicit bold/code marking is positive key-name evidence;
+/// section names and the role of a containing option are not.
+fn record_ambiguous_ip_mark(item: &DefinitionItem, context: &LoweringContext<'_>) {
+    use crate::definitions::NativeHeadRole;
+    use mant_ir::Inline;
+
+    fn styled(inlines: &[Inline], in_style: bool) -> bool {
+        inlines.iter().all(|inline| match inline {
+            Inline::Anchor { .. } | Inline::Code { .. } => true,
+            Inline::Text { value } => value.trim().is_empty() || in_style,
+            Inline::Strong { children } => styled(children, true),
+            Inline::Emphasis { children } | Inline::Link { children, .. } => {
+                styled(children, in_style)
+            }
+            Inline::LineBreak => false,
+        })
+    }
+    let [term] = item.terms.as_slice() else {
+        return;
+    };
+    let text = plain_text(term);
+    let mut chars = text.trim().chars();
+    let Some(mark) = chars.next() else { return };
+    if chars.next().is_some() || !mark.is_ascii() || (mark.is_ascii_alphanumeric() && mark != 'o') {
+        return;
+    }
+    context.native_heads.borrow_mut().record(
+        item,
+        if styled(term, false) {
+            NativeHeadRole::LiteralTerm
+        } else {
+            NativeHeadRole::Presentation
+        },
+    );
+}
+
 #[cfg(test)]
 mod tests {
     use mant_ir::{Block, DefinitionItem};
+
+    #[test]
+    fn ip_literal_marks_and_styled_keys_are_not_inferred_bullets() {
+        for (mark, expected) in [
+            ("*", "*"),
+            ("o", "o"),
+            ("#", "#"),
+            ("=", "="),
+            (r"\e", "\\"),
+            ("^", "^"),
+            ("$", "$"),
+            ("+", "+"),
+            ("-", "-"),
+            (r"\fB*\fP", "*"),
+            ("•", "•"),
+        ] {
+            let source = format!(".TH MARK 1\n.SH DESCRIPTION\n.IP \"{mark}\" 4\nBODY\n");
+            let document = crate::mandoc::parse_plain_manual(
+                std::path::Path::new("mark.1"),
+                source.as_bytes(),
+            )
+            .unwrap();
+            let Block::DefinitionList { items, .. } = &document.sections[0].blocks[0] else {
+                panic!("literal {mark:?} must retain its authored tag");
+            };
+            assert_eq!(super::plain_text(&items[0].terms[0]), expected);
+        }
+    }
+
+    #[test]
+    fn ip_named_bullets_retain_explicit_source_evidence() {
+        for mark in [r"\(bu", r"\[bu]", r"\fB\[bu]\fP", r"\ \(bu"] {
+            let source = format!(".TH MARK 1\n.SH DESCRIPTION\n.IP \"{mark}\" 4\nBODY\n");
+            let document = crate::mandoc::parse_plain_manual(
+                std::path::Path::new("mark.1"),
+                source.as_bytes(),
+            )
+            .unwrap();
+            assert!(
+                matches!(&document.sections[0].blocks[0], Block::List { kind: mant_ir::ListKind::Bullet, items, .. } if items.len() == 1),
+                "{mark:?}"
+            );
+        }
+    }
 
     #[test]
     fn native_tq_merges_only_an_immediately_pending_empty_definition() {

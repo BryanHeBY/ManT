@@ -1,5 +1,4 @@
-//! Tests for the Arch Linux `rsync(1)` fixture — EXIT VALUES bullet
-//! normalisation (the regression that motivated the normalisation pass).
+//! Tests for the Arch Linux `rsync(1)` fixture and its authored ASCII marks.
 
 use crate::common::{self, RSYNC_SECTIONS};
 use crate::fixtures::{archlinux_manual, archlinux_manual_query};
@@ -12,10 +11,9 @@ fn keeps_section_topology() {
     common::assert_section_topology("archlinux/rsync", archlinux_manual("rsync"), RSYNC_SECTIONS);
 }
 
-/// EXIT VALUES uses `.IP o` markers that must be normalised into a bullet
-/// list rather than a definition list with per-item `o` terms.
+/// `.IP o` does not prove a bullet: retain the original marks and payloads.
 #[test]
-fn exit_values_is_normalised_to_bullet_list() {
+fn exit_values_retains_literal_o_tags() {
     let doc = archlinux_manual("rsync");
     let exit = common::section(doc, "EXIT VALUES");
 
@@ -29,22 +27,27 @@ fn exit_values_is_normalised_to_bullet_list() {
         )
     });
     assert!(
-        has_bullet_list,
-        "rsync EXIT VALUES should contain a normalised bullet list"
+        !has_bullet_list,
+        "literal ASCII tags must not be silently replaced by bullets"
     );
 
-    // No definition list should remain — the `o` markers are uniform bullets.
+    // Preserve ambiguous source marks without a section-name heuristic.
     let has_definition_list = exit
         .blocks
         .iter()
         .any(|block| matches!(block, Block::DefinitionList { .. }));
     assert!(
-        !has_definition_list,
-        "rsync EXIT VALUES should not retain a definition list after normalisation"
+        has_definition_list,
+        "rsync EXIT VALUES should retain its literal marks"
     );
+    assert!(common::definition_items(exit).iter().all(|item| {
+        item.terms
+            .iter()
+            .all(|term| common::inline_text(term) == "o")
+    }));
 }
 
-/// The bullet list items contain the expected exit codes.
+/// The tagged items contain the expected exit codes.
 #[test]
 fn exit_values_contain_expected_codes() {
     let doc = archlinux_manual("rsync");
@@ -58,13 +61,11 @@ fn exit_values_contain_expected_codes() {
     );
 }
 
-/// --format man renders EXIT VALUES as a bullet list, not a definition list
-/// with per-item `o` terms.
+/// Text output preserves source `o` tags rather than inventing `-` marks.
 #[test]
-fn man_format_renders_exit_values_as_bullet_list() {
+fn man_format_renders_exit_values_with_literal_marks() {
     let output = render_query_man(&archlinux_manual_query("rsync"));
 
-    // Should NOT contain "o " as a standalone term line.
     let exit_start = output
         .find("EXIT VALUES")
         .expect("EXIT VALUES section in man output");
@@ -75,10 +76,11 @@ fn man_format_renders_exit_values_as_bullet_list() {
         .map_or(exit_section.len(), |i| i + 12);
     let exit_chunk = &exit_section[..section_end + 200.min(exit_section.len() - section_end)];
 
-    // No standalone "o\n" or "o  " term line.
     assert!(
-        !exit_chunk.contains("\no\n") && !exit_chunk.contains("\no  "),
-        "rsync EXIT VALUES should not have standalone 'o' term lines, got: {exit_chunk:?}"
+        exit_chunk
+            .lines()
+            .any(|line| line.trim_start().starts_with("o ")),
+        "rsync EXIT VALUES lost the source 'o' marks: {exit_chunk:?}"
     );
 }
 

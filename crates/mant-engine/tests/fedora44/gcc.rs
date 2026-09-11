@@ -6,7 +6,8 @@ use mant_ir::{Block, ListKind, SourceFormat};
 use mant_protocol::OutlineDetail;
 use mant_query::build_outline_with_detail;
 
-/// Independent compact heads: 10 sections and 4,902 semantic entries.
+/// Independent compact heads: 10 sections and 4,902 entries. Retained unstyled
+/// IP punctuation tags are presentation, not additional semantic entries.
 #[test]
 fn keeps_complete_sections_and_semantic_option_outlines() {
     let document = fedora44_manual("gcc");

@@ -38,6 +38,7 @@ pub(super) fn document_anchor_ids(blocks: &[Block], sections: &[Section]) -> Has
 }
 
 pub(super) struct IdentityPlan {
+    semantic: bool,
     pub(super) group_head: bool,
     pub(super) kind: EntryKind,
     pub(super) case: NameCase,
@@ -87,13 +88,16 @@ pub(super) fn identity_plan(
     } else {
         context
     };
-    let group_head = !names.is_empty()
-        || !item.terms.is_empty()
-            && item
-                .terms
-                .iter()
-                .all(|term| super::syntax::is_inferred_head(term, head_context));
+    let semantic = hint != Some(super::NativeHeadRole::Presentation);
+    let group_head = semantic
+        && (!names.is_empty()
+            || !item.terms.is_empty()
+                && item
+                    .terms
+                    .iter()
+                    .all(|term| super::syntax::is_inferred_head(term, head_context)));
     IdentityPlan {
+        semantic,
         group_head,
         kind,
         case,
@@ -156,6 +160,7 @@ pub(super) fn identify_item(
     // `set-mark` into the misleading semantic ID `set`. Markdown producers
     // likewise provide kind/name evidence and leave allocation to this pass.
     let IdentityPlan {
+        semantic,
         group_head: _,
         kind,
         case,
@@ -171,14 +176,14 @@ pub(super) fn identify_item(
     }
     retained.extend(anchors.iter().cloned());
 
-    // A target-only definition is a navigation placement artifact, not a
-    // semantic concept. Keep its native anchors but do not manufacture an
-    // empty `term-entry-*` whose outline label is merely its generated ID.
-    if names.is_empty()
-        && !item
-            .terms
-            .iter()
-            .any(|term| !plain_text(term).trim().is_empty())
+    // Presentation marks and target-only definitions are not semantic concepts.
+    // Keep their native anchors without manufacturing outline entries.
+    if !semantic
+        || (names.is_empty()
+            && !item
+                .terms
+                .iter()
+                .any(|term| !plain_text(term).trim().is_empty()))
     {
         item.entry = None;
         return EntryKind::Term;
@@ -220,11 +225,12 @@ pub(super) fn identify_item(
 }
 
 pub(super) fn has_semantic_spelling(item: &DefinitionItem, plan: &IdentityPlan) -> bool {
-    !plan.names.is_empty()
-        || item
-            .terms
-            .iter()
-            .any(|term| !plain_text(term).trim().is_empty())
+    plan.semantic
+        && (!plan.names.is_empty()
+            || item
+                .terms
+                .iter()
+                .any(|term| !plain_text(term).trim().is_empty()))
 }
 
 fn role_name_slug(kind: EntryKind, name: &str) -> String {

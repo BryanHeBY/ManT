@@ -9,6 +9,9 @@ pub(super) fn select_kind(
     hint: Option<NativeHeadRole>,
 ) -> (EntryKind, NameCase) {
     match hint {
+        Some(NativeHeadRole::LiteralTerm | NativeHeadRole::Presentation) => {
+            return (EntryKind::Term, NameCase::Sensitive);
+        }
         Some(NativeHeadRole::Option) => {
             return (
                 EntryKind::Parameter {

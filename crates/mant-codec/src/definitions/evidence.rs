@@ -8,6 +8,10 @@ pub(crate) enum NativeHeadRole {
     Option,
     Environment,
     Literal,
+    /// An explicitly styled, otherwise ambiguous man IP operator/key tag.
+    LiteralTerm,
+    /// An unstyled man IP mark supplies layout, not declaration evidence.
+    Presentation,
 }
 
 struct HeadWitness {

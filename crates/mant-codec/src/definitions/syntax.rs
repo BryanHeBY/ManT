@@ -40,7 +40,18 @@ pub(super) fn infer_identity(
         .map_or_else(String::new, |term| plain_text(term));
     let trimmed = first.trim();
     let (mut kind, mut case) = decision::select_kind(trimmed, context, hint);
-    let mut occurrences = if hint == Some(super::NativeHeadRole::Option) {
+    let mut occurrences = if hint == Some(super::NativeHeadRole::LiteralTerm) {
+        item.terms
+            .iter()
+            .map(|term| {
+                let text = plain_text(term);
+                vec![super::RecognizedName::contiguous(
+                    text.trim(),
+                    text.len() - text.trim_start().len(),
+                )]
+            })
+            .collect()
+    } else if hint == Some(super::NativeHeadRole::Option) {
         options::native_option_occurrences(&item.terms)
     } else if hint == Some(super::NativeHeadRole::Environment) {
         item.terms

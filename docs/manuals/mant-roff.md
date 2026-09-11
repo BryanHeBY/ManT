@@ -86,7 +86,14 @@ columns with a `manual.indentation-limit` warning rather than integer overflow.
 
 The `IP` and `TP` macros are source-ambiguous: a leading mark can introduce a
 bullet, an enumerated paragraph, or a glossary-style definition. ManT
-recognizes single-glyph bullet marks at that source boundary. A punctuated
+recognizes a bullet only when the complete visible tag is `•` and the native
+head retains an explicit named bullet escape (`\(bu` or `\[bu]`). Literal
+single-character tags, including `*`, `o`, `-`, `#`, `=`, `^`, `$`, and `\`,
+remain definitions: these can be real operator or editor-key names, even in
+consecutive or unstyled `IP` paragraphs. For ambiguous single ASCII punctuation
+or `o` tags in `IP`, the unstyled tag remains presentation with no semantic
+entry; explicit bold or code marking supplies a literal Term, never an inferred
+value merely because it is nested below an option. A punctuated
 integer such as `1.`, `1)`, `(1)`, or `[1]` is sufficient evidence for an
 ordered item, including a one-item footnote list. Adjacent, same-style,
 consecutively increasing marks join one list; a gap or style change begins a
@@ -185,8 +192,8 @@ coordinates instead of silently taking unrelated later prose.
 A `TP` whose complete tag is the named roff bullet `\(bu` or `\[bu]`
 (including leading escaped spacing) becomes a regular bullet item, not a
 semantic term named `•`. This narrow recovery retains body, layout and targets;
-it does not apply `IP`'s broader marker convention to literal `TP` operators
-such as `*`, `-`, or `+`.
+the same evidence rule applies to `IP`, and never replaces literal operators
+such as `*`, `-`, or `+` with a generated bullet.
 
 ## Manual References
 

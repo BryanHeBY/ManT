@@ -4,7 +4,7 @@
 //!
 //! * **Short terms** (`* / %`, `&&`, `space`) → `inline_term = true`
 //! * **Long terms** (`< > <= >= == !=`, `--verbose`) → `inline_term = false`
-//! * **Uniform bullet markers** (`o` in EXIT STATUS) → normalised to `Block::List`
+//! * **Literal ASCII markers** (`o` in EXIT STATUS) → retained as definition tags
 //!
 //! Tests go through the full pipeline: `parse_manual_source` → model →
 //! `render_query_text`, `render_query_man`, and `render_markdown`.
@@ -95,12 +95,11 @@ fn long_option_names_are_not_inline() {
 }
 
 #[test]
-fn uniform_bullet_markers_are_normalised_to_a_bullet_list() {
+fn uniform_ascii_markers_remain_authored_definition_tags() {
     let doc = document();
     let exit = common::section(doc, "EXIT STATUS");
 
-    // The three `.IP o 4` items should have been normalised into a
-    // Block::List { kind: Bullet } rather than a DefinitionList.
+    // Repetition does not prove that the character is semantically disposable.
     let has_bullet_list = exit.blocks.iter().any(|block| {
         matches!(
             block,
@@ -111,8 +110,8 @@ fn uniform_bullet_markers_are_normalised_to_a_bullet_list() {
         )
     });
     assert!(
-        has_bullet_list,
-        "EXIT STATUS should contain a normalised bullet list, got: {:?}",
+        !has_bullet_list,
+        "EXIT STATUS must not replace literal source tags, got: {:?}",
         exit.blocks
             .iter()
             .map(|b| match b {
@@ -126,6 +125,13 @@ fn uniform_bullet_markers_are_normalised_to_a_bullet_list() {
             })
             .collect::<Vec<_>>()
     );
+    let items = common::definition_items(exit);
+    assert_eq!(items.len(), 3);
+    assert!(items.iter().all(|item| {
+        item.terms
+            .iter()
+            .all(|term| common::inline_text(term) == "o")
+    }));
 }
 
 #[test]
