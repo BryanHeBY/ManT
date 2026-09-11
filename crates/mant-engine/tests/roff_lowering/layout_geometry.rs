@@ -30,6 +30,15 @@ fn man_tag_width_is_body_geometry_not_only_inline_fit() {
 }
 
 #[test]
+fn bracketed_ip_indexes_keep_their_authored_marker_spelling() {
+    let text = man(".IP [0] 5\nZERO\n.IP [1]\nONE\n");
+    assert!(text.contains("[0]"), "{text}");
+    assert!(text.contains("[1]"), "{text}");
+    assert!(!text.contains("0.   ZERO"), "{text}");
+    assert!(!text.contains("1.   ONE"), "{text}");
+}
+
+#[test]
 fn rs_uses_source_distance_and_prevailing_tag_width() {
     for (width, expected) in [
         ("0", 0),

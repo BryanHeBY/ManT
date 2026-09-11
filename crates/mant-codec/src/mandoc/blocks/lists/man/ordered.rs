@@ -75,7 +75,6 @@ enum IpOrdinalStyle {
     Period,
     ClosingParenthesis,
     Parenthesized,
-    Bracketed,
     IncrementingRegister,
 }
 
@@ -106,11 +105,6 @@ pub(in crate::mandoc::blocks) fn ordinal_marker(
         } else {
             (digits, IpOrdinalStyle::ClosingParenthesis)
         }
-    } else if let Some(digits) = text
-        .strip_prefix('[')
-        .and_then(|value| value.strip_suffix(']'))
-    {
-        (digits, IpOrdinalStyle::Bracketed)
     } else if uses_incrementing_register {
         (text, IpOrdinalStyle::IncrementingRegister)
     } else {
@@ -330,11 +324,11 @@ mod tests {
 
     #[test]
     fn recognizes_only_unambiguous_ordinal_spellings() {
-        for marker in ["1.", "2)", "(3)", "[4]"] {
+        for marker in ["1.", "2)", "(3)"] {
             assert!(super::ordinal_marker(&definition(marker, "item"), false).is_some());
         }
         assert!(super::ordinal_marker(&definition("1", "item"), true).is_some());
-        for value in ["1", "2.2", "v1.", "1.2."] {
+        for value in ["1", "[4]", "2.2", "v1.", "1.2."] {
             assert!(super::ordinal_marker(&definition(value, "value"), false).is_none());
         }
         let mut empty = definition("1.", "");
@@ -563,5 +557,19 @@ mod tests {
             })
             .collect();
         assert_eq!(lists, [(Some(1), 2), (Some(3), 1)]);
+    }
+
+    #[test]
+    fn bracketed_ip_indexes_remain_exact_definition_labels() {
+        let document = crate::mandoc::parse_plain_manual(
+            std::path::Path::new("bracketed-ip-index.5"),
+            b".TH BRACKETED-IP-INDEX 5\n.SH DESCRIPTION\n.IP [0] 5\nZERO\n.IP [1]\nONE\n",
+        )
+        .expect("parse bracketed indices");
+        let Block::DefinitionList { items, .. } = &document.sections[0].blocks[0] else {
+            panic!("bracketed IP labels must not be rewritten as decimal list markers");
+        };
+        assert_eq!(crate::mandoc::inline::plain_text(&items[0].terms[0]), "[0]");
+        assert_eq!(crate::mandoc::inline::plain_text(&items[1].terms[0]), "[1]");
     }
 }
