@@ -256,7 +256,7 @@ class ExplanationTests(unittest.TestCase):
         self.assertEqual(result['explanations'][0]['rule'], 'source-consistent-BR-manual-reference-spacing/v1')
 
     def test_literal_man_UR_target_delimiters_are_source_consistent_presentation(self):
-        source = '.TH PROBE 1\n.UR https\\://example.test/a\\-b\n.UE .\n'
+        source = '.TH PROBE 1\n.UR https:\\://example.test/a\\-b\n.UE .\n'
         result = assess_content(
             '<https://example.test/a-b>.\n',
             'https://example.test/a-b.\n',
@@ -270,8 +270,27 @@ class ExplanationTests(unittest.TestCase):
             'source-consistent-man-UR-target-delimiters/v1',
         )
 
+    def test_literal_man_UR_zero_width_break_does_not_duplicate_uri_colon(self):
+        # GNU groff tokenizes `\\:` as TOKEN_ZERO_WIDTH_BREAK and CVS mandoc
+        # renders the corresponding special character without a glyph.  The
+        # source inventory must therefore model `http:\\://` as `http://`,
+        # not `http:://`, before proving the renderer-only bracket difference.
+        source = '.TH PROBE 1\n.UR http:\\://example.test/path\n.UE\n'
+        result = assess_content(
+            '<http://example.test/path>\n',
+            'http://example.test/path\n',
+            source,
+        )
+        self.assertEqual(result['status'], 'explained')
+        self.assertEqual(result['rawComparison']['status'], 'review')
+        self.assertEqual(result['compatibilityPresentationComparison']['status'], 'covered')
+        self.assertEqual(
+            result['explanations'][0]['rule'],
+            'source-consistent-man-UR-target-delimiters/v1',
+        )
+
     def test_man_UR_projection_preserves_labels_and_rejects_dynamic_targets(self):
-        source = '.TH PROBE 1\n.UR https\\://example.test/a\nlabel\n.UE\n'
+        source = '.TH PROBE 1\n.UR https:\\://example.test/a\nlabel\n.UE\n'
         result = assess_content(
             'label <https://example.test/a>\n',
             'label ⟨https://example.test/a⟩\n',

@@ -51,7 +51,12 @@ _MAN_UR = re.compile(r"^[.']UR[ \t]+([^ \t]+)[ \t]*$")
 _MAN_IP_ORDINAL = re.compile(r"^[.']IP[ \t]+(\([1-9][0-9]*\)|\[[1-9][0-9]*\]|[1-9][0-9]*[.)])(?:[ \t]+[^ \t]+)?[ \t]*$")
 _MAN_UR_DYNAMIC_ESCAPE = re.compile(r"\\(?:\*|n|g|V|\$|\[|\()")
 _MAN_UR_LITERAL_ESCAPES = {
-    r"\:": ":",
+    # GNU groff parses \: as a zero-width break (input.cpp), and CVS
+    # mandoc's terminal character table likewise emits no visible glyph for
+    # this special escape.  It is commonly used after an already-authored
+    # URI colon, for example `http:\://…`; retaining another colon would
+    # manufacture `http:://…` and invalidate the source proof below.
+    r"\:": "",
     r"\-": "-",
     r"\%": "",
     r"\&": "",
