@@ -49,6 +49,16 @@ that crate was not published for that change.
   preceding `.sp` and continued lines. Execute `.fi`/`.nf` line boundaries in
   both macro packages even when the requested mode is unchanged, without
   inserting extra blank rows or changing counted alignment-group behavior.
+- Preserve literal `.IP`/`.TP` tags such as shell editing keys `#`, `=`, `*`,
+  `^` and `$`. Only a complete, source-proven named bullet is converted into
+  a bullet list; plain punctuation and `o` retain their authored spelling.
+  Ambiguous unstyled marks remain presentation-only rather than inventing
+  semantic terms or values; explicitly marked key names remain addressable.
+- Keep legacy `.UC`/`.AT` metadata and `.DT` tab-control operands out of
+  printable fallback in root, filled and literal content.
+- Treat successfully decoded empty table cells as valid results: zero-width
+  `\&` and font controls no longer reappear as visible source text. Escaped
+  literal backslashes and diagnostic-bearing unknown content remain intact.
 
 ### mant-ui 0.11.1
 
@@ -56,9 +66,14 @@ that crate was not published for that change.
   combining marks, flags and joined emoji across source styles. Search,
   selection, copy and link hit testing now use the same terminal-cell geometry
   as the rendered glyphs. A glyph wider than the entire viewport is replaced
-  once for display while its original text remains searchable and copyable.
+  once for display while its original text remains searchable. Selection
+  copies the visible replacement in this narrower-than-one-glyph case.
 - `mant` requires `mant-ui ^0.11.1` for this fix; unrelated crate versions and
   versioned output contracts remain unchanged.
+- Project links from source scalar ranges only after forming complete row
+  graphemes and expanding tabs. A link covering part of one glyph remains
+  clickable; distinct targets sharing a glyph require explicit navigation
+  rather than silently opening the first target.
 
 ## 0.11.0 - 2026-09-11
 
