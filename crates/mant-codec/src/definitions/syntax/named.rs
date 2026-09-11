@@ -317,20 +317,33 @@ pub(in crate::definitions) fn is_variable_term(value: &str) -> bool {
     } else {
         (value, None)
     };
-    !head.is_empty()
-        && head
-            .chars()
-            .all(|character| character.is_ascii_alphanumeric() || matches!(character, '_' | '-'))
-        && head
-            .chars()
-            .next()
-            .is_some_and(|character| character.is_ascii_alphabetic() || character == '_')
+    is_term_component_path(head)
         && index.is_none_or(|index| {
             !index.is_empty()
                 && index
                     .chars()
                     .all(|character| character.is_ascii_alphanumeric() || character == '_')
         })
+}
+
+/// A generic semantic term can be an ordinary identifier or a qualified
+/// technical name such as Perl's `Class::ISA`. Single-colon spellings remain
+/// excluded: they commonly denote prose, URLs, or provider syntax rather than
+/// a name. Every `::` component independently follows the existing identifier
+/// grammar, preventing empty pieces and URI-like `://` forms.
+fn is_term_component_path(value: &str) -> bool {
+    value.split("::").all(is_term_component)
+}
+
+fn is_term_component(value: &str) -> bool {
+    !value.is_empty()
+        && value
+            .chars()
+            .all(|character| character.is_ascii_alphanumeric() || matches!(character, '_' | '-'))
+        && value
+            .chars()
+            .next()
+            .is_some_and(|character| character.is_ascii_alphabetic() || character == '_')
 }
 
 pub(in crate::definitions) fn is_configuration_key(value: &str) -> bool {
@@ -343,4 +356,26 @@ pub(in crate::definitions) fn is_configuration_key(value: &str) -> bool {
         .chars()
         .next()
         .is_some_and(|character| character.is_ascii_alphabetic() || character == '_')
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_variable_term;
+
+    #[test]
+    fn qualified_technical_terms_require_complete_double_colon_components() {
+        for value in ["Class::ISA", "Pod::Plainer", "std::path::Path", "$Foo::bar"] {
+            assert!(is_variable_term(value), "accepted spelling: {value}");
+        }
+        for value in [
+            "Class:",
+            "Class:::ISA",
+            "Class::",
+            "::ISA",
+            "https://example",
+            "name: value",
+        ] {
+            assert!(!is_variable_term(value), "rejected spelling: {value}");
+        }
+    }
 }
