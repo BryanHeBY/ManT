@@ -312,8 +312,12 @@ should use `mant-protocol`, whose envelopes carry explicit schema identifiers
 and compatibility rules.
 
 Versioned CLI JSON contracts and compact MCP query projections live in
-[`mant-protocol`](https://crates.io/crates/mant-protocol); parsing and document
-operations live in [`mant-engine`](https://crates.io/crates/mant-engine).
+[`mant-protocol`](https://crates.io/crates/mant-protocol).
+[`mant-codec`](https://crates.io/crates/mant-codec) owns parsing and document
+encoding, [`mant-loader`](https://crates.io/crates/mant-loader) acquires local
+content, [`mant-query`](https://crates.io/crates/mant-query) queries existing IR,
+and [`mant-render`](https://crates.io/crates/mant-render) formats results.
+[`mant-engine`](https://crates.io/crates/mant-engine) composes loading and queries.
 The complete node and stability reference is
 [`mant-ir(7)`](https://github.com/BryanHeBY/ManT/blob/main/docs/manuals/mant-ir.md).
 Compatibility and migration notes are recorded in the

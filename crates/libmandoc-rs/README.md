@@ -47,8 +47,8 @@ The returned tree describes validated roff syntax: macro names, node roles,
 fonts, lists, displays, stateful enclosure delimiters, tables, equations,
 locations, and tags. It is not
 `ManT`'s source-neutral document IR. Consumers that want normalized sections,
-semantic entries, typed links, or renderers should use `mant-engine` and
-`mant-ir` instead.
+semantic entries, or typed links should use `mant-codec` and `mant-ir` instead.
+`mant-render` formats that IR; `mant-engine` composes local loading and queries.
 
 All bundled parser and compatibility definitions are compiled under the
 `mant_vendored_*` namespace; only the private `mant_mandoc_*` Rust/shim bridge

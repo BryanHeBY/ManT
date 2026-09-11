@@ -172,8 +172,11 @@ same entry:
 - `-o FILE`, `--output FILE` | `--output=FILE`: Write output.
 ```
 
-This produces aliases `-o` and `--output`, and two forms: `-o FILE, --output FILE`
-and `--output=FILE`. All aliases select the same definition and description.
+This exposes documented names `-o` and `--output`, and two forms:
+`-o FILE, --output FILE` and `--output=FILE`. Both names provide direct explain
+evidence for the same content owner; commas do not declare alias equivalence.
+Use explicit alias metadata for that relationship, and a returned path or ID
+for strict content selection.
 The pipe must be outside code spans and links, with a term on both sides;
 empty forms reject that item's annotation without changing its content or valid siblings. A pipe inside a
 code span remains part of that authored form and follows its role's name grammar.
@@ -263,7 +266,7 @@ Ordinary option-shaped definition lists produced by native manuals can receive i
 
 An accepted list item stays in the document tree and receives source-neutral
 `EntryFacts` in its optional `entry` field. From those content
-facts, `SemanticIndex` derives entry kinds, selector aliases, complete authored
+facts, `SemanticIndex` derives entry kinds, documented names, complete authored
 forms, explicit document targets, value domains, and nested ownership. Outline, excerpt, explanation,
 TUI, and MCP projections consume that derived index rather than reparsing the
 Markdown list. See [mant-ir(7)](mant-ir.md) for the distinction between content
@@ -287,9 +290,9 @@ definitions and indexed concepts.
 There are no independent `aliases=` or `forms=` attributes. This keeps indexed
 spellings and invocation forms grounded in content visible to human readers.
 For example, one `` `cd`, `chdir` `` item in a declared command list creates
-one command with two selectable aliases. Likewise ManT's own manual groups
+one command with two documented names. Likewise ManT's own manual groups
 `` `--search PATTERN`, `--grep PATTERN` `` into one option entry; explaining
-either alias returns the same full description. Place genuinely different
+either name provides direct evidence for the shared description. Place genuinely different
 commands in separate items even when their descriptions happen to be similar.
 
 The `names` field describes lookup, not a verified equivalence

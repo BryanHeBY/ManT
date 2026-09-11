@@ -87,7 +87,7 @@ any interactive interface. `--format` selects the content representation;
 
 “Semantic” means ManT retains intent before rendering turns it into text. A
 definition such as the several accepted `ssh -L` layouts becomes one parameter
-entry with exact selector aliases, complete authored forms, nested values, and
+entry with exact documented names, complete authored forms, nested values, and
 links back to the definitions that explain it. The TUI outline, `--explain`,
 JSON, and MCP then address that same concept instead of independently parsing
 its displayed spelling.
@@ -179,7 +179,7 @@ Start with an outline and retrieve only the section or option that matters:
 
 ```sh
 mant gcc --outline
-mant ssh --outline --outline-entries all --outline-root=-L
+mant ssh --explain=-L
 mant git --tldr
 mant gcc --node 4.2 --format markdown
 mant tar --node id:acls --format json

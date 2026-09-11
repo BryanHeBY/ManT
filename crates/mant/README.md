@@ -109,7 +109,7 @@ Discover the document before selecting only the content that matters:
 
 ```sh
 mant gcc --outline
-mant ssh --outline --outline-entries all --outline-root=-L
+mant ssh --explain=-L
 mant git --tldr
 mant gcc --node 4.2 --format markdown
 mant tar --explain=--exclude

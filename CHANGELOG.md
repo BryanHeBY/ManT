@@ -104,6 +104,13 @@ that crate was not published for that change.
 
 ### mant-sources 0.9.3
 
+- Reject non-portable archive member components before host path assembly,
+  including drive-relative prefixes, alternate streams, reserved Windows
+  devices and trailing dots/spaces. This intentionally tightens archive
+  acceptance on Unix too; native configuration path syntax is unchanged.
+- Reject FIFO and other non-regular configuration/metadata inputs without
+  blocking source discovery, doctor or updates. Preserve user configuration
+  symlinks while rejecting managed metadata links at the Unix open boundary.
 - Tar source updates now validate the entire remaining gzip/zstd transport
   after the tar end marker, including checksums, truncated trailers and
   concatenated compression members. Trailing zero padding consumes the same
@@ -230,11 +237,11 @@ that crate was not published for that change.
   parent. The closed layout object rejects unknown fields. Source lowering
   keeps source positions separate from IR parent origins; reparenting changes
   only the moved root, not every descendant.
-- `mant-engine` text and `mant-ui` compose parent origins once, share marker
+- `mant-render` text and `mant-ui` compose parent origins once, share marker
   collision and cell-width rules, and preserve separate source term lines
   instead of inserting commas. Zero-width targets do not introduce blank rows.
   Markdown list nesting no longer multiplies the section's indentation.
-- `mant-protocol` exposes pure geometry helpers; the unpublished v0.11 schema
+- `mant-ir` exposes pure geometry helpers; the unpublished v0.11 schema
   reflects signed block origins. Consumers must not treat these displacements
   as unsigned cumulative margins.
 
@@ -357,16 +364,6 @@ that crate was not published for that change.
   treating them as muted metadata. CLI and TUI share semantic palette families
   and stable kind labels, with Value distinct from Term and Match distinct from
   command color. Palette choices do not change semantic kinds or identities.
-
-### mant-sources (next release)
-
-- Reject non-portable archive member components before host path assembly,
-  including drive-relative prefixes, alternate streams, reserved Windows
-  devices and trailing dots/spaces. This intentionally tightens archive
-  acceptance on Unix too; native configuration path syntax is unchanged.
-- Reject FIFO and other non-regular configuration/metadata inputs without
-  blocking source discovery, doctor or updates. Preserve user configuration
-  symlinks while rejecting managed metadata links at the Unix open boundary.
 
 ### mant-ir 0.11.0
 
