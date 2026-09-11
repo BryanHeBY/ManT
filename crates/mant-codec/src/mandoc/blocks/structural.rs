@@ -184,7 +184,7 @@ impl StructuralLowerer<'_, '_, '_> {
         lowerer.push_nodes(children);
         lowerer.formatter.spacing = lowerer.state.spacing_enabled();
         *self.formatter = lowerer.formatter;
-        extend_blocks_with_spacing(self.output, lowerer.finish(), spacing);
+        extend_blocks_with_spacing(self.output, lowerer.finish(), spacing, node);
     }
 
     fn lower_transparent_container(&mut self, node: &Node) -> bool {
@@ -193,7 +193,7 @@ impl StructuralLowerer<'_, '_, '_> {
             Some("Bd") if node.display_kind == Some(DisplayKind::Filled) => {
                 let has_predecessor = self.has_paragraph_predecessor();
                 let spacing_before = u16::from(has_predecessor && !node.compact);
-                let mut nested = lower_blocks_with_predecessor(
+                let nested = lower_blocks_with_predecessor(
                     first_part_children(node, NodeKind::Body),
                     self.context,
                     self.context.offset_indent(
@@ -206,15 +206,7 @@ impl StructuralLowerer<'_, '_, '_> {
                     has_predecessor,
                     self.formatter,
                 );
-                if nested.is_empty() && spacing_before > 0 {
-                    nested.push(Block::VerticalSpace {
-                        lines: spacing_before,
-                        source: source_span(node),
-                    });
-                    self.output.extend(nested);
-                } else {
-                    extend_blocks_with_spacing(self.output, nested, spacing_before);
-                }
+                extend_blocks_with_spacing(self.output, nested, spacing_before, node);
             }
             Some("RS") => {
                 // mandoc's print_bvspace climbs first-child RS wrappers to
@@ -342,8 +334,24 @@ fn equation_block(node: &Node, indent_columns: crate::mandoc::layout::SourceInde
     }
 }
 
-/// Attach a macro's leading distance to its first visible nested block.
-fn extend_blocks_with_spacing(output: &mut Vec<Block>, mut nested: Vec<Block>, lines: u16) {
-    add_leading_spacing(&mut nested, lines);
+/// Preserve a retained macro's already executed leading distance, even when
+/// its body only changes formatter state. CVS `pre_PP`/`print_bvspace` and groff's
+/// paragraph macros execute spacing before the following RS sibling exists.
+/// The caller resolves predecessor/compact/PD policy; an empty body cannot
+/// cancel that source event or transfer its provenance to later content.
+fn extend_blocks_with_spacing(
+    output: &mut Vec<Block>,
+    mut nested: Vec<Block>,
+    lines: u16,
+    node: &Node,
+) {
+    if nested.is_empty() && lines > 0 {
+        nested.push(Block::VerticalSpace {
+            lines,
+            source: source_span(node),
+        });
+    } else {
+        add_leading_spacing(&mut nested, lines);
+    }
     output.extend(nested);
 }
