@@ -351,6 +351,9 @@ scripts/publish-crates.sh    Ordered independent-version crates.io publication
 scripts/update-protocol-schema-snapshot.sh  Regenerate a deliberate protocol snapshot
 scripts/update-reader-screenshot.sh  Host-stable Linux README screenshot capture
 scripts/audit-roff-fidelity.py  Visible-content differential audit
+scripts/audit-roff-all.py       Manifest-bound replay of all eight legacy dimensions
+scripts/audit-roff-rendering.py  Source-bound content and exact-geometry census
+scripts/check-roff-behavior-matrix.py  Reduced multi-width CLI/reader regression audit
 scripts/roff_reference.py      Bounded POSIX reference-renderer execution
 scripts/audit-roff-structure.py  Native AST-to-IR topology audit
 scripts/audit-roff-projection.py  CommonMark round-trip topology audit
@@ -737,6 +740,15 @@ risk-ranked representatives across categories and corpora; they are not the
 first pages encountered or an exhaustive review. Priorities describe signals,
 not confirmed defects. Consult `artifactIndex` for actually retained files;
 an `artifactCandidateKey` alone does not mean that a raw artifact was saved.
+
+Decode limits, unavailable tools and incomplete source context are audit
+coverage conditions, not automatic lowering defects. Decoder binaries are
+included in run identities. Timeout arguments constrain individual child
+processes; they do not promise a total wall-time deadline for parent-side
+decompression, hashing, JSON processing or an entire document. An inline
+conditional include is a possible external dependency even when its branch
+may not execute; changed control characters and computed requests are not
+fully interpreted by the source-context detector.
 Mutation self-tests establish a covered baseline, then remove/duplicate/reorder
 content, leak operands, alter gaps/origins and relocate targets. They run in
 the routine local gate without installing mandoc.

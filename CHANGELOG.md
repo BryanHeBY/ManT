@@ -59,6 +59,14 @@ that crate was not published for that change.
 - Treat successfully decoded empty table cells as valid results: zero-width
   `\&` and font controls no longer reappear as visible source text. Escaped
   literal backslashes and diagnostic-bearing unknown content remain intact.
+- Preserve executed paragraph distance when a `PP`/`P`/`LP` body contains only
+  formatter controls before a following relative scope. Empty lowered content
+  no longer cancels the source's blank row; `PD=0` and section-initial behavior
+  remain unchanged.
+- Keep a definition label on its own line when the start of its body executes
+  a line-boundary request. `TP`/`IP`/`TQ` fitting no longer loses that boundary
+  while lowering a detached body; later requests do not retroactively affect
+  the label, and ordinary run-in definitions retain their layout.
 
 ### mant-ui 0.11.1
 
