@@ -191,7 +191,7 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
     ) {
         if matches!(
             node.macro_name.as_deref(),
-            Some("PP" | "HP" | "IP" | "TP" | "TQ" | "RS" | "SY")
+            Some("PP" | "P" | "LP" | "HP" | "IP" | "TP" | "TQ" | "RS" | "SY")
         ) {
             self.formatter.font = FontState::new();
         }

@@ -92,11 +92,16 @@ mod tests {
     #[test]
     fn standalone_inputs_reject_redirect_only_so_pages() {
         let path = Path::new("stdin");
-        let error = parse_manual_bytes(path, b".so man1/target.1\n")
-            .expect_err("standalone input must not follow another file");
-        assert_eq!(error.kind(), ManualErrorKind::Redirect);
-        assert_eq!(error.path(), path);
-        assert!(error.to_string().contains("require MANPATH discovery"));
+        for source in [
+            b".so man1/target.1\n".as_slice(),
+            b".soquiet man1/target.1\n",
+        ] {
+            let error = parse_manual_bytes(path, source)
+                .expect_err("standalone input must not follow another file");
+            assert_eq!(error.kind(), ManualErrorKind::Redirect);
+            assert_eq!(error.path(), path);
+            assert!(error.to_string().contains("require MANPATH discovery"));
+        }
     }
 
     #[test]
@@ -105,6 +110,9 @@ mod tests {
             b".so\n".as_slice(),
             b".so first second\n",
             b".so bad\0name\n",
+            b".soquiet\n",
+            b".soquiet first second\n",
+            b".soquiet bad\0name\n",
         ] {
             let path = Path::new("original display name.1");
             let error = parse_manual_bytes(path, source).expect_err("reject malformed alias");
@@ -112,7 +120,7 @@ mod tests {
             assert_eq!(error.path(), path);
             assert_eq!(
                 error.message(),
-                "manual .so redirect must contain exactly one target path"
+                "manual .so/.soquiet redirect must contain exactly one target path"
             );
         }
     }

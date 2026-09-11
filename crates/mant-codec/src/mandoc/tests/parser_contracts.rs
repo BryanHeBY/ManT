@@ -1,6 +1,51 @@
 use super::*;
 
 #[test]
+fn retained_man_paragraph_macro_names_reset_persistent_font_state() {
+    fn retain_paragraph_name(node: &mut libmandoc_rs::Node, name: &str) {
+        if node.macro_name.as_deref() == Some("PP") {
+            node.macro_name = Some(name.to_owned());
+        }
+        for child in &mut node.children {
+            retain_paragraph_name(child, name);
+        }
+    }
+
+    for name in ["PP", "P", "LP"] {
+        let mut report = Parser::default()
+            .parse_bytes(
+                "paragraph-font.1",
+                b".TH PROBE 1\n.SH DESCRIPTION\n.ft B\nBEFORE\n.PP\nAFTER\n",
+            )
+            .expect("parse font-state fixture");
+        // Older mandoc releases normalize P/LP to PP. Exercise the retained
+        // macro names directly so the codec contract is independent of that
+        // native normalization and covers the CVS parser's owned AST shape.
+        retain_paragraph_name(&mut report.document.root, name);
+        let document = lower_mandoc_document(std::path::Path::new("paragraph-font.1"), &report);
+        let paragraphs = document.sections[0]
+            .blocks
+            .iter()
+            .filter_map(|block| match block {
+                Block::Paragraph { children, .. } => Some(children),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(paragraphs.len(), 2, "{name}: {document:?}");
+        assert!(
+            matches!(paragraphs[0].as_slice(), [Inline::Strong { children }] if inline_text(children) == "BEFORE"),
+            "{name}: {:?}",
+            paragraphs[0],
+        );
+        assert!(
+            matches!(paragraphs[1].as_slice(), [Inline::Text { value }] if value == "AFTER"),
+            "{name}: {:?}",
+            paragraphs[1],
+        );
+    }
+}
+
+#[test]
 fn byte_codec_never_opens_the_source_label_or_embedded_include() {
     let path = temporary_source("codec-no-io", ".TH ONDISK 1\n.SH NAME\nDISK_SECRET\n");
     let source = format!(

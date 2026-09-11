@@ -6,13 +6,14 @@ pub struct RedirectSyntaxError;
 
 impl std::fmt::Display for RedirectSyntaxError {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        formatter.write_str("manual .so redirect must contain exactly one target path")
+        formatter.write_str("manual .so/.soquiet redirect must contain exactly one target path")
     }
 }
 
 impl std::error::Error for RedirectSyntaxError {}
 
-/// Return a standalone alias target, not a path authorization or resolved file.
+/// Return a standalone `.so` or `.soquiet` alias target, not a path authorization
+/// or resolved file.
 ///
 /// # Errors
 /// Returns [`RedirectSyntaxError`] when an alias has missing or extra operands.
@@ -42,10 +43,14 @@ pub fn redirect_target(source: &[u8]) -> Result<Option<Vec<u8>>, RedirectSyntaxE
 }
 
 fn so_request_payload(line: &[u8]) -> Option<&[u8]> {
-    let payload = line
-        .strip_prefix(b".so")
-        .or_else(|| line.strip_prefix(b"'so"))?;
-    (payload.is_empty() || payload[0].is_ascii_whitespace()).then_some(payload)
+    let request = line
+        .strip_prefix(b".")
+        .or_else(|| line.strip_prefix(b"'"))?;
+    let name_end = request
+        .iter()
+        .position(u8::is_ascii_whitespace)
+        .unwrap_or(request.len());
+    matches!(&request[..name_end], b"so" | b"soquiet").then_some(&request[name_end..])
 }
 
 fn parse_so_target(payload: &[u8]) -> Result<Vec<u8>, RedirectSyntaxError> {
@@ -116,6 +121,39 @@ mod tests {
             assert_eq!(redirect_target(&source).unwrap().as_deref(), Some(target));
         }
         for source in [b".so\n".as_slice(), b".so two names\n", b".so bad\0name\n"] {
+            assert_eq!(redirect_target(source), Err(RedirectSyntaxError));
+        }
+    }
+
+    #[test]
+    fn quiet_alias_requests_use_the_same_standalone_and_operand_rules() {
+        for source in [
+            b".soquiet man1/target.1\n".as_slice(),
+            b"'soquiet\tman1/target.1\r\n",
+            b".\\\" comment\n.soquiet man1/target.1 \\\" trailing comment\n",
+        ] {
+            assert_eq!(
+                redirect_target(source).unwrap().as_deref(),
+                Some(b"man1/target.1".as_slice()),
+            );
+        }
+        for source in [
+            b".TH INLINE 1\n.soquiet target.1\n".as_slice(),
+            b".soquiet first\n.so second\n",
+            b".so first\n.soquiet second\n",
+            b".soquietly target.1\n",
+            b".soquietx target.1\n",
+            b".msoquiet target.1\n",
+            b".soquiet/target.1\n",
+        ] {
+            assert_eq!(redirect_target(source).unwrap(), None);
+        }
+        for source in [
+            b".soquiet\n".as_slice(),
+            b"'soquiet\t\r\n",
+            b".soquiet two names\n",
+            b".soquiet bad\0name\n",
+        ] {
             assert_eq!(redirect_target(source), Err(RedirectSyntaxError));
         }
     }
