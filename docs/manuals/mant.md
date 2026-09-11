@@ -1162,6 +1162,7 @@ The current protocol descriptor is:
   "documentSchema": "mant.document/v0.11",
   "outlineSchema": "mant.outline/v0.11",
   "excerptSchema": "mant.excerpt/v0.11",
+  "explanationSchema": "mant.explanation/v0.11",
   "searchSchema": "mant.search/v0.11",
   "scopeRequestSchema": "mant.scope-request/v0.11",
   "scopeQuerySchema": "mant.scope-query/v0.11",

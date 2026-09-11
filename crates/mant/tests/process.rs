@@ -1063,6 +1063,23 @@ fn protocol_version_is_a_clean_json_document() {
     assert_eq!(value["excerptSchema"], "mant.excerpt/v0.11");
     assert_eq!(value["searchSchema"], "mant.search/v0.11");
 
+    for (label, reference) in [
+        ("protocol manual", PROTOCOL_REFERENCE),
+        (
+            "command manual",
+            include_str!("../../../docs/manuals/mant.md"),
+        ),
+    ] {
+        let descriptor = reference
+            .split("```json")
+            .skip(1)
+            .filter_map(|block| block.split_once("```"))
+            .filter_map(|(json, _)| serde_json::from_str::<serde_json::Value>(json.trim()).ok())
+            .find(|example| example["protocol"] == value["protocol"])
+            .unwrap_or_else(|| panic!("{label} must contain a complete protocol descriptor"));
+        assert_eq!(descriptor, value, "{label} protocol descriptor is stale");
+    }
+
     for (field, marker) in value.as_object().expect("protocol descriptor") {
         let documented = format!(
             "\"{field}\": {}",
