@@ -176,12 +176,12 @@ pub(super) fn spans_width(spans: &[Span<'_>]) -> usize {
         .sum()
 }
 
-pub(super) fn shifted_links(links: Vec<LogicalLinkRange>, columns: usize) -> Vec<LogicalLinkRange> {
+pub(super) fn shifted_links(links: Vec<LogicalLinkRange>, scalars: usize) -> Vec<LogicalLinkRange> {
     links
         .into_iter()
         .map(|mut link| {
-            link.start_column += columns;
-            link.end_column += columns;
+            link.start_scalar += scalars;
+            link.end_scalar += scalars;
             link
         })
         .collect()
@@ -204,7 +204,7 @@ fn append_inline(
 ) {
     mant_render::visit_inline_text(nodes, names, |source, target, text| {
         let first_line = lines.len() - 1;
-        let first_column = spans_width(&lines[first_line].spans);
+        let first_scalar = spans_scalars(&lines[first_line].spans);
         if code {
             // Lexical code accents are weaker than authored markup and names.
             for span in crate::code::highlight(vec![Span::styled(text.to_owned(), style)]) {
@@ -218,7 +218,7 @@ fn append_inline(
             append_text(text, source_style(style, source, target), lines);
         }
         if let Some(target) = target.and_then(|target| local_link_target(target, current_address)) {
-            record_link(lines, first_line, first_column, &target);
+            record_link(lines, first_line, first_scalar, &target);
         }
     });
 }
@@ -300,7 +300,7 @@ fn markdown_reference_address(
 fn record_link(
     lines: &mut [StyledInlineLine],
     first_line: usize,
-    first_column: usize,
+    first_scalar: usize,
     target: &LinkTarget,
 ) {
     let last_line = lines.len() - 1;
@@ -310,20 +310,24 @@ fn record_link(
         .take(last_line + 1)
         .skip(first_line)
     {
-        let start_column = if line_index == first_line {
-            first_column
+        let start_scalar = if line_index == first_line {
+            first_scalar
         } else {
             0
         };
-        let end_column = spans_width(&line.spans);
-        if end_column > start_column {
+        let end_scalar = spans_scalars(&line.spans);
+        if end_scalar > start_scalar {
             line.links.push(LogicalLinkRange {
                 target: target.clone(),
-                start_column,
-                end_column,
+                start_scalar,
+                end_scalar,
             });
         }
     }
+}
+
+pub(super) fn spans_scalars(spans: &[Span<'_>]) -> usize {
+    spans.iter().map(|span| span.content.chars().count()).sum()
 }
 
 fn append_text(value: &str, style: Style, lines: &mut Vec<StyledInlineLine>) {

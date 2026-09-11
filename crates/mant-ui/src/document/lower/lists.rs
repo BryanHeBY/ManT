@@ -1,5 +1,5 @@
 //! List markers, definition heads, and their shared content/anchor ownership.
-use super::super::inline::shifted_reference_marks;
+use super::super::inline::{shifted_reference_marks, spans_scalars};
 use super::super::{
     Block, ListKind, LogicalLine, Span, Style, StyledInlineLine, inline_anchor_rows, shifted_links,
     spans_width, theme,
@@ -206,12 +206,8 @@ impl DocumentBuilder<'_> {
             let first = description_lines
                 .first_mut()
                 .map_or_else(StyledInlineLine::default, std::mem::take);
-            let description_offset = spans_width(&term_spans);
-            let description_scalar_offset = term_spans
-                .iter()
-                .map(|span| span.content.chars().count())
-                .sum();
-            term_links.extend(shifted_links(first.links, description_offset));
+            let description_scalar_offset = spans_scalars(&term_spans);
+            term_links.extend(shifted_links(first.links, description_scalar_offset));
             term_marks.extend(shifted_reference_marks(
                 first.reference_marks,
                 description_scalar_offset,

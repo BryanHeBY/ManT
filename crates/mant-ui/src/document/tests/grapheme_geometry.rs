@@ -24,6 +24,151 @@ fn text(value: &str) -> Inline {
     }
 }
 
+fn link(value: &str, id: &str) -> Inline {
+    Inline::Link {
+        target: mant_ir::LinkTarget::Section { id: id.into() },
+        title: None,
+        children: vec![text(value)],
+    }
+}
+
+#[test]
+fn partial_grapheme_links_project_after_the_complete_source_row() {
+    for (prefix, suffix, glyph) in [("e", "\u{301}", "e\u{301}"), ("👩", "‍💻", "👩‍💻")]
+    {
+        for children in [
+            vec![text(prefix), link(suffix, "destination"), text("Z")],
+            vec![link(prefix, "destination"), text(suffix), text("Z")],
+            vec![
+                link(prefix, "destination"),
+                link(suffix, "destination"),
+                text("Z"),
+            ],
+        ] {
+            let view = DocumentView::new(&document(children));
+            for width in [1, 2, 20] {
+                let rendered = view.render(width);
+                let found = &rendered.search(glyph)[0];
+                for column in found.start_column..found.end_column {
+                    assert_eq!(
+                        rendered.link_target_at(found.row, column),
+                        Some(&LinkTarget::Section("destination".into()))
+                    );
+                }
+                let actual = buffer(&rendered.text.lines[found.row], width);
+                let expected = if glyph == "👩‍💻" && width == 1 {
+                    "�"
+                } else {
+                    glyph
+                };
+                assert_eq!(actual[(0, 0)].symbol(), expected);
+                let z = &rendered.search("Z")[0];
+                assert!(rendered.link_target_at(z.row, z.start_column).is_none());
+            }
+        }
+    }
+}
+
+#[test]
+fn conflicting_targets_on_one_glyph_are_selector_only_not_first_match() {
+    let manual = |value: &str, name: &str| Inline::Link {
+        target: mant_ir::LinkTarget::Manual {
+            name: name.into(),
+            manual_section: Some("1".into()),
+        },
+        title: None,
+        children: vec![text(value)],
+    };
+    let view = DocumentView::new(&document(vec![
+        manual("👩", "first"),
+        manual("‍💻", "second"),
+        text("Z"),
+    ]));
+    assert_eq!(view.references.len(), 2);
+    let rendered = view.render(20);
+    let found = &rendered.search("👩‍💻")[0];
+    for column in found.start_column..found.end_column {
+        assert!(rendered.link_target_at(found.row, column).is_none());
+    }
+    for reference in &view.references {
+        assert!(view.reference_target(&reference.id).is_some());
+        assert_eq!(rendered.anchor_row(&reference.id), Some(found.row));
+    }
+    let actual = buffer(&rendered.text.lines[found.row], 20);
+    assert_eq!(actual[(0, 0)].symbol(), "👩‍💻");
+    let selected = RenderedSelection::new(TextPosition {
+        row: found.row,
+        column: 1,
+    });
+    assert_eq!(rendered.selected_text(selected), "👩‍💻");
+}
+
+#[test]
+fn tabs_expand_after_source_link_ranges_and_empty_links_remain_empty() {
+    let view = DocumentView::new(&document(vec![
+        text("👩‍💻\t"),
+        link("Z", "z"),
+        link("", "empty"),
+    ]));
+    let rendered = view.render(20);
+    let found = &rendered.search("Z")[0];
+    assert_eq!(found.start_column, 8);
+    assert_eq!(
+        rendered.link_target_at(found.row, 8),
+        Some(&LinkTarget::Section("z".into()))
+    );
+    assert!(rendered.link_target_at(found.row, 7).is_none());
+    assert_eq!(
+        buffer(&rendered.text.lines[found.row], 20)[(8, 0)].symbol(),
+        "Z"
+    );
+    assert_eq!(rendered.links.len(), 1);
+}
+
+#[test]
+fn definition_run_in_shifts_links_by_source_scalars_not_glyph_columns() {
+    let mut query = document(vec![]);
+    query.document.as_mut().unwrap().blocks = vec![Block::DefinitionList {
+        declaration_groups: vec![],
+        compact: true,
+        items: vec![DefinitionItem {
+            terms: vec![vec![text("👩‍💻")]],
+            description: vec![Block::Paragraph {
+                children: vec![link("Z", "z")],
+                layout: LayoutHint::default(),
+                source: None,
+            }],
+            entry: None,
+            source: None,
+            layout: mant_ir::DefinitionLayout {
+                inline_term: true,
+                body_indent_columns: 0,
+                ..Default::default()
+            },
+        }],
+        layout: LayoutHint::default(),
+        source: None,
+    }];
+    let rendered = DocumentView::new(&query).render(20);
+    let z = &rendered.search("Z")[0];
+    assert_eq!(
+        rendered.link_target_at(z.row, z.start_column),
+        Some(&LinkTarget::Section("z".into()))
+    );
+    assert_eq!(
+        buffer(&rendered.text.lines[z.row], 20)[(u16::try_from(z.start_column).unwrap(), 0)]
+            .symbol(),
+        "Z"
+    );
+    let glyph = &rendered.search("👩‍💻")[0];
+    assert_eq!(glyph.row, z.row);
+    assert!(
+        rendered
+            .link_target_at(glyph.row, glyph.start_column)
+            .is_none()
+    );
+}
+
 fn buffer(line: &Line<'_>, width: u16) -> Buffer {
     let area = Rect::new(0, 0, width, 1);
     let mut buffer = Buffer::empty(area);
@@ -104,6 +249,17 @@ fn wrapping_and_one_column_replacement_never_split_a_cluster() {
                     glyph
                 }
             );
+            // Search retains source coordinates, but copy deliberately returns
+            // the visible replacement in a viewport too narrow for the glyph.
+            if glyph_width > usize::from(width) {
+                assert_eq!(
+                    rendered.selected_text(RenderedSelection::new(TextPosition {
+                        row: found[0].row,
+                        column: 0,
+                    })),
+                    "�"
+                );
+            }
             assert!(found[0].end_column <= usize::from(width));
             assert!(
                 rendered

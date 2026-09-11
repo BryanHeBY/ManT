@@ -19,7 +19,6 @@ pub(super) fn styled_cells(line: &LogicalLine) -> Vec<StyledCell> {
 
     let mut cells = Vec::new();
     let mut column = line.indent;
-    let mut source_column = 0;
     let mut source_index = 0;
     // A grapheme can cross source-style boundaries. Segment the whole logical
     // row, then give each indivisible terminal glyph its first scalar's style.
@@ -43,9 +42,7 @@ pub(super) fn styled_cells(line: &LogicalLine) -> Vec<StyledCell> {
         }
         let style = span.map_or_else(Style::default, |span| span.style);
         let source_width = grapheme.columns();
-        let link_index = line.links.iter().position(|link| {
-            link.start_column < source_column + source_width && link.end_column > source_column
-        });
+        let link_index = grapheme_link(line, source_index, grapheme.text().chars().count());
         if grapheme.text() == "\t" {
             let spaces = TAB_STOP - column % TAB_STOP;
             cells.extend((0..spaces).map(|_| StyledCell {
@@ -59,7 +56,6 @@ pub(super) fn styled_cells(line: &LogicalLine) -> Vec<StyledCell> {
                 link_index,
             }));
             column += spaces;
-            source_column += spaces;
             source_index += 1;
             continue;
         }
@@ -89,9 +85,24 @@ pub(super) fn styled_cells(line: &LogicalLine) -> Vec<StyledCell> {
             column += cell_width;
             source_index += 1;
         }
-        source_column += source_width;
     }
     cells
+}
+
+/// A terminal glyph is indivisible. A unique target covering any source scalar
+/// owns the whole glyph. Distinct targets sharing it are deliberately not
+/// directly clickable: document-reference selectors remain available,
+/// rather than silently choosing the first target in traversal order.
+fn grapheme_link(line: &LogicalLine, start: usize, scalars: usize) -> Option<usize> {
+    let mut matches = line
+        .links
+        .iter()
+        .enumerate()
+        .filter(|(_, link)| link.start_scalar < start + scalars && link.end_scalar > start);
+    let (index, first) = matches.next()?;
+    matches
+        .all(|(_, link)| link.target == first.target)
+        .then_some(index)
 }
 
 pub(super) fn fitting_prefix(cells: &[StyledCell], available: usize) -> usize {

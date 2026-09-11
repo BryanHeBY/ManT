@@ -110,19 +110,21 @@ impl DocumentBuilder<'_> {
             let links = line
                 .spans
                 .iter()
-                .filter(|span| span.role == mant_render::TldrRole::Link)
-                .filter_map(|span| {
+                .scan(0, |offset, span| {
+                    let start = *offset;
+                    *offset += span.text.chars().count();
+                    Some((span, start, *offset))
+                })
+                .filter(|(span, _, _)| span.role == mant_render::TldrRole::Link)
+                .filter_map(|(_, start_scalar, end_scalar)| {
                     tldr.more_information
                         .as_deref()
                         .and_then(ExternalUri::parse)
-                        .map(|uri| (span, uri))
-                })
-                .map(|(span, uri)| LogicalLinkRange {
-                    target: LinkTarget::External(uri),
-                    start_column: 0,
-                    end_column: mant_render::cells::graphemes(&span.text)
-                        .map(|g| g.columns())
-                        .sum(),
+                        .map(|uri| LogicalLinkRange {
+                            target: LinkTarget::External(uri),
+                            start_scalar,
+                            end_scalar,
+                        })
                 })
                 .collect();
             self.push(LogicalLine {

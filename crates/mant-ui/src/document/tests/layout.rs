@@ -327,8 +327,8 @@ fn outdented_list_paragraph_keeps_links_on_the_visible_body() {
     assert_eq!(builder.lines[0].indent, 5);
     assert_eq!(builder.lines[1].indent, 6);
     assert_eq!(builder.lines[2].indent, 6);
-    assert_eq!(builder.lines[1].links[0].start_column, 0);
-    assert_eq!(builder.lines[1].links[0].end_column, 4);
+    assert_eq!(builder.lines[1].links[0].start_scalar, 0);
+    assert_eq!(builder.lines[1].links[0].end_scalar, 4);
     assert_eq!(
         builder.lines[1]
             .spans

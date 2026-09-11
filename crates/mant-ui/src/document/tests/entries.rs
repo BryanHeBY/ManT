@@ -39,8 +39,8 @@ fn nested_code_links_preserve_emphasis_and_restore_the_following_style() {
     for index in [1, 3] {
         assert_eq!(spans[index].style, Style::default().fg(theme::TEXT));
     }
-    assert_eq!(lines[0].links[0].start_column, 19);
-    assert_eq!(lines[0].links[0].end_column, 30);
+    assert_eq!(lines[0].links[0].start_scalar, 19);
+    assert_eq!(lines[0].links[0].end_scalar, 30);
 }
 
 #[test]

@@ -79,8 +79,9 @@ pub(super) struct ReferenceMark {
 #[derive(Debug, Clone)]
 pub(super) struct LogicalLinkRange {
     pub(super) target: LinkTarget,
-    pub(super) start_column: usize,
-    pub(super) end_column: usize,
+    /// Source scalar range, before complete-row grapheme shaping and tab expansion.
+    pub(super) start_scalar: usize,
+    pub(super) end_scalar: usize,
 }
 
 #[derive(Debug, Clone)]
