@@ -82,10 +82,13 @@ GLUED_MARKER = re.compile(r"^[ \t]*\u2022[A-Za-z(\"']", re.MULTILINE)
 # are never visible product text (tabs/newlines remain legitimate separators).
 INTERNAL_MARKER = re.compile("[\u001a\u001c-\u001f]")
 MDOC_NAME_DESCRIPTION = re.compile(r"^[.']Nd(?:\s|$)", re.MULTILINE)
-MDOC_FUNCTION_DECLARATION = re.compile(r"^[.'](?:Fn|Fo)(?:\s|$)", re.MULTILINE)
 MDOC_MULTI_OPERAND_FA = re.compile(
     r'''^[.']Fa(?:[ \t]+"(?:[^"\\]|\\.)*"){2,}[ \t]*$''',
     re.MULTILINE,
+)
+MDOC_FUNCTION_NAME = re.compile(r"^[.'](?:Fn|Fo)[ \t]+(?P<name>[A-Za-z_][A-Za-z0-9_.-]*)", re.MULTILINE)
+AUTHORED_LITERAL_UNICODE_ESCAPE = re.compile(
+    r"\\\\(\[u[0-9A-Fa-f]{4,6}(?:_[0-9A-Fa-f]{4,6})*\])"
 )
 EM_DASH_ATTACHED_TO_WORD = re.compile(r"—(?=\w)")
 EXTERNAL_ROFF_CONTEXT = re.compile(
@@ -1446,10 +1449,15 @@ def broken_phrase_candidates(
     return output
 
 
-def fidelity_signatures(value: str) -> tuple[list[str], list[str]]:
+def fidelity_signatures(value: str, source: str | None = None) -> tuple[list[str], list[str]]:
     hard: list[str] = []
     review: list[str] = []
-    if UNICODE_ESCAPE.search(value):
+    visible_unicode_escapes = set(UNICODE_ESCAPE.findall(value))
+    authored_unicode_escapes = (
+        {"\\" + suffix for suffix in AUTHORED_LITERAL_UNICODE_ESCAPE.findall(source)}
+        if source is not None else set()
+    )
+    if visible_unicode_escapes - authored_unicode_escapes:
         # Manuals about roff deliberately print Unicode escape examples. A
         # visible escape is evidence to inspect, not proof that the parser
         # leaked control syntax.
@@ -1459,6 +1467,40 @@ def fidelity_signatures(value: str) -> tuple[list[str], list[str]]:
     if GLUED_MARKER.search(value):
         review.append("list or enumeration marker may be glued to following text")
     return hard, review
+
+
+def mdoc_multi_operand_fa_phrases(source: str) -> list[str]:
+    """Return directly comparable multi-operand ``Fa`` phrases in ``Fo`` runs.
+
+    Counting every comma in an entire manual is not evidence that an ``Fa``
+    separator was lost: documentation prose, code, and unrelated lists all
+    contribute commas. Recover only simple authored operands whose exact
+    source-level phrase can be found in a rendered synopsis. Complex roff
+    escapes stay deliberately unprofiled rather than guessed.
+    """
+    phrases = []
+    function_depth = 0
+    for line in source.splitlines():
+        if re.match(r"^[.']Fo(?:[ \t]|$)", line):
+            function_depth += 1
+            continue
+        if re.match(r"^[.']Fc(?:[ \t]|$)", line):
+            function_depth = max(0, function_depth - 1)
+            continue
+        if not function_depth or not MDOC_MULTI_OPERAND_FA.fullmatch(line):
+            continue
+        operands = re.findall(r'"((?:[^"\\]|\\.)*)"', line)
+        if any(re.search(r"\\(?![\\\"])", operand) for operand in operands):
+            continue
+        phrase = ", ".join(re.sub(r'\\([\\\"])', r'\1', operand) for operand in operands)
+        if phrase:
+            phrases.append(phrase)
+    return phrases
+
+
+def mdoc_function_names(source: str) -> set[str]:
+    """Return plain function names with a declaration form safe to compare."""
+    return {match.group("name") for match in MDOC_FUNCTION_NAME.finditer(source)}
 
 
 def differential_signatures(
@@ -1482,22 +1524,15 @@ def differential_signatures(
                 "mdoc Nd separator is attached to its description "
                 f"(reference={reference_attached}, mant={mant_attached})"
             )
-    if MDOC_FUNCTION_DECLARATION.search(source):
-        reference_terminators = reference.count(");")
-        mant_terminators = mant.count(");")
-        if reference_terminators > mant_terminators:
-            review.append(
-                "mdoc synopsis function terminators may be missing "
-                f"(reference={reference_terminators}, mant={mant_terminators})"
-            )
-    if MDOC_MULTI_OPERAND_FA.search(source):
-        reference_commas = reference.count(",")
-        mant_commas = mant.count(",")
-        if reference_commas > mant_commas:
-            review.append(
-                "mdoc multi-operand Fa separators may be missing "
-                f"(reference={reference_commas}, mant={mant_commas})"
-            )
+    reference_visible = normalized_visible_text(reference)
+    mant_visible = normalized_visible_text(mant)
+    for name in sorted(mdoc_function_names(source)):
+        declaration = re.compile(rf"(?<![A-Za-z0-9_.-]){re.escape(name)}\s*\([^)]*\)\s*;")
+        if declaration.search(reference_visible) and not declaration.search(mant_visible):
+            review.append(f"mdoc function declaration terminator is missing for {name}")
+    for phrase in mdoc_multi_operand_fa_phrases(source):
+        if phrase in reference_visible and phrase not in mant_visible:
+            review.append(f"mdoc multi-operand Fa separator is missing in {phrase}")
     return review
 
 
@@ -2025,11 +2060,12 @@ def compare_rendered(
 
     missing = missing_token_candidates(reference_tokens, mant_tokens)
     phrases = broken_phrase_candidates(reference_lines, mant_tokens, ngram)
-    hard_signatures, review_signatures = fidelity_signatures(mant_output)
+    source_text = raw_source.decode("utf-8", errors="replace") if raw_source is not None else None
+    hard_signatures, review_signatures = fidelity_signatures(mant_output, source_text)
     if raw_source is not None:
         review_signatures.extend(
             differential_signatures(
-                raw_source.decode("utf-8", errors="replace"),
+                source_text,
                 reference_output,
                 mant_output,
             )
@@ -2420,6 +2456,11 @@ def self_check() -> None:
     assert review == [
         "bracketed Unicode escape is visible; verify documented syntax"
     ]
+    hard, review = fidelity_signatures(
+        r"literal \[u2192] example", r"author writes \\[u2192] literally"
+    )
+    assert not hard
+    assert not review
     assert differential_signatures(
         ".Nd description\n", "name — description", "name —description"
     ) == [
@@ -2427,9 +2468,7 @@ def self_check() -> None:
     ]
     assert differential_signatures(
         ".Fo function\n.Fc\n", "function();", "function()"
-    ) == [
-        "mdoc synopsis function terminators may be missing (reference=1, mant=0)"
-    ]
+    ) == ["mdoc function declaration terminator is missing for function"]
     assert not differential_signatures(
         ".Fn function\n", "function();", "function();"
     )
@@ -2437,7 +2476,12 @@ def self_check() -> None:
         '.Fo function\n.Fa "int first" "int second"\n.Fc\n',
         "function(int first, int second);",
         "function(int first int second);",
-    )[-1] == "mdoc multi-operand Fa separators may be missing (reference=1, mant=0)"
+    )[-1] == "mdoc multi-operand Fa separator is missing in int first, int second"
+    assert not differential_signatures(
+        '.Fo function\n.Fa "int first" "int second"\n.Fc\n',
+        "function(int first, int second); prose, has unrelated commas, too.",
+        "function(int first, int second);",
+    )
     assert redirect_only_target(b'.\\" alias\n.so man1/target.1\n') == "man1/target.1"
     assert redirect_only_target(b".so man1/target.1\ntext\n") is None
     layout_source = ".EX\nplain first\n  plain second\n.EE\n"

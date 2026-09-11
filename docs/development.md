@@ -716,6 +716,13 @@ uncovered (with their original detail); they do not become lowering
 hard-failures. A reference with visible text that ManT loses remains a hard
 failure.
 
+Punctuation probes are declaration-local: the audit compares an authored mdoc
+function declaration or multi-operand `.Fa` phrase only when that exact phrase
+is present in the reference rendering. It does not infer a lost separator from
+the total number of commas or semicolons in an unrelated manual body. Literal
+Unicode escape examples likewise remain visible when authored as examples and
+are not parser-leak candidates by themselves.
+
 ```sh
 cargo build --release -p mant
 cargo build --release -p mant-ui --example geometry_audit
