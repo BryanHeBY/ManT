@@ -217,6 +217,21 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
                 .queue_targets(structural_targets, source_span(node));
             return;
         }
+        // A retained Pp executes term_vspace even when native no-fill flags
+        // would otherwise route it through inline-only word lowering.
+        if node.macro_name.as_deref() == Some("Pp") {
+            self.state.flush_preformatted();
+            self.state.flush_paragraph();
+            self.state
+                .queue_targets(structural_targets, source_span(node));
+            if !self.state.output.is_empty() {
+                self.state.output.push(Block::VerticalSpace {
+                    lines: 1,
+                    source: source_span(node),
+                });
+            }
+            return;
+        }
         if self.push_no_fill_lines(node) {
             self.state
                 .queue_targets(structural_targets, source_span(node));
@@ -235,17 +250,7 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
                 return;
             }
         }
-        if node.macro_name.as_deref() == Some("Pp") {
-            self.state.flush_paragraph();
-            self.state
-                .queue_targets(structural_targets, source_span(node));
-            if !self.state.output.is_empty() {
-                self.state.output.push(Block::VerticalSpace {
-                    lines: 1,
-                    source: source_span(node),
-                });
-            }
-        } else if node.macro_name.as_deref() == Some("br") {
+        if node.macro_name.as_deref() == Some("br") {
             self.state.hard_break();
         } else if matches!(node.macro_name.as_deref(), Some("UR" | "MT")) {
             let spacing_enabled = self.state.spacing_enabled();

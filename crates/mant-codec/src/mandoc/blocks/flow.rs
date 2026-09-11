@@ -43,13 +43,16 @@ impl BlockState {
     }
 
     pub(super) fn literal_mode_boundary(&mut self) {
-        // The mode switch has a geometric effect only while the temporary
-        // HP first line is pending. Otherwise retain the existing coalescing
-        // of adjacent, geometrically equivalent no-fill regions.
+        // Native fi/nf execute term_newln even when the requested mode is
+        // already active. Keep adjacent literal blocks coalesced while ending
+        // their pending row (including a continued word), not adding a gap.
         if self.hanging_origin.is_some() {
             self.flush_preformatted();
             self.flush_paragraph();
             self.consume_hanging_first_line();
+        } else {
+            self.literal.end_line();
+            self.flush_paragraph();
         }
     }
     pub(super) const fn with_output(

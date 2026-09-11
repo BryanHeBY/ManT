@@ -23,6 +23,14 @@ impl LiteralFlow {
         starts_line && self.row_occupied && !self.tight_boundary
     }
 
+    pub(super) fn end_line(&mut self) {
+        if self.row_occupied {
+            self.nodes.push(Inline::LineBreak);
+            self.row_occupied = false;
+        }
+        self.tight_boundary = false;
+    }
+
     pub(super) fn append(
         &mut self,
         mut nodes: Vec<Inline>,

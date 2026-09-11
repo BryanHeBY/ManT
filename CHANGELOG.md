@@ -45,6 +45,10 @@ that crate was not published for that change.
   fresh resolution cannot mix the CVS parser with pre-migration lowering.
   Unchanged crates retain their versions; all published v0.11 protocol shapes
   and schema snapshots are unchanged. No release tag is implied by these notes.
+- Retain independent `.Pp` paragraph spacing in raw mdoc no-fill flow, including
+  preceding `.sp` and continued lines. Execute `.fi`/`.nf` line boundaries in
+  both macro packages even when the requested mode is unchanged, without
+  inserting extra blank rows or changing counted alignment-group behavior.
 
 ### mant-ui 0.11.1
 

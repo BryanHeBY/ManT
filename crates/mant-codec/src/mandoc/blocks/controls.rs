@@ -23,7 +23,8 @@ enum ControlOutcome {
 fn classify_control(node: &Node, dialect: libmandoc_rs::MacroSet) -> Option<BlockControl> {
     match node.macro_name.as_deref()? {
         "PD" => Some(BlockControl::ParagraphDistance),
-        "nf" | "fi" | "EX" | "EE" if dialect == libmandoc_rs::MacroSet::Man => {
+        "nf" | "fi" => Some(BlockControl::LiteralBoundary),
+        "EX" | "EE" if dialect == libmandoc_rs::MacroSet::Man => {
             Some(BlockControl::LiteralBoundary)
         }
         "An" => Some(BlockControl::Author(node.author_mode)),
