@@ -183,12 +183,7 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
         }
     }
 
-    fn push(
-        &mut self,
-        node: &Node,
-        next: Option<&Node>,
-        table_embedding: Option<&TableEmbedding<'_>>,
-    ) {
+    fn push(&mut self, node: &Node, next: Option<&Node>, table_embedding: Option<&TableEmbedding>) {
         if matches!(
             node.macro_name.as_deref(),
             Some("PP" | "P" | "LP" | "HP" | "IP" | "TP" | "TQ" | "RS" | "SY")

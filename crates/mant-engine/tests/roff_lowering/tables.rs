@@ -135,7 +135,7 @@ fn preserves_tbl_rows_across_interleaved_comments_and_text_blocks() {
             cells => panic!("expected one paragraph per table cell: {cells:?}"),
         })
         .collect::<Vec<_>>();
-    assert_eq!(first_cells, ["a", "b", "c", "d(1)", "e"]);
+    assert_eq!(first_cells, ["a", "b", "c", "d (1)", "e"]);
 }
 
 #[test]
@@ -183,7 +183,7 @@ fn preserves_tbl_rows_nested_in_unfilled_mdoc_displays() {
 }
 
 #[test]
-fn restores_mdoc_names_inside_tbl_text_blocks() {
+fn tbl_text_blocks_retain_native_cell_text_without_synthetic_mdoc_styles() {
     let document = parse_manual_bytes(
         std::path::Path::new("table-text-block.3"),
         b".Dd August 19, 2026\n.Dt TABLE-TEXT-BLOCK 3\n.Os\n\
@@ -197,14 +197,13 @@ T{\n.Nm\nT}\tMT-Safe\n.TE\n",
         panic!("expected attributes table");
     };
     let [Block::Paragraph { children, .. }] = rows[1].cells[0].blocks.as_slice() else {
-        panic!("expected recovered name cell");
+        panic!("expected native table cell");
     };
-    assert_eq!(inline_text(children), "table-text-block");
-    assert!(matches!(children.as_slice(), [Inline::Strong { .. }]));
+    assert!(children.is_empty(), "tbl receives no operands for .Nm");
 }
 
 #[test]
-fn restores_alternating_font_arguments_inside_tbl_text_blocks() {
+fn tbl_text_blocks_do_not_replay_man_font_requests() {
     let document = parse_manual_bytes(
         std::path::Path::new("table-text-alternation.7"),
         b".TH TABLE-TEXT-ALTERNATION 7\n.SH DESCRIPTION\n.TS\nl l.\nT{\n\
@@ -217,10 +216,10 @@ fn restores_alternating_font_arguments_inside_tbl_text_blocks() {
         panic!("expected a structured table");
     };
     let [left, right] = rows[0].cells.as_slice() else {
-        panic!("expected both reconstructed table cells");
+        panic!("expected both native table cells");
     };
     let [Block::Paragraph { children: left, .. }] = left.blocks.as_slice() else {
-        panic!("expected a reconstructed left table-cell paragraph");
+        panic!("expected a left table-cell paragraph");
     };
     let [
         Block::Paragraph {
@@ -228,22 +227,22 @@ fn restores_alternating_font_arguments_inside_tbl_text_blocks() {
         },
     ] = right.blocks.as_slice()
     else {
-        panic!("expected a reconstructed right table-cell paragraph");
+        panic!("expected a right table-cell paragraph");
     };
-    assert_eq!(inline_text(left), "'s1's2'");
+    assert_eq!(inline_text(left), "' s1 ' s2 '");
     assert_eq!(
         inline_text(right),
-        "s1 produces the same formatted output as s2."
+        "s1 produces the same formatted output as s2 ."
     );
     assert!(
-        right
+        !right
             .iter()
             .any(|inline| matches!(inline, Inline::Emphasis { .. }))
     );
 }
 
 #[test]
-fn mixed_mdoc_table_requests_preserve_content_when_block_semantics_are_unsupported() {
+fn mixed_mdoc_table_requests_keep_raw_operands_without_recovery_diagnostics() {
     for body in [
         ".Cm TOKENA\n.Pp\nTOKENB",
         ".Em TOKENA\n.Bl -bullet\n.It\nTOKENB\n.El",
@@ -267,13 +266,13 @@ fn mixed_mdoc_table_requests_preserve_content_when_block_semantics_are_unsupport
                 .unwrap()
                 .diagnostics
                 .iter()
-                .any(|d| d.code.as_deref() == Some("manual.unhandled-table-text-block"))
+                .all(|d| d.code.as_deref() != Some("manual.unhandled-table-text-block"))
         );
     }
 }
 
 #[test]
-fn mixed_table_requests_never_replace_complete_content_with_partial_recovery() {
+fn mixed_table_requests_never_replace_complete_native_cell_content() {
     for font in ["B", "I", "BR"] {
         for paragraph in ["PP", "TP"] {
             for apostrophe in [false, true] {
@@ -303,7 +302,7 @@ fn mixed_table_requests_never_replace_complete_content_with_partial_recovery() {
                     document
                         .diagnostics
                         .iter()
-                        .any(|d| d.code.as_deref() == Some("manual.unhandled-table-text-block"))
+                        .all(|d| d.code.as_deref() != Some("manual.unhandled-table-text-block"))
                 );
             }
         }
@@ -311,32 +310,32 @@ fn mixed_table_requests_never_replace_complete_content_with_partial_recovery() {
 }
 
 #[test]
-fn table_inline_requests_match_their_native_dialect_and_keep_cross_line_state() {
+fn table_text_blocks_follow_native_tbl_request_dispatch() {
     for (header, request, expected) in [
         (
             ".Dd September 5, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION",
             ".Fl Fl help",
-            "--help",
+            "Fl help",
         ),
         (
             ".Dd September 5, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION",
             ".Cm TOKENA Ns : Ns Ar TOKENB",
-            "TOKENA:TOKENB",
+            "TOKENA Ns : Ns Ar TOKENB",
         ),
         (
             ".Dd September 5, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION",
             ".Oo Fl a Oc No TOKENA",
-            "[-a] TOKENA",
+            "Fl a Oc No TOKENA",
         ),
         (
             ".Dd September 5, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION",
             ".Sm off\n.Cm TOKENA\n.Ar TOKENB\n.Sm on\n.No TOKENC",
-            "TOKENATOKENB TOKENC",
+            "off TOKENA TOKENB on TOKENC",
         ),
         (
             ".Dd September 5, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION",
             ".Oo\n.Fl a\n.Oc\n.No TOKENA",
-            "[-a] TOKENA",
+            "a TOKENA",
         ),
         (".TH PROBE 1\n.SH DESCRIPTION", ".B Fl", "Fl"),
         (".TH PROBE 1\n.SH DESCRIPTION", ".I Ar Ns Op", "Ar Ns Op"),
@@ -344,30 +343,35 @@ fn table_inline_requests_match_their_native_dialect_and_keep_cross_line_state() 
         let table_source = format!("{header}\n.TS\nl.\nT{{\n{request}\nT}}\n.TE\n");
         let table =
             parse_manual_bytes(std::path::Path::new("table.1"), table_source.as_bytes()).unwrap();
-        let plain_source = format!("{header}\n{request}\n");
-        let plain =
-            parse_manual_bytes(std::path::Path::new("plain.1"), plain_source.as_bytes()).unwrap();
         let [Block::Table { rows, .. }] = table.sections[0].blocks.as_slice() else {
             panic!("expected table: {table:#?}")
         };
         let [Block::Paragraph { children, .. }] = rows[0].cells[0].blocks.as_slice() else {
-            panic!("expected cell paragraph")
+            panic!("expected table cell paragraph")
         };
         let actual = inline_text(children);
         assert_eq!(actual, expected, "{request}");
-        let [Block::Paragraph { children, .. }] = plain.sections[0].blocks.as_slice() else {
-            panic!("expected native paragraph")
-        };
-        assert_eq!(
-            actual,
-            inline_text(children),
-            "body/table disagreement for {request}"
-        );
     }
 }
 
 #[test]
-fn restores_nested_mdoc_requests_inside_tbl_text_blocks() {
+fn tbl_text_blocks_preserve_the_tiocpkt_control_key_spacing() {
+    let document = parse_manual_bytes(
+        std::path::Path::new("tiocpkt-table.2const"),
+        b".TH TIOCPKT 2const\n.SH DESCRIPTION\n.TS\nl.\nT{\n.BR \\[ha]S / \\[ha]Q .\nT}\n.TE\n",
+    )
+    .expect("lower the TIOCPKT tbl control-key witness");
+    let Block::Table { rows, .. } = &document.sections[0].blocks[0] else {
+        panic!("expected one table");
+    };
+    let [Block::Paragraph { children, .. }] = rows[0].cells[0].blocks.as_slice() else {
+        panic!("expected one table paragraph");
+    };
+    assert_eq!(inline_text(children), "^S / ^Q .");
+}
+
+#[test]
+fn table_text_blocks_keep_raw_mdoc_operands_without_semantic_styling() {
     let document = parse_manual_bytes(
         std::path::Path::new("table-mdoc-requests.8"),
         b".Dd August 19, 2026\n.Dt TABLE-MDOC-REQUESTS 8\n.Os\n.Sh DESCRIPTION\n\
@@ -375,16 +379,16 @@ fn restores_nested_mdoc_requests_inside_tbl_text_blocks() {
 bitwise and of the address with\n.Ar mask\nequals\n.Ar addr .\n.Ar addr\n\
 can be an IPv4 or IPv6 address.\nT}\n.TE\n",
     )
-    .expect("lower nested mdoc requests in table text blocks");
+    .expect("lower mdoc operands in table text blocks");
 
     let Block::Table { rows, .. } = &document.sections[0].blocks[0] else {
         panic!("expected a structured table");
     };
     let [left, right] = rows[0].cells.as_slice() else {
-        panic!("expected two reconstructed table cells");
+        panic!("expected two table cells");
     };
     let [Block::Paragraph { children: left, .. }] = left.blocks.as_slice() else {
-        panic!("expected reconstructed selector cell");
+        panic!("expected selector cell");
     };
     let [
         Block::Paragraph {
@@ -392,19 +396,20 @@ can be an IPv4 or IPv6 address.\nT}\n.TE\n",
         },
     ] = right.blocks.as_slice()
     else {
-        panic!("expected reconstructed description cell");
+        panic!("expected description cell");
     };
-    assert_eq!(inline_text(left), "sip addr[/mask]");
+    assert_eq!(inline_text(left), "sip Ar addr Ns Op / Ns Ar mask");
     assert_eq!(
         inline_text(right),
-        "bitwise and of the address with mask equals addr. addr can be an IPv4 or IPv6 address."
+        "bitwise and of the address with mask equals addr . addr can be an IPv4 or IPv6 address."
     );
     assert!(
-        left.iter()
+        !left
+            .iter()
             .any(|inline| matches!(inline, Inline::Strong { .. }))
     );
     assert!(
-        right
+        !right
             .iter()
             .any(|inline| matches!(inline, Inline::Emphasis { .. }))
     );

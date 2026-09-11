@@ -44,7 +44,7 @@ impl StructuralLowerer<'_, '_, '_> {
         );
     }
 
-    pub(super) fn push(&mut self, node: &Node, table_embedding: Option<&TableEmbedding<'_>>) {
+    pub(super) fn push(&mut self, node: &Node, table_embedding: Option<&TableEmbedding>) {
         let continues_ip_item =
             node.macro_name.as_deref() == Some("RS") && self.man_list_state.is_active();
         if !matches!(node.macro_name.as_deref(), Some("IP" | "TP")) && !continues_ip_item {

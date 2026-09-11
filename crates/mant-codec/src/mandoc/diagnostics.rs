@@ -55,32 +55,6 @@ impl LoweringContext<'_> {
         });
     }
 
-    pub(super) fn warn_unhandled_table_text_block(&self, node: &Node) {
-        self.diagnostics.borrow_mut().push(Diagnostic {
-            impact: mant_ir::DiagnosticImpact::None,
-            level: DiagnosticLevel::Warning,
-            code: Some("manual.unhandled-table-text-block".to_owned()),
-            message: "tbl text block contains semantic roff that could not be retained".to_owned(),
-            source: source_span(node),
-        });
-    }
-
-    pub(super) fn warn_unhandled_table_text_block_line(&self, line: u32) {
-        self.diagnostics.borrow_mut().push(Diagnostic {
-            impact: mant_ir::DiagnosticImpact::None,
-            level: DiagnosticLevel::Warning,
-            code: Some("manual.unhandled-table-text-block".to_owned()),
-            message: "tbl inline semantics could not be reconstructed completely; complete native cell text or source spelling was retained".to_owned(),
-            source: Some(SourceSpan {
-                byte_range: None,
-                line,
-                column: 1,
-                end_line: None,
-                end_column: None,
-            }),
-        });
-    }
-
     pub(super) fn warn_unexpanded_table_cell(&self, line: u32) {
         let mut diagnostics = self.diagnostics.borrow_mut();
         if diagnostics

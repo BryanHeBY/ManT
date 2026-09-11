@@ -25,6 +25,12 @@ pub(super) use render::{NativeRenderError, render_buffer, render_bundle};
 pub(super) use session::parse_file;
 pub(super) use session::{parse_buffer, parse_bundle};
 
+pub(super) fn is_native_roff_request(name: &str) -> bool {
+    // The C shim consumes the borrowed byte slice synchronously and takes an
+    // explicit length, so it neither stores nor requires a NUL terminator.
+    unsafe { raw::mant_mandoc_is_native_roff_request(name.as_ptr().cast(), name.len()) != 0 }
+}
+
 #[cfg(test)]
 mod tests {
     use std::{

@@ -27,6 +27,7 @@
 #include "mdoc.h"
 #include "eqn.h"
 #include "roff.h"
+#include "roff_int.h"
 #include "tbl.h"
 #include "mandoc_parse.h"
 
@@ -51,6 +52,28 @@ struct mant_mandoc_document {
 	int			 render_status;
 #endif
 };
+
+/*
+ * Ask the pinned parser's request table rather than duplicating the roff
+ * request vocabulary in Rust. tbl handles these requests itself and only
+ * passes operands of unknown or high-level man/mdoc macros to tbl_read().
+ *
+ * The table is local to this call, so this helper introduces neither parser
+ * session state nor a cross-thread cache.
+ */
+int
+mant_mandoc_is_native_roff_request(const char *name, size_t length)
+{
+	struct ohash	*requests;
+	int		 result;
+
+	if (name == NULL || length == 0)
+		return 0;
+	requests = roffhash_alloc(ROFF_br, ROFF_RENAMED);
+	result = roffhash_find(requests, name, length) != TOKEN_NONE;
+	roffhash_free(requests);
+	return result;
+}
 
 MANT_THREAD_LOCAL const struct mant_mandoc_source *bundle_sources;
 MANT_THREAD_LOCAL size_t bundle_source_count;

@@ -419,12 +419,15 @@ libmandoc but unavailable through a public C API:
   spellings of vertical continuation;
 - effective cell content/rule kinds and first-data-row table boundaries,
   retaining native layout precedence and distinguishing `T&` from a new table;
+- the pinned native roff-request lookup used by consumers that need to retain
+  libmandoc's tbl dispatch boundary without duplicating its request registry;
 - structured diagnostics and explicit source/include/compression policy.
 
 These extensions never reinterpret source into `ManT`'s document IR. For
-example, semantic reconstruction of roff requests inside tbl `T{ … T}` cells
-belongs to `mant-codec`, because libmandoc intentionally retains that payload
-as table text rather than a nested public syntax tree.
+example, semantic presentation of tbl `T{ … T}` cell text belongs to
+`mant-codec`, because libmandoc intentionally retains that payload as table
+text rather than a nested public syntax tree. The shim can identify native
+roff requests, but it does not reinterpret high-level source into `ManT` IR.
 
 ## Build requirements and supported targets
 

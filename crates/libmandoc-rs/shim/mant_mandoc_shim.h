@@ -177,6 +177,7 @@ const char *mant_mandoc_document_alias_target(const struct mant_mandoc_document 
 int mant_mandoc_document_has_body(const struct mant_mandoc_document *);
 int mant_mandoc_document_equation_truncated(
     const struct mant_mandoc_document *);
+int mant_mandoc_is_native_roff_request(const char *, size_t);
 size_t mant_mandoc_node_view_size(void);
 size_t mant_mandoc_table_cell_view_size(void);
 const struct mant_mandoc_node *mant_mandoc_document_root(

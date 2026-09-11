@@ -13,7 +13,7 @@ pub(super) fn append_table_row(
     node: &Node,
     context: &LoweringContext<'_>,
     indent_columns: crate::mandoc::layout::SourceIndent,
-    embedding: Option<&TableEmbedding<'_>>,
+    embedding: Option<&TableEmbedding>,
     formatter: &mut crate::mandoc::formatter::FormatterState,
 ) {
     if node.table_cells.is_empty() {
@@ -63,7 +63,6 @@ pub(super) fn append_table_row(
                             node,
                             context,
                             text_block,
-                            embedding.map_or(&[], |embedding| embedding.nodes.as_slice()),
                             formatter,
                         );
                         match lowered {

@@ -47,6 +47,26 @@ fn tbl_text_block_prefers_native_parse_time_string_expansion() {
 }
 
 #[test]
+fn tbl_text_blocks_follow_native_request_dispatch_without_replaying_high_level_macros() {
+    let document = parse_manual_bytes(
+        std::path::Path::new("tbl-request-dispatch.1"),
+        b".Dd September 12, 2026\n.Dt TBLPROBE 1\n.Os\n.Sh DESCRIPTION\n.TS\nl.\nT{\n.BR A / B .\nT}\nT{\n.Sm off\n.Em WORD\nT}\nT{\n.Fl Fl help\nT}\nT{\n.sp 1\nSPACED\nT}\n.TE\n",
+    )
+    .expect("lower CVS mandoc tbl dispatch witness");
+    let Block::Table { rows, .. } = &document.sections[0].blocks[0] else {
+        panic!("expected one lowered table");
+    };
+    let cells = rows
+        .iter()
+        .map(|row| match row.cells[0].blocks.as_slice() {
+            [Block::Paragraph { children, .. }] => inline_text(children),
+            blocks => panic!("expected one table cell paragraph: {blocks:?}"),
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(cells, ["A / B .", "off WORD", "Fl help", "SPACED"]);
+}
+
+#[test]
 fn tbl_source_recovery_never_promotes_roff_comments_to_cells_or_text_blocks() {
     let document = parse_manual_bytes(
         std::path::Path::new("tbl-inline-comment.3"),
@@ -67,7 +87,7 @@ fn tbl_source_recovery_never_promotes_roff_comments_to_cells_or_text_blocks() {
         .collect::<Vec<_>>()
         .join(" ");
     assert!(
-        table_text.contains("left right linked(3) plain"),
+        table_text.contains("left right linked (3) plain"),
         "{table_text}"
     );
     assert!(!table_text.contains("ignored"), "{table_text}");

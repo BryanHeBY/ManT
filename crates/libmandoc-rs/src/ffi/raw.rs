@@ -164,6 +164,7 @@ unsafe extern "C" {
     pub(super) fn mant_mandoc_document_alias_target(document: *const CDocument) -> *const c_char;
     pub(super) fn mant_mandoc_document_has_body(document: *const CDocument) -> i32;
     pub(super) fn mant_mandoc_document_equation_truncated(document: *const CDocument) -> i32;
+    pub(super) fn mant_mandoc_is_native_roff_request(name: *const c_char, length: usize) -> i32;
     #[cfg(test)]
     pub(super) fn mant_mandoc_node_view_size() -> usize;
     #[cfg(test)]
