@@ -222,32 +222,31 @@ fn profile_request(line: &str) -> Result<Value, String> {
     .parse_file(&path)
     .map_err(|error| error.to_string())?;
     let (mut expected, mut expected_topology) = ast_profile(&report.document.root);
-    if let Some(source) = read_source(&path)? {
-        for (line, expression) in source_table_equations(&String::from_utf8_lossy(&source)) {
-            let value = normalize_equation_fragment(&expression)?;
-            if value.is_empty()
-                || expected_topology.equations.iter().any(|equation| {
-                    equation.source_line == line
-                        && equation.context == EquationContext::TableCell
-                        && equation.value == value
-                })
-            {
-                continue;
-            }
-            expected.table_equations += 1;
-            expected_topology.equations.push(AstEquationTopology {
-                source_line: line,
-                context: EquationContext::TableCell,
-                value,
-            });
+    let source = read_source(&path)?;
+    for (line, expression) in source_table_equations(&String::from_utf8_lossy(&source)) {
+        let value = normalize_equation_fragment(&expression)?;
+        if value.is_empty()
+            || expected_topology.equations.iter().any(|equation| {
+                equation.source_line == line
+                    && equation.context == EquationContext::TableCell
+                    && equation.value == value
+            })
+        {
+            continue;
         }
-        expected_topology.equations.sort_by_key(|equation| {
-            (
-                equation.source_line,
-                equation_context_order(equation.context),
-            )
+        expected.table_equations += 1;
+        expected_topology.equations.push(AstEquationTopology {
+            source_line: line,
+            context: EquationContext::TableCell,
+            value,
         });
     }
+    expected_topology.equations.sort_by_key(|equation| {
+        (
+            equation.source_line,
+            equation_context_order(equation.context),
+        )
+    });
     let document = parse_manual_page(&ManualPage {
         name: "audit".to_owned(),
         section: "1".to_owned(),
@@ -1203,7 +1202,7 @@ fn strip_equation_font_escapes(source: &str) -> String {
     output
 }
 
-fn read_source(path: &Path) -> Result<Option<Vec<u8>>, String> {
+fn read_source(path: &Path) -> Result<Vec<u8>, String> {
     let extension = path.extension().and_then(|extension| extension.to_str());
     if extension.is_some_and(|extension| extension.eq_ignore_ascii_case("gz")) {
         let source = fs::File::open(path).map_err(|error| error.to_string())?;
@@ -1212,7 +1211,7 @@ fn read_source(path: &Path) -> Result<Option<Vec<u8>>, String> {
         decoder
             .read_to_end(&mut output)
             .map_err(|error| error.to_string())?;
-        return Ok(Some(output));
+        return Ok(output);
     }
     if extension.is_some_and(|extension| extension.eq_ignore_ascii_case("zst")) {
         let source = fs::File::open(path).map_err(|error| error.to_string())?;
@@ -1222,7 +1221,7 @@ fn read_source(path: &Path) -> Result<Option<Vec<u8>>, String> {
         decoder
             .read_to_end(&mut output)
             .map_err(|error| error.to_string())?;
-        return Ok(Some(output));
+        return Ok(output);
     }
     if extension.is_some_and(|extension| {
         extension.eq_ignore_ascii_case("xz") || extension.eq_ignore_ascii_case("bz2")
@@ -1233,12 +1232,27 @@ fn read_source(path: &Path) -> Result<Option<Vec<u8>>, String> {
             "bzip2"
         };
         let output = Command::new(program).args(["-dc", "--"]).arg(path).output();
-        return match output {
-            Ok(output) if output.status.success() => Ok(Some(output.stdout)),
-            Ok(_) | Err(_) => Ok(None),
-        };
+        return decoded_command_source(program, output);
     }
-    fs::read(path).map(Some).map_err(|error| error.to_string())
+    fs::read(path).map_err(|error| error.to_string())
+}
+
+fn decoded_command_source(
+    program: &str,
+    result: std::io::Result<std::process::Output>,
+) -> Result<Vec<u8>, String> {
+    let output = result.map_err(|error| format!("source decoder {program}: {error}"))?;
+    if !output.status.success() {
+        return Err(format!(
+            "source decoder {program} failed ({}): {}",
+            output.status,
+            String::from_utf8_lossy(&output.stderr)
+                .chars()
+                .take(512)
+                .collect::<String>()
+        ));
+    }
+    Ok(output.stdout)
 }
 
 #[derive(Clone, Copy)]
@@ -1453,6 +1467,36 @@ mod tests {
         NoFillSourceLine, equation_visible_text, is_no_fill_row_text, is_zero_width_guard_line,
         retained_no_fill_rows,
     };
+
+    #[test]
+    fn unavailable_source_decoder_is_not_absent_equation_evidence() {
+        let error = super::decoded_command_source(
+            "xz",
+            Err(std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                "missing decoder",
+            )),
+        )
+        .unwrap_err();
+        assert!(error.contains("xz"));
+        assert!(error.contains("missing decoder"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn failed_source_decoder_is_not_successful_empty_input() {
+        use std::os::unix::process::ExitStatusExt;
+        let output = |code| std::process::Output {
+            status: std::process::ExitStatus::from_raw(code << 8),
+            stdout: Vec::new(),
+            stderr: b"invalid compressed data".to_vec(),
+        };
+        assert!(super::decoded_command_source("bzip2", Ok(output(1))).is_err());
+        assert_eq!(
+            super::decoded_command_source("bzip2", Ok(output(0))).unwrap(),
+            Vec::<u8>::new()
+        );
+    }
 
     #[test]
     fn ip_list_obligations_require_complete_authored_named_bullets() {
