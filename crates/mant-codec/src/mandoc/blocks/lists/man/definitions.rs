@@ -191,7 +191,11 @@ fn lower_man_item(
         paragraph_distance,
         crate::mandoc::layout::DefinitionGeometry {
             body: *definition_hanging_width,
-            placement: crate::mandoc::layout::TermPlacement::Fit,
+            placement: if body_breaks_pending_head(first_part_children(node, NodeKind::Body)) {
+                crate::mandoc::layout::TermPlacement::Stacked
+            } else {
+                crate::mandoc::layout::TermPlacement::Fit
+            },
             gap: 1,
         },
         super::super::DefinitionFlow {
@@ -211,6 +215,56 @@ fn lower_man_item(
         spacing_before,
         max_width,
     }
+}
+
+/// The native formatter enters a TP/IP body with the head still pending on
+/// its line. A detached body's empty inline builder cannot represent that
+/// state: an initial br/fi/nf must therefore constrain head placement, not
+/// manufacture an empty paragraph or an additional vertical-space request.
+fn body_breaks_pending_head(nodes: &[Node]) -> bool {
+    for node in nodes {
+        if node.kind == NodeKind::Comment {
+            continue;
+        }
+        let name = node.macro_name.as_deref();
+        // roff_term dispatches fi/nf to br; in, ti, sp and ce/rj also end the
+        // pending line before their separate layout/captured-text effects.
+        // man_term's pre_literal does the same for EX/EE.
+        if matches!(
+            name,
+            Some("br" | "fi" | "nf" | "in" | "ti" | "sp" | "ce" | "rj" | "EX" | "EE")
+        ) {
+            return true;
+        }
+        if node.flags.no_print
+            || name == Some("Tg")
+            || crate::mandoc::controls::operand_control(name).is_some()
+        {
+            // Classification only: normal lowering still executes font and
+            // layout controls and retains targets exactly once.
+            continue;
+        }
+        if node.kind == NodeKind::Text
+            && node.text.as_deref().is_some_and(|text| {
+                !text.is_empty()
+                    && crate::mandoc::roff_escape::decode(text)
+                        .iter()
+                        .all(|event| {
+                            matches!(
+                                event,
+                                crate::mandoc::roff_escape::RoffInlineEvent::Font(_)
+                                    | crate::mandoc::roff_escape::RoffInlineEvent::PreviousFont
+                            )
+                        })
+            })
+        {
+            continue;
+        }
+        // Printable content or an independently handled structural scope
+        // consumes the initial head/body boundary. Never search past it.
+        return false;
+    }
+    false
 }
 
 pub(in crate::mandoc::blocks) struct ManDefinitionState<'a> {
@@ -361,7 +415,9 @@ fn append_definition(
                 prepend_definition_heads(&mut item, items.drain(first_pending..));
                 // Explicit TQ tags retain their source order and one owner;
                 // this does not assert semantic name equivalence.
-                item.layout.inline_term = terms_fit_inline(&item.terms, max_term_width);
+                // Adding earlier TQ heads can tighten width fitting, but
+                // cannot reopen the final head's explicitly closed line.
+                item.layout.inline_term &= terms_fit_inline(&item.terms, max_term_width);
             }
         }
         item.layout.spacing_before_lines = Some(if items.is_empty() {
