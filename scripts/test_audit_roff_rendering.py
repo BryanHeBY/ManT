@@ -10,7 +10,7 @@ import sys
 import tempfile
 import unittest
 from unittest.mock import patch
-from roff_review_queue import ArtifactSelection, classify, plain_output_controls
+from roff_review_queue import ArtifactSelection, classify, plain_output_controls, review_family
 
 SPEC = importlib.util.spec_from_file_location("rendering_census", Path(__file__).with_name("audit-roff-rendering.py"))
 AUDIT = importlib.util.module_from_spec(SPEC)
@@ -289,6 +289,25 @@ class RenderingCensusTests(unittest.TestCase):
             'mixed-presentation-and-content-review',
         )
 
+    def test_review_families_group_only_observable_evidence_without_mutating_records(self):
+        residual = {'status': 'review', 'counts': {'missing-occurrence': 3, 'sequence-replace': 1}}
+        record = {
+            'status': 'review',
+            'triage': {'category': 'unexplained-content', 'priority': 80},
+            'contentAssessment': {'explanations': [{'rule': 'source-consistent-example/v1'}]},
+            'frames': {'reference': {'status': 'covered'}, 'mant': {'status': 'partial'}},
+            'geometry': {'status': 'review'},
+            'rawControlCoverage': {'status': 'covered'},
+        }
+        before = json.dumps(record, sort_keys=True)
+        family = review_family(record, residual)
+        repeated = review_family(record, {'counts': {'sequence-replace': 1, 'missing-occurrence': 3}, 'status': 'review'})
+        self.assertEqual(family['schema'], 'mant.roff-review-family/v1')
+        self.assertEqual(family['id'], repeated['id'])
+        self.assertEqual(family['traits']['differenceBuckets'], {'missing-occurrence': '2-4', 'sequence-replace': '1'})
+        self.assertEqual(family['traits']['frameStatuses']['mant'], 'partial')
+        self.assertEqual(json.dumps(record, sort_keys=True), before)
+
     def test_artifact_selection_prefers_late_high_risk_and_distinct_corpora(self):
         def row(identity, priority):
             return {'status': 'review', 'identities': [{'id': identity}], 'triage': {'category': 'unexplained-content', 'priority': priority}}
@@ -302,6 +321,46 @@ class RenderingCensusTests(unittest.TestCase):
         pool.consider(4, row('d:oversized', 100), {'stdout': b'0123456789'})
         self.assertEqual(pool.bytes, 8)
         self.assertEqual(pool.omitted['single-artifact-byte-budget'], 1)
+
+    def test_census_records_family_counts_and_per_page_family_ids(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            mant, reference = root / 'mant', root / 'mandoc'
+            mant.write_bytes(b'mant')
+            reference.write_bytes(b'mandoc')
+            source = root / 'source'
+            source.write_bytes(b'body')
+            manifest = root / 'manifest'
+            manifest.write_text(json.dumps({'id': 'one', 'source_path': str(source)}) + '\n')
+            output = root / 'audit'
+            output.mkdir()
+            args = argparse.Namespace(mant=mant, reference=reference, manifest=manifest, max_pages=None,
+                reference_id='fixed-test', output=output, workers=1, artifact_pages=0,
+                width=80, timeout=1, verify=False)
+
+            def inspect(_item, _args):
+                return {
+                    'sourcePath': str(source), 'identities': [{'id': 'one'}], 'status': 'review',
+                    'content': {'status': 'review', 'counts': {'missing-occurrence': 1}},
+                    'geometry': {'status': 'covered'},
+                    'contentAssessment': {'residualComparison': {'status': 'review', 'counts': {'missing-occurrence': 1}}},
+                    'frames': {'reference': {'status': 'covered'}, 'mant': {'status': 'covered'}},
+                    'rawControlCoverage': {'status': 'covered'},
+                    'triage': {'category': 'unexplained-content', 'priority': 80},
+                }, {}
+
+            report = {}
+            with patch.object(AUDIT, 'ZSTD_BINARY', None), \
+                 patch.object(AUDIT, 'inspect', side_effect=inspect), \
+                 patch.object(AUDIT.subprocess, 'check_output', side_effect=['producer', '']), \
+                 patch('builtins.print'):
+                self.assertEqual(AUDIT.census(args, report), 0)
+            saved = json.loads((output / 'summary.json').read_text())
+            self.assertEqual(saved['schema'], 'mant.roff-rendering-census/v5')
+            self.assertEqual(sum(saved['triageFamilyLogicalCounts'].values()), 1)
+            self.assertEqual(saved['triageFamilies'][0]['logicalPages'], 1)
+            row = json.loads((output / 'results.jsonl').read_text())
+            self.assertEqual(row['triageFamily']['id'], saved['triageFamilies'][0]['family']['id'])
 
     def test_zero_artifact_budget_does_not_invent_saved_evidence(self):
         pool = ArtifactSelection(0)

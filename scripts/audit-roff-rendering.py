@@ -31,7 +31,7 @@ from roff_content_explanations import assess_content
 from roff_layout_geometry import compare_layout_geometry
 from roff_reference import MAX_INPUT_BYTES, reference_environment, run_renderer
 from roff_rendering_frame import prepare_frame
-from roff_review_queue import ArtifactSelection, classify, plain_output_controls
+from roff_review_queue import ArtifactSelection, classify, plain_output_controls, review_family
 
 ROOT = Path(__file__).resolve().parents[1]
 # A possible dependency detector, NOT a roff interpreter. In particular, even
@@ -311,7 +311,7 @@ def main():
     if args.artifact_pages < 0 or (args.max_pages is not None and args.max_pages < 1):
         parser.error("invalid page budget")
     args.output.mkdir(parents=True, exist_ok=False)
-    report = {"schema": "mant.roff-rendering-census/v4", "status": "audit-error", "coverageComplete": False}
+    report = {"schema": "mant.roff-rendering-census/v5", "status": "audit-error", "coverageComplete": False}
     try:
         return census(args, report)
     except Exception as error:
@@ -339,7 +339,7 @@ def census(args, report):
         decoder["sha256"] = binaries["zstd"]["sha256"]
     producer = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
     dirty = subprocess.check_output(["git", "status", "--porcelain"], cwd=ROOT, text=True).splitlines()
-    report.update({"schema": "mant.roff-rendering-census/v4", "producerCommit": producer,
+    report.update({"schema": "mant.roff-rendering-census/v5", "producerCommit": producer,
               "producerDirtyPaths": dirty, "started": datetime.now(timezone.utc).isoformat(),
               "binaries": binaries, "sourceDecoders": {"zstd": decoder},
               "referenceIdentity": args.reference_id,
@@ -358,6 +358,8 @@ def census(args, report):
               "physicalPages": len(inputs), "logicalPages": sum(len(rows) for _, rows in inputs),
               "environment": reference_environment()})
     counts, dimensions, triage_counts, explained_counts = Counter(), Counter(), Counter(), Counter()
+    family_counts: Counter[str] = Counter()
+    family_index: dict[str, dict] = {}
     selection = ArtifactSelection(args.artifact_pages)
     ordinal = 0
     with (args.output / "results.jsonl").open("w", encoding="utf-8") as stream, ThreadPoolExecutor(args.workers) as pool:
@@ -366,11 +368,26 @@ def census(args, report):
         for start in range(0, len(inputs), args.workers * 4):
             for record, artifacts in pool.map(lambda item: inspect(item, args), inputs[start:start + args.workers * 4]):
                 record.setdefault('triage', classify(record))
+                residual = record.get("contentAssessment", {}).get(
+                    "residualComparison", record.get("content", {})
+                )
+                record['triageFamily'] = review_family(record, residual)
                 record['artifactCandidateKey'] = f'candidate-{ordinal:06d}'
                 selection.consider(ordinal, record, artifacts)
                 ordinal += 1
                 counts[record["status"]] += len(record["identities"])
                 triage_counts[record['triage']['category']] += len(record['identities'])
+                family = record['triageFamily']
+                family_id = family['id']
+                family_counts[family_id] += len(record['identities'])
+                summary = family_index.setdefault(
+                    family_id,
+                    {"family": family, "logicalPages": 0, "sampleIds": []},
+                )
+                summary["logicalPages"] += len(record['identities'])
+                for identity in record['identities']:
+                    if len(summary["sampleIds"]) < 3:
+                        summary["sampleIds"].append(identity["id"])
                 assessment = record.get('contentAssessment', {})
                 explained_counts[assessment.get('status', 'uncovered')] += len(record['identities'])
                 for dimension in ("content", "geometry"):
@@ -394,8 +411,13 @@ def census(args, report):
     report.update(status="completed", coverageComplete=all(status == "clean" for status in counts),
                   finished=datetime.now(timezone.utc).isoformat(), statusCounts=dict(counts),
                   dimensions=dict(dimensions), triageLogicalCounts=dict(triage_counts),
+                  triageFamilyLogicalCounts=dict(family_counts),
+                  triageFamilies=sorted(
+                      family_index.values(),
+                      key=lambda family: (-family["logicalPages"], family["family"]["id"]),
+                  ),
                   contentAssessmentLogicalCounts=dict(explained_counts),
-                  artifactSelection='risk-ranked-category-corpus-representatives',
+                  artifactSelection='risk-ranked-category-family-corpus-representatives',
                   artifactBytes=selection.bytes, artifactPages=len(artifact_index), artifactIndex=artifact_index,
                   artifactSelectionOmissions=dict(selection.omitted),
                   resultsSha256=file_hash(args.output / "results.jsonl"),

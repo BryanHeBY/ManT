@@ -2,7 +2,12 @@
 from __future__ import annotations
 
 from collections import Counter
+import hashlib
+import json
 import re
+
+
+REVIEW_FAMILY_SCHEMA = "mant.roff-review-family/v1"
 
 
 def plain_output_controls(text: str) -> dict:
@@ -14,6 +19,64 @@ def plain_output_controls(text: str) -> dict:
 
 def _difference_weight(comparison: dict) -> int:
     return sum(comparison.get('counts', {}).values())
+
+
+def _count_bucket(count: int) -> str:
+    """Describe a diff magnitude without turning a page-specific count into an ID."""
+    if count <= 0:
+        return "0"
+    if count == 1:
+        return "1"
+    if count <= 4:
+        return "2-4"
+    if count <= 16:
+        return "5-16"
+    if count <= 64:
+        return "17-64"
+    return "65+"
+
+
+def review_family(record: dict, residual: dict | None = None) -> dict:
+    """Describe a repeatable review shape without weakening any raw evidence.
+
+    Full-corpus renderer differences are often repeated terminal conventions
+    rather than thousands of independent defects. This groups only the
+    *observable audit evidence*: triage category, bounded difference-kind
+    magnitudes, applied proof rules, and frame/geometry coverage. It neither
+    interprets roff nor decides that two pages share a root cause. Every page
+    keeps its own raw comparison, and every family remains reviewable.
+    """
+    residual = record.get("content", {}) if residual is None else residual
+    triage = record.get("triage") or classify(record, residual)
+    counts = residual.get("counts", {})
+    traits = {
+        "category": triage["category"],
+        "residualStatus": residual.get("status", "uncovered"),
+        "differenceBuckets": {
+            kind: _count_bucket(int(count))
+            for kind, count in sorted(counts.items())
+            if isinstance(count, int) and count > 0
+        },
+        "explanationRules": sorted({
+            str(explanation["rule"])
+            for explanation in record.get("contentAssessment", {}).get("explanations", [])
+            if isinstance(explanation, dict) and isinstance(explanation.get("rule"), str)
+        }),
+        "frameStatuses": {
+            side: frame.get("status", "uncovered")
+            for side, frame in sorted(record.get("frames", {}).items())
+            if isinstance(frame, dict)
+        },
+        "geometryStatus": record.get("geometry", {}).get("status", "uncovered"),
+        "rawControlStatus": record.get("rawControlCoverage", {}).get("status", "uncovered"),
+    }
+    encoded = json.dumps(traits, ensure_ascii=True, sort_keys=True, separators=(",", ":")).encode()
+    return {
+        "schema": REVIEW_FAMILY_SCHEMA,
+        "id": "family-" + hashlib.sha256(encoded).hexdigest()[:16],
+        "traits": traits,
+        "note": "Grouping aid only; member pages retain independent raw evidence and no family is accepted automatically.",
+    }
 
 
 def classify(record: dict, residual: dict | None = None) -> dict:
@@ -98,7 +161,12 @@ class ArtifactSelection:
         identity = record['identities'][0]['id']
         corpus = identity.split(':', 1)[0] if ':' in identity else identity.rsplit('/', 1)[0]
         triage = record['triage']
-        bucket = (triage['category'], corpus)
+        family = record.get("triageFamily", {})
+        family_id = family.get("id", "unclassified") if isinstance(family, dict) else "unclassified"
+        # Coverage categories alone group thousands of unrelated residuals.
+        # Preserve a representative per observable evidence family and corpus;
+        # this changes artifact selection only, never audit status or evidence.
+        bucket = (triage['category'], family_id, corpus)
         # Prefer pages with real alignment/retention gaps within one bucket,
         # then occurrence count; neither makes them a confirmed product defect.
         content = record.get('content', {})

@@ -14,6 +14,43 @@ fixes below. The corrected product has separate real-page, upstream comparison,
 matrix and full local-gate evidence; those checks must not be represented as
 another 45,036-page run of the final product commit.
 
+## 2026-09-11 current full replay
+
+The current replay used producer commit `0fba3349511441fdb9a6404b1db2db5d5f9f255b`,
+a clean worktree, the fixed CVS reference
+`cvs-2026-09-11-0800-f06ba20baedee4adc5914fa023bf02812645b41249077204849d465c08c02f59`,
+and the immutable 45,036-logical-page manifest
+`a5cd7919d1ac2774a335d077611b47680de8c1babe1b031d31ff8808f568879c`.
+
+The independent rendering census (`mant.roff-rendering-census/v4`) processed
+all 37,286 physical paths. Its raw statuses remained 52 clean, 15,125 partial,
+27,878 review, and 1,981 uncovered; those numbers are observations, not an
+acceptance score. The source-bound content assessment recorded 15,369 covered,
+11,999 explained presentation differences, 15,687 remaining review candidates,
+and 1,981 uncovered inputs.
+
+This replay added a narrow presentation rule for literal mdoc `Bl -column`
+tables. ManT intentionally formats dense portable-text cells with ` | ` while
+CVS terminal output aligns the same cells with whitespace. The rule applies
+only when a non-executing source scan can establish a complete, non-nested
+`It`/`Ta` separator inventory, the reference has no such delimiter, and the
+product has exactly that many delimiters. It cannot mask cell content, literal
+pipes, dynamic macros, nested tables, continuations, or mismatched output.
+Raw comparison evidence is unchanged. This moved table-separator-heavy pages
+from the unexplained-content queue to mixed presentation/content review when
+other residuals remain; 2,709 logical inputs still have unexplained-content
+priority and 7,413 retain mixed-presentation/content priority.
+
+`audit-roff-all.py` completed all eight legacy dimensions for the same complete
+manifest. Its result SHA-256 is
+`61b663193ca3a4cd58b05fabe7dc50314fba08960b6a5acf93d7ad96e68712cf`; its
+actual-source-inventory SHA-256 is
+`66c40cae9dcbbc262006a5a0050c522d9580cc0db37046212f05a2ef20ff3410`.
+The run preserved stable manifest, binaries, rules, and source hashes. Its
+nonzero process status reflects retained legacy hard failures/uncovered
+coverage, not an incomplete orchestration run. `reviewPending: true` and
+`coverageComplete: false` remain the correct conclusions.
+
 ## Distinguishing evidence from defects
 
 The audit now preserves raw comparisons alongside source-bound explanations.
@@ -21,6 +58,16 @@ An explanation must identify the literal source declaration and exact generated
 occurrence. For example, fixed CVS `termp_nd_pre` emits an en dash for `Nd`,
 whereas ManT's NAME presentation uses an em dash. Only this proven occurrence
 can be explained; arbitrary punctuation or missing content cannot be waived.
+
+New `mant.roff-rendering-census/v5` replays also attach a stable **review
+family** to every page. A family is a grouping aid made solely from observable
+audit traits: residual difference-kind magnitude buckets, any already-recorded
+strict explanation rules, and frame/geometry/control coverage states. It
+neither executes roff nor claims a shared root cause. Each member retains its
+complete raw comparison, and no family is accepted automatically. The summary
+lists a few representative IDs per family so reviewers can investigate one
+concrete behaviour at a time without mistaking thousands of repeated terminal
+presentations for thousands of independently confirmed defects.
 
 Other corrections prevent the oracle from confusing presentation or query
 coordinates with source semantics:
