@@ -631,13 +631,13 @@ AST-to-IR ledgers. It uses the same local `man(1)`/groff reference rendering as
 the fidelity auditor, but only compares source-gated line boundaries, spacing,
 and authored relative indentation within the documented lowering policy;
 formatter-owned display gutters and body margins are out of scope. In
-particular, `RS` nesting currently uses a normalized four-column increment
-rather than reproducing its numeric distance. Differences caused solely by
-that policy need an explained review outcome, not a product-fidelity claim;
-the structure audit checks retained nesting or semantic-container ownership.
-Exact `HP` hanging geometry is likewise outside the current contract. It
-does not re-run, modify, or invalidate completed `FIDELITY_AUDIT.csv` or
-`STRUCTURE_AUDIT.csv` rows.
+particular, current lowering retains bounded, unit-aware `RS` distances and
+parent-relative `HP` first/continuation origins. Those are contracts, not
+blanket exclusions; only documented native terminal flush artifacts and
+device-owned placement remain intentional differences. The historical layout
+oracle has limited evidence for those dimensions: its old clean rows cannot
+prove the newer geometry contract. It does not re-run, modify, or invalidate
+completed `FIDELITY_AUDIT.csv` or `STRUCTURE_AUDIT.csv` rows.
 
 ```sh
 cargo build --package mant
@@ -661,6 +661,60 @@ historical conclusions. Its [guide](../tests/fixtures/roff/LAYOUT_AUDIT.md)
 defines the narrow signal and review lifecycle. Do not add it to daily CI;
 only its self-check and focused regressions derived from confirmed findings
 belong there.
+
+### Pinned-reference content and geometry audit
+
+Use the independent rendering census after parser, lowering or reader geometry
+changes. Supply an explicitly built, **unpatched** fixed upstream mandoc; do not
+use the embedding crate's renderer as the only reference. Keep its source
+revision/manifest and binary hash alongside the results. Groff remains a second
+reference for resolving candidates, not an automatic tie breaker.
+
+```sh
+cargo build --release -p mant
+cargo build --release -p mant-ui --example geometry_audit
+python3 scripts/check-roff-behavior-matrix.py \
+  --mant target/release/mant --reference /path/to/fixed-cvs/mandoc \
+  --geometry-probe target/release/examples/geometry_audit \
+  --output target/rendering-matrix
+python3 scripts/audit-roff-rendering.py \
+  --reference /path/to/fixed-cvs/mandoc --reference-id cvs-YYYYMMDD \
+  --manifest /path/to/source-manifest.jsonl --output target/rendering-corpus
+```
+
+Without `--manifest`, the census selects checked-in real manuals. A manifest
+row supplies `id`, `source_path` and optionally the historical decoded
+`source_sha256`; each run records actual source/transport hashes and reports
+historical mismatches rather than silently treating changed bytes as reviewed.
+The matrix replays the retained 46+15 original inputs, new request/flow/target
+cases and actual Ratatui cell evidence at widths 20, 40, 80 and 120. The full
+census compares CLI text at a wide reference width; it is not a full-corpus
+interactive TUI test. Neither command builds inside `/tmp`.
+
+The content oracle preserves Unicode and short executable names, occurrences,
+order and operand/control leakage. The geometry oracle compares source-bound
+hard rows, exact gaps and relative origins; it does not implement a second
+roff interpreter. Dynamic execution, unknown framing, ambiguous source owners
+and budget exhaustion produce `partial`/`uncovered`, never `clean`. A target's
+presence alone does not prove its correct row: the reduced matrix uses exact
+target/visible-row checks from the reader probe. Table/device geometry still
+needs specialized tests and source review.
+
+These tools report differences as review candidates, not product defects.
+Even punctuation, reference hyphenation or page framing can explain a candidate.
+Header/footer removal is exact and recorded, never arbitrary first/last lines.
+Mutation self-tests establish a covered baseline, then remove/duplicate/reorder
+content, leak operands, alter gaps/origins and relocate targets. They run in
+the routine local gate without installing mandoc.
+
+The census bounds input/decompression, subprocess CPU/memory/output, timeouts,
+worker queues, alignment work, findings and saved raw artifacts. Process limits
+are **not** a filesystem/network sandbox: use trusted corpora or an externally
+isolated host. Ordinary audit exit success does not mean all candidates have
+been reviewed; `--verify` additionally rejects review candidates and incomplete
+coverage. Keep compact acceptance evidence under `tests/fixtures/roff/`, with
+large raw reports in local `target/`. Never rewrite historical ledgers merely
+to turn a new audit green.
 
 ### Roff target-conservation audit
 

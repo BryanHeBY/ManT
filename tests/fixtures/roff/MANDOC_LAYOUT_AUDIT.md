@@ -32,9 +32,11 @@ fixture contains an ambiguous sentence repeated in filled and no-fill
 contexts. The other 72 are one class: mandoc preserves or adds two to four
 vertical blank rows at a source-gated no-fill boundary, while ManT deliberately
 normalizes the run to one semantic separator. Every visible line and relative
-indent remains present. This is established ManT layout policy, covered by
-`collapses_a_no_fill_blank_line_run_to_one_visual_separator`, not an AST or
-content regression.
+indent remains present. This describes the **historical 2026-08-24 policy**,
+not the current spacing contract. Current source-bound paragraph and explicit
+space requests retain their independent gaps. Revisit these exact sources
+using the pinned-reference matrix/census in `docs/development.md` before making
+a current fidelity claim; the old separator-collapse disposition is not a waiver.
 
 The new rows comprise two NetBSD aliases of one `ipfilter` source and
 DragonFly `screen(4)`. The temporary OpenBSD current sample found the same

@@ -42,6 +42,10 @@ run "check CI native dependency script syntax" \
 run "test locked vendor source replay" \
   python3 crates/libmandoc-rs/scripts/test_sync_vendor.py
 run "check roff fidelity audit" python3 scripts/audit-roff-fidelity.py --self-check
+run "test bidirectional roff content comparison" python3 scripts/roff_content_compare.py
+run "test source-bound roff layout geometry" python3 scripts/test-roff-layout-geometry.py
+run "test rendering matrix mutation sensitivity" python3 scripts/check-roff-behavior-matrix.py --self-test
+run "test bounded rendering census" python3 scripts/audit-roff-rendering.py --self-test
 run "check roff structure audit" python3 scripts/audit-roff-structure.py --self-check
 run "check roff CommonMark projection audit" \
   python3 scripts/audit-roff-projection.py --self-check
@@ -64,6 +68,8 @@ run "check independent embedded reader consumer" bash scripts/check-ui-consumer.
 run "check isolated CLI capability combinations" python3 scripts/check-cli-features.py
 run "test roff audit profilers" \
   cargo test --locked --package mant-engine --examples
+run "test real terminal-cell geometry probe" \
+  cargo test --locked --package mant-ui --example geometry_audit
 run "test optional libmandoc features" \
   cargo test --locked --package libmandoc-rs --all-features
 run "check libmandoc native symbol namespace" \

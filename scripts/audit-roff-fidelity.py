@@ -78,7 +78,9 @@ UNICODE_ESCAPE = re.compile(
     r"\\\[u[0-9A-Fa-f]{4,6}(?:_[0-9A-Fa-f]{4,6})*\]"
 )
 GLUED_MARKER = re.compile(r"^[ \t]*\u2022[A-Za-z(\"']", re.MULTILINE)
-INTERNAL_MARKER = re.compile("[\u001d-\u001f]")
+# Include both the historical and fixed-CVS private layout sentinels. These
+# are never visible product text (tabs/newlines remain legitimate separators).
+INTERNAL_MARKER = re.compile("[\u001a\u001c-\u001f]")
 MDOC_NAME_DESCRIPTION = re.compile(r"^[.']Nd(?:\s|$)", re.MULTILINE)
 MDOC_FUNCTION_DECLARATION = re.compile(r"^[.'](?:Fn|Fo)(?:\s|$)", re.MULTILINE)
 MDOC_MULTI_OPERAND_FA = re.compile(
@@ -2272,6 +2274,10 @@ def write_syntax_report(
 
 def self_check() -> None:
     reference_runner_self_check()
+    for marker in ("\x1a", "\x1c", "\x1d", "\x1e", "\x1f"):
+        assert fidelity_signatures("before" + marker + "after")[0] == [
+            "internal libmandoc marker leaked"
+        ]
     digest = "0" * 64
     assert source_audit_identity("share/man/man1/git.1.gz", digest) == (
         digest,

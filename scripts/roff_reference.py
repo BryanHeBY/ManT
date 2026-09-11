@@ -32,13 +32,15 @@ def reference_environment() -> dict[str, str]:
 
 
 def run_renderer(command, timeout, environment, input_bytes=None, *,
-                 output_limit=MAX_OUTPUT_BYTES, memory_limit=MAX_ADDRESS_SPACE):
+                 output_limit=MAX_OUTPUT_BYTES, memory_limit=MAX_ADDRESS_SPACE,
+                 binary_output=False):
+    empty = b"" if binary_output else ""
     if os.name != "posix":
-        return 125, "", "bounded reference execution requires a POSIX audit host"
+        return 125, empty, "bounded reference execution requires a POSIX audit host"
     if timeout <= 0 or output_limit <= 0 or memory_limit <= 0:
-        return 125, "", "renderer budgets must be positive"
+        return 125, empty, "renderer budgets must be positive"
     if input_bytes is not None and len(input_bytes) > MAX_INPUT_BYTES:
-        return 125, "", "renderer input exceeds 16 MiB"
+        return 125, empty, "renderer input exceeds 16 MiB"
     launcher = [sys.executable, "-I", str(Path(__file__).resolve()), "--exec",
                 str(math.ceil(timeout) + 1), str(memory_limit), *command]
     deadline = time.monotonic() + timeout
@@ -49,7 +51,7 @@ def run_renderer(command, timeout, environment, input_bytes=None, *,
             start_new_session=True,
         )
     except OSError as error:
-        return 125, "", f"could not start renderer: {error}"
+        return 125, empty, f"could not start renderer: {error}"
     streams = [bytearray(), bytearray()]
     total = 0
     pending = memoryview(input_bytes or b"")
@@ -64,7 +66,7 @@ def run_renderer(command, timeout, environment, input_bytes=None, *,
             while selector.get_map() or process.poll() is None:
                 remaining = deadline - time.monotonic()
                 if remaining <= 0:
-                    return 124, "", f"renderer timed out after {timeout}s"
+                    return 124, empty, f"renderer timed out after {timeout}s"
                 for key, _ in selector.select(min(remaining, 0.05)):
                     if key.data is None:
                         try:
@@ -86,10 +88,10 @@ def run_renderer(command, timeout, environment, input_bytes=None, *,
                         continue
                     total += len(chunk)
                     if total > output_limit:
-                        return 125, "", f"renderer output exceeds {output_limit} bytes"
+                        return 125, empty, f"renderer output exceeds {output_limit} bytes"
                     streams[key.data].extend(chunk)
         return (process.returncode,
-                streams[0].decode("utf-8", errors="replace"),
+                bytes(streams[0]) if binary_output else streams[0].decode("utf-8", errors="replace"),
                 streams[1].decode("utf-8", errors="replace"))
     finally:
         # Kill descendants that inherited our pipes too, even if the leader
@@ -133,6 +135,8 @@ def self_check():
                             kwargs.pop("timeout", 5), environment, **kwargs)
     assert run("import sys; sys.stdout.buffer.write(sys.stdin.buffer.read())",
                input_bytes="café 日本".encode())[1] == "café 日本"
+    assert run("import sys; sys.stdout.buffer.write(bytes([255,0,128]))",
+               binary_output=True)[1] == b"\xff\0\x80"
     for fd in (1, 2):
         status, output, error = run(f"import os; os.write({fd}, b'x' * 10000)", output_limit=100)
         assert status == 125 and not output and "exceeds" in error
