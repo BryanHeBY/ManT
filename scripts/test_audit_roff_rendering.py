@@ -322,6 +322,75 @@ class RenderingCensusTests(unittest.TestCase):
         self.assertEqual(pool.bytes, 8)
         self.assertEqual(pool.omitted['single-artifact-byte-budget'], 1)
 
+    def test_selected_artifact_identity_is_the_immutable_selection_ordinal(self):
+        pool = ArtifactSelection(2, 16)
+        shared = {
+            'status': 'review', 'identities': [{'id': 'shared:source'}],
+            'triage': {'category': 'unexplained-content', 'priority': 80},
+        }
+        pool.consider(7, shared, {'stdout': b'first'})
+        # Callers may enrich or even reuse a record dictionary. Selection
+        # identities still belong to the admission ordinals, not this field.
+        shared['artifactCandidateKey'] = 'candidate-000099'
+        pool.consider(11, {**shared, 'identities': [{'id': 'other:source'}]}, {'stdout': b'second'})
+        self.assertEqual(
+            [f"candidate-{item['ordinal']:06d}" for item in pool.selected()],
+            ['candidate-000007', 'candidate-000011'],
+        )
+
+    def test_census_artifacts_do_not_reuse_mutable_record_candidate_keys(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            mant, reference = root / 'mant', root / 'mandoc'
+            mant.write_bytes(b'mant')
+            reference.write_bytes(b'mandoc')
+            first, second = root / 'first', root / 'second'
+            first.write_bytes(b'first')
+            second.write_bytes(b'second')
+            manifest = root / 'manifest'
+            manifest.write_text(
+                '\n'.join([
+                    json.dumps({'id': 'one', 'source_path': str(first)}),
+                    json.dumps({'id': 'two', 'source_path': str(second)}),
+                ]) + '\n'
+            )
+            output = root / 'audit'
+            output.mkdir()
+            args = argparse.Namespace(mant=mant, reference=reference, manifest=manifest,
+                max_pages=None, reference_id='fixed-test', output=output, workers=1,
+                artifact_pages=2, batch_size=1, parallelism={'workers': 1}, width=80,
+                timeout=1, verify=False)
+
+            def inspect(item, _args):
+                identity = item[1][0]['id']
+                return {
+                    'sourcePath': item[0], 'identities': [{'id': identity}], 'status': 'review',
+                    # Reproduce the old output collision: callers may carry
+                    # stale record metadata, but it cannot name a directory.
+                    'artifactCandidateKey': 'candidate-000000',
+                    'content': {'status': 'review', 'counts': {'missing-occurrence': 1}},
+                    'geometry': {'status': 'covered'},
+                    'contentAssessment': {'residualComparison': {
+                        'status': 'review', 'counts': {'missing-occurrence': 1}}},
+                    'frames': {'reference': {'status': 'covered'}, 'mant': {'status': 'covered'}},
+                    'rawControlCoverage': {'status': 'covered'},
+                    'triage': {'category': 'unexplained-content', 'priority': 80},
+                }, {'stdout': identity.encode()}
+
+            report = {}
+            with patch.object(AUDIT, 'ZSTD_BINARY', None), \
+                 patch.object(AUDIT, 'inspect', side_effect=inspect), \
+                 patch.object(AUDIT.subprocess, 'check_output', side_effect=['producer', '']), \
+                 patch('builtins.print'):
+                self.assertEqual(AUDIT.census(args, report), 0)
+            self.assertTrue((output / 'candidate-000000').is_dir())
+            self.assertTrue((output / 'candidate-000001').is_dir())
+            summary = json.loads((output / 'summary.json').read_text())
+            self.assertEqual(
+                {artifact['key'] for artifact in summary['artifactIndex']},
+                {'candidate-000000', 'candidate-000001'},
+            )
+
     def test_census_records_family_counts_and_per_page_family_ids(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

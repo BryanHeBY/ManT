@@ -390,7 +390,6 @@ def census(args, report):
                     "residualComparison", record.get("content", {})
                 )
                 record['triageFamily'] = review_family(record, residual)
-                record['artifactCandidateKey'] = f'candidate-{ordinal:06d}'
                 selection.consider(ordinal, record, artifacts)
                 ordinal += 1
                 counts[record["status"]] += len(record["identities"])
@@ -417,13 +416,22 @@ def census(args, report):
             if start % (args.batch_size * 16) == 0:
                 print(f"{min(start + args.batch_size, len(inputs))}/{len(inputs)} physical pages: {dict(counts)}", flush=True)
     artifact_index = []
+    artifact_keys = set()
     for item in selection.selected():
         record = item['record']
-        directory = args.output / record['artifactCandidateKey']
+        # Selection retains record dictionaries while later scheduling waves
+        # continue to enrich them. The immutable selection ordinal, rather
+        # than mutable record metadata, owns an artifact directory identity.
+        # This remains collision-free even if a caller reuses a record object.
+        key = f"candidate-{item['ordinal']:06d}"
+        if key in artifact_keys:
+            raise AssertionError(f"duplicate selected artifact key: {key}")
+        artifact_keys.add(key)
+        directory = args.output / key
         directory.mkdir()
         for name, data in item['artifacts'].items():
             (directory / name).write_bytes(data)
-        artifact_index.append({'key': record['artifactCandidateKey'], 'ids': [i['id'] for i in record['identities']],
+        artifact_index.append({'key': key, 'ids': [i['id'] for i in record['identities']],
                                'triage': record['triage'], 'bytes': item['size'],
                                'files': {name: digest(data) for name, data in item['artifacts'].items()}})
     report.update(status="completed", coverageComplete=all(status == "clean" for status in counts),
