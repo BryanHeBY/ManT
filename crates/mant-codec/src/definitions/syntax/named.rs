@@ -53,8 +53,22 @@ pub(in crate::definitions) fn named_term_name(
     if validate(value) {
         return Some(value);
     }
+    if let Some(name) = optional_parameter_name(value, validate) {
+        return Some(name);
+    }
     let (name, annotation) = value.split_once(char::is_whitespace)?;
     (validate(name) && annotations(annotation)).then_some(name)
+}
+
+/// A bracketed optional assignment suffix is authored invocation syntax, not
+/// part of a generic term's selector.  Keep this intentionally narrower than
+/// an array subscript: `name[=<type>]` names `name`, whereas `name[index]`
+/// remains one complete variable spelling.
+fn optional_parameter_name<'a>(value: &'a str, validate: fn(&str) -> bool) -> Option<&'a str> {
+    let (name, suffix) = value.split_once('[')?;
+    let parameter = suffix.strip_suffix(']')?.strip_prefix('=')?;
+    let parameter = parameter.strip_prefix('<')?.strip_suffix('>')?;
+    (validate(name) && is_variable_term(parameter)).then_some(name)
 }
 
 fn annotations(value: &str) -> bool {
@@ -155,7 +169,10 @@ pub(super) fn named_occurrences(
     parts
         .into_iter()
         .map(|part| {
-            let name = if let Some((name, value)) = part.trim().split_once('=') {
+            let trimmed = part.trim();
+            let name = if let Some(name) = named_term_name(trimmed, validate) {
+                name
+            } else if let Some((name, value)) = trimmed.split_once('=') {
                 let name = name.trim_end();
                 if !validate(name) || contains_additional_environment_assignment(value) {
                     return None;
@@ -170,6 +187,38 @@ pub(super) fn named_occurrences(
             ))
         })
         .collect()
+}
+
+/// Generic terms normally use their complete identifier grammar.  A narrow
+/// invocation form makes source-defined callable names addressable without
+/// treating prose as a declaration: its name must contain lowercase technical
+/// spelling and every remaining token must be an all-uppercase placeholder.
+pub(in crate::definitions) fn term_occurrences(text: &str) -> Option<Vec<RecognizedName>> {
+    named_occurrences(text, is_variable_term).or_else(|| {
+        let name = invocation_name(text.trim())?;
+        let offset = name.as_ptr() as usize - text.as_ptr() as usize;
+        Some(vec![RecognizedName::contiguous(name, offset)])
+    })
+}
+
+fn invocation_name(value: &str) -> Option<&str> {
+    let (name, parameters) = value.split_once(char::is_whitespace)?;
+    (is_variable_term(name)
+        && name.chars().any(char::is_lowercase)
+        && parameters.split_whitespace().all(invocation_placeholder))
+    .then_some(name)
+}
+
+fn invocation_placeholder(token: &str) -> bool {
+    !token.is_empty()
+        && token.split(',').all(|part| {
+            !part.is_empty()
+                && part.chars().all(|character| {
+                    character.is_ascii_uppercase()
+                        || character.is_ascii_digit()
+                        || matches!(character, '_' | '-')
+                })
+        })
 }
 
 /// A declaration group is atomic: accepting a word after rejected prose does
@@ -360,7 +409,7 @@ pub(in crate::definitions) fn is_configuration_key(value: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::is_variable_term;
+    use super::{is_variable_term, term_occurrences};
 
     #[test]
     fn qualified_technical_terms_require_complete_double_colon_components() {
@@ -377,5 +426,21 @@ mod tests {
         ] {
             assert!(!is_variable_term(value), "rejected spelling: {value}");
         }
+    }
+
+    #[test]
+    fn generic_terms_keep_optional_parameters_and_uppercase_invocations_out_of_names() {
+        let names = |value| {
+            term_occurrences(value)
+                .unwrap_or_default()
+                .into_iter()
+                .map(|found| found.name)
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(names("istrip[=<bool>]"), ["istrip"]);
+        assert_eq!(names("getservbyname NAME,PROTO"), ["getservbyname"]);
+        assert_eq!(names("array[index]"), ["array[index]"]);
+        assert!(names("Using References").is_empty());
+        assert!(names("name[=literal]").is_empty());
     }
 }

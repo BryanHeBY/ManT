@@ -556,6 +556,36 @@ fn qualified_technical_terms_are_addressable_without_colon_widening() {
 }
 
 #[test]
+fn generic_terms_bind_complete_invocation_heads_and_optional_parameters() {
+    let mut sections = vec![Section {
+        id: "definitions".into(),
+        fragment_aliases: Vec::new(),
+        heading: "DEFINITIONS".into(),
+        spacing_before_lines: 0,
+        blocks: vec![Block::DefinitionList {
+            declaration_groups: Vec::new(),
+            items: vec![
+                item("istrip[=<bool>]"),
+                item("getservbyname NAME,PROTO"),
+                item("Using References"),
+            ],
+            compact: true,
+            layout: LayoutHint::default(),
+            source: None,
+        }],
+        children: Vec::new(),
+        source: None,
+    }];
+    identify_definitions(&mut Vec::new(), &mut sections, &HashSet::new(), None);
+    let Block::DefinitionList { items, .. } = &sections[0].blocks[0] else {
+        panic!("generic definition list");
+    };
+    assert_eq!(items[0].entry.as_ref().unwrap().names, ["istrip"]);
+    assert_eq!(items[1].entry.as_ref().unwrap().names, ["getservbyname"]);
+    assert!(items[2].entry.as_ref().unwrap().names.is_empty());
+}
+
+#[test]
 fn retained_ordinal_labels_are_presentation_not_semantic_entries() {
     // Native man `.IP`/`.TP` labels may remain definitions when one item or
     // an authored marker spelling cannot prove an ordered list. They remain

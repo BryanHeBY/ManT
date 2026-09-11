@@ -211,9 +211,7 @@ pub(super) fn name_occurrences(
                         })
                         .collect()
                 }
-                EntryKind::Term => {
-                    named::named_occurrences(&text, is_variable_term).unwrap_or_default()
-                }
+                EntryKind::Term => named::term_occurrences(&text).unwrap_or_default(),
                 EntryKind::Parameter { .. } => Vec::new(),
             }
         })
