@@ -409,7 +409,7 @@ ManT decodes visible roff text after libmandoc parsing. These escape families ha
 | `\N'number'` | Numbered glyph in the pinned mandoc terminal range 0–255, with control filtering; unsupported or malformed indices remain visibly escaped, not interpreted as arbitrary Unicode |
 | `\X'tty: link URI'` | External terminal link start; `\X'tty: link'` ends it |
 
-Named characters resolve through the complete character catalog compiled from the pinned libmandoc source. ManT deliberately applies copy-friendly compatibility folds to common quotes and symbols; other catalog entries use their declared Unicode scalar. Groff-style bracketed Unicode names such as `\[u2192]` and composite names such as `\[u0061_0301]` are decoded independently of that catalog. A name absent from both forms is retained as `\(XX`, `\[NAME]`, or `\C'desc'` instead of being silently deleted, while known zero-width controls remain invisible.
+Named characters resolve through the complete character catalog compiled from the pinned libmandoc source, retaining its declared Unicode scalar—including typographic quotes—rather than applying presentation-only folds. Groff-style bracketed Unicode names such as `\[u2192]` and composite names such as `\[u0061_0301]` are decoded independently of that catalog. A name absent from both forms is retained as `\(XX`, `\[NAME]`, or `\C'desc'` instead of being silently deleted, while known zero-width controls remain invisible.
 
 Font names map as follows:
 

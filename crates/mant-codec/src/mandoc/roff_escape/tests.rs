@@ -143,8 +143,10 @@ fn preserves_roff_reverse_solidus_characters_in_windows_paths() {
 #[test]
 fn resolves_named_characters_from_the_pinned_mandoc_catalog() {
     assert_eq!(
-        visible_text(r"at=\(at ga=\(ga oq=\(oq arrow=\(-> larrow=\(<- mu=\(mu lB=\(lB rB=\(rB"),
-        "at=@ ga=` oq=' arrow=→ larrow=← mu=× lB=[ rB=]"
+        visible_text(
+            r"at=\(at ga=\(ga oq=\(oq cq=\(cq lq=\(lq rq=\(rq arrow=\(-> larrow=\(<- mu=\(mu lB=\(lB rB=\(rB"
+        ),
+        "at=@ ga=` oq=‘ cq=’ lq=“ rq=” arrow=→ larrow=← mu=× lB=[ rB=]"
     );
     assert_eq!(visible_text(r"zero=\[:]width"), "zero=width");
 }

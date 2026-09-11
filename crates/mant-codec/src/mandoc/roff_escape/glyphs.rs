@@ -15,26 +15,16 @@ pub(super) fn unicode_special_characters(name: &str) -> Option<String> {
     (!output.is_empty()).then_some(output)
 }
 
-/// Compatibility folds intentionally chosen by `ManT`. Every other known name
-/// comes from the complete catalog pinned by `libmandoc-rs`.
+/// Narrow compatibility fallback for a documented groff spelling absent from
+/// the pinned mandoc character table. All characters that the pinned table
+/// knows, including typographic quotation marks, must retain that table's
+/// exact Unicode scalar instead of being folded for presentation convenience.
 pub(super) fn dedicated_special_character(name: &str) -> Option<&'static str> {
     match name {
-        "en" => Some("–"),
-        "em" => Some("—"),
-        "aq" | "cq" | "oq" => Some("'"),
-        "dq" | "lq" | "rq" => Some("\""),
-        "co" => Some("©"),
-        "rg" => Some("®"),
-        "tm" => Some("™"),
-        "bu" => Some("•"),
-        "ha" => Some("^"),
-        "ti" => Some("~"),
-        "rs" => Some("\\"),
         // NetBSD's DRM manuals use this long-standing groff-style spelling
-        // for a lower-case c with caron.  It is absent from libmandoc
-        // 1.14.6's fixed character table, so retain the authored name rather
-        // than leaking the raw `\[vc]` escape or silently dropping it like
-        // terminal formatters that do not provide the device glyph.
+        // for a lower-case c with caron.  It is absent from the pinned mandoc
+        // table, so preserve the authored character rather than leaking the
+        // raw `\[vc]` escape or silently dropping it.
         "vc" => Some("č"),
         _ => None,
     }

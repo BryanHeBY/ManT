@@ -72,7 +72,7 @@ unknown=\\[future-glyph]\n",
     };
     assert_eq!(
         inline_text(children),
-        "at=@ ga=` oq=' arrow=→ larrow=← mu=× de=° pl=+ dg=† ua=↑ da=↓ lB=[ rB=] unknown=\\[future-glyph]"
+        "at=@ ga=` oq=‘ arrow=→ larrow=← mu=× de=° pl=+ dg=† ua=↑ da=↓ lB=[ rB=] unknown=\\[future-glyph]"
     );
 }
 
