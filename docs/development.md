@@ -664,6 +664,29 @@ belong there.
 
 ### Pinned-reference content and geometry audit
 
+For a full-corpus replay of the existing structural, projection, target and
+semantic profiles plus fidelity/layout against both mandoc and groff, use:
+
+```sh
+cargo build --locked --release -p mant --bin mant -p mant-engine \
+  --example roff_structure_profile --example roff_projection_profile \
+  --example roff_target_profile --example roff_semantic_profile
+python3 scripts/audit-roff-all.py --manifest /path/to/source-manifest.jsonl \
+  --output target/all-roff-audits --mant target/release/mant \
+  --mandoc /path/to/fixed-cvs/mandoc --groff /usr/bin/groff \
+  --profiler-dir target/release/examples
+```
+
+Use `--plan` to check the inputs without executing audits. Each of the eight
+dimensions retains its existing candidate rules, and records execution errors,
+resource limits and external-context coverage separately. The output directory
+must be new; historical CSV acceptance is not rewritten. Results bind the
+manifest, actual source bytes, binaries and rules, but do not attest a binary's
+build provenance or all external include/macro resources. A completed scan can
+still contain uncovered pages and pending candidates. Run the separate content
+and source-geometry census and reduced multi-width reader matrix below too;
+legacy layout scores alone do not establish exact indentation or blank rows.
+
 Use the independent rendering census after parser, lowering or reader geometry
 changes. Supply an explicitly built, **unpatched** fixed upstream mandoc; do not
 use the embedding crate's renderer as the only reference. Keep its source

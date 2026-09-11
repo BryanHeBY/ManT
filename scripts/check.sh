@@ -47,6 +47,7 @@ run "test source-bound presentation explanations" python3 scripts/test_roff_cont
 run "test source-bound roff layout geometry" python3 scripts/test-roff-layout-geometry.py
 run "test rendering matrix mutation sensitivity" python3 scripts/check-roff-behavior-matrix.py --self-test
 run "test bounded rendering census" python3 scripts/audit-roff-rendering.py --self-test
+run "test full-corpus audit orchestration" python3 scripts/test_audit_roff_all.py
 run "check roff structure audit" python3 scripts/audit-roff-structure.py --self-check
 run "check roff CommonMark projection audit" \
   python3 scripts/audit-roff-projection.py --self-check
