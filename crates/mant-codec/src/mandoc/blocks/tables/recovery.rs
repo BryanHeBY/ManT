@@ -2,8 +2,8 @@
 use crate::mandoc::{
     LoweringContext, TableTextBlock,
     inline::{
-        FilledBoundary, InlineBuilder, lower_man_link, lower_source_fragment_with_formatter_state,
-        plain_text,
+        FilledBoundary, FragmentContentAuthority, InlineBuilder, lower_man_link,
+        lower_source_fragment_with_formatter_state, plain_text,
     },
     roff_escape::visible_text,
 };
@@ -105,6 +105,7 @@ pub(super) struct CellPosition<'a> {
 #[must_use]
 struct CellCandidate {
     inlines: Vec<Inline>,
+    content_authority: FragmentContentAuthority,
     formatter: crate::mandoc::formatter::FormatterState,
     diagnostics: Vec<mant_ir::Diagnostic>,
 }
@@ -119,13 +120,15 @@ impl CellCandidate {
             return native.is_none();
         }
         let text = plain_text(&self.inlines);
-        // tbl_dat::string is produced after roff_expand() in the original
-        // parser session. If native evaluated text exists, it is the content
-        // authority: source-fragment recovery cannot recreate arbitrary
-        // string/register state in a synthetic parser. Source recovery still
-        // supplies macro/font structure when its visible result agrees.
+        // CVS mandoc invokes roff_expand() before tbl_read().  Strings,
+        // registers, and macro arguments therefore need the original
+        // session's tbl_dat payload.  Conversely, that flattened payload has
+        // discarded self-contained mdoc/man inline syntax, so a complete
+        // source recovery is authoritative for `.Fl`, `.Ns`, fonts, and
+        // enclosure macros even when its visible spelling differs.
         if let Some(native) = native {
-            return table_text_agrees(&text, &visible_text(native));
+            return self.content_authority == FragmentContentAuthority::RecoveredSyntax
+                || table_text_agrees(&text, &visible_text(native));
         }
         !position.row.iter().enumerate().any(|(index, candidate)| {
             index != position.index
@@ -182,8 +185,11 @@ pub(super) fn lower_table_cell(
         // replacement for the native payload. If that payload is absent,
         // retain the entire source rather than only the supported lines.
         let candidate_diagnostics = context.diagnostics.borrow_mut().split_off(diagnostic_start);
-        let reconstructed = match recovered {
-            TableTextRecovery::Complete(inlines) => inlines,
+        let (reconstructed, content_authority) = match recovered {
+            TableTextRecovery::Complete {
+                inlines,
+                content_authority,
+            } => (inlines, content_authority),
             TableTextRecovery::Incomplete => {
                 context
                     .diagnostics
@@ -198,6 +204,7 @@ pub(super) fn lower_table_cell(
         };
         let candidate = CellCandidate {
             inlines: reconstructed,
+            content_authority,
             formatter: candidate_state,
             diagnostics: candidate_diagnostics,
         };
@@ -296,7 +303,10 @@ fn lower_table_cell_text(
 }
 
 enum TableTextRecovery {
-    Complete(Vec<Inline>),
+    Complete {
+        inlines: Vec<Inline>,
+        content_authority: FragmentContentAuthority,
+    },
     Incomplete,
 }
 
@@ -319,7 +329,10 @@ fn lower_table_text_block(
             return TableTextRecovery::Incomplete;
         }
         *formatter = recovered.formatter;
-        return TableTextRecovery::Complete(recovered.inlines);
+        return TableTextRecovery::Complete {
+            inlines: recovered.inlines,
+            content_authority: recovered.content_authority,
+        };
     }
     // A rejected request sequence cannot be proven complete by stitching
     // together whichever AST siblings escaped tbl. Even a present node may
@@ -374,7 +387,10 @@ fn lower_table_text_block(
         );
     }
     formatter.spacing = builder.spacing_enabled();
-    TableTextRecovery::Complete(builder.finish())
+    TableTextRecovery::Complete {
+        inlines: builder.finish(),
+        content_authority: FragmentContentAuthority::NativeEvaluation,
+    }
 }
 
 #[cfg(test)]

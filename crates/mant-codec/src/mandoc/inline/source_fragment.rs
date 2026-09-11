@@ -17,7 +17,24 @@ use super::{
 pub(in crate::mandoc) struct RecoveredFragment {
     pub(in crate::mandoc) inlines: Vec<Inline>,
     pub(in crate::mandoc) complete: bool,
+    /// Whether a complete fragment still needs the original parser session
+    /// for its visible text.  `roff_expand()` resolves strings, number
+    /// registers, and macro arguments before tbl records a cell; a synthetic
+    /// parser cannot reproduce that document-local state.
+    pub(in crate::mandoc) content_authority: FragmentContentAuthority,
     pub(in crate::mandoc) formatter: crate::mandoc::formatter::FormatterState,
+}
+
+/// Select the source of visible cell text after bounded source recovery.
+///
+/// A synthetic parse is authoritative for self-contained inline syntax such
+/// as `.Fl`, `.Ns`, and enclosure macros: libmandoc's flattened tbl payload
+/// has already lost that structure.  Dynamic roff interpolation is resolved
+/// by the original parse session, so the native cell text remains authority.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(in crate::mandoc) enum FragmentContentAuthority {
+    RecoveredSyntax,
+    NativeEvaluation,
 }
 
 pub(in crate::mandoc) fn lower_source_fragment_with_formatter_state(
@@ -27,6 +44,11 @@ pub(in crate::mandoc) fn lower_source_fragment_with_formatter_state(
     synopsis: bool,
     formatter: crate::mandoc::formatter::FormatterState,
 ) -> Option<RecoveredFragment> {
+    let content_authority = if requires_native_evaluation(source) {
+        FragmentContentAuthority::NativeEvaluation
+    } else {
+        FragmentContentAuthority::RecoveredSyntax
+    };
     let mut requests = 0;
     for line in source.lines() {
         if let Some(request) = line.trim_start().strip_prefix(['.', '\'']) {
@@ -54,6 +76,7 @@ pub(in crate::mandoc) fn lower_source_fragment_with_formatter_state(
         RecoveredFragment {
             inlines: parse_roff_text_with_state(source, &mut font, true),
             complete: false,
+            content_authority,
             formatter,
         }
     };
@@ -119,8 +142,41 @@ pub(in crate::mandoc) fn lower_source_fragment_with_formatter_state(
     Some(RecoveredFragment {
         inlines,
         complete: true,
+        content_authority,
         formatter,
     })
+}
+
+/// Return whether the source contains an interpolation whose visible value is
+/// defined by the surrounding roff execution session.
+///
+/// The lexer deliberately recognizes only the expansion families handled by
+/// CVS mandoc's `roff_expand()`: strings (`\\*`), numeric registers (`\\n`),
+/// and macro arguments (`\\$`).  Those branches read the document's string
+/// table, register table, or active macro invocation respectively.  Fixed
+/// glyphs, font changes, and zero-width hints remain self-contained and
+/// therefore keep structured source recovery.  In particular, `\\g` is not
+/// expanded by mandoc and `\\V` is retained as unsupported syntax, so neither
+/// makes the original parser session content authority.
+fn requires_native_evaluation(source: &str) -> bool {
+    let mut characters = source.chars();
+    while let Some(character) = characters.next() {
+        if character != '\\' {
+            continue;
+        }
+        let Some(escape) = characters.next() else {
+            break;
+        };
+        // `\\E` is a copy-mode literal escape.  It deliberately prevents the
+        // following trigger from being interpreted as an interpolation here.
+        if escape == 'E' {
+            continue;
+        }
+        if matches!(escape, '*' | 'n' | '$') {
+            return true;
+        }
+    }
+    false
 }
 
 #[cfg(test)]
@@ -282,5 +338,30 @@ mod tests {
             assert!(lower_source_fragment(".so external.1", dialect, None, false).is_none());
             assert!(lower_source_fragment(".TS\nl.\ntext\n.TE", dialect, None, false).is_none());
         }
+    }
+
+    #[test]
+    fn content_authority_distinguishes_inline_syntax_from_session_expansion() {
+        let recovered = lower_source_fragment(".Fl Fl help", MacroSet::Mdoc, None, false)
+            .expect("recover self-contained mdoc syntax");
+        assert_eq!(
+            recovered.content_authority,
+            FragmentContentAuthority::RecoveredSyntax
+        );
+        for source in [r".No There\*(Aqs", r".No step\n+[counter]", r".No \$1"] {
+            let recovered = lower_source_fragment(source, MacroSet::Mdoc, None, false)
+                .expect("recover bounded source fragment");
+            assert_eq!(
+                recovered.content_authority,
+                FragmentContentAuthority::NativeEvaluation,
+                "{source}"
+            );
+        }
+        let recovered = lower_source_fragment(r".No fixed\(aqglyph", MacroSet::Mdoc, None, false)
+            .expect("recover fixed glyph");
+        assert_eq!(
+            recovered.content_authority,
+            FragmentContentAuthority::RecoveredSyntax
+        );
     }
 }
