@@ -26,9 +26,11 @@ import subprocess
 import sys
 
 from roff_content_compare import compare_content
+from roff_content_explanations import explain_content
 from roff_layout_geometry import compare_layout_geometry
 from roff_reference import MAX_INPUT_BYTES, reference_environment, run_renderer
 from roff_rendering_frame import prepare_frame
+from roff_review_queue import ArtifactSelection, classify, plain_output_controls
 
 ROOT = Path(__file__).resolve().parents[1]
 EXTERNAL = re.compile(rb"^[.'][ \t]*(?:so|soquiet|mso)(?:[ \t]|$)", re.MULTILINE)
@@ -146,9 +148,12 @@ def census_inputs(args):
 
 
 def compact(value):
+    # Comparison modules already bound findings and disclose truncation. Do
+    # not discard all but three here: that hid later high-risk evidence behind
+    # routine punctuation and footer differences.
     return {key: item for key, item in value.items() if key != "findings"} | {
-        "findings": value.get("findings", [])[:3],
-        "findingsRetained": min(3, len(value.get("findings", []))),
+        "findings": value.get("findings", []),
+        "findingsRetained": len(value.get("findings", [])),
         "findingsAvailable": len(value.get("findings", [])),
     }
 
@@ -168,6 +173,7 @@ def inspect(item, args):
         if EXTERNAL.search(source):
             record["reason"] = "external-source-context: standalone .so/.soquiet/.mso is not comparable"
             return record, artifacts
+        artifacts['source.roff'] = source
         environment = reference_environment()
         commands = {
             "reference": [str(args.reference), "-Tutf8", "-O", f"width={args.width}"],
@@ -195,12 +201,15 @@ def inspect(item, args):
         mant, mant_frame = prepare_frame(outputs["mant"], source_text, reference=False)
         record["frames"] = {"reference": ref_frame, "mant": mant_frame}
         content = compare_content(ref, mant, source_text)
+        explained = explain_content(ref, mant, source_text, raw_comparison=content)
         geometry = compare_layout_geometry(ref, mant, source_text)
         # Check raw output as well: furniture masking must never conceal leaks.
-        raw = compare_content(outputs["mant"], outputs["mant"], source_text)
-        record["rawControlLeaks"] = raw.get("counts", {}).get("control-leak", 0)
-        record["rawControlCoverage"] = {"status": raw["status"], "coverage": raw.get("coverage", {})}
+        raw = plain_output_controls(outputs["mant"])
+        record["rawControlLeaks"] = len(raw.get("characters", []))
+        record["rawControlCoverage"] = raw
         record["content"] = compact(content)
+        record["contentAssessment"] = {key: value for key, value in explained.items() if key not in ('rawComparison', 'residualComparison')}
+        record["contentAssessment"]["residualComparison"] = compact(explained['residualComparison'])
         record["geometry"] = compact(geometry)
         statuses = [content["status"], geometry["status"], ref_frame["status"], mant_frame["status"], raw["status"]]
         if raw["status"] == "hard-failure" or content["status"] == "hard-failure":
@@ -212,11 +221,13 @@ def inspect(item, args):
             record["status"] = "clean"
         else:
             record["status"] = "partial"
+        record['triage'] = classify(record, explained['residualComparison'])
         artifacts["source.roff"] = source
-        artifacts["comparison.json"] = (json.dumps({"content": content, "geometry": geometry},
+        artifacts["comparison.json"] = (json.dumps({"content": content, "geometry": geometry, 'assessment': explained},
                                        ensure_ascii=False, indent=2) + "\n").encode()
     except (OSError, ValueError, EOFError, lzma.LZMAError) as error:
         record.update(reason="source-or-comparison-error", error=str(error)[:512])
+    record.setdefault('triage', classify(record))
     return record, artifacts
 
 
@@ -235,7 +246,7 @@ def main():
     parser.add_argument("--timeout", type=float, default=15)
     parser.add_argument("--workers", type=int, default=4)
     parser.add_argument("--max-pages", type=int)
-    parser.add_argument("--artifact-pages", type=int, default=32)
+    parser.add_argument("--artifact-pages", type=int, default=32, help='Risk-ranked category/corpus representatives, under a shared 64 MiB raw-artifact cap')
     parser.add_argument("--verify", action="store_true", help="Also fail on candidates or incomplete coverage")
     args = parser.parse_args()
     if not 1 <= args.workers <= 4 or not 20 <= args.width <= 1000 or not math.isfinite(args.timeout) or args.timeout <= 0:
@@ -243,7 +254,7 @@ def main():
     if args.artifact_pages < 0 or (args.max_pages is not None and args.max_pages < 1):
         parser.error("invalid page budget")
     args.output.mkdir(parents=True, exist_ok=False)
-    report = {"schema": "mant.roff-rendering-census/v1", "status": "audit-error", "coverageComplete": False}
+    report = {"schema": "mant.roff-rendering-census/v2", "status": "audit-error", "coverageComplete": False}
     try:
         return census(args, report)
     except Exception as error:
@@ -267,45 +278,58 @@ def census(args, report):
                 for name, path in (("mant", args.mant), ("reference", args.reference))}
     producer = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
     dirty = subprocess.check_output(["git", "status", "--porcelain"], cwd=ROOT, text=True).splitlines()
-    report.update({"schema": "mant.roff-rendering-census/v1", "producerCommit": producer,
+    report.update({"schema": "mant.roff-rendering-census/v2", "producerCommit": producer,
               "producerDirtyPaths": dirty, "started": datetime.now(timezone.utc).isoformat(),
               "binaries": binaries, "referenceIdentity": args.reference_id,
               "manifestSha256": args._manifest_sha256,
               "comparators": {name: file_hash(ROOT / "scripts" / name) for name in (
                   "roff_content_compare.py", "roff_layout_geometry.py", "roff_rendering_frame.py",
-                  "roff_reference.py", "audit-roff-rendering.py")},
+                  "roff_reference.py", "roff_content_explanations.py", "roff_review_queue.py", "audit-roff-rendering.py")},
               "parameters": {key: str(value) if isinstance(value, Path) else value
                              for key, value in vars(args).items() if not key.startswith("_")},
               "physicalPages": len(inputs), "logicalPages": sum(len(rows) for _, rows in inputs),
               "environment": reference_environment()})
-    counts, dimensions = Counter(), Counter()
-    saved_bytes = saved_pages = 0
+    counts, dimensions, triage_counts, explained_counts = Counter(), Counter(), Counter(), Counter()
+    selection = ArtifactSelection(args.artifact_pages)
+    ordinal = 0
     with (args.output / "results.jsonl").open("w", encoding="utf-8") as stream, ThreadPoolExecutor(args.workers) as pool:
         # Executor.map preserves source order, but eagerly submits all futures.
         # Batches bound queued rendered output independently of corpus size.
         for start in range(0, len(inputs), args.workers * 4):
             for record, artifacts in pool.map(lambda item: inspect(item, args), inputs[start:start + args.workers * 4]):
+                record.setdefault('triage', classify(record))
+                record['artifactCandidateKey'] = f'candidate-{ordinal:06d}'
+                selection.consider(ordinal, record, artifacts)
+                ordinal += 1
                 counts[record["status"]] += len(record["identities"])
+                triage_counts[record['triage']['category']] += len(record['identities'])
+                assessment = record.get('contentAssessment', {})
+                explained_counts[assessment.get('status', 'uncovered')] += len(record['identities'])
                 for dimension in ("content", "geometry"):
                     value = record.get(dimension, {})
                     dimensions[dimension + ":" + value.get("status", "uncovered")] += len(record["identities"])
-                size = sum(len(value) for value in artifacts.values())
-                if record["status"] != "clean" and artifacts and saved_pages < args.artifact_pages and saved_bytes + size <= 64 * 1024 * 1024:
-                    directory = args.output / f"candidate-{saved_pages:03d}"
-                    directory.mkdir()
-                    for name, data in artifacts.items():
-                        (directory / name).write_bytes(data)
-                    record["artifacts"] = str(directory)
-                    saved_pages += 1
-                    saved_bytes += size
                 stream.write(json.dumps(record, ensure_ascii=False, separators=(",", ":")) + "\n")
                 report["statusCounts"] = dict(counts)
             stream.flush()
             if start % (args.workers * 4 * 16) == 0:
                 print(f"{min(start + args.workers * 4, len(inputs))}/{len(inputs)} physical pages: {dict(counts)}", flush=True)
+    artifact_index = []
+    for item in selection.selected():
+        record = item['record']
+        directory = args.output / record['artifactCandidateKey']
+        directory.mkdir()
+        for name, data in item['artifacts'].items():
+            (directory / name).write_bytes(data)
+        artifact_index.append({'key': record['artifactCandidateKey'], 'ids': [i['id'] for i in record['identities']],
+                               'triage': record['triage'], 'bytes': item['size'],
+                               'files': {name: digest(data) for name, data in item['artifacts'].items()}})
     report.update(status="completed", coverageComplete=all(status == "clean" for status in counts),
                   finished=datetime.now(timezone.utc).isoformat(), statusCounts=dict(counts),
-                  dimensions=dict(dimensions), artifactBytes=saved_bytes, artifactPages=saved_pages,
+                  dimensions=dict(dimensions), triageLogicalCounts=dict(triage_counts),
+                  contentAssessmentLogicalCounts=dict(explained_counts),
+                  artifactSelection='risk-ranked-category-corpus-representatives',
+                  artifactBytes=selection.bytes, artifactPages=len(artifact_index), artifactIndex=artifact_index,
+                  artifactSelectionOmissions=dict(selection.omitted),
                   resultsSha256=file_hash(args.output / "results.jsonl"),
                   binariesUnchanged=all(file_hash(Path(v["path"])) == v["sha256"] for v in binaries.values()),
                   comparatorsUnchanged=all(file_hash(ROOT / "scripts" / name) == sha for name, sha in report["comparators"].items()),

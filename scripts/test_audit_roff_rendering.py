@@ -10,6 +10,7 @@ import sys
 import tempfile
 import unittest
 from unittest.mock import patch
+from roff_review_queue import ArtifactSelection, classify, plain_output_controls
 
 SPEC = importlib.util.spec_from_file_location("rendering_census", Path(__file__).with_name("audit-roff-rendering.py"))
 AUDIT = importlib.util.module_from_spec(SPEC)
@@ -24,7 +25,8 @@ class RenderingCensusTests(unittest.TestCase):
         with patch.object(AUDIT, "source_bytes", return_value=(source, AUDIT.digest(source))), \
              patch.object(AUDIT, "run_renderer", side_effect=[(0, reference, ""), (0, mant, "")]), \
              patch.object(AUDIT, "prepare_frame", side_effect=lambda text, *_args, **_kwargs: (text, {"status": "covered"})), \
-             patch.object(AUDIT, "compare_content", side_effect=[covered, raw]), \
+             patch.object(AUDIT, "compare_content", return_value=covered), \
+             patch.object(AUDIT, "plain_output_controls", return_value=raw), \
              patch.object(AUDIT, "compare_layout_geometry", return_value=covered):
             return AUDIT.inspect(("input", [{"id": "one"}]), args)[0]
 
@@ -93,6 +95,46 @@ class RenderingCensusTests(unittest.TestCase):
                  self.assertRaises(SystemExit) as error:
                 AUDIT.main()
             self.assertEqual(error.exception.code, 2)
+
+    def test_all_bounded_findings_survive_the_census_record(self):
+        original = {'findings': [{'kind': 'missing-occurrence', 'token': str(i)} for i in range(128)],
+                    'coverage': {'complete': False, 'reasons': ['finding-retention-budget']}}
+        kept = AUDIT.compact(original)
+        self.assertEqual(kept['findingsRetained'], 128)
+        self.assertEqual(kept['findings'], original['findings'])
+        self.assertFalse(kept['coverage']['complete'])
+
+    def test_plain_output_rejects_sgr_as_well_as_other_controls(self):
+        self.assertEqual(plain_output_controls('中\tTEXT\n')['status'], 'covered')
+        for text in ['\x1b[31mTEXT\x1b[0m', '\x1b]52;abc\x07', 'TEXT\b', 'TEXT\r']:
+            self.assertEqual(plain_output_controls(text)['status'], 'hard-failure')
+
+    def test_explaining_separator_never_clears_geometry_or_raw_status(self):
+        record = {'status': 'review', 'content': {'status': 'review'}, 'geometry': {'status': 'review'}}
+        result = classify(record, {'status': 'covered', 'counts': {}})
+        self.assertEqual(result['category'], 'geometry-difference')
+        self.assertEqual(record['status'], 'review')
+        self.assertFalse(result['confirmedProductDefect'])
+
+    def test_artifact_selection_prefers_late_high_risk_and_distinct_corpora(self):
+        def row(identity, priority):
+            return {'status': 'review', 'identities': [{'id': identity}], 'triage': {'category': 'unexplained-content', 'priority': priority}}
+        pool = ArtifactSelection(2, 8)
+        pool.consider(0, row('a:first', 10), {'stdout': b'abcd'})
+        pool.consider(1, row('a:duplicate', 10), {'stdout': b'abcd'})
+        pool.consider(2, row('b:second', 20), {'stdout': b'abcd'})
+        pool.consider(3, row('c:late-high-risk', 90), {'stdout': b'abcd'})
+        self.assertEqual([i['ordinal'] for i in pool.selected()], [3, 2])
+        self.assertEqual(pool.bytes, 8)
+        pool.consider(4, row('d:oversized', 100), {'stdout': b'0123456789'})
+        self.assertEqual(pool.bytes, 8)
+        self.assertEqual(pool.omitted['single-artifact-byte-budget'], 1)
+
+    def test_zero_artifact_budget_does_not_invent_saved_evidence(self):
+        pool = ArtifactSelection(0)
+        pool.consider(0, {'status': 'review'}, {'stdout': b'text'})
+        self.assertEqual(pool.selected(), [])
+        self.assertEqual(pool.bytes, 0)
 
 
 if __name__ == "__main__":

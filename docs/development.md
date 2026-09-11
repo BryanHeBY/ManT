@@ -703,6 +703,17 @@ needs specialized tests and source review.
 These tools report differences as review candidates, not product defects.
 Even punctuation, reference hyphenation or page framing can explain a candidate.
 Header/footer removal is exact and recorded, never arbitrary first/last lines.
+Content triage keeps the original findings and records a separate residual
+comparison. A supported literal mdoc NAME prefix can explain its generated
+`Nd` separator at the exact source/output occurrence; it cannot normalize
+authored punctuation elsewhere. Unknown execution and incomplete comparisons
+remain unclassified. An explained content difference does not accept geometry.
+The census retains every finding within the comparator's disclosed limit,
+instead of retaining only the first three. Saved raw artifacts are bounded,
+risk-ranked representatives across categories and corpora; they are not the
+first pages encountered or an exhaustive review. Priorities describe signals,
+not confirmed defects. Consult `artifactIndex` for actually retained files;
+an `artifactCandidateKey` alone does not mean that a raw artifact was saved.
 Mutation self-tests establish a covered baseline, then remove/duplicate/reorder
 content, leak operands, alter gaps/origins and relocate targets. They run in
 the routine local gate without installing mandoc.

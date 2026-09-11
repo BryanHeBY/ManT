@@ -43,6 +43,7 @@ run "test locked vendor source replay" \
   python3 crates/libmandoc-rs/scripts/test_sync_vendor.py
 run "check roff fidelity audit" python3 scripts/audit-roff-fidelity.py --self-check
 run "test bidirectional roff content comparison" python3 scripts/roff_content_compare.py
+run "test source-bound presentation explanations" python3 scripts/test_roff_content_explanations.py
 run "test source-bound roff layout geometry" python3 scripts/test-roff-layout-geometry.py
 run "test rendering matrix mutation sensitivity" python3 scripts/check-roff-behavior-matrix.py --self-test
 run "test bounded rendering census" python3 scripts/audit-roff-rendering.py --self-test
