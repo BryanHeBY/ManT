@@ -123,10 +123,11 @@ matched_bold_font=$(env "${runtime_environment[@]}" fc-match -f '%{file}\n' \
   || fail "Fontconfig did not select the pinned JetBrains Mono Bold font"
 
 printf '==> start isolated ManT reader\n'
+# Keep the complete SYNOPSIS through `mant --mcp` above the status bar.
 env "${runtime_environment[@]}" xterm \
   -name mant-screenshot \
   -title mant-screenshot \
-  -geometry 135x49 \
+  -geometry 135x51 \
   -fa "$font_pattern" \
   -fs 14 \
   -bg '#11111b' \
