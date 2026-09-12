@@ -355,7 +355,7 @@ impl Decoder {
             };
             match trigger {
                 // A nested `\z` still owns the next complete glyph.
-                'z' => continue,
+                'z' => {}
                 '(' => {
                     self.take_counted(2);
                     return;

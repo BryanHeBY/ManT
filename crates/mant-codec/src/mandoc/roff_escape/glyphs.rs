@@ -17,7 +17,7 @@ pub(super) fn unicode_special_characters(name: &str) -> Option<String> {
 
 /// Decode the documented default mappings from groff's `composite.tmac`.
 ///
-/// groff_char(7) defines `\\[base accent ...]` as a composite glyph and its
+/// `groff_char(7)` defines `\\[base accent ...]` as a composite glyph and its
 /// shipped `composite.tmac` maps the accent names below to Unicode combining
 /// scalars.  mandoc deliberately has no equivalent dynamic character table,
 /// so those escapes remain in native text nodes.  Keep this decoder limited to
