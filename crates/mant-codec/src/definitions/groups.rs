@@ -197,7 +197,10 @@ impl GroupEvidence {
     }
 }
 
-#[cfg(test)]
+// These witnesses are populated only by the native roff lowering path.  Keep
+// their regression matrix out of the Markdown-only build, which deliberately
+// omits the roff-only recording API.
+#[cfg(all(test, feature = "roff"))]
 mod tests {
     use super::GroupEvidence;
     use mant_ir::{Block, DefinitionItem, DefinitionLayout, Inline, LayoutHint, SourceSpan};
