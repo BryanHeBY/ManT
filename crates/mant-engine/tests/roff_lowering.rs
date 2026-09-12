@@ -2,8 +2,7 @@
 use std::{collections::HashSet, fmt::Write as _, fs, process};
 
 use mant_ir::{
-    Block, DiagnosticLevel, Inline, ListKind, ResolvedContent, SemanticIndex, SourceFormat,
-    ValueDomain,
+    Block, Inline, ListKind, ResolvedContent, SemanticIndex, SourceFormat, ValueDomain,
     visit::{self, Visit},
 };
 

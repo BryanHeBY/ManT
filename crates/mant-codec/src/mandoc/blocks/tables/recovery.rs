@@ -15,7 +15,6 @@ pub(in crate::mandoc::blocks) struct TableEmbedding {
 
 fn table_embeddings(nodes: &[Node], context: &LoweringContext<'_>) -> TableEmbeddingPlan {
     let mut embeddings = (0..nodes.len()).map(|_| None).collect::<Vec<_>>();
-    let mut consumed = vec![false; nodes.len()];
     for (index, node) in nodes.iter().enumerate() {
         if node.kind != NodeKind::Table {
             continue;
@@ -28,39 +27,27 @@ fn table_embeddings(nodes: &[Node], context: &LoweringContext<'_>) -> TableEmbed
                 .count(),
             node.table_escape,
         );
-        let Some(last_line) = blocks.iter().map(|block| block.end_line).max() else {
+        if blocks.is_empty() {
             continue;
-        };
-        for (candidate_index, candidate) in nodes.iter().enumerate().skip(index + 1) {
-            if candidate.line > last_line {
-                break;
-            }
-            if blocks
-                .iter()
-                .any(|block| block.contains_line(candidate.line))
-            {
-                consumed[candidate_index] = true;
-            }
         }
         embeddings[index] = Some(TableEmbedding { blocks });
     }
-    TableEmbeddingPlan {
-        embeddings,
-        consumed,
-    }
+    TableEmbeddingPlan { embeddings }
 }
 
-/// One sibling stream owns both embeddings and their consumed-node bitmap.
+/// One sibling stream owns source coordinates for embedded table text.
+///
+/// Native macro expansion can reuse the source line of a table cell while
+/// emitting ordinary AST siblings after the table. Those siblings remain in
+/// the normal block stream unless a native execution witness proves that a
+/// source recovery transaction consumed them; line-number overlap alone is
+/// never ownership evidence.
 pub(in crate::mandoc::blocks) struct TableEmbeddingPlan {
     embeddings: Vec<Option<TableEmbedding>>,
-    consumed: Vec<bool>,
 }
 impl TableEmbeddingPlan {
     pub(in crate::mandoc::blocks) fn new(nodes: &[Node], context: &LoweringContext<'_>) -> Self {
         table_embeddings(nodes, context)
-    }
-    pub(in crate::mandoc::blocks) fn consumes(&self, index: usize) -> bool {
-        self.consumed[index]
     }
     pub(in crate::mandoc::blocks) fn embedding(&self, index: usize) -> Option<&TableEmbedding> {
         self.embeddings[index].as_ref()
@@ -89,7 +76,14 @@ impl CellCandidate {
         cell: &libmandoc_rs::TableCell,
         position: CellPosition<'_>,
         source_operands: &str,
+        source_recovery_safe: bool,
     ) -> bool {
+        // A complete synthetic parse has no authority on its own.  The
+        // parser records this row as safe only when tbl received the original
+        // source rather than a user-macro expansion or renamed request.
+        if !source_recovery_safe {
+            return false;
+        }
         let native = cell.text.as_deref().filter(|text| !text.is_empty());
         if self.inlines.is_empty() {
             return native.is_none();
@@ -102,16 +96,13 @@ impl CellCandidate {
         // normalized visible text is exactly the same.
         if let Some(native) = native {
             let native = visible_text(native);
-            // `roff_parsetext()` gives tbl the high-level macro operands,
-            // then the owned tbl cell retains that executed operand stream.
-            // A complete source fragment may deliberately change its
-            // presentation (`.Fl Fl help` -> `--help`, `.MR printf 3` -> a
-            // typed reference), so candidate *display* text need not equal
-            // the native payload.  The original operand stream must still
-            // agree exactly.  This is execution evidence, unlike merely
-            // reparsing a syntactically complete source substring.
-            return table_text_agrees(&text, &native)
-                || table_text_agrees(source_operands, &native);
+            // `roff_parsetext()` gives tbl direct high-level macro operands,
+            // and the owned cell retains the executed operand stream. A
+            // source fragment can deliberately change its presentation
+            // (`.Fl Fl help` -> `--help`, `.MR printf 3` -> a typed
+            // reference), so its display text is not evidence. The original
+            // direct operand stream must match native text exactly.
+            return table_text_agrees(source_operands, &native);
         }
         !position.row.iter().enumerate().any(|(index, candidate)| {
             index != position.index
@@ -173,7 +164,12 @@ pub(super) fn lower_table_cell(
                 formatter: recovered.formatter,
                 diagnostics: Vec::new(),
             };
-            if candidate.belongs_to(cell, position, &source_operands) {
+            if candidate.belongs_to(
+                cell,
+                position,
+                &source_operands,
+                node.table_source_recovery_safe,
+            ) {
                 return Some(candidate.commit(context, formatter));
             }
         }
@@ -190,7 +186,12 @@ pub(super) fn lower_table_cell(
             formatter: candidate_state,
             diagnostics: candidate_diagnostics,
         };
-        if candidate.belongs_to(cell, position, &source_operands) {
+        if candidate.belongs_to(
+            cell,
+            position,
+            &source_operands,
+            node.table_source_recovery_safe,
+        ) {
             return Some(candidate.commit(context, formatter));
         }
         *formatter = initial_state;
@@ -207,26 +208,31 @@ pub(super) fn lower_table_cell(
 }
 
 fn table_text_agrees(reconstructed: &str, parsed: &str) -> bool {
-    let normalize = |value: &str| {
-        value
-            .chars()
-            .filter(|character| !character.is_whitespace())
-            .collect::<String>()
-    };
-    let reconstructed = normalize(reconstructed);
-    let parsed = normalize(parsed);
-    reconstructed == parsed
+    fn normalize(value: &str) -> String {
+        // tbl's native macro branch may retain structural padding from a
+        // no-operand wrapper (`.Oo`/`.Oc`) even though the corresponding
+        // source operand stream has no physical blanks at that point. Keep
+        // word boundaries as execution evidence, but normalize the width of
+        // those formatter-owned runs. In particular, `A B` never equals
+        // `AB`: recovery must not turn an executed space into concatenation.
+        visible_text(value)
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ")
+    }
+    normalize(reconstructed) == normalize(parsed)
 }
 
 /// Build the exact high-level operand stream that CVS `roff_parsetext()`
-/// hands to tbl for this bounded text block.  It is intentionally evidence,
+/// hands to tbl for this bounded text block. It is intentionally evidence,
 /// not a second parser: requests are reduced only to the operands native tbl
 /// itself receives, and the owned `TableCell` must corroborate the result.
 fn table_source_operands(context: &LoweringContext<'_>, source: &str) -> String {
     source
         .lines()
         .filter_map(|line| table_cell_content_line(context, line))
-        .map(str::trim)
+        .map(visible_text)
+        .map(|line| line.trim().to_owned())
         .filter(|line| !line.is_empty())
         .collect::<Vec<_>>()
         .join(" ")
@@ -327,6 +333,13 @@ mod tests {
     use crate::mandoc::inline::plain_text;
 
     #[test]
+    fn native_table_witness_preserves_internal_whitespace() {
+        assert!(super::table_text_agrees(" A B ", "A B"));
+        assert!(super::table_text_agrees("A  B", "A B"));
+        assert!(!super::table_text_agrees("A B", "AB"));
+    }
+
+    #[test]
     fn complete_semantic_table_recovery_commits_its_formatter_state() {
         fn find(node: &libmandoc_rs::Node) -> Option<&libmandoc_rs::Node> {
             if node.kind == libmandoc_rs::NodeKind::Table {
@@ -337,20 +350,21 @@ mod tests {
         }
         let report = libmandoc_rs::Parser::new(libmandoc_rs::ParseOptions::default())
             .parse_bytes("state.1", b".Dd September 8, 2026\n.Dt STATE 1\n.Os\n.Sh DESCRIPTION\n.TS\nl l.\nWORD\tNEXT\n.TE\n").unwrap();
-        let node = find(&report.document.root).unwrap();
+        let mut node = find(&report.document.root).unwrap().clone();
+        // This unit supplies an artificial text block; model the direct tbl
+        // dispatch proof that a real parser report would carry with it.
+        node.table_source_recovery_safe = true;
         let mut context = crate::mandoc::LoweringContext::new(None, None);
         context.macro_set = libmandoc_rs::MacroSet::Mdoc;
-        for (source, expected_text, expected_spacing) in [
-            (".Sm off\n.Em WORD", "WORD", false),
-            (".Fl Fl help", "--help", true),
+        for (source, native_text, expected_text, expected_spacing) in [
+            (".Sm off\n.Em WORD", "off WORD", "WORD", false),
+            (".Fl Fl help", "Fl help", "--help", true),
         ] {
             let mut cell = node.table_cells[0].clone();
-            cell.text = Some(expected_text.to_owned());
+            cell.text = Some(native_text.to_owned());
             cell.text_block = true;
             let block = super::TableTextBlock {
                 source: source.to_owned(),
-                start_line: 7,
-                end_line: 9,
                 escape: Some(b'\\'),
             };
             let mut state = crate::mandoc::formatter::FormatterState::default();
@@ -363,7 +377,7 @@ mod tests {
                     index: 0,
                     row: &node.table_cells,
                 },
-                node,
+                &node,
                 &context,
                 Some(&block),
                 &mut state,
@@ -394,13 +408,12 @@ mod tests {
             b".TH FALLBACK 1\n.SH DESCRIPTION\n.TS\nl.\nplaceholder\n.TE\n",
         )
         .unwrap();
-        let node = table_node(&report.document.root).unwrap();
+        let mut node = table_node(&report.document.root).unwrap().clone();
+        node.table_source_recovery_safe = true;
         let mut context = crate::mandoc::LoweringContext::new(None, None);
         context.macro_set = libmandoc_rs::MacroSet::Man;
         let block = super::TableTextBlock {
             source: ".B TOKENA\n.PP\nTOKENB".to_owned(),
-            start_line: 6,
-            end_line: 8,
             escape: Some(b'\\'),
         };
         for (native, expected) in [
@@ -420,7 +433,7 @@ mod tests {
                     index: 0,
                     row: std::slice::from_ref(&cell),
                 },
-                node,
+                &node,
                 &context,
                 Some(&block),
                 &mut crate::mandoc::formatter::FormatterState::default(),

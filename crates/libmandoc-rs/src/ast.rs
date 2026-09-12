@@ -251,6 +251,13 @@ pub struct Node {
     /// `Some(0)` means `.eo` had disabled escapes. `None` means the node is
     /// not a table row. This is an execution fact, not a source scan.
     pub table_escape: Option<u8>,
+    /// Whether native tbl input for this row reached tbl without user macro
+    /// expansion or request renaming.
+    ///
+    /// This is a parser execution fact. It lets a downstream presentation
+    /// layer enrich a closed high-level macro fragment only when the original
+    /// spelling and the native table payload have the same provenance.
+    pub table_source_recovery_safe: bool,
     /// Source and renderer flags attached to the node.
     pub flags: NodeFlags,
     /// Normalized list behavior for an mdoc list block.

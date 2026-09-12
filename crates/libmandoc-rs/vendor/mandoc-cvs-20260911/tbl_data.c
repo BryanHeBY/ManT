@@ -100,6 +100,7 @@ getdata(struct tbl_node *tbl, struct tbl_span *dp,
 	dat->hspans = 0;
 	dat->vspans = 0;
 	dat->block = 0;
+	dat->source_safe = tbl->source_safe;
 	dat->pos = TBL_DATA_NONE;
 
 	/*
@@ -223,6 +224,7 @@ tbl_cdata(struct tbl_node *tbl, int ln, const char *p, int pos)
 
 	dat->pos = TBL_DATA_DATA;
 	dat->block = 1;
+	dat->source_safe &= tbl->source_safe;
 
 	if (dat->string != NULL) {
 		sz = strlen(p + pos) + strlen(dat->string) + 2;

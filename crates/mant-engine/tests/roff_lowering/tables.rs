@@ -477,7 +477,7 @@ fn lowers_every_mdoc_column_list_cell() {
 }
 
 #[test]
-fn keeps_unexpanded_tabular_cells_visible_with_a_diagnostic() {
+fn native_tbl_diagnostics_do_not_invent_unparsed_source_cells() {
     let document = parse_manual_bytes(
         std::path::Path::new("unexpanded-table-cell.7"),
         b".TH UNEXPANDED-TABLE-CELL 7\n.SH DESCRIPTION\n.TS\nl l.\n1\t\\*[unknown-label]\n.TE\n",
@@ -487,13 +487,18 @@ fn keeps_unexpanded_tabular_cells_visible_with_a_diagnostic() {
     let Block::Table { rows, .. } = &document.sections[0].blocks[0] else {
         panic!("expected a structured table");
     };
-    assert_eq!(rows[0].cells.len(), 2);
-    let [Block::Paragraph { children, .. }] = rows[0].cells[1].blocks.as_slice() else {
-        panic!("expected one recovered table-cell paragraph");
+    // CVS tbl consumes the malformed string escape as part of the second
+    // field and exposes only the surviving first cell. Lowering must retain
+    // that executed native topology rather than recreating a source-looking
+    // second cell from bytes that no formatter rendered.
+    assert_eq!(rows[0].cells.len(), 1);
+    let [Block::Paragraph { children, .. }] = rows[0].cells[0].blocks.as_slice() else {
+        panic!("expected one native table-cell paragraph");
     };
-    assert_eq!(inline_text(children), r"\*[unknown-label]");
-    assert!(document.diagnostics.iter().any(|diagnostic| {
-        diagnostic.level == DiagnosticLevel::Unsupported
-            && diagnostic.code.as_deref() == Some("manual.unexpanded-table-cell")
-    }));
+    assert_eq!(inline_text(children), "1");
+    assert!(
+        !document.diagnostics.iter().any(|diagnostic| {
+            diagnostic.code.as_deref() == Some("manual.unexpanded-table-cell")
+        })
+    );
 }

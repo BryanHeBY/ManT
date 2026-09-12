@@ -167,7 +167,7 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
     fn push_nodes(&mut self, nodes: &[Node]) {
         let table_plan = TableEmbeddingPlan::new(nodes, self.context);
         for (index, node) in nodes.iter().enumerate() {
-            if table_plan.consumes(index) || is_inline_equation_quote_artifact(nodes, index) {
+            if is_inline_equation_quote_artifact(nodes, index) {
                 continue;
             }
             if follows_inline_equation_punctuation(nodes, index) {

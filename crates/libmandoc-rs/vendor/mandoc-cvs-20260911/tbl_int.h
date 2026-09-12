@@ -36,6 +36,7 @@ struct	tbl_node {
 	struct tbl_span	 *last_span;	/* Last data row. */
 	int		  line;		/* Line number in input file. */
 	int		  pos;		/* Column number in input file. */
+	int		  source_safe;	/* Current input avoids user macro expansion. */
 	enum tbl_part	  part;		/* Table section being parsed. */
 };
 

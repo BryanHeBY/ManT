@@ -180,3 +180,49 @@ fn parser_copies_table_cells_and_equation_text() {
             .is_some_and(|value| value.contains('x'))
     );
 }
+
+#[test]
+fn parser_records_whether_tbl_content_bypassed_user_macro_execution() {
+    for (label, source, expected) in [
+        (
+            "direct",
+            b".TH PROBE 1\n.SH DESCRIPTION\n.TS\nl.\nT{\n.MR printf 3\nT}\n.TE\n".as_slice(),
+            true,
+        ),
+        (
+            "redefined",
+            b".TH PROBE 1\n.de MR\nprintf 3\n..\n.SH DESCRIPTION\n.TS\nl.\nT{\n.MR printf 3\nT}\n.TE\n".as_slice(),
+            false,
+        ),
+        (
+            "appended",
+            b".TH PROBE 1\n.am1 B\nADDED_TEXT\n..\n.SH DESCRIPTION\n.TS\nl.\nT{\n.B ORIGINAL_OPERAND\nT}\n.TE\n".as_slice(),
+            false,
+        ),
+        (
+            "custom-control",
+            b".TH PROBE 1\n.SH DESCRIPTION\n.cc @\n@TS\nl.\nT{\n@MR printf 3\nT}\n@TE\n".as_slice(),
+            false,
+        ),
+    ] {
+        let report = Parser::default()
+            .parse_bytes(format!("tbl-provenance-{label}.1"), source)
+            .expect("parse tbl provenance fixture");
+        let row = find_kind(&report.document.root, NodeKind::Table).expect("table row");
+        assert_eq!(row.table_source_recovery_safe, expected, "{label}");
+    }
+}
+
+#[test]
+fn parser_records_direct_mdoc_table_macro_provenance() {
+    for source in [
+        b".Dd September 5, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.TS\nl.\nT{\n.Oo Fl a Oc No TOKENA\nT}\n.TE\n".as_slice(),
+        b".Dd September 5, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.TS\nl.\nT{\n.MR printf 3\nT}\n.TE\n".as_slice(),
+    ] {
+        let report = Parser::default()
+            .parse_bytes("tbl-direct-mdoc.1", source)
+            .expect("parse direct mdoc table macro");
+        let row = find_kind(&report.document.root, NodeKind::Table).expect("table row");
+        assert!(row.table_source_recovery_safe, "{row:#?}");
+    }
+}

@@ -813,7 +813,7 @@ fn automatic_function_target_survives_a_section_identity_collision() {
 }
 
 #[test]
-fn keeps_semantic_links_inside_tbl_text_blocks() {
+fn tbl_user_macro_expansion_preserves_native_text_without_fabricating_links() {
     let document = parse_manual_bytes(
         std::path::Path::new("table-text-link.1"),
         b".TH TABLE-TEXT-LINK 1\n\
@@ -835,33 +835,31 @@ THIS_MACRO_IS_NOT_CALLED\n\
 .TS\ntab($);\nl l.\ngrn$T{\nrenders\n.MR gremlin 1\ndiagrams;\nT}\n\
 gperl$T{\npopulates\n.I groff\nregisters using\n.MR perl 1 ;\nT}\n.TE\n",
     )
-    .expect("lower semantic tbl text block");
+    .expect("lower a tbl text block using a document-local macro");
 
     let [Block::Table { rows, .. }] = document.sections[0].blocks.as_slice() else {
-        panic!("semantic table content must not escape into a separate paragraph");
+        panic!("table content must not escape into a separate paragraph");
     };
     let [Block::Paragraph { children, .. }] = rows[0].cells[1].blocks.as_slice() else {
         panic!("expected semantic table cell paragraph");
     };
-    assert_eq!(inline_text(children), "renders gremlin(1) diagrams;");
-    assert!(children.iter().any(|child| matches!(
-        child,
-        Inline::Link {
-            target: mant_ir::LinkTarget::Manual { name, manual_section },
-            ..
-        } if name == "gremlin" && manual_section.as_deref() == Some("1")
-    )));
+    assert_eq!(inline_text(children), "renders gremlin (1) diagrams;");
+    assert!(
+        !children
+            .iter()
+            .any(|child| matches!(child, Inline::Link { .. }))
+    );
     let [Block::Paragraph { children, .. }] = rows[1].cells[1].blocks.as_slice() else {
         panic!("expected styled semantic table cell paragraph");
     };
     assert_eq!(
         inline_text(children),
-        "populates groff registers using perl(1);"
+        "populates groff registers using perl (1);"
     );
     assert!(
-        children
+        !children
             .iter()
-            .any(|child| matches!(child, Inline::Emphasis { .. }))
+            .any(|child| matches!(child, Inline::Link { .. }))
     );
 }
 

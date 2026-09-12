@@ -16,6 +16,7 @@ fn node(kind: NodeKind, text: Option<&str>, offset: Option<&str>) -> Node {
         column: 0,
         flow_epoch: 0,
         table_escape: None,
+        table_source_recovery_safe: false,
         flags: NodeFlags::default(),
         list_kind: None,
         definition_list_style: None,

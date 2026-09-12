@@ -1487,6 +1487,17 @@ mant_mandoc_node_snapshot(struct mant_mandoc_document *document,
 	view->column = source->pos + 1;
 	view->flow_epoch = source->flow_epoch;
 	view->table_escape = source->type == ROFFT_TBL ? source->tbl_escape : -1;
+	if (source->type == ROFFT_TBL && source->span != NULL &&
+	    source->span->pos == TBL_SPAN_DATA) {
+		const struct tbl_dat *dat;
+
+		view->table_source_recovery_safe = 1;
+		for (dat = source->span->first; dat != NULL; dat = dat->next)
+			if (dat->source_safe == 0) {
+				view->table_source_recovery_safe = 0;
+				break;
+			}
+	}
 	view->flags = snapshot_node_flags(source);
 	snapshot_normalized_data(view, source);
 	if (source->type == ROFFT_TBL && source->span != NULL &&

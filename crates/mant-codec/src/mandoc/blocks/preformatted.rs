@@ -219,9 +219,6 @@ impl DisplayFlow<'_, '_> {
     fn append_nodes(&mut self, nodes: &[Node]) {
         let plan = TableEmbeddingPlan::new(nodes, self.context);
         for (index, node) in nodes.iter().enumerate() {
-            if plan.consumes(index) {
-                continue;
-            }
             if self.append_container(node) {
                 self.paragraph_predecessor |= super::super::adjacency::is_logical_sibling(node);
                 continue;

@@ -208,6 +208,7 @@ unsafe fn copy_node(
         column: view.column.try_into().unwrap_or_default(),
         flow_epoch: view.flow_epoch,
         table_escape: u8::try_from(view.table_escape).ok(),
+        table_source_recovery_safe: view.table_source_recovery_safe != 0,
         flags: NodeFlags {
             generated: view.flags & NODE_GENERATED != 0,
             sentence_end: view.flags & NODE_SENTENCE_END != 0,

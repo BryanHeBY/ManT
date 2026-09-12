@@ -97,6 +97,7 @@ struct	tbl_dat {
 	int		  hspans;  /* How many horizontal spans follow. */
 	int		  vspans;  /* How many vertical spans follow. */
 	int		  block;   /* T{ text block T} */
+	unsigned char	  source_safe; /* Input avoided user macro expansion. */
 	enum tbl_datt	  pos;
 };
 

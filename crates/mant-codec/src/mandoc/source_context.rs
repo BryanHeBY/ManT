@@ -23,15 +23,7 @@ pub(super) struct LoweringContext<'a> {
 #[derive(Debug)]
 pub(super) struct TableTextBlock {
     pub(super) source: String,
-    pub(super) start_line: u32,
-    pub(super) end_line: u32,
     pub(super) escape: Option<u8>,
-}
-
-impl TableTextBlock {
-    pub(super) const fn contains_line(&self, line: u32) -> bool {
-        line >= self.start_line && line <= self.end_line
-    }
 }
 
 /// Apply the lexical comment rule that roff executes before handing text to
@@ -182,20 +174,18 @@ impl<'a> LoweringContext<'a> {
             return Vec::new();
         };
         let mut blocks = Vec::new();
-        let mut current = None::<(String, u32)>;
-        for (line_number, line) in source_lines.lines_from(line) {
+        let mut current = None::<String>;
+        for (_, line) in source_lines.lines_from(line) {
             // Interpret tbl's `T{` / `T}` sentinels after roff has removed
             // inline comments.  A comment can follow a real sentinel, while
             // a comment-only request can mention a disabled sentinel without
             // claiming a later text block.
             let (visible_line, _) = roff_line_without_comment(line, escape);
             let trimmed = visible_line.trim_start();
-            if let Some((content, start_line)) = current.as_mut() {
+            if let Some(content) = current.as_mut() {
                 if let Some(remainder) = trimmed.strip_prefix("T}") {
                     blocks.push(TableTextBlock {
                         source: std::mem::take(content),
-                        start_line: *start_line,
-                        end_line: line_number.saturating_sub(1),
                         escape,
                     });
                     current = None;
@@ -206,7 +196,7 @@ impl<'a> LoweringContext<'a> {
                     // Closing the first cell must not hide the next opening
                     // marker carried by the same physical source line.
                     if remainder.trim_end().ends_with("T{") {
-                        current = Some((String::new(), line_number.saturating_add(1)));
+                        current = Some(String::new());
                     }
                 } else {
                     if !content.is_empty() {
@@ -215,7 +205,7 @@ impl<'a> LoweringContext<'a> {
                     content.push_str(line);
                 }
             } else if trimmed.trim_end().ends_with("T{") {
-                current = Some((String::new(), line_number.saturating_add(1)));
+                current = Some(String::new());
             }
         }
         blocks
@@ -278,7 +268,6 @@ mod tests {
             r"escaped\ "
         );
     }
-
     #[test]
     fn table_execution_source_uses_the_native_escape_state_at_the_cell() {
         assert_eq!(

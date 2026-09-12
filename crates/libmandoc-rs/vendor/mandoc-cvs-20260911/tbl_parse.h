@@ -27,4 +27,5 @@ int		 tbl_end(struct tbl_node *, int, int);
 void		 tbl_free(struct tbl_node *);
 void		 tbl_read(struct tbl_node *, int, const char *, int);
 void		 tbl_restart(int, int, struct tbl_node *);
+void		 tbl_set_source_safe(struct tbl_node *, int);
 struct tbl_span	*tbl_span(struct tbl_node *);

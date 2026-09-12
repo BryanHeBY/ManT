@@ -1972,6 +1972,8 @@ roff_parseln(struct roff *r, int ln, struct buf *buf, int *offs, size_t len)
 		return e;
 	}
 	if (r->tbl != NULL && (ctl == 0 || buf->buf[pos] == '\0')) {
+		tbl_set_source_safe(r->tbl,
+		    ctl == 0 && r->mstackpos < 0 && r->control == '\0');
 		tbl_read(r->tbl, ln, buf->buf, ppos);
 		roff_addtbl(r, ln, r->tbl);
 		return e;
@@ -2025,6 +2027,7 @@ roff_req_or_macro(ROFF_ARGS) {
 			pos++;
 		while (buf->buf[pos] == ' ')
 			pos++;
+		tbl_set_source_safe(r->tbl, r->mstackpos < 0 && r->control == '\0');
 		tbl_read(r->tbl, ln, buf->buf, pos);
 		roff_addtbl(r, ln, r->tbl);
 		return ROFF_IGN;

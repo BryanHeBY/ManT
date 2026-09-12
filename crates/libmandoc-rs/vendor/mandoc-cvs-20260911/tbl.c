@@ -104,6 +104,12 @@ tbl_alloc(int pos, int line, struct tbl_node *last_tbl)
 }
 
 void
+tbl_set_source_safe(struct tbl_node *tbl, int source_safe)
+{
+	tbl->source_safe = source_safe;
+}
+
+void
 tbl_free(struct tbl_node *tbl)
 {
 	struct tbl_node	*old_tbl;

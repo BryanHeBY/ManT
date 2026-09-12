@@ -93,6 +93,86 @@ fn tbl_source_recovery_never_replays_a_redefined_macro_outside_native_context() 
 }
 
 #[test]
+fn tbl_source_recovery_requires_native_direct_call_provenance() {
+    let document = parse_manual_bytes(
+        std::path::Path::new("tbl-redefined-manual-reference.1"),
+        b".TH TBL-REDEFINED-MANUAL-REFERENCE 1\n.de MR\nprintf 3\n..\n.SH DESCRIPTION\n.TS\nl.\nT{\n.MR printf 3\nT}\n.TE\n",
+    )
+    .expect("lower a table with a redefined manual-reference macro");
+    let Block::Table { rows, .. } = &document.sections[0].blocks[0] else {
+        panic!("expected one lowered table");
+    };
+    let [Block::Paragraph { children, .. }] = rows[0].cells[0].blocks.as_slice() else {
+        panic!("expected native table paragraph");
+    };
+    assert_eq!(inline_text(children), "printf 3");
+    assert!(
+        !contains_manual_link(children),
+        "a redefined .MR must not fabricate a manual link: {children:?}"
+    );
+}
+
+#[test]
+fn tbl_source_recovery_does_not_reinterpret_text_after_custom_control_change() {
+    let document = parse_manual_bytes(
+        std::path::Path::new("tbl-custom-control.1"),
+        b".TH TBL-CUSTOM-CONTROL 1\n.SH DESCRIPTION\n.cc @\n@TS\nl.\nT{\n@MR printf 3\nT}\n@TE\n",
+    )
+    .expect("lower a table after changing the native control character");
+    let Block::Table { rows, .. } = &document.sections[0].blocks[0] else {
+        panic!("expected one lowered table");
+    };
+    let [Block::Paragraph { children, .. }] = rows[0].cells[0].blocks.as_slice() else {
+        panic!("expected native table paragraph");
+    };
+    assert_eq!(inline_text(children), "printf 3");
+    assert!(!contains_manual_link(children), "{children:?}");
+}
+
+#[test]
+fn tbl_source_recovery_preserves_native_whitespace_from_redefined_macro() {
+    let document = parse_manual_bytes(
+        std::path::Path::new("tbl-redefined-whitespace.1"),
+        b".TH TBL-REDEFINED-WHITESPACE 1\n.de B\nA B\n..\n.SH DESCRIPTION\n.TS\nl.\nT{\n.B AB\nT}\n.TE\n",
+    )
+    .expect("lower a table with a whitespace-producing macro override");
+    let Block::Table { rows, .. } = &document.sections[0].blocks[0] else {
+        panic!("expected one lowered table");
+    };
+    let [Block::Paragraph { children, .. }] = rows[0].cells[0].blocks.as_slice() else {
+        panic!("expected native table paragraph");
+    };
+    assert_eq!(inline_text(children), "A B");
+}
+
+#[test]
+fn declined_tbl_recovery_never_consumes_native_macro_expansion_siblings() {
+    let document = parse_manual_bytes(
+        std::path::Path::new("tbl-appended-macro-sibling.1"),
+        b".TH TBL-APPENDED-MACRO-SIBLING 1\n.am1 B\nADDED_TEXT\n..\n.SH DESCRIPTION\n.TS\nl.\nT{\n.B ORIGINAL_OPERAND\nT}\n.TE\n",
+    )
+    .expect("lower a table with an appended macro body");
+    let text = visible_document_text(&document);
+    assert!(text.contains("ADDED_TEXT"), "{text}");
+    assert!(text.contains("ORIGINAL_OPERAND"), "{text}");
+}
+
+fn contains_manual_link(children: &[Inline]) -> bool {
+    children.iter().any(|inline| match inline {
+        Inline::Link {
+            target: mant_ir::LinkTarget::Manual { .. },
+            ..
+        } => true,
+        Inline::Strong { children }
+        | Inline::Emphasis { children }
+        | Inline::Link { children, .. } => contains_manual_link(children),
+        Inline::Text { .. } | Inline::Code { .. } | Inline::Anchor { .. } | Inline::LineBreak => {
+            false
+        }
+    })
+}
+
+#[test]
 fn tbl_native_field_count_wins_over_raw_tab_characters() {
     let document = parse_manual_bytes(
         std::path::Path::new("tbl-executed-delimiter.1"),
