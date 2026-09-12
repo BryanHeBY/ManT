@@ -115,6 +115,8 @@ EXTERNAL_ROFF_CONTEXT = re.compile(
 )
 ROFF_REQUEST = re.compile(r"^[.'](?P<name>[A-Za-z][A-Za-z0-9]*)(?:[ \t]+(?P<args>.*))?$")
 ROFF_FONT_ESCAPE = re.compile(r"\\f(?:\[[^]]*]|.)")
+TableRow = tuple[tuple[str, ...], ...]
+TableRowPair = tuple[TableRow, TableRow]
 
 TRANSLATION = str.maketrans(
     {
@@ -1025,6 +1027,162 @@ def token_lines(value: str) -> list[list[str]]:
     return lines
 
 
+def source_text_table_rows(source: str | None) -> list[TableRow]:
+    """Return only literal multi-line tbl rows whose cell boundaries survive.
+
+    The fidelity oracle compares words globally, but an ordered n-gram may not
+    cross table cells: terminal tbl output aligns cells horizontally whereas
+    ManT deliberately serializes them with `` | ``.  This is not a tbl parser.
+    It accepts only balanced ``T{``/``T}`` rows, records their visible cell
+    tokens, and declines ordinary tabular syntax or malformed nesting.  The
+    result therefore proves a physical source cell boundary before a phrase is
+    exempted from the continuity probe.
+    """
+    if source is None:
+        return []
+    rows: list[TableRow] = []
+    inside_table = False
+    current_row: list[tuple[str, ...]] = []
+    current_cell: list[str] | None = None
+
+    def finish_cell() -> bool:
+        nonlocal current_cell
+        if current_cell is None:
+            return False
+        current_row.append(source_table_cell_tokens(current_cell))
+        current_cell = None
+        return True
+
+    for raw_line in source.splitlines():
+        stripped = raw_line.strip()
+        if not inside_table:
+            if stripped in {".TS", "'TS"}:
+                inside_table = True
+            continue
+        if stripped in {".TE", "'TE"}:
+            # A malformed or unsupported table is simply not evidence. Other
+            # independent tbl blocks in the same manual may still be exact.
+            current_cell = None
+            current_row = []
+            inside_table = False
+            continue
+        if current_cell is None:
+            if stripped == "T{":
+                current_cell = []
+            continue
+        if not stripped.startswith("T}"):
+            current_cell.append(raw_line)
+            continue
+
+        # tbl puts the following raw cells and/or another multi-line cell on
+        # the same physical line, for example ``T}\t(1<<1)\tclient\tT{`` or
+        # ``T}@T{``.  Splitting only the explicit tab/@ separators preserves
+        # the row's source-owned cell boundary without executing tbl layout.
+        if not finish_cell():
+            current_row = []
+            continue
+        suffix = stripped[2:]
+        next_cell = suffix.endswith("T{")
+        raw_cells = suffix[:-2] if next_cell else suffix
+        # Literal raw cells are tab-separated in the common tbl dialect; `@`
+        # is a source-selected separator in rclone's tables.  An exotic row
+        # simply fails the exact output-row equality below, so accepting this
+        # lexical split cannot exempt a non-matching display row.
+        for raw_cell in raw_cells.replace("@", "\t").split("\t"):
+            if raw_cell:
+                current_row.append(source_table_cell_tokens([raw_cell]))
+        if next_cell:
+            current_cell = []
+            continue
+        if not suffix:
+            rows.append(tuple(current_row))
+            current_row = []
+            continue
+        rows.append(tuple(current_row))
+        current_row = []
+    # An unfinished final table is not useful, but previously complete rows
+    # remain exact independent evidence.
+    return rows
+
+
+def source_table_cell_tokens(lines: Sequence[str]) -> tuple[str, ...]:
+    """Normalise the literal payload of one conservative ``T{`` cell."""
+    visible = []
+    for line in lines:
+        match = ROFF_REQUEST.fullmatch(line)
+        if match is not None:
+            request = match.group("name")
+            arguments = match.group("args") or ""
+            # These controls own no text. Other inline macro operands remain
+            # useful as anchors, even though this source lens does not execute
+            # their font or spacing state.
+            if request in {"br", "sp"}:
+                continue
+            visible.append(arguments)
+            continue
+        visible.append(line)
+    value = "\n".join(visible)
+    value = ROFF_FONT_ESCAPE.sub("", value)
+    value = value.replace(r"\&", "").replace(r"\~", " ").replace(r"\-", "-")
+    return tuple(token_key(token) for token in tokens(value))
+
+
+def portable_table_row_pairs(
+    source: str | None, mant: str
+) -> list[TableRowPair]:
+    """Bind ManT `` | `` rows to exact, literal source-table rows.
+
+    A literal pipe in prose or code is not a table. Require every displayed
+    cell to have the exact same normalised token sequence as one source ``T{``
+    row before using it as phrase-boundary evidence.
+    """
+    source_rows = source_text_table_rows(source)
+    if not source_rows:
+        return []
+    output = strip_terminal_formatting(mant).translate(TRANSLATION)
+    rows = []
+    for line in output.splitlines():
+        if " | " not in line:
+            continue
+        portable = tuple(
+            tuple(token_key(token) for token in tokens(cell))
+            for cell in line.split(" | ")
+        )
+        if not portable:
+            continue
+        for source_row in source_rows:
+            if portable == source_row:
+                rows.append((source_row, portable))
+                break
+    return rows
+
+
+def phrase_crosses_table_cells(
+    phrase: Sequence[str], cells: Sequence[Sequence[str]]
+) -> bool:
+    """Whether one ordered phrase is a subsequence spanning table cells."""
+    cell_index = 0
+    token_index = 0
+    visited: set[int] = set()
+    for wanted in (token_key(token) for token in phrase):
+        while cell_index < len(cells):
+            cell = cells[cell_index]
+            while token_index < len(cell):
+                if cell[token_index] == wanted:
+                    visited.add(cell_index)
+                    token_index += 1
+                    break
+                token_index += 1
+            else:
+                cell_index += 1
+                token_index = 0
+                continue
+            break
+        else:
+            return False
+    return len(visited) > 1
+
+
 def labeled_mdoc_links(source: str) -> list[tuple[tuple[str, ...], tuple[str, ...]]]:
     """Return ``.Lk`` destinations whose authored label remains visible.
 
@@ -1467,7 +1625,8 @@ def appears_with_small_insertions(
 
 
 def broken_phrase_candidates(
-    reference_lines: Sequence[Sequence[str]], mine: Sequence[str], width: int
+    reference_lines: Sequence[Sequence[str]], mine: Sequence[str], width: int,
+    table_rows: Sequence[TableRowPair] = (),
 ) -> list[str]:
     if len(mine) < width:
         return []
@@ -1488,6 +1647,11 @@ def broken_phrase_candidates(
                 or key in seen
                 or not all(value in mine_tokens for value in key)
                 or appears_with_small_insertions(key, mine_keys)
+                or any(
+                    phrase_crosses_table_cells(key, source_row)
+                    and phrase_crosses_table_cells(key, portable_row)
+                    for source_row, portable_row in table_rows
+                )
             ):
                 continue
             output.append(" ".join(display))
@@ -2067,6 +2231,7 @@ def compare_rendered(
     No ledger policy or interpretation differs from ``audit_page``.
     """
     reference_output = strip_reference_chrome(reference_output)
+    source_text = raw_source.decode("utf-8", errors="replace") if raw_source is not None else None
     reference_lines = token_lines(reference_output)
     if reference_kind == "mandoc" and raw_source is not None:
         reference_lines = omit_mandoc_labeled_link_destinations(
@@ -2105,8 +2270,12 @@ def compare_rendered(
         )
 
     missing = missing_token_candidates(reference_tokens, mant_tokens)
-    phrases = broken_phrase_candidates(reference_lines, mant_tokens, ngram)
-    source_text = raw_source.decode("utf-8", errors="replace") if raw_source is not None else None
+    phrases = broken_phrase_candidates(
+        reference_lines,
+        mant_tokens,
+        ngram,
+        portable_table_row_pairs(source_text, mant_output),
+    )
     hard_signatures, review_signatures = fidelity_signatures(mant_output, source_text)
     if raw_source is not None:
         review_signatures.extend(
@@ -2507,6 +2676,50 @@ def self_check() -> None:
         ["one", "two", "four", "elsewhere", "three"],
         4,
     ) == ["one two three four"]
+    literal_table_source = """.TS
+l l.
+T{
+alpha beta
+T}@T{
+gamma delta
+T}
+.TE
+"""
+    literal_table_rows = portable_table_row_pairs(
+        literal_table_source,
+        "alpha beta | gamma delta\n",
+    )
+    assert len(literal_table_rows) == 1
+    assert broken_phrase_candidates(
+        [["alpha", "beta", "gamma", "delta"]],
+        ["alpha", "beta", "delta", "elsewhere", "gamma"],
+        4,
+        literal_table_rows,
+    ) == []
+    # A page that merely contains a tbl request cannot exempt an unrelated
+    # literal pipe in source code: no exact source-table row binds it.
+    assert portable_table_row_pairs(
+        literal_table_source,
+        "alpha beta | ordinary code\n",
+    ) == []
+    mixed_table_source = """.TS
+l l l l.
+T{
+alpha
+T}\t1\tbeta\tT{
+gamma
+T}
+.TE
+"""
+    assert portable_table_row_pairs(
+        mixed_table_source,
+        "alpha | (1) | beta | gamma\n",
+    ) == [
+        (
+            (("alpha",), (), ("beta",), ("gamma",)),
+            (("alpha",), (), ("beta",), ("gamma",)),
+        )
+    ]
     # CVS tbl_term.c emits a U+2502 frame between physical cells. The global
     # token comparison still observes both cells; phrase ordering must not
     # borrow that renderer-owned geometry as a missing-content claim.
