@@ -119,17 +119,23 @@ _GROFF_CHARACTER_MUTATORS = {
 _EQN_OPEN = re.compile(r"^[.']EQ(?:[ \t]+.*)?$")
 _EQN_CLOSE = re.compile(r"^[.']EN(?:[ \t]+.*)?$")
 _EQN_LITERAL_SUBSCRIPT = re.compile(
-    r"(?<![^ \t])(?P<base>[A-Za-z][A-Za-z0-9_.-]*)[ \t]+sub[ \t]+"
-    r"(?P<sub>[A-Za-z0-9][A-Za-z0-9_.-]*)(?![^ \t])"
+    r"(?<![A-Za-z0-9_.-])(?P<base>[A-Za-z][A-Za-z0-9_.-]*)[ \t]+sub[ \t]+"
+    r"(?P<sub>[A-Za-z0-9][A-Za-z0-9_.-]*)(?![A-Za-z0-9_.-])"
 )
 _EQN_LITERAL_FRACTION = re.compile(
-    r"(?<![^ \t])(?P<numerator>[A-Za-z][A-Za-z0-9_.-]*)[ \t]+over[ \t]+"
-    r"(?P<denominator>[A-Za-z0-9][A-Za-z0-9_.-]*)(?![^ \t])"
+    r"(?<![A-Za-z0-9_.-])(?P<numerator>[A-Za-z][A-Za-z0-9_.-]*)[ \t]+over[ \t]+"
+    r"(?P<denominator>[A-Za-z0-9][A-Za-z0-9_.-]*)(?![A-Za-z0-9_.-])"
 )
 _EQN_LITERAL_BRACED_FROM = re.compile(
-    r"(?<![^ \t])(?P<base>[A-Za-z][A-Za-z0-9_.-]*)[ \t]+from[ \t]+"
-    r"\{[^{}\n]+\}(?![^ \t])"
+    r"(?<![A-Za-z0-9_.-])(?P<base>[A-Za-z][A-Za-z0-9_.-]*)[ \t]+from[ \t]+"
+    r"\{[^{}\n]+\}(?![A-Za-z0-9_.-])"
 )
+_EQN_LITERAL_LDOTS = re.compile(r"(?<![A-Za-z0-9_.-])ldots(?![A-Za-z0-9_.-])")
+# CVS eqn.c's static eqnsyms table turns these literal operands into the
+# corresponding named roff character before eqn_term.c applies positional
+# rendering. Keep the source model deliberately small: it resolves only the
+# operands needed to establish a complete, otherwise lexical relation proof.
+_EQN_LITERAL_SYMBOLS = {"pi": "π", "PI": "Π"}
 _EQN_DYNAMIC_WORDS = {"define", "delim", "gfont", "gsize", "include", "ifdef", "if"}
 _DYNAMIC_ESCAPE = re.compile(r"\\(?:\*|n|g|V|\$)")
 _AUDIT_DYNAMIC_REQUESTS = {
@@ -222,8 +228,8 @@ def _literal_eqn_relation_spellings(source: str) -> Counter[tuple[str, str]] | N
     with explicit copyable spacing.  Both block equations and inline equations
     activated by a literal ``.EQ delim XY .EN`` setting are safe evidence;
     bare punctuation is never treated as eqn.  This is not an interpreter:
-    only simple word operands are accepted, and a dynamic eqn request declines
-    the complete source proof.
+    only simple word operands and the GNU ``ldots`` token are accepted, and a
+    dynamic eqn request declines the complete source proof.
     """
     spellings: Counter[tuple[str, str]] = Counter()
     in_block = False
@@ -239,14 +245,18 @@ def _literal_eqn_relation_spellings(source: str) -> Counter[tuple[str, str]] | N
             if words and words[0].lower() in _EQN_DYNAMIC_WORDS:
                 return False
             for match in _EQN_LITERAL_SUBSCRIPT.finditer(expression):
+                base = _EQN_LITERAL_SYMBOLS.get(match['base'], match['base'])
+                sub = _EQN_LITERAL_SYMBOLS.get(match['sub'], match['sub'])
                 spellings[(
-                    f"{match['base']}_{match['sub']}",
-                    f"{match['base']} _ {match['sub']}",
+                    f"{base}_{sub}",
+                    f"{base} _ {sub}",
                 )] += 1
             for match in _EQN_LITERAL_FRACTION.finditer(expression):
+                numerator = _EQN_LITERAL_SYMBOLS.get(match['numerator'], match['numerator'])
+                denominator = _EQN_LITERAL_SYMBOLS.get(match['denominator'], match['denominator'])
                 spellings[(
-                    f"{match['numerator']}/{match['denominator']}",
-                    f"{match['numerator']} / {match['denominator']}",
+                    f"{numerator}/{denominator}",
+                    f"{numerator} / {denominator}",
                 )] += 1
             for match in _EQN_LITERAL_BRACED_FROM.finditer(expression):
                 # The terminal tokenization of a braced lower limit is
@@ -255,7 +265,14 @@ def _literal_eqn_relation_spellings(source: str) -> Counter[tuple[str, str]] | N
                 # We do not interpret that operand; the balanced braces are
                 # merely the source fact that makes this attached marker an
                 # eqn `from` relation rather than ordinary prose.
-                spellings[(f"{match['base']}_", f"{match['base']} _")] += 1
+                base = _EQN_LITERAL_SYMBOLS.get(match['base'], match['base'])
+                spellings[(f"{base}_", f"{base} _")] += 1
+            # This is intentionally not a general prose normalization.
+            # libmandoc's terminal renderer preserves the GNU token while
+            # ManT's bounded owned-AST snapshot intentionally emits the
+            # conventional copyable spelling.  The surrounding literal eqn
+            # context and the exact inventories below keep that choice local.
+            spellings[("ldots", "...")] += len(_EQN_LITERAL_LDOTS.findall(expression))
         return True
 
     for raw in source.splitlines():
@@ -920,13 +937,19 @@ def _source_consistent_compatibility_projection(reference: str, mant: str,
     # ManT deliberately exposes the same parsed relations in a copyable
     # textual form. Demand full inventories on both sides so an unrelated
     # identifier cannot borrow a proof from a literal equation context.
-    if eqn_relations is not None and all(
-            projected_reference.count(reference_spelling) == limit
-            and projected_mant.count(mant_spelling) == limit
-            for (reference_spelling, mant_spelling), limit in eqn_relations.items()
-    ):
+    if eqn_relations is not None:
         replacements = 0
         for (reference_spelling, mant_spelling), limit in eqn_relations.items():
+            # A configured inline delimiter can occur inside a tbl cell that
+            # libmandoc deliberately retains as literal table text. Prove
+            # each spelling independently: an unexecuted candidate must not
+            # suppress exact source/reference/product evidence for a separate
+            # executed relation, and an inexact spelling remains untouched.
+            if (
+                projected_reference.count(reference_spelling) != limit
+                or projected_mant.count(mant_spelling) != limit
+            ):
+                continue
             projected_reference, count = _replace_limited(
                 projected_reference, reference_spelling, mant_spelling, limit
             )
@@ -938,7 +961,7 @@ def _source_consistent_compatibility_projection(reference: str, mant: str,
                 "sourceCandidates": sum(eqn_relations.values()),
                 "referenceSpellings": sorted({pair[0] for pair in eqn_relations}),
                 "mantSpellings": sorted({pair[1] for pair in eqn_relations}),
-                "reason": "Literal block or configured-inline eqn relations are represented by the same parsed relation: CVS eqn_term.c attaches positional markers while ManT retains explicit copyable spacing.",
+                "reason": "Literal block or configured-inline eqn relations with exact source/reference/product inventories are represented by the same parsed relation: CVS eqn_term.c attaches positional markers while ManT retains explicit copyable spacing.",
             })
 
     column_separators = _literal_mdoc_column_separator_count(source)
