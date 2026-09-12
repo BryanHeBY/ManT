@@ -469,7 +469,11 @@ class ExplanationTests(unittest.TestCase):
         source = '.EQ\ndelim $$\n.EN\n$x sub i$ $pi over 2$\n'
         result = assess_content('x_i\n', 'x _ i\n', source)
         self.assertEqual(result['status'], 'explained')
-        self.assertEqual(result['explanations'][0]['sourceSpellings'], 1)
+        evidence = result['explanations'][0]
+        self.assertEqual(evidence['sourceSpellings'], 1)
+        self.assertEqual(evidence['sourceCandidates'], 2)
+        self.assertEqual(evidence['referenceSpellings'], ['x_i'])
+        self.assertEqual(evidence['mantSpellings'], ['x _ i'])
 
     def test_eqn_subscript_projection_rejects_dynamic_definitions(self):
         source = '.EQ\ndefine x / log sub 2 /\nx\n.EN\n'

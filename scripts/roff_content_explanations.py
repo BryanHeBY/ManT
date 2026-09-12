@@ -272,7 +272,9 @@ def _literal_eqn_relation_spellings(source: str) -> Counter[tuple[str, str]] | N
             # ManT's bounded owned-AST snapshot intentionally emits the
             # conventional copyable spelling.  The surrounding literal eqn
             # context and the exact inventories below keep that choice local.
-            spellings[("ldots", "...")] += len(_EQN_LITERAL_LDOTS.findall(expression))
+            ldots_count = len(_EQN_LITERAL_LDOTS.findall(expression))
+            if ldots_count:
+                spellings[("ldots", "...")] += ldots_count
         return True
 
     for raw in source.splitlines():
@@ -939,6 +941,7 @@ def _source_consistent_compatibility_projection(reference: str, mant: str,
     # identifier cannot borrow a proof from a literal equation context.
     if eqn_relations is not None:
         replacements = 0
+        confirmed_relations: Counter[tuple[str, str]] = Counter()
         for (reference_spelling, mant_spelling), limit in eqn_relations.items():
             # A configured inline delimiter can occur inside a tbl cell that
             # libmandoc deliberately retains as literal table text. Prove
@@ -954,14 +957,16 @@ def _source_consistent_compatibility_projection(reference: str, mant: str,
                 projected_reference, reference_spelling, mant_spelling, limit
             )
             replacements += count
+            if count == limit:
+                confirmed_relations[(reference_spelling, mant_spelling)] = limit
         if replacements:
             evidence.append({
                 "rule": "source-consistent-eqn-linear-relations/v1",
                 "sourceSpellings": replacements,
                 "sourceCandidates": sum(eqn_relations.values()),
-                "referenceSpellings": sorted({pair[0] for pair in eqn_relations}),
-                "mantSpellings": sorted({pair[1] for pair in eqn_relations}),
-                "reason": "Literal block or configured-inline eqn relations with exact source/reference/product inventories are represented by the same parsed relation: CVS eqn_term.c attaches positional markers while ManT retains explicit copyable spacing.",
+                "referenceSpellings": sorted({pair[0] for pair in confirmed_relations}),
+                "mantSpellings": sorted({pair[1] for pair in confirmed_relations}),
+                "reason": "Each reported literal block or configured-inline eqn relation has an exact source/reference/product inventory: CVS eqn_term.c attaches positional markers while ManT retains explicit copyable spacing. Unreported candidates remain in the raw review.",
             })
 
     column_separators = _literal_mdoc_column_separator_count(source)
