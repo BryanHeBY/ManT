@@ -73,7 +73,11 @@ TOKEN = re.compile(r"\w[\w.+:/-]{2,}", re.UNICODE)
 URL_WRAP = re.compile(
     r"(https?://[^\s\n]*/)[ \t]*\n[ \t]*(?=[A-Za-z0-9%_~?&=][^\s\n]*[./_~?&=%-])"
 )
-DEHYPHENATE = re.compile(r"-[ \t]*\n[ \t]*")
+# A terminal soft-wrap hyphen joins two word characters.  Do not join a line
+# merely because it ends in dashes: no-fill tables routinely use operation
+# masks such as -W----, and treating those as soft hyphenation merges the next
+# table row into the mask before fidelity comparison.
+DEHYPHENATE = re.compile(r"(?<=\w)-[ \t]*\n[ \t]*(?=\w)", re.UNICODE)
 BORDERS = re.compile(r"[\u2500-\u257f\u2022\u00b7]")
 ANGLE_LINK = re.compile(r"<((?:https?|mailto):[^<>]{1,4096})>", re.DOTALL)
 # ManT's terminal presentation uses compact Unicode angle brackets for typed
@@ -83,6 +87,10 @@ ANGLE_LINK = re.compile(r"<((?:https?|mailto):[^<>]{1,4096})>", re.DOTALL)
 COMPACT_ANGLE_LINK = re.compile(r"⟨((?:https?|mailto):[^⟨⟩]{1,4096})⟩", re.DOTALL)
 RUNNING_HEADER = re.compile(
     r"^\s*(?P<label>\S+\([^)\s]+\))\s+.+\s+(?P=label)\s*$",
+    re.IGNORECASE,
+)
+TERMINAL_FOOTER = re.compile(
+    r"^\s+.+\s{2,}\S+\([^\)\s]+\)\s*$",
     re.IGNORECASE,
 )
 UNICODE_ESCAPE = re.compile(
@@ -954,6 +962,12 @@ def strip_reference_chrome(value: str) -> str:
     lines = strip_terminal_formatting(value).splitlines()
     visible = [index for index, line in enumerate(lines) if line.strip()]
     if len(visible) >= 3:
+        # CVS termp emits a two-row terminal footer: host or operating-system
+        # text followed by a date/manual label row. The second row identifies
+        # the pair; retaining the preceding host row fabricates a missing
+        # content candidate because ManT has no terminal chrome.
+        if TERMINAL_FOOTER.fullmatch(lines[visible[-1]]):
+            lines[visible[-2]] = ""
         lines[visible[0]] = ""
         lines[visible[-1]] = ""
         for index in visible[:4]:
@@ -2374,6 +2388,10 @@ def self_check() -> None:
     assert strip_reference_chrome(
         "delim $$\nMM2GV(1) General Commands Manual MM2GV(1)\ncontent\nfooter\n"
     ).strip() == "content"
+    assert strip_reference_chrome(
+        "PROBE(1) Commands PROBE(1)\ncontent\nLinux 6.18\n"
+        "   July 3, 2025                  PROBE(1)\n"
+    ).strip() == "content"
     assert normalized_visible_text(
         "read <https://example.test/api/\nversion.3.html> now"
     ) == "read https://example.test/api/version.3.html now"
@@ -2436,6 +2454,7 @@ def self_check() -> None:
     assert token_key("alloca.") == token_key("alloca")
     assert token_key("docs.example/path") != token_key("docs.example")
     assert tokens("one line-\nbreak here") == ["one", "linebreak", "here"]
+    assert tokens("-W----\nZIO_STAGE_ENCRYPT") == ["W----", "ZIO_STAGE_ENCRYPT"]
     assert tokens("Prikaže café 日本語") == ["Prikaže", "café", "日本語"]
     assert tokens("cafe\u0301") == ["café"]
     assert missing_token_candidates(["alpha", "missing"], ["alpha"]) == ["missing"]

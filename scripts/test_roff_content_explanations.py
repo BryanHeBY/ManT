@@ -391,6 +391,21 @@ class ExplanationTests(unittest.TestCase):
             'source-consistent-groff-named-character/v1',
         )
 
+    def test_literal_compact_groff_caron_can_explain_an_unsupported_reference_glyph(self):
+        # groff_char(7) documents the compact vS/vs and vZ/vz spellings. The
+        # source scanner must bind the evidence to this exact whole word, not
+        # to a matching fallback fragment elsewhere in the manual.
+        source = '.TH PROBE 1\nPrika\\(vze\n'
+        result = assess_content('Prikae\n', 'Prikaže\n', source)
+        self.assertEqual(result['status'], 'explained')
+        self.assertEqual(result['explanations'][0]['referenceSpellings'], ['Prikae'])
+        self.assertEqual(result['explanations'][0]['mantSpellings'], ['Prikaže'])
+
+    def test_named_character_projection_ignores_roff_comments(self):
+        source = '.\\" obsolete Prika\\(vze\n.TH PROBE 1\nPrika\\(vze\n'
+        result = assess_content('Prikae\n', 'Prikaže\n', source)
+        self.assertEqual(result['status'], 'explained')
+
     def test_named_character_projection_requires_complete_literal_inventory(self):
         source = '.An Dole\\[vc]ek\n'
         for reference, mant in (
