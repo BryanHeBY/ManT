@@ -35,6 +35,24 @@ Paragraph before a target request.\n\
 }
 
 #[test]
+fn semantic_identity_uses_the_same_composite_glyph_projection_as_visible_text() {
+    let path = std::path::Path::new("semantic-composite-glyph.1");
+    let source = b".TH SEMANTIC-COMPOSITE 1\n\
+.SH OPTIONS\n\
+.TP\n\
+.B A\\z\\o'BC'D\n\
+Description.\n";
+    let document = parse_manual_bytes(path, source).expect("lower term with overstrike glyph");
+    let index = mant_ir::DocumentIndex::build(&document);
+
+    assert!(
+        index.contains("term-ad"),
+        "semantic projection: {document:#?}"
+    );
+    assert!(!index.contains("term-acd"));
+}
+
+#[test]
 fn native_section_ids_ignore_unrelated_section_insertions() {
     let mut original = LoweringContext::new(None, None);
     let original_name = original.section_id("NAME");

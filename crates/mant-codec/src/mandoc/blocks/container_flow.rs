@@ -6,7 +6,7 @@ impl super::BlockLowerer<'_, '_> {
         if !crate::mandoc::containers::is_container(node) {
             return false;
         }
-        if node.macro_name.as_deref() != Some("Bf")
+        if !matches!(node.macro_name.as_deref(), Some("Bf" | "Bk"))
             && !crate::mandoc::containers::has_structural_payload(node)
         {
             return false;
@@ -37,6 +37,18 @@ impl super::BlockLowerer<'_, '_> {
                         self.formatter.font.pop_scope(saved);
                     }
                 }
+                Event::EnterKeep => {
+                    self.state
+                        .push_inline_with(source_span(node), false, false, |builder| {
+                            builder.enter_keep_words();
+                        });
+                }
+                Event::ExitKeep => {
+                    self.state
+                        .push_inline_with(source_span(node), false, false, |builder| {
+                            builder.exit_keep_words();
+                        });
+                }
                 event => self
                     .state
                     .push_inline_with(source_span(node), false, false, |builder| {
@@ -45,7 +57,7 @@ impl super::BlockLowerer<'_, '_> {
                             Event::Glyph(value) => builder.append_text(&value),
                             Event::Tight => builder.tighten_next_boundary(),
                             Event::Release => builder.release_next_boundary(),
-                            Event::EmptyWord => builder.append_word(Vec::new()),
+                            Event::EmptyWord => builder.execute_empty_word(),
                             _ => unreachable!("container children and font scopes handled above"),
                         }
                     }),

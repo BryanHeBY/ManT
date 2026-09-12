@@ -18,6 +18,8 @@ pub(super) enum Event<'a> {
     Tight,
     Release,
     EmptyWord,
+    EnterKeep,
+    ExitKeep,
     EnterFont(RoffFont),
     ExitFont,
 }
@@ -46,31 +48,42 @@ pub(super) fn walk(node: &Node, mut emit: impl FnMut(Event<'_>)) -> bool {
                 emit(Event::ExitFont);
             }
         }
-        Some("Bk") => emit(Event::Children(body)),
+        Some("Bk") => {
+            emit(Event::EnterKeep);
+            emit(Event::Children(body));
+            emit(Event::ExitKeep);
+        }
         Some("ce" | "rj") => aligned_line_payload(node, &mut emit),
         Some("Eo") => authored_enclosure(node, &mut emit),
         name if super::inline::is_enclosure_macro(name) => {
             let marks = node.enclosure.as_ref().map_or_else(
                 || {
-                    enclosure_marks(name.unwrap_or_default())
-                        .map(|(a, b)| (a.to_owned(), b.to_owned()))
+                    if name == Some("En") {
+                        Some((None, None))
+                    } else {
+                        enclosure_marks(name.unwrap_or_default())
+                            .map(|(a, b)| (Some(a.to_owned()), Some(b.to_owned())))
+                    }
                 },
                 |enclosure| {
                     Some((
-                        super::roff_escape::visible_text(&enclosure.opening),
+                        Some(super::roff_escape::visible_text(&enclosure.opening)),
                         enclosure
                             .closing
                             .as_deref()
-                            .map(super::roff_escape::visible_text)
-                            .unwrap_or_default(),
+                            .map(super::roff_escape::visible_text),
                     ))
                 },
             );
             let Some((open, close)) = marks else {
                 return false;
             };
-            if !open.is_empty() {
-                emit(Event::Glyph(open));
+            if let Some(open) = open {
+                if open.is_empty() {
+                    emit(Event::EmptyWord);
+                } else {
+                    emit(Event::Glyph(open));
+                }
                 emit(Event::Tight);
             }
             let children = node
@@ -79,9 +92,17 @@ pub(super) fn walk(node: &Node, mut emit: impl FnMut(Event<'_>)) -> bool {
                 .find(|child| child.kind == NodeKind::Body)
                 .map_or(node.children.as_slice(), |body| body.children.as_slice());
             emit(Event::Children(children));
-            if !close.is_empty() {
+            if let Some(close) = close {
                 emit(Event::Tight);
-                emit(Event::Glyph(close));
+                if close.is_empty() {
+                    emit(Event::EmptyWord);
+                } else {
+                    emit(Event::Glyph(close));
+                }
+            } else {
+                // An absent obsolete `.Es` closing delimiter emits no word,
+                // but mdoc_term.c still releases TERMP_NOSPACE after `.En`.
+                emit(Event::Release);
             }
             if node
                 .children

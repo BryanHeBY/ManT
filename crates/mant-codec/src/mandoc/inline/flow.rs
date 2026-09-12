@@ -11,6 +11,8 @@ pub(in crate::mandoc) struct InlineBuilder {
     has_printable_content: bool,
     empty_word: bool,
     pending_word_spaces: usize,
+    word_end_break: WordEndBreak,
+    keep: KeepState,
     pub(in crate::mandoc) font: FontState,
     pub(in crate::mandoc) zero_advance: ZeroAdvanceState,
     // A nested inline scope can resolve a `\\z` glyph that was armed by its
@@ -25,6 +27,7 @@ pub(in crate::mandoc) struct InlineBuilder {
     // releases the next formatter word.  ParagraphFlow consumes only this
     // post-execution result.
     final_word_join: Option<bool>,
+    final_source_continuation: Option<bool>,
 }
 
 /// A checkpoint for output that may be semantically annotated or discarded
@@ -39,7 +42,23 @@ pub(in crate::mandoc) struct OutputCheckpoint {
     has_printable_content: bool,
     empty_word: bool,
     pending_word_spaces: usize,
+    word_end_break: WordEndBreak,
+    keep: KeepState,
     source_cursor: Option<super::source_cursor::SourceCursor>,
+    final_word_join: Option<bool>,
+    final_source_continuation: Option<bool>,
+}
+
+/// Formatter execution state that crosses a private presentation scope.
+/// Keeping these facts together prevents an atomic wrapper from preserving
+/// zero-advance state while silently dropping a word-end break or final
+/// source-line decision.
+pub(in crate::mandoc) struct PreservedInlineState {
+    pub(in crate::mandoc) zero_advance: ZeroAdvanceState,
+    pub(in crate::mandoc) zero_advance_joined: bool,
+    pub(in crate::mandoc) word_end_break: bool,
+    pub(in crate::mandoc) final_word_join: Option<bool>,
+    pub(in crate::mandoc) final_source_continuation: Option<bool>,
 }
 
 /// Roff remembers the previous selection independently of the current font.
@@ -85,11 +104,17 @@ enum PendingBoundary {
     Tight,
     PrefixJoin,
     Preserved,
+    Continued,
+    Kept,
 }
 
 impl PendingBoundary {
     const fn is_tight(self) -> bool {
         matches!(self, Self::Tight | Self::PrefixJoin)
+    }
+
+    const fn is_nonbreaking(self) -> bool {
+        self.is_tight() || matches!(self, Self::Kept)
     }
 }
 
@@ -97,6 +122,33 @@ impl PendingBoundary {
 enum SpacingMode {
     Enabled,
     Disabled,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum WordEndBreak {
+    Clear,
+    Pending,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct KeepState {
+    depth: usize,
+    source_line: Option<u32>,
+    crossed_source_line: bool,
+}
+
+impl KeepState {
+    const fn new() -> Self {
+        Self {
+            depth: 0,
+            source_line: None,
+            crossed_source_line: false,
+        }
+    }
+
+    const fn active(self) -> bool {
+        self.depth > 0
+    }
 }
 
 impl SpacingMode {
@@ -144,11 +196,14 @@ impl InlineBuilder {
             has_printable_content: false,
             empty_word: false,
             pending_word_spaces: 0,
+            word_end_break: WordEndBreak::Clear,
+            keep: KeepState::new(),
             font: FontState::new(),
             zero_advance: ZeroAdvanceState::new(),
             zero_advance_joined: false,
             source_cursor: None,
             final_word_join: None,
+            final_source_continuation: None,
         }
     }
 
@@ -161,16 +216,27 @@ impl InlineBuilder {
             has_printable_content: false,
             empty_word: false,
             pending_word_spaces: 0,
+            word_end_break: WordEndBreak::Clear,
+            keep: KeepState::new(),
             font: FontState::new(),
             zero_advance: ZeroAdvanceState::new(),
             zero_advance_joined: false,
             source_cursor: None,
             final_word_join: None,
+            final_source_continuation: None,
         }
     }
 
     pub(in crate::mandoc) fn tighten_next_boundary(&mut self) {
         self.boundary = PendingBoundary::Tight;
+    }
+
+    pub(in crate::mandoc) fn request_word_end_break(&mut self) {
+        self.word_end_break = WordEndBreak::Pending;
+    }
+
+    pub(in crate::mandoc) fn take_word_end_break(&mut self) -> bool {
+        std::mem::replace(&mut self.word_end_break, WordEndBreak::Clear) == WordEndBreak::Pending
     }
 
     pub(in crate::mandoc) fn note_zero_advance_join(&mut self) {
@@ -182,6 +248,11 @@ impl InlineBuilder {
     }
 
     pub(in crate::mandoc) fn begin_executed_node(&mut self, node: &libmandoc_rs::Node) {
+        if self.keep.active() && node.flags.line_start {
+            let crossed_keep_line = self.keep.source_line.is_some_and(|line| line != node.line);
+            self.keep.crossed_source_line |= crossed_keep_line;
+            self.keep.source_line = Some(node.line);
+        }
         if node.flags.line_start
             && let Some(cursor) = &mut self.source_cursor
         {
@@ -195,6 +266,7 @@ impl InlineBuilder {
     /// descriptive label before the URI stored as its first child.
     pub(in crate::mandoc) fn begin_source_fragment(&mut self) {
         self.final_word_join = None;
+        self.final_source_continuation = None;
     }
 
     pub(in crate::mandoc) fn final_word_join_or(&self, fallback: bool) -> bool {
@@ -206,10 +278,15 @@ impl InlineBuilder {
             cursor.continue_line(continued);
         }
         self.final_word_join = Some(continued);
+        self.final_source_continuation = Some(continued);
     }
 
     pub(in crate::mandoc) fn final_word_join_state(&self) -> Option<bool> {
         self.final_word_join
+    }
+
+    pub(in crate::mandoc) fn final_source_continuation_or(&self, fallback: bool) -> bool {
+        self.final_source_continuation.unwrap_or(fallback)
     }
 
     /// Adopt the already-executed tail result from a private formatter scope.
@@ -220,8 +297,41 @@ impl InlineBuilder {
         self.final_word_join = result;
     }
 
+    pub(in crate::mandoc) fn inherit_execution_state(&mut self, state: PreservedInlineState) {
+        self.zero_advance = state.zero_advance;
+        self.word_end_break =
+            if state.word_end_break || self.word_end_break == WordEndBreak::Pending {
+                WordEndBreak::Pending
+            } else {
+                WordEndBreak::Clear
+            };
+        self.final_word_join = state.final_word_join;
+        self.final_source_continuation = state.final_source_continuation;
+        if state.zero_advance_joined {
+            self.tighten_next_boundary();
+            self.note_zero_advance_join();
+        }
+    }
+
     pub(in crate::mandoc) fn transfer_source_cursor(&mut self, next: &mut Self) {
         next.source_cursor = self.source_cursor.take();
+    }
+
+    /// Execute a source operand whose formatter order differs from its AST
+    /// order without inventing a second physical row. `.Lk` renders its label
+    /// before the URI even though the URI is the first source child. Explicit
+    /// `\\p` output and the operand's final continuation still survive.
+    pub(in crate::mandoc) fn without_source_node_boundaries(
+        &mut self,
+        execute: impl FnOnce(&mut Self),
+    ) {
+        let cursor = self.source_cursor.take();
+        execute(self);
+        let continued = self.final_source_continuation_or(false);
+        self.source_cursor = cursor;
+        if let Some(cursor) = &mut self.source_cursor {
+            cursor.continue_line(continued);
+        }
     }
 
     pub(in crate::mandoc) fn reset_source_cursor(&mut self) {
@@ -235,11 +345,33 @@ impl InlineBuilder {
         self.final_word_join = Some(false);
     }
 
+    pub(in crate::mandoc) fn enter_keep_words(&mut self) {
+        self.keep.depth = self.keep.depth.saturating_add(1);
+    }
+
+    pub(in crate::mandoc) fn exit_keep_words(&mut self) {
+        self.keep.depth = self.keep.depth.saturating_sub(1);
+        if !self.keep.active() {
+            self.keep.source_line = None;
+            self.keep.crossed_source_line = false;
+        }
+    }
+
     /// Source wrapping is a word boundary even while macro auto-spacing is
     /// disabled. Explicit joins still take precedence over ordinary wrapping.
     pub(in crate::mandoc) fn preserve_source_word_boundary(&mut self) {
         if !self.boundary.is_tight() {
             self.boundary = PendingBoundary::Preserved;
+        }
+    }
+
+    /// Preserve the formatter word boundary released inside a physically
+    /// continued source line.  The incoming word decides whether its own
+    /// leading blank adds a second space; this state must survive a new
+    /// source-fragment reset.
+    pub(in crate::mandoc) fn preserve_continued_boundary(&mut self) {
+        if !self.boundary.is_tight() {
+            self.boundary = PendingBoundary::Continued;
         }
     }
 
@@ -312,7 +444,11 @@ impl InlineBuilder {
             has_printable_content: self.has_printable_content,
             empty_word: self.empty_word,
             pending_word_spaces: self.pending_word_spaces,
+            word_end_break: self.word_end_break,
+            keep: self.keep,
             source_cursor: self.source_cursor.clone(),
+            final_word_join: self.final_word_join,
+            final_source_continuation: self.final_source_continuation,
         }
     }
 
@@ -348,7 +484,11 @@ impl InlineBuilder {
         self.has_printable_content = checkpoint.has_printable_content;
         self.empty_word = checkpoint.empty_word;
         self.pending_word_spaces = checkpoint.pending_word_spaces;
+        self.word_end_break = checkpoint.word_end_break;
+        self.keep = checkpoint.keep;
         self.source_cursor = checkpoint.source_cursor;
+        self.final_word_join = checkpoint.final_word_join;
+        self.final_source_continuation = checkpoint.final_source_continuation;
     }
 
     /// Drop a compactly hidden operand's output while preserving the
@@ -364,13 +504,19 @@ impl InlineBuilder {
         let boundary = self.boundary;
         let source_cursor = self.source_cursor.clone();
         let zero_advance_joined = self.zero_advance_joined;
+        let final_word_join = self.final_word_join;
+        let final_source_continuation = self.final_source_continuation;
+        let word_end_break = self.word_end_break;
         self.discard_output_since(checkpoint);
         self.boundary = boundary;
         self.source_cursor = source_cursor;
         self.zero_advance_joined = zero_advance_joined;
+        self.final_word_join = final_word_join;
+        self.final_source_continuation = final_source_continuation;
+        self.word_end_break = word_end_break;
         // Semantic compaction may replace an operand's glyphs, never its
-        // layout. Native `term_word()` writes an explicit break immediately;
-        // retain that event outside a subsequently visible fallback link so a
+        // layout. A word-end `\\p` is realized by the shared builder; retain
+        // that result outside a subsequently visible fallback link so a
         // cursor that already consumed the source row cannot erase it.
         self.retain_line_breaks(retained_line_breaks);
     }
@@ -394,6 +540,7 @@ impl InlineBuilder {
         self.boundary = PendingBoundary::Ordinary;
         self.empty_word = false;
         self.pending_word_spaces = 0;
+        self.word_end_break = WordEndBreak::Clear;
         if self.has_printable_content && !matches!(self.nodes.last(), Some(Inline::LineBreak)) {
             self.nodes.push(Inline::LineBreak);
             self.last_visible_character = Some('\n');
@@ -402,6 +549,7 @@ impl InlineBuilder {
             cursor.explicit_line_break(false);
         }
         self.final_word_join = Some(false);
+        self.final_source_continuation = Some(false);
     }
 
     pub(in crate::mandoc) fn append(&mut self, mut incoming: Vec<Inline>) {
@@ -425,12 +573,27 @@ impl InlineBuilder {
         self.append_at_boundary(&mut incoming, true, occupies_row);
     }
 
+    pub(in crate::mandoc) fn execute_empty_word(&mut self) {
+        self.begin_word_projection(true);
+        self.append_word(Vec::new());
+    }
+
     /// Generated glyphs use the effective font just like authored text, but
     /// are not reparsed as roff source (names can contain literal escapes).
     pub(in crate::mandoc) fn append_text(&mut self, value: &str) {
+        self.begin_word_projection(!value.is_empty());
+        let kept_zero_boundary = self.boundary == PendingBoundary::Kept
+            && value.chars().next().is_some_and(char::is_whitespace)
+            && self.zero_advance.has_pending_glyph();
         let mut projected = Vec::new();
         self.zero_advance
             .append_generated_text(value, &mut projected, self.font.current);
+        if kept_zero_boundary {
+            // TERMP_KEEP inserts a non-breaking formatter blank.  A pending
+            // BACKBEFORE glyph consumes that cell, so retain the glyph while
+            // suppressing both the virtual blank and ordinary boundary.
+            self.boundary = PendingBoundary::Tight;
+        }
         self.append(projected);
         // Generated formatter words (for example Lk's colon or enclosure
         // delimiters) cannot themselves carry source `\\c`; they consume a
@@ -446,8 +609,63 @@ impl InlineBuilder {
     /// own inter-word space. Tight joins (for example alternating `.BR`
     /// operands) deliberately bypass this transition and overstrike instead.
     pub(in crate::mandoc) fn begin_word_projection(&mut self, next_is_visible: bool) {
+        let continued_word = next_is_visible
+            && self.final_source_continuation_or(false)
+            && !self.boundary.is_tight();
+        if next_is_visible {
+            self.final_word_join = Some(false);
+            self.final_source_continuation = Some(false);
+        }
+        if next_is_visible && self.keep.crossed_source_line {
+            self.keep.crossed_source_line = false;
+            if self.word_end_break == WordEndBreak::Pending
+                && !self.zero_advance.has_pending_glyph()
+            {
+                // A physical input-line boundary inside Bk completes a
+                // pending `\p`, unless TERMP_BACKBEFORE must first be settled
+                // by this formatter word's implicit KEEP blank.
+                self.hard_break();
+            }
+        }
+        if next_is_visible && self.keep.active() && !self.boundary.is_tight() {
+            self.boundary = PendingBoundary::Kept;
+            if let Some(glyph) = self.zero_advance.resolve_at_word_boundary() {
+                // CVS writes TERMP_KEEP's implicit NBRSP before the next
+                // glyph. It settles BACKBEFORE without becoming visible, so
+                // retain the glyph and join the incoming formatter word.
+                self.append_projected(vec![glyph]);
+                self.boundary = PendingBoundary::Tight;
+            }
+        }
+        if next_is_visible
+            && !self.boundary.is_nonbreaking()
+            && self.word_end_break == WordEndBreak::Pending
+            && (self.spacing.enabled()
+                || matches!(
+                    self.boundary,
+                    PendingBoundary::Preserved | PendingBoundary::Continued
+                ))
+        {
+            if let Some(glyph) = self.zero_advance.resolve_at_word_boundary() {
+                // The formatter's automatic word blank settles BACKBEFORE
+                // before a buffered `\\p` can become a line boundary.  Keep
+                // the glyph and join the incoming word at that position.
+                self.append_projected(vec![glyph]);
+                self.boundary = PendingBoundary::Tight;
+            } else {
+                self.hard_break();
+            }
+        }
+        if continued_word && !self.boundary.is_tight() {
+            // TERMP_NONEWLINE suppresses the physical source break while an
+            // `.Ec`-style release permits the normal formatter blank.  An
+            // authored leading blank is retained separately by the incoming
+            // word, producing the two spaces emitted by CVS in both filled
+            // and literal flows.
+            self.boundary = PendingBoundary::Continued;
+        }
         if !next_is_visible
-            || self.boundary.is_tight()
+            || self.boundary.is_nonbreaking()
             || !(self.has_printable_content || self.zero_advance.has_pending_glyph())
             || !(self.spacing.enabled() || matches!(self.boundary, PendingBoundary::Preserved))
         {
@@ -530,6 +748,9 @@ impl InlineBuilder {
                 self.pending_word_spaces = 0;
                 self.empty_word = false;
             }
+            // The previous physical-line decision is consumed before CVS
+            // term_word() clears TERMP_NONEWLINE for the current word.
+            cursor.continue_line(false);
             if empty_row {
                 // Empty executed rows are content, including at a display's
                 // start/end. Do not turn them into inter-word padding.
@@ -543,7 +764,11 @@ impl InlineBuilder {
             }
         }
         let empty_word = word && incoming_first.is_none() && !incoming_has_printable;
-        let add_space = if empty_word || self.empty_word {
+        let add_space = if (matches!(self.boundary, PendingBoundary::Continued)
+            && incoming_first.is_some_and(char::is_whitespace))
+            || empty_word
+            || self.empty_word
+        {
             self.has_printable_content
         } else {
             needs_boundary_space(self.last_visible_character, incoming_first)
@@ -553,14 +778,23 @@ impl InlineBuilder {
             push_text(&mut self.nodes, " ".repeat(self.pending_word_spaces));
             self.pending_word_spaces = 0;
         }
-        if (self.spacing.enabled() || matches!(boundary, PendingBoundary::Preserved))
+        if (self.spacing.enabled()
+            || matches!(
+                boundary,
+                PendingBoundary::Preserved | PendingBoundary::Continued | PendingBoundary::Kept
+            ))
             && !boundary.is_tight()
             && add_space
         {
             if empty_word {
                 // A word boundary is real, but trailing formatter padding
-                // is not authored term content. Materialize at the next glyph.
-                self.pending_word_spaces = self.pending_word_spaces.saturating_add(1);
+                // is not authored term content. Materialize at the next
+                // glyph. When this empty word itself just realized `\p`,
+                // that break delimiter already consumed its leading blank;
+                // only the following word's boundary remains visible.
+                if self.last_visible_character != Some('\n') {
+                    self.pending_word_spaces = self.pending_word_spaces.saturating_add(1);
+                }
             } else {
                 push_text(&mut self.nodes, " ".to_owned());
                 self.last_visible_character = Some(' ');
@@ -593,15 +827,21 @@ impl InlineBuilder {
     /// visible.  CVS mandoc carries its backtracking flags through nested
     /// `term_word()` calls, so the caller must continue the state in the
     /// surrounding inline stream before committing it at a real boundary.
-    pub(in crate::mandoc) fn finish_preserving_zero_advance(
+    pub(in crate::mandoc) fn finish_preserving_execution(
         mut self,
-    ) -> (Vec<Inline>, ZeroAdvanceState, bool) {
-        let zero_advance = std::mem::take(&mut self.zero_advance);
-        let joined = self.zero_advance_joined;
-        (self.finish_nodes(), zero_advance, joined)
+    ) -> (Vec<Inline>, PreservedInlineState) {
+        let state = PreservedInlineState {
+            zero_advance: std::mem::take(&mut self.zero_advance),
+            zero_advance_joined: self.zero_advance_joined,
+            word_end_break: self.word_end_break == WordEndBreak::Pending,
+            final_word_join: self.final_word_join,
+            final_source_continuation: self.final_source_continuation,
+        };
+        (self.finish_nodes(), state)
     }
 
     fn finish_nodes(&mut self) -> Vec<Inline> {
+        self.word_end_break = WordEndBreak::Clear;
         if let Some(cursor) = &self.source_cursor {
             if !cursor.row_occupied()
                 && let Some(last) = self

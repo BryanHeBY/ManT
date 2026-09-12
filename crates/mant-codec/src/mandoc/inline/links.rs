@@ -106,7 +106,9 @@ fn execute_hidden_node(builder: &mut InlineBuilder, node: &Node, default_name: O
     // make the resolved glyph part of the later hidden word.
     builder.begin_word_projection(true);
     let checkpoint = builder.output_checkpoint();
-    append_inline_node(builder, node, default_name);
+    builder.without_source_node_boundaries(|builder| {
+        append_inline_node(builder, node, default_name);
+    });
     builder.discard_output_preserving_execution(checkpoint);
     builder.zero_advance.discard_hidden_pending_glyph();
 }
@@ -213,34 +215,57 @@ fn split_boundary_prefix(mut children: Vec<Inline>) -> (Vec<Inline>, Vec<Inline>
 /// typed destination and lets the label retain its own formatter state.
 fn link_identity_text(source: &str) -> String {
     let mut identity = String::new();
-    let mut discard_next_glyph = false;
+    let mut skip_next_glyph = false;
     for event in decode(source) {
         match event {
             RoffInlineEvent::Text(value) => {
                 for character in value.chars() {
-                    if discard_next_glyph {
-                        discard_next_glyph = false;
+                    if skip_next_glyph {
+                        skip_next_glyph = false;
                     } else {
                         identity.push(character);
                     }
                 }
             }
-            RoffInlineEvent::Glyph(value) | RoffInlineEvent::FallbackGlyph(value) => {
-                if discard_next_glyph {
-                    discard_next_glyph = false;
+            RoffInlineEvent::Glyph(value) => {
+                if skip_next_glyph {
+                    skip_next_glyph = false;
                 } else {
                     identity.push_str(&value);
                 }
             }
-            RoffInlineEvent::ZeroAdvance => discard_next_glyph = true,
-            RoffInlineEvent::Font(_)
-            | RoffInlineEvent::PreviousFont
-            | RoffInlineEvent::ZeroWidthGlyph
+            RoffInlineEvent::FallbackGlyph(_) => {
+                // Unknown and out-of-range glyphs have no HTML codepoint.
+                // They remain readable in terminal prose but are omitted by
+                // CVS `print_encode(..., norecurse=1)` when building hrefs.
+                skip_next_glyph = false;
+            }
+            RoffInlineEvent::DeviceName => {
+                if skip_next_glyph {
+                    skip_next_glyph = false;
+                } else {
+                    identity.push_str("html");
+                }
+            }
+            RoffInlineEvent::Overstrike { source, .. } => {
+                if skip_next_glyph {
+                    skip_next_glyph = false;
+                } else if let Some(character) = source.chars().next_back() {
+                    identity.push(character);
+                }
+            }
+            RoffInlineEvent::ZeroAdvance => skip_next_glyph = true,
+            // CVS HTML_SKIPCHAR survives font changes, but every other
+            // formatter escape consumes the pending skip before a later
+            // address glyph. In particular, `\\z\\c` must not delete the
+            // first character following `\\c` from a typed target.
+            RoffInlineEvent::Font(_) | RoffInlineEvent::PreviousFont => {}
+            RoffInlineEvent::ZeroWidthGlyph
             | RoffInlineEvent::Link(_)
             | RoffInlineEvent::EmptyDestination
             | RoffInlineEvent::LineBreak
             | RoffInlineEvent::NoSpace
-            | RoffInlineEvent::Presentation { .. } => {}
+            | RoffInlineEvent::Presentation { .. } => skip_next_glyph = false,
         }
     }
     identity

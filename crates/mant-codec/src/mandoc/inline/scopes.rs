@@ -42,7 +42,9 @@ pub(super) fn append(builder: &mut InlineBuilder, node: &Node, name: Option<&str
             Event::Glyph(value) => builder.append_text(&value),
             Event::Tight => builder.tighten_next_boundary(),
             Event::Release => builder.release_next_boundary(),
-            Event::EmptyWord => builder.append_word(Vec::new()),
+            Event::EmptyWord => builder.execute_empty_word(),
+            Event::EnterKeep => builder.enter_keep_words(),
+            Event::ExitKeep => builder.exit_keep_words(),
             Event::EnterFont(font) => saved_font = Some(builder.font.push_scope(font)),
             Event::ExitFont => {
                 if let Some(saved) = saved_font.take() {

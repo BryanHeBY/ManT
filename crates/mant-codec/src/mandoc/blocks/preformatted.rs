@@ -108,7 +108,9 @@ impl DisplayFlow<'_, '_> {
                 }
                 Event::Tight => self.line.tighten_next_boundary(),
                 Event::Release => self.line.release_next_boundary(),
-                Event::EmptyWord => self.line.append_word(Vec::new()),
+                Event::EmptyWord => self.line.execute_empty_word(),
+                Event::EnterKeep => self.line.enter_keep_words(),
+                Event::ExitKeep => self.line.exit_keep_words(),
                 Event::EnterFont(font) => saved_font = Some(self.line.font.push_scope(font)),
                 Event::ExitFont => {
                     if let Some(saved) = saved_font.take() {

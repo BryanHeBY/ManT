@@ -59,6 +59,15 @@ pub(super) enum RoffInlineEvent {
     /// be made into a terminal `\\z` glyph because no output glyph exists to
     /// overstrike.
     FallbackGlyph(String),
+    /// The formatter's current output-device name. Terminal and HTML
+    /// projections intentionally spell this differently (`utf8` vs `html`).
+    DeviceName,
+    /// A roff overstrike request. Terminal geometry is outside the IR, but
+    /// HTML link identities retain its final source glyph.
+    Overstrike {
+        source: String,
+        terminal: Option<String>,
+    },
     /// `\\z` makes the next complete glyph zero-advance. The decoder keeps
     /// decoding that glyph and every intervening formatter control; the
     /// cross-node projection decides whether a later glyph overstrikes it.
@@ -82,6 +91,76 @@ pub(super) enum RoffInlineEvent {
         kind: PresentationKind,
         argument: Option<String>,
     },
+}
+
+/// Formatter-neutral core of CVS `TERMP_BACKAFTER`/`TERMP_BACKBEFORE`.
+///
+/// Styled terminal output and plain semantic text both use this state so a
+/// target/name projection cannot disagree with the visible document about
+/// which complete glyph survives `\z`.
+pub(super) struct ZeroAdvanceMachine<T> {
+    armed: bool,
+    pending: Option<T>,
+}
+
+impl<T> ZeroAdvanceMachine<T> {
+    pub(super) const fn new() -> Self {
+        Self {
+            armed: false,
+            pending: None,
+        }
+    }
+
+    pub(super) fn arm(&mut self) {
+        self.armed = true;
+    }
+
+    pub(super) const fn is_armed(&self) -> bool {
+        self.armed
+    }
+
+    pub(super) const fn has_pending(&self) -> bool {
+        self.pending.is_some()
+    }
+
+    pub(super) fn cancel_armed(&mut self) -> bool {
+        std::mem::take(&mut self.armed)
+    }
+
+    pub(super) fn project_glyph(&mut self, glyph: T) -> Option<(T, bool)> {
+        if self.armed {
+            self.armed = false;
+            self.pending = Some(glyph);
+            return None;
+        }
+        let replaced_pending = self.pending.take().is_some();
+        Some((glyph, replaced_pending))
+    }
+
+    pub(super) fn project_fallback(&mut self, glyph: T) -> Option<(T, bool)> {
+        if self.cancel_armed() {
+            return None;
+        }
+        let replaced_pending = self.pending.take().is_some();
+        Some((glyph, replaced_pending))
+    }
+
+    pub(super) fn resolve_word_boundary(&mut self) -> Option<T> {
+        (!self.armed).then(|| self.pending.take()).flatten()
+    }
+
+    pub(super) fn take_pending(&mut self) -> Option<T> {
+        self.pending.take()
+    }
+
+    pub(super) fn discard_pending(&mut self) {
+        self.pending = None;
+    }
+
+    pub(super) fn clear(&mut self) {
+        self.armed = false;
+        self.pending = None;
+    }
 }
 
 /// The observable role of one decoded inline event.
@@ -111,6 +190,14 @@ pub(super) fn inline_event_effect(event: &RoffInlineEvent) -> InlineEventEffect 
                 InlineEventEffect::Visible
             }
         }
+        RoffInlineEvent::DeviceName => InlineEventEffect::Visible,
+        RoffInlineEvent::Overstrike { terminal, .. } => {
+            if terminal.is_some() {
+                InlineEventEffect::Visible
+            } else {
+                InlineEventEffect::StateOnly
+            }
+        }
         RoffInlineEvent::ZeroWidthGlyph => InlineEventEffect::RowMarker,
         RoffInlineEvent::LineBreak | RoffInlineEvent::EmptyDestination => {
             InlineEventEffect::LineBoundary
@@ -135,77 +222,159 @@ pub(super) fn decode(source: &str) -> Vec<RoffInlineEvent> {
     Decoder::new(source).decode()
 }
 
-/// Return only the visible characters of a roff-encoded identifier or label.
-pub(super) fn visible_text(source: &str) -> String {
-    let mut output = String::new();
-    let mut zero_advance = false;
-    let mut pending: Option<String> = None;
-    for event in decode(source) {
-        match event {
-            RoffInlineEvent::Text(value) => {
-                for character in value.chars() {
-                    if matches!(character, '\n' | '\r') {
-                        if let Some(glyph) = pending.take() {
-                            output.push_str(&glyph);
-                        }
-                        output.push(character);
-                    } else if zero_advance {
-                        pending = Some(character.to_string());
-                        zero_advance = false;
-                    } else if let Some(glyph) = pending.take() {
-                        if character.is_whitespace() {
-                            output.push_str(&glyph);
-                        } else {
-                            // The following printable glyph overstrikes the
-                            // preceding zero-advance one.
-                            output.push(character);
-                        }
-                    } else {
-                        output.push(character);
+/// CVS terminal overstrike execution skips complete roff escapes inside the
+/// argument and repeatedly writes only literal source glyphs at one cell.
+/// Decode escape boundaries with the shared tokenizer, but retain the final
+/// literal glyph as the renderer-neutral visible cell.
+fn overstrike_terminal_glyph(source: &str) -> Option<String> {
+    let mut decoder = Decoder::new(source);
+    let mut last = None;
+    while decoder.index < decoder.characters.len() {
+        let character = decoder.characters[decoder.index];
+        if character != '\\' {
+            decoder.index += 1;
+            let character = match character {
+                ASCII_BREAK => continue,
+                ASCII_HYPH => '-',
+                ASCII_NBRSP => ' ',
+                other => other,
+            };
+            let mut glyph = String::new();
+            push_terminal_safe(&mut glyph, character);
+            last = Some(glyph);
+            continue;
+        }
+        decoder.index += 1;
+        let Some(mut trigger) = decoder.take_character() else {
+            break;
+        };
+        while trigger == 'E' {
+            let Some(next) = decoder.take_character() else {
+                return last;
+            };
+            trigger = next;
+        }
+        decoder.decode_escape(trigger);
+    }
+    last
+}
+
+struct PlainTextProjection {
+    output: String,
+    zero_advance: ZeroAdvanceMachine<String>,
+    pending_word_end_break: bool,
+    suppress_break_whitespace: bool,
+}
+
+impl PlainTextProjection {
+    const fn new() -> Self {
+        Self {
+            output: String::new(),
+            zero_advance: ZeroAdvanceMachine::new(),
+            pending_word_end_break: false,
+            suppress_break_whitespace: false,
+        }
+    }
+
+    fn append_text(&mut self, value: &str) {
+        for character in value.chars() {
+            if self.pending_word_end_break && character.is_whitespace() {
+                if let Some(glyph) = self.zero_advance.resolve_word_boundary() {
+                    self.output.push_str(&glyph);
+                    self.suppress_break_whitespace = true;
+                    continue;
+                }
+                self.output.push('\n');
+                self.pending_word_end_break = false;
+                self.suppress_break_whitespace = true;
+                continue;
+            }
+            if self.suppress_break_whitespace && character.is_whitespace() {
+                continue;
+            }
+            self.suppress_break_whitespace = false;
+            if matches!(character, '\n' | '\r') {
+                if let Some(glyph) = self.zero_advance.take_pending() {
+                    self.output.push_str(&glyph);
+                }
+                self.output.push(character);
+            } else if self.zero_advance.is_armed() {
+                let _ = self.zero_advance.project_glyph(character.to_string());
+            } else if self.zero_advance.has_pending() {
+                if character.is_whitespace() {
+                    if let Some(glyph) = self.zero_advance.take_pending() {
+                        self.output.push_str(&glyph);
                     }
+                    continue;
                 }
+                let Some((character, _)) = self.zero_advance.project_glyph(character.to_string())
+                else {
+                    continue;
+                };
+                self.output.push_str(&character);
+            } else if let Some((character, _)) =
+                self.zero_advance.project_glyph(character.to_string())
+            {
+                self.output.push_str(&character);
             }
-            RoffInlineEvent::Glyph(value) => {
-                if zero_advance {
-                    pending = Some(value);
-                    zero_advance = false;
-                } else {
-                    // A complete glyph advances to the next source position;
-                    // it therefore replaces any pending zero-advance glyph.
-                    pending = None;
-                    output.push_str(&value);
-                }
-            }
+        }
+    }
+
+    fn append_glyph(&mut self, value: String) {
+        self.suppress_break_whitespace = false;
+        if let Some((value, _)) = self.zero_advance.project_glyph(value) {
+            self.output.push_str(&value);
+        }
+    }
+
+    fn append_event(&mut self, event: RoffInlineEvent) {
+        match event {
+            RoffInlineEvent::Text(value) => self.append_text(&value),
+            RoffInlineEvent::Glyph(value)
+            | RoffInlineEvent::Overstrike {
+                terminal: Some(value),
+                ..
+            } => self.append_glyph(value),
             RoffInlineEvent::FallbackGlyph(value) => {
-                if zero_advance {
-                    zero_advance = false;
-                } else {
-                    output.push_str(&value);
+                if let Some((value, _)) = self.zero_advance.project_fallback(value) {
+                    self.suppress_break_whitespace = false;
+                    self.output.push_str(&value);
                 }
             }
-            RoffInlineEvent::ZeroAdvance => {
-                pending = None;
-                zero_advance = true;
+            RoffInlineEvent::DeviceName => self.append_text("utf8"),
+            RoffInlineEvent::ZeroAdvance => self.zero_advance.arm(),
+            RoffInlineEvent::EmptyDestination => {
+                self.suppress_break_whitespace = false;
+                self.output.push_str("<>");
             }
-            RoffInlineEvent::EmptyDestination => output.push_str("<>"),
-            RoffInlineEvent::LineBreak => {
-                if let Some(glyph) = pending.take() {
-                    output.push_str(&glyph);
-                }
-                output.push('\n');
+            RoffInlineEvent::LineBreak => self.pending_word_end_break = true,
+            RoffInlineEvent::NoSpace => {
+                self.zero_advance.cancel_armed();
             }
             RoffInlineEvent::Font(_)
             | RoffInlineEvent::ZeroWidthGlyph
             | RoffInlineEvent::PreviousFont
             | RoffInlineEvent::Link(_)
-            | RoffInlineEvent::NoSpace
+            | RoffInlineEvent::Overstrike { terminal: None, .. }
             | RoffInlineEvent::Presentation { .. } => {}
         }
     }
-    if let Some(glyph) = pending {
-        output.push_str(&glyph);
+
+    fn finish(mut self) -> String {
+        if let Some(glyph) = self.zero_advance.take_pending() {
+            self.output.push_str(&glyph);
+        }
+        self.output
     }
-    output
+}
+
+/// Return only the visible characters of a roff-encoded identifier or label.
+pub(super) fn visible_text(source: &str) -> String {
+    let mut projection = PlainTextProjection::new();
+    for event in decode(source) {
+        projection.append_event(event);
+    }
+    projection.finish()
 }
 
 struct Decoder {
@@ -304,7 +473,10 @@ impl Decoder {
                 .push_special_character(&trigger.to_string(), NamedCharacterSyntax::TwoCharacter),
             '-' => self.text.push('-'),
             'e' | '\\' => self.text.push('\\'),
-            ' ' | '~' | '0' => self.text.push(' '),
+            // These are formatter glyphs, not breakable source whitespace.
+            // Keeping them as one glyph lets a pending `\\p` pass across the
+            // displayed blank and break only at the next real word boundary.
+            ' ' | '~' | '0' => self.emit(RoffInlineEvent::Glyph(" ".to_owned())),
             'p' => self.emit(RoffInlineEvent::LineBreak),
             // Opaque formatter state supported by mandoc_escape(3). These
             // operands must be consumed even though ManT does not render the
@@ -324,7 +496,7 @@ impl Decoder {
                     // then emits `utf8` (term.c, ESCAPE_DEVICE).  ManT's
                     // renderer is likewise Unicode terminal text, so this is
                     // visible content rather than an opaque string request.
-                    self.text.push_str("utf8");
+                    self.emit(RoffInlineEvent::DeviceName);
                 } else {
                     self.emit(RoffInlineEvent::Presentation {
                         kind: PresentationKind::FormatterState,
@@ -332,7 +504,12 @@ impl Decoder {
                     });
                 }
             }
-            'A' | 'b' | 'D' | 'R' | 'Z' | 'o' => {
+            'o' => {
+                let source = self.take_delimited_argument().unwrap_or_default();
+                let terminal = overstrike_terminal_glyph(&source);
+                self.emit(RoffInlineEvent::Overstrike { source, terminal });
+            }
+            'A' | 'b' | 'D' | 'R' | 'Z' => {
                 let argument = self.take_delimited_argument();
                 self.emit(RoffInlineEvent::Presentation {
                     kind: PresentationKind::Postprocessor,
@@ -414,9 +591,9 @@ impl Decoder {
                 && self.index > start + 1
                 && self.characters.get(self.index - 1) == Some(&delimiter)
         });
-        // mandoc's mchars_num2char accepts only the 8-bit terminal
-        // range. N is a font glyph index, not an arbitrary Unicode
-        // scalar; unsupported/device-dependent indices stay visible.
+        // mandoc's mchars_num2char accepts only the 8-bit terminal range.
+        // Preserve unsupported spellings as a terminal fallback event so a
+        // link-identity projection can still follow CVS HTML and omit them.
         if let Some(number) = argument
             .as_deref()
             .filter(|_| closed)
@@ -424,10 +601,11 @@ impl Decoder {
         {
             push_terminal_safe(&mut self.text, char::from(number));
         } else {
-            self.text.push_str(r"\N");
+            let mut value = String::from(r"\N");
             for character in &self.characters[start..self.index] {
-                push_terminal_safe(&mut self.text, *character);
+                push_terminal_safe(&mut value, *character);
             }
+            self.emit(RoffInlineEvent::FallbackGlyph(value));
         }
     }
 

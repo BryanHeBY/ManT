@@ -253,6 +253,25 @@ fn zero_advance_discards_complete_overstrike_glyphs_without_recursion() {
 }
 
 #[test]
+fn visible_projection_applies_zero_advance_to_composite_formatter_glyphs() {
+    assert_eq!(visible_text(r"A\z\o'BC'D"), "AD");
+    assert_eq!(visible_text(r"A\z\*[.T]D"), "Atf8D");
+    assert_eq!(visible_text(r"A\zX\z\c"), "AX");
+    assert_eq!(visible_text(r"A\zX\[future-glyph]"), r"A\[future-glyph]");
+    assert_eq!(visible_text(r"A\zX\p"), "AX");
+    assert_eq!(visible_text(r"A\pB C"), "AB\nC");
+    assert_eq!(visible_text(r"A\pB   C"), "AB\nC");
+    assert_eq!(visible_text(r"A\zX\p   B"), "AX\nB");
+    assert_eq!(visible_text("A\\pB\nC"), "AB\nC");
+    assert_eq!(visible_text(r"A\pB \(em C"), "AB\n— C");
+    assert_eq!(visible_text(r"A\pB \~ C"), "AB\n  C");
+    assert_eq!(visible_text(r"A\pB \0 C"), "AB\n  C");
+    assert_eq!(visible_text(r"A\pB \o'XY' C"), "AB\nY C");
+    assert_eq!(visible_text(r"A\pB \*[.T] C"), "AB\nutf8 C");
+    assert_eq!(visible_text(r"A\pB \fB C"), "AB\nC");
+}
+
+#[test]
 fn copy_mode_escape_chains_are_decoded_iteratively() {
     let source = format!(r"\E{}fBbold\EfR", "E".repeat(16_384));
 

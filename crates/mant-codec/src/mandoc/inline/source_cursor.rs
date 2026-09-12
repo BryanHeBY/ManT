@@ -59,10 +59,9 @@ impl SourceCursor {
         self.continued = continued;
     }
 
-    /// An inline `\\p`/native break ends the currently occupied output row
-    /// immediately.  The next source node may start a new physical line, but
-    /// it must not manufacture a second break merely because the cursor still
-    /// remembers the row that the explicit request already closed.
+    /// A realized inline `\\p` or native break ends the occupied output row.
+    /// `\\p` itself is held by `InlineBuilder` until a real word boundary;
+    /// once realized, the next source node must not manufacture a second row.
     pub(super) fn explicit_line_break(&mut self, occupies_following_row: bool) {
         self.pending = false;
         self.row = if occupies_following_row {

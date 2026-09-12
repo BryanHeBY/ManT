@@ -90,24 +90,21 @@ pub(super) fn append_inline_node_with_next(
     // scope, otherwise the scope's private builder has no knowledge of the
     // surrounding word boundary and may overprint/drop the glyph.
     let final_word_join_before = builder.final_word_join_state();
-    builder.begin_word_projection(node_emits_visible_output(node, default_name));
     builder.begin_executed_node(node);
+    builder.begin_word_projection(node_emits_visible_output(node, default_name));
     if node.flags.delimiter_close {
         builder.tighten_next_boundary();
     }
     match node.macro_name.as_deref() {
         Some("B" | "I" | "SB" | "R" | "BI" | "BR" | "IB" | "IR" | "RB" | "RI" | "OP") => {
-            let (inlines, joins_preceding_node) = lower_man_font_scope(
+            let (inlines, execution) = lower_man_font_scope(
                 node,
                 default_name,
                 builder.spacing_enabled(),
                 &mut builder.font,
                 &mut builder.zero_advance,
             );
-            if joins_preceding_node {
-                builder.tighten_next_boundary();
-                builder.note_zero_advance_join();
-            }
+            builder.inherit_execution_state(execution);
             builder.append(inlines);
         }
         Some("Ns") => {
@@ -245,27 +242,33 @@ fn append_text_node(builder: &mut InlineBuilder, node: &Node) {
     // before generated enclosure punctuation is emitted. Control *nodes* are
     // routed separately and therefore do not gain this behavior.
     builder.begin_word_projection(true);
-    let (inlines, joins_preceding_node, no_space_consumed_backtrack) =
-        font::parse_roff_text_with_zero_advance(
-            source,
-            &mut builder.font,
-            !node.flags.no_fill,
-            &mut builder.zero_advance,
-        );
+    let pending_word_end_break = builder.take_word_end_break();
+    let execution = font::parse_roff_text_with_zero_advance(
+        source,
+        &mut builder.font,
+        !node.flags.no_fill,
+        &mut builder.zero_advance,
+        pending_word_end_break,
+    );
     // mdoc_term gives an empty text node a vertical row only when the text
     // itself begins an input line. An empty No/Em argument does not, whereas
     // a buffered zero-width glyph (for example \&) still occupies that row.
-    let occupies_literal_row = !inlines.is_empty()
+    let occupies_literal_row = !execution.output.is_empty()
         || (node.flags.line_start && node.text.as_deref().is_some_and(str::is_empty))
         || decode(source)
             .iter()
             .any(|event| matches!(event, RoffInlineEvent::ZeroWidthGlyph));
-    if joins_preceding_node {
+    if execution.joins_preceding_node {
         builder.tighten_next_boundary();
         builder.note_zero_advance_join();
     }
-    builder.append_word_with_literal_row(inlines, occupies_literal_row);
-    let continues_line = node.flags.line_continuation && !no_space_consumed_backtrack;
+    builder.append_word_with_literal_row(execution.output, occupies_literal_row);
+    if execution.pending_word_end_break {
+        builder.request_word_end_break();
+    }
+    let continues_line = execution
+        .source_continuation
+        .unwrap_or(node.flags.line_continuation);
     if node.flags.delimiter_open || continues_line {
         builder.tighten_next_boundary();
     }
@@ -342,16 +345,10 @@ pub(super) fn append_include(builder: &mut InlineBuilder, node: &Node, default_n
     include.font.pop_scope(saved);
     include.tighten_next_boundary();
     include.append_text(">");
-    let final_word_join = include.final_word_join_state();
     let font = include.font;
-    let (nodes, zero_advance, joined) = include.finish_preserving_zero_advance();
+    let (nodes, execution) = include.finish_preserving_execution();
     builder.font = font;
-    builder.zero_advance = zero_advance;
-    builder.inherit_final_word_join(final_word_join);
-    if joined {
-        builder.tighten_next_boundary();
-        builder.note_zero_advance_join();
-    }
+    builder.inherit_execution_state(execution);
     let value = plain_text(&nodes);
     if !value.is_empty() {
         builder.append(vec![Inline::Code { value }]);

@@ -46,17 +46,22 @@ impl ParagraphFlow {
             .last_line
             .zip(source_line)
             .is_some_and(|(previous, current)| current > previous);
-        let boundary = if self.builder.has_tight_boundary() || !crossed_source_line {
-            FilledBoundary::SameLine
-        } else if starts_indented_line {
-            FilledBoundary::LineBreak
-        } else {
-            FilledBoundary::Word
-        };
+        let source_continues = self.builder.final_source_continuation_or(false);
+        let boundary =
+            if self.builder.has_tight_boundary() || source_continues || !crossed_source_line {
+                FilledBoundary::SameLine
+            } else if starts_indented_line {
+                FilledBoundary::LineBreak
+            } else {
+                FilledBoundary::Word
+            };
         if boundary == FilledBoundary::LineBreak {
             self.builder.hard_break();
         } else if boundary == FilledBoundary::Word && ordinary_text {
             self.builder.preserve_source_word_boundary();
+        }
+        if source_continues && !self.builder.has_tight_boundary() {
+            self.builder.preserve_continued_boundary();
         }
         let previous_count = self.builder.node_count();
         self.builder.begin_source_fragment();

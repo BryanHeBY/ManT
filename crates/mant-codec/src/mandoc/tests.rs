@@ -812,6 +812,11 @@ fn inline_execution_keeps_word_joins_glyph_ownership_and_literal_breaks_distinct
             b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal\n.Lk https://example.org\\p label\n.No AFTER\n.Ed\n".as_slice(),
             "label\nAFTER",
         ),
+        (
+            "literal-enclosure-retains-formatter-and-authored-blanks",
+            b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal\n.Eo [\n.No BEFORE\\c\n.Ec\n AFTER\n.Ed\n".as_slice(),
+            "[\nBEFORE  AFTER",
+        ),
     ] {
         let document = parse_manual_bytes(
             std::path::Path::new(&format!("inline-execution-{label}.1")),
@@ -826,6 +831,417 @@ fn inline_execution_keeps_word_joins_glyph_ownership_and_literal_breaks_distinct
             panic!("{label}: expected flow content: {blocks:#?}");
         };
         assert_eq!(inline_text(children), expected, "{label}: {children:?}");
+    }
+}
+
+#[test]
+#[allow(clippy::too_many_lines)]
+fn inline_execution_tracks_zero_advance_word_and_physical_line_states_independently() {
+    let cases = [
+        (
+            "completed-zero-advance-survives-no-space",
+            b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\\zX\\c\n.No AFTER\n".as_slice(),
+            "BEFOREAFTER",
+        ),
+        (
+            "later-no-space-remains-effective",
+            b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\\z\\c\\c\n.No AFTER\n".as_slice(),
+            "BEFOREAFTER",
+        ),
+        (
+            "armed-and-pending-zero-advance-stages-coexist",
+            b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\\zX\\z\\c\n.No AFTER\n".as_slice(),
+            "BEFOREXAFTER",
+        ),
+        (
+            "word-end-break-waits-for-the-complete-word",
+            b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\\pTAIL\n.No AFTER\n".as_slice(),
+            "BEFORETAIL\nAFTER",
+        ),
+        (
+            "word-end-break-crosses-tight-ns-boundary",
+            b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.No A\\pB Ns C\n.No D\n".as_slice(),
+            "ABC\nD",
+        ),
+        (
+            "word-end-break-realizes-inside-a-later-tight-text-node",
+            b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.No A\\p Ns No \"B C\"\n.No D\n".as_slice(),
+            "AB\nC D",
+        ),
+        (
+            "word-end-break-crosses-a-generated-tight-prefix-before-an-inner-space",
+            b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.No A\\p Ns Fl \"B C\"\n.No D\n".as_slice(),
+            "A-B\nC D",
+        ),
+        (
+            "disabled-spacing-defers-word-end-break-to-the-next-inner-space",
+            b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.Sm off\n.No A\\p No \"B C\"\n.Sm on\n.No D\n".as_slice(),
+            "AB\nC D",
+        ),
+        (
+            "word-end-break-stops-at-intra-operand-space",
+            b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.No \"A\\pB C\"\n.No D\n".as_slice(),
+            "AB\nC D",
+        ),
+        (
+            "word-end-break-and-trailing-continuation-remain-orthogonal",
+            b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.No \"A\\p B\\c\"\n.No C\n".as_slice(),
+            "A\nBC",
+        ),
+        (
+            "intra-word-break-does-not-cancel-a-later-continuation",
+            b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.No \"A\\pB C\\c\"\n.No D\n".as_slice(),
+            "AB\nCD",
+        ),
+        (
+            "word-end-break-crosses-unpaddable-space",
+            b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.No \"A\\pB\\ C\"\n.No D\n".as_slice(),
+            "AB C\nD",
+        ),
+        (
+            "word-end-break-crosses-nonbreaking-space",
+            b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.No \"A\\pB\\~C\"\n.No D\n".as_slice(),
+            "AB C\nD",
+        ),
+        (
+            "word-end-break-crosses_fixed-width_space",
+            b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.No \"A\\pB\\0C\"\n.No D\n".as_slice(),
+            "AB C\nD",
+        ),
+        (
+            "projected-glyph-ends-only-the-consumed-break-whitespace-run",
+            b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.No \"A\\pB \\(em C\"\n".as_slice(),
+            "AB\n— C",
+        ),
+        (
+            "nonbreaking-glyph-preserves-the-following-ordinary-blank",
+            b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.No \"A\\pB \\~ C\"\n".as_slice(),
+            "AB\n  C",
+        ),
+        (
+            "fixed-width-glyph-preserves-the-following-ordinary-blank",
+            b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.No \"A\\pB \\0 C\"\n".as_slice(),
+            "AB\n  C",
+        ),
+        (
+            "overstrike-glyph-preserves-the-following-ordinary-blank",
+            b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.No \"A\\pB \\o'XY' C\"\n".as_slice(),
+            "AB\nY C",
+        ),
+        (
+            "device-glyph-preserves-the-following-ordinary-blank",
+            b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.No \"A\\pB \\*[.T] C\"\n".as_slice(),
+            "AB\nutf8 C",
+        ),
+        (
+            "font-state-does-not-end-consumed-break-whitespace",
+            b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.No \"A\\pB \\fB C\"\n".as_slice(),
+            "AB\nC",
+        ),
+        (
+            "repeated-word-end-break-is-idempotent",
+            b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.No A\\p\\pB\n.No C\n".as_slice(),
+            "AB\nC",
+        ),
+        (
+            "word-end-break-and-zero-advance-remain-orthogonal",
+            b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.No A\\p\\zX Ns B\n.No C\n".as_slice(),
+            "AB\nC",
+        ),
+        (
+            "zero-advance-glyph-defers-a-trailing-word-end-break",
+            b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.No A\\zX\\p\n.No D\n.No C\n".as_slice(),
+            "AXD\nC",
+        ),
+        (
+            "word-end-break-before-zero-advance-survives-the-settling-word",
+            b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.No A\\p\\zX\n.No B\n.No C\n".as_slice(),
+            "AXB\nC",
+        ),
+        (
+            "empty-word-settles-zero-advance-before-realizing-word-end-break",
+            b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.No A\\zX\\p\n.No \"\"\n.No B\n.No C\n".as_slice(),
+            "AX\nB C",
+        ),
+        (
+            "empty-word-realizes-word-end-break-with-one-following-boundary",
+            b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.No A\\p\n.No \"\"\n.No B\n.No C\n".as_slice(),
+            "A\n B C",
+        ),
+        (
+            "zero-advance-word-blank-defers-the-word-end-break",
+            b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.No \"A\\zX\\p B\"\n.No D\n".as_slice(),
+            "AXB\nD",
+        ),
+        (
+            "zero-advance-overwrite-keeps-the-word-end-break",
+            b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.No A\\zX\\pB\n.No D\n".as_slice(),
+            "AB\nD",
+        ),
+        (
+            "enclosure-releases-spacing-not-physical-continuation",
+            b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.Eo [\n.No BEFORE\\c\n.Ec\n AFTER\n".as_slice(),
+            "[BEFORE  AFTER",
+        ),
+        (
+            "styled-word-retains-formatter-and-authored-blanks",
+            b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.Eo [\n.No BEFORE\\c\n.Ec\n.No \" AFTER\"\n".as_slice(),
+            "[BEFORE  AFTER",
+        ),
+        (
+            "explicit-empty-es-close-is-a-word",
+            b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.Es \"\" \"\"\n.En BEFORE\\c\n.No AFTER\n".as_slice(),
+            "BEFORE AFTER",
+        ),
+        (
+            "missing-es-close-releases-word-spacing",
+            b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.Es \"\"\n.En BEFORE\\c\n.No AFTER\n".as_slice(),
+            "BEFORE AFTER",
+        ),
+        (
+            "en-without-es-releases-word-spacing",
+            b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.En BEFORE\\c\n.No AFTER\n".as_slice(),
+            "BEFORE AFTER",
+        ),
+        (
+            "generated-close-consumes-physical-continuation",
+            b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.Op BEFORE\\c\n AFTER\n".as_slice(),
+            "[BEFORE]\n AFTER",
+        ),
+        (
+            "man-font-scope-carries-word-end-break",
+            b".TH PROBE 1\n.SH DESCRIPTION\n.B A\\p\nB\n".as_slice(),
+            "A\nB",
+        ),
+        (
+            "alternating-man-font-scope-carries-word-end-break",
+            b".TH PROBE 1\n.SH DESCRIPTION\n.BR A\\p B\nC\n".as_slice(),
+            "AB\nC",
+        ),
+        (
+            "alternating-man-font-scope-realizes-word-end-break-inside-an-operand",
+            b".TH PROBE 1\n.SH DESCRIPTION\n.BR A\\p \"B C\"\nD\n".as_slice(),
+            "AB\nC D",
+        ),
+        (
+            "man-op-keeps-operands-before-word-end-break",
+            b".TH PROBE 1\n.SH DESCRIPTION\n.OP A\\p B\nC\n".as_slice(),
+            "[A B]\nC",
+        ),
+        (
+            "man-op-no-space-suppresses-the-kept-operand-boundary",
+            b".TH PROBE 1\n.SH DESCRIPTION\n.OP \"A\\c\" C\nD\n".as_slice(),
+            "[AC] D",
+        ),
+        (
+            "man-op-no-space-after-word-end-break-keeps-the-second-operand",
+            b".TH PROBE 1\n.SH DESCRIPTION\n.OP \"A\\p B\\c\" C\nD\n".as_slice(),
+            "[A\nBC] D",
+        ),
+        (
+            "man-op-empty-kept-operand-consumes-no-space-without-padding",
+            b".TH PROBE 1\n.SH DESCRIPTION\n.OP \"A\\p B\\c\" \"\"\nD\n".as_slice(),
+            "[A\nB] D",
+        ),
+        (
+            "include-scope-carries-word-end-break",
+            b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.In stdio.h\\p\n.No AFTER\n".as_slice(),
+            "<stdio.h>\nAFTER",
+        ),
+        (
+            "mdoc-keep-group-defers-word-end-break",
+            b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.Bk -words\n.No A\\p No B\n.Ek\n.No C\n".as_slice(),
+            "A B\nC",
+        ),
+        (
+            "mdoc-keep-group-respects-source-line-end",
+            b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.Bk -words\n.No A\\p\n.No B\n.Ek\n.No C\n".as_slice(),
+            "A\nB C",
+        ),
+        (
+            "macro-expanded-continuation-retains-authored-blank",
+            b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.de X\n.Eo [\n.No BEFORE\\c\n.Ec\n.No \" AFTER\"\n..\n.Sh DESCRIPTION\n.X\n".as_slice(),
+            "[BEFORE  AFTER",
+        ),
+    ];
+    for (label, source, expected) in cases {
+        let document = parse_manual_bytes(
+            std::path::Path::new(&format!("inline-state-{label}.1")),
+            source,
+        )
+        .expect("parse inline execution-state fixture");
+        let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
+            panic!("{label}: expected one paragraph: {:#?}", document.sections);
+        };
+        assert_eq!(inline_text(children), expected, "{label}: {children:?}");
+    }
+}
+
+#[test]
+fn private_and_keep_scopes_preserve_incoming_word_end_execution_state() {
+    for (label, source, expected) in [
+        (
+            "tight-include",
+            b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.No A\\p Ns In stdio.h\n.No AFTER\n".as_slice(),
+            "A<stdio.h>\nAFTER",
+        ),
+        (
+            "kept-include",
+            b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.Bk -words\n.No A\\p In stdio.h\n.Ek\n.No AFTER\n".as_slice(),
+            "A <stdio.h>\nAFTER",
+        ),
+        (
+            "same-line-keep-without-break",
+            b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.Bk -words\n.No A No B\n.Ek\n.No C\n".as_slice(),
+            "A B C",
+        ),
+        (
+            "cross-line-keep-without-break",
+            b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.Bk -words\n.No A\n.No B\n.Ek\n.No C\n".as_slice(),
+            "A B C",
+        ),
+        (
+            "keep-boundary-settles-a-zero-advance-glyph",
+            b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.Bk -words\n.No A\\zX\n.No B\n.Ek\n.No C\n".as_slice(),
+            "AXB C",
+        ),
+        (
+            "empty-keep-word-settles-zero-advance-before-the-next-word",
+            b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.Bk -words\n.No A\\zX\n.No \"\"\n.No B\n.Ek\n.No C\n".as_slice(),
+            "AX B C",
+        ),
+        (
+            "empty-keep-word-realizes-word-end-break-with-one-following-boundary",
+            b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.Bk -words\n.No A\\p\n.No \"\"\n.No B\n.Ek\n.No C\n".as_slice(),
+            "A\n B C",
+        ),
+        (
+            "keep-boundary-defers-word-end-break-after-settling-zero-advance",
+            b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.Bk -words\n.No A\\zX\\p\n.No B\n.Ek\n.No C\n".as_slice(),
+            "AXB\nC",
+        ),
+    ] {
+        let document = parse_manual_bytes(
+            std::path::Path::new(&format!("inline-private-state-{label}.1")),
+            source,
+        )
+        .expect("parse private inline execution fixture");
+        let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
+            panic!("{label}: expected one paragraph: {:#?}", document.sections);
+        };
+        assert_eq!(inline_text(children), expected, "{label}: {children:?}");
+    }
+}
+
+#[test]
+fn overstrike_projects_one_terminal_cell_through_the_shared_zero_advance_state() {
+    for (label, source, expected) in [
+        ("ordinary", r"A\o'BC'D", "ACD"),
+        ("zero-advance", r"A\z\o'BC'D", "AD"),
+        ("empty", r"A\o''D", "AD"),
+        ("nested-escape", r"A\o'BC\fI'D", "ACD"),
+    ] {
+        let manual =
+            format!(".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.No {source}\n");
+        let document = parse_manual_bytes(
+            std::path::Path::new(&format!("inline-overstrike-{label}.1")),
+            manual.as_bytes(),
+        )
+        .expect("parse overstrike projection fixture");
+        let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
+            panic!("{label}: expected one paragraph: {:#?}", document.sections);
+        };
+        assert_eq!(inline_text(children), expected, "{label}: {children:?}");
+    }
+}
+
+#[test]
+fn semantic_link_identity_executes_zero_advance_controls_without_guessing_display_text() {
+    for (label, macro_name, source, expected) in [
+        (
+            "mail-no-space",
+            "Mt",
+            b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.Mt user@\\z\\cexample.org\n".as_slice(),
+            "user@example.org",
+        ),
+        (
+            "mail-zero-advance-glyph",
+            "Mt",
+            b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.Mt user@\\zXexample.org\n".as_slice(),
+            "user@example.org",
+        ),
+        (
+            "mail-zero-advance-font-control",
+            "Mt",
+            b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.Mt user@\\z\\fBexample.org\n".as_slice(),
+            "user@xample.org",
+        ),
+        (
+            "link-zero-width",
+            "Lk",
+            b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.Lk https://example.org/\\z\\&suffix label\n".as_slice(),
+            "https://example.org/suffix",
+        ),
+        (
+            "link-word-break",
+            "Lk",
+            b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.Lk https://example.org/\\z\\psuffix label\n".as_slice(),
+            "https://example.org/suffix",
+        ),
+        (
+            "link-no-space",
+            "Lk",
+            b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.Lk https://example.org/\\z\\csuffix label\n".as_slice(),
+            "https://example.org/suffix",
+        ),
+        (
+            "link-unknown-glyph",
+            "Lk",
+            b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.Lk https://example.org/\\[nosuch]suffix label\n".as_slice(),
+            "https://example.org/suffix",
+        ),
+        (
+            "mail-out-of-range-numbered-glyph",
+            "Mt",
+            b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.Mt user@\\N'999'example.org\n".as_slice(),
+            "user@example.org",
+        ),
+        (
+            "link-html-device-name",
+            "Lk",
+            b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.Lk https://example.org/\\*[.T] label\n".as_slice(),
+            "https://example.org/html",
+        ),
+        (
+            "link-overstrike-final-glyph",
+            "Lk",
+            b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.Lk https://example.org/\\o'ab' label\n".as_slice(),
+            "https://example.org/b",
+        ),
+    ] {
+        let document = parse_manual_bytes(
+            std::path::Path::new(&format!("link-identity-{label}.1")),
+            source,
+        )
+        .expect("parse link identity fixture");
+        let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
+            panic!("{label}: expected one paragraph: {:#?}", document.sections);
+        };
+        let target = children.iter().find_map(|inline| match inline {
+            Inline::Link { target, .. } => Some(target),
+            _ => None,
+        });
+        match macro_name {
+            "Mt" => assert!(
+                matches!(target, Some(mant_ir::LinkTarget::Email { address }) if address == expected),
+                "{label}: wrong typed email target: {target:?}"
+            ),
+            "Lk" => assert!(
+                matches!(target, Some(mant_ir::LinkTarget::External { uri }) if uri == expected),
+                "{label}: wrong typed external target: {target:?}"
+            ),
+            _ => unreachable!(),
+        }
     }
 }
 
