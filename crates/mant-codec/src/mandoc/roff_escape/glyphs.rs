@@ -25,7 +25,17 @@ pub(super) fn dedicated_special_character(name: &str) -> Option<&'static str> {
         // for a lower-case c with caron.  It is absent from the pinned mandoc
         // table, so preserve the authored character rather than leaking the
         // raw `\[vc]` escape or silently dropping it.
+        // The pinned mandoc table omits these documented groff caron
+        // spellings.  groff_char(7) specifies vS, vs, vZ, and vz; generated
+        // Slovene manuals also use the compact two-character form.  The vc
+        // spelling is a historical c-with-caron form in NetBSD DRM manuals.
+        // Preserve the authored Unicode instead of leaking formatter source.
+        "vC" => Some("Č"),
         "vc" => Some("č"),
+        "vS" => Some("Š"),
+        "vs" => Some("š"),
+        "vZ" => Some("Ž"),
+        "vz" => Some("ž"),
         _ => None,
     }
 }

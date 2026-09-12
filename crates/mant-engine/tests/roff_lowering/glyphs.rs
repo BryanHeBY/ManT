@@ -77,6 +77,23 @@ unknown=\\[future-glyph]\n",
 }
 
 #[test]
+fn lowers_documented_groff_caron_spellings_missing_from_mandoc() {
+    // groff_char(7) documents the compact S/s and Z/z forms.  Pinned CVS
+    // mandoc does not expose them in chars.c, so exercise the full AST to IR
+    // path rather than only the escape tokenizer.
+    let document = parse_manual_bytes(
+        std::path::Path::new("groff-caron-characters.7"),
+        b".TH GROFF-CARON 7\n.SH TEST\n\\(vC\\(vc \\(vS\\(vs \\(vZ\\(vz\n",
+    )
+    .expect("lower groff caron characters");
+
+    let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
+        panic!("expected one character paragraph");
+    };
+    assert_eq!(inline_text(children), "Čč Šš Žž");
+}
+
+#[test]
 fn lowers_historical_single_character_escapes_through_the_pinned_catalog() {
     let document = parse_manual_bytes(
         std::path::Path::new("single-character-escapes.7"),

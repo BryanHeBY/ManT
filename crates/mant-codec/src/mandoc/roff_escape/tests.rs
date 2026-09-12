@@ -153,6 +153,14 @@ fn resolves_named_characters_from_the_pinned_mandoc_catalog() {
 }
 
 #[test]
+fn preserves_documented_groff_caron_spellings_absent_from_mandoc() {
+    // groff_char(7) documents the S/s and Z/z forms.  The pinned CVS table
+    // does not know them, while generated Slovene manuals use the compact
+    // two-character form.
+    assert_eq!(visible_text(r"\(vC\(vc \(vS\(vs \(vZ\(vz"), "Čč Šš Žž");
+}
+
+#[test]
 fn retains_unknown_named_characters_in_a_visible_source_form() {
     assert_eq!(
         visible_text(r"a=\(zz b=\[future-glyph] c=\C'other'"),
