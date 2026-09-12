@@ -107,3 +107,35 @@ fn zero_advance_crosses_alternating_man_macro_arguments() {
     // calls, so the semantic projection must be AB rather than AXB.
     assert_eq!(inline_text(children), "AB");
 }
+
+#[test]
+fn zero_advance_projects_implicit_words_and_generated_op_brackets_in_output_order() {
+    let document = parse_manual_bytes(
+        std::path::Path::new("zero-advance-output-order.1"),
+        b".TH ZERO-ADVANCE 1\n.SH DESCRIPTION\nA\\zX\nB\n.OP A\\zX B\n.OP A\\zX\n",
+    )
+    .expect("parse zero-advance formatter boundaries");
+    let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
+        panic!("expected one paragraph: {:#?}", document.sections[0].blocks);
+    };
+
+    // CVS term.c inserts the filled-word blank before the next glyph, which
+    // preserves X without making the blank visible. man_term.c emits `.OP`
+    // brackets through term_word(), so B and ] respectively overprint or
+    // preserve the pending glyph according to their actual output order.
+    assert_eq!(inline_text(children), "AXB [AXB] [A]");
+}
+
+#[test]
+fn visible_glyphs_before_a_definition_break_do_not_detach_the_head() {
+    let document = parse_manual_bytes(
+        std::path::Path::new("definition-glyph-before-break.1"),
+        b".TH DEFINITION 1\n.SH DESCRIPTION\n.TP\n.B x\n\\[u03B1]\n.br\nBODY\n",
+    )
+    .expect("parse visible glyph before a definition body break");
+    let text = visible_document_text(&document);
+
+    // A glyph decoded from a named escape is visible content, not a formatter
+    // transition. It therefore remains with x before `.br` starts BODY.
+    assert!(text.contains("x α \nBODY"), "{text:?}");
+}

@@ -288,10 +288,30 @@ impl InlineBuilder {
     /// Generated glyphs use the effective font just like authored text, but
     /// are not reparsed as roff source (names can contain literal escapes).
     pub(in crate::mandoc) fn append_text(&mut self, value: &str) {
-        self.append(vec![super::font::styled_segment(
-            value.into(),
-            self.font.current,
-        )]);
+        let mut projected = Vec::new();
+        self.zero_advance
+            .append_generated_text(value, &mut projected, self.font.current);
+        self.append(projected);
+    }
+
+    /// Start an ordinary formatter word after a source text node. If a prior
+    /// `\z` glyph is pending, model term.c's implicit blank before decoding
+    /// the next glyph: preserve the pending glyph but suppress this reader's
+    /// own inter-word space. Tight joins (for example alternating `.BR`
+    /// operands) deliberately bypass this transition and overstrike instead.
+    pub(in crate::mandoc) fn begin_word_projection(&mut self, next_is_visible: bool) {
+        if !next_is_visible
+            || self.boundary.is_tight()
+            || !self.has_printable_content
+            || !(self.spacing.enabled() || matches!(self.boundary, PendingBoundary::Preserved))
+        {
+            return;
+        }
+        let Some(glyph) = self.zero_advance.resolve_at_word_boundary() else {
+            return;
+        };
+        self.append_projected(vec![glyph]);
+        self.boundary = PendingBoundary::Tight;
     }
 
     /// Only macros that select a font establish this scope. Transparent
@@ -448,12 +468,16 @@ impl InlineBuilder {
     fn flush_zero_advance(&mut self) {
         let mut pending = Vec::new();
         self.zero_advance.finish_into(&mut pending);
-        if pending.is_empty() {
+        self.append_projected(pending);
+    }
+
+    fn append_projected(&mut self, mut incoming: Vec<Inline>) {
+        if incoming.is_empty() {
             return;
         }
-        let last = last_visible_character(&pending);
-        let printable = has_printable_character(&pending);
-        self.nodes.append(&mut pending);
+        let last = last_visible_character(&incoming);
+        let printable = has_printable_character(&incoming);
+        self.nodes.append(&mut incoming);
         if last.is_some() {
             self.last_visible_character = last;
         }

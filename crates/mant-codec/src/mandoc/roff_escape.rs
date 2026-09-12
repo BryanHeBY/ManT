@@ -79,6 +79,51 @@ pub(super) enum RoffInlineEvent {
     },
 }
 
+/// The observable role of one decoded inline event.
+///
+/// Consumers need this shared classification when deciding whether a
+/// formatter request can be crossed while looking for visible body content.
+/// It intentionally distinguishes an invisible row marker (`\&`) from a
+/// pure state transition (such as a font selection) and from a real line
+/// boundary. Adding a new decoder event must therefore make its effect
+/// explicit instead of silently flowing through a catch-all branch.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum InlineEventEffect {
+    Visible,
+    RowMarker,
+    StateOnly,
+    LineBoundary,
+}
+
+pub(super) fn inline_event_effect(event: &RoffInlineEvent) -> InlineEventEffect {
+    match event {
+        RoffInlineEvent::Text(value)
+        | RoffInlineEvent::Glyph(value)
+        | RoffInlineEvent::FallbackGlyph(value) => {
+            if value.is_empty() {
+                InlineEventEffect::StateOnly
+            } else {
+                InlineEventEffect::Visible
+            }
+        }
+        RoffInlineEvent::ZeroWidthGlyph => InlineEventEffect::RowMarker,
+        RoffInlineEvent::LineBreak | RoffInlineEvent::EmptyDestination => {
+            InlineEventEffect::LineBoundary
+        }
+        RoffInlineEvent::ZeroAdvance
+        | RoffInlineEvent::Font(_)
+        | RoffInlineEvent::PreviousFont
+        | RoffInlineEvent::Link(_)
+        | RoffInlineEvent::Presentation { .. } => InlineEventEffect::StateOnly,
+    }
+}
+
+pub(super) fn source_has_visible_glyph(source: &str) -> bool {
+    decode(source)
+        .iter()
+        .any(|event| inline_event_effect(event) == InlineEventEffect::Visible)
+}
+
 /// Decode one libmandoc text node into typed, renderer-independent events.
 pub(super) fn decode(source: &str) -> Vec<RoffInlineEvent> {
     Decoder::new(source).decode()

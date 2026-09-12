@@ -28,7 +28,9 @@ pub(super) use source::roff_macro_arguments;
 
 use super::{
     first_part_children,
-    roff_escape::{RoffFont as Font, RoffInlineEvent, decode, visible_text},
+    roff_escape::{
+        RoffFont as Font, RoffInlineEvent, decode, source_has_visible_glyph, visible_text,
+    },
 };
 
 pub(super) fn lower_inline_nodes(nodes: &[Node], default_name: Option<&str>) -> Vec<Inline> {
@@ -186,8 +188,10 @@ fn append_text_node(builder: &mut InlineBuilder, node: &Node) {
     if node.flags.delimiter_close {
         builder.tighten_next_boundary();
     }
+    let source = node.text.as_deref().unwrap_or_default();
+    builder.begin_word_projection(source_has_visible_glyph(source));
     let (inlines, joins_preceding_node) = font::parse_roff_text_with_zero_advance(
-        node.text.as_deref().unwrap_or_default(),
+        source,
         &mut builder.font,
         !node.flags.no_fill,
         &mut builder.zero_advance,
@@ -197,7 +201,7 @@ fn append_text_node(builder: &mut InlineBuilder, node: &Node) {
     // a buffered zero-width glyph (for example \&) still occupies that row.
     let occupies_literal_row = !inlines.is_empty()
         || (node.flags.line_start && node.text.as_deref().is_some_and(str::is_empty))
-        || decode(node.text.as_deref().unwrap_or_default())
+        || decode(source)
             .iter()
             .any(|event| matches!(event, RoffInlineEvent::ZeroWidthGlyph));
     if joins_preceding_node {
@@ -366,13 +370,6 @@ pub(super) fn alternating_font_pair(macro_name: Option<&str>) -> Option<(Font, F
         Some("RI") => Some((Font::Regular, Font::Emphasis)),
         _ => None,
     }
-}
-
-fn surround(open: &str, mut children: Vec<Inline>, close: &str) -> Vec<Inline> {
-    let mut result = text_node(open);
-    result.append(&mut children);
-    result.extend(text_node(close));
-    result
 }
 
 fn text_node(value: &str) -> Vec<Inline> {

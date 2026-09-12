@@ -39,6 +39,62 @@ impl ZeroAdvanceState {
         self.armed = true;
     }
 
+    /// Resolve a pending zero-advance glyph at a formatter-inserted word
+    /// boundary. CVS `term_word()` writes that virtual blank before the next
+    /// glyph; the blank consumes the backtracking position, so the glyph
+    /// survives and the next word joins it without a visible space.
+    pub(in crate::mandoc) fn resolve_at_word_boundary(&mut self) -> Option<Inline> {
+        if self.armed {
+            return None;
+        }
+        self.fragment_started_pending = false;
+        self.resolved_preexisting = false;
+        self.pending.take()
+    }
+
+    /// Feed formatter-generated text through the same projection as authored
+    /// glyphs. Brackets from `.OP`, generated declaration punctuation, and
+    /// implicit wrapper text can overwrite a pending `\z` glyph just like a
+    /// source glyph in CVS `term_word()`.
+    pub(in crate::mandoc) fn append_generated_text(
+        &mut self,
+        value: &str,
+        output: &mut Vec<Inline>,
+        font: Font,
+    ) {
+        let mut buffer = String::new();
+        for character in value.chars() {
+            if matches!(character, '\n' | '\r') {
+                flush_segment(output, &mut buffer, font, None);
+                if let Some(glyph) = self.pending.take() {
+                    output.push(glyph);
+                }
+                buffer.push(character);
+                continue;
+            }
+            if self.armed {
+                self.armed = false;
+                self.pending = Some(styled_segment(character.to_string(), font));
+                continue;
+            }
+            if self.pending.is_some() {
+                if character.is_whitespace() {
+                    flush_segment(output, &mut buffer, font, None);
+                    if let Some(glyph) = self.pending.take() {
+                        output.push(glyph);
+                    }
+                    continue;
+                }
+                self.pending = None;
+                if self.fragment_started_pending {
+                    self.resolved_preexisting = true;
+                }
+            }
+            buffer.push(character);
+        }
+        flush_segment(output, &mut buffer, font, None);
+    }
+
     fn append_text(
         &mut self,
         value: &str,
@@ -188,6 +244,12 @@ pub(super) fn lower_man_font_scope(
     }
     if node.macro_name.as_deref() == Some("OP") {
         let mut output = builder_with_zero_advance(spacing, *state, zero_advance);
+        // CVS man_term.c::pre_OP() emits both brackets with term_word().
+        // Keep them inside this builder so a pending `\z` glyph can be
+        // overwritten by the closing bracket instead of being appended after
+        // a post-hoc `surround()` wrapper.
+        output.append_text("[");
+        output.tighten_next_boundary();
         for (index, child) in node.children.iter().enumerate() {
             state.select(if index == 0 {
                 Font::Strong
@@ -206,9 +268,11 @@ pub(super) fn lower_man_font_scope(
         // OP resets for its closing bracket, then the man macro scope resets
         // again. Consequently a following fP selects regular, not its operand.
         state.select(Font::Regular);
+        output.font = *state;
+        output.tighten_next_boundary();
+        output.append_text("]");
         state.select(Font::Regular);
-        let (output, joined) = finish_with_zero_advance(output, zero_advance);
-        return (super::surround("[", output, "]"), joined);
+        return finish_with_zero_advance(output, zero_advance);
     }
     match node.macro_name.as_deref() {
         Some("B" | "SB") => state.select(Font::Strong),
