@@ -334,7 +334,7 @@ class AllAuditTests(unittest.TestCase):
                     'residualStatus': 'review',
                     'sourceConsistentCompatibilityApplied': True,
                     'explanations': [{
-                        'rule': 'source-consistent-eqn-subscript-spacing/v1',
+                        'rule': 'source-consistent-eqn-linear-relations/v1',
                         'referenceSpellings': ['log_2'],
                     }],
                 },

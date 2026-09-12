@@ -426,8 +426,27 @@ class ExplanationTests(unittest.TestCase):
         self.assertEqual(result['status'], 'explained')
         self.assertEqual(
             result['explanations'][0]['rule'],
-            'source-consistent-eqn-subscript-spacing/v1',
+            'source-consistent-eqn-linear-relations/v1',
         )
+
+    def test_configured_inline_eqn_relations_require_a_literal_delimiter_setting(self):
+        source = '.EQ\ndelim $$\n.EN\n$x sub i$ and $a over b$\n'
+        result = assess_content('x_i and a/b\n', 'x _ i and a / b\n', source)
+        self.assertEqual(result['status'], 'explained')
+        self.assertEqual(
+            result['explanations'][0]['rule'],
+            'source-consistent-eqn-linear-relations/v1',
+        )
+
+        # A dollar-delimited ordinary line cannot borrow the proof: only a
+        # literal, balanced eqn configuration makes the punctuation semantic.
+        result = assess_content('x_i and a/b\n', 'x _ i and a / b\n', '$x sub i$ and $a over b$\n')
+        self.assertNotEqual(result['status'], 'explained')
+
+    def test_configured_inline_eqn_braced_from_relation_preserves_its_marker(self):
+        source = '.EQ\ndelim $$\n.EN\n$lim from {n\\(-> inf}$\n'
+        result = assess_content('lim_ n\n', 'lim _ n\n', source)
+        self.assertEqual(result['status'], 'explained')
 
     def test_eqn_subscript_projection_rejects_dynamic_definitions(self):
         source = '.EQ\ndefine x / log sub 2 /\nx\n.EN\n'

@@ -122,6 +122,14 @@ _EQN_LITERAL_SUBSCRIPT = re.compile(
     r"(?<![^ \t])(?P<base>[A-Za-z][A-Za-z0-9_.-]*)[ \t]+sub[ \t]+"
     r"(?P<sub>[A-Za-z0-9][A-Za-z0-9_.-]*)(?![^ \t])"
 )
+_EQN_LITERAL_FRACTION = re.compile(
+    r"(?<![^ \t])(?P<numerator>[A-Za-z][A-Za-z0-9_.-]*)[ \t]+over[ \t]+"
+    r"(?P<denominator>[A-Za-z0-9][A-Za-z0-9_.-]*)(?![^ \t])"
+)
+_EQN_LITERAL_BRACED_FROM = re.compile(
+    r"(?<![^ \t])(?P<base>[A-Za-z][A-Za-z0-9_.-]*)[ \t]+from[ \t]+"
+    r"\{[^{}\n]+\}(?![^ \t])"
+)
 _EQN_DYNAMIC_WORDS = {"define", "delim", "gfont", "gsize", "include", "ifdef", "if"}
 _DYNAMIC_ESCAPE = re.compile(r"\\(?:\*|n|g|V|\$)")
 _AUDIT_DYNAMIC_REQUESTS = {
@@ -206,46 +214,96 @@ def _literal_groff_default_composite_words(source: str) -> Counter[tuple[str, st
     return spellings or None
 
 
-def _literal_eqn_subscript_spellings(source: str) -> Counter[tuple[str, str]] | None:
-    """Return literal block-eqn subscript spellings, or decline execution.
+def _literal_eqn_relation_spellings(source: str) -> Counter[tuple[str, str]] | None:
+    """Return source-bound simple eqn relation spellings, or decline execution.
 
-    CVS ``eqn_term.c`` emits the subscript marker immediately after its base
-    (``log_2``), whereas ManT's renderer preserves the same AST relation as
-    the copyable, explicitly separated ``log _ 2``. This is a source-bound
-    presentation proof, not a general eqn interpreter: accept only literal
-    block equations with simple word operands and decline a block that can
-    define or select dynamic eqn behaviour.
+    CVS ``eqn_term.c`` emits positional markers directly against their bases
+    (``log_2`` and ``a/b``), whereas ManT retains the same parsed relations
+    with explicit copyable spacing.  Both block equations and inline equations
+    activated by a literal ``.EQ delim XY .EN`` setting are safe evidence;
+    bare punctuation is never treated as eqn.  This is not an interpreter:
+    only simple word operands are accepted, and a dynamic eqn request declines
+    the complete source proof.
     """
     spellings: Counter[tuple[str, str]] = Counter()
     in_block = False
-    saw_block = False
+    saw_equations = False
+    pending_delimiters: tuple[str, str] | None = None
+    active_delimiters: tuple[str, str] | None = None
+
+    def collect(expressions: list[str]) -> bool:
+        for expression in expressions:
+            if _DYNAMIC_ESCAPE.search(expression):
+                return False
+            words = expression.split()
+            if words and words[0].lower() in _EQN_DYNAMIC_WORDS:
+                return False
+            for match in _EQN_LITERAL_SUBSCRIPT.finditer(expression):
+                spellings[(
+                    f"{match['base']}_{match['sub']}",
+                    f"{match['base']} _ {match['sub']}",
+                )] += 1
+            for match in _EQN_LITERAL_FRACTION.finditer(expression):
+                spellings[(
+                    f"{match['numerator']}/{match['denominator']}",
+                    f"{match['numerator']} / {match['denominator']}",
+                )] += 1
+            for match in _EQN_LITERAL_BRACED_FROM.finditer(expression):
+                # The terminal tokenization of a braced lower limit is
+                # renderer-specific: CVS exposes only `base_` while ManT
+                # retains a separated marker before the complete operand.
+                # We do not interpret that operand; the balanced braces are
+                # merely the source fact that makes this attached marker an
+                # eqn `from` relation rather than ordinary prose.
+                spellings[(f"{match['base']}_", f"{match['base']} _")] += 1
+        return True
+
     for raw in source.splitlines():
         if _EQN_OPEN.fullmatch(raw):
             if in_block:
                 return None
             in_block = True
-            saw_block = True
+            saw_equations = True
+            pending_delimiters = None
             continue
         if _EQN_CLOSE.fullmatch(raw):
             if not in_block:
                 return None
             in_block = False
+            active_delimiters = pending_delimiters
             continue
-        if not in_block:
+        if in_block:
+            if raw.endswith("\\"):
+                return None
+            delimiter = raw.strip().split()
+            if delimiter[:1] == ["delim"]:
+                if len(delimiter) != 2:
+                    return None
+                if delimiter[1] == "off":
+                    pending_delimiters = None
+                elif len(delimiter[1]) == 2:
+                    pending_delimiters = (delimiter[1][0], delimiter[1][1])
+                else:
+                    return None
+                continue
+            if not collect([raw]):
+                return None
             continue
-        if raw.endswith("\\") or _DYNAMIC_ESCAPE.search(raw):
+        if active_delimiters is None:
+            continue
+        opening, closing = active_delimiters
+        # Delimiters are literal one-character operands from the balanced
+        # configuration line above; regex escaping keeps punctuation syntax
+        # from broadening this source inspection.
+        expressions = re.findall(
+            re.escape(opening) + r"([^\n" + re.escape(closing) + r"]*)" + re.escape(closing),
+            raw,
+        )
+        if expressions and not collect(expressions):
             return None
-        words = raw.split()
-        if words and words[0].lower() in _EQN_DYNAMIC_WORDS:
-            return None
-        for match in _EQN_LITERAL_SUBSCRIPT.finditer(raw):
-            spellings[(
-                f"{match['base']}_{match['sub']}",
-                f"{match['base']} _ {match['sub']}",
-            )] += 1
     if in_block:
         return None
-    return spellings if saw_block and spellings else None
+    return spellings if saw_equations and spellings else None
 
 
 def _literal_mdoc_bullet_item_count(source: str) -> int | None:
@@ -857,30 +915,30 @@ def _source_consistent_compatibility_projection(reference: str, mant: str,
                 "reason": "Literal documented groff default composites whose complete fallback and decoded word inventories agree are preserved by ManT even though CVS mandoc does not implement its dynamic composite character table.",
             })
 
-    eqn_subscripts = _literal_eqn_subscript_spellings(source)
-    # CVS eqn_term.c writes `_` under TERMP_NOSPACE while ManT deliberately
-    # exposes the same equation relation in a copyable textual form. Demand
-    # full inventories on both sides so an unrelated identifier cannot borrow
-    # a proof from a literal eqn block.
-    if eqn_subscripts is not None and all(
+    eqn_relations = _literal_eqn_relation_spellings(source)
+    # CVS eqn_term.c writes positional operators under TERMP_NOSPACE while
+    # ManT deliberately exposes the same parsed relations in a copyable
+    # textual form. Demand full inventories on both sides so an unrelated
+    # identifier cannot borrow a proof from a literal equation context.
+    if eqn_relations is not None and all(
             projected_reference.count(reference_spelling) == limit
             and projected_mant.count(mant_spelling) == limit
-            for (reference_spelling, mant_spelling), limit in eqn_subscripts.items()
+            for (reference_spelling, mant_spelling), limit in eqn_relations.items()
     ):
         replacements = 0
-        for (reference_spelling, mant_spelling), limit in eqn_subscripts.items():
+        for (reference_spelling, mant_spelling), limit in eqn_relations.items():
             projected_reference, count = _replace_limited(
                 projected_reference, reference_spelling, mant_spelling, limit
             )
             replacements += count
         if replacements:
             evidence.append({
-                "rule": "source-consistent-eqn-subscript-spacing/v1",
+                "rule": "source-consistent-eqn-linear-relations/v1",
                 "sourceSpellings": replacements,
-                "sourceCandidates": sum(eqn_subscripts.values()),
-                "referenceSpellings": sorted({pair[0] for pair in eqn_subscripts}),
-                "mantSpellings": sorted({pair[1] for pair in eqn_subscripts}),
-                "reason": "Literal block-eqn subscripts are represented by the same parsed relation: CVS eqn_term.c uses an attached underscore while ManT retains explicit copyable spacing.",
+                "sourceCandidates": sum(eqn_relations.values()),
+                "referenceSpellings": sorted({pair[0] for pair in eqn_relations}),
+                "mantSpellings": sorted({pair[1] for pair in eqn_relations}),
+                "reason": "Literal block or configured-inline eqn relations are represented by the same parsed relation: CVS eqn_term.c attaches positional markers while ManT retains explicit copyable spacing.",
             })
 
     column_separators = _literal_mdoc_column_separator_count(source)
