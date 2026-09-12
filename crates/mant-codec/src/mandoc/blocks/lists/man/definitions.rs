@@ -249,12 +249,15 @@ fn body_breaks_pending_head(nodes: &[Node]) -> bool {
                 !text.is_empty()
                     && crate::mandoc::roff_escape::decode(text)
                         .iter()
-                        .all(|event| {
-                            matches!(
-                                event,
-                                crate::mandoc::roff_escape::RoffInlineEvent::Font(_)
-                                    | crate::mandoc::roff_escape::RoffInlineEvent::PreviousFont
-                            )
+                        .all(|event| match event {
+                            crate::mandoc::roff_escape::RoffInlineEvent::Text(value) => {
+                                value.is_empty()
+                            }
+                            crate::mandoc::roff_escape::RoffInlineEvent::LineBreak
+                            | crate::mandoc::roff_escape::RoffInlineEvent::EmptyDestination => {
+                                false
+                            }
+                            _ => true,
                         })
             })
         {

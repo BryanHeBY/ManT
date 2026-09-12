@@ -64,6 +64,18 @@ fn explicit_initial_body_requests_end_short_heads_without_adding_blank_rows() {
 }
 
 #[test]
+fn invisible_inline_controls_do_not_hide_an_initial_body_break() {
+    let source = b".TH PROBE 1\n.SH TEST\n.TP\n.B x\n\\&\n.br\nBODY\n";
+    let query = load_roff_bytes(source).unwrap();
+    let text = render_query_text(&query);
+    let owner = item(&query);
+    assert!(!owner.layout.inline_term, "{text}");
+    let lines = text.lines().collect::<Vec<_>>();
+    let head_row = lines.iter().position(|line| line.trim() == "x").unwrap();
+    assert_eq!(lines[head_row + 1].trim(), "BODY", "{text}");
+}
+
+#[test]
 fn requests_after_printable_body_do_not_retroactively_stack_the_head() {
     for prefix in ["", ".ft B\n", ".PD 0\n", ".ta 4n\n", ".ll 50n\n"] {
         for request in [".br", ".fi", ".nf"] {
