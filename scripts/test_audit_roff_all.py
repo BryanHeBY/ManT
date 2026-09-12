@@ -43,6 +43,33 @@ class AllAuditTests(unittest.TestCase):
         self.assertEqual(result['fidelity-mandoc']['sourceSyntax'], findings)
         self.assertNotIn('triage', result['fidelity-groff'])
 
+    def test_source_syntax_triage_cannot_be_overwritten_by_later_classifiers(self):
+        result = {
+            'fidelity-mandoc': {
+                'execution': 'success',
+                'status': 'review',
+                'coverage': 'legacy-dimensions-covered',
+                'finding': {'status': 'review'},
+                'sourceContentAssessment': {
+                    'status': 'explained',
+                    'rawStatus': 'review',
+                    'residualStatus': 'covered',
+                    'sourceConsistentCompatibilityApplied': True,
+                    'explanations': [],
+                },
+            },
+            'fidelity-groff': {
+                'execution': 'success',
+                'status': 'clean',
+                'coverage': 'legacy-dimensions-covered',
+            },
+        }
+        AUDIT.classify_source_syntax_reviews(result, [{'code': 'test'}])
+        AUDIT.classify_source_proven_presentation(result)
+        AUDIT.classify_cross_reference_presentation(result)
+        self.assertEqual(result['fidelity-mandoc']['status'], 'review')
+        self.assertEqual(result['fidelity-mandoc']['triage'], 'source-syntax-error')
+
     def test_manifest_keeps_arbitrary_suffix_and_all_logical_ids(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

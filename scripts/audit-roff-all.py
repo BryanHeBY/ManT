@@ -335,6 +335,7 @@ def classify_cross_reference_presentation(result):
         if (
             reviewed.get('execution') != 'success'
             or reviewed.get('status') != 'review'
+            or reviewed.get('triage')
             or peer.get('execution') != 'success'
             or peer.get('status') != 'clean'
             or reviewed.get('coverage') != peer.get('coverage')
@@ -390,6 +391,7 @@ def classify_source_proven_presentation(result):
             not isinstance(assessment, dict)
             or value.get('execution') != 'success'
             or value.get('status') != 'review'
+            or value.get('triage')
             or value.get('finding', {}).get('status') != 'review'
             or not (residual_covered or glyph_only)
         ):
