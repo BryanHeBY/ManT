@@ -78,6 +78,10 @@ URL_WRAP = re.compile(
 # masks such as -W----, and treating those as soft hyphenation merges the next
 # table row into the mask before fidelity comparison.
 DEHYPHENATE = re.compile(r"(?<=\w)-[ \t]*\n[ \t]*(?=\w)", re.UNICODE)
+SOURCE_LITERAL_HYPHEN_PAIR = re.compile(
+    r"(?<![\w.+:/-])(?P<left>\w[\w.+:/-]*-)[ \t]+(?P<right>\w[\w.+:/-]*)",
+    re.UNICODE,
+)
 BORDERS = re.compile(r"[\u2500-\u257f\u2022\u00b7]")
 ANGLE_LINK = re.compile(r"<((?:https?|mailto):[^<>]{1,4096})>", re.DOTALL)
 # ManT's terminal presentation uses compact Unicode angle brackets for typed
@@ -992,20 +996,74 @@ def unwrap_angle_links(value: str) -> str:
     )
 
 
-def normalized_visible_text(value: str) -> str:
+def source_literal_hyphen_pairs(source: str | None) -> Counter[tuple[str, str]]:
+    """Return direct same-line ``left- right`` source pairs.
+
+    CVS ``term_fill()`` may wrap after every hyphen, including a literal
+    trailing operator such as ``x-``.  The usual terminal dehyphenation would
+    then manufacture ``xenumerates``.  Only a direct source line with the
+    same literal spelling can protect that boundary; macro interpolation,
+    continuation, and arbitrary source-wide word presence are not evidence.
+    """
+    pairs: Counter[tuple[str, str]] = Counter()
+    if source is None:
+        return pairs
+    for raw_line in source.splitlines():
+        if raw_line.endswith("\\"):
+            continue
+        line = ROFF_FONT_ESCAPE.sub("", raw_line)
+        line = (
+            line.replace(r"\&", "")
+            .replace(r"\%", "")
+            .replace(r"\~", " ")
+            .replace(r"\^", "")
+        )
+        if "\\" in line:
+            continue
+        for match in SOURCE_LITERAL_HYPHEN_PAIR.finditer(line):
+            pairs[(match["left"], match["right"])] += 1
+    return pairs
+
+
+def dehyphenate_terminal_wraps(value: str, source: str | None = None) -> str:
+    """Rejoin formatter wrapping without deleting source-proven operators."""
+    protected = source_literal_hyphen_pairs(source)
+    if not protected:
+        return DEHYPHENATE.sub("", value)
+
+    def replace(match: re.Match[str]) -> str:
+        # The pattern deliberately consumes only the hyphen and physical line
+        # break.  Recover the immediately surrounding words to test the exact
+        # source-proven operator spelling before changing presentation text.
+        start = match.start()
+        end = match.end()
+        left = re.search(r"\w[\w.+:/-]*$", value[:start])
+        right = re.match(r"\w[\w.+:/-]*", value[end:])
+        if left is None or right is None:
+            return ""
+        key = (left[0] + "-", right[0])
+        if protected[key] <= 0:
+            return ""
+        protected[key] -= 1
+        return "- "
+
+    return DEHYPHENATE.sub(replace, value)
+
+
+def normalized_visible_text(value: str, source: str | None = None) -> str:
     value = strip_terminal_formatting(value).translate(TRANSLATION)
     value = unwrap_angle_links(value)
     value = URL_WRAP.sub(r"\1", value)
-    value = DEHYPHENATE.sub("", value)
+    value = dehyphenate_terminal_wraps(value, source)
     value = BORDERS.sub(" ", value)
     return unicodedata.normalize("NFC", " ".join(value.split()))
 
 
-def tokens(value: str) -> list[str]:
-    return TOKEN.findall(normalized_visible_text(value))
+def tokens(value: str, source: str | None = None) -> list[str]:
+    return TOKEN.findall(normalized_visible_text(value, source))
 
 
-def token_lines(value: str) -> list[list[str]]:
+def token_lines(value: str, source: str | None = None) -> list[list[str]]:
     """Return ordinary reference rows eligible for ordered-phrase comparison.
 
     Token occurrence comparison still sees every table cell. Ordered phrase
@@ -1020,7 +1078,7 @@ def token_lines(value: str) -> list[list[str]]:
     value = strip_terminal_formatting(value).translate(TRANSLATION)
     value = unwrap_angle_links(value)
     value = URL_WRAP.sub(r"\1", value)
-    value = DEHYPHENATE.sub("", value)
+    value = dehyphenate_terminal_wraps(value, source)
     lines = []
     for line in value.splitlines():
         # The UTF-8 terminal renderer's U+2502 is an emitted table-cell frame,
@@ -2282,14 +2340,14 @@ def compare_rendered(
     """
     reference_output = strip_reference_chrome(reference_output)
     source_text = raw_source.decode("utf-8", errors="replace") if raw_source is not None else None
-    reference_lines = token_lines(reference_output)
+    reference_lines = token_lines(reference_output, source_text)
     if reference_kind == "mandoc" and raw_source is not None:
         reference_lines = omit_mandoc_labeled_link_destinations(
             reference_lines,
             raw_source.decode("utf-8", errors="replace"),
         )
     reference_tokens = [value for line in reference_lines for value in line]
-    mant_tokens = tokens(mant_output)
+    mant_tokens = tokens(mant_output, source_text)
     if not reference_tokens:
         return AuditArtifact(
             finding=Finding(
@@ -2673,6 +2731,17 @@ def self_check() -> None:
     assert token_key("alloca.") == token_key("alloca")
     assert token_key("docs.example/path") != token_key("docs.example")
     assert tokens("one line-\nbreak here") == ["one", "linebreak", "here"]
+    # CVS term_fill() may wrap after an authored trailing hyphen that is an
+    # operator rather than a discretionary word break.  The direct source
+    # spelling retains that operator; an unproved physical wrap still joins.
+    literal_hyphen_source = r"\fIx-\fR enumerates from index"
+    assert tokens("x-\n enumerates from index", literal_hyphen_source) == [
+        "enumerates",
+        "from",
+        "index",
+    ]
+    assert tokens("x-\n enumerates from index") == ["xenumerates", "from", "index"]
+    assert tokens("compound-\n word", literal_hyphen_source) == ["compoundword"]
     assert tokens("-W----\nZIO_STAGE_ENCRYPT") == ["W----", "ZIO_STAGE_ENCRYPT"]
     assert tokens("Prikaže café 日本語") == ["Prikaže", "café", "日本語"]
     assert tokens("cafe\u0301") == ["café"]
