@@ -377,6 +377,34 @@ class ExplanationTests(unittest.TestCase):
         result = assess_content('(1) first\n', '1. first\n', source)
         self.assertNotEqual(result['status'], 'explained')
 
+    def test_literal_groff_named_character_can_explain_an_unsupported_reference_glyph(self):
+        # CVS chars.c intentionally has no `vc` table entry.  ManT preserves
+        # the authored groff spelling instead of dropping it with the
+        # reference renderers, but the audit must retain a source-bound proof.
+        source = '.Dd September 11, 2026\n.Dt PROBE 1\n.Os\n.An Jarom\\(\'ir Dole\\[vc]ek\n'
+        result = assess_content('Jaromír Doleek\n', 'Jaromír Doleček\n', source)
+        self.assertEqual(result['status'], 'explained')
+        self.assertEqual(result['rawComparison']['status'], 'review')
+        self.assertEqual(result['compatibilityPresentationComparison']['status'], 'covered')
+        self.assertEqual(
+            result['explanations'][0]['rule'],
+            'source-consistent-groff-named-character/v1',
+        )
+
+    def test_named_character_projection_requires_complete_literal_inventory(self):
+        source = '.An Dole\\[vc]ek\n'
+        for reference, mant in (
+            ('Doleek\nDoleek\n', 'Doleček\n'),
+            ('Doleek\n', 'Doleček\nDoleček\n'),
+            ('Doleek\n', 'Doleček\n'),
+        ):
+            with self.subTest(reference=reference, mant=mant):
+                candidate_source = source
+                if reference == 'Doleek\n' and mant == 'Doleček\n':
+                    candidate_source = '.ds name Dole\\[vc]ek\n' + source
+                result = assess_content(reference, mant, candidate_source)
+                self.assertNotEqual(result['status'], 'explained')
+
     def test_literal_mdoc_column_table_separators_are_source_consistent_presentation(self):
         source = '''.Dd September 11, 2026
 .Dt PROBE 1

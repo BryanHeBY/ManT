@@ -24,6 +24,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import unicodedata
 from collections import Counter
 from dataclasses import asdict, dataclass
 from fractions import Fraction
@@ -60,7 +61,12 @@ MANUAL_SUFFIX = re.compile(
     r"\.(?P<section>[1-9][0-9A-Za-z]*|[ln])(?:\.(?:gz|bz2|xz|zst))?$"
 )
 ANSI = re.compile(r"\x1b(?:\[[0-?]*[ -/]*[@-~]|\][^\x07]*(?:\x07|\x1b\\))")
-TOKEN = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_.+:/-]{2,}")
+# Audit the document's visible language, not only its ASCII substrings.
+# Python Unicode word matching retains accented and non-Latin words.  NFC
+# makes a terminal's decomposed accents equivalent to normalised text from
+# another renderer.  The narrow ASCII punctuation tail keeps paths, qualified
+# names, URLs, and options useful as single candidates.
+TOKEN = re.compile(r"\w[\w.+:/-]{2,}", re.UNICODE)
 # Only join a wrapped URL/path component after a non-slash component. A bare
 # slash at the end of an unrelated token (for example Perl's `tr//` followed
 # by a new sentence) must not consume the semantic line boundary.
@@ -971,7 +977,7 @@ def normalized_visible_text(value: str) -> str:
     value = URL_WRAP.sub(r"\1", value)
     value = DEHYPHENATE.sub("", value)
     value = BORDERS.sub(" ", value)
-    return " ".join(value.split())
+    return unicodedata.normalize("NFC", " ".join(value.split()))
 
 
 def tokens(value: str) -> list[str]:
@@ -1001,7 +1007,7 @@ def token_lines(value: str) -> list[list[str]]:
         # token stream; only exclude cross-cell n-gram evidence here.
         if "\u2502" in line:
             continue
-        lines.append(TOKEN.findall(BORDERS.sub(" ", line)))
+        lines.append(TOKEN.findall(unicodedata.normalize("NFC", BORDERS.sub(" ", line))))
     return lines
 
 
@@ -2430,6 +2436,8 @@ def self_check() -> None:
     assert token_key("alloca.") == token_key("alloca")
     assert token_key("docs.example/path") != token_key("docs.example")
     assert tokens("one line-\nbreak here") == ["one", "linebreak", "here"]
+    assert tokens("Prikaže café 日本語") == ["Prikaže", "café", "日本語"]
+    assert tokens("cafe\u0301") == ["café"]
     assert missing_token_candidates(["alpha", "missing"], ["alpha"]) == ["missing"]
     assert missing_token_candidates(["fBpackage.json"], ["package.json"]) == []
     assert missing_token_candidates(["defsReport"], ["defs", "Report"]) == []

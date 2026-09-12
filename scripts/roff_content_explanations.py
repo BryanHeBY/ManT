@@ -65,10 +65,54 @@ _MAN_EXTERNAL_LITERAL_ESCAPES = {
     r"\%": "",
     r"\&": "",
 }
+# The product's roff escape decoder deliberately preserves this long-standing
+# groff spelling even though pinned CVS mandoc does not provide it in
+# ``chars.c``.  Keep the audit projection equally narrow: this is not a
+# general roff interpreter or a promise that arbitrary groff character names
+# survive lowering.  The mapping mirrors the source-preserving compatibility
+# fact in ``mant-codec/src/mandoc/roff_escape/glyphs.rs``.
+_GROFF_NAMED_GLYPHS = {"vc": "č"}
+_GROFF_NAMED_GLYPH_IN_WORD = re.compile(
+    r"(?<![\\A-Za-z0-9_.+:/-])"
+    r"(?P<prefix>[A-Za-z0-9_.+:/-]*)"
+    r"\\\[(?P<name>vc)\]"
+    r"(?P<suffix>[A-Za-z0-9_.+:/-]*)"
+    r"(?![A-Za-z0-9_.+:/-])"
+)
+_DYNAMIC_ESCAPE = re.compile(r"\\(?:\*|n|g|V|\$)")
 _AUDIT_DYNAMIC_REQUESTS = {
     "als", "am", "cc", "c2", "de", "di", "ds", "ec", "el", "ie", "if", "ig",
     "mso", "nr", "rm", "rn", "so", "soquiet", "tr", "wh",
 }
+
+
+def _literal_groff_named_glyph_words(source: str) -> Counter[tuple[str, str]] | None:
+    """Return literal groff-only named-glyph words, or decline execution.
+
+    ``\\[vc]`` is not present in CVS ``chars.c`` (so its terminal formatter
+    drops it), while groff accepts it as a lower-case c with caron and ManT
+    deliberately preserves it.  A source inventory is useful only when no
+    request or escape can mutate the text stream, and only when both the
+    fallback and decoded spellings are complete whole-word inventories.  This
+    prevents an unrelated literal ``Doleek`` from borrowing the source proof.
+    """
+    spellings: Counter[tuple[str, str]] = Counter()
+    for raw in source.splitlines():
+        if raw.endswith("\\") or _DYNAMIC_ESCAPE.search(raw):
+            return None
+        request = _MDOC_REQUEST.fullmatch(raw)
+        if request is not None and request[1].islower() and request[1] in _AUDIT_DYNAMIC_REQUESTS:
+            return None
+        for match in _GROFF_NAMED_GLYPH_IN_WORD.finditer(raw):
+            glyph = _GROFF_NAMED_GLYPHS[match["name"]]
+            fallback = match["prefix"] + match["suffix"]
+            decoded = match["prefix"] + glyph + match["suffix"]
+            # The content comparator deliberately ignores short punctuation
+            # fragments.  Only complete comparable words can justify a
+            # source-bound renderer compatibility projection.
+            if len(fallback) >= 3 and len(decoded) >= 3:
+                spellings[(fallback, decoded)] += 1
+    return spellings or None
 
 
 def _literal_mdoc_bullet_item_count(source: str) -> int | None:
@@ -626,6 +670,32 @@ def _source_consistent_compatibility_projection(reference: str, mant: str,
                 "sourceMarkers": sum(ordinal_markers.values()),
                 "referenceMarkers": replacements,
                 "reason": "Literal punctuated man(7) IP tags are source-proven ordered items; CVS prints the authored tag while ManT's portable ordered-list renderer uses the canonical N. marker.",
+            })
+
+    named_glyph_words = _literal_groff_named_glyph_words(source)
+    # CVS mandoc's character table intentionally has no ``vc`` row, while
+    # groff and ManT preserve the authored c-with-caron.  Exact inventories on
+    # all three sides make this a reference-compatibility distinction rather
+    # than an excuse for arbitrary Unicode substitutions.
+    if named_glyph_words is not None and all(
+            projected_reference.count(fallback) == limit
+            and projected_mant.count(decoded) == limit
+            for (fallback, decoded), limit in named_glyph_words.items()
+    ):
+        replacements = 0
+        for (fallback, decoded), limit in named_glyph_words.items():
+            projected_reference, count = _replace_limited(
+                projected_reference, fallback, decoded, limit
+            )
+            replacements += count
+        if replacements:
+            evidence.append({
+                "rule": "source-consistent-groff-named-character/v1",
+                "sourceSpellings": replacements,
+                "sourceCandidates": sum(named_glyph_words.values()),
+                "referenceSpellings": sorted({fallback for fallback, _ in named_glyph_words}),
+                "mantSpellings": sorted({decoded for _, decoded in named_glyph_words}),
+                "reason": "Literal groff-only named characters whose complete fallback and decoded word inventories agree are preserved by ManT even when the selected terminal reference omits its unsupported glyph.",
             })
 
     column_separators = _literal_mdoc_column_separator_count(source)

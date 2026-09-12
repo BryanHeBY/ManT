@@ -588,7 +588,7 @@ python3 scripts/audit-roff-fidelity.py --manpath /usr/share/man --pending-only \
   --audit-db tests/fixtures/roff/FIDELITY_AUDIT.csv --corpus archlinux-host
 ```
 
-The audit compares normalized visible tokens and contiguous token phrases, plus narrowly source-conditioned whitespace and punctuation that carry mdoc semantics. It deliberately ignores general line wrapping, indentation, blank lines, typography, headers, footers, and ManT-specific visible link targets. A `REVIEW` result is a candidate for human inspection rather than a test failure; reference renderers and ManT intentionally differ in several presentation details. Stable path sampling uses the path and `--seed`, so repeating a bounded local scan selects the same pages. Use `--max-pages-per-section` when broad coverage matters more than matching the host corpus distribution, repeat `--man-section` to focus on exact suffixes such as `1`, `3ssl`, or `8`, and repeat `--source-pattern` to require multiple multiline source shapes before sampling. Source-directed sweeps are the appropriate complement to random and AST-priority sampling when a rare macro family needs complete review.
+The audit compares NFC-normalized visible Unicode tokens and contiguous token phrases, plus narrowly source-conditioned whitespace and punctuation that carry mdoc semantics. It deliberately ignores general line wrapping, indentation, blank lines, typography, headers, footers, and ManT-specific visible link targets. A `REVIEW` result is a candidate for human inspection rather than a test failure; reference renderers and ManT intentionally differ in several presentation details. Stable path sampling uses the path and `--seed`, so repeating a bounded local scan selects the same pages. Use `--max-pages-per-section` when broad coverage matters more than matching the host corpus distribution, repeat `--man-section` to focus on exact suffixes such as `1`, `3ssl`, or `8`, and repeat `--source-pattern` to require multiple multiline source shapes before sampling. Source-directed sweeps are the appropriate complement to random and AST-priority sampling when a rare macro family needs complete review.
 
 ### Roff structure audit
 
@@ -715,6 +715,15 @@ fails before comparison cannot judge ManT content. Those rows remain explicitly
 uncovered (with their original detail); they do not become lowering
 hard-failures. A reference with visible text that ManT loses remains a hard
 failure.
+
+The runner retains every raw renderer finding. It may separately label a
+candidate `explained` only when a bounded source model accounts for every
+affected occurrence and a stricter residual comparison is clean. For example,
+the model can prove one literal groff-only named glyph that the pinned mandoc
+renderer drops. It refuses dynamic requests, source continuations, partial
+inventories, and unrelated similarly spelled words; this is an audit
+classification, never a blanket compatibility exemption or a product-clean
+result.
 
 Punctuation probes are declaration-local: the audit compares an authored mdoc
 function declaration or multi-operand `.Fa` phrase only when that exact phrase

@@ -52,6 +52,7 @@ def module(name):
 SOURCES = module('audit-roff-rendering')
 FIDELITY = module('audit-roff-fidelity')
 LAYOUT = module('audit-roff-layout')
+EXPLANATIONS = module('roff_content_explanations')
 LEGACY = {name: module('audit-roff-' + name) for name in PROFILES}
 
 
@@ -305,6 +306,58 @@ def classify_cross_reference_presentation(result):
         )
 
 
+def classify_source_proven_presentation(result):
+    """Downgrade only source-proven reference presentation differences."""
+    for name in ('fidelity-mandoc', 'fidelity-groff'):
+        value = result.get(name)
+        assessment = value.get('sourceContentAssessment') if isinstance(value, dict) else None
+        finding = value.get('finding', {}) if isinstance(value, dict) else {}
+        glyph_proofs = (
+            [
+                explanation
+                for explanation in assessment.get('explanations', [])
+                if explanation.get('rule') == 'source-consistent-groff-named-character/v1'
+            ]
+            if isinstance(assessment, dict)
+            else []
+        )
+        missing = set(finding.get('missing_tokens') or [])
+        glyph_only = (
+            len(glyph_proofs) == 1
+            and missing == set(glyph_proofs[0].get('referenceSpellings') or [])
+            and not finding.get('broken_phrases')
+            and not finding.get('signatures')
+        )
+        residual_covered = (
+            isinstance(assessment, dict)
+            and assessment.get('status') == 'explained'
+            and assessment.get('rawStatus') == 'review'
+            and assessment.get('residualStatus') == 'covered'
+            and assessment.get('sourceConsistentCompatibilityApplied')
+        )
+        if (
+            not isinstance(assessment, dict)
+            or value.get('execution') != 'success'
+            or value.get('status') != 'review'
+            or value.get('finding', {}).get('status') != 'review'
+            or not (residual_covered or glyph_only)
+        ):
+            continue
+        value['status'] = 'explained'
+        value['rawStatus'] = 'review'
+        value['triage'] = (
+            'source-proven-reference-glyph-compatibility'
+            if glyph_only else 'source-proven-reference-presentation'
+        )
+        value['triageReason'] = (
+            'a bounded source model accounted for every legacy renderer-only '
+            'candidate; its Unicode-aware residual comparison was covered'
+            if residual_covered else
+            'a bounded source model accounted for every legacy missing token; '
+            'the stricter Unicode-aware residual remains recorded separately'
+        )
+
+
 def execution_status(code, error):
     if code == 0:
         return 'success'
@@ -394,8 +447,12 @@ def render_dimensions(path, source, args, external):
         coverage = 'partial-external-context' if external else 'legacy-dimensions-covered'
         if finding['status'] == 'hard-failure':
             coverage = 'uncovered'
-        result['fidelity-' + kind] = {'execution': 'success', 'status': finding['status'],
-                                     'coverage': coverage, **bounded_finding(finding)}
+        assessment = finding.pop('_sourceContentAssessment', None)
+        fidelity = {'execution': 'success', 'status': finding['status'],
+                    'coverage': coverage, **bounded_finding(finding)}
+        if isinstance(assessment, dict):
+            fidelity['sourceContentAssessment'] = assessment
+        result['fidelity-' + kind] = fidelity
         layout = finding['layout']
         if not LAYOUT.valid_layout(layout):
             result['layout-' + kind] = failed('uncovered', 'legacy fidelity did not produce a valid layout observation')
@@ -403,6 +460,7 @@ def render_dimensions(path, source, args, external):
             result['layout-' + kind] = {'execution': 'success',
                 'status': 'review' if layout['candidates'] else 'clean', 'coverage': coverage,
                 **bounded_finding(layout)}
+    classify_source_proven_presentation(result)
     classify_cross_reference_presentation(result)
     return result, observations
 
@@ -568,6 +626,23 @@ if __name__ == '__main__':
         payload = json.load(sys.stdin)
         artifact = FIDELITY.compare_rendered(payload['label'], payload['source'].encode(),
             payload['reference'], payload['mant'], payload['kind'])
-        print(json.dumps(asdict(artifact.finding), ensure_ascii=False))
+        finding = asdict(artifact.finding)
+        if finding['status'] == 'review':
+            assessment = EXPLANATIONS.assess_content(
+                FIDELITY.strip_reference_chrome(payload['reference']),
+                payload['mant'],
+                payload['source'],
+            )
+            finding['_sourceContentAssessment'] = {
+                'status': assessment['status'],
+                'rawStatus': assessment['rawComparison']['status'],
+                'compatibilityStatus': assessment['compatibilityPresentationComparison']['status'],
+                'residualStatus': assessment['residualComparison']['status'],
+                'sourceConsistentCompatibilityApplied': assessment['coverage'][
+                    'sourceConsistentCompatibilityApplied'
+                ],
+                'explanations': assessment['explanations'],
+            }
+        print(json.dumps(finding, ensure_ascii=False))
     else:
         raise SystemExit(main())

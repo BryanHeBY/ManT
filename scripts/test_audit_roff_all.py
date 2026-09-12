@@ -216,6 +216,106 @@ class AllAuditTests(unittest.TestCase):
         AUDIT.classify_cross_reference_presentation(partial)
         self.assertEqual(partial['fidelity-groff']['status'], 'review')
 
+    def test_source_proven_presentation_preserves_raw_review(self):
+        result = {
+            'fidelity-mandoc': {
+                'execution': 'success',
+                'coverage': 'legacy-dimensions-covered',
+                'status': 'review',
+                'finding': {'status': 'review'},
+                'sourceContentAssessment': {
+                    'status': 'explained',
+                    'rawStatus': 'review',
+                    'residualStatus': 'covered',
+                    'sourceConsistentCompatibilityApplied': True,
+                },
+            },
+        }
+        AUDIT.classify_source_proven_presentation(result)
+        value = result['fidelity-mandoc']
+        self.assertEqual(value['status'], 'explained')
+        self.assertEqual(value['rawStatus'], 'review')
+        self.assertEqual(value['triage'], 'source-proven-reference-presentation')
+        self.assertEqual(value['finding']['status'], 'review')
+
+    def test_source_proven_presentation_requires_a_complete_residual(self):
+        result = {
+            'fidelity-groff': {
+                'execution': 'success',
+                'coverage': 'legacy-dimensions-covered',
+                'status': 'review',
+                'finding': {'status': 'review'},
+                'sourceContentAssessment': {
+                    'status': 'explained',
+                    'rawStatus': 'review',
+                    'residualStatus': 'review',
+                    'sourceConsistentCompatibilityApplied': True,
+                },
+            },
+        }
+        AUDIT.classify_source_proven_presentation(result)
+        self.assertEqual(result['fidelity-groff']['status'], 'review')
+
+    def test_source_proven_named_glyph_reconciles_legacy_ascii_tokenization(self):
+        # The legacy word tokenizer intentionally splits a Unicode word such
+        # as Doleček.  Its independent residual comparator is consequently
+        # more conservative, but an exact source/reference/Mant inventory can
+        # still prove that this one legacy missing token is reference-only.
+        result = {
+            'fidelity-mandoc': {
+                'execution': 'success',
+                'coverage': 'legacy-dimensions-covered',
+                'status': 'review',
+                'finding': {
+                    'status': 'review',
+                    'missing_tokens': ['Doleek'],
+                    'broken_phrases': [],
+                    'signatures': [],
+                },
+                'sourceContentAssessment': {
+                    'status': 'review',
+                    'rawStatus': 'review',
+                    'residualStatus': 'review',
+                    'sourceConsistentCompatibilityApplied': True,
+                    'explanations': [{
+                        'rule': 'source-consistent-groff-named-character/v1',
+                        'referenceSpellings': ['Doleek'],
+                    }],
+                },
+            },
+        }
+        AUDIT.classify_source_proven_presentation(result)
+        value = result['fidelity-mandoc']
+        self.assertEqual(value['status'], 'explained')
+        self.assertEqual(value['triage'], 'source-proven-reference-glyph-compatibility')
+
+    def test_named_glyph_proof_cannot_hide_another_legacy_candidate(self):
+        result = {
+            'fidelity-mandoc': {
+                'execution': 'success',
+                'coverage': 'legacy-dimensions-covered',
+                'status': 'review',
+                'finding': {
+                    'status': 'review',
+                    'missing_tokens': ['Doleek', 'lost'],
+                    'broken_phrases': [],
+                    'signatures': [],
+                },
+                'sourceContentAssessment': {
+                    'status': 'review',
+                    'rawStatus': 'review',
+                    'residualStatus': 'review',
+                    'sourceConsistentCompatibilityApplied': True,
+                    'explanations': [{
+                        'rule': 'source-consistent-groff-named-character/v1',
+                        'referenceSpellings': ['Doleek'],
+                    }],
+                },
+            },
+        }
+        AUDIT.classify_source_proven_presentation(result)
+        self.assertEqual(result['fidelity-mandoc']['status'], 'review')
+
     def test_completed_summary_counts_cross_reference_triage_separately(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -265,7 +365,12 @@ class AllAuditTests(unittest.TestCase):
         code, output, error = AUDIT.run_renderer([sys.executable, str(Path(AUDIT.__file__)), '--compare-worker'],
             10, AUDIT.reference_environment(), json.dumps(payload).encode(), binary_output=True)
         self.assertEqual(code, 0, error)
-        self.assertEqual(json.loads(output), asdict(expected.finding))
+        worker = json.loads(output)
+        self.assertEqual(
+            {key: value for key, value in worker.items() if key != '_sourceContentAssessment'},
+            asdict(expected.finding),
+        )
+        self.assertEqual(worker['_sourceContentAssessment']['rawStatus'], 'review')
 
     def test_direct_groff_uses_mandoc_and_layout_missing_is_uncovered(self):
         args = argparse.Namespace(groff=Path('/bin/groff'), mandoc=Path('/bin/mandoc'), mant=Path('/bin/mant'), timeout=1)
