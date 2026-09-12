@@ -438,7 +438,7 @@ escaping is minimal but lossless: intraword underscores such as the one in
 
 Color, point size, vertical or non-literal motion, drawing, overstrike, register, string, device, and postprocessor escape operands are consumed so control syntax cannot leak into prose. Their presentation effect is omitted. A positive literal relative horizontal motion retains one space as a text-mode approximation, including before a `\c` line join; negative, absolute, register-based, and compound motions remain presentation-only. Known zero-width spacing and formatter controls remain zero width. An otherwise undefined one-character escape follows roff's visible-trigger fallback after terminal-control filtering.
 
-The zero-advance `\z` escape consumes complete control operands and never exposes a partial glyph spelling. A final literal glyph remains visible when no later glyph can overstrike it; otherwise the linear projection omits the overstruck glyph.
+The zero-advance `\z` escape consumes complete control operands and never exposes a partial glyph spelling. Its pending glyph state crosses adjacent source text, style operands, and inline macro arguments, and settles only at a real line or cell boundary. A final literal glyph remains visible when no later glyph can overstrike it; otherwise the linear projection omits the overstruck glyph.
 
 Decoded text is never interpreted a second time as roff syntax. In particular, literal font-escape spellings authored with `\e` or `\[rs]` remain visible even when their letters resemble the currently selected font.
 

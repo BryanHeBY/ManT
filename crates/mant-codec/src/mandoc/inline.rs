@@ -20,7 +20,7 @@ mod source;
 use font::lower_man_font_scope;
 #[cfg(test)]
 use font::parse_roff_text_with_font;
-pub(super) use font::parse_roff_text_with_state;
+pub(super) use font::{ZeroAdvanceState, parse_roff_text_with_state};
 pub(super) use font::{lower_inline_nodes_with_font_state, parse_roff_text};
 pub(in crate::mandoc) use source_fragment::lower_source_fragment_with_formatter_state;
 
@@ -90,12 +90,17 @@ pub(super) fn append_inline_node_with_next(
     }
     match node.macro_name.as_deref() {
         Some("B" | "I" | "SB" | "R" | "BI" | "BR" | "IB" | "IR" | "RB" | "RI" | "OP") => {
-            let inlines = lower_man_font_scope(
+            let (inlines, joins_preceding_node) = lower_man_font_scope(
                 node,
                 default_name,
                 builder.spacing_enabled(),
                 &mut builder.font,
+                &mut builder.zero_advance,
             );
+            if joins_preceding_node {
+                builder.tighten_next_boundary();
+                builder.note_zero_advance_join();
+            }
             builder.append(inlines);
         }
         Some("Ns") => {
@@ -181,10 +186,11 @@ fn append_text_node(builder: &mut InlineBuilder, node: &Node) {
     if node.flags.delimiter_close {
         builder.tighten_next_boundary();
     }
-    let inlines = parse_roff_text_with_state(
+    let (inlines, joins_preceding_node) = font::parse_roff_text_with_zero_advance(
         node.text.as_deref().unwrap_or_default(),
         &mut builder.font,
         !node.flags.no_fill,
+        &mut builder.zero_advance,
     );
     // mdoc_term gives an empty text node a vertical row only when the text
     // itself begins an input line. An empty No/Em argument does not, whereas
@@ -194,6 +200,10 @@ fn append_text_node(builder: &mut InlineBuilder, node: &Node) {
         || decode(node.text.as_deref().unwrap_or_default())
             .iter()
             .any(|event| matches!(event, RoffInlineEvent::ZeroWidthGlyph));
+    if joins_preceding_node {
+        builder.tighten_next_boundary();
+        builder.note_zero_advance_join();
+    }
     builder.append_word_with_literal_row(inlines, occupies_literal_row);
     if node.flags.delimiter_open || node.flags.line_continuation {
         builder.tighten_next_boundary();
@@ -510,6 +520,36 @@ mod tests {
         let source = r"[\|optional\|]\&.\|.\|. \||\|";
 
         assert_eq!(plain_text(&parse_roff_text(source)), "[optional]... |");
+    }
+
+    #[test]
+    fn projects_zero_advance_glyphs_after_full_escape_decoding() {
+        // CVS term.c keeps TERMP_BACKAFTER through font, device and other
+        // formatter controls.  The glyph after `\\z` is still a real glyph:
+        // only a later printable glyph at the same formatter position hides
+        // it.  Test named and numbered glyphs as well as controls with
+        // operands so a local skip parser cannot regress this contract.
+        for (source, expected) in [
+            (r"TOKEN\z\[rs]", r"TOKEN\"),
+            (r"TOKEN\z\N'88'", "TOKENX"),
+            (r"TOKEN\zX\fP", "TOKENX"),
+            (r"TOKEN\zX\&", "TOKENX"),
+            (r"TOKEN\zX END", "TOKENXEND"),
+            (r"A\z\h'1n'XB END", "AXB END"),
+            (r"A\z\F[mono]XB END", "AB END"),
+        ] {
+            assert_eq!(plain_text(&parse_roff_text(source)), expected, "{source}");
+        }
+
+        let nodes = parse_roff_text(r"A\z\fBXB\fP END");
+        assert_eq!(plain_text(&nodes), "AB END");
+        assert!(matches!(
+            nodes.as_slice(),
+            [Inline::Text { value: prefix }, Inline::Strong { children }, Inline::Text { value: suffix }]
+                if prefix == "A"
+                    && suffix == " END"
+                    && matches!(children.as_slice(), [Inline::Text { value }] if value == "B")
+        ));
     }
 
     #[test]

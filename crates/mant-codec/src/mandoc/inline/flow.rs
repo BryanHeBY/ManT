@@ -1,5 +1,5 @@
 //! Filled flow preserves font, spacing and pending boundaries across scopes.
-use super::{Font, needs_boundary_space, push_text, updated_spacing};
+use super::{Font, ZeroAdvanceState, needs_boundary_space, push_text, updated_spacing};
 use mant_ir::Inline;
 use mant_ir::{first_visible_character, has_printable_character, last_visible_character};
 
@@ -12,6 +12,12 @@ pub(in crate::mandoc) struct InlineBuilder {
     empty_word: bool,
     pending_word_spaces: usize,
     pub(in crate::mandoc) font: FontState,
+    pub(in crate::mandoc) zero_advance: ZeroAdvanceState,
+    // A nested inline scope can resolve a `\\z` glyph that was armed by its
+    // parent.  Preserve that boundary fact when the scope returns its nodes:
+    // otherwise the parent would invent a word separator before the
+    // overwriting glyph.
+    zero_advance_joined: bool,
     source_cursor: Option<super::source_cursor::SourceCursor>,
 }
 
@@ -118,6 +124,8 @@ impl InlineBuilder {
             empty_word: false,
             pending_word_spaces: 0,
             font: FontState::new(),
+            zero_advance: ZeroAdvanceState::new(),
+            zero_advance_joined: false,
             source_cursor: None,
         }
     }
@@ -132,12 +140,18 @@ impl InlineBuilder {
             empty_word: false,
             pending_word_spaces: 0,
             font: FontState::new(),
+            zero_advance: ZeroAdvanceState::new(),
+            zero_advance_joined: false,
             source_cursor: None,
         }
     }
 
     pub(in crate::mandoc) fn tighten_next_boundary(&mut self) {
         self.boundary = PendingBoundary::Tight;
+    }
+
+    pub(in crate::mandoc) fn note_zero_advance_join(&mut self) {
+        self.zero_advance_joined = true;
     }
 
     pub(in crate::mandoc) fn track_executed_lines(&mut self) {
@@ -240,6 +254,7 @@ impl InlineBuilder {
     /// Preserve a formatter-requested line boundary without creating empty
     /// leading, repeated, or trailing rows around the paragraph.
     pub(in crate::mandoc) fn hard_break(&mut self) {
+        self.flush_zero_advance();
         self.boundary = PendingBoundary::Ordinary;
         self.empty_word = false;
         self.pending_word_spaces = 0;
@@ -395,6 +410,23 @@ impl InlineBuilder {
     }
 
     pub(in crate::mandoc) fn finish(mut self) -> Vec<Inline> {
+        self.flush_zero_advance();
+        self.finish_nodes()
+    }
+
+    /// Return an inner scope without forcing a pending `\\z` glyph to become
+    /// visible.  CVS mandoc carries its backtracking flags through nested
+    /// `term_word()` calls, so the caller must continue the state in the
+    /// surrounding inline stream before committing it at a real boundary.
+    pub(in crate::mandoc) fn finish_preserving_zero_advance(
+        mut self,
+    ) -> (Vec<Inline>, ZeroAdvanceState, bool) {
+        let zero_advance = std::mem::take(&mut self.zero_advance);
+        let joined = self.zero_advance_joined;
+        (self.finish_nodes(), zero_advance, joined)
+    }
+
+    fn finish_nodes(&mut self) -> Vec<Inline> {
         if let Some(cursor) = &self.source_cursor {
             if !cursor.row_occupied()
                 && let Some(last) = self
@@ -405,11 +437,26 @@ impl InlineBuilder {
             {
                 self.nodes.remove(last);
             }
-            return self.nodes;
+            return std::mem::take(&mut self.nodes);
         }
         while matches!(self.nodes.last(), Some(Inline::LineBreak)) {
             self.nodes.pop();
         }
-        self.nodes
+        std::mem::take(&mut self.nodes)
+    }
+
+    fn flush_zero_advance(&mut self) {
+        let mut pending = Vec::new();
+        self.zero_advance.finish_into(&mut pending);
+        if pending.is_empty() {
+            return;
+        }
+        let last = last_visible_character(&pending);
+        let printable = has_printable_character(&pending);
+        self.nodes.append(&mut pending);
+        if last.is_some() {
+            self.last_visible_character = last;
+        }
+        self.has_printable_content |= printable;
     }
 }

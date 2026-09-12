@@ -52,6 +52,17 @@ pub(super) enum PresentationKind {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(super) enum RoffInlineEvent {
     Text(String),
+    /// One source-level glyph whose printable fallback spans several
+    /// characters, for example an unknown `\\[name]` escape.
+    Glyph(String),
+    /// An unrecognized source glyph. It remains visible normally, but cannot
+    /// be made into a terminal `\\z` glyph because no output glyph exists to
+    /// overstrike.
+    FallbackGlyph(String),
+    /// `\\z` makes the next complete glyph zero-advance. The decoder keeps
+    /// decoding that glyph and every intervening formatter control; the
+    /// cross-node projection decides whether a later glyph overstrikes it.
+    ZeroAdvance,
     /// An invisible glyph buffered by the terminal formatter. Unlike a font
     /// selection, it occupies a literal output row without adding text.
     ZeroWidthGlyph,
@@ -76,17 +87,71 @@ pub(super) fn decode(source: &str) -> Vec<RoffInlineEvent> {
 /// Return only the visible characters of a roff-encoded identifier or label.
 pub(super) fn visible_text(source: &str) -> String {
     let mut output = String::new();
+    let mut zero_advance = false;
+    let mut pending: Option<String> = None;
     for event in decode(source) {
         match event {
-            RoffInlineEvent::Text(value) => output.push_str(&value),
+            RoffInlineEvent::Text(value) => {
+                for character in value.chars() {
+                    if matches!(character, '\n' | '\r') {
+                        if let Some(glyph) = pending.take() {
+                            output.push_str(&glyph);
+                        }
+                        output.push(character);
+                    } else if zero_advance {
+                        pending = Some(character.to_string());
+                        zero_advance = false;
+                    } else if let Some(glyph) = pending.take() {
+                        if character.is_whitespace() {
+                            output.push_str(&glyph);
+                        } else {
+                            // The following printable glyph overstrikes the
+                            // preceding zero-advance one.
+                            output.push(character);
+                        }
+                    } else {
+                        output.push(character);
+                    }
+                }
+            }
+            RoffInlineEvent::Glyph(value) => {
+                if zero_advance {
+                    pending = Some(value);
+                    zero_advance = false;
+                } else {
+                    // A complete glyph advances to the next source position;
+                    // it therefore replaces any pending zero-advance glyph.
+                    pending = None;
+                    output.push_str(&value);
+                }
+            }
+            RoffInlineEvent::FallbackGlyph(value) => {
+                if zero_advance {
+                    zero_advance = false;
+                } else {
+                    output.push_str(&value);
+                }
+            }
+            RoffInlineEvent::ZeroAdvance => {
+                pending = None;
+                zero_advance = true;
+            }
             RoffInlineEvent::EmptyDestination => output.push_str("<>"),
-            RoffInlineEvent::LineBreak => output.push('\n'),
+            RoffInlineEvent::LineBreak => {
+                if let Some(glyph) = pending.take() {
+                    output.push_str(&glyph);
+                }
+                output.push('\n');
+            }
             RoffInlineEvent::Font(_)
             | RoffInlineEvent::ZeroWidthGlyph
             | RoffInlineEvent::PreviousFont
             | RoffInlineEvent::Link(_)
             | RoffInlineEvent::Presentation { .. } => {}
         }
+    }
+    if let Some(glyph) = pending {
+        output.push_str(&glyph);
     }
     output
 }
@@ -231,27 +296,11 @@ impl Decoder {
                 });
             }
             'N' => self.decode_numbered_glyph(),
-            'z' => {
-                // GNU roff formats the next *glyph* without advancing; CVS
-                // mandoc represents that as ESCAPE_SKIPCHAR and its terminal
-                // renderer overstrikes the following glyph.  A linear semantic
-                // IR cannot represent an overstrike, so the zero-width glyph
-                // is formatting input rather than visible document text.
-                // Consume its full spelling here (including a nested \z or a
-                // named glyph) so it cannot leak as a synthetic prefix.
-                if let Some(glyph) = self.skip_zero_advance_glyph()
-                    && !self.has_visible_glyph_before_line_end()
-                {
-                    // A final zero-advance literal has no following glyph to
-                    // overstrike.  Both reference formatters retain it at
-                    // the end of the physical output line.
-                    self.text.push(glyph);
-                }
-                self.emit(RoffInlineEvent::Presentation {
-                    kind: PresentationKind::Spacing,
-                    argument: None,
-                });
-            }
+            // `term_word()` carries TERMP_BACKAFTER/BACKBEFORE across calls:
+            // `\\z` is therefore an execution state transition, not a local
+            // character-skipping shortcut. Keep the following escapes in the
+            // normal decoder so their operands and font effects survive.
+            'z' => self.emit(RoffInlineEvent::ZeroAdvance),
             '%' if self.characters.get(self.index..self.index + 2) == Some(&['<', '>']) => {
                 self.index += 2;
                 self.emit(RoffInlineEvent::EmptyDestination);
@@ -343,92 +392,28 @@ impl Decoder {
         });
     }
 
-    /// Consume the single formatter glyph following `\z` without recursively
-    /// decoding it into visible events.
-    ///
-    /// `roff_escape()` gives `\z` the same one-glyph operand shape as the
-    /// terminal renderer.  The bounded iterative loop handles repeated `\z`
-    /// prefixes without creating an attacker-controlled Rust call stack.
-    fn skip_zero_advance_glyph(&mut self) -> Option<char> {
-        loop {
-            let Some(character) = self.take_character() else {
-                return None;
-            };
-            if character != '\\' {
-                return Some(character);
-            }
-            let Some(trigger) = self.take_character() else {
-                return None;
-            };
-            match trigger {
-                // A nested `\z` still owns the next complete glyph.
-                'z' => {}
-                '(' => {
-                    self.take_counted(2);
-                    return None;
-                }
-                '[' => {
-                    self.take_until(']');
-                    return None;
-                }
-                'C' => {
-                    self.take_delimited_argument();
-                    return None;
-                }
-                'N' => {
-                    if self
-                        .characters
-                        .get(self.index)
-                        .is_some_and(char::is_ascii_digit)
-                    {
-                        self.take_counted(1);
-                    } else {
-                        self.take_delimited_argument();
-                    }
-                    return None;
-                }
-                // These formatter controls own operands too.  `\z` hides
-                // the complete glyph, not merely the control trigger.
-                'f' | 'm' | 'M' => {
-                    self.take_opaque_argument();
-                    continue;
-                }
-                's' => {
-                    self.take_size_argument();
-                    continue;
-                }
-                // Every other escape is a one-character formatter operand at
-                // this boundary.  Its trigger has already been consumed.
-                _ => return None,
-            }
-        }
-    }
-
-    fn has_visible_glyph_before_line_end(&self) -> bool {
-        self.characters[self.index..]
-            .iter()
-            .take_while(|character| !matches!(character, '\n' | '\r'))
-            .any(|character| !matches!(character, '\n' | '\r'))
-    }
-
     fn push_special_character(&mut self, name: &str, syntax: NamedCharacterSyntax) {
         if let Some(value) = dedicated_special_character(name) {
-            self.text.push_str(value);
+            self.emit(RoffInlineEvent::Glyph(value.to_owned()));
             return;
         }
         if let Some(value) = documented_groff_composite_character(name) {
-            self.text.push_str(&value);
+            self.emit(RoffInlineEvent::Glyph(value));
             return;
         }
         if let Some(value) = unicode_special_characters(name) {
+            let mut glyph = String::new();
             for character in value.chars() {
-                push_terminal_safe(&mut self.text, character);
+                push_terminal_safe(&mut glyph, character);
             }
+            self.emit(RoffInlineEvent::Glyph(glyph));
             return;
         }
         match libmandoc_rs::special_character(name) {
             Some(SpecialCharacter::Visible(character)) => {
-                push_terminal_safe(&mut self.text, character);
+                let mut glyph = String::new();
+                push_terminal_safe(&mut glyph, character);
+                self.emit(RoffInlineEvent::Glyph(glyph));
             }
             Some(SpecialCharacter::ZeroWidth) => self.emit(RoffInlineEvent::ZeroWidthGlyph),
             None => self.push_unknown_special_character(name, syntax),
@@ -441,11 +426,12 @@ impl Decoder {
             NamedCharacterSyntax::Bracketed => (r"\[", "]"),
             NamedCharacterSyntax::CharacterDescriptor => (r"\C'", "'"),
         };
-        self.text.push_str(prefix);
+        let mut value = String::from(prefix);
         for character in name.chars() {
-            push_terminal_safe(&mut self.text, character);
+            push_terminal_safe(&mut value, character);
         }
-        self.text.push_str(suffix);
+        value.push_str(suffix);
+        self.emit(RoffInlineEvent::FallbackGlyph(value));
     }
 
     fn push_source_character(&mut self, character: char) {

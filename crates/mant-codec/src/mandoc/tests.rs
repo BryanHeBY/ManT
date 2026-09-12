@@ -90,3 +90,20 @@ mod entries;
 
 mod navigation;
 mod tables;
+
+#[test]
+fn zero_advance_crosses_alternating_man_macro_arguments() {
+    let document = parse_manual_bytes(
+        std::path::Path::new("zero-advance-man-font-scope.1"),
+        b".TH ZERO-ADVANCE 1\n.SH DESCRIPTION\n.BR A\\zX B\n",
+    )
+    .expect("parse alternating man font scope");
+    let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
+        panic!("expected one paragraph");
+    };
+
+    // `\\zX` writes X without advancing. CVS term.c later writes B at that
+    // same position even though the operands are separate `term_word()`
+    // calls, so the semantic projection must be AB rather than AXB.
+    assert_eq!(inline_text(children), "AB");
+}
