@@ -420,6 +420,21 @@ class ExplanationTests(unittest.TestCase):
         self.assertNotEqual(result['status'], 'explained')
         self.assertFalse(result['coverage']['sourceConsistentCompatibilityApplied'])
 
+    def test_literal_eqn_subscript_can_explain_attached_cvs_spacing(self):
+        source = '.EQ\n1 + log sub 2 italic value\n.EN\n'
+        result = assess_content('1 + log_2 value\n', '1 + log _ 2 value\n', source)
+        self.assertEqual(result['status'], 'explained')
+        self.assertEqual(
+            result['explanations'][0]['rule'],
+            'source-consistent-eqn-subscript-spacing/v1',
+        )
+
+    def test_eqn_subscript_projection_rejects_dynamic_definitions(self):
+        source = '.EQ\ndefine x / log sub 2 /\nx\n.EN\n'
+        result = assess_content('log_2\n', 'log _ 2\n', source)
+        self.assertNotEqual(result['status'], 'explained')
+        self.assertFalse(result['coverage']['sourceConsistentCompatibilityApplied'])
+
     def test_named_character_projection_ignores_roff_comments(self):
         source = '.\\" obsolete Prika\\(vze\n.TH PROBE 1\nPrika\\(vze\n'
         result = assess_content('Prikae\n', 'Prikaže\n', source)

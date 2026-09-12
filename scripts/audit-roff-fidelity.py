@@ -1732,6 +1732,34 @@ def appears_with_small_insertions(
     return False
 
 
+def table_phrase_is_only_terminal_geometry(
+    phrase: Sequence[str], cells: Sequence[Sequence[str]]
+) -> bool:
+    """Return whether a reference n-gram is a non-source tbl projection.
+
+    ``tbl_term.c`` may visually interleave a subset of one cell with another
+    column. Once a complete source row has exactly matched ManT's portable
+    row, a reference n-gram that is merely an ordered subsequence of that
+    source row is not evidence that ManT lost or reordered prose. Require it
+    not to be contiguous source text: a genuine sentence inside one cell must
+    remain eligible for the ordinary broken-phrase check.
+    """
+    flattened = tuple(token for cell in cells for token in cell)
+    if len(phrase) > len(flattened):
+        return False
+    contiguous = any(
+        flattened[index : index + len(phrase)] == tuple(phrase)
+        for index in range(len(flattened) - len(phrase) + 1)
+    )
+    if contiguous:
+        return False
+    cursor = 0
+    for token in flattened:
+        if cursor < len(phrase) and token == phrase[cursor]:
+            cursor += 1
+    return cursor == len(phrase)
+
+
 def broken_phrase_candidates(
     reference_lines: Sequence[Sequence[str]], mine: Sequence[str], width: int,
     table_rows: Sequence[TableRowPair] = (),
@@ -1758,6 +1786,11 @@ def broken_phrase_candidates(
                 or any(
                     phrase_crosses_table_cells(key, source_row)
                     and phrase_crosses_table_cells(key, portable_row)
+                    for source_row, portable_row in table_rows
+                )
+                or any(
+                    table_phrase_is_only_terminal_geometry(key, source_row)
+                    and source_row == portable_row
                     for source_row, portable_row in table_rows
                 )
             ):
@@ -2816,6 +2849,37 @@ T}
         4,
         literal_table_rows,
     ) == []
+    geometry_table_source = """.TS
+tab(@);
+l l.
+T{
+The color for a folder or a shortcut to a folder as an RGB hex string.
+T}@T{
+string
+T}
+.TE
+"""
+    geometry_table_rows = portable_table_row_pairs(
+        geometry_table_source,
+        "The color for a folder or a shortcut to a folder as an RGB hex string. | string\n",
+    )
+    # The reference table formatter can line up `color for folder` beside the
+    # next cell's `string`. The exact source/portable row proves that this
+    # non-contiguous sequence is geometry, not a missing ManT phrase.
+    assert broken_phrase_candidates(
+        [["color", "for", "folder", "string"]],
+        [
+            "the", "color", "for", "folder", "shortcut", "folder",
+            "rgb", "hex", "string", "string",
+        ],
+        4,
+        geometry_table_rows,
+    ) == []
+    # Contiguous prose inside a verified table cell remains a real ordering
+    # candidate when ManT does not contain it.
+    assert not table_phrase_is_only_terminal_geometry(
+        ("color", "for", "folder"), geometry_table_rows[0][0]
+    )
     # A page that merely contains a tbl request cannot exempt an unrelated
     # literal pipe in source code: no exact source-table row binds it.
     assert portable_table_row_pairs(

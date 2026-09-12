@@ -319,6 +319,7 @@ def classify_source_proven_presentation(result):
                 if explanation.get('rule') in {
                     'source-consistent-groff-named-character/v1',
                     'source-consistent-groff-default-composite/v1',
+                    'source-consistent-eqn-subscript-spacing/v1',
                 }
             ]
             if isinstance(assessment, dict)

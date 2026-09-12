@@ -316,6 +316,33 @@ class AllAuditTests(unittest.TestCase):
         AUDIT.classify_source_proven_presentation(result)
         self.assertEqual(result['fidelity-mandoc']['status'], 'explained')
 
+    def test_source_proven_eqn_subscript_reconciles_terminal_spacing(self):
+        result = {
+            'fidelity-mandoc': {
+                'execution': 'success',
+                'coverage': 'legacy-dimensions-covered',
+                'status': 'review',
+                'finding': {
+                    'status': 'review',
+                    'missing_tokens': ['log_2'],
+                    'broken_phrases': [],
+                    'signatures': [],
+                },
+                'sourceContentAssessment': {
+                    'status': 'review',
+                    'rawStatus': 'review',
+                    'residualStatus': 'review',
+                    'sourceConsistentCompatibilityApplied': True,
+                    'explanations': [{
+                        'rule': 'source-consistent-eqn-subscript-spacing/v1',
+                        'referenceSpellings': ['log_2'],
+                    }],
+                },
+            },
+        }
+        AUDIT.classify_source_proven_presentation(result)
+        self.assertEqual(result['fidelity-mandoc']['status'], 'explained')
+
     def test_named_glyph_proof_cannot_hide_another_legacy_candidate(self):
         result = {
             'fidelity-mandoc': {
