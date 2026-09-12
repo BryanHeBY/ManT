@@ -14,7 +14,9 @@ conditionals or macro execution from raw source.
 -static	void		 roff_addtbl(struct roff_man *, int, struct tbl_node *);
 +static	void		 roff_addtbl(struct roff *, int, struct tbl_node *);
  static	int		 roff_als(ROFF_ARGS);
-@@ -1101,12 +1101,14 @@
+ static	int		 roff_block(ROFF_ARGS);
+ static	int		 roff_block_text(ROFF_ARGS);
+@@ -1101,15 +1101,18 @@
  }
  
  static void
@@ -22,8 +24,8 @@ conditionals or macro execution from raw source.
 +roff_addtbl(struct roff *r, int line, struct tbl_node *tbl)
  {
  	struct roff_node	*n;
- 	struct tbl_span	*span;
- 	struct roff_man	*man;
+ 	struct tbl_span		*span;
++	struct roff_man		*man;
  
 +	man = r->man;
  	if (man->meta.macroset == MACROSET_MAN)
@@ -32,20 +34,26 @@ conditionals or macro execution from raw source.
  		n = roff_node_alloc(man, line, 0, ROFFT_TBL, TOKEN_NONE);
 +		n->tbl_escape = (unsigned char)r->escape;
  		n->span = span;
-@@ -1970,7 +1972,7 @@
+ 		roff_node_append(man, n);
+ 		n->flags |= NODE_VALID | NODE_ENDED;
+@@ -1970,7 +1973,7 @@
+ 	}
  	if (r->tbl != NULL && (ctl == 0 || buf->buf[pos] == '\0')) {
  		tbl_read(r->tbl, ln, buf->buf, ppos);
 -		roff_addtbl(r->man, ln, r->tbl);
 +		roff_addtbl(r, ln, r->tbl);
  		return e;
-@@ -2023,7 +2025,7 @@
- 	while (buf->buf[pos] == ' ')
- 		pos++;
- 	tbl_read(r->tbl, ln, buf->buf, pos);
--	roff_addtbl(r->man, ln, r->tbl);
-+	roff_addtbl(r, ln, r->tbl);
- 	return ROFF_IGN;
- }
+ 	}
+ 	if ( ! ctl) {
+@@ -2023,7 +2026,7 @@
+ 		while (buf->buf[pos] == ' ')
+ 			pos++;
+ 		tbl_read(r->tbl, ln, buf->buf, pos);
+-		roff_addtbl(r->man, ln, r->tbl);
++		roff_addtbl(r, ln, r->tbl);
+ 		return ROFF_IGN;
+ 	}
+ 
 --- a/roff.h
 +++ b/roff.h
 @@ -526,6 +526,7 @@
@@ -54,3 +62,5 @@ conditionals or macro execution from raw source.
  	size_t		  flow_epoch; /* Executed flow boundaries at allocation. */
 +	unsigned char	  tbl_escape; /* Active escape when tbl row was read. */
  	int		  flags;
+ #define	NODE_VALID	 (1 << 0)  /* Has been validated. */
+ #define	NODE_ENDED	 (1 << 1)  /* Gone past body end mark. */
