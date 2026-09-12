@@ -190,30 +190,26 @@ impl GroupEvidence {
             });
     }
     /// TQ extends one physical owner. Rebind the exact merged head to the
-    /// original first node and final continuation, not its new array position.
+    /// original first node and final continuation, not its new array position
+    /// or a source-coordinate lookalike. Macro expansion can duplicate both
+    /// a definition's source span and its visible head, so only the native
+    /// owner marker survives as an unambiguous identity here.
     #[cfg(feature = "roff")]
     pub(crate) fn continued(&mut self, item: &DefinitionItem, last_key: usize) {
         let Some(source) = item.source else { return };
+        let Some(key) = owner_marker(item) else {
+            return;
+        };
         let head = head_content(&item.terms);
-        let Some(bucket) = self.items.get_mut(&(source.line, source.column)) else {
-            return;
-        };
-        let candidates = bucket
-            .iter()
-            .filter(|w| w.source == source && head.starts_with(&w.head));
-        let Some(key) = candidates
-            .map(|w| w.key)
-            .reduce(|a, b| if a == b { a } else { 0 })
-            .filter(|&key| key != 0)
-        else {
-            return;
-        };
-        bucket.push(Witness {
-            source,
-            head,
-            key,
-            last_key,
-        });
+        self.items
+            .entry((source.line, source.column))
+            .or_default()
+            .push(Witness {
+                source,
+                head,
+                key,
+                last_key,
+            });
     }
     /// Build a complete owner allocation plan only after all normalization has
     /// finished.  This rejects a damaged repeated macro stream globally, but
