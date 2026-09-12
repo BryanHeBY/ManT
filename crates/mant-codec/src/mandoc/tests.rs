@@ -179,6 +179,136 @@ fn zero_advance_crosses_leading_scopes_generated_prefixes_and_link_labels() {
 }
 
 #[test]
+fn declaration_witnesses_close_on_unclassified_bodies_and_survive_split_macro_lists() {
+    let body_closed = parse_manual_bytes(
+        std::path::Path::new("declaration-body-closure.1"),
+        b".TH PROBE 1\n.SH OPTIONS\n.TP\n.B \"This is explanatory prose.\"\nOWN DESCRIPTION.\n.TP\n.B --alpha\n.TP\n.B --beta\nSHARED DESCRIPTION.\n",
+    )
+    .expect("parse an unclassified definition with its own body");
+    let [
+        Block::DefinitionList {
+            items,
+            declaration_groups,
+            ..
+        },
+    ] = body_closed.sections[0].blocks.as_slice()
+    else {
+        panic!(
+            "expected one definition list: {:#?}",
+            body_closed.sections[0].blocks
+        );
+    };
+    assert_eq!(items.len(), 3);
+    assert_eq!(
+        declaration_groups,
+        &[mant_ir::DeclarationGroup {
+            start_item: 1,
+            end_item: 3,
+        }],
+        "the prose owner's own body closes its physical run"
+    );
+
+    let split_macro = parse_manual_bytes(
+        std::path::Path::new("declaration-split-macro.1"),
+        b".TH PROBE 1\n.SH OPTIONS\n.de XX\n.TP\n.B --alpha\n.TP\n.B --beta\nSHARED DESCRIPTION.\n..\n.XX\n.PP\nSEPARATOR.\n.XX\n",
+    )
+    .expect("parse two macro-expanded declaration lists");
+    let lists = split_macro.sections[0]
+        .blocks
+        .iter()
+        .filter_map(|block| match block {
+            Block::DefinitionList {
+                items,
+                declaration_groups,
+                ..
+            } => Some((items, declaration_groups)),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(lists.len(), 2, "the paragraph splits physical lists");
+    for (items, declaration_groups) in lists {
+        assert_eq!(
+            items
+                .iter()
+                .map(|item| inline_text(&item.terms[0]))
+                .collect::<Vec<_>>(),
+            ["--alpha", "--beta"]
+        );
+        assert_eq!(
+            declaration_groups,
+            &[mant_ir::DeclarationGroup {
+                start_item: 0,
+                end_item: 2,
+            }],
+            "each complete expansion retains its own shared description"
+        );
+    }
+}
+
+#[test]
+fn zero_advance_crosses_empty_enclosures_and_atomic_mdoc_output() {
+    let cases = [
+        (
+            "empty-enclosure",
+            b".Dd September 12, 2026\n.Dt ZERO-ADVANCE 1\n.Os\n.Sh DESCRIPTION\n.No A\\zX\n.Dq\n.No B\n".as_slice(),
+            "AX“” B",
+        ),
+        (
+            "include",
+            b".Dd September 12, 2026\n.Dt ZERO-ADVANCE 1\n.Os\n.Sh DESCRIPTION\n.In A\\zX\n".as_slice(),
+            "<A>",
+        ),
+        (
+            "bsd",
+            b".Dd September 12, 2026\n.Dt ZERO-ADVANCE 1\n.Os\n.Sh DESCRIPTION\n.Bx A\\zX\n".as_slice(),
+            "ABSD",
+        ),
+    ];
+    for (label, source, expected) in cases {
+        let document = parse_manual_bytes(
+            std::path::Path::new(&format!("zero-advance-{label}.1")),
+            source,
+        )
+        .expect("parse zero-advance atomic output");
+        let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
+            panic!(
+                "{label}: expected one paragraph: {:#?}",
+                document.sections[0].blocks
+            );
+        };
+        assert_eq!(inline_text(children), expected, "{label}: {children:?}");
+    }
+}
+
+#[test]
+fn zero_advance_treats_every_empty_enclosure_delimiter_as_a_formatter_word() {
+    for (macro_name, delimiters) in [
+        ("Dq", "“”"),
+        ("Op", "[]"),
+        ("Pq", "()"),
+        ("Brq", "{}"),
+        ("Sq", "‘’"),
+    ] {
+        let source = format!(
+            ".Dd September 12, 2026\n.Dt ZERO-ADVANCE 1\n.Os\n.Sh DESCRIPTION\n.No A\\zX\n.{macro_name}\n.No B\n"
+        );
+        let document = parse_manual_bytes(
+            std::path::Path::new(&format!("zero-advance-empty-{macro_name}.1")),
+            source.as_bytes(),
+        )
+        .expect("parse empty mdoc enclosure");
+        let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
+            panic!("{macro_name}: expected one paragraph");
+        };
+        assert_eq!(
+            inline_text(children),
+            format!("AX{delimiters} B"),
+            "{macro_name}: {children:?}"
+        );
+    }
+}
+
+#[test]
 fn visible_glyphs_before_a_definition_break_do_not_detach_the_head() {
     let document = parse_manual_bytes(
         std::path::Path::new("definition-glyph-before-break.1"),

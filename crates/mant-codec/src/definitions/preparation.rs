@@ -4,6 +4,7 @@ use std::collections::HashMap;
 
 use mant_ir::{Block, DefinitionItem, Inline, Section, SourceSpan};
 
+use super::groups::GroupMatchingPlan;
 use super::{
     NativeHeadEvidence,
     context::{DefinitionContext, child_definition_context, definition_group_context},
@@ -42,12 +43,19 @@ pub(super) fn prepare(
     context: DefinitionContext,
     evidence: &NativeHeadEvidence,
 ) -> PreparedDefinitions {
+    // Ownership normalization may move definition owners between lists. Build
+    // native pointer matching only after that movement is complete, otherwise
+    // a valid macro expansion split by an ordinary paragraph looks like a
+    // missing same-coordinate sibling.
+    normalize_blocks(blocks, context, evidence);
+    normalize_sections(sections, context, evidence);
+    let mut group_matches = evidence.groups.matching_plan(blocks, sections);
     let mut prepared = PreparedDefinitions {
         preferred_counts: HashMap::new(),
         plans: Vec::new(),
     };
-    prepared.blocks(blocks, context, evidence);
-    prepared.sections(sections, context, evidence);
+    prepared.blocks(blocks, context, evidence, &mut group_matches);
+    prepared.sections(sections, context, evidence, &mut group_matches);
     prepared
 }
 
@@ -57,11 +65,12 @@ impl PreparedDefinitions {
         sections: &mut [Section],
         parent: DefinitionContext,
         evidence: &NativeHeadEvidence,
+        group_matches: &mut GroupMatchingPlan,
     ) {
         for section in sections {
             let context = DefinitionContext::for_section(&section.heading.plain_text(), parent);
-            self.blocks(&mut section.blocks, context, evidence);
-            self.sections(&mut section.children, context, evidence);
+            self.blocks(&mut section.blocks, context, evidence, group_matches);
+            self.sections(&mut section.children, context, evidence, group_matches);
         }
     }
 
@@ -70,9 +79,8 @@ impl PreparedDefinitions {
         blocks: &mut Vec<Block>,
         context: DefinitionContext,
         evidence: &NativeHeadEvidence,
+        group_matches: &mut GroupMatchingPlan,
     ) {
-        normalize_definition_nesting_with_boundaries(blocks, &evidence.continuations);
-        normalize_hanging_definitions(blocks, context);
         for block in blocks {
             match block {
                 Block::List { items, .. } => {
@@ -83,7 +91,7 @@ impl PreparedDefinitions {
                         let child_context = item.entry.as_ref().map_or(context, |facts| {
                             child_definition_context(facts.kind, context)
                         });
-                        self.blocks(&mut item.blocks, child_context, evidence);
+                        self.blocks(&mut item.blocks, child_context, evidence, group_matches);
                     }
                 }
                 Block::DefinitionList {
@@ -108,14 +116,19 @@ impl PreparedDefinitions {
                             head: head_content(&item.terms),
                             identity,
                         });
-                        self.blocks(&mut item.description, child_context, evidence);
+                        self.blocks(
+                            &mut item.description,
+                            child_context,
+                            evidence,
+                            group_matches,
+                        );
                     }
-                    *declaration_groups = evidence.groups.resolve(items, &heads);
+                    *declaration_groups = evidence.groups.resolve(items, &heads, group_matches);
                 }
                 Block::Table { rows, .. } => {
                     for row in rows {
                         for cell in &mut row.cells {
-                            self.blocks(&mut cell.blocks, context, evidence);
+                            self.blocks(&mut cell.blocks, context, evidence, group_matches);
                         }
                     }
                 }
@@ -126,6 +139,60 @@ impl PreparedDefinitions {
                 | Block::ThematicBreak { .. }
                 | Block::Unsupported { .. } => {}
             }
+        }
+    }
+}
+
+fn normalize_sections(
+    sections: &mut [Section],
+    parent: DefinitionContext,
+    evidence: &NativeHeadEvidence,
+) {
+    for section in sections {
+        let context = DefinitionContext::for_section(&section.heading.plain_text(), parent);
+        normalize_blocks(&mut section.blocks, context, evidence);
+        normalize_sections(&mut section.children, context, evidence);
+    }
+}
+
+fn normalize_blocks(
+    blocks: &mut Vec<Block>,
+    context: DefinitionContext,
+    evidence: &NativeHeadEvidence,
+) {
+    normalize_definition_nesting_with_boundaries(blocks, &evidence.continuations);
+    normalize_hanging_definitions(blocks, context);
+    for block in blocks {
+        match block {
+            Block::List { items, .. } => {
+                for item in items {
+                    let child_context = item.entry.as_ref().map_or(context, |facts| {
+                        child_definition_context(facts.kind, context)
+                    });
+                    normalize_blocks(&mut item.blocks, child_context, evidence);
+                }
+            }
+            Block::DefinitionList { items, .. } => {
+                let item_context = definition_group_context(items, context);
+                for item in items {
+                    let identity = identity_plan(item, item_context, evidence.role(item));
+                    let child_context = child_definition_context(identity.kind, item_context);
+                    normalize_blocks(&mut item.description, child_context, evidence);
+                }
+            }
+            Block::Table { rows, .. } => {
+                for row in rows {
+                    for cell in &mut row.cells {
+                        normalize_blocks(&mut cell.blocks, context, evidence);
+                    }
+                }
+            }
+            Block::Paragraph { .. }
+            | Block::Preformatted { .. }
+            | Block::Equation { .. }
+            | Block::VerticalSpace { .. }
+            | Block::ThematicBreak { .. }
+            | Block::Unsupported { .. } => {}
         }
     }
 }
