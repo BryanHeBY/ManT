@@ -48,7 +48,7 @@ pub(super) fn response(
     (
         QueryExplanation {
             supports: std::mem::take(&mut page.pools[0].values),
-            schema: ExplanationSchema::V0Dot11,
+            schema: ExplanationSchema::V0Dot12,
             order: mant_protocol::EvidenceOrder::ClassThenSource,
             counts,
             label: plan.content.label.clone(),

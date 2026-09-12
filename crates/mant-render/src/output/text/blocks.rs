@@ -115,7 +115,10 @@ impl BlockRenderer<'_> {
             let first_origin = compose_origin(base_indent, layout.indent_columns);
             return Flow::text(
                 value
-                    .trim_matches('\n')
+                    // A leading inline break can be formatter output from an
+                    // empty word containing `\p`; unlike a trailing line
+                    // terminator it is observable vertical content.
+                    .trim_end_matches('\n')
                     .split('\n')
                     .enumerate()
                     .map(|(index, line)| {
@@ -168,13 +171,7 @@ impl BlockRenderer<'_> {
             }
             Block::Table { rows, layout, .. } => {
                 let origin = compose_origin(base_indent, layout.indent_columns);
-                if mant_ir::geometry::table_requires_origin_preserving_stack(rows, origin) {
-                    return self.stacked_table_flow(rows, origin);
-                }
-                (
-                    super::super::table::table_rows(rows, |cell| self.cell_text(cell)).join("\n"),
-                    layout.indent_columns,
-                )
+                return self.table_flow(rows, origin);
             }
             Block::Equation { value, layout, .. }
             | Block::Unsupported {
@@ -206,13 +203,69 @@ impl BlockRenderer<'_> {
     }
 
     fn cell_text(&self, cell: &TableCell) -> String {
-        self.render_blocks(&cell.blocks, 0).replace('\n', " ")
+        self.render_blocks(&cell.blocks, 0)
+    }
+
+    fn table_flow(&self, rows: &[mant_ir::TableRow], origin: i32) -> Flow {
+        if mant_ir::geometry::table_requires_origin_preserving_stack(rows, origin) {
+            return self.stacked_table_flow(rows, origin);
+        }
+        let physical_rows = super::super::table::table_rows(rows, |cell| self.cell_text(cell));
+        let value = physical_rows.join("\n");
+        if physical_rows.is_empty() {
+            Flow::default()
+        } else if value.is_empty() {
+            // One real, empty tbl row is layout, not an absent table. Keep it
+            // in the shared gap flow so surrounding blocks retain exactly one
+            // blank physical row without inventing whitespace cell content.
+            let mut flow = Flow::default();
+            flow.gap(1);
+            flow
+        } else {
+            Flow::text(indent_lines(&value, padding(origin)))
+        }
     }
 
     fn stacked_table_flow(&self, rows: &[mant_ir::TableRow], origin: i32) -> Flow {
         let mut output = Flow::default();
-        for cell in rows.iter().flat_map(|row| &row.cells) {
-            output.extend(self.block_flow(&cell.blocks, origin));
+        for row in rows {
+            match &row.kind {
+                mant_ir::TableRowKind::Data if row.cells.is_empty() => output.gap(1),
+                mant_ir::TableRowKind::Data => {
+                    for cell in &row.cells {
+                        match cell.kind {
+                            mant_ir::TableCellKind::Text => {
+                                output.extend(self.block_flow(&cell.blocks, origin));
+                            }
+                            mant_ir::TableCellKind::HorizontalRule
+                            | mant_ir::TableCellKind::IsolatedHorizontalRule => {
+                                output.push_text(indent_lines("---", padding(origin)));
+                            }
+                            mant_ir::TableCellKind::DoubleHorizontalRule
+                            | mant_ir::TableCellKind::IsolatedDoubleHorizontalRule => {
+                                output.push_text(indent_lines("===", padding(origin)));
+                            }
+                        }
+                    }
+                }
+                mant_ir::TableRowKind::HorizontalRule => {
+                    output.push_text(indent_lines("---", padding(origin)));
+                }
+                mant_ir::TableRowKind::DoubleHorizontalRule => {
+                    output.push_text(indent_lines("===", padding(origin)));
+                }
+                mant_ir::TableRowKind::LayoutRule { cells } => {
+                    let row = cells
+                        .iter()
+                        .map(|kind| match kind {
+                            mant_ir::TableRuleCellKind::Horizontal => "---",
+                            mant_ir::TableRuleCellKind::DoubleHorizontal => "===",
+                        })
+                        .collect::<Vec<_>>()
+                        .join(" | ");
+                    output.push_text(indent_lines(&row, padding(origin)));
+                }
+            }
         }
         output
     }
@@ -262,6 +315,7 @@ mod tests {
             [(-2, 3, 1), (3, -2, 1), (4096, 3, 4096), (4090, 10, 4096)]
         {
             let cell = |text| TableCell {
+                kind: mant_ir::TableCellKind::Text,
                 blocks: vec![paragraph(text, child_indent)],
                 column_span: 2,
                 row_span: 1,
@@ -269,6 +323,7 @@ mod tests {
             };
             let table = Block::Table {
                 rows: vec![mant_ir::TableRow {
+                    kind: mant_ir::TableRowKind::Data,
                     cells: vec![cell("FIRST"), cell("SECOND")],
                 }],
                 layout: LayoutHint {
@@ -289,7 +344,9 @@ mod tests {
         let nested = plain_list(
             vec![Block::Table {
                 rows: vec![mant_ir::TableRow {
+                    kind: mant_ir::TableRowKind::Data,
                     cells: vec![TableCell {
+                        kind: mant_ir::TableCellKind::Text,
                         blocks: vec![plain_list(vec![paragraph("NESTED", 5)], 3)],
                         column_span: 1,
                         row_span: 1,
@@ -310,8 +367,10 @@ mod tests {
         );
         let table = Block::Table {
             rows: vec![mant_ir::TableRow {
+                kind: mant_ir::TableRowKind::Data,
                 cells: ["FIRST", "SECOND"]
                     .map(|text| TableCell {
+                        kind: mant_ir::TableCellKind::Text,
                         blocks: vec![paragraph(text, 0)],
                         column_span: 1,
                         row_span: 1,
@@ -331,6 +390,57 @@ mod tests {
         );
     }
 
+    #[test]
+    fn stacked_tables_preserve_partial_whole_layout_rules_and_empty_rows() {
+        let renderer = super::super::plain_renderer();
+        let table = Block::Table {
+            rows: vec![
+                mant_ir::TableRow {
+                    kind: mant_ir::TableRowKind::Data,
+                    cells: vec![
+                        TableCell {
+                            kind: mant_ir::TableCellKind::HorizontalRule,
+                            blocks: Vec::new(),
+                            column_span: 1,
+                            row_span: 1,
+                            alignment: None,
+                        },
+                        TableCell {
+                            kind: mant_ir::TableCellKind::Text,
+                            blocks: vec![paragraph("VISIBLE", -1)],
+                            column_span: 1,
+                            row_span: 1,
+                            alignment: None,
+                        },
+                    ],
+                },
+                mant_ir::TableRow {
+                    kind: mant_ir::TableRowKind::Data,
+                    cells: Vec::new(),
+                },
+                mant_ir::TableRow {
+                    kind: mant_ir::TableRowKind::DoubleHorizontalRule,
+                    cells: Vec::new(),
+                },
+                mant_ir::TableRow {
+                    kind: mant_ir::TableRowKind::LayoutRule {
+                        cells: vec![
+                            mant_ir::TableRuleCellKind::Horizontal,
+                            mant_ir::TableRuleCellKind::DoubleHorizontal,
+                        ],
+                    },
+                    cells: Vec::new(),
+                },
+            ],
+            layout: LayoutHint::default(),
+            source: None,
+        };
+        assert_eq!(
+            renderer.render_blocks(&[table], 0),
+            "---\nVISIBLE\n\n===\n--- | ==="
+        );
+    }
+
     fn paragraph(text: &str, indent: i32) -> Block {
         Block::Paragraph {
             children: vec![Inline::Text { value: text.into() }],
@@ -340,6 +450,138 @@ mod tests {
             },
             source: None,
         }
+    }
+
+    #[test]
+    fn paragraph_preserves_a_formatter_generated_leading_line_break() {
+        let renderer = super::super::plain_renderer();
+        let block = Block::Paragraph {
+            children: vec![
+                Inline::LineBreak,
+                Inline::Text {
+                    value: "BODY".into(),
+                },
+            ],
+            layout: LayoutHint::default(),
+            source: None,
+        };
+        assert_eq!(renderer.render_blocks(&[block], 0), "\nBODY");
+    }
+
+    #[test]
+    fn table_cells_preserve_formatter_generated_line_breaks() {
+        let renderer = super::super::plain_renderer();
+        let table = Block::Table {
+            rows: vec![mant_ir::TableRow {
+                kind: mant_ir::TableRowKind::Data,
+                cells: vec![TableCell {
+                    kind: mant_ir::TableCellKind::Text,
+                    blocks: vec![Block::Paragraph {
+                        children: vec![
+                            Inline::Text { value: "A".into() },
+                            Inline::LineBreak,
+                            Inline::Text {
+                                value: "B C".into(),
+                            },
+                        ],
+                        layout: LayoutHint::default(),
+                        source: None,
+                    }],
+                    column_span: 1,
+                    row_span: 1,
+                    alignment: None,
+                }],
+            }],
+            layout: LayoutHint::default(),
+            source: None,
+        };
+        assert_eq!(renderer.render_blocks(&[table], 0), "A\nB C");
+    }
+
+    #[test]
+    fn table_cells_preserve_leading_and_trailing_physical_rows() {
+        let renderer = super::super::plain_renderer();
+        for (children, expected) in [
+            (
+                vec![
+                    Inline::LineBreak,
+                    Inline::Text {
+                        value: "BODY".into(),
+                    },
+                ],
+                "\nBODY",
+            ),
+            (
+                vec![
+                    Inline::Text {
+                        value: "BODY".into(),
+                    },
+                    Inline::LineBreak,
+                ],
+                "BODY",
+            ),
+        ] {
+            let table = Block::Table {
+                rows: vec![mant_ir::TableRow {
+                    kind: mant_ir::TableRowKind::Data,
+                    cells: vec![TableCell {
+                        kind: mant_ir::TableCellKind::Text,
+                        blocks: vec![Block::Paragraph {
+                            children,
+                            layout: LayoutHint::default(),
+                            source: None,
+                        }],
+                        column_span: 1,
+                        row_span: 1,
+                        alignment: None,
+                    }],
+                }],
+                layout: LayoutHint::default(),
+                source: None,
+            };
+            assert_eq!(renderer.render_blocks(&[table], 0), expected);
+        }
+    }
+
+    #[test]
+    fn an_empty_table_row_remains_a_physical_row() {
+        let renderer = super::super::plain_renderer();
+        let table = Block::Table {
+            rows: vec![mant_ir::TableRow {
+                kind: mant_ir::TableRowKind::Data,
+                cells: vec![TableCell {
+                    kind: mant_ir::TableCellKind::Text,
+                    blocks: vec![Block::Paragraph {
+                        children: Vec::new(),
+                        layout: LayoutHint::default(),
+                        source: None,
+                    }],
+                    column_span: 1,
+                    row_span: 1,
+                    alignment: None,
+                }],
+            }],
+            layout: LayoutHint::default(),
+            source: None,
+        };
+        let surrounding = [
+            Block::Paragraph {
+                children: vec![Inline::Text {
+                    value: "BEFORE".into(),
+                }],
+                layout: LayoutHint::default(),
+                source: None,
+            },
+            table,
+            Block::Paragraph {
+                children: vec![Inline::Text {
+                    value: "AFTER".into(),
+                }],
+                layout: LayoutHint::default(),
+                source: None,
+            },
+        ];
+        assert_eq!(renderer.render_blocks(&surrounding, 0), "BEFORE\n\nAFTER");
     }
 
     fn plain_list(blocks: Vec<Block>, indent: i32) -> Block {
@@ -423,7 +665,9 @@ mod tests {
                     },
                     Block::Table {
                         rows: vec![mant_ir::TableRow {
+                            kind: mant_ir::TableRowKind::Data,
                             cells: vec![TableCell {
+                                kind: mant_ir::TableCellKind::Text,
                                 blocks: vec![paragraph("CELL", 1)],
                                 column_span: 1,
                                 row_span: 1,

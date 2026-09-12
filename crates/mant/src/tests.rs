@@ -56,7 +56,7 @@ fn invalid_complete_views_are_rejected_before_the_cli_host_is_called() {
         },
     ] {
         let request = QueryRequest {
-            schema: mant_protocol::RequestSchema::V0Dot11,
+            schema: mant_protocol::RequestSchema::V0Dot12,
             input: QueryInput::Document {
                 selector: "tool".into(),
                 source: None,
@@ -68,7 +68,7 @@ fn invalid_complete_views_are_rejected_before_the_cli_host_is_called() {
         assert_eq!(host.query_calls.get(), 0);
     }
     let scope = mant_protocol::ScopeQueryRequest {
-        schema: mant_protocol::ScopeRequestSchema::V0Dot11,
+        schema: mant_protocol::ScopeRequestSchema::V0Dot12,
         scope: mant_protocol::DocumentScope {
             documents: vec![mant_protocol::DocumentSelector {
                 selector: "tool".into(),
@@ -509,7 +509,7 @@ impl CliHost for FakeHost {
 
     fn discover(&self, _query: &CatalogQuery) -> Result<DocumentCatalog, Failure> {
         Ok(DocumentCatalog {
-            schema: CatalogSchema::V0Dot11,
+            schema: CatalogSchema::V0Dot12,
             query: CatalogQuery::default(),
             coverage: mant_protocol::CatalogCoverage::default(),
             total: 2,
@@ -810,14 +810,14 @@ fn stdin_protocol_emits_only_compact_query_json() {
     let host = FakeHost::new();
     let (status, output, diagnostics) = invoke(
             &["--request-json", "--format", "json", "--compact"],
-            br#"{"schema":"mant.request/v0.11","input":{"kind":"document","selector":"git","manualSection":"1"},"view":{"kind":"full"}}"#,
+            br#"{"schema":"mant.request/v0.12","input":{"kind":"document","selector":"git","manualSection":"1"},"view":{"kind":"full"}}"#,
             &host,
         );
 
     assert_eq!(status, 0);
     assert_eq!(
         output,
-        "{\"schema\":\"mant.query/v0.11\",\"label\":\"git\"}\n"
+        "{\"schema\":\"mant.query/v0.12\",\"label\":\"git\"}\n"
     );
     assert!(diagnostics.is_empty());
     assert_eq!(host.query_calls.get(), 1);
@@ -827,17 +827,17 @@ fn stdin_protocol_emits_only_compact_query_json() {
 fn malformed_or_extended_requests_fail_before_querying_the_host() {
     for input in [
             br"not-json".as_slice(),
-            br#"{"schema":"mant.request/v0.11","input":{"kind":"document","selector":"git"},"view":{"kind":"full"},"futureField":true}"#.as_slice(),
-            br#"{"schema":"mant.request/v0.11","input":{"kind":"document","selector":"   "},"view":{"kind":"full"}}"#.as_slice(),
-            br#"{"schema":"mant.request/v0.11","input":{"kind":"document","selector":"git"},"view":{"kind":"excerpt","nodes":[]}}"#.as_slice(),
-            br#"{"schema":"mant.request/v0.11","input":{"kind":"document","selector":"git"},"view":{"kind":"excerpt","selectors":[]}}"#.as_slice(),
-            br#"{"schema":"mant.request/v0.11","input":{"kind":"document","selector":"git"},"view":{"kind":"excerpt","selectors":["1","2","3","4","5","6","7","8","9","10","11","12","13","14","15","16","17"]}}"#.as_slice(),
-            br#"{"schema":"mant.request/v0.11","input":{"kind":"document","selector":"git"},"view":{"kind":"outline","root":"   "}}"#.as_slice(),
-            br#"{"schema":"mant.request/v0.11","input":{"kind":"document","selector":"git"},"view":{"kind":"outline","entries":{"kind":"kinds","kinds":[]}}}"#.as_slice(),
-            br#"{"schema":"mant.request/v0.11","input":{"kind":"document","selector":"git"},"view":{"kind":"search","pattern":"","limit":10}}"#.as_slice(),
-            br#"{"schema":"mant.request/v0.11","input":{"kind":"document","selector":"git"},"view":{"kind":"search","pattern":"git","limit":0}}"#.as_slice(),
-            br#"{"schema":"mant.request/v0.11","input":{"kind":"document","selector":"git"},"view":{"kind":"search","pattern":"git","contextLines":101}}"#.as_slice(),
-            br#"{"schema":"mant.request/v0.11","input":{"kind":"document","selector":"git"},"view":{"kind":"search","pattern":"[","syntax":"regex"}}"#.as_slice(),
+            br#"{"schema":"mant.request/v0.12","input":{"kind":"document","selector":"git"},"view":{"kind":"full"},"futureField":true}"#.as_slice(),
+            br#"{"schema":"mant.request/v0.12","input":{"kind":"document","selector":"   "},"view":{"kind":"full"}}"#.as_slice(),
+            br#"{"schema":"mant.request/v0.12","input":{"kind":"document","selector":"git"},"view":{"kind":"excerpt","nodes":[]}}"#.as_slice(),
+            br#"{"schema":"mant.request/v0.12","input":{"kind":"document","selector":"git"},"view":{"kind":"excerpt","selectors":[]}}"#.as_slice(),
+            br#"{"schema":"mant.request/v0.12","input":{"kind":"document","selector":"git"},"view":{"kind":"excerpt","selectors":["1","2","3","4","5","6","7","8","9","10","11","12","13","14","15","16","17"]}}"#.as_slice(),
+            br#"{"schema":"mant.request/v0.12","input":{"kind":"document","selector":"git"},"view":{"kind":"outline","root":"   "}}"#.as_slice(),
+            br#"{"schema":"mant.request/v0.12","input":{"kind":"document","selector":"git"},"view":{"kind":"outline","entries":{"kind":"kinds","kinds":[]}}}"#.as_slice(),
+            br#"{"schema":"mant.request/v0.12","input":{"kind":"document","selector":"git"},"view":{"kind":"search","pattern":"","limit":10}}"#.as_slice(),
+            br#"{"schema":"mant.request/v0.12","input":{"kind":"document","selector":"git"},"view":{"kind":"search","pattern":"git","limit":0}}"#.as_slice(),
+            br#"{"schema":"mant.request/v0.12","input":{"kind":"document","selector":"git"},"view":{"kind":"search","pattern":"git","contextLines":101}}"#.as_slice(),
+            br#"{"schema":"mant.request/v0.12","input":{"kind":"document","selector":"git"},"view":{"kind":"search","pattern":"[","syntax":"regex"}}"#.as_slice(),
         ] {
             let host = FakeHost::new();
             let (status, output, diagnostics) = invoke(
@@ -857,23 +857,23 @@ fn stdin_requests_select_outline_and_excerpt_projections() {
     let host = FakeHost::with_manual_and_tldr();
     let (status, output, diagnostics) = invoke(
             &["--request-json", "--format", "json", "--compact"],
-            br#"{"schema":"mant.request/v0.11","input":{"kind":"document","selector":"demo"},"view":{"kind":"outline","entries":{"kind":"none"}}}"#,
+            br#"{"schema":"mant.request/v0.12","input":{"kind":"document","selector":"demo"},"view":{"kind":"outline","entries":{"kind":"none"}}}"#,
             &host,
         );
     assert_eq!(status, 0);
     let outline: serde_json::Value = serde_json::from_str(&output).expect("outline JSON");
-    assert_eq!(outline["schema"], "mant.outline/v0.11");
+    assert_eq!(outline["schema"], "mant.outline/v0.12");
     assert_eq!(outline["entries"]["kind"], "none");
     assert!(diagnostics.is_empty());
 
     let (status, output, diagnostics) = invoke(
             &["--request-json", "--format", "json", "--compact"],
-            br#"{"schema":"mant.request/v0.11","input":{"kind":"document","selector":"demo"},"view":{"kind":"excerpt","selectors":[{"kind":"path","path":"2.1"}]}}"#,
+            br#"{"schema":"mant.request/v0.12","input":{"kind":"document","selector":"demo"},"view":{"kind":"excerpt","selectors":[{"kind":"path","path":"2.1"}]}}"#,
             &host,
         );
     assert_eq!(status, 0);
     let excerpt: serde_json::Value = serde_json::from_str(&output).expect("excerpt JSON");
-    assert_eq!(excerpt["schema"], "mant.excerpt/v0.11");
+    assert_eq!(excerpt["schema"], "mant.excerpt/v0.12");
     assert_eq!(excerpt["selections"][0]["outline"]["node"]["path"], "2.1");
     assert!(diagnostics.is_empty());
     assert_eq!(host.query_calls.get(), 2);
@@ -897,7 +897,7 @@ fn direct_queries_render_outlines_and_selected_nodes_in_requested_formats() {
     );
     assert_eq!(status, 0);
     let value: serde_json::Value = serde_json::from_str(&output).expect("excerpt JSON");
-    assert_eq!(value["schema"], "mant.excerpt/v0.11");
+    assert_eq!(value["schema"], "mant.excerpt/v0.12");
     assert_eq!(value["selections"][0]["outline"]["node"]["path"], "2.1");
     assert_eq!(
         value["selections"][0]["section"]["heading"]["content"][0]["value"],
@@ -981,7 +981,7 @@ fn explains_semantic_evidence_without_turning_sections_into_entries() {
     );
     assert_eq!(status, 0);
     let value: serde_json::Value = serde_json::from_str(&output).expect("excerpt JSON");
-    assert_eq!(value["schema"], "mant.explanation/v0.11");
+    assert_eq!(value["schema"], "mant.explanation/v0.12");
     assert_eq!(value["outcome"], "evidence");
     assert_eq!(value["evidence"][0]["outline"]["node"]["id"], "exclude");
     assert!(diagnostics.is_empty());
@@ -1010,7 +1010,7 @@ fn semantic_entries_work_through_cli_and_request_json() {
     );
     assert_eq!(status, 0);
     let outline: serde_json::Value = serde_json::from_str(&output).expect("outline JSON");
-    assert_eq!(outline["schema"], "mant.outline/v0.11");
+    assert_eq!(outline["schema"], "mant.outline/v0.12");
     let encoded = outline.to_string();
     assert!(encoded.contains("\"parameterKind\":\"option\""));
     assert!(encoded.contains("\"kind\":\"command\""));
@@ -1102,7 +1102,7 @@ fn semantic_entry_selectors_work_through_cli_and_request_json() {
 
     let (status, output, diagnostics) = invoke(
         &["--request-json", "--format", "json", "--compact"],
-        br#"{"schema":"mant.request/v0.11","input":{"kind":"document","selector":"demo"},"view":{"kind":"explain","entry":"command-query"}}"#,
+        br#"{"schema":"mant.request/v0.12","input":{"kind":"document","selector":"demo"},"view":{"kind":"explain","entry":"command-query"}}"#,
         &host,
     );
     assert_eq!(status, 0);
@@ -1188,7 +1188,7 @@ fn searches_report_markdown_coordinates_and_reusable_outline_nodes() {
 
     assert_eq!(status, 0);
     let value: serde_json::Value = serde_json::from_str(&output).expect("search JSON");
-    assert_eq!(value["schema"], "mant.search/v0.11");
+    assert_eq!(value["schema"], "mant.search/v0.12");
     assert_eq!(value["total"], 1);
     assert_eq!(value["matches"][0]["outline"]["node"]["path"], "2.1");
     assert_eq!(value["matches"][0]["outline"]["node"]["id"], "common-3");
@@ -1206,13 +1206,13 @@ fn stdin_search_requests_use_the_same_projection_contract() {
     let host = FakeHost::with_manual();
     let (status, output, diagnostics) = invoke(
             &["--request-json", "--format", "json", "--compact"],
-            br#"{"schema":"mant.request/v0.11","input":{"kind":"document","selector":"demo"},"view":{"kind":"search","pattern":"options","limit":10}}"#,
+            br#"{"schema":"mant.request/v0.12","input":{"kind":"document","selector":"demo"},"view":{"kind":"search","pattern":"options","limit":10}}"#,
             &host,
         );
 
     assert_eq!(status, 0);
     let value: serde_json::Value = serde_json::from_str(&output).expect("search JSON");
-    assert_eq!(value["schema"], "mant.search/v0.11");
+    assert_eq!(value["schema"], "mant.search/v0.12");
     assert_eq!(value["query"]["syntax"], "literal");
     assert_eq!(value["query"]["scope"], "visible");
     assert!(
@@ -1305,12 +1305,12 @@ fn protocol_results_are_stable_json_documents_without_optional_capabilities() {
     assert_eq!(status, 0);
     let value: serde_json::Value = serde_json::from_str(&output).expect("protocol JSON");
     assert_eq!(value["protocol"], CLI_PROTOCOL_VERSION);
-    assert_eq!(value["nativeApiVersion"], "0.11");
-    assert_eq!(value["requestSchema"], "mant.request/v0.11");
-    assert_eq!(value["outlineSchema"], "mant.outline/v0.11");
-    assert_eq!(value["excerptSchema"], "mant.excerpt/v0.11");
-    assert_eq!(value["searchSchema"], "mant.search/v0.11");
-    assert_eq!(value["catalogSchema"], "mant.catalog/v0.11");
+    assert_eq!(value["nativeApiVersion"], "0.12");
+    assert_eq!(value["requestSchema"], "mant.request/v0.12");
+    assert_eq!(value["outlineSchema"], "mant.outline/v0.12");
+    assert_eq!(value["excerptSchema"], "mant.excerpt/v0.12");
+    assert_eq!(value["searchSchema"], "mant.search/v0.12");
+    assert_eq!(value["catalogSchema"], "mant.catalog/v0.12");
     assert!(diagnostics.is_empty());
 }
 
@@ -1359,7 +1359,7 @@ fn catalog_lists_grouped_documents_and_emits_flat_find_records() {
     );
     assert_eq!(status, 0);
     let value: serde_json::Value = serde_json::from_str(&output).expect("catalog JSON");
-    assert_eq!(value["schema"], "mant.catalog/v0.11");
+    assert_eq!(value["schema"], "mant.catalog/v0.12");
     assert_eq!(value["documents"][0]["address"]["path"], "guide");
     assert!(value["documents"][0].get("sourcePath").is_none());
     assert!(diagnostics.is_empty());
@@ -1390,7 +1390,7 @@ fn generated_schemas_are_json_only_and_side_effect_free() {
         "https://json-schema.org/draft/2020-12/schema"
     );
     assert_eq!(value["additionalProperties"], false);
-    assert!(output.contains("mant.request/v0.11"));
+    assert!(output.contains("mant.request/v0.12"));
     assert!(diagnostics.is_empty());
     assert_eq!(host.query_calls.get(), 0);
     assert_eq!(host.update_calls.get(), 0);
@@ -1413,7 +1413,7 @@ fn generated_schemas_are_json_only_and_side_effect_free() {
 #[test]
 fn deep_generated_responses_reach_the_top_level_schema_diagnostic() {
     let input = format!(
-        "{{\"schema\":\"mant.query/v0.11\",\"result\":{}}}",
+        "{{\"schema\":\"mant.query/v0.12\",\"result\":{}}}",
         "[".repeat(140) + "0" + &"]".repeat(140)
     );
     let Err(error) = read_native_request(&mut input.as_bytes()) else {
@@ -1423,6 +1423,6 @@ fn deep_generated_responses_reach_the_top_level_schema_diagnostic() {
     assert!(
         error
             .into_message()
-            .contains("unsupported request schema 'mant.query/v0.11'"),
+            .contains("unsupported request schema 'mant.query/v0.12'"),
     );
 }

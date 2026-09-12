@@ -20,10 +20,13 @@ use font::lower_man_font_scope;
 #[cfg(test)]
 use font::parse_roff_text_with_font;
 pub(super) use font::{
+    FormatterWordPart, ZeroAdvanceState, parse_formatter_word_parts_with_zero_advance,
+    parse_roff_text_with_state, parse_roff_text_with_zero_advance,
+};
+pub(super) use font::{
     NoFillInlineState, lower_inline_nodes_with_font_state, lower_no_fill_line_with_font_state,
     parse_roff_text,
 };
-pub(super) use font::{ZeroAdvanceState, parse_roff_text_with_state};
 pub(in crate::mandoc) use source_fragment::lower_source_fragment_with_formatter_state;
 
 pub(super) use source::roff_macro_arguments;
@@ -159,6 +162,19 @@ pub(super) fn append_inline_node_with_next(
             let setting = plain_text(&lower_inline_nodes(&node.children, default_name));
             builder.set_spacing(setting.trim());
         }
+        Some("sp") => {
+            let lines = builder.resolve_vertical_space(super::layout::vertical_space_delta(node));
+            builder.vertical_space(lines.into());
+        }
+        name if super::controls::formatter_control(name)
+            .is_some_and(|control| !control.specialized) =>
+        {
+            match super::controls::formatter_control(name).map(|control| control.boundary) {
+                Some(super::controls::FormatterBoundary::Line) => builder.hard_break(),
+                Some(super::controls::FormatterBoundary::NoBreak) => builder.no_break_flush(),
+                Some(super::controls::FormatterBoundary::None) | None => {}
+            }
+        }
         name if super::controls::operand_control(name).is_some() => {}
         Some("Ap") => {
             builder.tighten_next_boundary();
@@ -196,7 +212,7 @@ pub(super) fn append_inline_node_with_next(
 /// word boundary before a nested scope lowers it.  Control-only requests and
 /// targets must remain transparent; generated prefixes such as `.Fl` and
 /// `.Nd` are visible even with no text child.
-fn node_emits_visible_output(node: &Node, default_name: Option<&str>) -> bool {
+pub(super) fn node_emits_visible_output(node: &Node, default_name: Option<&str>) -> bool {
     if node.flags.no_print || node.kind == NodeKind::Comment {
         return false;
     }
@@ -211,7 +227,7 @@ fn node_emits_visible_output(node: &Node, default_name: Option<&str>) -> bool {
         return false;
     }
     match node.macro_name.as_deref() {
-        Some("Tg" | "Ns" | "br" | "Pp" | "ft" | "Sm") => false,
+        Some("Tg" | "Ns" | "br" | "Pp" | "sp" | "ft" | "Sm") => false,
         // An empty enclosure still emits its paired delimiters through the
         // shared container stream.  Those glyphs are the next formatter word
         // and must resolve a preceding `\\z` state before they are written.
@@ -250,6 +266,7 @@ fn append_text_node(builder: &mut InlineBuilder, node: &Node) {
     // itself begins an input line. An empty No/Em argument does not, whereas
     // a buffered zero-width glyph (for example \&) still occupies that row.
     let occupies_literal_row = !execution.output.is_empty()
+        || builder.zero_advance.has_buffered_glyph()
         || (node.flags.line_start && node.text.as_deref().is_some_and(str::is_empty))
         || decode(source)
             .iter()
@@ -404,6 +421,12 @@ pub(super) fn alternating_font_pair(macro_name: Option<&str>) -> Option<(Font, F
     }
 }
 
+/// Wrappers whose own formatter action only changes state while their
+/// children remain the complete visible execution stream.
+///
+/// Consumers that inspect an executed prefix (for example a pending
+/// definition head) may recurse through these nodes.  Generated-glyph
+/// enclosures and atomic semantic macros are deliberately excluded.
 fn text_node(value: &str) -> Vec<Inline> {
     vec![Inline::Text {
         value: value.to_owned(),

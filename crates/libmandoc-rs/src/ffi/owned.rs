@@ -1,12 +1,15 @@
 //! Immediate borrowed snapshot to owned Rust AST transfer.
 use super::{
-    raw::{self, CDocument, CNode, CNodeView, CTableCell, CTableCellView},
+    raw::{
+        self, CDocument, CNode, CNodeView, CTableCell, CTableCellView, CTableRuleCell,
+        CTableRuleCellView,
+    },
     session::DocumentHandle,
 };
 use crate::{
     AuthorMode, DefinitionListStyle, DisplayKind, Document, MacroSet, Metadata, Node, NodeFlags,
     NodeKind, NormalizedEnclosure, NormalizedFont, NormalizedListKind, RawDocument, TableAlignment,
-    TableCell, TableCellKind,
+    TableCell, TableCellKind, TableRowKind, TableRuleCellKind,
 };
 use std::{ffi::CStr, os::raw::c_char, ptr::NonNull};
 const NODE_GENERATED: u32 = 1 << 0;
@@ -184,6 +187,23 @@ fn author_mode(value: i32) -> Result<Option<AuthorMode>, String> {
     }
 }
 
+fn table_row_kind(
+    value: i32,
+    layout_rules: Vec<TableRuleCellKind>,
+) -> Result<Option<TableRowKind>, String> {
+    match value {
+        0 => Ok(None),
+        1 => Ok(Some(TableRowKind::Data)),
+        2 => Ok(Some(TableRowKind::HorizontalRule)),
+        3 => Ok(Some(TableRowKind::DoubleHorizontalRule)),
+        4 if !layout_rules.is_empty() => Ok(Some(TableRowKind::LayoutRule {
+            cells: layout_rules,
+        })),
+        4 => Err("libmandoc returned an empty layout-only rule row".to_owned()),
+        _ => Err("libmandoc returned an unknown table row kind".to_owned()),
+    }
+}
+
 unsafe fn copy_node(
     document: *mut CDocument,
     pointer: *const CNode,
@@ -209,6 +229,9 @@ unsafe fn copy_node(
         flow_epoch: view.flow_epoch,
         table_escape: u8::try_from(view.table_escape).ok(),
         table_source_recovery_safe: view.table_source_recovery_safe != 0,
+        table_row_kind: table_row_kind(view.table_row_kind, unsafe {
+            copy_table_rule_cells(document, view.table_rule_cells)
+        }?)?,
         flags: NodeFlags {
             generated: view.flags & NODE_GENERATED != 0,
             sentence_end: view.flags & NODE_SENTENCE_END != 0,
@@ -305,6 +328,30 @@ unsafe fn copy_table_cells(
                 2 => TableAlignment::Right,
                 _ => TableAlignment::Left,
             },
+        });
+        pointer = view.next;
+    }
+    Ok(cells)
+}
+
+unsafe fn copy_table_rule_cells(
+    document: *const CDocument,
+    mut pointer: *const CTableRuleCell,
+) -> Result<Vec<TableRuleCellKind>, String> {
+    let mut cells = Vec::new();
+    while !pointer.is_null() {
+        let mut view = std::mem::MaybeUninit::<CTableRuleCellView>::uninit();
+        if unsafe {
+            raw::mant_mandoc_table_rule_cell_snapshot(document, pointer, view.as_mut_ptr())
+        } == 0
+        {
+            return Err("libmandoc returned an invalid borrowed table rule cell".to_owned());
+        }
+        let view = unsafe { view.assume_init() };
+        cells.push(match view.kind {
+            1 => TableRuleCellKind::Horizontal,
+            2 => TableRuleCellKind::DoubleHorizontal,
+            _ => return Err("libmandoc returned an unknown table rule cell kind".to_owned()),
         });
         pointer = view.next;
     }

@@ -138,7 +138,8 @@ fn cells_to_line(
         | LineSurface::TldrTop
         | LineSurface::TldrBottom
         | LineSurface::Divider
-        | LineSurface::Rule => None,
+        | LineSurface::Rule
+        | LineSurface::DoubleRule => None,
     };
 
     let framed_tldr = tldr_decoration_width(line, width) != 0;
@@ -187,7 +188,8 @@ fn cells_to_line(
             | LineSurface::TldrTop
             | LineSurface::TldrBottom
             | LineSurface::Divider
-            | LineSurface::Rule => 0,
+            | LineSurface::Rule
+            | LineSurface::DoubleRule => 0,
         };
         spans.push(Span::styled(" ".repeat(fill), Style::default().bg(color)));
     }

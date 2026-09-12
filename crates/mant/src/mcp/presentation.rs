@@ -483,7 +483,7 @@ mod tests {
     #[test]
     fn scope_failures_keep_their_selector_guidance_but_mask_controls() {
         let mut response = ScopeQueryResponse {
-            schema: ScopeQuerySchema::V0Dot11,
+            schema: ScopeQuerySchema::V0Dot12,
             scope: ResolvedDocumentScope {
                 query: DocumentScope {
                     documents: vec![DocumentSelector {

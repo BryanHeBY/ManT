@@ -1,6 +1,6 @@
 # Document content and reference navigation
 
-This is the implemented navigation contract for unreleased v0.11. Authoritative
+This is the implemented navigation contract for unreleased v0.12. Authoritative
 headings, bounded reference traversal, protocol projections and interactive
 navigation all use the same document model.
 

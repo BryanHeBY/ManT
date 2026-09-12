@@ -143,7 +143,7 @@ pub fn build_outline_with_references(
             .as_ref()
             .and_then(mant_ir::Document::display_title)
             .map(std::borrow::Cow::into_owned),
-        schema: OutlineSchema::V0Dot11,
+        schema: OutlineSchema::V0Dot12,
         entries,
         root,
         label: query.label.clone(),

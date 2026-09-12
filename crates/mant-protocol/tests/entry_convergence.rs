@@ -10,7 +10,7 @@ fn definition() -> Value {
 }
 
 fn document(item: &Value) -> Value {
-    json!({"schema":"mant.document/v0.11","producer":{"name":"test","version":"0"},
+    json!({"schema":"mant.document/v0.12","producer":{"name":"test","version":"0"},
         "source":{"format":"markdown"},"meta":{},"sections":[],
         "blocks":[{"type":"definition-list","items":[item]}]})
 }
@@ -34,7 +34,7 @@ fn nested_diagnostic_impact_is_required_at_document_and_query_boundaries() {
             serde_json::from_value::<DocumentResponse>(payload.clone()).is_ok(),
             valid
         );
-        let query = json!({"schema":"mant.query/v0.11","label":"test","document":payload});
+        let query = json!({"schema":"mant.query/v0.12","label":"test","document":payload});
         assert_eq!(serde_json::from_value::<QueryBundle>(query).is_ok(), valid);
     }
 }
@@ -57,7 +57,7 @@ fn document_and_query_envelopes_reject_legacy_nested_facts() {
             serde_json::from_value::<DocumentResponse>(payload.clone()).is_ok(),
             legacy.is_none()
         );
-        let query = json!({"schema":"mant.query/v0.11","label":"test","document":payload});
+        let query = json!({"schema":"mant.query/v0.12","label":"test","document":payload});
         assert_eq!(
             serde_json::from_value::<QueryBundle>(query).is_ok(),
             legacy.is_none()
@@ -94,7 +94,7 @@ fn outline_names_and_entry_kind_are_closed_at_both_projection_levels() {
     let duplicate_full = raw_full.replacen('{', "{\"names\":[],", 1);
     assert!(serde_json::from_str::<OutlineNode>(&duplicate_full).is_err());
     assert!(serde_json::from_str::<OutlineNodeReference>(&duplicate).is_err());
-    let mut excerpt = json!({"schema":"mant.excerpt/v0.11","label":"test",
+    let mut excerpt = json!({"schema":"mant.excerpt/v0.12","label":"test",
         "selections":[{"kind":"document-entry","outline":{"node":node},
             "entry":{"type":"definition-list","items":[definition()]}}]});
     assert!(serde_json::from_value::<QueryExcerpt>(excerpt.clone()).is_ok());
@@ -120,7 +120,7 @@ fn query_list_kinds_reject_legacy_or_inapplicable_start() {
     payload["blocks"] = json!([{"type":"list","kind":{"kind":"bullet","start":null},"items":[]}]);
     assert!(
         serde_json::from_value::<QueryBundle>(
-            json!({"schema":"mant.query/v0.11","label":"test","document":payload})
+            json!({"schema":"mant.query/v0.12","label":"test","document":payload})
         )
         .is_err()
     );

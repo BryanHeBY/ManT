@@ -36,7 +36,7 @@ fn offline_commands_and_invalid_inputs_do_not_capture_a_system_snapshot() {
         (vec!["--request-json"], "{", false),
         (
             vec!["--request-json"],
-            r#"{"schema":"mant.request/v0.11","input":{"kind":"document","selector":"tool"},"view":{"kind":"excerpt","selectors":[]}}"#,
+            r#"{"schema":"mant.request/v0.12","input":{"kind":"document","selector":"tool"},"view":{"kind":"excerpt","selectors":[]}}"#,
             false,
         ),
         (
@@ -96,7 +96,7 @@ fn valid_complete_requests_reuse_one_host_snapshot_without_sharing_between_hosts
     // process environment, registering a source, or writing a temporary fixture.
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("README.md");
     let mut request = QueryRequest {
-        schema: RequestSchema::V0Dot11,
+        schema: RequestSchema::V0Dot12,
         input: QueryInput::File {
             path: path.to_string_lossy().into_owned(),
             format: InputFormat::Markdown,

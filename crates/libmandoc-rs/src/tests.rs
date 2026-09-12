@@ -7,6 +7,7 @@ use crate::{
     AuthorMode, Compression, DefinitionListStyle, DiagnosticCode, DiagnosticLevel, DisplayKind,
     Document, IncludePolicy, InputFormat, MacroSet, Node, NodeKind, NormalizedFont,
     NormalizedListKind, ParseError, ParseOptions, Parser, SourceBundle, TableAlignment,
+    TableRowKind, TableRuleCellKind,
 };
 use std::{
     fs, process,

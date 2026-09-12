@@ -9,7 +9,9 @@ use libmandoc_rs::{AuthorMode, DisplayKind, Node, NodeKind};
 use mant_ir::{Block, Inline, Section};
 
 use super::{
-    LoweringContext, first_part_children,
+    LoweringContext,
+    controls::FormatterBoundary,
+    first_part_children,
     inline::{
         FilledBoundary, FontState, InlineBuilder, NoFillInlineState, append_inline_node_with_next,
         is_enclosure_macro, lower_inline_nodes, lower_inline_nodes_with_font_state,
@@ -18,7 +20,7 @@ use super::{
     },
     layout::{
         add_leading_spacing, layout, layout_with_spacing, section_spacing, set_block_spacing,
-        update_paragraph_distance, vertical_distance_lines,
+        update_paragraph_distance, vertical_space_delta,
     },
     part_child_groups,
     roff_escape::visible_text,
@@ -37,7 +39,7 @@ use inline_flow::{
 
 mod sections;
 use sections::is_section;
-pub(super) use sections::{lower_root_blocks, lower_sections};
+pub(super) use sections::lower_document_structure;
 mod structural;
 use structural::StructuralLowerer;
 mod synopsis;
@@ -45,7 +47,7 @@ use synopsis::lower_synopsis_head;
 mod flow;
 mod man_nofill;
 use flow::BlockState;
-use man_nofill::{NoFillBoundary, no_fill_boundary};
+use man_nofill::no_fill_boundary;
 mod lists;
 mod preformatted;
 mod tables;
@@ -56,23 +58,6 @@ use lists::{
 };
 use preformatted::preformatted_blocks;
 use tables::{TableEmbedding, TableEmbeddingPlan, append_table_row};
-
-fn lower_blocks(
-    nodes: &[Node],
-    context: &LoweringContext<'_>,
-    indent_columns: crate::mandoc::layout::SourceIndent,
-    paragraph_distance: &mut u16,
-) -> Vec<Block> {
-    let mut formatter = crate::mandoc::formatter::FormatterState::default();
-    lower_blocks_with_spacing(
-        nodes,
-        context,
-        indent_columns,
-        paragraph_distance,
-        true,
-        &mut formatter,
-    )
-}
 
 fn lower_blocks_with_spacing(
     nodes: &[Node],
@@ -116,7 +101,7 @@ fn lower_blocks_with_predecessor(
     );
     lowerer.paragraph_predecessor = paragraph_predecessor;
     lowerer.push_nodes(nodes);
-    lowerer.formatter.spacing = lowerer.state.spacing_enabled();
+    lowerer.state.sync_formatter_state(&mut lowerer.formatter);
     *formatter = lowerer.formatter;
     lowerer.finish()
 }
@@ -134,8 +119,6 @@ struct BlockLowerer<'a, 'source> {
     // hanging margin. Explicit `.TP`/`.IP` widths update it for following
     // tagged paragraphs, exactly as mandoc's terminal renderer does.
     definition_hanging_width: crate::mandoc::layout::Distance,
-    split_authors: bool,
-    synopsis_return_type_open: bool,
     // Source-proven `.IP`/`.TP` ordinals form lists immediately; this state
     // joins only adjacent, consecutively numbered items of the same style.
     man_list_state: ManListState,
@@ -153,16 +136,18 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
         output: Vec<Block>,
         formatter: crate::mandoc::formatter::FormatterState,
     ) -> Self {
+        let mut formatter = formatter;
+        let mut state = BlockState::with_output(indent_columns, spacing_enabled, output);
+        state.inherit_vertical_space_debt(formatter.vertical_space_debt);
+        state.inherit_zero_advance_armed(std::mem::take(&mut formatter.zero_advance_armed));
         Self {
             context,
             indent_columns,
             paragraph_distance,
-            state: BlockState::with_output(indent_columns, spacing_enabled, output),
+            state,
             formatter,
             no_fill_inline: NoFillInlineState::new(),
             definition_hanging_width: crate::mandoc::layout::Distance::cells(DEFAULT_MAN_TAG_WIDTH),
-            split_authors: false,
-            synopsis_return_type_open: false,
             man_list_state: ManListState::new(),
             paragraph_predecessor: false,
         }
@@ -170,6 +155,7 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
 
     fn push_nodes(&mut self, nodes: &[Node]) {
         let table_plan = TableEmbeddingPlan::new(nodes, self.context);
+        let mut synopsis_previous = None;
         for (index, node) in nodes.iter().enumerate() {
             if is_inline_equation_quote_artifact(nodes, index) {
                 continue;
@@ -177,17 +163,31 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
             if follows_inline_equation_punctuation(nodes, index) {
                 self.state.tighten_next_boundary();
             }
-            self.push(node, nodes.get(index + 1), table_plan.embedding(index));
+            self.push(
+                node,
+                nodes.get(index + 1),
+                table_plan.embedding(index),
+                synopsis_previous,
+            );
             // Source execution, not visible output, owns the predecessor fact.
             if self.context.macro_set == libmandoc_rs::MacroSet::Mdoc
                 && super::adjacency::is_logical_sibling(node)
             {
                 self.paragraph_predecessor = true;
             }
+            if !synopsis::transparent_synopsis_predecessor(node) {
+                synopsis_previous = Some(node);
+            }
         }
     }
 
-    fn push(&mut self, node: &Node, next: Option<&Node>, table_embedding: Option<&TableEmbedding>) {
+    fn push(
+        &mut self,
+        node: &Node,
+        next: Option<&Node>,
+        table_embedding: Option<&TableEmbedding>,
+        synopsis_previous: Option<&Node>,
+    ) {
         self.prepare_node_execution(node);
         if node.macro_name.as_deref() == Some("ft") {
             lower_inline_nodes_with_font_state(
@@ -215,12 +215,13 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
         // would otherwise route it through inline-only word lowering.
         if node.macro_name.as_deref() == Some("Pp") {
             self.state.flush_preformatted();
-            self.state.flush_paragraph();
+            let lines = self.state.resolve_vertical_space(1);
+            self.state.flush_paragraph_for_vertical_request();
             self.state
                 .queue_targets(structural_targets, source_span(node));
-            if !self.state.output.is_empty() {
+            if self.paragraph_predecessor || !self.state.output.is_empty() {
                 self.state.output.push(Block::VerticalSpace {
-                    lines: 1,
+                    lines,
                     source: source_span(node),
                 });
             }
@@ -232,7 +233,7 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
             return;
         }
         self.state.flush_preformatted();
-        if self.push_mdoc_synopsis_declaration(node) {
+        if self.push_mdoc_synopsis_declaration(node, synopsis_previous) {
             return;
         }
         if node.flags.delimiter_close
@@ -258,6 +259,7 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
             self.push_inline_node(node, next);
         } else {
             self.state.flush_paragraph();
+            self.state.sync_formatter_state(&mut self.formatter);
             let output_start = self.state.output.len();
             let spacing_enabled = self.state.spacing_enabled();
             StructuralLowerer {
@@ -282,18 +284,32 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
             }
             self.state.inherit_spacing(self.formatter.spacing);
             self.state
+                .inherit_vertical_space_debt(self.formatter.vertical_space_debt);
+            self.state
+                .inherit_zero_advance_armed(std::mem::take(&mut self.formatter.zero_advance_armed));
+            self.state
                 .queue_targets(structural_targets, source_span(node));
             self.state.attach_pending_to_structural_output(output_start);
         }
     }
 
     fn prepare_node_execution(&mut self, node: &Node) {
+        let formatter_control = super::controls::formatter_control(node.macro_name.as_deref());
         match no_fill_boundary(node) {
-            NoFillBoundary::None => {}
-            NoFillBoundary::Line => self.settle_no_fill_inline(),
-            NoFillBoundary::NoBreak => {
-                let nodes = self.no_fill_inline.take_settled_row();
-                self.state.no_break_formatter_flush(nodes);
+            FormatterBoundary::None => {}
+            FormatterBoundary::Line => {
+                self.settle_no_fill_inline();
+                if formatter_control.is_some_and(|control| !control.specialized) {
+                    self.state.hard_break();
+                }
+            }
+            FormatterBoundary::NoBreak => {
+                if self.state.has_formatter_cell()
+                    || self.no_fill_inline.has_pending_formatter_cell()
+                {
+                    let nodes = self.no_fill_inline.take_no_break_cell();
+                    self.state.no_break_formatter_flush(nodes);
+                }
             }
         }
         if matches!(
@@ -310,6 +326,8 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
             self.state
                 .push_preformatted(nodes, None, false, false, true);
         }
+        self.state
+            .inherit_zero_advance_armed(self.no_fill_inline.take_bare_zero_advance_armed());
     }
 
     fn finish(mut self) -> Vec<Block> {

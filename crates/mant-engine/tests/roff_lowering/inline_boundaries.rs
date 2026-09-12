@@ -381,9 +381,10 @@ fn preserves_mdoc_name_and_function_punctuation_by_context() {
     let synopsis = document.sections[1]
         .blocks
         .iter()
-        .map(|block| match block {
-            Block::Paragraph { children, .. } => inline_text(children),
-            block => panic!("expected synopsis paragraph, got {block:?}"),
+        .filter_map(|block| match block {
+            Block::Paragraph { children, .. } => Some(inline_text(children)),
+            Block::VerticalSpace { lines: 1, .. } => None,
+            block => panic!("expected synopsis paragraph or CVS gap, got {block:?}"),
         })
         .collect::<Vec<_>>();
     assert_eq!(
@@ -392,6 +393,14 @@ fn preserves_mdoc_name_and_function_punctuation_by_context() {
             "compact_call(int value);",
             "explicit_call(int value, const char *label);"
         ]
+    );
+    assert_eq!(
+        document.sections[1]
+            .blocks
+            .iter()
+            .filter(|block| matches!(block, Block::VerticalSpace { lines: 1, .. }))
+            .count(),
+        1
     );
 
     let [
@@ -424,9 +433,10 @@ fn preserves_mdoc_synopsis_declaration_units() {
     let rendered = document.sections[0]
         .blocks
         .iter()
-        .map(|block| match block {
-            Block::Paragraph { children, .. } => inline_text(children),
-            block => panic!("expected synopsis declaration paragraph, got {block:?}"),
+        .filter_map(|block| match block {
+            Block::Paragraph { children, .. } => Some(inline_text(children)),
+            Block::VerticalSpace { lines: 1, .. } => None,
+            block => panic!("expected synopsis declaration or CVS gap, got {block:?}"),
         })
         .collect::<Vec<_>>();
 
@@ -438,5 +448,13 @@ fn preserves_mdoc_synopsis_declaration_units() {
             "void synprobe_second(struct thing *a, int n);",
             "synprobe_third(int n);",
         ]
+    );
+    assert_eq!(
+        document.sections[0]
+            .blocks
+            .iter()
+            .filter(|block| matches!(block, Block::VerticalSpace { lines: 1, .. }))
+            .count(),
+        3
     );
 }

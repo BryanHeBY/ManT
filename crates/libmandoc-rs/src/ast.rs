@@ -156,6 +156,38 @@ pub enum TableCellKind {
     IsolatedDoubleHorizontalRule,
 }
 
+/// Native kind of one tbl(7) row.
+///
+/// Empty data rows and whole-row rules both contain no cells, so consumers
+/// must not infer this distinction from [`Node::table_cells`].
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum TableRowKind {
+    /// A data row, including an intentionally empty input line.
+    Data,
+    /// A whole-row single horizontal rule (`_`).
+    HorizontalRule,
+    /// A whole-row double horizontal rule (`=`).
+    DoubleHorizontalRule,
+    /// A rule row authored in the tbl layout, retaining one rule strength
+    /// for each logical column.  CVS represents this as an otherwise empty
+    /// data span rather than as a whole-row rule span.
+    LayoutRule {
+        /// Rule strengths in logical column order.
+        cells: Vec<TableRuleCellKind>,
+    },
+}
+
+/// Horizontal rule strength for one cell of a layout-only tbl row.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum TableRuleCellKind {
+    /// A single horizontal rule (`_` or `-`).
+    Horizontal,
+    /// A double horizontal rule (`=`).
+    DoubleHorizontal,
+}
+
 /// Owned payload of one cell in a libmandoc table row.
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -266,6 +298,8 @@ pub struct Node {
     /// layer enrich a closed high-level macro fragment only when the original
     /// spelling and the native table payload have the same provenance.
     pub table_source_recovery_safe: bool,
+    /// Native tbl row kind, when this node represents a table span.
+    pub table_row_kind: Option<TableRowKind>,
     /// Source and renderer flags attached to the node.
     pub flags: NodeFlags,
     /// Normalized list behavior for an mdoc list block.

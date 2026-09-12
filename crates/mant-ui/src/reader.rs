@@ -194,7 +194,7 @@ mod tests {
             offsets.push(query.offset);
             let next_offset = (query.offset == 0).then_some(1);
             Ok(DocumentCatalog {
-                schema: CatalogSchema::V0Dot11,
+                schema: CatalogSchema::V0Dot12,
                 query: query.clone(),
                 coverage: mant_protocol::CatalogCoverage::default(),
                 total: 2,
@@ -234,7 +234,7 @@ mod tests {
         let catalog = discover_catalog_pages(&query, &mut |_| {
             calls += 1;
             Ok(DocumentCatalog {
-                schema: CatalogSchema::V0Dot11,
+                schema: CatalogSchema::V0Dot12,
                 query: query.clone(),
                 coverage: mant_protocol::CatalogCoverage::default(),
                 total: 20_000,

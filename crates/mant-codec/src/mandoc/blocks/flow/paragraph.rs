@@ -35,6 +35,29 @@ impl ParagraphFlow {
     pub(super) fn no_break_flush(&mut self) {
         self.builder.no_break_flush();
     }
+    pub(super) fn has_formatter_cell(&self) -> bool {
+        self.builder.has_formatter_cell()
+    }
+
+    pub(super) fn resolve_vertical_space(&mut self, rows: i32) -> u16 {
+        self.builder.resolve_vertical_space(rows)
+    }
+
+    pub(super) fn inherit_vertical_space_debt(&mut self, debt: u16) {
+        self.builder.inherit_vertical_space_debt(debt);
+    }
+
+    pub(super) const fn vertical_space_debt(&self) -> u16 {
+        self.builder.vertical_space_debt()
+    }
+
+    pub(super) fn inherit_zero_advance_armed(&mut self, armed: bool) {
+        self.builder.inherit_zero_advance_armed(armed);
+    }
+
+    pub(super) fn take_zero_advance_armed(&mut self) -> bool {
+        self.builder.take_zero_advance_armed()
+    }
 
     pub(super) fn append(
         &mut self,
@@ -88,15 +111,53 @@ impl ParagraphFlow {
         &mut self,
         indent: crate::mandoc::layout::SourceIndent,
         spacing: bool,
-    ) -> Option<Block> {
+    ) -> (Option<Block>, bool) {
+        self.take_with(indent, spacing, false)
+    }
+
+    pub(super) fn take_for_vertical_request(
+        &mut self,
+        indent: crate::mandoc::layout::SourceIndent,
+        spacing: bool,
+    ) -> (Option<Block>, bool) {
+        self.take_with(indent, spacing, true)
+    }
+
+    fn take_with(
+        &mut self,
+        indent: crate::mandoc::layout::SourceIndent,
+        spacing: bool,
+        vertical_request: bool,
+    ) -> (Option<Block>, bool) {
         let mut next = Self::new(spacing);
-        self.builder.transfer_container_execution(&mut next.builder);
+        let invisible_formatter_cell = self.builder.has_invisible_formatter_cell();
+        if vertical_request {
+            self.builder
+                .transfer_vertical_request_execution(&mut next.builder);
+        } else {
+            self.builder.transfer_container_execution(&mut next.builder);
+        }
+        // The pending break makes this an active native cell. Transfer any
+        // bare `\z` decision before extracting the otherwise unrepresentable
+        // leading break, so the two effects remain ordered atomically.
+        let empty_word_end_break = self.builder.take_unrepresented_word_end_break();
         let previous = std::mem::replace(self, next);
-        let children = previous.builder.finish();
-        (!children.is_empty()).then(|| Block::Paragraph {
-            children,
-            layout: layout(indent),
-            source: previous.source,
-        })
+        let mut children = previous.builder.finish();
+        if invisible_formatter_cell
+            && !empty_word_end_break
+            && !mant_ir::has_printable_character(&children)
+        {
+            children.push(mant_ir::Inline::Text {
+                value: String::new(),
+            });
+        }
+        (
+            (!children.is_empty()).then(|| Block::Paragraph {
+                children,
+                layout: layout(indent),
+                source: previous.source,
+            }),
+            empty_word_end_break,
+        )
     }
 }

@@ -23,7 +23,7 @@ fn outline_contract_exposes_both_human_paths_and_document_ids() {
     let outline = QueryOutline {
         references: mant_protocol::ReferenceInventory::default(),
         display_title: None,
-        schema: OutlineSchema::V0Dot11,
+        schema: OutlineSchema::V0Dot12,
         entries: EntryProjection::All,
         root: None,
         label: "demo(1)".to_owned(),
@@ -76,7 +76,7 @@ fn outline_contract_exposes_both_human_paths_and_document_ids() {
     };
 
     let value = serde_json::to_value(outline).expect("outline JSON");
-    assert_eq!(value["schema"], "mant.outline/v0.11");
+    assert_eq!(value["schema"], "mant.outline/v0.12");
     assert_eq!(value["entries"]["kind"], "all");
     assert_eq!(value["label"], "demo(1)");
     assert_eq!(value["nodes"][0]["kind"], "document-section");
@@ -107,7 +107,7 @@ fn outline_contract_exposes_both_human_paths_and_document_ids() {
 #[test]
 fn outline_optional_diagnostic_fields_default_to_a_complete_result() {
     let outline: QueryOutline = serde_json::from_value(serde_json::json!({
-        "schema": "mant.outline/v0.11",
+        "schema": "mant.outline/v0.12",
         "references": mant_protocol::ReferenceInventory::default(),
         "entries": {"kind": "summary"},
         "label": "demo",
@@ -132,7 +132,7 @@ fn excerpt_contract_keeps_breadcrumbs_separate_from_complete_sections() {
     };
     let excerpt = QueryExcerpt {
         display_title: None,
-        schema: ExcerptSchema::V0Dot11,
+        schema: ExcerptSchema::V0Dot12,
         address: None,
         semantics_complete: true,
         label: "demo(1)".to_owned(),
@@ -162,7 +162,7 @@ fn excerpt_contract_keeps_breadcrumbs_separate_from_complete_sections() {
     };
 
     let value = serde_json::to_value(excerpt).expect("excerpt JSON");
-    assert_eq!(value["schema"], "mant.excerpt/v0.11");
+    assert_eq!(value["schema"], "mant.excerpt/v0.12");
     assert_eq!(value["selections"][0]["kind"], "document-section");
     assert_eq!(
         value["selections"][0]["outline"]["ancestors"][0]["path"],
@@ -200,7 +200,7 @@ fn excerpt_contract_can_return_one_semantic_definition() {
     };
     let excerpt = QueryExcerpt {
         display_title: None,
-        schema: ExcerptSchema::V0Dot11,
+        schema: ExcerptSchema::V0Dot12,
         label: "demo(1)".to_owned(),
         address: None,
         semantics_complete: true,
@@ -252,7 +252,7 @@ fn document_root_contract_addresses_content_before_the_first_heading() {
     let outline = QueryOutline {
         references: mant_protocol::ReferenceInventory::default(),
         display_title: None,
-        schema: OutlineSchema::V0Dot11,
+        schema: OutlineSchema::V0Dot12,
         entries: EntryProjection::None,
         root: None,
         label: "guide.md".to_owned(),
@@ -274,7 +274,7 @@ fn document_root_contract_addresses_content_before_the_first_heading() {
     };
     let excerpt = QueryExcerpt {
         display_title: None,
-        schema: ExcerptSchema::V0Dot11,
+        schema: ExcerptSchema::V0Dot12,
         label: "guide.md".to_owned(),
         address: None,
         semantics_complete: true,
@@ -322,7 +322,7 @@ fn tldr_uses_the_reserved_zero_path_in_outline_and_excerpt_contracts() {
     let outline = QueryOutline {
         references: mant_protocol::ReferenceInventory::default(),
         display_title: None,
-        schema: OutlineSchema::V0Dot11,
+        schema: OutlineSchema::V0Dot12,
         entries: EntryProjection::None,
         root: None,
         label: "demo".to_owned(),
@@ -339,7 +339,7 @@ fn tldr_uses_the_reserved_zero_path_in_outline_and_excerpt_contracts() {
     };
     let excerpt = QueryExcerpt {
         display_title: None,
-        schema: ExcerptSchema::V0Dot11,
+        schema: ExcerptSchema::V0Dot12,
         label: "demo".to_owned(),
         address: None,
         semantics_complete: true,

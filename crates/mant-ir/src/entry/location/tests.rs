@@ -118,7 +118,9 @@ fn transparent_table_and_list_paths_keep_nested_semantic_coordinates() {
     transparent.entry = None;
     transparent.blocks = vec![Block::Table {
         rows: vec![TableRow {
+            kind: crate::TableRowKind::Data,
             cells: vec![TableCell {
+                kind: crate::TableCellKind::Text,
                 blocks: vec![definitions(vec![
                     definition(
                         "parent",

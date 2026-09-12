@@ -128,7 +128,7 @@ pagination. `--list` and `--find` return at most 10,000 rows by default. Inside
 one relevance tier, candidates preserving the query's exact case rank ahead of
 candidates found only through case folding. Plain `--find` output is
 tab-separated as the canonical catalog path and `kind`, while `--format json`
-returns `mant.catalog/v0.11`. `--list` groups the same hierarchy beneath
+returns `mant.catalog/v0.12`. `--list` groups the same hierarchy beneath
 `documents`, `sources/SOURCE`, or `manual/SECTION`.
 
 An empty name match stays silent in ordinary text output. If an explicit source
@@ -940,7 +940,7 @@ There is no shorthand, fuzzy search, inferred synonym or command execution.
 Explanation input rejects controls and values over 512 Unicode scalars before
 document resolution; structural selector values are limited to 512 UTF-8 bytes.
 
-Explanation JSON is `mant.explanation/v0.11`, not an excerpt. Check `outcome`
+Explanation JSON is `mant.explanation/v0.12`, not an excerpt. Check `outcome`
 (`evidence` or `no-evidence`), `total`, `returned`, `nextOffset`, independent
 `truncation` flags and diagnostics. The outcome is computed before pagination,
 so an empty later page can still have `outcome: evidence`. The collector keeps
@@ -1142,7 +1142,7 @@ read-only and cannot invoke this operation.
 ## Integration
 
 <!-- mant:entries role=option case=sensitive -->
-- `--request-json`: Read one closed `mant.request/v0.11` or `mant.scope-request/v0.11` object from standard input.
+- `--request-json`: Read one closed `mant.request/v0.12` or `mant.scope-request/v0.12` object from standard input.
 - `--schema CONTRACT`: Print a generated JSON Schema for `doctor`, `tldr-update`, `request`, `query`, `outline`, `excerpt`, `explanation`, `search`, `scope-request`, `scope-query`, `catalog`, or `all`.
 - `--protocol-version`: Print the exact native protocol versions.
 - `--mcp`: Serve read-only ManT tools over silent MCP stdio. Successful calls
@@ -1155,23 +1155,23 @@ The current protocol descriptor is:
 
 ```json
 {
-  "protocol": "mant.cli/v0.11",
-  "nativeApiVersion": "0.11",
-  "requestSchema": "mant.request/v0.11",
-  "querySchema": "mant.query/v0.11",
-  "documentSchema": "mant.document/v0.11",
-  "outlineSchema": "mant.outline/v0.11",
-  "excerptSchema": "mant.excerpt/v0.11",
-  "explanationSchema": "mant.explanation/v0.11",
-  "searchSchema": "mant.search/v0.11",
-  "scopeRequestSchema": "mant.scope-request/v0.11",
-  "scopeQuerySchema": "mant.scope-query/v0.11",
-  "catalogSchema": "mant.catalog/v0.11"
+  "protocol": "mant.cli/v0.12",
+  "nativeApiVersion": "0.12",
+  "requestSchema": "mant.request/v0.12",
+  "querySchema": "mant.query/v0.12",
+  "documentSchema": "mant.document/v0.12",
+  "outlineSchema": "mant.outline/v0.12",
+  "excerptSchema": "mant.excerpt/v0.12",
+  "explanationSchema": "mant.explanation/v0.12",
+  "searchSchema": "mant.search/v0.12",
+  "scopeRequestSchema": "mant.scope-request/v0.12",
+  "scopeQuerySchema": "mant.scope-query/v0.12",
+  "catalogSchema": "mant.catalog/v0.12"
 }
 ```
 
 The native request and response family follows ManT's pre-stable minor release
-line: ManT 0.11.x uses v0.11, and patch releases remain backward compatible.
+line: ManT 0.12.x uses v0.12, and patch releases remain backward compatible.
 They may add documented optional response fields but do not change requests,
 required fields, tagged unions, or existing field semantics. The
 former experimental bare v1 through v7 query schemas are no longer accepted.

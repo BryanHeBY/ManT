@@ -145,6 +145,9 @@ fn lower_mdoc_plain_list(
                     formatter.spacing,
                     formatter,
                 );
+                if kind != ListKind::Plain {
+                    formatter.execute_word();
+                }
                 context.lower_inline_with_spacing(
                     first_part_children(item.node, NodeKind::Head),
                     formatter.spacing,
@@ -220,27 +223,15 @@ fn lower_mdoc_definition_list(
     let lowered_items = items
         .into_iter()
         .map(|item| {
-            context.lower_inline_with_spacing(item.leading_controls, formatter.spacing, formatter);
-            let mut lowered = definition_item(
-                item.node,
+            lower_mdoc_definition_item(
+                &item,
                 context,
                 list_indent,
                 paragraph_distance,
                 geometry,
-                DefinitionFlow {
-                    spacing_enabled: formatter.spacing,
-                    paragraph_predecessor: item_body_predecessor(false, 0, false),
-                },
+                node.definition_list_style,
                 formatter,
-            );
-            for targets::OwnedTarget {
-                name: target,
-                owner_source: source,
-            } in item.targets().into_iter().rev()
-            {
-                targets::attach_definition_targets(&mut lowered, [target], source);
-            }
-            lowered
+            )
         })
         .collect::<Vec<_>>();
     if node.definition_list_style == Some(DefinitionListStyle::Tag)
@@ -277,6 +268,40 @@ fn lower_mdoc_definition_list(
         layout: layout(indent_columns),
         source: source_span(node),
     }
+}
+
+fn lower_mdoc_definition_item(
+    item: &MdocListItem<'_>,
+    context: &LoweringContext<'_>,
+    list_indent: crate::mandoc::layout::SourceIndent,
+    paragraph_distance: &mut u16,
+    geometry: crate::mandoc::layout::DefinitionGeometry,
+    style: Option<DefinitionListStyle>,
+    formatter: &mut crate::mandoc::formatter::FormatterState,
+) -> DefinitionItem {
+    context.lower_inline_with_spacing(item.leading_controls, formatter.spacing, formatter);
+    let shares_pending_term_row = style != Some(DefinitionListStyle::Overhang);
+    let mut lowered = definition_item(
+        item.node,
+        context,
+        list_indent,
+        paragraph_distance,
+        geometry,
+        DefinitionFlow {
+            spacing_enabled: formatter.spacing,
+            paragraph_predecessor: true,
+            shares_pending_term_row,
+        },
+        formatter,
+    );
+    for targets::OwnedTarget {
+        name: target,
+        owner_source: source,
+    } in item.targets().into_iter().rev()
+    {
+        targets::attach_definition_targets(&mut lowered, [target], source);
+    }
+    lowered
 }
 
 /// Drop source-visible ordinal terms after a complete mdoc tag list has proved
@@ -429,6 +454,7 @@ fn lower_mdoc_column_list(
             );
             let mut cells = part_child_groups(item.node, NodeKind::Body)
                 .map(|body| AstTableCell {
+                    kind: mant_ir::TableCellKind::Text,
                     blocks: lower_blocks_with_predecessor(
                         body,
                         context,
@@ -454,6 +480,7 @@ fn lower_mdoc_column_list(
                 attach_item_targets(&mut blocks, &item, layout(cell_indent.content_origin()));
                 if !blocks.is_empty() {
                     cells.push(AstTableCell {
+                        kind: mant_ir::TableCellKind::Text,
                         blocks,
                         column_span: 1,
                         row_span: 1,
@@ -461,7 +488,10 @@ fn lower_mdoc_column_list(
                     });
                 }
             }
-            TableRow { cells }
+            TableRow {
+                kind: mant_ir::TableRowKind::Data,
+                cells,
+            }
         })
         .filter(|row| !row.cells.is_empty())
         .collect();
@@ -530,7 +560,9 @@ fn append_list_targets(
         Block::Table { rows, .. } => {
             if rows.is_empty() {
                 rows.push(TableRow {
+                    kind: mant_ir::TableRowKind::Data,
                     cells: vec![AstTableCell {
+                        kind: mant_ir::TableCellKind::Text,
                         blocks: Vec::new(),
                         column_span: 1,
                         row_span: 1,

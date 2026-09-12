@@ -1,7 +1,7 @@
 //! State-only requests execute before printable fallback and never leak operands.
 use super::{
     AuthorMode, Block, BlockState, LoweringContext, Node, NodeKind, is_section, lower_inline_nodes,
-    plain_text, source_span, update_paragraph_distance, vertical_distance_lines,
+    plain_text, source_span, update_paragraph_distance, vertical_space_delta,
 };
 
 /// A read-only request classification, not a replayable formatter effect.
@@ -42,9 +42,12 @@ impl super::BlockLowerer<'_, '_> {
             return false;
         }
         self.state.flush_preformatted();
-        self.state.flush_paragraph();
+        let lines = self
+            .state
+            .resolve_vertical_space(vertical_space_delta(node));
+        self.state.flush_paragraph_for_vertical_request();
         self.state.consume_hanging_first_line();
-        if space && let Some(lines) = vertical_distance_lines(node) {
+        if space {
             self.state.output.push(Block::VerticalSpace {
                 lines,
                 source: source_span(node),
@@ -86,8 +89,8 @@ impl super::BlockLowerer<'_, '_> {
                     node,
                     self.context,
                     &mut self.state,
+                    &mut self.formatter,
                     self.paragraph_distance,
-                    &mut self.split_authors,
                 ) == ControlOutcome::Consumed
             });
         if control_consumed
@@ -129,8 +132,8 @@ fn execute_block_control(
     node: &Node,
     context: &LoweringContext<'_>,
     state: &mut BlockState,
+    formatter: &mut crate::mandoc::formatter::FormatterState,
     paragraph_distance: &mut u16,
-    split_authors: &mut bool,
 ) -> ControlOutcome {
     match request {
         BlockControl::ParagraphDistance => update_paragraph_distance(node, paragraph_distance),
@@ -140,15 +143,14 @@ fn execute_block_control(
             // body origin, including when no text preceded the request.
             state.literal_mode_boundary();
         }
-        BlockControl::Author(mode) => match mode {
-            Some(AuthorMode::Split) => *split_authors = true,
-            Some(AuthorMode::NoSplit) => *split_authors = false,
-            None if *split_authors => {
+        BlockControl::Author(mode) => {
+            let authors_section = context.active_mdoc_section()
+                == crate::mandoc::source_context::MdocSectionContext::Authors;
+            if formatter.execute_author(mode, authors_section) {
                 state.hard_break();
-                return ControlOutcome::ContinueInline;
             }
-            None => return ControlOutcome::ContinueInline,
-        },
+            return ControlOutcome::ContinueInline;
+        }
         BlockControl::Spacing => {
             let setting = plain_text(&lower_inline_nodes(&node.children, context.default_name));
             state.set_spacing(setting.trim());

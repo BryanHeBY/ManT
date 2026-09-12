@@ -154,14 +154,14 @@ pub struct DocumentScope {
 /// Exact schema marker for a scope-query request.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub enum ScopeRequestSchema {
-    /// Version 0.11 of the pre-stable scope-query request.
-    #[serde(rename = "mant.scope-request/v0.11")]
-    V0Dot11,
+    /// Version 0.12 of the pre-stable scope-query request.
+    #[serde(rename = "mant.scope-request/v0.12")]
+    V0Dot12,
 }
 
 impl ScopeRequestSchema {
     /// Serialized identifier of the current request contract.
-    pub const ID: &'static str = "mant.scope-request/v0.11";
+    pub const ID: &'static str = "mant.scope-request/v0.12";
 }
 
 /// Query projection supported over a document set.
@@ -216,7 +216,7 @@ pub enum ScopeQueryView {
 /// Native request for a bounded multi-document query.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-#[schemars(extend("$id" = "urn:mant:scope-request:v0.11"))]
+#[schemars(extend("$id" = "urn:mant:scope-request:v0.12"))]
 pub struct ScopeQueryRequest {
     /// Exact request schema discriminator.
     pub schema: ScopeRequestSchema,
@@ -229,14 +229,14 @@ pub struct ScopeQueryRequest {
 /// Exact schema marker for a resolved scope query.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub enum ScopeQuerySchema {
-    /// Version 0.11 of the pre-stable scope-query result.
-    #[serde(rename = "mant.scope-query/v0.11")]
-    V0Dot11,
+    /// Version 0.12 of the pre-stable scope-query result.
+    #[serde(rename = "mant.scope-query/v0.12")]
+    V0Dot12,
 }
 
 impl ScopeQuerySchema {
     /// Serialized identifier of the current result contract.
-    pub const ID: &'static str = "mant.scope-query/v0.11";
+    pub const ID: &'static str = "mant.scope-query/v0.12";
 }
 
 /// Typed cross-document edge retained in a resolved scope.
@@ -495,7 +495,7 @@ pub struct ScopeExplanation {
 /// Complete bounded multi-document response.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
-#[schemars(extend("$id" = "urn:mant:scope-query:v0.11"))]
+#[schemars(extend("$id" = "urn:mant:scope-query:v0.12"))]
 pub struct ScopeQueryResponse {
     /// Exact response schema discriminator.
     pub schema: ScopeQuerySchema,

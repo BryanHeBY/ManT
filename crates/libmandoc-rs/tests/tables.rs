@@ -1,5 +1,5 @@
 //! Native tbl metadata must distinguish printable payload from layout controls.
-use libmandoc_rs::{Node, Parser, TableCell, TableCellKind};
+use libmandoc_rs::{Node, Parser, TableCell, TableCellKind, TableRowKind, TableRuleCellKind};
 
 fn cells(node: &Node) -> Vec<&TableCell> {
     node.table_cells
@@ -20,17 +20,69 @@ fn escapes(node: &Node) -> Vec<Option<u8>> {
 
 #[test]
 fn table_boundaries_survive_leading_rules_and_layout_restarts() {
-    fn starts(node: &Node) -> Vec<bool> {
+    fn rows(node: &Node) -> Vec<(TableRowKind, bool)> {
         let mut result = Vec::new();
-        if !node.table_cells.is_empty() {
-            result.push(node.flags.table_start);
+        if let Some(kind) = &node.table_row_kind {
+            result.push((kind.clone(), node.flags.table_start));
         }
-        result.extend(node.children.iter().flat_map(starts));
+        result.extend(node.children.iter().flat_map(rows));
         result
     }
     let source = b".TH PROBE 1\n.SH DESCRIPTION\n.TS\nl.\nFIRST\n.T&\nr.\nSECOND\n.TE\n.TS\nl.\n_\nTHIRD\nFOURTH\n.TE\n";
     let parsed = Parser::default().parse_bytes("table.1", source).unwrap();
-    assert_eq!(starts(&parsed.document.root), [true, false, true, false]);
+    assert_eq!(
+        rows(&parsed.document.root),
+        [
+            (TableRowKind::Data, true),
+            (TableRowKind::Data, false),
+            (TableRowKind::HorizontalRule, true),
+            (TableRowKind::Data, false),
+            (TableRowKind::Data, false),
+        ]
+    );
+}
+
+#[test]
+fn layout_only_rule_rows_retain_per_column_strength() {
+    fn rows(node: &Node) -> Vec<TableRowKind> {
+        let mut result = node.table_row_kind.iter().cloned().collect::<Vec<_>>();
+        result.extend(node.children.iter().flat_map(rows));
+        result
+    }
+    let source = b".TH PROBE 1\n.SH DESCRIPTION\n.TS\n_\nl.\nSINGLE\n.TE\n.TS\n=\nl.\nDOUBLE\n.TE\n.TS\n_ =\nl l.\nLEFT\tRIGHT\n.TE\n.TS\n_.\nIGNORED\n.TE\n.TS\n=.\nIGNORED\n.TE\n.TS\n_ =.\nLEFT\tRIGHT\n.TE\n";
+    let parsed = Parser::default().parse_bytes("table.1", source).unwrap();
+    assert_eq!(
+        rows(&parsed.document.root),
+        [
+            TableRowKind::LayoutRule {
+                cells: vec![TableRuleCellKind::Horizontal],
+            },
+            TableRowKind::Data,
+            TableRowKind::LayoutRule {
+                cells: vec![TableRuleCellKind::DoubleHorizontal],
+            },
+            TableRowKind::Data,
+            TableRowKind::LayoutRule {
+                cells: vec![
+                    TableRuleCellKind::Horizontal,
+                    TableRuleCellKind::DoubleHorizontal,
+                ],
+            },
+            TableRowKind::Data,
+            TableRowKind::LayoutRule {
+                cells: vec![TableRuleCellKind::Horizontal],
+            },
+            TableRowKind::LayoutRule {
+                cells: vec![TableRuleCellKind::DoubleHorizontal],
+            },
+            TableRowKind::LayoutRule {
+                cells: vec![
+                    TableRuleCellKind::Horizontal,
+                    TableRuleCellKind::DoubleHorizontal,
+                ],
+            },
+        ]
+    );
 }
 
 #[test]

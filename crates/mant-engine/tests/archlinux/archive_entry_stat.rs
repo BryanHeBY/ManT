@@ -14,9 +14,12 @@ fn keeps_include_and_function_declarations_independently_addressable() {
     let paragraphs = synopsis
         .blocks
         .iter()
-        .map(|block| match block {
-            Block::Paragraph { children, .. } => inline_text(children),
-            block => panic!("expected one paragraph per declaration, got {block:?}"),
+        .filter_map(|block| match block {
+            Block::Paragraph { children, .. } => Some(inline_text(children)),
+            // Fixed CVS places one vertical row between include and function
+            // declarations and between successive declarations.
+            Block::VerticalSpace { lines: 1, .. } => None,
+            block => panic!("expected a declaration boundary, got {block:?}"),
         })
         .collect::<Vec<_>>();
 

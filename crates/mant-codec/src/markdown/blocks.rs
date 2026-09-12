@@ -262,6 +262,7 @@ fn parse_table_row(
                     }]
                 };
                 cells.push(TableCell {
+                    kind: mant_ir::TableCellKind::Text,
                     blocks,
                     column_span: 1,
                     row_span: 1,
@@ -274,6 +275,7 @@ fn parse_table_row(
             Event::Start(tag) => {
                 let whole = cursor.consume_balanced(range);
                 cells.push(TableCell {
+                    kind: mant_ir::TableCellKind::Text,
                     blocks: vec![source.unsupported_block(
                         unsupported_block_name(&tag),
                         whole,
@@ -287,7 +289,13 @@ fn parse_table_row(
             _ => {}
         }
     }
-    (TableRow { cells }, end)
+    (
+        TableRow {
+            kind: mant_ir::TableRowKind::Data,
+            cells,
+        },
+        end,
+    )
 }
 
 fn table_alignment(alignment: Alignment) -> Option<TableAlignment> {

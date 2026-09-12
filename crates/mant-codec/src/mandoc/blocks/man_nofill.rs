@@ -4,6 +4,7 @@ use super::{
     lower_inline_nodes_with_font_state, lower_no_fill_line_with_font_state,
     participates_in_inline_flow, source_span, targets,
 };
+use crate::mandoc::controls::{FormatterBoundary, formatter_control};
 
 struct LoweredNoFillLine {
     nodes: Vec<Inline>,
@@ -29,54 +30,14 @@ pub(super) fn is_no_fill_payload(node: &Node) -> bool {
 /// execute without calling `term_newln()` or `term_flushln()`, so pending
 /// `\c`, `\p`, and `\z` state crosses them.  Requests that establish a real
 /// line boundary are settled before their normal block dispatch executes.
-#[derive(Clone, Copy, Eq, PartialEq)]
-pub(super) enum NoFillBoundary {
-    None,
-    Line,
-    NoBreak,
-}
-
-pub(super) fn no_fill_boundary(node: &Node) -> NoFillBoundary {
-    // `mc` flushes with TERMP_NOBREAK: it commits the current cells but keeps
-    // the next formatter word on the same visual row.  Device-specific margin
-    // geometry is omitted, but the source-neutral projection retains one
-    // ordinary boundary rather than inventing a newline.
-    if node.macro_name.as_deref() == Some("mc") {
-        return NoFillBoundary::NoBreak;
-    }
-    // These requests call term_newln()/term_flushln() in the pinned CVS
-    // terminal executor.  Check them before payload classification because
-    // roff control nodes can retain NODE_NOFILL and inline-flow children.
-    if matches!(
-        node.macro_name.as_deref(),
-        Some("br" | "ce" | "rj" | "fi" | "nf" | "EX" | "EE" | "sp" | "in" | "ti" | "Pp")
-    ) {
-        return NoFillBoundary::Line;
+pub(super) fn no_fill_boundary(node: &Node) -> FormatterBoundary {
+    if let Some(control) = formatter_control(node.macro_name.as_deref()) {
+        return control.boundary;
     }
     if is_no_fill_payload(node) {
-        return NoFillBoundary::None;
-    }
-    if matches!(
-        node.macro_name.as_deref(),
-        Some(
-            "ft" | "PD"
-                | "Sm"
-                | "Tg"
-                | "ad"
-                | "na"
-                | "hy"
-                | "nh"
-                | "ne"
-                | "nr"
-                | "ta"
-                | "DT"
-                | "ll"
-                | "po"
-        )
-    ) {
-        NoFillBoundary::None
+        FormatterBoundary::None
     } else {
-        NoFillBoundary::Line
+        FormatterBoundary::Line
     }
 }
 
@@ -158,14 +119,25 @@ fn empty_word_rows(node: &Node) -> usize {
 
 impl super::BlockLowerer<'_, '_> {
     pub(super) fn push_no_fill_lines(&mut self, node: &Node) -> bool {
+        if !is_no_fill_payload(node) {
+            return false;
+        }
+        // `nf`/`fi` split presentation buffers, not the native formatter.
+        // Move a surviving bare BACKAFTER request into the no-fill executor;
+        // an occupied cell was already settled by the mode boundary.
+        self.no_fill_inline
+            .inherit_zero_advance_armed(self.state.take_zero_advance_armed());
         let Some(lines) = lower_no_fill_lines(
             node,
             self.context.default_name,
             &mut self.formatter.font,
             &mut self.no_fill_inline,
         ) else {
-            return false;
+            unreachable!("a no-fill payload must lower as a no-fill row");
         };
+        // Every accepted no-fill payload represents a real `term_word()` and
+        // consequently clears formatter-global negative `.sp` debt.
+        self.state.execute_formatter_word();
         for line in lines {
             self.state.push_preformatted(
                 line.nodes,

@@ -109,11 +109,25 @@ pub(in crate::mandoc) fn paragraph_distance_lines(node: &Node) -> Option<u16> {
 }
 
 /// Convert an explicit vertical-space request to terminal rows.
+#[cfg(test)]
 pub(in crate::mandoc) fn vertical_distance_lines(node: &Node) -> Option<u16> {
     first_text(node).map_or(Some(1), distance_lines)
 }
 
+/// Signed CVS terminal distance for `.sp`. Negative rows accumulate in
+/// `term.skipvsp` and cancel later vertical-space requests until a formatter
+/// word resets that debt.
+pub(in crate::mandoc) fn vertical_space_delta(node: &Node) -> i32 {
+    first_text(node).map_or(1, |argument| signed_distance_lines(argument).unwrap_or(1))
+}
+
 fn distance_lines(argument: &str) -> Option<u16> {
+    let signed = signed_distance_lines(argument)?;
+    Some(u16::try_from(signed.max(0)).unwrap_or(u16::MAX))
+}
+
+#[allow(clippy::cast_possible_truncation)]
+fn signed_distance_lines(argument: &str) -> Option<i32> {
     let argument = argument.trim();
     let number_end = argument
         .find(|character: char| character.is_ascii_alphabetic())
@@ -135,12 +149,22 @@ fn distance_lines(argument: &str) -> Option<u16> {
         _ => scale,
     };
 
-    // Equivalent to mandoc's positive rounding in term_vspan(), without a
-    // lossy float cast, including its fallback for unusually large values.
-    for lines in 0_u16..66 {
-        if vertical_rows < f64::from(lines) + 0.5005 {
-            return Some(lines);
-        }
-    }
-    Some(1)
+    // `term_vspan()` rounds away from zero at the half-row boundary and maps
+    // positive values outside its supported range back to one row. Negative
+    // values remain valid because they feed the bounded skip-vspace debt.
+    let rounded = if vertical_rows > 0.0 {
+        (vertical_rows + 0.4995).trunc()
+    } else {
+        (vertical_rows - 0.4995).trunc()
+    };
+    let rounded = if rounded <= f64::from(i32::MIN) {
+        i32::MIN
+    } else if rounded >= f64::from(i32::MAX) {
+        i32::MAX
+    } else {
+        // The finite value is integral after `trunc()` and was explicitly
+        // clamped to the complete i32 range above.
+        rounded as i32
+    };
+    Some(if rounded < 66 { rounded } else { 1 })
 }

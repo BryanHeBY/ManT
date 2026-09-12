@@ -12,7 +12,7 @@ that crate was not published for that change.
 
 ## Unreleased
 
-### libmandoc-rs 0.11.0
+### libmandoc-rs 0.12.0
 
 - Replace the 1.14.6 native baseline with the official CVS tree pinned at
   2026-09-11 08:00:00 UTC. `LIBMANDOC_VERSION` is `cvs-20260911`; the source
@@ -35,16 +35,35 @@ that crate was not published for that change.
 - Restack local changes into independent upstream-candidate fixes and explicit
   embedding policies. The active vendor source may be a pinned release or CVS
   snapshot; Git history owns earlier baselines, not parallel patch stacks.
+- Preserve whether each native table row is data, a whole-row rule, or a
+  per-column layout rule. Adding `Node::table_row_kind` is source-breaking for
+  downstream exhaustive `Node` destructuring and struct-literal consumers, so
+  the crate advances with the rest of the unpublished contract family rather
+  than silently mixing the new snapshot with older lowering.
 
-### mant-codec, mant-loader, mant-engine and mant 0.11.1
+### mant-ir, mant-protocol, mant-codec, mant-loader, mant-query, mant-render, mant-engine and mant 0.12.0
 
-- Adopt `libmandoc-rs ^0.11.0` through the roff loading path. Paragraph font
+- Advance the unpublished native request, document, outline, excerpt,
+  explanation, search, scope, and catalog contract family to `v0.12`. Published
+  `v0.11` golden contracts remain checked in and unchanged. All affected Rust
+  crates use `0.12.0` and `^0.12.0` internal dependencies; `mant-sources`
+  remains independently versioned at `0.9.3`.
+- Add the closed `TableRow.kind` fact (`data`, `horizontal-rule`,
+  `double-horizontal-rule`, or a per-column `layout-rule`) to `mant-ir` and the
+  native protocol family. Add the closed `TableCell.kind` fact so partial tbl
+  layout rows and data-cell rules remain visible beside ordinary cells without
+  leaking ignored operands. Code constructing `TableRow` or `TableCell` must
+  initialize the new fields. Text and TUI renderers now preserve empty table
+  rows and distinguish whole-row, per-column, single, double, connecting, and
+  isolated rules instead of inferring them from cell contents.
+
+- Adopt `libmandoc-rs ^0.12.0` through the roff loading path. Paragraph font
   resets cover the newly preserved `P` and `LP` tokens. Standalone `soquiet`
   redirects use the same exact-name and confined-source rules as `so`.
 - Require the updated codec/loader in downstream production dependencies so a
   fresh resolution cannot mix the CVS parser with pre-migration lowering.
-  Unchanged crates retain their versions; all published v0.11 protocol shapes
-  and schema snapshots are unchanged. No release tag is implied by these notes.
+  Published v0.11 protocol shapes and schema snapshots remain unchanged. No
+  release tag is implied by these notes.
 - Retain independent `.Pp` paragraph spacing in raw mdoc no-fill flow, including
   preceding `.sp` and continued lines. Execute `.fi`/`.nf` line boundaries in
   both macro packages even when the requested mode is unchanged, without
@@ -68,7 +87,7 @@ that crate was not published for that change.
   while lowering a detached body; later requests do not retroactively affect
   the label, and ordinary run-in definitions retain their layout.
 
-### mant-ui 0.11.1
+### mant-ui 0.12.0
 
 - Keep complete Unicode graphemes together in document wrapping, including
   combining marks, flags and joined emoji across source styles. Search,
@@ -76,8 +95,7 @@ that crate was not published for that change.
   as the rendered glyphs. A glyph wider than the entire viewport is replaced
   once for display while its original text remains searchable. Selection
   copies the visible replacement in this narrower-than-one-glyph case.
-- `mant` requires `mant-ui ^0.11.1` for this fix; unrelated crate versions and
-  versioned output contracts remain unchanged.
+- `mant` requires `mant-ui ^0.12.0` for this fix.
 - Project links from source scalar ranges only after forming complete row
   graphemes and expanding tabs. A link covering part of one glyph remains
   clickable; distinct targets sharing a glyph require explicit navigation

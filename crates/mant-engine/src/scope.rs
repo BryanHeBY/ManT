@@ -136,7 +136,7 @@ mod tests {
     #[test]
     fn native_scope_request_enforces_entry_selector_contract() {
         let mut request = ScopeQueryRequest {
-            schema: mant_protocol::ScopeRequestSchema::V0Dot11,
+            schema: mant_protocol::ScopeRequestSchema::V0Dot12,
             scope: DocumentScope {
                 documents: vec![DocumentSelector {
                     selector: "root".to_owned(),

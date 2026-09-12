@@ -302,7 +302,29 @@ impl<'ir> Visit<'ir> for InvariantCollector {
             validate_source_span(&mut self.diagnostics, source);
         }
         if let Block::Table { rows, .. } = block {
+            for row in rows {
+                if !matches!(&row.kind, crate::TableRowKind::Data) && !row.cells.is_empty() {
+                    self.diagnostics.push(invariant(
+                        "ir.invalid-table-rule-cells",
+                        "whole-row table rules must not contain data cells".to_owned(),
+                    ));
+                }
+                if let crate::TableRowKind::LayoutRule { cells } = &row.kind
+                    && cells.is_empty()
+                {
+                    self.diagnostics.push(invariant(
+                        "ir.empty-table-layout-rule",
+                        "layout-only table rules must contain at least one rule cell".to_owned(),
+                    ));
+                }
+            }
             for cell in rows.iter().flat_map(|row| &row.cells) {
+                if cell.kind != crate::TableCellKind::Text && !cell.blocks.is_empty() {
+                    self.diagnostics.push(invariant(
+                        "ir.invalid-table-rule-content",
+                        "table rule cells must not contain ordinary block content".to_owned(),
+                    ));
+                }
                 if cell.column_span == 0 || cell.row_span == 0 {
                     self.diagnostics.push(invariant(
                         "ir.invalid-table-span",
@@ -551,7 +573,9 @@ mod tests {
             },
             Block::Table {
                 rows: vec![TableRow {
+                    kind: crate::TableRowKind::Data,
                     cells: vec![TableCell {
+                        kind: crate::TableCellKind::Text,
                         blocks: Vec::new(),
                         column_span: 0,
                         row_span: 0,
@@ -579,6 +603,55 @@ mod tests {
         ] {
             assert!(codes.contains(&expected), "missing {expected}: {codes:?}");
         }
+    }
+
+    #[test]
+    fn rejects_rule_rows_with_data_or_without_layout_strengths() {
+        let blocks = vec![Block::Table {
+            rows: vec![
+                TableRow {
+                    kind: crate::TableRowKind::HorizontalRule,
+                    cells: vec![TableCell {
+                        kind: crate::TableCellKind::Text,
+                        blocks: Vec::new(),
+                        column_span: 1,
+                        row_span: 1,
+                        alignment: None,
+                    }],
+                },
+                TableRow {
+                    kind: crate::TableRowKind::LayoutRule { cells: Vec::new() },
+                    cells: Vec::new(),
+                },
+                TableRow {
+                    kind: crate::TableRowKind::Data,
+                    cells: vec![TableCell {
+                        kind: crate::TableCellKind::HorizontalRule,
+                        blocks: vec![Block::Paragraph {
+                            children: Vec::new(),
+                            layout: LayoutHint::default(),
+                            source: None,
+                        }],
+                        column_span: 1,
+                        row_span: 1,
+                        alignment: None,
+                    }],
+                },
+            ],
+            layout: LayoutHint::default(),
+            source: None,
+        }];
+        let diagnostics = validate_document(&document(Vec::new(), blocks));
+        let codes = diagnostics
+            .iter()
+            .filter_map(|diagnostic| diagnostic.code.as_deref())
+            .collect::<Vec<_>>();
+        assert!(codes.contains(&"ir.invalid-table-rule-cells"), "{codes:?}");
+        assert!(codes.contains(&"ir.empty-table-layout-rule"), "{codes:?}");
+        assert!(
+            codes.contains(&"ir.invalid-table-rule-content"),
+            "{codes:?}"
+        );
     }
 
     #[test]

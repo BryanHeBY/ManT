@@ -126,9 +126,9 @@ fields, and negative/fractional/oversized starts are rejected during decoding.
 
 Every canonical ID in `DocumentIndex` is a local navigation target, including entries attached directly to ordinary list items or native definitions. A `LinkTarget::Section` may target any such ID; its historical variant name does not restrict links to heading-backed sections. Entry targets do not need an additional inline anchor. Producers resolve exact authored fragments to canonical IDs before validation; duplicate identities and incompatible roles remain separate errors.
 
-`TableGrid` supplies shared sparse logical-column coordinates for table consumers. Horizontal spans omit covered cells; vertical continuations retain explicit empty cells in subsequent rows, while `rowSpan` remains on the content owner. Covered content is never repeated. Callers can request dense column slots with an explicit budget, so large span values need not allocate a dense grid.
+`TableGrid` supplies shared sparse logical-column coordinates for table consumers. Each row has a closed `kind`: `data`, `horizontal-rule`, `double-horizontal-rule`, or `layout-rule`. A layout rule retains one `horizontal` or `double-horizontal` strength per logical column, including mixed `_`/`=` layout rows. Data-row cells also have a closed `kind`: omitted/`text`, `horizontal-rule`, `double-horizontal-rule`, `isolated-horizontal-rule`, or `isolated-double-horizontal-rule`. These cell roles preserve partial layout rows and tbl data-cell rule tokens without inventing text blocks; a rule cell must have no ordinary block content. A data row with no cells is an intentional physical blank row; it is not interchangeable with a rule. Horizontal spans omit covered cells; vertical continuations retain explicit empty cells in subsequent rows, while `rowSpan` remains on the content owner. Covered content is never repeated. Callers can request dense column slots with an explicit budget, so large span values need not allocate a dense grid.
 
-CLI text and TUI stack cells in source order when a table's composed origin falls outside the final padding bounds, a cell subtree contains a negative relative displacement, or a descendant origin would cross those bounds. The check includes nested containers, list markers, definition bodies, and continuation lines. In this fallback, ordinary block rendering composes the real parent origin before clipping visible text, preserving outdents, links, anchors, and hard lines. Rendering cells at local column zero and translating them afterwards would lose that geometry. Tables with nonnegative origins and displacements that remain within the bounds retain the ordinary column layout.
+CLI text and TUI stack cells in source order when a table's composed origin falls outside the final padding bounds, a cell subtree contains a negative relative displacement, or a descendant origin would cross those bounds. The check includes nested containers, list markers, definition bodies, and continuation lines. In this fallback, ordinary block rendering composes the real parent origin before clipping visible text, preserving outdents, links, anchors, and hard lines. Rendering cells at local column zero and translating them afterwards would lose that geometry. Tables with nonnegative origins and displacements that remain within the bounds retain the ordinary column layout unless expanding multiline cells across dense logical slots would exceed the renderer's bounded physical-slot budget; text output then uses explicit `column N:` rows so every physical line remains visible without width-by-height amplification.
 
 ## Inline Content
 
@@ -410,7 +410,7 @@ Add the crate when implementing an in-process parser, index, renderer, or truste
 
 ```toml
 [dependencies]
-mant-ir = "^0.11.0"
+mant-ir = "^0.12.0"
 ```
 
 Prefer constructors and visitors from the crate over recursively rewriting public fields by hand. Use `visit::Visit` or `visit::VisitMut` for whole-document passes and run validation after transformations that can affect identities or links.

@@ -36,6 +36,7 @@ struct mant_mandoc_node_view {
 	size_t			 flow_epoch;
 	int			 table_escape;
 	int			 table_source_recovery_safe;
+	int			 table_row_kind;
 	unsigned int		 flags;
 	int			 list_kind;
 	int			 definition_list_style;
@@ -49,6 +50,7 @@ struct mant_mandoc_node_view {
 	const char		*enclosure_close;
 	const char		*equation;
 	const struct mant_mandoc_table_cell *table_cells;
+	const struct mant_mandoc_table_rule_cell *table_rule_cells;
 	const struct mant_mandoc_node *child;
 	const struct mant_mandoc_node *next;
 };
@@ -64,6 +66,12 @@ struct mant_mandoc_table_cell_view {
 	unsigned int		 row_span;
 	int			 alignment;
 	const struct mant_mandoc_table_cell *next;
+};
+
+/* Borrowed projection of one layout-only tbl(7) rule cell. */
+struct mant_mandoc_table_rule_cell_view {
+	int			 kind;
+	const struct mant_mandoc_table_rule_cell *next;
 };
 
 typedef int (*mant_mandoc_source_resolver)(void *, const char *,
@@ -86,6 +94,14 @@ enum mant_mandoc_node_kind {
 	MANT_MANDOC_COMMENT = 7,
 	MANT_MANDOC_TABLE = 8,
 	MANT_MANDOC_EQUATION = 9
+};
+
+enum mant_mandoc_table_row_kind {
+	MANT_MANDOC_TABLE_ROW_NONE = 0,
+	MANT_MANDOC_TABLE_ROW_DATA = 1,
+	MANT_MANDOC_TABLE_ROW_HORIZ = 2,
+	MANT_MANDOC_TABLE_ROW_DHORIZ = 3,
+	MANT_MANDOC_TABLE_ROW_LAYOUT_RULE = 4
 };
 
 enum mant_mandoc_list_kind {
@@ -183,6 +199,7 @@ int mant_mandoc_document_equation_truncated(
 int mant_mandoc_is_native_roff_request(const char *, size_t);
 size_t mant_mandoc_node_view_size(void);
 size_t mant_mandoc_table_cell_view_size(void);
+size_t mant_mandoc_table_rule_cell_view_size(void);
 const struct mant_mandoc_node *mant_mandoc_document_root(
     const struct mant_mandoc_document *);
 int mant_mandoc_node_snapshot(struct mant_mandoc_document *,
@@ -190,6 +207,9 @@ int mant_mandoc_node_snapshot(struct mant_mandoc_document *,
 int mant_mandoc_table_cell_snapshot(const struct mant_mandoc_document *,
     const struct mant_mandoc_table_cell *,
     struct mant_mandoc_table_cell_view *);
+int mant_mandoc_table_rule_cell_snapshot(const struct mant_mandoc_document *,
+    const struct mant_mandoc_table_rule_cell *,
+    struct mant_mandoc_table_rule_cell_view *);
 #ifdef MANT_MANDOC_RENDER
 const unsigned char *mant_mandoc_document_output(
     const struct mant_mandoc_document *);

@@ -41,7 +41,14 @@ fn prose_function_blocks_are_inline_but_synopsis_declarations_remain_separate() 
         "before WORD(arg)) after",
     );
     let doc = mant_loader::load_roff_bytes(b".Dd Sep 8, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.Fo FIRST\n.Fa arg\n.Fc\n.Fo SECOND\n.Fa arg\n.Fc\n").unwrap();
-    assert_eq!(doc.document.unwrap().sections[0].blocks.len(), 2);
+    let blocks = &doc.document.unwrap().sections[0].blocks;
+    assert_eq!(blocks.len(), 3);
+    assert!(matches!(blocks[0], mant_ir::Block::Paragraph { .. }));
+    assert!(matches!(
+        blocks[1],
+        mant_ir::Block::VerticalSpace { lines: 1, .. }
+    ));
+    assert!(matches!(blocks[2], mant_ir::Block::Paragraph { .. }));
 }
 
 #[test]

@@ -176,7 +176,7 @@ use mant_protocol::{EntryProjection, InputFormat, QueryInput, QueryRequest, Quer
 use mant_render::render_outline_text;
 
 let request = QueryRequest {
-    schema: RequestSchema::V0Dot11,
+    schema: RequestSchema::V0Dot12,
     input: QueryInput::File {
         path: "notes.md".to_owned(),
         format: InputFormat::Markdown,

@@ -191,16 +191,15 @@ fn lower_man_item(
         paragraph_distance,
         crate::mandoc::layout::DefinitionGeometry {
             body: *definition_hanging_width,
-            placement: if body_breaks_pending_head(first_part_children(node, NodeKind::Body)) {
-                crate::mandoc::layout::TermPlacement::Stacked
-            } else {
-                crate::mandoc::layout::TermPlacement::Fit
-            },
+            placement: crate::mandoc::layout::TermPlacement::Fit,
             gap: 1,
         },
         super::super::DefinitionFlow {
             spacing_enabled,
-            paragraph_predecessor: false,
+            // The detached body still follows the native tag row. This is
+            // source-flow evidence even when the body has not emitted IR yet.
+            paragraph_predecessor: true,
+            shares_pending_term_row: true,
         },
         formatter,
     );
@@ -215,56 +214,6 @@ fn lower_man_item(
         spacing_before,
         max_width,
     }
-}
-
-/// The native formatter enters a TP/IP body with the head still pending on
-/// its line. A detached body's empty inline builder cannot represent that
-/// state: an initial br/fi/nf must therefore constrain head placement, not
-/// manufacture an empty paragraph or an additional vertical-space request.
-fn body_breaks_pending_head(nodes: &[Node]) -> bool {
-    for node in nodes {
-        if node.kind == NodeKind::Comment {
-            continue;
-        }
-        let name = node.macro_name.as_deref();
-        // roff_term dispatches fi/nf to br; in, ti, sp and ce/rj also end the
-        // pending line before their separate layout/captured-text effects.
-        // man_term's pre_literal does the same for EX/EE.
-        if matches!(
-            name,
-            Some("br" | "fi" | "nf" | "in" | "ti" | "sp" | "ce" | "rj" | "EX" | "EE")
-        ) {
-            return true;
-        }
-        if node.flags.no_print
-            || name == Some("Tg")
-            || crate::mandoc::controls::operand_control(name).is_some()
-        {
-            // Classification only: normal lowering still executes font and
-            // layout controls and retains targets exactly once.
-            continue;
-        }
-        if node.kind == NodeKind::Text
-            && node.text.as_deref().is_some_and(|text| {
-                !text.is_empty()
-                    && crate::mandoc::roff_escape::decode(text)
-                        .iter()
-                        .all(|event| {
-                            matches!(
-                                crate::mandoc::roff_escape::inline_event_effect(event),
-                                crate::mandoc::roff_escape::InlineEventEffect::StateOnly
-                                    | crate::mandoc::roff_escape::InlineEventEffect::RowMarker
-                            )
-                        })
-            })
-        {
-            continue;
-        }
-        // Printable content or an independently handled structural scope
-        // consumes the initial head/body boundary. Never search past it.
-        return false;
-    }
-    false
 }
 
 pub(in crate::mandoc::blocks) struct ManDefinitionState<'a> {

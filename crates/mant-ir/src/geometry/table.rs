@@ -90,7 +90,9 @@ mod tests {
 
     fn rows(block: Block) -> Vec<TableRow> {
         vec![TableRow {
+            kind: crate::TableRowKind::Data,
             cells: vec![TableCell {
+                kind: crate::TableCellKind::Text,
                 blocks: vec![block],
                 column_span: 1,
                 row_span: 1,

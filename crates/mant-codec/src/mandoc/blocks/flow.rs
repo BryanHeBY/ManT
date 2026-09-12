@@ -201,13 +201,96 @@ impl BlockState {
         self.literal.no_break_flush(nodes);
     }
 
+    pub(super) fn has_formatter_cell(&self) -> bool {
+        self.paragraph.has_formatter_cell() || self.literal.has_formatter_column()
+    }
+
+    pub(super) fn resolve_vertical_space(&mut self, rows: i32) -> u16 {
+        self.paragraph.resolve_vertical_space(rows)
+    }
+
+    pub(super) fn inherit_vertical_space_debt(&mut self, debt: u16) {
+        self.paragraph.inherit_vertical_space_debt(debt);
+    }
+
+    /// Execute one native formatter word while the visible row is owned by
+    /// the no-fill flow.  The word still clears CVS `skipvsp`, which belongs
+    /// to the surrounding formatter rather than either IR buffer.
+    pub(super) fn execute_formatter_word(&mut self) {
+        self.paragraph.inherit_vertical_space_debt(0);
+    }
+
+    pub(super) fn inherit_zero_advance_armed(&mut self, armed: bool) {
+        self.paragraph.inherit_zero_advance_armed(armed);
+    }
+
+    pub(super) fn take_zero_advance_armed(&mut self) -> bool {
+        self.paragraph.take_zero_advance_armed()
+    }
+
+    pub(super) fn sync_formatter_state(
+        &mut self,
+        formatter: &mut crate::mandoc::formatter::FormatterState,
+    ) {
+        formatter.spacing = self.spacing_enabled;
+        formatter.vertical_space_debt = self.paragraph.vertical_space_debt();
+        formatter.zero_advance_armed = self.paragraph.take_zero_advance_armed();
+    }
+
     pub(super) fn flush_paragraph(&mut self) {
+        self.flush_paragraph_with(false);
+    }
+
+    pub(super) fn flush_paragraph_for_vertical_request(&mut self) {
+        self.flush_paragraph_with(true);
+    }
+
+    fn flush_paragraph_with(&mut self, vertical_request: bool) {
         let output_start = self.output.len();
-        if let Some(block) = self
-            .paragraph
-            .take(self.indent_columns, self.spacing_enabled)
-        {
-            self.output.push(block);
+        let (block, empty_word_end_break) = if vertical_request {
+            self.paragraph
+                .take_for_vertical_request(self.indent_columns, self.spacing_enabled)
+        } else {
+            self.paragraph
+                .take(self.indent_columns, self.spacing_enabled)
+        };
+        if let Some(block) = block {
+            match block {
+                Block::Paragraph {
+                    children,
+                    layout,
+                    source,
+                } if !mant_ir::has_printable_character(&children)
+                    && children.iter().any(
+                        |inline| matches!(inline, Inline::Text { value } if value.is_empty()),
+                    ) =>
+                {
+                    // An explicit empty formatter cell (for example `\&`)
+                    // owns one physical row. Empty paragraphs are otherwise
+                    // presentation-neutral, so encode the row as spacing.
+                    // Retain zero-width targets at that row during the
+                    // representation change.
+                    let anchors = children
+                        .into_iter()
+                        .filter(|inline| matches!(inline, Inline::Anchor { .. }))
+                        .collect::<Vec<_>>();
+                    if !anchors.is_empty() {
+                        self.output.push(Block::Paragraph {
+                            children: anchors,
+                            layout,
+                            source,
+                        });
+                    }
+                    self.output.push(Block::VerticalSpace { lines: 1, source });
+                }
+                block => self.output.push(block),
+            }
+        }
+        if empty_word_end_break {
+            self.output.push(Block::VerticalSpace {
+                lines: 1,
+                source: None,
+            });
         }
         if self.output.len() > output_start {
             if let Some(origin) = self.hanging_origin

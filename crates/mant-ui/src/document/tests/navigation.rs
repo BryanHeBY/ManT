@@ -393,13 +393,17 @@ fn table_anchors_follow_their_cell_content_through_wrapping_and_stacking() {
         source: None,
     };
     let cell = |blocks| TableCell {
+        kind: mant_ir::TableCellKind::Text,
         blocks,
         column_span: 1,
         row_span: 1,
         alignment: None,
     };
     let table = |cells| Block::Table {
-        rows: vec![TableRow { cells }],
+        rows: vec![TableRow {
+            kind: mant_ir::TableRowKind::Data,
+            cells,
+        }],
         layout: LayoutHint::default(),
         source: None,
     };

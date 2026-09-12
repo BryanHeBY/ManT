@@ -273,10 +273,10 @@ fn link_identity_text(source: &str) -> String {
 /// Lower the portable semantic forms of mdoc `Bx` from its authored arguments.
 ///
 ///
-/// libmandoc appends a generated `BSD` node with `Ns` and intentionally leaves
-/// lifecycle arguments as compact `-develBSD` text. The mdoc contract instead
-/// gives the lifecycle forms descriptive meanings, while an ordinary version
-/// and optional release render as `versionBSD release`. The raw AST flags make
+/// libmandoc appends a generated `BSD` word and, before a second authored
+/// operand, generated `Ns`, `-`, and `Ns` nodes. The mdoc contract gives the
+/// lifecycle forms descriptive meanings, while an ordinary version and
+/// optional release render as `versionBSD-release`. The raw AST flags make
 /// this distinction explicit without reparsing source text or depending on a
 /// particular formatter's generated nodes.
 pub(super) fn append_bsd_reference(builder: &mut InlineBuilder, node: &Node, name: Option<&str>) {
@@ -288,7 +288,7 @@ pub(super) fn append_bsd_reference(builder: &mut InlineBuilder, node: &Node, nam
         })
         .collect::<Vec<_>>();
     let Some(first) = authored.first().copied() else {
-        builder.append_text("BSD");
+        builder.append_generated_word("BSD");
         return;
     };
     if authored.len() == 1
@@ -324,8 +324,11 @@ pub(super) fn append_bsd_reference(builder: &mut InlineBuilder, node: &Node, nam
     // Visibility must not rewrite that native arity or reorder execution.
     append_inline_node(builder, first, name);
     builder.tighten_next_boundary();
-    builder.append_text("BSD");
+    builder.append_generated_word("BSD");
     for child in &authored[1..] {
+        builder.tighten_next_boundary();
+        builder.append_generated_word("-");
+        builder.tighten_next_boundary();
         let checkpoint = builder.output_checkpoint();
         append_inline_node(builder, child, name);
         if !builder.output_since_has_non_whitespace_glyph(&checkpoint) {

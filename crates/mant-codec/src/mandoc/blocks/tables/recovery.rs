@@ -137,6 +137,7 @@ pub(super) fn lower_table_cell(
         let diagnostic_start = context.diagnostics.borrow().len();
         let source = LoweringContext::table_execution_source(&text_block.source, text_block.escape);
         let source_operands = table_source_operands(context, &source);
+        let source_recovery_allowed = !contains_native_table_request(context, &source);
         // CVS mandoc passes high-level macro operands into tbl, while GNU
         // tbl expands the same inline macro language. A `T{}` source block
         // may enrich its already-associated native cell, but an isolated
@@ -146,7 +147,7 @@ pub(super) fn lower_table_cell(
         // native payload. This keeps unrelated document-local macros from
         // disabling recovery without allowing a synthetic parser to replace
         // what the native execution actually produced.
-        if !contains_native_table_request(context, &source)
+        if source_recovery_allowed
             && let Some(recovered) = lower_source_fragment_with_formatter_state(
                 &source,
                 text_block.escape,
@@ -167,20 +168,29 @@ pub(super) fn lower_table_cell(
             }
         }
 
-        let mut candidate_state = initial_state;
-        let recovered = lower_raw_table_text_block(&source, context, &mut candidate_state);
-        // Recovery remains transactional: it can replace native text only
-        // when a raw candidate agrees with this exact cell. A declined
-        // semantic fragment therefore cannot replace a complete native cell
-        // with a partial subset of its source.
-        let candidate_diagnostics = context.diagnostics.borrow_mut().split_off(diagnostic_start);
-        let candidate = CellCandidate {
-            inlines: recovered,
-            formatter: candidate_state,
-            diagnostics: candidate_diagnostics,
-        };
-        if candidate.belongs_to(cell, position, &source_operands, cell.source_recovery_safe) {
-            return Some(candidate.commit(context, formatter));
+        // The raw fallback is deliberately weaker than semantic recovery: it
+        // never replays requests or macro meaning, only the complete operand
+        // stream that native tbl would have received.  This remains safe when
+        // a native request such as `.br` made the isolated semantic parse
+        // ineligible, and prevents an unavailable native payload from turning
+        // into silent content loss.
+        if cell.text.as_deref().is_none_or(str::is_empty) {
+            let mut candidate_state = initial_state;
+            let recovered = lower_raw_table_text_block(&source, context, &mut candidate_state);
+            // Recovery remains transactional: it can replace native text only
+            // when a raw candidate agrees with this exact cell. A declined
+            // semantic fragment therefore cannot replace a complete native cell
+            // with a partial subset of its source.
+            let candidate_diagnostics =
+                context.diagnostics.borrow_mut().split_off(diagnostic_start);
+            let candidate = CellCandidate {
+                inlines: recovered,
+                formatter: candidate_state,
+                diagnostics: candidate_diagnostics,
+            };
+            if candidate.belongs_to(cell, position, &source_operands, cell.source_recovery_safe) {
+                return Some(candidate.commit(context, formatter));
+            }
         }
         *formatter = initial_state;
     }
@@ -237,24 +247,30 @@ fn lower_table_cell_text(
     let Some((opening, closing)) = context.equation_delimiters_at(line) else {
         return context.lower_text(source, formatter);
     };
-    let mut output = Vec::new();
+    // Equation delimiters annotate part of one native `term_word()`; they do
+    // not split formatter execution.  Re-encode the normalized expression as
+    // a literal code-font run, then decode the complete cell once so `\z`,
+    // `\p`, fonts, and word boundaries remain ordered across the delimiter.
+    let mut parts = Vec::new();
     let mut remainder = source;
     while let Some(opening_index) = remainder.find(opening) {
         let after_opening = &remainder[opening_index + opening.len_utf8()..];
         let Some(closing_index) = after_opening.find(closing) else {
             break;
         };
-        output.extend(context.lower_text(&remainder[..opening_index], formatter));
+        parts.push(crate::mandoc::inline::FormatterWordPart::Source(
+            &remainder[..opening_index],
+        ));
         let expression = &after_opening[..closing_index];
         if !expression.trim().is_empty() {
-            output.push(Inline::Code {
-                value: context.normalize_equation(expression, line),
-            });
+            parts.push(crate::mandoc::inline::FormatterWordPart::Code(
+                context.normalize_equation(expression, line),
+            ));
         }
         remainder = &after_opening[closing_index + closing.len_utf8()..];
     }
-    output.extend(context.lower_text(remainder, formatter));
-    output
+    parts.push(crate::mandoc::inline::FormatterWordPart::Source(remainder));
+    context.lower_formatter_word_parts(&parts, formatter)
 }
 
 fn lower_raw_table_text_block(
@@ -262,24 +278,38 @@ fn lower_raw_table_text_block(
     context: &LoweringContext<'_>,
     formatter: &mut crate::mandoc::formatter::FormatterState,
 ) -> Vec<Inline> {
+    // `tbl_cdata()` appends every admitted physical input line to one cell
+    // string, separated by exactly one ASCII blank. Native requests are
+    // consumed before that point and contribute no cell word. Replaying the
+    // admitted lines independently would invent formatter-word boundaries:
+    // in particular, `\c` and deferred `\p` must observe tbl's inserted
+    // blank inside this one word.
+    let operands = source
+        .lines()
+        .filter_map(|line| table_cell_content_line(context, line))
+        .map(|line| {
+            let line = line.trim();
+            if line.starts_with(['.', '\'']) {
+                format!("\\&{line}")
+            } else {
+                line.to_owned()
+            }
+        })
+        .filter(|line| !line.is_empty())
+        .collect::<Vec<_>>();
+    let operand_source = operands.join(" ");
+    // A malformed raw operand must remain visible even if the richer bounded
+    // fragment parser declines it. This final path decodes complete escape
+    // operands but intentionally does not assign macro semantics.
     let mut builder = InlineBuilder::with_spacing(formatter.spacing);
-    for source_line in source.lines() {
-        let Some(source_line) = table_cell_content_line(context, source_line) else {
-            continue;
-        };
-        let source_line = source_line.trim();
-        if source_line.is_empty() {
-            continue;
-        }
-        // `tbl_read()` receives the operand after the control name. Its
-        // ordinary roff escapes remain active, but it has no high-level
-        // macro/font state to reconstruct.
-        builder.append_filled(
-            context.lower_text(source_line, formatter),
-            FilledBoundary::Word,
-        );
+    builder.inherit_vertical_space_debt(formatter.vertical_space_debt);
+    if !operand_source.is_empty() {
+        let lowered = context.lower_text(&operand_source, formatter);
+        builder.begin_word_projection(mant_ir::has_printable_character(&lowered));
+        builder.append_filled(lowered, FilledBoundary::Word);
     }
     formatter.spacing = builder.spacing_enabled();
+    formatter.vertical_space_debt = builder.vertical_space_debt();
     builder.finish()
 }
 
@@ -434,6 +464,47 @@ mod tests {
                 plain_text(&inlines.expect("complete fallback payload")),
                 expected
             );
+        }
+
+        // `tbl_cdata()` builds one formatter word from admitted operands.
+        // Requests contribute no text, `\c` observes the inserted blank,
+        // and `\p` is realized there. Physical T{} source rows are not IR
+        // hard lines; CVS may wrap the resulting word later from column width.
+        for (source, expected) in [
+            (".B TOKENA\n.br\nTOKENB", "TOKENA TOKENB"),
+            (".B A\\c\n.br\nB", "A B"),
+            (".B A\\p\n.br\nB C", "A\nB C"),
+            ("\\&\n.br\nB", " B"),
+            ("\\&\n.sp 0\nB", " B"),
+            ("\\&\n.sp 1\nB", " B"),
+            ("\\&\n.mc |\nB", " B"),
+            ("\\&\n.ti 4n\nB", " B"),
+        ] {
+            let block = super::TableTextBlock {
+                source: source.to_owned(),
+                escape: Some(b'\\'),
+            };
+            for native in [None, Some("")] {
+                let mut cell = node.table_cells[0].clone();
+                cell.text = native.map(str::to_owned);
+                cell.text_block = true;
+                let inlines = super::lower_table_cell(
+                    &cell,
+                    super::CellPosition {
+                        index: 0,
+                        row: std::slice::from_ref(&cell),
+                    },
+                    &node,
+                    &context,
+                    Some(&block),
+                    &mut crate::mandoc::formatter::FormatterState::default(),
+                );
+                assert_eq!(
+                    plain_text(&inlines.expect("raw operand fallback")),
+                    expected,
+                    "source={source:?} native={native:?}"
+                );
+            }
         }
     }
 

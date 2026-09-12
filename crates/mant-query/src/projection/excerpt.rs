@@ -122,7 +122,7 @@ pub fn select_excerpt(
             .as_ref()
             .and_then(mant_ir::Document::display_title)
             .map(std::borrow::Cow::into_owned),
-        schema: ExcerptSchema::V0Dot11,
+        schema: ExcerptSchema::V0Dot12,
         label: query.label.clone(),
         address: query.address.clone(),
         semantics_complete: document

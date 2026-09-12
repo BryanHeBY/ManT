@@ -17,27 +17,27 @@ pub const MAX_NODE_SELECTORS: usize = 16;
 /// Exact schema marker for a complete `ManT` query result.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub enum QuerySchema {
-    /// Query envelope built around `mant.document/v0.11`.
-    #[serde(rename = "mant.query/v0.11")]
-    V0Dot11,
+    /// Query envelope built around `mant.document/v0.12`.
+    #[serde(rename = "mant.query/v0.12")]
+    V0Dot12,
 }
 
 impl QuerySchema {
     /// Serialized identifier of the current query response contract.
-    pub const ID: &'static str = "mant.query/v0.11";
+    pub const ID: &'static str = "mant.query/v0.12";
 }
 
 /// Exact schema marker for a native query request.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub enum RequestSchema {
     /// Query and projection request accepted through `--request-json`.
-    #[serde(rename = "mant.request/v0.11")]
-    V0Dot11,
+    #[serde(rename = "mant.request/v0.12")]
+    V0Dot12,
 }
 
 impl RequestSchema {
     /// Serialized identifier of the current request contract.
-    pub const ID: &'static str = "mant.request/v0.11";
+    pub const ID: &'static str = "mant.request/v0.12";
 }
 
 /// Source selected by one public query request.
@@ -158,7 +158,7 @@ pub enum QueryView {
 /// Native use-case input. The engine validates semantic constraints before I/O.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-#[schemars(extend("$id" = "urn:mant:request:v0.11"))]
+#[schemars(extend("$id" = "urn:mant:request:v0.12"))]
 pub struct QueryRequest {
     /// Exact request schema discriminator.
     pub schema: RequestSchema,
@@ -171,7 +171,7 @@ pub struct QueryRequest {
 /// Versioned full-query result emitted at CLI and request JSON boundaries.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-#[schemars(extend("$id" = "urn:mant:query:v0.11"))]
+#[schemars(extend("$id" = "urn:mant:query:v0.12"))]
 pub struct QueryBundle {
     /// Exact response schema discriminator.
     pub schema: QuerySchema,
@@ -192,7 +192,7 @@ pub struct QueryBundle {
 impl From<&ResolvedContent> for QueryBundle {
     fn from(content: &ResolvedContent) -> Self {
         Self {
-            schema: QuerySchema::V0Dot11,
+            schema: QuerySchema::V0Dot12,
             label: content.label.clone(),
             address: content.address.clone(),
             document: content.document.as_ref().map(Into::into),

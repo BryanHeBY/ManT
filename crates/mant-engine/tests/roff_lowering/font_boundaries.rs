@@ -316,3 +316,159 @@ fn lowers_normalized_mdoc_font_and_author_layout() {
         [Inline::Code { value }] if value == "literal text"
     ));
 }
+
+#[test]
+fn mdoc_author_mode_persists_across_subsections_and_later_sections() {
+    // Fixed CVS mdoc_term.c keeps TERMP_SPLIT renderer-global, resets it only
+    // on entry to a top-level AUTHORS body, and lets nested Ss inherit it.
+    let query = mant_loader::load_roff_bytes(
+        b".Dd September 13, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh AUTHORS\n.An -split\n.An first\n.Ss MORE\n.An second\n.An third\n.Sh NOTES\n.An fourth\n.An fifth\n",
+    )
+    .unwrap();
+    let document = query.document.as_ref().unwrap();
+    let authors = document
+        .sections
+        .iter()
+        .find(|section| inline_text(&section.heading.content) == "AUTHORS")
+        .unwrap();
+    let Block::Paragraph { children, .. } = &authors.blocks[0] else {
+        panic!("first author is a paragraph")
+    };
+    assert_eq!(inline_text(children), "first");
+    let Block::Paragraph { children, .. } = &authors.children[0].blocks[0] else {
+        panic!("subsection authors are a paragraph")
+    };
+    assert_eq!(inline_text(children), "second\nthird");
+    let notes = document
+        .sections
+        .iter()
+        .find(|section| inline_text(&section.heading.content) == "NOTES")
+        .unwrap();
+    let Block::Paragraph { children, .. } = &notes.blocks[0] else {
+        panic!("later authors are a paragraph")
+    };
+    assert_eq!(inline_text(children), "fourth\nfifth");
+}
+
+#[test]
+fn visible_cd_nodes_execute_synopsis_pre_without_fd_post_breaks() {
+    // Fixed CVS maps Cd to termp_fd_pre() but not termp_fd_post(): the second
+    // Cd starts a line, then ordinary body text remains on that line.
+    let query = mant_loader::load_roff_bytes(
+        b".Dd September 13, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh SYNOPSIS\n.Cd one\n.Cd two\n.No BODY\n",
+    )
+    .unwrap();
+    let synopsis = query
+        .document
+        .as_ref()
+        .unwrap()
+        .sections
+        .iter()
+        .find(|section| inline_text(&section.heading.content) == "SYNOPSIS")
+        .unwrap();
+    let rows = synopsis
+        .blocks
+        .iter()
+        .filter_map(|block| match block {
+            Block::Paragraph { children, .. } => Some(inline_text(children)),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(rows, ["one", "two BODY"]);
+}
+
+#[test]
+fn styled_authors_heading_does_not_activate_native_author_splitting() {
+    // Fixed CVS mdoc_state.c assigns SEC_AUTHORS only to a single direct text
+    // heading child. `.Sh Em AUTHORS` remains SEC_CUSTOM.
+    let query = mant_loader::load_roff_bytes(
+        b".Dd September 13, 2026\n.Dt PROBE 3\n.Os\n.Sh Em AUTHORS\n.An first\n.An second\n.No TAIL\n",
+    )
+    .unwrap();
+    let section = &query.document.as_ref().unwrap().sections[0];
+    let [Block::Paragraph { children, .. }] = section.blocks.as_slice() else {
+        panic!(
+            "expected one custom-section paragraph: {:?}",
+            section.blocks
+        );
+    };
+    assert_eq!(inline_text(children), "first second TAIL");
+}
+
+#[test]
+fn definition_head_author_executes_persistent_authors_state() {
+    // Fixed CVS termp_an_pre() enables TERMP_SPLIT after the first ordinary
+    // `.An` in AUTHORS even when that author occurs in a definition head.
+    let query = mant_loader::load_roff_bytes(
+        b".Dd September 13, 2026\n.Dt PROBE 3\n.Os\n.Sh AUTHORS\n.Bl -tag\n.It Xo\n.An first\n.Xc\n.No desc\n.El\n.No BEFORE\n.An second\n.No AFTER\n",
+    )
+    .unwrap();
+    let rendered = mant_render::render_query_text(&query);
+    assert!(rendered.contains("BEFORE\nsecond AFTER"), "{rendered}");
+}
+
+#[test]
+fn synopsis_macros_without_post_flush_share_the_following_formatter_line() {
+    // Fixed CVS assigns Ft/Vt/In only synopsis_pre() (and In's closing
+    // delimiter); none has a post newline. Ordinary following body therefore
+    // remains in the same formatter row.
+    for (macro_line, expected) in [
+        (".Ft int", "int BODY"),
+        (".Vt int", "int BODY"),
+        (".In stdio.h", "#include <stdio.h> BODY"),
+    ] {
+        let source = format!(
+            ".Dd September 13, 2026\n.Dt PROBE 3\n.Os\n.Sh SYNOPSIS\n{macro_line}\n.No BODY\n"
+        );
+        let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
+        let rendered = mant_render::render_query_text(&query);
+        assert!(rendered.contains(expected), "{macro_line}: {rendered}");
+    }
+}
+
+#[test]
+fn visible_synopsis_predecessors_end_ft_function_pairing() {
+    // Fixed CVS `synopsis_pre()` examines the preceding executable sibling:
+    // only an adjacent `Ft` can pair with `Fn`/`Fo`.  Visible `No` and styled
+    // `Em` nodes both force the later function declaration onto a new row.
+    for (middle, visible) in [(".No WRAP", "WRAP"), (".Em WRAP", "WRAP")] {
+        let source = format!(
+            ".Dd September 13, 2026\n.Dt PROBE 3\n.Os\n.Sh SYNOPSIS\n.Ft int\n{middle}\n.Fn f\n"
+        );
+        let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
+        let section = &query.document.as_ref().unwrap().sections[0];
+        let rows = section
+            .blocks
+            .iter()
+            .filter_map(|block| match block {
+                Block::Paragraph { children, .. } => Some(inline_text(children)),
+                Block::VerticalSpace { .. } => None,
+                block => panic!("expected synopsis paragraph or gap, got {block:?}"),
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(rows, [format!("int {visible}"), "f();".to_owned()]);
+    }
+}
+
+#[test]
+fn invisible_synopsis_formatter_cells_still_execute_native_newlines() {
+    // Fixed CVS term_newln() flushes the occupied `\&` formatter cell but
+    // does not add another vertical row. Both pairs therefore retain exactly
+    // one blank line before BODY.
+    for second in [".Cd \\&", ".Vt \\&"] {
+        let source = format!(
+            ".Dd September 13, 2026\n.Dt PROBE 3\n.Os\n.Sh SYNOPSIS\n.Cd \\&\n{second}\n.No BODY\n"
+        );
+        let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
+        let section = &query.document.as_ref().unwrap().sections[0];
+        assert!(
+            matches!(
+                section.blocks.as_slice(),
+                [Block::VerticalSpace { lines: 1, .. }, Block::Paragraph { children, .. }]
+                    if inline_text(children) == "BODY"
+            ),
+            "{second}: {:?}",
+            section.blocks
+        );
+    }
+}

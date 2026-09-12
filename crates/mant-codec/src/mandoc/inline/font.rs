@@ -39,6 +39,16 @@ impl ZeroAdvanceState {
         self.machine.arm();
     }
 
+    pub(in crate::mandoc) fn inherit_armed(&mut self, armed: bool) {
+        if armed {
+            self.arm();
+        }
+    }
+
+    pub(in crate::mandoc) fn take_armed(&mut self) -> bool {
+        self.machine.cancel_armed()
+    }
+
     /// Resolve a pending zero-advance glyph at a formatter-inserted word
     /// boundary. CVS `term_word()` writes that virtual blank before the next
     /// glyph; the blank consumes the backtracking position, so the glyph
@@ -56,6 +66,12 @@ impl ZeroAdvanceState {
     /// stream.
     pub(in crate::mandoc) const fn has_pending_glyph(&self) -> bool {
         self.machine.has_pending() && !self.machine.is_armed()
+    }
+
+    /// A completed BACKBEFORE glyph occupies the native formatter cell even
+    /// when another `\z` has already armed BACKAFTER for the next glyph.
+    pub(in crate::mandoc) const fn has_buffered_glyph(&self) -> bool {
+        self.machine.has_pending()
     }
 
     /// Discard a completed glyph emitted by an operand whose compact output
@@ -379,6 +395,14 @@ pub(in crate::mandoc) struct NoFillInlineState {
     zero_advance: ZeroAdvanceState,
     pending_word_end_break: bool,
     continued: bool,
+    formatter_cell: NoFillFormatterCell,
+}
+
+#[derive(Clone, Copy, Eq, PartialEq)]
+enum NoFillFormatterCell {
+    Origin,
+    Invisible,
+    Visible,
 }
 
 impl NoFillInlineState {
@@ -387,19 +411,91 @@ impl NoFillInlineState {
             zero_advance: ZeroAdvanceState::new(),
             pending_word_end_break: false,
             continued: false,
+            formatter_cell: NoFillFormatterCell::Origin,
         }
     }
 
     pub(in crate::mandoc) fn finish_row(&mut self, output: &mut Vec<Inline>) {
-        self.zero_advance.finish_into(output);
+        // A physical no-fill row flushes an occupied formatter cell, but CVS
+        // leaves a bare BACKAFTER request alive when no glyph was ever
+        // buffered.  It can therefore affect the first word after `.fi`.
+        if self.formatter_cell != NoFillFormatterCell::Origin {
+            let output_start = output.len();
+            self.zero_advance.finish_into(output);
+            if self.formatter_cell == NoFillFormatterCell::Invisible
+                && output.len() == output_start
+                && !self.pending_word_end_break
+            {
+                // `\&` advances the native cell without producing a glyph.
+                // A real line flush still owns that empty row, so retain the
+                // same explicit sentinel used by an authored empty word.
+                output.push(Inline::Text {
+                    value: String::new(),
+                });
+            }
+        }
+        if self.pending_word_end_break {
+            if mant_ir::has_printable_character(output) {
+                output.push(Inline::LineBreak);
+            } else {
+                // A control-only `\p` still occupies one native no-fill row.
+                // Use the same explicit empty-row sentinel as an empty TEXT
+                // word so LiteralFlow cannot trim it as a formatter-only tail.
+                output.push(Inline::Text {
+                    value: String::new(),
+                });
+            }
+        }
         self.pending_word_end_break = false;
         self.continued = false;
+        self.formatter_cell = NoFillFormatterCell::Origin;
     }
 
     pub(in crate::mandoc) fn take_settled_row(&mut self) -> Vec<Inline> {
         let mut output = Vec::new();
         self.finish_row(&mut output);
         output
+    }
+
+    /// Flush the current terminal cell under `TERMP_NOBREAK`.
+    /// A buffered `\p` makes the cell active but does not emit a visual row
+    /// boundary during this flush; a completed `\zX` glyph is materialized.
+    pub(in crate::mandoc) fn take_no_break_cell(&mut self) -> Vec<Inline> {
+        let mut output = Vec::new();
+        let realizes_word_end_break = self.pending_word_end_break && !self.continued;
+        self.zero_advance.finish_into(&mut output);
+        if realizes_word_end_break {
+            if output.is_empty() {
+                output.push(Inline::Text {
+                    value: String::new(),
+                });
+            }
+            output.push(Inline::LineBreak);
+        }
+        self.pending_word_end_break = false;
+        self.continued = false;
+        self.formatter_cell = NoFillFormatterCell::Origin;
+        output
+    }
+
+    pub(in crate::mandoc) const fn has_pending_formatter_cell(&self) -> bool {
+        !matches!(self.formatter_cell, NoFillFormatterCell::Origin)
+            || self.zero_advance.has_buffered_glyph()
+            || self.pending_word_end_break
+    }
+
+    pub(in crate::mandoc) fn inherit_zero_advance_armed(&mut self, armed: bool) {
+        self.zero_advance.inherit_armed(armed);
+    }
+
+    pub(in crate::mandoc) fn take_bare_zero_advance_armed(&mut self) -> bool {
+        if self.formatter_cell != NoFillFormatterCell::Origin
+            || self.zero_advance.has_buffered_glyph()
+        {
+            false
+        } else {
+            self.zero_advance.take_armed()
+        }
     }
 }
 
@@ -428,6 +524,13 @@ pub(in crate::mandoc) fn lower_no_fill_line_with_font_state(
     inline_state.zero_advance = execution.zero_advance;
     inline_state.pending_word_end_break = execution.word_end_break;
     inline_state.continued = continues_line;
+    if mant_ir::has_printable_character(&output) {
+        inline_state.formatter_cell = NoFillFormatterCell::Visible;
+    } else if execution.formatter_cell_occupied
+        && inline_state.formatter_cell == NoFillFormatterCell::Origin
+    {
+        inline_state.formatter_cell = NoFillFormatterCell::Invisible;
+    }
     if !continues_line {
         inline_state.finish_row(&mut output);
     }
@@ -475,9 +578,31 @@ pub(in crate::mandoc) struct TextExecution {
     pub(in crate::mandoc) pending_word_end_break: bool,
 }
 
+/// One presentation segment inside a single native formatter word.
+/// Source segments execute roff controls; Code segments contribute already
+/// normalized glyphs without mutating the source font registers.
+pub(in crate::mandoc) enum FormatterWordPart<'a> {
+    Source(&'a str),
+    Code(String),
+}
+
+enum FormatterWordEvent {
+    Source(RoffInlineEvent),
+    Code(String),
+}
+
 struct TextEventState {
     pending_word_end_break: bool,
     suppress_break_whitespace: bool,
+}
+
+impl TextEventState {
+    const fn new(pending_word_end_break: bool) -> Self {
+        Self {
+            pending_word_end_break,
+            suppress_break_whitespace: false,
+        }
+    }
 }
 
 fn append_text_event(
@@ -530,20 +655,75 @@ pub(in crate::mandoc) fn parse_roff_text_with_zero_advance(
     zero_advance: &mut ZeroAdvanceState,
     pending_word_end_break: bool,
 ) -> TextExecution {
+    let events = decode(source)
+        .into_iter()
+        .map(FormatterWordEvent::Source)
+        .collect::<Vec<_>>();
+    execute_formatter_word_events(
+        &events,
+        state,
+        recognize_generated_references,
+        zero_advance,
+        pending_word_end_break,
+    )
+}
+
+pub(in crate::mandoc) fn parse_formatter_word_parts_with_zero_advance(
+    parts: &[FormatterWordPart<'_>],
+    state: &mut FontState,
+    recognize_generated_references: bool,
+    zero_advance: &mut ZeroAdvanceState,
+    pending_word_end_break: bool,
+) -> TextExecution {
+    let events = parts
+        .iter()
+        .flat_map(|part| match part {
+            FormatterWordPart::Source(source) => decode(source)
+                .into_iter()
+                .map(FormatterWordEvent::Source)
+                .collect::<Vec<_>>(),
+            FormatterWordPart::Code(value) => {
+                vec![FormatterWordEvent::Code(value.clone())]
+            }
+        })
+        .collect::<Vec<_>>();
+    execute_formatter_word_events(
+        &events,
+        state,
+        recognize_generated_references,
+        zero_advance,
+        pending_word_end_break,
+    )
+}
+
+fn execute_formatter_word_events(
+    events: &[FormatterWordEvent],
+    state: &mut FontState,
+    recognize_generated_references: bool,
+    zero_advance: &mut ZeroAdvanceState,
+    pending_word_end_break: bool,
+) -> TextExecution {
     let (mut output, mut buffer) = (Vec::new(), String::new());
     let mut font = state.current;
     let mut link: Option<String> = None;
-    let events = decode(source);
     let mut explicit_line_continuation = None;
-    let mut text_state = TextEventState {
-        pending_word_end_break,
-        suppress_break_whitespace: false,
-    };
+    let mut text_state = TextEventState::new(pending_word_end_break);
     zero_advance.begin_fragment();
 
     for (index, event) in events.iter().enumerate() {
         match event {
-            RoffInlineEvent::Text(value) => {
+            FormatterWordEvent::Code(value) => {
+                append_code_event(
+                    value,
+                    &mut output,
+                    &mut buffer,
+                    font,
+                    link.as_deref(),
+                    zero_advance,
+                    &mut text_state,
+                );
+            }
+            FormatterWordEvent::Source(RoffInlineEvent::Text(value)) => {
                 append_text_event(
                     value,
                     &mut output,
@@ -554,51 +734,47 @@ pub(in crate::mandoc) fn parse_roff_text_with_zero_advance(
                     &mut text_state,
                 );
             }
-            RoffInlineEvent::Glyph(value)
-            | RoffInlineEvent::Overstrike {
-                terminal: Some(value),
-                ..
-            } => {
+            FormatterWordEvent::Source(
+                RoffInlineEvent::Glyph(value)
+                | RoffInlineEvent::Overstrike {
+                    terminal: Some(value),
+                    ..
+                },
+            ) => {
                 text_state.suppress_break_whitespace = false;
                 zero_advance.append_glyph(value, &mut buffer, font, link.as_deref());
             }
-            RoffInlineEvent::FallbackGlyph(value) => {
+            FormatterWordEvent::Source(RoffInlineEvent::FallbackGlyph(value)) => {
                 if zero_advance.append_fallback_glyph(value, &mut buffer, font, link.as_deref()) {
                     text_state.suppress_break_whitespace = false;
                 }
             }
-            RoffInlineEvent::DeviceName => {
+            FormatterWordEvent::Source(RoffInlineEvent::DeviceName) => {
                 text_state.suppress_break_whitespace = false;
                 zero_advance.append_text("utf8", &mut output, &mut buffer, font, link.as_deref());
             }
-            RoffInlineEvent::ZeroAdvance => zero_advance.arm(),
-            RoffInlineEvent::NoSpace => {
+            FormatterWordEvent::Source(RoffInlineEvent::ZeroAdvance) => zero_advance.arm(),
+            FormatterWordEvent::Source(RoffInlineEvent::NoSpace) => {
                 let canceled_armed = zero_advance.cancel_armed_for_no_space();
                 if index + 1 == events.len() {
                     explicit_line_continuation = Some(!canceled_armed);
-                    if !canceled_armed {
-                        // A trailing `\c` keeps the current formatter word
-                        // open on the next input row. Consequently a pending
-                        // word-end `\p` has no boundary to realize here.
-                        text_state.pending_word_end_break = false;
-                    }
                 }
             }
-            RoffInlineEvent::Font(next_font) => {
+            FormatterWordEvent::Source(RoffInlineEvent::Font(next_font)) => {
                 flush_segment(&mut output, &mut buffer, font, link.as_deref());
                 state.select(*next_font);
                 font = state.current;
             }
-            RoffInlineEvent::PreviousFont => {
+            FormatterWordEvent::Source(RoffInlineEvent::PreviousFont) => {
                 flush_segment(&mut output, &mut buffer, font, link.as_deref());
                 state.restore();
                 font = state.current;
             }
-            RoffInlineEvent::Link(target) => {
+            FormatterWordEvent::Source(RoffInlineEvent::Link(target)) => {
                 flush_segment(&mut output, &mut buffer, font, link.as_deref());
                 link.clone_from(target);
             }
-            RoffInlineEvent::EmptyDestination => {
+            FormatterWordEvent::Source(RoffInlineEvent::EmptyDestination) => {
                 text_state.suppress_break_whitespace = false;
                 if !recognize_generated_references
                     || !promote_sphinx_manual_reference(
@@ -611,12 +787,14 @@ pub(in crate::mandoc) fn parse_roff_text_with_zero_advance(
                     buffer.push_str("<>");
                 }
             }
-            RoffInlineEvent::LineBreak => {
+            FormatterWordEvent::Source(RoffInlineEvent::LineBreak) => {
                 text_state.pending_word_end_break = true;
             }
-            RoffInlineEvent::Presentation { .. }
-            | RoffInlineEvent::ZeroWidthGlyph
-            | RoffInlineEvent::Overstrike { terminal: None, .. } => {}
+            FormatterWordEvent::Source(
+                RoffInlineEvent::Presentation { .. }
+                | RoffInlineEvent::ZeroWidthGlyph
+                | RoffInlineEvent::Overstrike { terminal: None, .. },
+            ) => {}
         }
     }
     flush_segment(&mut output, &mut buffer, font, link.as_deref());
@@ -626,6 +804,28 @@ pub(in crate::mandoc) fn parse_roff_text_with_zero_advance(
         source_continuation: explicit_line_continuation,
         pending_word_end_break: text_state.pending_word_end_break,
     }
+}
+
+fn append_code_event(
+    value: &str,
+    output: &mut Vec<Inline>,
+    buffer: &mut String,
+    current_font: Font,
+    link: Option<&str>,
+    zero_advance: &mut ZeroAdvanceState,
+    text_state: &mut TextEventState,
+) {
+    flush_segment(output, buffer, current_font, link);
+    append_text_event(
+        value,
+        output,
+        buffer,
+        Font::Code,
+        link,
+        zero_advance,
+        text_state,
+    );
+    flush_segment(output, buffer, Font::Code, link);
 }
 
 fn promote_sphinx_manual_reference(

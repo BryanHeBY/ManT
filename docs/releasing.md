@@ -54,7 +54,7 @@ integrators must act.
    must call out the resulting wire change and all checked-in examples must
    move together. The `mant-protocol` crate version and native wire identifiers are
    separate: a crate-only implementation or documentation release can retain
-   `mant.request/v0.11` and its related identifiers, while a breaking wire change
+   `mant.request/v0.12` and its related identifiers, while a breaking wire change
    must choose a new protocol family regardless of the crate's current semver.
 
 4. Run a broad local roff fidelity audit before freezing the release. Use the

@@ -153,7 +153,9 @@ fn nested_reparenting_never_translates_descendants_or_source_twice() {
     };
     let table = Block::Table {
         rows: vec![TableRow {
+            kind: crate::TableRowKind::Data,
             cells: vec![TableCell {
+                kind: crate::TableCellKind::Text,
                 blocks: vec![paragraph],
                 column_span: 1,
                 row_span: 1,

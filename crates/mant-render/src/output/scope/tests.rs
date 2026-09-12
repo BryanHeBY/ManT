@@ -15,7 +15,7 @@ fn address(path: &str) -> DocumentAddress {
 }
 fn response(result: ScopeQueryResult) -> ScopeQueryResponse {
     ScopeQueryResponse {
-        schema: ScopeQuerySchema::V0Dot11,
+        schema: ScopeQuerySchema::V0Dot12,
         scope: ResolvedDocumentScope {
             query: DocumentScope {
                 documents: vec![],

@@ -102,8 +102,8 @@ fn lower_mandoc_document_with_source(
     declaration_groups::record(&parsed.root, &mut context.native_heads.borrow_mut());
     context.reserve_section_ids(explicit_targets);
     let mut diagnostics = diagnostics::lower_diagnostics(&report.diagnostics);
-    let mut sections = blocks::lower_sections(&parsed.root, &mut context);
-    let mut root_blocks = blocks::lower_root_blocks(&parsed.root, &context);
+    let (mut root_blocks, mut sections) =
+        blocks::lower_document_structure(&parsed.root, &mut context);
     diagnostics.extend(context.take_diagnostics());
     navigation::normalize_generated_anchors(&mut root_blocks, &mut sections, explicit_targets);
     let mut retained_targets = navigation::native_anchor_ids(&root_blocks, &sections);

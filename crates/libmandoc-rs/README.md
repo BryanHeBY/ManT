@@ -84,6 +84,9 @@ Table cells expose their effective `TableCellKind`: layout rules override data,
 and connecting/isolated single/double rules remain distinguishable. A rule may
 retain a native text payload for inspection; consumers must not print it or
 recover discarded source content as though it were a text cell.
+`TableRowKind` independently distinguishes an empty data span from whole-row
+`_`/`=` rules and per-column layout rules (including mixed strengths)
+whole-row rules; all three legitimately carry zero cells in the native tree.
 
 ## Basic use
 
@@ -429,8 +432,9 @@ libmandoc but unavailable through a public C API:
   pinned parser otherwise retains as an unexpanded identifier;
 - tbl multiline-cell and vertical-continuation flags, including both tbl(7)
   spellings of vertical continuation;
-- effective cell content/rule kinds and first-data-row table boundaries,
-  retaining native layout precedence and distinguishing `T&` from a new table;
+- effective cell and row rule kinds plus first-data-row table boundaries,
+  retaining native layout precedence, empty data rows, and the distinction
+  between `T&` and a new table;
 - the pinned native roff-request lookup used by consumers that need to retain
   libmandoc's tbl dispatch boundary without duplicating its request registry;
 - structured diagnostics and explicit source/include/compression policy.

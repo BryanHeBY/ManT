@@ -695,7 +695,7 @@ fn propagates_nested_no_space_and_preserves_prefix_content() {
 }
 
 #[test]
-fn discards_temporary_indent_arguments_without_hiding_the_next_line() {
+fn temporary_indent_discards_its_operand_but_retains_the_line_boundary() {
     let document = parse_manual_bytes(
         std::path::Path::new("temporary-indent.8"),
         b".TH TEMPORARY-INDENT 8\n.SH EXAMPLES\n.ti +8n\nexample% command\n.ti\nexample% other\n",
@@ -705,7 +705,15 @@ fn discards_temporary_indent_arguments_without_hiding_the_next_line() {
     let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
         panic!("expected one examples paragraph");
     };
-    assert_eq!(inline_text(children), "example% command example% other");
+    assert_eq!(inline_text(children), "example% command\nexample% other");
+    assert_eq!(
+        children
+            .iter()
+            .filter(|inline| matches!(inline, Inline::LineBreak))
+            .count(),
+        1,
+        "each .ti boundary must be represented exactly once: {children:?}"
+    );
 }
 
 #[test]

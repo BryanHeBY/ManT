@@ -8,6 +8,13 @@ pub(super) struct LiteralFlow {
     tight_boundary: bool,
     ordinary_continuation: bool,
     row_occupied: bool,
+    formatter_column: FormatterColumn,
+}
+
+#[derive(Clone, Copy, Eq, PartialEq)]
+enum FormatterColumn {
+    Origin,
+    Advanced,
 }
 
 impl LiteralFlow {
@@ -18,6 +25,7 @@ impl LiteralFlow {
             tight_boundary: false,
             ordinary_continuation: false,
             row_occupied: false,
+            formatter_column: FormatterColumn::Origin,
         }
     }
 
@@ -29,6 +37,7 @@ impl LiteralFlow {
         if self.row_occupied {
             self.nodes.push(Inline::LineBreak);
             self.row_occupied = false;
+            self.formatter_column = FormatterColumn::Origin;
         }
         self.tight_boundary = false;
         self.ordinary_continuation = false;
@@ -55,6 +64,7 @@ impl LiteralFlow {
                 self.nodes.push(Inline::LineBreak);
             }
             self.row_occupied = false;
+            self.formatter_column = FormatterColumn::Origin;
         }
         if self.ordinary_continuation && occupies_row {
             self.nodes.push(Inline::Text {
@@ -62,8 +72,30 @@ impl LiteralFlow {
             });
             self.ordinary_continuation = false;
         }
+        let ends_formatter_row = nodes
+            .iter()
+            .rev()
+            .find(|node| !matches!(node, Inline::Anchor { .. }))
+            .is_some_and(|node| matches!(node, Inline::LineBreak));
+        if let Some(last_break) = nodes
+            .iter()
+            .rposition(|node| matches!(node, Inline::LineBreak))
+        {
+            self.formatter_column =
+                if mant_ir::has_printable_character(&nodes[last_break.saturating_add(1)..]) {
+                    FormatterColumn::Advanced
+                } else {
+                    FormatterColumn::Origin
+                };
+        } else if mant_ir::has_printable_character(&nodes) {
+            self.formatter_column = FormatterColumn::Advanced;
+        }
         self.nodes.extend(nodes);
-        self.row_occupied |= occupies_row;
+        if ends_formatter_row {
+            self.row_occupied = false;
+        } else {
+            self.row_occupied |= occupies_row;
+        }
         self.tight_boundary = continues_line;
         if self.source.is_none() {
             self.source = source;
@@ -77,10 +109,16 @@ impl LiteralFlow {
         let committed_a_cell = mant_ir::has_printable_character(&nodes);
         self.nodes.extend(nodes);
         self.row_occupied |= committed_a_cell;
-        if self.row_occupied {
-            self.tight_boundary = true;
-            self.ordinary_continuation = true;
-        }
+        // The caller invokes this only for an active formatter cell. `.mc`
+        // releases NOSPACE but preserves an independently active NONEWLINE.
+        // LiteralFlow represents that as an ordinary continuation across a
+        // still-tight physical row boundary.
+        self.ordinary_continuation = self.tight_boundary;
+        self.formatter_column = FormatterColumn::Origin;
+    }
+
+    pub(super) const fn has_formatter_column(&self) -> bool {
+        matches!(self.formatter_column, FormatterColumn::Advanced)
     }
 
     pub(super) fn take(&mut self, indent: crate::mandoc::layout::SourceIndent) -> Option<Block> {

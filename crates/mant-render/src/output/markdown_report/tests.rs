@@ -8,7 +8,7 @@ use mant_codec::encode::{MarkdownOptions, render_markdown, render_markdown_with_
 fn renders_the_shared_query_contract_without_leaking_json() {
     let fixture = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../..")
-        .join("tests/contracts/minimal-query-v0.11.json");
+        .join("tests/contracts/minimal-query-v0.12.json");
     if !fixture.exists() {
         // The tagged repository owns shared process-contract fixtures; they
         // intentionally remain outside the published engine package.
@@ -32,7 +32,7 @@ fn renders_the_shared_query_contract_without_leaking_json() {
     assert!(markdown.contains(", or read OPTIONS"));
     assert!(!markdown.contains("[OPTIONS](#options-1)"));
     assert!(!markdown.contains("<a "));
-    assert!(!markdown.contains("mant.query/v0.11"));
+    assert!(!markdown.contains("mant.query/v0.12"));
 
     let addressable = render_markdown_with_options(&query, MarkdownOptions::ADDRESSABLE);
     assert!(addressable.contains("[OPTIONS](#options-1)"));

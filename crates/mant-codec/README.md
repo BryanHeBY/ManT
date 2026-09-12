@@ -48,7 +48,7 @@ literal displays, lists and table recovery:
 | --- | --- |
 | Stage composition | `mandoc/mod.rs` resolves the parsed document and runs lowering, navigation and validation. |
 | Source lookup | `source_context.rs`, `ast.rs` and `equations.rs` provide source/AST services and bounded operation-local memoization; diagnostics use their own collector. They do not store a hidden formatter register. |
-| Formatter state | `FormatterState` carries current font, previous font and spacing explicitly between consumers. A normal font-scope exit restores current font but retains previous-font effects. |
+| Formatter state | `FormatterState` carries font, spacing, deferred vertical-space debt, and bare zero-advance execution explicitly between consumers. A normal font-scope exit restores current font but retains previous-font effects; native tables reset cell-local backtracking at their documented boundary. |
 | Container routing | `containers.rs` streams borrowed children and scope boundaries; structural payloads remain tables/lists. Logical punctuation adjacency is a separate, non-executing classification in `adjacency.rs`. |
 | Inline and physical lines | `InlineBuilder` executes word/control events; `source_cursor.rs` places source-visible events on physical lines. No-fill changes layout, not macro interpretation. |
 | Structural layout | Block drivers own pending paragraphs and list state; section, synopsis, man no-fill and dialect-specific list consumers remain separate. Shared definition helpers do not own formatter state. |

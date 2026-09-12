@@ -285,7 +285,7 @@ fn scoped_serialized_owners_with_the_same_id_keep_independent_name_roles() {
         ScopeQueryResponse, ScopeQueryResult, ScopedExplanation, ScopedExplanationEvidence,
     };
     let template: ScopeQueryResponse = serde_json::from_str(include_str!(
-        "../../../tests/contracts/scope-explain-v0.11.json"
+        "../../../tests/contracts/scope-explain-v0.12.json"
     ))
     .unwrap();
     let ScopeQueryResult::Explain { mut explanation } = template.result else {

@@ -1,7 +1,7 @@
 //! Bounded table columns and stacked fallback, preserving cell-local payload.
 use super::{
-    Line, LogicalTableCell, LogicalTableRow, Span, TableAlignment, WrappedLine, WrappedLink,
-    WrappedSearchCell, wrap_line_with_links,
+    Line, LogicalTableCell, LogicalTableLayout, LogicalTableRow, Span, TableAlignment, WrappedLine,
+    WrappedLink, WrappedSearchCell, wrap_line_with_links,
 };
 const TABLE_COLUMN_GAP: usize = 2;
 pub(super) fn render_table_row_with_links(
@@ -9,6 +9,9 @@ pub(super) fn render_table_row_with_links(
     table: &LogicalTableRow,
     width: usize,
 ) -> Vec<WrappedLine> {
+    if let Some(rules) = &table.rules {
+        return render_layout_rule(indent, rules, &table.layout, width);
+    }
     if table.cells.is_empty() {
         return vec![WrappedLine {
             source_end: None,
@@ -27,6 +30,40 @@ pub(super) fn render_table_row_with_links(
         return stack_table_cells(indent, table, width);
     };
     render_table_columns(indent, table, &column_widths)
+}
+
+fn render_layout_rule(
+    indent: usize,
+    rules: &[mant_ir::TableRuleCellKind],
+    layout: &LogicalTableLayout,
+    width: usize,
+) -> Vec<WrappedLine> {
+    let indent = super::readable_origins(indent, indent, width).0;
+    let available = width.saturating_sub(indent).max(1);
+    let widths = table_column_widths(&layout.preferred_widths, available)
+        .filter(|widths| widths.len() == rules.len())
+        .unwrap_or_else(|| {
+            let base = available.saturating_sub(rules.len().saturating_sub(1) * TABLE_COLUMN_GAP);
+            vec![(base / rules.len().max(1)).max(1); rules.len()]
+        });
+    let mut spans = vec![Span::raw(" ".repeat(indent))];
+    for (index, (rule, width)) in rules.iter().zip(widths).enumerate() {
+        if index != 0 {
+            spans.push(Span::raw(" ".repeat(TABLE_COLUMN_GAP)));
+        }
+        let glyph = match rule {
+            mant_ir::TableRuleCellKind::Horizontal => '─',
+            mant_ir::TableRuleCellKind::DoubleHorizontal => '═',
+        };
+        spans.push(Span::raw(glyph.to_string().repeat(width)));
+    }
+    vec![WrappedLine {
+        source_end: None,
+        anchors: Vec::new(),
+        line: Line::from(spans),
+        links: Vec::new(),
+        search_cells: Vec::new(),
+    }]
 }
 
 fn stack_table_cells(indent: usize, table: &LogicalTableRow, width: usize) -> Vec<WrappedLine> {

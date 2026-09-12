@@ -11,7 +11,8 @@ mod windows_root;
 use crate::{InputFormat, Node};
 #[cfg(test)]
 use raw::{
-    CNodeView, CTableCellView, mant_mandoc_node_view_size, mant_mandoc_table_cell_view_size,
+    CNodeView, CTableCellView, CTableRuleCellView, mant_mandoc_node_view_size,
+    mant_mandoc_table_cell_view_size, mant_mandoc_table_rule_cell_view_size,
 };
 #[cfg(windows)]
 use raw::{CResolvedSource, CSourceResolver};
@@ -43,8 +44,9 @@ mod tests {
     use flate2::read::MultiGzDecoder;
 
     use super::{
-        CNodeView, CTableCellView, InputFormat, Node, mant_mandoc_node_view_size,
-        mant_mandoc_table_cell_view_size, parse_buffer,
+        CNodeView, CTableCellView, CTableRuleCellView, InputFormat, Node,
+        mant_mandoc_node_view_size, mant_mandoc_table_cell_view_size,
+        mant_mandoc_table_rule_cell_view_size, parse_buffer,
     };
 
     #[test]
@@ -56,6 +58,10 @@ mod tests {
         assert_eq!(
             unsafe { mant_mandoc_table_cell_view_size() },
             std::mem::size_of::<CTableCellView>()
+        );
+        assert_eq!(
+            unsafe { mant_mandoc_table_rule_cell_view_size() },
+            std::mem::size_of::<CTableRuleCellView>()
         );
     }
 

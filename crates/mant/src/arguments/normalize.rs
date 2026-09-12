@@ -476,7 +476,7 @@ fn normalize_query_source(
             QuerySource::InputStdin { format, view }
         } else {
             QuerySource::Arguments(QueryRequest {
-                schema: RequestSchema::V0Dot11,
+                schema: RequestSchema::V0Dot12,
                 input: QueryInput::File { path, format },
                 view,
             })
@@ -489,7 +489,7 @@ fn normalize_query_source(
             color,
         )?;
         QuerySource::Arguments(QueryRequest {
-            schema: RequestSchema::V0Dot11,
+            schema: RequestSchema::V0Dot12,
             input: QueryInput::Document {
                 selector: normalized.name,
                 source: options.configured_source,

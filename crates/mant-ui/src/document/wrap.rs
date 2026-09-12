@@ -13,7 +13,7 @@ use mant_ir::TableAlignment;
 
 use super::{
     LineSurface, LinkTarget, LogicalLine, WrapMode,
-    model::{LogicalTableCell, LogicalTableRow},
+    model::{LogicalTableCell, LogicalTableLayout, LogicalTableRow},
 };
 use crate::theme;
 
@@ -135,6 +135,22 @@ fn wrap_logical_line(line: &LogicalLine, width: usize) -> Vec<WrappedLine> {
                     Span::raw(" ".repeat(indent)),
                     Span::styled(
                         "─".repeat(width.saturating_sub(indent)),
+                        Style::default().fg(theme::OVERLAY),
+                    ),
+                ]),
+                links: Vec::new(),
+                search_cells: Vec::new(),
+            }];
+        }
+        LineSurface::DoubleRule => {
+            let indent = readable_origins(line.indent, line.indent, width).0;
+            return vec![WrappedLine {
+                source_end: None,
+                anchors: Vec::new(),
+                line: Line::from(vec![
+                    Span::raw(" ".repeat(indent)),
+                    Span::styled(
+                        "═".repeat(width.saturating_sub(indent)),
                         Style::default().fg(theme::OVERLAY),
                     ),
                 ]),

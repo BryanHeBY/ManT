@@ -113,7 +113,7 @@ impl crate::DocumentResolver {
             )?,
         };
         Ok(ScopeQueryResponse {
-            schema: ScopeQuerySchema::V0Dot11,
+            schema: ScopeQuerySchema::V0Dot12,
             scope: loaded.into_parts().0,
             result,
         })
@@ -154,7 +154,7 @@ mod tests {
 
     fn request() -> ScopeQueryRequest {
         ScopeQueryRequest {
-            schema: ScopeRequestSchema::V0Dot11,
+            schema: ScopeRequestSchema::V0Dot12,
             scope: DocumentScope {
                 documents: vec![DocumentSelector {
                     selector: "root".to_owned(),

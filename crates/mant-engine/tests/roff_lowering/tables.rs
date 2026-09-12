@@ -23,6 +23,65 @@ fn lowers_tbl_and_eqn_payloads_into_structured_blocks() {
 }
 
 #[test]
+fn preserves_empty_tbl_rows_and_whole_row_rule_kinds() {
+    // Fixed CVS renders the blank data span as one empty physical row and the
+    // `_`/`=` spans as distinct single and double rules.
+    let query = mant_loader::load_roff_bytes(
+        b".TH PROBE 1\n.SH DESCRIPTION\n.TS\nl.\nBEFORE\n\n_\n=\nAFTER\n.TE\n",
+    )
+    .expect("lower empty and ruled tbl rows");
+    let document = query.document.as_ref().expect("document");
+    let [Block::Table { rows, .. }] = document.sections[0].blocks.as_slice() else {
+        panic!("expected one table: {:?}", document.sections[0].blocks);
+    };
+    assert_eq!(
+        rows.iter().map(|row| row.kind.clone()).collect::<Vec<_>>(),
+        [
+            mant_ir::TableRowKind::Data,
+            mant_ir::TableRowKind::Data,
+            mant_ir::TableRowKind::HorizontalRule,
+            mant_ir::TableRowKind::DoubleHorizontalRule,
+            mant_ir::TableRowKind::Data,
+        ]
+    );
+    assert!(rows[1].cells.is_empty());
+    let rendered = mant_render::render_query_text(&query);
+    assert!(rendered.contains("BEFORE\n\n---\n===\nAFTER"), "{rendered}");
+}
+
+#[test]
+fn preserves_partial_layout_rule_cells_without_leaking_ignored_payload() {
+    // Verified against the pinned CVS reference: `_ l` is a data row whose
+    // first cell renders a connecting rule and whose second cell retains its
+    // text.  The source operand under the rule column is consumed by tbl.
+    let query = mant_loader::load_roff_bytes(
+        b".TH PROBE 1\n.SH DESCRIPTION\n.TS\n_ l.\nIGNORED\tVISIBLE\n.TE\n",
+    )
+    .expect("lower a partial tbl layout-rule row");
+    let document = query.document.as_ref().expect("document");
+    let [Block::Table { rows, .. }] = document.sections[0].blocks.as_slice() else {
+        panic!("expected one table: {:?}", document.sections[0].blocks);
+    };
+    let [row] = rows.as_slice() else {
+        panic!("expected one table row: {rows:?}");
+    };
+    assert_eq!(row.kind, mant_ir::TableRowKind::Data);
+    let [rule, text] = row.cells.as_slice() else {
+        panic!("expected two table cells: {:?}", row.cells);
+    };
+    assert_eq!(rule.kind, mant_ir::TableCellKind::HorizontalRule);
+    assert!(rule.blocks.is_empty(), "{rule:?}");
+    assert_eq!(text.kind, mant_ir::TableCellKind::Text);
+    assert!(
+        matches!(text.blocks.as_slice(), [Block::Paragraph { children, .. }] if inline_text(children) == "VISIBLE")
+    );
+
+    let rendered = mant_render::render_query_text(&query);
+    assert!(rendered.contains("--- | VISIBLE"), "{rendered}");
+    assert!(!rendered.contains("IGNORED"), "{rendered}");
+}
+
+#[test]
 fn large_tbl_rows_scale_without_changing_their_topology() {
     const ROW_COUNT: usize = 2_048;
     let mut source = String::from(".TH TABLE-SCALE 7\n.SH TABLE\n.TS\nl l.\n");
@@ -136,6 +195,154 @@ fn preserves_tbl_rows_across_interleaved_comments_and_text_blocks() {
         })
         .collect::<Vec<_>>();
     assert_eq!(first_cells, ["a", "b", "c", "d(1)", "e"]);
+}
+
+#[test]
+fn tbl_text_blocks_do_not_promote_physical_source_rows_to_hard_lines() {
+    for (label, cell, expected) in [
+        ("ordinary", "\\& A", " A"),
+        ("single-text-block-line", "T{\n\\& A\nT}", " A"),
+        ("short-following-word", "T{\n\\&\nB\nT}", " B"),
+        (
+            "wrappable-following-word",
+            "T{\n\\&\nprintf 3\nT}",
+            " printf 3",
+        ),
+    ] {
+        let source = format!(".TH PROBE 1\n.SH DESCRIPTION\n.TS\nl.\n{cell}\n.TE\n");
+        let document = parse_manual_bytes(
+            std::path::Path::new(&format!("table-leading-row-{label}.1")),
+            source.as_bytes(),
+        )
+        .expect("lower table leading-row evidence fixture");
+        let Block::Table { rows, .. } = &document.sections[0].blocks[0] else {
+            panic!("{label}: expected table: {:#?}", document.sections);
+        };
+        let [Block::Paragraph { children, .. }] = rows[0].cells[0].blocks.as_slice() else {
+            panic!("{label}: expected cell paragraph: {:?}", rows[0].cells[0]);
+        };
+        assert_eq!(inline_text(children), expected, "{label}: {children:?}");
+        assert!(
+            children
+                .iter()
+                .all(|inline| !matches!(inline, Inline::LineBreak)),
+            "{label}: {children:?}"
+        );
+    }
+}
+
+#[test]
+fn tbl_equation_delimiters_keep_one_formatter_word_execution_stream() {
+    for (label, cell, expected) in [
+        ("plain-zero-advance", r"A\zX$y$B", "AyB"),
+        ("named-zero-advance", r"A\z\[u0058]$y$B", "AyB"),
+        ("font-state", r"\fBA$y$\fP B", "Ay B"),
+        ("word-end", r"A\pB$y z$C", "ABy\nzC"),
+    ] {
+        let source =
+            format!(".TH PROBE 1\n.SH DESCRIPTION\n.EQ\ndelim $$\n.EN\n.TS\nl.\n{cell}\n.TE\n");
+        let document = parse_manual_bytes(
+            std::path::Path::new(&format!("table-equation-flow-{label}.1")),
+            source.as_bytes(),
+        )
+        .expect("lower table equation execution fixture");
+        let Block::Table { rows, .. } = &document.sections[0].blocks[0] else {
+            panic!("{label}: expected table: {:#?}", document.sections);
+        };
+        let [Block::Paragraph { children, .. }] = rows[0].cells[0].blocks.as_slice() else {
+            panic!("{label}: expected cell paragraph: {:?}", rows[0].cells[0]);
+        };
+        assert_eq!(inline_text(children), expected, "{label}: {children:?}");
+        assert!(
+            children
+                .iter()
+                .any(|inline| matches!(inline, Inline::Code { .. })),
+            "{label}: {children:?}"
+        );
+        if label == "font-state" {
+            assert!(
+                children.iter().any(
+                    |inline| matches!(inline, Inline::Strong { children } if inline_text(children) == "A")
+                ),
+                "{label}: {children:?}"
+            );
+            assert!(
+                matches!(children.last(), Some(Inline::Text { value }) if value == " B"),
+                "{label}: equation styling changed the previous-font register: {children:?}"
+            );
+        }
+    }
+
+    let source =
+        b".TH PROBE 1\n.SH DESCRIPTION\n.EQ\ndelim $$\n.EN\n.TS\nl.\nT{\n\\&\n$y$\nT}\n.TE\n";
+    let document = parse_manual_bytes(
+        std::path::Path::new("table-equation-leading-empty-row.1"),
+        source,
+    )
+    .expect("lower equation after an empty leading text-block row");
+    let Block::Table { rows, .. } = &document.sections[0].blocks[0] else {
+        panic!("expected table: {:#?}", document.sections);
+    };
+    let [Block::Paragraph { children, .. }] = rows[0].cells[0].blocks.as_slice() else {
+        panic!("expected cell paragraph: {:?}", rows[0].cells[0]);
+    };
+    assert_eq!(inline_text(children), " y", "{children:?}");
+    assert!(
+        children
+            .iter()
+            .all(|inline| !matches!(inline, Inline::LineBreak)),
+        "{children:?}"
+    );
+    assert!(
+        children
+            .iter()
+            .any(|inline| matches!(inline, Inline::Code { value } if value == "y")),
+        "{children:?}"
+    );
+}
+
+#[test]
+fn tbl_equation_code_style_does_not_mutate_roff_font_registers() {
+    let source = b".TH PROBE 1\n.SH DESCRIPTION\n.EQ\ndelim $$\n.EN\n.TS\nl l.\n\\fBA$y$\t\\fP B\n.TE\n\\fP AFTER\n";
+    let document = parse_manual_bytes(
+        std::path::Path::new("table-equation-font-registers.1"),
+        source,
+    )
+    .expect("lower equation font-register fixture");
+    let Block::Table { rows, .. } = &document.sections[0].blocks[0] else {
+        panic!("expected table: {:#?}", document.sections);
+    };
+    for (label, cell) in [
+        ("equation", &rows[0].cells[0]),
+        ("next-cell", &rows[0].cells[1]),
+    ] {
+        let [Block::Paragraph { children, .. }] = cell.blocks.as_slice() else {
+            panic!("{label}: unexpected cell: {cell:#?}");
+        };
+        if label == "equation" {
+            assert!(
+                children
+                    .iter()
+                    .any(|inline| matches!(inline, Inline::Code { value } if value == "y"))
+            );
+        } else {
+            assert!(
+                children
+                    .iter()
+                    .all(|inline| !matches!(inline, Inline::Code { .. })),
+                "{children:?}"
+            );
+        }
+    }
+    let Block::Paragraph { children, .. } = &document.sections[0].blocks[1] else {
+        panic!("expected paragraph after table: {:#?}", document.sections);
+    };
+    assert!(
+        children
+            .iter()
+            .all(|inline| !matches!(inline, Inline::Code { .. })),
+        "{children:?}"
+    );
 }
 
 #[test]
@@ -371,6 +578,174 @@ fn table_text_blocks_keep_native_request_operands_out_of_visible_content() {
             panic!("expected table cell paragraph")
         };
         assert_eq!(inline_text(children), "BODY", "{request}");
+    }
+}
+
+#[test]
+fn table_source_recovery_defers_formatter_boundaries_to_native_tbl_execution() {
+    for (label, request, expected) in [
+        ("margin-continued", ".No A\\zX\\c\n.mc |\n.No B", "AXB"),
+        ("indent-continued", ".No A\\zX\\c\n.ti 4n\n.No B", "AXB"),
+        ("margin-overprint", ".No A\\zX\n.mc |\n.No B", "AXB"),
+        ("indent-overprint", ".No A\\zX\n.ti 4n\n.No B", "AXB"),
+        ("margin-word-break", ".No A\\p\n.mc |\n.No B C", "A\nB C"),
+        ("indent-word-break", ".No A\\p\n.ti 4n\n.No B C", "A\nB C"),
+        ("break-word-break", ".No A\\p\n.br\n.No B C", "A\nB C"),
+        ("space-word-break", ".No A\\p\n.sp 2\n.No B C", "A\nB C"),
+        (
+            "repeated-boundaries",
+            ".No A\\zX\\c\n.mc |\n.ti 4n\n.mc !\n.No B",
+            "AXB",
+        ),
+        ("margin-ordinary", ".No A\n.mc |\n.No B", "A B"),
+        ("indent-ordinary", ".No A\n.ti 4n\n.No B", "A B"),
+        (
+            "native-request-releases-continuation",
+            ".No A\\c\n.ll 50n\n.No B",
+            "A B",
+        ),
+        (
+            "native-request-preserves-word-end-break",
+            ".No A\\p\\c\n.br\n.No B C",
+            "A\nB C",
+        ),
+    ] {
+        let source = format!(
+            ".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.TS\nl.\nT{{\n{request}\nT}}\n.TE\n"
+        );
+        let document = parse_manual_bytes(
+            std::path::Path::new(&format!("table-formatter-boundary-{label}.1")),
+            source.as_bytes(),
+        )
+        .expect("lower native tbl formatter boundary");
+        let [Block::Table { rows, .. }] = document.sections[0].blocks.as_slice() else {
+            panic!("{label}: expected table: {document:#?}");
+        };
+        let [Block::Paragraph { children, .. }] = rows[0].cells[0].blocks.as_slice() else {
+            panic!("{label}: expected table cell paragraph");
+        };
+        assert_eq!(inline_text(children), expected, "{label}: {children:?}");
+        let rendered = mant_render::render_query_text(&ResolvedContent {
+            label: label.into(),
+            address: None,
+            document: Some(document),
+            tldr: None,
+        });
+        assert!(rendered.contains(expected), "{label}: {rendered:?}");
+    }
+}
+
+#[test]
+fn native_table_requests_do_not_disable_safe_recovery_in_adjacent_cells() {
+    let source = b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.TS\nl l.\nT{\n.No A\\c\n.ll 50n\n.No B\nT}\tT{\n.Xr printf 3\nT}\n.TE\n";
+    let document = parse_manual_bytes(
+        std::path::Path::new("table-native-request-adjacent.1"),
+        source,
+    )
+    .expect("lower independent table cells");
+    let [Block::Table { rows, .. }] = document.sections[0].blocks.as_slice() else {
+        panic!("expected table: {document:#?}");
+    };
+    let [left, right] = rows[0].cells.as_slice() else {
+        panic!("expected two cells: {rows:#?}");
+    };
+    let [Block::Paragraph { children: left, .. }] = left.blocks.as_slice() else {
+        panic!("expected native left cell: {left:#?}");
+    };
+    let [
+        Block::Paragraph {
+            children: right, ..
+        },
+    ] = right.blocks.as_slice()
+    else {
+        panic!("expected recovered right cell: {right:#?}");
+    };
+    assert_eq!(inline_text(left), "A B");
+    assert_eq!(inline_text(right), "printf(3)");
+    assert!(right.iter().any(|inline| matches!(
+        inline,
+        Inline::Link {
+            target: mant_ir::LinkTarget::Manual {
+                name,
+                manual_section,
+            },
+            ..
+        } if name == "printf" && manual_section.as_deref() == Some("3")
+    )));
+}
+
+#[test]
+fn empty_and_control_only_table_rows_preserve_execution_and_layout() {
+    for (label, cell) in [("zero-width", "\\&"), ("word-end-break", "\\p")] {
+        let source = format!(
+            ".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.TS\nl.\n{cell}\n.TE\n.No AFTER\n"
+        );
+        let query = mant_loader::load_roff_bytes(source.as_bytes()).expect("load empty tbl row");
+        let rendered = mant_render::render_query_text(&query);
+        assert!(
+            rendered.contains("BEFORE\n\nAFTER"),
+            "{label}: {rendered:?}"
+        );
+    }
+
+    let query = mant_loader::load_roff_bytes(
+        b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.sp -1\n.TS\nl.\n\\z\n.TE\n.sp 1\n.No TEXT\n",
+    )
+    .expect("load a final table cell with formatter state");
+    let rendered = mant_render::render_query_text(&query);
+    assert!(rendered.contains("\n\nEXT"), "{rendered:?}");
+    assert!(!rendered.contains("TEXT"), "{rendered:?}");
+
+    let document = parse_manual_bytes(
+        std::path::Path::new("table-zero-advance-cell-boundary.1"),
+        b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.TS\nl l.\n\\z\tB C\n.TE\n.No AFTER LAST\n",
+    )
+    .expect("lower per-cell zero-advance boundary");
+    let Block::Table { rows, .. } = &document.sections[0].blocks[0] else {
+        panic!("expected table: {document:#?}");
+    };
+    let [_, right] = rows[0].cells.as_slice() else {
+        panic!("expected two table cells: {rows:#?}");
+    };
+    let [Block::Paragraph { children, .. }] = right.blocks.as_slice() else {
+        panic!("expected right cell paragraph: {right:#?}");
+    };
+    assert_eq!(inline_text(children), "B C");
+
+    // tbl_term clears both backtracking flags before each cell. At row flush,
+    // only a completely unoccupied bare `\z` may survive the final cell.
+    for (label, cell, expected, rejected) in [
+        ("visible", "A\\z", "A\nB C", "A\nBC"),
+        ("completed-and-armed", "\\zX\\z", "X\nB C", "X\nBC"),
+        ("word-break", "\\p\\z", "\nB C", "\nBC"),
+        ("visible-word-break", "A\\p\\z", "A\nB C", "A\nBC"),
+    ] {
+        let source = format!(
+            ".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.TS\nl.\n{cell}\n.TE\n.No B C\n"
+        );
+        let query = mant_loader::load_roff_bytes(source.as_bytes()).expect("load tbl arm reset");
+        let rendered = mant_render::render_query_text(&query);
+        assert!(rendered.contains(expected), "{label}: {rendered:?}");
+        assert!(!rendered.contains(rejected), "{label}: {rendered:?}");
+    }
+}
+
+#[test]
+fn multiline_tbl_cells_preserve_the_native_single_word_operand_stream() {
+    for (label, body, expected) in [
+        ("continued", ".B A\\c\n.br\nB", "DESCRIPTION\nA B"),
+        ("word-end", ".B A\\p\n.br\nB C", "DESCRIPTION\nA\nB C"),
+        ("row", "\\&\nB", "DESCRIPTION\n B"),
+        ("row-br", "\\&\n.br\nB", "DESCRIPTION\n B"),
+        ("row-sp0", "\\&\n.sp 0\nB", "DESCRIPTION\n B"),
+        ("row-sp1", "\\&\n.sp 1\nB", "DESCRIPTION\n B"),
+        ("row-mc", "\\&\n.mc |\nB", "DESCRIPTION\n B"),
+        ("row-ti", "\\&\n.ti 4n\nB", "DESCRIPTION\n B"),
+    ] {
+        let source = format!(".TH PROBE 1\n.SH DESCRIPTION\n.TS\nl.\nT{{\n{body}\nT}}\n.TE\n");
+        let query = mant_loader::load_roff_bytes(source.as_bytes()).expect("load multiline cell");
+        let rendered = mant_render::render_query_text(&query);
+        assert!(rendered.contains(expected), "{label}: {rendered:?}");
     }
 }
 

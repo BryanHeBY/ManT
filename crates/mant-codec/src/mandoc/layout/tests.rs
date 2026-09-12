@@ -2,7 +2,7 @@ use libmandoc_rs::{Node, NodeFlags, NodeKind};
 
 use super::{
     horizontal_distance_columns, layout, layout_with_spacing, paragraph_distance_lines,
-    vertical_distance_lines,
+    vertical_distance_lines, vertical_space_delta,
 };
 use mant_ir::Block;
 
@@ -17,6 +17,7 @@ fn node(kind: NodeKind, text: Option<&str>, offset: Option<&str>) -> Node {
         flow_epoch: 0,
         table_escape: None,
         table_source_recovery_safe: false,
+        table_row_kind: None,
         flags: NodeFlags::default(),
         list_kind: None,
         definition_list_style: None,
@@ -48,6 +49,18 @@ fn converts_mandoc_vertical_units_to_terminal_rows() {
     assert_eq!(
         vertical_distance_lines(&node(NodeKind::Text, Some("not-a-number"), None)),
         None
+    );
+    assert_eq!(
+        vertical_space_delta(&node(NodeKind::Text, Some("-1v"), None)),
+        -1
+    );
+    assert_eq!(
+        vertical_space_delta(&node(NodeKind::Text, Some("-1i"), None)),
+        -6
+    );
+    assert_eq!(
+        vertical_space_delta(&node(NodeKind::Text, Some("invalid"), None)),
+        1
     );
 }
 

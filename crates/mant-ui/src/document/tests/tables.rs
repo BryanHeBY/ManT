@@ -7,6 +7,7 @@ fn signed_table_cells_preserve_real_origins_links_and_anchors() {
         [(-2, 3, 1), (3, -2, 1), (4096, 3, 4096), (4090, 10, 4096)]
     {
         let cell = |id: &str, text: &str| TableCell {
+            kind: mant_ir::TableCellKind::Text,
             blocks: vec![Block::Paragraph {
                 children: vec![
                     Inline::anchor_with_aliases(id, vec![format!("Exact.{id}").into()]),
@@ -32,6 +33,7 @@ fn signed_table_cells_preserve_real_origins_links_and_anchors() {
         let document = query.document.as_mut().unwrap();
         document.blocks = vec![Block::Table {
             rows: vec![TableRow {
+                kind: mant_ir::TableRowKind::Data,
                 cells: vec![cell("first", "FIRST"), cell("second", "SECOND")],
             }],
             layout: LayoutHint {
@@ -77,14 +79,17 @@ fn table_cells_use_shared_content_driven_columns_and_independent_wrapping() {
     };
     bundle.document.as_mut().expect("document").sections[0].blocks = vec![Block::Table {
         rows: vec![TableRow {
+            kind: mant_ir::TableRowKind::Data,
             cells: vec![
                 TableCell {
+                    kind: mant_ir::TableCellKind::Text,
                     blocks: vec![paragraph("alpha beta gamma")],
                     column_span: 1,
                     row_span: 1,
                     alignment: None,
                 },
                 TableCell {
+                    kind: mant_ir::TableCellKind::Text,
                     blocks: vec![paragraph("right hand")],
                     column_span: 1,
                     row_span: 1,
@@ -124,6 +129,7 @@ fn short_table_keys_do_not_claim_half_of_a_wide_viewport() {
         source: None,
     };
     let cell = |value: &str| TableCell {
+        kind: mant_ir::TableCellKind::Text,
         blocks: vec![paragraph(value)],
         column_span: 1,
         row_span: 1,
@@ -133,9 +139,11 @@ fn short_table_keys_do_not_claim_half_of_a_wide_viewport() {
     bundle.document.as_mut().expect("document").sections[0].blocks = vec![Block::Table {
         rows: vec![
             TableRow {
+                kind: mant_ir::TableRowKind::Data,
                 cells: vec![cell("1"), cell("Executable programs and shell commands")],
             },
             TableRow {
+                kind: mant_ir::TableRowKind::Data,
                 cells: vec![cell("8"), cell("System administration commands")],
             },
         ],
@@ -154,6 +162,228 @@ fn short_table_keys_do_not_claim_half_of_a_wide_viewport() {
     assert_eq!(rows[1], "   1  Executable programs and shell commands");
     assert_eq!(rows[2].trim_end(), "   8  System administration commands");
     assert!(UnicodeWidthStr::width(rows[2].as_str()) < 50);
+}
+
+#[test]
+fn empty_and_ruled_table_rows_keep_distinct_terminal_surfaces() {
+    let paragraph = |value: &str| Block::Paragraph {
+        children: vec![Inline::Text {
+            value: value.to_owned(),
+        }],
+        layout: LayoutHint::default(),
+        source: None,
+    };
+    let data = |value: &str| TableRow {
+        kind: mant_ir::TableRowKind::Data,
+        cells: vec![TableCell {
+            kind: mant_ir::TableCellKind::Text,
+            blocks: vec![paragraph(value)],
+            column_span: 1,
+            row_span: 1,
+            alignment: None,
+        }],
+    };
+    let mut bundle = bundle();
+    bundle.document.as_mut().expect("document").sections[0].blocks = vec![Block::Table {
+        rows: vec![
+            data("BEFORE"),
+            TableRow {
+                kind: mant_ir::TableRowKind::Data,
+                cells: Vec::new(),
+            },
+            TableRow {
+                kind: mant_ir::TableRowKind::HorizontalRule,
+                cells: Vec::new(),
+            },
+            TableRow {
+                kind: mant_ir::TableRowKind::DoubleHorizontalRule,
+                cells: Vec::new(),
+            },
+            data("AFTER"),
+        ],
+        layout: LayoutHint::default(),
+        source: None,
+    }];
+    let rows = DocumentView::new(&bundle)
+        .render(24)
+        .text
+        .lines
+        .iter()
+        .map(ToString::to_string)
+        .collect::<Vec<_>>();
+    let before = rows.iter().position(|row| row.contains("BEFORE")).unwrap();
+    assert!(rows[before + 1].is_empty(), "{rows:#?}");
+    assert!(
+        rows[before + 2].trim().chars().all(|ch| ch == '─'),
+        "{rows:#?}"
+    );
+    assert!(
+        rows[before + 3].trim().chars().all(|ch| ch == '═'),
+        "{rows:#?}"
+    );
+    assert!(rows[before + 4].contains("AFTER"), "{rows:#?}");
+}
+
+#[test]
+fn partial_rule_cells_remain_visible_beside_text_cells() {
+    let mut bundle = bundle();
+    bundle.document.as_mut().expect("document").sections[0].blocks = vec![Block::Table {
+        rows: vec![TableRow {
+            kind: mant_ir::TableRowKind::Data,
+            cells: vec![
+                TableCell {
+                    kind: mant_ir::TableCellKind::HorizontalRule,
+                    blocks: Vec::new(),
+                    column_span: 1,
+                    row_span: 1,
+                    alignment: None,
+                },
+                TableCell {
+                    kind: mant_ir::TableCellKind::Text,
+                    blocks: vec![Block::Paragraph {
+                        children: vec![Inline::Text {
+                            value: "VISIBLE".to_owned(),
+                        }],
+                        layout: LayoutHint::default(),
+                        source: None,
+                    }],
+                    column_span: 1,
+                    row_span: 1,
+                    alignment: None,
+                },
+            ],
+        }],
+        layout: LayoutHint::default(),
+        source: None,
+    }];
+
+    let rows = DocumentView::new(&bundle)
+        .render(40)
+        .text
+        .lines
+        .iter()
+        .map(ToString::to_string)
+        .collect::<Vec<_>>();
+    let row = rows
+        .iter()
+        .find(|row| row.contains("VISIBLE"))
+        .expect("visible table row");
+    assert!(row.contains('─'), "{rows:#?}");
+    assert!(
+        row.find('─').unwrap() < row.find("VISIBLE").unwrap(),
+        "{rows:#?}"
+    );
+}
+
+#[test]
+fn stacked_partial_rule_cells_are_not_dropped() {
+    let mut bundle = bundle();
+    bundle.document.as_mut().expect("document").sections[0].blocks = vec![Block::Table {
+        rows: vec![TableRow {
+            kind: mant_ir::TableRowKind::Data,
+            cells: vec![
+                TableCell {
+                    kind: mant_ir::TableCellKind::HorizontalRule,
+                    blocks: Vec::new(),
+                    column_span: 1,
+                    row_span: 1,
+                    alignment: None,
+                },
+                TableCell {
+                    kind: mant_ir::TableCellKind::Text,
+                    blocks: vec![Block::Paragraph {
+                        children: vec![Inline::Text {
+                            value: "VISIBLE".to_owned(),
+                        }],
+                        layout: LayoutHint {
+                            indent_columns: -1,
+                            ..LayoutHint::default()
+                        },
+                        source: None,
+                    }],
+                    column_span: 1,
+                    row_span: 1,
+                    alignment: None,
+                },
+            ],
+        }],
+        layout: LayoutHint::default(),
+        source: None,
+    }];
+
+    let rows = DocumentView::new(&bundle)
+        .render(40)
+        .text
+        .lines
+        .iter()
+        .map(ToString::to_string)
+        .collect::<Vec<_>>();
+    assert!(
+        rows.iter()
+            .any(|row| !row.trim().is_empty() && row.trim().chars().all(|ch| ch == '─')),
+        "{rows:#?}"
+    );
+    assert!(rows.iter().any(|row| row.contains("VISIBLE")), "{rows:#?}");
+}
+
+#[test]
+fn rule_rows_do_not_split_table_wide_column_measurement() {
+    let paragraph = |value: &str| Block::Paragraph {
+        children: vec![Inline::Text {
+            value: value.to_owned(),
+        }],
+        layout: LayoutHint::default(),
+        source: None,
+    };
+    let cell = |value: &str| TableCell {
+        kind: mant_ir::TableCellKind::Text,
+        blocks: vec![paragraph(value)],
+        column_span: 1,
+        row_span: 1,
+        alignment: None,
+    };
+    let mut bundle = bundle();
+    bundle.document.as_mut().expect("document").sections[0].blocks = vec![Block::Table {
+        rows: vec![
+            TableRow {
+                kind: mant_ir::TableRowKind::Data,
+                cells: vec![cell("A"), cell("FIRST")],
+            },
+            TableRow {
+                kind: mant_ir::TableRowKind::LayoutRule {
+                    cells: vec![
+                        mant_ir::TableRuleCellKind::Horizontal,
+                        mant_ir::TableRuleCellKind::DoubleHorizontal,
+                    ],
+                },
+                cells: Vec::new(),
+            },
+            TableRow {
+                kind: mant_ir::TableRowKind::Data,
+                cells: vec![cell("LONG LEFT COLUMN"), cell("SECOND")],
+            },
+        ],
+        layout: LayoutHint::default(),
+        source: None,
+    }];
+    let rows = DocumentView::new(&bundle)
+        .render(60)
+        .text
+        .lines
+        .iter()
+        .map(ToString::to_string)
+        .collect::<Vec<_>>();
+    let first = rows.iter().find(|row| row.contains("FIRST")).unwrap();
+    let second = rows.iter().find(|row| row.contains("SECOND")).unwrap();
+    assert_eq!(first.find("FIRST"), second.find("SECOND"), "{rows:#?}");
+    let rule = rows
+        .iter()
+        .find(|row| row.contains('─') && row.contains('═'))
+        .expect("mixed layout rule");
+    assert!(
+        rule.find('─').unwrap() < rule.find('═').unwrap(),
+        "{rows:#?}"
+    );
 }
 
 #[test]

@@ -6,6 +6,9 @@ pub(super) fn rows(rows: &[TableRow], track: bool) -> Vec<MappedText> {
     bounded_table_rows(rows)
         .into_iter()
         .map(|row| match row {
+            TableRowPlan::Empty
+            | TableRowPlan::WholeRule { .. }
+            | TableRowPlan::LayoutRule { .. } => MappedText::default(),
             TableRowPlan::Dense { slots } => MappedText::join(
                 slots.into_iter().map(|cell| {
                     cell.map_or_else(MappedText::default, |cell| plain_cell(cell, track))

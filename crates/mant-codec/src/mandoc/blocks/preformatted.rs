@@ -6,7 +6,7 @@ use mant_ir::{Block, Inline};
 use super::super::{
     LoweringContext,
     inline::{InlineBuilder, append_inline_node_with_next},
-    layout::{layout, vertical_distance_lines},
+    layout::{layout, vertical_space_delta},
     source_span,
 };
 use super::tables::{TableEmbeddingPlan, append_table_row};
@@ -30,6 +30,10 @@ pub(super) fn preformatted_blocks(
         formatter: *formatter,
     };
     flow.line.font = formatter.font;
+    flow.line
+        .inherit_vertical_space_debt(formatter.vertical_space_debt);
+    flow.line
+        .inherit_zero_advance_armed(std::mem::take(&mut formatter.zero_advance_armed));
     flow.line.track_executed_lines();
     let body_index = node
         .children
@@ -50,6 +54,8 @@ pub(super) fn preformatted_blocks(
     flow.flush();
     formatter.font = flow.line.font;
     formatter.spacing = flow.line.spacing_enabled();
+    formatter.vertical_space_debt = flow.line.vertical_space_debt();
+    formatter.zero_advance_armed = flow.line.take_zero_advance_armed();
     flow.output
 }
 
@@ -122,10 +128,23 @@ impl DisplayFlow<'_, '_> {
     }
 
     fn flush(&mut self) {
+        self.flush_with(false);
+    }
+
+    fn flush_for_vertical_request(&mut self) {
+        self.flush_with(true);
+    }
+
+    fn flush_with(&mut self, vertical_request: bool) {
         let mut next = InlineBuilder::with_spacing(self.line.spacing_enabled());
         next.font = self.line.font;
         self.line.transfer_source_cursor(&mut next);
-        self.line.transfer_container_execution(&mut next);
+        if vertical_request {
+            self.line.transfer_vertical_request_execution(&mut next);
+        } else {
+            self.line.transfer_container_execution(&mut next);
+        }
+        let empty_word_end_break = self.line.take_unrepresented_word_end_break();
         let children = std::mem::replace(&mut self.line, next).finish();
         if !children.is_empty() {
             self.output.push(if self.literal {
@@ -141,6 +160,12 @@ impl DisplayFlow<'_, '_> {
                     layout: layout(self.indent_columns),
                     source: self.source.take(),
                 }
+            });
+        }
+        if empty_word_end_break {
+            self.output.push(Block::VerticalSpace {
+                lines: 1,
+                source: None,
             });
         }
     }
@@ -172,9 +197,10 @@ impl DisplayFlow<'_, '_> {
                 // mdoc_term.c termp_pp_pre executes term_vspace even after
                 // an explicit sp or a continued word. This is a structural
                 // request, not the inline break used in definition heads.
-                self.flush();
+                let lines = self.line.resolve_vertical_space(1);
+                self.flush_for_vertical_request();
                 self.output.push(Block::VerticalSpace {
-                    lines: 1,
+                    lines,
                     source: source_span(node),
                 });
                 self.line.reset_source_cursor();
@@ -185,9 +211,10 @@ impl DisplayFlow<'_, '_> {
                 }
             }
             Some("sp") => {
-                self.flush();
+                let lines = self.line.resolve_vertical_space(vertical_space_delta(node));
+                self.flush_for_vertical_request();
                 self.output.push(Block::VerticalSpace {
-                    lines: vertical_distance_lines(node).unwrap_or(0),
+                    lines,
                     source: source_span(node),
                 });
                 self.line.reset_source_cursor();
@@ -239,6 +266,8 @@ impl DisplayFlow<'_, '_> {
                 self.flush();
                 self.formatter.font = self.line.font;
                 self.formatter.spacing = self.line.spacing_enabled();
+                self.formatter.vertical_space_debt = self.line.vertical_space_debt();
+                self.formatter.zero_advance_armed = self.line.take_zero_advance_armed();
                 let nested = super::lower_blocks_with_predecessor(
                     std::slice::from_ref(node),
                     self.context,
@@ -252,6 +281,11 @@ impl DisplayFlow<'_, '_> {
                 self.paragraph_predecessor = true;
                 self.line.font = self.formatter.font;
                 self.line.inherit_spacing(self.formatter.spacing);
+                self.line
+                    .inherit_vertical_space_debt(self.formatter.vertical_space_debt);
+                self.line.inherit_zero_advance_armed(std::mem::take(
+                    &mut self.formatter.zero_advance_armed,
+                ));
                 self.line.reset_source_cursor();
                 self.source = None;
             } else if node.kind == NodeKind::Table
@@ -261,6 +295,8 @@ impl DisplayFlow<'_, '_> {
                 self.flush();
                 self.formatter.font = self.line.font;
                 self.formatter.spacing = self.line.spacing_enabled();
+                self.formatter.vertical_space_debt = self.line.vertical_space_debt();
+                self.formatter.zero_advance_armed = self.line.take_zero_advance_armed();
                 if node.kind == NodeKind::Table {
                     append_table_row(
                         &mut self.output,
@@ -283,6 +319,11 @@ impl DisplayFlow<'_, '_> {
                 }
                 self.line.font = self.formatter.font;
                 self.line.inherit_spacing(self.formatter.spacing);
+                self.line
+                    .inherit_vertical_space_debt(self.formatter.vertical_space_debt);
+                self.line.inherit_zero_advance_armed(std::mem::take(
+                    &mut self.formatter.zero_advance_armed,
+                ));
                 self.line.reset_source_cursor();
                 self.source = None;
             } else if node.kind != NodeKind::Text && node.macro_name.is_none() {

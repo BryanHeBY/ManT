@@ -124,7 +124,7 @@ fn success(output: &Output) -> Value {
 fn multiple_owners_relations_and_strict_navigation_remain_independent() {
     let root = fixture("owners");
     let result = success(&run(&root, &["first", "--explain=--help"]));
-    assert_eq!(result["schema"], "mant.explanation/v0.11");
+    assert_eq!(result["schema"], "mant.explanation/v0.12");
     assert_eq!(result["total"], 4);
     let evidence = result["evidence"].as_array().unwrap();
     assert!(evidence[3].get("entry").is_none());
@@ -143,7 +143,7 @@ fn multiple_owners_relations_and_strict_navigation_remain_independent() {
     assert_eq!(strict.status.code(), Some(2));
     for id in ["brief", "class-help", "assist"] {
         let read = success(&run(&root, &["first", &format!("--node=id:{id}")]));
-        assert_eq!(read["schema"], "mant.excerpt/v0.11");
+        assert_eq!(read["schema"], "mant.excerpt/v0.12");
         assert_eq!(read["selections"].as_array().unwrap().len(), 1);
     }
     let outline = success(&run(
@@ -253,7 +253,7 @@ fn request_json_and_cli_share_classification_and_original_rendering() {
         .stderr(Stdio::piped())
         .spawn()
         .unwrap();
-    let request = json!({"schema":"mant.request/v0.11","input":{"kind":"document","selector":"first"},"view":{"kind":"explain","entry":"--help"}});
+    let request = json!({"schema":"mant.request/v0.12","input":{"kind":"document","selector":"first"},"view":{"kind":"explain","entry":"--help"}});
     child
         .stdin
         .take()

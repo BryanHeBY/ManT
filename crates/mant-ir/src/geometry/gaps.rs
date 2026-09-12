@@ -363,7 +363,9 @@ mod tests {
         for (origin, expected) in [(-2, true), (2, false)] {
             let table = Block::Table {
                 rows: vec![TableRow {
+                    kind: crate::TableRowKind::Data,
                     cells: vec![TableCell {
+                        kind: crate::TableCellKind::Text,
                         blocks: vec![paragraph(3, 3000, text())],
                         column_span: 1,
                         row_span: 1,

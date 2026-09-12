@@ -4,6 +4,14 @@ use super::{
     SourceLineIndex, equation_delimiter_changes, formatter, inline,
 };
 
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub(super) enum MdocSectionContext {
+    #[default]
+    Other,
+    Synopsis,
+    Authors,
+}
+
 pub(super) struct LoweringContext<'a> {
     pub(super) macro_set: MacroSet,
     pub(super) native_heads: RefCell<crate::definitions::NativeHeadEvidence>,
@@ -18,6 +26,7 @@ pub(super) struct LoweringContext<'a> {
     pub(super) assigned_section_ids: HashSet<String>,
     pub(super) explicit_targets: HashSet<String>,
     pub(super) diagnostics: RefCell<Vec<Diagnostic>>,
+    active_mdoc_section: std::cell::Cell<MdocSectionContext>,
 }
 
 #[derive(Debug)]
@@ -107,7 +116,16 @@ impl<'a> LoweringContext<'a> {
             assigned_section_ids: HashSet::new(),
             explicit_targets: HashSet::new(),
             diagnostics: RefCell::new(Vec::new()),
+            active_mdoc_section: std::cell::Cell::new(MdocSectionContext::Other),
         }
+    }
+
+    pub(super) fn active_mdoc_section(&self) -> MdocSectionContext {
+        self.active_mdoc_section.get()
+    }
+
+    pub(super) fn replace_mdoc_section(&self, section: MdocSectionContext) -> MdocSectionContext {
+        self.active_mdoc_section.replace(section)
     }
 
     pub(super) fn lower_inline_with_spacing(
@@ -116,14 +134,24 @@ impl<'a> LoweringContext<'a> {
         spacing: bool,
         formatter: &mut formatter::FormatterState,
     ) -> Vec<mant_ir::Inline> {
-        if self.macro_set != MacroSet::Mdoc {
-            return inline::lower_inline_nodes_with_spacing(nodes, self.default_name, spacing);
-        }
+        // `.An -split` and `.An -nosplit` are formatter requests even when
+        // they occur inside an inline definition head such as `It Xo`.
+        // They return without rendering children in CVS, so execute their
+        // persistent state here before lowering the visible head payload.
+        execute_inline_author_modes(
+            nodes,
+            formatter,
+            self.active_mdoc_section() == MdocSectionContext::Authors,
+        );
         let mut builder = inline::InlineBuilder::with_spacing(spacing);
         builder.font = formatter.font;
+        builder.inherit_vertical_space_debt(formatter.vertical_space_debt);
+        builder.inherit_zero_advance_armed(std::mem::take(&mut formatter.zero_advance_armed));
         inline::append_inline_nodes(&mut builder, nodes, self.default_name);
         formatter.font = builder.font;
         formatter.spacing = builder.spacing_enabled();
+        formatter.vertical_space_debt = builder.vertical_space_debt();
+        formatter.zero_advance_armed = builder.take_zero_advance_armed();
         builder.finish()
     }
 
@@ -132,10 +160,53 @@ impl<'a> LoweringContext<'a> {
         source: &str,
         formatter: &mut formatter::FormatterState,
     ) -> Vec<mant_ir::Inline> {
-        if self.macro_set != MacroSet::Mdoc {
-            return inline::parse_roff_text(source);
+        let mut zero_advance = inline::ZeroAdvanceState::new();
+        zero_advance.inherit_armed(std::mem::take(&mut formatter.zero_advance_armed));
+        let execution = inline::parse_roff_text_with_zero_advance(
+            source,
+            &mut formatter.font,
+            self.macro_set == MacroSet::Mdoc,
+            &mut zero_advance,
+            false,
+        );
+        let mut output = execution.output;
+        if execution.pending_word_end_break {
+            output.push(mant_ir::Inline::LineBreak);
         }
-        inline::parse_roff_text_with_state(source, &mut formatter.font, true)
+        // Even a control-only tbl word enters term_word(): it clears
+        // formatter-global skipvsp and can leave a bare BACKAFTER request for
+        // the next cell-external word.
+        formatter.execute_word();
+        formatter.zero_advance_armed = zero_advance.take_armed();
+        zero_advance.finish_into(&mut output);
+        output
+    }
+
+    /// Execute interleaved native source and generated equation glyphs as one
+    /// tbl formatter word. Generated Code styling is presentation metadata;
+    /// it must not mutate roff's current/previous font registers.
+    pub(super) fn lower_formatter_word_parts(
+        &self,
+        parts: &[inline::FormatterWordPart<'_>],
+        formatter: &mut formatter::FormatterState,
+    ) -> Vec<mant_ir::Inline> {
+        let mut zero_advance = inline::ZeroAdvanceState::new();
+        zero_advance.inherit_armed(std::mem::take(&mut formatter.zero_advance_armed));
+        let execution = inline::parse_formatter_word_parts_with_zero_advance(
+            parts,
+            &mut formatter.font,
+            self.macro_set == MacroSet::Mdoc,
+            &mut zero_advance,
+            false,
+        );
+        let mut output = execution.output;
+        if execution.pending_word_end_break {
+            output.push(mant_ir::Inline::LineBreak);
+        }
+        formatter.execute_word();
+        formatter.zero_advance_armed = zero_advance.take_armed();
+        zero_advance.finish_into(&mut output);
+        output
     }
 
     pub(super) fn table_execution_source(source: &str, escape: Option<u8>) -> String {
@@ -242,6 +313,24 @@ impl<'a> LoweringContext<'a> {
         inline::roff_macro_arguments(arguments)
             .first()
             .is_some_and(|head| head.contains("\\n+"))
+    }
+}
+
+fn execute_inline_author_modes(
+    nodes: &[Node],
+    formatter: &mut formatter::FormatterState,
+    authors_section: bool,
+) {
+    for node in nodes {
+        if node.macro_name.as_deref() == Some("An") {
+            // CVS `termp_an_pre()` changes persistent state for ordinary
+            // author names too: the first `.An` in AUTHORS enables splitting
+            // for later names unless `-nosplit` is active.  This prepass is
+            // used by detached definition heads whose visible children are
+            // lowered separately from their structural execution state.
+            formatter.execute_author(node.author_mode, authors_section);
+        }
+        execute_inline_author_modes(&node.children, formatter, authors_section);
     }
 }
 

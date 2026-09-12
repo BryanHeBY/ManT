@@ -182,7 +182,7 @@ impl StructuralLowerer<'_, '_, '_> {
             ));
         }
         lowerer.push_nodes(children);
-        lowerer.formatter.spacing = lowerer.state.spacing_enabled();
+        lowerer.state.sync_formatter_state(&mut lowerer.formatter);
         *self.formatter = lowerer.formatter;
         extend_blocks_with_spacing(self.output, lowerer.finish(), spacing, node);
     }
@@ -234,7 +234,7 @@ impl StructuralLowerer<'_, '_, '_> {
                 );
                 lowerer.paragraph_predecessor = paragraph_predecessor;
                 lowerer.push_nodes(first_part_children(node, NodeKind::Body));
-                lowerer.formatter.spacing = lowerer.state.spacing_enabled();
+                lowerer.state.sync_formatter_state(&mut lowerer.formatter);
                 *self.formatter = lowerer.formatter;
                 let mut nested = lowerer.finish();
                 if continues_item {

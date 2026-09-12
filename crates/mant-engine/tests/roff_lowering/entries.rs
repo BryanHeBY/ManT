@@ -476,7 +476,7 @@ fn expands_mdoc_bsd_lifecycle_and_release_forms() {
     };
     assert_eq!(
         inline_text(children),
-        "BSD BSD (currently in alpha test) BSD (currently in beta test) BSD (currently under development). 4.3BSD. 4.3BSD Net/2. 386BSD 0.1."
+        "BSD BSD (currently in alpha test) BSD (currently in beta test) BSD (currently under development). 4.3BSD. 4.3BSD-Net/2. 386BSD-0.1."
     );
 }
 

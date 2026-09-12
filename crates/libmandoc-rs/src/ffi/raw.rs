@@ -18,6 +18,11 @@ pub(super) struct CTableCell {
 }
 
 #[repr(C)]
+pub(super) struct CTableRuleCell {
+    pub(super) _private: [u8; 0],
+}
+
+#[repr(C)]
 pub(super) struct CNodeView {
     pub(super) kind: i32,
     pub(super) macro_name: *const c_char,
@@ -28,6 +33,7 @@ pub(super) struct CNodeView {
     pub(super) flow_epoch: usize,
     pub(super) table_escape: i32,
     pub(super) table_source_recovery_safe: i32,
+    pub(super) table_row_kind: i32,
     pub(super) flags: u32,
     pub(super) list_kind: i32,
     pub(super) definition_list_style: i32,
@@ -41,6 +47,7 @@ pub(super) struct CNodeView {
     pub(super) enclosure_close: *const c_char,
     pub(super) equation: *const c_char,
     pub(super) table_cells: *const CTableCell,
+    pub(super) table_rule_cells: *const CTableRuleCell,
     pub(super) child: *const CNode,
     pub(super) next: *const CNode,
 }
@@ -56,6 +63,12 @@ pub(super) struct CTableCellView {
     pub(super) row_span: u32,
     pub(super) alignment: i32,
     pub(super) next: *const CTableCell,
+}
+
+#[repr(C)]
+pub(super) struct CTableRuleCellView {
+    pub(super) kind: i32,
+    pub(super) next: *const CTableRuleCell,
 }
 
 #[repr(C)]
@@ -172,6 +185,8 @@ unsafe extern "C" {
     pub(super) fn mant_mandoc_node_view_size() -> usize;
     #[cfg(test)]
     pub(super) fn mant_mandoc_table_cell_view_size() -> usize;
+    #[cfg(test)]
+    pub(super) fn mant_mandoc_table_rule_cell_view_size() -> usize;
     pub(super) fn mant_mandoc_document_root(document: *const CDocument) -> *const CNode;
     pub(super) fn mant_mandoc_node_snapshot(
         document: *mut CDocument,
@@ -182,6 +197,11 @@ unsafe extern "C" {
         document: *const CDocument,
         cell: *const CTableCell,
         view: *mut CTableCellView,
+    ) -> i32;
+    pub(super) fn mant_mandoc_table_rule_cell_snapshot(
+        document: *const CDocument,
+        cell: *const CTableRuleCell,
+        view: *mut CTableRuleCellView,
     ) -> i32;
     #[cfg(feature = "render")]
     pub(super) fn mant_mandoc_document_output(document: *const CDocument) -> *const u8;

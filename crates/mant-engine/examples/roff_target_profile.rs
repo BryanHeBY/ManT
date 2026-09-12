@@ -548,6 +548,7 @@ Escape.
             flow_epoch: 0,
             table_escape: None,
             table_source_recovery_safe: false,
+            table_row_kind: None,
             flags,
             list_kind: None,
             definition_list_style: None,

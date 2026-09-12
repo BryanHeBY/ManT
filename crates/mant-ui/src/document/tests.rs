@@ -90,14 +90,17 @@ fn geometry_bundle() -> ResolvedContent {
         },
         Block::Table {
             rows: vec![TableRow {
+                kind: mant_ir::TableRowKind::Data,
                 cells: vec![
                     TableCell {
+                        kind: mant_ir::TableCellKind::Text,
                         blocks: vec![paragraph("alpha beta gamma")],
                         column_span: 1,
                         row_span: 1,
                         alignment: None,
                     },
                     TableCell {
+                        kind: mant_ir::TableCellKind::Text,
                         blocks: vec![paragraph("right hand value")],
                         column_span: 1,
                         row_span: 1,
@@ -358,6 +361,7 @@ fn manual_children_keep_the_same_gaps_as_the_established_layout() {
 fn horizontal_spans_align_the_following_cell_with_later_rows() {
     let mut bundle = bundle();
     let cell = |text: &str, column_span| TableCell {
+        kind: mant_ir::TableCellKind::Text,
         blocks: vec![Block::Paragraph {
             children: vec![Inline::Text { value: text.into() }],
             layout: LayoutHint::default(),
@@ -370,9 +374,11 @@ fn horizontal_spans_align_the_following_cell_with_later_rows() {
     bundle.document.as_mut().unwrap().sections[0].blocks = vec![Block::Table {
         rows: vec![
             TableRow {
+                kind: mant_ir::TableRowKind::Data,
                 cells: vec![cell("TOPSPAN", 2), cell("RIGHT", 1)],
             },
             TableRow {
+                kind: mant_ir::TableRowKind::Data,
                 cells: vec![cell("LEFT", 1), cell("MIDDLE", 1), cell("END", 1)],
             },
         ],

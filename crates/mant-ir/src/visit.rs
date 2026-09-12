@@ -92,7 +92,7 @@ where
             }
         }
         Block::Table { rows, .. } => {
-            for TableRow { cells } in rows {
+            for TableRow { cells, .. } in rows {
                 for TableCell { blocks, .. } in cells {
                     walk_blocks(visitor, blocks);
                 }
@@ -243,7 +243,7 @@ where
             }
         }
         Block::Table { rows, .. } => {
-            for TableRow { cells } in rows {
+            for TableRow { cells, .. } in rows {
                 for TableCell { blocks, .. } in cells {
                     walk_blocks_mut(visitor, blocks);
                 }

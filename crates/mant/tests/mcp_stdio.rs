@@ -482,7 +482,7 @@ fn assert_tool_replies(replies: &[Value]) {
         assert!(outline.contains(&format!("ID: {id}")), "{outline}");
         assert!(outline.contains(title), "{outline}");
     }
-    assert!(!outline.contains("mant.outline/v0.11"));
+    assert!(!outline.contains("mant.outline/v0.12"));
 
     assert_classified_explanations(replies);
 

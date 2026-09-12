@@ -17,6 +17,7 @@ impl super::BlockLowerer<'_, '_> {
                 append_inline_node_with_next(builder, node, next, self.context.default_name);
                 self.formatter.font = builder.font;
                 self.formatter.spacing = builder.spacing_enabled();
+                self.formatter.vertical_space_debt = builder.vertical_space_debt();
             },
         );
         self.state.inherit_spacing(self.formatter.spacing);

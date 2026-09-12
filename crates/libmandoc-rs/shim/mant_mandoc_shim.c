@@ -1137,13 +1137,12 @@ snapshot_node_flags(const struct roff_node *source)
 		flags |= MANT_MANDOC_NODE_DELIMITER_CLOSE;
 	if (source->flags & NODE_SYNPRETTY)
 		flags |= MANT_MANDOC_NODE_SYNOPSIS_PRETTY;
-	if (source->type == ROFFT_TBL && source->span != NULL &&
-	    source->span->pos == TBL_SPAN_DATA) {
-		/* Rule-only rows do not produce owned cells. Mark the first
-		 * data row of this native table, not every layout restart (T&). */
+	if (source->type == ROFFT_TBL && source->span != NULL) {
+		/* tbl_data.c links every span owned by one tbl_node, including
+		 * leading whole-row rules and empty data rows.  A T& layout restart
+		 * keeps the same chain.  Mark its actual first span so consumers do
+		 * not attach a leading rule to the preceding native table. */
 		previous = source->span->prev;
-		while (previous != NULL && previous->pos != TBL_SPAN_DATA)
-			previous = previous->prev;
 		if (previous == NULL)
 			flags |= MANT_MANDOC_NODE_TABLE_START;
 	}
@@ -1457,6 +1456,12 @@ mant_mandoc_table_cell_view_size(void)
 	return sizeof(struct mant_mandoc_table_cell_view);
 }
 
+size_t
+mant_mandoc_table_rule_cell_view_size(void)
+{
+	return sizeof(struct mant_mandoc_table_rule_cell_view);
+}
+
 const struct mant_mandoc_node *
 mant_mandoc_document_root(const struct mant_mandoc_document *document)
 {
@@ -1487,21 +1492,61 @@ mant_mandoc_node_snapshot(struct mant_mandoc_document *document,
 	view->column = source->pos + 1;
 	view->flow_epoch = source->flow_epoch;
 	view->table_escape = source->type == ROFFT_TBL ? source->tbl_escape : -1;
-	if (source->type == ROFFT_TBL && source->span != NULL &&
-	    source->span->pos == TBL_SPAN_DATA) {
+	if (source->type == ROFFT_TBL && source->span != NULL) {
 		const struct tbl_dat *dat;
 
-		view->table_source_recovery_safe = 1;
-		for (dat = source->span->first; dat != NULL; dat = dat->next)
-			if (dat->source_safe == 0) {
-				view->table_source_recovery_safe = 0;
-				break;
-			}
+		switch (source->span->pos) {
+		case TBL_SPAN_DATA: {
+			const struct tbl_cell *layout_cell;
+			int layout_rule;
+
+			/*
+			 * tbl_data.c represents an all-rule layout row as a
+			 * data span.  tbl_term.c renders each layout cell,
+			 * including mixed _/= rows, and ignores any tbl_dat
+			 * operands that getdata() happened to retain.
+			 */
+			layout_cell = source->span->layout == NULL ? NULL :
+			    source->span->layout->first;
+			layout_rule = layout_cell != NULL;
+			for (; layout_cell != NULL; layout_cell = layout_cell->next)
+				if (layout_cell->pos != TBL_CELL_HORIZ &&
+				    layout_cell->pos != TBL_CELL_DHORIZ) {
+					layout_rule = 0;
+					break;
+				}
+			if (layout_rule) {
+				view->table_row_kind =
+				    MANT_MANDOC_TABLE_ROW_LAYOUT_RULE;
+				view->table_rule_cells =
+				    (const struct mant_mandoc_table_rule_cell *)
+				    source->span->layout->first;
+			} else
+				view->table_row_kind = MANT_MANDOC_TABLE_ROW_DATA;
+			break;
+		}
+		case TBL_SPAN_HORIZ:
+			view->table_row_kind = MANT_MANDOC_TABLE_ROW_HORIZ;
+			break;
+		case TBL_SPAN_DHORIZ:
+			view->table_row_kind = MANT_MANDOC_TABLE_ROW_DHORIZ;
+			break;
+		}
+
+		if (source->span->pos == TBL_SPAN_DATA) {
+			view->table_source_recovery_safe = 1;
+			for (dat = source->span->first; dat != NULL;
+			    dat = dat->next)
+				if (dat->source_safe == 0) {
+					view->table_source_recovery_safe = 0;
+					break;
+				}
+		}
 	}
 	view->flags = snapshot_node_flags(source);
 	snapshot_normalized_data(view, source);
 	if (source->type == ROFFT_TBL && source->span != NULL &&
-	    source->span->pos == TBL_SPAN_DATA)
+	    view->table_row_kind == MANT_MANDOC_TABLE_ROW_DATA)
 		view->table_cells =
 		    (const struct mant_mandoc_table_cell *)source->span->first;
 	else if (source->type == ROFFT_EQN) {
@@ -1562,6 +1607,29 @@ mant_mandoc_table_cell_snapshot(const struct mant_mandoc_document *document,
 	     source->layout->pos == TBL_CELL_NUMBER))
 		view->alignment = 2;
 	view->next = (const struct mant_mandoc_table_cell *)source->next;
+	return 1;
+}
+
+int
+mant_mandoc_table_rule_cell_snapshot(
+    const struct mant_mandoc_document *document,
+    const struct mant_mandoc_table_rule_cell *cell,
+    struct mant_mandoc_table_rule_cell_view *view)
+{
+	const struct tbl_cell *source;
+
+	if (document == NULL || document->parser == NULL || cell == NULL ||
+	    view == NULL)
+		return 0;
+	source = (const struct tbl_cell *)cell;
+	memset(view, 0, sizeof(*view));
+	if (source->pos == TBL_CELL_HORIZ)
+		view->kind = 1;
+	else if (source->pos == TBL_CELL_DHORIZ)
+		view->kind = 2;
+	else
+		return 0;
+	view->next = (const struct mant_mandoc_table_rule_cell *)source->next;
 	return 1;
 }
 

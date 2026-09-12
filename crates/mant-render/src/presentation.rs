@@ -239,7 +239,7 @@ mod tests {
             },
         ];
         DocumentCatalog {
-            schema: CatalogSchema::V0Dot11,
+            schema: CatalogSchema::V0Dot12,
             query: mant_protocol::CatalogQuery::default(),
             coverage: mant_protocol::CatalogCoverage::default(),
             total: 2,

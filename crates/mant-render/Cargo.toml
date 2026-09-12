@@ -1,6 +1,6 @@
 [package]
 name = "mant-render"
-version = "0.11.0"
+version = "0.12.0"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
@@ -20,9 +20,9 @@ all-features = true
 default = []
 
 [dependencies]
-mant-ir = { path = "../mant-ir", version = "^0.11.0" }
-mant-protocol = { path = "../mant-protocol", version = "^0.11.0" }
-mant-codec = { path = "../mant-codec", version = "^0.11.0", default-features = false }
+mant-ir = { path = "../mant-ir", version = "^0.12.0" }
+mant-protocol = { path = "../mant-protocol", version = "^0.12.0" }
+mant-codec = { path = "../mant-codec", version = "^0.12.0", default-features = false }
 pulldown-cmark.workspace = true
 serde.workspace = true
 serde_json.workspace = true

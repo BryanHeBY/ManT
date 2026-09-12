@@ -182,6 +182,136 @@ fn parser_copies_table_cells_and_equation_text() {
 }
 
 #[test]
+fn parser_distinguishes_empty_tbl_data_rows_from_whole_row_rules() {
+    fn collect(node: &Node, rows: &mut Vec<(TableRowKind, usize)>) {
+        if node.kind == NodeKind::Table {
+            rows.push((
+                node.table_row_kind.clone().expect("native table row kind"),
+                node.table_cells.len(),
+            ));
+        }
+        for child in &node.children {
+            collect(child, rows);
+        }
+    }
+
+    // Fixed CVS tbl_data.c creates an empty TBL_SPAN_DATA for the blank input
+    // line and distinct HORIZ/DHORIZ spans for `_` and `=`.
+    let document = Parser::default()
+        .parse_bytes(
+            "tbl-empty-and-rules.1",
+            b".TH PROBE 1\n.SH DESCRIPTION\n.TS\nl.\nBEFORE\n\n_\n=\nAFTER\n.TE\n",
+        )
+        .expect("parse empty and ruled tbl rows")
+        .document;
+    let mut rows = Vec::new();
+    collect(&document.root, &mut rows);
+    assert_eq!(
+        rows,
+        [
+            (TableRowKind::Data, 1),
+            (TableRowKind::Data, 0),
+            (TableRowKind::HorizontalRule, 0),
+            (TableRowKind::DoubleHorizontalRule, 0),
+            (TableRowKind::Data, 1),
+        ]
+    );
+}
+
+#[test]
+fn parser_preserves_layout_only_rule_rows_per_column() {
+    fn collect(node: &Node, rows: &mut Vec<TableRowKind>) {
+        if let Some(kind) = &node.table_row_kind {
+            rows.push(kind.clone());
+        }
+        for child in &node.children {
+            collect(child, rows);
+        }
+    }
+
+    // Fixed CVS tbl_data.c creates these as TBL_SPAN_DATA rows with no
+    // tbl_dat cells; tbl_term.c renders the associated layout cells.
+    let document = Parser::default()
+        .parse_bytes(
+            "tbl-layout-rule-rows.1",
+            b".TH PROBE 1\n.SH DESCRIPTION\n.TS\n_\nl.\nSINGLE\n.TE\n.TS\n=\nl.\nDOUBLE\n.TE\n.TS\n_ =\nl l.\nLEFT\tRIGHT\n.TE\n.TS\n_.\nIGNORED\n.TE\n.TS\n=.\nIGNORED\n.TE\n.TS\n_ =.\nLEFT\tRIGHT\n.TE\n",
+        )
+        .expect("parse layout-only rule rows")
+        .document;
+    let mut rows = Vec::new();
+    collect(&document.root, &mut rows);
+    assert_eq!(
+        rows,
+        [
+            TableRowKind::LayoutRule {
+                cells: vec![TableRuleCellKind::Horizontal],
+            },
+            TableRowKind::Data,
+            TableRowKind::LayoutRule {
+                cells: vec![TableRuleCellKind::DoubleHorizontal],
+            },
+            TableRowKind::Data,
+            TableRowKind::LayoutRule {
+                cells: vec![
+                    TableRuleCellKind::Horizontal,
+                    TableRuleCellKind::DoubleHorizontal,
+                ],
+            },
+            TableRowKind::Data,
+            TableRowKind::LayoutRule {
+                cells: vec![TableRuleCellKind::Horizontal],
+            },
+            TableRowKind::LayoutRule {
+                cells: vec![TableRuleCellKind::DoubleHorizontal],
+            },
+            TableRowKind::LayoutRule {
+                cells: vec![
+                    TableRuleCellKind::Horizontal,
+                    TableRuleCellKind::DoubleHorizontal,
+                ],
+            },
+        ]
+    );
+}
+
+#[test]
+fn parser_marks_a_leading_rule_as_the_start_of_its_native_table() {
+    fn collect(node: &Node, rows: &mut Vec<(TableRowKind, bool)>) {
+        if node.kind == NodeKind::Table {
+            rows.push((
+                node.table_row_kind.clone().expect("native table row kind"),
+                node.flags.table_start,
+            ));
+        }
+        for child in &node.children {
+            collect(child, rows);
+        }
+    }
+
+    // Fixed CVS tbl_data.c links `_` and the following data row into one
+    // tbl_node span chain.  The rule is the first span; T& only restarts the
+    // layout of the existing chain.
+    let document = Parser::default()
+        .parse_bytes(
+            "tbl-leading-rule-boundary.1",
+            b".TH PROBE 1\n.SH DESCRIPTION\n.TS\nl.\nFIRST\n.T&\nr.\nSECOND\n.TE\n.TS\nl.\n_\nTHIRD\n.TE\n",
+        )
+        .expect("parse adjacent tables with a leading rule")
+        .document;
+    let mut rows = Vec::new();
+    collect(&document.root, &mut rows);
+    assert_eq!(
+        rows,
+        [
+            (TableRowKind::Data, true),
+            (TableRowKind::Data, false),
+            (TableRowKind::HorizontalRule, true),
+            (TableRowKind::Data, false),
+        ]
+    );
+}
+
+#[test]
 fn parser_records_whether_tbl_content_bypassed_user_macro_execution() {
     for (label, source, expected) in [
         (

@@ -233,7 +233,7 @@ pub struct ListItem {
 /// Resolved list-item boundary. Absent spacing inherits list compactness;
 /// explicit zero is tight, while larger requests precede the whole marker and
 /// body, including items beginning with displays or other non-paragraph blocks.
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ListItemLayout {
     /// Blank rows before this item; missing/null inherits list compactness.
@@ -370,16 +370,58 @@ impl DefinitionItem {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct TableRow {
+    /// Structural row role retained independently from cell contents.
+    #[serde(default, skip_serializing_if = "TableRowKind::is_data")]
+    pub kind: TableRowKind,
     /// Cells in column order. Horizontal spans omit covered cells; vertical
     /// continuations retain empty cells at their logical positions. Use
     /// [`crate::TableGrid`] to place cells without losing horizontal spans.
     pub cells: Vec<TableCell>,
 }
 
+/// Structural role of one logical table row.
+#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "kebab-case", deny_unknown_fields)]
+pub enum TableRowKind {
+    /// A data row, including an intentionally empty source row.
+    #[default]
+    Data,
+    /// A whole-row single horizontal rule.
+    HorizontalRule,
+    /// A whole-row double horizontal rule.
+    DoubleHorizontalRule,
+    /// A rule row authored in the tbl layout, retaining the strength of each
+    /// logical column rather than collapsing a mixed `_`/`=` row.
+    LayoutRule {
+        /// Rule strengths in logical column order.
+        cells: Vec<TableRuleCellKind>,
+    },
+}
+
+impl TableRowKind {
+    // Serde's `skip_serializing_if` predicate receives a shared reference.
+    const fn is_data(value: &Self) -> bool {
+        matches!(value, Self::Data)
+    }
+}
+
+/// Horizontal rule strength for one logical column of a layout-only row.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "kebab-case")]
+pub enum TableRuleCellKind {
+    /// A single horizontal rule.
+    Horizontal,
+    /// A double horizontal rule.
+    DoubleHorizontal,
+}
+
 /// Block-capable table cell with optional layout information.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct TableCell {
+    /// Effective native cell content after tbl layout-rule precedence.
+    #[serde(default, skip_serializing_if = "TableCellKind::is_text")]
+    pub kind: TableCellKind,
     /// Block content contained in the cell.
     pub blocks: Vec<Block>,
     /// Number of logical columns occupied by the cell.
@@ -391,6 +433,30 @@ pub struct TableCell {
     /// Requested horizontal alignment, if explicitly known.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub alignment: Option<TableAlignment>,
+}
+
+/// Effective content role of one table cell.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "kebab-case")]
+pub enum TableCellKind {
+    /// Printable data or an ordinary empty cell.
+    #[default]
+    Text,
+    /// A connecting single horizontal rule.
+    HorizontalRule,
+    /// A connecting double horizontal rule.
+    DoubleHorizontalRule,
+    /// An isolated single horizontal rule (`\_`).
+    IsolatedHorizontalRule,
+    /// An isolated double horizontal rule (`\=`).
+    IsolatedDoubleHorizontalRule,
+}
+
+impl TableCellKind {
+    #[allow(clippy::trivially_copy_pass_by_ref)] // serde skip predicates borrow the field
+    const fn is_text(value: &Self) -> bool {
+        matches!(value, Self::Text)
+    }
 }
 
 /// Horizontal alignment requested by a source table.

@@ -117,7 +117,7 @@ impl<'query> PreparedCatalogQuery<'query> {
             .map(document_summary)
             .collect::<Vec<_>>();
         DocumentCatalog {
-            schema: CatalogSchema::V0Dot11,
+            schema: CatalogSchema::V0Dot12,
             query: query.clone(),
             coverage,
             total: u32::try_from(total).unwrap_or(u32::MAX),

@@ -573,8 +573,10 @@ fn chooses_safe_fences_and_preserves_native_table_and_equation_content() {
                 },
                 Block::Table {
                     rows: vec![TableRow {
+                        kind: mant_ir::TableRowKind::Data,
                         cells: vec![
                             TableCell {
+                                kind: mant_ir::TableCellKind::Text,
                                 blocks: vec![paragraph(vec![Inline::Text {
                                     value: "left".to_owned(),
                                 }])],
@@ -583,6 +585,7 @@ fn chooses_safe_fences_and_preserves_native_table_and_equation_content() {
                                 alignment: None,
                             },
                             TableCell {
+                                kind: mant_ir::TableCellKind::Text,
                                 blocks: vec![paragraph(vec![Inline::Text {
                                     value: "right".to_owned(),
                                 }])],

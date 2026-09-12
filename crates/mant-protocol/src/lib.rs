@@ -36,10 +36,10 @@ pub use selector::*;
 pub use update::*;
 
 /// Pre-stable native API release line shared by the query protocol family.
-pub const NATIVE_API_VERSION: &str = "0.11";
+pub const NATIVE_API_VERSION: &str = "0.12";
 
 /// Exact process protocol reported by the native CLI boundary.
-pub const CLI_PROTOCOL_VERSION: &str = "mant.cli/v0.11";
+pub const CLI_PROTOCOL_VERSION: &str = "mant.cli/v0.12";
 
 #[cfg(test)]
 mod tests {
@@ -51,44 +51,44 @@ mod tests {
 
     #[test]
     fn native_api_version_is_explicit() {
-        assert_eq!(NATIVE_API_VERSION, "0.11");
-        assert_eq!(CLI_PROTOCOL_VERSION, "mant.cli/v0.11");
+        assert_eq!(NATIVE_API_VERSION, "0.12");
+        assert_eq!(CLI_PROTOCOL_VERSION, "mant.cli/v0.12");
     }
 
     #[test]
     fn advertised_schema_ids_match_their_serialized_markers() {
         for (value, expected) in [
             (
-                serde_json::to_value(RequestSchema::V0Dot11),
+                serde_json::to_value(RequestSchema::V0Dot12),
                 RequestSchema::ID,
             ),
-            (serde_json::to_value(QuerySchema::V0Dot11), QuerySchema::ID),
+            (serde_json::to_value(QuerySchema::V0Dot12), QuerySchema::ID),
             (
-                serde_json::to_value(DocumentSchema::V0Dot11),
+                serde_json::to_value(DocumentSchema::V0Dot12),
                 DocumentSchema::ID,
             ),
             (
-                serde_json::to_value(OutlineSchema::V0Dot11),
+                serde_json::to_value(OutlineSchema::V0Dot12),
                 OutlineSchema::ID,
             ),
             (
-                serde_json::to_value(ExcerptSchema::V0Dot11),
+                serde_json::to_value(ExcerptSchema::V0Dot12),
                 ExcerptSchema::ID,
             ),
             (
-                serde_json::to_value(SearchSchema::V0Dot11),
+                serde_json::to_value(SearchSchema::V0Dot12),
                 SearchSchema::ID,
             ),
             (
-                serde_json::to_value(ScopeRequestSchema::V0Dot11),
+                serde_json::to_value(ScopeRequestSchema::V0Dot12),
                 ScopeRequestSchema::ID,
             ),
             (
-                serde_json::to_value(ScopeQuerySchema::V0Dot11),
+                serde_json::to_value(ScopeQuerySchema::V0Dot12),
                 ScopeQuerySchema::ID,
             ),
             (
-                serde_json::to_value(CatalogSchema::V0Dot11),
+                serde_json::to_value(CatalogSchema::V0Dot12),
                 CatalogSchema::ID,
             ),
             (

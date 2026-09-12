@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use mant_ir::{DocumentAddress, TableAlignment};
+use mant_ir::{DocumentAddress, TableAlignment, TableRuleCellKind};
 use ratatui::{style::Style, text::Span};
 
 /// External URI that passed `ManT`'s host-activation policy.
@@ -94,6 +94,7 @@ pub(super) struct LogicalTableCell {
 #[derive(Debug, Clone)]
 pub(super) struct LogicalTableRow {
     pub(super) cells: Vec<LogicalTableCell>,
+    pub(super) rules: Option<Vec<TableRuleCellKind>>,
     pub(super) layout: Arc<LogicalTableLayout>,
 }
 
@@ -169,6 +170,7 @@ pub(super) enum LineSurface {
     TldrBottom,
     Divider,
     Rule,
+    DoubleRule,
 }
 
 impl LogicalLine {
@@ -246,7 +248,32 @@ impl LogicalLine {
             spans: Vec::new(),
             surface: LineSurface::Normal,
             wrap_mode: WrapMode::Word,
-            table_row: Some(LogicalTableRow { cells, layout }),
+            table_row: Some(LogicalTableRow {
+                cells,
+                rules: None,
+                layout,
+            }),
+            links: Vec::new(),
+            reference_marks: Vec::new(),
+        }
+    }
+
+    pub(super) fn table_rule(
+        indent: usize,
+        rules: Vec<TableRuleCellKind>,
+        layout: Arc<LogicalTableLayout>,
+    ) -> Self {
+        Self {
+            indent,
+            continuation_indent: indent,
+            spans: Vec::new(),
+            surface: LineSurface::Normal,
+            wrap_mode: WrapMode::Word,
+            table_row: Some(LogicalTableRow {
+                cells: Vec::new(),
+                rules: Some(rules),
+                layout,
+            }),
             links: Vec::new(),
             reference_marks: Vec::new(),
         }
@@ -257,6 +284,14 @@ impl LogicalLine {
         line.indent = indent;
         line.continuation_indent = indent;
         line.surface = LineSurface::Rule;
+        line
+    }
+
+    pub(super) fn double_rule(indent: usize) -> Self {
+        let mut line = Self::empty();
+        line.indent = indent;
+        line.continuation_indent = indent;
+        line.surface = LineSurface::DoubleRule;
         line
     }
 

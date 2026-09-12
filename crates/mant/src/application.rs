@@ -55,7 +55,7 @@ pub(crate) fn request_for_address(address: &DocumentAddress) -> (QueryRequest, L
     };
     (
         QueryRequest {
-            schema: RequestSchema::V0Dot11,
+            schema: RequestSchema::V0Dot12,
             input: QueryInput::Document {
                 // A resolved address must never degrade into source precedence or
                 // suffix discovery when its exact destination is missing.
@@ -80,7 +80,7 @@ pub(crate) fn request_for_navigation(
             manual_section,
         } => (
             QueryRequest {
-                schema: RequestSchema::V0Dot11,
+                schema: RequestSchema::V0Dot12,
                 input: QueryInput::Document {
                     selector: name.clone(),
                     source: None,

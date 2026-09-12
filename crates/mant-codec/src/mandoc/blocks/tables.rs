@@ -1,6 +1,9 @@
 //! Assemble native tbl rows; source recovery has a separate transaction boundary.
 use crate::mandoc::{LoweringContext, layout::layout, source_span};
-use libmandoc_rs::{Node, TableAlignment as MandocTableAlignment, TableCellKind};
+use libmandoc_rs::{
+    Node, TableAlignment as MandocTableAlignment, TableCellKind,
+    TableRowKind as MandocTableRowKind, TableRuleCellKind as MandocTableRuleCellKind,
+};
 use mant_ir::{
     Block, LayoutHint, TableAlignment as AstTableAlignment, TableCell as AstTableCell, TableRow,
 };
@@ -16,11 +19,20 @@ pub(super) fn append_table_row(
     embedding: Option<&TableEmbedding>,
     formatter: &mut crate::mandoc::formatter::FormatterState,
 ) {
-    if node.table_cells.is_empty() {
+    let Some(kind) = table_row_kind(node) else {
+        // Only native table spans carry a row kind. Keep the defensive guard
+        // for synthetic test nodes and malformed foreign ASTs.
+        debug_assert!(node.table_cells.is_empty());
+        return;
+    };
+    if !matches!(&kind, mant_ir::TableRowKind::Data) && !node.table_cells.is_empty() {
+        // CVS whole-row rules do not own data cells. Refuse to reinterpret a
+        // structurally inconsistent foreign snapshot as printable contents.
         return;
     }
     let mut text_block_index = 0;
     let row = TableRow {
+        kind,
         // `tbl_data.c` determines field boundaries using the table's executed
         // delimiter and escape state. The owned native row is consequently
         // the only authority for how many cells exist. Source text can enrich
@@ -28,6 +40,11 @@ pub(super) fn append_table_row(
         // a raw TAB (or from an alternate `tab()` delimiter).
         cells: (0..node.table_cells.len())
             .map(|index| {
+                // tbl_term.c clears both backtracking flags before each data
+                // cell. A bare `\z` produced by the final cell can survive
+                // the table, but input state and preceding cells cannot enter
+                // this one.
+                formatter.clear_zero_advance();
                 let cell = &node.table_cells[index];
                 let vertical_continuation = cell.vertical_continuation;
                 let text_block = if cell.text_block {
@@ -61,6 +78,14 @@ pub(super) fn append_table_row(
                     // A successfully decoded control-only cell is empty, not
                     // missing source that needs synthetic recovery.
                     .unwrap_or_default();
+                    // `tbl_term.c` clears BACKAFTER/BACKBEFORE before every
+                    // cell and the row flush clears them again whenever this
+                    // cell actually populated the native buffer.  Only a
+                    // completely bare `\z` cell can carry its armed state
+                    // beyond the final column.
+                    if table_cell_occupies_formatter(cell, &children) {
+                        formatter.clear_zero_advance();
+                    }
                     vec![Block::Paragraph {
                         children,
                         layout: LayoutHint::default(),
@@ -68,6 +93,7 @@ pub(super) fn append_table_row(
                     }]
                 };
                 AstTableCell {
+                    kind: table_cell_kind(cell.kind),
                     blocks,
                     column_span: cell.column_span,
                     row_span: cell.row_span,
@@ -91,4 +117,57 @@ pub(super) fn append_table_row(
             source: source_span(node),
         });
     }
+}
+
+fn table_row_kind(node: &Node) -> Option<mant_ir::TableRowKind> {
+    match &node.table_row_kind {
+        Some(MandocTableRowKind::Data) => Some(mant_ir::TableRowKind::Data),
+        Some(MandocTableRowKind::HorizontalRule) => Some(mant_ir::TableRowKind::HorizontalRule),
+        Some(MandocTableRowKind::DoubleHorizontalRule) => {
+            Some(mant_ir::TableRowKind::DoubleHorizontalRule)
+        }
+        Some(MandocTableRowKind::LayoutRule { cells }) => Some(mant_ir::TableRowKind::LayoutRule {
+            cells: cells
+                .iter()
+                .map(|cell| match cell {
+                    MandocTableRuleCellKind::Horizontal => mant_ir::TableRuleCellKind::Horizontal,
+                    MandocTableRuleCellKind::DoubleHorizontal => {
+                        mant_ir::TableRuleCellKind::DoubleHorizontal
+                    }
+                })
+                .collect(),
+        }),
+        None => None,
+    }
+}
+
+const fn table_cell_kind(kind: TableCellKind) -> mant_ir::TableCellKind {
+    match kind {
+        TableCellKind::HorizontalRule => mant_ir::TableCellKind::HorizontalRule,
+        TableCellKind::DoubleHorizontalRule => mant_ir::TableCellKind::DoubleHorizontalRule,
+        TableCellKind::IsolatedHorizontalRule => mant_ir::TableCellKind::IsolatedHorizontalRule,
+        TableCellKind::IsolatedDoubleHorizontalRule => {
+            mant_ir::TableCellKind::IsolatedDoubleHorizontalRule
+        }
+        TableCellKind::Text | TableCellKind::Empty => mant_ir::TableCellKind::Text,
+    }
+}
+
+fn table_cell_occupies_formatter(
+    cell: &libmandoc_rs::TableCell,
+    children: &[mant_ir::Inline],
+) -> bool {
+    if !children.is_empty() {
+        return true;
+    }
+    cell.text.as_deref().is_some_and(|text| {
+        crate::mandoc::roff_escape::decode(text)
+            .iter()
+            .any(|event| {
+                !matches!(
+                    crate::mandoc::roff_escape::inline_event_effect(event),
+                    crate::mandoc::roff_escape::InlineEventEffect::StateOnly
+                )
+            })
+    })
 }

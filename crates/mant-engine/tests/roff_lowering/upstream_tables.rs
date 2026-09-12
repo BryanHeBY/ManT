@@ -75,7 +75,10 @@ fn adjacent_tables_remain_distinct_but_layout_restarts_do_not_split() {
             panic!("separate tables: {document:?}")
         };
         assert_eq!(first.len(), 2);
-        assert_eq!(second.len(), 2);
+        assert_eq!(second.len(), 2 + usize::from(!leading_rule.is_empty()));
+        if !leading_rule.is_empty() {
+            assert_eq!(second[0].kind, mant_ir::TableRowKind::HorizontalRule);
+        }
         assert_eq!(
             first[1].cells[0].alignment,
             Some(mant_ir::TableAlignment::Right)
@@ -117,4 +120,56 @@ fn table_rule_cells_never_resurrect_suppressed_source_payload() {
         panic!("paragraph")
     };
     assert_eq!(inline_text(children), "_");
+}
+
+#[test]
+fn layout_only_rule_rows_retain_each_column_strength() {
+    let document = man(
+        ".TS\n_\nl.\nSINGLE\n.TE\n.TS\n=\nl.\nDOUBLE\n.TE\n.TS\n_ =\nl l.\nLEFT\tRIGHT\n.TE\n.TS\n_.\nIGNORED\n.TE\n.TS\n=.\nIGNORED\n.TE\n.TS\n_ =.\nLEFT\tRIGHT\n.TE",
+    );
+    let tables = document.sections[0]
+        .blocks
+        .iter()
+        .filter_map(|block| match block {
+            Block::Table { rows, .. } => Some(rows),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(tables.len(), 6);
+    assert_eq!(
+        tables[0][0].kind,
+        mant_ir::TableRowKind::LayoutRule {
+            cells: vec![mant_ir::TableRuleCellKind::Horizontal],
+        }
+    );
+    assert_eq!(
+        tables[1][0].kind,
+        mant_ir::TableRowKind::LayoutRule {
+            cells: vec![mant_ir::TableRuleCellKind::DoubleHorizontal],
+        }
+    );
+    assert_eq!(
+        tables[2][0].kind,
+        mant_ir::TableRowKind::LayoutRule {
+            cells: vec![
+                mant_ir::TableRuleCellKind::Horizontal,
+                mant_ir::TableRuleCellKind::DoubleHorizontal,
+            ],
+        }
+    );
+    assert_eq!(tables[3][0].kind, tables[0][0].kind);
+    assert_eq!(tables[4][0].kind, tables[1][0].kind);
+    assert_eq!(tables[5][0].kind, tables[2][0].kind);
+    assert!(tables[3..].iter().all(|rows| rows[0].cells.is_empty()));
+    let query = ResolvedContent {
+        label: "probe".into(),
+        address: None,
+        document: Some(document),
+        tldr: None,
+    };
+    let rendered = mant_render::render_query_text(&query);
+    assert!(rendered.contains("---"), "{rendered}");
+    assert!(rendered.contains("==="), "{rendered}");
+    assert!(rendered.contains("--- | ==="), "{rendered}");
+    assert!(!rendered.contains("IGNORED"), "{rendered}");
 }

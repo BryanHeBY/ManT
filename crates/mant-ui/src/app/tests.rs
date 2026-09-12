@@ -202,7 +202,7 @@ fn document_catalog() -> DocumentCatalog {
         },
     ];
     DocumentCatalog {
-        schema: CatalogSchema::V0Dot11,
+        schema: CatalogSchema::V0Dot12,
         query: mant_protocol::CatalogQuery::default(),
         coverage: mant_protocol::CatalogCoverage::default(),
         total: 2,
@@ -227,7 +227,7 @@ fn overflowing_document_catalog() -> DocumentCatalog {
         })
         .collect::<Vec<_>>();
     DocumentCatalog {
-        schema: CatalogSchema::V0Dot11,
+        schema: CatalogSchema::V0Dot12,
         query: mant_protocol::CatalogQuery::default(),
         coverage: mant_protocol::CatalogCoverage::default(),
         total: u32::try_from(documents.len()).expect("fixture length"),

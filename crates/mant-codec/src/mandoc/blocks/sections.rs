@@ -1,16 +1,21 @@
 //! Section/root ownership and source-ordered heading reconstruction.
 use super::{
-    Block, LoweringContext, Node, NodeKind, Section, first_part_children, lower_blocks,
-    lower_inline_nodes, plain_text, section_spacing, source_span, update_paragraph_distance,
+    Block, LoweringContext, Node, NodeKind, Section, first_part_children,
+    lower_blocks_with_spacing, lower_inline_nodes, plain_text, section_spacing, source_span,
+    update_paragraph_distance,
 };
 
-pub(in crate::mandoc) fn lower_sections(
+pub(in crate::mandoc) fn lower_document_structure(
     root: &Node,
     context: &mut LoweringContext<'_>,
-) -> Vec<Section> {
+) -> (Vec<Block>, Vec<Section>) {
     let mut paragraph_distance = 1;
+    let mut root_paragraph_distance = 1;
+    let mut formatter = crate::mandoc::formatter::FormatterState::default();
+    let mut root_blocks = Vec::new();
     let mut sections = Vec::new();
-    for node in &root.children {
+    let mut root_start = 0;
+    for (index, node) in root.children.iter().enumerate() {
         update_paragraph_distance(node, &mut paragraph_distance);
         // Accept both `.SH` and a `.SS` that appears directly at the document
         // root. Well-formed pages nest `.SS` inside a `.SH` body, but pages
@@ -20,6 +25,15 @@ pub(in crate::mandoc) fn lower_sections(
         if !is_section(node, true) && !is_section(node, false) {
             continue;
         }
+        root_blocks.extend(lower_blocks_with_spacing(
+            &root.children[root_start..index],
+            context,
+            crate::mandoc::layout::SourceIndent::default(),
+            &mut root_paragraph_distance,
+            true,
+            &mut formatter,
+        ));
+        root_start = index + 1;
         let has_preceding_content = sections.last().is_some_and(section_has_body);
         let spacing_before_lines = section_spacing(
             node,
@@ -32,44 +46,19 @@ pub(in crate::mandoc) fn lower_sections(
             context,
             spacing_before_lines,
             &mut paragraph_distance,
+            &mut formatter,
+            true,
         ));
     }
-    sections
-}
-
-/// Lower printable root content that is not owned by a formal section.
-///
-/// Most manuals contain only metadata and section blocks at the root, but
-/// roff also permits ordinary text there. Generated or malformed pages can,
-/// for example, indent what looks like a request and thereby make it literal
-/// text. Preserve those bytes in `Document::blocks` instead of silently
-/// discarding them while discovering sections.
-pub(in crate::mandoc) fn lower_root_blocks(
-    root: &Node,
-    context: &LoweringContext<'_>,
-) -> Vec<Block> {
-    let mut output = Vec::new();
-    let mut paragraph_distance = 1;
-    let mut start = 0;
-    for (index, node) in root.children.iter().enumerate() {
-        if !is_section(node, true) && !is_section(node, false) {
-            continue;
-        }
-        output.extend(lower_blocks(
-            &root.children[start..index],
-            context,
-            crate::mandoc::layout::SourceIndent::default(),
-            &mut paragraph_distance,
-        ));
-        start = index + 1;
-    }
-    output.extend(lower_blocks(
-        &root.children[start..],
+    root_blocks.extend(lower_blocks_with_spacing(
+        &root.children[root_start..],
         context,
         crate::mandoc::layout::SourceIndent::default(),
-        &mut paragraph_distance,
+        &mut root_paragraph_distance,
+        true,
+        &mut formatter,
     ));
-    output
+    (root_blocks, sections)
 }
 
 fn lower_section(
@@ -77,6 +66,8 @@ fn lower_section(
     context: &mut LoweringContext<'_>,
     spacing_before_lines: u16,
     paragraph_distance: &mut u16,
+    formatter: &mut crate::mandoc::formatter::FormatterState,
+    top_level: bool,
 ) -> Section {
     let heading = lower_inline_nodes(
         first_part_children(node, NodeKind::Head),
@@ -91,11 +82,22 @@ fn lower_section(
         .iter()
         .position(|child| is_section(child, false))
         .unwrap_or(body.len());
-    let blocks = lower_blocks(
+    let section_context = if top_level {
+        native_mdoc_section_context(node)
+    } else {
+        context.active_mdoc_section()
+    };
+    let previous_section = context.replace_mdoc_section(section_context);
+    if top_level && section_context == crate::mandoc::source_context::MdocSectionContext::Authors {
+        formatter.enter_authors_section();
+    }
+    let blocks = lower_blocks_with_spacing(
         &body[..first_subsection],
         context,
         crate::mandoc::layout::SourceIndent::default(),
         paragraph_distance,
+        true,
+        formatter,
     );
     let mut children = Vec::new();
     let mut has_preceding_content = !blocks.is_empty();
@@ -110,10 +112,18 @@ fn lower_section(
             has_preceding_content,
             *paragraph_distance,
         );
-        let child = lower_section(child, context, child_spacing, paragraph_distance);
+        let child = lower_section(
+            child,
+            context,
+            child_spacing,
+            paragraph_distance,
+            formatter,
+            false,
+        );
         has_preceding_content = section_has_body(&child);
         children.push(child);
     }
+    context.replace_mdoc_section(previous_section);
     Section {
         id: id.into(),
         fragment_aliases,
@@ -129,6 +139,27 @@ fn lower_section(
         blocks,
         children,
         source: source_span(node),
+    }
+}
+
+/// Mirror CVS `mdoc_state.c::state_sh()` at the syntax-tree boundary.
+///
+/// Native section semantics are assigned only when the `.Sh` head contains
+/// exactly one direct text child.  A styled or otherwise structured heading
+/// that happens to render as `AUTHORS` or `SYNOPSIS` remains `SEC_CUSTOM` and
+/// must not activate renderer state associated with the standard section.
+fn native_mdoc_section_context(node: &Node) -> crate::mandoc::source_context::MdocSectionContext {
+    let head = first_part_children(node, NodeKind::Head);
+    let [title] = head else {
+        return crate::mandoc::source_context::MdocSectionContext::Other;
+    };
+    if title.kind != NodeKind::Text {
+        return crate::mandoc::source_context::MdocSectionContext::Other;
+    }
+    match title.text.as_deref() {
+        Some("SYNOPSIS") => crate::mandoc::source_context::MdocSectionContext::Synopsis,
+        Some("AUTHORS") => crate::mandoc::source_context::MdocSectionContext::Authors,
+        _ => crate::mandoc::source_context::MdocSectionContext::Other,
     }
 }
 
