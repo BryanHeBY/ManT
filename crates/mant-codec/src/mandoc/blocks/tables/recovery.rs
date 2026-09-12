@@ -84,7 +84,12 @@ impl CellCandidate {
     /// An empty normalized cell can shift source-block association. Accept
     /// styles only when the candidate agrees with this cell or is not proven
     /// to belong to another one; a control-only empty cell still commits state.
-    fn belongs_to(&self, cell: &libmandoc_rs::TableCell, position: CellPosition<'_>) -> bool {
+    fn belongs_to(
+        &self,
+        cell: &libmandoc_rs::TableCell,
+        position: CellPosition<'_>,
+        source_operands: &str,
+    ) -> bool {
         let native = cell.text.as_deref().filter(|text| !text.is_empty());
         if self.inlines.is_empty() {
             return native.is_none();
@@ -96,7 +101,17 @@ impl CellCandidate {
         // cell, but never replaces non-empty native content unless the
         // normalized visible text is exactly the same.
         if let Some(native) = native {
-            return table_text_agrees(&text, &visible_text(native));
+            let native = visible_text(native);
+            // `roff_parsetext()` gives tbl the high-level macro operands,
+            // then the owned tbl cell retains that executed operand stream.
+            // A complete source fragment may deliberately change its
+            // presentation (`.Fl Fl help` -> `--help`, `.MR printf 3` -> a
+            // typed reference), so candidate *display* text need not equal
+            // the native payload.  The original operand stream must still
+            // agree exactly.  This is execution evidence, unlike merely
+            // reparsing a syntactically complete source substring.
+            return table_text_agrees(&text, &native)
+                || table_text_agrees(source_operands, &native);
         }
         !position.row.iter().enumerate().any(|(index, candidate)| {
             index != position.index
@@ -132,6 +147,7 @@ pub(super) fn lower_table_cell(
         let initial_state = *formatter;
         let diagnostic_start = context.diagnostics.borrow().len();
         let source = LoweringContext::table_execution_source(&text_block.source, text_block.escape);
+        let source_operands = table_source_operands(context, &source);
         // CVS mandoc passes high-level macro operands into tbl, while GNU
         // tbl expands the same inline macro language. A `T{}` source block
         // may enrich its already-associated native cell, but an isolated
@@ -157,7 +173,7 @@ pub(super) fn lower_table_cell(
                 formatter: recovered.formatter,
                 diagnostics: Vec::new(),
             };
-            if candidate.belongs_to(cell, position) {
+            if candidate.belongs_to(cell, position, &source_operands) {
                 return Some(candidate.commit(context, formatter));
             }
         }
@@ -174,7 +190,7 @@ pub(super) fn lower_table_cell(
             formatter: candidate_state,
             diagnostics: candidate_diagnostics,
         };
-        if candidate.belongs_to(cell, position) {
+        if candidate.belongs_to(cell, position, &source_operands) {
             return Some(candidate.commit(context, formatter));
         }
         *formatter = initial_state;
@@ -200,6 +216,20 @@ fn table_text_agrees(reconstructed: &str, parsed: &str) -> bool {
     let reconstructed = normalize(reconstructed);
     let parsed = normalize(parsed);
     reconstructed == parsed
+}
+
+/// Build the exact high-level operand stream that CVS `roff_parsetext()`
+/// hands to tbl for this bounded text block.  It is intentionally evidence,
+/// not a second parser: requests are reduced only to the operands native tbl
+/// itself receives, and the owned `TableCell` must corroborate the result.
+fn table_source_operands(context: &LoweringContext<'_>, source: &str) -> String {
+    source
+        .lines()
+        .filter_map(|line| table_cell_content_line(context, line))
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 fn lower_table_cell_text(

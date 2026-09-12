@@ -828,6 +828,9 @@ fn keeps_semantic_links_inside_tbl_text_blocks() {
 .  .\n\
 .\\}\n\
 .rr do-fallback\n\
+.de UNUSED\n\
+THIS_MACRO_IS_NOT_CALLED\n\
+..\n\
 .SH DESCRIPTION\n\
 .TS\ntab($);\nl l.\ngrn$T{\nrenders\n.MR gremlin 1\ndiagrams;\nT}\n\
 gperl$T{\npopulates\n.I groff\nregisters using\n.MR perl 1 ;\nT}\n.TE\n",
