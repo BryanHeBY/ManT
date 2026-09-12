@@ -547,6 +547,7 @@ Escape.
             column: 1,
             flow_epoch: 0,
             table_escape: None,
+            table_source_recovery_safe: false,
             flags,
             list_kind: None,
             definition_list_style: None,
