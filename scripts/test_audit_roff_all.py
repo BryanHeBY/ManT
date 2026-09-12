@@ -18,6 +18,31 @@ SPEC.loader.exec_module(AUDIT)
 
 
 class AllAuditTests(unittest.TestCase):
+    def test_incomplete_special_character_escape_respects_escape_parity(self):
+        findings = AUDIT.source_syntax_findings("valid \\[name]\ninvalid \\[unfinished\n")
+        self.assertEqual(
+            findings,
+            [{
+                'code': 'roff.incomplete-special-character-escape',
+                'line': 2,
+                'column': 9,
+                'reason': 'CVS roff_escape.c reaches MANDOCERR_ESC_INCOMPLETE before a closing ] on this input line',
+            }],
+        )
+        self.assertEqual(AUDIT.source_syntax_findings("literal \\\\[unfinished\n"), [])
+
+    def test_source_syntax_context_keeps_fidelity_review_open(self):
+        result = {
+            'fidelity-mandoc': {'status': 'review'},
+            'fidelity-groff': {'status': 'clean'},
+        }
+        findings = [{'code': 'roff.incomplete-special-character-escape', 'line': 9, 'column': 3, 'reason': 'test'}]
+        AUDIT.classify_source_syntax_reviews(result, findings)
+        self.assertEqual(result['fidelity-mandoc']['status'], 'review')
+        self.assertEqual(result['fidelity-mandoc']['triage'], 'source-syntax-error')
+        self.assertEqual(result['fidelity-mandoc']['sourceSyntax'], findings)
+        self.assertNotIn('triage', result['fidelity-groff'])
+
     def test_manifest_keeps_arbitrary_suffix_and_all_logical_ids(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

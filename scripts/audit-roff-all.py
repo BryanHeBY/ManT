@@ -37,6 +37,13 @@ DIMENSIONS = (*PROFILES, 'fidelity-mandoc', 'layout-mandoc', 'fidelity-groff', '
 STANDALONE_REDIRECT_INPUT_LIMIT = 'standalone .so redirects require MANPATH discovery and cannot be followed by --input'
 NO_REFERENCE_TOKENS = 'the page cannot be classified as clean without a reference corpus'
 MISSING_MANUAL_REDIRECT = 'could not resolve manual .so target'
+# CVS roff_escape.c reports MANDOCERR_ESC_INCOMPLETE when a special-character
+# escape reaches the end of an input line before its closing bracket. This
+# narrow source fact lets the review queue distinguish malformed generated
+# input from a potential lowering discrepancy without treating either as clean.
+_INCOMPLETE_SPECIAL_CHARACTER_ESCAPE = re.compile(
+    r'(?<!\\)(?:\\\\)*\\\[[^\]\n]*$'
+)
 
 
 def module(name):
@@ -109,6 +116,46 @@ def hierarchy(path):
             if parent.name.startswith('man') and parent.name[3:] and section.startswith(parent.name[3:]):
                 return parent.parent
     return path.parent
+
+
+def source_syntax_findings(source):
+    """Return bounded upstream-defined source errors observable without execution.
+
+    Do not attempt to parse roff here. The single recognised construction is
+    deliberately the one whose failure mode is explicit in pinned CVS
+    ``roff_escape.c``: an active ``\\[`` special-character escape that reaches
+    the current input line without ``]``. An even number of preceding
+    backslashes is a literal backslash and must not be diagnosed.
+    """
+    findings = []
+    for line_number, line in enumerate(source.splitlines(), 1):
+        match = _INCOMPLETE_SPECIAL_CHARACTER_ESCAPE.search(line)
+        if match is None:
+            continue
+        findings.append({
+            'code': 'roff.incomplete-special-character-escape',
+            'line': line_number,
+            'column': match.start() + 1,
+            'reason': 'CVS roff_escape.c reaches MANDOCERR_ESC_INCOMPLETE before a closing ] on this input line',
+        })
+    return findings
+
+
+def classify_source_syntax_reviews(result, findings):
+    """Attach malformed-source context without accepting a fidelity review."""
+    if not findings:
+        return
+    for name in ('fidelity-mandoc', 'fidelity-groff'):
+        value = result.get(name)
+        if not isinstance(value, dict) or value.get('status') != 'review' or value.get('triage'):
+            continue
+        value['sourceSyntax'] = findings
+        value['triage'] = 'source-syntax-error'
+        value['triageReason'] = (
+            'the source contains an active special-character escape that CVS '
+            'roff_escape.c defines as incomplete; retain the comparison for '
+            'visibility, but do not treat it as a lowering verdict'
+        )
 
 
 def identity(path):
@@ -464,6 +511,7 @@ def render_dimensions(path, source, args, external):
             result['layout-' + kind] = {'execution': 'success',
                 'status': 'review' if layout['candidates'] else 'clean', 'coverage': coverage,
                 **bounded_finding(layout)}
+    classify_source_syntax_reviews(result, source_syntax_findings(source.decode('utf-8')))
     classify_source_proven_presentation(result)
     classify_cross_reference_presentation(result)
     return result, observations
@@ -485,6 +533,7 @@ def inspect_source(item, args):
                                     for name in DIMENSIONS if name not in PROFILES}
             return record
         record['sourceValidUtf8'] = True
+        record['sourceSyntax'] = source_syntax_findings(source.decode('utf-8'))
         record['dimensions'], record['renderers'] = render_dimensions(path, source, args, record['externalContext'])
     except SOURCES.SourceBudgetError as error:
         record['dimensions'] = {name: failed('budget', error) for name in DIMENSIONS}
