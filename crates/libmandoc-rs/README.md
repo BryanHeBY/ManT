@@ -332,7 +332,7 @@ or changing the patch stack.
 ### Local vendor patches
 
 The checked-in vendor tree differs from the pinned CVS source subset only by
-the 24 ordered patches in `patches/series`. The following group contains
+the 27 ordered patches in `patches/series`. The following group contains
 independently reviewable correctness, compatibility, and portability changes;
 they are candidates for separate upstream evaluation, not claims of submission
 or acceptance:
@@ -368,6 +368,15 @@ or acceptance:
 - `0024-retain-executed-tbl-escape-state.patch` retains the actual escape
   character that was active when each tbl row was read, allowing bounded
   source recovery to apply native comment semantics without replaying roff.
+- `0025-retain-tbl-source-provenance.patch` records whether each table cell
+  came from native built-in request dispatch or an execution context that
+  cannot safely be reconstructed from source text alone.
+- `0026-track-tbl-cell-execution-provenance.patch` makes that provenance
+  cell-local and includes user-macro calls that execute without emitting a
+  table word, so one unsafe cell does not downgrade unrelated cells.
+- `0027-bound-escape-parser-depth.patch` bounds nested escape-argument parsing
+  and consumes a rejected nesting suffix instead of allowing hostile input to
+  grow the native C stack without limit.
 
 The remaining patches implement the synchronous embedding boundary:
 

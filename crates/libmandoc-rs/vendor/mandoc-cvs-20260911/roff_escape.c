@@ -30,6 +30,11 @@
 #include "roff.h"
 #include "roff_int.h"
 
+#define ROFF_ESCAPE_DEPTH_LIMIT 256
+
+static enum mandoc_esc roff_escape_impl(const char *, int, int,
+		int *, int *, int *, int *, int *, unsigned int, int *);
+
 /*
  * Traditional escape sequence interpreter for general use
  * including in high-level formatters.  This function does not issue
@@ -67,6 +72,18 @@ enum mandoc_esc
 roff_escape(const char *buf, const int ln, const int aesc,
     int *resc, int *rnam, int *rarg, int *rendarg, int *rend)
 {
+	int depth_exhausted;
+
+	depth_exhausted = 0;
+	return roff_escape_impl(buf, ln, aesc,
+	    resc, rnam, rarg, rendarg, rend, 0, &depth_exhausted);
+}
+
+static enum mandoc_esc
+roff_escape_impl(const char *buf, const int ln, const int aesc,
+    int *resc, int *rnam, int *rarg, int *rendarg, int *rend,
+    unsigned int depth, int *depth_exhausted)
+{
 	int		 iesc;		/* index of leading escape char */
 	int		 inam;		/* index of escape name */
 	int		 iarg;		/* index beginning the argument */
@@ -82,6 +99,35 @@ roff_escape(const char *buf, const int ln, const int aesc,
 	enum mandoc_esc	 stype;		/* for sub-escape */
 	enum mandocerr	 err;		/* diagnostic code */
 	char		 term;		/* byte terminating the argument */
+
+	/*
+	 * Nested escape arguments normally recurse only a few levels, but
+	 * hostile input can otherwise make the C stack grow without bound.
+	 * Consume the remaining input on exhaustion so outer scanners cannot
+	 * repeatedly re-enter the same rejected nesting suffix.
+	 */
+	if (depth >= ROFF_ESCAPE_DEPTH_LIMIT) {
+		inam = aesc;
+		do {
+			inam++;
+		} while (buf[inam] == 'E');
+		for (iend = inam; buf[iend] != '\0'; iend++)
+			continue;
+		if (resc != NULL)
+			*resc = aesc;
+		if (rnam != NULL)
+			*rnam = inam;
+		if (rarg != NULL)
+			*rarg = iend;
+		if (rendarg != NULL)
+			*rendarg = iend;
+		if (rend != NULL)
+			*rend = iend;
+		if (*depth_exhausted == 0 && ln != 0)
+			mandoc_msg(MANDOCERR_ROFFLOOP, ln, aesc, NULL);
+		*depth_exhausted = 1;
+		return ESCAPE_ERROR;
+	}
 
 	/*
 	 * Treat "\E" just like "\";
@@ -282,8 +328,11 @@ roff_escape(const char *buf, const int ln, const int aesc,
 	stype = ESCAPE_EXPAND;
 	if ((term == '\b' || (term == '\0' && maxl == INT_MAX)) &&
 	    buf[iarg] == buf[iesc]) {
-		stype = roff_escape(buf, ln, iendarg,
-		    &sesc, &snam, &sarg, &sendarg, &send);
+		stype = roff_escape_impl(buf, ln, iendarg,
+		    &sesc, &snam, &sarg, &sendarg, &send,
+		    depth + 1, depth_exhausted);
+		if (*depth_exhausted)
+			goto out_depth;
 		if (stype == ESCAPE_EXPAND)
 			goto out_sub;
 	}
@@ -358,8 +407,11 @@ roff_escape(const char *buf, const int ln, const int aesc,
 			break;
 		}
 		if (buf[iendarg] == buf[iesc]) {
-			stype = roff_escape(buf, ln, iendarg,
-			    &sesc, &snam, &sarg, &sendarg, &send);
+			stype = roff_escape_impl(buf, ln, iendarg,
+			    &sesc, &snam, &sarg, &sendarg, &send,
+			    depth + 1, depth_exhausted);
+			if (*depth_exhausted)
+				goto out_depth;
 			if (stype == ESCAPE_EXPAND)
 				goto out_sub;
 			iend = send;
@@ -506,6 +558,11 @@ roff_escape(const char *buf, const int ln, const int aesc,
 	default:
 		break;
 	}
+	goto out;
+
+out_depth:
+	iendarg = iend = send;
+	rval = ESCAPE_ERROR;
 	goto out;
 
 out_sub:
