@@ -201,27 +201,6 @@ pub(super) fn visible_text(source: &str) -> String {
     output
 }
 
-/// Decode the native spelling that remains after roff executed `.eo`.
-///
-/// CVS `roff_expand()` protects literal backslashes in escape-disabled input
-/// as `\\e` before tbl persists the payload. That sentinel means one authored
-/// backslash in this narrow execution mode; it does *not* re-enable the roff
-/// escape grammar. Keep this conversion separate from [`decode`] so callers
-/// cannot accidentally turn a literal `\\fI` into a font transition.
-pub(super) fn literal_escape_disabled_text(source: &str) -> String {
-    let mut output = String::with_capacity(source.len());
-    let mut characters = source.chars();
-    while let Some(character) = characters.next() {
-        if character == '\\' && characters.clone().next() == Some('e') {
-            output.push('\\');
-            characters.next();
-        } else {
-            output.push(character);
-        }
-    }
-    output
-}
-
 struct Decoder {
     characters: Vec<char>,
     index: usize,

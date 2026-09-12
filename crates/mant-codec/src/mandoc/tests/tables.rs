@@ -184,6 +184,30 @@ fn tbl_escape_disabled_cells_keep_escape_spellings_literal() {
 }
 
 #[test]
+fn tbl_native_payload_preserves_escape_transitions_inside_one_cell() {
+    let document = parse_manual_bytes(
+        std::path::Path::new("tbl-eo-then-ec.1"),
+        b".TH TBL-EO-THEN-EC 1\n.SH DESCRIPTION\n.eo\n.TS\nl.\nT{\nLITERAL \\fIBARE\\fP\n.ec\nACTIVE \\fISTYLED\\fP\nT}\n.TE\n",
+    )
+    .expect("lower a tbl cell that reenables escape processing");
+    let Block::Table { rows, .. } = &document.sections[0].blocks[0] else {
+        panic!("expected one lowered table");
+    };
+    let [Block::Paragraph { children, .. }] = rows[0].cells[0].blocks.as_slice() else {
+        panic!("expected native table paragraph");
+    };
+    assert_eq!(inline_text(children), r"LITERAL \fIBARE\fP ACTIVE STYLED");
+    assert_eq!(
+        children
+            .iter()
+            .filter(|inline| matches!(inline, Inline::Emphasis { .. }))
+            .count(),
+        1,
+        "only the post-.ec font escape may execute: {children:?}"
+    );
+}
+
+#[test]
 fn tbl_source_recovery_preserves_native_whitespace_from_redefined_macro() {
     let document = parse_manual_bytes(
         std::path::Path::new("tbl-redefined-whitespace.1"),

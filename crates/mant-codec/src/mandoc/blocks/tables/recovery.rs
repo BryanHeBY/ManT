@@ -4,7 +4,6 @@ use crate::mandoc::{
     inline::{
         FilledBoundary, InlineBuilder, lower_source_fragment_with_formatter_state, plain_text,
     },
-    roff_escape::literal_escape_disabled_text,
 };
 use libmandoc_rs::{Node, NodeKind};
 use mant_ir::Inline;
@@ -189,7 +188,6 @@ pub(super) fn lower_table_cell(
         return Some(lower_table_cell_text(
             cell.text.as_deref().unwrap_or_default(),
             node.line,
-            node.table_escape,
             context,
             formatter,
         ));
@@ -227,19 +225,15 @@ fn table_source_operands(context: &LoweringContext<'_>, source: &str) -> String 
 fn lower_table_cell_text(
     source: &str,
     line: u32,
-    escape: Option<u8>,
     context: &LoweringContext<'_>,
     formatter: &mut crate::mandoc::formatter::FormatterState,
 ) -> Vec<Inline> {
-    // tbl keeps its evaluated payload as roff-encoded bytes. When `.eo` was
-    // active, those bytes are literal authored output: feeding them through
-    // the normal escape decoder would turn `\\fI` into formatting that never
-    // executed in the native parser.
-    if escape == Some(0) {
-        return vec![Inline::Text {
-            value: literal_escape_disabled_text(source),
-        }];
-    }
+    // `roff_expand()` retains one encoded stream even when a continued cell
+    // changes its escape state.  During `.eo`, a literal backslash becomes
+    // `\\e`; after a later `.ec`, real formatting escapes remain encoded as
+    // such.  Decode that native stream exactly once: the row's `tbl_escape`
+    // records only the state while that AST row was allocated and cannot
+    // describe a later transition inside the same `T{ ... T}` cell.
     let Some((opening, closing)) = context.equation_delimiters_at(line) else {
         return context.lower_text(source, formatter);
     };
