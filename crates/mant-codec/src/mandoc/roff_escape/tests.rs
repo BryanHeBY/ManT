@@ -89,6 +89,15 @@ fn normalizes_internal_markers_and_known_zero_width_controls() {
 }
 
 #[test]
+fn renders_the_cvs_utf8_device_escape_as_visible_text() {
+    // CVS roff_escape.c recognizes `\\*[.T]` as ESCAPE_DEVICE and term.c
+    // emits `utf8` for its UTF-8 output device.  Keep that renderer-visible
+    // value while unresolved ordinary string requests remain formatter state.
+    assert_eq!(visible_text(r"device=\*[.T]"), "device=utf8");
+    assert_eq!(visible_text(r"string=\*[unknown]"), "string=");
+}
+
+#[test]
 fn decodes_bracketed_unicode_and_composite_character_names() {
     assert_eq!(
         visible_text(r"Ma\[u0161]l\[u00E1] \[u2014] \[u01F642]"),

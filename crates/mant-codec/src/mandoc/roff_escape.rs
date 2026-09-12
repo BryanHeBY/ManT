@@ -192,12 +192,28 @@ impl Decoder {
             // Opaque formatter state supported by mandoc_escape(3). These
             // operands must be consumed even though ManT does not render the
             // corresponding device state.
-            'F' | 'g' | 'k' | 'n' | 'O' | 'V' | 'Y' | '*' => {
+            'F' | 'g' | 'k' | 'n' | 'O' | 'V' | 'Y' => {
                 let argument = self.take_opaque_argument();
                 self.emit(RoffInlineEvent::Presentation {
                     kind: PresentationKind::FormatterState,
                     argument,
                 });
+            }
+            '*' => {
+                let argument = self.take_opaque_argument();
+                if argument.as_deref() == Some(".T") {
+                    // CVS roff_escape.c retains the special `\\*[.T]`
+                    // device escape in text.  Its UTF-8 terminal renderer
+                    // then emits `utf8` (term.c, ESCAPE_DEVICE).  ManT's
+                    // renderer is likewise Unicode terminal text, so this is
+                    // visible content rather than an opaque string request.
+                    self.text.push_str("utf8");
+                } else {
+                    self.emit(RoffInlineEvent::Presentation {
+                        kind: PresentationKind::FormatterState,
+                        argument,
+                    });
+                }
             }
             'A' | 'b' | 'D' | 'R' | 'Z' | 'o' => {
                 let argument = self.take_delimited_argument();
