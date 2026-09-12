@@ -118,6 +118,13 @@ AUTHORED_LITERAL_UNICODE_ESCAPE = re.compile(
     # possible parser leak.
     r"(?:\\\\|\\e|\\\[rs\])(\[u[0-9A-Fa-f]{4,6}(?:_[0-9A-Fa-f]{4,6})*\])"
 )
+# CVS preconv.c rewrites an ordinary non-ASCII scalar as ``\\[uXXXX]`` before
+# roff parsing. A source author can deliberately write a literal backslash
+# immediately before such a scalar, for example while documenting a malformed
+# or locale-specific roff spelling. The parser then correctly preserves the
+# resulting ``\\[uXXXX]`` as visible text. Keep this source form separate
+# from general Unicode so it cannot hide an actual escape leak.
+AUTHORED_LITERAL_UTF8_AFTER_BACKSLASH = re.compile(r"(?<!\\)\\([^\x00-\x7f])")
 EM_DASH_ATTACHED_TO_WORD = re.compile(r"—(?=\w)")
 EXTERNAL_ROFF_CONTEXT = re.compile(
     rb"(?:^|[ \t])[.'](?:so|mso)(?:[ \t]|$)", re.MULTILINE
@@ -1804,10 +1811,16 @@ def fidelity_signatures(value: str, source: str | None = None) -> tuple[list[str
     hard: list[str] = []
     review: list[str] = []
     visible_unicode_escapes = set(UNICODE_ESCAPE.findall(value))
-    authored_unicode_escapes = (
-        {"\\" + suffix for suffix in AUTHORED_LITERAL_UNICODE_ESCAPE.findall(source)}
-        if source is not None else set()
-    )
+    authored_unicode_escapes: set[str] = set()
+    if source is not None:
+        authored_unicode_escapes.update(
+            "\\" + suffix
+            for suffix in AUTHORED_LITERAL_UNICODE_ESCAPE.findall(source)
+        )
+        authored_unicode_escapes.update(
+            f"\\[u{ord(character):04X}]"
+            for character in AUTHORED_LITERAL_UTF8_AFTER_BACKSLASH.findall(source)
+        )
     if visible_unicode_escapes - authored_unicode_escapes:
         # Manuals about roff deliberately print Unicode escape examples. A
         # visible escape is evidence to inspect, not proof that the parser
@@ -2953,6 +2966,14 @@ T}
     ]
     hard, review = fidelity_signatures(
         r"literal \[u2192] example", r"author writes \\[u2192] literally"
+    )
+    assert not hard
+    assert not review
+    # CVS preconv.c rewrites the raw Ukrainian `е` to `\[u0435]`; the
+    # preceding authored backslash remains literal, so this is documentation
+    # text rather than an unhandled parser escape.
+    hard, review = fidelity_signatures(
+        r"literal \[u0435] example", "author writes \\е literally"
     )
     assert not hard
     assert not review
