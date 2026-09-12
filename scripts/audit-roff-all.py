@@ -545,6 +545,23 @@ def inspect_source(item, args):
 
 
 def profile_dimension(name, records, args):
+    # These profiles parse with an explicit source root so that native facts
+    # can be collected.  The product's standalone `--input` path deliberately
+    # does not authorize `.so`/`.mso` discovery. Comparing those two different
+    # input authorities can manufacture large apparent lowering losses (for
+    # example an alias page whose profiler follows `bash.1` while ManT reads
+    # only the selected file). Keep the page as explicit external-context
+    # coverage rather than treating a different document as a regression.
+    for row in records:
+        if row.get('externalContext') and name not in row['dimensions']:
+            row['dimensions'][name] = {
+                'execution': 'success',
+                'status': 'uncovered',
+                'coverage': 'partial-external-context',
+                'coverageReasons': [
+                    'profile root may resolve external roff source state that standalone product input intentionally does not authorize'
+                ],
+            }
     selected = [r for r in records if name not in r['dimensions']]
     paths = [Path(r['sourcePath']) for r in selected]
     if not paths:

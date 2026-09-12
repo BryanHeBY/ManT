@@ -149,6 +149,13 @@ class AllAuditTests(unittest.TestCase):
             self.assertEqual(gap['status'], 'uncovered')
             self.assertEqual(gap['coverage'], 'partial-external-context')
 
+    def test_external_context_skips_profiles_with_stronger_include_authority(self):
+        row = {'sourcePath': '/fixture/alias.1', 'externalContext': True, 'dimensions': {}}
+        AUDIT.profile_dimension('structure', [row], argparse.Namespace(profiler_dir=Path('unused'), batch_timeout=1))
+        value = row['dimensions']['structure']
+        self.assertEqual(value['status'], 'uncovered')
+        self.assertEqual(value['coverage'], 'partial-external-context')
+
     def test_empty_groff_reference_is_explicit_reference_coverage_gap(self):
         finding = {
             'status': 'hard-failure',
