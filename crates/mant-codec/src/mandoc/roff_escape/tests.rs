@@ -175,7 +175,7 @@ fn malformed_and_undefined_escapes_are_bounded_and_predictable() {
     assert_eq!(visible_text(r"alpha\qbeta"), "alphaqbeta");
     assert_eq!(visible_text(r"\EfBbold\EfR"), "bold");
     assert_eq!(visible_text(r"before\N1after"), r"before\N1after");
-    assert_eq!(visible_text(r"before\zXafter"), "beforeXafter");
+    assert_eq!(visible_text(r"before\zXafter"), "beforeafter");
 }
 
 #[test]
@@ -203,13 +203,13 @@ fn numbered_glyphs_follow_the_terminal_range_not_unicode_indices() {
 }
 
 #[test]
-fn zero_advance_retains_complete_glyphs_without_recursive_decoding() {
+fn zero_advance_discards_complete_overstrike_glyphs_without_recursion() {
     for source in [r"\z\(emTOKENB", r"\z\[em]TOKENB", r"\z\C'em'TOKENB"] {
-        assert_eq!(visible_text(source), "—TOKENB", "{source}");
+        assert_eq!(visible_text(source), "TOKENB", "{source}");
     }
-    assert_eq!(visible_text(r"\z\[future-glyph]"), r"\[future-glyph]");
+    assert_eq!(visible_text(r"\z\[future-glyph]"), "");
     assert_eq!(visible_text(r"\z"), "");
-    assert_eq!(visible_text(&format!("{}X", r"\z".repeat(20_000))), "X");
+    assert_eq!(visible_text(&format!("{}Y", r"\zX".repeat(20_000))), "Y");
 }
 
 #[test]

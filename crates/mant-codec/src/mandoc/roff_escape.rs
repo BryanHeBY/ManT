@@ -214,9 +214,14 @@ impl Decoder {
             }
             'N' => self.decode_numbered_glyph(),
             'z' => {
-                // Suppress the glyph's advance, not its visible spelling. Let
-                // the normal iterative decoder consume the complete glyph
-                // (including named escapes), without recursive \z handling.
+                // GNU roff formats the next *glyph* without advancing; CVS
+                // mandoc represents that as ESCAPE_SKIPCHAR and its terminal
+                // renderer overstrikes the following glyph.  A linear semantic
+                // IR cannot represent an overstrike, so the zero-width glyph
+                // is formatting input rather than visible document text.
+                // Consume its full spelling here (including a nested \z or a
+                // named glyph) so it cannot leak as a synthetic prefix.
+                self.skip_zero_advance_glyph();
                 self.emit(RoffInlineEvent::Presentation {
                     kind: PresentationKind::Spacing,
                     argument: None,
@@ -311,6 +316,57 @@ impl Decoder {
             kind: PresentationKind::HorizontalMotion,
             argument,
         });
+    }
+
+    /// Consume the single formatter glyph following `\z` without recursively
+    /// decoding it into visible events.
+    ///
+    /// `roff_escape()` gives `\z` the same one-glyph operand shape as the
+    /// terminal renderer.  The bounded iterative loop handles repeated `\z`
+    /// prefixes without creating an attacker-controlled Rust call stack.
+    fn skip_zero_advance_glyph(&mut self) {
+        loop {
+            let Some(character) = self.take_character() else {
+                return;
+            };
+            if character != '\\' {
+                return;
+            }
+            let Some(trigger) = self.take_character() else {
+                return;
+            };
+            match trigger {
+                // A nested `\z` still owns the next complete glyph.
+                'z' => continue,
+                '(' => {
+                    self.take_counted(2);
+                    return;
+                }
+                '[' => {
+                    self.take_until(']');
+                    return;
+                }
+                'C' => {
+                    self.take_delimited_argument();
+                    return;
+                }
+                'N' => {
+                    if self
+                        .characters
+                        .get(self.index)
+                        .is_some_and(char::is_ascii_digit)
+                    {
+                        self.take_counted(1);
+                    } else {
+                        self.take_delimited_argument();
+                    }
+                    return;
+                }
+                // Every other escape is a one-character formatter operand at
+                // this boundary.  Its trigger has already been consumed.
+                _ => return,
+            }
+        }
     }
 
     fn push_special_character(&mut self, name: &str, syntax: NamedCharacterSyntax) {
