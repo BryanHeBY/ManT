@@ -582,6 +582,7 @@ mod tests {
             line,
             column: 1,
             flow_epoch: 0,
+            table_escape: None,
             flags,
             list_kind: None,
             definition_list_style: None,

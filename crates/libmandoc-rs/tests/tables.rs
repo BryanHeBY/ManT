@@ -47,3 +47,22 @@ fn layout_rules_override_payload_and_data_rules_retain_their_kind() {
         assert_eq!(cells[2].kind, TableCellKind::Text);
     }
 }
+
+#[test]
+fn table_rows_retain_the_native_executed_escape_state() {
+    let source = b".TH PROBE 1\n.SH DESCRIPTION\n.de UNUSED\n.ec @\n..\n.TS\nl.\nDEFAULT \\\" hidden\n.TE\n.ec @\n.TS\nl.\nALTERNATE @\" hidden\n.TE\n.eo\n.TS\nl.\nDISABLED \\\" visible\n.TE\n";
+    let parsed = Parser::default().parse_bytes("table.1", source).unwrap();
+    fn escapes(node: &Node) -> Vec<Option<u8>> {
+        let mut values = if node.table_cells.is_empty() {
+            Vec::new()
+        } else {
+            vec![node.table_escape]
+        };
+        values.extend(node.children.iter().flat_map(escapes));
+        values
+    }
+    assert_eq!(
+        escapes(&parsed.document.root),
+        [Some(b'\\'), Some(b'@'), Some(0)]
+    );
+}

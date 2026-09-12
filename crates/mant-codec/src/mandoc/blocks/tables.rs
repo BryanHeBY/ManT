@@ -20,7 +20,7 @@ pub(super) fn append_table_row(
         return;
     }
     let mut text_block_index = 0;
-    let source_cells = context.tab_separated_table_cells(node.line);
+    let source_cells = context.tab_separated_table_cells(node.line, node.table_escape);
     let cell_count = node
         .table_cells
         .len()

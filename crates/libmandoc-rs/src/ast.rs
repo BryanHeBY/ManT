@@ -246,6 +246,11 @@ pub struct Node {
     /// flow boundary. This is not a source line or a persistent identity;
     /// generations are only comparable within the same parse report.
     pub flow_epoch: usize,
+    /// Escape character active when the native parser read this tbl(7) row.
+    ///
+    /// `Some(0)` means `.eo` had disabled escapes. `None` means the node is
+    /// not a table row. This is an execution fact, not a source scan.
+    pub table_escape: Option<u8>,
     /// Source and renderer flags attached to the node.
     pub flags: NodeFlags,
     /// Normalized list behavior for an mdoc list block.

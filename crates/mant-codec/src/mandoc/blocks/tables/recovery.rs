@@ -26,6 +26,7 @@ fn table_embeddings(nodes: &[Node], context: &LoweringContext<'_>) -> TableEmbed
                 .iter()
                 .filter(|cell| cell.text_block)
                 .count(),
+            node.table_escape,
         );
         let Some(last_line) = blocks.iter().map(|block| block.end_line).max() else {
             continue;
@@ -71,7 +72,7 @@ pub(super) fn lower_missing_table_cell(
     context: &LoweringContext<'_>,
     formatter: &mut crate::mandoc::formatter::FormatterState,
 ) -> Vec<Inline> {
-    let source = context.table_execution_source(node.line, source.unwrap_or_default());
+    let source = context.table_execution_source(source.unwrap_or_default(), node.table_escape);
     let source = source.trim();
     if source.is_empty() {
         return Vec::new();
@@ -151,17 +152,18 @@ pub(super) fn lower_table_cell(
     if let Some(text_block) = text_block {
         let initial_state = *formatter;
         let diagnostic_start = context.diagnostics.borrow().len();
-        let source = context.table_execution_source(text_block.start_line, &text_block.source);
+        let source = context.table_execution_source(&text_block.source, text_block.escape);
         // CVS mandoc passes high-level macro operands into tbl, while GNU
         // tbl expands the same inline macro language. A `T{}` source block is
         // already associated with this exact native text-block cell, so a
         // complete, closed inline parse may restore the source semantics
         // directly. Native requests and anything dependent on the original
         // roff session deliberately stay on the raw/native path below.
-        if !contains_native_table_request(context, &source)
+        if !context.table_source_has_macro_barrier(node.line)
+            && !contains_native_table_request(context, &source)
             && let Some(recovered) = lower_source_fragment_with_formatter_state(
                 &source,
-                context.table_escape_at(text_block.start_line),
+                text_block.escape,
                 context.macro_set,
                 context.default_name,
                 node.flags.synopsis_pretty,
@@ -332,6 +334,7 @@ mod tests {
                 source: source.to_owned(),
                 start_line: 7,
                 end_line: 9,
+                escape: Some(b'\\'),
             };
             let mut state = crate::mandoc::formatter::FormatterState::default();
             state
@@ -381,6 +384,7 @@ mod tests {
             source: ".B TOKENA\n.PP\nTOKENB".to_owned(),
             start_line: 6,
             end_line: 8,
+            escape: Some(b'\\'),
         };
         for (native, expected) in [
             (None, "TOKENA TOKENB"),

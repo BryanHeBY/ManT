@@ -11,7 +11,6 @@ pub(super) struct LoweringContext<'a> {
     // the RefCells below are memoization and diagnostic collection only.
     pub(super) default_name: Option<&'a str>,
     pub(super) source_lines: Option<SourceLineIndex<'a>>,
-    table_escape_changes: Vec<TableEscapeChange>,
     pub(super) equation_delimiters: Vec<EquationDelimiterChange>,
     pub(super) normalized_equations: RefCell<BTreeMap<String, String>>,
     native_table_requests: RefCell<HashMap<String, bool>>,
@@ -26,18 +25,7 @@ pub(super) struct TableTextBlock {
     pub(super) source: String,
     pub(super) start_line: u32,
     pub(super) end_line: u32,
-}
-
-#[derive(Clone, Copy, Debug)]
-struct TableEscapeChange {
-    line: u32,
-    escape: Option<u8>,
-}
-
-#[derive(Clone, Copy, Debug)]
-enum TableEscapeRequest {
-    Set(u8),
-    Disable,
+    pub(super) escape: Option<u8>,
 }
 
 impl TableTextBlock {
@@ -58,7 +46,7 @@ impl TableTextBlock {
 /// that cell from its owned table snapshot.
 fn table_execution_source(source: &str, initial_escape: Option<u8>) -> String {
     let mut output = String::with_capacity(source.len());
-    let mut escape = initial_escape;
+    let escape = initial_escape;
     for physical_line in source.split_inclusive('\n') {
         let (line, had_newline) = physical_line.strip_suffix("\r\n").map_or_else(
             || {
@@ -72,9 +60,6 @@ fn table_execution_source(source: &str, initial_escape: Option<u8>) -> String {
         output.push_str(visible);
         if had_newline && !continues {
             output.push('\n');
-        }
-        if let Some(request) = table_escape_request(visible) {
-            escape = request.apply();
         }
     }
     output
@@ -116,53 +101,6 @@ fn roff_line_without_comment(line: &str, escape: Option<u8>) -> (&str, bool) {
     (line, false)
 }
 
-/// Return an escape-state transition executed by a plain roff control line.
-///
-/// CVS mandoc implements only `.ec` and `.eo`; `ecs`/`ecr` remain unsupported
-/// there, so this bounded source service deliberately follows that parser
-/// rather than growing a broader, incompatible roff interpreter.
-fn table_escape_request(line: &str) -> Option<TableEscapeRequest> {
-    let trimmed = line.trim_start();
-    let request = trimmed
-        .strip_prefix('.')
-        .or_else(|| trimmed.strip_prefix('\''))?;
-    let name_end = request.find(char::is_whitespace).unwrap_or(request.len());
-    let name = &request[..name_end];
-    let argument = request[name_end..].trim_start();
-    match name {
-        "ec" => Some(TableEscapeRequest::Set(
-            argument.as_bytes().first().copied().unwrap_or(b'\\'),
-        )),
-        "eo" => Some(TableEscapeRequest::Disable),
-        _ => None,
-    }
-}
-
-fn table_escape_changes(source: &str) -> Vec<TableEscapeChange> {
-    let mut changes = Vec::new();
-    let mut escape = Some(b'\\');
-    for (index, line) in source.lines().enumerate() {
-        let (visible, _) = roff_line_without_comment(line, escape);
-        if let Some(request) = table_escape_request(visible) {
-            escape = request.apply();
-            changes.push(TableEscapeChange {
-                line: u32::try_from(index.saturating_add(2)).unwrap_or(u32::MAX),
-                escape,
-            });
-        }
-    }
-    changes
-}
-
-impl TableEscapeRequest {
-    const fn apply(self) -> Option<u8> {
-        match self {
-            Self::Set(escape) => Some(escape),
-            Self::Disable => None,
-        }
-    }
-}
-
 impl<'a> LoweringContext<'a> {
     pub(super) fn new(default_name: Option<&'a str>, source: Option<&'a str>) -> Self {
         Self {
@@ -170,7 +108,6 @@ impl<'a> LoweringContext<'a> {
             native_heads: RefCell::default(),
             default_name,
             source_lines: source.map(SourceLineIndex::new),
-            table_escape_changes: source.map_or_else(Vec::new, table_escape_changes),
             equation_delimiters: source.map_or_else(Vec::new, equation_delimiter_changes),
             normalized_equations: RefCell::new(BTreeMap::new()),
             native_table_requests: RefCell::new(HashMap::new()),
@@ -209,8 +146,8 @@ impl<'a> LoweringContext<'a> {
         inline::parse_roff_text_with_state(source, &mut formatter.font, true)
     }
 
-    pub(super) fn table_execution_source(&self, line: u32, source: &str) -> String {
-        table_execution_source(source, self.table_escape_at(line))
+    pub(super) fn table_execution_source(&self, source: &str, escape: Option<u8>) -> String {
+        table_execution_source(source, escape)
     }
 
     /// Query libmandoc's pinned roff registry once per distinct table request.
@@ -229,7 +166,39 @@ impl<'a> LoweringContext<'a> {
         native
     }
 
-    pub(super) fn table_text_blocks(&self, line: u32, maximum: usize) -> Vec<TableTextBlock> {
+    /// Whether source before a tbl row changes the macro namespace.
+    ///
+    /// A source fragment parser has no access to these definitions.  It may
+    /// enrich built-in inline macros only when the document has not supplied
+    /// a competing macro environment; otherwise the native tbl payload is
+    /// the only executed evidence and must win.
+    pub(super) fn table_source_has_macro_barrier(&self, line: u32) -> bool {
+        self.source_lines
+            .as_ref()
+            .into_iter()
+            .flat_map(|source| source.lines_from(1))
+            .take_while(|(number, _)| *number < line)
+            .any(|(_, source)| {
+                let Some(request) = source
+                    .trim_start()
+                    .strip_prefix(['.', '\''])
+                    .map(str::trim_start)
+                else {
+                    return false;
+                };
+                matches!(
+                    request.split_whitespace().next(),
+                    Some("de" | "am" | "als" | "rn" | "rm")
+                )
+            })
+    }
+
+    pub(super) fn table_text_blocks(
+        &self,
+        line: u32,
+        maximum: usize,
+        escape: Option<u8>,
+    ) -> Vec<TableTextBlock> {
         // Ordinary tbl rows must not scan forward for `T{` markers.  Besides
         // wasting work, that used to let a commented-out multiline-cell
         // marker claim later real rows as its embedded semantic children.
@@ -246,8 +215,7 @@ impl<'a> LoweringContext<'a> {
             // inline comments.  A comment can follow a real sentinel, while
             // a comment-only request can mention a disabled sentinel without
             // claiming a later text block.
-            let (visible_line, _) =
-                roff_line_without_comment(line, self.table_escape_at(line_number));
+            let (visible_line, _) = roff_line_without_comment(line, escape);
             let trimmed = visible_line.trim_start();
             if let Some((content, start_line)) = current.as_mut() {
                 if let Some(remainder) = trimmed.strip_prefix("T}") {
@@ -255,6 +223,7 @@ impl<'a> LoweringContext<'a> {
                         source: std::mem::take(content),
                         start_line: *start_line,
                         end_line: line_number.saturating_sub(1),
+                        escape,
                     });
                     current = None;
                     if blocks.len() == maximum {
@@ -279,11 +248,16 @@ impl<'a> LoweringContext<'a> {
         blocks
     }
 
-    pub(super) fn tab_separated_table_cells(&self, line: u32) -> Option<Vec<&'a str>> {
+    pub(super) fn tab_separated_table_cells(
+        &self,
+        line: u32,
+        escape: Option<u8>,
+    ) -> Option<Vec<&'a str>> {
         let source_line = self.source_lines.as_ref()?.line(line)?;
-        source_line
+        let (visible, _) = roff_line_without_comment(source_line, escape);
+        visible
             .contains('\t')
-            .then(|| source_line.split('\t').collect())
+            .then(|| visible.split('\t').collect())
     }
 
     /// Whether a source-level `.IP` marker uses roff's pre-increment form.
@@ -318,17 +292,6 @@ impl<'a> LoweringContext<'a> {
             .first()
             .is_some_and(|head| head.contains("\\n+"))
     }
-
-    /// The executed escape character at a source coordinate, if escapes are
-    /// enabled. Table recovery uses this only to recreate a bounded inline
-    /// fragment's lexical state; it never guesses an unobserved session.
-    pub(super) fn table_escape_at(&self, line: u32) -> Option<u8> {
-        self.table_escape_changes
-            .iter()
-            .rev()
-            .find(|change| change.line <= line)
-            .map_or(Some(b'\\'), |change| change.escape)
-    }
 }
 
 #[cfg(test)]
@@ -356,14 +319,14 @@ mod tests {
     }
 
     #[test]
-    fn table_execution_source_uses_the_document_escape_state_at_the_cell() {
+    fn table_execution_source_uses_the_native_escape_state_at_the_cell() {
         let context = LoweringContext::new(None, Some(".ec @\n.TS\n"));
         assert_eq!(
-            context.table_execution_source(2, "visible @\" ignored"),
+            context.table_execution_source("visible @\" ignored", Some(b'@')),
             "visible"
         );
         assert_eq!(
-            context.table_execution_source(2, "visible \\\" literal"),
+            context.table_execution_source("visible \\\" literal", Some(b'@')),
             "visible \\\" literal"
         );
     }

@@ -72,6 +72,62 @@ fn tbl_text_block_prefers_native_parse_time_string_expansion() {
 }
 
 #[test]
+fn tbl_source_recovery_never_replays_a_redefined_macro_outside_native_context() {
+    let document = parse_manual_bytes(
+        std::path::Path::new("tbl-redefined-macro.1"),
+        b".TH TBL-REDEFINED-MACRO 1\n.SH DESCRIPTION\n.de B\nREPLACED_MACRO\n..\n.TS\nl.\nT{\n.B ORIGINAL_OPERAND\nT}\n.TE\n",
+    )
+    .expect("lower a table with a document-local macro override");
+    let Block::Table { rows, .. } = &document.sections[0].blocks[0] else {
+        panic!("expected one lowered table");
+    };
+    let [Block::Paragraph { children, .. }] = rows[0].cells[0].blocks.as_slice() else {
+        panic!("expected native table paragraph");
+    };
+    assert_eq!(inline_text(children), "REPLACED_MACRO");
+}
+
+#[test]
+fn tbl_comments_use_native_not_lexically_guessed_escape_state() {
+    let document = parse_manual_bytes(
+        std::path::Path::new("tbl-unexecuted-escape.1"),
+        b".TH TBL-UNEXECUTED-ESCAPE 1\n.SH DESCRIPTION\n.de UNUSED\n.ec @\n..\n.TS\nl.\nT{\n.B VISIBLE \\\" HIDDEN_COMMENT\nT}\n.TE\n",
+    )
+    .expect("lower a table after an uncalled escape-changing macro");
+    let Block::Table { rows, .. } = &document.sections[0].blocks[0] else {
+        panic!("expected one lowered table");
+    };
+    let [Block::Paragraph { children, .. }] = rows[0].cells[0].blocks.as_slice() else {
+        panic!("expected table paragraph");
+    };
+    assert_eq!(inline_text(children), "VISIBLE");
+}
+
+#[test]
+fn tbl_comment_truncation_precedes_tab_cell_recovery() {
+    let document = parse_manual_bytes(
+        std::path::Path::new("tbl-comment-tabs.1"),
+        b".TH TBL-COMMENT-TABS 1\n.SH DESCRIPTION\n.TS\nl l.\nLEFT\tRIGHT \\\" COMMENT\tHIDDEN_CELL\n.TE\n",
+    )
+    .expect("lower a table with a commented trailing tab field");
+    let Block::Table { rows, .. } = &document.sections[0].blocks[0] else {
+        panic!("expected one lowered table");
+    };
+    assert_eq!(rows[0].cells.len(), 2);
+    let text = rows[0]
+        .cells
+        .iter()
+        .flat_map(|cell| &cell.blocks)
+        .filter_map(|block| match block {
+            Block::Paragraph { children, .. } => Some(inline_text(children)),
+            _ => None,
+        })
+        .collect::<Vec<_>>()
+        .join(" ");
+    assert_eq!(text, "LEFT RIGHT");
+}
+
+#[test]
 fn tbl_text_blocks_recover_complete_inline_macro_semantics() {
     let document = parse_manual_bytes(
         std::path::Path::new("tbl-request-dispatch.1"),

@@ -332,7 +332,7 @@ or changing the patch stack.
 ### Local vendor patches
 
 The checked-in vendor tree differs from the pinned CVS source subset only by
-the 23 ordered patches in `patches/series`. The following group contains
+the 24 ordered patches in `patches/series`. The following group contains
 independently reviewable correctness, compatibility, and portability changes;
 they are candidates for separate upstream evaluation, not claims of submission
 or acceptance:
@@ -365,6 +365,9 @@ or acceptance:
 - `0023-initialize-escape-parser-state.patch` gives optional recursive escape
   state explicit initial values for strict MSVC compilation, retaining the
   existing assignments and diagnostic behavior.
+- `0024-retain-executed-tbl-escape-state.patch` retains the actual escape
+  character that was active when each tbl row was read, allowing bounded
+  source recovery to apply native comment semantics without replaying roff.
 
 The remaining patches implement the synchronous embedding boundary:
 

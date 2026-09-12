@@ -15,6 +15,7 @@ fn node(kind: NodeKind, text: Option<&str>, offset: Option<&str>) -> Node {
         line: 0,
         column: 0,
         flow_epoch: 0,
+        table_escape: None,
         flags: NodeFlags::default(),
         list_kind: None,
         definition_list_style: None,

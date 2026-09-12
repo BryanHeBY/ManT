@@ -526,6 +526,7 @@ struct	roff_node {
 	int		  line;    /* Input file line number. */
 	int		  pos;     /* Input file column number. */
 	size_t		  flow_epoch; /* Executed flow boundaries at allocation. */
+	unsigned char	  tbl_escape; /* Active escape when tbl row was read. */
 	int		  flags;
 #define	NODE_VALID	 (1 << 0)  /* Has been validated. */
 #define	NODE_ENDED	 (1 << 1)  /* Gone past body end mark. */

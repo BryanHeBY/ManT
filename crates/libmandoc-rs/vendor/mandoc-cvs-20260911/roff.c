@@ -174,7 +174,7 @@ static	int		 roffnode_cleanscope(struct roff *);
 static	int		 roffnode_pop(struct roff *);
 static	void		 roffnode_push(struct roff *, enum roff_tok,
 				const char *, int, int);
-static	void		 roff_addtbl(struct roff_man *, int, struct tbl_node *);
+static	void		 roff_addtbl(struct roff *, int, struct tbl_node *);
 static	int		 roff_als(ROFF_ARGS);
 static	int		 roff_block(ROFF_ARGS);
 static	int		 roff_block_text(ROFF_ARGS);
@@ -1101,15 +1101,18 @@ roff_body_alloc(struct roff_man *man, int line, int pos, int tok)
 }
 
 static void
-roff_addtbl(struct roff_man *man, int line, struct tbl_node *tbl)
+roff_addtbl(struct roff *r, int line, struct tbl_node *tbl)
 {
 	struct roff_node	*n;
 	struct tbl_span		*span;
+	struct roff_man		*man;
 
+	man = r->man;
 	if (man->meta.macroset == MACROSET_MAN)
 		man_breakscope(man, ROFF_TS);
 	while ((span = tbl_span(tbl)) != NULL) {
 		n = roff_node_alloc(man, line, 0, ROFFT_TBL, TOKEN_NONE);
+		n->tbl_escape = (unsigned char)r->escape;
 		n->span = span;
 		roff_node_append(man, n);
 		n->flags |= NODE_VALID | NODE_ENDED;
@@ -1970,7 +1973,7 @@ roff_parseln(struct roff *r, int ln, struct buf *buf, int *offs, size_t len)
 	}
 	if (r->tbl != NULL && (ctl == 0 || buf->buf[pos] == '\0')) {
 		tbl_read(r->tbl, ln, buf->buf, ppos);
-		roff_addtbl(r->man, ln, r->tbl);
+		roff_addtbl(r, ln, r->tbl);
 		return e;
 	}
 	if ( ! ctl) {
@@ -2023,7 +2026,7 @@ roff_req_or_macro(ROFF_ARGS) {
 		while (buf->buf[pos] == ' ')
 			pos++;
 		tbl_read(r->tbl, ln, buf->buf, pos);
-		roff_addtbl(r->man, ln, r->tbl);
+		roff_addtbl(r, ln, r->tbl);
 		return ROFF_IGN;
 	}
 
