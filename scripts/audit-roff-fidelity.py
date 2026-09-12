@@ -107,7 +107,12 @@ MDOC_MULTI_OPERAND_FA = re.compile(
 )
 MDOC_FUNCTION_NAME = re.compile(r"^[.'](?:Fn|Fo)[ \t]+(?P<name>[A-Za-z_][A-Za-z0-9_.-]*)", re.MULTILINE)
 AUTHORED_LITERAL_UNICODE_ESCAPE = re.compile(
-    r"\\\\(\[u[0-9A-Fa-f]{4,6}(?:_[0-9A-Fa-f]{4,6})*\])"
+    # A manual can document an escape by writing its leading backslash with
+    # `\\`, groff's `\e`, or the portable `\[rs]` glyph.  Only these direct,
+    # adjacent source spellings prove that a visible `\[u…]` is intentional;
+    # a generic source occurrence of `uXXXX` is not enough to suppress a
+    # possible parser leak.
+    r"(?:\\\\|\\e|\\\[rs\])(\[u[0-9A-Fa-f]{4,6}(?:_[0-9A-Fa-f]{4,6})*\])"
 )
 EM_DASH_ATTACHED_TO_WORD = re.compile(r"—(?=\w)")
 EXTERNAL_ROFF_CONTEXT = re.compile(
@@ -1028,20 +1033,23 @@ def token_lines(value: str) -> list[list[str]]:
 
 
 def source_text_table_rows(source: str | None) -> list[TableRow]:
-    """Return only literal multi-line tbl rows whose cell boundaries survive.
+    """Return only conservative tbl rows whose physical cell boundaries survive.
 
     The fidelity oracle compares words globally, but an ordered n-gram may not
     cross table cells: terminal tbl output aligns cells horizontally whereas
-    ManT deliberately serializes them with `` | ``.  This is not a tbl parser.
-    It accepts only balanced ``T{``/``T}`` rows, records their visible cell
-    tokens, and declines ordinary tabular syntax or malformed nesting.  The
-    result therefore proves a physical source cell boundary before a phrase is
-    exempted from the continuity probe.
+    ManT deliberately serializes them with `` | ``.  This is deliberately a
+    source lens rather than a tbl executor.  It accepts balanced ``T{``/``T}``
+    cells and ordinary cells separated by the table's declared delimiter. A
+    candidate must later equal one emitted ManT pipe row exactly before it can
+    exempt a cross-cell phrase, so prose and layout guesses cannot suppress
+    continuity evidence.
     """
     if source is None:
         return []
     rows: list[TableRow] = []
     inside_table = False
+    reading_format = False
+    separator = "\t"
     current_row: list[tuple[str, ...]] = []
     current_cell: list[str] | None = None
 
@@ -1053,11 +1061,40 @@ def source_text_table_rows(source: str | None) -> list[TableRow]:
         current_cell = None
         return True
 
+    def finish_row() -> None:
+        nonlocal current_row
+        if current_row:
+            rows.append(tuple(current_row))
+        current_row = []
+
+    def append_raw_cell(value: str) -> None:
+        current_row.append(source_table_cell_tokens([value]))
+
+    def begin_row_from_raw(raw_line: str) -> None:
+        """Consume an ordinary tbl row or a raw prefix before ``T{``."""
+        nonlocal current_cell
+        if separator not in raw_line and raw_line.strip() != "T{":
+            return
+        cells = raw_line.split(separator)
+        for index, cell in enumerate(cells):
+            if cell.strip() != "T{":
+                append_raw_cell(cell)
+                continue
+            # A multi-line cell owns the remainder of its physical row.
+            if index != len(cells) - 1:
+                current_row.clear()
+                return
+            current_cell = []
+            return
+        finish_row()
+
     for raw_line in source.splitlines():
         stripped = raw_line.strip()
         if not inside_table:
             if stripped in {".TS", "'TS"}:
                 inside_table = True
+                reading_format = True
+                separator = "\t"
             continue
         if stripped in {".TE", "'TE"}:
             # A malformed or unsupported table is simply not evidence. Other
@@ -1065,41 +1102,49 @@ def source_text_table_rows(source: str | None) -> list[TableRow]:
             current_cell = None
             current_row = []
             inside_table = False
+            reading_format = False
+            continue
+        if reading_format:
+            # tbl options precede the format and may select `tab(@);`.
+            option = re.search(r"(?:^|[ \t])tab\((.)\)", raw_line)
+            if option is not None:
+                separator = option.group(1)
+            if stripped.endswith("."):
+                reading_format = False
             continue
         if current_cell is None:
-            if stripped == "T{":
-                current_cell = []
+            if stripped in {"_", "=", ".sp", "'sp"}:
+                continue
+            begin_row_from_raw(raw_line)
             continue
-        if not stripped.startswith("T}"):
+        closing = raw_line.lstrip()
+        if not closing.startswith("T}"):
             current_cell.append(raw_line)
             continue
-
-        # tbl puts the following raw cells and/or another multi-line cell on
-        # the same physical line, for example ``T}\t(1<<1)\tclient\tT{`` or
-        # ``T}@T{``.  Splitting only the explicit tab/@ separators preserves
-        # the row's source-owned cell boundary without executing tbl layout.
         if not finish_cell():
             current_row = []
             continue
-        suffix = stripped[2:]
-        next_cell = suffix.endswith("T{")
-        raw_cells = suffix[:-2] if next_cell else suffix
-        # Literal raw cells are tab-separated in the common tbl dialect; `@`
-        # is a source-selected separator in rclone's tables.  An exotic row
-        # simply fails the exact output-row equality below, so accepting this
-        # lexical split cannot exempt a non-matching display row.
-        for raw_cell in raw_cells.replace("@", "\t").split("\t"):
-            if raw_cell:
-                current_row.append(source_table_cell_tokens([raw_cell]))
-        if next_cell:
-            current_cell = []
-            continue
+
+        suffix = closing[2:]
+        # A delimiter immediately after `T}` starts the first following cell;
+        # only additional delimiters denote explicit empty cells.
+        if suffix.startswith(separator):
+            suffix = suffix[len(separator) :]
         if not suffix:
-            rows.append(tuple(current_row))
-            current_row = []
+            finish_row()
             continue
-        rows.append(tuple(current_row))
-        current_row = []
+        cells = suffix.split(separator)
+        for index, cell in enumerate(cells):
+            if cell.strip() != "T{":
+                append_raw_cell(cell)
+                continue
+            if index != len(cells) - 1:
+                current_row.clear()
+                break
+            current_cell = []
+            break
+        else:
+            finish_row()
     # An unfinished final table is not useful, but previously complete rows
     # remain exact independent evidence.
     return rows
@@ -1123,7 +1168,12 @@ def source_table_cell_tokens(lines: Sequence[str]) -> tuple[str, ...]:
         visible.append(line)
     value = "\n".join(visible)
     value = ROFF_FONT_ESCAPE.sub("", value)
-    value = value.replace(r"\&", "").replace(r"\~", " ").replace(r"\-", "-")
+    value = (
+        value.replace(r"\&", "")
+        .replace(r"\%", "")
+        .replace(r"\~", " ")
+        .replace(r"\-", "-")
+    )
     return tuple(token_key(token) for token in tokens(value))
 
 
@@ -2677,6 +2727,7 @@ def self_check() -> None:
         4,
     ) == ["one two three four"]
     literal_table_source = """.TS
+tab(@);
 l l.
 T{
 alpha beta
@@ -2720,6 +2771,43 @@ T}
             (("alpha",), (), ("beta",), ("gamma",)),
         )
     ]
+    raw_prefix_table_source = """.TS
+l l l.
+Keymap\tT{
+complete keyboard description
+T}\tT{
+aliases for keys
+T}
+.TE
+"""
+    assert portable_table_row_pairs(
+        raw_prefix_table_source,
+        "Keymap | complete keyboard description | aliases for keys\n",
+    ) == [
+        (
+            (
+                ("keymap",),
+                ("complete", "keyboard", "description"),
+                ("aliases", "for", "keys"),
+            ),
+            (
+                ("keymap",),
+                ("complete", "keyboard", "description"),
+                ("aliases", "for", "keys"),
+            ),
+        )
+    ]
+    custom_separator_table_source = """.TS
+tab(@);
+l l.
+left@T{
+right
+T}
+.TE
+"""
+    assert portable_table_row_pairs(custom_separator_table_source, "left | right\n") == [
+        ((("left",), ("right",)), (("left",), ("right",)))
+    ]
     # CVS tbl_term.c emits a U+2502 frame between physical cells. The global
     # token comparison still observes both cells; phrase ordering must not
     # borrow that renderer-owned geometry as a missing-content claim.
@@ -2735,6 +2823,19 @@ T}
     )
     assert not hard
     assert not review
+    for source in [
+        r"author writes \\[u2192] literally",
+        r"author writes \e[u2192] literally",
+        r"author writes \[rs][u2192] literally",
+    ]:
+        hard, review = fidelity_signatures(r"literal \[u2192] example", source)
+        assert not hard
+        assert not review
+    hard, review = fidelity_signatures(r"literal \[u2192] example", r"u2192 appears in prose")
+    assert not hard
+    assert review == [
+        "bracketed Unicode escape is visible; verify documented syntax"
+    ]
     assert differential_signatures(
         ".Nd description\n", "name — description", "name —description"
     ) == [
