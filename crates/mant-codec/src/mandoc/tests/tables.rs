@@ -28,6 +28,31 @@ fn bounds_distinct_tbl_equation_normalization_work() {
 }
 
 #[test]
+fn display_equations_preserve_native_eqn_decorators() {
+    let document = parse_manual_bytes(
+        std::path::Path::new("eqn-decorators.1"),
+        b".TH EQUATION 1\n.SH DESCRIPTION\n.EQ\nx dot = f(t) bar\ny dotdot bar ~=~ n under\nx vec ~=~ y dyad\n.EN\n",
+    )
+    .expect("lower decorated equations");
+    let values = document.sections[0]
+        .blocks
+        .iter()
+        .filter_map(|block| match block {
+            Block::Equation { value, .. } => Some(value.as_str()),
+            _ => None,
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    // CVS eqn_term.c emits the resolved top/bottom decorations after each
+    // base expression. The semantic IR must retain those relations rather
+    // than silently reducing every decorated equation to its bare operands.
+    for fragment in ["x˙", "‾", "y¨", "n_", "x→", "y↔"] {
+        assert!(values.contains(fragment), "{fragment}: {values}");
+    }
+}
+
+#[test]
 fn tbl_text_block_prefers_native_parse_time_string_expansion() {
     let document = parse_manual_bytes(
         std::path::Path::new("tbl-expanded-string.1"),

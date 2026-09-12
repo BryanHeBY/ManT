@@ -1234,7 +1234,17 @@ append_equation(struct text_buffer *buffer, const struct eqn_box *box,
 				return 0;
 		}
 	}
-	if (!append_text(buffer, box->right))
+	/*
+	 * eqn.c stores decorators on the enclosing list box rather than in its
+	 * children.  Keep the parser's resolved spelling in the owned snapshot:
+	 * term_eqn() emits top after the base and writes a literal underscore for
+	 * every bottom decoration.  Dropping these fields loses the meaning of
+	 * `dot`, `bar`, `vec`, `dyad`, and `under` before Rust can lower it.
+	 * Decorations precede a closing fence, matching eqn_term.c.
+	 */
+	if (!append_text(buffer, box->top) ||
+	    (box->bottom != NULL && !append_text(buffer, "_")) ||
+	    !append_text(buffer, box->right))
 		return 0;
 	if (box->pos == EQNPOS_SQRT)
 		return append_text(buffer, ")");

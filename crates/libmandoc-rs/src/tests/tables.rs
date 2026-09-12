@@ -34,6 +34,27 @@ fn parser_normalizes_the_common_gnu_ldots_equation_macro() {
 }
 
 #[test]
+fn parser_preserves_eqn_decorations_from_native_boxes() {
+    let report = Parser::default()
+        .parse_bytes(
+            "equation-decorators.1",
+            b".TH EQUATION 1\n.SH DESCRIPTION\n.EQ\nx dot = f(t) bar\ny dotdot bar ~=~ n under\nx vec ~=~ y dyad\n.EN\n",
+        )
+        .expect("parse decorated equations");
+    let equations = find_kind(&report.document.root, NodeKind::Equation)
+        .and_then(|node| node.equation.as_deref())
+        .expect("normalized equation");
+
+    // CVS eqn.c records these on eqn_box::top/bottom, not as children.
+    // Keep their resolved native spellings in the owned AST so downstream
+    // lowering can apply the same character catalog as ordinary roff text.
+    for decorator in [r"\[a.]", r"\[rn]", r"\[ad]", r"\[->]", r"\[<>]"] {
+        assert!(equations.contains(decorator), "{decorator}: {equations}");
+    }
+    assert!(equations.contains("n_"), "{equations}");
+}
+
+#[test]
 fn parser_marks_tbl_text_block_cells() {
     let path = source_path("tbl-text-block");
     fs::write(
