@@ -89,16 +89,18 @@ fn native_link_discovery_does_not_require_targets_but_opening_uses_exact_section
         )
         .unwrap();
     }
-    let outline = success(&run(
-        &home,
-        &["links", "--outline", "--outline-references=all"],
-    ));
-    let records = outline["references"]["records"].as_array().unwrap();
-    assert_eq!(records.len(), 3);
-    assert_eq!(records[0]["target"]["manualSection"], "3");
-    assert_eq!(records[1]["resolution"]["kind"], "not-queried");
-    assert_eq!(records[2]["target"]["name"], "linkabsent");
     if cfg!(feature = "roff") {
+        let outline = success(&run(
+            &home,
+            &["links", "--outline", "--outline-references=all"],
+        ));
+        let records = outline["references"]["records"].as_array().unwrap();
+        assert_eq!(records.len(), 3);
+        assert_eq!(records[0]["target"]["manualSection"], "3");
+        assert_eq!(records[1]["resolution"]["kind"], "not-queried");
+        assert_eq!(records[2]["target"]["name"], "linkabsent");
+        // No implicit section is introduced into the unqualified link's target.
+        assert!(records[1]["target"].get("manualSection").is_none());
         let exact = success(&run(&home, &["manual/3/linkprobe"]));
         assert!(exact.to_string().contains("test manual 3"));
         let unqualified = success(&run(&home, &["linkprobe", "--manual"]));
@@ -107,6 +109,18 @@ fn native_link_discovery_does_not_require_targets_but_opening_uses_exact_section
             "unqualified opening follows configured manual section precedence, not a guessed section 1"
         );
     } else {
+        // `all` follows explicitly sectioned manual links to load their
+        // native target.  A Markdown-only binary cannot do that, but it must
+        // still scan the source document and report the reference inventory.
+        let outline = success(&run(
+            &home,
+            &["links", "--outline", "--outline-references=summary"],
+        ));
+        assert_eq!(outline["references"]["occurrences"]["value"], 3);
+        assert_eq!(
+            outline["references"]["records"].as_array().unwrap().len(),
+            0
+        );
         let unavailable = run(&home, &["manual/3/linkprobe"]);
         assert_eq!(unavailable.status.code(), Some(1));
         assert!(
@@ -115,7 +129,5 @@ fn native_link_discovery_does_not_require_targets_but_opening_uses_exact_section
         assert!(unavailable.stdout.is_empty());
     }
     assert!(!run(&home, &["manual/7/linkabsent"]).status.success());
-    // No implicit section is introduced into the unqualified link's target.
-    assert!(records[1]["target"].get("manualSection").is_none());
     fs::remove_dir_all(home).unwrap();
 }

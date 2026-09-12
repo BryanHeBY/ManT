@@ -73,6 +73,11 @@ pub(super) enum RoffInlineEvent {
     /// preceding visible text proves that it belongs to a manual reference.
     EmptyDestination,
     LineBreak,
+    /// `\\c` conditionally suppresses the next input-line boundary.  CVS
+    /// `term_word()` gives it a special interaction with `\\z`: when a
+    /// zero-advance glyph is waiting to be overstruck, `\\c` cancels that
+    /// backtracking state instead of enabling a source-line join.
+    NoSpace,
     Presentation {
         kind: PresentationKind,
         argument: Option<String>,
@@ -111,6 +116,7 @@ pub(super) fn inline_event_effect(event: &RoffInlineEvent) -> InlineEventEffect 
             InlineEventEffect::LineBoundary
         }
         RoffInlineEvent::ZeroAdvance
+        | RoffInlineEvent::NoSpace
         | RoffInlineEvent::Font(_)
         | RoffInlineEvent::PreviousFont
         | RoffInlineEvent::Link(_)
@@ -192,6 +198,7 @@ pub(super) fn visible_text(source: &str) -> String {
             | RoffInlineEvent::ZeroWidthGlyph
             | RoffInlineEvent::PreviousFont
             | RoffInlineEvent::Link(_)
+            | RoffInlineEvent::NoSpace
             | RoffInlineEvent::Presentation { .. } => {}
         }
     }
@@ -355,7 +362,8 @@ impl Decoder {
             '%' | '&' | ')' | ',' | '/' | '^' | 'a' | 'd' | 'r' | 't' | 'u' | '{' | '|' | '}' => {
                 self.emit(RoffInlineEvent::ZeroWidthGlyph);
             }
-            '!' | '?' | ':' | 'c' => {
+            'c' => self.emit(RoffInlineEvent::NoSpace),
+            '!' | '?' | ':' => {
                 self.emit(RoffInlineEvent::Presentation {
                     kind: PresentationKind::Spacing,
                     argument: None,

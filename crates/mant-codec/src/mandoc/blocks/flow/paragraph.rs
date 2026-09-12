@@ -61,7 +61,7 @@ impl ParagraphFlow {
         let previous_count = self.builder.node_count();
         self.builder.begin_source_fragment();
         append(&mut self.builder);
-        if self.builder.source_line_continues_or(continues_line) {
+        if self.builder.final_word_join_or(continues_line) {
             self.builder.tighten_next_boundary();
         }
         if self.builder.node_count() != previous_count {

@@ -59,6 +59,20 @@ impl SourceCursor {
         self.continued = continued;
     }
 
+    /// An inline `\\p`/native break ends the currently occupied output row
+    /// immediately.  The next source node may start a new physical line, but
+    /// it must not manufacture a second break merely because the cursor still
+    /// remembers the row that the explicit request already closed.
+    pub(super) fn explicit_line_break(&mut self, occupies_following_row: bool) {
+        self.pending = false;
+        self.row = if occupies_following_row {
+            Row::Occupied
+        } else {
+            Row::Vacant
+        };
+        self.continued = false;
+    }
+
     pub(super) fn reset(&mut self) {
         *self = Self::new();
     }

@@ -19,6 +19,14 @@ fn emits_text_font_and_renderer_link_events() {
 }
 
 #[test]
+fn keeps_no_space_distinct_from_generic_presentation_state() {
+    assert_eq!(
+        decode(r"\z\c"),
+        vec![RoffInlineEvent::ZeroAdvance, RoffInlineEvent::NoSpace]
+    );
+}
+
+#[test]
 fn recognizes_constant_width_and_pandoc_verbatim_font_families() {
     assert_eq!(
         decode(r"\f[C]code\f[V]verbatim\f[VB]bold\f[VI]italic\f[R]"),

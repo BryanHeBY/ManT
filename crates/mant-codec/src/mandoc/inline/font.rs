@@ -71,6 +71,37 @@ impl ZeroAdvanceState {
         self.resolved_preexisting = false;
     }
 
+    /// Execute CVS `ESCAPE_NOSPACE` against the pending `\\z` state.
+    ///
+    /// `term_word()` clears `TERMP_BACKAFTER` before it considers a trailing
+    /// `\\c` a request to join the following input line.  A buffered glyph is
+    /// therefore made visible; a bare armed `\\z` is simply disarmed.  The
+    /// boolean reports that the no-space request was consumed this way.
+    fn cancel_for_no_space(
+        &mut self,
+        output: &mut Vec<Inline>,
+        buffer: &mut String,
+        font: Font,
+        link: Option<&str>,
+    ) -> bool {
+        if self.armed {
+            self.armed = false;
+            return true;
+        }
+        if self.pending.is_some() {
+            self.flush(output, buffer, font, link);
+            return true;
+        }
+        false
+    }
+
+    /// The output-free recovery path can only carry a bare armed `\\z`.
+    /// Keep its state transition encapsulated instead of letting consumers
+    /// treat the representation of pending glyphs as public behavior.
+    pub(super) fn cancel_armed_for_no_space(&mut self) {
+        self.armed = false;
+    }
+
     /// Feed formatter-generated text through the same projection as authored
     /// glyphs. Brackets from `.OP`, generated declaration punctuation, and
     /// implicit wrapper text can overwrite a pending `\z` glyph just like a
@@ -366,7 +397,7 @@ pub(in crate::mandoc) fn parse_roff_text_with_state(
     recognize_generated_references: bool,
 ) -> Vec<Inline> {
     let mut zero_advance = ZeroAdvanceState::default();
-    let (mut output, _) = parse_roff_text_with_zero_advance(
+    let (mut output, _, _) = parse_roff_text_with_zero_advance(
         source,
         state,
         recognize_generated_references,
@@ -384,11 +415,12 @@ pub(in crate::mandoc) fn parse_roff_text_with_zero_advance(
     state: &mut FontState,
     recognize_generated_references: bool,
     zero_advance: &mut ZeroAdvanceState,
-) -> (Vec<Inline>, bool) {
+) -> (Vec<Inline>, bool, bool) {
     let mut output = Vec::new();
     let mut buffer = String::new();
     let mut font = state.current;
     let mut link: Option<String> = None;
+    let mut no_space_consumed_backtrack = false;
     zero_advance.begin_fragment();
 
     for event in decode(source) {
@@ -405,6 +437,14 @@ pub(in crate::mandoc) fn parse_roff_text_with_zero_advance(
                 zero_advance.append_fallback_glyph(&value, &mut buffer);
             }
             RoffInlineEvent::ZeroAdvance => zero_advance.arm(),
+            RoffInlineEvent::NoSpace => {
+                no_space_consumed_backtrack |= zero_advance.cancel_for_no_space(
+                    &mut output,
+                    &mut buffer,
+                    font,
+                    link.as_deref(),
+                );
+            }
             RoffInlineEvent::Font(next_font) => {
                 flush_segment(&mut output, &mut buffer, font, link.as_deref());
                 state.select(next_font);
@@ -442,7 +482,11 @@ pub(in crate::mandoc) fn parse_roff_text_with_zero_advance(
         }
     }
     flush_segment(&mut output, &mut buffer, font, link.as_deref());
-    (output, zero_advance.take_preceding_join())
+    (
+        output,
+        zero_advance.take_preceding_join(),
+        no_space_consumed_backtrack,
+    )
 }
 
 /// Execute only source controls from text whose visible operand is replaced by
@@ -459,6 +503,13 @@ pub(super) fn execute_suppressed_text_controls(
             RoffInlineEvent::Font(font) => state.select(font),
             RoffInlineEvent::PreviousFont => state.restore(),
             RoffInlineEvent::ZeroAdvance => zero_advance.arm(),
+            RoffInlineEvent::NoSpace => {
+                // Suppressed source still follows the formatter ordering. A
+                // no-space request may cancel a bare pending `\\z`, but no
+                // projected glyph exists in this deliberately output-free
+                // path.
+                zero_advance.cancel_armed_for_no_space();
+            }
             RoffInlineEvent::Text(_)
             | RoffInlineEvent::Glyph(_)
             | RoffInlineEvent::FallbackGlyph(_)

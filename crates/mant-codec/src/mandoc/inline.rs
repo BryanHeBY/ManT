@@ -89,6 +89,7 @@ pub(super) fn append_inline_node_with_next(
     // Resolve a preceding `\\z` glyph before entering a styled or atomic
     // scope, otherwise the scope's private builder has no knowledge of the
     // surrounding word boundary and may overprint/drop the glyph.
+    let final_word_join_before = builder.final_word_join_state();
     builder.begin_word_projection(node_emits_visible_output(node, default_name));
     builder.begin_executed_node(node);
     if node.flags.delimiter_close {
@@ -182,8 +183,16 @@ pub(super) fn append_inline_node_with_next(
     {
         builder.tighten_next_boundary();
     }
-    if node.flags.delimiter_open || node.flags.line_continuation {
+    if node.flags.delimiter_open {
         builder.tighten_next_boundary();
+    }
+    // The AST flag is only a fallback for scopes that lower through a private
+    // builder.  A scope that executed its own final word (for example `.In`
+    // closing with `>`) reports the result explicitly, and must not be
+    // retightened from the source spelling.
+    if node.flags.line_continuation && builder.final_word_join_state() == final_word_join_before {
+        builder.tighten_next_boundary();
+        builder.inherit_final_word_join(Some(true));
     }
 }
 
@@ -236,12 +245,13 @@ fn append_text_node(builder: &mut InlineBuilder, node: &Node) {
     // before generated enclosure punctuation is emitted. Control *nodes* are
     // routed separately and therefore do not gain this behavior.
     builder.begin_word_projection(true);
-    let (inlines, joins_preceding_node) = font::parse_roff_text_with_zero_advance(
-        source,
-        &mut builder.font,
-        !node.flags.no_fill,
-        &mut builder.zero_advance,
-    );
+    let (inlines, joins_preceding_node, no_space_consumed_backtrack) =
+        font::parse_roff_text_with_zero_advance(
+            source,
+            &mut builder.font,
+            !node.flags.no_fill,
+            &mut builder.zero_advance,
+        );
     // mdoc_term gives an empty text node a vertical row only when the text
     // itself begins an input line. An empty No/Em argument does not, whereas
     // a buffered zero-width glyph (for example \&) still occupies that row.
@@ -255,10 +265,11 @@ fn append_text_node(builder: &mut InlineBuilder, node: &Node) {
         builder.note_zero_advance_join();
     }
     builder.append_word_with_literal_row(inlines, occupies_literal_row);
-    if node.flags.delimiter_open || node.flags.line_continuation {
+    let continues_line = node.flags.line_continuation && !no_space_consumed_backtrack;
+    if node.flags.delimiter_open || continues_line {
         builder.tighten_next_boundary();
     }
-    builder.continue_source_line(super::blocks::ends_with_line_continuation(node));
+    builder.continue_source_line(continues_line);
 }
 
 /// Append sibling events without throwing away pending formatter effects.
@@ -331,10 +342,12 @@ pub(super) fn append_include(builder: &mut InlineBuilder, node: &Node, default_n
     include.font.pop_scope(saved);
     include.tighten_next_boundary();
     include.append_text(">");
+    let final_word_join = include.final_word_join_state();
     let font = include.font;
     let (nodes, zero_advance, joined) = include.finish_preserving_zero_advance();
     builder.font = font;
     builder.zero_advance = zero_advance;
+    builder.inherit_final_word_join(final_word_join);
     if joined {
         builder.tighten_next_boundary();
         builder.note_zero_advance_join();

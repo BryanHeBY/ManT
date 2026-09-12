@@ -19,11 +19,12 @@ pub(in crate::mandoc) struct InlineBuilder {
     // overwriting glyph.
     zero_advance_joined: bool,
     source_cursor: Option<super::source_cursor::SourceCursor>,
-    // This is deliberately separate from `PendingBoundary`: a formatter
-    // request such as `Ns` can tighten a boundary without extending the
-    // physical source line. ParagraphFlow needs the latter fact only after a
-    // complete inline subtree has executed.
-    source_line_continuation: Option<bool>,
+    // The formatter's final next-word decision.  This is deliberately *not*
+    // the physical source-line state held by `SourceCursor`: `\\c` may keep
+    // reading the input line while a generated delimiter or container close
+    // releases the next formatter word.  ParagraphFlow consumes only this
+    // post-execution result.
+    final_word_join: Option<bool>,
 }
 
 /// A checkpoint for output that may be semantically annotated or discarded
@@ -147,7 +148,7 @@ impl InlineBuilder {
             zero_advance: ZeroAdvanceState::new(),
             zero_advance_joined: false,
             source_cursor: None,
-            source_line_continuation: None,
+            final_word_join: None,
         }
     }
 
@@ -164,7 +165,7 @@ impl InlineBuilder {
             zero_advance: ZeroAdvanceState::new(),
             zero_advance_joined: false,
             source_cursor: None,
-            source_line_continuation: None,
+            final_word_join: None,
         }
     }
 
@@ -193,18 +194,30 @@ impl InlineBuilder {
     /// is joined. This matters for mdoc `.Lk`, whose renderer executes the
     /// descriptive label before the URI stored as its first child.
     pub(in crate::mandoc) fn begin_source_fragment(&mut self) {
-        self.source_line_continuation = None;
+        self.final_word_join = None;
     }
 
-    pub(in crate::mandoc) fn source_line_continues_or(&self, fallback: bool) -> bool {
-        self.source_line_continuation.unwrap_or(fallback)
+    pub(in crate::mandoc) fn final_word_join_or(&self, fallback: bool) -> bool {
+        self.final_word_join.unwrap_or(fallback)
     }
 
     pub(in crate::mandoc) fn continue_source_line(&mut self, continued: bool) {
         if let Some(cursor) = &mut self.source_cursor {
             cursor.continue_line(continued);
         }
-        self.source_line_continuation = Some(continued);
+        self.final_word_join = Some(continued);
+    }
+
+    pub(in crate::mandoc) fn final_word_join_state(&self) -> Option<bool> {
+        self.final_word_join
+    }
+
+    /// Adopt the already-executed tail result from a private formatter scope.
+    /// The scope may have consumed a child `\\c` with generated punctuation;
+    /// looking at the outer AST flag after that would reverse the execution
+    /// order.
+    pub(in crate::mandoc) fn inherit_final_word_join(&mut self, result: Option<bool>) {
+        self.final_word_join = result;
     }
 
     pub(in crate::mandoc) fn transfer_source_cursor(&mut self, next: &mut Self) {
@@ -219,6 +232,7 @@ impl InlineBuilder {
 
     pub(in crate::mandoc) fn release_next_boundary(&mut self) {
         self.boundary = PendingBoundary::Ordinary;
+        self.final_word_join = Some(false);
     }
 
     /// Source wrapping is a word boundary even while macro auto-spacing is
@@ -384,7 +398,10 @@ impl InlineBuilder {
             self.nodes.push(Inline::LineBreak);
             self.last_visible_character = Some('\n');
         }
-        self.source_line_continuation = Some(false);
+        if let Some(cursor) = &mut self.source_cursor {
+            cursor.explicit_line_break(false);
+        }
+        self.final_word_join = Some(false);
     }
 
     pub(in crate::mandoc) fn append(&mut self, mut incoming: Vec<Inline>) {
@@ -419,7 +436,7 @@ impl InlineBuilder {
         // delimiters) cannot themselves carry source `\\c`; they consume a
         // preceding continuation before the next source operand runs.
         if !value.is_empty() {
-            self.source_line_continuation = Some(false);
+            self.final_word_join = Some(false);
         }
     }
 
@@ -550,7 +567,16 @@ impl InlineBuilder {
                 self.has_printable_content = true;
             }
         }
+        let appended_start = self.nodes.len();
         self.nodes.append(incoming);
+        if line_break_count(&self.nodes[appended_start..]) > 0 {
+            // `incoming` has moved, so inspect the tail already appended.
+            // An explicit break is an executed row transition, independent
+            // of the next source node's physical line number.
+            if let Some(cursor) = &mut self.source_cursor {
+                cursor.explicit_line_break(incoming_last != Some('\n'));
+            }
+        }
         if incoming_last.is_some() {
             self.last_visible_character = incoming_last;
         }
@@ -619,6 +645,9 @@ impl InlineBuilder {
         }
         self.nodes
             .extend(std::iter::repeat_n(Inline::LineBreak, count));
+        if let Some(cursor) = &mut self.source_cursor {
+            cursor.explicit_line_break(false);
+        }
         self.last_visible_character = Some('\n');
         self.empty_word = false;
         self.pending_word_spaces = 0;

@@ -733,9 +733,11 @@ fn semantic_link_compaction_preserves_layout_and_final_execution_boundaries() {
         )
         .expect("parse semantic link layout fixture");
         let blocks = &document.sections[0].blocks;
-        let children = match blocks.as_slice() {
-            [Block::Paragraph { children, .. }] | [Block::Preformatted { children, .. }] => children,
-            _ => panic!("{label}: expected one flow block: {blocks:#?}"),
+        let [block] = blocks.as_slice() else {
+            panic!("{label}: expected one flow block: {blocks:#?}");
+        };
+        let (Block::Paragraph { children, .. } | Block::Preformatted { children, .. }) = block else {
+            panic!("{label}: expected one flow block: {blocks:#?}");
         };
         assert_eq!(inline_text(children), expected, "{label}: {children:?}");
     }
@@ -770,6 +772,60 @@ fn empty_operands_are_words_before_generated_semantic_punctuation() {
                 "{label}: the resolved label must remain a visible link: {children:?}"
             );
         }
+    }
+}
+
+#[test]
+fn inline_execution_keeps_word_joins_glyph_ownership_and_literal_breaks_distinct() {
+    // CVS `term_word()` carries `TERMP_BACKAFTER`, `TERMP_NOSPACE`, and an
+    // emitted `\\p` break as independent state.  These cases deliberately
+    // cross semantic wrappers because they are where a flattened AST tail is
+    // most tempting (and wrong) to use as a replacement for execution order.
+    for (label, source, expected) in [
+        (
+            "enclosure-closes-a-source-continuation",
+            b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.Eo [\n.No A\\c\n.Ec\n.No AFTER\n".as_slice(),
+            "[A AFTER",
+        ),
+        (
+            "include-closes-a-source-continuation",
+            b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.In stdio.h\\c\n.No AFTER\n".as_slice(),
+            "<stdio.h> AFTER",
+        ),
+        (
+            "no-space-cancels-a-bare-zero-advance",
+            b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\\z\\c\n.No AFTER\n".as_slice(),
+            "BEFORE AFTER",
+        ),
+        (
+            "hidden-empty-mail-operand-cannot-own-a-prior-glyph",
+            b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.Mt a@example.org\\zX \"\"\n.No AFTER\n".as_slice(),
+            "a@example.orgX AFTER",
+        ),
+        (
+            "literal-explicit-break-closes-the-source-row-once",
+            b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal\n.No BEFORE\\p\n.No AFTER\n.Ed\n".as_slice(),
+            "BEFORE\nAFTER",
+        ),
+        (
+            "hidden-uri-explicit-break-closes-the-source-row-once",
+            b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal\n.Lk https://example.org\\p label\n.No AFTER\n.Ed\n".as_slice(),
+            "label\nAFTER",
+        ),
+    ] {
+        let document = parse_manual_bytes(
+            std::path::Path::new(&format!("inline-execution-{label}.1")),
+            source,
+        )
+        .expect("parse inline execution boundary fixture");
+        let blocks = &document.sections[0].blocks;
+        let [block] = blocks.as_slice() else {
+            panic!("{label}: expected one flow block: {blocks:#?}");
+        };
+        let (Block::Paragraph { children, .. } | Block::Preformatted { children, .. }) = block else {
+            panic!("{label}: expected flow content: {blocks:#?}");
+        };
+        assert_eq!(inline_text(children), expected, "{label}: {children:?}");
     }
 }
 

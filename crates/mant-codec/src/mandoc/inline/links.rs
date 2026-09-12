@@ -99,6 +99,12 @@ pub(super) fn append_mail_addresses(
 /// caller's one formatter stream so hidden URI/mail controls, empty labels,
 /// and later siblings observe the same font and `\\z` state as CVS mandoc.
 fn execute_hidden_node(builder: &mut InlineBuilder, node: &Node, default_name: Option<&str>) {
+    // A hidden operand is still the next formatter word.  Settle a pending
+    // glyph *before* the replacement checkpoint so a `\z` glyph armed by the
+    // preceding visible operand keeps that operand's ownership.  CVS carries
+    // `TERMP_BACKAFTER` across `term_word()` calls; it does not retroactively
+    // make the resolved glyph part of the later hidden word.
+    builder.begin_word_projection(true);
     let checkpoint = builder.output_checkpoint();
     append_inline_node(builder, node, default_name);
     builder.discard_output_preserving_execution(checkpoint);
@@ -233,6 +239,7 @@ fn link_identity_text(source: &str) -> String {
             | RoffInlineEvent::Link(_)
             | RoffInlineEvent::EmptyDestination
             | RoffInlineEvent::LineBreak
+            | RoffInlineEvent::NoSpace
             | RoffInlineEvent::Presentation { .. } => {}
         }
     }
