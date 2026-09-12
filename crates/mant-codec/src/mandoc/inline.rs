@@ -86,6 +86,11 @@ pub(super) fn append_inline_node_with_next(
         append_text_node(builder, node);
         return;
     }
+    // A macro node can start the next formatter word just as a text node can.
+    // Resolve a preceding `\\z` glyph before entering a styled or atomic
+    // scope, otherwise the scope's private builder has no knowledge of the
+    // surrounding word boundary and may overprint/drop the glyph.
+    builder.begin_word_projection(node_emits_visible_output(node, default_name));
     builder.begin_executed_node(node);
     if node.flags.delimiter_close {
         builder.tighten_next_boundary();
@@ -180,6 +185,40 @@ pub(super) fn append_inline_node_with_next(
     }
     if node.flags.delimiter_open || node.flags.line_continuation {
         builder.tighten_next_boundary();
+    }
+}
+
+/// Whether an executable inline node introduces a formatter glyph.
+///
+/// This is deliberately a small semantic preflight, not a second renderer:
+/// it tells the shared output stream whether the node may consume a pending
+/// word boundary before a nested scope lowers it.  Control-only requests and
+/// targets must remain transparent; generated prefixes such as `.Fl` and
+/// `.Nd` are visible even with no text child.
+fn node_emits_visible_output(node: &Node, default_name: Option<&str>) -> bool {
+    if node.flags.no_print || node.kind == NodeKind::Comment {
+        return false;
+    }
+    if node.kind == NodeKind::Text {
+        return node.text.as_deref().is_some_and(source_has_visible_glyph);
+    }
+    if node
+        .macro_name
+        .as_deref()
+        .is_some_and(|name| super::controls::operand_control(Some(name)).is_some())
+    {
+        return false;
+    }
+    match node.macro_name.as_deref() {
+        Some("Tg" | "Ns" | "br" | "Pp" | "ft" | "Sm") => false,
+        Some("Fl" | "Nd") => true,
+        Some("Nm") if node.kind == NodeKind::Block && node.children.is_empty() => {
+            default_name.is_some()
+        }
+        _ => node
+            .children
+            .iter()
+            .any(|child| node_emits_visible_output(child, default_name)),
     }
 }
 

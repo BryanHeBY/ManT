@@ -302,7 +302,7 @@ impl InlineBuilder {
     pub(in crate::mandoc) fn begin_word_projection(&mut self, next_is_visible: bool) {
         if !next_is_visible
             || self.boundary.is_tight()
-            || !self.has_printable_content
+            || !(self.has_printable_content || self.zero_advance.has_pending_glyph())
             || !(self.spacing.enabled() || matches!(self.boundary, PendingBoundary::Preserved))
         {
             return;

@@ -127,6 +127,58 @@ fn zero_advance_projects_implicit_words_and_generated_op_brackets_in_output_orde
 }
 
 #[test]
+fn zero_advance_crosses_leading_scopes_generated_prefixes_and_link_labels() {
+    let cases = [
+        (
+            "leading-word",
+            b".TH ZERO-ADVANCE 1\n.SH DESCRIPTION\n\\zX\nB\n".as_slice(),
+            "XB",
+        ),
+        (
+            "man-font-scope",
+            b".TH ZERO-ADVANCE 1\n.SH DESCRIPTION\nA\\zX\n.B B\n".as_slice(),
+            "AXB",
+        ),
+        (
+            "optional-arguments",
+            b".TH ZERO-ADVANCE 1\n.SH DESCRIPTION\nA\\zX\n.OP B C\n".as_slice(),
+            "AX[B C]",
+        ),
+        (
+            "mdoc-prefix",
+            b".Dd September 12, 2026\n.Dt ZERO-ADVANCE 1\n.Os\n.Sh DESCRIPTION\n.No A\\zX Fl b\n".as_slice(),
+            "AX-b",
+        ),
+        (
+            "link-label",
+            b".Dd September 12, 2026\n.Dt ZERO-ADVANCE 1\n.Os\n.Sh DESCRIPTION\n.No A\\zX Lk https://example.org B\n".as_slice(),
+            "AXB",
+        ),
+    ];
+    for (label, source, expected) in cases {
+        let document = parse_manual_bytes(
+            std::path::Path::new(&format!("zero-advance-{label}.1")),
+            source,
+        )
+        .expect("parse cross-scope zero-advance fixture");
+        let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
+            panic!(
+                "{label}: expected one paragraph: {:#?}",
+                document.sections[0].blocks
+            );
+        };
+        assert_eq!(inline_text(children), expected, "{label}: {children:?}");
+        if label == "link-label" {
+            assert!(
+                matches!(children.as_slice(), [Inline::Text { value: prefix }, Inline::Text { value: glyph }, Inline::Link { .. }]
+                    if prefix == "A" && glyph == "X"),
+                "the pending glyph must precede the atomically lowered link: {children:?}"
+            );
+        }
+    }
+}
+
+#[test]
 fn visible_glyphs_before_a_definition_break_do_not_detach_the_head() {
     let document = parse_manual_bytes(
         std::path::Path::new("definition-glyph-before-break.1"),

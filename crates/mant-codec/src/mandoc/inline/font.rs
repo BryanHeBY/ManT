@@ -52,6 +52,15 @@ impl ZeroAdvanceState {
         self.pending.take()
     }
 
+    /// A pending zero-advance glyph is visible formatter state even before a
+    /// previous ordinary word has committed an IR node.  In particular,
+    /// `\\zX` at the beginning of a source line must survive the implicit
+    /// boundary before the next word rather than be mistaken for an empty
+    /// stream.
+    pub(in crate::mandoc) const fn has_pending_glyph(&self) -> bool {
+        self.pending.is_some() && !self.armed
+    }
+
     /// Feed formatter-generated text through the same projection as authored
     /// glyphs. Brackets from `.OP`, generated declaration punctuation, and
     /// implicit wrapper text can overwrite a pending `\z` glyph just like a
