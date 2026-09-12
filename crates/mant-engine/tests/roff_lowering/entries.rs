@@ -899,6 +899,41 @@ fn generic_callable_terms_are_addressable_without_borrowing_a_later_taxonomy_bod
 }
 
 #[test]
+fn unclassified_native_heads_do_not_split_an_example_into_a_declaration_group() {
+    // Reduced from fluidsynth(1).  The source uses TP layout for a multi-line
+    // command transcript.  `router_begin note` is deliberately not a
+    // selectable declaration, so semantic preparation must not discard that
+    // physical head and then treat the following two lines as a fresh group
+    // with the final line's prose as shared context.
+    let document = parse_manual_bytes(
+        std::path::Path::new("command-transcript.1"),
+        b".TH COMMAND-TRANSCRIPT 1\n.SH COMMANDS\n\
+.TP\n.B Router examples\n\
+.TP\nrouter_clear\n\
+.TP\nrouter_begin note\n\
+.TP\nrouter_chan 0 7 0 15\n\
+.TP\nrouter_end\n\
+Will accept only note events.\n",
+    )
+    .expect("lower command transcript");
+
+    let Block::DefinitionList {
+        items,
+        declaration_groups,
+        ..
+    } = &document.sections[0].blocks[0]
+    else {
+        panic!("expected one definition list");
+    };
+    assert!(
+        items
+            .iter()
+            .any(|item| inline_text(&item.terms[0]) == "router_chan 0 7 0 15")
+    );
+    assert!(declaration_groups.is_empty(), "{declaration_groups:?}");
+}
+
+#[test]
 fn preserves_a_single_mdoc_option_argument_and_its_description() {
     let document = parse_manual_bytes(
         std::path::Path::new("option-with-argument.1"),

@@ -14,6 +14,12 @@ struct Witness {
 #[derive(Default)]
 pub(crate) struct GroupEvidence {
     edges: HashSet<(usize, usize)>,
+    // A semantic declaration group may start only at the beginning of a
+    // native declaration run, or after a source owner with its own readable
+    // body.  Keep the raw sibling fact separately from `edges`: semantic
+    // preparation deliberately drops unaddressable heads, and must not make
+    // the next recognizable head look like a fresh adjacent run.
+    native_predecessors: HashSet<usize>,
     items: HashMap<(u32, u32), Vec<Witness>>,
 }
 
@@ -21,6 +27,7 @@ impl GroupEvidence {
     #[cfg(feature = "roff")]
     pub(crate) fn adjacent(&mut self, left: usize, right: usize) {
         self.edges.insert((left, right));
+        self.native_predecessors.insert(right);
     }
     #[cfg(feature = "roff")]
     pub(crate) fn record(&mut self, item: &DefinitionItem, key: usize) {
@@ -83,30 +90,49 @@ impl GroupEvidence {
         let mut result = Vec::new();
         let mut pending = None;
         let mut previous = None;
+        // Once a native declaration run contains a head that semantic
+        // preparation cannot retain, it cannot prove a later suffix shares a
+        // description.  Keep the block until a readable body closes that
+        // physical run instead of restarting inference at the next named
+        // owner.
+        let mut blocked_by_unclassified_head = false;
         for (index, item) in items.iter().enumerate() {
-            let key = self.key(item);
-            if !heads[index] || key.is_none() {
+            let Some(key) = self.key(item) else {
                 pending = None;
                 previous = None;
                 continue;
-            }
-            if !previous
-                .zip(key.map(|(first, _)| first))
-                .is_some_and(|edge| self.edges.contains(&edge))
-            {
+            };
+            if !heads[index] {
                 pending = None;
+                previous = None;
+                blocked_by_unclassified_head = true;
+                continue;
+            }
+            let contiguous = previous
+                .zip(Some(key.0))
+                .is_some_and(|edge| self.edges.contains(&edge));
+            if !contiguous {
+                pending = None;
+                blocked_by_unclassified_head |= self.native_predecessors.contains(&key.0);
             }
             if mant_ir::blocks_have_readable_content(&item.description) {
-                if let Some(start_item) = pending.take() {
+                let start_item = pending.take();
+                if !blocked_by_unclassified_head && let Some(start_item) = start_item {
                     result.push(DeclarationGroup {
                         start_item,
                         end_item: index + 1,
                     });
                 }
-            } else {
+                blocked_by_unclassified_head = false;
+            } else if !blocked_by_unclassified_head {
+                // Do not reconstruct a run after semantic preparation has
+                // rejected an intervening native definition head.  That
+                // pattern is commonly a command/example transcript followed
+                // by prose for its final line, not several declarations with
+                // one shared description.
                 pending.get_or_insert(index);
             }
-            previous = key.map(|(_, last)| last);
+            previous = Some(key.1);
         }
         result
     }
