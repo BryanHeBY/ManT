@@ -3,7 +3,7 @@ use super::font::execute_suppressed_text_controls;
 use super::{
     Font, Inline, InlineBuilder, Node, NodeKind, RoffInlineEvent, append_inline_node,
     append_inline_nodes, decode, first_part_children, inline_children,
-    lower_inline_nodes_with_spacing, plain_text, text_node, visible_text,
+    lower_inline_nodes_with_spacing, plain_text, source_has_visible_glyph, text_node, visible_text,
 };
 
 /// Execute mdoc `.Lk` in the caller's formatter stream, then wrap the visible
@@ -26,7 +26,15 @@ pub(super) fn append_link(builder: &mut InlineBuilder, node: &Node, default_name
         .map_or(1, |index| index + 1)
         .max(1);
     let label = &children[1..label_end];
-    if label.is_empty() {
+    let label_has_visible_glyph = label
+        .iter()
+        .any(|child| child.text.as_deref().is_some_and(source_has_visible_glyph));
+    if !label_has_visible_glyph {
+        // An empty label (including `""`) falls back to the URI.  Still
+        // execute any control-only label operands before the visible URI:
+        // mdoc's formatter consumes those controls even though they produce
+        // no glyphs of their own.
+        execute_suppressed_nodes(builder, label);
         append_external_link(builder, address, false, |builder| {
             append_inline_node(builder, first, default_name);
         });
@@ -37,12 +45,24 @@ pub(super) fn append_link(builder: &mut InlineBuilder, node: &Node, default_name
         append_inline_nodes(builder, label, default_name);
     } else {
         // A descriptive Lk label replaces the rendered URI, but remains in
-        // the same output stream as its surrounding source siblings.
+        // the same output stream as its surrounding source siblings. CVS
+        // `termp_lk_pre()` presents the label first, then its colon and URI,
+        // regardless of source operand order. Preserve that execution order:
+        // a hidden URI's controls must be applied after label controls.
         builder.with_font_scope(Font::Emphasis, |builder| {
             append_external_link(builder, address, false, |builder| {
                 append_inline_nodes(builder, label, default_name);
             });
         });
+        // CVS `termp_lk_pre()` writes a generated colon between the
+        // descriptive label and URI. Compact Mant output intentionally hides
+        // that punctuation and repeated URI, but it must retain the colon's
+        // zero-advance overwrite effect before later source siblings run.
+        builder.zero_advance.consume_hidden_generated_glyph();
+        // The URI is hidden by compact presentation, not absent from native
+        // execution. Apply its formatter controls in the same position where
+        // CVS renders the target, after the descriptive label and colon.
+        execute_suppressed_nodes(builder, std::slice::from_ref(first));
     }
     append_inline_nodes(builder, &children[label_end..], default_name);
 }
@@ -61,13 +81,30 @@ pub(super) fn append_mail_addresses(
             continue;
         }
         let address = link_identity_text(child.text.as_deref().unwrap_or_default());
-        if !address.is_empty() {
+        if address.is_empty() {
+            // A control-only mail operand is not an address, but it still
+            // changes the formatter state consumed by the following address
+            // and sibling nodes.
+            execute_suppressed_nodes(builder, std::slice::from_ref(child));
+        } else {
             append_external_link(builder, address, true, |builder| {
                 append_inline_node(builder, child, default_name);
             });
         }
     }
     builder.font.pop_scope(saved);
+}
+
+/// Semantic wrappers may replace an authored operand's visible spelling, but
+/// they never erase its execution effects. Keep that state transition in the
+/// caller's one formatter stream so hidden URI/mail controls, empty labels,
+/// and later siblings observe the same font and `\\z` state as CVS mandoc.
+fn execute_suppressed_nodes(builder: &mut InlineBuilder, nodes: &[Node]) {
+    for node in nodes {
+        if let Some(source) = node.text.as_deref() {
+            execute_suppressed_text_controls(source, &mut builder.font, &mut builder.zero_advance);
+        }
+    }
 }
 
 /// Wrap newly executed visible content without interrupting the caller's

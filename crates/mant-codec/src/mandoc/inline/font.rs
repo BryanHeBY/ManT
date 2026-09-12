@@ -61,6 +61,17 @@ impl ZeroAdvanceState {
         self.pending.is_some() && !self.armed
     }
 
+    /// Apply a formatter glyph whose compact semantic projection is hidden.
+    /// CVS `termp_lk_pre()` emits the colon after a descriptive `.Lk` label
+    /// through `term_word()`. Mant intentionally omits that colon and the
+    /// repeated URI, but the glyph still overwrites a preceding `\z` cell.
+    pub(in crate::mandoc) fn consume_hidden_generated_glyph(&mut self) {
+        self.pending = None;
+        self.armed = false;
+        self.fragment_started_pending = false;
+        self.resolved_preexisting = false;
+    }
+
     /// Feed formatter-generated text through the same projection as authored
     /// glyphs. Brackets from `.OP`, generated declaration punctuation, and
     /// implicit wrapper text can overwrite a pending `\z` glyph just like a

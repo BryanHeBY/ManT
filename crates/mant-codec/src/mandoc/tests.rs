@@ -437,6 +437,78 @@ fn mail_and_link_labels_share_the_zero_advance_stream() {
 }
 
 #[test]
+fn semantic_links_execute_hidden_operands_and_preserve_empty_label_fallbacks() {
+    let cases = [
+        (
+            "link-zero-width-label",
+            b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.Lk https://example.org A\\zX\n.No B\n".as_slice(),
+            "A B",
+        ),
+        (
+            "empty-link-label",
+            b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.Lk https://example.org \"\"\n.No B\n".as_slice(),
+            "https://example.org B",
+        ),
+    ];
+    for (label, source, expected) in cases {
+        let document = parse_manual_bytes(
+            std::path::Path::new(&format!("semantic-link-{label}.1")),
+            source,
+        )
+        .expect("parse semantic link formatter-state fixture");
+        let [Block::Paragraph { children, .. }] = document.sections[1].blocks.as_slice() else {
+            panic!(
+                "{label}: expected one description paragraph: {:#?}",
+                document.sections
+            );
+        };
+        assert_eq!(inline_text(children), expected, "{label}: {children:?}");
+        assert!(
+            children.iter().any(|inline| {
+                matches!(inline, Inline::Link { target: mant_ir::LinkTarget::External { uri }, .. } if uri == "https://example.org")
+            }),
+            "{label}: visible text must retain the typed external target"
+        );
+    }
+
+    let link_controls = parse_manual_bytes(
+        std::path::Path::new("semantic-link-hidden-uri-font.1"),
+        b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.Lk \\fBhttps://example.org label\n.Li \\fPZ\n",
+    )
+    .expect("parse hidden link URI controls");
+    let [Block::Paragraph { children, .. }] = link_controls.sections[1].blocks.as_slice() else {
+        panic!(
+            "expected one description paragraph: {:#?}",
+            link_controls.sections
+        );
+    };
+    assert!(
+        matches!(children.last(), Some(Inline::Strong { children }) if inline_text(children) == "Z"),
+        "controls hidden with the URI must still affect following siblings: {children:?}"
+    );
+
+    let mail_controls = parse_manual_bytes(
+        std::path::Path::new("semantic-mail-hidden-font.1"),
+        b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.Mt \\fB a@example.org\n.Li \\fPZ\n",
+    )
+    .expect("parse hidden mail operand controls");
+    let [Block::Paragraph { children, .. }] = mail_controls.sections[1].blocks.as_slice() else {
+        panic!(
+            "expected one description paragraph: {:#?}",
+            mail_controls.sections
+        );
+    };
+    assert!(
+        children.iter().any(|inline| {
+            matches!(inline, Inline::Link { target: mant_ir::LinkTarget::Email { address }, children, .. }
+                if address == "a@example.org"
+                    && matches!(children.as_slice(), [Inline::Strong { children }] if inline_text(children) == "a@example.org"))
+        }),
+        "a control-only Mt operand must set the address font: {children:?}"
+    );
+}
+
+#[test]
 fn zero_advance_treats_every_empty_enclosure_delimiter_as_a_formatter_word() {
     for (macro_name, delimiters) in [
         ("Dq", "“”"),
