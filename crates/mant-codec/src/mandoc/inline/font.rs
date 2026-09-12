@@ -435,6 +435,32 @@ pub(in crate::mandoc) fn parse_roff_text_with_zero_advance(
     (output, zero_advance.take_preceding_join())
 }
 
+/// Execute only source controls from text whose visible operand is replaced by
+/// a semantic macro expansion. The mdoc validator can synthesize `BSD` for
+/// `.Bx` while retaining authored font changes in an otherwise empty text
+/// node; dropping that node must not also drop its formatter state.
+pub(super) fn execute_suppressed_text_controls(
+    source: &str,
+    state: &mut FontState,
+    zero_advance: &mut ZeroAdvanceState,
+) {
+    for event in decode(source) {
+        match event {
+            RoffInlineEvent::Font(font) => state.select(font),
+            RoffInlineEvent::PreviousFont => state.restore(),
+            RoffInlineEvent::ZeroAdvance => zero_advance.arm(),
+            RoffInlineEvent::Text(_)
+            | RoffInlineEvent::Glyph(_)
+            | RoffInlineEvent::FallbackGlyph(_)
+            | RoffInlineEvent::ZeroWidthGlyph
+            | RoffInlineEvent::Link(_)
+            | RoffInlineEvent::EmptyDestination
+            | RoffInlineEvent::LineBreak
+            | RoffInlineEvent::Presentation { .. } => {}
+        }
+    }
+}
+
 fn promote_sphinx_manual_reference(
     output: &mut Vec<Inline>,
     buffer: &mut String,

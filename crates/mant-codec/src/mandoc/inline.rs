@@ -10,7 +10,6 @@ mod font;
 mod generated;
 mod links;
 pub(super) use links::lower_man_link;
-use links::{lower_link, lower_mail_addresses};
 mod scopes;
 mod source_cursor;
 mod source_fragment;
@@ -287,48 +286,14 @@ pub(super) fn append_inline_nodes(
     }
 }
 
-/// Materialize an independent value only where a caller needs a complete
-/// label/operand. Normal sibling and wrapper flow uses the shared builder.
-fn lower_inline_node(
-    node: &Node,
-    default_name: Option<&str>,
-    spacing_enabled: bool,
-    font: &mut FontState,
-) -> Vec<Inline> {
-    let mut builder = InlineBuilder::with_spacing(spacing_enabled);
-    builder.font = *font;
-    append_inline_node(&mut builder, node, default_name);
-    *font = builder.font;
-    builder.finish()
-}
-
-/// Generated references/declarations consume their inner boundaries as part
-/// of their own punctuation, rather than exporting an AST-tail approximation.
-fn lower_atomic_node(
-    node: &Node,
-    default_name: Option<&str>,
-    spacing_enabled: bool,
-    font: &mut FontState,
-) -> Vec<Inline> {
-    if node.kind == NodeKind::Equation {
-        return node
-            .equation
-            .as_deref()
-            .map(visible_text)
-            .filter(|value| !value.trim().is_empty())
-            .map(|value| vec![Inline::Code { value }])
-            .unwrap_or_default();
-    }
-    let children = inline_children(node);
-    let mut output = match node.macro_name.as_deref() {
-        Some("Lk") => lower_link(children, default_name, spacing_enabled, font),
-        Some("Mt") => lower_mail_addresses(children, default_name, spacing_enabled, font),
-        _ => unreachable!("only generated references/declarations are atomic"),
-    };
-    if let Some(anchor) = navigation_anchor(node) {
-        output.insert(0, anchor);
-    }
-    output
+/// Generated equations have no inline child stream to execute.
+fn lower_equation_node(node: &Node) -> Vec<Inline> {
+    node.equation
+        .as_deref()
+        .map(visible_text)
+        .filter(|value| !value.trim().is_empty())
+        .map(|value| vec![Inline::Code { value }])
+        .unwrap_or_default()
 }
 
 /// Execute mdoc `.In` delimiters and operands in one formatter stream before

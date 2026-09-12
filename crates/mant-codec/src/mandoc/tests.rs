@@ -243,6 +243,10 @@ fn declaration_witnesses_close_on_unclassified_bodies_and_survive_split_macro_li
             "each complete expansion retains its own shared description"
         );
     }
+    assert!(
+        !format!("{split_macro:?}").contains("mant-native-definition-owner"),
+        "parse-local owner markers must be removed before public IR escapes"
+    );
 }
 
 #[test]
@@ -277,6 +281,105 @@ fn zero_advance_crosses_empty_enclosures_and_atomic_mdoc_output() {
             );
         };
         assert_eq!(inline_text(children), expected, "{label}: {children:?}");
+    }
+}
+
+#[test]
+fn bsd_reference_executes_suppressed_font_operands_before_generated_text() {
+    let document = parse_manual_bytes(
+        std::path::Path::new("bsd-reference-font-state.1"),
+        b".Dd September 12, 2026\n.Dt BSD-FONT 1\n.Os\n.Sh DESCRIPTION\n.Bx \\fB\n.Li \\fPZ\n.Bx \\fB-devel\n.Li \\fPZ\n",
+    )
+    .expect("parse Bx formatter-state fixture");
+    let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
+        panic!("expected one paragraph: {:#?}", document.sections[0].blocks);
+    };
+
+    // CVS mdoc_validate.c appends generated BSD after source argument
+    // processing. A control-only operand remains executable even though the
+    // semantic lifecycle form replaces its visible spelling.
+    assert_eq!(
+        children,
+        &[
+            Inline::Strong {
+                children: vec![Inline::Text {
+                    value: "BSD".to_owned(),
+                }],
+            },
+            Inline::Text {
+                value: " ".to_owned(),
+            },
+            Inline::Strong {
+                children: vec![Inline::Text {
+                    value: "Z".to_owned(),
+                }],
+            },
+            Inline::Text {
+                value: " ".to_owned(),
+            },
+            Inline::Strong {
+                children: vec![Inline::Text {
+                    value: "BSD (currently under development)".to_owned(),
+                }],
+            },
+            Inline::Text {
+                value: " ".to_owned(),
+            },
+            Inline::Strong {
+                children: vec![Inline::Text {
+                    value: "Z".to_owned(),
+                }],
+            },
+        ],
+        "suppressed Bx operands must retain their font transitions"
+    );
+}
+
+#[test]
+fn mail_and_link_labels_share_the_zero_advance_stream() {
+    let cases = [
+        (
+            "mail-address",
+            b".Dd September 12, 2026\n.Dt ZERO-LINK 1\n.Os\n.Sh DESCRIPTION\n.No a Mt b@example.org\\zX Ns c\n".as_slice(),
+            "a b@example.orgc",
+        ),
+        (
+            "link-label",
+            b".Dd September 12, 2026\n.Dt ZERO-LINK 1\n.Os\n.Sh DESCRIPTION\n.No a Lk https://example.org b\\zX Ns c\n".as_slice(),
+            "a bc",
+        ),
+    ];
+    for (label, source, expected) in cases {
+        let document = parse_manual_bytes(
+            std::path::Path::new(&format!("zero-advance-{label}.1")),
+            source,
+        )
+        .expect("parse link formatter-state fixture");
+        let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
+            panic!("{label}: expected one paragraph");
+        };
+        assert_eq!(inline_text(children), expected, "{label}: {children:?}");
+        assert!(
+            children
+                .iter()
+                .any(|inline| matches!(inline, Inline::Link { .. })),
+            "{label}: preserving formatter state must not discard link identity"
+        );
+        let target = children.iter().find_map(|inline| match inline {
+            Inline::Link { target, .. } => Some(target),
+            _ => None,
+        });
+        match label {
+            "mail-address" => assert!(
+                matches!(target, Some(mant_ir::LinkTarget::Email { address }) if address == "b@example.org"),
+                "{label}: wrong email target: {target:?}"
+            ),
+            "link-label" => assert!(
+                matches!(target, Some(mant_ir::LinkTarget::External { uri }) if uri == "https://example.org"),
+                "{label}: wrong external target: {target:?}"
+            ),
+            _ => unreachable!("unrecognized zero-advance case"),
+        }
     }
 }
 

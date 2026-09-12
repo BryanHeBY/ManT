@@ -1,9 +1,9 @@
 //! Compose semantic wrappers in output order, not by inspecting AST tails.
 use super::font::coalesce_font_runs;
-use super::links::append_bsd_reference;
+use super::links::{append_bsd_reference, append_link, append_mail_addresses};
 use super::{
     Font, Inline, InlineBuilder, Node, NodeKind, append_include, append_inline_nodes,
-    first_part_children, inline_children, lower_atomic_node, navigation_anchor, plain_text,
+    first_part_children, inline_children, lower_equation_node, navigation_anchor, plain_text,
 };
 
 pub(super) fn append(builder: &mut InlineBuilder, node: &Node, name: Option<&str>) {
@@ -113,13 +113,20 @@ fn append_atomic(builder: &mut InlineBuilder, node: &Node, name: Option<&str>) -
     match node.macro_name.as_deref() {
         Some("In") => append_include(builder, node, name),
         Some("Bx") => append_bsd_reference(builder, node, name),
-        Some("Lk" | "Mt") => {
-            let nodes = lower_atomic_node(node, name, builder.spacing_enabled(), &mut builder.font);
-            builder.append(nodes);
+        Some("Lk") => {
+            if let Some(anchor) = navigation_anchor(node) {
+                builder.append(vec![anchor]);
+            }
+            append_link(builder, node, name);
+        }
+        Some("Mt") => {
+            if let Some(anchor) = navigation_anchor(node) {
+                builder.append(vec![anchor]);
+            }
+            append_mail_addresses(builder, node, name);
         }
         _ if node.kind == NodeKind::Equation => {
-            let nodes = lower_atomic_node(node, name, builder.spacing_enabled(), &mut builder.font);
-            builder.append(nodes);
+            builder.append(lower_equation_node(node));
         }
         _ => return false,
     }
