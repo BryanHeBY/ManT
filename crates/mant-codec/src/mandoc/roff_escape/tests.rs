@@ -232,6 +232,13 @@ fn zero_advance_discards_complete_overstrike_glyphs_without_recursion() {
         assert_eq!(visible_text(source), "TOKENB", "{source}");
     }
     assert_eq!(visible_text(r"\z\[future-glyph]"), "");
+    for source in [
+        r"A\z\fBXB\fP END",
+        r"A\z\m[red]XB\m[] END",
+        r"A\z\s[12]XB\s0 END",
+    ] {
+        assert_eq!(visible_text(source), "AB END", "{source}");
+    }
     assert_eq!(visible_text(r"\z"), "");
     assert_eq!(visible_text(&format!("{}Y", r"\zX".repeat(20_000))), "Y");
 }

@@ -380,6 +380,16 @@ impl Decoder {
                     }
                     return;
                 }
+                // These formatter controls own operands too.  `\z` hides
+                // the complete glyph, not merely the control trigger.
+                'f' | 'm' | 'M' => {
+                    self.take_opaque_argument();
+                    continue;
+                }
+                's' => {
+                    self.take_size_argument();
+                    continue;
+                }
                 // Every other escape is a one-character formatter operand at
                 // this boundary.  Its trigger has already been consumed.
                 _ => return,
