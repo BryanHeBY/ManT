@@ -40,7 +40,7 @@ pulldown-cmark.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 # Cross-pipeline native audit examples remain outside the production loader API.
-libmandoc-rs = { path = "../libmandoc-rs", version = "^0.12.0" }
+libmandoc-rs = { path = "../libmandoc-rs", version = "^0.12.0", features = ["render"] }
 flate2.workspace = true
 zstd.workspace = true
 

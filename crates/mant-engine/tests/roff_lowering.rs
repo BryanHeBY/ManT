@@ -20,6 +20,8 @@ fn parse_manual_source(
 
 #[path = "roff_lowering/consumer_boundaries.rs"]
 mod consumer_boundaries;
+#[path = "roff_lowering/cvs_renderer_contracts.rs"]
+mod cvs_renderer_contracts;
 #[path = "roff_lowering/driver.rs"]
 mod driver;
 #[path = "roff_lowering/entry_forms.rs"]

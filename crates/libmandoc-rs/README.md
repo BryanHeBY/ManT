@@ -300,6 +300,20 @@ retrieval. None of these tools is needed by an end-user Cargo build.
 Semantic parser changes need a Rust test with the smallest useful roff input;
 portability patches are covered by the relevant target CI jobs.
 
+Renderer-sensitive baseline changes must also run the cross-layer CVS contract
+matrix:
+
+```sh
+cargo test --locked -p mant-engine --test roff_lowering cvs_renderer_contracts
+```
+
+Each case sends the same source through this crate's vendored native renderer
+and through `ManT`'s lowering and text rendering.  The matrix concentrates on
+behaviour where pinned CVS mandoc and GNU groff differ, and records which side
+`ManT` deliberately selects.  This prevents a future CVS or stable-release
+vendor update from silently changing the native half while the lowering half
+continues to pass against an obsolete expectation.
+
 The sanitizer stress suite is also repository-only and intentionally stays out
 of routine CI. It rebuilds the Rust standard library, this crate, and the
 vendored C objects with `ThreadSanitizer` instrumentation, then drives
