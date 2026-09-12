@@ -176,9 +176,7 @@ pub(in crate::mandoc) fn ends_with_line_continuation(node: &Node) -> bool {
             .map_or(1, |index| index + 1)
             .max(1);
         if label_end > 1 {
-            return children
-                .first()
-                .is_some_and(|address| ends_with_line_continuation(address));
+            return children.first().is_some_and(ends_with_line_continuation);
         }
     }
     node.children

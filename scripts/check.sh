@@ -101,7 +101,7 @@ run "check read-only engine feature boundary" \
 run "build docs.rs documentation" \
   env RUSTDOCFLAGS=-Dwarnings cargo doc --locked --workspace --all-features --no-deps
 run "lint Rust workspace" \
-  cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
+  env CARGO_INCREMENTAL=0 cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
 run "compile fuzz targets" \
   cargo check --locked --manifest-path fuzz/Cargo.toml --bins
 

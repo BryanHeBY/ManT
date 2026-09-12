@@ -111,8 +111,20 @@ foreach ($BoundaryPackage in @("mant-codec", "mant-loader")) {
     Invoke-Native -Label "test native $BoundaryPackage" -Program "cargo" `
         -Arguments @("test", "--locked", "--package", $BoundaryPackage, "--no-default-features", "--features", "roff")
 }
-Invoke-Native -Label "lint portable Rust packages" -Program "cargo" `
-    -Arguments (@("clippy", "--locked") + $Packages + @("--all-targets", "--all-features", "--", "-D", "warnings"))
+$PreviousCargoIncremental = [Environment]::GetEnvironmentVariable("CARGO_INCREMENTAL", "Process")
+try {
+    # A fresh Clippy build is the verification boundary. Incremental lint
+    # artifacts have previously hidden a new warning until CI rebuilt cleanly.
+    $env:CARGO_INCREMENTAL = "0"
+    Invoke-Native -Label "lint portable Rust packages" -Program "cargo" `
+        -Arguments (@("clippy", "--locked") + $Packages + @("--all-targets", "--all-features", "--", "-D", "warnings"))
+} finally {
+    if ($null -eq $PreviousCargoIncremental) {
+        Remove-Item Env:CARGO_INCREMENTAL -ErrorAction SilentlyContinue
+    } else {
+        $env:CARGO_INCREMENTAL = $PreviousCargoIncremental
+    }
+}
 Invoke-Native -Label "check isolated CLI capability combinations" -Program "python" `
     -Arguments @("scripts/check-cli-features.py")
 & (Join-Path $PSScriptRoot "build-and-smoke.ps1") -BuildProfile $BuildProfile
