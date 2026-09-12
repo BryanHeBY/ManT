@@ -231,7 +231,11 @@ fn append_text_node(builder: &mut InlineBuilder, node: &Node) {
         builder.tighten_next_boundary();
     }
     let source = node.text.as_deref().unwrap_or_default();
-    builder.begin_word_projection(source_has_visible_glyph(source));
+    // `term_word()` consumes its inter-word boundary even for an explicit
+    // empty operand. That word event can resolve a preceding `\\z` glyph
+    // before generated enclosure punctuation is emitted. Control *nodes* are
+    // routed separately and therefore do not gain this behavior.
+    builder.begin_word_projection(true);
     let (inlines, joins_preceding_node) = font::parse_roff_text_with_zero_advance(
         source,
         &mut builder.font,

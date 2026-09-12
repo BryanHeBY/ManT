@@ -19,6 +19,11 @@ pub(in crate::mandoc) struct InlineBuilder {
     // overwriting glyph.
     zero_advance_joined: bool,
     source_cursor: Option<super::source_cursor::SourceCursor>,
+    // This is deliberately separate from `PendingBoundary`: a formatter
+    // request such as `Ns` can tighten a boundary without extending the
+    // physical source line. ParagraphFlow needs the latter fact only after a
+    // complete inline subtree has executed.
+    source_line_continuation: Option<bool>,
 }
 
 /// A checkpoint for output that may be semantically annotated or discarded
@@ -142,6 +147,7 @@ impl InlineBuilder {
             zero_advance: ZeroAdvanceState::new(),
             zero_advance_joined: false,
             source_cursor: None,
+            source_line_continuation: None,
         }
     }
 
@@ -158,6 +164,7 @@ impl InlineBuilder {
             zero_advance: ZeroAdvanceState::new(),
             zero_advance_joined: false,
             source_cursor: None,
+            source_line_continuation: None,
         }
     }
 
@@ -181,10 +188,23 @@ impl InlineBuilder {
         }
     }
 
+    /// Start a top-level source subtree. Its final formatter word, rather
+    /// than the AST's source order, determines whether the next physical line
+    /// is joined. This matters for mdoc `.Lk`, whose renderer executes the
+    /// descriptive label before the URI stored as its first child.
+    pub(in crate::mandoc) fn begin_source_fragment(&mut self) {
+        self.source_line_continuation = None;
+    }
+
+    pub(in crate::mandoc) fn source_line_continues_or(&self, fallback: bool) -> bool {
+        self.source_line_continuation.unwrap_or(fallback)
+    }
+
     pub(in crate::mandoc) fn continue_source_line(&mut self, continued: bool) {
         if let Some(cursor) = &mut self.source_cursor {
             cursor.continue_line(continued);
         }
+        self.source_line_continuation = Some(continued);
     }
 
     pub(in crate::mandoc) fn transfer_source_cursor(&mut self, next: &mut Self) {
@@ -326,6 +346,7 @@ impl InlineBuilder {
         &mut self,
         checkpoint: OutputCheckpoint,
     ) {
+        let retained_line_breaks = line_break_count(&self.nodes[checkpoint.node_count..]);
         let boundary = self.boundary;
         let source_cursor = self.source_cursor.clone();
         let zero_advance_joined = self.zero_advance_joined;
@@ -333,6 +354,11 @@ impl InlineBuilder {
         self.boundary = boundary;
         self.source_cursor = source_cursor;
         self.zero_advance_joined = zero_advance_joined;
+        // Semantic compaction may replace an operand's glyphs, never its
+        // layout. Native `term_word()` writes an explicit break immediately;
+        // retain that event outside a subsequently visible fallback link so a
+        // cursor that already consumed the source row cannot erase it.
+        self.retain_line_breaks(retained_line_breaks);
     }
 
     /// Wrap the output emitted since `checkpoint` without replaying its
@@ -358,6 +384,7 @@ impl InlineBuilder {
             self.nodes.push(Inline::LineBreak);
             self.last_visible_character = Some('\n');
         }
+        self.source_line_continuation = Some(false);
     }
 
     pub(in crate::mandoc) fn append(&mut self, mut incoming: Vec<Inline>) {
@@ -388,6 +415,12 @@ impl InlineBuilder {
         self.zero_advance
             .append_generated_text(value, &mut projected, self.font.current);
         self.append(projected);
+        // Generated formatter words (for example Lk's colon or enclosure
+        // delimiters) cannot themselves carry source `\\c`; they consume a
+        // preceding continuation before the next source operand runs.
+        if !value.is_empty() {
+            self.source_line_continuation = Some(false);
+        }
     }
 
     /// Start an ordinary formatter word after a source text node. If a prior
@@ -579,4 +612,32 @@ impl InlineBuilder {
         }
         self.has_printable_content |= printable;
     }
+
+    fn retain_line_breaks(&mut self, count: usize) {
+        if count == 0 {
+            return;
+        }
+        self.nodes
+            .extend(std::iter::repeat_n(Inline::LineBreak, count));
+        self.last_visible_character = Some('\n');
+        self.empty_word = false;
+        self.pending_word_spaces = 0;
+    }
+}
+
+/// Count layout instructions recursively before discarding a compact operand.
+/// Styling and link wrappers are presentation-only, but their explicit line
+/// breaks are formatter output and must survive without retaining the hidden
+/// operand's glyphs.
+fn line_break_count(nodes: &[Inline]) -> usize {
+    nodes
+        .iter()
+        .map(|node| match node {
+            Inline::LineBreak => 1,
+            Inline::Strong { children }
+            | Inline::Emphasis { children }
+            | Inline::Link { children, .. } => line_break_count(children),
+            Inline::Text { .. } | Inline::Code { .. } | Inline::Anchor { .. } => 0,
+        })
+        .sum()
 }

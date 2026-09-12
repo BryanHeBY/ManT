@@ -699,6 +699,81 @@ fn semantic_link_continuations_preserve_literal_rows() {
 }
 
 #[test]
+fn semantic_link_compaction_preserves_layout_and_final_execution_boundaries() {
+    for (label, source, expected) in [
+        (
+            "empty-label-row",
+            b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal\n.No BEFORE\n.Lk https://example.org \"\"\n.No AFTER\n.Ed\n".as_slice(),
+            "BEFORE\nhttps://example.org\nAFTER",
+        ),
+        (
+            "control-only-label-row",
+            b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal\n.No BEFORE\n.Lk https://example.org \\fB\n.No AFTER\n.Ed\n".as_slice(),
+            "BEFORE\nhttps://example.org\nAFTER",
+        ),
+        (
+            "zero-width-label-row",
+            b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal\n.No BEFORE\n.Lk https://example.org \\zX\n.No AFTER\n.Ed\n".as_slice(),
+            "BEFORE\nhttps://example.org\nAFTER",
+        ),
+        (
+            "hidden-target-break",
+            b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.Lk https://example.org\\p label\n.No AFTER\n".as_slice(),
+            "label\nAFTER",
+        ),
+        (
+            "trailing-punctuation-consumes-continuation",
+            b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.Lk https://example.org\\c label .\n.No AFTER\n".as_slice(),
+            "label. AFTER",
+        ),
+    ] {
+        let document = parse_manual_bytes(
+            std::path::Path::new(&format!("semantic-link-layout-{label}.1")),
+            source,
+        )
+        .expect("parse semantic link layout fixture");
+        let blocks = &document.sections[0].blocks;
+        let children = match blocks.as_slice() {
+            [Block::Paragraph { children, .. }] | [Block::Preformatted { children, .. }] => children,
+            _ => panic!("{label}: expected one flow block: {blocks:#?}"),
+        };
+        assert_eq!(inline_text(children), expected, "{label}: {children:?}");
+    }
+}
+
+#[test]
+fn empty_operands_are_words_before_generated_semantic_punctuation() {
+    for (label, source, expected) in [
+        (
+            "optional-argument",
+            b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.Op A\\zX \"\"\n.No AFTER\n".as_slice(),
+            "[AX] AFTER",
+        ),
+        (
+            "link-label",
+            b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.Lk https://example.org \\zX \"\"\n.No AFTER\n".as_slice(),
+            "X AFTER",
+        ),
+    ] {
+        let document = parse_manual_bytes(
+            std::path::Path::new(&format!("semantic-empty-word-{label}.1")),
+            source,
+        )
+        .expect("parse semantic empty word fixture");
+        let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
+            panic!("{label}: expected one paragraph: {:#?}", document.sections);
+        };
+        assert_eq!(inline_text(children), expected, "{label}: {children:?}");
+        if label == "link-label" {
+            assert!(
+                matches!(children.first(), Some(Inline::Link { children, .. }) if inline_text(children) == "X"),
+                "{label}: the resolved label must remain a visible link: {children:?}"
+            );
+        }
+    }
+}
+
+#[test]
 fn zero_advance_treats_every_empty_enclosure_delimiter_as_a_formatter_word() {
     for (macro_name, delimiters) in [
         ("Dq", "“”"),
