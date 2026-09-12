@@ -21,6 +21,21 @@ pub(in crate::mandoc) struct InlineBuilder {
     source_cursor: Option<super::source_cursor::SourceCursor>,
 }
 
+/// A checkpoint for output that may be semantically annotated or discarded
+/// after it has executed. Formatter state deliberately remains live: a
+/// hidden operand can select a font or consume a `\\z` glyph even when its
+/// projected characters are not retained in Mant's compact presentation.
+#[derive(Clone)]
+pub(in crate::mandoc) struct OutputCheckpoint {
+    node_count: usize,
+    boundary: PendingBoundary,
+    last_visible_character: Option<char>,
+    has_printable_content: bool,
+    empty_word: bool,
+    pending_word_spaces: usize,
+    source_cursor: Option<super::source_cursor::SourceCursor>,
+}
+
 /// Roff remembers the previous selection independently of the current font.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(in crate::mandoc) struct FontState {
@@ -249,6 +264,58 @@ impl InlineBuilder {
 
     pub(in crate::mandoc) fn node_count(&self) -> usize {
         self.nodes.len()
+    }
+
+    /// Save presentation-only state before executing an operand whose
+    /// rendered spelling may be replaced. Font, spacing, and zero-advance
+    /// state are intentionally not part of this snapshot: they are execution
+    /// effects and must survive an eventual compact-output fallback.
+    pub(in crate::mandoc) fn output_checkpoint(&self) -> OutputCheckpoint {
+        OutputCheckpoint {
+            node_count: self.nodes.len(),
+            boundary: self.boundary,
+            last_visible_character: self.last_visible_character,
+            has_printable_content: self.has_printable_content,
+            empty_word: self.empty_word,
+            pending_word_spaces: self.pending_word_spaces,
+            source_cursor: self.source_cursor.clone(),
+        }
+    }
+
+    /// Whether source executed since `checkpoint` produced visible document
+    /// content. This is intentionally stricter than looking for a source
+    /// glyph: a trailing `\\zX` can be consumed by generated punctuation and
+    /// leave no visible label at all.
+    pub(in crate::mandoc) fn output_since_is_printable(
+        &self,
+        checkpoint: &OutputCheckpoint,
+    ) -> bool {
+        has_printable_character(&self.nodes[checkpoint.node_count..])
+    }
+
+    /// Drop only the projected representation emitted since `checkpoint`.
+    /// This is used by semantic macros that compactly replace a source
+    /// operand. Its formatter execution state remains in the builder.
+    pub(in crate::mandoc) fn discard_output_since(&mut self, checkpoint: OutputCheckpoint) {
+        self.nodes.truncate(checkpoint.node_count);
+        self.boundary = checkpoint.boundary;
+        self.last_visible_character = checkpoint.last_visible_character;
+        self.has_printable_content = checkpoint.has_printable_content;
+        self.empty_word = checkpoint.empty_word;
+        self.pending_word_spaces = checkpoint.pending_word_spaces;
+        self.source_cursor = checkpoint.source_cursor;
+    }
+
+    /// Wrap the output emitted since `checkpoint` without replaying its
+    /// formatter execution. Links and other semantic wrappers are IR
+    /// annotations over an already-executed source stream.
+    pub(in crate::mandoc) fn wrap_output_since(
+        &mut self,
+        checkpoint: &OutputCheckpoint,
+        wrap: impl FnOnce(Vec<Inline>) -> Vec<Inline>,
+    ) {
+        let output = self.nodes.split_off(checkpoint.node_count);
+        self.nodes.extend(wrap(output));
     }
 
     /// Preserve a formatter-requested line boundary without creating empty

@@ -1,9 +1,9 @@
 //! Dialect-specific link execution, separate from pure target construction.
-use super::font::execute_suppressed_text_controls;
+use super::font::{execute_hidden_text, execute_suppressed_text_controls};
 use super::{
     Font, Inline, InlineBuilder, Node, NodeKind, RoffInlineEvent, append_inline_node,
     append_inline_nodes, decode, first_part_children, inline_children,
-    lower_inline_nodes_with_spacing, plain_text, source_has_visible_glyph, text_node, visible_text,
+    lower_inline_nodes_with_spacing, plain_text, text_node, visible_text,
 };
 
 /// Execute mdoc `.Lk` in the caller's formatter stream, then wrap the visible
@@ -17,31 +17,16 @@ pub(super) fn append_link(builder: &mut InlineBuilder, node: &Node, default_name
     // Identity extraction is pure. The formatter executes the label before
     // the URI, even when compact presentation hides the latter's glyphs.
     let address = link_identity_text(first.text.as_deref().unwrap_or_default());
-    if address.is_empty() {
-        return;
-    }
     let label_end = children
         .iter()
         .rposition(|child| !child.flags.delimiter_close)
         .map_or(1, |index| index + 1)
         .max(1);
     let label = &children[1..label_end];
-    let label_has_visible_glyph = label
-        .iter()
-        .any(|child| child.text.as_deref().is_some_and(source_has_visible_glyph));
-    if !label_has_visible_glyph {
-        // An empty label (including `""`) falls back to the URI.  Still
-        // execute any control-only label operands before the visible URI:
-        // mdoc's formatter consumes those controls even though they produce
-        // no glyphs of their own.
-        execute_suppressed_nodes(builder, label);
-        append_external_link(builder, address, false, |builder| {
-            append_inline_node(builder, first, default_name);
-        });
+    if label.is_empty() {
+        append_link_target_or_text(builder, first, address, default_name);
     } else if source_closing_punctuation(label) {
-        append_external_link(builder, address, false, |builder| {
-            append_inline_node(builder, first, default_name);
-        });
+        append_link_target_or_text(builder, first, address, default_name);
         append_inline_nodes(builder, label, default_name);
     } else {
         // A descriptive Lk label replaces the rendered URI, but remains in
@@ -49,20 +34,32 @@ pub(super) fn append_link(builder: &mut InlineBuilder, node: &Node, default_name
         // `termp_lk_pre()` presents the label first, then its colon and URI,
         // regardless of source operand order. Preserve that execution order:
         // a hidden URI's controls must be applied after label controls.
+        let checkpoint = builder.output_checkpoint();
         builder.with_font_scope(Font::Emphasis, |builder| {
-            append_external_link(builder, address, false, |builder| {
-                append_inline_nodes(builder, label, default_name);
-            });
+            append_inline_nodes(builder, label, default_name);
         });
         // CVS `termp_lk_pre()` writes a generated colon between the
         // descriptive label and URI. Compact Mant output intentionally hides
         // that punctuation and repeated URI, but it must retain the colon's
         // zero-advance overwrite effect before later source siblings run.
         builder.zero_advance.consume_hidden_generated_glyph();
-        // The URI is hidden by compact presentation, not absent from native
-        // execution. Apply its formatter controls in the same position where
-        // CVS renders the target, after the descriptive label and colon.
-        execute_suppressed_nodes(builder, std::slice::from_ref(first));
+        if builder.output_since_is_printable(&checkpoint) {
+            if !address.is_empty() {
+                wrap_external_link_output(builder, &checkpoint, address);
+            }
+            // The URI is hidden by compact presentation, not absent from
+            // native execution. Decode it completely after the label and
+            // generated colon; controls and `\\z` operands must not leak into
+            // later source siblings.
+            execute_hidden_node(builder, first);
+        } else {
+            // A syntactically present label can disappear after zero-width
+            // projection. Do not leave an empty link: rollback only its
+            // output, retain its executed state, and render the URI fallback
+            // exactly once.
+            builder.discard_output_since(checkpoint);
+            append_link_target_or_text(builder, first, address, default_name);
+        }
     }
     append_inline_nodes(builder, &children[label_end..], default_name);
 }
@@ -85,7 +82,7 @@ pub(super) fn append_mail_addresses(
             // A control-only mail operand is not an address, but it still
             // changes the formatter state consumed by the following address
             // and sibling nodes.
-            execute_suppressed_nodes(builder, std::slice::from_ref(child));
+            execute_hidden_node(builder, child);
         } else {
             append_external_link(builder, address, true, |builder| {
                 append_inline_node(builder, child, default_name);
@@ -99,11 +96,27 @@ pub(super) fn append_mail_addresses(
 /// they never erase its execution effects. Keep that state transition in the
 /// caller's one formatter stream so hidden URI/mail controls, empty labels,
 /// and later siblings observe the same font and `\\z` state as CVS mandoc.
-fn execute_suppressed_nodes(builder: &mut InlineBuilder, nodes: &[Node]) {
-    for node in nodes {
-        if let Some(source) = node.text.as_deref() {
-            execute_suppressed_text_controls(source, &mut builder.font, &mut builder.zero_advance);
-        }
+fn execute_hidden_node(builder: &mut InlineBuilder, node: &Node) {
+    if let Some(source) = node.text.as_deref() {
+        execute_hidden_text(source, &mut builder.font, &mut builder.zero_advance);
+    }
+}
+
+fn append_link_target_or_text(
+    builder: &mut InlineBuilder,
+    node: &Node,
+    address: String,
+    default_name: Option<&str>,
+) {
+    if address.is_empty() {
+        // A malformed or control-only target must degrade to ordinary source
+        // output. It still owns font and zero-width effects; an invalid URI
+        // is not permission to erase its visible label or later state.
+        append_inline_node(builder, node, default_name);
+    } else {
+        append_external_link(builder, address, false, |builder| {
+            append_inline_node(builder, node, default_name);
+        });
     }
 }
 
@@ -122,6 +135,26 @@ fn append_external_link(
         let mut output = prefix;
         output.push(Inline::Link {
             target: external_link_target(address, email),
+            title: None,
+            children,
+        });
+        output
+    });
+}
+
+/// Attach link identity to an already-executed descriptive label.  The label
+/// must not be lowered a second time merely because its final visible form is
+/// only known after `\\z` and generated colon projection have run.
+fn wrap_external_link_output(
+    builder: &mut InlineBuilder,
+    checkpoint: &super::flow::OutputCheckpoint,
+    address: String,
+) {
+    builder.wrap_output_since(checkpoint, |children| {
+        let (prefix, children) = split_boundary_prefix(children);
+        let mut output = prefix;
+        output.push(Inline::Link {
+            target: external_link_target(address, false),
             title: None,
             children,
         });

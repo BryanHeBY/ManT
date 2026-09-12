@@ -1,5 +1,6 @@
 //! Literal rows follow executed AST events, never gaps in physical source.
 
+#[derive(Clone)]
 pub(super) struct SourceCursor {
     pending: bool,
     row: Row,

@@ -472,6 +472,25 @@ pub(super) fn execute_suppressed_text_controls(
     }
 }
 
+/// Execute a source operand that compact presentation intentionally hides.
+///
+/// This must decode the *whole* operand rather than merely replaying font
+/// escapes: `\\z` owns its following glyph, named glyphs and formatting
+/// controls carry operands, and the final hidden glyph must not overstrike a
+/// later visible sibling. The emitted representation is discarded while the
+/// resulting font state is retained.
+pub(super) fn execute_hidden_text(
+    source: &str,
+    state: &mut FontState,
+    zero_advance: &mut ZeroAdvanceState,
+) {
+    let _ = parse_roff_text_with_zero_advance(source, state, false, zero_advance);
+    // A hidden operand cannot lend a pending overstrike cell to the next
+    // visible operand. CVS consumes it within the formatter word that
+    // compact Mant is choosing not to project.
+    zero_advance.consume_hidden_generated_glyph();
+}
+
 fn promote_sphinx_manual_reference(
     output: &mut Vec<Inline>,
     buffer: &mut String,

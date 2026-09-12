@@ -509,6 +509,103 @@ fn semantic_links_execute_hidden_operands_and_preserve_empty_label_fallbacks() {
 }
 
 #[test]
+fn semantic_links_choose_visible_output_after_executing_operands() {
+    let cases = [
+        (
+            "hidden-uri-zero-width",
+            b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.Lk https://example.org/\\zXY label\n.No AFTER\n".as_slice(),
+            "label AFTER",
+        ),
+        (
+            "mail-zero-width",
+            b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.Mt \\zX a@example.org\n.No AFTER\n".as_slice(),
+            "a@example.org AFTER",
+        ),
+        (
+            "projected-empty-label",
+            b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.Lk https://example.org \\zX\n.No AFTER\n".as_slice(),
+            "https://example.org AFTER",
+        ),
+        (
+            "empty-target-label",
+            b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.Lk \\fB label\n.Li \\fPZ\n".as_slice(),
+            "label Z",
+        ),
+    ];
+    for (label, source, expected) in cases {
+        let document = parse_manual_bytes(
+            std::path::Path::new(&format!("semantic-link-execution-{label}.1")),
+            source,
+        )
+        .expect("parse semantic link execution fixture");
+        let [Block::Paragraph { children, .. }] = document.sections[1].blocks.as_slice() else {
+            panic!(
+                "{label}: expected one description paragraph: {:#?}",
+                document.sections
+            );
+        };
+        assert_eq!(inline_text(children), expected, "{label}: {children:?}");
+        assert!(
+            !children.iter().any(|inline| {
+                matches!(inline, Inline::Link { children, .. } if children.is_empty())
+            }),
+            "{label}: visible source must not leave an empty link: {children:?}"
+        );
+        match label {
+            "mail-zero-width" => assert!(
+                children.iter().any(|inline| {
+                    matches!(inline, Inline::Link { target: mant_ir::LinkTarget::Email { address }, .. }
+                        if address == "a@example.org")
+                }),
+                "{label}: the recovered address must retain its email target: {children:?}"
+            ),
+            "hidden-uri-zero-width" | "projected-empty-label" => assert!(
+                children.iter().any(|inline| {
+                    matches!(inline, Inline::Link { target: mant_ir::LinkTarget::External { uri }, .. }
+                        if uri == "https://example.org/Y" || uri == "https://example.org")
+                }),
+                "{label}: the visible link must retain its external target: {children:?}"
+            ),
+            "empty-target-label" => {
+                assert!(
+                    !children.iter().any(|inline| matches!(inline, Inline::Link { .. })),
+                    "{label}: an empty target must degrade to ordinary text: {children:?}"
+                );
+                assert!(
+                    matches!(children.last(), Some(Inline::Strong { children }) if inline_text(children) == "Z"),
+                    "{label}: hidden target controls must still affect later siblings: {children:?}"
+                );
+            }
+            _ => unreachable!("unrecognized semantic link case"),
+        }
+    }
+}
+
+#[test]
+fn control_only_link_labels_keep_their_structural_font_scope() {
+    let document = parse_manual_bytes(
+        std::path::Path::new("semantic-link-control-only-label.1"),
+        b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.Lk https://example.org \\fB\n.Li \\fPZ\n",
+    )
+    .expect("parse control-only Lk label");
+    let [Block::Paragraph { children, .. }] = document.sections[1].blocks.as_slice() else {
+        panic!(
+            "expected one description paragraph: {:#?}",
+            document.sections
+        );
+    };
+    assert_eq!(
+        inline_text(children),
+        "https://example.org Z",
+        "{children:?}"
+    );
+    assert!(
+        matches!(children.last(), Some(Inline::Text { value }) if value == "Z"),
+        "the Lk scope must not turn the URI or following Z bold: {children:?}"
+    );
+}
+
+#[test]
 fn zero_advance_treats_every_empty_enclosure_delimiter_as_a_formatter_word() {
     for (macro_name, delimiters) in [
         ("Dq", "“”"),
