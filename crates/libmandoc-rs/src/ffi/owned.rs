@@ -296,6 +296,7 @@ unsafe fn copy_table_cells(
             },
             text: unsafe { visible_string(view.text) },
             text_block: view.text_block != 0,
+            source_recovery_safe: view.source_recovery_safe != 0,
             vertical_continuation: view.vertical_continuation != 0,
             column_span: view.column_span.try_into().unwrap_or(u16::MAX),
             row_span: view.row_span.try_into().unwrap_or(u16::MAX),

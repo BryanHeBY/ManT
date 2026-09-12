@@ -168,6 +168,14 @@ pub struct TableCell {
     pub text: Option<String>,
     /// The cell was written using a multiline tbl(7) `T{`/`T}` text block.
     pub text_block: bool,
+    /// Whether the complete native input for this cell bypassed user-defined
+    /// or renamed roff macros.
+    ///
+    /// This is a cell-local execution fact. A source-backed consumer may use
+    /// it to enrich a closed inline fragment only when its own operands also
+    /// corroborate this native payload; it is not a claim about sibling cells
+    /// or the table row as a whole.
+    pub source_recovery_safe: bool,
     /// This cell continues a vertical span owned by a cell in an earlier row.
     ///
     /// tbl(7) permits both a `^` layout cell and a literal `\^` data cell for

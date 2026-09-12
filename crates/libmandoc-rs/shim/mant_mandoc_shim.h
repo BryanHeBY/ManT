@@ -58,6 +58,7 @@ struct mant_mandoc_table_cell_view {
 	const char		*text;
 	int			 kind;
 	int			 text_block;
+	int			 source_recovery_safe;
 	int			 vertical_continuation;
 	unsigned int		 column_span;
 	unsigned int		 row_span;

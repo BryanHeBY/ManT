@@ -109,6 +109,21 @@ tbl_set_source_safe(struct tbl_node *tbl, int source_safe)
 	tbl->source_safe = source_safe;
 }
 
+/*
+ * A user-defined or renamed macro can be called from a continued-data cell
+ * without producing tbl input at all.  In that case, tbl_data.c never gets a
+ * chance to observe r->mstackpos.  Mark the active cell directly so clients
+ * cannot mistake a later direct text line for proof that the complete cell
+ * bypassed user-macro execution.
+ */
+void
+tbl_mark_source_unsafe(struct tbl_node *tbl)
+{
+	if (tbl->part == TBL_PART_CDATA && tbl->last_span != NULL &&
+	    tbl->last_span->last != NULL)
+		tbl->last_span->last->source_safe = 0;
+}
+
 void
 tbl_free(struct tbl_node *tbl)
 {

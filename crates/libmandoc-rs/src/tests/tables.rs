@@ -226,3 +226,28 @@ fn parser_records_direct_mdoc_table_macro_provenance() {
         assert!(row.table_source_recovery_safe, "{row:#?}");
     }
 }
+
+#[test]
+fn parser_tracks_source_recovery_provenance_per_tbl_text_block() {
+    for (label, definition) in [
+        ("empty", ".de Fl\n..\n"),
+        ("return", ".de Fl\n.return\n..\n"),
+    ] {
+        let source = format!(
+            ".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n{definition}.Sh DESCRIPTION\n.TS\nl l.\nT{{\n.Fl\nhelp\nT}}\tT{{\n.Em WORD\nT}}\n.TE\n"
+        );
+        let report = Parser::default()
+            .parse_bytes(format!("tbl-empty-macro-{label}.1"), source.as_bytes())
+            .expect("parse tbl cell after an empty user macro")
+            .document;
+        let row = find_kind(&report.root, NodeKind::Table).expect("tbl row");
+        assert_eq!(row.table_cells.len(), 2, "{label}: {row:#?}");
+        assert!(row.table_cells[0].text_block, "{label}: {row:#?}");
+        assert!(
+            !row.table_cells[0].source_recovery_safe,
+            "{label}: {row:#?}"
+        );
+        assert!(row.table_cells[1].text_block, "{label}: {row:#?}");
+        assert!(row.table_cells[1].source_recovery_safe, "{label}: {row:#?}");
+    }
+}

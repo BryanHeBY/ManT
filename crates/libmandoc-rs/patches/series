@@ -23,3 +23,4 @@
 0023-initialize-escape-parser-state.patch
 0024-retain-executed-tbl-escape-state.patch
 0025-retain-tbl-source-provenance.patch
+0026-track-tbl-cell-execution-provenance.patch

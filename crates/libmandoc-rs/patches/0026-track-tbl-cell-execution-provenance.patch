@@ -1,0 +1,60 @@
+Subject: track tbl cell execution provenance
+Upstream-Status: Local embedding (not submitted)
+
+A source-backed consumer can only enrich a tbl `T{ ... T}` cell when the
+native parser confirms that the entire cell bypassed user-defined or renamed
+macros.  An empty macro produces no tbl input, so recording only calls that
+append a payload leaves a later direct source line falsely trusted.  Mark the
+active continued-data cell at macro dispatch time, and expose the existing
+per-cell fact rather than a row-wide aggregate.
+
+--- a/roff.c
++++ b/roff.c
+@@ -2014,6 +2014,14 @@ roff_parseln(struct roff *r, int ln, struct buf *buf, int *offs, size_t len)
+ static int
+ roff_req_or_macro(ROFF_ARGS) {
+ 
++	/*
++	 * tbl input is normally direct high-level macro operands. A user macro
++	 * may consume the whole invocation and produce no tbl input, so record
++	 * that execution fact on an active T{...T} cell before expansion.
++	 */
++	if (r->tbl != NULL && (tok == ROFF_USERDEF || tok == ROFF_RENAMED))
++		tbl_mark_source_unsafe(r->tbl);
++
+ 	/* For now, tables ignore most macros and some request. */
+ 
+ 	if (r->tbl != NULL && (tok == TOKEN_NONE || tok == ROFF_TS ||
+--- a/tbl.c
++++ b/tbl.c
+@@ -109,6 +109,21 @@ tbl_set_source_safe(struct tbl_node *tbl, int source_safe)
+ 	tbl->source_safe = source_safe;
+ }
+ 
++/*
++ * A user-defined or renamed macro can be called from a continued-data cell
++ * without producing tbl input at all.  In that case, tbl_data.c never gets a
++ * chance to observe r->mstackpos.  Mark the active cell directly so clients
++ * cannot mistake a later direct text line for proof that the complete cell
++ * bypassed user-macro execution.
++ */
++void
++tbl_mark_source_unsafe(struct tbl_node *tbl)
++{
++	if (tbl->part == TBL_PART_CDATA && tbl->last_span != NULL &&
++	    tbl->last_span->last != NULL)
++		tbl->last_span->last->source_safe = 0;
++}
++
+ void
+ tbl_free(struct tbl_node *tbl)
+ {
+--- a/tbl_parse.h
++++ b/tbl_parse.h
+@@ -27,5 +27,6 @@ int		 tbl_end(struct tbl_node *, int, int);
+ void		 tbl_free(struct tbl_node *);
+ void		 tbl_read(struct tbl_node *, int, const char *, int);
+ void		 tbl_restart(int, int, struct tbl_node *);
++void		 tbl_mark_source_unsafe(struct tbl_node *);
+ void		 tbl_set_source_safe(struct tbl_node *, int);
+ struct tbl_span	*tbl_span(struct tbl_node *);

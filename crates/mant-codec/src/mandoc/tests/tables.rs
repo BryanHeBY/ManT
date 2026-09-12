@@ -130,6 +130,60 @@ fn tbl_source_recovery_does_not_reinterpret_text_after_custom_control_change() {
 }
 
 #[test]
+fn tbl_recovery_marks_empty_user_macros_per_cell_without_degrading_siblings() {
+    for (label, definition) in [
+        ("empty", ".de Fl\n..\n"),
+        ("return", ".de Fl\n.return\n..\n"),
+    ] {
+        let source = format!(
+            ".Dd September 12, 2026\n.Dt TBL-EMPTY-FL 1\n.Os\n{definition}.Sh DESCRIPTION\n.TS\nl l.\nT{{\n.Fl\nhelp\nT}}\tT{{\n.Em WORD\nT}}\n.TE\n"
+        );
+        let document = parse_manual_bytes(
+            std::path::Path::new("tbl-empty-user-macro.1"),
+            source.as_bytes(),
+        )
+        .expect("lower a table with an empty user macro");
+        let Block::Table { rows, .. } = &document.sections[0].blocks[0] else {
+            panic!("expected one lowered table");
+        };
+        let cells = rows[0]
+            .cells
+            .iter()
+            .map(|cell| match cell.blocks.as_slice() {
+                [Block::Paragraph { children, .. }] => inline_text(children),
+                blocks => panic!("expected table cell paragraph: {blocks:?}"),
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(cells, ["help", "WORD"], "{label}");
+        let second = match rows[0].cells[1].blocks.as_slice() {
+            [Block::Paragraph { children, .. }] => children,
+            blocks => panic!("expected second table cell paragraph: {blocks:?}"),
+        };
+        assert!(contains_emphasis(second), "{label}: {second:?}");
+    }
+}
+
+#[test]
+fn tbl_escape_disabled_cells_keep_escape_spellings_literal() {
+    let document = parse_manual_bytes(
+        std::path::Path::new("tbl-eo-literal.1"),
+        b".TH TBL-EO-LITERAL 1\n.SH DESCRIPTION\n.eo\n.TS\nl.\nT{\n.B TOKEN \\fIITALIC\\fP\nT}\n.TE\n",
+    )
+    .expect("lower a tbl cell with escape processing disabled");
+    let Block::Table { rows, .. } = &document.sections[0].blocks[0] else {
+        panic!("expected one lowered table");
+    };
+    let [Block::Paragraph { children, .. }] = rows[0].cells[0].blocks.as_slice() else {
+        panic!("expected native table paragraph");
+    };
+    assert_eq!(inline_text(children), r"TOKEN \fIITALIC\fP");
+    assert!(
+        !contains_emphasis(children),
+        "disabled escape processing must not synthesize italics: {children:?}"
+    );
+}
+
+#[test]
 fn tbl_source_recovery_preserves_native_whitespace_from_redefined_macro() {
     let document = parse_manual_bytes(
         std::path::Path::new("tbl-redefined-whitespace.1"),
@@ -166,6 +220,16 @@ fn contains_manual_link(children: &[Inline]) -> bool {
         Inline::Strong { children }
         | Inline::Emphasis { children }
         | Inline::Link { children, .. } => contains_manual_link(children),
+        Inline::Text { .. } | Inline::Code { .. } | Inline::Anchor { .. } | Inline::LineBreak => {
+            false
+        }
+    })
+}
+
+fn contains_emphasis(children: &[Inline]) -> bool {
+    children.iter().any(|inline| match inline {
+        Inline::Emphasis { .. } => true,
+        Inline::Strong { children } | Inline::Link { children, .. } => contains_emphasis(children),
         Inline::Text { .. } | Inline::Code { .. } | Inline::Anchor { .. } | Inline::LineBreak => {
             false
         }

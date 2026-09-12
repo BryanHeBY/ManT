@@ -1546,6 +1546,7 @@ mant_mandoc_table_cell_snapshot(const struct mant_mandoc_document *document,
 		}
 	}
 	view->text_block = source->block;
+	view->source_recovery_safe = source->source_safe;
 	view->vertical_continuation =
 	    (source->layout != NULL && source->layout->pos == TBL_CELL_DOWN) ||
 	    (source->string != NULL && !strcmp(source->string, "\\^"));

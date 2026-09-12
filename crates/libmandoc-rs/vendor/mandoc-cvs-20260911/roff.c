@@ -2014,6 +2014,14 @@ roff_parseln(struct roff *r, int ln, struct buf *buf, int *offs, size_t len)
 static int
 roff_req_or_macro(ROFF_ARGS) {
 
+	/*
+	 * tbl input is normally direct high-level macro operands. A user macro
+	 * may consume the whole invocation and produce no tbl input, so record
+	 * that execution fact on an active T{...T} cell before expansion.
+	 */
+	if (r->tbl != NULL && (tok == ROFF_USERDEF || tok == ROFF_RENAMED))
+		tbl_mark_source_unsafe(r->tbl);
+
 	/* For now, tables ignore most macros and some request. */
 
 	if (r->tbl != NULL && (tok == TOKEN_NONE || tok == ROFF_TS ||

@@ -45,12 +45,16 @@ pub(in crate::mandoc) fn lower_source_fragment_with_formatter_state(
         }
         requests = requests.saturating_add(1);
     }
-    let has_font_escape = super::decode(source).iter().any(|event| {
-        matches!(
-            event,
-            super::RoffInlineEvent::Font(_) | super::RoffInlineEvent::PreviousFont
-        )
-    });
+    // `.eo` is an executed lexical mode, not an absent table escape. In that
+    // mode `\\fI` is authored text, so it must neither admit this recovery
+    // merely because it resembles a font escape nor be decoded a second time.
+    let has_font_escape = initial_escape != Some(0)
+        && super::decode(source).iter().any(|event| {
+            matches!(
+                event,
+                super::RoffInlineEvent::Font(_) | super::RoffInlineEvent::PreviousFont
+            )
+        });
     if requests == 0 && !has_font_escape {
         return None;
     }
@@ -70,12 +74,17 @@ pub(in crate::mandoc) fn lower_source_fragment_with_formatter_state(
         return Some(fallback());
     }
 
-    let escape_prefix = match initial_escape {
-        Some(b'\\') => String::new(),
-        Some(escape) if escape.is_ascii_graphic() => {
+    // A tbl row always records an executed escape state. Do not invent `.eo`
+    // for a synthetic or incomplete caller that lacks this fact.
+    let Some(escape) = initial_escape else {
+        return Some(fallback());
+    };
+    let escape_prefix = match escape {
+        b'\\' => String::new(),
+        0 => ".eo\n".to_owned(),
+        escape if escape.is_ascii_graphic() => {
             format!(".ec {}\n", char::from(escape))
         }
-        None => ".eo\n".to_owned(),
         // libmandoc stores `.ec` as one byte. A non-ASCII byte cannot be
         // faithfully reconstructed as a Rust source character here.
         _ => return Some(fallback()),

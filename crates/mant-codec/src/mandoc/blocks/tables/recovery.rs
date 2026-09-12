@@ -4,7 +4,7 @@ use crate::mandoc::{
     inline::{
         FilledBoundary, InlineBuilder, lower_source_fragment_with_formatter_state, plain_text,
     },
-    roff_escape::visible_text,
+    roff_escape::literal_escape_disabled_text,
 };
 use libmandoc_rs::{Node, NodeKind};
 use mant_ir::Inline;
@@ -95,21 +95,20 @@ impl CellCandidate {
         // cell, but never replaces non-empty native content unless the
         // normalized visible text is exactly the same.
         if let Some(native) = native {
-            let native = visible_text(native);
             // `roff_parsetext()` gives tbl direct high-level macro operands,
             // and the owned cell retains the executed operand stream. A
             // source fragment can deliberately change its presentation
             // (`.Fl Fl help` -> `--help`, `.MR printf 3` -> a typed
             // reference), so its display text is not evidence. The original
             // direct operand stream must match native text exactly.
-            return table_text_agrees(source_operands, &native);
+            return table_text_agrees(source_operands, native);
         }
         !position.row.iter().enumerate().any(|(index, candidate)| {
             index != position.index
                 && candidate
                     .text
                     .as_deref()
-                    .is_some_and(|native| table_text_agrees(&text, &visible_text(native)))
+                    .is_some_and(|native| table_text_agrees(&text, native))
         })
     }
 
@@ -164,12 +163,7 @@ pub(super) fn lower_table_cell(
                 formatter: recovered.formatter,
                 diagnostics: Vec::new(),
             };
-            if candidate.belongs_to(
-                cell,
-                position,
-                &source_operands,
-                node.table_source_recovery_safe,
-            ) {
+            if candidate.belongs_to(cell, position, &source_operands, cell.source_recovery_safe) {
                 return Some(candidate.commit(context, formatter));
             }
         }
@@ -186,12 +180,7 @@ pub(super) fn lower_table_cell(
             formatter: candidate_state,
             diagnostics: candidate_diagnostics,
         };
-        if candidate.belongs_to(
-            cell,
-            position,
-            &source_operands,
-            node.table_source_recovery_safe,
-        ) {
+        if candidate.belongs_to(cell, position, &source_operands, cell.source_recovery_safe) {
             return Some(candidate.commit(context, formatter));
         }
         *formatter = initial_state;
@@ -200,6 +189,7 @@ pub(super) fn lower_table_cell(
         return Some(lower_table_cell_text(
             cell.text.as_deref().unwrap_or_default(),
             node.line,
+            node.table_escape,
             context,
             formatter,
         ));
@@ -215,10 +205,7 @@ fn table_text_agrees(reconstructed: &str, parsed: &str) -> bool {
         // word boundaries as execution evidence, but normalize the width of
         // those formatter-owned runs. In particular, `A B` never equals
         // `AB`: recovery must not turn an executed space into concatenation.
-        visible_text(value)
-            .split_whitespace()
-            .collect::<Vec<_>>()
-            .join(" ")
+        value.split_whitespace().collect::<Vec<_>>().join(" ")
     }
     normalize(reconstructed) == normalize(parsed)
 }
@@ -231,7 +218,6 @@ fn table_source_operands(context: &LoweringContext<'_>, source: &str) -> String 
     source
         .lines()
         .filter_map(|line| table_cell_content_line(context, line))
-        .map(visible_text)
         .map(|line| line.trim().to_owned())
         .filter(|line| !line.is_empty())
         .collect::<Vec<_>>()
@@ -241,9 +227,19 @@ fn table_source_operands(context: &LoweringContext<'_>, source: &str) -> String 
 fn lower_table_cell_text(
     source: &str,
     line: u32,
+    escape: Option<u8>,
     context: &LoweringContext<'_>,
     formatter: &mut crate::mandoc::formatter::FormatterState,
 ) -> Vec<Inline> {
+    // tbl keeps its evaluated payload as roff-encoded bytes. When `.eo` was
+    // active, those bytes are literal authored output: feeding them through
+    // the normal escape decoder would turn `\\fI` into formatting that never
+    // executed in the native parser.
+    if escape == Some(0) {
+        return vec![Inline::Text {
+            value: literal_escape_disabled_text(source),
+        }];
+    }
     let Some((opening, closing)) = context.equation_delimiters_at(line) else {
         return context.lower_text(source, formatter);
     };
@@ -354,6 +350,7 @@ mod tests {
         // This unit supplies an artificial text block; model the direct tbl
         // dispatch proof that a real parser report would carry with it.
         node.table_source_recovery_safe = true;
+        node.table_cells[0].source_recovery_safe = true;
         let mut context = crate::mandoc::LoweringContext::new(None, None);
         context.macro_set = libmandoc_rs::MacroSet::Mdoc;
         for (source, native_text, expected_text, expected_spacing) in [
@@ -410,6 +407,7 @@ mod tests {
         .unwrap();
         let mut node = table_node(&report.document.root).unwrap().clone();
         node.table_source_recovery_safe = true;
+        node.table_cells[0].source_recovery_safe = true;
         let mut context = crate::mandoc::LoweringContext::new(None, None);
         context.macro_set = libmandoc_rs::MacroSet::Man;
         let block = super::TableTextBlock {
