@@ -1,5 +1,5 @@
 //! Dialect-specific link execution, separate from pure target construction.
-use super::font::{execute_hidden_text, execute_suppressed_text_controls};
+use super::font::execute_suppressed_text_controls;
 use super::{
     Font, Inline, InlineBuilder, Node, NodeKind, RoffInlineEvent, append_inline_node,
     append_inline_nodes, decode, first_part_children, inline_children,
@@ -25,9 +25,6 @@ pub(super) fn append_link(builder: &mut InlineBuilder, node: &Node, default_name
     let label = &children[1..label_end];
     if label.is_empty() {
         append_link_target_or_text(builder, first, address, default_name);
-    } else if source_closing_punctuation(label) {
-        append_link_target_or_text(builder, first, address, default_name);
-        append_inline_nodes(builder, label, default_name);
     } else {
         // A descriptive Lk label replaces the rendered URI, but remains in
         // the same output stream as its surrounding source siblings. CVS
@@ -38,26 +35,31 @@ pub(super) fn append_link(builder: &mut InlineBuilder, node: &Node, default_name
         builder.with_font_scope(Font::Emphasis, |builder| {
             append_inline_nodes(builder, label, default_name);
         });
+        let label_is_visible = builder.output_since_has_non_whitespace_glyph(&checkpoint);
+        if label_is_visible && !address.is_empty() {
+            wrap_external_link_output(builder, &checkpoint, address.clone());
+        } else if !label_is_visible {
+            // Controls in an empty or fully overstruck label still execute,
+            // including source-line continuation.  Remove only its rendered
+            // output before deciding whether the URI must become visible.
+            builder.discard_output_preserving_execution(checkpoint);
+        }
         // CVS `termp_lk_pre()` writes a generated colon between the
         // descriptive label and URI. Compact Mant output intentionally hides
-        // that punctuation and repeated URI, but it must retain the colon's
-        // zero-advance overwrite effect before later source siblings run.
-        builder.zero_advance.consume_hidden_generated_glyph();
-        if builder.output_since_is_printable(&checkpoint) {
-            if !address.is_empty() {
-                wrap_external_link_output(builder, &checkpoint, address);
-            }
+        // that punctuation and repeated URI. Execute the colon as a real
+        // generated word, however: it consumes a preceding `\\z` glyph and
+        // ends a label-local `\\c` continuation before the URI runs.
+        execute_hidden_generated_text(builder, ":");
+        if label_is_visible {
             // The URI is hidden by compact presentation, not absent from
             // native execution. Decode it completely after the label and
-            // generated colon; controls and `\\z` operands must not leak into
-            // later source siblings.
-            execute_hidden_node(builder, first);
+            // generated colon; its full word event controls fonts, line
+            // continuation, and `\\z` state for later source siblings.
+            execute_hidden_node(builder, first, default_name);
         } else {
             // A syntactically present label can disappear after zero-width
-            // projection. Do not leave an empty link: rollback only its
-            // output, retain its executed state, and render the URI fallback
-            // exactly once.
-            builder.discard_output_since(checkpoint);
+            // projection. Fall back to the URI exactly once; an empty target
+            // is still represented by its ordinary source text.
             append_link_target_or_text(builder, first, address, default_name);
         }
     }
@@ -82,7 +84,7 @@ pub(super) fn append_mail_addresses(
             // A control-only mail operand is not an address, but it still
             // changes the formatter state consumed by the following address
             // and sibling nodes.
-            execute_hidden_node(builder, child);
+            execute_hidden_node(builder, child, default_name);
         } else {
             append_external_link(builder, address, true, |builder| {
                 append_inline_node(builder, child, default_name);
@@ -96,10 +98,21 @@ pub(super) fn append_mail_addresses(
 /// they never erase its execution effects. Keep that state transition in the
 /// caller's one formatter stream so hidden URI/mail controls, empty labels,
 /// and later siblings observe the same font and `\\z` state as CVS mandoc.
-fn execute_hidden_node(builder: &mut InlineBuilder, node: &Node) {
-    if let Some(source) = node.text.as_deref() {
-        execute_hidden_text(source, &mut builder.font, &mut builder.zero_advance);
-    }
+fn execute_hidden_node(builder: &mut InlineBuilder, node: &Node, default_name: Option<&str>) {
+    let checkpoint = builder.output_checkpoint();
+    append_inline_node(builder, node, default_name);
+    builder.discard_output_preserving_execution(checkpoint);
+    builder.zero_advance.discard_hidden_pending_glyph();
+}
+
+fn execute_hidden_generated_text(builder: &mut InlineBuilder, value: &str) {
+    let checkpoint = builder.output_checkpoint();
+    // `termp_lk_pre()` sets TERMP_NOSPACE before it calls term_word(":").
+    // The generated colon is hidden in compact output but still consumes the
+    // exact formatter boundary established by a label or its `\\c` escape.
+    builder.tighten_next_boundary();
+    builder.append_text(value);
+    builder.discard_output_preserving_execution(checkpoint);
 }
 
 fn append_link_target_or_text(
@@ -183,23 +196,6 @@ fn split_boundary_prefix(mut children: Vec<Inline>) -> (Vec<Inline>, Vec<Inline>
         children.remove(0);
     }
     (vec![Inline::Text { value: prefix }], children)
-}
-
-fn source_closing_punctuation(nodes: &[Node]) -> bool {
-    let mut text = String::new();
-    for node in nodes {
-        let Some(value) = node.text.as_deref() else {
-            return false;
-        };
-        text.push_str(&visible_text(value));
-    }
-    !text.is_empty()
-        && text.chars().all(|character| {
-            matches!(
-                character,
-                '.' | ',' | ':' | ';' | '!' | '?' | ')' | ']' | '}'
-            )
-        })
 }
 
 /// Extract a link destination from the source spelling without borrowing its

@@ -282,15 +282,26 @@ impl InlineBuilder {
         }
     }
 
-    /// Whether source executed since `checkpoint` produced visible document
-    /// content. This is intentionally stricter than looking for a source
-    /// glyph: a trailing `\\zX` can be consumed by generated punctuation and
-    /// leave no visible label at all.
-    pub(in crate::mandoc) fn output_since_is_printable(
+    /// Whether output since `checkpoint` contains a glyph a reader can use
+    /// as a semantic link label. Whitespace-only output is not a label: link
+    /// identity must fall back to its visible target instead of wrapping an
+    /// invisible click region.
+    pub(in crate::mandoc) fn output_since_has_non_whitespace_glyph(
         &self,
         checkpoint: &OutputCheckpoint,
     ) -> bool {
-        has_printable_character(&self.nodes[checkpoint.node_count..])
+        fn contains_glyph(nodes: &[Inline]) -> bool {
+            nodes.iter().any(|node| match node {
+                Inline::Text { value } | Inline::Code { value } => {
+                    value.chars().any(|character| !character.is_whitespace())
+                }
+                Inline::Strong { children }
+                | Inline::Emphasis { children }
+                | Inline::Link { children, .. } => contains_glyph(children),
+                Inline::Anchor { .. } | Inline::LineBreak => false,
+            })
+        }
+        contains_glyph(&self.nodes[checkpoint.node_count..])
     }
 
     /// Drop only the projected representation emitted since `checkpoint`.
@@ -304,6 +315,24 @@ impl InlineBuilder {
         self.empty_word = checkpoint.empty_word;
         self.pending_word_spaces = checkpoint.pending_word_spaces;
         self.source_cursor = checkpoint.source_cursor;
+    }
+
+    /// Drop a compactly hidden operand's output while preserving the
+    /// formatter transitions it performed.  In particular, `\\c` changes the
+    /// next word's boundary and a literal row advances its source cursor;
+    /// those are execution facts even though a semantic macro may replace the
+    /// operand's visible spelling.
+    pub(in crate::mandoc) fn discard_output_preserving_execution(
+        &mut self,
+        checkpoint: OutputCheckpoint,
+    ) {
+        let boundary = self.boundary;
+        let source_cursor = self.source_cursor.clone();
+        let zero_advance_joined = self.zero_advance_joined;
+        self.discard_output_since(checkpoint);
+        self.boundary = boundary;
+        self.source_cursor = source_cursor;
+        self.zero_advance_joined = zero_advance_joined;
     }
 
     /// Wrap the output emitted since `checkpoint` without replaying its

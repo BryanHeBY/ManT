@@ -61,13 +61,12 @@ impl ZeroAdvanceState {
         self.pending.is_some() && !self.armed
     }
 
-    /// Apply a formatter glyph whose compact semantic projection is hidden.
-    /// CVS `termp_lk_pre()` emits the colon after a descriptive `.Lk` label
-    /// through `term_word()`. Mant intentionally omits that colon and the
-    /// repeated URI, but the glyph still overwrites a preceding `\z` cell.
-    pub(in crate::mandoc) fn consume_hidden_generated_glyph(&mut self) {
+    /// Discard a completed glyph emitted by an operand whose compact output
+    /// is suppressed. A bare `\\z` remains armed: CVS carries that request
+    /// into the next formatter word, whereas `\\zX` has already produced the
+    /// hidden glyph `X` and must not lend it to a later visible operand.
+    pub(in crate::mandoc) fn discard_hidden_pending_glyph(&mut self) {
         self.pending = None;
-        self.armed = false;
         self.fragment_started_pending = false;
         self.resolved_preexisting = false;
     }
@@ -470,25 +469,6 @@ pub(super) fn execute_suppressed_text_controls(
             | RoffInlineEvent::Presentation { .. } => {}
         }
     }
-}
-
-/// Execute a source operand that compact presentation intentionally hides.
-///
-/// This must decode the *whole* operand rather than merely replaying font
-/// escapes: `\\z` owns its following glyph, named glyphs and formatting
-/// controls carry operands, and the final hidden glyph must not overstrike a
-/// later visible sibling. The emitted representation is discarded while the
-/// resulting font state is retained.
-pub(super) fn execute_hidden_text(
-    source: &str,
-    state: &mut FontState,
-    zero_advance: &mut ZeroAdvanceState,
-) {
-    let _ = parse_roff_text_with_zero_advance(source, state, false, zero_advance);
-    // A hidden operand cannot lend a pending overstrike cell to the next
-    // visible operand. CVS consumes it within the formatter word that
-    // compact Mant is choosing not to project.
-    zero_advance.consume_hidden_generated_glyph();
 }
 
 fn promote_sphinx_manual_reference(

@@ -606,6 +606,99 @@ fn control_only_link_labels_keep_their_structural_font_scope() {
 }
 
 #[test]
+fn semantic_links_execute_hidden_word_boundaries_and_native_delimiters() {
+    let cases = [
+        (
+            "label-continuation",
+            b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.Lk https://example.org label\\c\n.No AFTER\n".as_slice(),
+            "label AFTER",
+        ),
+        (
+            "uri-continuation",
+            b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.Lk https://example.org\\c label\n.No AFTER\n".as_slice(),
+            "labelAFTER",
+        ),
+        (
+            "escaped-punctuation-label",
+            b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.Lk https://example.org \\fB.\n.Li \\fPZ\n".as_slice(),
+            ". Z",
+        ),
+        (
+            "bare-closing-punctuation",
+            b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.Lk https://example.org .\n.Li Z\n".as_slice(),
+            "https://example.org. Z",
+        ),
+        (
+            "zero-width-punctuation-label",
+            b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.Lk https://example.org \\&.\n.Li Z\n".as_slice(),
+            ". Z",
+        ),
+        (
+            "bare-hidden-zero-advance",
+            b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.Lk https://example.org/\\z label\n.No AFTER\n".as_slice(),
+            "label FTER",
+        ),
+        (
+            "whitespace-label",
+            b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.Lk https://example.org \" \"\n.No AFTER\n".as_slice(),
+            "https://example.org AFTER",
+        ),
+    ];
+    for (label, source, expected) in cases {
+        let document = parse_manual_bytes(
+            std::path::Path::new(&format!("semantic-link-boundary-{label}.1")),
+            source,
+        )
+        .expect("parse semantic link boundary fixture");
+        let [Block::Paragraph { children, .. }] = document.sections[1].blocks.as_slice() else {
+            panic!(
+                "{label}: expected one description paragraph: {:#?}",
+                document.sections
+            );
+        };
+        assert_eq!(inline_text(children), expected, "{label}: {children:?}");
+        assert!(
+            !children.iter().any(|inline| {
+                matches!(inline, Inline::Link { children, .. } if children.is_empty())
+            }),
+            "{label}: semantic link output must not be empty: {children:?}"
+        );
+        if label == "escaped-punctuation-label" {
+            assert!(
+                matches!(children.last(), Some(Inline::Text { value }) if value == "Z"),
+                "{label}: an authored label font scope must not leak: {children:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn semantic_link_continuations_preserve_literal_rows() {
+    for (label, source, expected) in [
+        (
+            "label",
+            b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.Bd -literal\n.Lk https://example.org label\\c\n.No AFTER\n.Ed\n".as_slice(),
+            "label\nAFTER",
+        ),
+        (
+            "uri",
+            b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.Bd -literal\n.Lk https://example.org\\c label\n.No AFTER\n.Ed\n".as_slice(),
+            "labelAFTER",
+        ),
+    ] {
+        let document = parse_manual_bytes(
+            std::path::Path::new(&format!("semantic-link-literal-continuation-{label}.1")),
+            source,
+        )
+        .expect("parse literal semantic link continuation");
+        let [Block::Preformatted { children, .. }] = document.sections[1].blocks.as_slice() else {
+            panic!("{label}: expected one literal display: {:#?}", document.sections);
+        };
+        assert_eq!(inline_text(children), expected, "{label}: {children:?}");
+    }
+}
+
+#[test]
 fn zero_advance_treats_every_empty_enclosure_delimiter_as_a_formatter_word() {
     for (macro_name, delimiters) in [
         ("Dq", "“”"),

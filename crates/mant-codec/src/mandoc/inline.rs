@@ -372,7 +372,7 @@ fn navigation_anchor(node: &Node) -> Option<Inline> {
     super::targets::raw_target(node).map(|id| Inline::anchor_at(id, super::source_span(node)))
 }
 
-fn inline_children(node: &Node) -> &[Node] {
+pub(super) fn inline_children(node: &Node) -> &[Node] {
     // A present empty body still owns the content. Falling back to Head and
     // Body wrappers would execute their enclosing macro a second time.
     node.children

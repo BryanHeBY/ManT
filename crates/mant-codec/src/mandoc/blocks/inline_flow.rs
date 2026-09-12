@@ -162,6 +162,25 @@ pub(in crate::mandoc) fn ends_with_line_continuation(node: &Node) -> bool {
     if node.kind == NodeKind::Text {
         return node.flags.line_continuation;
     }
+    if node.macro_name.as_deref() == Some("Lk") {
+        // mdoc_term.c::termp_lk_pre() executes a descriptive link label,
+        // generated colon, and URI in that order.  The source tree keeps the
+        // URI first, so a `\\c` on the label is consumed by the colon and
+        // must not join the following source line; a `\\c` on the URI is
+        // executed last and does.  Inspecting the source subtree's final text
+        // node would reverse that formatter contract.
+        let children = crate::mandoc::inline::inline_children(node);
+        let label_end = children
+            .iter()
+            .rposition(|child| !child.flags.delimiter_close)
+            .map_or(1, |index| index + 1)
+            .max(1);
+        if label_end > 1 {
+            return children
+                .first()
+                .is_some_and(|address| ends_with_line_continuation(address));
+        }
+    }
     node.children
         .iter()
         .rev()
