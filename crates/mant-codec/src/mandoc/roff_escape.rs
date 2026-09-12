@@ -239,7 +239,14 @@ impl Decoder {
                 // is formatting input rather than visible document text.
                 // Consume its full spelling here (including a nested \z or a
                 // named glyph) so it cannot leak as a synthetic prefix.
-                self.skip_zero_advance_glyph();
+                if let Some(glyph) = self.skip_zero_advance_glyph()
+                    && !self.has_visible_glyph_before_line_end()
+                {
+                    // A final zero-advance literal has no following glyph to
+                    // overstrike.  Both reference formatters retain it at
+                    // the end of the physical output line.
+                    self.text.push(glyph);
+                }
                 self.emit(RoffInlineEvent::Presentation {
                     kind: PresentationKind::Spacing,
                     argument: None,
@@ -342,31 +349,31 @@ impl Decoder {
     /// `roff_escape()` gives `\z` the same one-glyph operand shape as the
     /// terminal renderer.  The bounded iterative loop handles repeated `\z`
     /// prefixes without creating an attacker-controlled Rust call stack.
-    fn skip_zero_advance_glyph(&mut self) {
+    fn skip_zero_advance_glyph(&mut self) -> Option<char> {
         loop {
             let Some(character) = self.take_character() else {
-                return;
+                return None;
             };
             if character != '\\' {
-                return;
+                return Some(character);
             }
             let Some(trigger) = self.take_character() else {
-                return;
+                return None;
             };
             match trigger {
                 // A nested `\z` still owns the next complete glyph.
                 'z' => {}
                 '(' => {
                     self.take_counted(2);
-                    return;
+                    return None;
                 }
                 '[' => {
                     self.take_until(']');
-                    return;
+                    return None;
                 }
                 'C' => {
                     self.take_delimited_argument();
-                    return;
+                    return None;
                 }
                 'N' => {
                     if self
@@ -378,7 +385,7 @@ impl Decoder {
                     } else {
                         self.take_delimited_argument();
                     }
-                    return;
+                    return None;
                 }
                 // These formatter controls own operands too.  `\z` hides
                 // the complete glyph, not merely the control trigger.
@@ -392,9 +399,16 @@ impl Decoder {
                 }
                 // Every other escape is a one-character formatter operand at
                 // this boundary.  Its trigger has already been consumed.
-                _ => return,
+                _ => return None,
             }
         }
+    }
+
+    fn has_visible_glyph_before_line_end(&self) -> bool {
+        self.characters[self.index..]
+            .iter()
+            .take_while(|character| !matches!(character, '\n' | '\r'))
+            .any(|character| !matches!(character, '\n' | '\r'))
     }
 
     fn push_special_character(&mut self, name: &str, syntax: NamedCharacterSyntax) {

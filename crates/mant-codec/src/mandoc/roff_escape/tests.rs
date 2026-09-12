@@ -240,6 +240,7 @@ fn zero_advance_discards_complete_overstrike_glyphs_without_recursion() {
         assert_eq!(visible_text(source), "AB END", "{source}");
     }
     assert_eq!(visible_text(r"\z"), "");
+    assert_eq!(visible_text("TOKEN\\zX\nNEXT"), "TOKENX\nNEXT");
     assert_eq!(visible_text(&format!("{}Y", r"\zX".repeat(20_000))), "Y");
 }
 
