@@ -166,9 +166,11 @@
 #define tbl_end mant_vendored_tbl_end
 #define tbl_free mant_vendored_tbl_free
 #define tbl_layout mant_vendored_tbl_layout
+#define tbl_mark_source_unsafe mant_vendored_tbl_mark_source_unsafe
 #define tbl_option mant_vendored_tbl_option
 #define tbl_read mant_vendored_tbl_read
 #define tbl_restart mant_vendored_tbl_restart
+#define tbl_set_source_safe mant_vendored_tbl_set_source_safe
 #define tbl_span mant_vendored_tbl_span
 #define tblcalc mant_vendored_tblcalc
 #define term_begin mant_vendored_term_begin
