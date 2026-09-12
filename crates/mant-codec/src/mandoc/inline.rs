@@ -10,7 +10,7 @@ mod font;
 mod generated;
 mod links;
 pub(super) use links::lower_man_link;
-use links::{lower_bsd_reference, lower_link, lower_mail_addresses};
+use links::{lower_link, lower_mail_addresses};
 mod scopes;
 mod source_cursor;
 mod source_fragment;
@@ -211,6 +211,10 @@ fn node_emits_visible_output(node: &Node, default_name: Option<&str>) -> bool {
     }
     match node.macro_name.as_deref() {
         Some("Tg" | "Ns" | "br" | "Pp" | "ft" | "Sm") => false,
+        // An empty enclosure still emits its paired delimiters through the
+        // shared container stream.  Those glyphs are the next formatter word
+        // and must resolve a preceding `\\z` state before they are written.
+        name if is_enclosure_macro(name) => true,
         Some("Fl" | "Nd") => true,
         Some("Nm") if node.kind == NodeKind::Block && node.children.is_empty() => {
             default_name.is_some()
@@ -317,46 +321,59 @@ fn lower_atomic_node(
     }
     let children = inline_children(node);
     let mut output = match node.macro_name.as_deref() {
-        Some("In") => {
-            let saved = font.push_scope(if node.flags.synopsis_pretty && node.flags.line_start {
-                Font::Strong
-            } else {
-                Font::Emphasis
-            });
-            let lowered =
-                lower_inline_nodes_with_font_state(children, default_name, spacing_enabled, font);
-            if node.flags.synopsis_pretty {
-                font.select(Font::Strong);
-            }
-            font.pop_scope(saved);
-            if lowered.is_empty() {
-                Vec::new()
-            } else {
-                vec![Inline::Code {
-                    value: format!(
-                        "{}<{}>",
-                        if node.flags.synopsis_pretty && node.flags.line_start {
-                            "#include "
-                        } else {
-                            ""
-                        },
-                        plain_text(&lowered)
-                    ),
-                }]
-            }
-        }
         Some("Lk") => lower_link(children, default_name, spacing_enabled, font),
         Some("Mt") => lower_mail_addresses(children, default_name, spacing_enabled, font),
-        Some("Bx") => lower_bsd_reference(
-            node,
-            lower_inline_nodes_with_font_state(children, default_name, spacing_enabled, font),
-        ),
         _ => unreachable!("only generated references/declarations are atomic"),
     };
     if let Some(anchor) = navigation_anchor(node) {
         output.insert(0, anchor);
     }
     output
+}
+
+/// Execute mdoc `.In` delimiters and operands in one formatter stream before
+/// compacting the result into the renderer-neutral code span.  In particular,
+/// the closing `>` is a real generated glyph: it can overstrike a preceding
+/// zero-advance glyph just like CVS `term_word()` does.
+pub(super) fn append_include(builder: &mut InlineBuilder, node: &Node, default_name: Option<&str>) {
+    let children = inline_children(node);
+    let mut include = InlineBuilder::with_spacing(builder.spacing_enabled());
+    include.font = builder.font;
+    include.zero_advance = std::mem::take(&mut builder.zero_advance);
+    if let Some(anchor) = navigation_anchor(node) {
+        include.append(vec![anchor]);
+    }
+    let saved = include
+        .font
+        .push_scope(if node.flags.synopsis_pretty && node.flags.line_start {
+            Font::Strong
+        } else {
+            Font::Emphasis
+        });
+    if node.flags.synopsis_pretty && node.flags.line_start {
+        include.append_text("#include ");
+    }
+    include.append_text("<");
+    include.tighten_next_boundary();
+    append_inline_nodes(&mut include, children, default_name);
+    if node.flags.synopsis_pretty {
+        include.font.select(Font::Strong);
+    }
+    include.font.pop_scope(saved);
+    include.tighten_next_boundary();
+    include.append_text(">");
+    let font = include.font;
+    let (nodes, zero_advance, joined) = include.finish_preserving_zero_advance();
+    builder.font = font;
+    builder.zero_advance = zero_advance;
+    if joined {
+        builder.tighten_next_boundary();
+        builder.note_zero_advance_join();
+    }
+    let value = plain_text(&nodes);
+    if !value.is_empty() {
+        builder.append(vec![Inline::Code { value }]);
+    }
 }
 
 /// Whether a semantic macro owns an inline enclosure body.

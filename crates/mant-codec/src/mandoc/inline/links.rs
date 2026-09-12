@@ -1,8 +1,9 @@
 //! Dialect-specific link execution, separate from pure target construction.
 use super::{
     Font, FontState, Inline, InlineBuilder, Node, NodeKind, append_inline_node,
-    first_part_children, lower_inline_node, lower_inline_nodes_with_font_state,
-    lower_inline_nodes_with_spacing, plain_text, text_node, visible_text,
+    append_inline_nodes, first_part_children, inline_children, lower_inline_node,
+    lower_inline_nodes_with_font_state, lower_inline_nodes_with_spacing, plain_text, text_node,
+    visible_text,
 };
 
 pub(super) fn lower_link(
@@ -136,40 +137,53 @@ fn is_source_closing_punctuation(value: &str) -> bool {
 /// and optional release render as `versionBSD release`. The raw AST flags make
 /// this distinction explicit without reparsing source text or depending on a
 /// particular formatter's generated nodes.
-pub(super) fn lower_bsd_reference(node: &Node, fallback: Vec<Inline>) -> Vec<Inline> {
-    let mut authored = node
+pub(super) fn append_bsd_reference(builder: &mut InlineBuilder, node: &Node, name: Option<&str>) {
+    let authored = node
         .children
         .iter()
         .filter(|child| {
             child.kind == NodeKind::Text && !child.flags.generated && !child.flags.no_print
         })
-        .filter_map(|child| child.text.as_deref())
-        .map(visible_text)
-        .filter(|value| !value.is_empty());
-    let Some(first) = authored.next() else {
-        return text_node("BSD");
+        .filter(|child| {
+            child
+                .text
+                .as_deref()
+                .is_some_and(|text| !visible_text(text).is_empty())
+        })
+        .collect::<Vec<_>>();
+    let Some(first) = authored.first() else {
+        builder.append_text("BSD");
+        return;
     };
-    let second = authored.next();
-    if authored.next().is_some() {
-        return fallback;
+    if authored.len() > 2 {
+        append_inline_nodes(builder, inline_children(node), name);
+        return;
     }
-    if second.is_none() {
-        let lifecycle = match first.as_str() {
+    let first_text = visible_text(first.text.as_deref().unwrap_or_default());
+    if authored.len() == 1 {
+        let lifecycle = match first_text.as_str() {
             "-alpha" => Some("BSD (currently in alpha test)"),
             "-beta" => Some("BSD (currently in beta test)"),
             "-devel" => Some("BSD (currently under development)"),
             _ => None,
         };
         if let Some(lifecycle) = lifecycle {
-            return text_node(lifecycle);
+            builder.append_text(lifecycle);
+            return;
         }
     }
-    let mut value = format!("{first}BSD");
-    if let Some(second) = second {
-        value.push(' ');
-        value.push_str(&second);
+    // Execute authored operands and generated spelling in the caller's one
+    // formatter stream. Native `Bx` inserts `BSD` with an `Ns` join, but its
+    // generated sibling cannot see a caller-owned zero-advance state after an
+    // atomic reconstruction. Keeping the suffix here preserves release-word
+    // spacing and lets it overstrike a pending glyph.
+    append_inline_node(builder, first, name);
+    builder.tighten_next_boundary();
+    builder.append_text("BSD");
+    if let Some(second) = authored.get(1) {
+        builder.append_text(" ");
+        append_inline_node(builder, second, name);
     }
-    text_node(&value)
 }
 
 fn external_link_target(address: String, email: bool) -> mant_ir::LinkTarget {

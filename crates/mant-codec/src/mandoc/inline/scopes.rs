@@ -1,8 +1,9 @@
 //! Compose semantic wrappers in output order, not by inspecting AST tails.
 use super::font::coalesce_font_runs;
+use super::links::append_bsd_reference;
 use super::{
-    Font, Inline, InlineBuilder, Node, NodeKind, append_inline_nodes, first_part_children,
-    inline_children, lower_atomic_node, navigation_anchor, plain_text,
+    Font, Inline, InlineBuilder, Node, NodeKind, append_include, append_inline_nodes,
+    first_part_children, inline_children, lower_atomic_node, navigation_anchor, plain_text,
 };
 
 pub(super) fn append(builder: &mut InlineBuilder, node: &Node, name: Option<&str>) {
@@ -18,11 +19,7 @@ pub(super) fn append(builder: &mut InlineBuilder, node: &Node, name: Option<&str
     // Atomic reconstructions own their generated punctuation (references,
     // function declarations, etc.); their output cannot carry a guessed tail
     // effect. Transparent and styled scopes below share the caller's flow.
-    if node.kind == NodeKind::Equation
-        || matches!(node.macro_name.as_deref(), Some("In" | "Lk" | "Mt" | "Bx"))
-    {
-        let nodes = lower_atomic_node(node, name, builder.spacing_enabled(), &mut builder.font);
-        builder.append(nodes);
+    if append_atomic(builder, node, name) {
         return;
     }
     if let Some(anchor) = navigation_anchor(node) {
@@ -106,6 +103,27 @@ pub(super) fn append(builder: &mut InlineBuilder, node: &Node, name: Option<&str
         }
         _ => append_inline_nodes(builder, children, name),
     }
+}
+
+/// Atomic syntax owns a semantic wrapper, but its visible components still
+/// execute in the caller's formatter stream.  Keep that dispatch separate
+/// from ordinary scope lowering so new atomic forms cannot accidentally
+/// recreate an isolated zero-advance state.
+fn append_atomic(builder: &mut InlineBuilder, node: &Node, name: Option<&str>) -> bool {
+    match node.macro_name.as_deref() {
+        Some("In") => append_include(builder, node, name),
+        Some("Bx") => append_bsd_reference(builder, node, name),
+        Some("Lk" | "Mt") => {
+            let nodes = lower_atomic_node(node, name, builder.spacing_enabled(), &mut builder.font);
+            builder.append(nodes);
+        }
+        _ if node.kind == NodeKind::Equation => {
+            let nodes = lower_atomic_node(node, name, builder.spacing_enabled(), &mut builder.font);
+            builder.append(nodes);
+        }
+        _ => return false,
+    }
+    true
 }
 
 fn section_reference(children: Vec<Inline>) -> Vec<Inline> {
