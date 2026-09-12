@@ -5,8 +5,8 @@ use mant_ir::{
     Block, LayoutHint, TableAlignment as AstTableAlignment, TableCell as AstTableCell, TableRow,
 };
 mod recovery;
+use recovery::lower_table_cell;
 pub(super) use recovery::{TableEmbedding, TableEmbeddingPlan};
-use recovery::{lower_missing_table_cell, lower_table_cell};
 
 pub(super) fn append_table_row(
     output: &mut Vec<Block>,
@@ -20,17 +20,17 @@ pub(super) fn append_table_row(
         return;
     }
     let mut text_block_index = 0;
-    let source_cells = context.tab_separated_table_cells(node.line, node.table_escape);
-    let cell_count = node
-        .table_cells
-        .len()
-        .max(source_cells.as_ref().map_or(0, Vec::len));
     let row = TableRow {
-        cells: (0..cell_count)
+        // `tbl_data.c` determines field boundaries using the table's executed
+        // delimiter and escape state. The owned native row is consequently
+        // the only authority for how many cells exist. Source text can enrich
+        // one proven cell below, but must never manufacture a new column from
+        // a raw TAB (or from an alternate `tab()` delimiter).
+        cells: (0..node.table_cells.len())
             .map(|index| {
-                let cell = node.table_cells.get(index);
-                let vertical_continuation = cell.is_some_and(|cell| cell.vertical_continuation);
-                let text_block = if cell.is_some_and(|cell| cell.text_block) {
+                let cell = &node.table_cells[index];
+                let vertical_continuation = cell.vertical_continuation;
+                let text_block = if cell.text_block {
                     let block =
                         embedding.and_then(|embedding| embedding.blocks.get(text_block_index));
                     text_block_index += 1;
@@ -38,13 +38,7 @@ pub(super) fn append_table_row(
                 } else {
                     None
                 };
-                let raw_source = source_cells
-                    .as_ref()
-                    .and_then(|cells| cells.get(index))
-                    .copied();
-                let blocks = if vertical_continuation
-                    || cell.is_some_and(|cell| cell.kind != TableCellKind::Text)
-                {
+                let blocks = if vertical_continuation || cell.kind != TableCellKind::Text {
                     // `\^` is tbl's vertical-span control marker. The
                     // preceding cell owns the actual content and its copied
                     // `row_span`; rendering the marker as text would invent
@@ -53,30 +47,20 @@ pub(super) fn append_table_row(
                     // payload: source recovery must never resurrect it.
                     Vec::new()
                 } else {
-                    let children = if let Some(cell) = cell {
-                        let lowered = lower_table_cell(
-                            cell,
-                            recovery::CellPosition {
-                                index,
-                                row: &node.table_cells,
-                            },
-                            node,
-                            context,
-                            text_block,
-                            formatter,
-                        );
-                        match lowered {
-                            // A successfully decoded control-only cell is
-                            // empty, not missing source that needs recovery.
-                            Some(inlines) => inlines,
-                            None if text_block.is_none() => {
-                                lower_missing_table_cell(raw_source, node, context, formatter)
-                            }
-                            None => Vec::new(),
-                        }
-                    } else {
-                        lower_missing_table_cell(raw_source, node, context, formatter)
-                    };
+                    let children = lower_table_cell(
+                        cell,
+                        recovery::CellPosition {
+                            index,
+                            row: &node.table_cells,
+                        },
+                        node,
+                        context,
+                        text_block,
+                        formatter,
+                    )
+                    // A successfully decoded control-only cell is empty, not
+                    // missing source that needs synthetic recovery.
+                    .unwrap_or_default();
                     vec![Block::Paragraph {
                         children,
                         layout: LayoutHint::default(),
@@ -85,12 +69,12 @@ pub(super) fn append_table_row(
                 };
                 AstTableCell {
                     blocks,
-                    column_span: cell.map_or(1, |cell| cell.column_span),
-                    row_span: cell.map_or(1, |cell| cell.row_span),
-                    alignment: Some(match cell.map(|cell| cell.alignment) {
-                        None | Some(MandocTableAlignment::Left) => AstTableAlignment::Left,
-                        Some(MandocTableAlignment::Center) => AstTableAlignment::Center,
-                        Some(MandocTableAlignment::Right) => AstTableAlignment::Right,
+                    column_span: cell.column_span,
+                    row_span: cell.row_span,
+                    alignment: Some(match cell.alignment {
+                        MandocTableAlignment::Left => AstTableAlignment::Left,
+                        MandocTableAlignment::Center => AstTableAlignment::Center,
+                        MandocTableAlignment::Right => AstTableAlignment::Right,
                     }),
                 }
             })

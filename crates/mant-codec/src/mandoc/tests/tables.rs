@@ -73,18 +73,45 @@ fn tbl_text_block_prefers_native_parse_time_string_expansion() {
 
 #[test]
 fn tbl_source_recovery_never_replays_a_redefined_macro_outside_native_context() {
+    for definition in ["de", "de1"] {
+        let source = format!(
+            ".TH TBL-REDEFINED-MACRO 1\n.SH DESCRIPTION\n.{definition} B\nREPLACED_MACRO\n..\n.TS\nl.\nT{{\n.B ORIGINAL_OPERAND\nT}}\n.TE\n"
+        );
+        let document = parse_manual_bytes(
+            std::path::Path::new("tbl-redefined-macro.1"),
+            source.as_bytes(),
+        )
+        .expect("lower a table with a document-local macro override");
+        let Block::Table { rows, .. } = &document.sections[0].blocks[0] else {
+            panic!("expected one lowered table");
+        };
+        let [Block::Paragraph { children, .. }] = rows[0].cells[0].blocks.as_slice() else {
+            panic!("expected native table paragraph");
+        };
+        assert_eq!(inline_text(children), "REPLACED_MACRO", "{definition}");
+    }
+}
+
+#[test]
+fn tbl_native_field_count_wins_over_raw_tab_characters() {
     let document = parse_manual_bytes(
-        std::path::Path::new("tbl-redefined-macro.1"),
-        b".TH TBL-REDEFINED-MACRO 1\n.SH DESCRIPTION\n.de B\nREPLACED_MACRO\n..\n.TS\nl.\nT{\n.B ORIGINAL_OPERAND\nT}\n.TE\n",
+        std::path::Path::new("tbl-executed-delimiter.1"),
+        b".TH TBL-EXECUTED-DELIMITER 1\n.SH DESCRIPTION\n.TS\ntab(;);\nl l.\nLEFT\tMID\tGHOST;RIGHT\n.TE\n",
     )
-    .expect("lower a table with a document-local macro override");
+    .expect("lower a table with a non-default tbl delimiter");
     let Block::Table { rows, .. } = &document.sections[0].blocks[0] else {
         panic!("expected one lowered table");
     };
-    let [Block::Paragraph { children, .. }] = rows[0].cells[0].blocks.as_slice() else {
-        panic!("expected native table paragraph");
-    };
-    assert_eq!(inline_text(children), "REPLACED_MACRO");
+    assert_eq!(rows[0].cells.len(), 2);
+    let cells = rows[0]
+        .cells
+        .iter()
+        .map(|cell| match cell.blocks.as_slice() {
+            [Block::Paragraph { children, .. }] => inline_text(children),
+            blocks => panic!("expected table cell paragraph: {blocks:?}"),
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(cells, ["LEFT\tMID\tGHOST", "RIGHT"]);
 }
 
 #[test]

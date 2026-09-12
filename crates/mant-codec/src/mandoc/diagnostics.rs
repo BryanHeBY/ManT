@@ -55,29 +55,6 @@ impl LoweringContext<'_> {
         });
     }
 
-    pub(super) fn warn_unexpanded_table_cell(&self, line: u32) {
-        let mut diagnostics = self.diagnostics.borrow_mut();
-        if diagnostics
-            .iter()
-            .any(|diagnostic| diagnostic.code.as_deref() == Some("manual.unexpanded-table-cell"))
-        {
-            return;
-        }
-        diagnostics.push(Diagnostic {
-            impact: mant_ir::DiagnosticImpact::None,
-            level: DiagnosticLevel::Unsupported,
-            code: Some("manual.unexpanded-table-cell".to_owned()),
-            message: "one or more tbl cells contain formatter strings that could not be expanded; their source spellings were preserved".to_owned(),
-            source: Some(SourceSpan {
-                byte_range: None,
-                line,
-                column: 1,
-                end_line: None,
-                end_column: None,
-            }),
-        });
-    }
-
     pub(super) fn warn_inline_equation_budget(&self, line: u32) {
         let mut diagnostics = self.diagnostics.borrow_mut();
         if diagnostics

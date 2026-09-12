@@ -66,27 +66,6 @@ impl TableEmbeddingPlan {
         self.embeddings[index].as_ref()
     }
 }
-pub(super) fn lower_missing_table_cell(
-    source: Option<&str>,
-    node: &Node,
-    context: &LoweringContext<'_>,
-    formatter: &mut crate::mandoc::formatter::FormatterState,
-) -> Vec<Inline> {
-    let source = context.table_execution_source(source.unwrap_or_default(), node.table_escape);
-    let source = source.trim();
-    if source.is_empty() {
-        return Vec::new();
-    }
-    let lowered = lower_table_cell_text(source, node.line, context, formatter);
-    if !lowered.is_empty() {
-        return lowered;
-    }
-    context.warn_unexpanded_table_cell(node.line);
-    vec![Inline::Code {
-        value: source.to_owned(),
-    }]
-}
-
 /// A cell's position is needed to interpret row-local tbl layout controls.
 #[derive(Clone, Copy)]
 pub(super) struct CellPosition<'a> {
@@ -152,15 +131,17 @@ pub(super) fn lower_table_cell(
     if let Some(text_block) = text_block {
         let initial_state = *formatter;
         let diagnostic_start = context.diagnostics.borrow().len();
-        let source = context.table_execution_source(&text_block.source, text_block.escape);
+        let source = LoweringContext::table_execution_source(&text_block.source, text_block.escape);
         // CVS mandoc passes high-level macro operands into tbl, while GNU
-        // tbl expands the same inline macro language. A `T{}` source block is
-        // already associated with this exact native text-block cell, so a
-        // complete, closed inline parse may restore the source semantics
-        // directly. Native requests and anything dependent on the original
-        // roff session deliberately stay on the raw/native path below.
-        if !context.table_source_has_macro_barrier(node.line)
-            && !contains_native_table_request(context, &source)
+        // tbl expands the same inline macro language. A `T{}` source block
+        // may enrich its already-associated native cell, but an isolated
+        // parse is never execution evidence on its own: redefined macros,
+        // control characters, and conditionals belong to the original roff
+        // session. Commit the candidate only after it agrees with this exact
+        // native payload. This keeps unrelated document-local macros from
+        // disabling recovery without allowing a synthetic parser to replace
+        // what the native execution actually produced.
+        if !contains_native_table_request(context, &source)
             && let Some(recovered) = lower_source_fragment_with_formatter_state(
                 &source,
                 text_block.escape,
@@ -171,8 +152,14 @@ pub(super) fn lower_table_cell(
             )
             && recovered.complete
         {
-            *formatter = recovered.formatter;
-            return Some(recovered.inlines);
+            let candidate = CellCandidate {
+                inlines: recovered.inlines,
+                formatter: recovered.formatter,
+                diagnostics: Vec::new(),
+            };
+            if candidate.belongs_to(cell, position) {
+                return Some(candidate.commit(context, formatter));
+            }
         }
 
         let mut candidate_state = initial_state;
@@ -328,7 +315,7 @@ mod tests {
             (".Fl Fl help", "--help", true),
         ] {
             let mut cell = node.table_cells[0].clone();
-            cell.text = Some("unexpanded native operand payload".to_owned());
+            cell.text = Some(expected_text.to_owned());
             cell.text_block = true;
             let block = super::TableTextBlock {
                 source: source.to_owned(),

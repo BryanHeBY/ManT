@@ -146,7 +146,7 @@ impl<'a> LoweringContext<'a> {
         inline::parse_roff_text_with_state(source, &mut formatter.font, true)
     }
 
-    pub(super) fn table_execution_source(&self, source: &str, escape: Option<u8>) -> String {
+    pub(super) fn table_execution_source(source: &str, escape: Option<u8>) -> String {
         table_execution_source(source, escape)
     }
 
@@ -164,33 +164,6 @@ impl<'a> LoweringContext<'a> {
             .borrow_mut()
             .insert(name.to_owned(), native);
         native
-    }
-
-    /// Whether source before a tbl row changes the macro namespace.
-    ///
-    /// A source fragment parser has no access to these definitions.  It may
-    /// enrich built-in inline macros only when the document has not supplied
-    /// a competing macro environment; otherwise the native tbl payload is
-    /// the only executed evidence and must win.
-    pub(super) fn table_source_has_macro_barrier(&self, line: u32) -> bool {
-        self.source_lines
-            .as_ref()
-            .into_iter()
-            .flat_map(|source| source.lines_from(1))
-            .take_while(|(number, _)| *number < line)
-            .any(|(_, source)| {
-                let Some(request) = source
-                    .trim_start()
-                    .strip_prefix(['.', '\''])
-                    .map(str::trim_start)
-                else {
-                    return false;
-                };
-                matches!(
-                    request.split_whitespace().next(),
-                    Some("de" | "am" | "als" | "rn" | "rm")
-                )
-            })
     }
 
     pub(super) fn table_text_blocks(
@@ -246,18 +219,6 @@ impl<'a> LoweringContext<'a> {
             }
         }
         blocks
-    }
-
-    pub(super) fn tab_separated_table_cells(
-        &self,
-        line: u32,
-        escape: Option<u8>,
-    ) -> Option<Vec<&'a str>> {
-        let source_line = self.source_lines.as_ref()?.line(line)?;
-        let (visible, _) = roff_line_without_comment(source_line, escape);
-        visible
-            .contains('\t')
-            .then(|| visible.split('\t').collect())
     }
 
     /// Whether a source-level `.IP` marker uses roff's pre-increment form.
@@ -320,13 +281,12 @@ mod tests {
 
     #[test]
     fn table_execution_source_uses_the_native_escape_state_at_the_cell() {
-        let context = LoweringContext::new(None, Some(".ec @\n.TS\n"));
         assert_eq!(
-            context.table_execution_source("visible @\" ignored", Some(b'@')),
+            LoweringContext::table_execution_source("visible @\" ignored", Some(b'@')),
             "visible"
         );
         assert_eq!(
-            context.table_execution_source("visible \\\" literal", Some(b'@')),
+            LoweringContext::table_execution_source("visible \\\" literal", Some(b'@')),
             "visible \\\" literal"
         );
     }
