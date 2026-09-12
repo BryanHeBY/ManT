@@ -316,7 +316,10 @@ def classify_source_proven_presentation(result):
             [
                 explanation
                 for explanation in assessment.get('explanations', [])
-                if explanation.get('rule') == 'source-consistent-groff-named-character/v1'
+                if explanation.get('rule') in {
+                    'source-consistent-groff-named-character/v1',
+                    'source-consistent-groff-default-composite/v1',
+                }
             ]
             if isinstance(assessment, dict)
             else []

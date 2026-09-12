@@ -401,6 +401,25 @@ class ExplanationTests(unittest.TestCase):
         self.assertEqual(result['explanations'][0]['referenceSpellings'], ['Prikae'])
         self.assertEqual(result['explanations'][0]['mantSpellings'], ['Prikaže'])
 
+    def test_literal_groff_default_composite_can_explain_the_cvs_fallback(self):
+        # groff's shipped composite.tmac maps `ad` to a combining diaeresis,
+        # while CVS chars.c has no dynamic composite table. A direct spelling
+        # remains source-bound even in a document that defines ordinary macros.
+        source = '.de helper\n..\nwhich can be re\\[e ad]nabled\n'
+        result = assess_content('which can be renabled\n', 'which can be reënabled\n', source)
+        self.assertEqual(result['status'], 'explained')
+        self.assertEqual(result['rawComparison']['status'], 'review')
+        self.assertEqual(
+            result['explanations'][0]['rule'],
+            'source-consistent-groff-default-composite/v1',
+        )
+
+    def test_default_composite_projection_rejects_a_mutated_character_table(self):
+        source = '.char ad X\nwhich can be re\\[e ad]nabled\n'
+        result = assess_content('which can be renabled\n', 'which can be reënabled\n', source)
+        self.assertNotEqual(result['status'], 'explained')
+        self.assertFalse(result['coverage']['sourceConsistentCompatibilityApplied'])
+
     def test_named_character_projection_ignores_roff_comments(self):
         source = '.\\" obsolete Prika\\(vze\n.TH PROBE 1\nPrika\\(vze\n'
         result = assess_content('Prikae\n', 'Prikaže\n', source)

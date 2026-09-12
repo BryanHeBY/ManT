@@ -289,6 +289,33 @@ class AllAuditTests(unittest.TestCase):
         self.assertEqual(value['status'], 'explained')
         self.assertEqual(value['triage'], 'source-proven-reference-glyph-compatibility')
 
+    def test_source_proven_default_composite_reconciles_legacy_ascii_tokenization(self):
+        result = {
+            'fidelity-mandoc': {
+                'execution': 'success',
+                'coverage': 'legacy-dimensions-covered',
+                'status': 'review',
+                'finding': {
+                    'status': 'review',
+                    'missing_tokens': ['renabled'],
+                    'broken_phrases': [],
+                    'signatures': [],
+                },
+                'sourceContentAssessment': {
+                    'status': 'review',
+                    'rawStatus': 'review',
+                    'residualStatus': 'review',
+                    'sourceConsistentCompatibilityApplied': True,
+                    'explanations': [{
+                        'rule': 'source-consistent-groff-default-composite/v1',
+                        'referenceSpellings': ['renabled'],
+                    }],
+                },
+            },
+        }
+        AUDIT.classify_source_proven_presentation(result)
+        self.assertEqual(result['fidelity-mandoc']['status'], 'explained')
+
     def test_named_glyph_proof_cannot_hide_another_legacy_candidate(self):
         result = {
             'fidelity-mandoc': {
